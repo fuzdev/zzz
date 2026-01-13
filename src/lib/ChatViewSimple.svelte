@@ -35,7 +35,7 @@
 			<ChatThread
 				{thread}
 				onsend={(input) => chat.send_to_thread(thread.id, input)}
-				attrs={{class: empty ? 'floating p_sm' : 'height_100'}}
+				attrs={{class: empty ? 'floating p_sm' : 'height:100%'}}
 				focus_key={chat.id}
 				bind:pending_element_to_focus_key={
 					() => chat.app.ui.pending_element_to_focus_key,

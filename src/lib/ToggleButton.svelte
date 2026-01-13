@@ -26,7 +26,7 @@
 <button type="button" class="plain icon_button" {...rest} onclick={() => (active = !active)}>
 	{@render rest.children?.()}
 	<span class="position:relative">
-		<span style:visibility="hidden" class="display:inline-flex flex-direction:column height_0">
+		<span style:visibility="hidden" class="display:inline-flex flex-direction:column height:0">
 			<span>
 				{#if typeof active_content === 'string'}{active_content}{:else}{@render active_content()}{/if}
 			</span>

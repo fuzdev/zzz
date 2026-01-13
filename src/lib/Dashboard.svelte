@@ -85,13 +85,13 @@
 <!-- TODO drive with data -->
 <div class="dashboard" style:--sidebar_width="{sidebar_width}px">
 	<div
-		class="height_100 width_100 position:fixed top_0 left_0"
+		class="height:100% width:100% position:fixed top:0 left:0"
 		style:padding-left="var(--sidebar_width)"
 	>
 		{@render children()}
 	</div>
 	<div
-		class="height_100 position:fixed top_0 left_0 overflow:auto scrollbar-width:thin"
+		class="height:100% position:fixed top:0 left:0 overflow:auto scrollbar-width:thin"
 		style:width="var(--sidebar_width)"
 	>
 		<!-- TODO refactor -->
@@ -163,7 +163,7 @@
 	<!-- sidebar toggle button -->
 	<button
 		type="button"
-		class="position:fixed bottom_0 left_0 icon_button plain border_radius_0"
+		class="position:fixed bottom:0 left:0 icon_button plain border_radius_0"
 		aria-label={sidebar_button_title}
 		title={sidebar_button_title}
 		onclick={() => app.ui.toggle_sidebar()}

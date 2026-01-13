@@ -11,7 +11,7 @@
 	const projects = projects_context.get();
 </script>
 
-<aside class="height_100 overflow-y:auto unstyled width_upto_xs p_xs">
+<aside class="height:100% overflow-y:auto unstyled width_upto_xs p_xs">
 	<div class="display:flex">
 		<button
 			type="button"

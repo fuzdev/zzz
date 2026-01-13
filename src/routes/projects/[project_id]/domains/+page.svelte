@@ -43,7 +43,7 @@
 						</p>
 					</div>
 				{:else}
-					<table class="width_100">
+					<table class="width:100%">
 						<thead>
 							<tr>
 								<th>domain name</th>

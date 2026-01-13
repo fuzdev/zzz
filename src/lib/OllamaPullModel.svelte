@@ -58,7 +58,7 @@
 				<div class="title">model name</div>
 				<input
 					type="text"
-					class="plain width_100"
+					class="plain width:100%"
 					placeholder="{GLYPH_PLACEHOLDER} e.g., llama3.1, mistral, codellama"
 					bind:value={ollama.pull_model_name}
 					onkeydown={handle_keydown}

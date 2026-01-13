@@ -52,7 +52,7 @@
 				<ul class="unstyled">
 					{#each provider.models as model (model)}
 						<li class="row">
-							<ModelLink class="font_family_mono width_100 row px_xs py_xs3 font_size_md" {model}>
+							<ModelLink class="font_family_mono width:100% row px_xs py_xs3 font_size_md" {model}>
 								<div class="flex:1">
 									<ProviderLogo name={model.provider_name} />
 									<span>{model.name}</span>

@@ -59,7 +59,7 @@
 	<CopyToClipboard text={JSON.stringify(action.json, null, 2)} class="plain" />
 </div>
 <pre
-	class="font_family_mono font_size_sm white-space:pre-wrap word-break:break-word p_sm width_100">{JSON.stringify(
+	class="font_family_mono font_size_sm white-space:pre-wrap word-break:break-word p_sm width:100%">{JSON.stringify(
 		action.json,
 		null,
 		2,

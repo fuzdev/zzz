@@ -134,7 +134,7 @@
 				<input
 					type="text"
 					bind:value={browser.edited_url}
-					class="width_100 plain"
+					class="width:100% plain"
 					class:url_edited={browser.url_edited}
 					onkeypress={(e) => {
 						if (e.key === 'Enter') {

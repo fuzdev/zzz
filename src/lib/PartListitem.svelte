@@ -22,7 +22,7 @@
 <PartContextmenu {part}>
 	<button
 		type="button"
-		class="listitem width_100"
+		class="listitem width:100%"
 		{...attrs}
 		class:selected
 		class:compact

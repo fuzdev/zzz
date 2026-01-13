@@ -218,11 +218,11 @@
 							<Glyph glyph={GLYPH_CANCEL} />
 						</button>
 						<div
-							class="bg_d_5 width_100 border_radius_xs position:relative overflow:hidden font-weight:600"
+							class="bg_d_5 width:100% border_radius_xs position:relative overflow:hidden font-weight:600"
 							style:height="24px"
 						>
 							<div
-								class="position:absolute width_100 height_100 row px_lg font_family_mono"
+								class="position:absolute width:100% height:100% row px_lg font_family_mono"
 								style:z-index="2"
 							>
 								reconnecting in...

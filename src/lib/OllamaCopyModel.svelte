@@ -46,7 +46,7 @@
 				<div class="title mb_xs">source model</div>
 				{#if ollama.model_names.length > 0}
 					<select
-						class="plain width_100"
+						class="plain width:100%"
 						bind:value={ollama.copy_source_model}
 						disabled={ollama.copy_is_copying}
 					>
@@ -58,7 +58,7 @@
 				{:else}
 					<input
 						type="text"
-						class="plain width_100"
+						class="plain width:100%"
 						placeholder="{GLYPH_PLACEHOLDER} source model name"
 						bind:value={ollama.copy_source_model}
 						onkeydown={handle_keydown}
@@ -73,7 +73,7 @@
 				<div class="title mb_xs">destination model name</div>
 				<input
 					type="text"
-					class="plain width_100"
+					class="plain width:100%"
 					placeholder="{GLYPH_PLACEHOLDER} new model name"
 					bind:value={ollama.copy_destination_model}
 					onkeydown={handle_keydown}

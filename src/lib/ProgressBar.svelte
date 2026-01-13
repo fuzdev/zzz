@@ -25,6 +25,6 @@
 		class="flex:1 bg_5 border_radius_xs overflow:hidden"
 		style:height="var(--progress_bar_height, 6px)"
 	>
-		<div class="bg_a_5 height_100" style:width="{value}%"></div>
+		<div class="bg_a_5 height:100%" style:width="{value}%"></div>
 	</div>
 </div>

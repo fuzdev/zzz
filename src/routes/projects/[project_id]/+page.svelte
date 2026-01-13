@@ -58,7 +58,7 @@
 						<div class="mb_md">
 							<label>
 								project name
-								<input type="text" bind:value={project_viewmodel.edited_name} class="width_100" />
+								<input type="text" bind:value={project_viewmodel.edited_name} class="width:100%" />
 							</label>
 						</div>
 						<div>
@@ -66,7 +66,7 @@
 								description
 								<textarea
 									bind:value={project_viewmodel.edited_description}
-									class="width_100"
+									class="width:100%"
 									rows="3"
 								></textarea>
 							</label>

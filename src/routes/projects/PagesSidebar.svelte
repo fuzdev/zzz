@@ -12,7 +12,7 @@
 	const project_viewmodel = $derived(projects.current_project_viewmodel);
 </script>
 
-<aside class="height_100 overflow-y:auto unstyled width_upto_xs p_xs">
+<aside class="height:100% overflow-y:auto unstyled width_upto_xs p_xs">
 	{#if project_viewmodel}
 		<div class="display:flex">
 			<button

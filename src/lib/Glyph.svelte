@@ -18,7 +18,7 @@
 
 <span
 	{...rest}
-	class="glyph display:inline-block text-align:center line_height_1 white-space:nowrap font-weight:400 {rest.class}"
+	class="glyph display:inline-block text-align:center line-height:1 white-space:nowrap font-weight:400 {rest.class}"
 	style:width={final_size}
 	style:height={final_size}
 	style:min-width={final_size}

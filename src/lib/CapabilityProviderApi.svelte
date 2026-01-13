@@ -82,7 +82,7 @@
 		<div class="py_sm display:flex gap_sm align-items:start">
 			<form class="flex:1">
 				<div
-					class="width_100 chip plain flex:1 flex-direction:column mb_lg"
+					class="width:100% chip plain flex:1 flex-direction:column mb_lg"
 					style:display="display:flex !important"
 					style:align-items="flex-start !important"
 					style:font-weight="400 !important"

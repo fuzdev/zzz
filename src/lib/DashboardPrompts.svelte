@@ -65,11 +65,11 @@
 	};
 </script>
 
-<div class="display:flex width_100 height_100">
+<div class="display:flex width:100% height:100%">
 	<div class="column_fixed">
 		<div class="p_sm pl_0">
 			<div class="row gap_xs2 mb_xs pl_xs2">
-				<button type="button" class="plain width_100 justify-content:start" onclick={create_prompt}>
+				<button type="button" class="plain width:100% justify-content:start" onclick={create_prompt}>
 					<Glyph glyph={GLYPH_ADD} />&nbsp; new prompt
 				</button>
 				{#if app.prompts.items.size > 1}
@@ -180,7 +180,7 @@
 			</div>
 		</PromptContextmenu>
 	{:else if app.prompts.items.size}
-		<div class="box height_100 flex:1" in:fade={{duration: DURATION_SM}}>
+		<div class="box height:100% flex:1" in:fade={{duration: DURATION_SM}}>
 			<p>
 				select a prompt from the list or <button
 					type="button"
@@ -199,7 +199,7 @@
 			</p>
 		</div>
 	{:else}
-		<div class="box height_100 flex:1" in:fade={{duration: DURATION_SM}}>
+		<div class="box height:100% flex:1" in:fade={{duration: DURATION_SM}}>
 			<p>
 				no prompts yet, <button type="button" class="inline color_d" onclick={create_prompt}
 					>create a new prompt</button

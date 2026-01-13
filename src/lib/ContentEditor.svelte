@@ -67,11 +67,11 @@
 		: undefined}
 />
 
-<div class="column width_100 flex:1">
-	<div class="display:flex flex:1 gap_xs2 width_100">
+<div class="column width:100% flex:1">
+	<div class="display:flex flex:1 gap_xs2 width:100%">
 		<textarea
 			{...attrs}
-			class="plain mb_0 width_100 flex:1 {attrs?.class}"
+			class="plain mb_0 width:100% flex:1 {attrs?.class}"
 			bind:this={textarea_el}
 			bind:value={content}
 			{placeholder}

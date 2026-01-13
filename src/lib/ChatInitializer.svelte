@@ -73,7 +73,7 @@
 			{#each app.chats.chat_templates as chat_template (chat_template.id)}
 				<button
 					type="button"
-					class="plain selectable width_100 py_sm text-align:left justify-content:start font-weight:400"
+					class="plain selectable width:100% py_sm text-align:left justify-content:start font-weight:400"
 					onclick={() => init_from_template(chat_template)}
 				>
 					<div>

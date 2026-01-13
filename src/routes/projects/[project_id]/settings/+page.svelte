@@ -34,7 +34,7 @@
 							<input
 								type="text"
 								bind:value={project_viewmodel.edited_name}
-								class="width_100"
+								class="width:100%"
 								placeholder={project_viewmodel.project.name}
 							/>
 						</label>
@@ -45,7 +45,7 @@
 							<div class="title">description</div>
 							<textarea
 								bind:value={project_viewmodel.edited_description}
-								class="width_100"
+								class="width:100%"
 								rows="3"
 								placeholder={project_viewmodel.project.description || 'No description'}
 							></textarea>

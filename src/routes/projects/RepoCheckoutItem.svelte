@@ -30,7 +30,7 @@
 			<input
 				type="text"
 				bind:value={checkout.path}
-				class="width_100"
+				class="width:100%"
 				placeholder="./path/to/repo/checkout"
 			/>
 		</label>
@@ -42,7 +42,7 @@
 			<input
 				type="text"
 				bind:value={checkout.label}
-				class="width_100"
+				class="width:100%"
 				placeholder="description (e.g. 'development', 'some-feature-branch', 'some-bug-repro')"
 			/>
 		</label>

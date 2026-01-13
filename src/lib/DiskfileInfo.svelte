@@ -20,8 +20,8 @@
 	const app = frontend_context.get();
 </script>
 
-<div class="display:flex flex-direction:column gap_xs width_100">
-	<small class="overflow_wrap_break_all width_100">
+<div class="display:flex flex-direction:column gap_xs width:100%">
+	<small class="overflow_wrap_break_all width:100%">
 		<Glyph glyph={GLYPH_FILE} />{app.diskfiles.to_relative_path(diskfile.path)}
 	</small>
 

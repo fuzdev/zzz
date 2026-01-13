@@ -58,10 +58,10 @@
 	const {status} = $derived(capabilities.ollama);
 </script>
 
-<div class="display:flex height_100">
+<div class="display:flex height:100%">
 	<!-- sidebar -->
-	<div class="height_100 overflow:hidden width_upto_sm width_atleast_sm">
-		<div class="height_100 overflow:auto scrollbar-width:thin p_md">
+	<div class="height:100% overflow:hidden width_upto_sm width_atleast_sm">
+		<div class="height:100% overflow:auto scrollbar-width:thin p_md">
 			<!-- status and connection -->
 			<section class="display:flex flex-direction:column gap_md">
 				<div class="display:flex gap_sm align-items:start">
@@ -105,7 +105,7 @@
 				<div class="flex-direction:column gap_sm">
 					<button
 						type="button"
-						class="width_100 justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
+						class="width:100% justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
 						class:selected={ollama.manager_selected_view === 'configure'}
 						onclick={() => {
 							ollama.set_manager_view('configure', null);
@@ -117,7 +117,7 @@
 
 					<button
 						type="button"
-						class="width_100 justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
+						class="width:100% justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
 						class:selected={ollama.manager_selected_view === 'pull'}
 						disabled={!ollama.available}
 						onclick={() => ollama.set_manager_view('pull', null)}
@@ -128,7 +128,7 @@
 
 					<button
 						type="button"
-						class="width_100 justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
+						class="width:100% justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
 						class:selected={ollama.manager_selected_view === 'create'}
 						disabled={!ollama.available}
 						onclick={() => ollama.set_manager_view('create', null)}
@@ -139,7 +139,7 @@
 
 					<button
 						type="button"
-						class="width_100 justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
+						class="width:100% justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
 						class:selected={ollama.manager_selected_view === 'copy'}
 						disabled={!ollama.available || ollama.models_downloaded.length === 0}
 						onclick={() => ollama.set_manager_view('copy', null)}
@@ -204,7 +204,7 @@
 	</div>
 
 	<!-- main content -->
-	<div class="flex:1 height_100 overflow:auto p_md">
+	<div class="flex:1 height:100% overflow:auto p_md">
 		{#if ollama.manager_selected_view === 'configure'}
 			<OllamaConfigure
 				{ollama}

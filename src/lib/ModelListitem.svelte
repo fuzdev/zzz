@@ -14,7 +14,7 @@
 	// TODO show something to show if it's local (probably not file size?)
 </script>
 
-<ModelContextmenu attrs={{class: 'width_100 py_sm'}} {model}>
+<ModelContextmenu attrs={{class: 'width:100% py_sm'}} {model}>
 	<div class="font_size_md row">
 		<ProviderLogo name={model.provider_name} size="var(--font_size_xl)" />
 		<div class="pl_sm">

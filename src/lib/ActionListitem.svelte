@@ -22,7 +22,7 @@
 <ActionContextmenu {action}>
 	<button
 		type="button"
-		class="width_100 text-align:left justify-content:start py_xs px_md border_radius_0 border-style:none box_shadow_none"
+		class="width:100% text-align:left justify-content:start py_xs px_md border_radius_0 border-style:none box_shadow_none"
 		class:selected
 		class:color_c={action.has_error}
 		onclick={() => {
@@ -30,7 +30,7 @@
 		}}
 		transition:slide
 	>
-		<div class="font-weight:400 display:flex align-items:center gap_xs width_100">
+		<div class="font-weight:400 display:flex align-items:center gap_xs width:100%">
 			<Glyph glyph={get_glyph_for_action_method(action.method)} />
 			<Glyph glyph={get_glyph_for_action_kind(action.kind)} />
 			<span class="font_family_mono flex:1 ellipsis">{action.method}</span>

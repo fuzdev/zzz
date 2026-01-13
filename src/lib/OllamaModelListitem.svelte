@@ -34,7 +34,7 @@
 		class:selected
 		{onclick}
 	>
-		<div class="display:flex flex-direction:column gap_xs width_100">
+		<div class="display:flex flex-direction:column gap_xs width:100%">
 			<div class="display:flex justify-content:space-between align-items:center">
 				<div class="ellipsis font_size_lg">
 					{model.name}

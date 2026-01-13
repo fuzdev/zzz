@@ -65,7 +65,7 @@
 	};
 </script>
 
-<div class="height_100 overflow:auto scrollbar-width:thin">
+<div class="height:100% overflow:auto scrollbar-width:thin">
 	{#if zzz_dir === undefined}
 		<div>&nbsp;</div>
 	{:else if zzz_dir === null}

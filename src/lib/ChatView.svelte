@@ -33,7 +33,7 @@
 	// TODO custom buttons section - including quick local, smartest all, all, etc - custom buttons to do common things, compose them with buttons like "fill all" or "fill with tag" or at least drag
 </script>
 
-<div class="flex:1 height_100 display:flex align-items:start">
+<div class="flex:1 height:100% display:flex align-items:start">
 	<div class="column_fixed">
 		{#if chat}
 			<section class="column_section" transition:slide>

@@ -23,7 +23,7 @@
 					{@const models_with_tag = app.models.filter_by_tag(tag)}
 					<button
 						type="button"
-						class="width_100 font_size_sm py_xs3 justify-content:space-between plain border_radius_xs font-weight:600"
+						class="width:100% font_size_sm py_xs3 justify-content:space-between plain border_radius_xs font-weight:600"
 						style:min-height="0"
 						onclick={() => {
 							chat.add_threads_by_model_tag(tag);
@@ -45,7 +45,7 @@
 					{@const threads_with_tag = chat.threads.filter((t) => t.model.tags.includes(tag))}
 					<ConfirmButton
 						disabled={!threads_with_tag.length}
-						class="width_100 font_size_sm py_xs3 justify-content:space-between plain border_radius_xs font-weight:600"
+						class="width:100% font_size_sm py_xs3 justify-content:space-between plain border_radius_xs font-weight:600"
 						style="min-height: 0;"
 						onconfirm={() => {
 							chat.remove_threads_by_model_tag(tag);

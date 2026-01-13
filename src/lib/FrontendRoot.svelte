@@ -31,7 +31,7 @@
 		<MainDialog />
 		<!-- TODO user-defined pages should be able to control the full page at runtime -->
 		<Dashboard>
-			<div class="height_100 overflow:auto">
+			<div class="height:100% overflow:auto">
 				{@render children(app)}
 			</div>
 		</Dashboard>

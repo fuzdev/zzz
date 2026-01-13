@@ -50,7 +50,7 @@
 						<div class="mb_lg">
 							<label>
 								<h3 class="mt_0 mb_sm">domain name</h3>
-								<input type="text" bind:value={domains_viewmodel.domain_name} class="width_100" />
+								<input type="text" bind:value={domains_viewmodel.domain_name} class="width:100%" />
 							</label>
 							<p>enter the full domain name, like zzz.software or blog.zzz.software</p>
 						</div>
@@ -117,7 +117,7 @@
 							{/if}
 						</div>
 
-						<div class="width_100 display:flex justify-content:space-between gap_sm">
+						<div class="width:100% display:flex justify-content:space-between gap_sm">
 							<div>
 								<button
 									type="submit"

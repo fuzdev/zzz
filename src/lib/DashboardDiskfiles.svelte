@@ -72,9 +72,9 @@
 	}}
 />
 
-<div class="height_100 display:flex">
+<div class="height:100% display:flex">
 	{#if capabilities.filesystem_available === false}
-		<div class="box height_100 width_100">
+		<div class="box height:100% width:100%">
 			<div class="width_upto_sm">
 				<ErrorMessage>
 					<p>
@@ -94,17 +94,17 @@
 			</div>
 		</div>
 	{:else if capabilities.filesystem_available === null || capabilities.filesystem_available === undefined}
-		<div class="box height_100 width_100 display:flex align-items:center justify-content:center">
+		<div class="box height:100% width:100% display:flex align-items:center justify-content:center">
 			<div class="text-align:center">
 				<p class="mt_md">loading filesystem <PendingAnimation inline /></p>
 			</div>
 		</div>
 	{:else}
-		<div class="height_100 overflow:hidden width_upto_sm">
+		<div class="height:100% overflow:hidden width_upto_sm">
 			<DiskfileExplorer />
 		</div>
 
-		<div class="flex:1 column overflow:auto height_100">
+		<div class="flex:1 column overflow:auto height:100%">
 			<!-- tabs -->
 			<menu
 				class="unstyled display:flex overflow-x:auto scrollbar-width:thin"
@@ -142,12 +142,12 @@
 					/>
 				{:else}
 					<!-- TODO think this through - maybe the tabs should be more flexible than 1:1 with a diskfile? maybe `DiskfileEditorView` should have UI to create a file if there is none? -->
-					<div class="box height_100">
+					<div class="box height:100%">
 						<p>Something went wrong, this tab has no diskfile</p>
 					</div>
 				{/if}
 			{:else if diskfiles.items.size > 0}
-				<div class="box height_100">
+				<div class="box height:100%">
 					<p>
 						<button
 							type="button"
@@ -168,7 +168,7 @@
 					</p>
 				</div>
 			{:else}
-				<div class="box height_100">
+				<div class="box height:100%">
 					<p>
 						no files yet, <button type="button" class="inline color_d" onclick={create_file}
 							>create a new file</button

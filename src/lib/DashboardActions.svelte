@@ -18,7 +18,7 @@
 	let selected_action: Action | null = $state(null);
 </script>
 
-<div class="column p_lg height_100">
+<div class="column p_lg height:100%">
 	<DashboardHeader>
 		{#snippet header()}
 			<h1><Glyph glyph={GLYPH_LOG} /> system actions</h1>
@@ -59,11 +59,11 @@
 			/>
 		</div>
 
-		<div class="panel p_md overflow:auto height_100">
+		<div class="panel p_md overflow:auto height:100%">
 			{#if selected_action}
 				<ActionDetail action={selected_action} />
 			{:else if actions.items.size > 0}
-				<div class="box height_100">
+				<div class="box height:100%">
 					<p>
 						select an action from the list or <button
 							type="button"
@@ -75,7 +75,7 @@
 					</p>
 				</div>
 			{:else}
-				<div class="box height_100">
+				<div class="box height:100%">
 					<p>
 						no actions yet, <button
 							type="button"
