@@ -60,22 +60,22 @@
 </script>
 
 <DiskfileContextmenu {diskfile}>
-	<div class="display_flex height_100">
-		<div class="flex_1 width_atleast_sm height_100 column">
+	<div class="display:flex height:100%">
+		<div class="flex:1 width_atleast_sm height:100% column">
 			<ContentEditor
 				bind:this={content_editor}
 				bind:content={editor_state.current_content}
 				token_count={editor_state.current_token_count}
 				placeholder={GLYPH_PLACEHOLDER + ' ' + diskfile.path_relative}
 				readonly={false}
-				attrs={{class: 'height_100 border_radius_0'}}
+				attrs={{class: 'height:100% border_radius_0'}}
 				onsave={async (value) => {
 					await app.diskfiles.update(diskfile.path, value);
 				}}
 			/>
 		</div>
 
-		<div class="width_upto_sm width_atleast_sm py_md">
+		<div class="width_atmost_sm width_atleast_sm py_md">
 			<div class="px_md mb_lg">
 				<DiskfileActions {diskfile} {editor_state} />
 			</div>

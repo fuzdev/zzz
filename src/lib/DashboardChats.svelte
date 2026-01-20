@@ -22,12 +22,12 @@
 	});
 </script>
 
-<ChatsContextmenu attrs={{class: 'display_flex width_100 height_100'}}>
+<ChatsContextmenu attrs={{class: 'display:flex width:100% height:100%'}}>
 	<div class="column_fixed">
 		<div class="py_sm pr_sm">
 			<div class="row gap_xs2 mb_xs pl_xs2">
 				<button
-					class="plain flex_1 justify_content_start"
+					class="plain flex:1 justify-content:start"
 					type="button"
 					onclick={() => chats.add(undefined, true)}
 				>
@@ -85,8 +85,8 @@
 				<ChatView chat={chats.selected} />
 			</ChatContextmenu>
 		{:else if chats.items.size}
-			<div class="box height_100 flex_1">
-				<div class="p_md text_align_center">
+			<div class="box height:100% flex:1">
+				<div class="p_md text-align:center">
 					<p>
 						select a chat from the list,
 						<button type="button" class="inline color_d" onclick={() => chats.add(undefined, true)}
@@ -104,7 +104,7 @@
 				</div>
 			</div>
 		{:else}
-			<div class="box height_100">
+			<div class="box height:100%">
 				<p>
 					no chats yet,
 					<button type="button" class="inline color_d" onclick={() => chats.add(undefined, true)}

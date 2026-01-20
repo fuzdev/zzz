@@ -18,16 +18,16 @@
 	// TODO this should show "running" models as being actively doing inference, otherwise "loaded"
 </script>
 
-<div class="panel p_md width_upto_md">
-	<div class="display_flex justify_content_space_between align_items_center mb_md">
+<div class="panel p_md width_atmost_md">
+	<div class="display:flex justify-content:space-between align-items:center mb_md">
 		<h4 class="mt_0 mb_0">active models</h4>
-		<div class="display_flex align_items_center gap_sm">
+		<div class="display:flex align-items:center gap_sm">
 			{#if ollama.ps_status === 'pending'}
 				<PendingAnimation />
 			{/if}
 			<button
 				type="button"
-				class="plain align_items_center gap_sm"
+				class="plain align-items:center gap_sm"
 				disabled={ollama.ps_status === 'pending'}
 				title="polls Ollama continuously for the status of running models"
 				onclick={() => {
@@ -54,18 +54,18 @@
 					{#if !model}
 						<!-- TODO handle this case better, maybe show a warning? -->
 						<div
-							class="display_flex justify_content_space_between align_items_center p_sm border_radius_xs bg_1"
+							class="display:flex justify-content:space-between align-items:center p_sm border_radius_xs bg_1"
 						>
-							<div class="display_flex gap_sm align_items_center">
+							<div class="display:flex gap_sm align-items:center">
 								<Glyph glyph={GLYPH_INFO} />
 								<span>model {item.name} not found</span>
 							</div>
 						</div>
 					{:else}
 						<div
-							class="display_flex justify_content_space_between align_items_center p_sm border_radius_xs bg_1"
+							class="display:flex justify-content:space-between align-items:center p_sm border_radius_xs bg_1"
 						>
-							<div class="display_flex gap_sm align_items_center">
+							<div class="display:flex gap_sm align-items:center">
 								<!-- TODO handle this API without the `!`, maybe change to only require the name, and derive the model -->
 								<button
 									type="button"
@@ -82,7 +82,7 @@
 									</small>
 								{/if}
 							</div>
-							<div class="display_flex gap_sm align_items_center">
+							<div class="display:flex gap_sm align-items:center">
 								<!-- TODO maybe refactor with derived state -->
 								{#if item.expires_at}
 									{@const expires_at_date = new Date(item.expires_at)}

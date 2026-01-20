@@ -6,53 +6,23 @@
 	align-items: center;
 	justify-content: center;
 }
-
 /* like `.box` but uncentered */
 .column {
 	display: flex;
 	flex-direction: column;
 }
-
 /* can be used to override the direction of a `.box` */
 .row {
 	display: flex;
 	flex-direction: row;
 	align-items: center;
 }
-
-/* Formats content to wrap long strings and preserve displayed whitespace. */
-.formatted {
-	overflow: hidden;
-	white-space: break-spaces;
-}
-
 .ellipsis {
 	display: block;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
-
-.width_upto_xs {
-	width: 100%;
-	max-width: var(--distance_xs);
-}
-
-.width_upto_sm {
-	width: 100%;
-	max-width: var(--distance_sm);
-}
-
-.width_upto_md {
-	width: 100%;
-	max-width: var(--distance_md);
-}
-
-.width_atleast_sm {
-	width: 100%;
-	min-width: var(--distance_sm);
-}
-
 .selectable {
 	--button_fill: color-mix(in hsl, var(--fill) 8%, transparent);
 	--button_fill_hover: color-mix(in hsl, var(--fill) 16%, transparent);
@@ -78,29 +48,26 @@
 .selectable.selected.deselectable:not(:disabled) {
 	cursor: pointer;
 }
-
-/* A pane is a box floating over the page, like for dialogs.
-			By default it's opaque, resetting the background to the initial depth. */
+/* A pane is a box floating over the page, like for dialogs. By default it's opaque, resetting the background to the initial depth. */
 .pane {
 	background-color: var(--pane_bg, var(--bg));
 	box-shadow: var(
 		--pane_shadow,
-		/* TODO this is terrible, maybe add all the variables? should be culled anyway? */
 		var(--shadow_bottom_md)
 			color-mix(in hsl, var(--shadow_color) var(--shadow_alpha_3), transparent)
 	);
 	border-radius: var(--border_radius_xs);
 }
-
 /* A panel is a box embedded into the page, useful for visually isolating content. */
 .panel {
 	border-radius: var(--border_radius_xs);
 	background-color: var(--panel_bg, var(--fg_1));
 }
-
-/* TODO other button variants? */
-/* TODO this is slightly strange that it doesn't use --icon_size */
-/* These are used as modifiers to buttons, and so they use `:where` so they cascade. */
+/*
+TODO other button variants?
+TODO this is slightly strange that it doesn't use --icon_size.
+These are used as modifiers to buttons.
+*/
 .icon_button {
 	width: var(--input_height);
 	height: var(--input_height);
@@ -111,7 +78,6 @@
 	font-weight: 900;
 	padding: 0;
 }
-
 /* TODO maybe this belongs with the reset, like `selected`? or does `selected` belong here? */
 .plain:not(:hover) {
 	--border_color: transparent;
@@ -122,7 +88,6 @@
 .plain:active {
 	--border_color: transparent;
 }
-
 .menu_item {
 	--border_radius: 0;
 	--border_color: var(--border_color_3);
@@ -180,7 +145,6 @@
 	text-overflow: ellipsis;
 	line-height: var(--line_height_lg); /* prevents the bottom of g's and others from being cut off */
 }
-
 .chevron {
 	position: relative;
 	height: 8px;
@@ -191,7 +155,6 @@
 	border: 4px solid transparent;
 	border-left-color: var(--text_color_3);
 }
-
 .chip {
 	font-weight: 500;
 	padding-left: var(--space_xs);
@@ -202,97 +165,6 @@
 a.chip {
 	font-weight: 600;
 }
-
-.position_relative {
-	position: relative;
-}
-.position_absolute {
-	position: absolute;
-}
-.position_fixed {
-	position: fixed;
-}
-.position_sticky {
-	position: sticky;
-}
-.display_block {
-	display: block;
-}
-.display_inline {
-	display: inline;
-}
-.display_inline_block {
-	display: inline-block;
-}
-.display_flex {
-	display: flex;
-}
-.display_inline_flex {
-	display: inline-flex;
-}
-.display_grid {
-	display: grid;
-}
-.overflow_auto {
-	overflow: auto;
-}
-.overflow_hidden {
-	overflow: hidden;
-}
-.overflow_x_auto {
-	overflow-x: auto;
-}
-.overflow_y_auto {
-	overflow-y: auto;
-}
-.overflow_y_hidden {
-	overflow-y: hidden;
-}
-.overflow_wrap_break_word {
-	overflow-wrap: break-word;
-}
-.scrollbar_width_thin {
-	scrollbar-width: thin;
-}
-.flex_1 {
-	flex: 1;
-}
-.flex_wrap_wrap {
-	flex-wrap: wrap;
-}
-.flex_direction_column {
-	flex-direction: column;
-}
-.flex_shrink_0 {
-	flex-shrink: 0;
-}
-.align_items_center {
-	align-items: center;
-}
-.align_items_start {
-	align-items: start;
-}
-.align_items_end {
-	align-items: end;
-}
-.align_self_start {
-	align-self: start;
-}
-.justify_content_center {
-	justify-content: center;
-}
-.justify_content_start {
-	justify-content: start;
-}
-.justify_content_end {
-	justify-content: end;
-}
-.justify_content_space_between {
-	justify-content: space-between;
-}
-.flip_x {
-	transform: scaleX(-1);
-}
 .font_family_sans {
 	font-family: var(--font_family_sans);
 }
@@ -301,9 +173,6 @@ a.chip {
 }
 .font_family_mono {
 	font-family: var(--font_family_mono);
-}
-.line_height_1 {
-	line-height: 1;
 }
 .font_size_xs {
 	font-size: var(--font_size_xs);
@@ -329,30 +198,6 @@ a.chip {
 	font-size: var(--font_size_xl3);
 	--font_size: var(--font_size_xl3);
 }
-.text_align_start {
-	text-align: start;
-}
-.text_align_left {
-	text-align: left;
-}
-.text_align_right {
-	text-align: right;
-}
-.text_align_center {
-	text-align: center;
-}
-.word_break_break_all {
-	word-break: break-all;
-}
-.white_space_nowrap {
-	white-space: nowrap;
-}
-.white_space_pre {
-	white-space: pre;
-}
-.white_space_pre_wrap {
-	white-space: pre-wrap;
-}
 .text_color_2 {
 	color: var(--text_color_2);
 }
@@ -370,6 +215,9 @@ a.chip {
 }
 .bg_1 {
 	background-color: var(--bg_1);
+}
+.bg_2 {
+	background-color: var(--bg_2);
 }
 .bg_5 {
 	background-color: var(--bg_5);
@@ -422,12 +270,6 @@ a.chip {
 .border_width_1 {
 	border-width: var(--border_width_1);
 }
-.border_style_none {
-	border-style: none;
-}
-.border_style_dashed {
-	border-style: dashed;
-}
 .border_radius_xs {
 	border-radius: var(--border_radius_xs);
 }
@@ -456,29 +298,24 @@ a.chip {
 	box-shadow: var(--shadow_inset_top_sm)
 		color-mix(in hsl, var(--shadow_color) var(--shadow_alpha, var(--shadow_alpha_2)), transparent);
 }
-.width_100 {
-	width: 100%;
-}
 .width_xl4 {
 	width: var(--space_xl4);
 }
-.height_0 {
-	height: 0;
+.width_atmost_xs {
+	width: 100%;
+	max-width: var(--distance_xs);
 }
-.height_100 {
-	height: 100%;
+.width_atmost_sm {
+	width: 100%;
+	max-width: var(--distance_sm);
 }
-.top_0 {
-	top: 0;
+.width_atmost_md {
+	width: 100%;
+	max-width: var(--distance_md);
 }
-.right_0 {
-	right: 0;
-}
-.bottom_0 {
-	bottom: 0;
-}
-.left_0 {
-	left: 0;
+.width_atleast_sm {
+	width: 100%;
+	min-width: var(--distance_sm);
 }
 .p_xs4 {
 	padding: var(--space_xs4);
@@ -772,20 +609,167 @@ a.chip {
 .gap_xl5 {
 	gap: var(--space_xl5);
 }
-.border_radius_0 {
-	border-radius: 0;
+.align-items\:center {
+	align-items: center;
 }
-.font_weight_400 {
+.align-items\:end {
+	align-items: end;
+}
+.align-items\:start {
+	align-items: start;
+}
+.align-self\:start {
+	align-self: start;
+}
+.border-style\:dashed {
+	border-style: dashed;
+}
+.border-style\:none {
+	border-style: none;
+}
+.border-style\:solid {
+	border-style: solid;
+}
+.bottom\:0 {
+	bottom: 0;
+}
+.display\:block {
+	display: block;
+}
+.display\:flex {
+	display: flex;
+}
+.display\:grid {
+	display: grid;
+}
+.display\:inline {
+	display: inline;
+}
+.display\:inline-block {
+	display: inline-block;
+}
+.display\:inline-flex {
+	display: inline-flex;
+}
+.flex-direction\:column {
+	flex-direction: column;
+}
+.flex-shrink\:0 {
+	flex-shrink: 0;
+}
+.flex-wrap\:wrap {
+	flex-wrap: wrap;
+}
+.flex\:1 {
+	flex: 1;
+}
+.font-weight\:400 {
 	font-weight: 400;
-	--font_weight: 400;
 }
-.font_weight_500 {
+.font-weight\:500 {
 	font-weight: 500;
-	--font_weight: 500;
 }
-.font_weight_600 {
+.font-weight\:600 {
 	font-weight: 600;
-	--font_weight: 600;
+}
+.height\:0 {
+	height: 0;
+}
+.height\:100\% {
+	height: 100%;
+}
+.justify-content\:center {
+	justify-content: center;
+}
+.justify-content\:end {
+	justify-content: end;
+}
+.justify-content\:space-between {
+	justify-content: space-between;
+}
+.justify-content\:start {
+	justify-content: start;
+}
+.left\:0 {
+	left: 0;
+}
+.line-height\:1 {
+	line-height: 1;
+}
+.overflow-wrap\:break-word {
+	overflow-wrap: break-word;
+}
+.overflow-x\:auto {
+	overflow-x: auto;
+}
+.overflow-y\:auto {
+	overflow-y: auto;
+}
+.overflow-y\:hidden {
+	overflow-y: hidden;
+}
+.overflow\:auto {
+	overflow: auto;
+}
+.overflow\:hidden {
+	overflow: hidden;
+}
+.position\:absolute {
+	position: absolute;
+}
+.position\:fixed {
+	position: fixed;
+}
+.position\:relative {
+	position: relative;
+}
+.position\:sticky {
+	position: sticky;
+}
+.right\:0 {
+	right: 0;
+}
+.scrollbar-width\:thin {
+	scrollbar-width: thin;
+}
+.text-align\:center {
+	text-align: center;
+}
+.text-align\:left {
+	text-align: left;
+}
+.text-align\:right {
+	text-align: right;
+}
+.text-align\:start {
+	text-align: start;
+}
+.top\:0 {
+	top: 0;
+}
+.transform\:scaleX\(-1\) {
+	transform: scaleX(-1);
+}
+.white-space\:break-spaces {
+	white-space: break-spaces;
+}
+.white-space\:nowrap {
+	white-space: nowrap;
+}
+.white-space\:pre {
+	white-space: pre;
+}
+.white-space\:pre-wrap {
+	white-space: pre-wrap;
+}
+.width\:100\% {
+	width: 100%;
+}
+.word-break\:break-all {
+	word-break: break-all;
+}
+.word-break\:break-word {
+	word-break: break-word;
 }
 
 /* generated by src/routes/fuz.gen.css.ts */

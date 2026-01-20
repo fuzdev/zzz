@@ -12,12 +12,12 @@
 	const project_viewmodel = $derived(projects.current_project_viewmodel);
 </script>
 
-<aside class="height_100 overflow_y_auto unstyled width_upto_xs p_xs">
+<aside class="height:100% overflow-y:auto unstyled width_atmost_xs p_xs">
 	{#if project_viewmodel}
-		<div class="display_flex">
+		<div class="display:flex">
 			<button
 				type="button"
-				class="plain justify_content_start flex_1"
+				class="plain justify-content:start flex:1"
 				onclick={() => project_viewmodel.create_new_domain()}
 			>
 				<Glyph glyph={GLYPH_ADD} />&nbsp; new domain
@@ -34,7 +34,7 @@
 								selected={domain.id === projects.current_domain_id}
 								title={domain.name}
 							>
-								<div class="ellipsis row flex_1 pr_xs">{domain.name || '[new domain]'}</div>
+								<div class="ellipsis row flex:1 pr_xs">{domain.name || '[new domain]'}</div>
 								<span
 									class="status_dot {domain.status === 'active'
 										? 'status_active'

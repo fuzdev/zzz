@@ -26,11 +26,11 @@
 <div class="panel p_sm mb_md">
 	<div class="mb_sm">
 		<label>
-			<span class="display_block mb_xs">Path</span>
+			<span class="display:block mb_xs">Path</span>
 			<input
 				type="text"
 				bind:value={checkout.path}
-				class="width_100"
+				class="width:100%"
 				placeholder="./path/to/repo/checkout"
 			/>
 		</label>
@@ -38,21 +38,21 @@
 
 	<div class="mb_sm">
 		<label>
-			<span class="display_block mb_xs">Label</span>
+			<span class="display:block mb_xs">Label</span>
 			<input
 				type="text"
 				bind:value={checkout.label}
-				class="width_100"
+				class="width:100%"
 				placeholder="description (e.g. 'development', 'some-feature-branch', 'some-bug-repro')"
 			/>
 		</label>
 	</div>
 
 	<div class="mb_sm">
-		<span class="display_block mb_xs">Tags</span>
-		<div class="display_flex flex_wrap_wrap gap_xs mb_xs">
+		<span class="display:block mb_xs">Tags</span>
+		<div class="display:flex flex-wrap:wrap gap_xs mb_xs">
 			{#each checkout.tags as tag, tag_index (tag_index)}
-				<span class="chip color_e display_flex align_items_center">
+				<span class="chip color_e display:flex align-items:center">
 					{tag}
 					<button
 						type="button"
@@ -63,13 +63,13 @@
 				</span>
 			{/each}
 		</div>
-		<div class="display_flex gap_xs">
+		<div class="display:flex gap_xs">
 			<input
 				type="text"
 				bind:value={tag_input}
 				bind:this={tag_el}
 				placeholder="new tag"
-				class="flex_1"
+				class="flex:1"
 			/>
 			<button
 				type="button"
@@ -87,7 +87,7 @@
 		</div>
 	</div>
 
-	<div class="display_flex justify_content_end">
+	<div class="display:flex justify-content:end">
 		<button type="button" class="color_c" onclick={() => on_remove(index)}>
 			<Glyph glyph={GLYPH_DELETE} />&nbsp; delete checkout
 		</button>

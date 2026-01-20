@@ -65,11 +65,15 @@
 	};
 </script>
 
-<div class="display_flex width_100 height_100">
+<div class="display:flex width:100% height:100%">
 	<div class="column_fixed">
 		<div class="p_sm pl_0">
 			<div class="row gap_xs2 mb_xs pl_xs2">
-				<button type="button" class="plain width_100 justify_content_start" onclick={create_prompt}>
+				<button
+					type="button"
+					class="plain width:100% justify-content:start"
+					onclick={create_prompt}
+				>
 					<Glyph glyph={GLYPH_ADD} />&nbsp; new prompt
 				</button>
 				{#if app.prompts.items.size > 1}
@@ -94,7 +98,7 @@
 		<PromptContextmenu prompt={app.prompts.selected}>
 			<div class="column_fixed pr_sm">
 				<section class="column_section">
-					<div class="font_size_lg display_flex align_items_center">
+					<div class="font_size_lg display:flex align-items:center">
 						<Glyph glyph={GLYPH_PROMPT} />
 						<EditableText bind:value={app.prompts.selected.name} />
 					</div>
@@ -107,7 +111,7 @@
 					</div>
 					<div class="row gap_xs py_xs">
 						<CopyToClipboard text={app.prompts.selected.content} class="plain" />
-						<div class="flex_1">
+						<div class="flex:1">
 							<PromptStats prompt={app.prompts.selected} />
 						</div>
 						<ConfirmButton
@@ -135,10 +139,10 @@
 
 			<div class="column_fluid">
 				<div class="column_bg_1 column gap_md p_sm">
-					<div class="display_flex justify_content_space_between">
-						<div class="display_flex flex_wrap_wrap gap_xs">
+					<div class="display:flex justify-content:space-between">
+						<div class="display:flex flex-wrap:wrap gap_xs">
 							<button type="button" class="plain font_size_sm" onclick={add_text_part}>
-								<div class="row white_space_nowrap">
+								<div class="row white-space:nowrap">
 									<Glyph glyph={GLYPH_PART} />&nbsp; add text
 								</div>
 							</button>
@@ -148,7 +152,7 @@
 								onclick={add_diskfile_part}
 								disabled={!app.diskfiles.items.size}
 							>
-								<div class="row white_space_nowrap">
+								<div class="row white-space:nowrap">
 									<Glyph glyph={GLYPH_FILE} />&nbsp; add file
 								</div>
 							</button>
@@ -157,14 +161,14 @@
 								disabled={!app.prompts.selected.parts.length}
 								class="plain font_size_sm"
 							>
-								<div class="row white_space_nowrap">
+								<div class="row white-space:nowrap">
 									<Glyph glyph={GLYPH_REMOVE} />&nbsp; remove all
 								</div>
 							</ConfirmButton>
 						</div>
 					</div>
 					<ul
-						class="unstyled display_grid gap_md"
+						class="unstyled display:grid gap_md"
 						style:grid-template-columns="repeat(auto-fill, minmax(300px, 1fr))"
 					>
 						{#each app.prompts.selected.parts as part (part.id)}
@@ -180,7 +184,7 @@
 			</div>
 		</PromptContextmenu>
 	{:else if app.prompts.items.size}
-		<div class="box height_100 flex_1" in:fade={{duration: DURATION_SM}}>
+		<div class="box height:100% flex:1" in:fade={{duration: DURATION_SM}}>
 			<p>
 				select a prompt from the list or <button
 					type="button"
@@ -199,7 +203,7 @@
 			</p>
 		</div>
 	{:else}
-		<div class="box height_100 flex_1" in:fade={{duration: DURATION_SM}}>
+		<div class="box height:100% flex:1" in:fade={{duration: DURATION_SM}}>
 			<p>
 				no prompts yet, <button type="button" class="inline color_d" onclick={create_prompt}
 					>create a new prompt</button

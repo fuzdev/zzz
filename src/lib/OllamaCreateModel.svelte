@@ -29,7 +29,7 @@
 </script>
 
 <div class="panel p_md">
-	<header class="display_flex justify_content_space_between align_items_center mb_md">
+	<header class="display:flex justify-content:space-between align-items:center mb_md">
 		<h3 class="mt_0 mb_0">
 			<Glyph glyph={GLYPH_ADD} /> create model
 		</h3>
@@ -38,7 +38,7 @@
 		</button>
 	</header>
 
-	<section class="width_upto_md display_flex flex_direction_column gap_md">
+	<section class="width_atmost_md display:flex flex-direction:column gap_md">
 		<p>
 			This creates a new custom modelfile, to download a builtin model see <button
 				type="button"
@@ -52,7 +52,7 @@
 				<div class="title mb_xs">new model name</div>
 				<input
 					type="text"
-					class="plain width_100"
+					class="plain width:100%"
 					placeholder="{GLYPH_PLACEHOLDER} my-custom-model"
 					bind:value={ollama.create_model_name}
 					onkeydown={handle_keydown}
@@ -66,7 +66,7 @@
 				<div class="title mb_xs">base model (optional)</div>
 				{#if ollama.model_names.length > 0}
 					<select
-						class="plain width_100"
+						class="plain width:100%"
 						bind:value={ollama.create_from_model}
 						disabled={ollama.create_is_creating}
 					>
@@ -78,7 +78,7 @@
 				{:else}
 					<input
 						type="text"
-						class="plain width_100"
+						class="plain width:100%"
 						placeholder="{GLYPH_PLACEHOLDER} base model name"
 						bind:value={ollama.create_from_model}
 						onkeydown={handle_keydown}
@@ -93,7 +93,7 @@
 			<label>
 				<div class="title mb_xs">system prompt (optional)</div>
 				<textarea
-					class="plain width_100"
+					class="plain width:100%"
 					rows="4"
 					placeholder="{GLYPH_PLACEHOLDER} You are a helpful assistant..."
 					bind:value={ollama.create_system_prompt}
@@ -108,7 +108,7 @@
 				<div class="title mb_xs">template (optional)</div>
 				<!-- Custom template using Ollama template syntax -->
 				<textarea
-					class="plain width_100"
+					class="plain width:100%"
 					rows="3"
 					placeholder="{GLYPH_PLACEHOLDER} {'{{{ .System }}}'} {'{{{ .Prompt }}}'}"
 					bind:value={ollama.create_template}
@@ -118,7 +118,7 @@
 			<p>Custom prompt template using Ollama template syntax</p>
 		</fieldset>
 
-		<div class="display_flex gap_md">
+		<div class="display:flex gap_md">
 			<button
 				type="button"
 				class="color_b"

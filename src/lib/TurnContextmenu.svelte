@@ -68,7 +68,7 @@
 
 {#if show_editor}
 	<Dialog onclose={() => (show_editor = false)}>
-		<div class="pane p_md width_upto_md mx_auto">
+		<div class="pane p_md width_atmost_md mx_auto">
 			<h2 class="mt_0 mb_sm"><Glyph glyph={GLYPH_TURN} /> edit turn</h2>
 			<TurnView {turn} />
 		</div>

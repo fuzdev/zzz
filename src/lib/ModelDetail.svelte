@@ -82,9 +82,9 @@
 				</div>
 			{/if}
 			{#if model.tags.length}
-				<ul class="unstyled display_flex gap_xs">
+				<ul class="unstyled display:flex gap_xs">
 					{#each model.tags as tag (tag)}
-						<small class="chip font_weight_400">{tag}</small>
+						<small class="chip font-weight:400">{tag}</small>
 					{/each}
 				</ul>
 			{/if}
@@ -102,13 +102,13 @@
 			{#snippet header()}{/snippet}
 		</OllamaModelDetail>
 	{:else}
-		<aside class="mt_xl3 width_upto_md">
+		<aside class="mt_xl3 width_atmost_md">
 			⚠️ This should show model info, but the APIs for ChatGPT and Claude do not provide metadata
 			like context window size, output token limit, and other details. Gemini however does. It looks
 			like we'll have to maintain hardcoded metadata for models, probably extending what we can
 			retrieve from each API.
 		</aside>
-		<section class="display_flex gap_xs">
+		<section class="display:flex gap_xs">
 			<button
 				type="button"
 				class="color_d"

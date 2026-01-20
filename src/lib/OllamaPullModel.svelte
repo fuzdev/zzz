@@ -41,7 +41,7 @@
 </script>
 
 <div class="panel p_md">
-	<header class="display_flex justify_content_space_between align_items_center mb_md">
+	<header class="display:flex justify-content:space-between align-items:center mb_md">
 		<h3 class="mt_0 mb_0">
 			<Glyph glyph={GLYPH_DOWNLOAD} /> pull model
 		</h3>
@@ -50,15 +50,15 @@
 		</button>
 	</header>
 
-	<div class="width_upto_md display_flex flex_direction_column gap_md">
+	<div class="width_atmost_md display:flex flex-direction:column gap_md">
 		<p>This downloads a builtin model so you can use it locally.</p>
 
 		<fieldset>
-			<label class="display_block mb_xs">
+			<label class="display:block mb_xs">
 				<div class="title">model name</div>
 				<input
 					type="text"
-					class="plain width_100"
+					class="plain width:100%"
 					placeholder="{GLYPH_PLACEHOLDER} e.g., llama3.1, mistral, codellama"
 					bind:value={ollama.pull_model_name}
 					onkeydown={handle_keydown}
@@ -74,7 +74,7 @@
 				{:else}.{/if}
 			</p>
 			{#if models_not_downloaded.length > 0}
-				<div class="display_flex flex_wrap_wrap gap_xs">
+				<div class="display:flex flex-wrap:wrap gap_xs">
 					{#each models_not_downloaded as model (model.id)}
 						<button
 							type="button"
@@ -89,12 +89,12 @@
 			{/if}
 		</fieldset>
 
-		<label class="display_flex gap_xs align_items_center">
+		<label class="display:flex gap_xs align-items:center">
 			<input type="checkbox" class="compact" bind:checked={ollama.pull_insecure} />
 			<span>allow insecure connections</span>
 		</label>
 
-		<div class="display_flex gap_md">
+		<div class="display:flex gap_md">
 			<button type="button" class="color_a" disabled={!ollama.pull_can_pull} onclick={handle_pull}>
 				<Glyph glyph={GLYPH_DOWNLOAD} />&nbsp; pull model
 			</button>

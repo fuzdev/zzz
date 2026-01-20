@@ -56,7 +56,7 @@
 		<!-- preview toggle button in top-right corner -->
 		<button
 			type="button"
-			class="position_fixed top_0 right_0 icon_button plain border_radius_0"
+			class="position:fixed top:0 right:0 icon_button plain border_radius_0"
 			aria-label="close preview"
 			title="close preview"
 			onclick={toggle_preview}
@@ -75,16 +75,16 @@
 
 		<div class="editor_content">
 			{#if page_viewmodel && project}
-				<div class="height_100 column p_lg">
+				<div class="height:100% column p_lg">
 					<div>
-						<div class="display_flex gap_sm align_items_center">
+						<div class="display:flex gap_sm align-items:center">
 							<h1 class="mb_lg">
 								{page_viewmodel.current_page?.title || 'Page'}
 							</h1>
 						</div>
 
-						<div class="display_flex width_100 justify_content_space_between gap_sm mb_lg">
-							<div class="display_flex gap_sm">
+						<div class="display:flex width:100% justify-content:space-between gap_sm mb_lg">
+							<div class="display:flex gap_sm">
 								<button
 									type="button"
 									onclick={() => page_viewmodel.save_page()}
@@ -106,25 +106,25 @@
 					</div>
 
 					<div class="panel p_md mb_md">
-						<div class="display_flex gap_sm">
-							<div class="flex_1">
+						<div class="display:flex gap_sm">
+							<div class="flex:1">
 								<label>
 									page title
 									<input
 										type="text"
 										bind:value={page_viewmodel.title}
-										class="width_100"
+										class="width:100%"
 										placeholder="page title"
 									/>
 								</label>
 							</div>
-							<div class="flex_1">
+							<div class="flex:1">
 								<label>
 									page path
 									<input
 										type="text"
 										bind:value={page_viewmodel.path}
-										class="width_100"
+										class="width:100%"
 										placeholder="/page-path"
 									/>
 								</label>
@@ -136,7 +136,7 @@
 						<div class="panel p_md content_area">
 							<textarea
 								bind:value={page_viewmodel.content}
-								class="width_100 height_100 markdown_editor"
+								class="width:100% height:100% markdown_editor"
 								placeholder="{GLYPH_PLACEHOLDER} markup"
 							></textarea>
 						</div>

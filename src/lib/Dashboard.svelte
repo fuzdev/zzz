@@ -85,22 +85,22 @@
 <!-- TODO drive with data -->
 <div class="dashboard" style:--sidebar_width="{sidebar_width}px">
 	<div
-		class="height_100 width_100 position_fixed top_0 left_0"
+		class="height:100% width:100% position:fixed top:0 left:0"
 		style:padding-left="var(--sidebar_width)"
 	>
 		{@render children()}
 	</div>
 	<div
-		class="height_100 position_fixed top_0 left_0 overflow_auto scrollbar_width_thin"
+		class="height:100% position:fixed top:0 left:0 overflow:auto scrollbar-width:thin"
 		style:width="var(--sidebar_width)"
 	>
 		<!-- TODO refactor -->
 		<div class="p_sm">
-			<!-- TODO support `max_height_100` in Fuz CSS -->
+			<!-- TODO support `max_height_100` in fuz_css -->
 			<nav class="font_size_lg">
 				{#each dashboard_nav_items as section (section.group)}
 					{#if section.group === 'main'}
-						<div class="display_flex p_sm mb_sm">
+						<div class="display:flex p_sm mb_sm">
 							<NavLink
 								href={resolve('/')}
 								title={app.futuremode ? 'futuremode' : 'home'}
@@ -125,7 +125,7 @@
 									size="var(--icon_size_md)"
 									fill={app.futuremode ? 'var(--color_h_5)' : undefined}
 									style="transition: transform 200ms ease"
-									class={app.futuremode ? 'flip_x' : ''}
+									class={app.futuremode ? 'transform:scaleX(-1)' : ''}
 								/>
 							</NavLink>
 						</div>
@@ -163,7 +163,7 @@
 	<!-- sidebar toggle button -->
 	<button
 		type="button"
-		class="position_fixed bottom_0 left_0 icon_button plain border_radius_0"
+		class="position:fixed bottom:0 left:0 icon_button plain border_radius_0"
 		aria-label={sidebar_button_title}
 		title={sidebar_button_title}
 		onclick={() => app.ui.toggle_sidebar()}

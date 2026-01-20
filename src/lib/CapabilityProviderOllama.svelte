@@ -49,12 +49,12 @@
 	};
 </script>
 
-<div class="display_flex flex_direction_column">
-	<div class="py_sm display_flex gap_sm align_items_start">
-		<form class="flex_1">
+<div class="display:flex flex-direction:column">
+	<div class="py_sm display:flex gap_sm align-items:start">
+		<form class="flex:1">
 			<div
-				class="width_100 chip plain flex_1 flex_direction_column mb_lg"
-				style:display="display_flex !important"
+				class="width:100% chip plain flex:1 flex-direction:column mb_lg"
+				style:display="display:flex !important"
 				style:align-items="flex-start !important"
 				style:font-weight="400 !important"
 				class:color_b={capabilities.ollama.status === 'success'}
@@ -62,7 +62,7 @@
 				class:color_d={capabilities.ollama.status === 'pending' || checking}
 				class:color_e={capabilities.ollama.status === 'initial'}
 			>
-				<div class="column justify_content_center gap_xs pl_md" style:min-height="80px">
+				<div class="column justify-content:center gap_xs pl_md" style:min-height="80px">
 					<div class="font_size_xl">
 						ollama {capabilities.ollama.status === 'success'
 							? 'available'
@@ -101,7 +101,7 @@
 			</button>
 		</form>
 
-		<div class="flex_1 px_md">
+		<div class="flex:1 px_md">
 			Ollama (<ExternalLink href="https://ollama.com/">ollama.com</ExternalLink>,
 			<ExternalLink href="https://github.com/ollama/ollama">GitHub</ExternalLink>) is a local model
 			server that forks
@@ -109,7 +109,7 @@
 			of Zzz's first integrations and the plan is to support many other local LLM backends
 			(input/feedback is welcome). See also the <ProviderLink
 				provider={app.providers.find_by_name('ollama')}
-				><span class="white_space_nowrap"><Glyph glyph={GLYPH_PROVIDER} /> Ollama</span> provider</ProviderLink
+				><span class="white-space:nowrap"><Glyph glyph={GLYPH_PROVIDER} /> Ollama</span> provider</ProviderLink
 			> page.
 		</div>
 	</div>
@@ -159,7 +159,7 @@
 
 	<p>
 		Full controls are on the <ProviderLink provider={app.providers.find_by_name('ollama')}
-			><span class="white_space_nowrap"><Glyph glyph={GLYPH_PROVIDER} /> Ollama</span> provider</ProviderLink
+			><span class="white-space:nowrap"><Glyph glyph={GLYPH_PROVIDER} /> Ollama</span> provider</ProviderLink
 		> page.
 	</p>
 </div>

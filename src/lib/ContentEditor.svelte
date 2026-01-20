@@ -67,11 +67,11 @@
 		: undefined}
 />
 
-<div class="column width_100 flex_1">
-	<div class="display_flex flex_1 gap_xs2 width_100">
+<div class="column width:100% flex:1">
+	<div class="display:flex flex:1 gap_xs2 width:100%">
 		<textarea
 			{...attrs}
-			class="plain mb_0 width_100 flex_1 {attrs?.class}"
+			class="plain mb_0 width:100% flex:1 {attrs?.class}"
 			bind:this={textarea_el}
 			bind:value={content}
 			{placeholder}
@@ -96,7 +96,7 @@
 	{@render after?.()}
 
 	{#if show_actions && !readonly}
-		<div class="display_flex mt_xs">
+		<div class="display:flex mt_xs">
 			<CopyToClipboard text={content} class="plain" />
 			<PasteFromClipboard
 				onclipboardtext={(value) => {

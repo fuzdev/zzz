@@ -92,8 +92,8 @@
 
 <li transition:slide class="py_xs3">
 	<div class="border_radius_xs {action.pending ? 'bg_2' : 'bg_1'} {operation_color_class}">
-		<div class="display_flex justify_content_space_between align_items_center p_sm">
-			<div class="display_flex gap_md align_items_center">
+		<div class="display:flex justify-content:space-between align-items:center p_sm">
+			<div class="display:flex gap_md align-items:center">
 				{#if action.pending}
 					<PendingAnimation />
 				{:else}
@@ -103,14 +103,14 @@
 					/>
 				{/if}
 				<Glyph glyph={operation_icon} />
-				<div class="font_size_sm font_weight_600">{action.method}</div>
+				<div class="font_size_sm font-weight:600">{action.method}</div>
 				{#if model_name}
-					<div class="font_size_sm flex_1 font_family_mono ellipsis">
+					<div class="font_size_sm flex:1 font_family_mono ellipsis">
 						<div class="ellipsis">{model_name}</div>
 					</div>
 				{/if}
 				{#if action.failed && error_message}
-					<div class="font_size_sm color_c_5 font_weight_500">{error_message}</div>
+					<div class="font_size_sm color_c_5 font-weight:500">{error_message}</div>
 				{/if}
 			</div>
 			<span class="font_size_sm">

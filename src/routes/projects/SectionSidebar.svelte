@@ -17,7 +17,7 @@
 	// what about data?
 </script>
 
-<aside class="overflow_y_auto unstyled width_upto_xs p_xs">
+<aside class="overflow-y:auto unstyled width_atmost_xs p_xs">
 	<nav>
 		<ul class="unstyled">
 			<li>

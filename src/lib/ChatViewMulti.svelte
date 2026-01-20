@@ -64,7 +64,7 @@
 			</PendingButton>
 		</ContentEditor>
 
-		<div class="display_flex mt_lg">
+		<div class="display:flex mt_lg">
 			<button type="button" class="plain" onclick={() => (show_model_picker = true)}>
 				<Glyph glyph={GLYPH_ADD} />&nbsp; add thread
 			</button>

@@ -67,13 +67,13 @@
 	<div class="browser_chrome">
 		<!-- tab bar -->
 		<ul
-			class="browser_tab_bar unstyled display_flex overflow_x_auto overflow_y_hidden scrollbar_width_thin"
+			class="browser_tab_bar unstyled display:flex overflow-x:auto overflow-y:hidden scrollbar-width:thin"
 			{@attach tabs_reorderable.list({
 				onreorder: (from_index, to_index) => browser.reorder_tab(from_index, to_index),
 			})}
 		>
 			{#each browser.tabs.ordered_tabs as tab, index (tab.id)}
-				<li class="display_flex" {@attach tabs_reorderable.item({index})}>
+				<li class="display:flex" {@attach tabs_reorderable.item({index})}>
 					<BrowserTabListitem
 						{tab}
 						{index}
@@ -99,8 +99,8 @@
 		</ul>
 
 		<!-- navigation controls & address bar -->
-		<div class="browser_controls display_flex gap_sm p_xs4">
-			<div class="browser_nav_buttons display_flex gap_xs">
+		<div class="browser_controls display:flex gap_sm p_xs4">
+			<div class="browser_nav_buttons display:flex gap_xs">
 				<button
 					type="button"
 					class="icon_button plain p_xs border_radius_lg"
@@ -130,11 +130,11 @@
 			</div>
 
 			<!-- address bar -->
-			<div class="browser_address_bar flex_1">
+			<div class="browser_address_bar flex:1">
 				<input
 					type="text"
 					bind:value={browser.edited_url}
-					class="width_100 plain"
+					class="width:100% plain"
 					class:url_edited={browser.url_edited}
 					onkeypress={(e) => {
 						if (e.key === 'Enter') {
@@ -146,7 +146,7 @@
 			</div>
 
 			<!-- main menu -->
-			<div class="display_flex gap_xs">
+			<div class="display:flex gap_xs">
 				<button
 					type="button"
 					class="icon_button plain p_xs"

@@ -65,15 +65,15 @@
 	};
 </script>
 
-<div class="height_100 overflow_auto scrollbar_width_thin">
+<div class="height:100% overflow:auto scrollbar-width:thin">
 	{#if zzz_dir === undefined}
 		<div>&nbsp;</div>
 	{:else if zzz_dir === null}
 		<div class="row height_input_height"><PendingAnimation /></div>
 	{:else}
-		<div class="row height_input_height justify_content_space_between px_xs">
+		<div class="row height_input_height justify-content:space-between px_xs">
 			<small class="ellipsis"><Glyph glyph={GLYPH_DIRECTORY} /> {zzz_dir}</small>
-			<div class="display_flex gap_xs2">
+			<div class="display:flex gap_xs2">
 				<PendingButton
 					pending={TODO_create_file_pending}
 					class="plain compact"

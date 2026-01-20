@@ -58,21 +58,21 @@
 	const {status} = $derived(capabilities.ollama);
 </script>
 
-<div class="display_flex height_100">
+<div class="display:flex height:100%">
 	<!-- sidebar -->
-	<div class="height_100 overflow_hidden width_upto_sm width_atleast_sm">
-		<div class="height_100 overflow_auto scrollbar_width_thin p_md">
+	<div class="height:100% overflow:hidden width_atmost_sm width_atleast_sm">
+		<div class="height:100% overflow:auto scrollbar-width:thin p_md">
 			<!-- status and connection -->
-			<section class="display_flex flex_direction_column gap_md">
-				<div class="display_flex gap_sm align_items_start">
+			<section class="display:flex flex-direction:column gap_md">
+				<div class="display:flex gap_sm align-items:start">
 					<div
-						class="flex_1 chip plain display_flex justify_content_start font_weight_400"
+						class="flex:1 chip plain display:flex justify-content:start font-weight:400"
 						class:color_b={ollama.available}
 						class:color_c={!ollama.available && status === 'failure'}
 						class:color_d={!ollama.available && status === 'pending'}
 						class:color_e={!ollama.available && status === 'initial'}
 					>
-						<div class="column justify_content_center gap_xs p_md">
+						<div class="column justify-content:center gap_xs p_md">
 							<span class="font_size_lg">
 								Ollama {ollama.available
 									? `connected`
@@ -102,10 +102,10 @@
 				</div>
 
 				<!-- TODO hacky styles, trying a variant of menu styles here, some of which may be upstreamed (plain doesnt currently mix well with others like menu_item and colors) -->
-				<div class="flex_direction_column gap_sm">
+				<div class="flex-direction:column gap_sm">
 					<button
 						type="button"
-						class="width_100 justify_content_start border_radius_0 plain menu_item selectable font_weight_500"
+						class="width:100% justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
 						class:selected={ollama.manager_selected_view === 'configure'}
 						onclick={() => {
 							ollama.set_manager_view('configure', null);
@@ -117,7 +117,7 @@
 
 					<button
 						type="button"
-						class="width_100 justify_content_start border_radius_0 plain menu_item selectable font_weight_500"
+						class="width:100% justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
 						class:selected={ollama.manager_selected_view === 'pull'}
 						disabled={!ollama.available}
 						onclick={() => ollama.set_manager_view('pull', null)}
@@ -128,7 +128,7 @@
 
 					<button
 						type="button"
-						class="width_100 justify_content_start border_radius_0 plain menu_item selectable font_weight_500"
+						class="width:100% justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
 						class:selected={ollama.manager_selected_view === 'create'}
 						disabled={!ollama.available}
 						onclick={() => ollama.set_manager_view('create', null)}
@@ -139,7 +139,7 @@
 
 					<button
 						type="button"
-						class="width_100 justify_content_start border_radius_0 plain menu_item selectable font_weight_500"
+						class="width:100% justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
 						class:selected={ollama.manager_selected_view === 'copy'}
 						disabled={!ollama.available || ollama.models_downloaded.length === 0}
 						onclick={() => ollama.set_manager_view('copy', null)}
@@ -204,7 +204,7 @@
 	</div>
 
 	<!-- main content -->
-	<div class="flex_1 height_100 overflow_auto p_md">
+	<div class="flex:1 height:100% overflow:auto p_md">
 		{#if ollama.manager_selected_view === 'configure'}
 			<OllamaConfigure
 				{ollama}
@@ -213,7 +213,7 @@
 				onback={() => ollama.manager_back_to_last_view()}
 			/>
 		{:else if ollama.manager_selected_view === 'model' && ollama.manager_selected_model}
-			<div class="display_block panel p_md">
+			<div class="display:block panel p_md">
 				<OllamaModelDetail
 					model={ollama.manager_selected_model}
 					onshow={(m) => ollama.app.api.ollama_show({model: m.name})}

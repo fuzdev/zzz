@@ -35,7 +35,7 @@
 		aria-label={`Tab ${tab.title}`}
 		aria-pressed={tab.selected}
 	>
-		<div class="ellipsis font_weight_400 flex_1">
+		<div class="ellipsis font-weight:400 flex:1">
 			<Glyph glyph="⎕" />
 			<small class="ml_xs">{tab.title}</small>
 		</div>

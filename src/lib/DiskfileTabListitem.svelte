@@ -53,7 +53,7 @@
 			aria-label={`Tab ${path}`}
 			aria-pressed={tab.is_selected}
 		>
-			<div class="ellipsis font_weight_400 flex_1">
+			<div class="ellipsis font-weight:400 flex:1">
 				<small class="ml_xs">{path}</small>
 			</div>
 			<button

@@ -33,5 +33,5 @@
 		{/each}
 	</ul>
 {:else}
-	<p class="text_align_center">No chat selected</p>
+	<p class="text-align:center">No chat selected</p>
 {/if}

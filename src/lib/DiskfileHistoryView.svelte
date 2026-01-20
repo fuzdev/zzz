@@ -20,7 +20,7 @@
 </script>
 
 <div>
-	<small class="px_sm display_flex justify_content_space_between mb_sm">
+	<small class="px_sm display:flex justify-content:space-between mb_sm">
 		<ConfirmButton
 			onconfirm={() => editor_state.clear_history()}
 			position="right"
@@ -89,7 +89,7 @@
 		min-height: 0;
 	}
 
-	/* TODO this would be correct but we need an opaque bg, Fuz CSS needs the feature */
+	/* TODO this would be correct but we need an opaque bg, fuz_css needs the feature */
 	/* button.selected {
 		position: sticky;
 		top: 0;

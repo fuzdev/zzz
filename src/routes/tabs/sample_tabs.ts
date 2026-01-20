@@ -33,7 +33,7 @@ export const sample_tabs: Array<BrowserTabJson> = [
 	},
 	{
 		id: create_uuid(),
-		title: 'Fuz CSS',
+		title: 'fuz_css',
 		selected: false,
 		url: 'https://css.fuz.dev/',
 		type: 'external_url',
@@ -43,7 +43,7 @@ export const sample_tabs: Array<BrowserTabJson> = [
 	},
 	{
 		id: create_uuid(),
-		title: 'Fuz UI',
+		title: 'fuz_ui',
 		selected: false,
 		url: 'https://ui.fuz.dev/',
 		type: 'external_url',

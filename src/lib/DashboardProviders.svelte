@@ -17,7 +17,7 @@
 	<aside>⚠️ This information is incomplete and may be incorrect or outdated.</aside>
 	<div class="providers_grid">
 		{#each app.providers.items as provider (provider)}
-			<div class="panel p_lg align_self_start">
+			<div class="panel p_lg align-self:start">
 				<div class="font_size_xl mb_lg">
 					<ProviderLink {provider} icon="svg" />
 				</div>
@@ -52,8 +52,8 @@
 				<ul class="unstyled">
 					{#each provider.models as model (model)}
 						<li class="row">
-							<ModelLink class="font_family_mono width_100 row px_xs py_xs3 font_size_md" {model}>
-								<div class="flex_1">
+							<ModelLink class="font_family_mono width:100% row px_xs py_xs3 font_size_md" {model}>
+								<div class="flex:1">
 									<ProviderLogo name={model.provider_name} />
 									<span>{model.name}</span>
 								</div>

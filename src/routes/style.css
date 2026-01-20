@@ -1,6 +1,6 @@
 /* global stylesheet imported by `src/routes/+layout.svelte */
 
-/* TODO probably upstream serif headings to Fuz CSS */
+/* TODO probably upstream serif headings to fuz_css */
 .heading,
 h1,
 h2,
@@ -88,7 +88,7 @@ input.input_xs {
 	);
 }
 
-/* TODO @many upstream to Fuz? (not Fuz CSS right?) */
+/* TODO @many upstream to Fuz? (not fuz_css right?) */
 .reorderable_item {
 	--reorderable_outline_style: dashed;
 	outline: var(--outline_width) var(--reorderable_outline_style) var(--outline_color);
@@ -106,7 +106,7 @@ input.input_xs {
 	outline-width: var(--border_width_2);
 }
 
-/* TODO @many upstream to Fuz? (not Fuz CSS right?) */
+/* TODO @many upstream to Fuz? (not fuz_css right?) */
 [draggable='true'] {
 	cursor: grab;
 }
@@ -312,7 +312,7 @@ a.chip {
 	margin-bottom: 0;
 }
 
-/* TODO this is a hack because .plain doesn't compose with .selectable and .deselectable in Fuz CSS */
+/* TODO this is a hack because .plain doesn't compose with .selectable and .deselectable in fuz_css */
 .plain.selectable.deselectable:not(.menu_item) {
 	border: none;
 	color: var(--text_color);

@@ -28,7 +28,7 @@
 				<h1 class="mb_0">{project.name}</h1>
 				<div>
 					{#if project_viewmodel.editing_project}
-						<div class="display_flex gap_sm mb_sm">
+						<div class="display:flex gap_sm mb_sm">
 							<button
 								type="button"
 								class="color_a"
@@ -54,11 +54,11 @@
 				</div>
 
 				{#if project_viewmodel.editing_project}
-					<div class="panel p_md width_upto_md mb_lg">
+					<div class="panel p_md width_atmost_md mb_lg">
 						<div class="mb_md">
 							<label>
 								project name
-								<input type="text" bind:value={project_viewmodel.edited_name} class="width_100" />
+								<input type="text" bind:value={project_viewmodel.edited_name} class="width:100%" />
 							</label>
 						</div>
 						<div>
@@ -66,17 +66,17 @@
 								description
 								<textarea
 									bind:value={project_viewmodel.edited_description}
-									class="width_100"
+									class="width:100%"
 									rows="3"
 								></textarea>
 							</label>
 						</div>
 					</div>
 				{:else if project.description}
-					<p class="mb_lg width_upto_md">{project.description}</p>
+					<p class="mb_lg width_atmost_md">{project.description}</p>
 				{/if}
 
-				<div class="display_flex gap_md mb_lg">
+				<div class="display:flex gap_md mb_lg">
 					<span class="chip"
 						>{project.pages.length}
 						{project.pages.length === 1 ? 'page' : 'pages'}</span

@@ -45,7 +45,7 @@
 </script>
 
 {#if heading}
-	<h2 class="mt_lg text_align_center">{heading}</h2>
+	<h2 class="mt_lg text-align:center">{heading}</h2>
 {/if}
 
 <SortableList

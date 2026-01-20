@@ -11,11 +11,11 @@
 	const projects = projects_context.get();
 </script>
 
-<aside class="height_100 overflow_y_auto unstyled width_upto_xs p_xs">
-	<div class="display_flex">
+<aside class="height:100% overflow-y:auto unstyled width_atmost_xs p_xs">
+	<div class="display:flex">
 		<button
 			type="button"
-			class="plain justify_content_start flex_1"
+			class="plain justify-content:start flex:1"
 			onclick={() => {
 				const project = projects.create_new_project();
 				void goto(resolve(`/projects/${project.id}`));

@@ -31,8 +31,8 @@
 </script>
 
 <div {...attrs} class="panel p_lg {attrs?.class}">
-	<section class="display_flex mb_lg">
-		<div class="display_flex">
+	<section class="display:flex mb_lg">
+		<div class="display:flex">
 			<ProviderLogo name={provider.name} size="var(--icon_size_xl)" fill={null} />
 			<div class="pl_xl">
 				{#if at_detail_page}
@@ -60,7 +60,7 @@
 		{#if provider.name === 'ollama'}
 			<OllamaManager ollama={app.ollama} />
 		{:else}
-			<div class="width_upto_md mb_lg">
+			<div class="width_atmost_md mb_lg">
 				<CapabilityProviderApi provider_name={provider.name} show_info={false} />
 				{#if provider.api_key_url}
 					<ExternalLink href={provider.api_key_url}>get API key</ExternalLink>
@@ -71,7 +71,7 @@
 
 	<section>
 		<aside>⚠️ This information is incomplete and may be incorrect or outdated.</aside>
-		<ul class="display_flex flex_wrap_wrap unstyled gap_md">
+		<ul class="display:flex flex-wrap:wrap unstyled gap_md">
 			{#each provider.models as model (model)}
 				<ModelSummary {model} omit_provider />
 			{/each}

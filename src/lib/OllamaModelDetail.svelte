@@ -43,8 +43,8 @@
 	{#if header}
 		{@render header()}
 	{:else}
-		<header class="display_flex justify_content_space_between mb_md">
-			<div class="display_flex flex_direction_column gap_xs">
+		<header class="display:flex justify-content:space-between mb_md">
+			<div class="display:flex flex-direction:column gap_xs">
 				<h3 class="mt_0 mb_0 font_family_mono">
 					<ModelLink {model} icon />
 				</h3>
@@ -62,7 +62,7 @@
 		</header>
 	{/if}
 
-	<section class="display_flex gap_sm mb_xl3">
+	<section class="display:flex gap_sm mb_xl3">
 		{#if model.downloaded}
 			<button
 				type="button"
@@ -137,12 +137,12 @@
 			<p class="color_d font_size_sm mt_0 mb_0">not downloaded</p>
 		</section>
 	{:else if model.ollama_show_response_loading}
-		<section class="display_flex gap_sm align_items_center">
+		<section class="display:flex gap_sm align-items:center">
 			<PendingAnimation />
 			<span class="font_size_sm">loading model details...</span>
 		</section>
 	{:else if model.ollama_show_response_error}
-		<section class="display_flex flex_direction_column gap_sm">
+		<section class="display:flex flex-direction:column gap_sm">
 			<div class="color_c font_size_sm">
 				failed to load details: {model.ollama_show_response_error}
 			</div>
@@ -156,10 +156,10 @@
 			</button>
 		</section>
 	{:else if model.ollama_show_response}
-		<section class="display_flex flex_direction_column gap_md">
+		<section class="display:flex flex-direction:column gap_md">
 			<!-- basic info -->
 			{#if model.ollama_show_response.details}
-				<div class="display_grid gap_sm" style:grid-template-columns="auto 1fr">
+				<div class="display:grid gap_sm" style:grid-template-columns="auto 1fr">
 					<h5 class="my_0">capabilities:</h5>
 					<span class="font_family_mono">
 						{model.ollama_show_response.capabilities?.join(', ') || 'none'}
@@ -234,7 +234,7 @@
 			<!-- license -->
 			{#if model.ollama_show_response.license}
 				<Details class="mt_xl3">
-					{#snippet summary()}<h5 class="display_inline">license:</h5>{/snippet}
+					{#snippet summary()}<h5 class="display:inline">license:</h5>{/snippet}
 					<pre><code>{model.ollama_show_response.license}</code></pre>
 				</Details>
 			{/if}
@@ -242,7 +242,7 @@
 			<!-- modelfile -->
 			{#if model.ollama_show_response.modelfile}
 				<Details class="mt_xl3">
-					{#snippet summary()}<h5 class="display_inline">modelfile:</h5>{/snippet}
+					{#snippet summary()}<h5 class="display:inline">modelfile:</h5>{/snippet}
 					<pre><code>{model.ollama_show_response.modelfile}</code></pre>
 				</Details>
 			{/if}

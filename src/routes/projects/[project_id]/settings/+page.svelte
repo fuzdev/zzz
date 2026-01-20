@@ -27,14 +27,14 @@
 			<div class="p_lg">
 				<h1 class="mb_lg">project settings</h1>
 
-				<div class="panel p_md width_upto_md my_lg">
+				<div class="panel p_md width_atmost_md my_lg">
 					<div class="mb_md">
 						<label>
 							<div class="title">project name</div>
 							<input
 								type="text"
 								bind:value={project_viewmodel.edited_name}
-								class="width_100"
+								class="width:100%"
 								placeholder={project_viewmodel.project.name}
 							/>
 						</label>
@@ -45,7 +45,7 @@
 							<div class="title">description</div>
 							<textarea
 								bind:value={project_viewmodel.edited_description}
-								class="width_100"
+								class="width:100%"
 								rows="3"
 								placeholder={project_viewmodel.project.description || 'No description'}
 							></textarea>
@@ -62,7 +62,7 @@
 					</button>
 				</div>
 
-				<div class="panel p_md width_upto_md">
+				<div class="panel p_md width_atmost_md">
 					<h2 class="mt_0 mb_lg">danger zone</h2>
 					<p class="mb_md">These actions cannot be undone.</p>
 

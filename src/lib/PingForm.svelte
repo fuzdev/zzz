@@ -25,11 +25,11 @@
 	// TODO consider multiple buttons for each transport, so we can compare latency
 </script>
 
-<form class="column align_items_start gap_sm">
+<form class="column align-items:start gap_sm">
 	<div>
-		<button type="button" title="ping the server" onclick={() => app.api.ping()} class="flex_1">
+		<button type="button" title="ping the server" onclick={() => app.api.ping()} class="flex:1">
 			{#if children}{@render children()}{:else}⚞{/if}
-			<div class="font_size_lg font_weight_400 pl_sm">ping the server</div>
+			<div class="font_size_lg font-weight:400 pl_sm">ping the server</div>
 		</button>
 	</div>
 

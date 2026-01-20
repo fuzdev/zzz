@@ -30,12 +30,12 @@
 <ModelContextmenu {model}>
 	<button
 		type="button"
-		class="menu_item selectable plain text_align_start p_sm border_radius_0 font_weight_400"
+		class="menu_item selectable plain text-align:start p_sm border_radius_0 font-weight:400"
 		class:selected
 		{onclick}
 	>
-		<div class="display_flex flex_direction_column gap_xs width_100">
-			<div class="display_flex justify_content_space_between align_items_center">
+		<div class="display:flex flex-direction:column gap_xs width:100%">
+			<div class="display:flex justify-content:space-between align-items:center">
 				<div class="ellipsis font_size_lg">
 					{model.name}
 				</div>

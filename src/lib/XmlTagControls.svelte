@@ -16,7 +16,7 @@
 </script>
 
 <div class="column gap_xs">
-	<div class="display_flex align_items_center gap_xs2">
+	<div class="display:flex align-items:center gap_xs2">
 		<label
 			class="row mb_0 pr_md"
 			title="when enabled, the prompt's content will be wrapped with the xml tag '{part.xml_tag_name ||
@@ -36,7 +36,7 @@
 			<small>xml tag</small>
 		</label>
 		<input
-			class="plain flex_1 compact"
+			class="plain flex:1 compact"
 			class:dormant={!part.has_xml_tag}
 			placeholder={part.has_xml_tag
 				? GLYPH_PLACEHOLDER + ' ' + part.xml_tag_name_default

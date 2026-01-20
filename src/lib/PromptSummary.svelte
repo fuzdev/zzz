@@ -11,6 +11,6 @@
 <div class="pr_md">
 	{prompt.name}
 </div>
-<div class="flex_1 ellipsis">
+<div class="flex:1 ellipsis">
 	{prompt.content_preview}
 </div>

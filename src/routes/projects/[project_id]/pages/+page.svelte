@@ -43,7 +43,7 @@
 						</button>
 					</p>
 				{:else}
-					<table class="width_100">
+					<table class="width:100%">
 						<thead>
 							<tr>
 								<th>title</th>

@@ -27,7 +27,7 @@
 			show = false;
 		}}
 	>
-		<div class="pane p_lg width_upto_md mx_auto">
+		<div class="pane p_lg width_atmost_md mx_auto">
 			<Picker
 				{...rest}
 				onpick={(item) => {

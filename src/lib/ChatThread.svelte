@@ -76,11 +76,11 @@
 <ModelContextmenu model={thread.model}>
 	<ThreadContextmenu {thread}>
 		<div {...attrs} class="chat_thread {attrs?.class}" class:empty class:dormant={!thread.enabled}>
-			<div class="display_flex justify_content_space_between align_items_start">
+			<div class="display:flex justify-content:space-between align-items:start">
 				<header>
 					<button
 						type="button"
-						class="plain compact font_size_lg text_align_left font_weight_400"
+						class="plain compact font_size_lg text-align:left font-weight:400"
 						onclick={() => (show_model_picker = true)}
 					>
 						{thread.model.name}

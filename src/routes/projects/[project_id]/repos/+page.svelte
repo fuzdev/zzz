@@ -30,7 +30,7 @@
 				<h1 class="mb_lg">repos</h1>
 
 				{#if project_viewmodel.project.repos.length === 0}
-					<div class="panel p_lg text_align_center mb_lg">
+					<div class="panel p_lg text-align:center mb_lg">
 						<p>this project has no repositories configured yet</p>
 						<p>
 							<button
@@ -43,7 +43,7 @@
 						</p>
 					</div>
 				{:else}
-					<table class="width_100">
+					<table class="width:100%">
 						<thead>
 							<tr>
 								<th>repo</th>

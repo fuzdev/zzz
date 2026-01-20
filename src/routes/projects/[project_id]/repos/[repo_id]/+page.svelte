@@ -48,7 +48,7 @@
 			<div class="p_lg">
 				<h1 class="mb_lg">edit repo</h1>
 
-				<div class="panel p_md width_upto_md">
+				<div class="panel p_md width_atmost_md">
 					<form
 						onsubmit={(e) => {
 							swallow(e);
@@ -58,7 +58,7 @@
 						<div class="mb_lg">
 							<label>
 								<h3 class="mt_0 mb_sm">Git url</h3>
-								<input type="text" bind:value={repos_viewmodel.git_url} class="width_100" />
+								<input type="text" bind:value={repos_viewmodel.git_url} class="width:100%" />
 							</label>
 							<p>
 								enter the git URL, e.g. https://github.com/username/repo or
@@ -102,7 +102,7 @@
 							</div>
 						</div>
 
-						<div class="width_100 display_flex justify_content_space_between gap_sm">
+						<div class="width:100% display:flex justify-content:space-between gap_sm">
 							<div>
 								<button
 									type="submit"

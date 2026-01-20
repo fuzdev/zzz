@@ -12,7 +12,7 @@
 	<h2 class="mt_0 mb_lg">Projects</h2>
 
 	{#if projects.projects.length === 0}
-		<div class="panel p_lg width_upto_md">
+		<div class="panel p_lg width_atmost_md">
 			<p>no projects yet</p>
 		</div>
 	{:else}
@@ -20,7 +20,7 @@
 			{#each projects.projects as project (project.id)}
 				<a
 					href={resolve(`/projects/${project.id}`)}
-					class="project_card panel p_md font_weight_400"
+					class="project_card panel p_md font-weight:400"
 				>
 					<h3 class="mt_0 mb_sm">{project.name}</h3>
 					<p class="mb_md">{project.description}</p>
@@ -41,7 +41,7 @@
 							</div>
 						{/each}
 					</div>
-					<div class="display_flex gap_md">
+					<div class="display:flex gap_md">
 						<small class="chip"
 							>{project.pages.length} {project.pages.length === 1 ? 'page' : 'pages'}</small
 						>
@@ -52,7 +52,7 @@
 		</div>
 	{/if}
 
-	<div class="display_flex justify_content_between mt_lg">
+	<div class="display:flex justify_content_between mt_lg">
 		<button type="button" class="color_a" onclick={() => projects.create_new_project()}>
 			<Glyph glyph={GLYPH_ADD} />&nbsp; new project
 		</button>

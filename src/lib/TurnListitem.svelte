@@ -21,8 +21,8 @@
 		class:system={turn.role === 'system'}
 		class:dormant={!turn.enabled}
 	>
-		<div class="white_space_pre_wrap overflow_wrap_break_word">
-			<small class="mr_xs font_weight_600" title={turn.created}>@{turn.role}:</small>
+		<div class="white-space:pre-wrap overflow-wrap:break-word">
+			<small class="mr_xs font-weight:600" title={turn.created}>@{turn.role}:</small>
 			{#if turn.pending}
 				<PendingAnimation inline />
 			{:else if turn.error_message}

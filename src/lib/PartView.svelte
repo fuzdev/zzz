@@ -25,12 +25,12 @@
 
 <PartContextmenu {part}>
 	<div class="column gap_sm" class:dormant={!part.enabled}>
-		<div class="display_flex mb_0 justify_content_space_between">
+		<div class="display:flex mb_0 justify-content:space-between">
 			<div class="font_size_lg m_0">
 				<Glyph glyph={get_part_type_glyph(part)} />&nbsp;
 				{part.name}
 			</div>
-			<div class="display_flex gap_xs">
+			<div class="display:flex gap_xs">
 				<PartToggleButton {part} />
 				<PartRemoveButton {part} {prompts} />
 			</div>

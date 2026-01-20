@@ -33,17 +33,17 @@
 	// TODO custom buttons section - including quick local, smartest all, all, etc - custom buttons to do common things, compose them with buttons like "fill all" or "fill with tag" or at least drag
 </script>
 
-<div class="flex_1 height_100 display_flex align_items_start">
+<div class="flex:1 height:100% display:flex align-items:start">
 	<div class="column_fixed">
 		{#if chat}
 			<section class="column_section" transition:slide>
 				<!-- TODO needs work -->
-				<div class="font_size_lg display_flex align_items_center">
+				<div class="font_size_lg display:flex align-items:center">
 					<Glyph glyph={GLYPH_CHAT} />
 					<EditableText bind:value={chat.name} />
 				</div>
 				<div class="row">
-					<small class="flex_1" title={chat.created_formatted_datetime}
+					<small class="flex:1" title={chat.created_formatted_datetime}
 						>created {chat.created_formatted_short_date}</small
 					>
 					<div class="row gap_xs py_xs">
@@ -77,7 +77,7 @@
 		{#if thread_count && (chat.view_mode !== 'simple' || thread_count > 1)}
 			<section class="column_section">
 				<header
-					class="mt_0 mb_lg font_size_lg display_flex justify_content_space_between"
+					class="mt_0 mb_lg font_size_lg display:flex justify-content:space-between"
 					title="threads are the individual threads of conversation in a chat -- each chat can have many threads, comprising its history"
 				>
 					<span><Glyph glyph={GLYPH_THREAD} /> threads</span><span>{thread_count}</span>

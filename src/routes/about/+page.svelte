@@ -18,7 +18,7 @@
 	// TODO probably link to a blog post that's more approachable and less technical
 </script>
 
-<div class="width_upto_md p_lg">
+<div class="width_atmost_md p_lg">
 	<section>
 		<header class="mb_xl5" style:--font_size="var(--font_size_xl)">
 			<h1 class="row">
@@ -170,11 +170,11 @@
 				data={logo_zzz}
 				size="var(--icon_size_sm)"
 				fill={app.futuremode ? 'var(--color_h_5)' : 'var(--text_color)'}
-				class="mr_md {app.futuremode ? ' flip_x' : ''}"
+				class="mr_md {app.futuremode ? ' transform:scaleX(-1)' : ''}"
 				style="transition: transform 200ms ease"
 			/>
 			<span
-				><span class="display_inline_block text_align_right" style:width="6ch"
+				><span class="display:inline-block text-align:right" style:width="6ch"
 					>{app.futuremode ? 'disable' : 'enable'}</span
 				>
 				futuremode</span
@@ -183,7 +183,7 @@
 				data={logo_zzz}
 				size="var(--icon_size_sm)"
 				fill={app.futuremode ? 'var(--color_h_5)' : 'var(--text_color)'}
-				class="ml_md {app.futuremode ? '' : ' flip_x'}"
+				class="ml_md {app.futuremode ? '' : ' transform:scaleX(-1)'}"
 				style="transition: transform 200ms ease"
 			/>
 		</button>
@@ -313,7 +313,7 @@
 	<section>
 		<Details>
 			{#snippet summary()}package details{/snippet}
-			<div class="panel p_md width_upto_md">
+			<div class="panel p_md width_atmost_md">
 				<LibraryDetail {library} />
 			</div>
 		</Details>

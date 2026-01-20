@@ -18,14 +18,14 @@
 	let selected_action: Action | null = $state(null);
 </script>
 
-<div class="column p_lg height_100">
+<div class="column p_lg height:100%">
 	<DashboardHeader>
 		{#snippet header()}
 			<h1><Glyph glyph={GLYPH_LOG} /> system actions</h1>
 		{/snippet}
 		<TimeWidget value={app.time.now} />
 	</DashboardHeader>
-	<p class="width_upto_md">
+	<p class="width_atmost_md">
 		This page shows the actions that have happened behind the scenes. It's a work in progress and
 		not too useful yet. The idea is to make the system visible, auditable, and manipulable.
 	</p>
@@ -45,11 +45,11 @@
 	</p>
 
 	<div
-		class="flex_1 display_grid overflow_hidden"
+		class="flex:1 display:grid overflow:hidden"
 		style:grid-template-columns="320px 1fr"
 		style:gap="var(--space_md)"
 	>
-		<div class="overflow_auto scrollbar_width_thin border_right">
+		<div class="overflow:auto scrollbar-width:thin border_right">
 			<ActionList
 				limit={100}
 				selected_action_id={selected_action?.id}
@@ -59,11 +59,11 @@
 			/>
 		</div>
 
-		<div class="panel p_md overflow_auto height_100">
+		<div class="panel p_md overflow:auto height:100%">
 			{#if selected_action}
 				<ActionDetail action={selected_action} />
 			{:else if actions.items.size > 0}
-				<div class="box height_100">
+				<div class="box height:100%">
 					<p>
 						select an action from the list or <button
 							type="button"
@@ -75,7 +75,7 @@
 					</p>
 				</div>
 			{:else}
-				<div class="box height_100">
+				<div class="box height:100%">
 					<p>
 						no actions yet, <button
 							type="button"

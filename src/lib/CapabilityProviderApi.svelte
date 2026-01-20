@@ -77,13 +77,13 @@
 	};
 </script>
 
-<div class="display_flex flex_direction_column">
+<div class="display:flex flex-direction:column">
 	{#if provider}
-		<div class="py_sm display_flex gap_sm align_items_start">
-			<form class="flex_1">
+		<div class="py_sm display:flex gap_sm align-items:start">
+			<form class="flex:1">
 				<div
-					class="width_100 chip plain flex_1 flex_direction_column mb_lg"
-					style:display="display_flex !important"
+					class="width:100% chip plain flex:1 flex-direction:column mb_lg"
+					style:display="display:flex !important"
 					style:align-items="flex-start !important"
 					style:font-weight="400 !important"
 					class:color_b={capability.status === 'success'}
@@ -91,7 +91,7 @@
 					class:color_d={capability.status === 'pending' || checking}
 					class:color_e={capability.status === 'initial'}
 				>
-					<div class="column justify_content_center gap_xs pl_md" style:min-height="80px">
+					<div class="column justify-content:center gap_xs pl_md" style:min-height="80px">
 						<div class="font_size_xl">
 							{provider.name}
 							{capability.status === 'success'
@@ -127,10 +127,10 @@
 						class="mb_sm"
 						disabled={updating || !capabilities.backend_available}
 					/>
-					<div class="display_flex justify_content_space_between gap_xs">
+					<div class="display:flex justify-content:space-between gap_xs">
 						<button
 							type="button"
-							class="flex_1"
+							class="flex:1"
 							disabled={!api_key_input_normalized || updating || !capabilities.backend_available}
 							onclick={update_api_key}
 						>
@@ -142,7 +142,7 @@
 						</button>
 						<button
 							type="button"
-							class="flex_1"
+							class="flex:1"
 							disabled={checking || updating || !capabilities.backend_available}
 							onclick={reload_status}
 						>
@@ -150,7 +150,7 @@
 						</button>
 						<button
 							type="button"
-							class="flex_1"
+							class="flex:1"
 							disabled={capability.status !== 'success' ||
 								updating ||
 								!capabilities.backend_available}
@@ -162,11 +162,11 @@
 				</fieldset>
 			</form>
 
-			<div class="flex_1">
+			<div class="flex:1">
 				{#if show_info}
 					<div>
 						<ProviderLink {provider}
-							><span class="white_space_nowrap"
+							><span class="white-space:nowrap"
 								><Glyph glyph={GLYPH_PROVIDER} />
 								{provider.title}</span
 							> provider</ProviderLink

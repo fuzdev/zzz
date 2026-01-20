@@ -27,7 +27,7 @@
 	<div {...attrs} class="panel p_lg {attrs?.class}">
 		<div class="font_size_xl mb_lg">
 			<ModelLink {model} icon class="row">
-				<div class="flex_shrink_0">
+				<div class="flex-shrink:0">
 					<ProviderLogo name={model.provider_name} />
 				</div>
 				<span class="pl_sm">{model.name}</span>
@@ -40,9 +40,9 @@
 		{/if}
 
 		{#if model.tags.length}
-			<ul class="unstyled display_flex flex_wrap_wrap gap_xs mb_md mt_sm">
+			<ul class="unstyled display:flex flex-wrap:wrap gap_xs mb_md mt_sm">
 				{#each model.tags as tag (tag)}
-					<small class="chip font_weight_400">{tag}</small>
+					<small class="chip font-weight:400">{tag}</small>
 				{/each}
 			</ul>
 		{/if}

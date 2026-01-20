@@ -19,10 +19,10 @@
 	});
 </script>
 
-<div class="display_flex flex_direction_column">
-	<div class="display_flex">
+<div class="display:flex flex-direction:column">
+	<div class="display:flex">
 		<div
-			class="chip px_xl plain font_weight_400 width_upto_sm"
+			class="chip px_xl plain font-weight:400 width_atmost_sm"
 			style:padding="0 var(--space_xl) !important"
 			style:font-weight="400 !important"
 			class:color_b={capabilities.backend.status === 'success'}
@@ -30,7 +30,7 @@
 			class:color_d={capabilities.backend.status === 'pending'}
 			class:color_e={capabilities.backend.status === 'initial'}
 		>
-			<div class="column justify_content_center gap_xs" style:min-height="80px">
+			<div class="column justify-content:center gap_xs" style:min-height="80px">
 				<div class="font_size_xl">
 					backend {capabilities.backend.status === 'success'
 						? 'available'

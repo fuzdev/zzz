@@ -20,7 +20,7 @@
 	<NavLink
 		href={resolve(`/chats/${chat.id}`)}
 		{selected}
-		class="justify_content_space_between"
+		class="justify-content:space-between"
 		style="min-height: 0;"
 	>
 		<div class="ellipsis">

@@ -51,7 +51,7 @@
 	{#snippet children(prompt, pick)}
 		<button
 			type="button"
-			class="listitem compact width_100"
+			class="listitem compact width:100%"
 			class:selected={selected_ids?.includes(prompt.id)}
 			onclick={() => pick(prompt)}
 		>

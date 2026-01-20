@@ -18,11 +18,11 @@
 	};
 </script>
 
-<div class="panel p_md width_upto_md">
-	<div class="display_flex justify_content_space_between align_items_center mb_md">
+<div class="panel p_md width_atmost_md">
+	<div class="display:flex justify-content:space-between align-items:center mb_md">
 		<h4 class="mt_0 mb_0">action history</h4>
-		<div class="display_flex gap_xs align_items_center">
-			<label class="display_flex gap_xs align_items_center mb_0">
+		<div class="display:flex gap_xs align-items:center">
+			<label class="display:flex gap_xs align-items:center mb_0">
 				<input type="checkbox" class="compact" bind:checked={ollama.show_read_actions} />
 				<small>show read actions</small>
 			</label>

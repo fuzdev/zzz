@@ -34,13 +34,13 @@
 		role={selectable ? 'button' : undefined}
 		tabindex={selectable ? 0 : undefined}
 	>
-		<div class="row justify_content_space_between gap_xs">
-			<div class="flex_1">
-				<div class="font_weight_400">
+		<div class="row justify-content:space-between gap_xs">
+			<div class="flex:1">
+				<div class="font-weight:400">
 					<ProviderLogo name={thread.model.provider_name} size="var(--font_size_md)" />
 					{thread.model_name}
 				</div>
-				<div class="display_flex gap_xs">
+				<div class="display:flex gap_xs">
 					{#if turn_count > 0}
 						<small
 							>{turn_count} message{turn_count !== 1 ? 's' : ''}, {thread.token_count} token{thread.token_count !==
@@ -51,7 +51,7 @@
 					{:else}&nbsp;{/if}
 				</div>
 			</div>
-			<div class="display_flex gap_xs">
+			<div class="display:flex gap_xs">
 				<ThreadToggleButton {thread} />
 				<ConfirmButton
 					onconfirm={() => chat.remove_thread(thread.id)}

@@ -43,7 +43,7 @@
 </script>
 
 <div class="panel p_md">
-	<header class="display_flex justify_content_space_between align_items_center mb_md">
+	<header class="display:flex justify-content:space-between align-items:center mb_md">
 		<h3 class="mt_0 mb_0">
 			<Glyph glyph={GLYPH_SETTINGS} /> configure
 		</h3>
@@ -59,7 +59,7 @@
 		{/if}
 	</header>
 
-	<section class="width_upto_md display_flex flex_direction_column gap_lg">
+	<section class="width_atmost_md display:flex flex-direction:column gap_lg">
 		<p>
 			Ollama is a local LLM provider. {#if !error_message && capabilities.backend_available}
 				Want to <button type="button" class="inline compact color_a" onclick={onshowpull}
@@ -67,13 +67,13 @@
 				>?{/if}
 		</p>
 
-		<div class="display_flex flex_direction_column gap_md">
+		<div class="display:flex flex-direction:column gap_md">
 			<fieldset>
 				<label>
 					<div class="title mb_xs">Ollama host url</div>
 					<input
 						type="text"
-						class="plain flex_1"
+						class="plain flex:1"
 						placeholder="{GLYPH_PLACEHOLDER} {OLLAMA_URL}"
 						bind:value={ollama.host}
 						oninput={() => ollama.refresh()}
@@ -81,10 +81,10 @@
 				</label>
 			</fieldset>
 
-			<div class="row gap_xs justify_content_space_between">
+			<div class="row gap_xs justify-content:space-between">
 				<button
 					type="button"
-					class="justify_content_start"
+					class="justify-content:start"
 					disabled={ollama.list_status === 'pending' || !capabilities.backend_available}
 					onclick={() => ollama.refresh()}
 				>
@@ -102,7 +102,7 @@
 					<div class="row gap_sm" transition:slide={{axis: 'x'}}>
 						<button
 							type="button"
-							class="flex_shrink_0"
+							class="flex-shrink:0"
 							onclick={async () => {
 								ollama.host = OLLAMA_URL;
 								await ollama.refresh();
@@ -114,7 +114,7 @@
 					</div>
 				{/if}
 
-				<div class="display_flex gap_sm">
+				<div class="display:flex gap_sm">
 					<button
 						type="button"
 						class="plain"

@@ -17,7 +17,7 @@
 		{/snippet}
 		<TimeWidget value={app.time.now} />
 	</DashboardHeader>
-	<section class="width_upto_md">
+	<section class="width_atmost_md">
 		<p>This page lets you view and control the app's capabilities, its available powers.</p>
 		<p>
 			Zzz's goal is to connect your intent to the world through machines, so it runs in many
@@ -31,7 +31,7 @@
 	<section>
 		<CapabilitiesView />
 	</section>
-	<section class="mb_xl7 display_flex justify_content_center">
+	<section class="mb_xl7 display:flex justify-content:center">
 		<Footer />
 	</section>
 </div>

@@ -11,8 +11,8 @@
 </script>
 
 <div
-	class="chip plain flex_1 font_size_xl px_xl flex_direction_column mb_xl width_upto_sm"
-	style:display="display_flex !important"
+	class="chip plain flex:1 font_size_xl px_xl flex-direction:column mb_xl width_atmost_sm"
+	style:display="display:flex !important"
 	style:align-items="flex-start !important"
 	style:font-weight="400 !important"
 	class:color_b={capabilities.filesystem.status === 'success'}
@@ -20,7 +20,7 @@
 	class:color_d={capabilities.filesystem.status === 'pending'}
 	class:color_e={capabilities.filesystem.status === 'initial'}
 >
-	<div class="column justify_content_center gap_xs p_md" style:min-height="80px">
+	<div class="column justify-content:center gap_xs p_md" style:min-height="80px">
 		<div class="font_size_xl">
 			filesystem {capabilities.filesystem.status === 'success'
 				? 'available'

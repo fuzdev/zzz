@@ -20,7 +20,7 @@
 		{/snippet}
 		<TimeWidget value={app.time.now} />
 	</DashboardHeader>
-	<section class="width_upto_md">
+	<section class="width_atmost_md">
 		<Settings />
 
 		<div class="mt_lg">
@@ -43,7 +43,7 @@
 			</div> -->
 		</div>
 	</section>
-	<section class="mb_xl7 display_flex justify_content_center">
+	<section class="mb_xl7 display:flex justify-content:center">
 		<Footer />
 	</section>
 </div>

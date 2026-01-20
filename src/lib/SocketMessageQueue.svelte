@@ -122,14 +122,14 @@
 
 <div class="message_queue_container">
 	<!-- Header with message count and action buttons -->
-	<div class="display_flex justify_content_space_between align_items_center mb_sm">
+	<div class="display:flex justify-content:space-between align-items:center mb_sm">
 		<span class="chip {type === 'queued' ? 'color_e' : 'color_c'}">
 			{type}: {queued_messages_count}
 		</span>
 
-		<div class="display_flex gap_xs">
+		<div class="display:flex gap_xs">
 			{#if selected_count > 0}
-				<div class="display_flex gap_xs align_items_center">
+				<div class="display:flex gap_xs align-items:center">
 					<span class="chip font_size_sm">{selected_count} selected</span>
 
 					{#if socket.connected}
@@ -178,11 +178,11 @@
 					class="message_item p_sm {selected ? 'selected bg_2' : ''} {queued_messages.indexOf(
 						message,
 					) > 0
-						? 'border_top border_style_solid border_color_3'
+						? 'border_top border-style:solid border_color_3'
 						: ''}"
 				>
 					<!-- Message header with metadata and actions -->
-					<div class="display_flex gap_xs align_items_center flex_wrap_wrap">
+					<div class="display:flex gap_xs align-items:center flex-wrap:wrap">
 						<input
 							type="checkbox"
 							class="m_0 plain compact font_size_md"
@@ -192,7 +192,7 @@
 
 						<!-- Message type information -->
 						<div
-							class="font_family_mono flex_1 display_flex flex_wrap_wrap align_items_center gap_xs"
+							class="font_family_mono flex:1 display:flex flex-wrap:wrap align-items:center gap_xs"
 						>
 							<small class="chip">{message_type}</small>
 
@@ -235,7 +235,7 @@
 
 						<span class="font_size_sm">{format_timestamp(message.created)}</span>
 
-						<div class="display_flex gap_xs">
+						<div class="display:flex gap_xs">
 							<!-- Message details in popover -->
 							<PopoverButton
 								position="left"
@@ -245,7 +245,7 @@
 								<Glyph glyph={GLYPH_INFO} size="var(--font_size_lg)" />
 								{#snippet popover_content(popover)}
 									<div
-										class="p_md overflow_auto bg shadow_bottom_md"
+										class="p_md overflow:auto bg shadow_bottom_md"
 										style:max-height="400px"
 										style:max-width="500px"
 										style:min-width="300px"
@@ -253,7 +253,7 @@
 										style:border-radius="var(--border_radius_xs)"
 										style:z-index="100"
 									>
-										<div class="display_flex justify_content_space_between mb_xs">
+										<div class="display:flex justify-content:space-between mb_xs">
 											<h3 class="mt_xs">message details</h3>
 											<button
 												type="button"
@@ -264,7 +264,7 @@
 											</button>
 										</div>
 										<pre
-											class="fg_1 border_radius_xs border_width border_style border_color_2 font_family_mono font_size_xs white_space_pre_wrap word_break_break_word p_md">{message_data_serialized}</pre>
+											class="fg_1 border_radius_xs border_width border_style border_color_2 font_family_mono font_size_xs white-space:pre-wrap word-break:break-word p_md">{message_data_serialized}</pre>
 										<CopyToClipboard text={message_data_serialized} />
 									</div>
 								{/snippet}
@@ -297,12 +297,12 @@
 					<!-- Failed message details -->
 					{#if type === 'failed'}
 						{@const failed_message = message as FailedMessage}
-						<div class="display_flex flex_direction_column font_size_xs mt_xs">
-							<div class="display_flex justify_content_space_between mb_xs">
+						<div class="display:flex flex-direction:column font_size_xs mt_xs">
+							<div class="display:flex justify-content:space-between mb_xs">
 								<span>Failed at:</span>
 								<span class="font_family_mono">{format(failed_message.failed, 'HH:mm:ss')}</span>
 							</div>
-							<div class="display_flex justify_content_space_between">
+							<div class="display:flex justify-content:space-between">
 								<span>Reason:</span>
 								<span class="font_family_mono color_c">{failed_message.reason}</span>
 							</div>
@@ -313,7 +313,7 @@
 		</div>
 	{:else}
 		<div
-			class="p_md text_align_center border_style_dashed border_width_1 border_color_3 border_radius_xs bg_1"
+			class="p_md text-align:center border-style:dashed border_width_1 border_color_3 border_radius_xs bg_1"
 		>
 			No {type} messages
 		</div>

@@ -70,7 +70,7 @@
 
 {#if show_sort_controls && sortable.sorters.length > 1}
 	<label transition:slide {...label_attrs} class="p_xs row gap_xs2 mb_0 {label_attrs?.class}">
-		<small class="pr_xs3 white_space_nowrap">sort by</small>
+		<small class="pr_xs3 white-space:nowrap">sort by</small>
 		<select bind:value={sortable.active_key} class="compact plain font_size_sm">
 			{#each sortable.sorters as sorter (sorter.key)}
 				<option value={sorter.key}>

@@ -14,11 +14,11 @@
 </script>
 
 <div class="p_lg">
-	<section class="display_flex flex_wrap_wrap align_items_start gap_lg">
-		<div class="panel p_md flex_1 width_atleast_sm" style:max-width="480px">
-			<h3 class="mt_0 mb_lg display_flex align_items_center justify_content_space_between">
+	<section class="display:flex flex-wrap:wrap align-items:start gap_lg">
+		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
+			<h3 class="mt_0 mb_lg display:flex align-items:center justify-content:space-between">
 				<a
-					class="font_weight_500 text_color_2"
+					class="font-weight:500 text_color_2"
 					href={/* eslint-disable-line svelte/no-navigation-without-resolve */ to_nav_link_href(
 						app,
 						'chats',
@@ -40,7 +40,7 @@
 			{#if app.chats.ordered_items.length}
 				<ChatList />
 			{:else}
-				<div class="text_align_center p_md">
+				<div class="text-align:center p_md">
 					<button
 						type="button"
 						class="color_d"
@@ -54,10 +54,10 @@
 				</div>
 			{/if}
 		</div>
-		<div class="panel p_md flex_1 width_atleast_sm" style:max-width="480px">
-			<h3 class="mt_0 mb_lg display_flex align_items_center justify_content_space_between">
+		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
+			<h3 class="mt_0 mb_lg display:flex align-items:center justify-content:space-between">
 				<a
-					class="font_weight_500 text_color_2"
+					class="font-weight:500 text_color_2"
 					href={/* eslint-disable-line svelte/no-navigation-without-resolve */ to_nav_link_href(
 						app,
 						'prompts',
@@ -79,7 +79,7 @@
 			{#if app.prompts.ordered_items.length}
 				<PromptList />
 			{:else}
-				<div class="text_align_center p_md">
+				<div class="text-align:center p_md">
 					<button
 						type="button"
 						onclick={() => {
@@ -92,11 +92,11 @@
 				</div>
 			{/if}
 		</div>
-		<div class="panel p_md flex_1 width_atleast_sm" style:max-width="480px">
+		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
 			<div class="mb_lg">
 				<a href={resolve('/providers')} class="text_color_2"
 					><Glyph glyph={GLYPH_PROVIDER} />
-					<h3 class="display_inline my_0">providers</h3></a
+					<h3 class="display:inline my_0">providers</h3></a
 				>
 			</div>
 			<div>
@@ -106,7 +106,7 @@
 							<ProviderLink
 								{provider}
 								icon="svg"
-								class="menu_item row justify_content_start gap_xs py_xs"
+								class="menu_item row justify-content:start gap_xs py_xs"
 							/>
 						</li>
 					{:else}
@@ -115,18 +115,18 @@
 				</ul>
 			</div>
 		</div>
-		<div class="panel p_md flex_1 width_atleast_sm" style:max-width="480px">
+		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
 			<div class="mb_lg">
 				<a href={resolve('/models')} class="text_color_2"
 					><Glyph glyph={GLYPH_MODEL} />
-					<h3 class="display_inline my_0">models</h3></a
+					<h3 class="display:inline my_0">models</h3></a
 				>
 			</div>
 			<div>
 				<ul class="unstyled">
 					{#each app.models.ordered_by_name as model (model.name)}
 						<li>
-							<ModelLink {model} icon class="menu_item row justify_content_start gap_xs py_xs" />
+							<ModelLink {model} icon class="menu_item row justify-content:start gap_xs py_xs" />
 						</li>
 					{:else}
 						<p>no models available yet</p>

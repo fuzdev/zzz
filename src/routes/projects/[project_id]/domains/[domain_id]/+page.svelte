@@ -40,7 +40,7 @@
 					{/if}
 				</p>
 
-				<div class="panel p_md width_upto_md">
+				<div class="panel p_md width_atmost_md">
 					<form
 						onsubmit={(e) => {
 							e.preventDefault();
@@ -50,7 +50,7 @@
 						<div class="mb_lg">
 							<label>
 								<h3 class="mt_0 mb_sm">domain name</h3>
-								<input type="text" bind:value={domains_viewmodel.domain_name} class="width_100" />
+								<input type="text" bind:value={domains_viewmodel.domain_name} class="width:100%" />
 							</label>
 							<p>enter the full domain name, like zzz.software or blog.zzz.software</p>
 						</div>
@@ -65,8 +65,8 @@
 
 						<div class="mb_lg">
 							<h3 class="mt_0 mb_sm">status</h3>
-							<div class="display_flex gap_xl3">
-								<label class="display_flex align_items_center mb_0">
+							<div class="display:flex gap_xl3">
+								<label class="display:flex align-items:center mb_0">
 									<input
 										type="radio"
 										name="status"
@@ -75,7 +75,7 @@
 									/>
 									<span class="ml_xs">active</span>
 								</label>
-								<label class="display_flex align_items_center mb_0">
+								<label class="display:flex align-items:center mb_0">
 									<input
 										type="radio"
 										name="status"
@@ -84,7 +84,7 @@
 									/>
 									<span class="ml_xs">pending</span>
 								</label>
-								<label class="display_flex align_items_center mb_0">
+								<label class="display:flex align-items:center mb_0">
 									<input
 										type="radio"
 										name="status"
@@ -97,7 +97,7 @@
 						</div>
 
 						<div class="mb_md">
-							<label class="display_flex align_items_center">
+							<label class="display:flex align-items:center">
 								<input type="checkbox" bind:checked={domains_viewmodel.ssl_enabled} />
 								<span class="ml_xs">enable SSL</span>
 							</label>
@@ -117,7 +117,7 @@
 							{/if}
 						</div>
 
-						<div class="width_100 display_flex justify_content_space_between gap_sm">
+						<div class="width:100% display:flex justify-content:space-between gap_sm">
 							<div>
 								<button
 									type="submit"
