@@ -69,7 +69,11 @@
 	<div class="column_fixed">
 		<div class="p_sm pl_0">
 			<div class="row gap_xs2 mb_xs pl_xs2">
-				<button type="button" class="plain width:100% justify-content:start" onclick={create_prompt}>
+				<button
+					type="button"
+					class="plain width:100% justify-content:start"
+					onclick={create_prompt}
+				>
 					<Glyph glyph={GLYPH_ADD} />&nbsp; new prompt
 				</button>
 				{#if app.prompts.items.size > 1}
