@@ -27,7 +27,7 @@
 {#snippet content()}
 	<h1><Glyph glyph={GLYPH_PROJECT} /> projects</h1>
 
-	<section class="width_upto_md">
+	<section class="width_atmost_md">
 		<p>
 			When it's ready, Zzz will let you both <a href={resolve('/tabs')}>browse websites</a> and also create
 			them. The goal of this "projects" design is a streamlined extensible UX with one take on building

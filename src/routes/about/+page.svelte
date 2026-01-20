@@ -18,7 +18,7 @@
 	// TODO probably link to a blog post that's more approachable and less technical
 </script>
 
-<div class="width_upto_md p_lg">
+<div class="width_atmost_md p_lg">
 	<section>
 		<header class="mb_xl5" style:--font_size="var(--font_size_xl)">
 			<h1 class="row">
@@ -313,7 +313,7 @@
 	<section>
 		<Details>
 			{#snippet summary()}package details{/snippet}
-			<div class="panel p_md width_upto_md">
+			<div class="panel p_md width_atmost_md">
 				<LibraryDetail {library} />
 			</div>
 		</Details>

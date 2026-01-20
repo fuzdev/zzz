@@ -60,7 +60,7 @@
 
 <div class="display:flex height:100%">
 	<!-- sidebar -->
-	<div class="height:100% overflow:hidden width_upto_sm width_atleast_sm">
+	<div class="height:100% overflow:hidden width_atmost_sm width_atleast_sm">
 		<div class="height:100% overflow:auto scrollbar-width:thin p_md">
 			<!-- status and connection -->
 			<section class="display:flex flex-direction:column gap_md">

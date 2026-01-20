@@ -29,7 +29,7 @@
 {#snippet content()}
 	<h1><Glyph glyph={GLYPH_TAB} /> tabs</h1>
 
-	<section class="width_upto_md">
+	<section class="width_atmost_md">
 		{#if browser.browserified}
 			<aside>
 				⚠️⚠️ This is just a demo of planned functionality, nothing works like it should. Zzz needs a

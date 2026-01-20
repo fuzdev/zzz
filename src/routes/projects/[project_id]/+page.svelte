@@ -54,7 +54,7 @@
 				</div>
 
 				{#if project_viewmodel.editing_project}
-					<div class="panel p_md width_upto_md mb_lg">
+					<div class="panel p_md width_atmost_md mb_lg">
 						<div class="mb_md">
 							<label>
 								project name
@@ -73,7 +73,7 @@
 						</div>
 					</div>
 				{:else if project.description}
-					<p class="mb_lg width_upto_md">{project.description}</p>
+					<p class="mb_lg width_atmost_md">{project.description}</p>
 				{/if}
 
 				<div class="display:flex gap_md mb_lg">

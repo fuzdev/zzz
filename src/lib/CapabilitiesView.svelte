@@ -14,7 +14,7 @@
 	// TODO add ping button that forces websocket transport
 </script>
 
-<div class="width_upto_md">
+<div class="width_atmost_md">
 	<section>
 		<section class="mb_xl12">
 			<h2><Glyph glyph={GLYPH_BACKEND} /> backend</h2>

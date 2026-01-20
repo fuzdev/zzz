@@ -38,7 +38,7 @@
 		</button>
 	</header>
 
-	<section class="width_upto_md display:flex flex-direction:column gap_md">
+	<section class="width_atmost_md display:flex flex-direction:column gap_md">
 		<p>Create a copy of the source model with a new name.</p>
 
 		<fieldset>

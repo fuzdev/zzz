@@ -60,7 +60,7 @@
 		{#if provider.name === 'ollama'}
 			<OllamaManager ollama={app.ollama} />
 		{:else}
-			<div class="width_upto_md mb_lg">
+			<div class="width_atmost_md mb_lg">
 				<CapabilityProviderApi provider_name={provider.name} show_info={false} />
 				{#if provider.api_key_url}
 					<ExternalLink href={provider.api_key_url}>get API key</ExternalLink>

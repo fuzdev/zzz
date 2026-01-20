@@ -22,7 +22,7 @@
 <div class="display:flex flex-direction:column">
 	<div class="display:flex">
 		<div
-			class="chip px_xl plain font-weight:400 width_upto_sm"
+			class="chip px_xl plain font-weight:400 width_atmost_sm"
 			style:padding="0 var(--space_xl) !important"
 			style:font-weight="400 !important"
 			class:color_b={capabilities.backend.status === 'success'}

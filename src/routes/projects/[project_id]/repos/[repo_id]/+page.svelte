@@ -48,7 +48,7 @@
 			<div class="p_lg">
 				<h1 class="mb_lg">edit repo</h1>
 
-				<div class="panel p_md width_upto_md">
+				<div class="panel p_md width_atmost_md">
 					<form
 						onsubmit={(e) => {
 							swallow(e);

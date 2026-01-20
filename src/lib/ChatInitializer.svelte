@@ -54,7 +54,7 @@
 {/if}
 
 <div class="display:flex">
-	<section class="width_upto_sm width_atleast_sm">
+	<section class="width_atmost_sm width_atleast_sm">
 		<h3 class="mt_0 mb_lg">with model</h3>
 		<ModelPicker
 			onpick={(model) => {
@@ -67,7 +67,7 @@
 		/>
 	</section>
 
-	<section class="width_upto_sm width_atleast_sm">
+	<section class="width_atmost_sm width_atleast_sm">
 		<h3 class="mt_0 mb_lg px_md">from template</h3>
 		<menu class="unstyled column gap_xs px_md">
 			{#each app.chats.chat_templates as chat_template (chat_template.id)}

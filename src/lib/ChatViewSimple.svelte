@@ -28,7 +28,7 @@
 	>
 		<!-- the two `p_sm` are expected to stay in sync so the size is the same regardless of presentation style -->
 		<div
-			class="column width_upto_md width_atleast_sm"
+			class="column width_atmost_md width_atleast_sm"
 			class:height_100={!empty}
 			class:p_sm={!empty}
 		>

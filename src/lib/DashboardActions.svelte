@@ -25,7 +25,7 @@
 		{/snippet}
 		<TimeWidget value={app.time.now} />
 	</DashboardHeader>
-	<p class="width_upto_md">
+	<p class="width_atmost_md">
 		This page shows the actions that have happened behind the scenes. It's a work in progress and
 		not too useful yet. The idea is to make the system visible, auditable, and manipulable.
 	</p>

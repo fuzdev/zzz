@@ -355,7 +355,7 @@
 
 <div class="display:flex gap_xl5">
 	<!-- Connection Stats with retries included -->
-	<div class="width_upto_xs mt_md border_top pt_md">
+	<div class="width_atmost_xs mt_md border_top pt_md">
 		<div class="display:flex flex-direction:column gap_sm mb_sm">
 			{#if socket.reconnect_count > 0}
 				<div class="display:flex justify-content:space-between" transition:slide>

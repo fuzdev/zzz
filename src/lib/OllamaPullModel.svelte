@@ -50,7 +50,7 @@
 		</button>
 	</header>
 
-	<div class="width_upto_md display:flex flex-direction:column gap_md">
+	<div class="width_atmost_md display:flex flex-direction:column gap_md">
 		<p>This downloads a builtin model so you can use it locally.</p>
 
 		<fieldset>

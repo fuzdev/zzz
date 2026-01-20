@@ -27,7 +27,7 @@
 			<div class="p_lg">
 				<h1 class="mb_lg">project settings</h1>
 
-				<div class="panel p_md width_upto_md my_lg">
+				<div class="panel p_md width_atmost_md my_lg">
 					<div class="mb_md">
 						<label>
 							<div class="title">project name</div>
@@ -62,7 +62,7 @@
 					</button>
 				</div>
 
-				<div class="panel p_md width_upto_md">
+				<div class="panel p_md width_atmost_md">
 					<h2 class="mt_0 mb_lg">danger zone</h2>
 					<p class="mb_md">These actions cannot be undone.</p>
 

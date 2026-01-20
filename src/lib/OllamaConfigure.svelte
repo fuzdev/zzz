@@ -59,7 +59,7 @@
 		{/if}
 	</header>
 
-	<section class="width_upto_md display:flex flex-direction:column gap_lg">
+	<section class="width_atmost_md display:flex flex-direction:column gap_lg">
 		<p>
 			Ollama is a local LLM provider. {#if !error_message && capabilities.backend_available}
 				Want to <button type="button" class="inline compact color_a" onclick={onshowpull}

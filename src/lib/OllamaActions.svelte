@@ -18,7 +18,7 @@
 	};
 </script>
 
-<div class="panel p_md width_upto_md">
+<div class="panel p_md width_atmost_md">
 	<div class="display:flex justify-content:space-between align-items:center mb_md">
 		<h4 class="mt_0 mb_0">action history</h4>
 		<div class="display:flex gap_xs align-items:center">

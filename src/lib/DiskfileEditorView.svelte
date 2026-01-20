@@ -75,7 +75,7 @@
 			/>
 		</div>
 
-		<div class="width_upto_sm width_atleast_sm py_md">
+		<div class="width_atmost_sm width_atleast_sm py_md">
 			<div class="px_md mb_lg">
 				<DiskfileActions {diskfile} {editor_state} />
 			</div>

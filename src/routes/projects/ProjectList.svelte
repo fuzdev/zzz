@@ -12,7 +12,7 @@
 	<h2 class="mt_0 mb_lg">Projects</h2>
 
 	{#if projects.projects.length === 0}
-		<div class="panel p_lg width_upto_md">
+		<div class="panel p_lg width_atmost_md">
 			<p>no projects yet</p>
 		</div>
 	{:else}

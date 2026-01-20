@@ -75,7 +75,7 @@
 <div class="height:100% display:flex">
 	{#if capabilities.filesystem_available === false}
 		<div class="box height:100% width:100%">
-			<div class="width_upto_sm">
+			<div class="width_atmost_sm">
 				<ErrorMessage>
 					<p>
 						Filesystem is not available. File management requires a backend connection with
@@ -100,7 +100,7 @@
 			</div>
 		</div>
 	{:else}
-		<div class="height:100% overflow:hidden width_upto_sm">
+		<div class="height:100% overflow:hidden width_atmost_sm">
 			<DiskfileExplorer />
 		</div>
 

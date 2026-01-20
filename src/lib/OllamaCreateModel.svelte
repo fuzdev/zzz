@@ -38,7 +38,7 @@
 		</button>
 	</header>
 
-	<section class="width_upto_md display:flex flex-direction:column gap_md">
+	<section class="width_atmost_md display:flex flex-direction:column gap_md">
 		<p>
 			This creates a new custom modelfile, to download a builtin model see <button
 				type="button"

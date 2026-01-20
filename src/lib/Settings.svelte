@@ -6,7 +6,7 @@
 </script>
 
 <h3>color scheme</h3>
-<div class="width_upto_sm mb_lg">
+<div class="width_atmost_sm mb_lg">
 	<!-- TODO wanted to add `flex:1` to the buttons here, maybe add `menu_attrs` and `button_attrs`  -->
 	<ColorSchemeInput />
 </div>
@@ -21,8 +21,8 @@
 		href="https://css.fuz.dev/docs/themes">fuz_css</ExternalLink
 	>.
 </aside>
-<div class="width_upto_sm box">
-	<div class="width_upto_xs">
+<div class="width_atmost_sm box">
+	<div class="width_atmost_xs">
 		<ThemeInput />
 	</div>
 </div>

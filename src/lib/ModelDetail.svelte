@@ -102,7 +102,7 @@
 			{#snippet header()}{/snippet}
 		</OllamaModelDetail>
 	{:else}
-		<aside class="mt_xl3 width_upto_md">
+		<aside class="mt_xl3 width_atmost_md">
 			⚠️ This should show model info, but the APIs for ChatGPT and Claude do not provide metadata
 			like context window size, output token limit, and other details. Gemini however does. It looks
 			like we'll have to maintain hardcoded metadata for models, probably extending what we can

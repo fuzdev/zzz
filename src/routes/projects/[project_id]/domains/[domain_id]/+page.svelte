@@ -40,7 +40,7 @@
 					{/if}
 				</p>
 
-				<div class="panel p_md width_upto_md">
+				<div class="panel p_md width_atmost_md">
 					<form
 						onsubmit={(e) => {
 							e.preventDefault();
