@@ -64,7 +64,7 @@
 			<div class="ml_sm mb_md">
 				<ProviderLink provider={model.provider} icon="svg" class="font_size_lg" />
 				{#if model.provider && !model.provider.available}
-					<span class="font_size_md color_c_5 ml_sm">
+					<span class="font_size_md color_c_50 ml_sm">
 						<Glyph glyph={GLYPH_ERROR} />
 						{model.provider.status && !model.provider.status.available
 							? model.provider.status.error

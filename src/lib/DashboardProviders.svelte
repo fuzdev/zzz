@@ -24,9 +24,9 @@
 				<p>
 					<Glyph glyph={GLYPH_PROVIDER} />{provider.name}
 					{#if provider.available}
-						<span class="color_b_5 ml_sm"><Glyph glyph={GLYPH_CHECKMARK} /> available</span>
+						<span class="color_b_50 ml_sm"><Glyph glyph={GLYPH_CHECKMARK} /> available</span>
 					{:else}
-						<span class="color_c_5 ml_sm"
+						<span class="color_c_50 ml_sm"
 							><Glyph glyph={GLYPH_ERROR} />
 							{provider.status && !provider.status.available
 								? provider.status.error

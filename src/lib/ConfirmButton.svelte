@@ -83,7 +83,7 @@
 {/snippet}
 
 <style>
-	/* TODO these are a hack, fix after changing fuz_css to opaque bg colors (and use color_c_2 or something) */
+	/* TODO these are a hack, fix after changing fuz_css to opaque surface colors (and use color_c_20 or something) */
 	button {
 		background-color: #fff;
 	}

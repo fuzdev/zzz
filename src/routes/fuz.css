@@ -198,32 +198,11 @@ a.chip {
 	font-size: var(--font_size_xl3);
 	--font_size: var(--font_size_xl3);
 }
-.text_color_2 {
-	color: var(--text_color_2);
-}
 .text_color_3 {
 	color: var(--text_color_3);
 }
-.text_color_4 {
-	color: var(--text_color_4);
-}
-.text_color_5 {
-	color: var(--text_color_5);
-}
 .bg {
 	background-color: var(--bg);
-}
-.bg_1 {
-	background-color: var(--bg_1);
-}
-.bg_2 {
-	background-color: var(--bg_2);
-}
-.bg_5 {
-	background-color: var(--bg_5);
-}
-.fg_1 {
-	background-color: var(--fg_1);
 }
 .color_a_5 {
 	color: var(--color_a_5);
@@ -260,12 +239,6 @@ a.chip {
 }
 .bg_d_6 {
 	background-color: var(--color_d_6);
-}
-.border_color_2 {
-	border-color: var(--border_color_2);
-}
-.border_color_3 {
-	border-color: var(--border_color_3);
 }
 .border_width_1 {
 	border-width: var(--border_width_1);

@@ -61,14 +61,14 @@
 	}
 
 	.status_active {
-		background-color: var(--color_a_5);
+		background-color: var(--color_a_50);
 	}
 
 	.status_pending {
-		background-color: var(--color_e_5);
+		background-color: var(--color_e_50);
 	}
 
 	.status_inactive {
-		background-color: var(--text_color_5);
+		background-color: var(--text_50);
 	}
 </style>

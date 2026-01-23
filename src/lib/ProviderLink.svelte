@@ -61,7 +61,7 @@
 {:else if fallback}
 	{@render fallback()}
 {:else}
-	<small {...fallback_attrs} class="font_family_mono color_c_5 {fallback_attrs?.class}"
+	<small {...fallback_attrs} class="font_family_mono color_c_50 {fallback_attrs?.class}"
 		><Glyph glyph={GLYPH_PROVIDER} /> missing provider</small
 	>
 {/if}

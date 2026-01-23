@@ -70,11 +70,11 @@
 		display: block;
 		text-decoration: none;
 		color: inherit;
-		border: 1px solid var(--border_color_1);
+		border: 1px solid var(--shade_10);
 	}
 
 	.project_card:hover {
-		border-color: var(--border_color_2);
+		border-color: var(--shade_20);
 	}
 
 	.domains_list {
@@ -98,20 +98,20 @@
 	}
 
 	.status_active {
-		background-color: var(--color_b_5);
+		background-color: var(--color_b_50);
 	}
 
 	.status_pending {
-		background-color: var(--color_e_5);
+		background-color: var(--color_e_50);
 	}
 
 	.status_inactive {
-		background-color: var(--text_color_5);
+		background-color: var(--text_50);
 	}
 
 	.no_ssl_badge {
 		font-size: 0.8em;
-		background-color: var(--bg_2);
+		background-color: var(--shade_20);
 		padding: 1px 4px;
 		border-radius: var(--border_radius_xs);
 	}

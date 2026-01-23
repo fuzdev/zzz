@@ -18,7 +18,7 @@
 		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
 			<h3 class="mt_0 mb_lg display:flex align-items:center justify-content:space-between">
 				<a
-					class="font-weight:500 text_color_2"
+					class="font-weight:500 text_80"
 					href={/* eslint-disable-line svelte/no-navigation-without-resolve */ to_nav_link_href(
 						app,
 						'chats',
@@ -57,7 +57,7 @@
 		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
 			<h3 class="mt_0 mb_lg display:flex align-items:center justify-content:space-between">
 				<a
-					class="font-weight:500 text_color_2"
+					class="font-weight:500 text_80"
 					href={/* eslint-disable-line svelte/no-navigation-without-resolve */ to_nav_link_href(
 						app,
 						'prompts',
@@ -94,7 +94,7 @@
 		</div>
 		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
 			<div class="mb_lg">
-				<a href={resolve('/providers')} class="text_color_2"
+				<a href={resolve('/providers')} class="text_80"
 					><Glyph glyph={GLYPH_PROVIDER} />
 					<h3 class="display:inline my_0">providers</h3></a
 				>
@@ -117,7 +117,7 @@
 		</div>
 		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
 			<div class="mb_lg">
-				<a href={resolve('/models')} class="text_color_2"
+				<a href={resolve('/models')} class="text_80"
 					><Glyph glyph={GLYPH_MODEL} />
 					<h3 class="display:inline my_0">models</h3></a
 				>

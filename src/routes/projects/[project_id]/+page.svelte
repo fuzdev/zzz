@@ -99,13 +99,13 @@
 							<a href={resolve(`/projects/${project.id}/pages`)}>pages</a>
 						</h2>
 						{#if project.pages.length === 0}
-							<p class="text_color_5">no pages created yet</p>
+							<p class="text_50">no pages created yet</p>
 						{:else}
 							<ul class="pages_list">
 								{#each project.pages as page (page.id)}
 									<li>
 										<a href={resolve(`/projects/${project.id}/pages/${page.id}`)}>{page.title}</a>
-										<span class="text_color_5">{page.path}</span>
+										<span class="text_50">{page.path}</span>
 									</li>
 								{/each}
 							</ul>
@@ -124,7 +124,7 @@
 							<a href={resolve(`/projects/${project.id}/domains`)}>domains</a>
 						</h2>
 						{#if project.domains.length === 0}
-							<p class="text_color_5">no domains configured yet</p>
+							<p class="text_50">no domains configured yet</p>
 						{:else}
 							<ul class="domains_list">
 								{#each project.domains as domain (domain.id)}
@@ -164,7 +164,7 @@
 							<a href={resolve(`/projects/${project.id}/repos`)}>repos</a>
 						</h2>
 						{#if project.repos.length === 0}
-							<p class="text_color_5">no repos configured yet</p>
+							<p class="text_50">no repos configured yet</p>
 						{:else}
 							<ul class="repos_list">
 								{#each project.repos as repo (repo.id)}
@@ -228,7 +228,7 @@
 	.domains_list li,
 	.repos_list li {
 		padding: var(--font_size_xs) 0;
-		border-bottom: 1px solid var(--border_color_1);
+		border-bottom: 1px solid var(--shade_10);
 		display: flex;
 		flex-direction: column;
 	}
@@ -257,8 +257,8 @@
 	}
 
 	.checkout_badge {
-		background-color: var(--bg_2);
-		color: var(--text_color_5);
+		background-color: var(--shade_20);
+		color: var(--text_50);
 	}
 
 	.ssl_badge {
@@ -266,21 +266,21 @@
 		padding: 2px 6px;
 		border-radius: 10px;
 		font-size: 0.75em;
-		background-color: var(--bg_2);
+		background-color: var(--shade_20);
 	}
 
 	.status_active {
-		background-color: var(--color_b_2);
-		color: var(--color_b_9);
+		background-color: var(--color_b_20);
+		color: var(--color_b_90);
 	}
 
 	.status_pending {
-		background-color: var(--color_e_2);
-		color: var(--color_e_9);
+		background-color: var(--color_e_20);
+		color: var(--color_e_90);
 	}
 
 	.status_inactive {
-		background-color: var(--bg_2);
-		color: var(--text_color_5);
+		background-color: var(--shade_20);
+		color: var(--text_50);
 	}
 </style>

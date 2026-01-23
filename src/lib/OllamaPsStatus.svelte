@@ -54,7 +54,7 @@
 					{#if !model}
 						<!-- TODO handle this case better, maybe show a warning? -->
 						<div
-							class="display:flex justify-content:space-between align-items:center p_sm border_radius_xs bg_1"
+							class="display:flex justify-content:space-between align-items:center p_sm border_radius_xs shade_10"
 						>
 							<div class="display:flex gap_sm align-items:center">
 								<Glyph glyph={GLYPH_INFO} />
@@ -63,7 +63,7 @@
 						</div>
 					{:else}
 						<div
-							class="display:flex justify-content:space-between align-items:center p_sm border_radius_xs bg_1"
+							class="display:flex justify-content:space-between align-items:center p_sm border_radius_xs shade_10"
 						>
 							<div class="display:flex gap_sm align-items:center">
 								<!-- TODO handle this API without the `!`, maybe change to only require the name, and derive the model -->

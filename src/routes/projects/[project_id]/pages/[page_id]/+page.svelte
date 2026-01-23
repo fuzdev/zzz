@@ -201,7 +201,7 @@
 		left: 0;
 		width: 100%;
 		height: 100%;
-		background: var(--bg);
+		background: var(--shade_00);
 		z-index: 1000;
 		overflow: auto;
 	}

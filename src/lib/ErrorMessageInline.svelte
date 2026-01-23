@@ -12,7 +12,7 @@
 	} = $props();
 </script>
 
-<span class="color_c_5">
+<span class="color_c_50">
 	{#if glyph}
 		<Glyph {glyph} />
 	{/if}

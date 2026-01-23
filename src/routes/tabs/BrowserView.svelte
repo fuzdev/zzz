@@ -176,16 +176,16 @@
 		width: 100%;
 		display: flex;
 		flex-direction: column;
-		border-left: 1px solid var(--border_color_1);
+		border-left: 1px solid var(--shade_10);
 	}
 
 	.browser_chrome {
-		border-bottom: 1px solid var(--border_color_1);
+		border-bottom: 1px solid var(--shade_10);
 		flex-shrink: 0;
 	}
 
 	.browser_tab_bar {
-		border-bottom: 1px solid var(--border_color_1);
+		border-bottom: 1px solid var(--shade_10);
 	}
 
 	.browser_content {

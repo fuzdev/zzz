@@ -62,7 +62,7 @@
 		>{#snippet children(text_icon)}{#if icon}{@render icon(known_logo)}{:else if known_logo}<Svg
 					data={known_logo}
 					size="var(--font_size_xs)"
-					fill="var(--color_i_5)"
+					fill="var(--color_i_50)"
 					inline
 				/>{:else}{text_icon}{/if}{/snippet}</ExternalLinkIcon
 	></a

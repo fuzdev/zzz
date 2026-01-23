@@ -30,7 +30,7 @@
 			{:else if turn.is_content_loaded}
 				{turn.content}
 			{:else if turn.parts.length === 0}
-				<span class="text_color_4 font_family_mono">missing parts: {turn.part_ids.join(', ')}</span>
+				<span class="text_60 font_family_mono">missing parts: {turn.part_ids.join(', ')}</span>
 			{:else}
 				<ErrorMessageInline>{UNKNOWN_ERROR_MESSAGE}</ErrorMessageInline>
 			{/if}

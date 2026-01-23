@@ -114,6 +114,6 @@
 		overflow: hidden; /* for ellipsis, is there another way to force it to shrink to obscure content? */
 	}
 	span[role='button']:hover {
-		background-color: var(--bg_6);
+		background-color: var(--shade_60);
 	}
 </style>

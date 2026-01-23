@@ -81,7 +81,7 @@
 			color-mix(in hsl, var(--shadow_color) var(--shadow_alpha, var(--shadow_alpha_1)), transparent);
 	}
 	.browser_tab_button.selected {
-		color: var(--text_color_1);
+		color: var(--text_90);
 		box-shadow: var(--shadow_inset_top_sm)
 			color-mix(in hsl, var(--shadow_color) var(--shadow_alpha, var(--shadow_alpha_2)), transparent);
 	}

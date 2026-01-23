@@ -148,6 +148,6 @@
 		position: sticky;
 		top: 0;
 		bottom: 0;
-		background-color: var(--bg); /* TODO needs to be opaque but this is a hack */
+		background-color: var(--shade_00);
 	}
 </style>

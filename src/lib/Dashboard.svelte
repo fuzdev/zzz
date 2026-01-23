@@ -123,14 +123,14 @@
 								<Svg
 									data={logo_zzz}
 									size="var(--icon_size_md)"
-									fill={app.futuremode ? 'var(--color_h_5)' : undefined}
+									fill={app.futuremode ? 'var(--color_h_50)' : undefined}
 									style="transition: transform 200ms ease"
 									class={app.futuremode ? 'transform:scaleX(-1)' : ''}
 								/>
 							</NavLink>
 						</div>
 					{:else}
-						<div class="font_size_xl font_family_serif mt_xl7 mb_md text_color_3">
+						<div class="font_size_xl font_family_serif mt_xl7 mb_md text_70">
 							{section.group}
 						</div>
 					{/if}
@@ -145,7 +145,7 @@
 										<span class="icon_xs">
 											<Svg
 												data={link.icon}
-												fill={selected ? 'var(--link_color)' : 'var(--text_color_1)'}
+												fill={selected ? 'var(--link_color)' : 'var(--text_90)'}
 												size="var(--icon_size_xs)"
 											/>
 										</span>
