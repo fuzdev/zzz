@@ -74,15 +74,15 @@
 	}
 	.browser_tab_button:hover {
 		box-shadow: var(--shadow_inset_bottom_xs)
-			color-mix(in hsl, var(--shadow_color) var(--shadow_alpha, var(--shadow_alpha_30)), transparent);
+			color-mix(in hsl, var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)), transparent);
 	}
 	.browser_tab_button:active {
 		box-shadow: var(--shadow_inset_top_xs)
-			color-mix(in hsl, var(--shadow_color) var(--shadow_alpha, var(--shadow_alpha_30)), transparent);
+			color-mix(in hsl, var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)), transparent);
 	}
 	.browser_tab_button.selected {
 		color: var(--text_90);
 		box-shadow: var(--shadow_inset_top_sm)
-			color-mix(in hsl, var(--shadow_color) var(--shadow_alpha, var(--shadow_alpha_40)), transparent);
+			color-mix(in hsl, var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_40)), transparent);
 	}
 </style>

@@ -200,6 +200,6 @@
 
 	.browser_address_bar input.url_edited {
 		box-shadow: var(--shadow_xs)
-			color-mix(in hsl, var(--shadow_color) var(--shadow_alpha, var(--shadow_alpha_30)), transparent);
+			color-mix(in hsl, var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)), transparent);
 	}
 </style>
