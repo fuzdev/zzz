@@ -70,11 +70,11 @@
 		display: block;
 		text-decoration: none;
 		color: inherit;
-		border: 1px solid var(--shade_10);
+		border: 1px solid var(--border_color_10);
 	}
 
 	.project_card:hover {
-		border-color: var(--shade_20);
+		border-color: var(--border_color_20);
 	}
 
 	.domains_list {

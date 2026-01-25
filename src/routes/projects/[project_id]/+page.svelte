@@ -228,7 +228,7 @@
 	.domains_list li,
 	.repos_list li {
 		padding: var(--font_size_xs) 0;
-		border-bottom: 1px solid var(--shade_10);
+		border-bottom: 1px solid var(--border_color_10);
 		display: flex;
 		flex-direction: column;
 	}

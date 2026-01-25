@@ -249,7 +249,7 @@
 										style:max-height="400px"
 										style:max-width="500px"
 										style:min-width="300px"
-										style:border="1px solid var(--shade_30)"
+										style:border="1px solid var(--border_color_30)"
 										style:border-radius="var(--border_radius_xs)"
 										style:z-index="100"
 									>

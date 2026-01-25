@@ -52,7 +52,7 @@
 		white-space: nowrap;
 	}
 	.nav_link:hover {
-		border-color: var(--shade_50);
+		border-color: var(--border_color_50);
 	}
 	.nav_link:active {
 		border-color: var(--color_a_50);
@@ -62,6 +62,6 @@
 		color: var(--color_a_60);
 	}
 	.nav_link.selected_descendent {
-		border-color: var(--shade_50);
+		border-color: var(--border_color_50);
 	}
 </style>

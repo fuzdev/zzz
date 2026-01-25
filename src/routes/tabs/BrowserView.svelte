@@ -176,16 +176,16 @@
 		width: 100%;
 		display: flex;
 		flex-direction: column;
-		border-left: 1px solid var(--shade_10);
+		border-left: 1px solid var(--border_color_10);
 	}
 
 	.browser_chrome {
-		border-bottom: 1px solid var(--shade_10);
+		border-bottom: 1px solid var(--border_color_10);
 		flex-shrink: 0;
 	}
 
 	.browser_tab_bar {
-		border-bottom: 1px solid var(--shade_10);
+		border-bottom: 1px solid var(--border_color_10);
 	}
 
 	.browser_content {
@@ -200,6 +200,6 @@
 
 	.browser_address_bar input.url_edited {
 		box-shadow: var(--shadow_xs)
-			color-mix(in hsl, var(--shadow_color) var(--shadow_alpha, var(--shadow_alpha_1)), transparent);
+			color-mix(in hsl, var(--shadow_color) var(--shadow_alpha, var(--shadow_alpha_30)), transparent);
 	}
 </style>
