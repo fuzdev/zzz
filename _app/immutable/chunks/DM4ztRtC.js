@@ -1,0 +1,1 @@
+const n=(t,o=1)=>{if(t===0)return"0 Bytes";const s=1024,B=o<0?0:o,r=["bytes","KB","MB","GB","TB","PB","EB","ZB","YB"],a=Math.floor(Math.log(t)/Math.log(s));return parseFloat((t/s**a).toFixed(B))+" "+r[a]},e=t=>t<1?`${Math.round(t*1024)} MB`:`${t.toFixed(1)} GB`;export{n as a,e as f};
