@@ -237,8 +237,8 @@
 					</li>
 					<li>call Ollama's API if available -- low risk</li>
 					<li>
-						<strong class="color_c_50">there is no authentication yet</strong>, only an origin check,
-						so do not use this in production
+						<strong class="color_c_50">there is no authentication yet</strong>, only an origin
+						check, so do not use this in production
 					</li>
 					<li>
 						soon, more integrations including terminal access assuming Bash, but nothing that

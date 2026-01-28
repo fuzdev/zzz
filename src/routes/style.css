@@ -84,7 +84,13 @@ input.input_xs {
 .scrolled {
 	box-shadow: var(
 		--box_shadow,
-		var(--shadow_sm) color-mix(in hsl, var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha_40), transparent) inset
+		var(--shadow_sm)
+			color-mix(
+				in hsl,
+				var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha_40),
+				transparent
+			)
+			inset
 	);
 }
 
@@ -320,15 +326,27 @@ a.chip {
 .plain.selectable.deselectable:not(.menu_item).selected {
 	background-color: transparent;
 	box-shadow: var(--shadow_inset_top_xs)
-		color-mix(in hsl, var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)), transparent);
+		color-mix(
+			in hsl,
+			var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)),
+			transparent
+		);
 }
 .plain.selectable.deselectable:not(.menu_item).selected:hover {
 	box-shadow: var(--shadow_inset_top_sm)
-		color-mix(in hsl, var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)), transparent);
+		color-mix(
+			in hsl,
+			var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)),
+			transparent
+		);
 }
 .plain.selectable.deselectable:not(.menu_item).selected:active {
 	box-shadow: var(--shadow_inset_bottom_xs)
-		color-mix(in hsl, var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)), transparent);
+		color-mix(
+			in hsl,
+			var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)),
+			transparent
+		);
 }
 
 /* TODO upstream but maybe not exactly like this, fixes the contextmenu active state */
@@ -358,9 +376,17 @@ button.menu_item[disabled] {
 	width: 100%;
 	box-shadow:
 		var(--shadow_bottom_xl)
-			color-mix(in hsl, var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)), transparent),
+			color-mix(
+				in hsl,
+				var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)),
+				transparent
+			),
 		var(--shadow_bottom_xs)
-			color-mix(in hsl, var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)), transparent);
+			color-mix(
+				in hsl,
+				var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)),
+				transparent
+			);
 }
 
 /* TODO upstream? */
