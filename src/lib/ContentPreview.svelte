@@ -21,4 +21,4 @@
 	style:height
 	style:min-height={min_height}
 	style:max-height={max_height}
-	class="flex:1 width:100% overflow:auto scrollbar-width:thin border_radius_xs font_family_sans font_size_sm fg_1 px_md py_xs {attrs?.class}">{content}</pre>
+	class="flex:1 width:100% overflow:auto scrollbar-width:thin border_radius_xs font_family_sans font_size_sm shade_10 px_md py_xs {attrs?.class}">{content}</pre>

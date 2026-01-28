@@ -77,7 +77,7 @@
 
 <style>
 	.content_matches:not(.selected) {
-		background-color: var(--fg_1);
+		background-color: var(--shade_10);
 	}
 
 	.listitem.compact {
@@ -89,7 +89,7 @@
 		min-height: 0;
 	}
 
-	/* TODO this would be correct but we need an opaque bg, fuz_css needs the feature */
+	/* TODO this would be correct but we need an opaque surface, fuz_css needs the feature */
 	/* button.selected {
 		position: sticky;
 		top: 0;

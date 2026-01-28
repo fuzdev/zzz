@@ -46,7 +46,7 @@
 		left: 0;
 		top: 0;
 		height: 100%;
-		background: var(--fg_5);
+		background: var(--shade_50);
 		opacity: 10%;
 		transition: width var(--duration_3) ease-in-out;
 		border-radius: var(--border_radius_xs);

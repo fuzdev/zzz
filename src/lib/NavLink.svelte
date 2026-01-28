@@ -47,21 +47,21 @@
 		padding: var(--space_xs2) var(--space_sm);
 		text-decoration: none;
 		border: var(--border_width_2) var(--border_style) transparent;
-		color: var(--text_color_2);
+		color: var(--text_80);
 		font-weight: 600;
 		white-space: nowrap;
 	}
 	.nav_link:hover {
-		border-color: var(--border_color_5);
+		border-color: var(--border_color_50);
 	}
 	.nav_link:active {
-		border-color: var(--border_color_a);
+		border-color: var(--color_a_50);
 	}
 	.nav_link.selected {
-		border-color: var(--border_color_a);
-		color: var(--color_a_6);
+		border-color: var(--color_a_50);
+		color: var(--color_a_60);
 	}
 	.nav_link.selected_descendent {
-		border-color: var(--border_color_5);
+		border-color: var(--border_color_50);
 	}
 </style>

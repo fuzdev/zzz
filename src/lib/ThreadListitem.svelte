@@ -72,9 +72,9 @@
 		border: var(--border_width_2) var(--border_style) transparent;
 	}
 	.thread_listitem.selected {
-		border-color: var(--border_color_a);
+		border-color: var(--color_a_50);
 	}
 	.thread_listitem:hover {
-		background-color: var(--bg_1);
+		background-color: var(--shade_10);
 	}
 </style>

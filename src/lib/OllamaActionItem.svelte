@@ -91,7 +91,7 @@
 </script>
 
 <li transition:slide class="py_xs3">
-	<div class="border_radius_xs {action.pending ? 'bg_2' : 'bg_1'} {operation_color_class}">
+	<div class="border_radius_xs {action.pending ? 'shade_20' : 'shade_10'} {operation_color_class}">
 		<div class="display:flex justify-content:space-between align-items:center p_sm">
 			<div class="display:flex gap_md align-items:center">
 				{#if action.pending}
@@ -99,7 +99,7 @@
 				{:else}
 					<Glyph
 						glyph={action.success ? GLYPH_CHECKMARK : GLYPH_XMARK}
-						class={action.failed ? 'color_c_5' : undefined}
+						class={action.failed ? 'color_c_50' : undefined}
 					/>
 				{/if}
 				<Glyph glyph={operation_icon} />
@@ -110,7 +110,7 @@
 					</div>
 				{/if}
 				{#if action.failed && error_message}
-					<div class="font_size_sm color_c_5 font-weight:500">{error_message}</div>
+					<div class="font_size_sm color_c_50 font-weight:500">{error_message}</div>
 				{/if}
 			</div>
 			<span class="font_size_sm">

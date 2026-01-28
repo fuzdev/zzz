@@ -57,7 +57,7 @@ input[type='checkbox'].compact {
 	min-height: var(--input_height);
 }
 input[type='checkbox'].compact:not(:hover)::before {
-	color: var(--text_color_3);
+	color: var(--text_70);
 }
 
 /* TODO upstream */
@@ -84,7 +84,13 @@ input.input_xs {
 .scrolled {
 	box-shadow: var(
 		--box_shadow,
-		var(--shadow_sm) color-mix(in hsl, var(--shadow_color) var(--shadow_alpha_2), transparent) inset
+		var(--shadow_sm)
+			color-mix(
+				in hsl,
+				var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha_40),
+				transparent
+			)
+			inset
 	);
 }
 
@@ -95,7 +101,7 @@ input.input_xs {
 }
 .reorderable_item:hover {
 	outline-width: var(--border_width_1);
-	outline-color: var(--border_color_3);
+	outline-color: var(--border_color_30);
 }
 .reorderable_item:active {
 	outline-width: var(--border_width_1);
@@ -116,7 +122,7 @@ input.input_xs {
 /* Drag indicator base style */
 .drag_over {
 	--drag_indicator_size: 4px;
-	--drag_indicator_color: var(--color_a_5);
+	--drag_indicator_color: var(--color_a_50);
 	--drag_indicator_z_index: 100;
 	position: relative;
 }
@@ -162,7 +168,7 @@ input.input_xs {
 
 /* TODO ? */
 /* .drag_over_invalid::before {
-	background-color: var(--color_c_5);
+	background-color: var(--color_c_50);
 } */
 
 /* TODO upstream */
@@ -182,7 +188,7 @@ input.input_xs {
 }
 
 .column_bg_1 {
-	background-color: var(--fg_1);
+	background-color: var(--shade_10);
 	min-height: 100%;
 }
 
@@ -197,7 +203,7 @@ input.input_xs {
 /* Chip styles */
 .chip {
 	padding: var(--space_xs5) var(--space_sm);
-	background-color: var(--fg_1);
+	background-color: var(--shade_10);
 	border-radius: var(--border_radius_xs);
 	display: inline-flex;
 	align-items: center;
@@ -210,67 +216,67 @@ a.chip {
 }
 /* Chip color variants */
 .chip.color_a {
-	color: var(--color_a_5);
-	background-color: color-mix(in hsl, var(--fill_a) 12%, transparent);
+	color: var(--color_a_50);
+	background-color: color-mix(in hsl, var(--color_a_40) 12%, transparent);
 }
 .chip.color_b {
-	color: var(--color_b_5);
-	background-color: color-mix(in hsl, var(--fill_b) 12%, transparent);
+	color: var(--color_b_50);
+	background-color: color-mix(in hsl, var(--color_b_40) 12%, transparent);
 }
 .chip.color_c {
-	color: var(--color_c_5);
-	background-color: color-mix(in hsl, var(--fill_c) 12%, transparent);
+	color: var(--color_c_50);
+	background-color: color-mix(in hsl, var(--color_c_40) 12%, transparent);
 }
 .chip.color_d {
-	color: var(--color_d_5);
-	background-color: color-mix(in hsl, var(--fill_d) 12%, transparent);
+	color: var(--color_d_50);
+	background-color: color-mix(in hsl, var(--color_d_40) 12%, transparent);
 }
 .chip.color_e {
-	color: var(--color_e_5);
-	background-color: color-mix(in hsl, var(--fill_e) 12%, transparent);
+	color: var(--color_e_50);
+	background-color: color-mix(in hsl, var(--color_e_40) 12%, transparent);
 }
 .chip.color_f {
-	color: var(--color_f_5);
-	background-color: color-mix(in hsl, var(--fill_f) 12%, transparent);
+	color: var(--color_f_50);
+	background-color: color-mix(in hsl, var(--color_f_40) 12%, transparent);
 }
 .chip.color_g {
-	color: var(--color_g_5);
-	background-color: color-mix(in hsl, var(--fill_g) 12%, transparent);
+	color: var(--color_g_50);
+	background-color: color-mix(in hsl, var(--color_g_40) 12%, transparent);
 }
 .chip.color_h {
-	color: var(--color_h_5);
-	background-color: color-mix(in hsl, var(--fill_h) 12%, transparent);
+	color: var(--color_h_50);
+	background-color: color-mix(in hsl, var(--color_h_40) 12%, transparent);
 }
 .chip.color_i {
-	color: var(--color_i_5);
-	background-color: color-mix(in hsl, var(--fill_i) 12%, transparent);
+	color: var(--color_i_50);
+	background-color: color-mix(in hsl, var(--color_i_40) 12%, transparent);
 }
 .chip.color_a:not(.plain) {
-	border-color: var(--border_color_a);
+	border-color: var(--color_a_50);
 }
 .chip.color_b:not(.plain) {
-	border-color: var(--border_color_b);
+	border-color: var(--color_b_50);
 }
 .chip.color_c:not(.plain) {
-	border-color: var(--border_color_c);
+	border-color: var(--color_c_50);
 }
 .chip.color_d:not(.plain) {
-	border-color: var(--border_color_d);
+	border-color: var(--color_d_50);
 }
 .chip.color_e:not(.plain) {
-	border-color: var(--border_color_e);
+	border-color: var(--color_e_50);
 }
 .chip.color_f:not(.plain) {
-	border-color: var(--border_color_f);
+	border-color: var(--color_f_50);
 }
 .chip.color_g:not(.plain) {
-	border-color: var(--border_color_g);
+	border-color: var(--color_g_50);
 }
 .chip.color_h:not(.plain) {
-	border-color: var(--border_color_h);
+	border-color: var(--color_h_50);
 }
 .chip.color_i:not(.plain) {
-	border-color: var(--border_color_i);
+	border-color: var(--color_i_50);
 }
 
 /* TODO maybe upstream? is weird but has a consistency  */
@@ -296,14 +302,14 @@ a.chip {
 	text-align: left;
 }
 .listitem:hover {
-	--button_text_color: var(--text_color_2);
+	--button_text_color: var(--text_80);
 }
 .listitem.selected {
-	--button_text_color: var(--text_color_1);
-	--button_fill: var(--fg_2);
-	--button_fill_hover: var(--fg_1);
-	--button_fill_active: var(--fg_2);
-	--button_border_color: var(--border_color_a);
+	--button_text_color: var(--text_90);
+	--button_fill: var(--shade_20);
+	--button_fill_hover: var(--shade_10);
+	--button_fill_active: var(--shade_20);
+	--button_border_color: var(--color_a_50);
 }
 
 /* Column sections use padding instead of margin so they can transition in/out without layout jank. */
@@ -320,20 +326,32 @@ a.chip {
 .plain.selectable.deselectable:not(.menu_item).selected {
 	background-color: transparent;
 	box-shadow: var(--shadow_inset_top_xs)
-		color-mix(in hsl, var(--shadow_color) var(--shadow_alpha, var(--shadow_alpha_1)), transparent);
+		color-mix(
+			in hsl,
+			var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)),
+			transparent
+		);
 }
 .plain.selectable.deselectable:not(.menu_item).selected:hover {
 	box-shadow: var(--shadow_inset_top_sm)
-		color-mix(in hsl, var(--shadow_color) var(--shadow_alpha, var(--shadow_alpha_1)), transparent);
+		color-mix(
+			in hsl,
+			var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)),
+			transparent
+		);
 }
 .plain.selectable.deselectable:not(.menu_item).selected:active {
 	box-shadow: var(--shadow_inset_bottom_xs)
-		color-mix(in hsl, var(--shadow_color) var(--shadow_alpha, var(--shadow_alpha_1)), transparent);
+		color-mix(
+			in hsl,
+			var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)),
+			transparent
+		);
 }
 
 /* TODO upstream but maybe not exactly like this, fixes the contextmenu active state */
 .plain.selectable.deselectable.menu_item.selected:active {
-	background-color: var(--fg_3);
+	background-color: var(--shade_30);
 }
 
 /* TODO hacky for buttons as menu_items, fix upstream, need to think about composability of the classes if it even makes sense */
@@ -342,10 +360,10 @@ button.menu_item.plain {
 }
 /* TODO also hacky */
 button.menu_item.selected.plain {
-	--button_text_color: var(--text_color_2);
+	--button_text_color: var(--text_80);
 }
 button.menu_item.plain:hover:not(.selected) {
-	background-color: var(--bg_6);
+	background-color: var(--shade_60);
 }
 /* TODO hacky */
 button.menu_item[disabled] {
@@ -358,9 +376,17 @@ button.menu_item[disabled] {
 	width: 100%;
 	box-shadow:
 		var(--shadow_bottom_xl)
-			color-mix(in hsl, var(--shadow_color) var(--shadow_alpha, var(--shadow_alpha_1)), transparent),
+			color-mix(
+				in hsl,
+				var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)),
+				transparent
+			),
 		var(--shadow_bottom_xs)
-			color-mix(in hsl, var(--shadow_color) var(--shadow_alpha, var(--shadow_alpha_1)), transparent);
+			color-mix(
+				in hsl,
+				var(--shadow_color, var(--shadow_color_umbra)) var(--shadow_alpha, var(--shadow_alpha_30)),
+				transparent
+			);
 }
 
 /* TODO upstream? */

@@ -96,7 +96,7 @@
 							icon="svg"
 							icon_props={{size: 'var(--font_size_sm)'}}
 							show_name
-						/>{#if provider_error}<span class="color_c_5 ml_sm"
+						/>{#if provider_error}<span class="color_c_50 ml_sm"
 								><Glyph glyph={GLYPH_ERROR} /> {provider_error}</span
 							>{/if}</small
 					>
@@ -123,7 +123,7 @@
 						{pending}
 						disabled={send_disabled}
 						onclick={send}
-						class="plain {provider_error ? ' color_c_5' : ''}"
+						class="plain {provider_error ? ' color_c_50' : ''}"
 						title={provider?.available
 							? `send ${input_token_count} tokens to ${thread.model_name}`
 							: (provider_error ?? undefined)}
@@ -150,7 +150,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space_md);
-		background-color: var(--bg);
+		background-color: var(--shade_00);
 		border-radius: var(--border_radius_xs);
 	}
 

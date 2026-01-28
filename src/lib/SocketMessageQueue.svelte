@@ -175,10 +175,10 @@
 				{@const message_type = message.data?.type || 'unknown'}
 				{@const message_data_serialized = JSON.stringify(message.data, null, 2)}
 				<div
-					class="message_item p_sm {selected ? 'selected bg_2' : ''} {queued_messages.indexOf(
+					class="message_item p_sm {selected ? 'selected shade_20' : ''} {queued_messages.indexOf(
 						message,
 					) > 0
-						? 'border_top border-style:solid border_color_3'
+						? 'border_top border-style:solid border_color_30'
 						: ''}"
 				>
 					<!-- Message header with metadata and actions -->
@@ -198,7 +198,7 @@
 
 							<CopyToClipboard
 								text={message.id}
-								class="plain font_size_xs text_color_5"
+								class="plain font_size_xs text_50"
 								style="width: 120px;"
 								title="copy message id to clipboard"
 								copied_display_duration={0}
@@ -216,7 +216,7 @@
 							<small class="chip">{message.data.method}</small>
 							<CopyToClipboard
 								text={message.data.id}
-								class="plain font_size_xs text_color_5"
+								class="plain font_size_xs text_50"
 								style="width: 120px;"
 								title="copy message id to clipboard"
 								copied_display_duration={0}
@@ -245,11 +245,11 @@
 								<Glyph glyph={GLYPH_INFO} size="var(--font_size_lg)" />
 								{#snippet popover_content(popover)}
 									<div
-										class="p_md overflow:auto bg shadow_bottom_md"
+										class="p_md overflow:auto shade_00 shadow_bottom_md"
 										style:max-height="400px"
 										style:max-width="500px"
 										style:min-width="300px"
-										style:border="1px solid var(--border_color_3)"
+										style:border="1px solid var(--border_color_30)"
 										style:border-radius="var(--border_radius_xs)"
 										style:z-index="100"
 									>
@@ -264,7 +264,7 @@
 											</button>
 										</div>
 										<pre
-											class="fg_1 border_radius_xs border_width border_style border_color_2 font_family_mono font_size_xs white-space:pre-wrap word-break:break-word p_md">{message_data_serialized}</pre>
+											class="shade_10 border_radius_xs border_width border_style border_color_20 font_family_mono font_size_xs white-space:pre-wrap word-break:break-word p_md">{message_data_serialized}</pre>
 										<CopyToClipboard text={message_data_serialized} />
 									</div>
 								{/snippet}
@@ -313,7 +313,7 @@
 		</div>
 	{:else}
 		<div
-			class="p_md text-align:center border-style:dashed border_width_1 border_color_3 border_radius_xs bg_1"
+			class="p_md text-align:center border-style:dashed border_width_1 border_color_30 border_radius_xs shade_10"
 		>
 			No {type} messages
 		</div>
@@ -332,7 +332,7 @@
 	}
 
 	.message_item:hover {
-		background-color: var(--fg_1);
+		background-color: var(--shade_10);
 	}
 
 	.message_item.selected {

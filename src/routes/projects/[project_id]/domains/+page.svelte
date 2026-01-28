@@ -121,17 +121,17 @@
 	}
 
 	.status_active {
-		background-color: var(--color_b_2);
-		color: var(--color_b_9);
+		background-color: var(--color_b_20);
+		color: var(--color_b_90);
 	}
 
 	.status_pending {
-		background-color: var(--color_e_2);
-		color: var(--color_e_9);
+		background-color: var(--color_e_20);
+		color: var(--color_e_90);
 	}
 
 	.status_inactive {
-		background-color: var(--bg_2);
-		color: var(--text_color_5);
+		background-color: var(--shade_20);
+		color: var(--text_50);
 	}
 </style>

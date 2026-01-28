@@ -22,7 +22,7 @@
 		<small class="width_xl4 text-align:right">{value}%</small>
 	{/if}
 	<div
-		class="flex:1 bg_5 border_radius_xs overflow:hidden"
+		class="flex:1 shade_50 border_radius_xs overflow:hidden"
 		style:height="var(--progress_bar_height, 6px)"
 	>
 		<div class="bg_a_5 height:100%" style:width="{value}%"></div>

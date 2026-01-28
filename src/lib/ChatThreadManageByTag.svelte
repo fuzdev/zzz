@@ -37,7 +37,7 @@
 				{/each}
 			</menu>
 		</div>
-		<div class="flex:1 p_xs fg_1">
+		<div class="flex:1 p_xs shade_10">
 			<header class="font_size_lg text-align:center mb_xs">remove by tag</header>
 			<menu class="unstyled column">
 				{#each tags as tag (tag)}

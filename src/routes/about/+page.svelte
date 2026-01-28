@@ -169,7 +169,7 @@
 			<Svg
 				data={logo_zzz}
 				size="var(--icon_size_sm)"
-				fill={app.futuremode ? 'var(--color_h_5)' : 'var(--text_color)'}
+				fill={app.futuremode ? 'var(--color_h_50)' : 'var(--text_color)'}
 				class="mr_md {app.futuremode ? ' transform:scaleX(-1)' : ''}"
 				style="transition: transform 200ms ease"
 			/>
@@ -182,7 +182,7 @@
 			<Svg
 				data={logo_zzz}
 				size="var(--icon_size_sm)"
-				fill={app.futuremode ? 'var(--color_h_5)' : 'var(--text_color)'}
+				fill={app.futuremode ? 'var(--color_h_50)' : 'var(--text_color)'}
 				class="ml_md {app.futuremode ? '' : ' transform:scaleX(-1)'}"
 				style="transition: transform 200ms ease"
 			/>
@@ -207,7 +207,7 @@
 		</p>
 		<aside>
 			⚠️ I am not a security professional and Zzz has not been audited; it may be <strong
-				class="color_c_5">dangerous</strong
+				class="color_c_50">dangerous</strong
 			> to run and there is no auth yet
 		</aside>
 		<p>
@@ -237,8 +237,8 @@
 					</li>
 					<li>call Ollama's API if available -- low risk</li>
 					<li>
-						<strong class="color_c_5">there is no authentication yet</strong>, only an origin check,
-						so do not use this in production
+						<strong class="color_c_50">there is no authentication yet</strong>, only an origin
+						check, so do not use this in production
 					</li>
 					<li>
 						soon, more integrations including terminal access assuming Bash, but nothing that
