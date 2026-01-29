@@ -21,7 +21,7 @@ const SERVER_INFO_FILE = 'server.json';
 /**
  * Information about the running server, stored in server.json
  */
-export const Server_Info = z.strictObject({
+export const ServerInfo = z.strictObject({
 	/** Schema version (must be 1) */
 	version: z.number(),
 	/** Server process ID */
@@ -33,7 +33,7 @@ export const Server_Info = z.strictObject({
 	/** Package version of zzz */
 	zzz_version: z.string(),
 });
-export type Server_Info = z.infer<typeof Server_Info>;
+export type ServerInfo = z.infer<typeof ServerInfo>;
 
 /**
  * Returns the full path to server.json
@@ -45,13 +45,13 @@ export const server_info_get_path = (zzz_dir: string): string => {
 /**
  * Reads and validates server.json, deleting and returning null if corrupt or wrong version
  */
-export const server_info_read = async (zzz_dir: string): Promise<Server_Info | null> => {
+export const server_info_read = async (zzz_dir: string): Promise<ServerInfo | null> => {
 	const path = server_info_get_path(zzz_dir);
 
 	try {
 		const content = await fs.readFile(path, 'utf8');
 		const json = JSON.parse(content);
-		const result = Server_Info.safeParse(json);
+		const result = ServerInfo.safeParse(json);
 
 		if (!result.success) {
 			console.warn('[server_info] corrupt server.json, deleting:', result.error.message);
@@ -79,7 +79,7 @@ export const server_info_read = async (zzz_dir: string): Promise<Server_Info | n
 /**
  * Returns server info if running, otherwise deletes stale file and returns null
  */
-export const server_info_check_stale = async (zzz_dir: string): Promise<Server_Info | null> => {
+export const server_info_check_stale = async (zzz_dir: string): Promise<ServerInfo | null> => {
 	const info = await server_info_read(zzz_dir);
 	if (!info) return null;
 
@@ -92,7 +92,7 @@ export const server_info_check_stale = async (zzz_dir: string): Promise<Server_I
 	return info;
 };
 
-export interface Server_Info_Write_Options {
+export interface ServerInfoWriteOptions {
 	zzz_dir: string;
 	port: number;
 	zzz_version: string;
@@ -101,7 +101,7 @@ export interface Server_Info_Write_Options {
 /**
  * Writes server info to server.json atomically, returns the path
  */
-export const server_info_write = async (options: Server_Info_Write_Options): Promise<string> => {
+export const server_info_write = async (options: ServerInfoWriteOptions): Promise<string> => {
 	const {zzz_dir, port, zzz_version} = options;
 	const path = server_info_get_path(zzz_dir);
 	const temp_path = path + '.tmp';
@@ -110,7 +110,7 @@ export const server_info_write = async (options: Server_Info_Write_Options): Pro
 	// Ensure run directory exists
 	await fs.mkdir(dir, {recursive: true});
 
-	const info: Server_Info = {
+	const info: ServerInfo = {
 		version: SERVER_INFO_VERSION,
 		pid: process.pid,
 		port,

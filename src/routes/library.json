@@ -18145,7 +18145,7 @@
 				"path": "server/server_info.ts",
 				"declarations": [
 					{
-						"name": "Server_Info",
+						"name": "ServerInfo",
 						"kind": "type",
 						"doc_comment": "Information about the running server, stored in server.json",
 						"source_line": 24,
@@ -18194,10 +18194,10 @@
 						]
 					},
 					{
-						"name": "Server_Info_Write_Options",
+						"name": "ServerInfoWriteOptions",
 						"kind": "type",
 						"source_line": 95,
-						"type_signature": "Server_Info_Write_Options",
+						"type_signature": "ServerInfoWriteOptions",
 						"properties": [
 							{
 								"name": "zzz_dir",
@@ -18221,12 +18221,12 @@
 						"kind": "function",
 						"doc_comment": "Writes server info to server.json atomically, returns the path",
 						"source_line": 104,
-						"type_signature": "(options: Server_Info_Write_Options): Promise<string>",
+						"type_signature": "(options: ServerInfoWriteOptions): Promise<string>",
 						"return_type": "Promise<string>",
 						"parameters": [
 							{
 								"name": "options",
-								"type": "Server_Info_Write_Options"
+								"type": "ServerInfoWriteOptions"
 							}
 						]
 					},
