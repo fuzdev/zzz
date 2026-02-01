@@ -1,0 +1,1 @@
+import"./DsnmJJEf.js";import{s as t,r as p}from"./D_ShskPG.js";import{A as e}from"./C5XGI11n.js";function i(r,s){const o=p(s,["$$slots","$$events","$$legacy"]);e(r,t({status:"error"},()=>o))}export{i as E};
