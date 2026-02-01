@@ -1,10 +1,14 @@
-# Zzz
+# zzz
 
 > nice web things for the tired 💤
 
-Zzz (pronounced "zees") is a local-first IDE + CMS + browser + AI UI for power users and developers. It runs as a server on your machine with a PostgreSQL database backing a Svelte web frontend.
+zzz (`@fuzdev/zzz`) is a local-first IDE + CMS + browser + AI UI for power users
+and developers. It runs as a server on your machine with a PostgreSQL database
+backing a Svelte web frontend.
 
 **Status**: Early pre-release, development use only (no auth yet)
+
+For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
 ## Contents
 
