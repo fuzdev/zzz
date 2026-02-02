@@ -68,7 +68,6 @@
     "@google/generative-ai": "^0.24.1",
     "@hono/node-server": "^1.19.6",
     "@hono/node-ws": "^1.2.0",
-    "@sveltejs/package": "^2.5.7",
     "date-fns": "^4.1.0",
     "esm-env": "^1.2.2",
     "hono": "^4.10.7",
