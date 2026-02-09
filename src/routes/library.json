@@ -48,31 +48,37 @@
 		},
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
-			"@fuzdev/fuz_code": "^0.41.0",
+			"@fuzdev/fuz_code": "^0.44.1",
 			"@fuzdev/fuz_css": "^0.47.0",
-			"@fuzdev/fuz_ui": "^0.181.1",
-			"@fuzdev/fuz_util": "^0.48.3",
+			"@fuzdev/fuz_ui": "^0.182.0",
+			"@fuzdev/fuz_util": "^0.50.1",
+			"@jridgewell/trace-mapping": "^0.3.31",
 			"@ryanatkn/eslint-config": "^0.9.0",
-			"@ryanatkn/gro": "^0.190.0",
+			"@ryanatkn/gro": "^0.191.0",
 			"@sveltejs/adapter-node": "^5.4.0",
 			"@sveltejs/adapter-static": "^3.0.10",
 			"@sveltejs/kit": "^2.50.1",
 			"@sveltejs/vite-plugin-svelte": "^6.2.4",
+			"@types/estree": "^1.0.8",
 			"@types/node": "^24.10.1",
 			"@webref/css": "^8.2.0",
 			"eslint": "^9.39.1",
 			"eslint-plugin-svelte": "^3.13.1",
+			"esm-env": "^1.2.2",
 			"jsdom": "^27.2.0",
+			"magic-string": "^0.30.21",
 			"ollama": "^0.6.3",
 			"prettier": "^3.7.4",
 			"prettier-plugin-svelte": "^3.4.1",
 			"svelte": "^5.49.1",
 			"svelte-check": "^4.3.5",
+			"svelte2tsx": "^0.7.47",
 			"tslib": "^2.8.1",
 			"typescript": "^5.9.3",
 			"typescript-eslint": "^8.48.1",
 			"vitest": "^4.0.15",
-			"zod": "^4.1.13"
+			"zimmerframe": "^1.1.4",
+			"zod": "^4.3.6"
 		},
 		"dependencies": {
 			"@anthropic-ai/sdk": "^0.71.2",
@@ -80,7 +86,6 @@
 			"@hono/node-server": "^1.19.6",
 			"@hono/node-ws": "^1.2.0",
 			"date-fns": "^4.1.0",
-			"esm-env": "^1.2.2",
 			"hono": "^4.10.7",
 			"openai": "^6.10.0"
 		},
@@ -227,7 +232,7 @@
 						"kind": "type",
 						"doc_comment": "Action specifications indexed by method name.\nThese represent the complete action spec definitions.",
 						"source_line": 44,
-						"type_signature": "{ readonly completion_create: { method: \"completion_create\"; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; provider_name: ZodEnum<...>; model: ZodString; prompt: Zod..."
+						"type_signature": "{ readonly completion_create: { method: \"completion_create\"; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<...>; model: ZodString; prom..."
 					},
 					{
 						"name": "action_specs",
@@ -240,14 +245,14 @@
 						"kind": "type",
 						"doc_comment": "Action parameter schemas indexed by method name.\nThese represent the input data for each action,\ne.g. JSON-RPC request/notification params and local call arguments.",
 						"source_line": 96,
-						"type_signature": "{ readonly completion_create: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; prompt: ZodString; completion_messages: ZodOptional<...>; },..."
+						"type_signature": "{ readonly completion_create: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<...>; model: ZodString; prompt: ZodString; completion_messages: ZodOptional<...>; }, $strict>; _meta: ZodOptional<...>; }, $strict>; ... 18 more ...; r..."
 					},
 					{
 						"name": "ActionOutputs",
 						"kind": "type",
 						"doc_comment": "Action result schemas indexed by method name.\nThese represent the output data for each action,\ne.g. JSON-RPC response results and local call return values.",
 						"source_line": 146,
-						"type_signature": "{ readonly completion_create: ZodObject<{ completion_response: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; data: ZodDiscriminatedUnion<...>; }, $strict>; _meta: ZodOp..."
+						"type_signature": "{ readonly completion_create: ZodObject<{ completion_response: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<...>; model: ZodString; data: ZodDiscriminatedUnion<...>; }, $strict>; _meta: ZodOptional<...>; }, $strict>; ... 18 more ...; readonly toggle_main_men..."
 					},
 					{
 						"name": "ActionEventDatas",
@@ -1666,25 +1671,25 @@
 						"name": "diskfile_update_action_spec",
 						"kind": "variable",
 						"source_line": 82,
-						"type_signature": "{ method: \"diskfile_update\"; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\">; content: ZodString; }, $strict>; output: ZodNull; async: true; }"
+						"type_signature": "{ method: \"diskfile_update\"; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; content: ZodString; }, $strict>; output: ZodNull; async: true; }"
 					},
 					{
 						"name": "diskfile_delete_action_spec",
 						"kind": "variable",
 						"source_line": 96,
-						"type_signature": "{ method: \"diskfile_delete\"; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\">; }, $strict>; output: ZodNull; async: true; }"
+						"type_signature": "{ method: \"diskfile_delete\"; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>; output: ZodNull; async: true; }"
 					},
 					{
 						"name": "directory_create_action_spec",
 						"kind": "variable",
 						"source_line": 109,
-						"type_signature": "{ method: \"directory_create\"; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\">; }, $strict>; output: ZodNull; async: true; }"
+						"type_signature": "{ method: \"directory_create\"; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>; output: ZodNull; async: true; }"
 					},
 					{
 						"name": "completion_create_action_spec",
 						"kind": "variable",
 						"source_line": 122,
-						"type_signature": "{ method: \"completion_create\"; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; provider_name: ZodEnum<...>; model: ZodString; prompt: ZodString; completion_messages: Z..."
+						"type_signature": "{ method: \"completion_create\"; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<...>; model: ZodString; prompt: ZodString; completion_mess..."
 					},
 					{
 						"name": "completion_progress_action_spec",
@@ -1858,7 +1863,7 @@
 						"name": "ActionJson",
 						"kind": "type",
 						"source_line": 16,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; method: ZodEnum<...>; action_event_data: ZodOptional<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; method: ZodEnum<...>; action_event_data: ZodOptional<...>; }, $strict>"
 					},
 					{
 						"name": "ActionJsonInput",
@@ -2117,7 +2122,7 @@
 						"name": "ActionsJson",
 						"kind": "type",
 						"source_line": 14,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; items: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; items: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "ActionsJsonInput",
@@ -2284,7 +2289,7 @@
 						"name": "CapabilitiesJson",
 						"kind": "type",
 						"source_line": 23,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "CapabilitiesJsonInput",
@@ -2604,11 +2609,11 @@
 							{
 								"name": "constructor",
 								"kind": "constructor",
-								"type_signature": "(options: CellOptions<ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; }, $strict>>): Capabilities",
+								"type_signature": "(options: CellOptions<ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; }, $strict>>): Capabilities",
 								"parameters": [
 									{
 										"name": "options",
-										"type": "CellOptions<ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; }, $strict>>"
+										"type": "CellOptions<ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; }, $strict>>"
 									}
 								]
 							},
@@ -3334,7 +3339,7 @@
 						"kind": "type",
 						"doc_comment": "Base schema that defines common properties for all cells.",
 						"source_line": 17,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "CellJsonInput",
@@ -3799,7 +3804,7 @@
 						"name": "ChatJson",
 						"kind": "type",
 						"source_line": 18,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; ... 5 more ...; selected_thread_id: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 5 more ...; selected_thread_id: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "ChatJsonInput",
@@ -4181,7 +4186,7 @@
 						"name": "ChatsJson",
 						"kind": "type",
 						"source_line": 18,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; ... 4 more ...; show_sort_controls: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 4 more ...; show_sort_controls: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "ChatsJsonInput",
@@ -4920,13 +4925,13 @@
 						"name": "CompletionRequest",
 						"kind": "type",
 						"source_line": 16,
-						"type_signature": "ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; prompt: ZodString; completion_messages: ZodOptional<...>; }, $strict>"
+						"type_signature": "ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; prompt: ZodString; completion_messages: ZodOptional<...>; }, $strict>"
 					},
 					{
 						"name": "CompletionResponse",
 						"kind": "type",
 						"source_line": 26,
-						"type_signature": "ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; data: ZodDiscriminatedUnion<...>; }, $strict>"
+						"type_signature": "ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; data: ZodDiscriminatedUnion<...>; }, $strict>"
 					}
 				],
 				"dependencies": ["provider_types.ts", "zod_helpers.ts"],
@@ -6141,14 +6146,14 @@
 						"kind": "type",
 						"doc_comment": "Schema for history entries.",
 						"source_line": 14,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodNumber; content: ZodString; label: ZodString; is_disk_change: ZodDefault<...>; is_unsaved_edit: ZodDefault<...>; is_original_state: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodNumber; content: ZodString; label: ZodString; is_disk_change: ZodDefault<...>; is_unsaved_edit: ZodDefault<...>; is_original_state: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "DiskfileHistoryJson",
 						"kind": "type",
 						"doc_comment": "Schema for the DiskfileHistory cell.",
 						"source_line": 28,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; path: $ZodBranded<...>; entries: ZodDefault<...>; max_entries: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; path: $ZodBranded<...>; entries: ZodDefault<...>; max_entries: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "DiskfileHistoryJsonInput",
@@ -6274,7 +6279,7 @@
 						"name": "DiskfileTabJson",
 						"kind": "type",
 						"source_line": 9,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; diskfile_id: $ZodBranded<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; diskfile_id: $ZodBranded<...>; }, $strict>"
 					},
 					{
 						"name": "DiskfileTabJsonInput",
@@ -6365,7 +6370,7 @@
 						"name": "DiskfileTabsJson",
 						"kind": "type",
 						"source_line": 14,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; ... 5 more ...; max_tab_history: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 5 more ...; max_tab_history: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "DiskfileTabsJsonInput",
@@ -6651,32 +6656,32 @@
 						"kind": "type",
 						"doc_comment": "An absolute Unix-style file path.",
 						"source_line": 11,
-						"type_signature": "$ZodBranded<ZodString, \"DiskfilePath\">"
+						"type_signature": "$ZodBranded<ZodString, \"DiskfilePath\", \"out\">"
 					},
 					{
 						"name": "DiskfileDirectoryPath",
 						"kind": "type",
 						"doc_comment": "These always have a trailing slash.",
 						"source_line": 18,
-						"type_signature": "$ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<ZodString, \"DiskfilePath\">>, \"DiskfileDirectoryPath\">"
+						"type_signature": "$ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<ZodString, \"DiskfilePath\", \"out\">>, \"DiskfileDirectoryPath\", \"out\">"
 					},
 					{
 						"name": "DiskfileChange",
 						"kind": "type",
 						"source_line": 22,
-						"type_signature": "ZodObject<{ type: ZodEnum<{ add: \"add\"; change: \"change\"; delete: \"delete\"; }>; path: $ZodBranded<ZodString, \"DiskfilePath\">; }, $strict>"
+						"type_signature": "ZodObject<{ type: ZodEnum<{ add: \"add\"; change: \"change\"; delete: \"delete\"; }>; path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>"
 					},
 					{
 						"name": "SerializableDisknode",
 						"kind": "type",
 						"source_line": 29,
-						"type_signature": "ZodObject<{ id: $ZodBranded<ZodString, \"DiskfilePath\">; source_dir: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<...>>, \"DiskfileDirectoryPath\">; ... 4 more ...; dependencies: ZodArray<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; source_dir: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; ... 4 more ...; dependencies: ZodArray<...>; }, $strict>"
 					},
 					{
 						"name": "DiskfileJson",
 						"kind": "type",
 						"source_line": 41,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; ... 5 more ...; dependencies: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 5 more ...; dependencies: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "DiskfileJsonInput",
@@ -7226,7 +7231,7 @@
 						"name": "DiskfilesEditorJson",
 						"kind": "type",
 						"source_line": 10,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; show_sort_controls: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; show_sort_controls: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "DiskfilesEditorJsonInput",
@@ -7429,7 +7434,7 @@
 						"name": "DiskfilesJson",
 						"kind": "type",
 						"source_line": 15,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; diskfiles: ZodDefault<...>; selected_file_id: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; diskfiles: ZodDefault<...>; selected_file_id: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "DiskfilesJsonInput",
@@ -8238,7 +8243,7 @@
 						"name": "FrontendJson",
 						"kind": "type",
 						"source_line": 51,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; ui: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; ui: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "FrontendJsonInput",
@@ -8585,8 +8590,8 @@
 							{
 								"name": "lookup_action_input_schema",
 								"kind": "function",
-								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly completion_create: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; provider_name: ZodEnum<...>; model: ZodString; prompt: ZodString; completion_messages: ZodOptional<...>; }, $strict>; _meta: ZodOptional<...>; }, $strict>; ... 18 more ...; readonly toggle_main_menu: ZodOptional<...>; }[TMethod] | undefined",
-								"return_type": "{ readonly completion_create: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; prompt: ZodString; completion_messages: ZodOptional<...>; },...",
+								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly completion_create: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<...>; model: ZodString; prompt: ZodString; completion_messages: ZodOptional<...>; }, $strict>; _meta: ZodOptional<...>; }, $strict>; ... 18 more ...; readonly toggle_main_menu: ZodOptional<...>; }[TMethod] | undefined",
+								"return_type": "{ readonly completion_create: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<...>; model: ZodString; prompt: ZodString; completion_messages: ZodOptional<...>; }, $strict>; _meta: ZodOptional<...>; }, $strict>; ... 18 more ...; r...",
 								"parameters": [
 									{
 										"name": "method",
@@ -8597,8 +8602,8 @@
 							{
 								"name": "lookup_action_output_schema",
 								"kind": "function",
-								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly completion_create: ZodObject<{ completion_response: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; provider_name: ZodEnum<...>; model: ZodString; data: ZodDiscriminatedUnion<...>; }, $strict>; _meta: ZodOptional<...>; }, $strict>; ... 18 more ...; readonly toggle_main_menu: ZodObject<...>; }[TMethod] | undefined",
-								"return_type": "{ readonly completion_create: ZodObject<{ completion_response: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; data: ZodDiscriminatedUnion<...>; }, $strict>; _meta: ZodOp...",
+								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly completion_create: ZodObject<{ completion_response: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<...>; model: ZodString; data: ZodDiscriminatedUnion<...>; }, $strict>; _meta: ZodOptional<...>; }, $strict>; ... 18 more ...; readonly toggle_main_menu: ZodObject<...>; }[TMethod] | undefined",
+								"return_type": "{ readonly completion_create: ZodObject<{ completion_response: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<...>; model: ZodString; data: ZodDiscriminatedUnion<...>; }, $strict>; _meta: ZodOptional<...>; }, $strict>; ... 18 more ...; readonly toggle_main_men...",
 								"parameters": [
 									{
 										"name": "method",
@@ -9464,7 +9469,7 @@
 						"kind": "type",
 						"doc_comment": "Interface for objects that can be stored in an indexed collection.",
 						"source_line": 16,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; }, $strict>"
 					},
 					{
 						"name": "IndexOptions",
@@ -10750,7 +10755,7 @@
 						"name": "JsonrpcServerErrorCode",
 						"kind": "type",
 						"source_line": 155,
-						"type_signature": "$ZodBranded<ZodNumber, \"JsonrpcServerErrorCode\">"
+						"type_signature": "$ZodBranded<ZodNumber, \"JsonrpcServerErrorCode\", \"out\">"
 					},
 					{
 						"name": "JsonrpcErrorCode",
@@ -10954,7 +10959,7 @@
 						"name": "ModelJson",
 						"kind": "type",
 						"source_line": 14,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; ... 17 more ...; ollama_show_response_error: ZodOptional<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 17 more ...; ollama_show_response_error: ZodOptional<...>; }, $strict>"
 					},
 					{
 						"name": "ModelJsonInput",
@@ -11373,7 +11378,7 @@
 						"name": "ModelsJson",
 						"kind": "type",
 						"source_line": 14,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; items: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; items: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "ModelsJsonInput",
@@ -11875,7 +11880,7 @@
 						"name": "OllamaJson",
 						"kind": "type",
 						"source_line": 38,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; host: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; host: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "OllamaJsonInput",
@@ -12754,14 +12759,14 @@
 						"kind": "type",
 						"doc_comment": "Common properties for all part types.",
 						"source_line": 18,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; ... 10 more ...; summary: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 10 more ...; summary: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "TextPartJson",
 						"kind": "type",
 						"doc_comment": "Text part schema - direct content storage.",
 						"source_line": 34,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; ... 11 more ...; content: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 11 more ...; content: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "TextPartJsonInput",
@@ -12774,7 +12779,7 @@
 						"kind": "type",
 						"doc_comment": "Diskfile part schema - references a diskfile.",
 						"source_line": 42,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; ... 11 more ...; has_xml_tag: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 11 more ...; has_xml_tag: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "DiskfilePartJsonInput",
@@ -12787,7 +12792,7 @@
 						"kind": "type",
 						"doc_comment": "Union of all part types for deserialization.",
 						"source_line": 52,
-						"type_signature": "ZodDiscriminatedUnion<[ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; ... 11 more ...; content: ZodDefault<...>; }, $strict>, ZodObject<...>], \"type\">"
+						"type_signature": "ZodDiscriminatedUnion<[ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 11 more ...; content: ZodDefault<...>; }, $strict>, ZodObject<...>], \"type\">"
 					},
 					{
 						"name": "PartJsonInput",
@@ -13466,7 +13471,7 @@
 						"name": "PartsJson",
 						"kind": "type",
 						"source_line": 12,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; items: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; items: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "PartsJsonInput",
@@ -14224,7 +14229,7 @@
 						"name": "PromptJson",
 						"kind": "type",
 						"source_line": 18,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; name: ZodDefault<...>; parts: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; name: ZodDefault<...>; parts: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "PromptJsonInput",
@@ -14527,7 +14532,7 @@
 						"name": "PromptsJson",
 						"kind": "type",
 						"source_line": 17,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; items: ZodDefault<...>; selected_id: ZodDefault<...>; show_sort_controls: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; items: ZodDefault<...>; selected_id: ZodDefault<...>; show_sort_controls: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "PromptsJsonInput",
@@ -14882,7 +14887,7 @@
 						"name": "ProviderJson",
 						"kind": "type",
 						"source_line": 9,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; ... 6 more ...; api_key_url: ZodNullable<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 6 more ...; api_key_url: ZodNullable<...>; }, $strict>"
 					},
 					{
 						"name": "ProviderJsonInput",
@@ -15104,7 +15109,7 @@
 						"name": "ProvidersJson",
 						"kind": "type",
 						"source_line": 8,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; items: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; items: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "ProvidersJsonInput",
@@ -17741,7 +17746,7 @@
 						"kind": "type",
 						"doc_comment": "A branded type for representing safely normalized filesystem paths",
 						"source_line": 14,
-						"type_signature": "$ZodBranded<ZodPipe<ZodString, ZodTransform<string, string>>, \"ScopedFsPath\">"
+						"type_signature": "$ZodBranded<ZodPipe<ZodString, ZodTransform<string, string>>, \"ScopedFsPath\", \"out\">"
 					},
 					{
 						"name": "ScopedFs",
@@ -18329,7 +18334,7 @@
 						"name": "SocketJson",
 						"kind": "type",
 						"source_line": 22,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; ... 6 more ...; auto_reconnect: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 6 more ...; auto_reconnect: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "SocketJsonInput",
@@ -18980,7 +18985,7 @@
 						"name": "ThreadJson",
 						"kind": "type",
 						"source_line": 8,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; model_name: ZodDefault<...>; turns: ZodDefault<...>; enabled: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; model_name: ZodDefault<...>; turns: ZodDefault<...>; enabled: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "ThreadJsonInput",
@@ -19279,7 +19284,7 @@
 						"name": "ThreadsJson",
 						"kind": "type",
 						"source_line": 14,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; items: ZodDefault<...>; selected_id: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; items: ZodDefault<...>; selected_id: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "ThreadsJsonInput",
@@ -19611,7 +19616,7 @@
 						"name": "TimeJson",
 						"kind": "type",
 						"source_line": 9,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; updated: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "TimeJsonInput",
@@ -19953,7 +19958,7 @@
 						"kind": "type",
 						"doc_comment": "Turn is a conversation turn (like A2A Message) that references one or more parts (content entities).\nTurns contextualize reusable content within conversations, providing role, metadata, and ordering.",
 						"source_line": 12,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; ... 6 more ...; error_message: ZodOptional<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 6 more ...; error_message: ZodOptional<...>; }, $strict>"
 					},
 					{
 						"name": "TurnJsonInput",
@@ -20343,7 +20348,7 @@
 						"name": "UiJson",
 						"kind": "type",
 						"source_line": 6,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>; ... 6 more ...; tutorial_for_diskfiles: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 6 more ...; tutorial_for_diskfiles: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "UiJsonInput",
@@ -20498,13 +20503,13 @@
 						"name": "XmlAttribute",
 						"kind": "type",
 						"source_line": 22,
-						"type_signature": "ZodObject<{ id: $ZodBranded<ZodUUID, \"Uuid\">; key: ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, ZodString>; value: ZodString; }, $strict>"
+						"type_signature": "ZodObject<{ id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; key: ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, ZodString>; value: ZodString; }, $strict>"
 					},
 					{
 						"name": "XmlAttributeWithDefaults",
 						"kind": "type",
 						"source_line": 31,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>; key: ZodDefault<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, ZodString>>; value: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; key: ZodDefault<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, ZodString>>; value: ZodDefault<...>; }, $strict>"
 					}
 				],
 				"dependencies": ["zod_helpers.ts"],
@@ -20578,7 +20583,7 @@
 						"name": "TypeLiteral",
 						"kind": "type",
 						"source_line": 13,
-						"type_signature": "$ZodBranded<ZodString, \"TypeLiteral\">"
+						"type_signature": "$ZodBranded<ZodString, \"TypeLiteral\", \"out\">"
 					},
 					{
 						"name": "PathWithTrailingSlash",
@@ -20623,13 +20628,13 @@
 						"name": "Datetime",
 						"kind": "type",
 						"source_line": 41,
-						"type_signature": "$ZodBranded<ZodISODateTime, \"Datetime\">"
+						"type_signature": "$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">"
 					},
 					{
 						"name": "DatetimeNow",
 						"kind": "type",
 						"source_line": 43,
-						"type_signature": "ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\">>"
+						"type_signature": "ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>"
 					},
 					{
 						"name": "create_uuid",
@@ -20643,13 +20648,13 @@
 						"name": "Uuid",
 						"kind": "type",
 						"source_line": 48,
-						"type_signature": "$ZodBranded<ZodUUID, \"Uuid\">"
+						"type_signature": "$ZodBranded<ZodUUID, \"Uuid\", \"out\">"
 					},
 					{
 						"name": "UuidWithDefault",
 						"kind": "type",
 						"source_line": 50,
-						"type_signature": "ZodDefault<$ZodBranded<ZodUUID, \"Uuid\">>"
+						"type_signature": "ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>"
 					},
 					{
 						"name": "to_subschema",
