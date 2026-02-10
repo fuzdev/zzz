@@ -1,247 +1,156 @@
-# Development Guide
+# Development
 
-⚠️ AI generated
-
-Development workflow, extension points, and common patterns for Zzz.
-
-## Contents
-
-- [Setup](#setup)
-- [Development Workflow](#development-workflow)
-- [Project Structure](#project-structure)
-- [Extension Points](#extension-points)
-- [Common Patterns](#common-patterns)
-- [Testing](#testing)
-- [Code Style](#code-style)
+Development workflow, extension points, and common patterns.
 
 ## Setup
 
-### Prerequisites
-
-- Node.js 20+
-- npm
-
-### Initial Setup
-
 ```bash
-# Clone repository
-git clone https://github.com/fuzdev/zzz.git
-cd zzz
-
-# Copy environment template
+git clone https://github.com/fuzdev/zzz.git && cd zzz
 cp src/lib/server/.env.development.example .env.development
-
-# Install dependencies
 npm install
-
-# Start development server
-gro dev
 ```
 
-### Environment Variables
+Optionally add API keys to `.env.development` for remote providers (Anthropic, OpenAI, Google). Ollama requires no key.
 
-Configure in `.env.development`:
+## Commands
 
-```bash
-# AI Provider API Keys (BYOK - Bring Your Own Key)
-SECRET_ANTHROPIC_API_KEY=sk-ant-...
-SECRET_OPENAI_API_KEY=sk-...
-SECRET_GOOGLE_API_KEY=AIza...
+| Command | Purpose |
+|---------|---------|
+| `gro check` | All checks (typecheck, test, gen, format, lint) |
+| `gro typecheck` | Type checking only (faster iteration) |
+| `gro test` | Run Vitest tests |
+| `gro test -- --watch` | Tests in watch mode |
+| `gro gen` | Regenerate `*.gen.ts` files |
+| `gro format` | Format with Prettier |
+| `gro lint` | ESLint checking |
+| `gro build` | Production build |
+| `gro deploy` | Deploy to production |
 
-# Server Configuration
-PUBLIC_ZZZ_DIR=./           # Base for .zzz directory
-ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
-```
+Never run `gro dev` — the user manages the dev server.
 
-## Development Workflow
+## Code Generation
 
-### Commands
+`gro gen` regenerates these files from action specs. Never edit them manually:
 
-| Command               | Description                        |
-| --------------------- | ---------------------------------- |
-| `gro dev`             | Start dev server with HMR          |
-| `gro build`           | Production build                   |
-| `gro test`            | Run tests                          |
-| `gro test -- --watch` | Run tests in watch mode            |
-| `gro typecheck`       | TypeScript type checking           |
-| `gro check`           | Run all checks (types, lint, test) |
-| `gro lint`            | ESLint checking                    |
-| `gro gen`             | Run code generation                |
-| `gro deploy`          | Deploy to production               |
+| Generated file | Source |
+|---------------|--------|
+| `src/lib/action_metatypes.gen.ts` | Action method types |
+| `src/lib/action_collections.gen.ts` | Action spec collections |
+| `src/lib/frontend_action_types.gen.ts` | Frontend handler types |
+| `src/lib/server/backend_action_types.gen.ts` | Backend handler types |
+| `src/routes/library.gen.ts` | Route metadata |
 
-### Code Generation
+Run `gro gen` after changing `action_specs.ts`.
 
-Some files are auto-generated from specs:
+## File Naming
 
-```bash
-gro gen
-```
-
-Generated files (do not edit manually):
-
-- `src/lib/action_metatypes.gen.ts` - Action method types
-- `src/lib/action_collections.gen.ts` - Action spec collections
-- `src/lib/frontend_action_types.gen.ts` - Frontend handler types
-- `src/lib/server/backend_action_types.gen.ts` - Backend handler types
-
-### Build Output
-
-```
-build/                   # SvelteKit build output
-dist/                    # Library distribution
-.zzz/                    # Zzz app directory
-├── state/               # Persistent data
-│   └── completions/     # AI completion logs
-├── cache/               # Regenerable data (future)
-└── run/                 # Runtime ephemeral
-    └── server.json      # PID, port, version
-```
-
-## Project Structure
-
-### Key Directories
-
-```
-src/
-├── lib/                 # Core library (published as @fuzdev/zzz)
-│   ├── server/         # Backend code
-│   └── ...             # Shared code (frontend + backend)
-├── routes/             # SvelteKit pages
-└── app.html            # HTML template
-```
-
-### File Naming
-
-| Pattern        | Purpose                   | Example              |
-| -------------- | ------------------------- | -------------------- |
-| `*.ts`         | TypeScript modules        | `helpers.ts`         |
-| `*.svelte.ts`  | Svelte 5 reactive modules | `chat.svelte.ts`     |
-| `*.svelte`     | Svelte components         | `ChatView.svelte`    |
-| `*.test.ts`    | Test files                | `cell.test.ts`       |
-| `*_types.ts`   | Type definitions          | `action_types.ts`    |
-| `*_helpers.ts` | Utility functions         | `jsonrpc_helpers.ts` |
+| Pattern | Purpose | Example |
+|---------|---------|---------|
+| `snake_case.ts` | TypeScript modules | `helpers.ts`, `action_peer.ts` |
+| `snake_case.svelte.ts` | Svelte 5 reactive state | `chat.svelte.ts` |
+| `PascalCase.svelte` | Svelte components | `ChatView.svelte` |
+| `snake_case.test.ts` | Test files (in `src/test/`) | `cell.svelte.base.test.ts` |
+| `*_types.ts` | Type definitions | `action_types.ts` |
+| `*_helpers.ts` | Utility functions | `jsonrpc_helpers.ts` |
 
 ### Component Naming
 
 Components use `PascalCase` with domain prefixes:
 
-| Prefix     | Domain           | Examples                                 |
-| ---------- | ---------------- | ---------------------------------------- |
-| `Chat`     | Chat UI          | `ChatView`, `ChatListitem`               |
-| `Diskfile` | File editor      | `DiskfileEditorView`, `DiskfileExplorer` |
-| `Model`    | Model management | `ModelListitem`, `ModelPickerDialog`     |
-| `Ollama`   | Ollama-specific  | `OllamaManager`, `OllamaPullModel`       |
-| `Part`     | Content parts    | `PartView`, `PartEditorForText`          |
-| `Prompt`   | Prompts          | `PromptList`, `PromptPickerDialog`       |
-| `Thread`   | Threads          | `ThreadList`, `ThreadContextmenu`        |
-| `Turn`     | Turns            | `TurnView`, `TurnListitem`               |
+| Prefix | Domain | Examples |
+|--------|--------|----------|
+| `Chat` | Chat UI | `ChatView`, `ChatListitem` |
+| `Diskfile` | File editor | `DiskfileEditorView`, `DiskfileExplorer` |
+| `Model` | Model management | `ModelListitem`, `ModelPickerDialog` |
+| `Ollama` | Ollama-specific | `OllamaManager`, `OllamaPullModel` |
+| `Part` | Content parts | `PartView`, `PartEditorForText` |
+| `Prompt` | Prompts | `PromptList`, `PromptPickerDialog` |
+| `Thread` | Threads | `ThreadList`, `ThreadContextmenu` |
+| `Turn` | Turns | `TurnView`, `TurnListitem` |
 
 ## Extension Points
 
 ### Adding a New Cell
 
-1. **Define the schema** (`src/lib/my_thing_types.ts`):
+1. Define schema (in the `*.svelte.ts` file or a separate `*_types.ts`):
 
 ```typescript
-import {z} from 'zod';
-import {CellJson} from './cell_types.js';
-
 export const MyThingJson = CellJson.extend({
-	name: z.string().default(''),
-	value: z.number().default(0),
+  name: z.string().default(''),
+  value: z.number().default(0),
 }).meta({cell_class_name: 'MyThing'});
 ```
 
-2. **Create the class** (`src/lib/my_thing.svelte.ts`):
+2. Create the class (`src/lib/my_thing.svelte.ts`):
 
 ```typescript
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {MyThingJson} from './my_thing_types.js';
-
-export interface MyThingOptions extends CellOptions<typeof MyThingJson> {}
-
 export class MyThing extends Cell<typeof MyThingJson> {
-	name: string = $state()!;
-	value: number = $state()!;
+  name: string = $state()!;
+  value: number = $state()!;
 
-	readonly doubled = $derived(this.value * 2);
+  readonly doubled = $derived(this.value * 2);
 
-	constructor(options: MyThingOptions) {
-		super(MyThingJson, options);
-		this.init();
-	}
-
-	increment(): void {
-		this.value++;
-	}
+  constructor(options: MyThingOptions) {
+    super(MyThingJson, options);
+    this.init(); // Must call at end
+  }
 }
 ```
 
-3. **Register the class** (in `frontend.svelte.ts`):
+3. Register in `src/lib/cell_classes.ts`:
 
 ```typescript
-this.cell_registry.register(MyThing);
+export const cell_classes = {
+  // ... existing classes
+  MyThing,
+} satisfies Record<string, typeof Cell<any>>;
 ```
 
 ### Adding a New Action
 
-1. **Define the spec** (`src/lib/action_specs.ts`):
+1. Define the spec in `src/lib/action_specs.ts`:
 
 ```typescript
-export const my_action_spec = create_action_spec({
-	method: 'my_action',
-	kind: 'request_response',
-	initiator: 'frontend',
-	auth: 'authorize',
-	side_effects: true,
-	async: true,
-	input: z.object({
-		message: z.string(),
-	}),
-	output: z.object({
-		result: z.string(),
-	}),
-});
+export const my_action_action_spec = {
+  method: 'my_action',
+  kind: 'request_response',
+  initiator: 'frontend',
+  auth: 'public',
+  side_effects: true,
+  input: z.strictObject({
+    message: z.string(),
+  }),
+  output: z.strictObject({
+    result: z.string(),
+  }),
+  async: true,
+} satisfies ActionSpecUnion;
 ```
 
-2. **Add to exports** (`src/lib/action_specs.ts`):
+2. Run `gro gen` to regenerate handler types.
 
-```typescript
-export const action_specs = [
-	// ... existing specs
-	my_action_spec,
-];
-```
-
-3. **Run code generation**:
-
-```bash
-gro gen
-```
-
-4. **Add frontend handler** (`src/lib/frontend_action_handlers.ts`):
+3. Add frontend handler (`src/lib/frontend_action_handlers.ts`):
 
 ```typescript
 my_action: {
-  send_request: ({data}) => {
-    console.log('Sending:', data.input.message);
+  send_request: ({data: {input}}) => {
+    console.log('sending:', input.message);
   },
-  receive_response: ({app, data}) => {
-    console.log('Received:', data.output.result);
+  receive_response: ({app, data: {output}}) => {
+    console.log('received:', output.result);
   },
-  receive_error: ({data}) => {
-    console.error('Error:', data.error);
+  receive_error: ({data: {error}}) => {
+    console.error('failed:', error);
   },
 },
 ```
 
-5. **Add backend handler** (`src/lib/server/backend_action_handlers.ts`):
+4. Add backend handler (`src/lib/server/backend_action_handlers.ts`):
 
 ```typescript
 my_action: {
-  receive_request: async ({backend, data}) => {
-    const {message} = data.input;
-    // Process the request
+  receive_request: async ({backend, data: {input}}) => {
+    const {message} = input;
     return {result: `Processed: ${message}`};
   },
 },
@@ -249,50 +158,16 @@ my_action: {
 
 ### Adding a New Route
 
-1. **Create route directory** (`src/routes/my_route/`):
-
-```
-src/routes/my_route/
-├── +page.svelte
-└── +page.ts (optional)
-```
-
-2. **Create page component** (`+page.svelte`):
+Create `src/routes/my_route/+page.svelte`:
 
 ```svelte
 <script lang="ts">
-	import {frontend_context} from '$lib/frontend.svelte.js';
+  import {frontend_context} from '$lib/frontend.svelte.js';
 
-	const app = frontend_context.get();
+  const app = frontend_context.get();
 </script>
 
 <h1>My Route</h1>
-<!-- page content -->
-```
-
-### Adding a Component
-
-1. **Create component** (`src/lib/MyComponent.svelte`):
-
-```svelte
-<script lang="ts">
-	import type {Snippet} from 'svelte';
-
-	const {
-		title,
-		children,
-	}: {
-		title: string;
-		children?: Snippet;
-	} = $props();
-</script>
-
-<div class="my-component">
-	<h2>{title}</h2>
-	{#if children}
-		{@render children()}
-	{/if}
-</div>
 ```
 
 ## Common Patterns
@@ -301,182 +176,152 @@ src/routes/my_route/
 
 ```svelte
 <script lang="ts">
-	import {frontend_context} from '$lib/frontend.svelte.js';
+  import {frontend_context} from '$lib/frontend.svelte.js';
 
-	const app = frontend_context.get();
-
-	// Access collections
-	const {chats, models, prompts} = app;
-
-	// Derived state
-	const selected_chat = $derived(chats.selected);
+  const app = frontend_context.get();
+  const {chats, models, prompts} = app;
 </script>
 ```
 
 ### Collection Operations
 
 ```typescript
-// Add item
+// Add
 const chat = app.chats.add({name: 'New Chat'});
 
 // Get by ID
 const chat = app.chats.items.by_id.get(id);
 
-// Get by index
-const model = app.models.items.by('name', 'gpt-4');
+// Get by single index
+const model = app.models.items.by('name', 'gpt-5-2025-08-07');
 
 // Query multi-index
 const ollama_models = app.models.items.where('provider_name', 'ollama');
 
 // Iterate
 for (const chat of app.chats.items.values) {
-	console.log(chat.name);
+  console.log(chat.name);
 }
 ```
 
 ### Action Invocation
 
 ```typescript
-// Request/response action
+// Request/response
 const result = await app.api.completion_create({
   completion_request: {...},
   _meta: {progressToken: turn.id},
 });
 
-if (result.ok) {
-  const {completion_response} = result.value;
-} else {
-  console.error(result.error);
-}
-
 // Local action (sync)
 app.api.toggle_main_menu();
 ```
 
-### Reactive Effects
+### Component Pattern (Svelte 5)
 
 ```svelte
 <script lang="ts">
-	// Effect that runs when dependencies change
-	$effect(() => {
-		console.log('Selected chat changed:', app.chats.selected?.name);
-	});
+  import type {Snippet} from 'svelte';
 
-	// Pre-effect (runs before DOM updates)
-	$effect.pre(() => {
-		// URL synchronization, etc.
-	});
+  const {
+    title,
+    children,
+  }: {
+    title: string;
+    children?: Snippet;
+  } = $props();
 </script>
+
+<div class="my-component">
+  <h2>{title}</h2>
+  {#if children}
+    {@render children()}
+  {/if}
+</div>
 ```
 
 ### Context Menus
 
 ```svelte
 <script lang="ts">
-	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
-	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
+  import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
+  import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 </script>
 
 <Contextmenu>
-	{#snippet entries()}
-		<ContextmenuEntry onclick={() => doSomething()}>Action Label</ContextmenuEntry>
-	{/snippet}
-
-	<!-- Wrapped content -->
-	<div>Right-click me</div>
+  {#snippet entries()}
+    <ContextmenuEntry onclick={() => doSomething()}>Action Label</ContextmenuEntry>
+  {/snippet}
+  <div>Right-click me</div>
 </Contextmenu>
-```
-
-### Dialog Pattern
-
-```svelte
-<script lang="ts">
-	import PickerDialog from '$lib/PickerDialog.svelte';
-
-	let show = $state(false);
-
-	function handle_pick(item: Item): void {
-		// Handle selection
-		show = false;
-	}
-</script>
-
-<button onclick={() => (show = true)}>Open Picker</button>
-
-<PickerDialog bind:show items={collection.values} onpick={handle_pick}>
-	{#snippet children(item, pick)}
-		<button onclick={() => pick(item)}>
-			{item.name}
-		</button>
-	{/snippet}
-</PickerDialog>
 ```
 
 ## Testing
 
-### Running Tests
+Tests live in `src/test/` (not co-located). Split large suites by aspect with dot-separated names.
 
 ```bash
-# Run all tests
-gro test
-
-# Watch mode
-gro test -- --watch
-
-# Specific file
-gro test -- src/lib/cell.test.ts
+gro test                                    # all tests
+gro test -- --watch                         # watch mode
+gro test -- src/test/cell.svelte.base.test.ts  # specific file
 ```
 
-### Writing Tests
+### Test Pattern
+
+Uses Vitest with `test` and `expect`:
 
 ```typescript
-import {test} from 'uvu';
-import * as assert from 'uvu/assert';
+import {test, expect} from 'vitest';
 
-import {MyThing} from './my_thing.svelte.js';
+import {providers_default, models_default} from '$lib/config_defaults.js';
 
-test('MyThing initializes correctly', () => {
-	const thing = new MyThing({app: mock_app, json: {name: 'test'}});
-	assert.is(thing.name, 'test');
-	assert.is(thing.value, 0); // default
+test('all model provider_names exist in providers_default', () => {
+  const model_provider_names = new Set(models_default.map((model) => model.provider_name));
+  const provider_names = new Set(providers_default.map((provider) => provider.name));
+
+  for (const provider_name of model_provider_names) {
+    expect(
+      provider_names.has(provider_name),
+      `Provider "${provider_name}" does not exist in providers_default`,
+    ).toBe(true);
+  }
 });
-
-test('MyThing.increment works', () => {
-	const thing = new MyThing({app: mock_app, json: {}});
-	thing.increment();
-	assert.is(thing.value, 1);
-});
-
-test.run();
 ```
+
+### Test File Naming
+
+| Pattern | Example |
+|---------|---------|
+| `module.test.ts` | `action_event.test.ts` |
+| `module.aspect.test.ts` | `cell.svelte.base.test.ts`, `cell.svelte.decoders.test.ts` |
+| `module.aspect.test.ts` | `indexed_collection.svelte.queries.test.ts` |
 
 ## Code Style
 
-### Naming Conventions
+### Naming
 
-| Type                | Convention             | Example                       |
-| ------------------- | ---------------------- | ----------------------------- |
-| Variables/functions | `snake_case`           | `send_message`, `user_input`  |
-| Classes             | `PascalCase`           | `ChatView`, `ActionPeer`      |
-| Types/interfaces    | `PascalCase`           | `ChatOptions`, `ActionSpec`   |
-| Constants           | `SCREAMING_SNAKE_CASE` | `DEFAULT_TIMEOUT`, `API_PATH` |
-| Private fields      | `#field`               | `#internal_state`             |
-| Zod schemas         | `PascalCase`           | `ChatJson`, `ActionSpec`      |
+| Type | Convention | Example |
+|------|-----------|---------|
+| Variables/functions | `snake_case` | `send_message`, `user_input` |
+| Classes | `PascalCase` | `ChatView`, `ActionPeer` |
+| Types/interfaces | `PascalCase` | `ChatOptions`, `ActionSpec` |
+| Zod schemas | `PascalCase` | `ChatJson`, `CompletionRequest` |
+| Private fields | `#field` | `#internal_state` |
 
-### Code Quality Markers
+### Code Markers
 
-```typescript
-// @slop [Model] - LLM-generated code needing review
-// TODO - Work to be done
-// TODO @many - Affects multiple locations
-// TODO @api - API design consideration
-// TODO @db - Database-related
-```
+| Marker | Meaning |
+|--------|---------|
+| `// @slop [Model]` | LLM-generated code needing review |
+| `// TODO` | Work item |
+| `// TODO @many` | Affects multiple locations |
+| `// TODO @api` | API design question |
+| `// TODO @db` | Database-related |
 
 ### Import Order
 
 1. External packages (`svelte`, `zod`, etc.)
-2. Internal aliases (`$lib/...`, `$routes/...`)
+2. Internal aliases (`$lib/...`, `$env/...`)
 3. Relative imports (`./...`)
 
 ```typescript
@@ -489,40 +334,33 @@ import type {Frontend} from '$lib/frontend.svelte.js';
 import {helper_function} from './helpers.js';
 ```
 
-### Svelte 5 Runes
+All imports use `.js` extensions (ESM convention).
+
+### Svelte 5 Runes in State Classes
 
 ```typescript
-// Reactive state
-name: string = $state()!;           // Initialized by Cell.init()
-count: number = $state(0);          // With default
+// Schema fields — $state()! initialized by Cell.init()
+name: string = $state()!;
 
 // Derived values
 readonly doubled = $derived(this.count * 2);
-readonly complex = $derived.by(() => {
-  // Complex computation
-  return expensiveCalculation(this.count);
-});
+readonly complex = $derived.by(() => expensiveCalculation(this.count));
 
-// Raw state (no deep reactivity)
-response: Response = $state.raw();
+// Raw state (no deep reactivity) — for large objects
+response: CompletionResponse = $state.raw();
 ```
+
+No `$effect` in Cell classes — effects belong in Svelte components only.
 
 ### Error Handling
 
 ```typescript
-// Return Result type for actions
-const result = await app.api.some_action(input);
-if (!result.ok) {
-	console.error('Action failed:', result.error);
-	return;
-}
-const {value} = result;
+// Structured JSON-RPC errors
+throw jsonrpc_errors.invalid_params('Missing required field');
+throw jsonrpc_errors.ai_provider_error(provider_name, error_message);
 
-// Throw for unexpected errors
-if (!expectedCondition) {
-	throw new Error('Unexpected state');
+// Let ThrownJsonrpcError bubble through
+if (error instanceof ThrownJsonrpcError) {
+  throw error;
 }
-
-// Use ThrownJsonrpcError for structured errors
-throw new ThrownJsonrpcError(jsonrpc_error_messages.invalid_params('Missing required field'));
 ```

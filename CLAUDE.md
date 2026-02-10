@@ -1,276 +1,337 @@
 # zzz
 
-> nice web things for the tired 💤
+> nice web things for the tired
 
-zzz (`@fuzdev/zzz`) is a local-first IDE + CMS + browser + AI UI for power users
-and developers. It runs as a server on your machine with a PostgreSQL database
-backing a Svelte web frontend.
-
-**Status**: Early pre-release, development use only (no auth yet)
+`@fuzdev/zzz` — local-first AI forge: chat + files + prompts in one app.
+SvelteKit frontend, Hono/Node.js backend, Svelte 5 runes, Zod schemas.
+v0.0.1, no auth, no database yet. 26 cell classes, 20 action specs, 4 AI providers.
 
 For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
-## Contents
+## What zzz Does
 
-- [Quick Reference](#quick-reference)
-- [What is Zzz?](#what-is-zzz)
-- [Architecture Overview](#architecture-overview)
-- [Tech Stack](#tech-stack)
-- [Directory Structure](#directory-structure)
-- [Zzz App Directory](#zzz-app-directory)
-- [Development](#development)
-- [Documentation](#documentation)
+1. **Chat** with AI models — multi-thread, multi-model comparison, streaming responses
+2. **Edit files** on disk — scoped filesystem, syntax highlighting, multi-tab editor
+3. **Build prompts** — reusable content templates composed from text parts and file references
+4. **Manage models** — Ollama local models + Claude/ChatGPT/Gemini via BYOK API keys
+5. **Symmetric actions** — JSON-RPC 2.0 between frontend and backend, same ActionPeer on both sides
 
-## Quick Reference
+## Key Principles
 
-| What                 | Where                                       |
-| -------------------- | ------------------------------------------- |
-| **Start dev server** | `gro dev` or `npm run dev`                  |
-| **Run tests**        | `gro test` or `npm run test`                |
-| **Type check**       | `gro typecheck` or `npm run typecheck`      |
-| **Build**            | `gro build` or `npm run build`              |
-| **Action specs**     | `src/lib/action_specs.ts`                   |
-| **State classes**    | `src/lib/*.svelte.ts`                       |
-| **UI components**    | `src/lib/*.svelte`                          |
-| **Backend handlers** | `src/lib/server/backend_action_handlers.ts` |
-| **AI providers**     | `src/lib/server/backend_provider_*.ts`      |
+- **Local-first**: Ollama for local AI, sensitive data stays on your machine, no third-party lock-in
+- **Schema-driven**: Every Cell and Action defined by Zod schemas, validated at boundaries
+- **Symmetric actions**: Frontend and backend are peers — same ActionPeer code, same spec format
+- **Cell pattern**: All state is Cell subclasses with `$state`/`$derived` runes, JSON-serializable
 
-## What is Zzz?
+## Development Stage
 
-Zzz combines multiple tools into one integrated environment:
+Early development, v0.0.1. Breaking changes are expected and welcome. No authentication — development use only. All state is in-memory (no database yet). The Hono/Node.js backend is a reference implementation that may be replaced by a Rust daemon (`fuzd`).
 
-- **IDE**: File editing with syntax highlighting, multi-tab support
-- **CMS**: Content management with prompts, parts, and structured content
-- **Browser**: Planned tabbed browsing integrated with the workspace (see `/tabs`)
-- **AI UI**: Chat interface supporting multiple models and providers
-- **Projects**: Website/app building with git integration (see `/projects`)
+See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 
-### Design Priorities
+## Docs
 
-1. **Solo offline developer first**: Works without network, local PostgreSQL (pglite), local AI (Ollama)
-2. **User agency**: Full control over tools and data, no third-party lock-in
-3. **Local-first**: Sensitive data stays on your machine
-4. **Protocol agnosticism**: JSON-RPC 2.0 foundation, planned MCP/A2A compatibility
-5. **Extensibility**: Devs can extend without artificial restrictions
+- [docs/architecture.md](docs/architecture.md) — Action system, Cell system, content model, data flow
+- [docs/development.md](docs/development.md) — Development workflow, extension points, patterns
+- [docs/providers.md](docs/providers.md) — AI provider integration, adding new providers
+- [src/lib/server/CLAUDE.md](src/lib/server/CLAUDE.md) — Backend server architecture, providers, security
 
-### Relationship to Fuz
-
-Zzz demonstrates how far you can go in one direction with [Fuz](https://github.com/fuzdev/fuz_ui) - it's a maximal exploration of the stack for power users. The current Hono/Node backend is a **reference implementation**. The Fuz ecosystem includes a Rust daemon (`fuzd`) that will become the primary backend interface. Zzz's TypeScript backend demonstrates the architecture and may be deprecated once the Rust implementation matures.
-
-## Architecture Overview
-
-### Core Abstractions
-
-| Abstraction           | Purpose                                          | Key Files                      |
-| --------------------- | ------------------------------------------------ | ------------------------------ |
-| **Cell**              | Schema-driven reactive state with Svelte 5 runes | `cell.svelte.ts`               |
-| **Action**            | Symmetric RPC (frontend ↔ backend)              | `action_*.ts`                  |
-| **IndexedCollection** | Queryable collections with multiple indexes      | `indexed_collection.svelte.ts` |
-| **Transport**         | Protocol-agnostic communication                  | `transports.ts`                |
-
-### Content Model
-
-```
-Chat → Thread[] → Turn[] → Part[]
-                            ├── TextPart (direct content)
-                            └── DiskfilePart (file reference)
-
-Prompt → Part[] (reusable content templates)
-```
-
-- **Parts**: Content units that can be shared across turns
-- **Turns**: Conversation messages with role (user/assistant/system)
-- **Threads**: Linear conversation with a specific model
-- **Chats**: Container for comparing multiple threads/models
-
-### Action System
-
-The action system is **symmetric and peer-to-peer**:
-
-```typescript
-// Both frontend and backend use ActionPeer
-Frontend.peer.send(request)  →  Backend.peer.receive(message)
-Backend.peer.send(notification)  →  Frontend.peer.receive(message)
-```
-
-**Action kinds**:
-
-- `request_response`: Traditional RPC with response
-- `remote_notification`: Fire-and-forget (backend → frontend for streaming)
-- `local_call`: Frontend-only actions
-
-See [docs/architecture.md](docs/architecture.md) for details.
-
-## Tech Stack
-
-| Layer          | Technology                                                            |
-| -------------- | --------------------------------------------------------------------- |
-| **Frontend**   | SvelteKit + Svelte 5 + TypeScript + Vite                              |
-| **Backend**    | Hono + Node.js (reference impl)                                       |
-| **Database**   | PostgreSQL (pglite for local, full Postgres for production) - planned |
-| **Build**      | @ryanatkn/gro                                                         |
-| **UI**         | @fuzdev/fuz_ui components, @fuzdev/fuz_css styling                    |
-| **Validation** | Zod schemas                                                           |
-| **AI**         | Ollama (local), Claude/ChatGPT/Gemini (BYOK)                          |
-
-## Directory Structure
+## Repository Structure
 
 ```
 src/
-├── lib/                      # Published as @fuzdev/zzz
-│   ├── server/              # Backend (reference implementation)
-│   │   ├── backend.ts       # Core backend class
-│   │   ├── server.ts        # Hono server setup
-│   │   ├── backend_provider_*.ts  # AI providers
-│   │   ├── scoped_fs.ts     # Secure filesystem
-│   │   └── security.ts      # Origin verification
+├── lib/                          # Published as @fuzdev/zzz
+│   ├── server/                   # Backend (Hono/Node.js reference impl)
+│   │   ├── backend.ts
+│   │   ├── server.ts
+│   │   ├── backend_action_handlers.ts
+│   │   ├── backend_provider_*.ts # Ollama, Claude, ChatGPT, Gemini
+│   │   ├── scoped_fs.ts
+│   │   ├── security.ts
+│   │   └── backend_action_types.gen.ts
 │   │
-│   ├── *.svelte.ts          # State classes (Cell subclasses)
-│   │   ├── frontend.svelte.ts   # Root app state
-│   │   ├── chat.svelte.ts       # Chat state
-│   │   ├── thread.svelte.ts     # Thread state
-│   │   ├── turn.svelte.ts       # Turn state
-│   │   └── part.svelte.ts       # Content parts
+│   ├── *.svelte.ts               # Cell state classes (26 classes)
+│   ├── action_specs.ts           # All 20 action spec definitions
+│   ├── action_spec.ts            # ActionSpec schema
+│   ├── action_event.ts           # Action lifecycle state machine
+│   ├── action_peer.ts            # Symmetric send/receive
+│   ├── cell.svelte.ts            # Base Cell class
+│   ├── cell_classes.ts           # Cell class registry
+│   ├── indexed_collection.svelte.ts
 │   │
-│   ├── action_*.ts          # Action system
-│   │   ├── action_spec.ts   # Action metadata schemas
-│   │   ├── action_specs.ts  # All action definitions
-│   │   ├── action_event.ts  # Lifecycle state machine
-│   │   └── action_peer.ts   # Symmetric communication
-│   │
-│   └── *.svelte             # UI components
-│       ├── Chat*.svelte     # Chat UI
-│       ├── Diskfile*.svelte # File editor UI
-│       ├── Model*.svelte    # Model management UI
-│       └── ...
+│   ├── *.svelte                  # UI components
+│   ├── action_collections.gen.ts # Generated
+│   ├── frontend_action_types.gen.ts
+│   └── action_metatypes.gen.ts
 │
-└── routes/                  # SvelteKit routes
-    ├── chats/              # AI chat interface
-    ├── files/              # File editor
-    ├── models/             # Model catalog
-    ├── prompts/            # Prompt builder
-    ├── providers/          # AI provider config
-    ├── projects/           # Project management (futuremode)
-    ├── tabs/               # Browser tabs (futuremode)
-    └── about/              # About page
+├── routes/                       # SvelteKit routes (16 dirs)
+│   ├── about/
+│   ├── actions/
+│   ├── bots/
+│   ├── capabilities/
+│   ├── chats/
+│   ├── docs/
+│   ├── feeds/
+│   ├── files/
+│   ├── models/
+│   ├── projects/
+│   ├── prompts/
+│   ├── providers/
+│   ├── repos/
+│   ├── settings/
+│   ├── tabs/
+│   └── views/
+│
+├── test/                         # Tests (not co-located)
+│   ├── cell.svelte.*.test.ts
+│   ├── action_event.test.ts
+│   ├── indexed_collection.svelte.*.test.ts
+│   └── ...
+│
+└── routes/library.gen.ts         # Generated route metadata
 ```
 
-## Zzz App Directory
+## Architecture
 
-The `.zzz/` directory stores Zzz's app data. Configured via `PUBLIC_ZZZ_DIR` env var.
+The two core abstractions are **Cells** (reactive state) and **Actions** (RPC). Cells hold all application state as Svelte 5 rune classes with Zod schemas. Actions provide symmetric JSON-RPC 2.0 communication where frontend and backend are equal peers.
 
-```
-.zzz/
-├── state/                   # Persistent data
-│   └── completions/         # AI completion logs
-├── cache/                   # Regenerable data (future)
-└── run/                     # Runtime ephemeral
-    └── server.json          # PID, port, version
-```
+Content model: `Chat → Thread[] → Turn[] → Part[]` (TextPart or DiskfilePart). Prompts also hold Parts.
 
-| Directory | Semantics                               |
-| --------- | --------------------------------------- |
-| `state/`  | Persistent user data, survives restarts |
-| `cache/`  | Regenerable data, safe to delete        |
-| `run/`    | Runtime/ephemeral (PIDs, locks)         |
+See [docs/architecture.md](docs/architecture.md) for detailed data flow, content model, and IndexedCollection docs.
 
-The `run/server.json` file is written on server startup and removed on clean shutdown. It contains PID, port, start time, and version for server discovery.
+## Cell Classes
 
-### Scoped Filesystem
+26 registered classes in `src/lib/cell_classes.ts`:
 
-Zzz separates two filesystem concerns:
+| Class            | Source file                    | Purpose                              |
+| ---------------- | ------------------------------ | ------------------------------------ |
+| `Parts`          | `parts.svelte.ts`             | Collection of all parts              |
+| `TextPart`       | `part.svelte.ts`              | Direct text content                  |
+| `DiskfilePart`   | `part.svelte.ts`              | File reference content               |
+| `Capabilities`   | `capabilities.svelte.ts`      | Feature capability tracking          |
+| `Chat`           | `chat.svelte.ts`              | Chat container with threads          |
+| `Chats`          | `chats.svelte.ts`             | Collection of chats                  |
+| `Diskfile`       | `diskfile.svelte.ts`          | Single file on disk                  |
+| `DiskfileTab`    | `diskfile_tab.svelte.ts`      | Editor tab for a file                |
+| `DiskfileTabs`   | `diskfile_tabs.svelte.ts`     | Tab manager                          |
+| `DiskfileHistory`| `diskfile_history.svelte.ts`  | File edit history                    |
+| `Diskfiles`      | `diskfiles.svelte.ts`         | Collection of disk files             |
+| `DiskfilesEditor`| `diskfiles_editor.svelte.ts`  | Multi-file editor state              |
+| `Model`          | `model.svelte.ts`             | AI model definition                  |
+| `Models`         | `models.svelte.ts`            | Model catalog with indexes           |
+| `Action`         | `action.svelte.ts`            | Single action event state            |
+| `Actions`        | `actions.svelte.ts`           | Action history                       |
+| `Prompt`         | `prompt.svelte.ts`            | Reusable prompt template             |
+| `Prompts`        | `prompts.svelte.ts`           | Collection of prompts                |
+| `Provider`       | `provider.svelte.ts`          | AI provider config                   |
+| `Providers`      | `providers.svelte.ts`         | Collection of providers              |
+| `Socket`         | `socket.svelte.ts`            | WebSocket connection state           |
+| `Turn`           | `turn.svelte.ts`              | Single conversation message          |
+| `Thread`         | `thread.svelte.ts`            | Linear conversation with one model   |
+| `Threads`        | `threads.svelte.ts`           | Collection of threads                |
+| `Time`           | `time.svelte.ts`              | Reactive time state                  |
+| `Ui`             | `ui.svelte.ts`                | UI state (menus, layout)             |
 
-| Env Var                  | Purpose                                             |
-| ------------------------ | --------------------------------------------------- |
-| `PUBLIC_ZZZ_DIR`         | Zzz's app directory (default: `.zzz`)               |
-| `PUBLIC_ZZZ_SCOPED_DIRS` | Comma-separated paths Zzz can access for user files |
+## Action Specs
 
-Example:
+20 specs in `src/lib/action_specs.ts`:
 
-```bash
-PUBLIC_ZZZ_DIR="./.zzz"
-PUBLIC_ZZZ_SCOPED_DIRS="./projects,~/code,/mnt/data"
-```
+| Method                   | Kind                  | Initiator  | Purpose                          |
+| ------------------------ | --------------------- | ---------- | -------------------------------- |
+| `ping`                   | `request_response`    | `both`     | Health check                     |
+| `session_load`           | `request_response`    | `frontend` | Load initial session data        |
+| `filer_change`           | `remote_notification` | `backend`  | File system change notification  |
+| `diskfile_update`        | `request_response`    | `frontend` | Write file content               |
+| `diskfile_delete`        | `request_response`    | `frontend` | Delete a file                    |
+| `directory_create`       | `request_response`    | `frontend` | Create a directory               |
+| `completion_create`      | `request_response`    | `frontend` | Start AI completion              |
+| `completion_progress`    | `remote_notification` | `backend`  | Stream completion chunks         |
+| `ollama_progress`        | `remote_notification` | `backend`  | Ollama model operation progress  |
+| `toggle_main_menu`       | `local_call`          | `frontend` | Toggle main menu UI              |
+| `ollama_list`            | `request_response`    | `frontend` | List local Ollama models         |
+| `ollama_ps`              | `request_response`    | `frontend` | List running Ollama models       |
+| `ollama_show`            | `request_response`    | `frontend` | Show Ollama model details        |
+| `ollama_pull`            | `request_response`    | `frontend` | Pull Ollama model                |
+| `ollama_delete`          | `request_response`    | `frontend` | Delete Ollama model              |
+| `ollama_copy`            | `request_response`    | `frontend` | Copy Ollama model                |
+| `ollama_create`          | `request_response`    | `frontend` | Create Ollama model              |
+| `ollama_unload`          | `request_response`    | `frontend` | Unload Ollama model from memory  |
+| `provider_load_status`   | `request_response`    | `frontend` | Check provider availability      |
+| `provider_update_api_key`| `request_response`    | `frontend` | Update provider API key          |
 
-The `zzz_dir` is always watched and accessible (for app data like completions). `scoped_dirs` adds additional paths for user files.
-
-## Development
+## Development Workflow
 
 ### Setup
 
 ```bash
-# Copy env template
 cp src/lib/server/.env.development.example .env.development
-
-# Install dependencies
 npm install
-
-# Start development server
-gro dev
 ```
 
-### Commands
+### Daily Commands
 
-| Command         | Description                    |
-| --------------- | ------------------------------ |
-| `gro dev`       | Development server with HMR    |
-| `gro build`     | Production build               |
-| `gro test`      | Run test suite                 |
-| `gro typecheck` | Type checking                  |
-| `gro check`     | All checks (types, lint, test) |
-| `gro deploy`    | Deploy to production           |
+| Command         | Purpose                                    |
+| --------------- | ------------------------------------------ |
+| `gro check`     | All checks (typecheck, test, gen, format, lint) |
+| `gro typecheck` | Type checking only (faster iteration)      |
+| `gro test`      | Run Vitest tests                           |
+| `gro gen`       | Regenerate `*.gen.ts` files                |
+| `gro format`    | Format with Prettier                       |
+| `gro build`     | Production build                           |
 
 ### Naming Conventions
 
-| Type             | Convention             | Example           |
-| ---------------- | ---------------------- | ----------------- |
-| TypeScript files | `snake_case.ts`        | `action_peer.ts`  |
-| Svelte 5 modules | `snake_case.svelte.ts` | `chat.svelte.ts`  |
-| Components       | `PascalCase.svelte`    | `ChatView.svelte` |
-| Tests            | `*.test.ts`            | `cell.test.ts`    |
+| Thing            | Convention             | Example                |
+| ---------------- | ---------------------- | ---------------------- |
+| TypeScript files | `snake_case.ts`        | `action_peer.ts`       |
+| Svelte 5 state   | `snake_case.svelte.ts` | `chat.svelte.ts`       |
+| Components       | `PascalCase.svelte`    | `ChatView.svelte`      |
+| Tests            | `*.test.ts` in `src/test/` | `cell.svelte.base.test.ts` |
 
-### Code Markers
+## Code Patterns
 
-- `// @slop [Model]`: LLM-generated code for review
-- Core interfaces are hand-crafted; implementations may use LLM assistance
+### Cell Pattern
 
-## Documentation
+Every piece of state is a Cell subclass: Zod schema defines shape, `$state` runes hold values, `$derived` computes reactively.
 
-| Document                                     | Contents                                             |
-| -------------------------------------------- | ---------------------------------------------------- |
-| [docs/architecture.md](docs/architecture.md) | Action system, Cell system, content model, data flow |
-| [docs/development.md](docs/development.md)   | Development workflow, extension points, patterns     |
-| [docs/providers.md](docs/providers.md)       | AI provider integration, adding new providers        |
+```typescript
+// 1. Schema with CellJson base
+export const ChatJson = CellJson.extend({
+  name: z.string().default(''),
+  thread_ids: z.array(Uuid).default(() => []),
+  view_mode: z.enum(['simple', 'multi']).default('simple'),
+  selected_thread_id: Uuid.nullable().default(null),
+}).meta({cell_class_name: 'Chat'});
 
-## Values
+// 2. Class with $state for schema fields, $derived for computed
+export class Chat extends Cell<typeof ChatJson> {
+  name: string = $state()!;
+  thread_ids: Array<Uuid> = $state()!;
+  view_mode: ChatViewMode = $state()!;
+  selected_thread_id: Uuid | null = $state()!;
 
-- **User agency**: Control over tools and data
-- **Fullstack unification**: Single TypeScript runtime (frontend + backend)
-- **Protocol agnosticism**: Broad compatibility (JSON-RPC, MCP, A2A)
-- **Extensibility**: Without prescription
-- **Open standards**: Interoperability with the web ecosystem
-- **Security by design**: UX makes safe choices easy
+  readonly threads: Array<Thread> = $derived.by(() => {
+    const result: Array<Thread> = [];
+    for (const id of this.thread_ids) {
+      const thread = this.app.threads.items.by_id.get(id);
+      if (thread) result.push(thread);
+    }
+    return result;
+  });
 
-## Planned Features
+  constructor(options: ChatOptions) {
+    super(ChatJson, options);
+    this.init(); // Must call at end of constructor
+  }
+}
+```
 
-- Database integration (PostgreSQL via pglite) - [#7](https://github.com/fuzdev/zzz/issues/7)
-- Undo/history system - [#8](https://github.com/fuzdev/zzz/issues/8)
-- Authentication system
-- MCP/A2A protocol support
-- Terminal integration
-- Git integration
-- RSS/Atom/JSON Feed support
-- Native app with browser engine integration
+### Action Spec Pattern
 
-## Security
+Each action is a plain object with Zod schemas for input/output:
 
-⚠️ **No authentication yet** - development use only
+```typescript
+export const diskfile_update_action_spec = {
+  method: 'diskfile_update',
+  kind: 'request_response',
+  initiator: 'frontend',
+  auth: 'public',
+  side_effects: true,
+  input: z.strictObject({
+    path: DiskfilePath,
+    content: z.string(),
+  }),
+  output: z.null(),
+  async: true,
+} satisfies ActionSpecUnion;
+```
 
-Current security measures:
+Action kinds:
 
-- **ScopedFs**: Filesystem restricted to `.zzz` directory
-- **Origin verification**: CORS-like checks via `ALLOWED_ORIGINS`
-- **CSP**: Strict Content Security Policy
-- **No symlinks**: Path traversal protection
+| Kind                  | Transport        | Pattern                         |
+| --------------------- | ---------------- | ------------------------------- |
+| `request_response`    | HTTP or WebSocket | Frontend sends, backend replies |
+| `remote_notification` | WebSocket only    | Backend pushes to frontend      |
+| `local_call`          | None (in-process) | Frontend-only                   |
 
-See the [security section](/about) for detailed information.
+### Zod Schema Conventions
+
+- Always use `z.strictObject()` (not `z.object()`) for action specs — unknown keys are rejected
+- Cell schemas use `CellJson.extend({...})` with `.meta({cell_class_name: 'ClassName'})`
+- Every schema field must have a `.default()` for Cell instantiation without full JSON
+
+### State Class Rules
+
+- Schema fields use `$state()!` (non-null assertion, set by `init()`)
+- Computed values use `$derived` or `$derived.by(() => ...)`
+- No `$effect` inside Cell classes — effects belong in components
+- Constructor must call `this.init()` as the last statement
+- Always register new Cell classes in `cell_classes.ts`
+
+## Code Practices
+
+- `// @slop [Model]` marks LLM-generated code needing review
+- `// TODO` for work items, `// TODO @api` for API design questions
+- Import from `*.js` extensions (ESM convention): `import {Chat} from './chat.svelte.js'`
+- Prefer pure functions; mark mutations with `@mutates` JSDoc tag
+- Tests in `src/test/`, split by aspect: `cell.svelte.base.test.ts`, `cell.svelte.decoders.test.ts`
+- UI uses `@fuzdev/fuz_css` style variables and semantic classes, not inline styles
+
+## Zzz App Directory
+
+The `.zzz/` directory stores app data. Configured via `PUBLIC_ZZZ_DIR`.
+
+| Subdirectory | Purpose                                |
+| ------------ | -------------------------------------- |
+| `state/`     | Persistent data (completions logs)     |
+| `cache/`     | Regenerable data, safe to delete       |
+| `run/`       | Runtime ephemeral (server.json: PID, port) |
+
+All filesystem access goes through `ScopedFs` — path validation, no symlinks, absolute paths only.
+
+## Environment Variables
+
+From `src/lib/server/.env.development.example`:
+
+| Variable                              | Purpose                                    |
+| ------------------------------------- | ------------------------------------------ |
+| `PUBLIC_ZZZ_DIR`                      | Zzz app directory (default `.zzz`)         |
+| `PUBLIC_ZZZ_SCOPED_DIRS`              | Comma-separated user file paths            |
+| `PUBLIC_SERVER_PROTOCOL`              | `http` or `https`                          |
+| `PUBLIC_SERVER_HOST`                  | Server hostname                            |
+| `PUBLIC_SERVER_PORT`                  | SvelteKit dev server port                  |
+| `PUBLIC_SERVER_API_PATH`              | API endpoint path                          |
+| `PUBLIC_WEBSOCKET_URL`               | WebSocket URL                              |
+| `PUBLIC_SERVER_PROXIED_PORT`          | Hono backend port                          |
+| `PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY` | Testing delay in ms                  |
+| `ALLOWED_ORIGINS`                     | Origin allowlist patterns                  |
+| `SECRET_OPENAI_API_KEY`              | OpenAI API key                             |
+| `SECRET_ANTHROPIC_API_KEY`           | Anthropic API key                          |
+| `SECRET_GOOGLE_API_KEY`              | Google Gemini API key                      |
+| `SECRET_GITHUB_API_TOKEN`            | GitHub API token                           |
+
+## Avoid
+
+- **Never run `gro dev`** — the user manages the dev server
+- **Never edit `*.gen.ts` files** — they are regenerated by `gro gen`
+- **Use `z.strictObject()`** in action specs, not `z.object()` — unknown keys must be rejected
+- **No `$effect` in Cell classes** — effects belong in Svelte components only
+- **Run `gro gen` after changing action specs** — handler types are generated from specs
+- **Register new Cell classes in `cell_classes.ts`** — the registry must be complete
+- **Don't import without `.js` extension** — ESM requires explicit extensions
+
+## Known Limitations
+
+- **No authentication** — development use only, anyone with network access can use it
+- **No database** — all state is in-memory, lost on restart (pglite planned)
+- **No undo/history** — file edits are permanent
+- **No terminal integration** — no shell access from the UI
+- **No git integration** — no commit/push/pull from the UI
+- **No MCP/A2A** — protocol support planned but not implemented
+- **Backend is reference impl** — may be replaced by Rust daemon (`fuzd`)
+
+## fuz_app
+
+zzz is the primary source for the Cell and Action patterns that will become the `fuz_app` package — a shared foundation for Fuz ecosystem apps.
+
+Last updated: 2026-02-10

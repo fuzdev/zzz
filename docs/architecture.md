@@ -1,111 +1,111 @@
 # Architecture
 
-⚠️ AI generated
-
-Deep dive into Zzz's core systems: actions, cells, content model, and data flow.
-
-## Contents
-
-- [Action System](#action-system)
-- [Cell System](#cell-system)
-- [Content Model](#content-model)
-- [Data Flow](#data-flow)
-- [IndexedCollection](#indexedcollection)
-- [Filesystem](#filesystem)
+Core systems: actions, cells, content model, data flow, indexed collections, filesystem.
 
 ## Action System
 
-The action system provides **symmetric, peer-to-peer RPC** - the same code runs on frontend and backend.
+Symmetric peer-to-peer JSON-RPC 2.0. The same `ActionPeer` code runs on frontend and backend.
 
-### Core Components
+### Action Spec
 
-| Component | Purpose | File |
-|-----------|---------|------|
-| `ActionSpec` | Defines action metadata (method, kind, schemas) | `action_spec.ts` |
-| `ActionEvent` | Lifecycle state machine | `action_event.ts` |
-| `ActionPeer` | Send/receive operations | `action_peer.ts` |
-| `ActionRegistry` | Type-safe action lookup | `action_registry.ts` |
-
-### Action Specification
-
-Every action is defined with a spec:
+Every action is a plain object with Zod schemas. Defined in `src/lib/action_specs.ts`:
 
 ```typescript
 export const completion_create_action_spec = {
   method: 'completion_create',
-  kind: 'request_response',        // or 'remote_notification', 'local_call'
-  initiator: 'frontend',           // or 'backend', 'both'
-  auth: 'authorize',               // or 'public', null
-  side_effects: true,              // or null
-  async: true,
-  input: z.object({
+  kind: 'request_response',
+  initiator: 'frontend',
+  auth: 'public',
+  side_effects: true,
+  input: z.strictObject({
     completion_request: CompletionRequest,
-    _meta: z.object({ progressToken: Uuid.optional() }).optional(),
+    _meta: z.looseObject({progressToken: Uuid.optional()}).optional(),
   }),
-  output: z.object({
+  output: z.strictObject({
     completion_response: CompletionResponse,
+    _meta: z.looseObject({progressToken: Uuid.optional()}).optional(),
   }),
-};
+  async: true,
+} satisfies ActionSpecUnion;
 ```
 
 ### Action Kinds
 
-**`request_response`**: Traditional RPC pattern
-- Frontend sends request → Backend handles → Backend sends response
-- Phases: `send_request` → `receive_request` → `send_response` → `receive_response`
+| Kind | Phases | Transport | Use |
+|------|--------|-----------|-----|
+| `request_response` | `send_request` → `receive_request` → `send_response` → `receive_response` | HTTP or WebSocket | Standard RPC |
+| `remote_notification` | `send` → `receive` | WebSocket only | Streaming progress (backend → frontend) |
+| `local_call` | `execute` | None | Frontend-only UI actions |
 
-**`remote_notification`**: Fire-and-forget (backend → frontend)
-- Used for streaming progress updates
-- Phases: `send` → `receive`
+### Action Spec Fields
 
-**`local_call`**: Frontend-only
-- No network transport
-- Phase: `execute`
+| Field | Type | Values |
+|-------|------|--------|
+| `method` | `string` | Action name (e.g. `'completion_create'`) |
+| `kind` | `ActionKind` | `'request_response'` \| `'remote_notification'` \| `'local_call'` |
+| `initiator` | `ActionInitiator` | `'frontend'` \| `'backend'` \| `'both'` |
+| `auth` | `ActionAuth \| null` | `'public'` \| `'authorize'` \| `null` |
+| `side_effects` | `boolean \| null` | Whether action mutates state |
+| `input` | `z.ZodType` | Zod schema for request params |
+| `output` | `z.ZodType` | Zod schema for response |
+| `async` | `boolean` | Whether handler is async |
+
+### Core Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `ActionSpec` | `action_spec.ts` | Action metadata schema |
+| `ActionEvent` | `action_event.ts` | Lifecycle state machine (initial → parsed → handling → handled/failed) |
+| `ActionPeer` | `action_peer.ts` | Send/receive on both sides |
+| `ActionRegistry` | `action_registry.ts` | Type-safe action lookup |
 
 ### Action Event Lifecycle
 
-Each action goes through a state machine:
-
 ```
 Steps:   initial → parsed → handling → handled (or failed)
-Phases:  send_request ↔ receive_request ↔ send_response ↔ receive_response
 ```
 
 ```typescript
-// Creating and executing an action
 const event = create_action_event(environment, spec, input, 'send_request');
 await event.parse().handle_async();
 ```
 
 ### Handler Registration
 
-Frontend and backend register handlers for each action/phase:
+Frontend and backend register handlers per action per phase:
 
 ```typescript
-// Frontend handler (frontend_action_handlers.ts)
-export const frontend_action_handlers = {
+// Frontend (frontend_action_handlers.ts)
+export const frontend_action_handlers: FrontendActionHandlers = {
   completion_create: {
-    send_request: ({data}) => {
-      console.log('Sending completion request');
+    send_request: ({data: {input}}) => {
+      console.log('sending prompt:', input.completion_request.prompt);
     },
-    receive_response: ({app, data}) => {
-      const {completion_response} = data.output;
-      // Update turn with response
+    receive_response: ({app, data: {input, output}}) => {
+      const progress_token = input._meta?.progressToken;
+      if (progress_token) {
+        const turn = app.cell_registry.all.get(progress_token);
+        if (turn instanceof Turn) {
+          turn.content = to_completion_response_text(output.completion_response) || '';
+          turn.response = output.completion_response;
+        }
+      }
     },
-    receive_error: ({data}) => {
-      console.error('Completion failed:', data.error);
+    receive_error: ({data: {error}}) => {
+      console.error('completion failed:', error);
     },
   },
 };
 
-// Backend handler (backend_action_handlers.ts)
-export const backend_action_handlers = {
+// Backend (server/backend_action_handlers.ts)
+export const backend_action_handlers: BackendActionHandlers = {
   completion_create: {
-    receive_request: async ({backend, data}) => {
-      const {completion_request} = data.input;
-      const provider = backend.lookup_provider(completion_request.provider_name);
-      const response = await provider.handle_completion(options);
-      return {completion_response: response};
+    receive_request: async ({backend, data: {input}}) => {
+      const {prompt, provider_name, model, completion_messages} = input.completion_request;
+      const progress_token = input._meta?.progressToken;
+      const provider = backend.lookup_provider(provider_name);
+      const handler = provider.get_handler(!!progress_token);
+      return await handler({model, prompt, completion_messages, completion_options, progress_token});
     },
   },
 };
@@ -113,112 +113,131 @@ export const backend_action_handlers = {
 
 ### Transport Layer
 
-Actions are transport-agnostic via the `Transport` interface:
+Actions are transport-agnostic via the `Transport` interface (`transports.ts`):
 
 ```typescript
 interface Transport {
   transport_name: TransportName;
   send(message: JsonrpcRequest): Promise<JsonrpcResponseOrError>;
   send(message: JsonrpcNotification): Promise<JsonrpcErrorMessage | null>;
-  is_ready(): boolean;
+  is_ready: () => boolean;
 }
 ```
 
-**Implementations**:
-- `FrontendHttpTransport`: HTTP requests to backend
-- `FrontendWebsocketTransport`: WebSocket for bidirectional communication
-- `BackendWebsocketTransport`: Server-side WebSocket handling
+Implementations: `FrontendHttpTransport`, `FrontendWebsocketTransport`, `BackendWebsocketTransport`.
 
 ### JSON-RPC 2.0
 
-Actions use JSON-RPC 2.0 (MCP-compatible subset, no batching):
+MCP-compatible subset, no batching:
 
 ```typescript
-// Request
-{ jsonrpc: "2.0", id: "uuid", method: "completion_create", params: {...} }
-
-// Response
-{ jsonrpc: "2.0", id: "uuid", result: {...} }
-
-// Error
-{ jsonrpc: "2.0", id: "uuid", error: { code: -32000, message: "..." } }
-
-// Notification (no id, no response)
-{ jsonrpc: "2.0", method: "completion_progress", params: {...} }
+// Request:     { jsonrpc: "2.0", id: "uuid", method: "completion_create", params: {...} }
+// Response:    { jsonrpc: "2.0", id: "uuid", result: {...} }
+// Error:       { jsonrpc: "2.0", id: "uuid", error: { code: -32000, message: "..." } }
+// Notification (no id): { jsonrpc: "2.0", method: "completion_progress", params: {...} }
 ```
 
-### All Actions
+### All 20 Actions
 
-Defined in `src/lib/action_specs.ts`:
-
-| Action | Kind | Initiator | Purpose |
+| Method | Kind | Initiator | Purpose |
 |--------|------|-----------|---------|
-| `ping` | request_response | both | Health check |
-| `session_load` | request_response | frontend | Load initial session |
-| `completion_create` | request_response | frontend | AI completion |
-| `completion_progress` | remote_notification | backend | Streaming chunks |
-| `diskfile_update` | request_response | frontend | Update file |
-| `diskfile_delete` | request_response | frontend | Delete file |
-| `directory_create` | request_response | frontend | Create directory |
-| `filer_change` | remote_notification | backend | File change notification |
-| `ollama_*` | request_response | frontend | Ollama model management |
-| `provider_load_status` | request_response | frontend | Check provider availability |
-| `provider_update_api_key` | request_response | frontend | Update API key |
-| `toggle_main_menu` | local_call | frontend | UI toggle |
+| `ping` | `request_response` | `both` | Health check |
+| `session_load` | `request_response` | `frontend` | Load initial session data |
+| `filer_change` | `remote_notification` | `backend` | File system change notification |
+| `diskfile_update` | `request_response` | `frontend` | Write file content |
+| `diskfile_delete` | `request_response` | `frontend` | Delete a file |
+| `directory_create` | `request_response` | `frontend` | Create a directory |
+| `completion_create` | `request_response` | `frontend` | Start AI completion |
+| `completion_progress` | `remote_notification` | `backend` | Stream completion chunks |
+| `ollama_progress` | `remote_notification` | `backend` | Model operation progress |
+| `toggle_main_menu` | `local_call` | `frontend` | Toggle main menu UI |
+| `ollama_list` | `request_response` | `frontend` | List local models |
+| `ollama_ps` | `request_response` | `frontend` | List running models |
+| `ollama_show` | `request_response` | `frontend` | Show model details |
+| `ollama_pull` | `request_response` | `frontend` | Pull model |
+| `ollama_delete` | `request_response` | `frontend` | Delete model |
+| `ollama_copy` | `request_response` | `frontend` | Copy model |
+| `ollama_create` | `request_response` | `frontend` | Create model |
+| `ollama_unload` | `request_response` | `frontend` | Unload model from memory |
+| `provider_load_status` | `request_response` | `frontend` | Check provider availability |
+| `provider_update_api_key` | `request_response` | `frontend` | Update provider API key |
 
 ## Cell System
 
-Cells are **schema-driven reactive data models** using Svelte 5 runes.
+Schema-driven reactive data models using Svelte 5 runes.
 
 ### Base Cell Class
 
+From `cell.svelte.ts`:
+
 ```typescript
-export abstract class Cell<TSchema extends z.ZodType> {
-  // Identity
-  readonly id: Uuid = $state()!;
-  readonly created: Datetime = $state()!;
+export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements CellJson {
+  readonly cid = ++global_cell_count; // monotonic client-side ordering
+
+  // Base properties from CellJson
+  id: Uuid = $state()!;
+  created: Datetime = $state()!;
   updated: Datetime = $state()!;
 
-  // Schema
-  readonly schema: TSchema;
-  readonly schema_keys: Array<string> = $derived(...);
+  readonly schema!: TSchema;
+  readonly schema_keys: Array<SchemaKeys<TSchema>> = $derived(...);
+  readonly json: z.output<TSchema> = $derived(this.to_json());
+  readonly json_serialized: string = $derived(JSON.stringify(this.json));
 
-  // JSON operations
-  readonly json = $derived(this.to_json());
-  set_json(json: z.input<TSchema>): void;
-  set_json_partial(partial: Partial<...>): void;
+  readonly app: Frontend;
+  protected decoders: CellValueDecoder<TSchema> = {};
 
-  // Lifecycle
-  init(): void;  // Call at end of constructor
-  dispose(): void;
+  constructor(schema: TSchema, options: CellOptions<TSchema>) { ... }
+  protected init(): void { ... }  // Must call at end of subclass constructor
+  dispose(): void { ... }
+  set_json(json: z.input<TSchema>): void { ... }
+  set_json_partial(partial: Partial<...>): void { ... }
+  protected register(): void { ... }  // Called by init()
+  protected unregister(): void { ... }
+}
+```
 
-  // Registry
-  register(): void;
-  unregister(): void;
+### CellOptions
+
+```typescript
+interface CellOptions<TSchema extends z.ZodType> {
+  app: Frontend;                    // Root app state reference
+  json?: z.input<TSchema>;         // Initial JSON data (parsed by schema)
 }
 ```
 
 ### Creating a Cell
 
+Real example from `chat.svelte.ts`:
+
 ```typescript
-// 1. Define schema
+// 1. Schema with CellJson base — every field has .default()
 export const ChatJson = CellJson.extend({
   name: z.string().default(''),
   thread_ids: z.array(Uuid).default(() => []),
+  main_input: z.string().default(''),
   view_mode: z.enum(['simple', 'multi']).default('simple'),
+  selected_thread_id: Uuid.nullable().default(null),
 }).meta({cell_class_name: 'Chat'});
 
-// 2. Create class
+// 2. Class: $state for schema fields, $derived for computed
 export class Chat extends Cell<typeof ChatJson> {
-  // Reactive properties
   name: string = $state()!;
   thread_ids: Array<Uuid> = $state()!;
+  main_input: string = $state()!;
   view_mode: ChatViewMode = $state()!;
+  selected_thread_id: Uuid | null = $state()!;
 
-  // Derived properties
-  readonly threads: Array<Thread> = $derived.by(() =>
-    this.thread_ids.map(id => this.app.threads.items.by_id.get(id)).filter(Boolean)
-  );
+  readonly threads: Array<Thread> = $derived.by(() => {
+    const result: Array<Thread> = [];
+    for (const id of this.thread_ids) {
+      const thread = this.app.threads.items.by_id.get(id);
+      if (thread) result.push(thread);
+    }
+    return result;
+  });
+
+  readonly enabled_threads = $derived(this.threads.filter((t) => t.enabled));
 
   constructor(options: ChatOptions) {
     super(ChatJson, options);
@@ -227,18 +246,9 @@ export class Chat extends Cell<typeof ChatJson> {
 }
 ```
 
-### Cell Options
-
-```typescript
-interface CellOptions<TSchema extends z.ZodType> {
-  app: Frontend;                    // Reference to root state
-  json?: z.input<TSchema>;          // Initial JSON data
-}
-```
-
 ### Custom Decoders
 
-For complex field deserialization:
+For complex field deserialization, override `this.decoders` before `init()`:
 
 ```typescript
 constructor(options: ThreadOptions) {
@@ -252,7 +262,7 @@ constructor(options: ThreadOptions) {
           this.add_turn(json);
         }
       }
-      return HANDLED;  // Signal full handling
+      return HANDLED;  // Signal decoder fully handled the property
     },
   };
 
@@ -262,67 +272,45 @@ constructor(options: ThreadOptions) {
 
 ### Cell Registry
 
-All cells auto-register by ID, enabling reflection:
+All cell classes are registered in `cell_classes.ts`. Frontend iterates and registers them:
 
 ```typescript
-// Register a class
-app.cell_registry.register(Chat);
+// cell_classes.ts — add new classes here
+export const cell_classes = {
+  Parts, Chat, Chats, Thread, Threads, Turn, /* ... 26 total */
+} satisfies Record<string, typeof Cell<any>>;
 
-// Instantiate from JSON
-const chat = app.cell_registry.instantiate('Chat', json);
+// frontend.svelte.ts — auto-registers all classes
+for (const constructor of Object.values(cell_classes)) {
+  this.cell_registry.register(constructor);
+}
 
-// Lookup by ID
+// Lookup by ID at runtime
 const cell = app.cell_registry.all.get(id);
 ```
 
 ## Content Model
 
-### Hierarchy
-
 ```
-Frontend (root)
-├── Chats (collection)
-│   └── Chat
-│       └── thread_ids → Thread[]
-├── Threads (collection)
-│   └── Thread
-│       └── turns: IndexedCollection<Turn>
-├── Parts (collection)
-│   ├── TextPart (content stored directly)
-│   └── DiskfilePart (content from file)
-└── Prompts (collection)
-    └── Prompt
-        └── parts: Array<Part>
+Chat → thread_ids → Thread[]
+                     └── turns: IndexedCollection<Turn>
+                                └── part_ids → Part[]
+                                               ├── TextPart (content stored directly)
+                                               └── DiskfilePart (content from file reference)
+
+Prompt → parts: Array<Part>  (reusable content templates)
 ```
 
 ### Parts
 
-Content units that can be shared:
-
-**TextPart**: Direct content storage
-```typescript
-class TextPart extends Part<typeof TextPartJson> {
-  readonly type = 'text';
-  content: string = $state()!;
-}
-```
-
-**DiskfilePart**: File reference with lazy loading
-```typescript
-class DiskfilePart extends Part<typeof DiskfilePartJson> {
-  readonly type = 'diskfile';
-  path: DiskfilePath | null = $state()!;
-
-  // Content from file (or editor state if editing)
-  get content(): string | null | undefined {
-    return this.#editor_state?.current_content ?? this.diskfile?.content;
-  }
-}
-```
+| Type | Class | Content source |
+|------|-------|----------------|
+| Text | `TextPart` | `content: string` stored directly |
+| Diskfile | `DiskfilePart` | `path: DiskfilePath` → reads from disk or editor state |
 
 ### Turns
 
-Conversation messages with role context:
+Conversation messages with role:
 
 ```typescript
 class Turn extends Cell<typeof TurnJson> {
@@ -331,12 +319,9 @@ class Turn extends Cell<typeof TurnJson> {
   request: CompletionRequest | undefined = $state.raw();
   response: CompletionResponse | undefined = $state.raw();
 
-  // Aggregated content from all parts
   readonly content: string = $derived(
     this.parts.map(p => p.content).filter(Boolean).join('\n\n')
   );
-
-  // Pending when assistant turn awaits response
   readonly pending: boolean = $derived(
     this.role === 'assistant' && this.is_content_empty && !this.response
   );
@@ -345,25 +330,21 @@ class Turn extends Cell<typeof TurnJson> {
 
 ### Threads
 
-Linear conversation with a model:
+Linear conversation with one model. Sends messages via the action system:
 
 ```typescript
 class Thread extends Cell<typeof ThreadJson> {
   model_name: string = $state()!;
-  readonly model: Model = $derived.by(() => this.app.models.find_by_name(this.model_name));
-
   readonly turns: IndexedCollection<Turn> = new IndexedCollection();
   enabled: boolean = $state()!;
 
   async send_message(content: string): Promise<Turn | null> {
     const user_turn = this.add_user_turn(content);
     const assistant_turn = this.add_assistant_turn('', {request: ...});
-
     await this.app.api.completion_create({
       completion_request,
       _meta: {progressToken: assistant_turn.id},
     });
-
     return assistant_turn;
   }
 }
@@ -371,285 +352,121 @@ class Thread extends Cell<typeof ThreadJson> {
 
 ### Chats
 
-Container for multi-model comparison:
-
-```typescript
-class Chat extends Cell<typeof ChatJson> {
-  name: string = $state()!;
-  thread_ids: Array<Uuid> = $state()!;
-  view_mode: ChatViewMode = $state()!;  // 'simple' | 'multi'
-
-  readonly threads: Array<Thread> = $derived.by(...);
-  readonly enabled_threads: Array<Thread> = $derived(...);
-
-  async send_to_all(content: string): Promise<void> {
-    await Promise.all(this.enabled_threads.map(t => t.send_message(content)));
-  }
-}
-```
-
-### Prompts
-
-Reusable content templates:
-
-```typescript
-class Prompt extends Cell<typeof PromptJson> {
-  name: string = $state()!;
-  parts: Array<PartUnion> = $state()!;
-
-  readonly content: string = $derived(format_prompt_content(this.parts));
-}
-```
+Container for multi-model comparison. Holds `thread_ids`, resolves to Thread instances. `view_mode: 'simple' | 'multi'` controls single-thread vs side-by-side display.
 
 ## Data Flow
 
-### Completion Request Flow
+### Completion Request
 
 ```
 User types message in Chat UI
-    ↓
-Chat.send_to_thread(content)
-    ↓
-Thread.send_message(content)
-    ├── Create user Turn with TextPart
-    ├── Build CompletionMessage[] from thread history
-    ├── Create empty assistant Turn (progressToken = turn.id)
-    └── Call app.api.completion_create(request)
-    ↓
-ActionEvent lifecycle (send_request phase)
-    ↓
-Transport.send(JSON-RPC request)
-    ↓
-Backend.peer.receive(message)
-    ↓
-ActionEvent lifecycle (receive_request phase)
-    ↓
-backend_action_handlers.completion_create.receive_request()
-    ├── Lookup provider
-    ├── Call provider.handle_streaming_completion()
-    │   └── For each chunk: backend.api.completion_progress({token, chunk})
-    └── Return {completion_response}
-    ↓
-ActionEvent lifecycle (send_response phase)
-    ↓
-JSON-RPC response → Transport
-    ↓
-Frontend receives response
-    ↓
-ActionEvent lifecycle (receive_response phase)
-    ↓
-frontend_action_handlers.completion_create.receive_response()
-    └── turn.content = response_text, turn.response = completion_response
-    ↓
-Svelte reactivity updates UI
+  → Thread.send_message(content)
+    → Create user Turn with TextPart
+    → Build CompletionMessage[] from thread history
+    → Create empty assistant Turn (progressToken = turn.id)
+    → app.api.completion_create(request)
+      → ActionEvent send_request phase
+        → Transport.send(JSON-RPC request)
+          → Backend.peer.receive(message)
+            → ActionEvent receive_request phase
+              → backend_action_handlers.completion_create.receive_request()
+                → backend.lookup_provider(provider_name)
+                → provider.get_handler(!!progress_token)
+                → handler({model, prompt, ...})
+                  → For each chunk: backend.api.completion_progress({token, chunk})
+                → Return {completion_response}
+              → ActionEvent send_response phase
+                → JSON-RPC response via Transport
+                  → Frontend receive_response phase
+                    → turn.content = response_text
+                    → turn.response = completion_response
+                      → Svelte reactivity updates UI
 ```
 
-### Streaming Progress Flow
+### Streaming Progress
 
 ```
-Backend provider iterates chunks
-    ↓
-provider.send_streaming_progress(progressToken, chunk)
-    ↓
-backend.api.completion_progress({progressToken, chunk})
-    ↓
-create_action_event(spec, input, 'send')
-    ↓
-event.parse().handle_async()
-    ↓
-backend.peer.send(notification)  // JSON-RPC notification (no id)
-    ↓
-WebSocket broadcast to all clients
-    ↓
-Frontend.peer.receive(notification)
-    ↓
-frontend_action_handlers.completion_progress.receive()
-    └── Find turn by progressToken, append chunk to content
-    ↓
-Turn.content updates → UI re-renders
+Backend provider iterates chunks from SDK
+  → provider.send_streaming_progress(progress_token, chunk)
+    → backend.api.completion_progress({progressToken, chunk})
+      → WebSocket notification (no id, no response expected)
+        → frontend_action_handlers.completion_progress.receive()
+          → Find turn by progressToken in cell_registry
+          → Append chunk to turn content
+            → UI re-renders incrementally
 ```
 
 ## IndexedCollection
 
-Efficient queryable collections with multiple index types.
+Queryable reactive collections with multiple index types. From `indexed_collection.svelte.ts`.
 
-### Structure
+### Core Structure
 
 ```typescript
 class IndexedCollection<T extends IndexedItem> {
   readonly by_id: SvelteMap<Uuid, T> = new SvelteMap();
   readonly values: Array<T> = $derived(Array.from(this.by_id.values()));
   readonly size: number = $derived(this.by_id.size);
-  readonly indexes: Record<string, any> = $state({});
 }
 ```
 
 ### Index Types
 
-**Single Index**: One key → one item
-```typescript
-create_single_index({
-  key: 'name',
-  extractor: (model) => model.name,
-})
-// Usage: collection.by('name', 'gpt-4')
-```
+| Type | Cardinality | Example |
+|------|-------------|---------|
+| `single` | One key → one item | `by('name', 'gpt-5')` |
+| `multi` | One key → many items | `where('provider_name', 'ollama')` |
+| `derived` | Computed sorted array | `derived_index('ordered_by_name')` |
+| `dynamic` | Runtime-computed | Custom queries |
 
-**Multi Index**: One key → many items
-```typescript
-create_multi_index({
-  key: 'provider_name',
-  extractor: (model) => model.provider_name,
-  sort: (a, b) => a.name.localeCompare(b.name),
-})
-// Usage: collection.where('provider_name', 'ollama')
-```
-
-**Derived Index**: Computed array
-```typescript
-create_derived_index({
-  key: 'ordered_by_name',
-  compute: (collection) => collection.values,
-  sort: (a, b) => a.name.localeCompare(b.name),
-})
-// Usage: collection.derived_index('ordered_by_name')
-```
-
-### Incremental Updates
-
-Indexes support incremental onadd/onremove:
+### Index Definition
 
 ```typescript
-{
-  key: 'by_tag',
-  type: 'multi',
-  extractor: (model) => model.tags,
-  onadd: (index, item) => {
-    for (const tag of item.tags) {
-      const arr = index.get(tag) || [];
-      arr.push(item);
-      index.set(tag, arr);
-    }
-    return index;
-  },
-  onremove: (index, item) => {
-    for (const tag of item.tags) {
-      const arr = index.get(tag) || [];
-      const idx = arr.indexOf(item);
-      if (idx >= 0) arr.splice(idx, 1);
-    }
-    return index;
-  },
+interface IndexDefinition<T extends IndexedItem, TResult = any, TQuery = any> {
+  key: string;
+  type?: 'single' | 'multi' | 'derived' | 'dynamic';
+  extractor?: (item: T) => any;
+  compute: (collection: IndexedCollection<T>) => TResult;
+  onadd?: (result: TResult, item: T, collection: IndexedCollection<T>) => TResult;
+  onremove?: (result: TResult, item: T, collection: IndexedCollection<T>) => TResult;
 }
 ```
 
-### Usage Example
+### Usage
 
 ```typescript
-// In Models collection
-export class Models extends Cell<typeof ModelsJson> {
-  readonly items: IndexedCollection<Model> = new IndexedCollection({
-    indexes: [
-      create_single_index({key: 'name', extractor: m => m.name}),
-      create_multi_index({key: 'provider_name', extractor: m => m.provider_name}),
-      create_multi_index({key: 'tag', extractor: m => m.tags}),
-      create_derived_index({key: 'ordered_by_name', sort: (a, b) => a.name.localeCompare(b.name)}),
-    ],
-  });
+// Create with indexes
+const items = new IndexedCollection<Model>({
+  indexes: [
+    create_single_index({key: 'name', extractor: m => m.name}),
+    create_multi_index({key: 'provider_name', extractor: m => m.provider_name}),
+    create_derived_index({key: 'ordered_by_name', sort: (a, b) => a.name.localeCompare(b.name)}),
+  ],
+});
 
-  find_by_name(name: string): Model | undefined {
-    return this.items.by_optional('name', name);
-  }
-
-  filter_by_provider(provider: string): Array<Model> {
-    return this.items.where('provider_name', provider);
-  }
-}
+// Query
+items.by('name', 'gpt-5');                    // single → Model | undefined
+items.where('provider_name', 'ollama');        // multi → Array<Model>
+items.derived_index('ordered_by_name');        // derived → Array<Model>
 ```
 
 ## Filesystem
 
-Zzz's filesystem architecture separates app data from user files.
-
-### Directory Structure
-
-```
-.zzz/                        # Zzz app directory (PUBLIC_ZZZ_DIR)
-├── state/                   # Persistent data
-│   └── completions/         # AI completion logs
-├── cache/                   # Regenerable data (future)
-└── run/                     # Runtime ephemeral
-    └── server.json          # PID, port, version
-```
-
-### Two Concerns
+Two separate concerns:
 
 | Concern | Env Var | Purpose |
 |---------|---------|---------|
-| App directory | `PUBLIC_ZZZ_DIR` | Zzz's own data (state, cache, run) |
+| App directory | `PUBLIC_ZZZ_DIR` | Zzz's own data (`.zzz/state/`, `.zzz/cache/`, `.zzz/run/`) |
 | Scoped dirs | `PUBLIC_ZZZ_SCOPED_DIRS` | User file access (comma-separated paths) |
 
 ### ScopedFs
 
-All filesystem operations go through `ScopedFs` for security:
+All filesystem operations go through `ScopedFs` (`server/scoped_fs.ts`). Security: paths validated against allowed roots, symlinks rejected, absolute paths required, parent directories checked recursively.
 
-```typescript
-class ScopedFs {
-  readonly allowed_paths: ReadonlyArray<ScopedFsPath>;
+### Filer
 
-  // Security checks
-  is_path_allowed(path: string): boolean;
-  is_path_safe(path: string): Promise<boolean>;  // includes symlink check
-
-  // Operations (all validate paths first)
-  read_file(path, options): Promise<Buffer | string>;
-  write_file(path, data, options): Promise<void>;
-  mkdir(path, options): Promise<string | undefined>;
-  readdir(path, options): Promise<Array<Dirent>>;
-  stat(path, options): Promise<Stats>;
-  rm(path, options): Promise<void>;
-  exists(path): Promise<boolean>;
-}
-```
-
-**Security features**:
-- Paths validated against allowed roots
-- Symlinks rejected (no traversal attacks)
-- All paths must be absolute
-- Parent directories checked for symlinks
-
-### Filer Integration
-
-Each scoped directory gets a `Filer` watcher:
-
-```typescript
-// In Backend constructor
-for (const dir of this.scoped_dirs) {
-  const filer = new Filer({watch_dir_options: {dir}});
-  filer.watch((change, disknode) => {
-    this.#handle_filer_change(change, disknode, this, dir, filer);
-  });
-  this.filers.set(dir, {filer, cleanup_promise});
-}
-```
-
-File changes are broadcast to clients via `filer_change` notifications.
+Each scoped directory gets a `Filer` watcher. File changes are broadcast to clients via `filer_change` notifications over WebSocket.
 
 ### Server Info
 
-The `run/server.json` file tracks the running server:
-
-```typescript
-interface ServerInfo {
-  version: number;      // Schema version
-  pid: number;          // Process ID
-  port: number;         // Server port
-  started: string;      // ISO timestamp
-  zzz_version: string;  // Package version
-}
-```
-
-**Lifecycle**:
-- Written atomically on startup (temp + fsync + rename)
-- Removed on clean shutdown (SIGINT/SIGTERM)
-- Stale detection via `process.kill(pid, 0)`
+`run/server.json` tracks the running server (PID, port, version). Written atomically on startup, removed on clean shutdown (SIGINT/SIGTERM). Stale detection via `process.kill(pid, 0)`.
