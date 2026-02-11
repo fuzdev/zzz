@@ -1,6 +1,6 @@
 // @slop Claude Opus 4
 
-import type {Gen} from '@ryanatkn/gro/gen.js';
+import type {Gen} from '@fuzdev/gro/gen.js';
 
 import * as action_specs from './action_specs.js';
 import {is_action_spec} from './action_spec.js';

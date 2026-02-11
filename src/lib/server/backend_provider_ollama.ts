@@ -1,5 +1,5 @@
 import {Ollama} from 'ollama';
-import {find_cli} from '@ryanatkn/gro/cli.js';
+import {find_cli} from '@fuzdev/gro/cli.js';
 
 import {BackendProviderLocal, type CompletionHandlerOptions} from './backend_provider.js';
 import {to_completion_result} from '../response_helpers.js';

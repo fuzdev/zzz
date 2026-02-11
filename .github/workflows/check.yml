@@ -27,4 +27,4 @@ jobs:
       - run: cp src/lib/server/.env.development.example .env.development
       - run: cp src/lib/server/.env.production.example .env.production
       - run: npx svelte-kit sync
-      - run: npx @ryanatkn/gro check --workspace --build
+      - run: npx @fuzdev/gro check --workspace --build

@@ -1,4 +1,4 @@
-import type {Gen} from '@ryanatkn/gro/gen.js';
+import type {Gen} from '@fuzdev/gro/gen.js';
 
 import {get_innermost_type_name} from './zod_helpers.js';
 import * as action_specs from './action_specs.js';

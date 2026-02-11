@@ -1,5 +1,5 @@
-import type {WatcherChangeType} from '@ryanatkn/gro/watch_dir.js';
-import type {Disknode} from '@ryanatkn/gro/disknode.js';
+import type {WatcherChangeType} from '@fuzdev/gro/watch_dir.js';
+import type {Disknode} from '@fuzdev/gro/disknode.js';
 import {strip_start} from '@fuzdev/fuz_util/string.js';
 
 import {Uuid, Datetime, DatetimeNow, create_uuid} from './zod_helpers.js';

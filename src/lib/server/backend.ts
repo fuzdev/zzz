@@ -1,6 +1,6 @@
-import {Filer} from '@ryanatkn/gro/filer.js';
-import type {Disknode} from '@ryanatkn/gro/disknode.js';
-import type {WatcherChange} from '@ryanatkn/gro/watch_dir.js';
+import {Filer} from '@fuzdev/gro/filer.js';
+import type {Disknode} from '@fuzdev/gro/disknode.js';
+import type {WatcherChange} from '@fuzdev/gro/watch_dir.js';
 import {resolve} from 'node:path';
 import {Logger} from '@fuzdev/fuz_util/log.js';
 import type {BackendProviderOllama} from './backend_provider_ollama.js';
