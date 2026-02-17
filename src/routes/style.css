@@ -43,15 +43,7 @@ input[type='text'] {
 	text-align: center;
 }
 
-/* TODO upstream most of this */
-.compact {
-	--font_size: var(--font_size_sm);
-	--input_height: 2.6rem;
-	--input_padding_x: var(--space_sm);
-	--min_height: 2.6rem;
-	--border_radius: var(--border_radius_xs2);
-}
-
+/* TODO upstream these? */
 input[type='checkbox'].compact {
 	height: var(--input_height);
 	min-height: var(--input_height);
