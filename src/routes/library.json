@@ -1216,7 +1216,7 @@
 						]
 					}
 				],
-				"dependents": ["action_collections.gen.ts", "action_registry.ts"]
+				"dependents": ["action_collections.gen.ts"]
 			},
 			{
 				"path": "action_metatypes.gen.ts",
@@ -1530,40 +1530,7 @@
 			},
 			{
 				"path": "action_registry.ts",
-				"declarations": [
-					{
-						"name": "ActionRegistry",
-						"kind": "class",
-						"doc_comment": "Utility class to manage and query action specifications.\nProvides helper methods to get actions by various criteria.",
-						"source_line": 17,
-						"members": [
-							{
-								"name": "specs",
-								"kind": "variable",
-								"type_signature": "Array<ActionSpecUnion>"
-							},
-							{
-								"name": "constructor",
-								"kind": "constructor",
-								"type_signature": "(specs: ({ method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | \"authorize\"; async: true; } | { ...; } | { ...; })[]): ActionRegistry",
-								"parameters": [
-									{
-										"name": "specs",
-										"type": "({ method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | \"authorize\"; async: true; } | { ...."
-									}
-								]
-							},
-							{
-								"name": "get_schema_imports",
-								"kind": "function",
-								"type_signature": "(): string[]",
-								"return_type": "string[]",
-								"parameters": []
-							}
-						]
-					}
-				],
-				"dependencies": ["action_helpers.ts"],
+				"declarations": [],
 				"dependents": [
 					"action_collections.gen.ts",
 					"action_metatypes.gen.ts",

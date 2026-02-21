@@ -29,7 +29,7 @@ import {Socket} from './socket.svelte.js';
 import {Capabilities} from './capabilities.svelte.js';
 import {DiskfileHistory} from './diskfile_history.svelte.js';
 import {HANDLED} from './cell_helpers.js';
-import {ActionRegistry} from './action_registry.js';
+import {ActionRegistry} from '@fuzdev/fuz_app/action_registry.js';
 import {ActionPeer} from './action_peer.js';
 import type {ActionMethod, ActionsApi} from './action_metatypes.js';
 import type {FrontendActionHandlers} from './frontend_action_types.js';

@@ -3,7 +3,7 @@ import type {Gen} from '@fuzdev/gro/gen.js';
 import {get_innermost_type_name} from './zod_helpers.js';
 import * as action_specs from './action_specs.js';
 import {is_action_spec} from '@fuzdev/fuz_app/action_spec.js';
-import {ActionRegistry} from './action_registry.js';
+import {ActionRegistry} from '@fuzdev/fuz_app/action_registry.js';
 import {ImportBuilder, create_banner} from './codegen.js';
 
 // TODO some of these can probably be declared differently without codegen

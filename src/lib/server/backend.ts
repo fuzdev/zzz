@@ -12,7 +12,7 @@ import type {ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
 import type {ZzzConfig} from '../config_helpers.js';
 import {DiskfileDirectoryPath} from '../diskfile_types.js';
 import {ScopedFs} from './scoped_fs.js';
-import {ActionRegistry} from '../action_registry.js';
+import {ActionRegistry} from '@fuzdev/fuz_app/action_registry.js';
 import {ZZZ_DIR, ZZZ_SCOPED_DIRS} from '../constants.js';
 import type {BackendActionHandlers} from './backend_action_types.js';
 import type {ActionEventPhase, ActionEventEnvironment} from '../action_event_types.js';
