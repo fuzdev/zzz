@@ -1,0 +1,1 @@
+const n=(e=0)=>new Promise(t=>setTimeout(t,e)),c=e=>e!=null&&typeof e.then=="function",i=()=>{let e,t;return{promise:new Promise((s,o)=>{e=s,t=o}),resolve:e,reject:t}},m=Object.freeze({});export{m as E,i as c,c as i,n as w};
