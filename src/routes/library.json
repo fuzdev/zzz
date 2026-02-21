@@ -48,10 +48,11 @@
 		},
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
-			"@fuzdev/fuz_code": "^0.45.0",
-			"@fuzdev/fuz_css": "^0.52.0",
-			"@fuzdev/fuz_ui": "^0.184.0",
-			"@fuzdev/fuz_util": "^0.50.1",
+			"@fuzdev/fuz_app": "file:../fuz_app",
+			"@fuzdev/fuz_code": "^0.45.1",
+			"@fuzdev/fuz_css": "^0.53.1",
+			"@fuzdev/fuz_ui": "^0.185.2",
+			"@fuzdev/fuz_util": "^0.52.0",
 			"@jridgewell/trace-mapping": "^0.3.31",
 			"@ryanatkn/eslint-config": "^0.9.0",
 			"@sveltejs/adapter-node": "^5.4.0",
@@ -79,7 +80,7 @@
 		},
 		"dependencies": {
 			"@anthropic-ai/sdk": "^0.71.2",
-			"@fuzdev/gro": "^0.194.0",
+			"@fuzdev/gro": "^0.195.2",
 			"@google/generative-ai": "^0.24.1",
 			"@hono/node-server": "^1.19.6",
 			"@hono/node-ws": "^1.2.0",
@@ -14135,19 +14136,19 @@
 							{
 								"name": "position",
 								"type": "Position",
-								"description": "- Where to position the element ('left', 'right', etc.)",
+								"description": "Where to position the element ('left', 'right', etc.)",
 								"default_value": "'center'"
 							},
 							{
 								"name": "align",
 								"type": "Alignment",
-								"description": "- Alignment along the position edge ('start', 'center', 'end')",
+								"description": "Alignment along the position edge ('start', 'center', 'end')",
 								"default_value": "'center'"
 							},
 							{
 								"name": "offset",
 								"type": "string",
-								"description": "- Distance from the position (CSS value)",
+								"description": "Distance from the position (CSS value)",
 								"default_value": "'0'"
 							}
 						]
@@ -17552,17 +17553,17 @@
 							{
 								"name": "key",
 								"type": "string",
-								"description": "- The environment variable name (e.g., 'SOME_CONFIGURATION_KEY')"
+								"description": "The environment variable name (e.g., 'SOME_CONFIGURATION_KEY')"
 							},
 							{
 								"name": "value",
 								"type": "string",
-								"description": "- The new value for the environment variable"
+								"description": "The new value for the environment variable"
 							},
 							{
 								"name": "options",
 								"type": "UpdateEnvVariableOptions",
-								"description": "- Optional configuration for file path and operations",
+								"description": "Optional configuration for file path and operations",
 								"default_value": "{}"
 							}
 						]
@@ -18117,7 +18118,7 @@
 							{
 								"name": "allowed_patterns",
 								"type": "RegExp[]",
-								"description": "- Array of compiled regex patterns from parse_allowed_origins"
+								"description": "Array of compiled regex patterns from parse_allowed_origins"
 							}
 						]
 					}
