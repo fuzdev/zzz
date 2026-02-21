@@ -8,7 +8,7 @@ import type {
 	LocalCallActionSpec,
 	RemoteNotificationActionSpec,
 	RequestResponseActionSpec,
-} from './action_spec.js';
+} from '@fuzdev/fuz_app/action_spec.js';
 import {
 	is_send_request,
 	is_notification_send,
@@ -68,7 +68,7 @@ const create_sync_local_call_method = (
 	return (input?: unknown) => {
 		const event = create_action_event(environment, spec, input);
 		const action = environment.actions?.add_from_json({
-			method: spec.method,
+			method: spec.method as ActionMethod,
 			action_event_data: event.toJSON(),
 		});
 		action?.listen_to_action_event(event);
@@ -96,7 +96,7 @@ const create_async_local_call_method = (
 	return async (input?: unknown) => {
 		const event = create_action_event(environment, spec, input);
 		const action = environment.actions?.add_from_json({
-			method: spec.method,
+			method: spec.method as ActionMethod,
 			action_event_data: event.toJSON(),
 		});
 		action?.listen_to_action_event(event);
@@ -117,7 +117,7 @@ const create_request_response_method = (
 	return async (input?: unknown) => {
 		const event = create_action_event(environment, spec, input);
 		const action = environment.actions?.add_from_json({
-			method: spec.method,
+			method: spec.method as ActionMethod,
 			action_event_data: event.toJSON(),
 		});
 		action?.listen_to_action_event(event);
@@ -162,7 +162,7 @@ const create_remote_notification_method = (
 	return async (input?: unknown) => {
 		const event = create_action_event(environment, spec, input);
 		const action = environment.actions?.add_from_json({
-			method: spec.method,
+			method: spec.method as ActionMethod,
 			action_event_data: event.toJSON(),
 		});
 		action?.listen_to_action_event(event);

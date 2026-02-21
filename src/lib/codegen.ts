@@ -2,8 +2,7 @@
 
 import {UnreachableError} from '@fuzdev/fuz_util/error.js';
 
-import type {ActionSpecUnion} from './action_spec.js';
-import {is_action_initiator} from './action_types.js';
+import type {ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
 import type {ActionEventPhase} from './action_event_types.js';
 
 // TODO probably refactor this into more reusable and more app-specific helpers/config,
@@ -208,7 +207,7 @@ export const get_executor_phases = (
 	const {kind, initiator} = spec;
 	const phases: Array<ActionEventPhase> = [];
 
-	if (!is_action_initiator(initiator)) {
+	if (initiator !== 'frontend' && initiator !== 'backend' && initiator !== 'both') {
 		return phases;
 	}
 

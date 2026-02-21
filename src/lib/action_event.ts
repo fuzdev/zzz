@@ -1,7 +1,7 @@
 // @slop Claude Opus 4
 
 import type {ActionMethod} from './action_metatypes.js';
-import type {ActionSpecUnion} from './action_spec.js';
+import type {ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
 import type {
 	ActionEventEnvironment,
 	ActionEventPhase,
@@ -38,7 +38,7 @@ import type {
 	JsonrpcNotification,
 	JsonrpcErrorJson,
 } from './jsonrpc.js';
-import type {ActionKind} from './action_types.js';
+import type {ActionKind} from '@fuzdev/fuz_app/action_spec.js';
 import {UNKNOWN_ERROR_MESSAGE} from './constants.js';
 
 // TODO maybe just use runes in this module and remove `observe`
@@ -130,7 +130,7 @@ export class ActionEvent<
 			return this;
 		}
 
-		const parsed = safe_parse_action_input(this.spec.method, this.#data.input);
+		const parsed = safe_parse_action_input(this.spec.method as ActionMethod, this.#data.input);
 		if (parsed.success) {
 			this.#transition_step('parsed', {input: parsed.data});
 		} else {
@@ -165,7 +165,10 @@ export class ActionEvent<
 
 		this.#transition_step('handling', this.#create_handling_updates());
 
-		const handler = this.environment.lookup_action_handler(this.spec.method, this.#data.phase);
+		const handler = this.environment.lookup_action_handler(
+			this.spec.method as ActionMethod,
+			this.#data.phase,
+		);
 		if (!handler) {
 			this.#transition_step('handled');
 			return;
@@ -214,7 +217,10 @@ export class ActionEvent<
 
 		this.#transition_step('handling', this.#create_handling_updates());
 
-		const handler = this.environment.lookup_action_handler(this.spec.method, this.#data.phase);
+		const handler = this.environment.lookup_action_handler(
+			this.spec.method as ActionMethod,
+			this.#data.phase,
+		);
 		if (!handler) {
 			this.#transition_step('handled');
 			return;
@@ -372,7 +378,7 @@ export class ActionEvent<
 
 	#complete_handling(output: unknown): void {
 		if (output !== undefined && should_validate_output(this.spec.kind, this.#data.phase)) {
-			const parsed = safe_parse_action_output(this.spec.method, output);
+			const parsed = safe_parse_action_output(this.spec.method as ActionMethod, output);
 			if (parsed.success) {
 				this.#transition_step('handled', {output: parsed.data});
 			} else {
@@ -466,7 +472,7 @@ export const create_action_event = <TMethod extends ActionMethod>(
 	const initial_data = create_initial_data(
 		spec.kind,
 		phase,
-		spec.method,
+		spec.method as ActionMethod,
 		environment.executor,
 		input,
 	) as ActionEventDatas[TMethod];

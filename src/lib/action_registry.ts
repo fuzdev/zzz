@@ -5,9 +5,8 @@ import type {
 	RequestResponseActionSpec,
 	RemoteNotificationActionSpec,
 	LocalCallActionSpec,
-} from './action_spec.js';
+} from '@fuzdev/fuz_app/action_spec.js';
 import {to_action_spec_identifier} from './action_helpers.js';
-import type {ActionMethod} from './action_metatypes.js';
 
 // TODO use derived or `??=` in lazy getters for memoization
 
@@ -54,35 +53,35 @@ export class ActionRegistry {
 		return this.specs.filter((spec) => spec.initiator === 'frontend' || spec.initiator === 'both');
 	}
 
-	get methods(): Array<ActionMethod> {
+	get methods(): Array<string> {
 		return this.specs.map((spec) => spec.method);
 	}
 
-	get request_response_methods(): Array<ActionMethod> {
+	get request_response_methods(): Array<string> {
 		return this.request_response_specs.map((spec) => spec.method);
 	}
 
-	get remote_notification_methods(): Array<ActionMethod> {
+	get remote_notification_methods(): Array<string> {
 		return this.remote_notification_specs.map((spec) => spec.method);
 	}
 
-	get local_call_methods(): Array<ActionMethod> {
+	get local_call_methods(): Array<string> {
 		return this.local_call_specs.map((spec) => spec.method);
 	}
 
-	get backend_methods(): Array<ActionMethod> {
+	get backend_methods(): Array<string> {
 		return this.backend_specs.map((spec) => spec.method);
 	}
 
-	get frontend_methods(): Array<ActionMethod> {
+	get frontend_methods(): Array<string> {
 		return this.frontend_specs.map((spec) => spec.method);
 	}
 
-	get frontend_to_backend_methods(): Array<ActionMethod> {
+	get frontend_to_backend_methods(): Array<string> {
 		return this.frontend_to_backend_specs.map((spec) => spec.method);
 	}
 
-	get backend_to_frontend_methods(): Array<ActionMethod> {
+	get backend_to_frontend_methods(): Array<string> {
 		return this.backend_to_frontend_specs.map((spec) => spec.method);
 	}
 

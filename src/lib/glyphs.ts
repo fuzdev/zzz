@@ -1,5 +1,5 @@
 import type {ActionMethod} from './action_metatypes.js';
-import type {ActionKind} from './action_types.js';
+import type {ActionKind} from '@fuzdev/fuz_app/action_spec.js';
 
 export const GLYPH_UNKNOWN = '⁇'; // ⍰
 export const GLYPH_IMPORTANT = '⁈';

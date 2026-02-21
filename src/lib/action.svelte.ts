@@ -4,9 +4,9 @@ import {z} from 'zod';
 
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {ActionMethod} from './action_metatypes.js';
-import {ActionKind} from './action_types.js';
+import {ActionKind} from '@fuzdev/fuz_app/action_spec.js';
 import {ActionSpecs} from './action_collections.js';
-import type {ActionSpecUnion} from './action_spec.js';
+import type {ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
 import {CellJson} from './cell_types.js';
 import {ActionEventData} from './action_event_data.js';
 import type {ActionEvent} from './action_event.js';

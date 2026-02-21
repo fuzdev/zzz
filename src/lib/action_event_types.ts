@@ -4,10 +4,12 @@ import {z} from 'zod';
 import type {Logger} from '@fuzdev/fuz_util/log.js';
 
 import type {ActionMethod} from './action_metatypes.js';
-import type {ActionExecutor, ActionKind} from './action_types.js';
-import type {ActionSpecUnion} from './action_spec.js';
+import type {ActionKind, ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
 import type {ActionPeer} from './action_peer.js';
 import type {Actions} from './actions.svelte.js';
+
+export const ActionExecutor = z.enum(['frontend', 'backend']);
+export type ActionExecutor = z.infer<typeof ActionExecutor>;
 
 export const ActionEventStep = z.enum(['initial', 'parsed', 'handling', 'handled', 'failed']);
 export type ActionEventStep = z.infer<typeof ActionEventStep>;

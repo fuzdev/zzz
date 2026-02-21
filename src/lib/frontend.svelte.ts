@@ -33,10 +33,10 @@ import {ActionRegistry} from './action_registry.js';
 import {ActionPeer} from './action_peer.js';
 import type {ActionMethod, ActionsApi} from './action_metatypes.js';
 import type {FrontendActionHandlers} from './frontend_action_types.js';
-import type {ActionSpecUnion} from './action_spec.js';
+import type {ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
 import {ActionInputs, ActionOutputs, action_specs} from './action_collections.js';
 import {create_frontend_actions_api} from './frontend_actions_api.js';
-import {ActionExecutor} from './action_types.js';
+import {ActionExecutor} from './action_event_types.js';
 import {
 	ActionEventPhase,
 	ACTION_EVENT_PHASE_BY_KIND,

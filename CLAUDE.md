@@ -52,7 +52,6 @@ src/
 │   │
 │   ├── *.svelte.ts               # Cell state classes (26 classes)
 │   ├── action_specs.ts           # All 20 action spec definitions
-│   ├── action_spec.ts            # ActionSpec schema
 │   ├── action_event.ts           # Action lifecycle state machine
 │   ├── action_peer.ts            # Symmetric send/receive
 │   ├── cell.svelte.ts            # Base Cell class

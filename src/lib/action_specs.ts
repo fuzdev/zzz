@@ -10,7 +10,7 @@ import {
 } from './diskfile_types.js';
 import {ProviderStatus, ProviderName} from './provider_types.js';
 import {CompletionMessage, CompletionRequest, CompletionResponse} from './completion_types.js';
-import type {ActionSpecUnion} from './action_spec.js';
+import type {ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
 import {JsonrpcRequestId} from './jsonrpc.js';
 import {
 	OllamaListRequest,
@@ -42,6 +42,7 @@ export const ping_action_spec = {
 		ping_id: JsonrpcRequestId,
 	}),
 	async: true,
+	description: 'Health check — echoes the request ID back to the caller.',
 } satisfies ActionSpecUnion;
 
 export const session_load_action_spec = {
@@ -63,6 +64,7 @@ export const session_load_action_spec = {
 		}),
 	}),
 	async: true,
+	description: 'Load initial session data including filesystem state and provider status.',
 } satisfies ActionSpecUnion;
 
 export const filer_change_action_spec = {
@@ -77,6 +79,7 @@ export const filer_change_action_spec = {
 	}),
 	output: z.void(),
 	async: true,
+	description: 'Notifies the frontend of a file system change detected by the watcher.',
 } satisfies ActionSpecUnion;
 
 export const diskfile_update_action_spec = {
@@ -91,6 +94,7 @@ export const diskfile_update_action_spec = {
 	}),
 	output: z.null(),
 	async: true,
+	description: 'Write new content to a file on disk.',
 } satisfies ActionSpecUnion;
 
 export const diskfile_delete_action_spec = {
@@ -104,6 +108,7 @@ export const diskfile_delete_action_spec = {
 	}),
 	output: z.null(),
 	async: true,
+	description: 'Delete a file from disk.',
 } satisfies ActionSpecUnion;
 
 export const directory_create_action_spec = {
@@ -117,6 +122,7 @@ export const directory_create_action_spec = {
 	}),
 	output: z.null(),
 	async: true,
+	description: 'Create a new directory on disk.',
 } satisfies ActionSpecUnion;
 
 export const completion_create_action_spec = {
@@ -134,6 +140,7 @@ export const completion_create_action_spec = {
 		_meta: z.looseObject({progressToken: Uuid.optional()}).optional(),
 	}),
 	async: true,
+	description: 'Start an AI completion request, optionally with a progress token for streaming.',
 } satisfies ActionSpecUnion;
 
 export const completion_progress_action_spec = {
@@ -174,6 +181,7 @@ export const completion_progress_action_spec = {
 	}),
 	output: z.void(),
 	async: true,
+	description: 'Streams a completion chunk to the frontend during a streaming AI response.',
 } satisfies ActionSpecUnion;
 
 export const ollama_progress_action_spec = {
@@ -189,6 +197,7 @@ export const ollama_progress_action_spec = {
 	),
 	output: z.void(),
 	async: true,
+	description: 'Streams progress updates for an Ollama model operation (pull, create, etc.).',
 } satisfies ActionSpecUnion;
 
 // TODO this is just a placeholder for a local call
@@ -201,6 +210,7 @@ export const toggle_main_menu_action_spec = {
 	input: z.strictObject({show: z.boolean().optional()}).optional(),
 	output: z.strictObject({show: z.boolean()}),
 	async: false,
+	description: 'Toggle or set the visibility of the main navigation menu.',
 } satisfies ActionSpecUnion;
 
 export const ollama_list_action_spec = {
@@ -212,6 +222,7 @@ export const ollama_list_action_spec = {
 	input: OllamaListRequest,
 	output: z.union([OllamaListResponse, z.null()]),
 	async: true,
+	description: 'List all locally available Ollama models.',
 } satisfies ActionSpecUnion;
 
 export const ollama_ps_action_spec = {
@@ -223,6 +234,7 @@ export const ollama_ps_action_spec = {
 	input: OllamaPsRequest,
 	output: z.union([OllamaPsResponse, z.null()]),
 	async: true,
+	description: 'List currently running Ollama models.',
 } satisfies ActionSpecUnion;
 
 export const ollama_show_action_spec = {
@@ -234,6 +246,7 @@ export const ollama_show_action_spec = {
 	input: OllamaShowRequest,
 	output: z.union([OllamaShowResponse, z.null()]),
 	async: true,
+	description: 'Show detailed information about an Ollama model.',
 } satisfies ActionSpecUnion;
 
 export const ollama_pull_action_spec = {
@@ -249,6 +262,7 @@ export const ollama_pull_action_spec = {
 	), // TODO @many is strict right here?
 	output: z.void().optional(),
 	async: true,
+	description: 'Pull an Ollama model from the registry.',
 } satisfies ActionSpecUnion;
 
 export const ollama_delete_action_spec = {
@@ -260,6 +274,7 @@ export const ollama_delete_action_spec = {
 	input: OllamaDeleteRequest,
 	output: z.void().optional(),
 	async: true,
+	description: 'Delete an Ollama model from local storage.',
 } satisfies ActionSpecUnion;
 
 export const ollama_copy_action_spec = {
@@ -271,6 +286,7 @@ export const ollama_copy_action_spec = {
 	input: OllamaCopyRequest,
 	output: z.void().optional(),
 	async: true,
+	description: 'Copy an Ollama model under a new name.',
 } satisfies ActionSpecUnion;
 
 export const ollama_create_action_spec = {
@@ -286,6 +302,7 @@ export const ollama_create_action_spec = {
 	), // TODO @many is strict right here?
 	output: z.void().optional(),
 	async: true,
+	description: 'Create a new Ollama model from a Modelfile.',
 } satisfies ActionSpecUnion;
 
 export const ollama_unload_action_spec = {
@@ -299,6 +316,7 @@ export const ollama_unload_action_spec = {
 	}),
 	output: z.void().optional(),
 	async: true,
+	description: 'Unload an Ollama model from memory.',
 } satisfies ActionSpecUnion;
 
 export const provider_load_status_action_spec = {
@@ -315,6 +333,7 @@ export const provider_load_status_action_spec = {
 		status: ProviderStatus,
 	}),
 	async: true,
+	description: 'Check the availability and status of an AI provider.',
 } satisfies ActionSpecUnion;
 
 export const provider_update_api_key_action_spec = {
@@ -331,4 +350,5 @@ export const provider_update_api_key_action_spec = {
 		status: ProviderStatus,
 	}),
 	async: true,
+	description: 'Update the API key for an AI provider.',
 } satisfies ActionSpecUnion;

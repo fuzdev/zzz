@@ -17,7 +17,8 @@ import type {Result} from '@fuzdev/fuz_util/result.js';
 
 import type {ActionMethod} from './action_metatypes.js';
 import type {ActionInputs} from './action_collections.js';
-import type {ActionExecutor, ActionInitiator, ActionKind} from './action_types.js';
+import type {ActionInitiator, ActionKind} from '@fuzdev/fuz_app/action_spec.js';
+import type {ActionExecutor} from './action_event_types.js';
 import type {ActionEvent} from './action_event.js';
 import type {JsonrpcErrorJson} from './jsonrpc.js';
 

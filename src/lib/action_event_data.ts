@@ -10,8 +10,8 @@ import {
 	JsonrpcNotification,
 	JsonrpcErrorJson,
 } from './jsonrpc.js';
-import {ActionExecutor, ActionKind} from './action_types.js';
-import {ActionEventPhase, ActionEventStep} from './action_event_types.js';
+import {ActionKind} from '@fuzdev/fuz_app/action_spec.js';
+import {ActionExecutor, ActionEventPhase, ActionEventStep} from './action_event_types.js';
 
 // Base schema for all action event data
 export const ActionEventData = z.strictObject({
