@@ -14,26 +14,26 @@ import type {
  * All method types combined.
  */
 export const ActionMethods = z.enum([
+	'ping',
+	'session_load',
+	'filer_change',
+	'diskfile_update',
+	'diskfile_delete',
+	'directory_create',
 	'completion_create',
 	'completion_progress',
-	'directory_create',
-	'diskfile_delete',
-	'diskfile_update',
-	'filer_change',
+	'ollama_progress',
+	'toggle_main_menu',
+	'ollama_list',
+	'ollama_ps',
+	'ollama_show',
+	'ollama_pull',
+	'ollama_delete',
 	'ollama_copy',
 	'ollama_create',
-	'ollama_delete',
-	'ollama_list',
-	'ollama_progress',
-	'ollama_ps',
-	'ollama_pull',
-	'ollama_show',
 	'ollama_unload',
-	'ping',
 	'provider_load_status',
 	'provider_update_api_key',
-	'session_load',
-	'toggle_main_menu',
 ]);
 export type ActionMethods = z.infer<typeof ActionMethods>;
 
@@ -42,48 +42,48 @@ export type ActionMethods = z.infer<typeof ActionMethods>;
  * These represent the complete action spec definitions.
  */
 export const ActionSpecs = {
+	ping: specs.ping_action_spec,
+	session_load: specs.session_load_action_spec,
+	filer_change: specs.filer_change_action_spec,
+	diskfile_update: specs.diskfile_update_action_spec,
+	diskfile_delete: specs.diskfile_delete_action_spec,
+	directory_create: specs.directory_create_action_spec,
 	completion_create: specs.completion_create_action_spec,
 	completion_progress: specs.completion_progress_action_spec,
-	directory_create: specs.directory_create_action_spec,
-	diskfile_delete: specs.diskfile_delete_action_spec,
-	diskfile_update: specs.diskfile_update_action_spec,
-	filer_change: specs.filer_change_action_spec,
+	ollama_progress: specs.ollama_progress_action_spec,
+	toggle_main_menu: specs.toggle_main_menu_action_spec,
+	ollama_list: specs.ollama_list_action_spec,
+	ollama_ps: specs.ollama_ps_action_spec,
+	ollama_show: specs.ollama_show_action_spec,
+	ollama_pull: specs.ollama_pull_action_spec,
+	ollama_delete: specs.ollama_delete_action_spec,
 	ollama_copy: specs.ollama_copy_action_spec,
 	ollama_create: specs.ollama_create_action_spec,
-	ollama_delete: specs.ollama_delete_action_spec,
-	ollama_list: specs.ollama_list_action_spec,
-	ollama_progress: specs.ollama_progress_action_spec,
-	ollama_ps: specs.ollama_ps_action_spec,
-	ollama_pull: specs.ollama_pull_action_spec,
-	ollama_show: specs.ollama_show_action_spec,
 	ollama_unload: specs.ollama_unload_action_spec,
-	ping: specs.ping_action_spec,
 	provider_load_status: specs.provider_load_status_action_spec,
 	provider_update_api_key: specs.provider_update_api_key_action_spec,
-	session_load: specs.session_load_action_spec,
-	toggle_main_menu: specs.toggle_main_menu_action_spec,
 } as const;
 export interface ActionSpecs {
+	ping: typeof specs.ping_action_spec;
+	session_load: typeof specs.session_load_action_spec;
+	filer_change: typeof specs.filer_change_action_spec;
+	diskfile_update: typeof specs.diskfile_update_action_spec;
+	diskfile_delete: typeof specs.diskfile_delete_action_spec;
+	directory_create: typeof specs.directory_create_action_spec;
 	completion_create: typeof specs.completion_create_action_spec;
 	completion_progress: typeof specs.completion_progress_action_spec;
-	directory_create: typeof specs.directory_create_action_spec;
-	diskfile_delete: typeof specs.diskfile_delete_action_spec;
-	diskfile_update: typeof specs.diskfile_update_action_spec;
-	filer_change: typeof specs.filer_change_action_spec;
+	ollama_progress: typeof specs.ollama_progress_action_spec;
+	toggle_main_menu: typeof specs.toggle_main_menu_action_spec;
+	ollama_list: typeof specs.ollama_list_action_spec;
+	ollama_ps: typeof specs.ollama_ps_action_spec;
+	ollama_show: typeof specs.ollama_show_action_spec;
+	ollama_pull: typeof specs.ollama_pull_action_spec;
+	ollama_delete: typeof specs.ollama_delete_action_spec;
 	ollama_copy: typeof specs.ollama_copy_action_spec;
 	ollama_create: typeof specs.ollama_create_action_spec;
-	ollama_delete: typeof specs.ollama_delete_action_spec;
-	ollama_list: typeof specs.ollama_list_action_spec;
-	ollama_progress: typeof specs.ollama_progress_action_spec;
-	ollama_ps: typeof specs.ollama_ps_action_spec;
-	ollama_pull: typeof specs.ollama_pull_action_spec;
-	ollama_show: typeof specs.ollama_show_action_spec;
 	ollama_unload: typeof specs.ollama_unload_action_spec;
-	ping: typeof specs.ping_action_spec;
 	provider_load_status: typeof specs.provider_load_status_action_spec;
 	provider_update_api_key: typeof specs.provider_update_api_key_action_spec;
-	session_load: typeof specs.session_load_action_spec;
-	toggle_main_menu: typeof specs.toggle_main_menu_action_spec;
 }
 
 export const action_specs: Array<ActionSpecUnion> = Object.values(ActionSpecs);
@@ -94,48 +94,48 @@ export const action_specs: Array<ActionSpecUnion> = Object.values(ActionSpecs);
  * e.g. JSON-RPC request/notification params and local call arguments.
  */
 export const ActionInputs = {
+	ping: specs.ping_action_spec.input,
+	session_load: specs.session_load_action_spec.input,
+	filer_change: specs.filer_change_action_spec.input,
+	diskfile_update: specs.diskfile_update_action_spec.input,
+	diskfile_delete: specs.diskfile_delete_action_spec.input,
+	directory_create: specs.directory_create_action_spec.input,
 	completion_create: specs.completion_create_action_spec.input,
 	completion_progress: specs.completion_progress_action_spec.input,
-	directory_create: specs.directory_create_action_spec.input,
-	diskfile_delete: specs.diskfile_delete_action_spec.input,
-	diskfile_update: specs.diskfile_update_action_spec.input,
-	filer_change: specs.filer_change_action_spec.input,
+	ollama_progress: specs.ollama_progress_action_spec.input,
+	toggle_main_menu: specs.toggle_main_menu_action_spec.input,
+	ollama_list: specs.ollama_list_action_spec.input,
+	ollama_ps: specs.ollama_ps_action_spec.input,
+	ollama_show: specs.ollama_show_action_spec.input,
+	ollama_pull: specs.ollama_pull_action_spec.input,
+	ollama_delete: specs.ollama_delete_action_spec.input,
 	ollama_copy: specs.ollama_copy_action_spec.input,
 	ollama_create: specs.ollama_create_action_spec.input,
-	ollama_delete: specs.ollama_delete_action_spec.input,
-	ollama_list: specs.ollama_list_action_spec.input,
-	ollama_progress: specs.ollama_progress_action_spec.input,
-	ollama_ps: specs.ollama_ps_action_spec.input,
-	ollama_pull: specs.ollama_pull_action_spec.input,
-	ollama_show: specs.ollama_show_action_spec.input,
 	ollama_unload: specs.ollama_unload_action_spec.input,
-	ping: specs.ping_action_spec.input,
 	provider_load_status: specs.provider_load_status_action_spec.input,
 	provider_update_api_key: specs.provider_update_api_key_action_spec.input,
-	session_load: specs.session_load_action_spec.input,
-	toggle_main_menu: specs.toggle_main_menu_action_spec.input,
 } as const;
 export interface ActionInputs {
+	ping: z.infer<typeof specs.ping_action_spec.input>;
+	session_load: z.infer<typeof specs.session_load_action_spec.input>;
+	filer_change: z.infer<typeof specs.filer_change_action_spec.input>;
+	diskfile_update: z.infer<typeof specs.diskfile_update_action_spec.input>;
+	diskfile_delete: z.infer<typeof specs.diskfile_delete_action_spec.input>;
+	directory_create: z.infer<typeof specs.directory_create_action_spec.input>;
 	completion_create: z.infer<typeof specs.completion_create_action_spec.input>;
 	completion_progress: z.infer<typeof specs.completion_progress_action_spec.input>;
-	directory_create: z.infer<typeof specs.directory_create_action_spec.input>;
-	diskfile_delete: z.infer<typeof specs.diskfile_delete_action_spec.input>;
-	diskfile_update: z.infer<typeof specs.diskfile_update_action_spec.input>;
-	filer_change: z.infer<typeof specs.filer_change_action_spec.input>;
+	ollama_progress: z.infer<typeof specs.ollama_progress_action_spec.input>;
+	toggle_main_menu: z.infer<typeof specs.toggle_main_menu_action_spec.input>;
+	ollama_list: z.infer<typeof specs.ollama_list_action_spec.input>;
+	ollama_ps: z.infer<typeof specs.ollama_ps_action_spec.input>;
+	ollama_show: z.infer<typeof specs.ollama_show_action_spec.input>;
+	ollama_pull: z.infer<typeof specs.ollama_pull_action_spec.input>;
+	ollama_delete: z.infer<typeof specs.ollama_delete_action_spec.input>;
 	ollama_copy: z.infer<typeof specs.ollama_copy_action_spec.input>;
 	ollama_create: z.infer<typeof specs.ollama_create_action_spec.input>;
-	ollama_delete: z.infer<typeof specs.ollama_delete_action_spec.input>;
-	ollama_list: z.infer<typeof specs.ollama_list_action_spec.input>;
-	ollama_progress: z.infer<typeof specs.ollama_progress_action_spec.input>;
-	ollama_ps: z.infer<typeof specs.ollama_ps_action_spec.input>;
-	ollama_pull: z.infer<typeof specs.ollama_pull_action_spec.input>;
-	ollama_show: z.infer<typeof specs.ollama_show_action_spec.input>;
 	ollama_unload: z.infer<typeof specs.ollama_unload_action_spec.input>;
-	ping: z.infer<typeof specs.ping_action_spec.input>;
 	provider_load_status: z.infer<typeof specs.provider_load_status_action_spec.input>;
 	provider_update_api_key: z.infer<typeof specs.provider_update_api_key_action_spec.input>;
-	session_load: z.infer<typeof specs.session_load_action_spec.input>;
-	toggle_main_menu: z.infer<typeof specs.toggle_main_menu_action_spec.input>;
 }
 
 /**
@@ -144,48 +144,48 @@ export interface ActionInputs {
  * e.g. JSON-RPC response results and local call return values.
  */
 export const ActionOutputs = {
+	ping: specs.ping_action_spec.output,
+	session_load: specs.session_load_action_spec.output,
+	filer_change: specs.filer_change_action_spec.output,
+	diskfile_update: specs.diskfile_update_action_spec.output,
+	diskfile_delete: specs.diskfile_delete_action_spec.output,
+	directory_create: specs.directory_create_action_spec.output,
 	completion_create: specs.completion_create_action_spec.output,
 	completion_progress: specs.completion_progress_action_spec.output,
-	directory_create: specs.directory_create_action_spec.output,
-	diskfile_delete: specs.diskfile_delete_action_spec.output,
-	diskfile_update: specs.diskfile_update_action_spec.output,
-	filer_change: specs.filer_change_action_spec.output,
+	ollama_progress: specs.ollama_progress_action_spec.output,
+	toggle_main_menu: specs.toggle_main_menu_action_spec.output,
+	ollama_list: specs.ollama_list_action_spec.output,
+	ollama_ps: specs.ollama_ps_action_spec.output,
+	ollama_show: specs.ollama_show_action_spec.output,
+	ollama_pull: specs.ollama_pull_action_spec.output,
+	ollama_delete: specs.ollama_delete_action_spec.output,
 	ollama_copy: specs.ollama_copy_action_spec.output,
 	ollama_create: specs.ollama_create_action_spec.output,
-	ollama_delete: specs.ollama_delete_action_spec.output,
-	ollama_list: specs.ollama_list_action_spec.output,
-	ollama_progress: specs.ollama_progress_action_spec.output,
-	ollama_ps: specs.ollama_ps_action_spec.output,
-	ollama_pull: specs.ollama_pull_action_spec.output,
-	ollama_show: specs.ollama_show_action_spec.output,
 	ollama_unload: specs.ollama_unload_action_spec.output,
-	ping: specs.ping_action_spec.output,
 	provider_load_status: specs.provider_load_status_action_spec.output,
 	provider_update_api_key: specs.provider_update_api_key_action_spec.output,
-	session_load: specs.session_load_action_spec.output,
-	toggle_main_menu: specs.toggle_main_menu_action_spec.output,
 } as const;
 export interface ActionOutputs {
+	ping: z.infer<typeof specs.ping_action_spec.output>;
+	session_load: z.infer<typeof specs.session_load_action_spec.output>;
+	filer_change: z.infer<typeof specs.filer_change_action_spec.output>;
+	diskfile_update: z.infer<typeof specs.diskfile_update_action_spec.output>;
+	diskfile_delete: z.infer<typeof specs.diskfile_delete_action_spec.output>;
+	directory_create: z.infer<typeof specs.directory_create_action_spec.output>;
 	completion_create: z.infer<typeof specs.completion_create_action_spec.output>;
 	completion_progress: z.infer<typeof specs.completion_progress_action_spec.output>;
-	directory_create: z.infer<typeof specs.directory_create_action_spec.output>;
-	diskfile_delete: z.infer<typeof specs.diskfile_delete_action_spec.output>;
-	diskfile_update: z.infer<typeof specs.diskfile_update_action_spec.output>;
-	filer_change: z.infer<typeof specs.filer_change_action_spec.output>;
+	ollama_progress: z.infer<typeof specs.ollama_progress_action_spec.output>;
+	toggle_main_menu: z.infer<typeof specs.toggle_main_menu_action_spec.output>;
+	ollama_list: z.infer<typeof specs.ollama_list_action_spec.output>;
+	ollama_ps: z.infer<typeof specs.ollama_ps_action_spec.output>;
+	ollama_show: z.infer<typeof specs.ollama_show_action_spec.output>;
+	ollama_pull: z.infer<typeof specs.ollama_pull_action_spec.output>;
+	ollama_delete: z.infer<typeof specs.ollama_delete_action_spec.output>;
 	ollama_copy: z.infer<typeof specs.ollama_copy_action_spec.output>;
 	ollama_create: z.infer<typeof specs.ollama_create_action_spec.output>;
-	ollama_delete: z.infer<typeof specs.ollama_delete_action_spec.output>;
-	ollama_list: z.infer<typeof specs.ollama_list_action_spec.output>;
-	ollama_progress: z.infer<typeof specs.ollama_progress_action_spec.output>;
-	ollama_ps: z.infer<typeof specs.ollama_ps_action_spec.output>;
-	ollama_pull: z.infer<typeof specs.ollama_pull_action_spec.output>;
-	ollama_show: z.infer<typeof specs.ollama_show_action_spec.output>;
 	ollama_unload: z.infer<typeof specs.ollama_unload_action_spec.output>;
-	ping: z.infer<typeof specs.ping_action_spec.output>;
 	provider_load_status: z.infer<typeof specs.provider_load_status_action_spec.output>;
 	provider_update_api_key: z.infer<typeof specs.provider_update_api_key_action_spec.output>;
-	session_load: z.infer<typeof specs.session_load_action_spec.output>;
-	toggle_main_menu: z.infer<typeof specs.toggle_main_menu_action_spec.output>;
 }
 
 /**
@@ -194,26 +194,26 @@ export interface ActionOutputs {
  * for each action's event data, properly typed with inputs and outputs.
  */
 export interface ActionEventDatas {
+	ping: ActionEventRequestResponseData<'ping'>;
+	session_load: ActionEventRequestResponseData<'session_load'>;
+	filer_change: ActionEventRemoteNotificationData<'filer_change'>;
+	diskfile_update: ActionEventRequestResponseData<'diskfile_update'>;
+	diskfile_delete: ActionEventRequestResponseData<'diskfile_delete'>;
+	directory_create: ActionEventRequestResponseData<'directory_create'>;
 	completion_create: ActionEventRequestResponseData<'completion_create'>;
 	completion_progress: ActionEventRemoteNotificationData<'completion_progress'>;
-	directory_create: ActionEventRequestResponseData<'directory_create'>;
-	diskfile_delete: ActionEventRequestResponseData<'diskfile_delete'>;
-	diskfile_update: ActionEventRequestResponseData<'diskfile_update'>;
-	filer_change: ActionEventRemoteNotificationData<'filer_change'>;
+	ollama_progress: ActionEventRemoteNotificationData<'ollama_progress'>;
+	toggle_main_menu: ActionEventLocalCallData<'toggle_main_menu'>;
+	ollama_list: ActionEventRequestResponseData<'ollama_list'>;
+	ollama_ps: ActionEventRequestResponseData<'ollama_ps'>;
+	ollama_show: ActionEventRequestResponseData<'ollama_show'>;
+	ollama_pull: ActionEventRequestResponseData<'ollama_pull'>;
+	ollama_delete: ActionEventRequestResponseData<'ollama_delete'>;
 	ollama_copy: ActionEventRequestResponseData<'ollama_copy'>;
 	ollama_create: ActionEventRequestResponseData<'ollama_create'>;
-	ollama_delete: ActionEventRequestResponseData<'ollama_delete'>;
-	ollama_list: ActionEventRequestResponseData<'ollama_list'>;
-	ollama_progress: ActionEventRemoteNotificationData<'ollama_progress'>;
-	ollama_ps: ActionEventRequestResponseData<'ollama_ps'>;
-	ollama_pull: ActionEventRequestResponseData<'ollama_pull'>;
-	ollama_show: ActionEventRequestResponseData<'ollama_show'>;
 	ollama_unload: ActionEventRequestResponseData<'ollama_unload'>;
-	ping: ActionEventRequestResponseData<'ping'>;
 	provider_load_status: ActionEventRequestResponseData<'provider_load_status'>;
 	provider_update_api_key: ActionEventRequestResponseData<'provider_update_api_key'>;
-	session_load: ActionEventRequestResponseData<'session_load'>;
-	toggle_main_menu: ActionEventLocalCallData<'toggle_main_menu'>;
 }
 
 // generated by src/lib/action_collections.gen.ts - DO NOT EDIT OR RISK LOST DATA

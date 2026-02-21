@@ -352,3 +352,26 @@ export const provider_update_api_key_action_spec = {
 	async: true,
 	description: 'Update the API key for an AI provider.',
 } satisfies ActionSpecUnion;
+
+export const all_action_specs: Array<ActionSpecUnion> = [
+	ping_action_spec,
+	session_load_action_spec,
+	filer_change_action_spec,
+	diskfile_update_action_spec,
+	diskfile_delete_action_spec,
+	directory_create_action_spec,
+	completion_create_action_spec,
+	completion_progress_action_spec,
+	ollama_progress_action_spec,
+	toggle_main_menu_action_spec,
+	ollama_list_action_spec,
+	ollama_ps_action_spec,
+	ollama_show_action_spec,
+	ollama_pull_action_spec,
+	ollama_delete_action_spec,
+	ollama_copy_action_spec,
+	ollama_create_action_spec,
+	ollama_unload_action_spec,
+	provider_load_status_action_spec,
+	provider_update_api_key_action_spec,
+];

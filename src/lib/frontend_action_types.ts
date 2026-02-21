@@ -12,6 +12,87 @@ import type {ActionOutputs} from './action_collections.js';
  * - initiator: 'both' → all valid phases
  */
 export interface FrontendActionHandlers {
+	ping?: {
+		send_request?: (
+			action_event: ActionEvent<'ping', Frontend, 'send_request', 'handling'>,
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: ActionEvent<'ping', Frontend, 'receive_response', 'handling'>,
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: ActionEvent<'ping', Frontend, 'send_error', 'handling'>,
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: ActionEvent<'ping', Frontend, 'receive_error', 'handling'>,
+		) => void | Promise<void>;
+		receive_request?: (
+			action_event: ActionEvent<'ping', Frontend, 'receive_request', 'handling'>,
+		) => ActionOutputs['ping'] | Promise<ActionOutputs['ping']>;
+		send_response?: (
+			action_event: ActionEvent<'ping', Frontend, 'send_response', 'handling'>,
+		) => void | Promise<void>;
+	};
+	session_load?: {
+		send_request?: (
+			action_event: ActionEvent<'session_load', Frontend, 'send_request', 'handling'>,
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: ActionEvent<'session_load', Frontend, 'receive_response', 'handling'>,
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: ActionEvent<'session_load', Frontend, 'send_error', 'handling'>,
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: ActionEvent<'session_load', Frontend, 'receive_error', 'handling'>,
+		) => void | Promise<void>;
+	};
+	filer_change?: {
+		receive?: (
+			action_event: ActionEvent<'filer_change', Frontend, 'receive', 'handling'>,
+		) => void | Promise<void>;
+	};
+	diskfile_update?: {
+		send_request?: (
+			action_event: ActionEvent<'diskfile_update', Frontend, 'send_request', 'handling'>,
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: ActionEvent<'diskfile_update', Frontend, 'receive_response', 'handling'>,
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: ActionEvent<'diskfile_update', Frontend, 'send_error', 'handling'>,
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: ActionEvent<'diskfile_update', Frontend, 'receive_error', 'handling'>,
+		) => void | Promise<void>;
+	};
+	diskfile_delete?: {
+		send_request?: (
+			action_event: ActionEvent<'diskfile_delete', Frontend, 'send_request', 'handling'>,
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: ActionEvent<'diskfile_delete', Frontend, 'receive_response', 'handling'>,
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: ActionEvent<'diskfile_delete', Frontend, 'send_error', 'handling'>,
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: ActionEvent<'diskfile_delete', Frontend, 'receive_error', 'handling'>,
+		) => void | Promise<void>;
+	};
+	directory_create?: {
+		send_request?: (
+			action_event: ActionEvent<'directory_create', Frontend, 'send_request', 'handling'>,
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: ActionEvent<'directory_create', Frontend, 'receive_response', 'handling'>,
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: ActionEvent<'directory_create', Frontend, 'send_error', 'handling'>,
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: ActionEvent<'directory_create', Frontend, 'receive_error', 'handling'>,
+		) => void | Promise<void>;
+	};
 	completion_create?: {
 		send_request?: (
 			action_event: ActionEvent<'completion_create', Frontend, 'send_request', 'handling'>,
@@ -31,51 +112,84 @@ export interface FrontendActionHandlers {
 			action_event: ActionEvent<'completion_progress', Frontend, 'receive', 'handling'>,
 		) => void | Promise<void>;
 	};
-	directory_create?: {
-		send_request?: (
-			action_event: ActionEvent<'directory_create', Frontend, 'send_request', 'handling'>,
-		) => void | Promise<void>;
-		receive_response?: (
-			action_event: ActionEvent<'directory_create', Frontend, 'receive_response', 'handling'>,
-		) => void | Promise<void>;
-		send_error?: (
-			action_event: ActionEvent<'directory_create', Frontend, 'send_error', 'handling'>,
-		) => void | Promise<void>;
-		receive_error?: (
-			action_event: ActionEvent<'directory_create', Frontend, 'receive_error', 'handling'>,
-		) => void | Promise<void>;
-	};
-	diskfile_delete?: {
-		send_request?: (
-			action_event: ActionEvent<'diskfile_delete', Frontend, 'send_request', 'handling'>,
-		) => void | Promise<void>;
-		receive_response?: (
-			action_event: ActionEvent<'diskfile_delete', Frontend, 'receive_response', 'handling'>,
-		) => void | Promise<void>;
-		send_error?: (
-			action_event: ActionEvent<'diskfile_delete', Frontend, 'send_error', 'handling'>,
-		) => void | Promise<void>;
-		receive_error?: (
-			action_event: ActionEvent<'diskfile_delete', Frontend, 'receive_error', 'handling'>,
-		) => void | Promise<void>;
-	};
-	diskfile_update?: {
-		send_request?: (
-			action_event: ActionEvent<'diskfile_update', Frontend, 'send_request', 'handling'>,
-		) => void | Promise<void>;
-		receive_response?: (
-			action_event: ActionEvent<'diskfile_update', Frontend, 'receive_response', 'handling'>,
-		) => void | Promise<void>;
-		send_error?: (
-			action_event: ActionEvent<'diskfile_update', Frontend, 'send_error', 'handling'>,
-		) => void | Promise<void>;
-		receive_error?: (
-			action_event: ActionEvent<'diskfile_update', Frontend, 'receive_error', 'handling'>,
-		) => void | Promise<void>;
-	};
-	filer_change?: {
+	ollama_progress?: {
 		receive?: (
-			action_event: ActionEvent<'filer_change', Frontend, 'receive', 'handling'>,
+			action_event: ActionEvent<'ollama_progress', Frontend, 'receive', 'handling'>,
+		) => void | Promise<void>;
+	};
+	toggle_main_menu?: {
+		execute?: (
+			action_event: ActionEvent<'toggle_main_menu', Frontend, 'execute', 'handling'>,
+		) => ActionOutputs['toggle_main_menu'];
+	};
+	ollama_list?: {
+		send_request?: (
+			action_event: ActionEvent<'ollama_list', Frontend, 'send_request', 'handling'>,
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: ActionEvent<'ollama_list', Frontend, 'receive_response', 'handling'>,
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: ActionEvent<'ollama_list', Frontend, 'send_error', 'handling'>,
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: ActionEvent<'ollama_list', Frontend, 'receive_error', 'handling'>,
+		) => void | Promise<void>;
+	};
+	ollama_ps?: {
+		send_request?: (
+			action_event: ActionEvent<'ollama_ps', Frontend, 'send_request', 'handling'>,
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: ActionEvent<'ollama_ps', Frontend, 'receive_response', 'handling'>,
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: ActionEvent<'ollama_ps', Frontend, 'send_error', 'handling'>,
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: ActionEvent<'ollama_ps', Frontend, 'receive_error', 'handling'>,
+		) => void | Promise<void>;
+	};
+	ollama_show?: {
+		send_request?: (
+			action_event: ActionEvent<'ollama_show', Frontend, 'send_request', 'handling'>,
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: ActionEvent<'ollama_show', Frontend, 'receive_response', 'handling'>,
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: ActionEvent<'ollama_show', Frontend, 'send_error', 'handling'>,
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: ActionEvent<'ollama_show', Frontend, 'receive_error', 'handling'>,
+		) => void | Promise<void>;
+	};
+	ollama_pull?: {
+		send_request?: (
+			action_event: ActionEvent<'ollama_pull', Frontend, 'send_request', 'handling'>,
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: ActionEvent<'ollama_pull', Frontend, 'receive_response', 'handling'>,
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: ActionEvent<'ollama_pull', Frontend, 'send_error', 'handling'>,
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: ActionEvent<'ollama_pull', Frontend, 'receive_error', 'handling'>,
+		) => void | Promise<void>;
+	};
+	ollama_delete?: {
+		send_request?: (
+			action_event: ActionEvent<'ollama_delete', Frontend, 'send_request', 'handling'>,
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: ActionEvent<'ollama_delete', Frontend, 'receive_response', 'handling'>,
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: ActionEvent<'ollama_delete', Frontend, 'send_error', 'handling'>,
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: ActionEvent<'ollama_delete', Frontend, 'receive_error', 'handling'>,
 		) => void | Promise<void>;
 	};
 	ollama_copy?: {
@@ -106,81 +220,6 @@ export interface FrontendActionHandlers {
 			action_event: ActionEvent<'ollama_create', Frontend, 'receive_error', 'handling'>,
 		) => void | Promise<void>;
 	};
-	ollama_delete?: {
-		send_request?: (
-			action_event: ActionEvent<'ollama_delete', Frontend, 'send_request', 'handling'>,
-		) => void | Promise<void>;
-		receive_response?: (
-			action_event: ActionEvent<'ollama_delete', Frontend, 'receive_response', 'handling'>,
-		) => void | Promise<void>;
-		send_error?: (
-			action_event: ActionEvent<'ollama_delete', Frontend, 'send_error', 'handling'>,
-		) => void | Promise<void>;
-		receive_error?: (
-			action_event: ActionEvent<'ollama_delete', Frontend, 'receive_error', 'handling'>,
-		) => void | Promise<void>;
-	};
-	ollama_list?: {
-		send_request?: (
-			action_event: ActionEvent<'ollama_list', Frontend, 'send_request', 'handling'>,
-		) => void | Promise<void>;
-		receive_response?: (
-			action_event: ActionEvent<'ollama_list', Frontend, 'receive_response', 'handling'>,
-		) => void | Promise<void>;
-		send_error?: (
-			action_event: ActionEvent<'ollama_list', Frontend, 'send_error', 'handling'>,
-		) => void | Promise<void>;
-		receive_error?: (
-			action_event: ActionEvent<'ollama_list', Frontend, 'receive_error', 'handling'>,
-		) => void | Promise<void>;
-	};
-	ollama_progress?: {
-		receive?: (
-			action_event: ActionEvent<'ollama_progress', Frontend, 'receive', 'handling'>,
-		) => void | Promise<void>;
-	};
-	ollama_ps?: {
-		send_request?: (
-			action_event: ActionEvent<'ollama_ps', Frontend, 'send_request', 'handling'>,
-		) => void | Promise<void>;
-		receive_response?: (
-			action_event: ActionEvent<'ollama_ps', Frontend, 'receive_response', 'handling'>,
-		) => void | Promise<void>;
-		send_error?: (
-			action_event: ActionEvent<'ollama_ps', Frontend, 'send_error', 'handling'>,
-		) => void | Promise<void>;
-		receive_error?: (
-			action_event: ActionEvent<'ollama_ps', Frontend, 'receive_error', 'handling'>,
-		) => void | Promise<void>;
-	};
-	ollama_pull?: {
-		send_request?: (
-			action_event: ActionEvent<'ollama_pull', Frontend, 'send_request', 'handling'>,
-		) => void | Promise<void>;
-		receive_response?: (
-			action_event: ActionEvent<'ollama_pull', Frontend, 'receive_response', 'handling'>,
-		) => void | Promise<void>;
-		send_error?: (
-			action_event: ActionEvent<'ollama_pull', Frontend, 'send_error', 'handling'>,
-		) => void | Promise<void>;
-		receive_error?: (
-			action_event: ActionEvent<'ollama_pull', Frontend, 'receive_error', 'handling'>,
-		) => void | Promise<void>;
-	};
-	ollama_show?: {
-		send_request?: (
-			action_event: ActionEvent<'ollama_show', Frontend, 'send_request', 'handling'>,
-		) => void | Promise<void>;
-		receive_response?: (
-			action_event: ActionEvent<'ollama_show', Frontend, 'receive_response', 'handling'>,
-		) => void | Promise<void>;
-		send_error?: (
-			action_event: ActionEvent<'ollama_show', Frontend, 'send_error', 'handling'>,
-		) => void | Promise<void>;
-		receive_error?: (
-			action_event: ActionEvent<'ollama_show', Frontend, 'receive_error', 'handling'>,
-		) => void | Promise<void>;
-	};
 	ollama_unload?: {
 		send_request?: (
 			action_event: ActionEvent<'ollama_unload', Frontend, 'send_request', 'handling'>,
@@ -193,26 +232,6 @@ export interface FrontendActionHandlers {
 		) => void | Promise<void>;
 		receive_error?: (
 			action_event: ActionEvent<'ollama_unload', Frontend, 'receive_error', 'handling'>,
-		) => void | Promise<void>;
-	};
-	ping?: {
-		send_request?: (
-			action_event: ActionEvent<'ping', Frontend, 'send_request', 'handling'>,
-		) => void | Promise<void>;
-		receive_response?: (
-			action_event: ActionEvent<'ping', Frontend, 'receive_response', 'handling'>,
-		) => void | Promise<void>;
-		send_error?: (
-			action_event: ActionEvent<'ping', Frontend, 'send_error', 'handling'>,
-		) => void | Promise<void>;
-		receive_error?: (
-			action_event: ActionEvent<'ping', Frontend, 'receive_error', 'handling'>,
-		) => void | Promise<void>;
-		receive_request?: (
-			action_event: ActionEvent<'ping', Frontend, 'receive_request', 'handling'>,
-		) => ActionOutputs['ping'] | Promise<ActionOutputs['ping']>;
-		send_response?: (
-			action_event: ActionEvent<'ping', Frontend, 'send_response', 'handling'>,
 		) => void | Promise<void>;
 	};
 	provider_load_status?: {
@@ -247,25 +266,6 @@ export interface FrontendActionHandlers {
 		receive_error?: (
 			action_event: ActionEvent<'provider_update_api_key', Frontend, 'receive_error', 'handling'>,
 		) => void | Promise<void>;
-	};
-	session_load?: {
-		send_request?: (
-			action_event: ActionEvent<'session_load', Frontend, 'send_request', 'handling'>,
-		) => void | Promise<void>;
-		receive_response?: (
-			action_event: ActionEvent<'session_load', Frontend, 'receive_response', 'handling'>,
-		) => void | Promise<void>;
-		send_error?: (
-			action_event: ActionEvent<'session_load', Frontend, 'send_error', 'handling'>,
-		) => void | Promise<void>;
-		receive_error?: (
-			action_event: ActionEvent<'session_load', Frontend, 'receive_error', 'handling'>,
-		) => void | Promise<void>;
-	};
-	toggle_main_menu?: {
-		execute?: (
-			action_event: ActionEvent<'toggle_main_menu', Frontend, 'execute', 'handling'>,
-		) => ActionOutputs['toggle_main_menu'];
 	};
 }
 

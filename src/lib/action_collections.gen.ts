@@ -1,8 +1,7 @@
 import type {Gen} from '@fuzdev/gro/gen.js';
-import {is_action_spec} from '@fuzdev/fuz_app/action_spec.js';
 import {ActionRegistry} from '@fuzdev/fuz_app/action_registry.js';
 
-import * as action_specs from './action_specs.js';
+import {all_action_specs} from './action_specs.js';
 import {
 	to_action_spec_input_identifier,
 	to_action_spec_output_identifier,
@@ -16,7 +15,7 @@ import {ImportBuilder, create_banner} from './codegen.js';
  * @nodocs
  */
 export const gen: Gen = ({origin_path}) => {
-	const registry = new ActionRegistry(Object.values(action_specs).filter((s) => is_action_spec(s)));
+	const registry = new ActionRegistry(all_action_specs);
 	const imports = new ImportBuilder();
 	const banner = create_banner(origin_path);
 
