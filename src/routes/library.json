@@ -894,7 +894,7 @@
 					{
 						"name": "ActionEventChangeObserver",
 						"kind": "type",
-						"source_line": 45,
+						"source_line": 44,
 						"type_signature": "ActionEventChangeObserver<TMethod>",
 						"generic_params": [
 							{
@@ -907,7 +907,7 @@
 						"name": "ActionEvent",
 						"kind": "class",
 						"doc_comment": "Action event that manages the lifecycle of an action through its state machine.",
-						"source_line": 54,
+						"source_line": 53,
 						"generic_params": [
 							{
 								"name": "TMethod",
@@ -1091,7 +1091,7 @@
 						"name": "create_action_event",
 						"kind": "function",
 						"doc_comment": "Create an action event from a spec and initial input.",
-						"source_line": 459,
+						"source_line": 458,
 						"type_signature": "<TMethod extends ActionMethod>(environment: ActionEventEnvironment, spec: { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<...>; ... 4 more ...; async: true; } | { ...; } | { ...; }, input: unknown, initial_phase?: \"send_request\" | ... 8 more ... | undefined): ActionEvent<...>",
 						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\", \"initial\" | ... 3 more ... | \"failed\">",
 						"parameters": [
@@ -1118,7 +1118,7 @@
 						"name": "create_action_event_from_json",
 						"kind": "function",
 						"doc_comment": "Reconstruct an action event from serialized JSON data.",
-						"source_line": 486,
+						"source_line": 485,
 						"type_signature": "<TMethod extends ActionMethod>(json: ActionEventDatas[TMethod], environment: ActionEventEnvironment): ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"execute\", \"initial\" | ... 3 more ... | \"failed\">",
 						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\", \"initial\" | ... 3 more ... | \"failed\">",
 						"parameters": [
@@ -1135,7 +1135,7 @@
 					{
 						"name": "parse_action_event",
 						"kind": "function",
-						"source_line": 500,
+						"source_line": 499,
 						"type_signature": "(raw_json: unknown, environment: ActionEventEnvironment): ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | ... 13 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"execute\", \"initial\" | ... 3 more ... | \"failed\">",
 						"return_type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"execute\", \"initial\" | ... 3 mor...",
 						"parameters": [
@@ -1681,19 +1681,19 @@
 					{
 						"name": "ActionJson",
 						"kind": "type",
-						"source_line": 16,
+						"source_line": 15,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; method: ZodEnum<...>; action_event_data: ZodOptional<...>; }, $strict>"
 					},
 					{
 						"name": "ActionJsonInput",
 						"kind": "type",
-						"source_line": 21,
+						"source_line": 20,
 						"type_signature": "{ method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_..."
 					},
 					{
 						"name": "ActionOptions",
 						"kind": "type",
-						"source_line": 23,
+						"source_line": 22,
 						"type_signature": "ActionOptions",
 						"extends": ["CellOptions<typeof ActionJson>"],
 						"properties": []
@@ -1702,7 +1702,7 @@
 						"name": "Action",
 						"kind": "class",
 						"doc_comment": "Represents a single action in the system, tracking its full lifecycle through action events.",
-						"source_line": 28,
+						"source_line": 27,
 						"extends": ["Cell<typeof ActionJson>"],
 						"implements": [],
 						"members": [
@@ -1795,7 +1795,7 @@
 					{
 						"name": "ActionSchema",
 						"kind": "variable",
-						"source_line": 104,
+						"source_line": 103,
 						"type_signature": "ZodCustom<Action, Action>"
 					}
 				],
@@ -4657,7 +4657,7 @@
 						"name": "get_handler_return_type",
 						"kind": "function",
 						"doc_comment": "Gets the handler return type for a specific phase and spec.\nAlso adds necessary imports to the ImportBuilder.",
-						"source_line": 277,
+						"source_line": 273,
 						"type_signature": "(spec: { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 1 more ... | { ...; }; async: true; } | { ...; } | { ...; }, phase: \"send_request\" | ... 7 more ... | \"execute\", imports: ImportBuilder, path_prefix: string): string",
 						"return_type": "string",
 						"parameters": [
@@ -4683,7 +4683,7 @@
 						"name": "generate_phase_handlers",
 						"kind": "function",
 						"doc_comment": "Generates the phase handlers for an action spec using the unified ActionEvent type\nwith the new phase/step type parameters.",
-						"source_line": 306,
+						"source_line": 302,
 						"type_signature": "(spec: { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 1 more ... | { ...; }; async: true; } | { ...; } | { ...; }, executor: \"frontend\" | \"backend\", imports: ImportBuilder): string",
 						"return_type": "string",
 						"parameters": [
@@ -4705,7 +4705,7 @@
 						"name": "create_banner",
 						"kind": "function",
 						"doc_comment": "Creates a file banner comment.",
-						"source_line": 346,
+						"source_line": 342,
 						"type_signature": "(origin_path: string): string",
 						"return_type": "string",
 						"parameters": [

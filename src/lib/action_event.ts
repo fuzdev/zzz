@@ -1,7 +1,8 @@
 // @slop Claude Opus 4
 
 import type {ActionMethod} from './action_metatypes.js';
-import type {ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
+import type {ActionKind, ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
+
 import type {
 	ActionEventEnvironment,
 	ActionEventPhase,
@@ -38,7 +39,6 @@ import type {
 	JsonrpcNotification,
 	JsonrpcErrorJson,
 } from './jsonrpc.js';
-import type {ActionKind} from '@fuzdev/fuz_app/action_spec.js';
 import {UNKNOWN_ERROR_MESSAGE} from './constants.js';
 
 // TODO maybe just use runes in this module and remove `observe`

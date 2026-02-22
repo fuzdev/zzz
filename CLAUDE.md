@@ -232,6 +232,7 @@ Each action is a plain object with Zod schemas for input/output:
 ```typescript
 export const diskfile_update_action_spec = {
   method: 'diskfile_update',
+  description: 'Write content to a file on disk',
   kind: 'request_response',
   initiator: 'frontend',
   auth: 'public',
@@ -331,6 +332,10 @@ From `src/lib/server/.env.development.example`:
 
 ## fuz_app
 
-zzz is the primary source for the Cell and Action patterns that will become the `fuz_app` package — a shared foundation for Fuz ecosystem apps.
+zzz is the reference implementation for Cell and Action patterns. ActionSpec
+types have been extracted to `@fuzdev/fuz_app` — zzz imports them from
+`@fuzdev/fuz_app/action_spec.js` and `@fuzdev/fuz_app/action_registry.js`.
+Cell patterns and the full SAES runtime (ActionEvent, ActionPeer, transports)
+remain in zzz until a second consumer needs them (DA-5).
 
-Last updated: 2026-02-10
+Last updated: 2026-02-22

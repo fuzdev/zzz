@@ -207,10 +207,6 @@ export const get_executor_phases = (
 	const {kind, initiator} = spec;
 	const phases: Array<ActionEventPhase> = [];
 
-	if (initiator !== 'frontend' && initiator !== 'backend' && initiator !== 'both') {
-		return phases;
-	}
-
 	switch (kind) {
 		case 'request_response': {
 			// Executor can send/receive based on initiator
