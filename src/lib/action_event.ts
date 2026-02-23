@@ -1,13 +1,9 @@
 // @slop Claude Opus 4
 
 import type {ActionMethod} from './action_metatypes.js';
-import type {ActionKind, ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
+import type {ActionEventPhase, ActionKind, ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
 
-import type {
-	ActionEventEnvironment,
-	ActionEventPhase,
-	ActionEventStep,
-} from './action_event_types.js';
+import type {ActionEventEnvironment, ActionEventStep} from './action_event_types.js';
 import {ActionEventData} from './action_event_data.js';
 import {
 	validate_step_transition,

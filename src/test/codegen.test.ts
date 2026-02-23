@@ -3,13 +3,13 @@
 // @vitest-environment jsdom
 
 import {test, expect, describe} from 'vitest';
-
 import {
 	ImportBuilder,
 	get_executor_phases,
 	get_handler_return_type,
 	generate_phase_handlers,
-} from '$lib/codegen.js';
+} from '@fuzdev/fuz_app/action_codegen.js';
+
 import {
 	ping_action_spec,
 	session_load_action_spec,

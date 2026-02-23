@@ -1,6 +1,7 @@
 // @slop Claude Opus 4
 
 import {z} from 'zod';
+import {ActionEventPhase, ActionKind} from '@fuzdev/fuz_app/action_spec.js';
 
 import {ActionMethod} from './action_metatypes.js';
 import type {ActionInputs, ActionOutputs} from './action_collections.js';
@@ -10,8 +11,7 @@ import {
 	JsonrpcNotification,
 	JsonrpcErrorJson,
 } from './jsonrpc.js';
-import {ActionKind} from '@fuzdev/fuz_app/action_spec.js';
-import {ActionExecutor, ActionEventPhase, ActionEventStep} from './action_event_types.js';
+import {ActionExecutor, ActionEventStep} from './action_event_types.js';
 
 // Base schema for all action event data
 export const ActionEventData = z.strictObject({

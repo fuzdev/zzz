@@ -1,7 +1,6 @@
 // @slop Claude Opus 4
 
 import {
-	type ActionEventPhase,
 	type ActionEventStep,
 	type ActionExecutor,
 	ACTION_EVENT_STEP_TRANSITIONS,
@@ -15,10 +14,10 @@ import type {
 	ActionEventLocalCallData,
 } from './action_event_data.js';
 import type {Result} from '@fuzdev/fuz_util/result.js';
+import type {ActionEventPhase, ActionInitiator, ActionKind} from '@fuzdev/fuz_app/action_spec.js';
 
 import type {ActionMethod} from './action_metatypes.js';
 import type {ActionInputs} from './action_collections.js';
-import type {ActionInitiator, ActionKind} from '@fuzdev/fuz_app/action_spec.js';
 import type {ActionEvent} from './action_event.js';
 import type {JsonrpcErrorJson} from './jsonrpc.js';
 

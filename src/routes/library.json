@@ -210,7 +210,7 @@
 			{
 				"path": "action_collections.gen.ts",
 				"declarations": [],
-				"dependencies": ["action_helpers.ts", "action_specs.ts", "codegen.ts"]
+				"dependencies": ["action_helpers.ts", "action_specs.ts"]
 			},
 			{
 				"path": "action_collections.ts",
@@ -376,7 +376,7 @@
 						"name": "ActionEventData",
 						"kind": "type",
 						"source_line": 17,
-						"type_signature": "ZodObject<{ kind: ZodEnum<{ request_response: \"request_response\"; remote_notification: \"remote_notification\"; local_call: \"local_call\"; }>; phase: ZodEnum<{ send_request: \"send_request\"; ... 7 more ...; execute: \"execute\"; }>; ... 9 more ...; notification: ZodNullable<...>; }, $strict>"
+						"type_signature": "ZodObject<{ kind: ZodEnum<{ request_response: \"request_response\"; remote_notification: \"remote_notification\"; local_call: \"local_call\"; }>; phase: ZodEnum<{ send: \"send\"; send_request: \"send_request\"; ... 6 more ...; execute: \"execute\"; }>; ... 9 more ...; notification: ZodNullable<...>; }, $strict>"
 					},
 					{
 						"name": "ActionEventRequestResponseData",
@@ -440,228 +440,228 @@
 					{
 						"name": "is_request_response",
 						"kind": "function",
-						"source_line": 26,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventRequestResponseData",
+						"source_line": 25,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventRequestResponseData",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_remote_notification",
 						"kind": "function",
-						"source_line": 30,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventRemoteNotificationData",
+						"source_line": 29,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventRemoteNotificationData",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_local_call",
 						"kind": "function",
-						"source_line": 34,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventLocalCallData",
+						"source_line": 33,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventLocalCallData",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_send_request",
 						"kind": "function",
-						"source_line": 38,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
+						"source_line": 37,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_receive_request",
 						"kind": "function",
-						"source_line": 43,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
+						"source_line": 42,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_send_response",
 						"kind": "function",
-						"source_line": 48,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
+						"source_line": 47,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_receive_response",
 						"kind": "function",
-						"source_line": 53,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
+						"source_line": 52,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_notification_send",
 						"kind": "function",
-						"source_line": 58,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
+						"source_line": 57,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_notification_receive",
 						"kind": "function",
-						"source_line": 63,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
+						"source_line": 62,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_execute",
 						"kind": "function",
-						"source_line": 68,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventLocalCallData & { ...; }",
+						"source_line": 67,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventLocalCallData & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_initial",
 						"kind": "function",
-						"source_line": 74,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
+						"source_line": 73,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_parsed",
 						"kind": "function",
-						"source_line": 77,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
+						"source_line": 76,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_handling",
 						"kind": "function",
-						"source_line": 80,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
+						"source_line": 79,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_handled",
 						"kind": "function",
-						"source_line": 83,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
+						"source_line": 82,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_failed",
 						"kind": "function",
-						"source_line": 86,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
+						"source_line": 85,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_send_request_with_parsed_input",
 						"kind": "function",
-						"source_line": 92,
+						"source_line": 91,
 						"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\">(data: { ...; }): data is ({ ...; } & { ...; }) | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "is_notification_send_with_parsed_input",
 						"kind": "function",
-						"source_line": 100,
+						"source_line": 99,
 						"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\">(data: { ...; }): data is ({ ...; } & { ...; }) | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "validate_step_transition",
 						"kind": "function",
-						"source_line": 109,
+						"source_line": 108,
 						"type_signature": "(from: \"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\", to: \"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\"): void",
 						"return_type": "void",
 						"parameters": [
@@ -678,8 +678,8 @@
 					{
 						"name": "validate_phase_for_kind",
 						"kind": "function",
-						"source_line": 116,
-						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"): void",
+						"source_line": 115,
+						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"): void",
 						"return_type": "void",
 						"parameters": [
 							{
@@ -688,33 +688,33 @@
 							},
 							{
 								"name": "phase",
-								"type": "\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\""
+								"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
 							}
 						]
 					},
 					{
 						"name": "validate_phase_transition",
 						"kind": "function",
-						"source_line": 123,
-						"type_signature": "(from: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\", to: \"send_request\" | \"receive_request\" | ... 6 more ... | \"execute\"): void",
+						"source_line": 122,
+						"type_signature": "(from: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\", to: \"send\" | \"send_request\" | ... 6 more ... | \"receive\"): void",
 						"return_type": "void",
 						"parameters": [
 							{
 								"name": "from",
-								"type": "\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\""
+								"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
 							},
 							{
 								"name": "to",
-								"type": "\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\""
+								"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
 							}
 						]
 					},
 					{
 						"name": "get_initial_phase",
 						"kind": "function",
-						"source_line": 130,
-						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", initiator: \"frontend\" | \"backend\" | \"both\", executor: \"frontend\" | \"backend\"): \"send_request\" | \"receive_request\" | ... 7 more ... | null",
-						"return_type": "\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\" | null",
+						"source_line": 129,
+						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", initiator: \"frontend\" | \"backend\" | \"both\", executor: \"frontend\" | \"backend\"): \"send\" | \"send_request\" | ... 7 more ... | null",
+						"return_type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\" | null",
 						"parameters": [
 							{
 								"name": "kind",
@@ -733,8 +733,8 @@
 					{
 						"name": "should_validate_output",
 						"kind": "function",
-						"source_line": 147,
-						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"): boolean",
+						"source_line": 146,
+						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"): boolean",
 						"return_type": "boolean",
 						"parameters": [
 							{
@@ -743,29 +743,29 @@
 							},
 							{
 								"name": "phase",
-								"type": "\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\""
+								"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
 							}
 						]
 					},
 					{
 						"name": "is_action_complete",
 						"kind": "function",
-						"source_line": 151,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }): boolean",
+						"source_line": 150,
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): boolean",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
 					{
 						"name": "create_initial_data",
 						"kind": "function",
-						"source_line": 160,
-						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\", method: \"ping\" | ... 18 more ... | \"provider_update_api_key\", executor: \"frontend\" | \"backend\", input: unknown): { ...; }",
-						"return_type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"; ... 9 more ...; notification: { ...; } | null; }",
+						"source_line": 159,
+						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\", method: \"ping\" | ... 18 more ... | \"provider_update_api_key\", executor: \"frontend\" | \"backend\", input: unknown): { ...; }",
+						"return_type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }",
 						"parameters": [
 							{
 								"name": "kind",
@@ -773,7 +773,7 @@
 							},
 							{
 								"name": "phase",
-								"type": "\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\""
+								"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
 							},
 							{
 								"name": "method",
@@ -792,13 +792,13 @@
 					{
 						"name": "extract_action_result",
 						"kind": "function",
-						"source_line": 181,
-						"type_signature": "(event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"execute\", \"initial\" | ... 3 more ... | \"failed\">): Result<...>",
+						"source_line": 180,
+						"type_signature": "(event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): Result<...>",
 						"return_type": "Result<{ value: unknown; }, { error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }>",
 						"parameters": [
 							{
 								"name": "event",
-								"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"execute\", \"initial\" | ... 3 mor..."
+								"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | ..."
 							}
 						]
 					}
@@ -822,33 +822,27 @@
 						"type_signature": "ZodEnum<{ initial: \"initial\"; parsed: \"parsed\"; handling: \"handling\"; handled: \"handled\"; failed: \"failed\"; }>"
 					},
 					{
-						"name": "ActionEventPhase",
-						"kind": "type",
-						"source_line": 17,
-						"type_signature": "ZodEnum<{ send_request: \"send_request\"; receive_request: \"receive_request\"; send_response: \"send_response\"; receive_response: \"receive_response\"; send_error: \"send_error\"; receive_error: \"receive_error\"; send: \"send\"; receive: \"receive\"; execute: \"execute\"; }>"
-					},
-					{
 						"name": "ACTION_EVENT_STEP_TRANSITIONS",
 						"kind": "variable",
-						"source_line": 30,
+						"source_line": 17,
 						"type_signature": "Record<\"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\", readonly (\"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\")[]>"
 					},
 					{
 						"name": "ACTION_EVENT_PHASE_BY_KIND",
 						"kind": "variable",
-						"source_line": 38,
-						"type_signature": "Record<\"request_response\" | \"remote_notification\" | \"local_call\", readonly (\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\")[]>"
+						"source_line": 25,
+						"type_signature": "Record<\"request_response\" | \"remote_notification\" | \"local_call\", readonly (\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\")[]>"
 					},
 					{
 						"name": "ACTION_EVENT_PHASE_TRANSITIONS",
 						"kind": "variable",
-						"source_line": 51,
-						"type_signature": "Record<\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\", \"send_request\" | \"receive_request\" | ... 7 more ... | null>"
+						"source_line": 38,
+						"type_signature": "Record<\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\", \"send\" | \"send_request\" | ... 7 more ... | null>"
 					},
 					{
 						"name": "ActionEventEnvironment",
 						"kind": "type",
-						"source_line": 63,
+						"source_line": 50,
 						"type_signature": "ActionEventEnvironment",
 						"properties": [
 							{
@@ -894,7 +888,7 @@
 					{
 						"name": "ActionEventChangeObserver",
 						"kind": "type",
-						"source_line": 45,
+						"source_line": 41,
 						"type_signature": "ActionEventChangeObserver<TMethod>",
 						"generic_params": [
 							{
@@ -907,7 +901,7 @@
 						"name": "ActionEvent",
 						"kind": "class",
 						"doc_comment": "Action event that manages the lifecycle of an action through its state machine.",
-						"source_line": 54,
+						"source_line": 50,
 						"generic_params": [
 							{
 								"name": "TMethod",
@@ -946,7 +940,7 @@
 							{
 								"name": "constructor",
 								"kind": "constructor",
-								"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", TEnvironment extends ActionEventEnvironment = ActionEventEnvironment, TPhase extends ActionEventPhase = \"send_request\" | ... 7 more ... | \"execute\", TStep extends ActionEventStep = \"initial\" | ... 3 more ... | \"failed\">(environment: TEnvironment, spec: { ...; } | ... 1 more ... | { ...; }, data: ActionEventDatas[TMethod]): ActionEvent<...>",
+								"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", TEnvironment extends ActionEventEnvironment = ActionEventEnvironment, TPhase extends ActionEventPhase = \"send\" | ... 7 more ... | \"receive\", TStep extends ActionEventStep = \"initial\" | ... 3 more ... | \"failed\">(environment: TEnvironment, spec: { ...; } | ... 1 more ... | { ...; }, data: ActionEventDatas[TMethod]): ActionEvent<...>",
 								"parameters": [
 									{
 										"name": "environment",
@@ -1021,12 +1015,12 @@
 								"name": "transition",
 								"kind": "function",
 								"doc_comment": "Transition to a new phase.",
-								"type_signature": "(phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"): void",
+								"type_signature": "(phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"): void",
 								"return_type": "void",
 								"parameters": [
 									{
 										"name": "phase",
-										"type": "\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\""
+										"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
 									}
 								]
 							},
@@ -1091,9 +1085,9 @@
 						"name": "create_action_event",
 						"kind": "function",
 						"doc_comment": "Create an action event from a spec and initial input.",
-						"source_line": 459,
-						"type_signature": "<TMethod extends ActionMethod>(environment: ActionEventEnvironment, spec: { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<...>; ... 4 more ...; async: true; } | { ...; } | { ...; }, input: unknown, initial_phase?: \"send_request\" | ... 8 more ... | undefined): ActionEvent<...>",
-						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\", \"initial\" | ... 3 more ... | \"failed\">",
+						"source_line": 455,
+						"type_signature": "<TMethod extends ActionMethod>(environment: ActionEventEnvironment, spec: { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<...>; ... 4 more ...; async: true; } | { ...; } | { ...; }, input: unknown, initial_phase?: \"send\" | ... 8 more ... | undefined): ActionEvent<...>",
+						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"parameters": [
 							{
 								"name": "environment",
@@ -1109,7 +1103,7 @@
 							},
 							{
 								"name": "initial_phase",
-								"type": "\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\" | undefined",
+								"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\" | undefined",
 								"optional": true
 							}
 						]
@@ -1118,9 +1112,9 @@
 						"name": "create_action_event_from_json",
 						"kind": "function",
 						"doc_comment": "Reconstruct an action event from serialized JSON data.",
-						"source_line": 486,
-						"type_signature": "<TMethod extends ActionMethod>(json: ActionEventDatas[TMethod], environment: ActionEventEnvironment): ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"execute\", \"initial\" | ... 3 more ... | \"failed\">",
-						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\", \"initial\" | ... 3 more ... | \"failed\">",
+						"source_line": 482,
+						"type_signature": "<TMethod extends ActionMethod>(json: ActionEventDatas[TMethod], environment: ActionEventEnvironment): ActionEvent<TMethod, ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
+						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"parameters": [
 							{
 								"name": "json",
@@ -1135,9 +1129,9 @@
 					{
 						"name": "parse_action_event",
 						"kind": "function",
-						"source_line": 500,
-						"type_signature": "(raw_json: unknown, environment: ActionEventEnvironment): ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | ... 13 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"execute\", \"initial\" | ... 3 more ... | \"failed\">",
-						"return_type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"execute\", \"initial\" | ... 3 mor...",
+						"source_line": 496,
+						"type_signature": "(raw_json: unknown, environment: ActionEventEnvironment): ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | ... 13 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
+						"return_type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | ...",
 						"parameters": [
 							{
 								"name": "raw_json",
@@ -1221,7 +1215,7 @@
 			{
 				"path": "action_metatypes.gen.ts",
 				"declarations": [],
-				"dependencies": ["action_specs.ts", "codegen.ts", "zod_helpers.ts"]
+				"dependencies": ["action_specs.ts", "zod_helpers.ts"]
 			},
 			{
 				"path": "action_metatypes.ts",
@@ -1774,12 +1768,12 @@
 							{
 								"name": "listen_to_action_event",
 								"kind": "function",
-								"type_signature": "(action_event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"execute\", \"initial\" | ... 3 more ... | \"failed\">): () => void",
+								"type_signature": "(action_event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): () => void",
 								"return_type": "() => void",
 								"parameters": [
 									{
 										"name": "action_event",
-										"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"execute\", \"initial\" | ... 3 mor..."
+										"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | ..."
 									}
 								]
 							},
@@ -4510,218 +4504,6 @@
 				],
 				"dependencies": ["ToggleButton.svelte", "glyphs.ts"],
 				"dependents": ["ContentEditor.svelte", "DiskfileActions.svelte"]
-			},
-			{
-				"path": "codegen.ts",
-				"declarations": [
-					{
-						"name": "ImportBuilder",
-						"kind": "class",
-						"doc_comment": "Manages imports for generated code, building them on demand.\nAutomatically optimizes type-only imports to use `import type` syntax.\n\nWhy this matters:\n- `import type` statements are completely removed during compilation\n- Mixed imports like `import { type A, B }` cannot be safely removed\n- This ensures optimal tree-shaking and smaller bundle sizes",
-						"examples": [
-							"```typescript\nconst imports = new ImportBuilder();\nimports.add_types('./types.js', 'Foo', 'Bar');\nimports.add('./utils.js', 'helper');\nimports.add_type('./utils.js', 'HelperOptions');\nimports.add('./action_specs.js', '* as specs');\n\n// Generates:\n// import type {Foo, Bar} from './types.js';\n// import {helper, type HelperOptions} from './utils.js';\n// import * as specs from './action_specs.js';\n```"
-						],
-						"source_line": 42,
-						"members": [
-							{
-								"name": "imports",
-								"kind": "variable",
-								"type_signature": "Map<string, Map<string, ImportItem>>"
-							},
-							{
-								"name": "add",
-								"kind": "function",
-								"doc_comment": "Add a value import to be included in the generated code.",
-								"type_signature": "(from: string, what: string): this",
-								"return_type": "this",
-								"parameters": [
-									{
-										"name": "from",
-										"type": "string",
-										"description": "The module to import from"
-									},
-									{
-										"name": "what",
-										"type": "string",
-										"description": "What to import (value)"
-									}
-								]
-							},
-							{
-								"name": "add_type",
-								"kind": "function",
-								"doc_comment": "Add a type import to be included in the generated code.",
-								"type_signature": "(from: string, what: string): this",
-								"return_type": "this",
-								"parameters": [
-									{
-										"name": "from",
-										"type": "string",
-										"description": "The module to import from"
-									},
-									{
-										"name": "what",
-										"type": "string",
-										"description": "What to import (type)"
-									}
-								]
-							},
-							{
-								"name": "add_many",
-								"kind": "function",
-								"doc_comment": "Add multiple value imports from the same module.",
-								"type_signature": "(from: string, ...items: string[]): this",
-								"return_type": "this",
-								"parameters": [
-									{
-										"name": "from",
-										"type": "string"
-									},
-									{
-										"name": "items",
-										"type": "string[]"
-									}
-								]
-							},
-							{
-								"name": "add_types",
-								"kind": "function",
-								"doc_comment": "Add multiple type imports from the same module.",
-								"type_signature": "(from: string, ...items: string[]): this",
-								"return_type": "this",
-								"parameters": [
-									{
-										"name": "from",
-										"type": "string"
-									},
-									{
-										"name": "items",
-										"type": "string[]"
-									}
-								]
-							},
-							{
-								"name": "build",
-								"kind": "function",
-								"doc_comment": "Generate the import statements.\nIf all imports from a module are types, uses `import type` syntax.",
-								"type_signature": "(): string",
-								"return_type": "string",
-								"parameters": []
-							},
-							{
-								"name": "has_imports",
-								"kind": "function",
-								"doc_comment": "Check if the builder has any imports.",
-								"type_signature": "(): boolean",
-								"return_type": "boolean",
-								"parameters": []
-							},
-							{
-								"name": "preview",
-								"kind": "function",
-								"doc_comment": "Preview what imports will be generated (useful for debugging).",
-								"type_signature": "(): string[]",
-								"return_type": "string[]",
-								"return_description": "Array of import statement strings",
-								"parameters": []
-							},
-							{
-								"name": "clear",
-								"kind": "function",
-								"doc_comment": "Clear all imports.",
-								"type_signature": "(): this",
-								"return_type": "this",
-								"parameters": []
-							}
-						]
-					},
-					{
-						"name": "get_executor_phases",
-						"kind": "function",
-						"doc_comment": "Determines which phases an executor can handle based on the action spec.",
-						"source_line": 203,
-						"type_signature": "(spec: { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 1 more ... | { ...; }; async: true; } | { ...; } | { ...; }, executor: \"frontend\" | \"backend\"): (\"send_request\" | ... 7 more ... | \"execute\")[]",
-						"return_type": "(\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\")[]",
-						"parameters": [
-							{
-								"name": "spec",
-								"type": "{ method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 1 more ... | { ...; }; async: ..."
-							},
-							{
-								"name": "executor",
-								"type": "\"frontend\" | \"backend\""
-							}
-						]
-					},
-					{
-						"name": "get_handler_return_type",
-						"kind": "function",
-						"doc_comment": "Gets the handler return type for a specific phase and spec.\nAlso adds necessary imports to the ImportBuilder.",
-						"source_line": 273,
-						"type_signature": "(spec: { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 1 more ... | { ...; }; async: true; } | { ...; } | { ...; }, phase: \"send_request\" | ... 7 more ... | \"execute\", imports: ImportBuilder, path_prefix: string): string",
-						"return_type": "string",
-						"parameters": [
-							{
-								"name": "spec",
-								"type": "{ method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 1 more ... | { ...; }; async: ..."
-							},
-							{
-								"name": "phase",
-								"type": "\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\""
-							},
-							{
-								"name": "imports",
-								"type": "ImportBuilder"
-							},
-							{
-								"name": "path_prefix",
-								"type": "string"
-							}
-						]
-					},
-					{
-						"name": "generate_phase_handlers",
-						"kind": "function",
-						"doc_comment": "Generates the phase handlers for an action spec using the unified ActionEvent type\nwith the new phase/step type parameters.",
-						"source_line": 302,
-						"type_signature": "(spec: { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 1 more ... | { ...; }; async: true; } | { ...; } | { ...; }, executor: \"frontend\" | \"backend\", imports: ImportBuilder): string",
-						"return_type": "string",
-						"parameters": [
-							{
-								"name": "spec",
-								"type": "{ method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 1 more ... | { ...; }; async: ..."
-							},
-							{
-								"name": "executor",
-								"type": "\"frontend\" | \"backend\""
-							},
-							{
-								"name": "imports",
-								"type": "ImportBuilder"
-							}
-						]
-					},
-					{
-						"name": "create_banner",
-						"kind": "function",
-						"doc_comment": "Creates a file banner comment.",
-						"source_line": 342,
-						"type_signature": "(origin_path: string): string",
-						"return_type": "string",
-						"parameters": [
-							{
-								"name": "origin_path",
-								"type": "string"
-							}
-						]
-					}
-				],
-				"dependents": [
-					"action_collections.gen.ts",
-					"action_metatypes.gen.ts",
-					"frontend_action_types.gen.ts",
-					"server/backend_action_types.gen.ts"
-				]
 			},
 			{
 				"path": "completion_types.ts",
@@ -7738,7 +7520,7 @@
 			{
 				"path": "frontend_action_types.gen.ts",
 				"declarations": [],
-				"dependencies": ["action_specs.ts", "codegen.ts"]
+				"dependencies": ["action_specs.ts"]
 			},
 			{
 				"path": "frontend_action_types.ts",
@@ -8053,25 +7835,25 @@
 					{
 						"name": "frontend_context",
 						"kind": "variable",
-						"source_line": 49,
+						"source_line": 48,
 						"type_signature": "{ get: (error_message?: string | undefined) => Frontend; get_maybe: () => Frontend | undefined; set: (value: Frontend) => Frontend; }"
 					},
 					{
 						"name": "FrontendJson",
 						"kind": "type",
-						"source_line": 51,
+						"source_line": 50,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; ui: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "FrontendJsonInput",
 						"kind": "type",
-						"source_line": 56,
+						"source_line": 55,
 						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; ui?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; show_main_dialog?: boolean | undefined; ... 4 more ...; tutorial_for_diskfiles?: boolean | undefined; } | undefined; }"
 					},
 					{
 						"name": "FrontendOptions",
 						"kind": "type",
-						"source_line": 58,
+						"source_line": 57,
 						"type_signature": "FrontendOptions",
 						"extends": ["OmitStrict<CellOptions<typeof FrontendJson>, 'app'>"],
 						"properties": [
@@ -8132,7 +7914,7 @@
 						"name": "Frontend",
 						"kind": "class",
 						"doc_comment": "The base frontend app, typically used by creating your own `App extends Frontend`.\nGettable with `frontend_context.get()` inside a `<FrontendRoot>`.",
-						"source_line": 78,
+						"source_line": 77,
 						"extends": ["Cell<typeof FrontendJson>"],
 						"implements": ["ActionEventEnvironment"],
 						"members": [
@@ -8379,7 +8161,7 @@
 							{
 								"name": "lookup_action_handler",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send_request\" | ... 7 more ... | \"execute\"): ((event: any) => any) | undefined",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send\" | ... 7 more ... | \"receive\"): ((event: any) => any) | undefined",
 								"return_type": "((event: any) => any) | undefined",
 								"parameters": [
 									{
@@ -8388,7 +8170,7 @@
 									},
 									{
 										"name": "phase",
-										"type": "\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\""
+										"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
 									}
 								]
 							},
@@ -8431,7 +8213,7 @@
 							{
 								"name": "is_valid_phase_for_method",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send_request\" | ... 7 more ... | \"execute\"): boolean",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send\" | ... 7 more ... | \"receive\"): boolean",
 								"return_type": "boolean",
 								"parameters": [
 									{
@@ -8440,7 +8222,7 @@
 									},
 									{
 										"name": "phase",
-										"type": "\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\""
+										"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
 									}
 								]
 							}
@@ -16105,7 +15887,7 @@
 			{
 				"path": "server/backend_action_types.gen.ts",
 				"declarations": [],
-				"dependencies": ["action_specs.ts", "codegen.ts"]
+				"dependencies": ["action_specs.ts"]
 			},
 			{
 				"path": "server/backend_action_types.ts",
@@ -17104,14 +16886,14 @@
 						"name": "FilerChangeHandler",
 						"kind": "type",
 						"doc_comment": "Function type for handling file system changes.",
-						"source_line": 41,
+						"source_line": 37,
 						"type_signature": "FilerChangeHandler"
 					},
 					{
 						"name": "FilerInstance",
 						"kind": "type",
 						"doc_comment": "Structure to hold a Filer and its cleanup function.",
-						"source_line": 52,
+						"source_line": 48,
 						"type_signature": "FilerInstance",
 						"properties": [
 							{
@@ -17129,7 +16911,7 @@
 					{
 						"name": "BackendOptions",
 						"kind": "type",
-						"source_line": 57,
+						"source_line": 53,
 						"type_signature": "BackendOptions",
 						"properties": [
 							{
@@ -17180,7 +16962,7 @@
 						"name": "Backend",
 						"kind": "class",
 						"doc_comment": "Server for managing the Zzz application state and handling client messages.",
-						"source_line": 93,
+						"source_line": 89,
 						"extends": [],
 						"implements": ["ActionEventEnvironment"],
 						"members": [
@@ -17268,7 +17050,7 @@
 							{
 								"name": "lookup_action_handler",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send_request\" | ... 7 more ... | \"execute\"): ((event: any) => any) | undefined",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send\" | ... 7 more ... | \"receive\"): ((event: any) => any) | undefined",
 								"return_type": "((event: any) => any) | undefined",
 								"parameters": [
 									{
@@ -17277,7 +17059,7 @@
 									},
 									{
 										"name": "phase",
-										"type": "\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\""
+										"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
 									}
 								]
 							},

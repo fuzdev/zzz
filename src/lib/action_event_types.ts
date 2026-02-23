@@ -2,9 +2,9 @@
 
 import {z} from 'zod';
 import type {Logger} from '@fuzdev/fuz_util/log.js';
+import type {ActionEventPhase, ActionKind, ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
 
 import type {ActionMethod} from './action_metatypes.js';
-import type {ActionKind, ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
 import type {ActionPeer} from './action_peer.js';
 import type {Actions} from './actions.svelte.js';
 
@@ -13,19 +13,6 @@ export type ActionExecutor = z.infer<typeof ActionExecutor>;
 
 export const ActionEventStep = z.enum(['initial', 'parsed', 'handling', 'handled', 'failed']);
 export type ActionEventStep = z.infer<typeof ActionEventStep>;
-
-export const ActionEventPhase = z.enum([
-	'send_request',
-	'receive_request',
-	'send_response',
-	'receive_response',
-	'send_error',
-	'receive_error',
-	'send',
-	'receive',
-	'execute',
-]);
-export type ActionEventPhase = z.infer<typeof ActionEventPhase>;
 
 export const ACTION_EVENT_STEP_TRANSITIONS = {
 	initial: ['parsed', 'failed'],
