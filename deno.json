@@ -1,0 +1,31 @@
+{
+	"nodeModulesDir": "manual",
+	"unstable": ["sloppy-imports"],
+	"exclude": ["**/*.test.ts", "**/*.svelte.ts", "**/*.gen.ts", "src/test/"],
+	"tasks": {
+		"dev:start": "NODE_ENV=development deno run --allow-all src/lib/zzz/main.ts daemon start",
+		"install": "gro build && mkdir -p ~/.zzz/bin && cp dist_cli/zzz ~/.zzz/bin/zzz",
+		"check": "deno check src/lib/zzz/**/*.ts"
+	},
+	"imports": {
+		"@std/": "jsr:@std/",
+		"esm-env": "npm:esm-env@^1",
+		"hono": "npm:hono@^4",
+		"svelte": "npm:svelte@^5",
+		"zod": "npm:zod@^4",
+		"@electric-sql/pglite": "npm:@electric-sql/pglite@^0.3",
+		"@fuzdev/fuz_app/": "../fuz_app/src/lib/",
+		"@fuzdev/fuz_util/": "npm:/@fuzdev/fuz_util@^0.52.0/",
+		"@fuzdev/gro/": "npm:/@fuzdev/gro@^0.195.2/",
+		"ollama": "npm:ollama@^0.6",
+		"@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@^0.71.2",
+		"openai": "npm:openai@^6.10.0",
+		"@google/generative-ai": "npm:@google/generative-ai@^0.24.1"
+	},
+	"fmt": {
+		"useTabs": true,
+		"lineWidth": 100,
+		"indentWidth": 2,
+		"singleQuote": true
+	}
+}

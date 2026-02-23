@@ -20,7 +20,6 @@ import {
 } from './jsonrpc_helpers.js';
 import {jsonrpc_error_messages} from './jsonrpc_errors.js';
 import type {ActionMethod} from './action_metatypes.js';
-import {UNKNOWN_ERROR_MESSAGE} from './constants.js';
 
 // TODO @api @many refactor frontend_actions_api.ts with action_peer.ts
 
@@ -199,7 +198,7 @@ export class ActionPeer {
 			);
 			return create_jsonrpc_error_message(
 				request.id,
-				jsonrpc_error_messages.internal_error(UNKNOWN_ERROR_MESSAGE),
+				jsonrpc_error_messages.internal_error('unknown error'),
 			);
 		} catch (error) {
 			this.environment.log?.error(`[peer] receive request exception:`, request.method, error);

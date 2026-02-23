@@ -1,5 +1,4 @@
 import OpenAI from 'openai';
-import {SECRET_OPENAI_API_KEY} from '$env/static/private';
 
 import {
 	BackendProviderRemote,
@@ -14,7 +13,7 @@ export class BackendProviderChatgpt extends BackendProviderRemote<OpenAI> {
 	readonly name = 'chatgpt';
 
 	constructor(options: BackendProviderOptions) {
-		super({...options, api_key: options.api_key ?? (SECRET_OPENAI_API_KEY || null)});
+		super(options);
 	}
 
 	protected override create_client(): void {

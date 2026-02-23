@@ -3,7 +3,6 @@ import type {BackendActionHandlers} from './backend_action_types.js';
 import type {ActionOutputs} from '../action_collections.js';
 import {jsonrpc_errors, ThrownJsonrpcError} from '../jsonrpc_errors.js';
 import {to_serializable_disknode} from '../diskfile_helpers.js';
-import {UNKNOWN_ERROR_MESSAGE} from '../constants.js';
 import type {CompletionOptions, CompletionHandlerOptions} from './backend_provider.js';
 import {save_completion_response_to_disk} from './helpers.js';
 import type {OllamaListResponse, OllamaPsResponse, OllamaShowResponse} from '../ollama_helpers.js';
@@ -159,7 +158,7 @@ export const backend_action_handlers: BackendActionHandlers = {
 			} catch (error) {
 				console.error(`error writing file ${path}:`, error);
 				throw jsonrpc_errors.internal_error(
-					`failed to write file: ${error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE}`,
+					`failed to write file: ${error instanceof Error ? error.message : 'unknown error'}`,
 				);
 			}
 		},
@@ -179,7 +178,7 @@ export const backend_action_handlers: BackendActionHandlers = {
 					error,
 				);
 				throw jsonrpc_errors.internal_error(
-					`failed to delete file: ${error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE}`,
+					`failed to delete file: ${error instanceof Error ? error.message : 'unknown error'}`,
 				);
 			}
 		},
@@ -199,7 +198,7 @@ export const backend_action_handlers: BackendActionHandlers = {
 					error,
 				);
 				throw jsonrpc_errors.internal_error(
-					`failed to create directory: ${error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE}`,
+					`failed to create directory: ${error instanceof Error ? error.message : 'unknown error'}`,
 				);
 			}
 		},
@@ -542,7 +541,7 @@ export const backend_action_handlers: BackendActionHandlers = {
 					error,
 				);
 				throw jsonrpc_errors.internal_error(
-					`Failed to update API key: ${error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE}`,
+					`Failed to update API key: ${error instanceof Error ? error.message : 'unknown error'}`,
 				);
 			}
 		},

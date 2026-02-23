@@ -10,24 +10,30 @@ import {
 	to_jsonrpc_message_id,
 } from '../jsonrpc_helpers.js';
 import {jsonrpc_error_messages} from '../jsonrpc_errors.js';
-import {BACKEND_ARTIFICIAL_RESPONSE_DELAY} from '../constants.js';
 
 export interface RegisterActionsOptions {
 	path: string;
 	app: Hono;
 	backend: Backend;
+	/** Artificial response delay in ms (testing). */
+	artificial_delay?: number;
 }
 
 /**
  * Registers HTTP endpoints for all service actions in the schema registry.
  */
-export const register_http_actions = ({path, app, backend}: RegisterActionsOptions): void => {
+export const register_http_actions = ({
+	path,
+	app,
+	backend,
+	artificial_delay = 0,
+}: RegisterActionsOptions): void => {
 	const final_path = PathWithoutTrailingSlash.parse(path);
 
-	if (BACKEND_ARTIFICIAL_RESPONSE_DELAY > 0) {
+	if (artificial_delay > 0) {
 		app.use('*', async (_c, next) => {
-			backend.log?.debug(`[http_middleware] throttling ${BACKEND_ARTIFICIAL_RESPONSE_DELAY}ms`);
-			await wait(BACKEND_ARTIFICIAL_RESPONSE_DELAY);
+			backend.log?.debug(`[http_middleware] throttling ${artificial_delay}ms`);
+			await wait(artificial_delay);
 			await next();
 		});
 	}

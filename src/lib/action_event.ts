@@ -35,7 +35,6 @@ import type {
 	JsonrpcNotification,
 	JsonrpcErrorJson,
 } from './jsonrpc.js';
-import {UNKNOWN_ERROR_MESSAGE} from './constants.js';
 
 // TODO maybe just use runes in this module and remove `observe`
 export type ActionEventChangeObserver<TMethod extends ActionMethod> = (
@@ -178,7 +177,7 @@ export class ActionEvent<
 			const error_json =
 				error instanceof ThrownJsonrpcError
 					? {code: error.code, message: error.message, data: error.data}
-					: jsonrpc_error_messages.internal_error(UNKNOWN_ERROR_MESSAGE);
+					: jsonrpc_error_messages.internal_error('unknown error');
 
 			// If we're already in an error phase, transition to failed
 			// Otherwise, transition to appropriate error phase
@@ -230,7 +229,7 @@ export class ActionEvent<
 			const error_json =
 				error instanceof ThrownJsonrpcError
 					? {code: error.code, message: error.message, data: error.data}
-					: jsonrpc_error_messages.internal_error(UNKNOWN_ERROR_MESSAGE);
+					: jsonrpc_error_messages.internal_error('unknown error');
 
 			this.#fail(error_json);
 		}

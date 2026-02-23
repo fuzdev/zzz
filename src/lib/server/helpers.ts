@@ -3,7 +3,9 @@ import {format_file} from '@fuzdev/gro/format_file.js';
 
 import {ScopedFs} from './scoped_fs.js';
 import {ActionInputs, type ActionOutputs} from '../action_collections.js';
-import {ZZZ_DIR_STATE, ZZZ_DIR_STATE_COMPLETIONS} from '../constants.js';
+
+const ZZZ_DIR_STATE = 'state';
+const ZZZ_DIR_STATE_COMPLETIONS = 'completions';
 
 // TODO @db refactor
 export const save_completion_response_to_disk = async (

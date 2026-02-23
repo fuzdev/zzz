@@ -1,18 +1,30 @@
+/**
+ * Node.js server entry point.
+ *
+ * Used for SvelteKit dev mode and Node.js production builds.
+ * Delegates to `create_zzz_app` for the shared Hono app setup,
+ * then handles Node-specific concerns: HTTP binding, WebSocket injection,
+ * SvelteKit handler mounting.
+ *
+ * @module
+ */
+
 import {Hono} from 'hono';
 import {serve, type HttpBindings} from '@hono/node-server';
 import {createNodeWebSocket} from '@hono/node-ws';
 import {Logger} from '@fuzdev/fuz_util/log.js';
 import {ALLOWED_ORIGINS} from '$env/static/private';
+import {
+	SECRET_ANTHROPIC_API_KEY,
+	SECRET_OPENAI_API_KEY,
+	SECRET_GOOGLE_API_KEY,
+} from '$env/static/private';
 import {DEV} from 'esm-env';
 
 import pkg from '../../../package.json' with {type: 'json'};
-import {Backend} from './backend.js';
-import {server_info_write, server_info_remove, server_info_check_stale} from './server_info.js';
-import {backend_action_handlers} from './backend_action_handlers.js';
-import {register_http_actions} from './register_http_actions.js';
-import {register_websocket_actions} from './register_websocket_actions.js';
-import create_config from '../config.js';
-import {action_specs} from '../action_collections.js';
+import {server_info_write, server_info_remove} from './server_info.js';
+import {create_zzz_app} from './create_zzz_app.js';
+import {load_server_env} from './server_env.js';
 import {
 	API_PATH_FOR_HTTP_RPC,
 	SERVER_HOST,
@@ -20,91 +32,35 @@ import {
 	WEBSOCKET_PATH,
 	ZZZ_DIR,
 	ZZZ_SCOPED_DIRS,
+	BACKEND_ARTIFICIAL_RESPONSE_DELAY,
 } from '../constants.js';
-import {parse_allowed_origins, verify_request_source} from './security.js';
-import {handle_filer_change} from './backend_actions_api.js';
-import {BackendProviderOllama} from './backend_provider_ollama.js';
-import {BackendProviderClaude} from './backend_provider_claude.js';
-import {BackendProviderChatgpt} from './backend_provider_chatgpt.js';
-import {BackendProviderGemini} from './backend_provider_gemini.js';
-import type {BackendProviderOptions} from './backend_provider.js';
 
 const log = new Logger('[server]');
 
 const create_server = async (): Promise<void> => {
-	// TODO better config
-	const config = create_config();
-
-	// Security: allow only the configured server URL, extend with care
-	const allowed_origins = parse_allowed_origins(ALLOWED_ORIGINS);
-
-	// TODO better logging
-	log.info('creating server', {
-		config,
-		ZZZ_DIR,
-		ZZZ_SCOPED_DIRS,
-		allowed_origins,
+	// Load env — in Node/SvelteKit mode, we use the $env values that are
+	// already parsed in constants.ts, passed as defaults.
+	const env = load_server_env((key) => process.env[key], {
+		zzz_dir: ZZZ_DIR,
+		scoped_dirs: ZZZ_SCOPED_DIRS,
+		port: SERVER_PROXIED_PORT,
+		host: SERVER_HOST,
+		allowed_origins: ALLOWED_ORIGINS,
+		websocket_path: WEBSOCKET_PATH,
+		api_path: API_PATH_FOR_HTTP_RPC,
+		artificial_delay: BACKEND_ARTIFICIAL_RESPONSE_DELAY,
+		zzz_version: pkg.version,
+		secret_anthropic_api_key: SECRET_ANTHROPIC_API_KEY || undefined,
+		secret_openai_api_key: SECRET_OPENAI_API_KEY || undefined,
+		secret_google_api_key: SECRET_GOOGLE_API_KEY || undefined,
 	});
 
-	// Check for stale server info from a previous crash
-	// TODO do anything differently?
-	const stale_info = await server_info_check_stale(ZZZ_DIR);
-	if (stale_info) {
-		log.warn('found running server', stale_info);
-	}
+	// Node WebSocket adapter — needs a temporary Hono app for setup,
+	// then the real app is created by the factory.
+	const {injectWebSocket, upgradeWebSocket} = createNodeWebSocket({app: new Hono()});
 
-	const app = new Hono();
-
-	app.use(async (c, next) => {
-		// TODO improve this logging
-		log.info(
-			`[request_begin] ${c.req.method} ${c.req.url} origin(${c.req.header('origin')}) referer(${c.req.header('referer')})`,
-		);
-		await next();
-		log.info(`[request_end] ${c.req.method} ${c.req.url}`);
-	});
-
-	// Security: first verify the origin of incoming requests
-	app.use(verify_request_source(allowed_origins));
-
-	const {injectWebSocket, upgradeWebSocket} = createNodeWebSocket({app});
-
-	const backend = new Backend({
-		zzz_dir: ZZZ_DIR, // is the default
-		config,
-		action_specs,
-		action_handlers: backend_action_handlers,
-		handle_filer_change,
-	});
-
-	// TODO manage these dynamically, init from config/state
-	const provider_options: BackendProviderOptions = {
-		on_completion_progress: backend.api.completion_progress,
-	};
-	backend.add_provider(new BackendProviderOllama(provider_options));
-	backend.add_provider(new BackendProviderClaude(provider_options));
-	backend.add_provider(new BackendProviderChatgpt(provider_options));
-	backend.add_provider(new BackendProviderGemini(provider_options));
-
-	// TODO options for everything, maybe a nullable array and an enable/disable flag
-
-	if (WEBSOCKET_PATH) {
-		register_websocket_actions({
-			path: WEBSOCKET_PATH,
-			app,
-			backend,
-			upgradeWebSocket,
-		});
-	}
-
-	if (API_PATH_FOR_HTTP_RPC) {
-		register_http_actions({
-			path: API_PATH_FOR_HTTP_RPC,
-			app,
-			backend,
-			// TODO allowed_origins ?
-		});
-	}
+	// Create the shared zzz app
+	const {app, backend} = await create_zzz_app({env, upgradeWebSocket});
 
 	// In production with the Node adapter, mount the SvelteKit handler to serve the frontend.
 	if (!DEV) {
@@ -139,8 +95,8 @@ const create_server = async (): Promise<void> => {
 
 	const hono = serve(
 		{
-			hostname: SERVER_HOST,
-			port: SERVER_PROXIED_PORT,
+			hostname: env.host,
+			port: env.port,
 			fetch: app.fetch,
 		},
 		async (info) => {
@@ -148,9 +104,9 @@ const create_server = async (): Promise<void> => {
 
 			// Write server info after successfully binding
 			await server_info_write({
-				zzz_dir: ZZZ_DIR,
+				zzz_dir: env.zzz_dir,
 				port: info.port,
-				zzz_version: pkg.version,
+				zzz_version: env.zzz_version,
 			});
 		},
 	);
@@ -160,7 +116,7 @@ const create_server = async (): Promise<void> => {
 	// Shutdown handlers to clean up server info
 	const shutdown = async (signal: string): Promise<void> => {
 		log.info(`received ${signal}, shutting down...`);
-		await server_info_remove(ZZZ_DIR);
+		await server_info_remove(env.zzz_dir);
 		await backend.destroy();
 		process.exit(0);
 	};

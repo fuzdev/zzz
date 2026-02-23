@@ -13,7 +13,6 @@ import type {ActionEventPhase, ActionSpecUnion} from '@fuzdev/fuz_app/action_spe
 import type {ZzzConfig} from '../config_helpers.js';
 import {DiskfileDirectoryPath} from '../diskfile_types.js';
 import {ScopedFs} from './scoped_fs.js';
-import {ZZZ_DIR, ZZZ_SCOPED_DIRS} from '../constants.js';
 import type {BackendActionHandlers} from './backend_action_types.js';
 import type {ActionEventEnvironment, ActionExecutor} from '../action_event_types.js';
 import type {ActionMethod} from '../action_metatypes.js';
@@ -57,7 +56,6 @@ export interface BackendOptions {
 	zzz_dir?: string; // TODO @many move this info to path schemas
 	/**
 	 * Filesystem paths that Zzz can access for user files.
-	 * Defaults to `ZZZ_SCOPED_DIRS` from env.
 	 */
 	scoped_dirs?: Array<string>;
 	/**
@@ -132,11 +130,11 @@ export class Backend implements ActionEventEnvironment {
 	readonly #handle_filer_change: FilerChangeHandler;
 
 	constructor(options: BackendOptions) {
-		this.zzz_dir = DiskfileDirectoryPath.parse(resolve(options.zzz_dir || ZZZ_DIR));
+		this.zzz_dir = DiskfileDirectoryPath.parse(resolve(options.zzz_dir || '.zzz'));
 
 		// Resolve scoped_dirs to absolute paths and parse as DiskfileDirectoryPath
 		this.scoped_dirs = Object.freeze(
-			(options.scoped_dirs ?? ZZZ_SCOPED_DIRS).map((p) => DiskfileDirectoryPath.parse(resolve(p))),
+			(options.scoped_dirs ?? []).map((p) => DiskfileDirectoryPath.parse(resolve(p))),
 		);
 
 		this.config = options.config;

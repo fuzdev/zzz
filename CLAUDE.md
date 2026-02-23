@@ -25,9 +25,25 @@ For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
 ## Development Stage
 
-Early development, v0.0.1. Breaking changes are expected and welcome. No authentication — development use only. All state is in-memory (no database yet). The Hono/Node.js backend is a reference implementation that may be replaced by a Rust daemon (`fuzd`).
+Early development, v0.0.1. Breaking changes are expected and welcome. No authentication — development use only. All state is in-memory (no database yet). The Hono/Node.js backend is a reference implementation that may be replaced by a Rust daemon (`fuzd`). Deno is a shortcut for the CLI and production server — long-term both migrate to Rust fuz/fuzd.
 
 See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
+
+## CLI
+
+zzz has a Deno-compiled CLI binary for daemon management and browser launching.
+See [src/lib/zzz/CLAUDE.md](src/lib/zzz/CLAUDE.md) for full CLI architecture.
+
+```bash
+zzz                          # start daemon if needed, open browser
+zzz ~/dev/                   # open workspace at ~/dev/
+zzz daemon start             # start daemon (foreground)
+zzz daemon status            # show daemon info
+zzz init                     # initialize ~/.zzz/
+```
+
+The global daemon runs on port 4460 with state at `~/.zzz/`. Built via
+`gro_plugin_deno_compile` (see `gro.config.ts` and `deno.json`).
 
 ## Docs
 
@@ -35,6 +51,7 @@ See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 - [docs/development.md](docs/development.md) — Development workflow, extension points, patterns
 - [docs/providers.md](docs/providers.md) — AI provider integration, adding new providers
 - [src/lib/server/CLAUDE.md](src/lib/server/CLAUDE.md) — Backend server architecture, providers, security
+- [src/lib/zzz/CLAUDE.md](src/lib/zzz/CLAUDE.md) — CLI architecture, commands, runtime abstraction
 
 ## Repository Structure
 
@@ -43,12 +60,21 @@ src/
 ├── lib/                          # Published as @fuzdev/zzz
 │   ├── server/                   # Backend (Hono/Node.js reference impl)
 │   │   ├── backend.ts
-│   │   ├── server.ts
+│   │   ├── server.ts            # Node.js entry (dev mode)
+│   │   ├── server_deno.ts       # Deno entry (production/CLI)
 │   │   ├── backend_action_handlers.ts
 │   │   ├── backend_provider_*.ts # Ollama, Claude, ChatGPT, Gemini
 │   │   ├── scoped_fs.ts
 │   │   ├── security.ts
 │   │   └── backend_action_types.gen.ts
+│   │
+│   ├── zzz/                      # CLI (Deno compiled binary)
+│   │   ├── main.ts              # Entry point (deno compile target)
+│   │   ├── cli.ts               # Arg parsing wrapper
+│   │   ├── cli_config.ts        # ~/.zzz/config.json
+│   │   ├── runtime/             # ZzzRuntime abstraction
+│   │   ├── cli/                 # CLI infrastructure
+│   │   └── commands/            # init, daemon, open, status
 │   │
 │   ├── *.svelte.ts               # Cell state classes (26 classes)
 │   ├── action_specs.ts           # All 20 action spec definitions

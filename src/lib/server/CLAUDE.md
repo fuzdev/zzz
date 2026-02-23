@@ -28,7 +28,10 @@ The server provides:
 
 | File                             | Purpose                                                      |
 | -------------------------------- | ------------------------------------------------------------ |
-| `server.ts`                      | Server initialization, Hono setup, provider registration     |
+| `create_zzz_app.ts`              | Shared app factory — Backend, providers, endpoints           |
+| `server_env.ts`                  | Runtime-agnostic env loading (replaces `$env` for server)    |
+| `server.ts`                      | Node.js entry — calls factory, binds `@hono/node-server`     |
+| `server_deno.ts`                 | Deno entry — calls factory, binds `Deno.serve`               |
 | `backend.ts`                     | `Backend` class - core state, action handling, file watchers |
 | `backend_action_handlers.ts`     | Handler implementations for all backend actions              |
 | `backend_actions_api.ts`         | Backend-initiated notifications (streaming, file changes)    |
@@ -45,6 +48,8 @@ The server provides:
 | `env_file_helpers.ts`            | `.env` file manipulation                                     |
 | `helpers.ts`                     | Completion response persistence                              |
 | `server_helpers.ts`              | Server utilities                                             |
+| `server_deno.ts`                 | Deno entry point (production/CLI, `Deno.serve`)              |
+| `server_info.ts`                 | Daemon info file (server.json) read/write/cleanup            |
 
 **Generated files** (do not edit):
 
@@ -55,25 +60,39 @@ The server provides:
 
 ### Server Initialization Flow
 
+Two entry points share a common factory:
+
 ```
-server.ts: create_server()
+server_env.ts: load_server_env(env_get, defaults)
     │
-    ├── Parse ALLOWED_ORIGINS → security patterns
-    ├── Create Hono app with logging middleware
-    ├── Add origin verification middleware
-    ├── Setup WebSocket via @hono/node-ws
+    ▼
+create_zzz_app.ts: create_zzz_app({env, upgradeWebSocket})
     │
-    ├── Create Backend instance
-    │   ├── Initialize ScopedFs with directory
-    │   ├── Setup Filer for file watching
-    │   └── Register action handlers
-    │
+    ├── Parse allowed_origins → security patterns
+    ├── Create Hono app with logging + origin verification
+    ├── Create Backend instance (ScopedFs, Filer, handlers)
     ├── Add providers (Ollama, Claude, ChatGPT, Gemini)
-    ├── Register WebSocket endpoint (WEBSOCKET_PATH)
-    ├── Register HTTP endpoint (API_PATH_FOR_HTTP_RPC)
+    ├── Register WebSocket endpoint
+    ├── Register HTTP RPC endpoint
+    └── Return {app, backend}
     │
-    ├── [Production] Mount SvelteKit handler
-    └── Start server via @hono/node-server
+    ▼
+Entry points:
+    │
+    ├── server.ts (Node.js / SvelteKit)
+    │   ├── Load env from $env/static/* via constants.ts defaults
+    │   ├── createNodeWebSocket → upgradeWebSocket
+    │   ├── Call create_zzz_app()
+    │   ├── [Production] Mount SvelteKit handler
+    │   ├── Bind via @hono/node-server
+    │   └── injectWebSocket on bound server
+    │
+    └── server_deno.ts (Deno / compiled CLI)
+        ├── Load env from Deno.env.get
+        ├── Import upgradeWebSocket from hono/deno
+        ├── Call create_zzz_app()
+        ├── Write daemon.json via server_info
+        └── Bind via Deno.serve
 ```
 
 ### Backend Class
@@ -416,7 +435,7 @@ my_notification: async (input) => {
 
 ## Constants
 
-From `../constants.ts`:
+From `../constants.ts` (**frontend/SvelteKit only** — server uses `server_env.ts`):
 
 | Constant                            | Purpose                  |
 | ----------------------------------- | ------------------------ |
@@ -430,3 +449,16 @@ From `../constants.ts`:
 | `ZZZ_DIR_RUN`                       | `run` subdirectory       |
 | `ZZZ_DIR_CACHE`                     | `cache` subdirectory     |
 | `BACKEND_ARTIFICIAL_RESPONSE_DELAY` | Testing delay (ms)       |
+
+## Known Issues
+
+### `createNodeWebSocket` dummy app (minor)
+
+In `server.ts`, `createNodeWebSocket` is initialized with a throwaway Hono app,
+but routes are registered on the factory-created app. This likely works because
+`upgradeWebSocket` returns middleware (not tied to the app), but it's fragile.
+
+### Duplicate `/health` endpoint (minor)
+
+`server_deno.ts` adds a `/health` route after `create_zzz_app()`. If the factory
+ever adds its own health check, they'll conflict.

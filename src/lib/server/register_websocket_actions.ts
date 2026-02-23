@@ -1,9 +1,8 @@
 import type {Hono} from 'hono';
-import type {createNodeWebSocket} from '@hono/node-ws';
+import type {UpgradeWebSocket} from 'hono/ws';
 import {wait} from '@fuzdev/fuz_util/async.js';
 
 import type {Backend} from './backend.js';
-import {BACKEND_ARTIFICIAL_RESPONSE_DELAY} from '../constants.js';
 import {BackendWebsocketTransport} from './backend_websocket_transport.js';
 import {jsonrpc_error_messages} from '../jsonrpc_errors.js';
 import {
@@ -15,10 +14,10 @@ export interface RegisterWebsocketActionsOptions {
 	path: string;
 	app: Hono;
 	backend: Backend;
-	/**
-	 * @see https://hono.dev/helpers/websocket
-	 */
-	upgradeWebSocket: ReturnType<typeof createNodeWebSocket>['upgradeWebSocket'];
+	/** @see https://hono.dev/helpers/websocket */
+	upgradeWebSocket: UpgradeWebSocket;
+	/** Artificial response delay in ms (testing). */
+	artificial_delay?: number;
 	transport?: BackendWebsocketTransport;
 }
 
@@ -30,6 +29,7 @@ export const register_websocket_actions = ({
 	app,
 	backend,
 	upgradeWebSocket,
+	artificial_delay = 0,
 	transport = new BackendWebsocketTransport(),
 }: RegisterWebsocketActionsOptions): void => {
 	backend.peer.transports.register_transport(transport);
@@ -51,9 +51,9 @@ export const register_websocket_actions = ({
 					return;
 				}
 
-				if (BACKEND_ARTIFICIAL_RESPONSE_DELAY > 0) {
-					backend.log?.debug(`[ws] throttling ${BACKEND_ARTIFICIAL_RESPONSE_DELAY}ms`);
-					await wait(BACKEND_ARTIFICIAL_RESPONSE_DELAY);
+				if (artificial_delay > 0) {
+					backend.log?.debug(`[ws] throttling ${artificial_delay}ms`);
+					await wait(artificial_delay);
 				}
 
 				try {

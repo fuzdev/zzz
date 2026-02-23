@@ -10,7 +10,8 @@ import {join, dirname} from 'node:path';
 import {z} from 'zod';
 import {process_is_pid_running} from '@fuzdev/fuz_util/process.js';
 
-import {ZZZ_DIR_RUN} from '../constants.js';
+/** Subdirectory name for runtime data (PID file, etc.) */
+const ZZZ_DIR_RUN = 'run';
 
 /** Current server.json schema version */
 const SERVER_INFO_VERSION = 1;

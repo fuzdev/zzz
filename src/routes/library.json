@@ -59,6 +59,7 @@
 			"@sveltejs/adapter-static": "^3.0.10",
 			"@sveltejs/kit": "^2.50.1",
 			"@sveltejs/vite-plugin-svelte": "^6.2.4",
+			"@types/deno": "^2.5.0",
 			"@types/estree": "^1.0.8",
 			"@types/node": "^24.10.1",
 			"@webref/css": "^8.2.0",
@@ -365,8 +366,8 @@
 					"action_collection_helpers.ts",
 					"frontend.svelte.ts",
 					"server/backend_provider_ollama.ts",
-					"server/helpers.ts",
-					"server/server.ts"
+					"server/create_zzz_app.ts",
+					"server/helpers.ts"
 				]
 			},
 			{
@@ -888,7 +889,7 @@
 					{
 						"name": "ActionEventChangeObserver",
 						"kind": "type",
-						"source_line": 41,
+						"source_line": 40,
 						"type_signature": "ActionEventChangeObserver<TMethod>",
 						"generic_params": [
 							{
@@ -901,7 +902,7 @@
 						"name": "ActionEvent",
 						"kind": "class",
 						"doc_comment": "Action event that manages the lifecycle of an action through its state machine.",
-						"source_line": 50,
+						"source_line": 49,
 						"generic_params": [
 							{
 								"name": "TMethod",
@@ -1085,7 +1086,7 @@
 						"name": "create_action_event",
 						"kind": "function",
 						"doc_comment": "Create an action event from a spec and initial input.",
-						"source_line": 455,
+						"source_line": 454,
 						"type_signature": "<TMethod extends ActionMethod>(environment: ActionEventEnvironment, spec: { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<...>; ... 4 more ...; async: true; } | { ...; } | { ...; }, input: unknown, initial_phase?: \"send\" | ... 8 more ... | undefined): ActionEvent<...>",
 						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"parameters": [
@@ -1112,7 +1113,7 @@
 						"name": "create_action_event_from_json",
 						"kind": "function",
 						"doc_comment": "Reconstruct an action event from serialized JSON data.",
-						"source_line": 482,
+						"source_line": 481,
 						"type_signature": "<TMethod extends ActionMethod>(json: ActionEventDatas[TMethod], environment: ActionEventEnvironment): ActionEvent<TMethod, ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"parameters": [
@@ -1129,7 +1130,7 @@
 					{
 						"name": "parse_action_event",
 						"kind": "function",
-						"source_line": 496,
+						"source_line": 495,
 						"type_signature": "(raw_json: unknown, environment: ActionEventEnvironment): ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | ... 13 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"return_type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | ...",
 						"parameters": [
@@ -1148,7 +1149,6 @@
 					"action_collection_helpers.ts",
 					"action_event_data.ts",
 					"action_event_helpers.ts",
-					"constants.ts",
 					"jsonrpc_errors.ts",
 					"jsonrpc_helpers.ts",
 					"zod_helpers.ts"
@@ -1380,7 +1380,7 @@
 					{
 						"name": "ActionPeerSendOptions",
 						"kind": "type",
-						"source_line": 30,
+						"source_line": 29,
 						"type_signature": "ActionPeerSendOptions",
 						"properties": [
 							{
@@ -1393,7 +1393,7 @@
 					{
 						"name": "ActionPeerOptions",
 						"kind": "type",
-						"source_line": 34,
+						"source_line": 33,
 						"type_signature": "ActionPeerOptions",
 						"properties": [
 							{
@@ -1416,7 +1416,7 @@
 					{
 						"name": "ActionPeer",
 						"kind": "class",
-						"source_line": 44,
+						"source_line": 43,
 						"members": [
 							{
 								"name": "environment",
@@ -1514,7 +1514,6 @@
 				],
 				"dependencies": [
 					"action_event.ts",
-					"constants.ts",
 					"jsonrpc.ts",
 					"jsonrpc_errors.ts",
 					"jsonrpc_helpers.ts",
@@ -4713,7 +4712,7 @@
 					}
 				],
 				"dependencies": ["config_defaults.ts"],
-				"dependents": ["server/server.ts"]
+				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
 				"path": "ConfirmButton.svelte",
@@ -4780,130 +4779,130 @@
 					{
 						"name": "SERVER_PROTOCOL",
 						"kind": "variable",
-						"source_line": 29,
+						"source_line": 33,
 						"type_signature": "string"
 					},
 					{
 						"name": "SERVER_HOST",
 						"kind": "variable",
-						"source_line": 31,
+						"source_line": 35,
 						"type_signature": "string"
 					},
 					{
 						"name": "SERVER_URL",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 37,
+						"source_line": 41,
 						"type_signature": "string"
 					},
 					{
 						"name": "SERVER_PROXIED_PORT",
 						"kind": "variable",
-						"source_line": 39,
+						"source_line": 43,
 						"type_signature": "number"
 					},
 					{
 						"name": "BACKEND_ARTIFICIAL_RESPONSE_DELAY",
 						"kind": "variable",
-						"source_line": 41,
+						"source_line": 45,
 						"type_signature": "number"
 					},
 					{
 						"name": "ZZZ_DIR",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 47,
+						"source_line": 51,
 						"type_signature": "string"
 					},
 					{
 						"name": "ZZZ_DIR_STATE",
 						"kind": "variable",
-						"source_line": 50,
+						"source_line": 54,
 						"type_signature": "\"state\""
 					},
 					{
 						"name": "ZZZ_DIR_STATE_COMPLETIONS",
 						"kind": "variable",
-						"source_line": 51,
+						"source_line": 55,
 						"type_signature": "\"completions\""
 					},
 					{
 						"name": "ZZZ_DIR_RUN",
 						"kind": "variable",
-						"source_line": 52,
+						"source_line": 56,
 						"type_signature": "\"run\""
 					},
 					{
 						"name": "ZZZ_DIR_CACHE",
 						"kind": "variable",
-						"source_line": 53,
+						"source_line": 57,
 						"type_signature": "\"cache\""
 					},
 					{
 						"name": "ZZZ_SCOPED_DIRS",
 						"kind": "variable",
 						"doc_comment": "Comma-separated list of filesystem paths that Zzz can access.\nEmpty array means no scoped filesystem access.",
-						"source_line": 59,
+						"source_line": 63,
 						"type_signature": "string[]"
 					},
 					{
 						"name": "CONTENT_PREVIEW_LENGTH",
 						"kind": "variable",
-						"source_line": 65,
+						"source_line": 69,
 						"type_signature": "100"
 					},
 					{
 						"name": "API_PATH",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 71,
+						"source_line": 75,
 						"type_signature": "string"
 					},
 					{
 						"name": "API_URL",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 80,
+						"source_line": 84,
 						"type_signature": "string"
 					},
 					{
 						"name": "API_PATH_FOR_HTTP_RPC",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 86,
+						"source_line": 90,
 						"type_signature": "string"
 					},
 					{
 						"name": "API_URL_FOR_HTTP_RPC",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 92,
+						"source_line": 96,
 						"type_signature": "string"
 					},
 					{
 						"name": "WEBSOCKET_URL",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 99,
+						"source_line": 103,
 						"type_signature": "string"
 					},
 					{
 						"name": "WEBSOCKET_URL_OBJECT",
 						"kind": "variable",
-						"source_line": 103,
+						"source_line": 107,
 						"type_signature": "URL | null"
 					},
 					{
 						"name": "WEBSOCKET_PATH",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 109,
+						"source_line": 113,
 						"type_signature": "string | undefined"
 					},
 					{
 						"name": "UNKNOWN_ERROR_MESSAGE",
 						"kind": "variable",
-						"source_line": 111,
+						"source_line": 115,
 						"type_signature": "string"
 					}
 				],
@@ -4912,20 +4911,12 @@
 					"CapabilityBackend.svelte",
 					"CapabilityWebsocket.svelte",
 					"TurnListitem.svelte",
-					"action_event.ts",
-					"action_peer.ts",
 					"app.svelte.ts",
 					"frontend_http_transport.ts",
 					"frontend_websocket_transport.ts",
 					"helpers.ts",
 					"part.svelte.ts",
-					"server/backend.ts",
-					"server/backend_action_handlers.ts",
-					"server/helpers.ts",
-					"server/register_http_actions.ts",
-					"server/register_websocket_actions.ts",
 					"server/server.ts",
-					"server/server_info.ts",
 					"socket.svelte.ts"
 				]
 			},
@@ -15870,19 +15861,18 @@
 						"name": "backend_action_handlers",
 						"kind": "variable",
 						"doc_comment": "Handle client messages and produce appropriate server responses.\nEach returns a value or throws a `ThrownJsonrpcError`.\nOrganized by method and phase for symmetric handling.",
-						"source_line": 24,
+						"source_line": 23,
 						"type_signature": "BackendActionHandlers"
 					}
 				],
 				"dependencies": [
-					"constants.ts",
 					"diskfile_helpers.ts",
 					"diskfile_types.ts",
 					"jsonrpc_errors.ts",
 					"server/env_file_helpers.ts",
 					"server/helpers.ts"
 				],
-				"dependents": ["server/server.ts"]
+				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
 				"path": "server/backend_action_types.gen.ts",
@@ -16079,7 +16069,7 @@
 					"diskfile_helpers.ts",
 					"diskfile_types.ts"
 				],
-				"dependents": ["server/backend.ts", "server/server.ts"]
+				"dependents": ["server/backend.ts", "server/create_zzz_app.ts"]
 			},
 			{
 				"path": "server/backend_provider_chatgpt.ts",
@@ -16087,7 +16077,7 @@
 					{
 						"name": "BackendProviderChatgpt",
 						"kind": "class",
-						"source_line": 13,
+						"source_line": 12,
 						"extends": ["BackendProviderRemote<OpenAI>"],
 						"implements": [],
 						"members": [
@@ -16143,7 +16133,7 @@
 					}
 				],
 				"dependencies": ["response_helpers.ts", "server/backend_provider.ts"],
-				"dependents": ["server/server.ts"]
+				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
 				"path": "server/backend_provider_claude.ts",
@@ -16151,7 +16141,7 @@
 					{
 						"name": "BackendProviderClaude",
 						"kind": "class",
-						"source_line": 13,
+						"source_line": 12,
 						"extends": ["BackendProviderRemote<Anthropic>"],
 						"implements": [],
 						"members": [
@@ -16207,7 +16197,7 @@
 					}
 				],
 				"dependencies": ["response_helpers.ts", "server/backend_provider.ts"],
-				"dependents": ["server/server.ts"]
+				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
 				"path": "server/backend_provider_gemini.ts",
@@ -16215,7 +16205,7 @@
 					{
 						"name": "BackendProviderGemini",
 						"kind": "class",
-						"source_line": 14,
+						"source_line": 13,
 						"extends": ["BackendProviderRemote<GoogleGenerativeAI>"],
 						"implements": [],
 						"members": [
@@ -16271,7 +16261,7 @@
 					}
 				],
 				"dependencies": ["response_helpers.ts", "server/backend_provider.ts"],
-				"dependents": ["server/server.ts"]
+				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
 				"path": "server/backend_provider_ollama.ts",
@@ -16342,7 +16332,7 @@
 					"response_helpers.ts",
 					"server/backend_provider.ts"
 				],
-				"dependents": ["server/server.ts"]
+				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
 				"path": "server/backend_provider.ts",
@@ -16886,14 +16876,14 @@
 						"name": "FilerChangeHandler",
 						"kind": "type",
 						"doc_comment": "Function type for handling file system changes.",
-						"source_line": 37,
+						"source_line": 36,
 						"type_signature": "FilerChangeHandler"
 					},
 					{
 						"name": "FilerInstance",
 						"kind": "type",
 						"doc_comment": "Structure to hold a Filer and its cleanup function.",
-						"source_line": 48,
+						"source_line": 47,
 						"type_signature": "FilerInstance",
 						"properties": [
 							{
@@ -16911,7 +16901,7 @@
 					{
 						"name": "BackendOptions",
 						"kind": "type",
-						"source_line": 53,
+						"source_line": 52,
 						"type_signature": "BackendOptions",
 						"properties": [
 							{
@@ -16924,7 +16914,7 @@
 								"name": "scoped_dirs",
 								"kind": "variable",
 								"type_signature": "Array<string>",
-								"doc_comment": "Filesystem paths that Zzz can access for user files.\nDefaults to `ZZZ_SCOPED_DIRS` from env."
+								"doc_comment": "Filesystem paths that Zzz can access for user files."
 							},
 							{
 								"name": "config",
@@ -16962,7 +16952,7 @@
 						"name": "Backend",
 						"kind": "class",
 						"doc_comment": "Server for managing the Zzz application state and handling client messages.",
-						"source_line": 89,
+						"source_line": 87,
 						"extends": [],
 						"implements": ["ActionEventEnvironment"],
 						"members": [
@@ -17125,13 +17115,90 @@
 				],
 				"dependencies": [
 					"action_peer.ts",
-					"constants.ts",
 					"diskfile_types.ts",
 					"jsonrpc_errors.ts",
 					"server/backend_actions_api.ts",
 					"server/scoped_fs.ts"
 				],
-				"dependents": ["server/server.ts"]
+				"dependents": ["server/create_zzz_app.ts"]
+			},
+			{
+				"path": "server/create_zzz_app.ts",
+				"declarations": [
+					{
+						"name": "CreateZzzAppOptions",
+						"kind": "type",
+						"doc_comment": "Options for creating a zzz app.",
+						"source_line": 38,
+						"type_signature": "CreateZzzAppOptions",
+						"properties": [
+							{
+								"name": "env",
+								"kind": "variable",
+								"type_signature": "ZzzServerEnv",
+								"doc_comment": "Server environment configuration."
+							},
+							{
+								"name": "upgradeWebSocket",
+								"kind": "variable",
+								"type_signature": "UpgradeWebSocket",
+								"doc_comment": "Runtime-specific WebSocket upgrade function."
+							}
+						]
+					},
+					{
+						"name": "ZzzApp",
+						"kind": "type",
+						"doc_comment": "The created zzz app and its backend.",
+						"source_line": 48,
+						"type_signature": "ZzzApp",
+						"properties": [
+							{
+								"name": "app",
+								"kind": "variable",
+								"type_signature": "Hono",
+								"doc_comment": "Configured Hono app with all middleware and routes."
+							},
+							{
+								"name": "backend",
+								"kind": "variable",
+								"type_signature": "Backend",
+								"doc_comment": "Backend instance for lifecycle management."
+							}
+						]
+					},
+					{
+						"name": "create_zzz_app",
+						"kind": "function",
+						"doc_comment": "Create the zzz Hono app with Backend, providers, and endpoints.\n\nThis is the shared factory called by both entry points.\nThe caller is responsible for HTTP binding and WebSocket injection.",
+						"source_line": 61,
+						"type_signature": "(options: CreateZzzAppOptions): Promise<ZzzApp>",
+						"return_type": "Promise<ZzzApp>",
+						"parameters": [
+							{
+								"name": "options",
+								"type": "CreateZzzAppOptions"
+							}
+						]
+					}
+				],
+				"module_comment": "Shared zzz app factory.\n\nCreates the Hono app with Backend, AI providers, and action endpoints.\nUsed by both Node.js (SvelteKit dev) and Deno (compiled CLI) entry points.\n\nRuntime-specific concerns (HTTP binding, WebSocket adapter, SvelteKit handler)\nstay in the entry points. This factory is runtime-agnostic.",
+				"dependencies": [
+					"action_collections.ts",
+					"config.ts",
+					"server/backend.ts",
+					"server/backend_action_handlers.ts",
+					"server/backend_actions_api.ts",
+					"server/backend_provider_chatgpt.ts",
+					"server/backend_provider_claude.ts",
+					"server/backend_provider_gemini.ts",
+					"server/backend_provider_ollama.ts",
+					"server/register_http_actions.ts",
+					"server/register_websocket_actions.ts",
+					"server/security.ts",
+					"server/server_info.ts"
+				],
+				"dependents": ["server/server.ts", "server/server_deno.ts"]
 			},
 			{
 				"path": "server/env_file_helpers.ts",
@@ -17198,7 +17265,7 @@
 					{
 						"name": "save_completion_response_to_disk",
 						"kind": "function",
-						"source_line": 9,
+						"source_line": 11,
 						"type_signature": "(input: { completion_request: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; prompt: string; completion_messages?: { ...; }[] | undefined; }; _meta?: { ...; } | undefined; }, output: { ...; }, zzz_dir: string, scoped_fs: ScopedFs): Promise<...>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -17221,7 +17288,7 @@
 						]
 					}
 				],
-				"dependencies": ["action_collections.ts", "constants.ts", "server/scoped_fs.ts"],
+				"dependencies": ["action_collections.ts", "server/scoped_fs.ts"],
 				"dependents": ["server/backend_action_handlers.ts"]
 			},
 			{
@@ -17230,7 +17297,7 @@
 					{
 						"name": "RegisterActionsOptions",
 						"kind": "type",
-						"source_line": 15,
+						"source_line": 14,
 						"type_signature": "RegisterActionsOptions",
 						"properties": [
 							{
@@ -17247,6 +17314,12 @@
 								"name": "backend",
 								"kind": "variable",
 								"type_signature": "Backend"
+							},
+							{
+								"name": "artificial_delay",
+								"kind": "variable",
+								"type_signature": "number",
+								"doc_comment": "Artificial response delay in ms (testing)."
 							}
 						]
 					},
@@ -17254,8 +17327,8 @@
 						"name": "register_http_actions",
 						"kind": "function",
 						"doc_comment": "Registers HTTP endpoints for all service actions in the schema registry.",
-						"source_line": 24,
-						"type_signature": "({ path, app, backend }: RegisterActionsOptions): void",
+						"source_line": 25,
+						"type_signature": "({ path, app, backend, artificial_delay, }: RegisterActionsOptions): void",
 						"return_type": "void",
 						"parameters": [
 							{
@@ -17265,13 +17338,8 @@
 						]
 					}
 				],
-				"dependencies": [
-					"constants.ts",
-					"jsonrpc_errors.ts",
-					"jsonrpc_helpers.ts",
-					"zod_helpers.ts"
-				],
-				"dependents": ["server/server.ts"]
+				"dependencies": ["jsonrpc_errors.ts", "jsonrpc_helpers.ts", "zod_helpers.ts"],
+				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
 				"path": "server/register_websocket_actions.ts",
@@ -17279,7 +17347,7 @@
 					{
 						"name": "RegisterWebsocketActionsOptions",
 						"kind": "type",
-						"source_line": 14,
+						"source_line": 13,
 						"type_signature": "RegisterWebsocketActionsOptions",
 						"properties": [
 							{
@@ -17300,8 +17368,14 @@
 							{
 								"name": "upgradeWebSocket",
 								"kind": "variable",
-								"type_signature": "ReturnType<typeof createNodeWebSocket>['upgradeWebSocket']",
+								"type_signature": "UpgradeWebSocket",
 								"doc_comment": ""
+							},
+							{
+								"name": "artificial_delay",
+								"kind": "variable",
+								"type_signature": "number",
+								"doc_comment": "Artificial response delay in ms (testing)."
 							},
 							{
 								"name": "transport",
@@ -17314,8 +17388,8 @@
 						"name": "register_websocket_actions",
 						"kind": "function",
 						"doc_comment": "Registers websocket endpoints for all service actions in the schema registry.",
-						"source_line": 28,
-						"type_signature": "({ path, app, backend, upgradeWebSocket, transport, }: RegisterWebsocketActionsOptions): void",
+						"source_line": 27,
+						"type_signature": "({ path, app, backend, upgradeWebSocket, artificial_delay, transport, }: RegisterWebsocketActionsOptions): void",
 						"return_type": "void",
 						"parameters": [
 							{
@@ -17326,12 +17400,11 @@
 					}
 				],
 				"dependencies": [
-					"constants.ts",
 					"jsonrpc_errors.ts",
 					"jsonrpc_helpers.ts",
 					"server/backend_websocket_transport.ts"
 				],
-				"dependents": ["server/server.ts"]
+				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
 				"path": "server/scoped_fs.ts",
@@ -17717,7 +17790,138 @@
 						]
 					}
 				],
-				"dependents": ["server/server.ts"]
+				"dependents": ["server/create_zzz_app.ts"]
+			},
+			{
+				"path": "server/server_deno.ts",
+				"declarations": [
+					{
+						"name": "start_server_deno",
+						"kind": "function",
+						"doc_comment": "Start the zzz server using Deno runtime.\n\nCreates the full backend with providers, WebSocket, and HTTP RPC\nendpoints via `create_zzz_app`, then serves with `Deno.serve`.",
+						"source_line": 24,
+						"type_signature": "(): Promise<void>",
+						"return_type": "Promise<void>",
+						"parameters": []
+					}
+				],
+				"module_comment": "Deno entry point for zzz server.\n\nProduction entry point when running the compiled binary (`zzz daemon start`).\nUses the shared `create_zzz_app` factory for the Hono app, then binds\nwith `Deno.serve` and handles daemon lifecycle (PID file, signals).",
+				"dependencies": [
+					"server/create_zzz_app.ts",
+					"server/server_env.ts",
+					"server/server_info.ts",
+					"zzz/build_info.ts"
+				],
+				"dependents": ["zzz/commands/daemon.ts"]
+			},
+			{
+				"path": "server/server_env.ts",
+				"declarations": [
+					{
+						"name": "ZzzServerEnv",
+						"kind": "type",
+						"doc_comment": "Server environment values needed to create a zzz app.",
+						"source_line": 14,
+						"type_signature": "ZzzServerEnv",
+						"properties": [
+							{
+								"name": "zzz_dir",
+								"kind": "variable",
+								"type_signature": "string",
+								"doc_comment": "Zzz app data directory (e.g., `.zzz` or `~/.zzz/`)."
+							},
+							{
+								"name": "scoped_dirs",
+								"kind": "variable",
+								"type_signature": "Array<string>",
+								"doc_comment": "Filesystem paths the server can access for user files."
+							},
+							{
+								"name": "port",
+								"kind": "variable",
+								"type_signature": "number",
+								"doc_comment": "Port for the Hono backend server."
+							},
+							{
+								"name": "host",
+								"kind": "variable",
+								"type_signature": "string",
+								"doc_comment": "Hostname for the server."
+							},
+							{
+								"name": "allowed_origins",
+								"kind": "variable",
+								"type_signature": "string",
+								"doc_comment": "Comma-separated origin patterns for request verification."
+							},
+							{
+								"name": "websocket_path",
+								"kind": "variable",
+								"type_signature": "string",
+								"doc_comment": "WebSocket endpoint path."
+							},
+							{
+								"name": "api_path",
+								"kind": "variable",
+								"type_signature": "string",
+								"doc_comment": "HTTP RPC endpoint path."
+							},
+							{
+								"name": "artificial_delay",
+								"kind": "variable",
+								"type_signature": "number",
+								"doc_comment": "Artificial response delay in ms (testing)."
+							},
+							{
+								"name": "zzz_version",
+								"kind": "variable",
+								"type_signature": "string",
+								"doc_comment": "Package version string."
+							},
+							{
+								"name": "secret_anthropic_api_key",
+								"kind": "variable",
+								"type_signature": "string | undefined",
+								"doc_comment": "Anthropic API key for Claude provider."
+							},
+							{
+								"name": "secret_openai_api_key",
+								"kind": "variable",
+								"type_signature": "string | undefined",
+								"doc_comment": "OpenAI API key for ChatGPT provider."
+							},
+							{
+								"name": "secret_google_api_key",
+								"kind": "variable",
+								"type_signature": "string | undefined",
+								"doc_comment": "Google API key for Gemini provider."
+							}
+						]
+					},
+					{
+						"name": "load_server_env",
+						"kind": "function",
+						"doc_comment": "Load server env from a generic env reader function.\n\nWorks with `process.env`, `Deno.env.get`, or any `(key) => string | undefined`.\nDefaults can override missing env values.",
+						"source_line": 50,
+						"type_signature": "(env_get: (key: string) => string | undefined, defaults?: Partial<ZzzServerEnv> | undefined): ZzzServerEnv",
+						"return_type": "ZzzServerEnv",
+						"parameters": [
+							{
+								"name": "env_get",
+								"type": "(key: string) => string | undefined",
+								"description": "function to read environment variables"
+							},
+							{
+								"name": "defaults",
+								"type": "Partial<ZzzServerEnv> | undefined",
+								"optional": true,
+								"description": "override defaults for any field"
+							}
+						]
+					}
+				],
+				"module_comment": "Server environment configuration.\n\nRuntime-agnostic env loading for the zzz server. Replaces `$env/static/*`\nimports so both Node.js (SvelteKit dev) and Deno (compiled CLI) entry\npoints can share the same server setup.",
+				"dependents": ["server/server.ts", "server/server_deno.ts"]
 			},
 			{
 				"path": "server/server_helpers.ts",
@@ -17748,14 +17952,14 @@
 						"name": "ServerInfo",
 						"kind": "type",
 						"doc_comment": "Information about the running server, stored in server.json",
-						"source_line": 24,
+						"source_line": 25,
 						"type_signature": "ZodObject<{ version: ZodNumber; pid: ZodNumber; port: ZodNumber; started: ZodString; zzz_version: ZodString; }, $strict>"
 					},
 					{
 						"name": "server_info_get_path",
 						"kind": "function",
 						"doc_comment": "Returns the full path to server.json",
-						"source_line": 41,
+						"source_line": 42,
 						"type_signature": "(zzz_dir: string): string",
 						"return_type": "string",
 						"parameters": [
@@ -17769,7 +17973,7 @@
 						"name": "server_info_read",
 						"kind": "function",
 						"doc_comment": "Reads and validates server.json, deleting and returning null if corrupt or wrong version",
-						"source_line": 48,
+						"source_line": 49,
 						"type_signature": "(zzz_dir: string): Promise<{ version: number; pid: number; port: number; started: string; zzz_version: string; } | null>",
 						"return_type": "Promise<{ version: number; pid: number; port: number; started: string; zzz_version: string; } | null>",
 						"parameters": [
@@ -17783,7 +17987,7 @@
 						"name": "server_info_check_stale",
 						"kind": "function",
 						"doc_comment": "Returns server info if running, otherwise deletes stale file and returns null",
-						"source_line": 82,
+						"source_line": 83,
 						"type_signature": "(zzz_dir: string): Promise<{ version: number; pid: number; port: number; started: string; zzz_version: string; } | null>",
 						"return_type": "Promise<{ version: number; pid: number; port: number; started: string; zzz_version: string; } | null>",
 						"parameters": [
@@ -17796,7 +18000,7 @@
 					{
 						"name": "ServerInfoWriteOptions",
 						"kind": "type",
-						"source_line": 95,
+						"source_line": 96,
 						"type_signature": "ServerInfoWriteOptions",
 						"properties": [
 							{
@@ -17820,7 +18024,7 @@
 						"name": "server_info_write",
 						"kind": "function",
 						"doc_comment": "Writes server info to server.json atomically, returns the path",
-						"source_line": 104,
+						"source_line": 105,
 						"type_signature": "(options: ServerInfoWriteOptions): Promise<string>",
 						"return_type": "Promise<string>",
 						"parameters": [
@@ -17834,7 +18038,7 @@
 						"name": "server_info_remove",
 						"kind": "function",
 						"doc_comment": "Remove server info file (idempotent - ignores if already removed)",
-						"source_line": 142,
+						"source_line": 143,
 						"type_signature": "(zzz_dir: string): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -17845,26 +18049,16 @@
 						]
 					}
 				],
-				"dependencies": ["constants.ts"],
-				"dependents": ["server/server.ts"]
+				"dependents": ["server/create_zzz_app.ts", "server/server.ts", "server/server_deno.ts"]
 			},
 			{
 				"path": "server/server.ts",
 				"declarations": [],
+				"module_comment": "Node.js server entry point.\n\nUsed for SvelteKit dev mode and Node.js production builds.\nDelegates to `create_zzz_app` for the shared Hono app setup,\nthen handles Node-specific concerns: HTTP binding, WebSocket injection,\nSvelteKit handler mounting.",
 				"dependencies": [
-					"action_collections.ts",
-					"config.ts",
 					"constants.ts",
-					"server/backend.ts",
-					"server/backend_action_handlers.ts",
-					"server/backend_actions_api.ts",
-					"server/backend_provider_chatgpt.ts",
-					"server/backend_provider_claude.ts",
-					"server/backend_provider_gemini.ts",
-					"server/backend_provider_ollama.ts",
-					"server/register_http_actions.ts",
-					"server/register_websocket_actions.ts",
-					"server/security.ts",
+					"server/create_zzz_app.ts",
+					"server/server_env.ts",
 					"server/server_info.ts"
 				]
 			},
@@ -20427,6 +20621,1152 @@
 					"url_params_helpers.ts",
 					"xml.ts"
 				]
+			},
+			{
+				"path": "zzz/build_info.ts",
+				"declarations": [
+					{
+						"name": "VERSION",
+						"kind": "variable",
+						"source_line": 3,
+						"type_signature": "\"0.0.1\""
+					},
+					{
+						"name": "NAME",
+						"kind": "variable",
+						"source_line": 4,
+						"type_signature": "\"zzz\""
+					}
+				],
+				"dependents": ["server/server_deno.ts", "zzz/cli.ts", "zzz/cli/cli_help.ts"]
+			},
+			{
+				"path": "zzz/cli_config.ts",
+				"declarations": [
+					{
+						"name": "ZZZ_DEFAULT_PORT",
+						"kind": "variable",
+						"doc_comment": "Default port for the zzz daemon.",
+						"source_line": 20,
+						"type_signature": "4460"
+					},
+					{
+						"name": "ZzzCliConfig",
+						"kind": "type",
+						"doc_comment": "Schema for ~/.zzz/config.json.\n\nUses `zzz_config_` prefix so field names are self-documenting:\n```typescript\nconst { zzz_config_port } = load_zzz_cli_config();\n// Variable name tells you exactly what this is and where it came from\n```",
+						"source_line": 31,
+						"type_signature": "ZodObject<{ zzz_config_port: ZodDefault<ZodNumber>; }, $strict>"
+					},
+					{
+						"name": "get_zzz_dir",
+						"kind": "function",
+						"doc_comment": "Get the CLI config directory path (~/.zzz).",
+						"source_line": 44,
+						"type_signature": "(runtime: Pick<ZzzRuntime, \"env_get\">): string | null",
+						"return_type": "string | null",
+						"return_description": "Path to config directory, or null if $HOME is not set.",
+						"parameters": [
+							{
+								"name": "runtime",
+								"type": "Pick<ZzzRuntime, \"env_get\">",
+								"description": "Runtime with env_get capability."
+							}
+						]
+					},
+					{
+						"name": "get_zzz_config_path",
+						"kind": "function",
+						"doc_comment": "Get the CLI config file path (~/.zzz/config.json).",
+						"source_line": 55,
+						"type_signature": "(runtime: Pick<ZzzRuntime, \"env_get\">): string | null",
+						"return_type": "string | null",
+						"return_description": "Path to config.json, or null if $HOME is not set.",
+						"parameters": [
+							{
+								"name": "runtime",
+								"type": "Pick<ZzzRuntime, \"env_get\">",
+								"description": "Runtime with env_get capability."
+							}
+						]
+					},
+					{
+						"name": "get_zzz_daemon_info_path",
+						"kind": "function",
+						"doc_comment": "Get the daemon info file path (~/.zzz/run/daemon.json).",
+						"source_line": 66,
+						"type_signature": "(runtime: Pick<ZzzRuntime, \"env_get\">): string | null",
+						"return_type": "string | null",
+						"return_description": "Path to daemon.json, or null if $HOME is not set.",
+						"parameters": [
+							{
+								"name": "runtime",
+								"type": "Pick<ZzzRuntime, \"env_get\">",
+								"description": "Runtime with env_get capability."
+							}
+						]
+					},
+					{
+						"name": "load_zzz_cli_config",
+						"kind": "function",
+						"doc_comment": "Load CLI configuration from ~/.zzz/config.json.",
+						"source_line": 77,
+						"type_signature": "(runtime: Pick<ZzzRuntime, \"env_get\" | \"read_file\" | \"stat\">): Promise<{ zzz_config_port: number; } | null>",
+						"return_type": "Promise<{ zzz_config_port: number; } | null>",
+						"return_description": "Parsed config, or null if file doesn't exist or is invalid.",
+						"parameters": [
+							{
+								"name": "runtime",
+								"type": "Pick<ZzzRuntime, \"env_get\" | \"read_file\" | \"stat\">",
+								"description": "Runtime with file read capability."
+							}
+						]
+					},
+					{
+						"name": "save_zzz_cli_config",
+						"kind": "function",
+						"doc_comment": "Save CLI configuration to ~/.zzz/config.json.",
+						"source_line": 112,
+						"type_signature": "(runtime: Pick<ZzzRuntime, \"env_get\" | \"write_file\" | \"mkdir\">, config: { zzz_config_port: number; }): Promise<void>",
+						"return_type": "Promise<void>",
+						"parameters": [
+							{
+								"name": "runtime",
+								"type": "Pick<ZzzRuntime, \"env_get\" | \"write_file\" | \"mkdir\">",
+								"description": "Runtime with file write capability."
+							},
+							{
+								"name": "config",
+								"type": "{ zzz_config_port: number; }",
+								"description": "Configuration to save."
+							}
+						]
+					},
+					{
+						"name": "ZzzDaemonInfo",
+						"kind": "type",
+						"doc_comment": "Daemon info schema for ~/.zzz/run/daemon.json.",
+						"source_line": 134,
+						"type_signature": "ZodObject<{ version: ZodNumber; pid: ZodNumber; port: ZodNumber; started: ZodString; zzz_version: ZodString; }, $strict>"
+					},
+					{
+						"name": "parse_daemon_info",
+						"kind": "function",
+						"doc_comment": "Parse daemon info JSON with schema validation.",
+						"source_line": 154,
+						"type_signature": "(content: string): { version: number; pid: number; port: number; started: string; zzz_version: string; } | null",
+						"return_type": "{ version: number; pid: number; port: number; started: string; zzz_version: string; } | null",
+						"return_description": "Parsed daemon info, or null if invalid.",
+						"parameters": [
+							{
+								"name": "content",
+								"type": "string"
+							}
+						]
+					}
+				],
+				"module_comment": "zzz CLI configuration.\n\nManages CLI-specific configuration stored at ~/.zzz/config.json.\n\nThe CLI config uses the `zzz_config_` prefix for all fields to make\nthe source self-documenting in code.",
+				"dependencies": ["zzz/cli/util.ts"],
+				"dependents": [
+					"zzz/commands/daemon.ts",
+					"zzz/commands/init.ts",
+					"zzz/commands/open.ts",
+					"zzz/commands/status.ts"
+				]
+			},
+			{
+				"path": "zzz/cli.ts",
+				"declarations": [
+					{
+						"name": "ZzzParsedArgs",
+						"kind": "type",
+						"doc_comment": "Result of parsing raw CLI arguments.",
+						"source_line": 18,
+						"type_signature": "ZzzParsedArgs",
+						"properties": [
+							{
+								"name": "command",
+								"kind": "variable",
+								"type_signature": "string | undefined"
+							},
+							{
+								"name": "subcmd",
+								"kind": "variable",
+								"type_signature": "string | undefined"
+							},
+							{
+								"name": "flags",
+								"kind": "variable",
+								"type_signature": "ZzzGlobalArgs"
+							},
+							{
+								"name": "remaining",
+								"kind": "variable",
+								"type_signature": "ParsedArgs"
+							}
+						]
+					},
+					{
+						"name": "parse_zzz_args",
+						"kind": "function",
+						"doc_comment": "Parse zzz CLI arguments.\n\nPhase 1: argv_parse for raw tokenization.\nPhase 2: extract_global_flags for --help/-h, --version/-v.\nPhase 3: Extract command and subcommand from positionals.",
+						"source_line": 35,
+						"type_signature": "(args: string[]): ZzzParsedArgs",
+						"return_type": "ZzzParsedArgs",
+						"return_description": "Parsed argument structure.",
+						"parameters": [
+							{
+								"name": "args",
+								"type": "string[]",
+								"description": "Raw CLI arguments from Deno.args."
+							}
+						]
+					},
+					{
+						"name": "show_help",
+						"kind": "function",
+						"doc_comment": "Display help message.",
+						"source_line": 48,
+						"type_signature": "(command?: string | undefined, subcommand?: string | undefined): void",
+						"return_type": "void",
+						"parameters": [
+							{
+								"name": "command",
+								"type": "string | undefined",
+								"optional": true
+							},
+							{
+								"name": "subcommand",
+								"type": "string | undefined",
+								"optional": true
+							}
+						]
+					},
+					{
+						"name": "show_version",
+						"kind": "function",
+						"doc_comment": "Display version.",
+						"source_line": 55,
+						"type_signature": "(): void",
+						"return_type": "void",
+						"parameters": []
+					}
+				],
+				"module_comment": "zzz CLI argument parsing and help.\n\nThin wrapper around argv_parse + extract_global_flags.",
+				"dependencies": ["zzz/build_info.ts", "zzz/cli/cli_args.ts", "zzz/cli/cli_help.ts"],
+				"dependents": ["zzz/main.ts"]
+			},
+			{
+				"path": "zzz/cli/cli_args.ts",
+				"declarations": [
+					{
+						"name": "ZzzGlobalArgs",
+						"kind": "type",
+						"doc_comment": "Global CLI flags.\nExtracted before command-specific parsing.",
+						"source_line": 22,
+						"type_signature": "ZodObject<{ help: ZodDefault<ZodBoolean>; version: ZodDefault<ZodBoolean>; }, $strict>"
+					},
+					{
+						"name": "extract_global_flags",
+						"kind": "function",
+						"doc_comment": "Extract global flags from parsed args.",
+						"source_line": 46,
+						"type_signature": "(unparsed: ParsedArgs): { flags: { help: boolean; version: boolean; }; remaining: ParsedArgs; }",
+						"return_type": "{ flags: { help: boolean; version: boolean; }; remaining: ParsedArgs; }",
+						"return_description": "Global flags and remaining args.",
+						"parameters": [
+							{
+								"name": "unparsed",
+								"type": "ParsedArgs",
+								"description": "Raw parsed args from argv_parse."
+							}
+						]
+					},
+					{
+						"name": "parse_command_args",
+						"kind": "function",
+						"doc_comment": "Parse command-specific args with a schema.",
+						"source_line": 89,
+						"type_signature": "<T extends Record<string, unknown>>(remaining: ParsedArgs, schema: ZodType<T, unknown, $ZodTypeInternals<T, unknown>>): ParseResult<T>",
+						"return_type": "ParseResult<T>",
+						"return_description": "Parse result with typed data or error message.",
+						"parameters": [
+							{
+								"name": "remaining",
+								"type": "ParsedArgs",
+								"description": "Remaining args after global flag extraction."
+							},
+							{
+								"name": "schema",
+								"type": "ZodType<T, unknown, $ZodTypeInternals<T, unknown>>",
+								"description": "Zod schema for the command."
+							}
+						]
+					},
+					{
+						"name": "dispatch",
+						"kind": "function",
+						"doc_comment": "Parse args and dispatch to handler, with error handling.",
+						"source_line": 107,
+						"type_signature": "<T extends Record<string, unknown>>(remaining: ParsedArgs, schema: ZodType<T, unknown, $ZodTypeInternals<T, unknown>>, handler: (args: T) => Promise<void>): Promise<...>",
+						"return_type": "Promise<void>",
+						"parameters": [
+							{
+								"name": "remaining",
+								"type": "ParsedArgs",
+								"description": "Remaining args after global flag extraction."
+							},
+							{
+								"name": "schema",
+								"type": "ZodType<T, unknown, $ZodTypeInternals<T, unknown>>",
+								"description": "Zod schema for the command."
+							},
+							{
+								"name": "handler",
+								"type": "(args: T) => Promise<void>",
+								"description": "Command handler to call with parsed args."
+							}
+						]
+					},
+					{
+						"name": "SubcommandRoute",
+						"kind": "type",
+						"doc_comment": "Route definition for subcommand routing.",
+						"source_line": 126,
+						"type_signature": "SubcommandRoute<TContext>",
+						"generic_params": [
+							{
+								"name": "TContext"
+							}
+						],
+						"properties": [
+							{
+								"name": "schema",
+								"kind": "variable",
+								"type_signature": "z.ZodType<any>"
+							},
+							{
+								"name": "handler",
+								"kind": "variable",
+								"type_signature": "(ctx: TContext, args: any, flags: ZzzGlobalArgs) => Promise<void>"
+							}
+						]
+					},
+					{
+						"name": "create_subcommand_router",
+						"kind": "function",
+						"doc_comment": "Create a subcommand router from route definitions.",
+						"source_line": 139,
+						"type_signature": "<TContext>(routes: Record<string, SubcommandRoute<TContext>>, default_handler: ((ctx: TContext, flags: { help: boolean; version: boolean; }) => Promise<void>) | undefined, error_message: string): (remaining: ParsedArgs, ctx: TContext, flags: { ...; }) => Promise<...>",
+						"return_type": "(remaining: ParsedArgs, ctx: TContext, flags: { help: boolean; version: boolean; }) => Promise<void>",
+						"return_description": "Router function.",
+						"parameters": [
+							{
+								"name": "routes",
+								"type": "Record<string, SubcommandRoute<TContext>>",
+								"description": "Map of subcommand names to route definitions."
+							},
+							{
+								"name": "default_handler",
+								"type": "((ctx: TContext, flags: { help: boolean; version: boolean; }) => Promise<void>) | undefined",
+								"description": "Optional handler for when no subcommand is provided."
+							},
+							{
+								"name": "error_message",
+								"type": "string",
+								"description": "Error message for unknown subcommands."
+							}
+						]
+					}
+				],
+				"module_comment": "CLI argument parsing utilities for zzz.\n\nProvides shared parsing utilities for CLI commands.",
+				"dependencies": ["zzz/zod.ts"],
+				"dependents": ["zzz/cli.ts", "zzz/cli/cli_help.ts", "zzz/main.ts"]
+			},
+			{
+				"path": "zzz/cli/cli_help.ts",
+				"declarations": [
+					{
+						"name": "ZzzCommandCategory",
+						"kind": "type",
+						"doc_comment": "Command category for help organization.",
+						"source_line": 29,
+						"type_signature": "ZzzCommandCategory"
+					},
+					{
+						"name": "CommandMeta",
+						"kind": "type",
+						"doc_comment": "Command metadata for help generation.",
+						"source_line": 34,
+						"type_signature": "CommandMeta",
+						"properties": [
+							{
+								"name": "schema",
+								"kind": "variable",
+								"type_signature": "z.ZodType"
+							},
+							{
+								"name": "summary",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "usage",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "category",
+								"kind": "variable",
+								"type_signature": "ZzzCommandCategory"
+							}
+						]
+					},
+					{
+						"name": "HelpCategory",
+						"kind": "type",
+						"doc_comment": "Category configuration for help display.",
+						"source_line": 44,
+						"type_signature": "HelpCategory",
+						"properties": [
+							{
+								"name": "key",
+								"kind": "variable",
+								"type_signature": "ZzzCommandCategory"
+							},
+							{
+								"name": "title",
+								"kind": "variable",
+								"type_signature": "string"
+							}
+						]
+					},
+					{
+						"name": "ZZZ_HELP_CATEGORIES",
+						"kind": "variable",
+						"doc_comment": "Category display order for main help.",
+						"source_line": 56,
+						"type_signature": "HelpCategory[]"
+					},
+					{
+						"name": "ZZZ_HELP_EXAMPLES",
+						"kind": "variable",
+						"doc_comment": "Example commands for main help.",
+						"source_line": 65,
+						"type_signature": "string[]"
+					},
+					{
+						"name": "ZZZ_COMMANDS",
+						"kind": "variable",
+						"doc_comment": "Command registry for help generation.",
+						"source_line": 78,
+						"type_signature": "Record<string, CommandMeta>"
+					},
+					{
+						"name": "generate_command_help",
+						"kind": "function",
+						"doc_comment": "Generate help text for a command from its metadata.",
+						"source_line": 155,
+						"type_signature": "(command: string, meta: CommandMeta): string",
+						"return_type": "string",
+						"parameters": [
+							{
+								"name": "command",
+								"type": "string"
+							},
+							{
+								"name": "meta",
+								"type": "CommandMeta"
+							}
+						]
+					},
+					{
+						"name": "generate_main_help",
+						"kind": "function",
+						"doc_comment": "Generate main help text.",
+						"source_line": 217,
+						"type_signature": "(): string",
+						"return_type": "string",
+						"parameters": []
+					},
+					{
+						"name": "get_help_text",
+						"kind": "function",
+						"doc_comment": "Get help text for a command or main help.",
+						"source_line": 264,
+						"type_signature": "(command?: string | undefined, subcommand?: string | undefined): string",
+						"return_type": "string",
+						"parameters": [
+							{
+								"name": "command",
+								"type": "string | undefined",
+								"optional": true
+							},
+							{
+								"name": "subcommand",
+								"type": "string | undefined",
+								"optional": true
+							}
+						]
+					}
+				],
+				"module_comment": "CLI help generation and command metadata.",
+				"dependencies": [
+					"zzz/build_info.ts",
+					"zzz/cli/cli_args.ts",
+					"zzz/cli/schemas.ts",
+					"zzz/cli/util.ts",
+					"zzz/zod.ts"
+				],
+				"dependents": ["zzz/cli.ts"]
+			},
+			{
+				"path": "zzz/cli/schemas.ts",
+				"declarations": [
+					{
+						"name": "InitArgs",
+						"kind": "type",
+						"doc_comment": "Init command arguments.",
+						"source_line": 15,
+						"type_signature": "ZodObject<{ _: ZodDefault<ZodArray<ZodString>>; port: ZodOptional<ZodNumber>; }, $strict>"
+					},
+					{
+						"name": "DaemonStartArgs",
+						"kind": "type",
+						"doc_comment": "Daemon start arguments.",
+						"source_line": 24,
+						"type_signature": "ZodObject<{ _: ZodDefault<ZodArray<ZodString>>; port: ZodOptional<ZodNumber>; host: ZodOptional<ZodString>; }, $strict>"
+					},
+					{
+						"name": "DaemonStopArgs",
+						"kind": "type",
+						"doc_comment": "Daemon stop arguments.",
+						"source_line": 34,
+						"type_signature": "ZodObject<{ _: ZodDefault<ZodArray<ZodString>>; }, $strict>"
+					},
+					{
+						"name": "DaemonStatusArgs",
+						"kind": "type",
+						"doc_comment": "Daemon status arguments.",
+						"source_line": 42,
+						"type_signature": "ZodObject<{ _: ZodDefault<ZodArray<ZodString>>; json: ZodDefault<ZodBoolean>; }, $strict>"
+					},
+					{
+						"name": "StatusArgs",
+						"kind": "type",
+						"doc_comment": "Status command arguments.",
+						"source_line": 51,
+						"type_signature": "ZodObject<{ _: ZodDefault<ZodArray<ZodString>>; json: ZodDefault<ZodBoolean>; }, $strict>"
+					},
+					{
+						"name": "OpenArgs",
+						"kind": "type",
+						"doc_comment": "Open command arguments (default command).\n\nHandles: `zzz`, `zzz <file>`, `zzz <dir>`.",
+						"source_line": 62,
+						"type_signature": "ZodObject<{ _: ZodDefault<ZodArray<ZodString>>; }, $strict>"
+					}
+				],
+				"module_comment": "Per-command Zod schemas for CLI argument validation.\n\nCentralized here to avoid importing runtime deps (e.g., server_deno.ts)\nwhen only schemas are needed (e.g., for help generation).",
+				"dependents": ["zzz/cli/cli_help.ts", "zzz/main.ts"]
+			},
+			{
+				"path": "zzz/cli/util.ts",
+				"declarations": [
+					{
+						"name": "colors",
+						"kind": "variable",
+						"source_line": 9,
+						"type_signature": "{ readonly green: \"\\u001B[32m\"; readonly yellow: \"\\u001B[33m\"; readonly blue: \"\\u001B[34m\"; readonly red: \"\\u001B[31m\"; readonly cyan: \"\\u001B[36m\"; readonly dim: \"\\u001B[2m\"; readonly bold: \"\\u001B[1m\"; readonly reset: \"\\u001B[0m\"; }"
+					},
+					{
+						"name": "log",
+						"kind": "variable",
+						"source_line": 20,
+						"type_signature": "{ info: (msg: string) => void; success: (msg: string) => void; warn: (msg: string) => void; error: (msg: string) => void; step: (msg: string) => void; dim: (msg: string) => void; }"
+					},
+					{
+						"name": "run_local",
+						"kind": "function",
+						"doc_comment": "Run a local command and return stdout.",
+						"source_line": 37,
+						"type_signature": "(runtime: Pick<ZzzRuntime, \"run_command\">, command: string, args: string[]): Promise<ZzzCommandResult>",
+						"return_type": "Promise<ZzzCommandResult>",
+						"return_description": "Command result.",
+						"parameters": [
+							{
+								"name": "runtime",
+								"type": "Pick<ZzzRuntime, \"run_command\">",
+								"description": "Runtime with run_command capability."
+							},
+							{
+								"name": "command",
+								"type": "string",
+								"description": "Command to run."
+							},
+							{
+								"name": "args",
+								"type": "string[]",
+								"description": "Command arguments."
+							}
+						]
+					},
+					{
+						"name": "confirm",
+						"kind": "function",
+						"doc_comment": "Prompt for yes/no confirmation.",
+						"source_line": 52,
+						"type_signature": "(runtime: Pick<ZzzRuntime, \"stdout_write\" | \"stdin_read\">, message: string): Promise<boolean>",
+						"return_type": "Promise<boolean>",
+						"return_description": "`true` if user confirms, `false` otherwise.",
+						"parameters": [
+							{
+								"name": "runtime",
+								"type": "Pick<ZzzRuntime, \"stdout_write\" | \"stdin_read\">",
+								"description": "Runtime with stdout_write and stdin_read capabilities."
+							},
+							{
+								"name": "message",
+								"type": "string",
+								"description": "Message to display."
+							}
+						]
+					}
+				],
+				"module_comment": "CLI utilities for zzz.",
+				"dependents": [
+					"zzz/cli/cli_help.ts",
+					"zzz/cli_config.ts",
+					"zzz/commands/daemon.ts",
+					"zzz/commands/init.ts",
+					"zzz/commands/open.ts",
+					"zzz/commands/status.ts",
+					"zzz/main.ts"
+				]
+			},
+			{
+				"path": "zzz/commands/daemon.ts",
+				"declarations": [
+					{
+						"name": "cmd_daemon_start",
+						"kind": "function",
+						"doc_comment": "Start the daemon in foreground mode.\n\nCLI flags --port and --host override config values.",
+						"source_line": 24,
+						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; port?: number | undefined; host?: string | undefined; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
+						"return_type": "Promise<void>",
+						"parameters": [
+							{
+								"name": "runtime",
+								"type": "ZzzRuntime"
+							},
+							{
+								"name": "args",
+								"type": "{ _: string[]; port?: number | undefined; host?: string | undefined; }"
+							},
+							{
+								"name": "_flags",
+								"type": "{ help: boolean; version: boolean; }"
+							}
+						]
+					},
+					{
+						"name": "cmd_daemon_stop",
+						"kind": "function",
+						"doc_comment": "Stop the running daemon.",
+						"source_line": 40,
+						"type_signature": "(runtime: ZzzRuntime, _args: { _: string[]; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
+						"return_type": "Promise<void>",
+						"parameters": [
+							{
+								"name": "runtime",
+								"type": "ZzzRuntime"
+							},
+							{
+								"name": "_args",
+								"type": "{ _: string[]; }"
+							},
+							{
+								"name": "_flags",
+								"type": "{ help: boolean; version: boolean; }"
+							}
+						]
+					},
+					{
+						"name": "cmd_daemon_status",
+						"kind": "function",
+						"doc_comment": "Show daemon status.",
+						"source_line": 89,
+						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; json: boolean; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
+						"return_type": "Promise<void>",
+						"parameters": [
+							{
+								"name": "runtime",
+								"type": "ZzzRuntime"
+							},
+							{
+								"name": "args",
+								"type": "{ _: string[]; json: boolean; }"
+							},
+							{
+								"name": "_flags",
+								"type": "{ help: boolean; version: boolean; }"
+							}
+						]
+					}
+				],
+				"module_comment": "zzz daemon commands (start, stop, status).\n\nThe zzz CLI runs in Deno, so daemon start uses the Deno server entry point.\n\nRouting (`zzz daemon start|stop|status`) is handled by\ncreate_subcommand_router in main.ts.",
+				"dependencies": ["server/server_deno.ts", "zzz/cli/util.ts", "zzz/cli_config.ts"],
+				"dependents": ["zzz/main.ts"]
+			},
+			{
+				"path": "zzz/commands/init.ts",
+				"declarations": [
+					{
+						"name": "cmd_init",
+						"kind": "function",
+						"doc_comment": "Initialize zzz configuration (~/.zzz/).\n\nCreates the config directory and config.json.",
+						"source_line": 25,
+						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; port?: number | undefined; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
+						"return_type": "Promise<void>",
+						"parameters": [
+							{
+								"name": "runtime",
+								"type": "ZzzRuntime"
+							},
+							{
+								"name": "args",
+								"type": "{ _: string[]; port?: number | undefined; }"
+							},
+							{
+								"name": "_flags",
+								"type": "{ help: boolean; version: boolean; }"
+							}
+						]
+					}
+				],
+				"module_comment": "zzz init command.\n\nInitialize zzz configuration (~/.zzz/).",
+				"dependencies": ["zzz/cli/util.ts", "zzz/cli_config.ts"],
+				"dependents": ["zzz/main.ts"]
+			},
+			{
+				"path": "zzz/commands/open.ts",
+				"declarations": [
+					{
+						"name": "cmd_open",
+						"kind": "function",
+						"doc_comment": "Open the zzz UI in a browser, auto-starting the daemon if needed.",
+						"source_line": 93,
+						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
+						"return_type": "Promise<void>",
+						"parameters": [
+							{
+								"name": "runtime",
+								"type": "ZzzRuntime"
+							},
+							{
+								"name": "args",
+								"type": "{ _: string[]; }"
+							},
+							{
+								"name": "_flags",
+								"type": "{ help: boolean; version: boolean; }"
+							}
+						]
+					}
+				],
+				"module_comment": "zzz open command (default command).\n\nOpens the zzz browser UI, auto-starting the daemon if needed.\nHandles: `zzz`, `zzz <file>`, `zzz <dir>`.",
+				"dependencies": ["zzz/cli/util.ts", "zzz/cli_config.ts"],
+				"dependents": ["zzz/main.ts"]
+			},
+			{
+				"path": "zzz/commands/status.ts",
+				"declarations": [
+					{
+						"name": "cmd_status",
+						"kind": "function",
+						"doc_comment": "Show current system state.",
+						"source_line": 18,
+						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; json: boolean; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
+						"return_type": "Promise<void>",
+						"parameters": [
+							{
+								"name": "runtime",
+								"type": "ZzzRuntime"
+							},
+							{
+								"name": "args",
+								"type": "{ _: string[]; json: boolean; }"
+							},
+							{
+								"name": "_flags",
+								"type": "{ help: boolean; version: boolean; }"
+							}
+						]
+					}
+				],
+				"module_comment": "zzz status command.\n\nShow current system state (daemon status, loaded workspaces, watched repos).",
+				"dependencies": ["zzz/cli/util.ts", "zzz/cli_config.ts"],
+				"dependents": ["zzz/main.ts"]
+			},
+			{
+				"path": "zzz/main.ts",
+				"declarations": [],
+				"module_comment": "zzz CLI entry point.",
+				"dependencies": [
+					"zzz/cli.ts",
+					"zzz/cli/cli_args.ts",
+					"zzz/cli/schemas.ts",
+					"zzz/cli/util.ts",
+					"zzz/commands/daemon.ts",
+					"zzz/commands/init.ts",
+					"zzz/commands/open.ts",
+					"zzz/commands/status.ts",
+					"zzz/runtime/deno.ts"
+				]
+			},
+			{
+				"path": "zzz/runtime/deno.ts",
+				"declarations": [
+					{
+						"name": "create_deno_runtime",
+						"kind": "function",
+						"doc_comment": "Create a ZzzRuntime backed by Deno APIs.",
+						"source_line": 15,
+						"type_signature": "(args: readonly string[]): ZzzRuntime",
+						"return_type": "ZzzRuntime",
+						"return_description": "ZzzRuntime implementation using Deno runtime.",
+						"parameters": [
+							{
+								"name": "args",
+								"type": "readonly string[]",
+								"description": "CLI arguments (typically Deno.args)."
+							}
+						]
+					}
+				],
+				"module_comment": "Deno implementation of ZzzRuntime.",
+				"dependents": ["zzz/main.ts"]
+			},
+			{
+				"path": "zzz/runtime/types.ts",
+				"declarations": [
+					{
+						"name": "StatResult",
+						"kind": "type",
+						"doc_comment": "Result of a stat operation.",
+						"source_line": 21,
+						"type_signature": "StatResult",
+						"properties": [
+							{
+								"name": "is_file",
+								"kind": "variable",
+								"type_signature": "boolean"
+							},
+							{
+								"name": "is_directory",
+								"kind": "variable",
+								"type_signature": "boolean"
+							}
+						]
+					},
+					{
+						"name": "ZzzCommandResult",
+						"kind": "type",
+						"doc_comment": "Result of executing a command.",
+						"source_line": 29,
+						"type_signature": "ZzzCommandResult",
+						"properties": [
+							{
+								"name": "success",
+								"kind": "variable",
+								"type_signature": "boolean"
+							},
+							{
+								"name": "code",
+								"kind": "variable",
+								"type_signature": "number"
+							},
+							{
+								"name": "stdout",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "stderr",
+								"kind": "variable",
+								"type_signature": "string"
+							}
+						]
+					},
+					{
+						"name": "ZzzRuntime",
+						"kind": "type",
+						"doc_comment": "Unified runtime abstraction for zzz CLI operations.\n\nProvides all runtime primitives as injectable dependencies.\nFunctions should accept partial interfaces via `Pick<ZzzRuntime, ...>`.",
+						"source_line": 42,
+						"type_signature": "ZzzRuntime",
+						"properties": [
+							{
+								"name": "env_get",
+								"kind": "variable",
+								"type_signature": "(name: string) => string | undefined",
+								"doc_comment": "Get an environment variable value."
+							},
+							{
+								"name": "env_set",
+								"kind": "variable",
+								"type_signature": "(name: string, value: string) => void",
+								"doc_comment": "Set an environment variable."
+							},
+							{
+								"name": "env_all",
+								"kind": "variable",
+								"type_signature": "() => Record<string, string>",
+								"doc_comment": "Get all environment variables."
+							},
+							{
+								"name": "args",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "ReadonlyArray<string>",
+								"doc_comment": "CLI arguments passed to the program."
+							},
+							{
+								"name": "cwd",
+								"kind": "variable",
+								"type_signature": "() => string",
+								"doc_comment": "Get current working directory."
+							},
+							{
+								"name": "exit",
+								"kind": "variable",
+								"type_signature": "(code: number) => never",
+								"doc_comment": "Exit the process with a code."
+							},
+							{
+								"name": "stat",
+								"kind": "variable",
+								"type_signature": "(path: string) => Promise<StatResult | null>",
+								"doc_comment": "Get file/directory stats."
+							},
+							{
+								"name": "mkdir",
+								"kind": "variable",
+								"type_signature": "(path: string, options?: {recursive?: boolean}) => Promise<void>",
+								"doc_comment": "Create a directory."
+							},
+							{
+								"name": "read_file",
+								"kind": "variable",
+								"type_signature": "(path: string) => Promise<string>",
+								"doc_comment": "Read a file as text."
+							},
+							{
+								"name": "write_file",
+								"kind": "variable",
+								"type_signature": "(path: string, content: string) => Promise<void>",
+								"doc_comment": "Write text to a file."
+							},
+							{
+								"name": "remove",
+								"kind": "variable",
+								"type_signature": "(path: string, options?: {recursive?: boolean}) => Promise<void>",
+								"doc_comment": "Remove a file or directory."
+							},
+							{
+								"name": "run_command",
+								"kind": "variable",
+								"type_signature": "(cmd: string, args: Array<string>) => Promise<ZzzCommandResult>",
+								"doc_comment": "Run a command and return the result."
+							},
+							{
+								"name": "run_command_inherit",
+								"kind": "variable",
+								"type_signature": "(cmd: string, args: Array<string>) => Promise<number>",
+								"doc_comment": "Run a command with inherited stdout/stderr."
+							},
+							{
+								"name": "stdout_write",
+								"kind": "variable",
+								"type_signature": "(data: Uint8Array) => Promise<number>",
+								"doc_comment": "Write bytes to stdout."
+							},
+							{
+								"name": "stdin_read",
+								"kind": "variable",
+								"type_signature": "(buffer: Uint8Array) => Promise<number | null>",
+								"doc_comment": "Read bytes from stdin."
+							}
+						]
+					}
+				],
+				"module_comment": "Unified runtime abstraction for zzz CLI operations.\n\nProvides all runtime primitives as injectable dependencies.\nFunctions should accept partial interfaces for only what they need.\n\n@example\n```ts\n// Function declares only what it needs\nconst load_config = (\n  runtime: Pick<ZzzRuntime, 'env_get' | 'read_file' | 'stat'>,\n) => { ... };\n```"
+			},
+			{
+				"path": "zzz/zod.ts",
+				"declarations": [
+					{
+						"name": "zod_to_subschema",
+						"kind": "function",
+						"doc_comment": "Unwrap nested schema types (optional, default, nullable, etc).",
+						"source_line": 22,
+						"type_signature": "(def: $ZodTypeDef): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
+						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
+						"return_description": "Inner schema if wrapped, undefined otherwise.",
+						"parameters": [
+							{
+								"name": "def",
+								"type": "$ZodTypeDef",
+								"description": "Zod type definition to unwrap."
+							}
+						]
+					},
+					{
+						"name": "zod_to_schema_description",
+						"kind": "function",
+						"doc_comment": "Get the description from a schema's metadata, unwrapping if needed.",
+						"source_line": 39,
+						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): string | null",
+						"return_type": "string | null",
+						"return_description": "Description string or null if not found.",
+						"parameters": [
+							{
+								"name": "schema",
+								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
+								"description": "Zod schema to extract description from."
+							}
+						]
+					},
+					{
+						"name": "zod_to_schema_default",
+						"kind": "function",
+						"doc_comment": "Get the default value from a schema, unwrapping if needed.",
+						"source_line": 57,
+						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): unknown",
+						"return_type": "unknown",
+						"return_description": "Default value or undefined.",
+						"parameters": [
+							{
+								"name": "schema",
+								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
+								"description": "Zod schema to extract default from."
+							}
+						]
+					},
+					{
+						"name": "zod_to_schema_aliases",
+						"kind": "function",
+						"doc_comment": "Get aliases from a schema's metadata, unwrapping if needed.",
+						"source_line": 75,
+						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): string[]",
+						"return_type": "string[]",
+						"return_description": "Array of alias strings.",
+						"parameters": [
+							{
+								"name": "schema",
+								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
+								"description": "Zod schema to extract aliases from."
+							}
+						]
+					},
+					{
+						"name": "zod_to_schema_type_string",
+						"kind": "function",
+						"doc_comment": "Get the type string for a schema, suitable for display.",
+						"source_line": 93,
+						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): string",
+						"return_type": "string",
+						"return_description": "Human-readable type string.",
+						"parameters": [
+							{
+								"name": "schema",
+								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
+								"description": "Zod schema to get type string for."
+							}
+						]
+					},
+					{
+						"name": "zod_format_value",
+						"kind": "function",
+						"doc_comment": "Format a value for display in help text.",
+						"source_line": 145,
+						"type_signature": "(value: unknown): string",
+						"return_type": "string",
+						"return_description": "Formatted string representation.",
+						"parameters": [
+							{
+								"name": "value",
+								"type": "unknown",
+								"description": "Value to format."
+							}
+						]
+					},
+					{
+						"name": "ZodSchemaProperty",
+						"kind": "type",
+						"doc_comment": "Property extracted from an object schema.",
+						"source_line": 162,
+						"type_signature": "ZodSchemaProperty",
+						"properties": [
+							{
+								"name": "name",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "type",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "description",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "default",
+								"kind": "variable",
+								"type_signature": "unknown"
+							},
+							{
+								"name": "aliases",
+								"kind": "variable",
+								"type_signature": "Array<string>"
+							}
+						]
+					},
+					{
+						"name": "zod_to_schema_properties",
+						"kind": "function",
+						"doc_comment": "Extract properties from a Zod object schema.",
+						"source_line": 176,
+						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): ZodSchemaProperty[]",
+						"return_type": "ZodSchemaProperty[]",
+						"return_description": "Array of property definitions.",
+						"parameters": [
+							{
+								"name": "schema",
+								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
+								"description": "Zod object schema to extract from."
+							}
+						]
+					},
+					{
+						"name": "zod_to_schema_names_with_aliases",
+						"kind": "function",
+						"doc_comment": "Get all property names and their aliases from an object schema.",
+						"source_line": 206,
+						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): Set<string>",
+						"return_type": "Set<string>",
+						"return_description": "Set of all names and aliases.",
+						"parameters": [
+							{
+								"name": "schema",
+								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
+								"description": "Zod object schema."
+							}
+						]
+					}
+				],
+				"module_comment": "Zod schema introspection utilities.\n\nGeneric helpers for extracting metadata from Zod schemas.\nDesigned for CLI argument parsing but applicable elsewhere.",
+				"dependents": ["zzz/cli/cli_args.ts", "zzz/cli/cli_help.ts"]
 			}
 		]
 	}
