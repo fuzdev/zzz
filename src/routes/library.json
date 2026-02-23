@@ -20359,56 +20359,56 @@
 					{
 						"name": "Any",
 						"kind": "type",
-						"source_line": 7,
+						"source_line": 9,
 						"type_signature": "ZodAny"
 					},
 					{
 						"name": "HttpStatus",
 						"kind": "type",
-						"source_line": 10,
+						"source_line": 12,
 						"type_signature": "ZodNumber"
 					},
 					{
 						"name": "TypeLiteral",
 						"kind": "type",
-						"source_line": 13,
+						"source_line": 15,
 						"type_signature": "$ZodBranded<ZodString, \"TypeLiteral\", \"out\">"
 					},
 					{
 						"name": "PathWithTrailingSlash",
 						"kind": "type",
-						"source_line": 18,
+						"source_line": 20,
 						"type_signature": "ZodPipe<ZodString, ZodTransform<string, string>>"
 					},
 					{
 						"name": "PathWithoutTrailingSlash",
 						"kind": "type",
-						"source_line": 21,
+						"source_line": 23,
 						"type_signature": "ZodPipe<ZodString, ZodTransform<string, string>>"
 					},
 					{
 						"name": "PathWithLeadingSlash",
 						"kind": "type",
-						"source_line": 24,
+						"source_line": 26,
 						"type_signature": "ZodPipe<ZodString, ZodTransform<string, string>>"
 					},
 					{
 						"name": "PathWithoutLeadingSlash",
 						"kind": "type",
-						"source_line": 27,
+						"source_line": 29,
 						"type_signature": "ZodPipe<ZodString, ZodTransform<string, string>>"
 					},
 					{
 						"name": "SvelteMapSchema",
 						"kind": "type",
-						"source_line": 30,
+						"source_line": 32,
 						"type_signature": "ZodCustom<SvelteMap<unknown, unknown>, SvelteMap<unknown, unknown>>"
 					},
 					{
 						"name": "get_datetime_now",
 						"kind": "function",
 						"doc_comment": "Returns an ISO datetime string that is guaranteed to be monotonically increasing.\nIf called multiple times within the same millisecond, it increments the value\nby one millisecond to ensure uniqueness and order preservation.",
-						"source_line": 38,
+						"source_line": 40,
 						"type_signature": "(): string & $brand<\"Datetime\">",
 						"return_type": "string & $brand<\"Datetime\">",
 						"parameters": []
@@ -20416,19 +20416,19 @@
 					{
 						"name": "Datetime",
 						"kind": "type",
-						"source_line": 41,
+						"source_line": 43,
 						"type_signature": "$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">"
 					},
 					{
 						"name": "DatetimeNow",
 						"kind": "type",
-						"source_line": 43,
+						"source_line": 45,
 						"type_signature": "ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>"
 					},
 					{
 						"name": "create_uuid",
 						"kind": "function",
-						"source_line": 46,
+						"source_line": 48,
 						"type_signature": "(): string & $brand<\"Uuid\">",
 						"return_type": "string & $brand<\"Uuid\">",
 						"parameters": []
@@ -20436,34 +20436,20 @@
 					{
 						"name": "Uuid",
 						"kind": "type",
-						"source_line": 48,
+						"source_line": 50,
 						"type_signature": "$ZodBranded<ZodUUID, \"Uuid\", \"out\">"
 					},
 					{
 						"name": "UuidWithDefault",
 						"kind": "type",
-						"source_line": 50,
+						"source_line": 52,
 						"type_signature": "ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>"
-					},
-					{
-						"name": "to_subschema",
-						"kind": "function",
-						"doc_comment": "Helper to extract subschema from a Zod def, following Zod 4 patterns.",
-						"source_line": 56,
-						"type_signature": "(def: $ZodTypeDef): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
-						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
-						"parameters": [
-							{
-								"name": "def",
-								"type": "$ZodTypeDef"
-							}
-						]
 					},
 					{
 						"name": "get_innermost_type",
 						"kind": "function",
 						"doc_comment": "Gets the innermost type of a zod schema by unwrapping wrappers like transforms, ZodOptional, ZodDefault, etc.",
-						"source_line": 72,
+						"source_line": 60,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
 						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
 						"return_description": "The innermost schema without wrappers",
@@ -20478,7 +20464,7 @@
 					{
 						"name": "get_innermost_type_name",
 						"kind": "function",
-						"source_line": 98,
+						"source_line": 86,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): string",
 						"return_type": "string",
 						"parameters": [
@@ -20492,7 +20478,7 @@
 						"name": "zod_get_schema_keys",
 						"kind": "function",
 						"doc_comment": "Gets all property keys from a Zod object schema.",
-						"source_line": 107,
+						"source_line": 95,
 						"type_signature": "<T extends z.ZodType>(schema: T): SchemaKeys<T>[]",
 						"return_type": "SchemaKeys<T>[]",
 						"parameters": [
@@ -20506,7 +20492,7 @@
 						"name": "get_field_schema",
 						"kind": "function",
 						"doc_comment": "Get the Zod schema for a specific field in an object schema.",
-						"source_line": 122,
+						"source_line": 110,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>, key: string): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
 						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
 						"return_description": "The field's schema, or throws if not found",
@@ -20527,7 +20513,7 @@
 						"name": "maybe_get_field_schema",
 						"kind": "function",
 						"doc_comment": "Get the Zod schema for a specific field in an object schema, returning undefined if not found.",
-						"source_line": 137,
+						"source_line": 125,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>, key: string): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
 						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
 						"return_description": "The field's schema, or undefined if not found",
@@ -20548,7 +20534,7 @@
 						"name": "is_array_schema",
 						"kind": "function",
 						"doc_comment": "Checks if a Zod schema is an array or contains an array through wrappers.",
-						"source_line": 149,
+						"source_line": 137,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): boolean",
 						"return_type": "boolean",
 						"parameters": [
@@ -20562,7 +20548,7 @@
 						"name": "get_inner_array_schema",
 						"kind": "function",
 						"doc_comment": "Gets the innermost array schema from a potentially nested schema structure.\nReturns null if no array schema is found.",
-						"source_line": 158,
+						"source_line": 146,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): ZodArray<any> | null",
 						"return_type": "ZodArray<any> | null",
 						"parameters": [
@@ -20576,7 +20562,7 @@
 						"name": "format_zod_validation_error",
 						"kind": "function",
 						"doc_comment": "Formats a Zod validation error with field paths for clearer error messages.",
-						"source_line": 166,
+						"source_line": 154,
 						"type_signature": "(error: ZodError<unknown>): string",
 						"return_type": "string",
 						"parameters": [

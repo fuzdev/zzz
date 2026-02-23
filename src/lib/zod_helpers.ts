@@ -1,7 +1,9 @@
 import {z} from 'zod';
 import {EMPTY_ARRAY} from '@fuzdev/fuz_util/array.js';
-import {SvelteMap} from 'svelte/reactivity';
 import {ensure_end, ensure_start, strip_end, strip_start} from '@fuzdev/fuz_util/string.js';
+import {zod_to_subschema} from '@fuzdev/fuz_util/zod.js';
+import {SvelteMap} from 'svelte/reactivity';
+
 import type {SchemaKeys} from './cell_types.js';
 
 export const Any = z.any();
@@ -51,20 +53,6 @@ export const UuidWithDefault = Uuid.default(create_uuid);
 export type UuidWithDefault = z.infer<typeof UuidWithDefault>;
 
 /**
- * Helper to extract subschema from a Zod def, following Zod 4 patterns.
- */
-export const to_subschema = (def: z.core.$ZodTypeDef): z.ZodType | undefined => {
-	if ('innerType' in def) {
-		return def.innerType as z.ZodType;
-	} else if ('in' in def) {
-		return def.in as z.ZodType;
-	} else if ('schema' in def) {
-		return def.schema as z.ZodType;
-	}
-	return undefined;
-};
-
-/**
  * Gets the innermost type of a zod schema by unwrapping wrappers like transforms, ZodOptional, ZodDefault, etc.
  * @param schema The schema to unwrap
  * @returns The innermost schema without wrappers
@@ -78,7 +66,7 @@ export const get_innermost_type = (schema: z.ZodType): z.ZodType => {
 	}
 
 	if (schema instanceof z.ZodDefault) {
-		const subschema = to_subschema(def);
+		const subschema = zod_to_subschema(def);
 		if (subschema) {
 			return get_innermost_type(subschema);
 		}
@@ -86,7 +74,7 @@ export const get_innermost_type = (schema: z.ZodType): z.ZodType => {
 
 	// Handle transforms, pipes, and other wrappers
 	if (def.type === 'transform' || def.type === 'pipe' || def.type === 'prefault') {
-		const subschema = to_subschema(def);
+		const subschema = zod_to_subschema(def);
 		if (subschema) {
 			return get_innermost_type(subschema);
 		}
