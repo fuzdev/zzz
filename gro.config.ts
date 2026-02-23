@@ -1,6 +1,7 @@
 import type {CreateGroConfig} from '@fuzdev/gro';
 import {gro_plugin_deno_compile} from '@fuzdev/gro/gro_plugin_deno_compile.js';
 
+// eslint-disable-next-line @typescript-eslint/require-await
 const config: CreateGroConfig = async (base_config) => {
 	const base_plugins = base_config.plugins;
 	base_config.plugins = async (ctx) => {

@@ -15,7 +15,11 @@ import {
 	OpenArgs,
 } from './schemas.ts';
 import {ZzzGlobalArgs} from './cli_args.ts';
-import {zod_to_schema_properties, zod_format_value, type ZodSchemaProperty} from '../zod.ts';
+import {
+	zod_to_schema_properties,
+	zod_format_value,
+	type ZodSchemaProperty,
+} from '@fuzdev/fuz_util/zod.js';
 import {NAME, VERSION} from '../build_info.ts';
 import {colors} from './util.ts';
 

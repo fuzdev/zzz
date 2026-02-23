@@ -52,7 +52,7 @@
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.53.1",
 			"@fuzdev/fuz_ui": "^0.185.2",
-			"@fuzdev/fuz_util": "^0.52.0",
+			"@fuzdev/fuz_util": "^0.52.1",
 			"@jridgewell/trace-mapping": "^0.3.31",
 			"@ryanatkn/eslint-config": "^0.9.0",
 			"@sveltejs/adapter-node": "^5.4.0",
@@ -4779,130 +4779,130 @@
 					{
 						"name": "SERVER_PROTOCOL",
 						"kind": "variable",
-						"source_line": 33,
+						"source_line": 34,
 						"type_signature": "string"
 					},
 					{
 						"name": "SERVER_HOST",
 						"kind": "variable",
-						"source_line": 35,
+						"source_line": 36,
 						"type_signature": "string"
 					},
 					{
 						"name": "SERVER_URL",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 41,
+						"source_line": 42,
 						"type_signature": "string"
 					},
 					{
 						"name": "SERVER_PROXIED_PORT",
 						"kind": "variable",
-						"source_line": 43,
+						"source_line": 44,
 						"type_signature": "number"
 					},
 					{
 						"name": "BACKEND_ARTIFICIAL_RESPONSE_DELAY",
 						"kind": "variable",
-						"source_line": 45,
+						"source_line": 46,
 						"type_signature": "number"
 					},
 					{
 						"name": "ZZZ_DIR",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 51,
+						"source_line": 52,
 						"type_signature": "string"
 					},
 					{
 						"name": "ZZZ_DIR_STATE",
 						"kind": "variable",
-						"source_line": 54,
+						"source_line": 55,
 						"type_signature": "\"state\""
 					},
 					{
 						"name": "ZZZ_DIR_STATE_COMPLETIONS",
 						"kind": "variable",
-						"source_line": 55,
+						"source_line": 56,
 						"type_signature": "\"completions\""
 					},
 					{
 						"name": "ZZZ_DIR_RUN",
 						"kind": "variable",
-						"source_line": 56,
+						"source_line": 57,
 						"type_signature": "\"run\""
 					},
 					{
 						"name": "ZZZ_DIR_CACHE",
 						"kind": "variable",
-						"source_line": 57,
+						"source_line": 58,
 						"type_signature": "\"cache\""
 					},
 					{
 						"name": "ZZZ_SCOPED_DIRS",
 						"kind": "variable",
 						"doc_comment": "Comma-separated list of filesystem paths that Zzz can access.\nEmpty array means no scoped filesystem access.",
-						"source_line": 63,
+						"source_line": 64,
 						"type_signature": "string[]"
 					},
 					{
 						"name": "CONTENT_PREVIEW_LENGTH",
 						"kind": "variable",
-						"source_line": 69,
+						"source_line": 70,
 						"type_signature": "100"
 					},
 					{
 						"name": "API_PATH",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 75,
+						"source_line": 76,
 						"type_signature": "string"
 					},
 					{
 						"name": "API_URL",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 84,
+						"source_line": 85,
 						"type_signature": "string"
 					},
 					{
 						"name": "API_PATH_FOR_HTTP_RPC",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 90,
+						"source_line": 91,
 						"type_signature": "string"
 					},
 					{
 						"name": "API_URL_FOR_HTTP_RPC",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 96,
+						"source_line": 97,
 						"type_signature": "string"
 					},
 					{
 						"name": "WEBSOCKET_URL",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 103,
+						"source_line": 104,
 						"type_signature": "string"
 					},
 					{
 						"name": "WEBSOCKET_URL_OBJECT",
 						"kind": "variable",
-						"source_line": 107,
+						"source_line": 108,
 						"type_signature": "URL | null"
 					},
 					{
 						"name": "WEBSOCKET_PATH",
 						"kind": "variable",
 						"doc_comment": "",
-						"source_line": 113,
+						"source_line": 114,
 						"type_signature": "string | undefined"
 					},
 					{
 						"name": "UNKNOWN_ERROR_MESSAGE",
 						"kind": "variable",
-						"source_line": 115,
+						"source_line": 116,
 						"type_signature": "string"
 					}
 				],
@@ -20979,7 +20979,6 @@
 					}
 				],
 				"module_comment": "CLI argument parsing utilities for zzz.\n\nProvides shared parsing utilities for CLI commands.",
-				"dependencies": ["zzz/zod.ts"],
 				"dependents": ["zzz/cli.ts", "zzz/cli/cli_help.ts", "zzz/main.ts"]
 			},
 			{
@@ -20989,14 +20988,14 @@
 						"name": "ZzzCommandCategory",
 						"kind": "type",
 						"doc_comment": "Command category for help organization.",
-						"source_line": 29,
+						"source_line": 33,
 						"type_signature": "ZzzCommandCategory"
 					},
 					{
 						"name": "CommandMeta",
 						"kind": "type",
 						"doc_comment": "Command metadata for help generation.",
-						"source_line": 34,
+						"source_line": 38,
 						"type_signature": "CommandMeta",
 						"properties": [
 							{
@@ -21025,7 +21024,7 @@
 						"name": "HelpCategory",
 						"kind": "type",
 						"doc_comment": "Category configuration for help display.",
-						"source_line": 44,
+						"source_line": 48,
 						"type_signature": "HelpCategory",
 						"properties": [
 							{
@@ -21044,28 +21043,28 @@
 						"name": "ZZZ_HELP_CATEGORIES",
 						"kind": "variable",
 						"doc_comment": "Category display order for main help.",
-						"source_line": 56,
+						"source_line": 60,
 						"type_signature": "HelpCategory[]"
 					},
 					{
 						"name": "ZZZ_HELP_EXAMPLES",
 						"kind": "variable",
 						"doc_comment": "Example commands for main help.",
-						"source_line": 65,
+						"source_line": 69,
 						"type_signature": "string[]"
 					},
 					{
 						"name": "ZZZ_COMMANDS",
 						"kind": "variable",
 						"doc_comment": "Command registry for help generation.",
-						"source_line": 78,
+						"source_line": 82,
 						"type_signature": "Record<string, CommandMeta>"
 					},
 					{
 						"name": "generate_command_help",
 						"kind": "function",
 						"doc_comment": "Generate help text for a command from its metadata.",
-						"source_line": 155,
+						"source_line": 159,
 						"type_signature": "(command: string, meta: CommandMeta): string",
 						"return_type": "string",
 						"parameters": [
@@ -21083,7 +21082,7 @@
 						"name": "generate_main_help",
 						"kind": "function",
 						"doc_comment": "Generate main help text.",
-						"source_line": 217,
+						"source_line": 221,
 						"type_signature": "(): string",
 						"return_type": "string",
 						"parameters": []
@@ -21092,7 +21091,7 @@
 						"name": "get_help_text",
 						"kind": "function",
 						"doc_comment": "Get help text for a command or main help.",
-						"source_line": 264,
+						"source_line": 268,
 						"type_signature": "(command?: string | undefined, subcommand?: string | undefined): string",
 						"return_type": "string",
 						"parameters": [
@@ -21114,8 +21113,7 @@
 					"zzz/build_info.ts",
 					"zzz/cli/cli_args.ts",
 					"zzz/cli/schemas.ts",
-					"zzz/cli/util.ts",
-					"zzz/zod.ts"
+					"zzz/cli/util.ts"
 				],
 				"dependents": ["zzz/cli.ts"]
 			},
@@ -21598,175 +21596,6 @@
 					}
 				],
 				"module_comment": "Unified runtime abstraction for zzz CLI operations.\n\nProvides all runtime primitives as injectable dependencies.\nFunctions should accept partial interfaces for only what they need.\n\n@example\n```ts\n// Function declares only what it needs\nconst load_config = (\n  runtime: Pick<ZzzRuntime, 'env_get' | 'read_file' | 'stat'>,\n) => { ... };\n```"
-			},
-			{
-				"path": "zzz/zod.ts",
-				"declarations": [
-					{
-						"name": "zod_to_subschema",
-						"kind": "function",
-						"doc_comment": "Unwrap nested schema types (optional, default, nullable, etc).",
-						"source_line": 22,
-						"type_signature": "(def: $ZodTypeDef): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
-						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
-						"return_description": "Inner schema if wrapped, undefined otherwise.",
-						"parameters": [
-							{
-								"name": "def",
-								"type": "$ZodTypeDef",
-								"description": "Zod type definition to unwrap."
-							}
-						]
-					},
-					{
-						"name": "zod_to_schema_description",
-						"kind": "function",
-						"doc_comment": "Get the description from a schema's metadata, unwrapping if needed.",
-						"source_line": 39,
-						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): string | null",
-						"return_type": "string | null",
-						"return_description": "Description string or null if not found.",
-						"parameters": [
-							{
-								"name": "schema",
-								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-								"description": "Zod schema to extract description from."
-							}
-						]
-					},
-					{
-						"name": "zod_to_schema_default",
-						"kind": "function",
-						"doc_comment": "Get the default value from a schema, unwrapping if needed.",
-						"source_line": 57,
-						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): unknown",
-						"return_type": "unknown",
-						"return_description": "Default value or undefined.",
-						"parameters": [
-							{
-								"name": "schema",
-								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-								"description": "Zod schema to extract default from."
-							}
-						]
-					},
-					{
-						"name": "zod_to_schema_aliases",
-						"kind": "function",
-						"doc_comment": "Get aliases from a schema's metadata, unwrapping if needed.",
-						"source_line": 75,
-						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): string[]",
-						"return_type": "string[]",
-						"return_description": "Array of alias strings.",
-						"parameters": [
-							{
-								"name": "schema",
-								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-								"description": "Zod schema to extract aliases from."
-							}
-						]
-					},
-					{
-						"name": "zod_to_schema_type_string",
-						"kind": "function",
-						"doc_comment": "Get the type string for a schema, suitable for display.",
-						"source_line": 93,
-						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): string",
-						"return_type": "string",
-						"return_description": "Human-readable type string.",
-						"parameters": [
-							{
-								"name": "schema",
-								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-								"description": "Zod schema to get type string for."
-							}
-						]
-					},
-					{
-						"name": "zod_format_value",
-						"kind": "function",
-						"doc_comment": "Format a value for display in help text.",
-						"source_line": 145,
-						"type_signature": "(value: unknown): string",
-						"return_type": "string",
-						"return_description": "Formatted string representation.",
-						"parameters": [
-							{
-								"name": "value",
-								"type": "unknown",
-								"description": "Value to format."
-							}
-						]
-					},
-					{
-						"name": "ZodSchemaProperty",
-						"kind": "type",
-						"doc_comment": "Property extracted from an object schema.",
-						"source_line": 162,
-						"type_signature": "ZodSchemaProperty",
-						"properties": [
-							{
-								"name": "name",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "type",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "description",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "default",
-								"kind": "variable",
-								"type_signature": "unknown"
-							},
-							{
-								"name": "aliases",
-								"kind": "variable",
-								"type_signature": "Array<string>"
-							}
-						]
-					},
-					{
-						"name": "zod_to_schema_properties",
-						"kind": "function",
-						"doc_comment": "Extract properties from a Zod object schema.",
-						"source_line": 176,
-						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): ZodSchemaProperty[]",
-						"return_type": "ZodSchemaProperty[]",
-						"return_description": "Array of property definitions.",
-						"parameters": [
-							{
-								"name": "schema",
-								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-								"description": "Zod object schema to extract from."
-							}
-						]
-					},
-					{
-						"name": "zod_to_schema_names_with_aliases",
-						"kind": "function",
-						"doc_comment": "Get all property names and their aliases from an object schema.",
-						"source_line": 206,
-						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): Set<string>",
-						"return_type": "Set<string>",
-						"return_description": "Set of all names and aliases.",
-						"parameters": [
-							{
-								"name": "schema",
-								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-								"description": "Zod object schema."
-							}
-						]
-					}
-				],
-				"module_comment": "Zod schema introspection utilities.\n\nGeneric helpers for extracting metadata from Zod schemas.\nDesigned for CLI argument parsing but applicable elsewhere.",
-				"dependents": ["zzz/cli/cli_args.ts", "zzz/cli/cli_help.ts"]
 			}
 		]
 	}
