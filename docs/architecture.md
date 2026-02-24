@@ -467,6 +467,6 @@ All filesystem operations go through `ScopedFs` (`server/scoped_fs.ts`). Securit
 
 Each scoped directory gets a `Filer` watcher. File changes are broadcast to clients via `filer_change` notifications over WebSocket.
 
-### Server Info
+### Daemon Info
 
-`run/server.json` tracks the running server (PID, port, version). Written atomically on startup, removed on clean shutdown (SIGINT/SIGTERM). Stale detection via `process.kill(pid, 0)`.
+`run/daemon.json` tracks the running server (PID, port, version). Written atomically on startup via `@fuzdev/fuz_app/cli/daemon.js`, removed on clean shutdown (SIGINT/SIGTERM). Stale detection via `kill -0`.

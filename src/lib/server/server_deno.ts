@@ -29,6 +29,9 @@ import {VERSION} from '../zzz/build_info.ts';
 import {create_zzz_app} from './create_zzz_app.ts';
 import {load_server_env} from './server_env.ts';
 
+// TODO: this duplicates a subset of create_deno_runtime() from runtime/deno.ts —
+// consider sharing, but create_deno_runtime returns a full ZzzRuntime (with I/O,
+// cwd, exit, args) which is more than needed here.
 /** Deno adapter satisfying fuz_app's `*Deps` interfaces. */
 const daemon_runtime: EnvDeps & FsReadDeps & FsWriteDeps & FsRemoveDeps & CommandDeps = {
 	env_get: (name: string) => Deno.env.get(name),
