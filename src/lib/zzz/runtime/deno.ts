@@ -35,6 +35,7 @@ export const create_deno_runtime = (args: ReadonlyArray<string>): ZzzRuntime => 
 	mkdir: (path, options) => Deno.mkdir(path, options),
 	read_file: (path) => Deno.readTextFile(path),
 	write_file: (path, content) => Deno.writeTextFile(path, content),
+	rename: (old_path, new_path) => Deno.rename(old_path, new_path),
 	remove: (path, options) => Deno.remove(path, options),
 
 	// === Local Commands ===

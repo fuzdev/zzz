@@ -22,7 +22,6 @@ import {
 import {DEV} from 'esm-env';
 
 import pkg from '../../../package.json' with {type: 'json'};
-import {server_info_write, server_info_remove} from './server_info.js';
 import {create_zzz_app} from './create_zzz_app.js';
 import {load_server_env} from './server_env.js';
 import {
@@ -49,7 +48,7 @@ const create_server = async (): Promise<void> => {
 		websocket_path: WEBSOCKET_PATH,
 		api_path: API_PATH_FOR_HTTP_RPC,
 		artificial_delay: BACKEND_ARTIFICIAL_RESPONSE_DELAY,
-		zzz_version: pkg.version,
+		app_version: pkg.version,
 		secret_anthropic_api_key: SECRET_ANTHROPIC_API_KEY || undefined,
 		secret_openai_api_key: SECRET_OPENAI_API_KEY || undefined,
 		secret_google_api_key: SECRET_GOOGLE_API_KEY || undefined,
@@ -99,24 +98,15 @@ const create_server = async (): Promise<void> => {
 			port: env.port,
 			fetch: app.fetch,
 		},
-		async (info) => {
+		(info) => {
 			log.info(`listening on http://${info.address}:${info.port}`);
-
-			// Write server info after successfully binding
-			await server_info_write({
-				zzz_dir: env.zzz_dir,
-				port: info.port,
-				zzz_version: env.zzz_version,
-			});
 		},
 	);
 
 	injectWebSocket(hono);
 
-	// Shutdown handlers to clean up server info
 	const shutdown = async (signal: string): Promise<void> => {
 		log.info(`received ${signal}, shutting down...`);
-		await server_info_remove(env.zzz_dir);
 		await backend.destroy();
 		process.exit(0);
 	};

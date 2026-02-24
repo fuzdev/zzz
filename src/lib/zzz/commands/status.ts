@@ -6,12 +6,12 @@
  * @module
  */
 
-import {colors, log} from '@fuzdev/fuz_app/cli/util.js';
+import {colors} from '@fuzdev/fuz_app/cli/util.js';
+import {read_daemon_info, is_daemon_running, type DaemonInfo} from '@fuzdev/fuz_app/cli/daemon.js';
 
 import type {ZzzRuntime} from '../runtime/types.ts';
 import type {StatusArgs} from '../cli/schemas.ts';
 import type {ZzzGlobalArgs} from '../cli/cli_args.ts';
-import {get_zzz_daemon_info_path, parse_daemon_info, type ZzzDaemonInfo} from '../cli_config.ts';
 
 /**
  * Show current system state.
@@ -21,28 +21,14 @@ export const cmd_status = async (
 	args: StatusArgs,
 	_flags: ZzzGlobalArgs,
 ): Promise<void> => {
-	const daemon_path = get_zzz_daemon_info_path(runtime);
-	if (!daemon_path) {
-		log.error('$HOME not set');
-		runtime.exit(1);
-	}
-
 	// Check daemon
-	const stat = await runtime.stat(daemon_path);
-	let daemon_info: ZzzDaemonInfo | null = null;
+	let daemon_info: DaemonInfo | null = null;
 	let daemon_running = false;
 
-	if (stat) {
-		try {
-			const content = await runtime.read_file(daemon_path);
-			daemon_info = parse_daemon_info(content);
-			if (daemon_info) {
-				const check = await runtime.run_command('kill', ['-0', String(daemon_info.pid)]);
-				daemon_running = check.success;
-			}
-		} catch {
-			// ignore
-		}
+	const info = await read_daemon_info(runtime, 'zzz');
+	if (info) {
+		daemon_info = info;
+		daemon_running = await is_daemon_running(runtime, info.pid);
 	}
 
 	if (args.json) {

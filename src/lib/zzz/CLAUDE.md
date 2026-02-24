@@ -61,7 +61,7 @@ a browser — the `code .` equivalent.
 src/lib/zzz/
 ├── main.ts              # Entry point (deno compile target)
 ├── cli.ts               # parse_zzz_args, show_help, show_version
-├── cli_config.ts        # ~/.zzz/config.json schema, load/save, daemon info
+├── cli_config.ts        # ~/.zzz/config.json schema, load/save
 ├── build_info.ts        # VERSION, NAME constants
 ├── zod.ts               # Zod schema introspection for CLI help generation
 ├── runtime/
@@ -103,9 +103,11 @@ to the `open` command. So `zzz ~/dev/` and `zzz open ~/dev/` are equivalent.
 
 ### Daemon Lifecycle
 
-`daemon.json` at `~/.zzz/run/daemon.json` tracks PID, port, version. Written
-atomically (temp file + rename). CLI checks if PID is alive via `kill -0`.
-Stale files are cleaned up automatically.
+`daemon.json` at `~/.zzz/run/daemon.json` tracks PID, port, version. Managed
+via `@fuzdev/fuz_app/cli/daemon.js` helpers (`write_daemon_info`,
+`read_daemon_info`, `is_daemon_running`, `stop_daemon`). Written atomically
+(temp file + rename). CLI checks if PID is alive via `kill -0`. Stale files
+are cleaned up automatically.
 
 ## Build
 
@@ -149,6 +151,6 @@ deno task install
 ## Dependencies
 
 From `@fuzdev/fuz_util`: `argv_parse`, `args_parse` (CLI args).
-From `@fuzdev/fuz_app`: ActionSpec types (via existing zzz imports).
+From `@fuzdev/fuz_app`: CLI daemon helpers, config, help, util; ActionSpec types.
 From `hono`: HTTP server framework.
 From `zod`: Schema validation (v4, with `.meta()` for CLI descriptions).

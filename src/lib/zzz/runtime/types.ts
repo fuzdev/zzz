@@ -122,6 +122,14 @@ export interface ZzzRuntime {
 	write_file: (path: string, content: string) => Promise<void>;
 
 	/**
+	 * Rename (move) a file.
+	 *
+	 * @param old_path - Current path.
+	 * @param new_path - New path.
+	 */
+	rename: (old_path: string, new_path: string) => Promise<void>;
+
+	/**
 	 * Remove a file or directory.
 	 *
 	 * @param path - Path to remove.

@@ -28,8 +28,6 @@ import {BackendProviderClaude} from './backend_provider_claude.js';
 import {BackendProviderChatgpt} from './backend_provider_chatgpt.js';
 import {BackendProviderGemini} from './backend_provider_gemini.js';
 import type {BackendProviderOptions} from './backend_provider.js';
-import {server_info_check_stale} from './server_info.js';
-
 const log = new Logger('[server]');
 
 /**
@@ -73,12 +71,6 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 		scoped_dirs: env.scoped_dirs,
 		allowed_origins,
 	});
-
-	// Check for stale server info from a previous crash
-	const stale_info = await server_info_check_stale(env.zzz_dir);
-	if (stale_info) {
-		log.warn('found running server', stale_info);
-	}
 
 	const app = new Hono();
 

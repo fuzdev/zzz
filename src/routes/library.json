@@ -81,7 +81,7 @@
 		},
 		"dependencies": {
 			"@anthropic-ai/sdk": "^0.71.2",
-			"@fuzdev/gro": "^0.195.2",
+			"@fuzdev/gro": "^0.196.0",
 			"@google/generative-ai": "^0.24.1",
 			"@hono/node-server": "^1.19.6",
 			"@hono/node-ws": "^1.2.0",
@@ -17129,7 +17129,7 @@
 						"name": "CreateZzzAppOptions",
 						"kind": "type",
 						"doc_comment": "Options for creating a zzz app.",
-						"source_line": 38,
+						"source_line": 36,
 						"type_signature": "CreateZzzAppOptions",
 						"properties": [
 							{
@@ -17150,7 +17150,7 @@
 						"name": "ZzzApp",
 						"kind": "type",
 						"doc_comment": "The created zzz app and its backend.",
-						"source_line": 48,
+						"source_line": 46,
 						"type_signature": "ZzzApp",
 						"properties": [
 							{
@@ -17171,7 +17171,7 @@
 						"name": "create_zzz_app",
 						"kind": "function",
 						"doc_comment": "Create the zzz Hono app with Backend, providers, and endpoints.\n\nThis is the shared factory called by both entry points.\nThe caller is responsible for HTTP binding and WebSocket injection.",
-						"source_line": 61,
+						"source_line": 59,
 						"type_signature": "(options: CreateZzzAppOptions): Promise<ZzzApp>",
 						"return_type": "Promise<ZzzApp>",
 						"parameters": [
@@ -17195,8 +17195,7 @@
 					"server/backend_provider_ollama.ts",
 					"server/register_http_actions.ts",
 					"server/register_websocket_actions.ts",
-					"server/security.ts",
-					"server/server_info.ts"
+					"server/security.ts"
 				],
 				"dependents": ["server/server.ts", "server/server_deno.ts"]
 			},
@@ -17799,19 +17798,14 @@
 						"name": "start_server_deno",
 						"kind": "function",
 						"doc_comment": "Start the zzz server using Deno runtime.\n\nCreates the full backend with providers, WebSocket, and HTTP RPC\nendpoints via `create_zzz_app`, then serves with `Deno.serve`.",
-						"source_line": 24,
+						"source_line": 72,
 						"type_signature": "(): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": []
 					}
 				],
 				"module_comment": "Deno entry point for zzz server.\n\nProduction entry point when running the compiled binary (`zzz daemon start`).\nUses the shared `create_zzz_app` factory for the Hono app, then binds\nwith `Deno.serve` and handles daemon lifecycle (PID file, signals).",
-				"dependencies": [
-					"server/create_zzz_app.ts",
-					"server/server_env.ts",
-					"server/server_info.ts",
-					"zzz/build_info.ts"
-				],
+				"dependencies": ["server/create_zzz_app.ts", "server/server_env.ts", "zzz/build_info.ts"],
 				"dependents": ["zzz/commands/daemon.ts"]
 			},
 			{
@@ -17873,7 +17867,7 @@
 								"doc_comment": "Artificial response delay in ms (testing)."
 							},
 							{
-								"name": "zzz_version",
+								"name": "app_version",
 								"kind": "variable",
 								"type_signature": "string",
 								"doc_comment": "Package version string."
@@ -17946,121 +17940,10 @@
 				]
 			},
 			{
-				"path": "server/server_info.ts",
-				"declarations": [
-					{
-						"name": "ServerInfo",
-						"kind": "type",
-						"doc_comment": "Information about the running server, stored in server.json",
-						"source_line": 25,
-						"type_signature": "ZodObject<{ version: ZodNumber; pid: ZodNumber; port: ZodNumber; started: ZodString; zzz_version: ZodString; }, $strict>"
-					},
-					{
-						"name": "server_info_get_path",
-						"kind": "function",
-						"doc_comment": "Returns the full path to server.json",
-						"source_line": 42,
-						"type_signature": "(zzz_dir: string): string",
-						"return_type": "string",
-						"parameters": [
-							{
-								"name": "zzz_dir",
-								"type": "string"
-							}
-						]
-					},
-					{
-						"name": "server_info_read",
-						"kind": "function",
-						"doc_comment": "Reads and validates server.json, deleting and returning null if corrupt or wrong version",
-						"source_line": 49,
-						"type_signature": "(zzz_dir: string): Promise<{ version: number; pid: number; port: number; started: string; zzz_version: string; } | null>",
-						"return_type": "Promise<{ version: number; pid: number; port: number; started: string; zzz_version: string; } | null>",
-						"parameters": [
-							{
-								"name": "zzz_dir",
-								"type": "string"
-							}
-						]
-					},
-					{
-						"name": "server_info_check_stale",
-						"kind": "function",
-						"doc_comment": "Returns server info if running, otherwise deletes stale file and returns null",
-						"source_line": 83,
-						"type_signature": "(zzz_dir: string): Promise<{ version: number; pid: number; port: number; started: string; zzz_version: string; } | null>",
-						"return_type": "Promise<{ version: number; pid: number; port: number; started: string; zzz_version: string; } | null>",
-						"parameters": [
-							{
-								"name": "zzz_dir",
-								"type": "string"
-							}
-						]
-					},
-					{
-						"name": "ServerInfoWriteOptions",
-						"kind": "type",
-						"source_line": 96,
-						"type_signature": "ServerInfoWriteOptions",
-						"properties": [
-							{
-								"name": "zzz_dir",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "port",
-								"kind": "variable",
-								"type_signature": "number"
-							},
-							{
-								"name": "zzz_version",
-								"kind": "variable",
-								"type_signature": "string"
-							}
-						]
-					},
-					{
-						"name": "server_info_write",
-						"kind": "function",
-						"doc_comment": "Writes server info to server.json atomically, returns the path",
-						"source_line": 105,
-						"type_signature": "(options: ServerInfoWriteOptions): Promise<string>",
-						"return_type": "Promise<string>",
-						"parameters": [
-							{
-								"name": "options",
-								"type": "ServerInfoWriteOptions"
-							}
-						]
-					},
-					{
-						"name": "server_info_remove",
-						"kind": "function",
-						"doc_comment": "Remove server info file (idempotent - ignores if already removed)",
-						"source_line": 143,
-						"type_signature": "(zzz_dir: string): Promise<void>",
-						"return_type": "Promise<void>",
-						"parameters": [
-							{
-								"name": "zzz_dir",
-								"type": "string"
-							}
-						]
-					}
-				],
-				"dependents": ["server/create_zzz_app.ts", "server/server.ts", "server/server_deno.ts"]
-			},
-			{
 				"path": "server/server.ts",
 				"declarations": [],
 				"module_comment": "Node.js server entry point.\n\nUsed for SvelteKit dev mode and Node.js production builds.\nDelegates to `create_zzz_app` for the shared Hono app setup,\nthen handles Node-specific concerns: HTTP binding, WebSocket injection,\nSvelteKit handler mounting.",
-				"dependencies": [
-					"constants.ts",
-					"server/create_zzz_app.ts",
-					"server/server_env.ts",
-					"server/server_info.ts"
-				]
+				"dependencies": ["constants.ts", "server/create_zzz_app.ts", "server/server_env.ts"]
 			},
 			{
 				"path": "Settings.svelte",
@@ -20633,21 +20516,21 @@
 						"name": "ZZZ_DEFAULT_PORT",
 						"kind": "variable",
 						"doc_comment": "Default port for the zzz daemon.",
-						"source_line": 26,
+						"source_line": 23,
 						"type_signature": "4460"
 					},
 					{
 						"name": "ZzzCliConfig",
 						"kind": "type",
 						"doc_comment": "Schema for ~/.zzz/config.json.\n\nUses `zzz_config_` prefix so field names are self-documenting:\n```typescript\nconst { zzz_config_port } = load_zzz_cli_config();\n// Variable name tells you exactly what this is and where it came from\n```",
-						"source_line": 37,
+						"source_line": 34,
 						"type_signature": "ZodObject<{ zzz_config_port: ZodDefault<ZodNumber>; }, $strict>"
 					},
 					{
 						"name": "get_zzz_dir",
 						"kind": "function",
 						"doc_comment": "Get the CLI config directory path (~/.zzz).",
-						"source_line": 50,
+						"source_line": 47,
 						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\">): string | null",
 						"return_type": "string | null",
 						"return_description": "Path to config directory, or null if $HOME is not set.",
@@ -20663,7 +20546,7 @@
 						"name": "get_zzz_config_path",
 						"kind": "function",
 						"doc_comment": "Get the CLI config file path (~/.zzz/config.json).",
-						"source_line": 59,
+						"source_line": 56,
 						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\">): string | null",
 						"return_type": "string | null",
 						"return_description": "Path to config.json, or null if $HOME is not set.",
@@ -20676,26 +20559,10 @@
 						]
 					},
 					{
-						"name": "get_zzz_daemon_info_path",
-						"kind": "function",
-						"doc_comment": "Get the daemon info file path (~/.zzz/run/daemon.json).",
-						"source_line": 68,
-						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\">): string | null",
-						"return_type": "string | null",
-						"return_description": "Path to daemon.json, or null if $HOME is not set.",
-						"parameters": [
-							{
-								"name": "runtime",
-								"type": "Pick<EnvDeps, \"env_get\">",
-								"description": "Runtime with env_get capability."
-							}
-						]
-					},
-					{
 						"name": "load_zzz_cli_config",
 						"kind": "function",
 						"doc_comment": "Load CLI configuration from ~/.zzz/config.json.",
-						"source_line": 79,
+						"source_line": 65,
 						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\"> & FsReadDeps): Promise<{ zzz_config_port: number; } | null>",
 						"return_type": "Promise<{ zzz_config_port: number; } | null>",
 						"return_description": "Parsed config, or null if file doesn't exist or is invalid.",
@@ -20711,7 +20578,7 @@
 						"name": "save_zzz_cli_config",
 						"kind": "function",
 						"doc_comment": "Save CLI configuration to ~/.zzz/config.json.",
-						"source_line": 93,
+						"source_line": 79,
 						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\"> & FsWriteDeps, config: { zzz_config_port: number; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -20726,37 +20593,10 @@
 								"description": "Configuration to save."
 							}
 						]
-					},
-					{
-						"name": "ZzzDaemonInfo",
-						"kind": "type",
-						"doc_comment": "Daemon info schema for ~/.zzz/run/daemon.json.",
-						"source_line": 106,
-						"type_signature": "ZodObject<{ version: ZodNumber; pid: ZodNumber; port: ZodNumber; started: ZodString; zzz_version: ZodString; }, $strict>"
-					},
-					{
-						"name": "parse_daemon_info",
-						"kind": "function",
-						"doc_comment": "Parse daemon info JSON with schema validation.",
-						"source_line": 126,
-						"type_signature": "(content: string): { version: number; pid: number; port: number; started: string; zzz_version: string; } | null",
-						"return_type": "{ version: number; pid: number; port: number; started: string; zzz_version: string; } | null",
-						"return_description": "Parsed daemon info, or null if invalid.",
-						"parameters": [
-							{
-								"name": "content",
-								"type": "string"
-							}
-						]
 					}
 				],
 				"module_comment": "zzz CLI configuration.\n\nManages CLI-specific configuration stored at ~/.zzz/config.json.\n\nThe CLI config uses the `zzz_config_` prefix for all fields to make\nthe source self-documenting in code.",
-				"dependents": [
-					"zzz/commands/daemon.ts",
-					"zzz/commands/init.ts",
-					"zzz/commands/open.ts",
-					"zzz/commands/status.ts"
-				]
+				"dependents": ["zzz/commands/init.ts", "zzz/commands/open.ts"]
 			},
 			{
 				"path": "zzz/cli.ts",
@@ -21076,7 +20916,7 @@
 						"name": "cmd_daemon_start",
 						"kind": "function",
 						"doc_comment": "Start the daemon in foreground mode.\n\nCLI flags --port and --host override config values.",
-						"source_line": 24,
+						"source_line": 30,
 						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; port?: number | undefined; host?: string | undefined; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -21098,7 +20938,7 @@
 						"name": "cmd_daemon_stop",
 						"kind": "function",
 						"doc_comment": "Stop the running daemon.",
-						"source_line": 40,
+						"source_line": 46,
 						"type_signature": "(runtime: ZzzRuntime, _args: { _: string[]; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -21120,7 +20960,7 @@
 						"name": "cmd_daemon_status",
 						"kind": "function",
 						"doc_comment": "Show daemon status.",
-						"source_line": 89,
+						"source_line": 64,
 						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; json: boolean; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -21140,7 +20980,7 @@
 					}
 				],
 				"module_comment": "zzz daemon commands (start, stop, status).\n\nThe zzz CLI runs in Deno, so daemon start uses the Deno server entry point.\n\nRouting (`zzz daemon start|stop|status`) is handled by\ncreate_subcommand_router in main.ts.",
-				"dependencies": ["server/server_deno.ts", "zzz/cli_config.ts"],
+				"dependencies": ["server/server_deno.ts"],
 				"dependents": ["zzz/main.ts"]
 			},
 			{
@@ -21150,7 +20990,7 @@
 						"name": "cmd_init",
 						"kind": "function",
 						"doc_comment": "Initialize zzz configuration (~/.zzz/).\n\nCreates the config directory and config.json.",
-						"source_line": 25,
+						"source_line": 26,
 						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; port?: number | undefined; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -21180,7 +21020,7 @@
 						"name": "cmd_open",
 						"kind": "function",
 						"doc_comment": "Open the zzz UI in a browser, auto-starting the daemon if needed.",
-						"source_line": 93,
+						"source_line": 86,
 						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -21210,7 +21050,7 @@
 						"name": "cmd_status",
 						"kind": "function",
 						"doc_comment": "Show current system state.",
-						"source_line": 18,
+						"source_line": 19,
 						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; json: boolean; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -21230,7 +21070,6 @@
 					}
 				],
 				"module_comment": "zzz status command.\n\nShow current system state (daemon status, loaded workspaces, watched repos).",
-				"dependencies": ["zzz/cli_config.ts"],
 				"dependents": ["zzz/main.ts"]
 			},
 			{
@@ -21389,6 +21228,12 @@
 								"kind": "variable",
 								"type_signature": "(path: string, content: string) => Promise<void>",
 								"doc_comment": "Write text to a file."
+							},
+							{
+								"name": "rename",
+								"kind": "variable",
+								"type_signature": "(old_path: string, new_path: string) => Promise<void>",
+								"doc_comment": "Rename (move) a file."
 							},
 							{
 								"name": "remove",

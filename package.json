@@ -70,7 +70,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
-    "@fuzdev/gro": "^0.195.2",
+    "@fuzdev/gro": "^0.196.0",
     "@google/generative-ai": "^0.24.1",
     "@hono/node-server": "^1.19.6",
     "@hono/node-ws": "^1.2.0",

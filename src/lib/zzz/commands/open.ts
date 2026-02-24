@@ -8,16 +8,17 @@
  */
 
 import {colors, log} from '@fuzdev/fuz_app/cli/util.js';
+import {
+	get_daemon_info_path,
+	read_daemon_info,
+	is_daemon_running,
+	type DaemonInfo,
+} from '@fuzdev/fuz_app/cli/daemon.js';
 
 import type {ZzzRuntime} from '../runtime/types.ts';
 import type {OpenArgs} from '../cli/schemas.ts';
 import type {ZzzGlobalArgs} from '../cli/cli_args.ts';
-import {
-	get_zzz_dir,
-	get_zzz_daemon_info_path,
-	parse_daemon_info,
-	type ZzzDaemonInfo,
-} from '../cli_config.ts';
+import {get_zzz_dir} from '../cli_config.ts';
 
 /**
  * Check if the daemon is running.
@@ -26,33 +27,24 @@ import {
  */
 const check_daemon = async (
 	runtime: Pick<ZzzRuntime, 'env_get' | 'stat' | 'read_file' | 'run_command' | 'remove'>,
-): Promise<ZzzDaemonInfo | null> => {
-	const daemon_path = get_zzz_daemon_info_path(runtime);
-	if (!daemon_path) return null;
+): Promise<DaemonInfo | null> => {
+	const info = await read_daemon_info(runtime, 'zzz');
+	if (!info) return null;
 
-	const stat = await runtime.stat(daemon_path);
-	if (!stat) return null;
+	// Check if process is actually running
+	const running = await is_daemon_running(runtime, info.pid);
+	if (running) return info;
 
-	try {
-		const content = await runtime.read_file(daemon_path);
-		const info = parse_daemon_info(content);
-		if (!info) {
+	// Stale — clean up
+	const daemon_path = get_daemon_info_path(runtime, 'zzz');
+	if (daemon_path) {
+		try {
 			await runtime.remove(daemon_path);
-			return null;
+		} catch {
+			// already removed
 		}
-
-		// Check if process is actually running
-		const check = await runtime.run_command('kill', ['-0', String(info.pid)]);
-		if (check.success) {
-			return info;
-		}
-
-		// Stale — clean up
-		await runtime.remove(daemon_path);
-		return null;
-	} catch {
-		return null;
 	}
+	return null;
 };
 
 /**

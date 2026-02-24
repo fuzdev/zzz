@@ -48,8 +48,7 @@ The server provides:
 | `env_file_helpers.ts`            | `.env` file manipulation                                     |
 | `helpers.ts`                     | Completion response persistence                              |
 | `server_helpers.ts`              | Server utilities                                             |
-| `server_deno.ts`                 | Deno entry point (production/CLI, `Deno.serve`)              |
-| `server_info.ts`                 | Daemon info file (server.json) read/write/cleanup            |
+| `server_deno.ts`                 | Deno entry point (production/CLI, `Deno.serve`, daemon info) |
 
 **Generated files** (do not edit):
 
@@ -91,7 +90,7 @@ Entry points:
         ├── Load env from Deno.env.get
         ├── Import upgradeWebSocket from hono/deno
         ├── Call create_zzz_app()
-        ├── Write daemon.json via server_info
+        ├── Write daemon.json via fuz_app write_daemon_info
         └── Bind via Deno.serve
 ```
 

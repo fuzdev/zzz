@@ -10,11 +10,16 @@
  */
 
 import {colors, log} from '@fuzdev/fuz_app/cli/util.js';
+import {
+	get_daemon_info_path,
+	read_daemon_info,
+	is_daemon_running,
+	stop_daemon,
+} from '@fuzdev/fuz_app/cli/daemon.js';
 
 import type {ZzzRuntime} from '../runtime/types.ts';
 import type {DaemonStartArgs, DaemonStopArgs, DaemonStatusArgs} from '../cli/schemas.ts';
 import type {ZzzGlobalArgs} from '../cli/cli_args.ts';
-import {get_zzz_daemon_info_path, parse_daemon_info} from '../cli_config.ts';
 import {start_server_deno} from '../../server/server_deno.ts';
 
 /**
@@ -43,44 +48,13 @@ export const cmd_daemon_stop = async (
 	_args: DaemonStopArgs,
 	_flags: ZzzGlobalArgs,
 ): Promise<void> => {
-	const daemon_path = get_zzz_daemon_info_path(runtime);
-	if (!daemon_path) {
-		log.error('$HOME not set');
-		runtime.exit(1);
-	}
-
-	// Read daemon info
-	const stat = await runtime.stat(daemon_path);
-	if (!stat) {
-		log.info('No daemon running (no daemon.json found)');
-		return;
-	}
-
-	const content = await runtime.read_file(daemon_path);
-	const info = parse_daemon_info(content);
-	if (!info) {
-		log.warn('Corrupt daemon.json, removing');
-		try {
-			await runtime.remove(daemon_path);
-		} catch {
-			// already removed
-		}
-		return;
-	}
-
-	// Send SIGTERM to the daemon process
-	const result = await runtime.run_command('kill', [String(info.pid)]);
-	if (result.success) {
-		log.success(`Stopped daemon (pid ${info.pid})`);
+	const result = await stop_daemon(runtime, 'zzz');
+	if (result.stopped) {
+		log.success(result.message);
+	} else if (result.pid) {
+		log.warn(result.message);
 	} else {
-		log.warn(`Process ${info.pid} not running, cleaning up stale daemon.json`);
-	}
-
-	// Clean up daemon.json (may already be removed by the daemon's own shutdown handler)
-	try {
-		await runtime.remove(daemon_path);
-	} catch {
-		// already removed
+		log.info(result.message);
 	}
 };
 
@@ -92,14 +66,8 @@ export const cmd_daemon_status = async (
 	args: DaemonStatusArgs,
 	_flags: ZzzGlobalArgs,
 ): Promise<void> => {
-	const daemon_path = get_zzz_daemon_info_path(runtime);
-	if (!daemon_path) {
-		log.error('$HOME not set');
-		runtime.exit(1);
-	}
-
-	const stat = await runtime.stat(daemon_path);
-	if (!stat) {
+	const info = await read_daemon_info(runtime, 'zzz');
+	if (!info) {
 		if (args.json) {
 			console.log(JSON.stringify({running: false}));
 		} else {
@@ -108,17 +76,8 @@ export const cmd_daemon_status = async (
 		return;
 	}
 
-	const content = await runtime.read_file(daemon_path);
-	const info = parse_daemon_info(content);
-	if (!info) {
-		log.warn('Corrupt daemon.json, removing');
-		await runtime.remove(daemon_path);
-		return;
-	}
-
 	// Check if process is actually running
-	const check = await runtime.run_command('kill', ['-0', String(info.pid)]);
-	const running = check.success;
+	const running = await is_daemon_running(runtime, info.pid);
 
 	if (args.json) {
 		console.log(JSON.stringify({running, ...info}));
@@ -126,12 +85,13 @@ export const cmd_daemon_status = async (
 		console.log(`${colors.green}Daemon running${colors.reset}`);
 		console.log(`  PID:     ${info.pid}`);
 		console.log(`  Port:    ${info.port}`);
-		console.log(`  Version: ${info.zzz_version}`);
+		console.log(`  Version: ${info.app_version}`);
 		console.log(`  Started: ${info.started}`);
 		console.log(`  URL:     ${colors.cyan}http://localhost:${info.port}${colors.reset}`);
 	} else {
 		log.warn('Stale daemon.json found (process not running)');
-		await runtime.remove(daemon_path);
+		const daemon_path = get_daemon_info_path(runtime, 'zzz');
+		if (daemon_path) await runtime.remove(daemon_path);
 		log.info('Cleaned up stale daemon.json');
 	}
 };

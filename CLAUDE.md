@@ -311,7 +311,7 @@ The `.zzz/` directory stores app data. Configured via `PUBLIC_ZZZ_DIR`.
 | ------------ | -------------------------------------- |
 | `state/`     | Persistent data (completions logs)     |
 | `cache/`     | Regenerable data, safe to delete       |
-| `run/`       | Runtime ephemeral (server.json: PID, port) |
+| `run/`       | Runtime ephemeral (daemon.json: PID, port) |
 
 All filesystem access goes through `ScopedFs` — path validation, no symlinks, absolute paths only.
 
@@ -364,4 +364,8 @@ types have been extracted to `@fuzdev/fuz_app` — zzz imports them from
 Cell patterns and the full SAES runtime (ActionEvent, ActionPeer, transports)
 remain in zzz until a second consumer needs them (DA-5).
 
-Last updated: 2026-02-22
+The CLI and daemon lifecycle use `@fuzdev/fuz_app/cli/*` helpers: `DaemonInfo`
+schema, `write_daemon_info`, `read_daemon_info`, `is_daemon_running`,
+`stop_daemon`. The server writes `~/.zzz/run/daemon.json` (not `server.json`).
+
+Last updated: 2026-02-24

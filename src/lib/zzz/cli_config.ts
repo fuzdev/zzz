@@ -17,8 +17,6 @@ import {
 	load_config,
 	save_config,
 } from '@fuzdev/fuz_app/cli/config.js';
-import {log} from '@fuzdev/fuz_app/cli/util.js';
-
 /**
  * Default port for the zzz daemon.
  */
@@ -59,17 +57,6 @@ export const get_zzz_config_path = (runtime: Pick<EnvDeps, 'env_get'>): string |
 	get_config_path(runtime, 'zzz');
 
 /**
- * Get the daemon info file path (~/.zzz/run/daemon.json).
- *
- * @param runtime - Runtime with env_get capability.
- * @returns Path to daemon.json, or null if $HOME is not set.
- */
-export const get_zzz_daemon_info_path = (runtime: Pick<EnvDeps, 'env_get'>): string | null => {
-	const zzz_dir = get_zzz_dir(runtime);
-	return zzz_dir ? `${zzz_dir}/run/daemon.json` : null;
-};
-
-/**
  * Load CLI configuration from ~/.zzz/config.json.
  *
  * @param runtime - Runtime with file read capability.
@@ -97,42 +84,4 @@ export const save_zzz_cli_config = async (
 	if (!zzz_dir) throw new Error('$HOME not set');
 	const config_path = `${zzz_dir}/config.json`;
 	return save_config(runtime, config_path, zzz_dir, config);
-};
-
-/**
- * Daemon info schema for ~/.zzz/run/daemon.json.
- */
-export const ZzzDaemonInfo = z.strictObject({
-	/** Schema version. */
-	version: z.number(),
-	/** Server process ID. */
-	pid: z.number(),
-	/** Port the server is listening on. */
-	port: z.number(),
-	/** ISO timestamp when server started. */
-	started: z.string(),
-	/** Package version of zzz. */
-	zzz_version: z.string(),
-});
-
-export type ZzzDaemonInfo = z.infer<typeof ZzzDaemonInfo>;
-
-/**
- * Parse daemon info JSON with schema validation.
- *
- * @returns Parsed daemon info, or null if invalid.
- */
-export const parse_daemon_info = (content: string): ZzzDaemonInfo | null => {
-	try {
-		const parsed = JSON.parse(content);
-		const result = ZzzDaemonInfo.safeParse(parsed);
-		if (!result.success) {
-			log.warn(`Invalid daemon.json: ${result.error.message}`);
-			return null;
-		}
-		return result.data;
-	} catch {
-		log.warn('Failed to parse daemon.json');
-		return null;
-	}
 };

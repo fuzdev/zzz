@@ -29,7 +29,7 @@ export interface ZzzServerEnv {
 	/** Artificial response delay in ms (testing). */
 	artificial_delay: number;
 	/** Package version string. */
-	zzz_version: string;
+	app_version: string;
 	/** Anthropic API key for Claude provider. */
 	secret_anthropic_api_key: string | undefined;
 	/** OpenAI API key for ChatGPT provider. */
@@ -64,7 +64,7 @@ export const load_server_env = (
 			parseInt(env_get('PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY') ?? '', 10) ||
 			defaults?.artificial_delay ||
 			0,
-		zzz_version: defaults?.zzz_version || '0.0.1',
+		app_version: defaults?.app_version || '0.0.1',
 		secret_anthropic_api_key:
 			env_get('SECRET_ANTHROPIC_API_KEY') || defaults?.secret_anthropic_api_key,
 		secret_openai_api_key: env_get('SECRET_OPENAI_API_KEY') || defaults?.secret_openai_api_key,
