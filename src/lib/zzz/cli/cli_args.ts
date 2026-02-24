@@ -1,15 +1,22 @@
 /**
  * CLI argument parsing utilities for zzz.
  *
- * Provides shared parsing utilities for CLI commands.
+ * Provides zzz-specific dispatch and subcommand routing.
+ * Generic parsing utilities come from `@fuzdev/fuz_app/cli/args.js`.
  *
  * @module
  */
 
-import {args_parse, type Args, type ParsedArgs, type ArgValue} from '@fuzdev/fuz_util/args.js';
+import type {ParsedArgs} from '@fuzdev/fuz_util/args.js';
 import {z} from 'zod';
 
-import {zod_to_schema_properties, zod_to_schema_names_with_aliases} from '@fuzdev/fuz_util/zod.js';
+import {
+	parse_command_args,
+	create_extract_global_flags,
+	type ParseResult,
+} from '@fuzdev/fuz_app/cli/args.js';
+
+export {parse_command_args, type ParseResult};
 
 //
 // Global Args
@@ -35,67 +42,13 @@ export type ZzzGlobalArgs = z.infer<typeof ZzzGlobalArgs>;
 // Parsing Utilities
 //
 
-type ParseResult<T> = {success: true; data: T} | {success: false; error: string};
-
 /**
  * Extract global flags from parsed args.
- *
- * @param unparsed - Raw parsed args from argv_parse.
- * @returns Global flags and remaining args.
  */
-export const extract_global_flags = (
-	unparsed: ParsedArgs,
-): {flags: ZzzGlobalArgs; remaining: ParsedArgs} => {
-	const global_names = zod_to_schema_names_with_aliases(ZzzGlobalArgs);
-	const global_props = zod_to_schema_properties(ZzzGlobalArgs);
-
-	// Extract global flag values, handling aliases
-	const flags_input: Record<string, unknown> = {};
-	for (const prop of global_props) {
-		if (prop.name in unparsed) {
-			flags_input[prop.name] = unparsed[prop.name];
-		} else {
-			for (const alias of prop.aliases) {
-				if (alias in unparsed) {
-					flags_input[prop.name] = unparsed[alias];
-					break;
-				}
-			}
-		}
-	}
-
-	// Parse global flags
-	const global_parsed = args_parse(flags_input as Args, ZzzGlobalArgs);
-	const flags = global_parsed.success ? global_parsed.data : {help: false, version: false};
-
-	// Build remaining args without global flags
-	const remaining: ParsedArgs = {_: [...unparsed._]};
-	for (const [key, value] of Object.entries(unparsed)) {
-		if (key === '_') continue;
-		if (global_names.has(key)) continue;
-		remaining[key] = value;
-	}
-
-	return {flags, remaining};
-};
-
-/**
- * Parse command-specific args with a schema.
- *
- * @param remaining - Remaining args after global flag extraction.
- * @param schema - Zod schema for the command.
- * @returns Parse result with typed data or error message.
- */
-export const parse_command_args = <T extends Record<string, unknown>>(
-	remaining: ParsedArgs,
-	schema: z.ZodType<T>,
-): ParseResult<T> => {
-	const parsed = args_parse(remaining as Args, schema as z.ZodType<T & Record<string, ArgValue>>);
-	if (!parsed.success) {
-		return {success: false, error: z.prettifyError(parsed.error)};
-	}
-	return {success: true, data: parsed.data as T};
-};
+export const extract_global_flags = create_extract_global_flags(ZzzGlobalArgs, {
+	help: false,
+	version: false,
+});
 
 /**
  * Parse args and dispatch to handler, with error handling.
