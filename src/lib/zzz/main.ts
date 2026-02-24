@@ -4,8 +4,9 @@
  * @module
  */
 
-import {colors, log} from '@fuzdev/fuz_app/cli/util.js';
+import {colors} from '@fuzdev/fuz_app/cli/util.js';
 
+import {log} from './log.js';
 import type {ZzzRuntime} from './runtime/types.ts';
 import {create_deno_runtime} from './runtime/deno.ts';
 import {parse_zzz_args, show_help, show_version} from './cli.ts';
