@@ -8,7 +8,7 @@ import {
 	get_executor_phases,
 	get_handler_return_type,
 	generate_phase_handlers,
-} from '@fuzdev/fuz_app/action_codegen.js';
+} from '@fuzdev/fuz_app/actions/action_codegen.js';
 
 import {
 	ping_action_spec,

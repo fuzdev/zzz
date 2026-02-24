@@ -360,7 +360,7 @@ From `src/lib/server/.env.development.example`:
 
 zzz is the reference implementation for Cell and Action patterns. ActionSpec
 types have been extracted to `@fuzdev/fuz_app` — zzz imports them from
-`@fuzdev/fuz_app/action_spec.js` and `@fuzdev/fuz_app/action_registry.js`.
+`@fuzdev/fuz_app/actions/action_spec.js` and `@fuzdev/fuz_app/actions/action_registry.js`.
 Cell patterns and the full SAES runtime (ActionEvent, ActionPeer, transports)
 remain in zzz until a second consumer needs them (DA-5).
 

@@ -8,7 +8,7 @@ import type {
 	LocalCallActionSpec,
 	RemoteNotificationActionSpec,
 	RequestResponseActionSpec,
-} from '@fuzdev/fuz_app/action_spec.js';
+} from '@fuzdev/fuz_app/actions/action_spec.js';
 import {
 	is_send_request,
 	is_notification_send,

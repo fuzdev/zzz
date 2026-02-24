@@ -1,7 +1,7 @@
 // @slop Claude Opus 4
 
 import {z} from 'zod';
-import {ActionKind, type ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
+import {ActionKind, type ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {ActionMethod} from './action_metatypes.js';

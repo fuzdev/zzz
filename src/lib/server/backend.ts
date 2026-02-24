@@ -7,8 +7,8 @@ import type {BackendProviderOllama} from './backend_provider_ollama.js';
 import type {BackendProviderGemini} from './backend_provider_gemini.js';
 import type {BackendProviderChatgpt} from './backend_provider_chatgpt.js';
 import type {BackendProviderClaude} from './backend_provider_claude.js';
-import {ActionRegistry} from '@fuzdev/fuz_app/action_registry.js';
-import type {ActionEventPhase, ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
+import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
+import type {ActionEventPhase, ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 
 import type {ZzzConfig} from '../config_helpers.js';
 import {DiskfileDirectoryPath} from '../diskfile_types.js';

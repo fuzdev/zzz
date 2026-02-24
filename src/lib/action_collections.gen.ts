@@ -1,6 +1,6 @@
 import type {Gen} from '@fuzdev/gro/gen.js';
-import {ActionRegistry} from '@fuzdev/fuz_app/action_registry.js';
-import {ImportBuilder, create_banner} from '@fuzdev/fuz_app/action_codegen.js';
+import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
+import {ImportBuilder, create_banner} from '@fuzdev/fuz_app/actions/action_codegen.js';
 
 import {all_action_specs} from './action_specs.js';
 import {
@@ -21,7 +21,7 @@ export const gen: Gen = ({origin_path}) => {
 
 	// Add base imports
 	imports.add('zod', 'z');
-	imports.add_type('@fuzdev/fuz_app/action_spec.js', 'ActionSpecUnion');
+	imports.add_type('@fuzdev/fuz_app/actions/action_spec.js', 'ActionSpecUnion');
 	imports.add_many('./action_specs.js', '* as specs');
 
 	// Determine which data type to use for each method based on its spec

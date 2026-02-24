@@ -10,7 +10,7 @@ import {
 } from './diskfile_types.js';
 import {ProviderStatus, ProviderName} from './provider_types.js';
 import {CompletionMessage, CompletionRequest, CompletionResponse} from './completion_types.js';
-import type {ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
+import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 import {JsonrpcRequestId} from './jsonrpc.js';
 import {
 	OllamaListRequest,

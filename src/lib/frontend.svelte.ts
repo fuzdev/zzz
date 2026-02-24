@@ -3,8 +3,8 @@ import {SvelteMap} from 'svelte/reactivity';
 import {z} from 'zod';
 import {EMPTY_OBJECT} from '@fuzdev/fuz_util/object.js';
 import type {Assignable, ClassConstructor, OmitStrict} from '@fuzdev/fuz_util/types.js';
-import {ActionRegistry} from '@fuzdev/fuz_app/action_registry.js';
-import {ActionEventPhase, type ActionSpecUnion} from '@fuzdev/fuz_app/action_spec.js';
+import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
+import {ActionEventPhase, type ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 
 import {Provider, type ProviderJsonInput} from './provider.svelte.js';
 import type {ProviderStatus} from './provider_types.js';

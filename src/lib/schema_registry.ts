@@ -9,7 +9,7 @@ import type {
 	RequestResponseActionSpec,
 	RemoteNotificationActionSpec,
 	LocalCallActionSpec,
-} from '@fuzdev/fuz_app/action_spec.js';
+} from '@fuzdev/fuz_app/actions/action_spec.js';
 import type {ActionMethod} from './action_metatypes.js';
 
 // TODO currently unused

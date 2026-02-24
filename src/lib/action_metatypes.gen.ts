@@ -1,6 +1,6 @@
 import type {Gen} from '@fuzdev/gro/gen.js';
-import {ActionRegistry} from '@fuzdev/fuz_app/action_registry.js';
-import {ImportBuilder, create_banner} from '@fuzdev/fuz_app/action_codegen.js';
+import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
+import {ImportBuilder, create_banner} from '@fuzdev/fuz_app/actions/action_codegen.js';
 
 import {get_innermost_type_name} from './zod_helpers.js';
 import {all_action_specs} from './action_specs.js';

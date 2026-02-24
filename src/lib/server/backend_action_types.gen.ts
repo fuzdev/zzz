@@ -1,12 +1,12 @@
 // @slop Claude Opus 4
 
 import type {Gen} from '@fuzdev/gro/gen.js';
-import {ActionRegistry} from '@fuzdev/fuz_app/action_registry.js';
+import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
 import {
 	ImportBuilder,
 	generate_phase_handlers,
 	create_banner,
-} from '@fuzdev/fuz_app/action_codegen.js';
+} from '@fuzdev/fuz_app/actions/action_codegen.js';
 
 import {all_action_specs} from '../action_specs.js';
 

@@ -377,7 +377,7 @@
 						"name": "ActionEventData",
 						"kind": "type",
 						"source_line": 17,
-						"type_signature": "ZodObject<{ kind: ZodEnum<{ request_response: \"request_response\"; remote_notification: \"remote_notification\"; local_call: \"local_call\"; }>; phase: ZodEnum<{ send: \"send\"; send_request: \"send_request\"; ... 6 more ...; execute: \"execute\"; }>; ... 9 more ...; notification: ZodNullable<...>; }, $strict>"
+						"type_signature": "ZodObject<{ kind: ZodEnum<{ request_response: \"request_response\"; remote_notification: \"remote_notification\"; local_call: \"local_call\"; }>; phase: ZodEnum<{ send_request: \"send_request\"; ... 7 more ...; execute: \"execute\"; }>; ... 9 more ...; notification: ZodNullable<...>; }, $strict>"
 					},
 					{
 						"name": "ActionEventRequestResponseData",
@@ -442,12 +442,12 @@
 						"name": "is_request_response",
 						"kind": "function",
 						"source_line": 25,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventRequestResponseData",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventRequestResponseData",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -455,12 +455,12 @@
 						"name": "is_remote_notification",
 						"kind": "function",
 						"source_line": 29,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventRemoteNotificationData",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventRemoteNotificationData",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -468,12 +468,12 @@
 						"name": "is_local_call",
 						"kind": "function",
 						"source_line": 33,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventLocalCallData",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventLocalCallData",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -481,12 +481,12 @@
 						"name": "is_send_request",
 						"kind": "function",
 						"source_line": 37,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -494,12 +494,12 @@
 						"name": "is_receive_request",
 						"kind": "function",
 						"source_line": 42,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -507,12 +507,12 @@
 						"name": "is_send_response",
 						"kind": "function",
 						"source_line": 47,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -520,12 +520,12 @@
 						"name": "is_receive_response",
 						"kind": "function",
 						"source_line": 52,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -533,12 +533,12 @@
 						"name": "is_notification_send",
 						"kind": "function",
 						"source_line": 57,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -546,12 +546,12 @@
 						"name": "is_notification_receive",
 						"kind": "function",
 						"source_line": 62,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -559,12 +559,12 @@
 						"name": "is_execute",
 						"kind": "function",
 						"source_line": 67,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventLocalCallData & { ...; }",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventLocalCallData & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -572,12 +572,12 @@
 						"name": "is_initial",
 						"kind": "function",
 						"source_line": 73,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -585,12 +585,12 @@
 						"name": "is_parsed",
 						"kind": "function",
 						"source_line": 76,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -598,12 +598,12 @@
 						"name": "is_handling",
 						"kind": "function",
 						"source_line": 79,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -611,12 +611,12 @@
 						"name": "is_handled",
 						"kind": "function",
 						"source_line": 82,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -624,12 +624,12 @@
 						"name": "is_failed",
 						"kind": "function",
 						"source_line": 85,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -642,7 +642,7 @@
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -655,7 +655,7 @@
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -680,7 +680,7 @@
 						"name": "validate_phase_for_kind",
 						"kind": "function",
 						"source_line": 115,
-						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"): void",
+						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"): void",
 						"return_type": "void",
 						"parameters": [
 							{
@@ -689,7 +689,7 @@
 							},
 							{
 								"name": "phase",
-								"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
+								"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
 							}
 						]
 					},
@@ -697,16 +697,16 @@
 						"name": "validate_phase_transition",
 						"kind": "function",
 						"source_line": 122,
-						"type_signature": "(from: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\", to: \"send\" | \"send_request\" | ... 6 more ... | \"receive\"): void",
+						"type_signature": "(from: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", to: \"send_request\" | \"execute\" | ... 6 more ... | \"receive\"): void",
 						"return_type": "void",
 						"parameters": [
 							{
 								"name": "from",
-								"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
+								"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
 							},
 							{
 								"name": "to",
-								"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
+								"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
 							}
 						]
 					},
@@ -714,8 +714,8 @@
 						"name": "get_initial_phase",
 						"kind": "function",
 						"source_line": 129,
-						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", initiator: \"frontend\" | \"backend\" | \"both\", executor: \"frontend\" | \"backend\"): \"send\" | \"send_request\" | ... 7 more ... | null",
-						"return_type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\" | null",
+						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", initiator: \"frontend\" | \"backend\" | \"both\", executor: \"frontend\" | \"backend\"): \"send_request\" | \"execute\" | ... 7 more ... | null",
+						"return_type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | null",
 						"parameters": [
 							{
 								"name": "kind",
@@ -735,7 +735,7 @@
 						"name": "should_validate_output",
 						"kind": "function",
 						"source_line": 146,
-						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"): boolean",
+						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"): boolean",
 						"return_type": "boolean",
 						"parameters": [
 							{
@@ -744,7 +744,7 @@
 							},
 							{
 								"name": "phase",
-								"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
+								"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
 							}
 						]
 					},
@@ -752,12 +752,12 @@
 						"name": "is_action_complete",
 						"kind": "function",
 						"source_line": 150,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): boolean",
+						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): boolean",
 						"return_type": "boolean",
 						"parameters": [
 							{
 								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
+								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
 							}
 						]
 					},
@@ -765,8 +765,8 @@
 						"name": "create_initial_data",
 						"kind": "function",
 						"source_line": 159,
-						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\", method: \"ping\" | ... 18 more ... | \"provider_update_api_key\", executor: \"frontend\" | \"backend\", input: unknown): { ...; }",
-						"return_type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }",
+						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", method: \"ping\" | ... 18 more ... | \"provider_update_api_key\", executor: \"frontend\" | \"backend\", input: unknown): { ...; }",
+						"return_type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }",
 						"parameters": [
 							{
 								"name": "kind",
@@ -774,7 +774,7 @@
 							},
 							{
 								"name": "phase",
-								"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
+								"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
 							},
 							{
 								"name": "method",
@@ -794,12 +794,12 @@
 						"name": "extract_action_result",
 						"kind": "function",
 						"source_line": 180,
-						"type_signature": "(event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): Result<...>",
+						"type_signature": "(event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): Result<...>",
 						"return_type": "Result<{ value: unknown; }, { error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }>",
 						"parameters": [
 							{
 								"name": "event",
-								"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | ..."
+								"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 mor..."
 							}
 						]
 					}
@@ -832,13 +832,13 @@
 						"name": "ACTION_EVENT_PHASE_BY_KIND",
 						"kind": "variable",
 						"source_line": 25,
-						"type_signature": "Record<\"request_response\" | \"remote_notification\" | \"local_call\", readonly (\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\")[]>"
+						"type_signature": "Record<\"request_response\" | \"remote_notification\" | \"local_call\", readonly (\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\")[]>"
 					},
 					{
 						"name": "ACTION_EVENT_PHASE_TRANSITIONS",
 						"kind": "variable",
 						"source_line": 38,
-						"type_signature": "Record<\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\", \"send\" | \"send_request\" | ... 7 more ... | null>"
+						"type_signature": "Record<\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"send_request\" | \"execute\" | ... 7 more ... | null>"
 					},
 					{
 						"name": "ActionEventEnvironment",
@@ -941,7 +941,7 @@
 							{
 								"name": "constructor",
 								"kind": "constructor",
-								"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", TEnvironment extends ActionEventEnvironment = ActionEventEnvironment, TPhase extends ActionEventPhase = \"send\" | ... 7 more ... | \"receive\", TStep extends ActionEventStep = \"initial\" | ... 3 more ... | \"failed\">(environment: TEnvironment, spec: { ...; } | ... 1 more ... | { ...; }, data: ActionEventDatas[TMethod]): ActionEvent<...>",
+								"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", TEnvironment extends ActionEventEnvironment = ActionEventEnvironment, TPhase extends ActionEventPhase = \"send_request\" | ... 7 more ... | \"receive\", TStep extends ActionEventStep = \"initial\" | ... 3 more ... | \"failed\">(environment: TEnvironment, spec: { ...; } | ... 1 more ... | { ...; }, data: ActionEventDatas[TMethod]): ActionEvent<...>",
 								"parameters": [
 									{
 										"name": "environment",
@@ -1016,12 +1016,12 @@
 								"name": "transition",
 								"kind": "function",
 								"doc_comment": "Transition to a new phase.",
-								"type_signature": "(phase: \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\"): void",
+								"type_signature": "(phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"): void",
 								"return_type": "void",
 								"parameters": [
 									{
 										"name": "phase",
-										"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
+										"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
 									}
 								]
 							},
@@ -1087,8 +1087,8 @@
 						"kind": "function",
 						"doc_comment": "Create an action event from a spec and initial input.",
 						"source_line": 454,
-						"type_signature": "<TMethod extends ActionMethod>(environment: ActionEventEnvironment, spec: { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<...>; ... 4 more ...; async: true; } | { ...; } | { ...; }, input: unknown, initial_phase?: \"send\" | ... 8 more ... | undefined): ActionEvent<...>",
-						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
+						"type_signature": "<TMethod extends ActionMethod>(environment: ActionEventEnvironment, spec: { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<...>; ... 4 more ...; async: true; } | { ...; } | { ...; }, input: unknown, initial_phase?: \"send_request\" | ... 8 more ... | undefined): ActionEvent<...>",
+						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"parameters": [
 							{
 								"name": "environment",
@@ -1104,7 +1104,7 @@
 							},
 							{
 								"name": "initial_phase",
-								"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\" | undefined",
+								"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | undefined",
 								"optional": true
 							}
 						]
@@ -1114,8 +1114,8 @@
 						"kind": "function",
 						"doc_comment": "Reconstruct an action event from serialized JSON data.",
 						"source_line": 481,
-						"type_signature": "<TMethod extends ActionMethod>(json: ActionEventDatas[TMethod], environment: ActionEventEnvironment): ActionEvent<TMethod, ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
-						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
+						"type_signature": "<TMethod extends ActionMethod>(json: ActionEventDatas[TMethod], environment: ActionEventEnvironment): ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
+						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"parameters": [
 							{
 								"name": "json",
@@ -1131,8 +1131,8 @@
 						"name": "parse_action_event",
 						"kind": "function",
 						"source_line": 495,
-						"type_signature": "(raw_json: unknown, environment: ActionEventEnvironment): ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | ... 13 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
-						"return_type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | ...",
+						"type_signature": "(raw_json: unknown, environment: ActionEventEnvironment): ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | ... 13 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
+						"return_type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 mor...",
 						"parameters": [
 							{
 								"name": "raw_json",
@@ -1767,12 +1767,12 @@
 							{
 								"name": "listen_to_action_event",
 								"kind": "function",
-								"type_signature": "(action_event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): () => void",
+								"type_signature": "(action_event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): () => void",
 								"return_type": "() => void",
 								"parameters": [
 									{
 										"name": "action_event",
-										"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | ..."
+										"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 mor..."
 									}
 								]
 							},
@@ -8152,7 +8152,7 @@
 							{
 								"name": "lookup_action_handler",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send\" | ... 7 more ... | \"receive\"): ((event: any) => any) | undefined",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send_request\" | ... 7 more ... | \"receive\"): ((event: any) => any) | undefined",
 								"return_type": "((event: any) => any) | undefined",
 								"parameters": [
 									{
@@ -8161,7 +8161,7 @@
 									},
 									{
 										"name": "phase",
-										"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
+										"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
 									}
 								]
 							},
@@ -8204,7 +8204,7 @@
 							{
 								"name": "is_valid_phase_for_method",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send\" | ... 7 more ... | \"receive\"): boolean",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send_request\" | ... 7 more ... | \"receive\"): boolean",
 								"return_type": "boolean",
 								"parameters": [
 									{
@@ -8213,7 +8213,7 @@
 									},
 									{
 										"name": "phase",
-										"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
+										"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
 									}
 								]
 							}
@@ -17040,7 +17040,7 @@
 							{
 								"name": "lookup_action_handler",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send\" | ... 7 more ... | \"receive\"): ((event: any) => any) | undefined",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send_request\" | ... 7 more ... | \"receive\"): ((event: any) => any) | undefined",
 								"return_type": "((event: any) => any) | undefined",
 								"parameters": [
 									{
@@ -17049,7 +17049,7 @@
 									},
 									{
 										"name": "phase",
-										"type": "\"send\" | \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"receive\""
+										"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
 									}
 								]
 							},
