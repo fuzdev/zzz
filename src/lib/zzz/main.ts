@@ -8,7 +8,7 @@ import {colors} from '@fuzdev/fuz_app/cli/util.js';
 
 import {log} from './log.js';
 import type {ZzzRuntime} from './runtime/types.ts';
-import {create_deno_runtime} from './runtime/deno.ts';
+import {create_deno_runtime} from '@fuzdev/fuz_app/cli/runtime_deno.js';
 import {parse_zzz_args, show_help, show_version} from './cli.ts';
 import {dispatch, create_subcommand_router, type SubcommandRoute} from './cli/cli_args.ts';
 import {

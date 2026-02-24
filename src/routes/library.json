@@ -17798,7 +17798,7 @@
 						"name": "start_server_deno",
 						"kind": "function",
 						"doc_comment": "Start the zzz server using Deno runtime.\n\nCreates the full backend with providers, WebSocket, and HTTP RPC\nendpoints via `create_zzz_app`, then serves with `Deno.serve`.",
-						"source_line": 75,
+						"source_line": 33,
 						"type_signature": "(): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": []
@@ -20887,12 +20887,12 @@
 						"kind": "function",
 						"doc_comment": "Start the daemon in foreground mode.\n\nCLI flags --port and --host override config values.",
 						"source_line": 31,
-						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; port?: number | undefined; host?: string | undefined; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
+						"type_signature": "(runtime: DenoRuntime, args: { _: string[]; port?: number | undefined; host?: string | undefined; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
 							{
 								"name": "runtime",
-								"type": "ZzzRuntime"
+								"type": "DenoRuntime"
 							},
 							{
 								"name": "args",
@@ -20909,12 +20909,12 @@
 						"kind": "function",
 						"doc_comment": "Stop the running daemon.",
 						"source_line": 47,
-						"type_signature": "(runtime: ZzzRuntime, _args: { _: string[]; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
+						"type_signature": "(runtime: DenoRuntime, _args: { _: string[]; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
 							{
 								"name": "runtime",
-								"type": "ZzzRuntime"
+								"type": "DenoRuntime"
 							},
 							{
 								"name": "_args",
@@ -20931,12 +20931,12 @@
 						"kind": "function",
 						"doc_comment": "Show daemon status.",
 						"source_line": 65,
-						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; json: boolean; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
+						"type_signature": "(runtime: DenoRuntime, args: { _: string[]; json: boolean; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
 							{
 								"name": "runtime",
-								"type": "ZzzRuntime"
+								"type": "DenoRuntime"
 							},
 							{
 								"name": "args",
@@ -20961,12 +20961,12 @@
 						"kind": "function",
 						"doc_comment": "Initialize zzz configuration (~/.zzz/).\n\nCreates the config directory and config.json.",
 						"source_line": 27,
-						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; port?: number | undefined; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
+						"type_signature": "(runtime: DenoRuntime, args: { _: string[]; port?: number | undefined; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
 							{
 								"name": "runtime",
-								"type": "ZzzRuntime"
+								"type": "DenoRuntime"
 							},
 							{
 								"name": "args",
@@ -20991,12 +20991,12 @@
 						"kind": "function",
 						"doc_comment": "Open the zzz UI in a browser, auto-starting the daemon if needed.",
 						"source_line": 87,
-						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
+						"type_signature": "(runtime: DenoRuntime, args: { _: string[]; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
 							{
 								"name": "runtime",
-								"type": "ZzzRuntime"
+								"type": "DenoRuntime"
 							},
 							{
 								"name": "args",
@@ -21021,12 +21021,12 @@
 						"kind": "function",
 						"doc_comment": "Show current system state.",
 						"source_line": 19,
-						"type_signature": "(runtime: ZzzRuntime, args: { _: string[]; json: boolean; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
+						"type_signature": "(runtime: DenoRuntime, args: { _: string[]; json: boolean; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
 							{
 								"name": "runtime",
-								"type": "ZzzRuntime"
+								"type": "DenoRuntime"
 							},
 							{
 								"name": "args",
@@ -21078,192 +21078,21 @@
 					"zzz/commands/init.ts",
 					"zzz/commands/open.ts",
 					"zzz/commands/status.ts",
-					"zzz/log.ts",
-					"zzz/runtime/deno.ts"
+					"zzz/log.ts"
 				]
-			},
-			{
-				"path": "zzz/runtime/deno.ts",
-				"declarations": [
-					{
-						"name": "create_deno_runtime",
-						"kind": "function",
-						"doc_comment": "Create a ZzzRuntime backed by Deno APIs.",
-						"source_line": 15,
-						"type_signature": "(args: readonly string[]): ZzzRuntime",
-						"return_type": "ZzzRuntime",
-						"return_description": "ZzzRuntime implementation using Deno runtime.",
-						"parameters": [
-							{
-								"name": "args",
-								"type": "readonly string[]",
-								"description": "CLI arguments (typically Deno.args)."
-							}
-						]
-					}
-				],
-				"module_comment": "Deno implementation of ZzzRuntime.",
-				"dependents": ["zzz/main.ts"]
 			},
 			{
 				"path": "zzz/runtime/types.ts",
 				"declarations": [
 					{
-						"name": "StatResult",
-						"kind": "type",
-						"doc_comment": "Result of a stat operation.",
-						"source_line": 21,
-						"type_signature": "StatResult",
-						"properties": [
-							{
-								"name": "is_file",
-								"kind": "variable",
-								"type_signature": "boolean"
-							},
-							{
-								"name": "is_directory",
-								"kind": "variable",
-								"type_signature": "boolean"
-							}
-						]
-					},
-					{
-						"name": "ZzzCommandResult",
-						"kind": "type",
-						"doc_comment": "Result of executing a command.",
-						"source_line": 29,
-						"type_signature": "ZzzCommandResult",
-						"properties": [
-							{
-								"name": "success",
-								"kind": "variable",
-								"type_signature": "boolean"
-							},
-							{
-								"name": "code",
-								"kind": "variable",
-								"type_signature": "number"
-							},
-							{
-								"name": "stdout",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "stderr",
-								"kind": "variable",
-								"type_signature": "string"
-							}
-						]
-					},
-					{
 						"name": "ZzzRuntime",
 						"kind": "type",
-						"doc_comment": "Unified runtime abstraction for zzz CLI operations.\n\nProvides all runtime primitives as injectable dependencies.\nFunctions should accept partial interfaces via `Pick<ZzzRuntime, ...>`.",
-						"source_line": 42,
-						"type_signature": "ZzzRuntime",
-						"properties": [
-							{
-								"name": "env_get",
-								"kind": "variable",
-								"type_signature": "(name: string) => string | undefined",
-								"doc_comment": "Get an environment variable value."
-							},
-							{
-								"name": "env_set",
-								"kind": "variable",
-								"type_signature": "(name: string, value: string) => void",
-								"doc_comment": "Set an environment variable."
-							},
-							{
-								"name": "env_all",
-								"kind": "variable",
-								"type_signature": "() => Record<string, string>",
-								"doc_comment": "Get all environment variables."
-							},
-							{
-								"name": "args",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "ReadonlyArray<string>",
-								"doc_comment": "CLI arguments passed to the program."
-							},
-							{
-								"name": "cwd",
-								"kind": "variable",
-								"type_signature": "() => string",
-								"doc_comment": "Get current working directory."
-							},
-							{
-								"name": "exit",
-								"kind": "variable",
-								"type_signature": "(code: number) => never",
-								"doc_comment": "Exit the process with a code."
-							},
-							{
-								"name": "stat",
-								"kind": "variable",
-								"type_signature": "(path: string) => Promise<StatResult | null>",
-								"doc_comment": "Get file/directory stats."
-							},
-							{
-								"name": "mkdir",
-								"kind": "variable",
-								"type_signature": "(path: string, options?: {recursive?: boolean}) => Promise<void>",
-								"doc_comment": "Create a directory."
-							},
-							{
-								"name": "read_file",
-								"kind": "variable",
-								"type_signature": "(path: string) => Promise<string>",
-								"doc_comment": "Read a file as text."
-							},
-							{
-								"name": "write_file",
-								"kind": "variable",
-								"type_signature": "(path: string, content: string) => Promise<void>",
-								"doc_comment": "Write text to a file."
-							},
-							{
-								"name": "rename",
-								"kind": "variable",
-								"type_signature": "(old_path: string, new_path: string) => Promise<void>",
-								"doc_comment": "Rename (move) a file."
-							},
-							{
-								"name": "remove",
-								"kind": "variable",
-								"type_signature": "(path: string, options?: {recursive?: boolean}) => Promise<void>",
-								"doc_comment": "Remove a file or directory."
-							},
-							{
-								"name": "run_command",
-								"kind": "variable",
-								"type_signature": "(cmd: string, args: Array<string>) => Promise<ZzzCommandResult>",
-								"doc_comment": "Run a command and return the result."
-							},
-							{
-								"name": "run_command_inherit",
-								"kind": "variable",
-								"type_signature": "(cmd: string, args: Array<string>) => Promise<number>",
-								"doc_comment": "Run a command with inherited stdout/stderr."
-							},
-							{
-								"name": "stdout_write",
-								"kind": "variable",
-								"type_signature": "(data: Uint8Array) => Promise<number>",
-								"doc_comment": "Write bytes to stdout."
-							},
-							{
-								"name": "stdin_read",
-								"kind": "variable",
-								"type_signature": "(buffer: Uint8Array) => Promise<number | null>",
-								"doc_comment": "Read bytes from stdin."
-							}
-						]
+						"doc_comment": "Unified runtime abstraction for zzz CLI operations.\n\nProvides all runtime primitives as injectable dependencies.\nFunctions should accept partial interfaces via `Pick<ZzzRuntime, ...>`\nor better yet, narrow `*Deps` interfaces from fuz_app.",
+						"source_line": 22,
+						"type_signature": "DenoRuntime"
 					}
 				],
-				"module_comment": "Unified runtime abstraction for zzz CLI operations.\n\nProvides all runtime primitives as injectable dependencies.\nFunctions should accept partial interfaces for only what they need.\n\n@example\n```ts\n// Function declares only what it needs\nconst load_config = (\n  runtime: Pick<ZzzRuntime, 'env_get' | 'read_file' | 'stat'>,\n) => { ... };\n```"
+				"module_comment": "Runtime type alias for zzz.\n\nThe full runtime interface is shared via `DenoRuntime` from fuz_app.\n`ZzzRuntime` is a project-local alias used throughout the CLI code.\n\nFunctions should accept narrow `*Deps` interfaces from\n`@fuzdev/fuz_app/cli/runtime.js`, not the full `ZzzRuntime`."
 			}
 		]
 	}

@@ -82,9 +82,9 @@ src/lib/zzz/
 
 ### ZzzRuntime
 
-Injectable runtime abstraction. Functions accept narrow dependencies via
-`Pick<ZzzRuntime, 'env_get' | 'read_file'>`. Deno implementation in
-`runtime/deno.ts`. Matches tx's `TxRuntime` pattern exactly.
+Injectable runtime abstraction. `ZzzRuntime` is a type alias for `DenoRuntime`
+from `@fuzdev/fuz_app/cli/runtime_deno.js`. Functions should accept narrow
+`*Deps` interfaces (`EnvDeps`, `FsReadDeps`, etc.) from fuz_app.
 
 ### CLI Dispatch
 

@@ -15,56 +15,14 @@ import {
 	is_daemon_running,
 	get_daemon_info_path,
 } from '@fuzdev/fuz_app/cli/daemon.js';
-import type {
-	EnvDeps,
-	FsReadDeps,
-	FsWriteDeps,
-	FsRemoveDeps,
-	CommandDeps,
-	CommandResult,
-	StatResult,
-} from '@fuzdev/fuz_app/cli/runtime.js';
+import {create_deno_runtime} from '@fuzdev/fuz_app/cli/runtime_deno.js';
 
 import {VERSION} from '../zzz/build_info.ts';
 import {create_zzz_app} from './create_zzz_app.ts';
 import {load_server_env} from './server_env.ts';
 
-// TODO: this duplicates a subset of create_deno_runtime() from runtime/deno.ts —
-// consider sharing, but create_deno_runtime returns a full ZzzRuntime (with I/O,
-// cwd, exit, args) which is more than needed here.
-/** Deno adapter satisfying fuz_app's `*Deps` interfaces. */
-const daemon_runtime: EnvDeps & FsReadDeps & FsWriteDeps & FsRemoveDeps & CommandDeps = {
-	env_get: (name: string) => Deno.env.get(name),
-	env_set: (name: string, value: string) => Deno.env.set(name, value),
-	stat: async (path: string): Promise<StatResult | null> => {
-		try {
-			const s = await Deno.stat(path);
-			return {is_file: s.isFile, is_directory: s.isDirectory};
-		} catch {
-			return null;
-		}
-	},
-	read_file: (path: string) => Deno.readTextFile(path),
-	mkdir: (path: string, opts?: {recursive?: boolean}) => Deno.mkdir(path, opts),
-	write_file: (path: string, content: string) => Deno.writeTextFile(path, content),
-	rename: (old_path: string, new_path: string) => Deno.rename(old_path, new_path),
-	remove: (path: string) => Deno.remove(path),
-	run_command: async (cmd: string, args: Array<string>): Promise<CommandResult> => {
-		try {
-			const proc = new Deno.Command(cmd, {args, stdout: 'piped', stderr: 'piped'});
-			const result = await proc.output();
-			return {
-				success: result.code === 0,
-				code: result.code,
-				stdout: new TextDecoder().decode(result.stdout),
-				stderr: new TextDecoder().decode(result.stderr),
-			};
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			return {success: false, code: 1, stdout: '', stderr: message};
-		}
-	},
-};
+/** Shared runtime for daemon lifecycle and server operations. */
+const daemon_runtime = create_deno_runtime([]);
 
 /**
  * Start the zzz server using Deno runtime.
