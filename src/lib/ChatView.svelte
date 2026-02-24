@@ -1,9 +1,9 @@
 <script lang="ts">
 	import {slide} from 'svelte/transition';
 	import Details from '@fuzdev/fuz_ui/Details.svelte';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
 	import Glyph from './Glyph.svelte';
-	import ConfirmButton from './ConfirmButton.svelte';
 	import {Chat} from './chat.svelte.js';
 	import {frontend_context} from './frontend.svelte.js';
 	import {GLYPH_THREAD, GLYPH_CHAT, GLYPH_DELETE, GLYPH_VIEW} from './glyphs.js';

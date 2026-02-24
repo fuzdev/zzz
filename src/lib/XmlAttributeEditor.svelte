@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
 	import type {XmlAttributeWithDefaults} from './xml.js';
 	import {GLYPH_REMOVE} from './glyphs.js';
-	import ConfirmButton from './ConfirmButton.svelte';
 	import Glyph from './Glyph.svelte';
 
 	const {

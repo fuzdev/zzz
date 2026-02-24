@@ -13,6 +13,7 @@
 import {Hono} from 'hono';
 import {Logger} from '@fuzdev/fuz_util/log.js';
 import type {UpgradeWebSocket} from 'hono/ws';
+import {parse_allowed_origins, verify_request_source} from '@fuzdev/fuz_app/api/origin.js';
 
 import {Backend} from './backend.js';
 import type {ZzzServerEnv} from './server_env.js';
@@ -21,13 +22,13 @@ import {register_http_actions} from './register_http_actions.js';
 import {register_websocket_actions} from './register_websocket_actions.js';
 import create_config from '../config.js';
 import {action_specs} from '../action_collections.js';
-import {parse_allowed_origins, verify_request_source} from './security.js';
 import {handle_filer_change} from './backend_actions_api.js';
 import {BackendProviderOllama} from './backend_provider_ollama.js';
 import {BackendProviderClaude} from './backend_provider_claude.js';
 import {BackendProviderChatgpt} from './backend_provider_chatgpt.js';
 import {BackendProviderGemini} from './backend_provider_gemini.js';
 import type {BackendProviderOptions} from './backend_provider.js';
+
 const log = new Logger('[server]');
 
 /**

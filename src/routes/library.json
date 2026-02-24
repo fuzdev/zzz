@@ -87,7 +87,7 @@
 			"@hono/node-ws": "^1.2.0",
 			"date-fns": "^4.1.0",
 			"esm-env": "^1.2.2",
-			"hono": "^4.10.7",
+			"hono": "^4.12.2",
 			"openai": "^6.10.0",
 			"zod": "^4.3.6"
 		},
@@ -2714,7 +2714,6 @@
 					}
 				],
 				"dependencies": [
-					"ConfirmButton.svelte",
 					"Glyph.svelte",
 					"SocketMessageQueue.svelte",
 					"constants.ts",
@@ -4388,7 +4387,7 @@
 						"source_line": 1
 					}
 				],
-				"dependencies": ["ConfirmButton.svelte", "chat.svelte.ts"],
+				"dependencies": ["chat.svelte.ts"],
 				"dependents": ["ChatView.svelte", "ChatViewSimple.svelte"]
 			},
 			{
@@ -4412,7 +4411,6 @@
 					"ChatThreadManageByTag.svelte",
 					"ChatViewMulti.svelte",
 					"ChatViewSimple.svelte",
-					"ConfirmButton.svelte",
 					"EditableText.svelte",
 					"Glyph.svelte",
 					"ThreadList.svelte",
@@ -4440,7 +4438,6 @@
 				],
 				"dependencies": [
 					"ChatThread.svelte",
-					"ConfirmButton.svelte",
 					"ContentEditor.svelte",
 					"Glyph.svelte",
 					"ModelPickerDialog.svelte",
@@ -4713,65 +4710,6 @@
 				],
 				"dependencies": ["config_defaults.ts"],
 				"dependents": ["server/create_zzz_app.ts"]
-			},
-			{
-				"path": "ConfirmButton.svelte",
-				"declarations": [
-					{
-						"name": "ConfirmButton",
-						"kind": "component",
-						"props": [
-							{
-								"name": "onconfirm",
-								"type": "(popover: Popover) => void"
-							},
-							{
-								"name": "popover_button_attrs",
-								"type": "SvelteHTMLElements['button'] | undefined",
-								"optional": true
-							},
-							{
-								"name": "hide_on_confirm",
-								"type": "boolean | undefined",
-								"optional": true
-							},
-							{
-								"name": "popover_content",
-								"type": "Snippet<[popover: Popover, confirm: () => void]> | undefined",
-								"optional": true,
-								"description": "Unlike on `PopoverButton` this is optional and has a `confirm` arg"
-							},
-							{
-								"name": "popover_button_content",
-								"type": "Snippet<[popover: Popover, confirm: () => void]> | undefined",
-								"optional": true,
-								"description": "Content for the popover button"
-							},
-							{
-								"name": "children",
-								"type": "Snippet<[popover: Popover, confirm: () => void]> | undefined",
-								"optional": true,
-								"description": "Unlike on `PopoverButton` this has a `confirm` arg"
-							}
-						],
-						"source_line": 1
-					}
-				],
-				"dependencies": ["Glyph.svelte", "PopoverButton.svelte", "glyphs.ts"],
-				"dependents": [
-					"CapabilityWebsocket.svelte",
-					"ChatThreadManageByTag.svelte",
-					"ChatView.svelte",
-					"ChatViewMulti.svelte",
-					"DashboardPrompts.svelte",
-					"DiskfileActions.svelte",
-					"DiskfileHistoryView.svelte",
-					"OllamaModelDetail.svelte",
-					"PartRemoveButton.svelte",
-					"SocketMessageQueue.svelte",
-					"ThreadListitem.svelte",
-					"XmlAttributeEditor.svelte"
-				]
 			},
 			{
 				"path": "constants.ts",
@@ -5319,7 +5257,6 @@
 					}
 				],
 				"dependencies": [
-					"ConfirmButton.svelte",
 					"ContentPreview.svelte",
 					"DiskfilePickerDialog.svelte",
 					"EditableText.svelte",
@@ -6477,7 +6414,6 @@
 				],
 				"dependencies": [
 					"ClearRestoreButton.svelte",
-					"ConfirmButton.svelte",
 					"Glyph.svelte",
 					"frontend.svelte.ts",
 					"glyphs.ts"
@@ -6618,7 +6554,7 @@
 						"source_line": 1
 					}
 				],
-				"dependencies": ["ConfirmButton.svelte", "time_helpers.ts"],
+				"dependencies": ["time_helpers.ts"],
 				"dependents": ["DiskfileEditorView.svelte", "PartEditorForDiskfile.svelte"]
 			},
 			{
@@ -8367,7 +8303,6 @@
 					"ChatView.svelte",
 					"ChatViewMulti.svelte",
 					"ChatsContextmenu.svelte",
-					"ConfirmButton.svelte",
 					"ContentEditor.svelte",
 					"ContextmenuEntryCopyToClipboard.svelte",
 					"ContextmenuEntryToggle.svelte",
@@ -8876,7 +8811,6 @@
 					"ChatViewMulti.svelte",
 					"ChatsContextmenu.svelte",
 					"ClearRestoreButton.svelte",
-					"ConfirmButton.svelte",
 					"ContentEditor.svelte",
 					"ContextmenuEntryCopyToClipboard.svelte",
 					"ContextmenuEntryToggle.svelte",
@@ -9041,7 +8975,6 @@
 					"diskfile_editor_state.svelte.ts",
 					"part.svelte.ts",
 					"parts.svelte.ts",
-					"popover.svelte.ts",
 					"prompt.svelte.ts",
 					"prompts.svelte.ts",
 					"reorderable.svelte.ts",
@@ -12197,7 +12130,6 @@
 					}
 				],
 				"dependencies": [
-					"ConfirmButton.svelte",
 					"Glyph.svelte",
 					"ModelContextmenu.svelte",
 					"ModelLink.svelte",
@@ -13048,7 +12980,7 @@
 						"source_line": 1
 					}
 				],
-				"dependencies": ["ConfirmButton.svelte", "Glyph.svelte", "glyphs.ts"],
+				"dependencies": ["Glyph.svelte", "glyphs.ts"],
 				"dependents": ["PartSummary.svelte", "PartView.svelte", "TurnView.svelte"]
 			},
 			{
@@ -13426,321 +13358,6 @@
 					}
 				],
 				"dependents": ["ollama.svelte.ts"]
-			},
-			{
-				"path": "popover.svelte.ts",
-				"declarations": [
-					{
-						"name": "PopoverParameters",
-						"kind": "type",
-						"doc_comment": "Parameters for configuring the popover.",
-						"source_line": 20,
-						"type_signature": "PopoverParameters",
-						"properties": [
-							{
-								"name": "position",
-								"kind": "variable",
-								"type_signature": "Position",
-								"doc_comment": "Position of the popover relative to its trigger."
-							},
-							{
-								"name": "align",
-								"kind": "variable",
-								"type_signature": "Alignment",
-								"doc_comment": "Alignment along the position edge."
-							},
-							{
-								"name": "offset",
-								"kind": "variable",
-								"type_signature": "string",
-								"doc_comment": "Distance from the position."
-							},
-							{
-								"name": "disable_outside_click",
-								"kind": "variable",
-								"type_signature": "boolean",
-								"doc_comment": "Whether to disable closing when clicking outside."
-							},
-							{
-								"name": "popover_class",
-								"kind": "variable",
-								"type_signature": "string",
-								"doc_comment": "Custom class for the popover content."
-							},
-							{
-								"name": "onshow",
-								"kind": "variable",
-								"type_signature": "() => void",
-								"doc_comment": "Optional callback when popover is shown."
-							},
-							{
-								"name": "onhide",
-								"kind": "variable",
-								"type_signature": "() => void",
-								"doc_comment": "Optional callback when popover is hidden."
-							}
-						]
-					},
-					{
-						"name": "PopoverTriggerParameters",
-						"kind": "type",
-						"doc_comment": "Parameters for the popover trigger action.",
-						"source_line": 40,
-						"type_signature": "PopoverTriggerParameters",
-						"extends": ["PopoverParameters"],
-						"properties": [
-							{
-								"name": "content",
-								"kind": "variable",
-								"type_signature": "Snippet",
-								"doc_comment": "Content to render in the popover (as a snippet)."
-							}
-						]
-					},
-					{
-						"name": "TransitionFunction",
-						"kind": "type",
-						"doc_comment": "Support both Svelte transitions and custom transitions.",
-						"source_line": 48,
-						"type_signature": "TransitionFunction"
-					},
-					{
-						"name": "PopoverContentParameters",
-						"kind": "type",
-						"doc_comment": "Parameters for the popover content action.",
-						"source_line": 54,
-						"type_signature": "PopoverContentParameters",
-						"extends": ["PopoverParameters"],
-						"properties": []
-					},
-					{
-						"name": "Popover",
-						"kind": "class",
-						"doc_comment": "Class that manages state and provides actions for popovers.",
-						"source_line": 61,
-						"members": [
-							{
-								"name": "visible",
-								"kind": "variable",
-								"doc_comment": "Whether the popover is currently visible."
-							},
-							{
-								"name": "position",
-								"kind": "variable",
-								"doc_comment": "Position of the popover relative to its trigger.",
-								"type_signature": "Position"
-							},
-							{
-								"name": "align",
-								"kind": "variable",
-								"doc_comment": "Alignment along the position edge.",
-								"type_signature": "Alignment"
-							},
-							{
-								"name": "offset",
-								"kind": "variable",
-								"doc_comment": "Distance from the position."
-							},
-							{
-								"name": "disable_outside_click",
-								"kind": "variable",
-								"doc_comment": "Whether to disable closing when clicking outside."
-							},
-							{
-								"name": "popover_class",
-								"kind": "variable",
-								"doc_comment": "Custom class for the popover."
-							},
-							{
-								"name": "constructor",
-								"kind": "constructor",
-								"type_signature": "(params?: PopoverParameters | undefined): Popover",
-								"parameters": [
-									{
-										"name": "params",
-										"type": "PopoverParameters | undefined",
-										"optional": true
-									}
-								]
-							},
-							{
-								"name": "update",
-								"kind": "function",
-								"doc_comment": "Updates the popover configuration.",
-								"type_signature": "(params: PopoverParameters): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "params",
-										"type": "PopoverParameters"
-									}
-								]
-							},
-							{
-								"name": "show",
-								"kind": "function",
-								"doc_comment": "Shows the popover.",
-								"type_signature": "(): void",
-								"return_type": "void",
-								"parameters": []
-							},
-							{
-								"name": "hide",
-								"kind": "function",
-								"doc_comment": "Hides the popover.",
-								"type_signature": "(): void",
-								"return_type": "void",
-								"parameters": []
-							},
-							{
-								"name": "toggle",
-								"kind": "function",
-								"doc_comment": "Toggles the popover visibility.",
-								"type_signature": "(visible?: boolean): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "visible",
-										"type": "boolean",
-										"default_value": "!this.visible"
-									}
-								]
-							},
-							{
-								"name": "container",
-								"kind": "variable",
-								"doc_comment": "Attachment for the container element.",
-								"type_signature": "Attachment<HTMLElement>"
-							},
-							{
-								"name": "trigger",
-								"kind": "variable",
-								"doc_comment": "Attachment factory for the trigger element that shows/hides the popover."
-							},
-							{
-								"name": "content",
-								"kind": "variable",
-								"doc_comment": "Attachment factory for the popover content element."
-							}
-						]
-					}
-				],
-				"dependencies": ["helpers.ts", "position_helpers.ts"],
-				"dependents": ["PopoverButton.svelte"]
-			},
-			{
-				"path": "PopoverButton.svelte",
-				"declarations": [
-					{
-						"name": "PopoverButton",
-						"kind": "component",
-						"props": [
-							{
-								"name": "position",
-								"type": "Position | undefined",
-								"optional": true
-							},
-							{
-								"name": "align",
-								"type": "Alignment | undefined",
-								"optional": true
-							},
-							{
-								"name": "disable_outside_click",
-								"type": "boolean | undefined",
-								"optional": true
-							},
-							{
-								"name": "popover_class",
-								"type": "string | undefined",
-								"optional": true
-							},
-							{
-								"name": "popover_attrs",
-								"type": "SvelteHTMLElements['div'] | undefined",
-								"optional": true
-							},
-							{
-								"name": "popover_content",
-								"type": "Snippet<[popover: Popover]>"
-							},
-							{
-								"name": "popover_container_attrs",
-								"type": "SvelteHTMLElements['div'] | undefined",
-								"optional": true
-							},
-							{
-								"name": "button",
-								"type": "Snippet<[popover: Popover]> | undefined",
-								"optional": true
-							},
-							{
-								"name": "children",
-								"type": "Snippet<[popover: Popover]> | undefined",
-								"optional": true
-							}
-						],
-						"source_line": 1
-					}
-				],
-				"dependencies": ["popover.svelte.ts"],
-				"dependents": ["ConfirmButton.svelte", "SocketMessageQueue.svelte"]
-			},
-			{
-				"path": "position_helpers.ts",
-				"declarations": [
-					{
-						"name": "CardinalPosition",
-						"kind": "type",
-						"doc_comment": "Basic position options for UI elements (cardinal directions).",
-						"source_line": 10,
-						"type_signature": "CardinalPosition"
-					},
-					{
-						"name": "Position",
-						"kind": "type",
-						"doc_comment": "Extended position options including overlay and center.",
-						"source_line": 15,
-						"type_signature": "Position"
-					},
-					{
-						"name": "Alignment",
-						"kind": "type",
-						"doc_comment": "Alignment options for positioned elements.",
-						"source_line": 20,
-						"type_signature": "Alignment"
-					},
-					{
-						"name": "generate_position_styles",
-						"kind": "function",
-						"doc_comment": "Generates CSS positioning styles for UI elements.",
-						"source_line": 30,
-						"type_signature": "(position?: Position, align?: Alignment, offset?: string): Record<string, string>",
-						"return_type": "Record<string, string>",
-						"return_description": "CSS styles as a Record",
-						"parameters": [
-							{
-								"name": "position",
-								"type": "Position",
-								"description": "Where to position the element ('left', 'right', etc.)",
-								"default_value": "'center'"
-							},
-							{
-								"name": "align",
-								"type": "Alignment",
-								"description": "Alignment along the position edge ('start', 'center', 'end')",
-								"default_value": "'center'"
-							},
-							{
-								"name": "offset",
-								"type": "string",
-								"description": "Distance from the position (CSS value)",
-								"default_value": "'0'"
-							}
-						]
-					}
-				],
-				"dependents": ["popover.svelte.ts"]
 			},
 			{
 				"path": "ProgressBar.svelte",
@@ -17194,8 +16811,7 @@
 					"server/backend_provider_gemini.ts",
 					"server/backend_provider_ollama.ts",
 					"server/register_http_actions.ts",
-					"server/register_websocket_actions.ts",
-					"server/security.ts"
+					"server/register_websocket_actions.ts"
 				],
 				"dependents": ["server/server.ts", "server/server_deno.ts"]
 			},
@@ -17737,59 +17353,6 @@
 					}
 				],
 				"dependents": ["server/backend.ts", "server/helpers.ts"]
-			},
-			{
-				"path": "server/security.ts",
-				"declarations": [
-					{
-						"name": "parse_allowed_origins",
-						"kind": "function",
-						"doc_comment": "Parses ALLOWED_ORIGINS env var into regex matchers for request source verification.\nThis is NOT a CSRF protection mechanism - it's a simple origin/referer allowlist\nthat verifies requests are coming from expected sources.\n\nAccepts comma-separated patterns with limited wildcards:\n- Exact origins: `https://api.example.com`\n- Wildcard subdomains: `https://*.example.com` (matches exactly one subdomain level)\n- Multiple wildcards: `https://*.staging.*.example.com` (for deep subdomains)\n- Wildcard ports: `http://localhost:*` (matches any port or no port)\n- IPv6 addresses: `http://[::1]:3000`, `https://[2001:db8::1]`\n- Combined: `https://*.example.com:*`\n\nExamples:\n- `http://localhost:3000,https://prod.example.com`\n- `https://*.api.example.com,http://127.0.0.1:*`\n- `http://[::1]:*,https://*.*.corp.example.com:*`",
-						"source_line": 22,
-						"type_signature": "(env_value: string | undefined): RegExp[]",
-						"return_type": "RegExp[]",
-						"parameters": [
-							{
-								"name": "env_value",
-								"type": "string | undefined"
-							}
-						]
-					},
-					{
-						"name": "should_allow_origin",
-						"kind": "function",
-						"doc_comment": "Tests if a request source (origin or referer) matches any of the allowed patterns.\nPattern matching is case-insensitive for domains (as per web standards).",
-						"source_line": 35,
-						"type_signature": "(origin: string, allowed_patterns: RegExp[]): boolean",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "origin",
-								"type": "string"
-							},
-							{
-								"name": "allowed_patterns",
-								"type": "RegExp[]"
-							}
-						]
-					},
-					{
-						"name": "verify_request_source",
-						"kind": "function",
-						"doc_comment": "Middleware that verifies the request source against an allowlist.\n\nNOT a CSRF protection - this is a simple origin/referer check that:\n- Checks the Origin header first (if present)\n- Falls back to Referer header (if no Origin)\n- Allows requests without Origin/Referer headers (direct access, curl, etc.)\n\nThis is useful for:\n- Protecting locally-running services from being called by\n  untrusted websites as the user browses the web\n- Restricting which domains can make requests to your API\n- Preventing embedding of your service in unexpected sites\n- Basic source verification (but NOT security-critical CSRF protection)",
-						"source_line": 55,
-						"type_signature": "(allowed_patterns: RegExp[]): Handler",
-						"return_type": "Handler",
-						"parameters": [
-							{
-								"name": "allowed_patterns",
-								"type": "RegExp[]",
-								"description": "Array of compiled regex patterns from parse_allowed_origins"
-							}
-						]
-					}
-				],
-				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
 				"path": "server/server_deno.ts",
@@ -18363,14 +17926,7 @@
 						"source_line": 1
 					}
 				],
-				"dependencies": [
-					"ConfirmButton.svelte",
-					"Glyph.svelte",
-					"PopoverButton.svelte",
-					"glyphs.ts",
-					"helpers.ts",
-					"time_helpers.ts"
-				],
+				"dependencies": ["Glyph.svelte", "glyphs.ts", "helpers.ts", "time_helpers.ts"],
 				"dependents": ["CapabilityWebsocket.svelte"]
 			},
 			{
@@ -18940,7 +18496,6 @@
 					}
 				],
 				"dependencies": [
-					"ConfirmButton.svelte",
 					"Glyph.svelte",
 					"ProviderLogo.svelte",
 					"ThreadContextmenu.svelte",
@@ -20215,7 +19770,7 @@
 						"source_line": 1
 					}
 				],
-				"dependencies": ["ConfirmButton.svelte", "Glyph.svelte", "glyphs.ts"],
+				"dependencies": ["Glyph.svelte", "glyphs.ts"],
 				"dependents": ["XmlTagControls.svelte"]
 			},
 			{

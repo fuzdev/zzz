@@ -1,11 +1,11 @@
 <script lang="ts">
 	import type {SvelteHTMLElements} from 'svelte/elements';
 	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
 	import type {PartUnion} from './part.svelte.js';
 	import type {Prompt} from './prompt.svelte.js';
 	import type {Prompts} from './prompts.svelte.js';
-	import ConfirmButton from './ConfirmButton.svelte';
 	import {GLYPH_REMOVE} from './glyphs.js';
 	import Glyph from './Glyph.svelte';
 

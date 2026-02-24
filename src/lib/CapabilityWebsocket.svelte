@@ -5,10 +5,10 @@
 	import {formatDuration, intervalToDuration} from 'date-fns';
 	import {BROWSER} from 'esm-env';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
 	import {frontend_context} from './frontend.svelte.js';
 	import type {Socket} from './socket.svelte.js';
-	import ConfirmButton from './ConfirmButton.svelte';
 	import Glyph from './Glyph.svelte';
 	import {
 		GLYPH_CONNECT,

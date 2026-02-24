@@ -1,8 +1,8 @@
 <script lang="ts">
 	import {slide} from 'svelte/transition';
 	import type {SvelteHTMLElements} from 'svelte/elements';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import ConfirmButton from './ConfirmButton.svelte';
 	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
 	import type {Uuid} from './zod_helpers.js';
 	import {format_time} from './time_helpers.js';

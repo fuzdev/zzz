@@ -2,8 +2,8 @@
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 	import PasteFromClipboard from '@fuzdev/fuz_ui/PasteFromClipboard.svelte';
 	import {slide} from 'svelte/transition';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import ConfirmButton from './ConfirmButton.svelte';
 	import {frontend_context} from './frontend.svelte.js';
 	import type {Diskfile} from './diskfile.svelte.js';
 	import ClearRestoreButton from './ClearRestoreButton.svelte';

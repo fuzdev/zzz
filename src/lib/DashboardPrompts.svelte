@@ -2,8 +2,8 @@
 	import {fade} from 'svelte/transition';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 	import {random_item} from '@fuzdev/fuz_util/random.js';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import ConfirmButton from './ConfirmButton.svelte';
 	import Glyph from './Glyph.svelte';
 	import PartView from './PartView.svelte';
 	import {

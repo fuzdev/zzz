@@ -4,6 +4,7 @@
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import Details from '@fuzdev/fuz_ui/Details.svelte';
 	import type {Snippet} from 'svelte';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
 	import Glyph from './Glyph.svelte';
 	import {
@@ -15,7 +16,6 @@
 		GLYPH_DISCONNECT,
 	} from './glyphs.js';
 	import type {Model} from './model.svelte.js';
-	import ConfirmButton from './ConfirmButton.svelte';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 	import ModelLink from './ModelLink.svelte';
 	import {format_short_date} from './time_helpers.js';

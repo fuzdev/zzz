@@ -3,12 +3,12 @@
 	import {format} from 'date-fns';
 	import {SvelteMap} from 'svelte/reactivity';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
+	import PopoverButton from '@fuzdev/fuz_app/ui/PopoverButton.svelte';
 
 	import type {Socket, QueuedMessage, FailedMessage} from './socket.svelte.js';
 	import Glyph from './Glyph.svelte';
 	import {GLYPH_RETRY, GLYPH_REMOVE, GLYPH_INFO} from './glyphs.js';
-	import ConfirmButton from './ConfirmButton.svelte';
-	import PopoverButton from './PopoverButton.svelte';
 	import {format_timestamp} from './time_helpers.js';
 	import {DURATION_SM} from './helpers.js';
 
