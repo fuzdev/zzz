@@ -7,8 +7,9 @@
  * @module
  */
 
+import {colors, log} from '@fuzdev/fuz_app/cli/util.js';
+
 import type {ZzzRuntime} from '../runtime/types.ts';
-import {colors, log} from '../cli/util.ts';
 import type {OpenArgs} from '../cli/schemas.ts';
 import type {ZzzGlobalArgs} from '../cli/cli_args.ts';
 import {
@@ -64,7 +65,7 @@ const open_browser = async (
 	// Try xdg-open (Linux), then open (macOS), then start (Windows)
 	const openers = ['xdg-open', 'open', 'start'];
 	for (const opener of openers) {
-		const result = await runtime.run_command(opener, [url]);
+		const result = await runtime.run_command(opener, [url]); // eslint-disable-line no-await-in-loop
 		if (result.success) return;
 	}
 	// If all fail, just print the URL

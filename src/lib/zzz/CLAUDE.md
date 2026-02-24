@@ -69,9 +69,8 @@ src/lib/zzz/
 │   └── deno.ts          # Deno implementation via create_deno_runtime()
 ├── cli/
 │   ├── cli_args.ts      # Global flags, dispatch(), create_subcommand_router()
-│   ├── cli_help.ts      # Command registry, schema-driven help
-│   ├── schemas.ts       # Per-command Zod schemas
-│   └── util.ts          # Colors, log helpers, confirm
+│   ├── cli_help.ts      # Command registry, help via create_help (from fuz_app)
+│   └── schemas.ts       # Per-command Zod schemas
 └── commands/
     ├── init.ts          # zzz init — create ~/.zzz/ directory structure
     ├── daemon.ts        # zzz daemon start|stop|status

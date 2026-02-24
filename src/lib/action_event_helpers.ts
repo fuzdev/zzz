@@ -14,7 +14,11 @@ import type {
 	ActionEventLocalCallData,
 } from './action_event_data.js';
 import type {Result} from '@fuzdev/fuz_util/result.js';
-import type {ActionEventPhase, ActionInitiator, ActionKind} from '@fuzdev/fuz_app/actions/action_spec.js';
+import type {
+	ActionEventPhase,
+	ActionInitiator,
+	ActionKind,
+} from '@fuzdev/fuz_app/actions/action_spec.js';
 
 import type {ActionMethod} from './action_metatypes.js';
 import type {ActionInputs} from './action_collections.js';

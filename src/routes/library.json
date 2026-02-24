@@ -441,7 +441,7 @@
 					{
 						"name": "is_request_response",
 						"kind": "function",
-						"source_line": 25,
+						"source_line": 29,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventRequestResponseData",
 						"return_type": "boolean",
 						"parameters": [
@@ -454,7 +454,7 @@
 					{
 						"name": "is_remote_notification",
 						"kind": "function",
-						"source_line": 29,
+						"source_line": 33,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventRemoteNotificationData",
 						"return_type": "boolean",
 						"parameters": [
@@ -467,7 +467,7 @@
 					{
 						"name": "is_local_call",
 						"kind": "function",
-						"source_line": 33,
+						"source_line": 37,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventLocalCallData",
 						"return_type": "boolean",
 						"parameters": [
@@ -480,7 +480,7 @@
 					{
 						"name": "is_send_request",
 						"kind": "function",
-						"source_line": 37,
+						"source_line": 41,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
@@ -493,7 +493,7 @@
 					{
 						"name": "is_receive_request",
 						"kind": "function",
-						"source_line": 42,
+						"source_line": 46,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
@@ -506,7 +506,7 @@
 					{
 						"name": "is_send_response",
 						"kind": "function",
-						"source_line": 47,
+						"source_line": 51,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
@@ -519,7 +519,7 @@
 					{
 						"name": "is_receive_response",
 						"kind": "function",
-						"source_line": 52,
+						"source_line": 56,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
@@ -532,7 +532,7 @@
 					{
 						"name": "is_notification_send",
 						"kind": "function",
-						"source_line": 57,
+						"source_line": 61,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
@@ -545,7 +545,7 @@
 					{
 						"name": "is_notification_receive",
 						"kind": "function",
-						"source_line": 62,
+						"source_line": 66,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
@@ -558,7 +558,7 @@
 					{
 						"name": "is_execute",
 						"kind": "function",
-						"source_line": 67,
+						"source_line": 71,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventLocalCallData & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
@@ -571,7 +571,7 @@
 					{
 						"name": "is_initial",
 						"kind": "function",
-						"source_line": 73,
+						"source_line": 77,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
@@ -584,7 +584,7 @@
 					{
 						"name": "is_parsed",
 						"kind": "function",
-						"source_line": 76,
+						"source_line": 80,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
@@ -597,7 +597,7 @@
 					{
 						"name": "is_handling",
 						"kind": "function",
-						"source_line": 79,
+						"source_line": 83,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
@@ -610,7 +610,7 @@
 					{
 						"name": "is_handled",
 						"kind": "function",
-						"source_line": 82,
+						"source_line": 86,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
@@ -623,7 +623,7 @@
 					{
 						"name": "is_failed",
 						"kind": "function",
-						"source_line": 85,
+						"source_line": 89,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
 						"return_type": "boolean",
 						"parameters": [
@@ -636,7 +636,7 @@
 					{
 						"name": "is_send_request_with_parsed_input",
 						"kind": "function",
-						"source_line": 91,
+						"source_line": 95,
 						"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\">(data: { ...; }): data is ({ ...; } & { ...; }) | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
@@ -649,7 +649,7 @@
 					{
 						"name": "is_notification_send_with_parsed_input",
 						"kind": "function",
-						"source_line": 99,
+						"source_line": 103,
 						"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\">(data: { ...; }): data is ({ ...; } & { ...; }) | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
@@ -662,7 +662,7 @@
 					{
 						"name": "validate_step_transition",
 						"kind": "function",
-						"source_line": 108,
+						"source_line": 112,
 						"type_signature": "(from: \"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\", to: \"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\"): void",
 						"return_type": "void",
 						"parameters": [
@@ -679,7 +679,7 @@
 					{
 						"name": "validate_phase_for_kind",
 						"kind": "function",
-						"source_line": 115,
+						"source_line": 119,
 						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"): void",
 						"return_type": "void",
 						"parameters": [
@@ -696,7 +696,7 @@
 					{
 						"name": "validate_phase_transition",
 						"kind": "function",
-						"source_line": 122,
+						"source_line": 126,
 						"type_signature": "(from: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", to: \"send_request\" | \"execute\" | ... 6 more ... | \"receive\"): void",
 						"return_type": "void",
 						"parameters": [
@@ -713,7 +713,7 @@
 					{
 						"name": "get_initial_phase",
 						"kind": "function",
-						"source_line": 129,
+						"source_line": 133,
 						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", initiator: \"frontend\" | \"backend\" | \"both\", executor: \"frontend\" | \"backend\"): \"send_request\" | \"execute\" | ... 7 more ... | null",
 						"return_type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | null",
 						"parameters": [
@@ -734,7 +734,7 @@
 					{
 						"name": "should_validate_output",
 						"kind": "function",
-						"source_line": 146,
+						"source_line": 150,
 						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"): boolean",
 						"return_type": "boolean",
 						"parameters": [
@@ -751,7 +751,7 @@
 					{
 						"name": "is_action_complete",
 						"kind": "function",
-						"source_line": 150,
+						"source_line": 154,
 						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): boolean",
 						"return_type": "boolean",
 						"parameters": [
@@ -764,7 +764,7 @@
 					{
 						"name": "create_initial_data",
 						"kind": "function",
-						"source_line": 159,
+						"source_line": 163,
 						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", method: \"ping\" | ... 18 more ... | \"provider_update_api_key\", executor: \"frontend\" | \"backend\", input: unknown): { ...; }",
 						"return_type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }",
 						"parameters": [
@@ -793,7 +793,7 @@
 					{
 						"name": "extract_action_result",
 						"kind": "function",
-						"source_line": 180,
+						"source_line": 184,
 						"type_signature": "(event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): Result<...>",
 						"return_type": "Result<{ value: unknown; }, { error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }>",
 						"parameters": [
@@ -813,37 +813,37 @@
 					{
 						"name": "ActionExecutor",
 						"kind": "type",
-						"source_line": 11,
+						"source_line": 15,
 						"type_signature": "ZodEnum<{ frontend: \"frontend\"; backend: \"backend\"; }>"
 					},
 					{
 						"name": "ActionEventStep",
 						"kind": "type",
-						"source_line": 14,
+						"source_line": 18,
 						"type_signature": "ZodEnum<{ initial: \"initial\"; parsed: \"parsed\"; handling: \"handling\"; handled: \"handled\"; failed: \"failed\"; }>"
 					},
 					{
 						"name": "ACTION_EVENT_STEP_TRANSITIONS",
 						"kind": "variable",
-						"source_line": 17,
+						"source_line": 21,
 						"type_signature": "Record<\"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\", readonly (\"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\")[]>"
 					},
 					{
 						"name": "ACTION_EVENT_PHASE_BY_KIND",
 						"kind": "variable",
-						"source_line": 25,
+						"source_line": 29,
 						"type_signature": "Record<\"request_response\" | \"remote_notification\" | \"local_call\", readonly (\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\")[]>"
 					},
 					{
 						"name": "ACTION_EVENT_PHASE_TRANSITIONS",
 						"kind": "variable",
-						"source_line": 38,
+						"source_line": 42,
 						"type_signature": "Record<\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"send_request\" | \"execute\" | ... 7 more ... | null>"
 					},
 					{
 						"name": "ActionEventEnvironment",
 						"kind": "type",
-						"source_line": 50,
+						"source_line": 54,
 						"type_signature": "ActionEventEnvironment",
 						"properties": [
 							{
@@ -889,7 +889,7 @@
 					{
 						"name": "ActionEventChangeObserver",
 						"kind": "type",
-						"source_line": 40,
+						"source_line": 44,
 						"type_signature": "ActionEventChangeObserver<TMethod>",
 						"generic_params": [
 							{
@@ -902,7 +902,7 @@
 						"name": "ActionEvent",
 						"kind": "class",
 						"doc_comment": "Action event that manages the lifecycle of an action through its state machine.",
-						"source_line": 49,
+						"source_line": 53,
 						"generic_params": [
 							{
 								"name": "TMethod",
@@ -1086,7 +1086,7 @@
 						"name": "create_action_event",
 						"kind": "function",
 						"doc_comment": "Create an action event from a spec and initial input.",
-						"source_line": 454,
+						"source_line": 458,
 						"type_signature": "<TMethod extends ActionMethod>(environment: ActionEventEnvironment, spec: { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<...>; ... 4 more ...; async: true; } | { ...; } | { ...; }, input: unknown, initial_phase?: \"send_request\" | ... 8 more ... | undefined): ActionEvent<...>",
 						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"parameters": [
@@ -1113,7 +1113,7 @@
 						"name": "create_action_event_from_json",
 						"kind": "function",
 						"doc_comment": "Reconstruct an action event from serialized JSON data.",
-						"source_line": 481,
+						"source_line": 485,
 						"type_signature": "<TMethod extends ActionMethod>(json: ActionEventDatas[TMethod], environment: ActionEventEnvironment): ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"parameters": [
@@ -1130,7 +1130,7 @@
 					{
 						"name": "parse_action_event",
 						"kind": "function",
-						"source_line": 495,
+						"source_line": 499,
 						"type_signature": "(raw_json: unknown, environment: ActionEventEnvironment): ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | ... 13 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"return_type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 mor...",
 						"parameters": [
@@ -20633,28 +20633,28 @@
 						"name": "ZZZ_DEFAULT_PORT",
 						"kind": "variable",
 						"doc_comment": "Default port for the zzz daemon.",
-						"source_line": 20,
+						"source_line": 26,
 						"type_signature": "4460"
 					},
 					{
 						"name": "ZzzCliConfig",
 						"kind": "type",
 						"doc_comment": "Schema for ~/.zzz/config.json.\n\nUses `zzz_config_` prefix so field names are self-documenting:\n```typescript\nconst { zzz_config_port } = load_zzz_cli_config();\n// Variable name tells you exactly what this is and where it came from\n```",
-						"source_line": 31,
+						"source_line": 37,
 						"type_signature": "ZodObject<{ zzz_config_port: ZodDefault<ZodNumber>; }, $strict>"
 					},
 					{
 						"name": "get_zzz_dir",
 						"kind": "function",
 						"doc_comment": "Get the CLI config directory path (~/.zzz).",
-						"source_line": 44,
-						"type_signature": "(runtime: Pick<ZzzRuntime, \"env_get\">): string | null",
+						"source_line": 50,
+						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\">): string | null",
 						"return_type": "string | null",
 						"return_description": "Path to config directory, or null if $HOME is not set.",
 						"parameters": [
 							{
 								"name": "runtime",
-								"type": "Pick<ZzzRuntime, \"env_get\">",
+								"type": "Pick<EnvDeps, \"env_get\">",
 								"description": "Runtime with env_get capability."
 							}
 						]
@@ -20663,14 +20663,14 @@
 						"name": "get_zzz_config_path",
 						"kind": "function",
 						"doc_comment": "Get the CLI config file path (~/.zzz/config.json).",
-						"source_line": 55,
-						"type_signature": "(runtime: Pick<ZzzRuntime, \"env_get\">): string | null",
+						"source_line": 59,
+						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\">): string | null",
 						"return_type": "string | null",
 						"return_description": "Path to config.json, or null if $HOME is not set.",
 						"parameters": [
 							{
 								"name": "runtime",
-								"type": "Pick<ZzzRuntime, \"env_get\">",
+								"type": "Pick<EnvDeps, \"env_get\">",
 								"description": "Runtime with env_get capability."
 							}
 						]
@@ -20679,14 +20679,14 @@
 						"name": "get_zzz_daemon_info_path",
 						"kind": "function",
 						"doc_comment": "Get the daemon info file path (~/.zzz/run/daemon.json).",
-						"source_line": 66,
-						"type_signature": "(runtime: Pick<ZzzRuntime, \"env_get\">): string | null",
+						"source_line": 68,
+						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\">): string | null",
 						"return_type": "string | null",
 						"return_description": "Path to daemon.json, or null if $HOME is not set.",
 						"parameters": [
 							{
 								"name": "runtime",
-								"type": "Pick<ZzzRuntime, \"env_get\">",
+								"type": "Pick<EnvDeps, \"env_get\">",
 								"description": "Runtime with env_get capability."
 							}
 						]
@@ -20695,14 +20695,14 @@
 						"name": "load_zzz_cli_config",
 						"kind": "function",
 						"doc_comment": "Load CLI configuration from ~/.zzz/config.json.",
-						"source_line": 77,
-						"type_signature": "(runtime: Pick<ZzzRuntime, \"env_get\" | \"read_file\" | \"stat\">): Promise<{ zzz_config_port: number; } | null>",
+						"source_line": 79,
+						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\"> & FsReadDeps): Promise<{ zzz_config_port: number; } | null>",
 						"return_type": "Promise<{ zzz_config_port: number; } | null>",
 						"return_description": "Parsed config, or null if file doesn't exist or is invalid.",
 						"parameters": [
 							{
 								"name": "runtime",
-								"type": "Pick<ZzzRuntime, \"env_get\" | \"read_file\" | \"stat\">",
+								"type": "Pick<EnvDeps, \"env_get\"> & FsReadDeps",
 								"description": "Runtime with file read capability."
 							}
 						]
@@ -20711,13 +20711,13 @@
 						"name": "save_zzz_cli_config",
 						"kind": "function",
 						"doc_comment": "Save CLI configuration to ~/.zzz/config.json.",
-						"source_line": 112,
-						"type_signature": "(runtime: Pick<ZzzRuntime, \"env_get\" | \"write_file\" | \"mkdir\">, config: { zzz_config_port: number; }): Promise<void>",
+						"source_line": 93,
+						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\"> & FsWriteDeps, config: { zzz_config_port: number; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
 							{
 								"name": "runtime",
-								"type": "Pick<ZzzRuntime, \"env_get\" | \"write_file\" | \"mkdir\">",
+								"type": "Pick<EnvDeps, \"env_get\"> & FsWriteDeps",
 								"description": "Runtime with file write capability."
 							},
 							{
@@ -20731,14 +20731,14 @@
 						"name": "ZzzDaemonInfo",
 						"kind": "type",
 						"doc_comment": "Daemon info schema for ~/.zzz/run/daemon.json.",
-						"source_line": 134,
+						"source_line": 106,
 						"type_signature": "ZodObject<{ version: ZodNumber; pid: ZodNumber; port: ZodNumber; started: ZodString; zzz_version: ZodString; }, $strict>"
 					},
 					{
 						"name": "parse_daemon_info",
 						"kind": "function",
 						"doc_comment": "Parse daemon info JSON with schema validation.",
-						"source_line": 154,
+						"source_line": 126,
 						"type_signature": "(content: string): { version: number; pid: number; port: number; started: string; zzz_version: string; } | null",
 						"return_type": "{ version: number; pid: number; port: number; started: string; zzz_version: string; } | null",
 						"return_description": "Parsed daemon info, or null if invalid.",
@@ -20751,7 +20751,6 @@
 					}
 				],
 				"module_comment": "zzz CLI configuration.\n\nManages CLI-specific configuration stored at ~/.zzz/config.json.\n\nThe CLI config uses the `zzz_config_` prefix for all fields to make\nthe source self-documenting in code.",
-				"dependencies": ["zzz/cli/util.ts"],
 				"dependents": [
 					"zzz/commands/daemon.ts",
 					"zzz/commands/init.ts",
@@ -20974,133 +20973,51 @@
 						"name": "ZzzCommandCategory",
 						"kind": "type",
 						"doc_comment": "Command category for help organization.",
-						"source_line": 33,
+						"source_line": 27,
 						"type_signature": "ZzzCommandCategory"
-					},
-					{
-						"name": "CommandMeta",
-						"kind": "type",
-						"doc_comment": "Command metadata for help generation.",
-						"source_line": 38,
-						"type_signature": "CommandMeta",
-						"properties": [
-							{
-								"name": "schema",
-								"kind": "variable",
-								"type_signature": "z.ZodType"
-							},
-							{
-								"name": "summary",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "usage",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "category",
-								"kind": "variable",
-								"type_signature": "ZzzCommandCategory"
-							}
-						]
-					},
-					{
-						"name": "HelpCategory",
-						"kind": "type",
-						"doc_comment": "Category configuration for help display.",
-						"source_line": 48,
-						"type_signature": "HelpCategory",
-						"properties": [
-							{
-								"name": "key",
-								"kind": "variable",
-								"type_signature": "ZzzCommandCategory"
-							},
-							{
-								"name": "title",
-								"kind": "variable",
-								"type_signature": "string"
-							}
-						]
 					},
 					{
 						"name": "ZZZ_HELP_CATEGORIES",
 						"kind": "variable",
 						"doc_comment": "Category display order for main help.",
-						"source_line": 60,
-						"type_signature": "HelpCategory[]"
+						"source_line": 36,
+						"type_signature": "HelpCategory<ZzzCommandCategory>[]"
 					},
 					{
 						"name": "ZZZ_HELP_EXAMPLES",
 						"kind": "variable",
 						"doc_comment": "Example commands for main help.",
-						"source_line": 69,
+						"source_line": 45,
 						"type_signature": "string[]"
 					},
 					{
 						"name": "ZZZ_COMMANDS",
 						"kind": "variable",
 						"doc_comment": "Command registry for help generation.",
-						"source_line": 82,
-						"type_signature": "Record<string, CommandMeta>"
-					},
-					{
-						"name": "generate_command_help",
-						"kind": "function",
-						"doc_comment": "Generate help text for a command from its metadata.",
-						"source_line": 159,
-						"type_signature": "(command: string, meta: CommandMeta): string",
-						"return_type": "string",
-						"parameters": [
-							{
-								"name": "command",
-								"type": "string"
-							},
-							{
-								"name": "meta",
-								"type": "CommandMeta"
-							}
-						]
+						"source_line": 58,
+						"type_signature": "Record<string, CommandMeta<ZzzCommandCategory>>"
 					},
 					{
 						"name": "generate_main_help",
-						"kind": "function",
-						"doc_comment": "Generate main help text.",
-						"source_line": 221,
-						"type_signature": "(): string",
-						"return_type": "string",
-						"parameters": []
+						"kind": "variable",
+						"source_line": 116,
+						"type_signature": "() => string"
+					},
+					{
+						"name": "generate_command_help",
+						"kind": "variable",
+						"source_line": 116,
+						"type_signature": "(command: string, meta: CommandMeta<string>) => string"
 					},
 					{
 						"name": "get_help_text",
-						"kind": "function",
-						"doc_comment": "Get help text for a command or main help.",
-						"source_line": 268,
-						"type_signature": "(command?: string | undefined, subcommand?: string | undefined): string",
-						"return_type": "string",
-						"parameters": [
-							{
-								"name": "command",
-								"type": "string | undefined",
-								"optional": true
-							},
-							{
-								"name": "subcommand",
-								"type": "string | undefined",
-								"optional": true
-							}
-						]
+						"kind": "variable",
+						"source_line": 116,
+						"type_signature": "(command?: string | undefined, subcommand?: string | undefined) => string"
 					}
 				],
 				"module_comment": "CLI help generation and command metadata.",
-				"dependencies": [
-					"zzz/build_info.ts",
-					"zzz/cli/cli_args.ts",
-					"zzz/cli/schemas.ts",
-					"zzz/cli/util.ts"
-				],
+				"dependencies": ["zzz/build_info.ts", "zzz/cli/cli_args.ts", "zzz/cli/schemas.ts"],
 				"dependents": ["zzz/cli.ts"]
 			},
 			{
@@ -21151,80 +21068,6 @@
 				],
 				"module_comment": "Per-command Zod schemas for CLI argument validation.\n\nCentralized here to avoid importing runtime deps (e.g., server_deno.ts)\nwhen only schemas are needed (e.g., for help generation).",
 				"dependents": ["zzz/cli/cli_help.ts", "zzz/main.ts"]
-			},
-			{
-				"path": "zzz/cli/util.ts",
-				"declarations": [
-					{
-						"name": "colors",
-						"kind": "variable",
-						"source_line": 9,
-						"type_signature": "{ readonly green: \"\\u001B[32m\"; readonly yellow: \"\\u001B[33m\"; readonly blue: \"\\u001B[34m\"; readonly red: \"\\u001B[31m\"; readonly cyan: \"\\u001B[36m\"; readonly dim: \"\\u001B[2m\"; readonly bold: \"\\u001B[1m\"; readonly reset: \"\\u001B[0m\"; }"
-					},
-					{
-						"name": "log",
-						"kind": "variable",
-						"source_line": 20,
-						"type_signature": "{ info: (msg: string) => void; success: (msg: string) => void; warn: (msg: string) => void; error: (msg: string) => void; step: (msg: string) => void; dim: (msg: string) => void; }"
-					},
-					{
-						"name": "run_local",
-						"kind": "function",
-						"doc_comment": "Run a local command and return stdout.",
-						"source_line": 37,
-						"type_signature": "(runtime: Pick<ZzzRuntime, \"run_command\">, command: string, args: string[]): Promise<ZzzCommandResult>",
-						"return_type": "Promise<ZzzCommandResult>",
-						"return_description": "Command result.",
-						"parameters": [
-							{
-								"name": "runtime",
-								"type": "Pick<ZzzRuntime, \"run_command\">",
-								"description": "Runtime with run_command capability."
-							},
-							{
-								"name": "command",
-								"type": "string",
-								"description": "Command to run."
-							},
-							{
-								"name": "args",
-								"type": "string[]",
-								"description": "Command arguments."
-							}
-						]
-					},
-					{
-						"name": "confirm",
-						"kind": "function",
-						"doc_comment": "Prompt for yes/no confirmation.",
-						"source_line": 52,
-						"type_signature": "(runtime: Pick<ZzzRuntime, \"stdout_write\" | \"stdin_read\">, message: string): Promise<boolean>",
-						"return_type": "Promise<boolean>",
-						"return_description": "`true` if user confirms, `false` otherwise.",
-						"parameters": [
-							{
-								"name": "runtime",
-								"type": "Pick<ZzzRuntime, \"stdout_write\" | \"stdin_read\">",
-								"description": "Runtime with stdout_write and stdin_read capabilities."
-							},
-							{
-								"name": "message",
-								"type": "string",
-								"description": "Message to display."
-							}
-						]
-					}
-				],
-				"module_comment": "CLI utilities for zzz.",
-				"dependents": [
-					"zzz/cli/cli_help.ts",
-					"zzz/cli_config.ts",
-					"zzz/commands/daemon.ts",
-					"zzz/commands/init.ts",
-					"zzz/commands/open.ts",
-					"zzz/commands/status.ts",
-					"zzz/main.ts"
-				]
 			},
 			{
 				"path": "zzz/commands/daemon.ts",
@@ -21297,7 +21140,7 @@
 					}
 				],
 				"module_comment": "zzz daemon commands (start, stop, status).\n\nThe zzz CLI runs in Deno, so daemon start uses the Deno server entry point.\n\nRouting (`zzz daemon start|stop|status`) is handled by\ncreate_subcommand_router in main.ts.",
-				"dependencies": ["server/server_deno.ts", "zzz/cli/util.ts", "zzz/cli_config.ts"],
+				"dependencies": ["server/server_deno.ts", "zzz/cli_config.ts"],
 				"dependents": ["zzz/main.ts"]
 			},
 			{
@@ -21327,7 +21170,7 @@
 					}
 				],
 				"module_comment": "zzz init command.\n\nInitialize zzz configuration (~/.zzz/).",
-				"dependencies": ["zzz/cli/util.ts", "zzz/cli_config.ts"],
+				"dependencies": ["zzz/cli_config.ts"],
 				"dependents": ["zzz/main.ts"]
 			},
 			{
@@ -21357,7 +21200,7 @@
 					}
 				],
 				"module_comment": "zzz open command (default command).\n\nOpens the zzz browser UI, auto-starting the daemon if needed.\nHandles: `zzz`, `zzz <file>`, `zzz <dir>`.",
-				"dependencies": ["zzz/cli/util.ts", "zzz/cli_config.ts"],
+				"dependencies": ["zzz/cli_config.ts"],
 				"dependents": ["zzz/main.ts"]
 			},
 			{
@@ -21387,7 +21230,7 @@
 					}
 				],
 				"module_comment": "zzz status command.\n\nShow current system state (daemon status, loaded workspaces, watched repos).",
-				"dependencies": ["zzz/cli/util.ts", "zzz/cli_config.ts"],
+				"dependencies": ["zzz/cli_config.ts"],
 				"dependents": ["zzz/main.ts"]
 			},
 			{
@@ -21398,7 +21241,6 @@
 					"zzz/cli.ts",
 					"zzz/cli/cli_args.ts",
 					"zzz/cli/schemas.ts",
-					"zzz/cli/util.ts",
 					"zzz/commands/daemon.ts",
 					"zzz/commands/init.ts",
 					"zzz/commands/open.ts",

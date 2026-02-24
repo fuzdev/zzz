@@ -10,9 +10,14 @@
  */
 
 import {z} from 'zod';
-
-import type {ZzzRuntime} from './runtime/types.ts';
-import {log} from './cli/util.ts';
+import type {EnvDeps, FsReadDeps, FsWriteDeps} from '@fuzdev/fuz_app/cli/runtime.js';
+import {
+	get_app_dir,
+	get_config_path,
+	load_config,
+	save_config,
+} from '@fuzdev/fuz_app/cli/config.js';
+import {log} from '@fuzdev/fuz_app/cli/util.js';
 
 /**
  * Default port for the zzz daemon.
@@ -41,10 +46,8 @@ export type ZzzCliConfig = z.infer<typeof ZzzCliConfig>;
  * @param runtime - Runtime with env_get capability.
  * @returns Path to config directory, or null if $HOME is not set.
  */
-export const get_zzz_dir = (runtime: Pick<ZzzRuntime, 'env_get'>): string | null => {
-	const home = runtime.env_get('HOME');
-	return home ? `${home}/.zzz` : null;
-};
+export const get_zzz_dir = (runtime: Pick<EnvDeps, 'env_get'>): string | null =>
+	get_app_dir(runtime, 'zzz');
 
 /**
  * Get the CLI config file path (~/.zzz/config.json).
@@ -52,10 +55,8 @@ export const get_zzz_dir = (runtime: Pick<ZzzRuntime, 'env_get'>): string | null
  * @param runtime - Runtime with env_get capability.
  * @returns Path to config.json, or null if $HOME is not set.
  */
-export const get_zzz_config_path = (runtime: Pick<ZzzRuntime, 'env_get'>): string | null => {
-	const zzz_dir = get_zzz_dir(runtime);
-	return zzz_dir ? `${zzz_dir}/config.json` : null;
-};
+export const get_zzz_config_path = (runtime: Pick<EnvDeps, 'env_get'>): string | null =>
+	get_config_path(runtime, 'zzz');
 
 /**
  * Get the daemon info file path (~/.zzz/run/daemon.json).
@@ -63,7 +64,7 @@ export const get_zzz_config_path = (runtime: Pick<ZzzRuntime, 'env_get'>): strin
  * @param runtime - Runtime with env_get capability.
  * @returns Path to daemon.json, or null if $HOME is not set.
  */
-export const get_zzz_daemon_info_path = (runtime: Pick<ZzzRuntime, 'env_get'>): string | null => {
+export const get_zzz_daemon_info_path = (runtime: Pick<EnvDeps, 'env_get'>): string | null => {
 	const zzz_dir = get_zzz_dir(runtime);
 	return zzz_dir ? `${zzz_dir}/run/daemon.json` : null;
 };
@@ -75,32 +76,11 @@ export const get_zzz_daemon_info_path = (runtime: Pick<ZzzRuntime, 'env_get'>): 
  * @returns Parsed config, or null if file doesn't exist or is invalid.
  */
 export const load_zzz_cli_config = async (
-	runtime: Pick<ZzzRuntime, 'env_get' | 'read_file' | 'stat'>,
+	runtime: Pick<EnvDeps, 'env_get'> & FsReadDeps,
 ): Promise<ZzzCliConfig | null> => {
 	const config_path = get_zzz_config_path(runtime);
-	if (!config_path) {
-		return null;
-	}
-
-	// Check if file exists
-	const stat = await runtime.stat(config_path);
-	if (!stat) {
-		return null;
-	}
-
-	try {
-		const content = await runtime.read_file(config_path);
-		const parsed = JSON.parse(content);
-		const result = ZzzCliConfig.safeParse(parsed);
-		if (!result.success) {
-			log.warn(`Invalid config.json: ${result.error.message}`);
-			return null;
-		}
-		return result.data;
-	} catch (error) {
-		log.warn(`Failed to read config.json: ${(error as Error).message}`);
-		return null;
-	}
+	if (!config_path) return null;
+	return load_config(runtime, config_path, ZzzCliConfig);
 };
 
 /**
@@ -110,22 +90,13 @@ export const load_zzz_cli_config = async (
  * @param config - Configuration to save.
  */
 export const save_zzz_cli_config = async (
-	runtime: Pick<ZzzRuntime, 'env_get' | 'write_file' | 'mkdir'>,
+	runtime: Pick<EnvDeps, 'env_get'> & FsWriteDeps,
 	config: ZzzCliConfig,
 ): Promise<void> => {
 	const zzz_dir = get_zzz_dir(runtime);
-	if (!zzz_dir) {
-		throw new Error('$HOME not set');
-	}
-
+	if (!zzz_dir) throw new Error('$HOME not set');
 	const config_path = `${zzz_dir}/config.json`;
-
-	// Ensure directory exists
-	await runtime.mkdir(zzz_dir, {recursive: true});
-
-	// Write with pretty formatting
-	const content = JSON.stringify(config, null, '\t');
-	await runtime.write_file(config_path, content + '\n');
+	return save_config(runtime, config_path, zzz_dir, config);
 };
 
 /**

@@ -6,8 +6,9 @@
  * @module
  */
 
+import {colors, log} from '@fuzdev/fuz_app/cli/util.js';
+
 import type {ZzzRuntime} from '../runtime/types.ts';
-import {colors, log} from '../cli/util.ts';
 import type {InitArgs} from '../cli/schemas.ts';
 import type {ZzzGlobalArgs} from '../cli/cli_args.ts';
 import {
