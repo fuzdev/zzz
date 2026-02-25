@@ -19,10 +19,10 @@ import {
 	StatusArgs,
 	OpenArgs,
 } from './cli/schemas.ts';
-import {cmd_init} from './commands/init.ts';
-import {cmd_daemon_start, cmd_daemon_stop, cmd_daemon_status} from './commands/daemon.ts';
-import {cmd_open} from './commands/open.ts';
-import {cmd_status} from './commands/status.ts';
+import {init} from './commands/init.ts';
+import {daemon_start, daemon_stop, daemon_status} from './commands/daemon.ts';
+import {open} from './commands/open.ts';
+import {status} from './commands/status.ts';
 
 //
 // Subcommand routers
@@ -36,19 +36,19 @@ const route_daemon = create_subcommand_router<ZzzRuntime>(
 		start: {
 			schema: DaemonStartArgs,
 			handler: async (runtime, args, flags) => {
-				await cmd_daemon_start(runtime, args, flags);
+				await daemon_start(runtime, args, flags);
 			},
 		},
 		stop: {
 			schema: DaemonStopArgs,
 			handler: async (runtime, args, flags) => {
-				await cmd_daemon_stop(runtime, args, flags);
+				await daemon_stop(runtime, args, flags);
 			},
 		},
 		status: {
 			schema: DaemonStatusArgs,
 			handler: async (runtime, args, flags) => {
-				await cmd_daemon_status(runtime, args, flags);
+				await daemon_status(runtime, args, flags);
 			},
 		},
 	} satisfies Record<string, SubcommandRoute<ZzzRuntime>>,
@@ -77,7 +77,7 @@ const main = async (runtime: ZzzRuntime): Promise<void> => {
 	// No command provided — default to open (like `code .`)
 	if (!command) {
 		await dispatch(remaining, OpenArgs, async (args) => {
-			await cmd_open(runtime, args, flags);
+			await open(runtime, args, flags);
 		});
 		return;
 	}
@@ -88,7 +88,7 @@ const main = async (runtime: ZzzRuntime): Promise<void> => {
 		// Treat as a path argument to the open command
 		// Don't shift — the path is the first positional
 		await dispatch(remaining, OpenArgs, async (args) => {
-			await cmd_open(runtime, args, flags);
+			await open(runtime, args, flags);
 		});
 		return;
 	}
@@ -104,13 +104,13 @@ const main = async (runtime: ZzzRuntime): Promise<void> => {
 
 			case 'open':
 				await dispatch(remaining, OpenArgs, async (args) => {
-					await cmd_open(runtime, args, flags);
+					await open(runtime, args, flags);
 				});
 				break;
 
 			case 'init':
 				await dispatch(remaining, InitArgs, async (args) => {
-					await cmd_init(runtime, args, flags);
+					await init(runtime, args, flags);
 				});
 				break;
 
@@ -120,7 +120,7 @@ const main = async (runtime: ZzzRuntime): Promise<void> => {
 
 			case 'status':
 				await dispatch(remaining, StatusArgs, async (args) => {
-					await cmd_status(runtime, args, flags);
+					await status(runtime, args, flags);
 				});
 				break;
 

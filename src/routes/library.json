@@ -16746,7 +16746,7 @@
 						"name": "CreateZzzAppOptions",
 						"kind": "type",
 						"doc_comment": "Options for creating a zzz app.",
-						"source_line": 36,
+						"source_line": 37,
 						"type_signature": "CreateZzzAppOptions",
 						"properties": [
 							{
@@ -16767,7 +16767,7 @@
 						"name": "ZzzApp",
 						"kind": "type",
 						"doc_comment": "The created zzz app and its backend.",
-						"source_line": 46,
+						"source_line": 47,
 						"type_signature": "ZzzApp",
 						"properties": [
 							{
@@ -16788,7 +16788,7 @@
 						"name": "create_zzz_app",
 						"kind": "function",
 						"doc_comment": "Create the zzz Hono app with Backend, providers, and endpoints.\n\nThis is the shared factory called by both entry points.\nThe caller is responsible for HTTP binding and WebSocket injection.",
-						"source_line": 59,
+						"source_line": 60,
 						"type_signature": "(options: CreateZzzAppOptions): Promise<ZzzApp>",
 						"return_type": "Promise<ZzzApp>",
 						"parameters": [
@@ -20438,7 +20438,7 @@
 				"path": "zzz/commands/daemon.ts",
 				"declarations": [
 					{
-						"name": "cmd_daemon_start",
+						"name": "daemon_start",
 						"kind": "function",
 						"doc_comment": "Start the daemon in foreground mode.\n\nCLI flags --port and --host override config values.",
 						"source_line": 31,
@@ -20460,7 +20460,7 @@
 						]
 					},
 					{
-						"name": "cmd_daemon_stop",
+						"name": "daemon_stop",
 						"kind": "function",
 						"doc_comment": "Stop the running daemon.",
 						"source_line": 47,
@@ -20482,7 +20482,7 @@
 						]
 					},
 					{
-						"name": "cmd_daemon_status",
+						"name": "daemon_status",
 						"kind": "function",
 						"doc_comment": "Show daemon status.",
 						"source_line": 65,
@@ -20512,7 +20512,7 @@
 				"path": "zzz/commands/init.ts",
 				"declarations": [
 					{
-						"name": "cmd_init",
+						"name": "init",
 						"kind": "function",
 						"doc_comment": "Initialize zzz configuration (~/.zzz/).\n\nCreates the config directory and config.json.",
 						"source_line": 27,
@@ -20542,7 +20542,7 @@
 				"path": "zzz/commands/open.ts",
 				"declarations": [
 					{
-						"name": "cmd_open",
+						"name": "open",
 						"kind": "function",
 						"doc_comment": "Open the zzz UI in a browser, auto-starting the daemon if needed.",
 						"source_line": 87,
@@ -20572,7 +20572,7 @@
 				"path": "zzz/commands/status.ts",
 				"declarations": [
 					{
-						"name": "cmd_status",
+						"name": "status",
 						"kind": "function",
 						"doc_comment": "Show current system state.",
 						"source_line": 19,

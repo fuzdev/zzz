@@ -28,7 +28,7 @@ import {start_server_deno} from '../../server/server_deno.ts';
  *
  * CLI flags --port and --host override config values.
  */
-export const cmd_daemon_start = async (
+export const daemon_start = async (
 	runtime: ZzzRuntime,
 	args: DaemonStartArgs,
 	_flags: ZzzGlobalArgs,
@@ -44,7 +44,7 @@ export const cmd_daemon_start = async (
 /**
  * Stop the running daemon.
  */
-export const cmd_daemon_stop = async (
+export const daemon_stop = async (
 	runtime: ZzzRuntime,
 	_args: DaemonStopArgs,
 	_flags: ZzzGlobalArgs,
@@ -62,7 +62,7 @@ export const cmd_daemon_stop = async (
 /**
  * Show daemon status.
  */
-export const cmd_daemon_status = async (
+export const daemon_status = async (
 	runtime: ZzzRuntime,
 	args: DaemonStatusArgs,
 	_flags: ZzzGlobalArgs,

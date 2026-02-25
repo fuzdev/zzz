@@ -16,7 +16,7 @@ import type {ZzzGlobalArgs} from '../cli/cli_args.ts';
 /**
  * Show current system state.
  */
-export const cmd_status = async (
+export const status = async (
 	runtime: ZzzRuntime,
 	args: StatusArgs,
 	_flags: ZzzGlobalArgs,

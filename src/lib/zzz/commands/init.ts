@@ -24,7 +24,7 @@ import {
  *
  * Creates the config directory and config.json.
  */
-export const cmd_init = async (
+export const init = async (
 	runtime: ZzzRuntime,
 	args: InitArgs,
 	_flags: ZzzGlobalArgs,

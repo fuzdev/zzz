@@ -84,7 +84,7 @@ const resolve_path = (
 /**
  * Open the zzz UI in a browser, auto-starting the daemon if needed.
  */
-export const cmd_open = async (
+export const open = async (
 	runtime: ZzzRuntime,
 	args: OpenArgs,
 	_flags: ZzzGlobalArgs,
