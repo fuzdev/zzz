@@ -14,7 +14,7 @@
 
 {#if app.ui.show_desk_menu}
 	<aside
-		class="desk_sidebar"
+		class="desk_sidebar unstyled p_md"
 		{@attach app.ui.desk_pinned ? null : click_outside(() => app.ui.toggle_desk_menu(false))}
 	>
 		<div>
