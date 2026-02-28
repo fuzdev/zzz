@@ -2730,32 +2730,32 @@
 					{
 						"name": "cell_classes",
 						"kind": "variable",
-						"source_line": 28,
-						"type_signature": "{ Parts: typeof Parts; Capabilities: typeof Capabilities; Chat: typeof Chat; Chats: typeof Chats; Diskfile: typeof Diskfile; DiskfileTab: typeof DiskfileTab; DiskfileTabs: typeof DiskfileTabs; ... 18 more ...; Ui: typeof Ui; }"
+						"source_line": 30,
+						"type_signature": "{ Parts: typeof Parts; Capabilities: typeof Capabilities; Chat: typeof Chat; Chats: typeof Chats; Diskfile: typeof Diskfile; DiskfileTab: typeof DiskfileTab; DiskfileTabs: typeof DiskfileTabs; ... 20 more ...; Ui: typeof Ui; }"
 					},
 					{
 						"name": "CellClasses",
 						"kind": "type",
-						"source_line": 57,
-						"type_signature": "{ Parts: typeof Parts; Capabilities: typeof Capabilities; Chat: typeof Chat; Chats: typeof Chats; Diskfile: typeof Diskfile; DiskfileTab: typeof DiskfileTab; DiskfileTabs: typeof DiskfileTabs; ... 18 more ...; Ui: typeof Ui; }"
+						"source_line": 61,
+						"type_signature": "{ Parts: typeof Parts; Capabilities: typeof Capabilities; Chat: typeof Chat; Chats: typeof Chats; Diskfile: typeof Diskfile; DiskfileTab: typeof DiskfileTab; DiskfileTabs: typeof DiskfileTabs; ... 20 more ...; Ui: typeof Ui; }"
 					},
 					{
 						"name": "CellClassNames",
 						"kind": "type",
-						"source_line": 59,
-						"type_signature": "\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 12 more ... | \"Ui\""
+						"source_line": 63,
+						"type_signature": "\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 14 more ... | \"Ui\""
 					},
 					{
 						"name": "CellRegistryMap",
 						"kind": "type",
-						"source_line": 61,
+						"source_line": 65,
 						"type_signature": "CellRegistryMap"
 					},
 					{
 						"name": "is_cell_type",
 						"kind": "function",
 						"doc_comment": "Type guard to check if a cell is an instance of a specific cell class.",
-						"source_line": 68,
+						"source_line": 72,
 						"type_signature": "<K extends CellClassNames>(cell: Cell<any> | null | undefined, class_name: K): cell is CellRegistryMap[K]",
 						"return_type": "boolean",
 						"parameters": [
@@ -2773,9 +2773,9 @@
 						"name": "get_cell_class_names",
 						"kind": "function",
 						"doc_comment": "Get a list of all registered cell class names.",
-						"source_line": 76,
-						"type_signature": "(): (\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 12 more ... | \"Ui\")[]",
-						"return_type": "(\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 12 more ... | \"Ui\")[]",
+						"source_line": 80,
+						"type_signature": "(): (\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 14 more ... | \"Ui\")[]",
+						"return_type": "(\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 14 more ... | \"Ui\")[]",
 						"parameters": []
 					}
 				],
@@ -2800,6 +2800,8 @@
 					"provider.svelte.ts",
 					"providers.svelte.ts",
 					"socket.svelte.ts",
+					"space.svelte.ts",
+					"spaces.svelte.ts",
 					"thread.svelte.ts",
 					"threads.svelte.ts",
 					"time.svelte.ts",
@@ -2925,6 +2927,7 @@
 					"models.svelte.ts",
 					"parts.svelte.ts",
 					"prompts.svelte.ts",
+					"spaces.svelte.ts",
 					"thread.svelte.ts",
 					"threads.svelte.ts",
 					"time_helpers.ts"
@@ -3182,6 +3185,8 @@
 					"provider.svelte.ts",
 					"providers.svelte.ts",
 					"socket.svelte.ts",
+					"space.svelte.ts",
+					"spaces.svelte.ts",
 					"thread_types.ts",
 					"threads.svelte.ts",
 					"time.svelte.ts",
@@ -3562,6 +3567,8 @@
 					"provider.svelte.ts",
 					"providers.svelte.ts",
 					"socket.svelte.ts",
+					"space.svelte.ts",
+					"spaces.svelte.ts",
 					"thread.svelte.ts",
 					"threads.svelte.ts",
 					"time.svelte.ts",
@@ -5311,6 +5318,18 @@
 					"frontend.svelte.ts",
 					"glyphs.ts"
 				]
+			},
+			{
+				"path": "DeskMenu.svelte",
+				"declarations": [
+					{
+						"name": "DeskMenu",
+						"kind": "component",
+						"source_line": 1
+					}
+				],
+				"dependencies": ["Glyph.svelte", "frontend.svelte.ts", "glyphs.ts", "spaces.svelte.ts"],
+				"dependents": ["FrontendRoot.svelte"]
 			},
 			{
 				"path": "diskfile_editor_state.svelte.ts",
@@ -7762,25 +7781,25 @@
 					{
 						"name": "frontend_context",
 						"kind": "variable",
-						"source_line": 48,
+						"source_line": 49,
 						"type_signature": "{ get: (error_message?: string | undefined) => Frontend; get_maybe: () => Frontend | undefined; set: (value: Frontend) => Frontend; }"
 					},
 					{
 						"name": "FrontendJson",
 						"kind": "type",
-						"source_line": 50,
+						"source_line": 51,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; ui: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "FrontendJsonInput",
 						"kind": "type",
-						"source_line": 55,
-						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; ui?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; show_main_dialog?: boolean | undefined; ... 4 more ...; tutorial_for_diskfiles?: boolean | undefined; } | undefined; }"
+						"source_line": 56,
+						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; ui?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; show_main_dialog?: boolean | undefined; ... 5 more ...; show_desk_menu?: boolean | undefined; } | undefined; }"
 					},
 					{
 						"name": "FrontendOptions",
 						"kind": "type",
-						"source_line": 57,
+						"source_line": 58,
 						"type_signature": "FrontendOptions",
 						"extends": ["OmitStrict<CellOptions<typeof FrontendJson>, 'app'>"],
 						"properties": [
@@ -7841,7 +7860,7 @@
 						"name": "Frontend",
 						"kind": "class",
 						"doc_comment": "The base frontend app, typically used by creating your own `App extends Frontend`.\nGettable with `frontend_context.get()` inside a `<FrontendRoot>`.",
-						"source_line": 77,
+						"source_line": 78,
 						"extends": ["Cell<typeof FrontendJson>"],
 						"implements": ["ActionEventEnvironment"],
 						"members": [
@@ -7959,6 +7978,12 @@
 								"kind": "variable",
 								"modifiers": ["readonly"],
 								"type_signature": "Ollama"
+							},
+							{
+								"name": "spaces",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "Spaces"
 							},
 							{
 								"name": "bots",
@@ -8182,6 +8207,7 @@
 					"provider.svelte.ts",
 					"providers.svelte.ts",
 					"socket.svelte.ts",
+					"spaces.svelte.ts",
 					"threads.svelte.ts",
 					"time.svelte.ts",
 					"ui.svelte.ts"
@@ -8208,6 +8234,7 @@
 					"DashboardPrompts.svelte",
 					"DashboardProviders.svelte",
 					"DashboardSettings.svelte",
+					"DeskMenu.svelte",
 					"DiskfileActions.svelte",
 					"DiskfileContextmenu.svelte",
 					"DiskfileEditorNav.svelte",
@@ -8266,7 +8293,12 @@
 						"source_line": 1
 					}
 				],
-				"dependencies": ["Dashboard.svelte", "MainDialog.svelte", "frontend.svelte.ts"]
+				"dependencies": [
+					"Dashboard.svelte",
+					"DeskMenu.svelte",
+					"MainDialog.svelte",
+					"frontend.svelte.ts"
+				]
 			},
 			{
 				"path": "Glyph.svelte",
@@ -8315,6 +8347,7 @@
 					"DashboardPrompts.svelte",
 					"DashboardProviders.svelte",
 					"DashboardSettings.svelte",
+					"DeskMenu.svelte",
 					"DiskfileActions.svelte",
 					"DiskfileContextmenu.svelte",
 					"DiskfileEditorNav.svelte",
@@ -8703,75 +8736,87 @@
 						"type_signature": "\"⌺\""
 					},
 					{
-						"name": "GLYPH_IDEA",
+						"name": "GLYPH_SPACE",
 						"kind": "variable",
 						"source_line": 79,
+						"type_signature": "\"⌂\""
+					},
+					{
+						"name": "GLYPH_DESK",
+						"kind": "variable",
+						"source_line": 80,
+						"type_signature": "\"⍟\""
+					},
+					{
+						"name": "GLYPH_IDEA",
+						"kind": "variable",
+						"source_line": 82,
 						"type_signature": "\"⌆\""
 					},
 					{
 						"name": "GLYPH_PING",
 						"kind": "variable",
-						"source_line": 81,
+						"source_line": 84,
 						"type_signature": "\"⥀\""
 					},
 					{
 						"name": "GLYPH_HEARTBEAT",
 						"kind": "variable",
-						"source_line": 82,
+						"source_line": 85,
 						"type_signature": "\"∽\""
 					},
 					{
 						"name": "GLYPH_RESPONSE",
 						"kind": "variable",
-						"source_line": 83,
+						"source_line": 86,
 						"type_signature": "\"⮑\""
 					},
 					{
 						"name": "GLYPH_SESSION",
 						"kind": "variable",
-						"source_line": 84,
+						"source_line": 87,
 						"type_signature": "\"⏣\""
 					},
 					{
 						"name": "GLYPH_ACTION_TYPE_LOCAL_CALL",
 						"kind": "variable",
-						"source_line": 86,
+						"source_line": 89,
 						"type_signature": "\"⤳\""
 					},
 					{
 						"name": "GLYPH_ACTION_TYPE_REMOTE_NOTIFICATION",
 						"kind": "variable",
-						"source_line": 87,
+						"source_line": 90,
 						"type_signature": "\"⥙\""
 					},
 					{
 						"name": "GLYPH_ACTION_TYPE_REQUEST_RESPONSE",
 						"kind": "variable",
-						"source_line": 88,
+						"source_line": 91,
 						"type_signature": "\"⥮\""
 					},
 					{
 						"name": "GLYPH_EXTERNAL_LINK",
 						"kind": "variable",
-						"source_line": 90,
+						"source_line": 93,
 						"type_signature": "\"🡵\""
 					},
 					{
 						"name": "GLYPH_ARROW_RIGHT",
 						"kind": "variable",
-						"source_line": 92,
+						"source_line": 95,
 						"type_signature": "\"→\""
 					},
 					{
 						"name": "GLYPH_ARROW_LEFT",
 						"kind": "variable",
-						"source_line": 93,
+						"source_line": 96,
 						"type_signature": "\"←\""
 					},
 					{
 						"name": "get_glyph_for_action_method",
 						"kind": "function",
-						"source_line": 95,
+						"source_line": 98,
 						"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\"): string",
 						"return_type": "string",
 						"parameters": [
@@ -8784,7 +8829,7 @@
 					{
 						"name": "get_glyph_for_action_kind",
 						"kind": "function",
-						"source_line": 112,
+						"source_line": 115,
 						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\"): string",
 						"return_type": "string",
 						"parameters": [
@@ -8823,6 +8868,7 @@
 					"DashboardPrompts.svelte",
 					"DashboardProviders.svelte",
 					"DashboardSettings.svelte",
+					"DeskMenu.svelte",
 					"DiskfileActions.svelte",
 					"DiskfileContextmenu.svelte",
 					"DiskfileEditorNav.svelte",
@@ -8978,6 +9024,7 @@
 					"prompt.svelte.ts",
 					"prompts.svelte.ts",
 					"reorderable.svelte.ts",
+					"spaces.svelte.ts",
 					"thread.svelte.ts",
 					"turn.svelte.ts"
 				]
@@ -9233,6 +9280,7 @@
 					"models.svelte.ts",
 					"parts.svelte.ts",
 					"prompts.svelte.ts",
+					"spaces.svelte.ts",
 					"threads.svelte.ts"
 				]
 			},
@@ -9728,6 +9776,7 @@
 					"models.svelte.ts",
 					"parts.svelte.ts",
 					"prompts.svelte.ts",
+					"spaces.svelte.ts",
 					"thread.svelte.ts",
 					"threads.svelte.ts"
 				]
@@ -18140,6 +18189,234 @@
 				]
 			},
 			{
+				"path": "space.svelte.ts",
+				"declarations": [
+					{
+						"name": "SpaceJson",
+						"kind": "type",
+						"source_line": 6,
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; name: ZodDefault<...>; directory_paths: ZodDefault<...>; }, $strict>"
+					},
+					{
+						"name": "SpaceJsonInput",
+						"kind": "type",
+						"source_line": 11,
+						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; name?: string | undefined; directory_paths?: string[] | undefined; }"
+					},
+					{
+						"name": "SpaceOptions",
+						"kind": "type",
+						"source_line": 13,
+						"type_signature": "SpaceOptions",
+						"extends": ["CellOptions<typeof SpaceJson>"],
+						"properties": []
+					},
+					{
+						"name": "Space",
+						"kind": "class",
+						"source_line": 15,
+						"extends": ["Cell<typeof SpaceJson>"],
+						"implements": [],
+						"members": [
+							{
+								"name": "name",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "directory_paths",
+								"kind": "variable",
+								"type_signature": "Array<string>"
+							},
+							{
+								"name": "directory_count",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "number"
+							},
+							{
+								"name": "constructor",
+								"kind": "constructor",
+								"type_signature": "(options: SpaceOptions): Space",
+								"parameters": [
+									{
+										"name": "options",
+										"type": "SpaceOptions"
+									}
+								]
+							},
+							{
+								"name": "add_directory",
+								"kind": "function",
+								"type_signature": "(path: string): void",
+								"return_type": "void",
+								"parameters": [
+									{
+										"name": "path",
+										"type": "string"
+									}
+								]
+							},
+							{
+								"name": "remove_directory",
+								"kind": "function",
+								"type_signature": "(path: string): void",
+								"return_type": "void",
+								"parameters": [
+									{
+										"name": "path",
+										"type": "string"
+									}
+								]
+							}
+						]
+					}
+				],
+				"dependencies": ["cell.svelte.ts", "cell_types.ts"],
+				"dependents": ["cell_classes.ts", "spaces.svelte.ts"]
+			},
+			{
+				"path": "spaces.svelte.ts",
+				"declarations": [
+					{
+						"name": "SCRATCHPAD_NAME",
+						"kind": "variable",
+						"source_line": 12,
+						"type_signature": "\"scratchpad\""
+					},
+					{
+						"name": "SpacesJson",
+						"kind": "type",
+						"source_line": 14,
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; items: ZodDefault<...>; active_id: ZodDefault<...>; }, $strict>"
+					},
+					{
+						"name": "SpacesJsonInput",
+						"kind": "type",
+						"source_line": 19,
+						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; name?: string | undefined; directory_paths?: string[] | undefined; }[] | undefined; active_id?: string | ... 1 more ... | undefined; }"
+					},
+					{
+						"name": "SpacesOptions",
+						"kind": "type",
+						"source_line": 21,
+						"type_signature": "SpacesOptions",
+						"extends": ["CellOptions<typeof SpacesJson>"],
+						"properties": []
+					},
+					{
+						"name": "Spaces",
+						"kind": "class",
+						"source_line": 23,
+						"extends": ["Cell<typeof SpacesJson>"],
+						"implements": [],
+						"members": [
+							{
+								"name": "items",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "IndexedCollection<Space>"
+							},
+							{
+								"name": "active_id",
+								"kind": "variable",
+								"type_signature": "Uuid | null"
+							},
+							{
+								"name": "active",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "Space | undefined"
+							},
+							{
+								"name": "scratchpad",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "Space | undefined"
+							},
+							{
+								"name": "constructor",
+								"kind": "constructor",
+								"type_signature": "(options: SpacesOptions): Spaces",
+								"parameters": [
+									{
+										"name": "options",
+										"type": "SpacesOptions"
+									}
+								]
+							},
+							{
+								"name": "ensure_scratchpad",
+								"kind": "function",
+								"type_signature": "(): Space",
+								"return_type": "Space",
+								"parameters": []
+							},
+							{
+								"name": "add",
+								"kind": "function",
+								"type_signature": "(json?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; name?: string | undefined; directory_paths?: string[] | undefined; } | undefined): Space",
+								"return_type": "Space",
+								"parameters": [
+									{
+										"name": "json",
+										"type": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; name?: string | undefined; directory_paths?: string[] | undefined; } | undefined",
+										"optional": true
+									}
+								]
+							},
+							{
+								"name": "generate_unique_name",
+								"kind": "function",
+								"type_signature": "(base_name?: string): string",
+								"return_type": "string",
+								"parameters": [
+									{
+										"name": "base_name",
+										"type": "string",
+										"default_value": "'new space'"
+									}
+								]
+							},
+							{
+								"name": "remove",
+								"kind": "function",
+								"type_signature": "(id: string & $brand<\"Uuid\">): void",
+								"return_type": "void",
+								"parameters": [
+									{
+										"name": "id",
+										"type": "string & $brand<\"Uuid\">"
+									}
+								]
+							},
+							{
+								"name": "activate",
+								"kind": "function",
+								"type_signature": "(id: string & $brand<\"Uuid\">): void",
+								"return_type": "void",
+								"parameters": [
+									{
+										"name": "id",
+										"type": "string & $brand<\"Uuid\">"
+									}
+								]
+							}
+						]
+					}
+				],
+				"dependencies": [
+					"cell.svelte.ts",
+					"cell_helpers.ts",
+					"cell_types.ts",
+					"helpers.ts",
+					"indexed_collection.svelte.ts",
+					"indexed_collection_helpers.svelte.ts",
+					"space.svelte.ts"
+				],
+				"dependents": ["DeskMenu.svelte", "cell_classes.ts", "frontend.svelte.ts"]
+			},
+			{
 				"path": "thread_helpers.ts",
 				"declarations": [
 					{
@@ -19575,18 +19852,18 @@
 						"name": "UiJson",
 						"kind": "type",
 						"source_line": 6,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 6 more ...; tutorial_for_diskfiles: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 7 more ...; show_desk_menu: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "UiJsonInput",
 						"kind": "type",
-						"source_line": 15,
+						"source_line": 16,
 						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; show_main_dialog?: boolean | undefined; show_sidebar?: boolean | undefined; tutorial_for_database?: boolean | undefined; tutorial_for_chats?: boolean | undefined; tutorial_for_prompts?: boolean | undefined; tutorial_for_diskfiles?..."
 					},
 					{
 						"name": "UiOptions",
 						"kind": "type",
-						"source_line": 17,
+						"source_line": 18,
 						"type_signature": "UiOptions",
 						"extends": ["CellOptions<typeof UiJson>"],
 						"properties": []
@@ -19594,7 +19871,7 @@
 					{
 						"name": "Ui",
 						"kind": "class",
-						"source_line": 18,
+						"source_line": 19,
 						"extends": ["Cell<typeof UiJson>"],
 						"implements": [],
 						"members": [
@@ -19625,6 +19902,11 @@
 							},
 							{
 								"name": "tutorial_for_diskfiles",
+								"kind": "variable",
+								"type_signature": "boolean"
+							},
+							{
+								"name": "show_desk_menu",
 								"kind": "variable",
 								"type_signature": "boolean"
 							},
@@ -19670,6 +19952,20 @@
 										"name": "value",
 										"type": "boolean",
 										"default_value": "!this.show_sidebar"
+									}
+								]
+							},
+							{
+								"name": "toggle_desk_menu",
+								"kind": "function",
+								"doc_comment": "Toggle the desk menu visibility.",
+								"type_signature": "(value?: boolean): boolean",
+								"return_type": "boolean",
+								"parameters": [
+									{
+										"name": "value",
+										"type": "boolean",
+										"default_value": "!this.show_desk_menu"
 									}
 								]
 							}

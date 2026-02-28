@@ -20,6 +20,7 @@ import {Prompts} from './prompts.svelte.js';
 import {Parts} from './parts.svelte.js';
 import {Time} from './time.svelte.js';
 import {Ollama} from './ollama.svelte.js';
+import {Spaces} from './spaces.svelte.js';
 import type {ZzzConfig} from './config_helpers.js';
 import {BOTS_DEFAULT} from './config_defaults.js';
 import {DiskfileDirectoryPath, DiskfilePath} from './diskfile_types.js';
@@ -101,6 +102,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly socket: Socket;
 	readonly capabilities: Capabilities;
 	readonly ollama: Ollama;
+	readonly spaces: Spaces;
 
 	readonly bots: ZzzConfig['bots'];
 
@@ -187,6 +189,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.socket = new Socket({app: this});
 		this.capabilities = new Capabilities({app: this});
 		this.ollama = new Ollama({app: this});
+		this.spaces = new Spaces({app: this});
 
 		this.bots = options.bots ?? BOTS_DEFAULT;
 

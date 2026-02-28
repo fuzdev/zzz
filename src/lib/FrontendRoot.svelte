@@ -6,6 +6,7 @@
 	import {Frontend, frontend_context} from './frontend.svelte.js';
 	import Dashboard from './Dashboard.svelte';
 	import MainDialog from './MainDialog.svelte';
+	import DeskMenu from './DeskMenu.svelte';
 
 	// TODO maybe just make this `Zzz`?
 
@@ -29,6 +30,7 @@
 <Themed>
 	<ContextmenuRoot>
 		<MainDialog />
+		<DeskMenu />
 		<!-- TODO user-defined pages should be able to control the full page at runtime -->
 		<Dashboard>
 			<div class="height:100% overflow:auto">

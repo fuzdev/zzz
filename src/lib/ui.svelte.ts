@@ -10,6 +10,7 @@ export const UiJson = CellJson.extend({
 	tutorial_for_chats: z.boolean().default(true),
 	tutorial_for_prompts: z.boolean().default(true),
 	tutorial_for_diskfiles: z.boolean().default(true),
+	show_desk_menu: z.boolean().default(false),
 }).meta({cell_class_name: 'Ui'});
 export type UiJson = z.infer<typeof UiJson>;
 export type UiJsonInput = z.input<typeof UiJson>;
@@ -22,6 +23,7 @@ export class Ui extends Cell<typeof UiJson> {
 	tutorial_for_chats: boolean = $state()!;
 	tutorial_for_prompts: boolean = $state()!;
 	tutorial_for_diskfiles: boolean = $state()!;
+	show_desk_menu: boolean = $state()!;
 
 	// TODO revisit this API, maybe with an associated attachment?
 	/** Consumed by components like `ContentEditor` for focusing elements. */
@@ -46,6 +48,14 @@ export class Ui extends Cell<typeof UiJson> {
 	 */
 	toggle_sidebar(value: boolean = !this.show_sidebar): boolean {
 		this.show_sidebar = value;
+		return value;
+	}
+
+	/**
+	 * Toggle the desk menu visibility.
+	 */
+	toggle_desk_menu(value: boolean = !this.show_desk_menu): boolean {
+		this.show_desk_menu = value;
 		return value;
 	}
 }

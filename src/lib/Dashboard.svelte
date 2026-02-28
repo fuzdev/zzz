@@ -10,7 +10,13 @@
 	import {logo_zzz} from './logos.js';
 	import NavLink from './NavLink.svelte';
 	import Glyph from './Glyph.svelte';
-	import {GLYPH_ARROW_LEFT, GLYPH_ARROW_RIGHT, GLYPH_PROJECT, GLYPH_TAB} from './glyphs.js';
+	import {
+		GLYPH_ARROW_LEFT,
+		GLYPH_ARROW_RIGHT,
+		GLYPH_DESK,
+		GLYPH_PROJECT,
+		GLYPH_TAB,
+	} from './glyphs.js';
 	import {frontend_context} from './frontend.svelte.js';
 	import {main_nav_items_default, to_nav_link_href} from './nav.js';
 
@@ -169,5 +175,19 @@
 		onclick={() => app.ui.toggle_sidebar()}
 	>
 		<Glyph glyph={app.ui.show_sidebar ? GLYPH_ARROW_LEFT : GLYPH_ARROW_RIGHT} />
+	</button>
+
+	<!-- desk menu button -->
+	<button
+		type="button"
+		class="position:fixed top:0 right:0 plain border_radius_0"
+		aria-label="desk menu"
+		title="desk menu — switch spaces"
+		onclick={() => app.ui.toggle_desk_menu()}
+	>
+		<Glyph glyph={GLYPH_DESK} />
+		{#if app.spaces.active}
+			<span class="font_size_sm text_50 ml_xs">{app.spaces.active.name}</span>
+		{/if}
 	</button>
 </div>

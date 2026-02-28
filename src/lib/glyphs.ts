@@ -76,6 +76,9 @@ export const GLYPH_SETTINGS = '⛮'; // ⛭  ⚙  ⛮  ⛯ ⛣
 export const GLYPH_DOMAIN = '⟡'; // ⟡ ⏥
 export const GLYPH_PAGE = '⌺'; // ⌺ ⎚
 
+export const GLYPH_SPACE = '⌂'; // space/container
+export const GLYPH_DESK = '⍟'; // desk/system menu
+
 export const GLYPH_IDEA = '⌆'; // TODO use
 
 export const GLYPH_PING = '⥀';
