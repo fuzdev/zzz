@@ -19,6 +19,7 @@
 	} from './glyphs.js';
 	import {frontend_context} from './frontend.svelte.js';
 	import {main_nav_items_default, to_nav_link_href} from './nav.js';
+	import {DESK_WIDTH} from './DeskMenu.svelte';
 
 	// TODO dashboard should be mounted with Markdown
 
@@ -32,6 +33,7 @@
 
 	const SIDEBAR_WIDTH_MAX = 180;
 	const sidebar_width = $derived(app.ui.show_sidebar ? SIDEBAR_WIDTH_MAX : 0);
+	const desk_width = $derived(app.ui.show_desk_menu && app.ui.desk_pinned ? DESK_WIDTH : 0);
 
 	let futureclicks = $state(0);
 	const FUTURECLICKS = 3;
@@ -92,10 +94,15 @@
 />
 
 <!-- TODO drive with data -->
-<div class="dashboard" style:--sidebar_width="{sidebar_width}px">
+<div
+	class="dashboard"
+	style:--sidebar_width="{sidebar_width}px"
+	style:--desk_width="{desk_width}px"
+>
 	<div
 		class="height:100% width:100% position:fixed top:0 left:0"
 		style:padding-left="var(--sidebar_width)"
+		style:padding-right="var(--desk_width)"
 	>
 		{@render children()}
 	</div>
@@ -181,13 +188,15 @@
 	</button>
 
 	<!-- desk menu button -->
-	<button
-		type="button"
-		class="position:fixed top:0 right:0 icon_button plain border-radius:0 border_bottom_left_radius_md"
-		aria-label="desk menu"
-		title="desk menu — switch spaces"
-		onclick={() => app.ui.toggle_desk_menu()}
-	>
-		<Glyph glyph={GLYPH_DESK} />
-	</button>
+	{#if !app.ui.show_desk_menu}
+		<button
+			type="button"
+			class="position:fixed top:0 right:0 icon_button plain border-radius:0 border_bottom_left_radius_md"
+			aria-label="desk menu"
+			title="desk menu — switch spaces [~]"
+			onclick={() => app.ui.toggle_desk_menu()}
+		>
+			<Glyph glyph={GLYPH_DESK} />
+		</button>
+	{/if}
 </div>

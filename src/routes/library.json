@@ -4509,6 +4509,26 @@
 				"dependents": ["ContentEditor.svelte", "DiskfileActions.svelte"]
 			},
 			{
+				"path": "click_outside.svelte.ts",
+				"declarations": [
+					{
+						"name": "click_outside",
+						"kind": "function",
+						"doc_comment": "Creates an attachment that calls `callback` when a mousedown occurs outside the element.",
+						"source_line": 6,
+						"type_signature": "(callback: () => void): Attachment<HTMLElement>",
+						"return_type": "Attachment<HTMLElement>",
+						"parameters": [
+							{
+								"name": "callback",
+								"type": "() => void"
+							}
+						]
+					}
+				],
+				"dependents": ["DeskMenu.svelte"]
+			},
+			{
 				"path": "completion_types.ts",
 				"declarations": [
 					{
@@ -5110,6 +5130,7 @@
 					}
 				],
 				"dependencies": [
+					"DeskMenu.svelte",
 					"Glyph.svelte",
 					"NavLink.svelte",
 					"frontend.svelte.ts",
@@ -5328,8 +5349,14 @@
 						"source_line": 1
 					}
 				],
-				"dependencies": ["Glyph.svelte", "frontend.svelte.ts", "glyphs.ts", "spaces.svelte.ts"],
-				"dependents": ["FrontendRoot.svelte"]
+				"dependencies": [
+					"Glyph.svelte",
+					"click_outside.svelte.ts",
+					"frontend.svelte.ts",
+					"glyphs.ts",
+					"spaces.svelte.ts"
+				],
+				"dependents": ["Dashboard.svelte", "FrontendRoot.svelte"]
 			},
 			{
 				"path": "diskfile_editor_state.svelte.ts",
@@ -7794,7 +7821,7 @@
 						"name": "FrontendJsonInput",
 						"kind": "type",
 						"source_line": 56,
-						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; ui?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; show_main_dialog?: boolean | undefined; ... 5 more ...; show_desk_menu?: boolean | undefined; } | undefined; }"
+						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; ui?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; show_main_dialog?: boolean | undefined; ... 6 more ...; desk_pinned?: boolean | undefined; } | undefined; }"
 					},
 					{
 						"name": "FrontendOptions",
@@ -8748,75 +8775,81 @@
 						"type_signature": "\"⍟\""
 					},
 					{
+						"name": "GLYPH_PIN",
+						"kind": "variable",
+						"source_line": 81,
+						"type_signature": "\"⏍\""
+					},
+					{
 						"name": "GLYPH_IDEA",
 						"kind": "variable",
-						"source_line": 82,
+						"source_line": 83,
 						"type_signature": "\"⌆\""
 					},
 					{
 						"name": "GLYPH_PING",
 						"kind": "variable",
-						"source_line": 84,
+						"source_line": 85,
 						"type_signature": "\"⥀\""
 					},
 					{
 						"name": "GLYPH_HEARTBEAT",
 						"kind": "variable",
-						"source_line": 85,
+						"source_line": 86,
 						"type_signature": "\"∽\""
 					},
 					{
 						"name": "GLYPH_RESPONSE",
 						"kind": "variable",
-						"source_line": 86,
+						"source_line": 87,
 						"type_signature": "\"⮑\""
 					},
 					{
 						"name": "GLYPH_SESSION",
 						"kind": "variable",
-						"source_line": 87,
+						"source_line": 88,
 						"type_signature": "\"⏣\""
 					},
 					{
 						"name": "GLYPH_ACTION_TYPE_LOCAL_CALL",
 						"kind": "variable",
-						"source_line": 89,
+						"source_line": 90,
 						"type_signature": "\"⤳\""
 					},
 					{
 						"name": "GLYPH_ACTION_TYPE_REMOTE_NOTIFICATION",
 						"kind": "variable",
-						"source_line": 90,
+						"source_line": 91,
 						"type_signature": "\"⥙\""
 					},
 					{
 						"name": "GLYPH_ACTION_TYPE_REQUEST_RESPONSE",
 						"kind": "variable",
-						"source_line": 91,
+						"source_line": 92,
 						"type_signature": "\"⥮\""
 					},
 					{
 						"name": "GLYPH_EXTERNAL_LINK",
 						"kind": "variable",
-						"source_line": 93,
+						"source_line": 94,
 						"type_signature": "\"🡵\""
 					},
 					{
 						"name": "GLYPH_ARROW_RIGHT",
 						"kind": "variable",
-						"source_line": 95,
+						"source_line": 96,
 						"type_signature": "\"→\""
 					},
 					{
 						"name": "GLYPH_ARROW_LEFT",
 						"kind": "variable",
-						"source_line": 96,
+						"source_line": 97,
 						"type_signature": "\"←\""
 					},
 					{
 						"name": "get_glyph_for_action_method",
 						"kind": "function",
-						"source_line": 98,
+						"source_line": 99,
 						"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\"): string",
 						"return_type": "string",
 						"parameters": [
@@ -8829,7 +8862,7 @@
 					{
 						"name": "get_glyph_for_action_kind",
 						"kind": "function",
-						"source_line": 115,
+						"source_line": 116,
 						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\"): string",
 						"return_type": "string",
 						"parameters": [
@@ -19852,18 +19885,18 @@
 						"name": "UiJson",
 						"kind": "type",
 						"source_line": 6,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 7 more ...; show_desk_menu: ZodDefault<...>; }, $strict>"
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 8 more ...; desk_pinned: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "UiJsonInput",
 						"kind": "type",
-						"source_line": 16,
-						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; show_main_dialog?: boolean | undefined; show_sidebar?: boolean | undefined; tutorial_for_database?: boolean | undefined; tutorial_for_chats?: boolean | undefined; tutorial_for_prompts?: boolean | undefined; tutorial_for_diskfiles?..."
+						"source_line": 17,
+						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; show_main_dialog?: boolean | undefined; show_sidebar?: boolean | undefined; tutorial_for_database?: boolean | undefined; ... 4 more ...; desk_pinned?: boolean | undefined; }"
 					},
 					{
 						"name": "UiOptions",
 						"kind": "type",
-						"source_line": 18,
+						"source_line": 19,
 						"type_signature": "UiOptions",
 						"extends": ["CellOptions<typeof UiJson>"],
 						"properties": []
@@ -19871,7 +19904,7 @@
 					{
 						"name": "Ui",
 						"kind": "class",
-						"source_line": 19,
+						"source_line": 20,
 						"extends": ["Cell<typeof UiJson>"],
 						"implements": [],
 						"members": [
@@ -19907,6 +19940,11 @@
 							},
 							{
 								"name": "show_desk_menu",
+								"kind": "variable",
+								"type_signature": "boolean"
+							},
+							{
+								"name": "desk_pinned",
 								"kind": "variable",
 								"type_signature": "boolean"
 							},
@@ -19966,6 +20004,20 @@
 										"name": "value",
 										"type": "boolean",
 										"default_value": "!this.show_desk_menu"
+									}
+								]
+							},
+							{
+								"name": "toggle_desk_pinned",
+								"kind": "function",
+								"doc_comment": "Toggle the desk menu pinned state.",
+								"type_signature": "(value?: boolean): boolean",
+								"return_type": "boolean",
+								"parameters": [
+									{
+										"name": "value",
+										"type": "boolean",
+										"default_value": "!this.desk_pinned"
 									}
 								]
 							}
