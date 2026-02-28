@@ -14,8 +14,6 @@ import {
 } from '$lib/indexed_collection_helpers.svelte.js';
 import {create_uuid, Uuid} from '$lib/zod_helpers.js';
 
-/* eslint-disable @typescript-eslint/no-empty-function */
-
 // Mock item type that implements IndexedItem
 interface TestItem {
 	id: Uuid;
@@ -416,7 +414,7 @@ describe('IndexedCollection - Edge Cases', () => {
 						for (const value of item.array_a) {
 							stats.array_a_frequency[value]--;
 							if (stats.array_a_frequency[value] === 0) {
-								delete stats.array_a_frequency[value]; // eslint-disable-line @typescript-eslint/no-dynamic-delete
+								delete stats.array_a_frequency[value];
 							}
 						}
 						return stats;

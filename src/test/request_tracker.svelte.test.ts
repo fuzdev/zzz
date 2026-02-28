@@ -379,9 +379,9 @@ describe('RequestTracker', () => {
 			for (const {id, error} of test_cases) {
 				const deferred = tracker.track_request(id);
 				tracker.reject_request(id, error);
-				await expect(deferred.promise).rejects.toBeInstanceOf(ThrownJsonrpcError); // eslint-disable-line no-await-in-loop
+				await expect(deferred.promise).rejects.toBeInstanceOf(ThrownJsonrpcError);
 
-				const rejection_error = await deferred.promise.catch((err) => err); // eslint-disable-line no-await-in-loop
+				const rejection_error = await deferred.promise.catch((err) => err);
 				expect(rejection_error.code).toBe(error.error.code);
 				expect(rejection_error.message).toBe(error.error.message);
 
@@ -841,7 +841,7 @@ describe('RequestTracker', () => {
 				tracker.resolve_request(id, response);
 				expect(tracker.pending_requests.has(id)).toBe(false);
 
-				const result = await deferred.promise; // eslint-disable-line no-await-in-loop
+				const result = await deferred.promise;
 				expect(result).toBe(response);
 			}
 		});

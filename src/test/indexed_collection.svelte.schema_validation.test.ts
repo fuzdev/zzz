@@ -14,8 +14,6 @@ import {
 } from '$lib/indexed_collection_helpers.svelte.js';
 import {create_uuid, Uuid} from '$lib/zod_helpers.js';
 
-/* eslint-disable @typescript-eslint/no-empty-function */
-
 // Mock item type that implements IndexedItem
 interface TestItem {
 	id: Uuid;

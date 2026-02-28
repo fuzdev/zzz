@@ -4,8 +4,6 @@ import {test, expect, describe} from 'vitest';
 
 import {update_env_variable} from '$lib/server/env_file_helpers.js';
 
-/* eslint-disable @typescript-eslint/require-await */
-
 /**
  * Creates an in-memory file system for testing.
  * No module-level mocks - uses dependency injection instead.
@@ -203,7 +201,7 @@ describe('update_env_variable - error handling', () => {
 			update_env_variable('API_KEY', 'new_value', {
 				env_file_path: '/test/.env',
 				read_file: custom_read,
-				write_file: async () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+				write_file: async () => {},
 			}),
 		).rejects.toThrow(error_message);
 	});

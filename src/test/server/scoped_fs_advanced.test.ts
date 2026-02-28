@@ -6,8 +6,6 @@ import * as fs_sync from 'node:fs';
 
 import {ScopedFs, SymlinkNotAllowedError} from '$lib/server/scoped_fs.js';
 
-/* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-empty-function, no-await-in-loop */
-
 // Mock fs/promises and fs modules
 vi.mock('node:fs/promises', () => ({
 	readFile: vi.fn(),

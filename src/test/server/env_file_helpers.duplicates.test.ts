@@ -4,8 +4,6 @@ import {test, expect, describe} from 'vitest';
 
 import {update_env_variable} from '$lib/server/env_file_helpers.js';
 
-/* eslint-disable @typescript-eslint/require-await */
-
 const create_mock_fs = (initial_files: Record<string, string> = {}) => {
 	const files = {...initial_files};
 	return {
