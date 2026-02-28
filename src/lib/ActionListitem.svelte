@@ -22,7 +22,7 @@
 <ActionContextmenu {action}>
 	<button
 		type="button"
-		class="width:100% text-align:left justify-content:start py_xs px_md border_radius_0 border-style:none box_shadow_none"
+		class="width:100% text-align:left justify-content:start py_xs px_md border-radius:0 border-style:none box_shadow_none"
 		class:selected
 		class:color_c={action.has_error}
 		onclick={() => {

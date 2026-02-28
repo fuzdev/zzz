@@ -32,7 +32,7 @@
 		<div
 			role="button"
 			tabindex="0"
-			class="diskfile_tab_button border_radius_0 plain px_sm py_xs"
+			class="diskfile_tab_button border-radius:0 plain px_sm py_xs"
 			class:selected={tab.is_selected}
 			class:preview={tab.is_preview}
 			onclick={(e) => {

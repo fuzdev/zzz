@@ -23,7 +23,7 @@
 	<div
 		role="button"
 		tabindex="0"
-		class="browser_tab_button border_radius_0 plain px_sm py_xs"
+		class="browser_tab_button border-radius:0 plain px_sm py_xs"
 		class:selected={tab.selected}
 		onclick={() => onselect(index)}
 		onkeydown={(e) => {

@@ -105,7 +105,7 @@
 				<div class="flex-direction:column gap_sm">
 					<button
 						type="button"
-						class="width:100% justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
+						class="width:100% justify-content:start border-radius:0 plain menu_item selectable font-weight:500"
 						class:selected={ollama.manager_selected_view === 'configure'}
 						onclick={() => {
 							ollama.set_manager_view('configure', null);
@@ -117,7 +117,7 @@
 
 					<button
 						type="button"
-						class="width:100% justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
+						class="width:100% justify-content:start border-radius:0 plain menu_item selectable font-weight:500"
 						class:selected={ollama.manager_selected_view === 'pull'}
 						disabled={!ollama.available}
 						onclick={() => ollama.set_manager_view('pull', null)}
@@ -128,7 +128,7 @@
 
 					<button
 						type="button"
-						class="width:100% justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
+						class="width:100% justify-content:start border-radius:0 plain menu_item selectable font-weight:500"
 						class:selected={ollama.manager_selected_view === 'create'}
 						disabled={!ollama.available}
 						onclick={() => ollama.set_manager_view('create', null)}
@@ -139,7 +139,7 @@
 
 					<button
 						type="button"
-						class="width:100% justify-content:start border_radius_0 plain menu_item selectable font-weight:500"
+						class="width:100% justify-content:start border-radius:0 plain menu_item selectable font-weight:500"
 						class:selected={ollama.manager_selected_view === 'copy'}
 						disabled={!ollama.available || ollama.models_downloaded.length === 0}
 						onclick={() => ollama.set_manager_view('copy', null)}

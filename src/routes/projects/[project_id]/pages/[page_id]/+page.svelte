@@ -56,7 +56,7 @@
 		<!-- preview toggle button in top-right corner -->
 		<button
 			type="button"
-			class="position:fixed top:0 right:0 icon_button plain border_radius_0"
+			class="position:fixed top:0 right:0 icon_button plain border-radius:0"
 			aria-label="close preview"
 			title="close preview"
 			onclick={toggle_preview}

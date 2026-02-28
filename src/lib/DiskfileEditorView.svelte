@@ -68,7 +68,7 @@
 				token_count={editor_state.current_token_count}
 				placeholder={GLYPH_PLACEHOLDER + ' ' + diskfile.path_relative}
 				readonly={false}
-				attrs={{class: 'height:100% border_radius_0'}}
+				attrs={{class: 'height:100% border-radius:0'}}
 				onsave={async (value) => {
 					await app.diskfiles.update(diskfile.path, value);
 				}}

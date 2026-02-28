@@ -1375,6 +1375,15 @@ a.chip {
 .border_radius_lg {
 	border-radius: var(--border_radius_lg);
 }
+.border-radius\:0 {
+	border-radius: 0;
+}
+.border_top_right_radius_md {
+	border-top-right-radius: var(--border_radius_md);
+}
+.border_bottom_left_radius_md {
+	border-bottom-left-radius: var(--border_radius_md);
+}
 .shadow_bottom_md {
 	box-shadow: var(--shadow_bottom_md)
 		color-mix(

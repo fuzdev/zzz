@@ -169,7 +169,7 @@
 	<!-- sidebar toggle button -->
 	<button
 		type="button"
-		class="position:fixed bottom:0 left:0 icon_button plain border_radius_0"
+		class="position:fixed bottom:0 left:0 icon_button plain border-radius:0 border_top_right_radius_md"
 		aria-label={sidebar_button_title}
 		title={sidebar_button_title}
 		onclick={() => app.ui.toggle_sidebar()}
@@ -180,14 +180,11 @@
 	<!-- desk menu button -->
 	<button
 		type="button"
-		class="position:fixed top:0 right:0 plain border_radius_0"
+		class="position:fixed top:0 right:0 icon_button plain border-radius:0 border_bottom_left_radius_md"
 		aria-label="desk menu"
 		title="desk menu — switch spaces"
 		onclick={() => app.ui.toggle_desk_menu()}
 	>
 		<Glyph glyph={GLYPH_DESK} />
-		{#if app.spaces.active}
-			<span class="font_size_sm text_50 ml_xs">{app.spaces.active.name}</span>
-		{/if}
 	</button>
 </div>

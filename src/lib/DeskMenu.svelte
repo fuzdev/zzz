@@ -56,16 +56,30 @@
 						<h3 class="mt_0 mb_md">
 							{app.spaces.active.name === SCRATCHPAD_NAME ? 'scratchpad' : app.spaces.active.name} directories
 						</h3>
-						{#if app.spaces.active.directory_paths.length}
+						{#if app.scoped_dirs.length}
 							<ul class="unstyled">
-								{#each app.spaces.active.directory_paths as dir_path (dir_path)}
-									<li class="row gap_sm p_xs">
-										<code class="flex:1 font_size_sm">{dir_path}</code>
+								{#each app.scoped_dirs as dir_path (dir_path)}
+									{@const included = app.spaces.active.directory_paths.includes(dir_path)}
+									<li>
+										<button
+											type="button"
+											class="width:100% gap_sm"
+											class:selected={included}
+											onclick={() => {
+												if (included) {
+													app.spaces.active!.remove_directory(dir_path);
+												} else {
+													app.spaces.active!.add_directory(dir_path);
+												}
+											}}
+										>
+											<code class="flex:1 font_size_sm text-align:left">{dir_path}</code>
+										</button>
 									</li>
 								{/each}
 							</ul>
 						{:else}
-							<p class="text_50">no directories in this space</p>
+							<p class="text_50">no directories available</p>
 						{/if}
 					</section>
 				{/if}
