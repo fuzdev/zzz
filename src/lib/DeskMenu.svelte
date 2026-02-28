@@ -5,7 +5,9 @@
 <script lang="ts">
 	import {frontend_context} from './frontend.svelte.js';
 	import Glyph from './Glyph.svelte';
-	import {GLYPH_ADD, GLYPH_PIN, GLYPH_SPACE} from './glyphs.js';
+	import EditableText from './EditableText.svelte';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
+	import {GLYPH_ADD, GLYPH_DELETE, GLYPH_PIN, GLYPH_SPACE} from './glyphs.js';
 	import {SCRATCHPAD_NAME} from './spaces.svelte.js';
 	import {click_outside} from './click_outside.svelte.js';
 
@@ -35,10 +37,10 @@
 				</div>
 				<ul class="unstyled width:100%">
 					{#each app.spaces.items.values as space (space.id)}
-						<li>
+						<li class="row gap_xs">
 							<button
 								type="button"
-								class="width:100% gap_sm"
+								class="flex:1 gap_sm"
 								class:selected={space.id === app.spaces.active_id}
 								onclick={() => {
 									app.spaces.activate(space.id);
@@ -50,12 +52,21 @@
 									{space.directory_count === 1 ? 'dir' : 'dirs'}
 								</span>
 							</button>
+							{#if space.name !== SCRATCHPAD_NAME}
+								<ConfirmButton
+									onconfirm={() => app.spaces.remove(space.id)}
+									class="icon_button compact plain deselectable"
+									title="delete space"
+								>
+									<Glyph glyph={GLYPH_DELETE} />
+								</ConfirmButton>
+							{/if}
 						</li>
 					{/each}
 				</ul>
 				<button
 					type="button"
-					class="plain"
+					class="plain width:100%"
 					title="create new space"
 					onclick={() => {
 						const space = app.spaces.add();
@@ -67,9 +78,10 @@
 			</section>
 
 			{#if app.spaces.active}
-				<section class="box">
-					<h3 class="mt_0 mb_md">
-						{app.spaces.active.name === SCRATCHPAD_NAME ? 'scratchpad' : app.spaces.active.name} directories
+				<section>
+					<h3 class="mt_0 mb_md row gap_sm">
+						<EditableText bind:value={app.spaces.active.name} />
+						<span class="text_50 font_size_sm">directories</span>
 					</h3>
 					{#if app.scoped_dirs.length}
 						<ul class="unstyled">

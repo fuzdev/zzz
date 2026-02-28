@@ -83,7 +83,15 @@
 
 <svelte:window
 	onkeydowncapture={(e) => {
-		if (e.key === '~' && !is_editable(e.target)) {
+		if (
+			e.key === 'Escape' &&
+			app.ui.show_desk_menu &&
+			!app.ui.desk_pinned &&
+			!is_editable(e.target)
+		) {
+			app.ui.toggle_desk_menu(false);
+			swallow(e);
+		} else if (e.key === '~' && !is_editable(e.target)) {
 			app.ui.toggle_desk_menu();
 			swallow(e);
 		} else if (e.key === '`' && !is_editable(e.target)) {

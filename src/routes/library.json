@@ -5350,6 +5350,7 @@
 					}
 				],
 				"dependencies": [
+					"EditableText.svelte",
 					"Glyph.svelte",
 					"click_outside.svelte.ts",
 					"frontend.svelte.ts",
@@ -7278,7 +7279,7 @@
 						"source_line": 1
 					}
 				],
-				"dependents": ["ChatView.svelte", "DashboardPrompts.svelte"]
+				"dependents": ["ChatView.svelte", "DashboardPrompts.svelte", "DeskMenu.svelte"]
 			},
 			{
 				"path": "ErrorMessage.svelte",

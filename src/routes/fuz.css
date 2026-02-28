@@ -169,7 +169,6 @@
 	--shade_30: hsl(var(--tint_hue) var(--tint_saturation) 76%);
 	--shade_40: hsl(var(--tint_hue) var(--tint_saturation) 65%);
 	--shade_50: hsl(var(--tint_hue) var(--tint_saturation) 53%);
-	--shade_60: hsl(var(--tint_hue) var(--tint_saturation) 34%);
 	--shade_max: #000;
 	--shade_min: #fff;
 	--shadow_alpha_30: 25%;
@@ -299,7 +298,6 @@
 	--shade_30: hsl(var(--tint_hue) var(--tint_saturation) 26%);
 	--shade_40: hsl(var(--tint_hue) var(--tint_saturation) 36%);
 	--shade_50: hsl(var(--tint_hue) var(--tint_saturation) 48%);
-	--shade_60: hsl(var(--tint_hue) var(--tint_saturation) 67%);
 	--shade_max: #fff;
 	--shade_min: #000;
 	--shadow_alpha_30: 37%;
