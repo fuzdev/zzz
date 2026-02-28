@@ -81,7 +81,10 @@
 
 <svelte:window
 	onkeydowncapture={(e) => {
-		if (e.key === '`' && !is_editable(e.target)) {
+		if (e.key === '~' && !is_editable(e.target)) {
+			app.ui.toggle_desk_menu();
+			swallow(e);
+		} else if (e.key === '`' && !is_editable(e.target)) {
 			app.ui.toggle_sidebar();
 			swallow(e);
 		}

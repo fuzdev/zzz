@@ -26,7 +26,6 @@
 									class:selected={space.id === app.spaces.active_id}
 									onclick={() => {
 										app.spaces.activate(space.id);
-										app.ui.toggle_desk_menu(false);
 									}}
 								>
 									<span class="flex:1 text-align:left">{space.name}</span>
