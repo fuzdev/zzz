@@ -12,11 +12,11 @@ const config: CreateGroConfig = async (base_config) => {
 				entry: 'src/lib/zzz/main.ts',
 				output_name: 'zzz',
 				flags: [
-				'--no-check',
-				'--sloppy-imports',
-				'--include',
-				'../../blake3/crates/blake3_wasm/pkg/deno', // embeds WASM binary for blake3
-			],
+					'--no-check',
+					'--sloppy-imports',
+					'--include',
+					'../../blake3/crates/blake3_wasm/pkg/deno', // embeds WASM binary for blake3
+				],
 			}),
 		];
 	};

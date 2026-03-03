@@ -12,7 +12,7 @@ import {
 // Test helpers
 const create_mock_context = (headers: Record<string, string> = {}) => {
 	const next = vi.fn();
-	const text = vi.fn((content: string, status: number) => ({content, status}));
+	const json = vi.fn((content: unknown, status: number) => ({content, status}));
 
 	// Convert all header keys to lowercase for case-insensitive lookup
 	const normalized_headers: Record<string, string> = {};
@@ -24,10 +24,10 @@ const create_mock_context = (headers: Record<string, string> = {}) => {
 		req: {
 			header: (name: string) => normalized_headers[name.toLowerCase()],
 		},
-		text,
+		json,
 	};
 
-	return {c, next, text};
+	return {c, next, json};
 };
 
 const test_pattern = (
@@ -57,14 +57,14 @@ const test_middleware_allows = async (handler: Handler, headers: Record<string, 
 const test_middleware_blocks = async (
 	handler: Handler,
 	headers: Record<string, string>,
-	expected_message: string,
+	expected_error: string,
 	expected_status = 403,
 ) => {
-	const {c, next, text} = create_mock_context(headers);
+	const {c, next, json} = create_mock_context(headers);
 	const result = await handler(c as any, next);
 	expect(next).not.toHaveBeenCalled();
-	expect(text).toHaveBeenCalledWith(expected_message, expected_status);
-	expect(result).toEqual({content: expected_message, status: expected_status});
+	expect(json).toHaveBeenCalledWith({error: expected_error}, expected_status);
+	expect(result).toEqual({content: {error: expected_error}, status: expected_status});
 };
 
 describe('parse_allowed_origins', () => {
@@ -640,7 +640,7 @@ describe('verify_request_source middleware', () => {
 				{
 					origin: 'http://evil.com',
 				},
-				'forbidden origin',
+				'forbidden_origin',
 			);
 		});
 
@@ -662,14 +662,14 @@ describe('verify_request_source middleware', () => {
 				{
 					origin: 'http://[::1]:8080',
 				},
-				'forbidden origin',
+				'forbidden_origin',
 			);
 			await test_middleware_blocks(
 				middleware,
 				{
 					origin: 'https://[2001:db8::2]:443',
 				},
-				'forbidden origin',
+				'forbidden_origin',
 			);
 		});
 
@@ -703,7 +703,7 @@ describe('verify_request_source middleware', () => {
 				{
 					referer: 'http://evil.com/page',
 				},
-				'forbidden referer',
+				'forbidden_referer',
 			);
 		});
 
@@ -721,7 +721,7 @@ describe('verify_request_source middleware', () => {
 				{
 					referer: 'http://localhost.:3000/page',
 				},
-				'forbidden referer',
+				'forbidden_referer',
 			);
 
 			// Origin header with trailing dot also won't match
@@ -730,7 +730,7 @@ describe('verify_request_source middleware', () => {
 				{
 					origin: 'http://localhost.:3000',
 				},
-				'forbidden origin',
+				'forbidden_origin',
 			);
 
 			// To match trailing dots, you need them in the pattern
@@ -761,7 +761,7 @@ describe('verify_request_source middleware', () => {
 				{
 					referer: 'http://[::2]:3000/page',
 				},
-				'forbidden referer',
+				'forbidden_referer',
 			);
 		});
 
@@ -771,7 +771,7 @@ describe('verify_request_source middleware', () => {
 				{
 					referer: 'not-a-valid-url',
 				},
-				'forbidden referer',
+				'forbidden_referer',
 			);
 		});
 
@@ -784,7 +784,7 @@ describe('verify_request_source middleware', () => {
 				{
 					referer: 'data:text/html,<h1>test</h1>',
 				},
-				'forbidden referer',
+				'forbidden_referer',
 			);
 		});
 	});
@@ -825,7 +825,7 @@ describe('verify_request_source middleware', () => {
 				{
 					origin: 'http://localhost:3000',
 				},
-				'forbidden origin',
+				'forbidden_origin',
 			);
 		});
 
@@ -835,7 +835,7 @@ describe('verify_request_source middleware', () => {
 				{
 					referer: 'http://localhost:3000/page',
 				},
-				'forbidden referer',
+				'forbidden_referer',
 			);
 		});
 
