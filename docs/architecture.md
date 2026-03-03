@@ -12,52 +12,52 @@ Every action is a plain object with Zod schemas. Defined in `src/lib/action_spec
 
 ```typescript
 export const completion_create_action_spec = {
-  method: 'completion_create',
-  kind: 'request_response',
-  initiator: 'frontend',
-  auth: 'public',
-  side_effects: true,
-  input: z.strictObject({
-    completion_request: CompletionRequest,
-    _meta: z.looseObject({progressToken: Uuid.optional()}).optional(),
-  }),
-  output: z.strictObject({
-    completion_response: CompletionResponse,
-    _meta: z.looseObject({progressToken: Uuid.optional()}).optional(),
-  }),
-  async: true,
+	method: 'completion_create',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: 'public',
+	side_effects: true,
+	input: z.strictObject({
+		completion_request: CompletionRequest,
+		_meta: z.looseObject({progressToken: Uuid.optional()}).optional(),
+	}),
+	output: z.strictObject({
+		completion_response: CompletionResponse,
+		_meta: z.looseObject({progressToken: Uuid.optional()}).optional(),
+	}),
+	async: true,
 } satisfies ActionSpecUnion;
 ```
 
 ### Action Kinds
 
-| Kind | Phases | Transport | Use |
-|------|--------|-----------|-----|
-| `request_response` | `send_request` → `receive_request` → `send_response` → `receive_response` | HTTP or WebSocket | Standard RPC |
-| `remote_notification` | `send` → `receive` | WebSocket only | Streaming progress (backend → frontend) |
-| `local_call` | `execute` | None | Frontend-only UI actions |
+| Kind                  | Phases                                                                    | Transport         | Use                                     |
+| --------------------- | ------------------------------------------------------------------------- | ----------------- | --------------------------------------- |
+| `request_response`    | `send_request` → `receive_request` → `send_response` → `receive_response` | HTTP or WebSocket | Standard RPC                            |
+| `remote_notification` | `send` → `receive`                                                        | WebSocket only    | Streaming progress (backend → frontend) |
+| `local_call`          | `execute`                                                                 | None              | Frontend-only UI actions                |
 
 ### Action Spec Fields
 
-| Field | Type | Values |
-|-------|------|--------|
-| `method` | `string` | Action name (e.g. `'completion_create'`) |
-| `kind` | `ActionKind` | `'request_response'` \| `'remote_notification'` \| `'local_call'` |
-| `initiator` | `ActionInitiator` | `'frontend'` \| `'backend'` \| `'both'` |
-| `auth` | `ActionAuth \| null` | `'public'` \| `'authorize'` \| `null` |
-| `side_effects` | `boolean \| null` | Whether action mutates state |
-| `input` | `z.ZodType` | Zod schema for request params |
-| `output` | `z.ZodType` | Zod schema for response |
-| `async` | `boolean` | Whether handler is async |
+| Field          | Type                 | Values                                                            |
+| -------------- | -------------------- | ----------------------------------------------------------------- |
+| `method`       | `string`             | Action name (e.g. `'completion_create'`)                          |
+| `kind`         | `ActionKind`         | `'request_response'` \| `'remote_notification'` \| `'local_call'` |
+| `initiator`    | `ActionInitiator`    | `'frontend'` \| `'backend'` \| `'both'`                           |
+| `auth`         | `ActionAuth \| null` | `'public'` \| `'authenticate'` \| `null`                          |
+| `side_effects` | `boolean \| null`    | Whether action mutates state                                      |
+| `input`        | `z.ZodType`          | Zod schema for request params                                     |
+| `output`       | `z.ZodType`          | Zod schema for response                                           |
+| `async`        | `boolean`            | Whether handler is async                                          |
 
 ### Core Components
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| `ActionSpec` | `action_spec.ts` | Action metadata schema |
-| `ActionEvent` | `action_event.ts` | Lifecycle state machine (initial → parsed → handling → handled/failed) |
-| `ActionPeer` | `action_peer.ts` | Send/receive on both sides |
-| `ActionRegistry` | `action_registry.ts` | Type-safe action lookup |
+| Component        | File                 | Purpose                                                                |
+| ---------------- | -------------------- | ---------------------------------------------------------------------- |
+| `ActionSpec`     | `action_spec.ts`     | Action metadata schema                                                 |
+| `ActionEvent`    | `action_event.ts`    | Lifecycle state machine (initial → parsed → handling → handled/failed) |
+| `ActionPeer`     | `action_peer.ts`     | Send/receive on both sides                                             |
+| `ActionRegistry` | `action_registry.ts` | Type-safe action lookup                                                |
 
 ### Action Event Lifecycle
 
@@ -77,37 +77,43 @@ Frontend and backend register handlers per action per phase:
 ```typescript
 // Frontend (frontend_action_handlers.ts)
 export const frontend_action_handlers: FrontendActionHandlers = {
-  completion_create: {
-    send_request: ({data: {input}}) => {
-      console.log('sending prompt:', input.completion_request.prompt);
-    },
-    receive_response: ({app, data: {input, output}}) => {
-      const progress_token = input._meta?.progressToken;
-      if (progress_token) {
-        const turn = app.cell_registry.all.get(progress_token);
-        if (turn instanceof Turn) {
-          turn.content = to_completion_response_text(output.completion_response) || '';
-          turn.response = output.completion_response;
-        }
-      }
-    },
-    receive_error: ({data: {error}}) => {
-      console.error('completion failed:', error);
-    },
-  },
+	completion_create: {
+		send_request: ({data: {input}}) => {
+			console.log('sending prompt:', input.completion_request.prompt);
+		},
+		receive_response: ({app, data: {input, output}}) => {
+			const progress_token = input._meta?.progressToken;
+			if (progress_token) {
+				const turn = app.cell_registry.all.get(progress_token);
+				if (turn instanceof Turn) {
+					turn.content = to_completion_response_text(output.completion_response) || '';
+					turn.response = output.completion_response;
+				}
+			}
+		},
+		receive_error: ({data: {error}}) => {
+			console.error('completion failed:', error);
+		},
+	},
 };
 
 // Backend (server/backend_action_handlers.ts)
 export const backend_action_handlers: BackendActionHandlers = {
-  completion_create: {
-    receive_request: async ({backend, data: {input}}) => {
-      const {prompt, provider_name, model, completion_messages} = input.completion_request;
-      const progress_token = input._meta?.progressToken;
-      const provider = backend.lookup_provider(provider_name);
-      const handler = provider.get_handler(!!progress_token);
-      return await handler({model, prompt, completion_messages, completion_options, progress_token});
-    },
-  },
+	completion_create: {
+		receive_request: async ({backend, data: {input}}) => {
+			const {prompt, provider_name, model, completion_messages} = input.completion_request;
+			const progress_token = input._meta?.progressToken;
+			const provider = backend.lookup_provider(provider_name);
+			const handler = provider.get_handler(!!progress_token);
+			return await handler({
+				model,
+				prompt,
+				completion_messages,
+				completion_options,
+				progress_token,
+			});
+		},
+	},
 };
 ```
 
@@ -117,10 +123,10 @@ Actions are transport-agnostic via the `Transport` interface (`transports.ts`):
 
 ```typescript
 interface Transport {
-  transport_name: TransportName;
-  send(message: JsonrpcRequest): Promise<JsonrpcResponseOrError>;
-  send(message: JsonrpcNotification): Promise<JsonrpcErrorMessage | null>;
-  is_ready: () => boolean;
+	transport_name: TransportName;
+	send(message: JsonrpcRequest): Promise<JsonrpcResponseOrError>;
+	send(message: JsonrpcNotification): Promise<JsonrpcErrorMessage | null>;
+	is_ready: () => boolean;
 }
 ```
 
@@ -139,28 +145,28 @@ MCP-compatible subset, no batching:
 
 ### All 20 Actions
 
-| Method | Kind | Initiator | Purpose |
-|--------|------|-----------|---------|
-| `ping` | `request_response` | `both` | Health check |
-| `session_load` | `request_response` | `frontend` | Load initial session data |
-| `filer_change` | `remote_notification` | `backend` | File system change notification |
-| `diskfile_update` | `request_response` | `frontend` | Write file content |
-| `diskfile_delete` | `request_response` | `frontend` | Delete a file |
-| `directory_create` | `request_response` | `frontend` | Create a directory |
-| `completion_create` | `request_response` | `frontend` | Start AI completion |
-| `completion_progress` | `remote_notification` | `backend` | Stream completion chunks |
-| `ollama_progress` | `remote_notification` | `backend` | Model operation progress |
-| `toggle_main_menu` | `local_call` | `frontend` | Toggle main menu UI |
-| `ollama_list` | `request_response` | `frontend` | List local models |
-| `ollama_ps` | `request_response` | `frontend` | List running models |
-| `ollama_show` | `request_response` | `frontend` | Show model details |
-| `ollama_pull` | `request_response` | `frontend` | Pull model |
-| `ollama_delete` | `request_response` | `frontend` | Delete model |
-| `ollama_copy` | `request_response` | `frontend` | Copy model |
-| `ollama_create` | `request_response` | `frontend` | Create model |
-| `ollama_unload` | `request_response` | `frontend` | Unload model from memory |
-| `provider_load_status` | `request_response` | `frontend` | Check provider availability |
-| `provider_update_api_key` | `request_response` | `frontend` | Update provider API key |
+| Method                    | Kind                  | Initiator  | Purpose                         |
+| ------------------------- | --------------------- | ---------- | ------------------------------- |
+| `ping`                    | `request_response`    | `both`     | Health check                    |
+| `session_load`            | `request_response`    | `frontend` | Load initial session data       |
+| `filer_change`            | `remote_notification` | `backend`  | File system change notification |
+| `diskfile_update`         | `request_response`    | `frontend` | Write file content              |
+| `diskfile_delete`         | `request_response`    | `frontend` | Delete a file                   |
+| `directory_create`        | `request_response`    | `frontend` | Create a directory              |
+| `completion_create`       | `request_response`    | `frontend` | Start AI completion             |
+| `completion_progress`     | `remote_notification` | `backend`  | Stream completion chunks        |
+| `ollama_progress`         | `remote_notification` | `backend`  | Model operation progress        |
+| `toggle_main_menu`        | `local_call`          | `frontend` | Toggle main menu UI             |
+| `ollama_list`             | `request_response`    | `frontend` | List local models               |
+| `ollama_ps`               | `request_response`    | `frontend` | List running models             |
+| `ollama_show`             | `request_response`    | `frontend` | Show model details              |
+| `ollama_pull`             | `request_response`    | `frontend` | Pull model                      |
+| `ollama_delete`           | `request_response`    | `frontend` | Delete model                    |
+| `ollama_copy`             | `request_response`    | `frontend` | Copy model                      |
+| `ollama_create`           | `request_response`    | `frontend` | Create model                    |
+| `ollama_unload`           | `request_response`    | `frontend` | Unload model from memory        |
+| `provider_load_status`    | `request_response`    | `frontend` | Check provider availability     |
+| `provider_update_api_key` | `request_response`    | `frontend` | Update provider API key         |
 
 ## Cell System
 
@@ -201,8 +207,8 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 
 ```typescript
 interface CellOptions<TSchema extends z.ZodType> {
-  app: Frontend;                    // Root app state reference
-  json?: z.input<TSchema>;         // Initial JSON data (parsed by schema)
+	app: Frontend; // Root app state reference
+	json?: z.input<TSchema>; // Initial JSON data (parsed by schema)
 }
 ```
 
@@ -213,36 +219,36 @@ Real example from `chat.svelte.ts`:
 ```typescript
 // 1. Schema with CellJson base — every field has .default()
 export const ChatJson = CellJson.extend({
-  name: z.string().default(''),
-  thread_ids: z.array(Uuid).default(() => []),
-  main_input: z.string().default(''),
-  view_mode: z.enum(['simple', 'multi']).default('simple'),
-  selected_thread_id: Uuid.nullable().default(null),
+	name: z.string().default(''),
+	thread_ids: z.array(Uuid).default(() => []),
+	main_input: z.string().default(''),
+	view_mode: z.enum(['simple', 'multi']).default('simple'),
+	selected_thread_id: Uuid.nullable().default(null),
 }).meta({cell_class_name: 'Chat'});
 
 // 2. Class: $state for schema fields, $derived for computed
 export class Chat extends Cell<typeof ChatJson> {
-  name: string = $state()!;
-  thread_ids: Array<Uuid> = $state()!;
-  main_input: string = $state()!;
-  view_mode: ChatViewMode = $state()!;
-  selected_thread_id: Uuid | null = $state()!;
+	name: string = $state()!;
+	thread_ids: Array<Uuid> = $state()!;
+	main_input: string = $state()!;
+	view_mode: ChatViewMode = $state()!;
+	selected_thread_id: Uuid | null = $state()!;
 
-  readonly threads: Array<Thread> = $derived.by(() => {
-    const result: Array<Thread> = [];
-    for (const id of this.thread_ids) {
-      const thread = this.app.threads.items.by_id.get(id);
-      if (thread) result.push(thread);
-    }
-    return result;
-  });
+	readonly threads: Array<Thread> = $derived.by(() => {
+		const result: Array<Thread> = [];
+		for (const id of this.thread_ids) {
+			const thread = this.app.threads.items.by_id.get(id);
+			if (thread) result.push(thread);
+		}
+		return result;
+	});
 
-  readonly enabled_threads = $derived(this.threads.filter((t) => t.enabled));
+	readonly enabled_threads = $derived(this.threads.filter((t) => t.enabled));
 
-  constructor(options: ChatOptions) {
-    super(ChatJson, options);
-    this.init();  // Must call at end
-  }
+	constructor(options: ChatOptions) {
+		super(ChatJson, options);
+		this.init(); // Must call at end
+	}
 }
 ```
 
@@ -277,12 +283,17 @@ All cell classes are registered in `cell_classes.ts`. Frontend iterates and regi
 ```typescript
 // cell_classes.ts — add new classes here
 export const cell_classes = {
-  Parts, Chat, Chats, Thread, Threads, Turn, /* ... 26 total */
+	Parts,
+	Chat,
+	Chats,
+	Thread,
+	Threads,
+	Turn /* ... 26 total */,
 } satisfies Record<string, typeof Cell<any>>;
 
 // frontend.svelte.ts — auto-registers all classes
 for (const constructor of Object.values(cell_classes)) {
-  this.cell_registry.register(constructor);
+	this.cell_registry.register(constructor);
 }
 
 // Lookup by ID at runtime
@@ -303,9 +314,9 @@ Prompt → parts: Array<Part>  (reusable content templates)
 
 ### Parts
 
-| Type | Class | Content source |
-|------|-------|----------------|
-| Text | `TextPart` | `content: string` stored directly |
+| Type     | Class          | Content source                                         |
+| -------- | -------------- | ------------------------------------------------------ |
+| Text     | `TextPart`     | `content: string` stored directly                      |
 | Diskfile | `DiskfilePart` | `path: DiskfilePath` → reads from disk or editor state |
 
 ### Turns
@@ -314,17 +325,20 @@ Conversation messages with role:
 
 ```typescript
 class Turn extends Cell<typeof TurnJson> {
-  part_ids: Array<Uuid> = $state()!;
-  role: CompletionRole = $state()!;  // 'user' | 'assistant' | 'system'
-  request: CompletionRequest | undefined = $state.raw();
-  response: CompletionResponse | undefined = $state.raw();
+	part_ids: Array<Uuid> = $state()!;
+	role: CompletionRole = $state()!; // 'user' | 'assistant' | 'system'
+	request: CompletionRequest | undefined = $state.raw();
+	response: CompletionResponse | undefined = $state.raw();
 
-  readonly content: string = $derived(
-    this.parts.map(p => p.content).filter(Boolean).join('\n\n')
-  );
-  readonly pending: boolean = $derived(
-    this.role === 'assistant' && this.is_content_empty && !this.response
-  );
+	readonly content: string = $derived(
+		this.parts
+			.map((p) => p.content)
+			.filter(Boolean)
+			.join('\n\n'),
+	);
+	readonly pending: boolean = $derived(
+		this.role === 'assistant' && this.is_content_empty && !this.response,
+	);
 }
 ```
 
@@ -404,31 +418,31 @@ Queryable reactive collections with multiple index types. From `indexed_collecti
 
 ```typescript
 class IndexedCollection<T extends IndexedItem> {
-  readonly by_id: SvelteMap<Uuid, T> = new SvelteMap();
-  readonly values: Array<T> = $derived(Array.from(this.by_id.values()));
-  readonly size: number = $derived(this.by_id.size);
+	readonly by_id: SvelteMap<Uuid, T> = new SvelteMap();
+	readonly values: Array<T> = $derived(Array.from(this.by_id.values()));
+	readonly size: number = $derived(this.by_id.size);
 }
 ```
 
 ### Index Types
 
-| Type | Cardinality | Example |
-|------|-------------|---------|
-| `single` | One key → one item | `by('name', 'gpt-5')` |
-| `multi` | One key → many items | `where('provider_name', 'ollama')` |
+| Type      | Cardinality           | Example                            |
+| --------- | --------------------- | ---------------------------------- |
+| `single`  | One key → one item    | `by('name', 'gpt-5')`              |
+| `multi`   | One key → many items  | `where('provider_name', 'ollama')` |
 | `derived` | Computed sorted array | `derived_index('ordered_by_name')` |
-| `dynamic` | Runtime-computed | Custom queries |
+| `dynamic` | Runtime-computed      | Custom queries                     |
 
 ### Index Definition
 
 ```typescript
 interface IndexDefinition<T extends IndexedItem, TResult = any, TQuery = any> {
-  key: string;
-  type?: 'single' | 'multi' | 'derived' | 'dynamic';
-  extractor?: (item: T) => any;
-  compute: (collection: IndexedCollection<T>) => TResult;
-  onadd?: (result: TResult, item: T, collection: IndexedCollection<T>) => TResult;
-  onremove?: (result: TResult, item: T, collection: IndexedCollection<T>) => TResult;
+	key: string;
+	type?: 'single' | 'multi' | 'derived' | 'dynamic';
+	extractor?: (item: T) => any;
+	compute: (collection: IndexedCollection<T>) => TResult;
+	onadd?: (result: TResult, item: T, collection: IndexedCollection<T>) => TResult;
+	onremove?: (result: TResult, item: T, collection: IndexedCollection<T>) => TResult;
 }
 ```
 
@@ -437,27 +451,27 @@ interface IndexDefinition<T extends IndexedItem, TResult = any, TQuery = any> {
 ```typescript
 // Create with indexes
 const items = new IndexedCollection<Model>({
-  indexes: [
-    create_single_index({key: 'name', extractor: m => m.name}),
-    create_multi_index({key: 'provider_name', extractor: m => m.provider_name}),
-    create_derived_index({key: 'ordered_by_name', sort: (a, b) => a.name.localeCompare(b.name)}),
-  ],
+	indexes: [
+		create_single_index({key: 'name', extractor: (m) => m.name}),
+		create_multi_index({key: 'provider_name', extractor: (m) => m.provider_name}),
+		create_derived_index({key: 'ordered_by_name', sort: (a, b) => a.name.localeCompare(b.name)}),
+	],
 });
 
 // Query
-items.by('name', 'gpt-5');                    // single → Model | undefined
-items.where('provider_name', 'ollama');        // multi → Array<Model>
-items.derived_index('ordered_by_name');        // derived → Array<Model>
+items.by('name', 'gpt-5'); // single → Model | undefined
+items.where('provider_name', 'ollama'); // multi → Array<Model>
+items.derived_index('ordered_by_name'); // derived → Array<Model>
 ```
 
 ## Filesystem
 
 Two separate concerns:
 
-| Concern | Env Var | Purpose |
-|---------|---------|---------|
-| App directory | `PUBLIC_ZZZ_DIR` | Zzz's own data (`.zzz/state/`, `.zzz/cache/`, `.zzz/run/`) |
-| Scoped dirs | `PUBLIC_ZZZ_SCOPED_DIRS` | User file access (comma-separated paths) |
+| Concern       | Env Var                  | Purpose                                                    |
+| ------------- | ------------------------ | ---------------------------------------------------------- |
+| App directory | `PUBLIC_ZZZ_DIR`         | Zzz's own data (`.zzz/state/`, `.zzz/cache/`, `.zzz/run/`) |
+| Scoped dirs   | `PUBLIC_ZZZ_SCOPED_DIRS` | User file access (comma-separated paths)                   |
 
 ### ScopedFs
 
