@@ -20591,21 +20591,21 @@
 						"name": "ZzzGlobalArgs",
 						"kind": "type",
 						"doc_comment": "Global CLI flags.\nExtracted before command-specific parsing.",
-						"source_line": 29,
+						"source_line": 26,
 						"type_signature": "ZodObject<{ help: ZodDefault<ZodBoolean>; version: ZodDefault<ZodBoolean>; }, $strict>"
 					},
 					{
 						"name": "extract_global_flags",
 						"kind": "variable",
 						"doc_comment": "Extract global flags from parsed args.",
-						"source_line": 48,
+						"source_line": 45,
 						"type_signature": "(unparsed: ParsedArgs) => { flags: { help: boolean; version: boolean; }; remaining: ParsedArgs; }"
 					},
 					{
 						"name": "dispatch",
 						"kind": "function",
 						"doc_comment": "Parse args and dispatch to handler, with error handling.",
-						"source_line": 60,
+						"source_line": 57,
 						"type_signature": "<T extends Record<string, unknown>>(remaining: ParsedArgs, schema: ZodType<T, unknown, $ZodTypeInternals<T, unknown>>, handler: (args: T) => Promise<void>): Promise<...>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -20630,7 +20630,7 @@
 						"name": "SubcommandRoute",
 						"kind": "type",
 						"doc_comment": "Route definition for subcommand routing.",
-						"source_line": 79,
+						"source_line": 76,
 						"type_signature": "SubcommandRoute<TContext>",
 						"generic_params": [
 							{
@@ -20654,7 +20654,7 @@
 						"name": "create_subcommand_router",
 						"kind": "function",
 						"doc_comment": "Create a subcommand router from route definitions.",
-						"source_line": 92,
+						"source_line": 89,
 						"type_signature": "<TContext>(routes: Record<string, SubcommandRoute<TContext>>, default_handler: ((ctx: TContext, flags: { help: boolean; version: boolean; }) => Promise<void>) | undefined, error_message: string): (remaining: ParsedArgs, ctx: TContext, flags: { ...; }) => Promise<...>",
 						"return_type": "(remaining: ParsedArgs, ctx: TContext, flags: { help: boolean; version: boolean; }) => Promise<void>",
 						"return_description": "Router function.",
@@ -20953,7 +20953,7 @@
 						"name": "logger",
 						"kind": "variable",
 						"source_line": 9,
-						"type_signature": "Logger"
+						"type_signature": "any"
 					},
 					{
 						"name": "log",
