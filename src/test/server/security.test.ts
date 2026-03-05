@@ -7,7 +7,7 @@ import {
 	parse_allowed_origins,
 	should_allow_origin,
 	verify_request_source,
-} from '@fuzdev/fuz_app/api/origin.js';
+} from '@fuzdev/fuz_app/middleware/origin.js';
 
 // Test helpers
 const create_mock_context = (headers: Record<string, string> = {}) => {
