@@ -9,11 +9,7 @@
 
 import type {ParsedArgs} from '@fuzdev/fuz_util/args.js';
 import {z} from 'zod';
-import {
-	parse_command_args,
-	create_extract_global_flags,
-	type ParseResult,
-} from '@fuzdev/fuz_app/cli/args.js';
+import {parse_command_args, create_extract_global_flags} from '@fuzdev/fuz_app/cli/args.js';
 
 //
 // Global Args
