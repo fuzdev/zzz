@@ -4649,17 +4649,17 @@
 				"path": "config_helpers.ts",
 				"declarations": [
 					{
-						"name": "ZzzConfigCreator",
+						"name": "ZzzOptionsCreator",
 						"kind": "type",
 						"source_line": 7,
-						"type_signature": "ZzzConfigCreator"
+						"type_signature": "ZzzOptionsCreator"
 					},
 					{
-						"name": "ZzzConfig",
+						"name": "ZzzOptions",
 						"kind": "type",
 						"doc_comment": "",
 						"source_line": 12,
-						"type_signature": "ZzzConfig",
+						"type_signature": "ZzzOptions",
 						"properties": [
 							{
 								"name": "providers",
@@ -4732,7 +4732,7 @@
 						"name": "default",
 						"kind": "variable",
 						"source_line": 39,
-						"type_signature": "ZzzConfigCreator"
+						"type_signature": "ZzzOptionsCreator"
 					}
 				],
 				"dependencies": ["config_defaults.ts"],
@@ -7845,7 +7845,7 @@
 							{
 								"name": "bots",
 								"kind": "variable",
-								"type_signature": "ZzzConfig['bots']"
+								"type_signature": "ZzzOptions['bots']"
 							},
 							{
 								"name": "providers",
@@ -8017,7 +8017,7 @@
 								"name": "bots",
 								"kind": "variable",
 								"modifiers": ["readonly"],
-								"type_signature": "ZzzConfig['bots']"
+								"type_signature": "ZzzOptions['bots']"
 							},
 							{
 								"name": "provider_status",
@@ -14668,11 +14668,11 @@
 						"type_signature": "ReorderableValidDropPosition"
 					},
 					{
-						"name": "ReorderableStyleConfig",
+						"name": "ReorderableStyleOptions",
 						"kind": "type",
 						"doc_comment": "Styling configuration for reorderable components.",
 						"source_line": 30,
-						"type_signature": "ReorderableStyleConfig",
+						"type_signature": "ReorderableStyleOptions",
 						"properties": [
 							{
 								"name": "list_class",
@@ -14878,7 +14878,7 @@
 						"kind": "class",
 						"source_line": 89,
 						"extends": [],
-						"implements": ["ReorderableStyleConfig"],
+						"implements": ["ReorderableStyleOptions"],
 						"members": [
 							{
 								"name": "initialized",
@@ -16619,7 +16619,7 @@
 							{
 								"name": "config",
 								"kind": "variable",
-								"type_signature": "ZzzConfig",
+								"type_signature": "ZzzOptions",
 								"doc_comment": "Configuration for the backend and AI providers."
 							},
 							{
@@ -16680,7 +16680,7 @@
 								"name": "config",
 								"kind": "variable",
 								"modifiers": ["readonly"],
-								"type_signature": "ZzzConfig"
+								"type_signature": "ZzzOptions"
 							},
 							{
 								"name": "peer",
@@ -20424,7 +20424,7 @@
 						"type_signature": "4460"
 					},
 					{
-						"name": "ZzzCliConfig",
+						"name": "ZzzCliOptions",
 						"kind": "type",
 						"doc_comment": "Schema for ~/.zzz/config.json.\n\nUses `zzz_config_` prefix so field names are self-documenting:\n```typescript\nconst { zzz_config_port } = load_zzz_cli_config();\n// Variable name tells you exactly what this is and where it came from\n```",
 						"source_line": 34,

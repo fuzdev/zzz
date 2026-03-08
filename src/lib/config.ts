@@ -1,4 +1,4 @@
-import type {ZzzConfigCreator} from './config_helpers.js';
+import type {ZzzOptionsCreator} from './config_helpers.js';
 import {
 	models_default,
 	providers_default,
@@ -19,7 +19,7 @@ import {
 
 // TODO refactor currently this is imported directly by frontend and backend, but we probably only want to forward a serialized subset to the client -
 // maybe move to zzz.config.ts in the repo root, and genfile for the frontend config
-const config: ZzzConfigCreator = () => {
+const config: ZzzOptionsCreator = () => {
 	return {
 		providers: providers_default,
 		models: models_default,

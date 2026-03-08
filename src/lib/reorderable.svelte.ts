@@ -27,7 +27,7 @@ export type ReorderableValidDropPosition = Exclude<ReorderableDropPosition, 'non
 /**
  * Styling configuration for reorderable components.
  */
-export interface ReorderableStyleConfig {
+export interface ReorderableStyleOptions {
 	list_class: string | null;
 	item_class: string | null;
 	dragging_class: string | null;
@@ -86,7 +86,7 @@ export interface ReorderableOptions {
 	invalid_drop_class?: string | null;
 }
 
-export class Reorderable implements ReorderableStyleConfig {
+export class Reorderable implements ReorderableStyleOptions {
 	initialized = false;
 
 	source_index = -1;

@@ -10,7 +10,7 @@ import type {BackendProviderClaude} from './backend_provider_claude.js';
 import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
 import type {ActionEventPhase, ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 
-import type {ZzzConfig} from '../config_helpers.js';
+import type {ZzzOptions} from '../config_helpers.js';
 import {DiskfileDirectoryPath} from '../diskfile_types.js';
 import {ScopedFs} from './scoped_fs.js';
 import type {BackendActionHandlers} from './backend_action_types.js';
@@ -61,7 +61,7 @@ export interface BackendOptions {
 	/**
 	 * Configuration for the backend and AI providers.
 	 */
-	config: ZzzConfig;
+	config: ZzzOptions;
 	/**
 	 * Action specifications that determine what the backend can do.
 	 */
@@ -93,7 +93,7 @@ export class Backend implements ActionEventEnvironment {
 	/** Filesystem paths that Zzz can access for user files. */
 	readonly scoped_dirs: ReadonlyArray<DiskfileDirectoryPath>;
 
-	readonly config: ZzzConfig;
+	readonly config: ZzzOptions;
 
 	// TODO @many make transports an option?
 	readonly peer: ActionPeer = new ActionPeer({environment: this});

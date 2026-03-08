@@ -31,12 +31,12 @@ export const ZZZ_DEFAULT_PORT = 4460;
  * // Variable name tells you exactly what this is and where it came from
  * ```
  */
-export const ZzzCliConfig = z.strictObject({
+export const ZzzCliOptions = z.strictObject({
 	/** Port for the zzz daemon. */
 	zzz_config_port: z.number().default(ZZZ_DEFAULT_PORT),
 });
 
-export type ZzzCliConfig = z.infer<typeof ZzzCliConfig>;
+export type ZzzCliOptions = z.infer<typeof ZzzCliOptions>;
 
 /**
  * Get the CLI config directory path (~/.zzz).
@@ -64,10 +64,10 @@ export const get_zzz_config_path = (runtime: Pick<EnvDeps, 'env_get'>): string |
  */
 export const load_zzz_cli_config = async (
 	runtime: Pick<EnvDeps, 'env_get'> & FsReadDeps,
-): Promise<ZzzCliConfig | null> => {
+): Promise<ZzzCliOptions | null> => {
 	const config_path = get_zzz_config_path(runtime);
 	if (!config_path) return null;
-	return load_config(runtime, config_path, ZzzCliConfig);
+	return load_config(runtime, config_path, ZzzCliOptions);
 };
 
 /**
@@ -78,7 +78,7 @@ export const load_zzz_cli_config = async (
  */
 export const save_zzz_cli_config = async (
 	runtime: Pick<EnvDeps, 'env_get'> & FsWriteDeps,
-	config: ZzzCliConfig,
+	config: ZzzCliOptions,
 ): Promise<void> => {
 	const zzz_dir = get_zzz_dir(runtime);
 	if (!zzz_dir) throw new Error('$HOME not set');

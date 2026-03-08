@@ -21,7 +21,7 @@ import {Parts} from './parts.svelte.js';
 import {Time} from './time.svelte.js';
 import {Ollama} from './ollama.svelte.js';
 import {Spaces} from './spaces.svelte.js';
-import type {ZzzConfig} from './config_helpers.js';
+import type {ZzzOptions} from './config_helpers.js';
 import {BOTS_DEFAULT} from './config_defaults.js';
 import {DiskfileDirectoryPath, DiskfilePath} from './diskfile_types.js';
 import {cell_classes} from './cell_classes.js';
@@ -59,7 +59,7 @@ export interface FrontendOptions extends OmitStrict<CellOptions<typeof FrontendJ
 	/** Do not use - optional to avoid circular reference problem. */
 	app?: never;
 	models?: Array<ModelJsonInput>;
-	bots?: ZzzConfig['bots'];
+	bots?: ZzzOptions['bots'];
 	providers?: Array<ProviderJsonInput>;
 	cell_classes?: Record<string, ClassConstructor<Cell<any>>>;
 	action_specs?: Array<ActionSpecUnion>;
@@ -104,7 +104,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly ollama: Ollama;
 	readonly spaces: Spaces;
 
-	readonly bots: ZzzConfig['bots'];
+	readonly bots: ZzzOptions['bots'];
 
 	// TODO maybe instead of this pattern with getters/setters, using an encoder?
 	#zzz_dir: DiskfileDirectoryPath | null | undefined = $state(null); // TODO should this be undefined?
