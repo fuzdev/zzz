@@ -10,7 +10,7 @@
  */
 
 import {z} from 'zod';
-import type {EnvDeps, FsReadDeps, FsWriteDeps} from '@fuzdev/fuz_app/cli/runtime.js';
+import type {EnvDeps, FsReadDeps, FsWriteDeps} from '@fuzdev/fuz_app/runtime/deps.js';
 import {
 	get_app_dir,
 	get_config_path,

@@ -15,7 +15,7 @@ import {
 	is_daemon_running,
 	get_daemon_info_path,
 } from '@fuzdev/fuz_app/cli/daemon.js';
-import {create_deno_runtime} from '@fuzdev/fuz_app/cli/runtime_deno.js';
+import {create_deno_runtime} from '@fuzdev/fuz_app/runtime/deno.js';
 
 import {VERSION} from '../zzz/build_info.ts';
 import {create_zzz_app} from './create_zzz_app.ts';

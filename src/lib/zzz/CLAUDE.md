@@ -82,8 +82,8 @@ src/lib/zzz/
 
 ### ZzzRuntime
 
-Injectable runtime abstraction. `ZzzRuntime` is a type alias for `DenoRuntime`
-from `@fuzdev/fuz_app/cli/runtime_deno.js`. Functions should accept narrow
+Injectable runtime abstraction. `ZzzRuntime` is a type alias for `RuntimeDeps`
+from `@fuzdev/fuz_app/runtime/deps.js`. Functions should accept narrow
 `*Deps` interfaces (`EnvDeps`, `FsReadDeps`, etc.) from fuz_app.
 
 ### CLI Dispatch
