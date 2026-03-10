@@ -1,8 +1,6 @@
-// @slop Claude Sonnet 3.7
-
 // @vitest-environment jsdom
 
-import {test, expect, vi, describe, beforeEach, afterEach} from 'vitest';
+import {test, vi, describe, beforeEach, afterEach, assert} from 'vitest';
 
 import {
 	Reorderable,
@@ -104,21 +102,21 @@ describe('Reorderable', () => {
 		test('creates with default values', () => {
 			const reorderable = new Reorderable();
 
-			expect(reorderable).toBeInstanceOf(Reorderable);
-			expect(reorderable.list_node).toBeNull();
-			expect(reorderable.list_params).toBeNull();
-			expect(reorderable.indices.size).toBe(0);
-			expect(reorderable.elements.size).toBe(0);
-			expect(reorderable.direction).toBe('vertical');
-			expect(reorderable.id).toBeTruthy();
-			expect(reorderable.id).not.toBe(new Reorderable().id);
-			expect(reorderable.list_class).toBe('reorderable_list');
-			expect(reorderable.item_class).toBe('reorderable_item');
+			assert.instanceOf(reorderable, Reorderable);
+			assert.isNull(reorderable.list_node);
+			assert.isNull(reorderable.list_params);
+			assert.strictEqual(reorderable.indices.size, 0);
+			assert.strictEqual(reorderable.elements.size, 0);
+			assert.strictEqual(reorderable.direction, 'vertical');
+			assert.ok(reorderable.id);
+			assert.notStrictEqual(reorderable.id, new Reorderable().id);
+			assert.strictEqual(reorderable.list_class, 'reorderable_list');
+			assert.strictEqual(reorderable.item_class, 'reorderable_item');
 		});
 
 		test('creates with custom direction', () => {
 			const reorderable = new Reorderable({direction: 'horizontal'});
-			expect(reorderable.direction).toBe('horizontal');
+			assert.strictEqual(reorderable.direction, 'horizontal');
 		});
 
 		test('creates with custom styling', () => {
@@ -128,11 +126,11 @@ describe('Reorderable', () => {
 				dragging_class: 'custom_dragging',
 			});
 
-			expect(reorderable.list_class).toBe('custom_list');
-			expect(reorderable.item_class).toBe('custom_item');
-			expect(reorderable.dragging_class).toBe('custom_dragging');
+			assert.strictEqual(reorderable.list_class, 'custom_list');
+			assert.strictEqual(reorderable.item_class, 'custom_item');
+			assert.strictEqual(reorderable.dragging_class, 'custom_dragging');
 			// Other styles should have default values
-			expect(reorderable.drag_over_class).toBe('drag_over');
+			assert.strictEqual(reorderable.drag_over_class, 'drag_over');
 		});
 	});
 
@@ -156,43 +154,43 @@ describe('Reorderable', () => {
 		test('initializes correctly', () => {
 			cleanup_fn = attach_list(reorderable, list, {onreorder: mock_callback});
 
-			expect(reorderable.list_node).toBe(list);
-			expect(reorderable.list_params).toEqual({onreorder: mock_callback});
-			expect(list.classList.contains(reorderable.list_class!)).toBe(true);
-			expect(list.getAttribute('role')).toBe('list');
-			expect(list.dataset.reorderable_list_id).toBe(reorderable.id);
+			assert.strictEqual(reorderable.list_node, list);
+			assert.deepEqual(reorderable.list_params, {onreorder: mock_callback});
+			assert.ok(list.classList.contains(reorderable.list_class!));
+			assert.strictEqual(list.getAttribute('role'), 'list');
+			assert.strictEqual(list.dataset.reorderable_list_id, reorderable.id);
 		});
 
 		test('re-attachment changes callbacks', () => {
 			const mock_callback2 = vi.fn();
 			const cleanup1 = attach_list(reorderable, list, {onreorder: mock_callback});
 
-			expect(reorderable.list_params).toEqual({onreorder: mock_callback});
+			assert.deepEqual(reorderable.list_params, {onreorder: mock_callback});
 
 			// Re-attach with new callback
 			cleanup1();
 			cleanup_fn = attach_list(reorderable, list, {onreorder: mock_callback2});
 
-			expect(reorderable.list_params).toEqual({onreorder: mock_callback2});
+			assert.deepEqual(reorderable.list_params, {onreorder: mock_callback2});
 		});
 
 		test('destroy cleans up', () => {
 			cleanup_fn = attach_list(reorderable, list, {onreorder: mock_callback});
 
 			// Before destroy
-			expect(reorderable.list_node).toBe(list);
-			expect(list.classList.contains(reorderable.list_class!)).toBe(true);
+			assert.strictEqual(reorderable.list_node, list);
+			assert.ok(list.classList.contains(reorderable.list_class!));
 
 			// Destroy
 			cleanup_fn();
 			cleanup_fn = undefined;
 
 			// After destroy
-			expect(reorderable.list_node).toBeNull();
-			expect(reorderable.list_params).toBeNull();
-			expect(list.classList.contains(reorderable.list_class!)).toBe(false);
-			expect(list.hasAttribute('role')).toBe(false);
-			expect(list.dataset.reorderable_list_id).toBeUndefined();
+			assert.isNull(reorderable.list_node);
+			assert.isNull(reorderable.list_params);
+			assert.ok(!list.classList.contains(reorderable.list_class!));
+			assert.ok(!list.hasAttribute('role'));
+			assert.ok(list.dataset.reorderable_list_id === undefined);
 		});
 	});
 
@@ -218,11 +216,11 @@ describe('Reorderable', () => {
 		test('initializes correctly', () => {
 			cleanup_fn = attach_item(reorderable, item, {index: 0});
 
-			expect(item.classList.contains(reorderable.item_class!)).toBe(true);
-			expect(item.getAttribute('draggable')).toBe('true');
-			expect(item.getAttribute('role')).toBe('listitem');
-			expect(item.dataset.reorderable_item_id).toBeDefined();
-			expect(item.dataset.reorderable_list_id).toBe(reorderable.id);
+			assert.ok(item.classList.contains(reorderable.item_class!));
+			assert.strictEqual(item.getAttribute('draggable'), 'true');
+			assert.strictEqual(item.getAttribute('role'), 'listitem');
+			assert.isDefined(item.dataset.reorderable_item_id);
+			assert.strictEqual(item.dataset.reorderable_list_id, reorderable.id);
 
 			// Either in pending items or regular maps
 			const item_id = item.dataset.reorderable_item_id as ReorderableItemId;
@@ -230,7 +228,7 @@ describe('Reorderable', () => {
 				? reorderable.indices.has(item_id)
 				: reorderable.pending_items.some((p) => p.id === item_id);
 
-			expect(is_indexed).toBe(true);
+			assert.ok(is_indexed);
 		});
 
 		test('re-attachment changes index', () => {
@@ -241,10 +239,10 @@ describe('Reorderable', () => {
 
 			// Check initial index
 			if (reorderable.initialized) {
-				expect(reorderable.indices.get(item_id)).toBe(0);
+				assert.strictEqual(reorderable.indices.get(item_id), 0);
 			} else {
 				const pending_item = reorderable.pending_items.find((p) => p.id === item_id);
-				expect(pending_item?.index).toBe(0);
+				assert.strictEqual(pending_item?.index, 0);
 			}
 
 			// Re-attach with new index
@@ -256,10 +254,10 @@ describe('Reorderable', () => {
 
 			// Check if index was updated in the appropriate storage
 			if (reorderable.initialized) {
-				expect(reorderable.indices.get(new_item_id)).toBe(5);
+				assert.strictEqual(reorderable.indices.get(new_item_id), 5);
 			} else {
 				const pending_item = reorderable.pending_items.find((p) => p.id === new_item_id);
-				expect(pending_item?.index).toBe(5);
+				assert.strictEqual(pending_item?.index, 5);
 			}
 		});
 
@@ -269,23 +267,23 @@ describe('Reorderable', () => {
 			const item_id = item.dataset.reorderable_item_id as ReorderableItemId;
 
 			// Before destroy
-			expect(item.classList.contains(reorderable.item_class!)).toBe(true);
+			assert.ok(item.classList.contains(reorderable.item_class!));
 
 			// Destroy
 			cleanup_fn();
 			cleanup_fn = undefined;
 
 			// After destroy
-			expect(item.classList.contains(reorderable.item_class!)).toBe(false);
-			expect(item.hasAttribute('draggable')).toBe(false);
-			expect(item.hasAttribute('role')).toBe(false);
-			expect(item.dataset.reorderable_item_id).toBeUndefined();
-			expect(item.dataset.reorderable_list_id).toBeUndefined();
+			assert.ok(!item.classList.contains(reorderable.item_class!));
+			assert.ok(!item.hasAttribute('draggable'));
+			assert.ok(!item.hasAttribute('role'));
+			assert.ok(item.dataset.reorderable_item_id === undefined);
+			assert.ok(item.dataset.reorderable_list_id === undefined);
 
 			// Item should be removed from storage
 			const still_pending = reorderable.pending_items.some((p) => p.id === item_id);
 			const still_indexed = reorderable.indices.has(item_id);
-			expect(still_pending || still_indexed).toBe(false);
+			assert.ok(!(still_pending || still_indexed));
 		});
 	});
 
@@ -319,29 +317,29 @@ describe('Reorderable', () => {
 		test('update_indicator applies correct classes', () => {
 			// Update indicators
 			reorderable.update_indicator(item_id, 'top');
-			expect(item.classList.contains(reorderable.drag_over_class!)).toBe(true);
-			expect(item.classList.contains(reorderable.drag_over_top_class!)).toBe(true);
+			assert.ok(item.classList.contains(reorderable.drag_over_class!));
+			assert.ok(item.classList.contains(reorderable.drag_over_top_class!));
 
 			// Change indicator
 			reorderable.update_indicator(item_id, 'bottom');
-			expect(item.classList.contains(reorderable.drag_over_top_class!)).toBe(false);
-			expect(item.classList.contains(reorderable.drag_over_bottom_class!)).toBe(true);
+			assert.ok(!item.classList.contains(reorderable.drag_over_top_class!));
+			assert.ok(item.classList.contains(reorderable.drag_over_bottom_class!));
 
 			// Invalid drop
 			reorderable.update_indicator(item_id, 'left', false);
-			expect(item.classList.contains(reorderable.drag_over_left_class!)).toBe(false);
-			expect(item.classList.contains(reorderable.invalid_drop_class!)).toBe(true);
+			assert.ok(!item.classList.contains(reorderable.drag_over_left_class!));
+			assert.ok(item.classList.contains(reorderable.invalid_drop_class!));
 		});
 
 		test('clear_indicators removes all indicator classes', () => {
 			// Add indicator
 			reorderable.update_indicator(item_id, 'right');
-			expect(item.classList.contains(reorderable.drag_over_right_class!)).toBe(true);
+			assert.ok(item.classList.contains(reorderable.drag_over_right_class!));
 
 			// Clear indicators
 			reorderable.clear_indicators();
-			expect(item.classList.contains(reorderable.drag_over_class!)).toBe(false);
-			expect(item.classList.contains(reorderable.drag_over_right_class!)).toBe(false);
+			assert.ok(!item.classList.contains(reorderable.drag_over_class!));
+			assert.ok(!item.classList.contains(reorderable.drag_over_right_class!));
 		});
 	});
 
@@ -395,10 +393,10 @@ describe('Reorderable', () => {
 			first_item.dispatchEvent(drag_event);
 
 			// Check if drag operation was set up
-			expect(reorderable.source_index).toBe(0);
-			expect(reorderable.source_item_id).toBe(item_id);
-			expect(first_item.classList.contains(reorderable.dragging_class!)).toBe(true);
-			expect(mock_data_transfer.setData).toHaveBeenCalled();
+			assert.strictEqual(reorderable.source_index, 0);
+			assert.strictEqual(reorderable.source_item_id, item_id);
+			assert.ok(first_item.classList.contains(reorderable.dragging_class!));
+			assert.ok(mock_data_transfer.setData.mock.calls.length > 0);
 		});
 
 		test('dragend resets state', () => {
@@ -416,9 +414,9 @@ describe('Reorderable', () => {
 			list.dispatchEvent(dragend_event);
 
 			// Check if state was reset
-			expect(reorderable.source_index).toBe(-1);
-			expect(reorderable.source_item_id).toBeNull();
-			expect(first_item.classList.contains(reorderable.dragging_class!)).toBe(false);
+			assert.strictEqual(reorderable.source_index, -1);
+			assert.isNull(reorderable.source_item_id);
+			assert.ok(!first_item.classList.contains(reorderable.dragging_class!));
 		});
 	});
 
@@ -431,10 +429,8 @@ describe('Reorderable', () => {
 			// Initialize first reorderable
 			const cleanup1 = attach_list(reorderable1, list, {onreorder: vi.fn()});
 
-			// Expect no error when trying to initialize second reorderable with same list
-			expect(() => {
-				attach_list(reorderable2, list, {onreorder: vi.fn()});
-			}).not.toThrow();
+			// Should not throw when trying to initialize second reorderable with same list
+			attach_list(reorderable2, list, {onreorder: vi.fn()});
 
 			// Clean up
 			cleanup1();
@@ -456,7 +452,7 @@ describe('Reorderable', () => {
 			const cleanup2 = attachment2(list);
 
 			// Should work without errors
-			expect(reorderable.list_node).toBe(list);
+			assert.strictEqual(reorderable.list_node, list);
 
 			// Clean up
 			if (cleanup2) cleanup2();
@@ -497,8 +493,8 @@ describe('Reorderable', () => {
 			inner_item.dispatchEvent(drag_event);
 
 			// Should find the outer item as the dragged item
-			expect(reorderable.source_item_id).toBe(outer_id);
-			expect(reorderable.source_index).toBe(0);
+			assert.strictEqual(reorderable.source_item_id, outer_id);
+			assert.strictEqual(reorderable.source_index, 0);
 
 			// Clean up
 			outer_action.destroy?.();
@@ -537,13 +533,13 @@ describe('Reorderable', () => {
 			target_item.dispatchEvent(drop_event1);
 
 			// onreorder should not be called for invalid target
-			expect(onreorder).not.toHaveBeenCalled();
+			assert.strictEqual(onreorder.mock.calls.length, 0);
 
 			// Directly call the onreorder function as the implementation would
 			reorderable.list_params?.onreorder(0, 2);
 
 			// Now the callback should have been called
-			expect(onreorder).toHaveBeenCalledWith(0, 2);
+			assert.deepEqual(onreorder.mock.calls[0], [0, 2]);
 
 			// Clean up
 			for (const r of action_results) r?.destroy();
@@ -578,15 +574,15 @@ describe('Reorderable', () => {
 			const other_id = other_item.dataset.reorderable_item_id as ReorderableItemId;
 			reorderable.update_indicator(other_id, 'bottom');
 
-			expect(other_item.classList.contains(reorderable.drag_over_class!)).toBe(true);
+			assert.ok(other_item.classList.contains(reorderable.drag_over_class!));
 
 			// Now try to apply indicators to the source item
 			reorderable.update_indicator(source_id, 'top');
 
 			// Indicators should be cleared instead
-			expect(source_item.classList.contains(reorderable.drag_over_class!)).toBe(false);
-			expect(reorderable.active_indicator_item_id).toBeNull();
-			expect(reorderable.current_indicator).toBe('none');
+			assert.ok(!source_item.classList.contains(reorderable.drag_over_class!));
+			assert.isNull(reorderable.active_indicator_item_id);
+			assert.strictEqual(reorderable.current_indicator, 'none');
 
 			// Clean up
 			for (const r of action_results) r?.destroy();
@@ -637,15 +633,15 @@ describe('Reorderable', () => {
 			first_item1.dispatchEvent(drag_event1);
 
 			// Should only affect first reorderable
-			expect(reorderable1.source_index).toBe(0);
-			expect(reorderable2.source_index).toBe(-1);
+			assert.strictEqual(reorderable1.source_index, 0);
+			assert.strictEqual(reorderable2.source_index, -1);
 
 			// Directly call the callback instead of relying on event propagation
 			onreorder1(0, 1);
 
 			// Only first callback should be called
-			expect(onreorder1).toHaveBeenCalled();
-			expect(onreorder2).not.toHaveBeenCalled();
+			assert.ok(onreorder1.mock.calls.length > 0);
+			assert.strictEqual(onreorder2.mock.calls.length, 0);
 
 			// Clean up
 			for (const r of action_results1) r?.destroy();
@@ -676,24 +672,24 @@ describe('Reorderable', () => {
 			});
 
 			// Check list class
-			expect(list.classList.contains('my_list')).toBe(true);
+			assert.ok(list.classList.contains('my_list'));
 
 			// Check item class
 			const first_item = items[0];
 			const second_item = items[1];
 			if (!first_item || !second_item) throw new Error('Expected first and second items');
 
-			expect(first_item.classList.contains('my_item')).toBe(true);
+			assert.ok(first_item.classList.contains('my_item'));
 
 			// Apply dragging class
 			first_item.classList.add(reorderable.dragging_class!);
-			expect(first_item.classList.contains('my_dragging')).toBe(true);
+			assert.ok(first_item.classList.contains('my_dragging'));
 
 			// Apply indicator
 			second_item.classList.add(reorderable.drag_over_class!);
 			second_item.classList.add(reorderable.drag_over_top_class!);
-			expect(second_item.classList.contains('my_drag_over')).toBe(true);
-			expect(second_item.classList.contains('my_drag_over_top')).toBe(true);
+			assert.ok(second_item.classList.contains('my_drag_over'));
+			assert.ok(second_item.classList.contains('my_drag_over_top'));
 
 			// Clean up
 			for (const r of action_results) r?.destroy();
@@ -713,12 +709,12 @@ describe('Reorderable', () => {
 			});
 
 			// Check list role
-			expect(list.getAttribute('role')).toBe('list');
+			assert.strictEqual(list.getAttribute('role'), 'list');
 
 			// Check item role
 			const first_item = items[0];
 			if (!first_item) throw new Error('Expected first item');
-			expect(first_item.getAttribute('role')).toBe('listitem');
+			assert.strictEqual(first_item.getAttribute('role'), 'listitem');
 
 			// Clean up
 			for (const r of action_results) r?.destroy();

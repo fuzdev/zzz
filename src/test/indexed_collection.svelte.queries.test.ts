@@ -1,8 +1,6 @@
-// @slop Claude Sonnet 3.7
-
 // @vitest-environment jsdom
 
-import {test, expect, describe, beforeEach} from 'vitest';
+import {test, describe, beforeEach, assert} from 'vitest';
 import {z} from 'zod';
 
 import {IndexedCollection} from '$lib/indexed_collection.svelte.js';
@@ -218,93 +216,93 @@ describe('IndexedCollection - Query Capabilities', () => {
 
 	test('basic query operations', () => {
 		// Single index direct lookup
-		expect(collection.by_optional('by_string_a', 'a1'.toLowerCase())).toBe(items[0]);
-		expect(collection.by_optional('by_string_b', 'b1')).toBeDefined();
+		assert.strictEqual(collection.by_optional('by_string_a', 'a1'.toLowerCase()), items[0]);
+		assert.ok(collection.by_optional('by_string_b', 'b1') !== undefined);
 
 		// Multi index direct lookup
-		expect(collection.where('by_string_c', 'c1')).toHaveLength(2);
-		expect(collection.where('by_number_a', 5)).toHaveLength(2);
-		expect(collection.where('by_boolean_a', 'y')).toHaveLength(3);
+		assert.strictEqual(collection.where('by_string_c', 'c1').length, 2);
+		assert.strictEqual(collection.where('by_number_a', 5).length, 2);
+		assert.strictEqual(collection.where('by_boolean_a', 'y').length, 3);
 
 		// Non-existent values
-		expect(collection.by_optional('by_string_a', 'nonexistent')).toBeUndefined();
-		expect(collection.where('by_string_c', 'nonexistent')).toHaveLength(0);
+		assert.ok(collection.by_optional('by_string_a', 'nonexistent') === undefined);
+		assert.strictEqual(collection.where('by_string_c', 'nonexistent').length, 0);
 	});
 
 	test('case sensitivity in queries', () => {
 		// Case insensitive string_a lookup (extractor converts to lowercase)
-		expect(collection.by_optional('by_string_a', 'a1'.toLowerCase())).toBe(items[0]);
-		expect(collection.by_optional('by_string_a', 'A1'.toLowerCase())).toBe(items[0]);
+		assert.strictEqual(collection.by_optional('by_string_a', 'a1'.toLowerCase()), items[0]);
+		assert.strictEqual(collection.by_optional('by_string_a', 'A1'.toLowerCase()), items[0]);
 
 		// Case sensitive string_b lookup (no conversion in extractor)
-		expect(collection.by_optional('by_string_b', 'B1')).toBeUndefined();
-		expect(collection.by_optional('by_string_b', 'b1')).toBeDefined();
+		assert.ok(collection.by_optional('by_string_b', 'B1') === undefined);
+		assert.ok(collection.by_optional('by_string_b', 'b1') !== undefined);
 	});
 
 	test('compound queries combining indexes', () => {
 		// Find c1 items with string_b=b1
 		const c1_items = collection.where('by_string_c', 'c1');
 		const b1_c1_items = c1_items.filter((item) => item.string_b === 'b1');
-		expect(b1_c1_items).toHaveLength(1);
-		expect(b1_c1_items[0]!.string_a).toBe('a1');
+		assert.strictEqual((b1_c1_items).length, 1);
+		assert.strictEqual(b1_c1_items[0]!.string_a, 'a1');
 
 		// Find boolean_a=true items with number_a=5
 		const boolean_a_true_items = collection.where('by_boolean_a', 'y');
 		const high_value_boolean_a_true = boolean_a_true_items.filter((item) => item.number_a === 5);
-		expect(high_value_boolean_a_true).toHaveLength(2);
-		expect(high_value_boolean_a_true.map((i) => i.string_a)).toContain('a2');
-		expect(high_value_boolean_a_true.map((i) => i.string_a)).toContain('b2');
+		assert.strictEqual((high_value_boolean_a_true).length, 2);
+		assert.include(high_value_boolean_a_true.map((i) => i.string_a), 'a2');
+		assert.include(high_value_boolean_a_true.map((i) => i.string_a), 'b2');
 	});
 
 	test('queries with array values', () => {
 		// Query by array_a (checks if any tag matches)
 		const tag1_items = collection.where('by_array_a', 'tag1');
-		expect(tag1_items).toHaveLength(3);
-		expect(tag1_items.map((i) => i.string_a)).toContain('a1');
-		expect(tag1_items.map((i) => i.string_a)).toContain('a2');
-		expect(tag1_items.map((i) => i.string_a)).toContain('b2');
+		assert.strictEqual((tag1_items).length, 3);
+		assert.include(tag1_items.map((i) => i.string_a), 'a1');
+		assert.include(tag1_items.map((i) => i.string_a), 'a2');
+		assert.include(tag1_items.map((i) => i.string_a), 'b2');
 
 		// Multiple tags intersection (using multiple queries)
 		const tag2_items = collection.where('by_array_a', 'tag2');
 		const tag2_and_tag3_items = tag2_items.filter((item) => item.array_a.includes('tag3'));
-		expect(tag2_and_tag3_items).toHaveLength(1);
-		expect(tag2_and_tag3_items[0]!.string_a).toBe('a1');
+		assert.strictEqual((tag2_and_tag3_items).length, 1);
+		assert.strictEqual(tag2_and_tag3_items[0]!.string_a, 'a1');
 	});
 
 	test('derived index queries', () => {
 		// Test the recent_boolean_a_true derived index
 		const recent_boolean_a_true = collection.derived_index('recent_boolean_a_true');
-		expect(recent_boolean_a_true).toHaveLength(3); // All boolean_a=true items
+		assert.strictEqual((recent_boolean_a_true).length, 3); // All boolean_a=true items
 
 		// Verify order (most recent first)
 		const rbt0 = recent_boolean_a_true[0];
 		const rbt1 = recent_boolean_a_true[1];
 		const rbt2 = recent_boolean_a_true[2];
-		expect(rbt0).toBeDefined();
-		expect(rbt1).toBeDefined();
-		expect(rbt2).toBeDefined();
-		expect(rbt0!.string_a).toBe('b2'); // 3 days ago
-		expect(rbt1!.string_a).toBe('a1'); // 10 days ago
-		expect(rbt2!.string_a).toBe('a2'); // 20 days ago
+		assert.isDefined(rbt0);
+		assert.isDefined(rbt1);
+		assert.isDefined(rbt2);
+		assert.strictEqual(rbt0!.string_a, 'b2'); // 3 days ago
+		assert.strictEqual(rbt1!.string_a, 'a1'); // 10 days ago
+		assert.strictEqual(rbt2!.string_a, 'a2'); // 20 days ago
 
 		// Test the high_number_a derived index which should include all items with number_a >= 4
 		const high_number_a = collection.derived_index('high_number_a');
-		expect(high_number_a).toHaveLength(4);
-		expect(high_number_a.map((i) => i.string_a).sort()).toEqual(['a1', 'a2', 'b1', 'b2'].sort());
+		assert.strictEqual((high_number_a).length, 4);
+		assert.deepEqual(high_number_a.map((i) => i.string_a).sort(), ['a1', 'a2', 'b1', 'b2'].sort());
 	});
 
 	test('first/latest with multi-index', () => {
 		// Get first c1 item
 		const first_c1 = collection.first('by_string_c', 'c1', 1);
-		expect(first_c1).toHaveLength(1);
+		assert.strictEqual((first_c1).length, 1);
 		const first_c1_item = first_c1[0];
-		expect(first_c1_item).toBeDefined();
+		assert.isDefined(first_c1_item);
 
 		// Get latest c2 item
 		const latest_c2 = collection.latest('by_string_c', 'c2', 1);
-		expect(latest_c2).toHaveLength(1);
+		assert.strictEqual((latest_c2).length, 1);
 		const latest_c2_item = latest_c2[0];
-		expect(latest_c2_item).toBeDefined();
+		assert.isDefined(latest_c2_item);
 	});
 
 	test('time-based queries', () => {
@@ -315,15 +313,15 @@ describe('IndexedCollection - Query Capabilities', () => {
 		const items_this_year_count = collection.values.filter(
 			(item) => item.date_a.getFullYear() === current_year,
 		).length;
-		expect(this_year_items.length).toBe(items_this_year_count);
+		assert.strictEqual(this_year_items.length, items_this_year_count);
 
 		// More complex date range query - last 7 days
 		const now = Date.now();
 		const recent_items = collection.values.filter(
 			(item) => item.date_a.getTime() > now - 1000 * 60 * 60 * 24 * 7,
 		);
-		expect(recent_items.map((i) => i.string_a)).toContain('b1'); // 5 days ago
-		expect(recent_items.map((i) => i.string_a)).toContain('b2'); // 3 days ago
+		assert.include(recent_items.map((i) => i.string_a), 'b1'); // 5 days ago
+		assert.include(recent_items.map((i) => i.string_a), 'b2'); // 3 days ago
 	});
 
 	test('adding items affects derived queries correctly', () => {
@@ -342,46 +340,46 @@ describe('IndexedCollection - Query Capabilities', () => {
 
 		// Check that it appears at the top of the recent_boolean_a_true list
 		const recent_boolean_a_true = collection.derived_index('recent_boolean_a_true');
-		expect(recent_boolean_a_true[0]!.id).toBe(new_item.id);
+		assert.strictEqual(recent_boolean_a_true[0]!.id, new_item.id);
 
 		// Check that it appears in high_number_a
 		const high_number_a = collection.derived_index('high_number_a');
-		expect(has_item_with_id(high_number_a, new_item)).toBe(true);
+		assert.ok(has_item_with_id(high_number_a, new_item));
 	});
 
 	test('removing items updates derived queries', () => {
 		// Remove the most recent boolean_a=true item
 		const item_to_remove = items[4]; // b2 (most recent boolean_a=true)
-		expect(item_to_remove).toBeDefined();
+		assert.isDefined(item_to_remove);
 
 		collection.remove(item_to_remove!.id);
 
 		// Check that recent_boolean_a_true updates correctly
 		const recent_boolean_a_true = collection.derived_index('recent_boolean_a_true');
-		expect(recent_boolean_a_true).toHaveLength(2);
+		assert.strictEqual((recent_boolean_a_true).length, 2);
 		const rbt0 = recent_boolean_a_true[0];
 		const rbt1 = recent_boolean_a_true[1];
-		expect(rbt0).toBeDefined();
-		expect(rbt1).toBeDefined();
-		expect(rbt0!.string_a).toBe('a1');
-		expect(rbt1!.string_a).toBe('a2');
+		assert.isDefined(rbt0);
+		assert.isDefined(rbt1);
+		assert.strictEqual(rbt0!.string_a, 'a1');
+		assert.strictEqual(rbt1!.string_a, 'a2');
 
 		// Check that high_number_a updates correctly
 		const high_number_a = collection.derived_index('high_number_a');
-		expect(high_number_a).not.toContain(item_to_remove);
-		expect(high_number_a).toHaveLength(3); // Started with 4, removed 1
+		assert.notInclude(high_number_a, item_to_remove);
+		assert.strictEqual((high_number_a).length, 3); // Started with 4, removed 1
 	});
 
 	test('dynamic ordering of query results', () => {
 		// Get all items and sort by number_a (highest first)
 		const sorted_by_number_a = collection.values.slice().sort((a, b) => b.number_a - a.number_a);
-		expect(sorted_by_number_a[0]!.number_a).toBe(5);
+		assert.strictEqual(sorted_by_number_a[0]!.number_a, 5);
 
 		// Sort by creation time (newest first)
 		const sorted_by_time = collection.values
 			.slice()
 			.sort((a, b) => b.date_a.getTime() - a.date_a.getTime());
-		expect(sorted_by_time[0]!.string_a).toBe('b2'); // 3 days ago
+		assert.strictEqual(sorted_by_time[0]!.string_a, 'b2'); // 3 days ago
 	});
 });
 
@@ -436,33 +434,33 @@ describe('IndexedCollection - Search Patterns', () => {
 	test('word-based search', () => {
 		// Find items with "alpha" in string_a
 		const alpha_items = collection.where('by_word', 'alpha');
-		expect(alpha_items).toHaveLength(2);
+		assert.strictEqual((alpha_items).length, 2);
 
 		// Find items with "beta" in string_a
 		const beta_items = collection.where('by_word', 'beta');
-		expect(beta_items).toHaveLength(2);
+		assert.strictEqual((beta_items).length, 2);
 
 		// Find items with both "alpha" and "beta" (intersection)
 		const alpha_beta_items = alpha_items.filter((item) =>
 			item.string_a.toLowerCase().includes('beta'),
 		);
-		expect(alpha_beta_items).toHaveLength(1);
-		expect(alpha_beta_items[0]!.string_a).toBe('alpha beta gamma');
+		assert.strictEqual((alpha_beta_items).length, 1);
+		assert.strictEqual(alpha_beta_items[0]!.string_a, 'alpha beta gamma');
 	});
 
 	test('range-based categorization', () => {
 		// Find high-number_a items
 		const high_number_a = collection.where('by_number_a_range', 'high');
-		expect(high_number_a).toHaveLength(1);
-		expect(high_number_a[0]!.number_a).toBe(5);
+		assert.strictEqual((high_number_a).length, 1);
+		assert.strictEqual(high_number_a[0]!.number_a, 5);
 
 		// Find mid-number_a items
 		const mid_number_a = collection.where('by_number_a_range', 'mid');
-		expect(mid_number_a).toHaveLength(2);
+		assert.strictEqual((mid_number_a).length, 2);
 
 		// Find low-number_a items
 		const low_number_a = collection.where('by_number_a_range', 'low');
-		expect(low_number_a).toHaveLength(1);
-		expect(low_number_a[0]!.number_a).toBe(2);
+		assert.strictEqual((low_number_a).length, 1);
+		assert.strictEqual(low_number_a[0]!.number_a, 2);
 	});
 });

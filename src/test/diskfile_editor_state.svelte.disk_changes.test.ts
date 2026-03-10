@@ -1,8 +1,6 @@
-// @slop Claude Sonnet 3.7
-
 // @vitest-environment jsdom
 
-import {test, expect, beforeEach, describe} from 'vitest';
+import {test, beforeEach, describe, assert} from 'vitest';
 
 import {DiskfileEditorState} from '$lib/diskfile_editor_state.svelte.js';
 import {DiskfilePath, SerializableDisknode} from '$lib/diskfile_types.js';
@@ -41,7 +39,7 @@ beforeEach(() => {
 describe('disk change detection', () => {
 	test('identifies when disk content changes', () => {
 		// Initial state - no disk content tracking issues
-		expect(editor_state.last_seen_disk_content).toBe(TEST_CONTENT);
+		assert.strictEqual(editor_state.last_seen_disk_content, TEST_CONTENT);
 
 		// Simulate a change on disk
 		const new_disk_content = 'Content changed on disk';
@@ -51,8 +49,8 @@ describe('disk change detection', () => {
 		editor_state.check_disk_changes();
 
 		// Since there are no user edits, content should be auto-updated
-		expect(editor_state.current_content).toBe(new_disk_content);
-		expect(editor_state.last_seen_disk_content).toBe(new_disk_content);
+		assert.strictEqual(editor_state.current_content, new_disk_content);
+		assert.strictEqual(editor_state.last_seen_disk_content, new_disk_content);
 	});
 
 	test('with no user edits automatically updates content and selection', () => {
@@ -64,8 +62,8 @@ describe('disk change detection', () => {
 		editor_state.check_disk_changes();
 
 		// Content should be auto-updated
-		expect(editor_state.current_content).toBe(disk_content);
-		expect(editor_state.last_seen_disk_content).toBe(disk_content);
+		assert.strictEqual(editor_state.current_content, disk_content);
+		assert.strictEqual(editor_state.last_seen_disk_content, disk_content);
 
 		// History should have a new entry with disk change flag
 		const history = app.get_diskfile_history(TEST_PATH)!;
@@ -73,13 +71,13 @@ describe('disk change detection', () => {
 			(entry) => entry.is_disk_change && entry.content === disk_content,
 		);
 
-		expect(disk_entry).toMatchObject({
+		assert.include(disk_entry, {
 			content: disk_content,
 			is_disk_change: true,
 		});
 
 		// Selection should point to the new disk change entry
-		expect(editor_state.selected_history_entry_id).toBe(disk_entry!.id);
+		assert.strictEqual(editor_state.selected_history_entry_id, disk_entry!.id);
 	});
 
 	test('ignores null content states', () => {
@@ -91,7 +89,7 @@ describe('disk change detection', () => {
 		editor_state.check_disk_changes();
 
 		// Nothing should happen, no errors
-		expect(editor_state.last_seen_disk_content).toBeNull();
+		assert.isNull(editor_state.last_seen_disk_content);
 	});
 
 	test('does nothing if disk content matches last seen', () => {
@@ -103,7 +101,7 @@ describe('disk change detection', () => {
 		editor_state.check_disk_changes();
 
 		// Last seen should remain unchanged
-		expect(editor_state.last_seen_disk_content).toBe('Last seen content');
+		assert.strictEqual(editor_state.last_seen_disk_content, 'Last seen content');
 	});
 
 	test('handles first-time initialization correctly', () => {
@@ -126,24 +124,24 @@ describe('disk change detection', () => {
 		new_editor_state.check_disk_changes();
 
 		// last_seen_disk_content should be initialized
-		expect(new_editor_state.last_seen_disk_content).toBe('Initial content');
-		expect(new_editor_state.current_content).toBe('Initial content');
+		assert.strictEqual(new_editor_state.last_seen_disk_content, 'Initial content');
+		assert.strictEqual(new_editor_state.current_content, 'Initial content');
 	});
 
 	test('with user edits adds disk change to history but preserves user content', () => {
 		// First make a user edit
 		editor_state.current_content = 'User edited content';
-		expect(editor_state.content_was_modified_by_user).toBe(true);
+		assert.ok(editor_state.content_was_modified_by_user);
 
 		// Simulate disk change
 		test_diskfile.content = 'Changed on disk';
 		editor_state.check_disk_changes();
 
 		// User content should be preserved
-		expect(editor_state.current_content).toBe('User edited content');
+		assert.strictEqual(editor_state.current_content, 'User edited content');
 
 		// Last seen content should be updated
-		expect(editor_state.last_seen_disk_content).toBe('Changed on disk');
+		assert.strictEqual(editor_state.last_seen_disk_content, 'Changed on disk');
 
 		// Find the disk change entry
 		const history = app.get_diskfile_history(TEST_PATH)!;
@@ -151,13 +149,13 @@ describe('disk change detection', () => {
 			(entry) => entry.is_disk_change && entry.content === 'Changed on disk',
 		);
 
-		expect(disk_entry).toMatchObject({
+		assert.include(disk_entry, {
 			content: 'Changed on disk',
 			is_disk_change: true,
 		});
 
 		// Selection should not automatically change to disk entry
-		expect(editor_state.selected_history_entry_id).not.toBe(disk_entry!.id);
+		assert.notStrictEqual(editor_state.selected_history_entry_id, disk_entry!.id);
 	});
 
 	test('skips adding disk change if content matches existing entries', () => {
@@ -172,7 +170,7 @@ describe('disk change detection', () => {
 		editor_state.check_disk_changes();
 
 		// No new entry should be added
-		expect(history.entries.length).toBe(count_after_first);
+		assert.strictEqual(history.entries.length, count_after_first);
 	});
 
 	test('marks existing entry as disk change when content matches', () => {
@@ -184,19 +182,19 @@ describe('disk change detection', () => {
 		});
 
 		// Verify the entry isn't marked as a disk change yet
-		expect(entry.is_disk_change).toBe(false);
-		expect(entry.is_unsaved_edit).toBe(true);
+		assert.ok(!(entry.is_disk_change));
+		assert.ok(entry.is_unsaved_edit);
 
 		// Make a disk change that matches the existing entry's content
 		test_diskfile.content = 'New content on disk';
 		editor_state.check_disk_changes();
 
 		// The existing entry should now be marked as a disk change and not an unsaved edit
-		expect(history.entries[0]!.is_disk_change).toBe(true);
-		expect(history.entries[0]!.is_unsaved_edit).toBe(false);
+		assert.ok(history.entries[0]!.is_disk_change);
+		assert.ok(!(history.entries[0]!.is_unsaved_edit));
 
 		// No new entry should be created
-		expect(history.entries.length).toBe(2); // Original + our added entry
+		assert.strictEqual(history.entries.length, 2); // Original + our added entry
 	});
 });
 
@@ -221,12 +219,12 @@ describe('file history management', () => {
 			(e) => e.content === 'Second disk change' && e.is_disk_change,
 		);
 
-		expect(firstEntry).toMatchObject({
+		assert.include(firstEntry, {
 			content: 'First disk change',
 			is_disk_change: true,
 		});
 
-		expect(secondEntry).toMatchObject({
+		assert.include(secondEntry, {
 			content: 'Second disk change',
 			is_disk_change: true,
 		});
@@ -242,7 +240,7 @@ describe('file history management', () => {
 		editor_state.check_disk_changes();
 
 		// Selection should remain on user's edit
-		expect(editor_state.selected_history_entry_id).toBe(selected_id);
+		assert.strictEqual(editor_state.selected_history_entry_id, selected_id);
 	});
 
 	test('with user selection of older history maintains that selection during disk change', () => {
@@ -252,14 +250,14 @@ describe('file history management', () => {
 
 		// Select the older entry
 		editor_state.set_content_from_history(older_entry.id);
-		expect(editor_state.selected_history_entry_id).toBe(older_entry.id);
+		assert.strictEqual(editor_state.selected_history_entry_id, older_entry.id);
 
 		// Simulate disk change
 		test_diskfile.content = 'New disk content';
 		editor_state.check_disk_changes();
 
 		// Selection should remain on the older entry
-		expect(editor_state.selected_history_entry_id).toBe(older_entry.id);
+		assert.strictEqual(editor_state.selected_history_entry_id, older_entry.id);
 	});
 });
 
@@ -272,13 +270,13 @@ describe('save changes behavior', () => {
 		await editor_state.save_changes();
 
 		// Content should be saved to disk
-		expect(test_diskfile.content).toBe('User edit to save');
+		assert.strictEqual(test_diskfile.content, 'User edit to save');
 
 		// Last seen disk content should be updated
-		expect(editor_state.last_seen_disk_content).toBe('User edit to save');
+		assert.strictEqual(editor_state.last_seen_disk_content, 'User edit to save');
 
 		// User modified flag should be cleared
-		expect(editor_state.content_was_modified_by_user).toBe(false);
+		assert.ok(!(editor_state.content_was_modified_by_user));
 	});
 
 	test('saving during disk changes preserves selected content', async () => {
@@ -293,10 +291,10 @@ describe('save changes behavior', () => {
 		await editor_state.save_changes();
 
 		// Disk should have user content
-		expect(test_diskfile.content).toBe('User edit');
+		assert.strictEqual(test_diskfile.content, 'User edit');
 
 		// Last seen content should be updated
-		expect(editor_state.last_seen_disk_content).toBe('User edit');
+		assert.strictEqual(editor_state.last_seen_disk_content, 'User edit');
 	});
 });
 
@@ -307,14 +305,14 @@ describe('edge cases', () => {
 		editor_state.check_disk_changes();
 
 		// With no user edits, content should be updated to empty
-		expect(editor_state.current_content).toBe('');
-		expect(editor_state.last_seen_disk_content).toBe('');
+		assert.strictEqual(editor_state.current_content, '');
+		assert.strictEqual(editor_state.last_seen_disk_content, '');
 
 		// History should include empty content entry
 		const history = app.get_diskfile_history(TEST_PATH)!;
 		const empty_entry = history.entries.find((e) => e.content === '' && e.is_disk_change);
 
-		expect(empty_entry).toMatchObject({
+		assert.include(empty_entry, {
 			content: '',
 			is_disk_change: true,
 		});
@@ -344,10 +342,10 @@ describe('edge cases', () => {
 		empty_history_editor.check_disk_changes();
 
 		// Should handle gracefully without errors
-		expect(empty_history_editor.current_content).toBe('Disk changed');
+		assert.strictEqual(empty_history_editor.current_content, 'Disk changed');
 
 		// The implementation should create an entry with the disk_change flag
-		expect(history.entries[0]!).toMatchObject({
+		assert.include(history.entries[0]!, {
 			content: 'Disk changed',
 			is_disk_change: true,
 		});
@@ -364,7 +362,7 @@ describe('edge cases', () => {
 		editor_state.check_disk_changes();
 
 		// Should not crash and maintain same state
-		expect(editor_state.current_content).toBe('User edit');
+		assert.strictEqual(editor_state.current_content, 'User edit');
 	});
 
 	test('editing to match disk content is handled properly', () => {
@@ -376,6 +374,6 @@ describe('edge cases', () => {
 		editor_state.current_content = 'Disk content';
 
 		// User modified state should be false since it matches disk content
-		expect(editor_state.content_was_modified_by_user).toBe(false);
+		assert.ok(!(editor_state.content_was_modified_by_user));
 	});
 });

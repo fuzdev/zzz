@@ -1,6 +1,4 @@
-// @slop Claude Sonnet 4.5
-
-import {test, expect, describe} from 'vitest';
+import {test, describe, assert} from 'vitest';
 
 import {update_env_variable} from '$lib/server/env_file_helpers.js';
 
@@ -39,7 +37,7 @@ describe('update_env_variable - quote detection edge cases', () => {
 		});
 
 		// Should preserve unquoted style
-		expect(fs.get_file('/test/.env')).toBe('NAME=Smith');
+		assert.strictEqual(fs.get_file('/test/.env'), 'NAME=Smith');
 	});
 
 	test('handles value with internal quotes when quoted', async () => {
@@ -54,7 +52,7 @@ describe('update_env_variable - quote detection edge cases', () => {
 		});
 
 		// Should preserve quoted style
-		expect(fs.get_file('/test/.env')).toBe('NAME="Smith"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'NAME="Smith"');
 	});
 
 	test('handles single quote style', async () => {
@@ -69,7 +67,7 @@ describe('update_env_variable - quote detection edge cases', () => {
 		});
 
 		// Converts to double quotes (implementation detail)
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value"');
 	});
 
 	test('handles escaped quotes in value', async () => {
@@ -83,7 +81,7 @@ describe('update_env_variable - quote detection edge cases', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new"');
 	});
 
 	test('handles escaped quote at end of value', async () => {
@@ -97,7 +95,7 @@ describe('update_env_variable - quote detection edge cases', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new"');
 	});
 
 	test('handles multiple escaped quotes in sequence', async () => {
@@ -111,7 +109,7 @@ describe('update_env_variable - quote detection edge cases', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new"');
 	});
 
 	test('handles escaped quote with inline comment', async () => {
@@ -125,7 +123,7 @@ describe('update_env_variable - quote detection edge cases', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new" # comment');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new" # comment');
 	});
 });
 
@@ -141,7 +139,7 @@ describe('update_env_variable - special values', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY=""');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY=""');
 	});
 
 	test('handles value with equals sign', async () => {
@@ -155,7 +153,7 @@ describe('update_env_variable - special values', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="value=with=equals"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="value=with=equals"');
 	});
 
 	test('handles value with newlines', async () => {
@@ -169,7 +167,7 @@ describe('update_env_variable - special values', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="value\nwith\nnewlines"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="value\nwith\nnewlines"');
 	});
 
 	test('handles value with backslashes (Windows paths)', async () => {
@@ -183,7 +181,7 @@ describe('update_env_variable - special values', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('PATH_KEY="C:\\Users\\Admin\\Documents"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'PATH_KEY="C:\\Users\\Admin\\Documents"');
 	});
 
 	test('handles value with unicode characters', async () => {
@@ -198,7 +196,7 @@ describe('update_env_variable - special values', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe(`UNICODE_KEY="${unicode_value}"`);
+		assert.strictEqual(fs.get_file('/test/.env'), `UNICODE_KEY="${unicode_value}"`);
 	});
 
 	test('handles very long values', async () => {
@@ -213,7 +211,7 @@ describe('update_env_variable - special values', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe(`LONG_KEY="${long_value}"`);
+		assert.strictEqual(fs.get_file('/test/.env'), `LONG_KEY="${long_value}"`);
 	});
 
 	test('handles value with JSON content', async () => {
@@ -228,7 +226,7 @@ describe('update_env_variable - special values', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe(`JSON_KEY="${json_value}"`);
+		assert.strictEqual(fs.get_file('/test/.env'), `JSON_KEY="${json_value}"`);
 	});
 
 	test('handles value with special characters', async () => {
@@ -242,7 +240,7 @@ describe('update_env_variable - special values', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="value!@#$%^&*()_+-=[]{}|;:,.<>?"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="value!@#$%^&*()_+-=[]{}|;:,.<>?"');
 	});
 });
 
@@ -259,7 +257,7 @@ describe('update_env_variable - whitespace handling', () => {
 		});
 
 		// Normalizes to no spaces
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value"');
 	});
 
 	test('handles key with leading whitespace in file', async () => {
@@ -274,7 +272,7 @@ describe('update_env_variable - whitespace handling', () => {
 		});
 
 		// Normalizes whitespace
-		expect(fs.get_file('/test/.env')).toBe('LEADING_SPACE="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'LEADING_SPACE="new_value"');
 	});
 
 	test('handles key with trailing whitespace before equals', async () => {
@@ -288,7 +286,7 @@ describe('update_env_variable - whitespace handling', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('TRAILING_SPACE="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'TRAILING_SPACE="new_value"');
 	});
 
 	test('preserves exact original formatting for non-matching lines', async () => {
@@ -303,14 +301,14 @@ describe('update_env_variable - whitespace handling', () => {
 		});
 
 		const result = fs.get_file('/test/.env');
-		expect(result).toBe(
+		assert.strictEqual(result,
 			'  INDENT_KEY  =  "spaced"  \nTARGET_KEY="new"\n\t\tTAB_KEY\t=\t"tabbed"\t',
 		);
 
 		// Verify exact preservation of unchanged lines
 		const lines = result?.split('\n') || [];
-		expect(lines[0]).toBe('  INDENT_KEY  =  "spaced"  ');
-		expect(lines[2]).toBe('\t\tTAB_KEY\t=\t"tabbed"\t');
+		assert.strictEqual(lines[0], '  INDENT_KEY  =  "spaced"  ');
+		assert.strictEqual(lines[2], '\t\tTAB_KEY\t=\t"tabbed"\t');
 	});
 });
 
@@ -326,7 +324,7 @@ describe('update_env_variable - special keys', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY_123="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY_123="new_value"');
 	});
 
 	test('handles key with dots (regex special char)', async () => {
@@ -340,7 +338,7 @@ describe('update_env_variable - special keys', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('NORMAL_KEY="value1"\nSPECIAL.KEY="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'NORMAL_KEY="value1"\nSPECIAL.KEY="new_value"');
 	});
 
 	test('handles empty key name', async () => {
@@ -355,7 +353,7 @@ describe('update_env_variable - special keys', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('VALID_KEY="value"\n="empty_key_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'VALID_KEY="value"\n="empty_key_value"');
 	});
 });
 
@@ -371,7 +369,7 @@ describe('update_env_variable - file variations', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('# Comment 1\n# Comment 2\nNEW_KEY="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), '# Comment 1\n# Comment 2\nNEW_KEY="new_value"');
 	});
 
 	test('handles file with only empty lines', async () => {
@@ -386,7 +384,7 @@ describe('update_env_variable - file variations', () => {
 		});
 
 		// File ends with newline, so blank line separator is added
-		expect(fs.get_file('/test/.env')).toBe('\n\n\n\nNEW_KEY="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), '\n\n\n\nNEW_KEY="new_value"');
 	});
 
 	test('verifies path is resolved to absolute', async () => {
@@ -401,8 +399,8 @@ describe('update_env_variable - file variations', () => {
 		});
 
 		// Path should be absolute
-		expect(resolved_path).toBeDefined();
-		expect(resolved_path?.startsWith('/')).toBe(true);
-		expect(resolved_path?.endsWith('relative/.env')).toBe(true);
+		assert.ok(resolved_path !== undefined);
+		assert.ok(resolved_path?.startsWith('/'));
+		assert.ok(resolved_path?.endsWith('relative/.env'));
 	});
 });

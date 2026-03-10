@@ -1,8 +1,6 @@
-// @slop Claude Sonnet 3.7
-
 // @vitest-environment jsdom
 
-import {beforeEach, describe, test, expect, vi, afterEach} from 'vitest';
+import {beforeEach, describe, test, vi, afterEach, assert} from 'vitest';
 
 import {Socket} from '$lib/socket.svelte.js';
 import {DEFAULT_CLOSE_CODE} from '$lib/socket_helpers.js';
@@ -125,9 +123,10 @@ describe('Socket', () => {
 			const socket = new Socket({app});
 			socket.connect(TEST_URLS.BASE);
 
-			expect(globalThis.WebSocket).toHaveBeenCalledWith(TEST_URLS.BASE);
-			expect(socket.url).toBe(TEST_URLS.BASE);
-			expect(socket.status).toBe('pending');
+			assert.ok((globalThis.WebSocket as any).mock.calls.length > 0);
+			assert.deepEqual((globalThis.WebSocket as any).mock.calls[0], [TEST_URLS.BASE]);
+			assert.strictEqual(socket.url, TEST_URLS.BASE);
+			assert.strictEqual(socket.status, 'pending');
 		});
 
 		test('disconnect closes WebSocket with default close code', () => {
@@ -140,9 +139,9 @@ describe('Socket', () => {
 			// Disconnect
 			socket.disconnect();
 
-			expect(mock_socket.close_code).toBe(DEFAULT_CLOSE_CODE);
-			expect(socket.ws).toBeNull();
-			expect(socket.open).toBe(false);
+			assert.strictEqual(mock_socket.close_code, DEFAULT_CLOSE_CODE);
+			assert.isNull(socket.ws);
+			assert.ok(!(socket.open));
 		});
 
 		test('connection success updates state correctly', () => {
@@ -150,9 +149,9 @@ describe('Socket', () => {
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
 
-			expect(socket.open).toBe(true);
-			expect(socket.status).toBe('success');
-			expect(socket.connected).toBe(true);
+			assert.ok(socket.open);
+			assert.strictEqual(socket.status, 'success');
+			assert.ok(socket.connected);
 		});
 
 		test('update_url reconnects with new URL if already connected', () => {
@@ -160,14 +159,14 @@ describe('Socket', () => {
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
 
-			expect(socket.url).toBe(TEST_URLS.BASE);
+			assert.strictEqual(socket.url, TEST_URLS.BASE);
 
 			// Update URL
 			socket.update_url(TEST_URLS.ALTERNATE);
 
-			expect(socket.url).toBe(TEST_URLS.ALTERNATE);
-			expect(globalThis.WebSocket).toHaveBeenCalledTimes(2);
-			expect(globalThis.WebSocket).toHaveBeenLastCalledWith(TEST_URLS.ALTERNATE);
+			assert.strictEqual(socket.url, TEST_URLS.ALTERNATE);
+			assert.strictEqual((globalThis.WebSocket as any).mock.calls.length, 2);
+			assert.deepEqual((globalThis.WebSocket as any).mock.calls[1], [TEST_URLS.ALTERNATE]);
 		});
 	});
 
@@ -177,8 +176,8 @@ describe('Socket', () => {
 
 			// Not connected yet
 			const sent = socket.send(TEST_MESSAGE.BASIC);
-			expect(sent).toBe(false);
-			expect(socket.queued_message_count).toBe(1);
+			assert.ok(!(sent));
+			assert.strictEqual(socket.queued_message_count, 1);
 		});
 
 		test('send transmits message when socket is connected', () => {
@@ -188,11 +187,11 @@ describe('Socket', () => {
 
 			const sent = socket.send(TEST_MESSAGE.BASIC);
 
-			expect(sent).toBe(true);
-			expect(mock_socket.sent_messages.length).toBe(1);
+			assert.ok(sent);
+			assert.strictEqual(mock_socket.sent_messages.length, 1);
 			const first_message = mock_socket.sent_messages[0];
-			expect(first_message).toBeDefined();
-			expect(JSON.parse(first_message!)).toEqual(TEST_MESSAGE.BASIC);
+			assert.isDefined(first_message);
+			assert.deepEqual(JSON.parse(first_message!), TEST_MESSAGE.BASIC);
 		});
 
 		test('message queueing sends queued messages when reconnected', () => {
@@ -202,15 +201,15 @@ describe('Socket', () => {
 			socket.send({method: 'message_a'});
 			socket.send({method: 'message_b'});
 
-			expect(socket.queued_message_count).toBe(2);
+			assert.strictEqual(socket.queued_message_count, 2);
 
 			// Connect
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
 
 			// Messages should be sent
-			expect(mock_socket.sent_messages.length).toBe(2);
-			expect(socket.queued_message_count).toBe(0);
+			assert.strictEqual(mock_socket.sent_messages.length, 2);
+			assert.strictEqual(socket.queued_message_count, 0);
 		});
 	});
 
@@ -220,7 +219,7 @@ describe('Socket', () => {
 
 			// Queue a message
 			socket.send(TEST_MESSAGE.BASIC);
-			expect(socket.queued_message_count).toBe(1);
+			assert.strictEqual(socket.queued_message_count, 1);
 
 			// Mock send failure
 			const error_message = 'Send operation failed';
@@ -233,13 +232,13 @@ describe('Socket', () => {
 			mock_socket.connect();
 
 			// Message should move to failed
-			expect(socket.queued_message_count).toBe(0);
-			expect(socket.failed_message_count).toBe(1);
+			assert.strictEqual(socket.queued_message_count, 0);
+			assert.strictEqual(socket.failed_message_count, 1);
 
 			// Check error reason
 			const failed_message = Array.from(socket.failed_messages.values())[0];
-			expect(failed_message).toBeDefined();
-			expect(failed_message!.reason).toBe(error_message);
+			assert.isDefined(failed_message);
+			assert.strictEqual(failed_message!.reason, error_message);
 		});
 
 		test('clear_failed_messages removes all failed messages', () => {
@@ -259,12 +258,12 @@ describe('Socket', () => {
 			socket.retry_queued_messages();
 
 			// Verify message moved to failed
-			expect(socket.queued_message_count).toBe(0);
-			expect(socket.failed_message_count).toBe(1);
+			assert.strictEqual(socket.queued_message_count, 0);
+			assert.strictEqual(socket.failed_message_count, 1);
 
 			// Clear failed messages
 			socket.clear_failed_messages();
-			expect(socket.failed_message_count).toBe(0);
+			assert.strictEqual(socket.failed_message_count, 0);
 		});
 	});
 
@@ -278,12 +277,12 @@ describe('Socket', () => {
 			// Simulate unexpected close
 			mock_socket.dispatchEvent('close');
 
-			expect(socket.open).toBe(false);
-			expect(socket.status).toBe('failure');
+			assert.ok(!(socket.open));
+			assert.strictEqual(socket.status, 'failure');
 
 			// Should reconnect after delay
 			vi.advanceTimersByTime(1000);
-			expect(globalThis.WebSocket).toHaveBeenCalledTimes(2);
+			assert.strictEqual((globalThis.WebSocket as any).mock.calls.length, 2);
 		});
 
 		test('reconnect delay uses exponential backoff', () => {
@@ -295,17 +294,17 @@ describe('Socket', () => {
 			// Initial connect
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
-			expect(socket.status).toBe('success');
+			assert.strictEqual(socket.status, 'success');
 
 			// First unexpected close
 			mock_socket.dispatchEvent('close', {code: 1006});
-			expect(socket.status).toBe('failure');
-			expect(socket.reconnect_count).toBe(1);
-			expect(socket.current_reconnect_delay).toBe(1000); // 1000 * 1.5^0
+			assert.strictEqual(socket.status, 'failure');
+			assert.strictEqual(socket.reconnect_count, 1);
+			assert.strictEqual(socket.current_reconnect_delay, 1000); // 1000 * 1.5^0
 
 			// Trigger first reconnect
 			vi.advanceTimersByTime(1000);
-			expect(globalThis.WebSocket).toHaveBeenCalledTimes(2);
+			assert.strictEqual((globalThis.WebSocket as any).mock.calls.length, 2);
 
 			// Test subsequent reconnects with increasing delays
 			// Clear timers between tests to avoid interference
@@ -317,8 +316,8 @@ describe('Socket', () => {
 			socket.status = 'failure';
 			socket.reconnect_count = 1;
 			socket.maybe_reconnect();
-			expect(socket.reconnect_count).toBe(2);
-			expect(socket.current_reconnect_delay).toBe(1500); // 1000 * 1.5^1
+			assert.strictEqual(socket.reconnect_count, 2);
+			assert.strictEqual(socket.current_reconnect_delay, 1500); // 1000 * 1.5^1
 
 			// Clear timeout to avoid interference
 			if (socket.reconnect_timeout !== null) {
@@ -329,8 +328,8 @@ describe('Socket', () => {
 			socket.status = 'failure';
 			socket.reconnect_count = 2;
 			socket.maybe_reconnect();
-			expect(socket.reconnect_count).toBe(3);
-			expect(socket.current_reconnect_delay).toBe(2250); // 1000 * 1.5^2
+			assert.strictEqual(socket.reconnect_count, 3);
+			assert.strictEqual(socket.current_reconnect_delay, 2250); // 1000 * 1.5^2
 
 			// Test max delay cap
 			if (socket.reconnect_timeout !== null) {
@@ -339,8 +338,8 @@ describe('Socket', () => {
 			socket.status = 'failure';
 			socket.reconnect_count = 14;
 			socket.maybe_reconnect();
-			expect(socket.reconnect_count).toBe(15);
-			expect(socket.current_reconnect_delay).toBe(30000); // Capped at max value
+			assert.strictEqual(socket.reconnect_count, 15);
+			assert.strictEqual(socket.current_reconnect_delay, 30000); // Capped at max value
 		});
 	});
 
@@ -355,7 +354,7 @@ describe('Socket', () => {
 			vi.advanceTimersByTime(1000);
 
 			// Check ping was sent
-			expect(app.api.ping).toHaveBeenCalled();
+			assert.ok((app.api.ping as any).mock.calls.length > 0);
 		});
 	});
 });

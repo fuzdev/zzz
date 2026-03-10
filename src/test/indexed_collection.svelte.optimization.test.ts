@@ -1,8 +1,6 @@
-// @slop Claude Sonnet 3.7
-
 // @vitest-environment jsdom
 
-import {test, expect, vi, describe} from 'vitest';
+import {test, assert, describe, vi} from 'vitest';
 import {z} from 'zod';
 
 import {IndexedCollection} from '$lib/indexed_collection.svelte.js';
@@ -58,8 +56,8 @@ describe('IndexedCollection - Optimization Tests', () => {
 		});
 
 		// Verify compute was called exactly once during initialization
-		expect(compute_spy).toHaveBeenCalledTimes(1);
-		expect(collection.size).toBe(2);
+		assert.strictEqual(compute_spy.mock.calls.length, 1);
+		assert.strictEqual(collection.size, 2);
 	});
 
 	test('incremental updates avoid recomputing entire index', () => {
@@ -97,23 +95,23 @@ describe('IndexedCollection - Optimization Tests', () => {
 		});
 
 		// Verify compute was called exactly once during initialization
-		expect(compute_spy).toHaveBeenCalledTimes(1);
+		assert.strictEqual(compute_spy.mock.calls.length, 1);
 
 		// Add more items and check that compute isn't called again
 		collection.add(create_item('string_a3', 'string_b3', [], 20));
 		collection.add(create_item('string_a4', 'string_b4', [], 8));
 
 		// Compute should still have been called only once
-		expect(compute_spy).toHaveBeenCalledTimes(1);
+		assert.strictEqual(compute_spy.mock.calls.length, 1);
 
 		// onadd should have been called twice - once for each new item
-		expect(onadd_spy).toHaveBeenCalledTimes(2);
+		assert.strictEqual(onadd_spy.mock.calls.length, 2);
 
 		// Check that the index was correctly updated
 		const high_number = collection.derived_index('high_number');
-		expect(high_number.length).toBe(2);
-		expect(high_number.some((item) => item.string_a === 'string_a1')).toBe(true);
-		expect(high_number.some((item) => item.string_a === 'string_a3')).toBe(true);
+		assert.strictEqual(high_number.length, 2);
+		assert.ok(high_number.some((item) => item.string_a === 'string_a1'));
+		assert.ok(high_number.some((item) => item.string_a === 'string_a3'));
 	});
 
 	test('batch operations are more efficient', () => {
@@ -159,7 +157,7 @@ describe('IndexedCollection - Optimization Tests', () => {
 		const batch_time = end_time - start_time;
 
 		// Verify onadd was called for each item
-		expect(onadd_spy).toHaveBeenCalledTimes(100);
+		assert.strictEqual(onadd_spy.mock.calls.length, 100);
 
 		// Reset the spy for individual adds
 		onadd_spy.mockClear();
@@ -179,7 +177,7 @@ describe('IndexedCollection - Optimization Tests', () => {
 		const individual_time = individual_end - individual_start;
 
 		// Verify onadd was called for each item
-		expect(onadd_spy).toHaveBeenCalledTimes(100);
+		assert.strictEqual(onadd_spy.mock.calls.length, 100);
 
 		// This test is somewhat approximative but helps validate the efficiency
 		// We're not making a strict assertion on performance as it can vary between environments
@@ -220,10 +218,10 @@ describe('IndexedCollection - Optimization Tests', () => {
 		const number_fn = collection.get_index<(threshold: string) => Array<TestItem>>('by_min_number');
 
 		// These should return different filtered subsets without storing separate copies
-		expect(number_fn('10').length).not.toBe(number_fn('50').length);
-		expect(number_fn('0').length).toBe(20); // All items
-		expect(number_fn('50').length).toBe(10); // Half the items
-		expect(number_fn('90').length).toBe(2); // Just the highest values
+		assert.ok(number_fn('10').length !== number_fn('50').length);
+		assert.strictEqual(number_fn('0').length, 20); // All items
+		assert.strictEqual(number_fn('50').length, 10); // Half the items
+		assert.strictEqual(number_fn('90').length, 2); // Just the highest values
 	});
 
 	test('memory usage with large datasets', () => {
@@ -252,11 +250,11 @@ describe('IndexedCollection - Optimization Tests', () => {
 		// Verify the index contains the expected number of categories
 		const b_index = collection.get_index<Map<string, Array<TestItem>>>('by_string_b');
 		// console.log(`b_index`, $state.snapshot(b_index));
-		expect(b_index.size).toBe(10); // 10 unique categories
+		assert.strictEqual(b_index.size, 10); // 10 unique categories
 
 		// Verify each category has the right number of items
 		for (let i = 0; i < 10; i++) {
-			expect(collection.where('by_string_b', `string_b${i}`).length).toBe(100); // 1000 items / 10 categories = 100 per category
+			assert.strictEqual(collection.where('by_string_b', `string_b${i}`).length, 100); // 1000 items / 10 categories = 100 per category
 		}
 	});
 });

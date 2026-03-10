@@ -1,6 +1,4 @@
-// @slop Claude Sonnet 3.7
-
-import {test, expect, vi, beforeEach, afterEach, describe} from 'vitest';
+import {test, vi, beforeEach, afterEach, describe, assert} from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as fs_sync from 'node:fs';
 
@@ -66,7 +64,7 @@ afterEach(() => {
 describe('ScopedFs - construction and initialization', () => {
 	test('constructor - should accept an array of allowed paths', () => {
 		const scoped_fs = create_test_instance();
-		expect(scoped_fs).toBeInstanceOf(ScopedFs);
+		assert.instanceOf(scoped_fs, ScopedFs);
 	});
 
 	test('constructor - should make a defensive copy of allowed paths', () => {
@@ -77,16 +75,16 @@ describe('ScopedFs - construction and initialization', () => {
 		original_paths.push('/new/path');
 
 		// The instance should still only allow the original paths
-		expect(scoped_fs.is_path_allowed('/new/path')).toBe(false);
+		assert.ok(!scoped_fs.is_path_allowed('/new/path'));
 	});
 
 	test('constructor - should throw for invalid paths', () => {
 		// Non-absolute path
-		expect(() => new ScopedFs(['relative/path'])).toThrow();
+		assert.throws(() => new ScopedFs(['relative/path']));
 
 		// Empty path array should work but won't allow any paths
 		const empty_scoped_fs = new ScopedFs([]);
-		expect(empty_scoped_fs.is_path_allowed('/any/path')).toBe(false);
+		assert.ok(!empty_scoped_fs.is_path_allowed('/any/path'));
 	});
 });
 
@@ -102,7 +100,7 @@ describe('ScopedFs - path validation', () => {
 		];
 
 		for (const path of valid_paths) {
-			expect(scoped_fs.is_path_allowed(path)).toBe(true);
+			assert.ok(scoped_fs.is_path_allowed(path));
 		}
 	});
 
@@ -117,7 +115,7 @@ describe('ScopedFs - path validation', () => {
 		];
 
 		for (const path of invalid_paths) {
-			expect(scoped_fs.is_path_allowed(path)).toBe(false);
+			assert.ok(!scoped_fs.is_path_allowed(path));
 		}
 	});
 
@@ -127,7 +125,7 @@ describe('ScopedFs - path validation', () => {
 		const relative_paths = ['relative/path', './relative/path', '../relative/path'];
 
 		for (const path of relative_paths) {
-			expect(scoped_fs.is_path_allowed(path)).toBe(false);
+			assert.ok(!scoped_fs.is_path_allowed(path));
 		}
 	});
 
@@ -137,7 +135,7 @@ describe('ScopedFs - path validation', () => {
 		const traversal_paths = [FILE_PATHS.TRAVERSAL, '/allowed/path/../not-allowed'];
 
 		for (const path of traversal_paths) {
-			expect(scoped_fs.is_path_allowed(path)).toBe(false);
+			assert.ok(!scoped_fs.is_path_allowed(path));
 		}
 	});
 
@@ -145,28 +143,28 @@ describe('ScopedFs - path validation', () => {
 		const scoped_fs = create_test_instance();
 
 		// Empty path
-		expect(scoped_fs.is_path_allowed('')).toBe(false);
+		assert.ok(!scoped_fs.is_path_allowed(''));
 
 		// Root directory (only allowed if explicitly included)
-		expect(scoped_fs.is_path_allowed('/')).toBe(false);
+		assert.ok(!scoped_fs.is_path_allowed('/'));
 
 		// With root directory explicitly allowed
 		const root_scoped_fs = new ScopedFs(['/']);
-		expect(root_scoped_fs.is_path_allowed('/')).toBe(true);
-		expect(root_scoped_fs.is_path_allowed('/any/path')).toBe(true);
+		assert.ok(root_scoped_fs.is_path_allowed('/'));
+		assert.ok(root_scoped_fs.is_path_allowed('/any/path'));
 	});
 
 	test('is_path_safe - should verify path security including symlink checks', async () => {
 		const scoped_fs = create_test_instance();
 
 		// Regular allowed path without symlinks
-		expect(await scoped_fs.is_path_safe(FILE_PATHS.ALLOWED)).toBe(true);
+		assert.ok(await scoped_fs.is_path_safe(FILE_PATHS.ALLOWED));
 
 		// Path outside allowed directories
-		expect(await scoped_fs.is_path_safe(FILE_PATHS.OUTSIDE)).toBe(false);
+		assert.ok(!(await scoped_fs.is_path_safe(FILE_PATHS.OUTSIDE)));
 
 		// Path with traversal
-		expect(await scoped_fs.is_path_safe(FILE_PATHS.TRAVERSAL)).toBe(false);
+		assert.ok(!(await scoped_fs.is_path_safe(FILE_PATHS.TRAVERSAL)));
 
 		// Mock a symlink to test rejection
 		vi.mocked(fs.lstat).mockImplementationOnce(() =>
@@ -178,7 +176,7 @@ describe('ScopedFs - path validation', () => {
 		);
 
 		// Symlinked file should fail the safety check
-		expect(await scoped_fs.is_path_safe('/allowed/path/symlink')).toBe(false);
+		assert.ok(!(await scoped_fs.is_path_safe('/allowed/path/symlink')));
 	});
 });
 
@@ -190,8 +188,9 @@ describe('ScopedFs - file operations', () => {
 		vi.mocked(fs.readFile).mockResolvedValueOnce(test_content as any);
 
 		const content = await scoped_fs.read_file(FILE_PATHS.ALLOWED);
-		expect(content).toBe(test_content);
-		expect(fs.readFile).toHaveBeenCalledWith(FILE_PATHS.ALLOWED, 'utf8');
+		assert.strictEqual(content, test_content);
+		assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 1);
+		assert.deepEqual(vi.mocked(fs.readFile).mock.calls[0], [FILE_PATHS.ALLOWED, 'utf8']);
 	});
 
 	test('read_file - should return Buffer when options specify buffer encoding', async () => {
@@ -201,8 +200,8 @@ describe('ScopedFs - file operations', () => {
 		vi.mocked(fs.readFile).mockResolvedValueOnce(test_buffer);
 
 		const content = await scoped_fs.read_file(FILE_PATHS.ALLOWED, null);
-		expect(content).toBe(test_buffer);
-		expect(fs.readFile).toHaveBeenCalledWith(FILE_PATHS.ALLOWED, null);
+		assert.strictEqual(content, test_buffer);
+		assert.deepEqual(vi.mocked(fs.readFile).mock.calls[0], [FILE_PATHS.ALLOWED, null]);
 	});
 
 	test('read_file - should pass through various encoding options', async () => {
@@ -220,15 +219,20 @@ describe('ScopedFs - file operations', () => {
 			vi.mocked(fs.readFile).mockResolvedValueOnce('content' as any);
 
 			await scoped_fs.read_file(FILE_PATHS.ALLOWED, options as any);
-			expect(fs.readFile).toHaveBeenCalledWith(FILE_PATHS.ALLOWED, expected);
+			assert.deepEqual(vi.mocked(fs.readFile).mock.calls[0], [FILE_PATHS.ALLOWED, expected] as any);
 		}
 	});
 
 	test('read_file - should throw for paths outside allowed directories', async () => {
 		const scoped_fs = create_test_instance();
 
-		await expect(scoped_fs.read_file(FILE_PATHS.OUTSIDE)).rejects.toThrow('Path is not allowed');
-		expect(fs.readFile).not.toHaveBeenCalled();
+		try {
+			await scoped_fs.read_file(FILE_PATHS.OUTSIDE);
+			assert.fail('Expected error to be thrown');
+		} catch (e: any) {
+			assert.include(e.message, 'Path is not allowed');
+		}
+		assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 0);
 	});
 
 	test('write_file - should write to files in allowed paths', async () => {
@@ -238,16 +242,19 @@ describe('ScopedFs - file operations', () => {
 		vi.mocked(fs.writeFile).mockResolvedValueOnce();
 
 		await scoped_fs.write_file(FILE_PATHS.ALLOWED, test_content);
-		expect(fs.writeFile).toHaveBeenCalledWith(FILE_PATHS.ALLOWED, test_content, 'utf8');
+		assert.deepEqual(vi.mocked(fs.writeFile).mock.calls[0], [FILE_PATHS.ALLOWED, test_content, 'utf8']);
 	});
 
 	test('write_file - should throw for paths outside allowed directories', async () => {
 		const scoped_fs = create_test_instance();
 
-		await expect(scoped_fs.write_file(FILE_PATHS.OUTSIDE, 'content')).rejects.toThrow(
-			'Path is not allowed',
-		);
-		expect(fs.writeFile).not.toHaveBeenCalled();
+		try {
+			await scoped_fs.write_file(FILE_PATHS.OUTSIDE, 'content');
+			assert.fail('Expected error to be thrown');
+		} catch (e: any) {
+			assert.include(e.message, 'Path is not allowed');
+		}
+		assert.strictEqual(vi.mocked(fs.writeFile).mock.calls.length, 0);
 	});
 });
 
@@ -258,14 +265,19 @@ describe('ScopedFs - directory operations', () => {
 		vi.mocked(fs.mkdir).mockResolvedValueOnce(undefined);
 
 		await scoped_fs.mkdir(DIR_PATHS.NEW_DIR, {recursive: true});
-		expect(fs.mkdir).toHaveBeenCalledWith(DIR_PATHS.NEW_DIR, {recursive: true});
+		assert.deepEqual(vi.mocked(fs.mkdir).mock.calls[0], [DIR_PATHS.NEW_DIR, {recursive: true}]);
 	});
 
 	test('mkdir - should throw for paths outside allowed directories', async () => {
 		const scoped_fs = create_test_instance();
 
-		await expect(scoped_fs.mkdir(DIR_PATHS.OUTSIDE)).rejects.toThrow('Path is not allowed');
-		expect(fs.mkdir).not.toHaveBeenCalled();
+		try {
+			await scoped_fs.mkdir(DIR_PATHS.OUTSIDE);
+			assert.fail('Expected error to be thrown');
+		} catch (e: any) {
+			assert.include(e.message, 'Path is not allowed');
+		}
+		assert.strictEqual(vi.mocked(fs.mkdir).mock.calls.length, 0);
 	});
 
 	test('readdir - should list directory contents in allowed paths', async () => {
@@ -275,15 +287,20 @@ describe('ScopedFs - directory operations', () => {
 		vi.mocked(fs.readdir).mockResolvedValueOnce(dir_contents as any);
 
 		const contents = await scoped_fs.readdir(DIR_PATHS.ALLOWED, null);
-		expect(contents).toEqual(dir_contents);
-		expect(fs.readdir).toHaveBeenCalledWith(DIR_PATHS.ALLOWED, null);
+		assert.deepEqual(contents, dir_contents);
+		assert.deepEqual(vi.mocked(fs.readdir).mock.calls[0], [DIR_PATHS.ALLOWED, null] as any);
 	});
 
 	test('readdir - should throw for paths outside allowed directories', async () => {
 		const scoped_fs = create_test_instance();
 
-		await expect(scoped_fs.readdir(DIR_PATHS.OUTSIDE)).rejects.toThrow('Path is not allowed');
-		expect(fs.readdir).not.toHaveBeenCalled();
+		try {
+			await scoped_fs.readdir(DIR_PATHS.OUTSIDE);
+			assert.fail('Expected error to be thrown');
+		} catch (e: any) {
+			assert.include(e.message, 'Path is not allowed');
+		}
+		assert.strictEqual(vi.mocked(fs.readdir).mock.calls.length, 0);
 	});
 
 	test('rm - should remove files or directories in allowed paths', async () => {
@@ -292,14 +309,19 @@ describe('ScopedFs - directory operations', () => {
 		vi.mocked(fs.rm).mockResolvedValueOnce();
 
 		await scoped_fs.rm(DIR_PATHS.ALLOWED, {recursive: true});
-		expect(fs.rm).toHaveBeenCalledWith(DIR_PATHS.ALLOWED, {recursive: true});
+		assert.deepEqual(vi.mocked(fs.rm).mock.calls[0], [DIR_PATHS.ALLOWED, {recursive: true}]);
 	});
 
 	test('rm - should throw for paths outside allowed directories', async () => {
 		const scoped_fs = create_test_instance();
 
-		await expect(scoped_fs.rm(DIR_PATHS.OUTSIDE)).rejects.toThrow('Path is not allowed');
-		expect(fs.rm).not.toHaveBeenCalled();
+		try {
+			await scoped_fs.rm(DIR_PATHS.OUTSIDE);
+			assert.fail('Expected error to be thrown');
+		} catch (e: any) {
+			assert.include(e.message, 'Path is not allowed');
+		}
+		assert.strictEqual(vi.mocked(fs.rm).mock.calls.length, 0);
 	});
 });
 
@@ -314,15 +336,20 @@ describe('ScopedFs - stat operations', () => {
 		vi.mocked(fs.stat).mockResolvedValueOnce(mock_stats);
 
 		const stats = await scoped_fs.stat(FILE_PATHS.ALLOWED);
-		expect(stats).toBe(mock_stats);
-		expect(fs.stat).toHaveBeenCalledWith(FILE_PATHS.ALLOWED, undefined);
+		assert.strictEqual(stats, mock_stats);
+		assert.deepEqual(vi.mocked(fs.stat).mock.calls[0], [FILE_PATHS.ALLOWED, undefined]);
 	});
 
 	test('stat - should throw for paths outside allowed directories', async () => {
 		const scoped_fs = create_test_instance();
 
-		await expect(scoped_fs.stat(FILE_PATHS.OUTSIDE)).rejects.toThrow('Path is not allowed');
-		expect(fs.stat).not.toHaveBeenCalled();
+		try {
+			await scoped_fs.stat(FILE_PATHS.OUTSIDE);
+			assert.fail('Expected error to be thrown');
+		} catch (e: any) {
+			assert.include(e.message, 'Path is not allowed');
+		}
+		assert.strictEqual(vi.mocked(fs.stat).mock.calls.length, 0);
 	});
 
 	test('stat - should handle bigint option correctly', async () => {
@@ -339,7 +366,7 @@ describe('ScopedFs - stat operations', () => {
 			vi.mocked(fs.stat).mockResolvedValueOnce({} as any);
 
 			await scoped_fs.stat(FILE_PATHS.ALLOWED, options as any);
-			expect(fs.stat).toHaveBeenCalledWith(FILE_PATHS.ALLOWED, expected_options);
+			assert.deepEqual(vi.mocked(fs.stat).mock.calls[0], [FILE_PATHS.ALLOWED, expected_options]);
 		}
 	});
 
@@ -356,8 +383,8 @@ describe('ScopedFs - stat operations', () => {
 		vi.mocked(fs.stat).mockResolvedValueOnce(bigint_stats);
 
 		const result = await scoped_fs.stat(FILE_PATHS.ALLOWED, {bigint: true});
-		expect(result).toBe(bigint_stats);
-		expect(typeof (result as unknown as fs_sync.BigIntStats).size).toBe('bigint');
+		assert.strictEqual(result, bigint_stats as any);
+		assert.strictEqual(typeof (result as unknown as fs_sync.BigIntStats).size, 'bigint');
 	});
 });
 
@@ -376,7 +403,7 @@ describe('ScopedFs - existence checking', () => {
 		for (const {mock_fn, expected} of existence_tests) {
 			mock_fn();
 			const exists = await scoped_fs.exists(FILE_PATHS.ALLOWED);
-			expect(exists).toBe(expected);
+			assert.strictEqual(exists, expected);
 		}
 	});
 
@@ -384,8 +411,8 @@ describe('ScopedFs - existence checking', () => {
 		const scoped_fs = create_test_instance();
 
 		const exists = await scoped_fs.exists(FILE_PATHS.OUTSIDE);
-		expect(exists).toBe(false);
-		expect(fs.access).not.toHaveBeenCalled();
+		assert.ok(!(exists));
+		assert.strictEqual(vi.mocked(fs.access).mock.calls.length, 0);
 	});
 });
 
@@ -398,7 +425,7 @@ describe('ScopedFs - copy operations', () => {
 		vi.mocked(fs.copyFile).mockResolvedValueOnce();
 
 		await scoped_fs.copy_file(source, destination);
-		expect(fs.copyFile).toHaveBeenCalledWith(source, destination, undefined);
+		assert.deepEqual(vi.mocked(fs.copyFile).mock.calls[0], [source, destination, undefined]);
 	});
 
 	test('copy_file - should pass through mode parameter', async () => {
@@ -411,14 +438,14 @@ describe('ScopedFs - copy operations', () => {
 		vi.mocked(fs.copyFile).mockResolvedValueOnce();
 
 		await scoped_fs.copy_file(source, destination, COPYFILE_EXCL);
-		expect(fs.copyFile).toHaveBeenCalledWith(source, destination, COPYFILE_EXCL);
+		assert.deepEqual(vi.mocked(fs.copyFile).mock.calls[0], [source, destination, COPYFILE_EXCL]);
 
 		// Test with COPYFILE_FICLONE mode
 		const COPYFILE_FICLONE = 2;
 		vi.mocked(fs.copyFile).mockResolvedValueOnce();
 
 		await scoped_fs.copy_file(source, destination, COPYFILE_FICLONE);
-		expect(fs.copyFile).toHaveBeenCalledWith(source, destination, COPYFILE_FICLONE);
+		assert.deepEqual(vi.mocked(fs.copyFile).mock.calls[1], [source, destination, COPYFILE_FICLONE]);
 	});
 
 	test('copy_file - should throw if either source or destination is outside allowed paths', async () => {
@@ -429,10 +456,15 @@ describe('ScopedFs - copy operations', () => {
 		];
 
 		for (const {source, destination} of invalid_copy_operations) {
-			await expect(scoped_fs.copy_file(source, destination)).rejects.toThrow('Path is not allowed');
+			try {
+				await scoped_fs.copy_file(source, destination);
+				assert.fail('Expected error to be thrown');
+			} catch (e: any) {
+				assert.include(e.message, 'Path is not allowed');
+			}
 		}
 
-		expect(fs.copyFile).not.toHaveBeenCalled();
+		assert.strictEqual(vi.mocked(fs.copyFile).mock.calls.length, 0);
 	});
 });
 
@@ -449,11 +481,14 @@ describe('ScopedFs - symlink detection', () => {
 			} as any),
 		);
 
-		await expect(scoped_fs.read_file('/allowed/path/symlink.txt')).rejects.toThrow(
-			SymlinkNotAllowedError,
-		);
+		try {
+			await scoped_fs.read_file('/allowed/path/symlink.txt');
+			assert.fail('Expected error to be thrown');
+		} catch (e) {
+			assert.instanceOf(e, SymlinkNotAllowedError);
+		}
 
-		expect(fs.readFile).not.toHaveBeenCalled();
+		assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 0);
 	});
 
 	test('should reject operations when parent directory is a symlink', async () => {
@@ -477,10 +512,13 @@ describe('ScopedFs - symlink detection', () => {
 			} as any),
 		);
 
-		await expect(scoped_fs.read_file('/allowed/path/symlink-dir/file.txt')).rejects.toThrow(
-			SymlinkNotAllowedError,
-		);
+		try {
+			await scoped_fs.read_file('/allowed/path/symlink-dir/file.txt');
+			assert.fail('Expected error to be thrown');
+		} catch (e) {
+			assert.instanceOf(e, SymlinkNotAllowedError);
+		}
 
-		expect(fs.readFile).not.toHaveBeenCalled();
+		assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 0);
 	});
 });

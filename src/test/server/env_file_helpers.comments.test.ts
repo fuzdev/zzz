@@ -1,6 +1,4 @@
-// @slop Claude Sonnet 4.5
-
-import {test, expect, describe} from 'vitest';
+import {test, describe, assert} from 'vitest';
 
 import {update_env_variable} from '$lib/server/env_file_helpers.js';
 
@@ -38,7 +36,7 @@ describe('update_env_variable - inline comment preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value" # this is important');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value" # this is important');
 	});
 
 	test('preserves inline comment after unquoted value', async () => {
@@ -52,7 +50,7 @@ describe('update_env_variable - inline comment preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY=new_value # comment here');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY=new_value # comment here');
 	});
 
 	test('preserves inline comment with no space before hash', async () => {
@@ -66,7 +64,7 @@ describe('update_env_variable - inline comment preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value"# no space comment');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value"# no space comment');
 	});
 
 	test('preserves inline comment with multiple spaces before hash', async () => {
@@ -80,7 +78,7 @@ describe('update_env_variable - inline comment preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value"   # spaced comment');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value"   # spaced comment');
 	});
 
 	test('does not treat hash inside quoted value as comment', async () => {
@@ -94,7 +92,7 @@ describe('update_env_variable - inline comment preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value" # real comment');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value" # real comment');
 	});
 
 	test('treats hash in unquoted value as start of comment', async () => {
@@ -109,7 +107,7 @@ describe('update_env_variable - inline comment preservation', () => {
 		});
 
 		// The #notacomment part should be preserved as comment
-		expect(fs.get_file('/test/.env')).toBe('API_KEY=new_value#notacomment');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY=new_value#notacomment');
 	});
 
 	test('handles empty inline comment', async () => {
@@ -123,7 +121,7 @@ describe('update_env_variable - inline comment preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value" #');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value" #');
 	});
 
 	test('preserves inline comment with special characters', async () => {
@@ -137,7 +135,7 @@ describe('update_env_variable - inline comment preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new" # TODO: update this! @important');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new" # TODO: update this! @important');
 	});
 
 	test('handles single quotes with inline comment', async () => {
@@ -152,7 +150,7 @@ describe('update_env_variable - inline comment preservation', () => {
 		});
 
 		// Should preserve quotes and comment
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value" # comment');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value" # comment');
 	});
 
 	test('does not add inline comment when original has none', async () => {
@@ -166,7 +164,7 @@ describe('update_env_variable - inline comment preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value"');
 	});
 
 	test('preserves multiple hashes in comment', async () => {
@@ -180,7 +178,7 @@ describe('update_env_variable - inline comment preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new" # comment ## with ### hashes');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new" # comment ## with ### hashes');
 	});
 
 	test('preserves comment after escaped backslash at end of value', async () => {
@@ -195,7 +193,7 @@ describe('update_env_variable - inline comment preservation', () => {
 		});
 
 		// The \\\\ is two backslashes (one escaped), then closing quote, then comment
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new" # important comment');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new" # important comment');
 	});
 
 	test('preserves comment after single escaped backslash', async () => {
@@ -209,7 +207,7 @@ describe('update_env_variable - inline comment preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('PATH="D:\\\\new" # Windows path');
+		assert.strictEqual(fs.get_file('/test/.env'), 'PATH="D:\\\\new" # Windows path');
 	});
 
 	test('handles escaped quote followed by more content (not a closing quote)', async () => {
@@ -224,6 +222,6 @@ describe('update_env_variable - inline comment preservation', () => {
 		});
 
 		// The \" are escaped quotes, final " is closing quote
-		expect(fs.get_file('/test/.env')).toBe('MSG="new message" # greeting');
+		assert.strictEqual(fs.get_file('/test/.env'), 'MSG="new message" # greeting');
 	});
 });

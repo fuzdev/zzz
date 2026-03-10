@@ -1,6 +1,4 @@
-// @slop Claude Sonnet 4.5
-
-import {test, expect, describe} from 'vitest';
+import {test, describe, assert} from 'vitest';
 
 import {update_env_variable} from '$lib/server/env_file_helpers.js';
 
@@ -39,7 +37,7 @@ describe('update_env_variable - duplicate keys (LAST wins behavior)', () => {
 		});
 
 		// First occurrence stays unchanged, second (last) is updated
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="first_value"\nAPI_KEY="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="first_value"\nAPI_KEY="new_value"');
 	});
 
 	test('updates LAST occurrence when key appears three times', async () => {
@@ -54,13 +52,13 @@ describe('update_env_variable - duplicate keys (LAST wins behavior)', () => {
 		});
 
 		const result = fs.get_file('/test/.env');
-		expect(result).toBe('KEY="first"\nKEY="second"\nKEY="updated"');
+		assert.strictEqual(result, 'KEY="first"\nKEY="second"\nKEY="updated"');
 
 		// Verify first two occurrences are unchanged
 		const lines = result?.split('\n') || [];
-		expect(lines[0]).toBe('KEY="first"');
-		expect(lines[1]).toBe('KEY="second"');
-		expect(lines[2]).toBe('KEY="updated"');
+		assert.strictEqual(lines[0], 'KEY="first"');
+		assert.strictEqual(lines[1], 'KEY="second"');
+		assert.strictEqual(lines[2], 'KEY="updated"');
 	});
 
 	test('matches dotenv behavior: last wins', async () => {
@@ -76,7 +74,7 @@ describe('update_env_variable - duplicate keys (LAST wins behavior)', () => {
 
 		// dotenv would use "third_value", so we update the third occurrence
 		const result = fs.get_file('/test/.env');
-		expect(result).toBe('API_KEY=first_value\nAPI_KEY=second_value\nAPI_KEY=new_value');
+		assert.strictEqual(result, 'API_KEY=first_value\nAPI_KEY=second_value\nAPI_KEY=new_value');
 	});
 
 	test('updates LAST occurrence with inline comments preserved', async () => {
@@ -90,7 +88,7 @@ describe('update_env_variable - duplicate keys (LAST wins behavior)', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('KEY="first" # dev\nKEY="updated" # prod');
+		assert.strictEqual(fs.get_file('/test/.env'), 'KEY="first" # dev\nKEY="updated" # prod');
 	});
 
 	test('updates LAST occurrence when duplicates have different quote styles', async () => {
@@ -105,7 +103,7 @@ describe('update_env_variable - duplicate keys (LAST wins behavior)', () => {
 		});
 
 		// First stays unquoted, second (last) is updated and stays quoted
-		expect(fs.get_file('/test/.env')).toBe('KEY=unquoted_first\nKEY="new"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'KEY=unquoted_first\nKEY="new"');
 	});
 
 	test('updates LAST occurrence when separated by other keys', async () => {
@@ -119,7 +117,7 @@ describe('update_env_variable - duplicate keys (LAST wins behavior)', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="first"\nOTHER_KEY="value"\nAPI_KEY="new"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="first"\nOTHER_KEY="value"\nAPI_KEY="new"');
 	});
 
 	test('updates LAST occurrence when separated by comments', async () => {
@@ -133,7 +131,7 @@ describe('update_env_variable - duplicate keys (LAST wins behavior)', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="first"\n# Comment\nAPI_KEY="new"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="first"\n# Comment\nAPI_KEY="new"');
 	});
 
 	test('updates LAST occurrence when separated by empty lines', async () => {
@@ -147,7 +145,7 @@ describe('update_env_variable - duplicate keys (LAST wins behavior)', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="first"\n\nAPI_KEY="new"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="first"\n\nAPI_KEY="new"');
 	});
 
 	test('handles keys that are substrings of each other', async () => {
@@ -162,7 +160,7 @@ describe('update_env_variable - duplicate keys (LAST wins behavior)', () => {
 		});
 
 		// Should only update KEY, not SECRET_KEY
-		expect(fs.get_file('/test/.env')).toBe('KEY="new_value"\nSECRET_KEY="value2"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'KEY="new_value"\nSECRET_KEY="value2"');
 	});
 
 	test('handles keys that are prefixes of each other', async () => {
@@ -177,7 +175,7 @@ describe('update_env_variable - duplicate keys (LAST wins behavior)', () => {
 		});
 
 		// Should only update API_KEY, not API_KEY_SECRET
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value"\nAPI_KEY_SECRET="value2"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value"\nAPI_KEY_SECRET="value2"');
 	});
 
 	test('does not match keys in comments', async () => {
@@ -192,6 +190,6 @@ describe('update_env_variable - duplicate keys (LAST wins behavior)', () => {
 		});
 
 		// Comment line should be unchanged
-		expect(fs.get_file('/test/.env')).toBe('# API_KEY="commented"\nAPI_KEY="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), '# API_KEY="commented"\nAPI_KEY="new_value"');
 	});
 });

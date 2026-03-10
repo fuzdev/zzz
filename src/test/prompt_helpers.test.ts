@@ -1,6 +1,4 @@
-// @slop Claude Opus 4
-
-import {test, expect} from 'vitest';
+import {test, assert} from 'vitest';
 
 import {format_prompt_content} from '$lib/prompt_helpers.js';
 
@@ -40,7 +38,7 @@ const create_part = (partial: Partial<SimplePart> = {}): SimplePart => {
 // Basic tests
 test('format_prompt_content - returns empty string for empty parts array', () => {
 	const result = format_prompt_content([] as any);
-	expect(result).toBe('');
+	assert.strictEqual(result, '');
 });
 
 test('format_prompt_content - filters out disabled parts', () => {
@@ -50,14 +48,14 @@ test('format_prompt_content - filters out disabled parts', () => {
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe('Content 2');
+	assert.strictEqual(result, 'Content 2');
 });
 
 test('format_prompt_content - joins multiple enabled parts with double newlines', () => {
 	const parts = [create_part({content: 'Content 1'}), create_part({content: 'Content 2'})];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe('Content 1\n\nContent 2');
+	assert.strictEqual(result, 'Content 1\n\nContent 2');
 });
 
 // XML tag tests
@@ -71,7 +69,7 @@ test('format_prompt_content - wraps content with XML tags when specified', () =>
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe('<system>\nContent with tag\n</system>');
+	assert.strictEqual(result, '<system>\nContent with tag\n</system>');
 });
 
 test('format_prompt_content - uses xml_tag_name_default when no XML tag name is provided', () => {
@@ -85,7 +83,7 @@ test('format_prompt_content - uses xml_tag_name_default when no XML tag name is 
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe('<Fragment>\nContent with default tag\n</Fragment>');
+	assert.strictEqual(result, '<Fragment>\nContent with default tag\n</Fragment>');
 });
 
 // Test with different part types
@@ -106,7 +104,7 @@ test('format_prompt_content - uses different part types as defaults', () => {
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe('<File>\nFile content\n</File>\n\n<Fragment>\nSequence content\n</Fragment>');
+	assert.strictEqual(result, '<File>\nFile content\n</File>\n\n<Fragment>\nSequence content\n</Fragment>');
 });
 
 test('format_prompt_content - uses different default XML tag names for different part types', () => {
@@ -132,7 +130,7 @@ test('format_prompt_content - uses different default XML tag names for different
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe(
+	assert.strictEqual(result,
 		'<File>\nFile content\n</File>\n\n<Fragment>\nText content\n</Fragment>\n\n<Fragment>\nSequence content\n</Fragment>',
 	);
 });
@@ -149,7 +147,7 @@ test('format_prompt_content - includes attributes with key and value', () => {
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe('<div class="container">\nContent with attributes\n</div>');
+	assert.strictEqual(result, '<div class="container">\nContent with attributes\n</div>');
 });
 
 test('format_prompt_content - handles empty values as boolean attributes', () => {
@@ -163,7 +161,7 @@ test('format_prompt_content - handles empty values as boolean attributes', () =>
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe('<input disabled>\nContent with boolean attribute\n</input>');
+	assert.strictEqual(result, '<input disabled>\nContent with boolean attribute\n</input>');
 });
 
 test('format_prompt_content - handles explicitly empty string values', () => {
@@ -180,7 +178,7 @@ test('format_prompt_content - handles explicitly empty string values', () => {
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe(
+	assert.strictEqual(result,
 		'<div data-test class="container">\nContent with explicit empty value\n</div>',
 	);
 });
@@ -196,7 +194,7 @@ test('format_prompt_content - filters out attributes without keys', () => {
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe('<div>\nContent with missing key\n</div>');
+	assert.strictEqual(result, '<div>\nContent with missing key\n</div>');
 });
 
 test('format_prompt_content - handles multiple attributes with mix of empty and non-empty values', () => {
@@ -216,7 +214,7 @@ test('format_prompt_content - handles multiple attributes with mix of empty and 
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe(
+	assert.strictEqual(result,
 		'<div class="container" id="main" data-test="true" hidden disabled>\nMultiple attributes\n</div>',
 	);
 });
@@ -236,7 +234,7 @@ test('format_prompt_content - ignores attributes with empty keys after trimming'
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe('<div class="container">\nContent with whitespace key\n</div>');
+	assert.strictEqual(result, '<div class="container">\nContent with whitespace key\n</div>');
 });
 
 test('format_prompt_content - trims attribute keys before rendering', () => {
@@ -253,7 +251,7 @@ test('format_prompt_content - trims attribute keys before rendering', () => {
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe(
+	assert.strictEqual(result,
 		'<div class="container" data-test="true">\nContent with trimmed keys\n</div>',
 	);
 });
@@ -274,7 +272,7 @@ test('format_prompt_content - removes attributes with empty keys but preserves o
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe('<div class="container" data-valid="true">\nMixed attributes\n</div>');
+	assert.strictEqual(result, '<div class="container" data-valid="true">\nMixed attributes\n</div>');
 });
 
 test('format_prompt_content - filters out attributes with empty keys', () => {
@@ -288,7 +286,7 @@ test('format_prompt_content - filters out attributes with empty keys', () => {
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe('<div>\nContent with empty key\n</div>');
+	assert.strictEqual(result, '<div>\nContent with empty key\n</div>');
 });
 
 // Edge cases
@@ -296,7 +294,7 @@ test('format_prompt_content - trims whitespace from content', () => {
 	const parts = [create_part({content: '  Content with whitespace  '})];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe('Content with whitespace');
+	assert.strictEqual(result, 'Content with whitespace');
 });
 
 test('format_prompt_content - skips parts with empty content', () => {
@@ -307,7 +305,7 @@ test('format_prompt_content - skips parts with empty content', () => {
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe('Real content');
+	assert.strictEqual(result, 'Real content');
 });
 
 test('format_prompt_content - trims whitespace from XML tag name', () => {
@@ -320,7 +318,7 @@ test('format_prompt_content - trims whitespace from XML tag name', () => {
 	];
 
 	const result = format_prompt_content(parts as any);
-	expect(result).toBe('<system>\nTrimmed tag name\n</system>');
+	assert.strictEqual(result, '<system>\nTrimmed tag name\n</system>');
 });
 
 // Test that diskfile parts get the path attribute by default
@@ -336,7 +334,7 @@ test('format_prompt_content - ensures diskfile parts have path attribute', () =>
 	});
 
 	const result = format_prompt_content([diskfile_part] as any);
-	expect(result).toBe('<File path="src/example.ts">\nFile content with path\n</File>');
+	assert.strictEqual(result, '<File path="src/example.ts">\nFile content with path\n</File>');
 });
 
 // Test for when the path attribute is combined with other attributes
@@ -355,7 +353,7 @@ test('format_prompt_content - combines path attribute with other attributes for 
 	});
 
 	const result = format_prompt_content([diskfile_part] as any);
-	expect(result).toBe(
+	assert.strictEqual(result,
 		'<code path="src/utils.js" language="javascript" highlight>\nFile with multiple attributes\n</code>',
 	);
 });

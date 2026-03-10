@@ -1,8 +1,6 @@
-// @slop claude_sonnet_4
-
 // @vitest-environment jsdom
 
-import {test, expect, describe} from 'vitest';
+import {test, describe, assert} from 'vitest';
 
 import {Ollama} from '$lib/ollama.svelte.js';
 import {Frontend} from '$lib/frontend.svelte.js';
@@ -23,18 +21,18 @@ describe('Ollama', () => {
 		const app = create_test_app();
 		const ollama = new Ollama({app});
 
-		expect(ollama.host).toBe(OLLAMA_URL);
-		expect(ollama.list_status).toBe('initial');
-		expect(ollama.available).toBe(false);
-		expect(ollama.models.length).toBeTypeOf('number');
+		assert.strictEqual(ollama.host, OLLAMA_URL);
+		assert.strictEqual(ollama.list_status, 'initial');
+		assert.ok(!(ollama.available));
+		assert.typeOf(ollama.models.length, 'number');
 	});
 
 	test('should track pending and completed actions', () => {
 		const app = create_test_app();
 		const ollama = new Ollama({app});
 
-		expect(ollama.pending_actions).toHaveLength(0);
-		expect(ollama.completed_actions).toHaveLength(0);
+		assert.strictEqual((ollama.pending_actions).length, 0);
+		assert.strictEqual((ollama.completed_actions).length, 0);
 
 		// Add a pending action
 		app.actions.add_from_json({
@@ -55,8 +53,8 @@ describe('Ollama', () => {
 			},
 		});
 
-		expect(ollama.pending_actions).toHaveLength(1);
-		expect(ollama.completed_actions).toHaveLength(0);
+		assert.strictEqual((ollama.pending_actions).length, 1);
+		assert.strictEqual((ollama.completed_actions).length, 0);
 
 		// Add a completed action
 		app.actions.add_from_json({
@@ -77,8 +75,8 @@ describe('Ollama', () => {
 			},
 		});
 
-		expect(ollama.pending_actions).toHaveLength(1);
-		expect(ollama.completed_actions).toHaveLength(1);
+		assert.strictEqual((ollama.pending_actions).length, 1);
+		assert.strictEqual((ollama.completed_actions).length, 1);
 	});
 
 	test('should derive models from app.models', () => {
@@ -92,11 +90,11 @@ describe('Ollama', () => {
 
 		const ollama = new Ollama({app});
 
-		expect(ollama.models).toHaveLength(2);
-		expect(ollama.models.length).toBe(2);
-		expect(ollama.model_names).toContain('llama3.2:1b');
-		expect(ollama.model_names).toContain('gemma3:1b');
-		expect(ollama.model_names).not.toContain('gpt-4');
+		assert.strictEqual((ollama.models).length, 2);
+		assert.strictEqual(ollama.models.length, 2);
+		assert.include(ollama.model_names, 'llama3.2:1b');
+		assert.include(ollama.model_names, 'gemma3:1b');
+		assert.notInclude(ollama.model_names, 'gpt-4');
 	});
 
 	test('should update derived state correctly', () => {
@@ -110,8 +108,8 @@ describe('Ollama', () => {
 		const ollama = new Ollama({app});
 		ollama.list_status = 'success';
 
-		expect(ollama.available).toBe(true);
-		expect(ollama.models.length).toBe(2);
+		assert.ok(ollama.available);
+		assert.strictEqual(ollama.models.length, 2);
 	});
 
 	test('should clear model details', () => {
@@ -129,15 +127,15 @@ describe('Ollama', () => {
 		const ollama = new Ollama({app});
 		const model = app.models.find_by_name('test_model');
 
-		expect(model).toBeDefined();
-		expect(model!.ollama_show_response_loaded).toBe(true);
-		expect(model!.ollama_show_response).toEqual({license: 'MIT'});
+		assert.isDefined(model);
+		assert.ok(model!.ollama_show_response_loaded);
+		assert.deepEqual(model!.ollama_show_response, {license: 'MIT'});
 
 		ollama.clear_model_details(model!);
 
-		expect(model!.ollama_show_response).toBeUndefined();
-		expect(model!.ollama_show_response_loaded).toBe(false);
-		expect(model!.ollama_show_response_error).toBeUndefined();
+		assert.ok(model!.ollama_show_response === undefined);
+		assert.ok(!(model!.ollama_show_response_loaded));
+		assert.ok(model!.ollama_show_response_error === undefined);
 	});
 
 	test('should handle model_by_name map', () => {
@@ -151,22 +149,22 @@ describe('Ollama', () => {
 
 		const ollama = new Ollama({app});
 
-		expect(ollama.model_by_name.size).toBe(2);
-		expect(ollama.model_by_name.get('test1')?.name).toBe('test1');
-		expect(ollama.model_by_name.get('test2')?.name).toBe('test2');
-		expect(ollama.model_by_name.has('other')).toBe(false);
+		assert.strictEqual(ollama.model_by_name.size, 2);
+		assert.strictEqual(ollama.model_by_name.get('test1')?.name, 'test1');
+		assert.strictEqual(ollama.model_by_name.get('test2')?.name, 'test2');
+		assert.ok(!ollama.model_by_name.has('other'));
 	});
 
 	test('should initialize ps state correctly', () => {
 		const app = create_test_app();
 		const ollama = new Ollama({app});
 
-		expect(ollama.ps_response).toBeNull();
-		expect(ollama.ps_status).toBe('initial');
-		expect(ollama.ps_error).toBeNull();
-		expect(ollama.ps_polling_enabled).toBe(false);
-		expect(ollama.running_models).toEqual([]);
-		expect(ollama.running_model_names.size).toBe(0);
+		assert.isNull(ollama.ps_response);
+		assert.strictEqual(ollama.ps_status, 'initial');
+		assert.isNull(ollama.ps_error);
+		assert.ok(!(ollama.ps_polling_enabled));
+		assert.deepEqual(ollama.running_models, []);
+		assert.strictEqual(ollama.running_model_names.size, 0);
 	});
 
 	test('should derive running models from ps response', () => {
@@ -197,15 +195,15 @@ describe('Ollama', () => {
 			],
 		};
 
-		expect(ollama.running_models).toHaveLength(2);
-		expect(ollama.running_models[0]!.name).toBe('llama3.2:1b');
-		expect(ollama.running_models[0]!.size_vram).toBe(1024 * 1024 * 1024);
-		expect(ollama.running_models[1]!.name).toBe('gemma:2b');
-		expect(ollama.running_models[1]!.size_vram).toBe(2 * 1024 * 1024 * 1024);
+		assert.strictEqual((ollama.running_models).length, 2);
+		assert.strictEqual(ollama.running_models[0]!.name, 'llama3.2:1b');
+		assert.strictEqual(ollama.running_models[0]!.size_vram, 1024 * 1024 * 1024);
+		assert.strictEqual(ollama.running_models[1]!.name, 'gemma:2b');
+		assert.strictEqual(ollama.running_models[1]!.size_vram, 2 * 1024 * 1024 * 1024);
 
-		expect(ollama.running_model_names.has('llama3.2:1b')).toBe(true);
-		expect(ollama.running_model_names.has('gemma:2b')).toBe(true);
-		expect(ollama.running_model_names.has('other')).toBe(false);
+		assert.ok(ollama.running_model_names.has('llama3.2:1b'));
+		assert.ok(ollama.running_model_names.has('gemma:2b'));
+		assert.ok(!ollama.running_model_names.has('other'));
 	});
 
 	test('should handle ps polling state', () => {
@@ -214,19 +212,19 @@ describe('Ollama', () => {
 
 		// Start polling
 		ollama.start_ps_polling();
-		expect(ollama.ps_polling_enabled).toBe(true);
+		assert.ok(ollama.ps_polling_enabled);
 
 		// Starting again should be safe
 		ollama.start_ps_polling();
-		expect(ollama.ps_polling_enabled).toBe(true);
+		assert.ok(ollama.ps_polling_enabled);
 
 		// Stop polling
 		ollama.stop_ps_polling();
-		expect(ollama.ps_polling_enabled).toBe(false);
+		assert.ok(!(ollama.ps_polling_enabled));
 
 		// Stopping again should be safe
 		ollama.stop_ps_polling();
-		expect(ollama.ps_polling_enabled).toBe(false);
+		assert.ok(!(ollama.ps_polling_enabled));
 	});
 
 	test('should filter ollama actions correctly', () => {
@@ -288,10 +286,10 @@ describe('Ollama', () => {
 			},
 		});
 
-		expect(ollama.actions).toHaveLength(2);
-		expect(ollama.actions.map((a) => a.method)).toContain('ollama_pull');
-		expect(ollama.actions.map((a) => a.method)).toContain('ollama_list');
-		expect(ollama.actions.map((a) => a.method)).not.toContain('completion_create');
+		assert.strictEqual((ollama.actions).length, 2);
+		assert.include(ollama.actions.map((a) => a.method), 'ollama_pull');
+		assert.include(ollama.actions.map((a) => a.method), 'ollama_list');
+		assert.notInclude(ollama.actions.map((a) => a.method), 'completion_create');
 	});
 
 	test('should filter read operations when show_read_actions is false', () => {
@@ -336,13 +334,13 @@ describe('Ollama', () => {
 		});
 
 		// With show_read_actions = false (default)
-		expect(ollama.show_read_actions).toBe(false);
-		expect(ollama.filtered_actions).toHaveLength(1);
-		expect(ollama.filtered_actions[0]!.method).toBe('ollama_pull');
+		assert.ok(!(ollama.show_read_actions));
+		assert.strictEqual((ollama.filtered_actions).length, 1);
+		assert.strictEqual(ollama.filtered_actions[0]!.method, 'ollama_pull');
 
 		// With show_read_actions = true
 		ollama.show_read_actions = true;
-		expect(ollama.filtered_actions).toHaveLength(2);
+		assert.strictEqual((ollama.filtered_actions).length, 2);
 	});
 
 	test('should handle action progress tracking', () => {
@@ -368,8 +366,8 @@ describe('Ollama', () => {
 			},
 		});
 
-		expect(ollama.pending_actions).toHaveLength(1);
-		expect(ollama.pending_actions[0]!.action_event_data?.progress).toEqual({
+		assert.strictEqual((ollama.pending_actions).length, 1);
+		assert.deepEqual(ollama.pending_actions[0]!.action_event_data?.progress, {
 			status: 'downloading',
 			completed: 50,
 			total: 100,
@@ -394,12 +392,12 @@ describe('Ollama', () => {
 		// Update progress through the action event
 		action_event.update_progress({status: 'downloading', completed: 75, total: 100});
 
-		expect(action.action_event_data?.progress).toEqual({
+		assert.deepEqual(action.action_event_data?.progress, {
 			status: 'downloading',
 			completed: 75,
 			total: 100,
 		});
-		expect(ollama.pending_actions[0]!.action_event_data?.progress).toEqual({
+		assert.deepEqual(ollama.pending_actions[0]!.action_event_data?.progress, {
 			status: 'downloading',
 			completed: 75,
 			total: 100,
@@ -410,10 +408,10 @@ describe('Ollama', () => {
 		const app = create_test_app();
 		const ollama = new Ollama({app});
 
-		expect(ollama.actions).toHaveLength(0);
-		expect(ollama.pending_actions).toHaveLength(0);
-		expect(ollama.completed_actions).toHaveLength(0);
-		expect(ollama.filtered_actions).toHaveLength(0);
+		assert.strictEqual((ollama.actions).length, 0);
+		assert.strictEqual((ollama.pending_actions).length, 0);
+		assert.strictEqual((ollama.completed_actions).length, 0);
+		assert.strictEqual((ollama.filtered_actions).length, 0);
 	});
 
 	test('should handle failed actions', () => {
@@ -438,9 +436,9 @@ describe('Ollama', () => {
 			},
 		});
 
-		expect(ollama.pending_actions).toHaveLength(0);
-		expect(ollama.completed_actions).toHaveLength(1);
-		expect(ollama.completed_actions[0]!.action_event_data?.step).toBe('failed');
+		assert.strictEqual((ollama.pending_actions).length, 0);
+		assert.strictEqual((ollama.completed_actions).length, 1);
+		assert.strictEqual(ollama.completed_actions[0]!.action_event_data?.step, 'failed');
 	});
 
 	test('should only include ollama provider models', () => {
@@ -453,9 +451,9 @@ describe('Ollama', () => {
 
 		const ollama = new Ollama({app});
 
-		expect(ollama.models).toHaveLength(1);
-		expect(ollama.models[0]!.name).toBe('ollama_model');
-		expect(ollama.models[0]!.provider_name).toBe('ollama');
+		assert.strictEqual((ollama.models).length, 1);
+		assert.strictEqual(ollama.models[0]!.name, 'ollama_model');
+		assert.strictEqual(ollama.models[0]!.provider_name, 'ollama');
 	});
 
 	test('should handle ps response with empty models array', () => {
@@ -464,7 +462,7 @@ describe('Ollama', () => {
 
 		ollama.ps_response = {models: []};
 
-		expect(ollama.running_models).toHaveLength(0);
-		expect(ollama.running_model_names.size).toBe(0);
+		assert.strictEqual((ollama.running_models).length, 0);
+		assert.strictEqual(ollama.running_model_names.size, 0);
 	});
 });

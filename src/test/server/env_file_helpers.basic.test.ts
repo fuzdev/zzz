@@ -1,6 +1,4 @@
-// @slop Claude Sonnet 4.5
-
-import {test, expect, describe} from 'vitest';
+import {test, describe, assert} from 'vitest';
 
 import {update_env_variable} from '$lib/server/env_file_helpers.js';
 
@@ -44,7 +42,7 @@ describe('update_env_variable - basic functionality', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value"\n');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value"\n');
 	});
 
 	test('updates existing variable without quotes', async () => {
@@ -58,7 +56,7 @@ describe('update_env_variable - basic functionality', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY=new_value\n');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY=new_value\n');
 	});
 
 	test('adds new variable to empty file', async () => {
@@ -72,7 +70,7 @@ describe('update_env_variable - basic functionality', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('NEW_KEY="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'NEW_KEY="new_value"');
 	});
 
 	test('adds new variable to existing file with content', async () => {
@@ -86,7 +84,7 @@ describe('update_env_variable - basic functionality', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('EXISTING_KEY="existing_value"\nNEW_KEY="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'EXISTING_KEY="existing_value"\nNEW_KEY="new_value"');
 	});
 
 	test('creates file if it does not exist', async () => {
@@ -98,7 +96,7 @@ describe('update_env_variable - basic functionality', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('NEW_KEY="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'NEW_KEY="new_value"');
 	});
 
 	test('preserves quote style for quoted variables', async () => {
@@ -112,7 +110,7 @@ describe('update_env_variable - basic functionality', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value"');
 	});
 
 	test('preserves quote style for unquoted variables', async () => {
@@ -126,7 +124,7 @@ describe('update_env_variable - basic functionality', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY=new_value');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY=new_value');
 	});
 });
 
@@ -142,7 +140,7 @@ describe('update_env_variable - formatting preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe(
+		assert.strictEqual(fs.get_file('/test/.env'),
 			'# This is a comment\nAPI_KEY="new_value"\n# Another comment',
 		);
 	});
@@ -158,7 +156,7 @@ describe('update_env_variable - formatting preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value"\n\nOTHER_KEY="other_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value"\n\nOTHER_KEY="other_value"');
 	});
 
 	test('handles file with trailing newline', async () => {
@@ -172,7 +170,7 @@ describe('update_env_variable - formatting preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value"\n');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value"\n');
 	});
 
 	test('handles file without trailing newline', async () => {
@@ -186,7 +184,7 @@ describe('update_env_variable - formatting preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		expect(fs.get_file('/test/.env')).toBe('API_KEY="new_value"');
+		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="new_value"');
 	});
 });
 
@@ -197,13 +195,16 @@ describe('update_env_variable - error handling', () => {
 			throw new Error(error_message);
 		};
 
-		await expect(
-			update_env_variable('API_KEY', 'new_value', {
+		try {
+			await update_env_variable('API_KEY', 'new_value', {
 				env_file_path: '/test/.env',
 				read_file: custom_read,
 				write_file: async () => {},
-			}),
-		).rejects.toThrow(error_message);
+			});
+			assert.fail('Expected error to be thrown');
+		} catch (e: any) {
+			assert.include(e.message, error_message);
+		}
 	});
 
 	test('propagates write file error', async () => {
@@ -212,12 +213,15 @@ describe('update_env_variable - error handling', () => {
 			throw new Error(error_message);
 		};
 
-		await expect(
-			update_env_variable('API_KEY', 'new_value', {
+		try {
+			await update_env_variable('API_KEY', 'new_value', {
 				env_file_path: '/test/.env',
 				read_file: async () => '',
 				write_file: custom_write,
-			}),
-		).rejects.toThrow(error_message);
+			});
+			assert.fail('Expected error to be thrown');
+		} catch (e: any) {
+			assert.include(e.message, error_message);
+		}
 	});
 });

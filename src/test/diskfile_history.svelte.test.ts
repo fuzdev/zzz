@@ -1,8 +1,6 @@
-// @slop Claude Sonnet 3.7
-
 // @vitest-environment jsdom
 
-import {test, expect, beforeEach, describe} from 'vitest';
+import {test, beforeEach, describe, assert} from 'vitest';
 
 import {DiskfileHistory} from '$lib/diskfile_history.svelte.js';
 import {DiskfilePath} from '$lib/diskfile_types.js';
@@ -35,10 +33,10 @@ describe('DiskfileHistory', () => {
 
 	describe('initialization', () => {
 		test('creates empty history state', () => {
-			expect(history.path).toBe(TEST_PATH);
-			expect(history.entries).toEqual([]);
-			expect(history.max_entries).toBe(100);
-			expect(history.current_entry).toBe(null);
+			assert.strictEqual(history.path, TEST_PATH);
+			assert.deepEqual(history.entries, []);
+			assert.strictEqual(history.max_entries, 100);
+			assert.isNull(history.current_entry);
 		});
 	});
 
@@ -47,13 +45,13 @@ describe('DiskfileHistory', () => {
 			const entry = history.add_entry(TEST_CONTENT);
 
 			// Verify entry was created with proper structure
-			expect(history.entries.length).toBe(1);
-			expect(entry.content).toBe(TEST_CONTENT);
-			expect(entry.id).toBeDefined();
-			expect(typeof entry.created).toBe('number');
-			expect(entry.is_disk_change).toBe(false);
-			expect(entry.is_unsaved_edit).toBe(false);
-			expect(entry.is_original_state).toBe(false);
+			assert.strictEqual(history.entries.length, 1);
+			assert.strictEqual(entry.content, TEST_CONTENT);
+			assert.isDefined(entry.id);
+			assert.strictEqual(typeof entry.created, 'number');
+			assert.ok(!(entry.is_disk_change));
+			assert.ok(!(entry.is_unsaved_edit));
+			assert.ok(!(entry.is_original_state));
 		});
 
 		test('add_entry with custom options sets all properties', () => {
@@ -68,11 +66,11 @@ describe('DiskfileHistory', () => {
 			});
 
 			// Verify all options were applied
-			expect(entry.created).toBe(custom_timestamp);
-			expect(entry.is_disk_change).toBe(true);
-			expect(entry.is_unsaved_edit).toBe(true);
-			expect(entry.is_original_state).toBe(true);
-			expect(entry.label).toBe('Custom Label');
+			assert.strictEqual(entry.created, custom_timestamp);
+			assert.ok(entry.is_disk_change);
+			assert.ok(entry.is_unsaved_edit);
+			assert.ok(entry.is_original_state);
+			assert.strictEqual(entry.label, 'Custom Label');
 		});
 
 		test('add_entry skips duplicate content back-to-back', () => {
@@ -83,9 +81,9 @@ describe('DiskfileHistory', () => {
 			const duplicate = history.add_entry(TEST_CONTENT);
 
 			// Verify no new entry was added and original was returned
-			expect(history.entries.length).toBe(1);
-			expect(duplicate).toEqual(first);
-			expect(duplicate.id).toBe(first.id);
+			assert.strictEqual(history.entries.length, 1);
+			assert.deepEqual(duplicate, first);
+			assert.strictEqual(duplicate.id, first.id);
 		});
 
 		test('add_entry creates immutable entry array', () => {
@@ -96,8 +94,8 @@ describe('DiskfileHistory', () => {
 			history.add_entry(TEST_CONTENT);
 
 			// Verify entries array was replaced, not mutated in place
-			expect(history.entries).not.toBe(initial_entries);
-			expect(history.entries.length).toBe(1);
+			assert.notStrictEqual(history.entries, initial_entries);
+			assert.strictEqual(history.entries.length, 1);
 		});
 	});
 
@@ -113,10 +111,10 @@ describe('DiskfileHistory', () => {
 			history.add_entry('content 1', {created: time1});
 
 			// Verify entries are sorted newest first
-			expect(history.entries.length).toBe(3);
-			expect(history.entries[0]!.content).toBe('content 3');
-			expect(history.entries[1]!.content).toBe('content 2');
-			expect(history.entries[2]!.content).toBe('content 1');
+			assert.strictEqual(history.entries.length, 3);
+			assert.strictEqual(history.entries[0]!.content, 'content 3');
+			assert.strictEqual(history.entries[1]!.content, 'content 2');
+			assert.strictEqual(history.entries[2]!.content, 'content 1');
 		});
 
 		test('current_entry returns most recent entry', () => {
@@ -125,12 +123,12 @@ describe('DiskfileHistory', () => {
 			const latest = history.add_entry('latest entry');
 
 			// Verify current_entry points to most recent
-			expect(history.current_entry).toBe(history.entries[0]);
-			expect(history.current_entry).toEqual(latest);
+			assert.strictEqual(history.current_entry, history.entries[0]);
+			assert.deepEqual(history.current_entry, latest);
 		});
 
 		test('current_entry is null when history is empty', () => {
-			expect(history.current_entry).toBe(null);
+			assert.isNull(history.current_entry);
 		});
 	});
 
@@ -146,10 +144,10 @@ describe('DiskfileHistory', () => {
 			history.add_entry('content 4', {created: Date.now()});
 
 			// Verify only the most recent entries were kept
-			expect(history.entries.length).toBe(3);
-			expect(history.entries[0]!.content).toBe('content 4');
-			expect(history.entries[1]!.content).toBe('content 3');
-			expect(history.entries[2]!.content).toBe('content 2');
+			assert.strictEqual(history.entries.length, 3);
+			assert.strictEqual(history.entries[0]!.content, 'content 4');
+			assert.strictEqual(history.entries[1]!.content, 'content 3');
+			assert.strictEqual(history.entries[2]!.content, 'content 2');
 		});
 
 		test('add_entry correctly handles insertion with capacity limit', () => {
@@ -169,9 +167,9 @@ describe('DiskfileHistory', () => {
 			history.add_entry('oldest entry', {created: oldest_time});
 
 			// Verify correct entries were kept (newest two)
-			expect(history.entries.length).toBe(2);
-			expect(history.entries[0]!.content).toBe('newest entry');
-			expect(history.entries[1]!.content).toBe('middle entry');
+			assert.strictEqual(history.entries.length, 2);
+			assert.strictEqual(history.entries[0]!.content, 'newest entry');
+			assert.strictEqual(history.entries[1]!.content, 'middle entry');
 		});
 	});
 
@@ -186,9 +184,9 @@ describe('DiskfileHistory', () => {
 			const found = history.find_entry_by_id(entry2.id);
 
 			// Verify the right entry was found
-			expect(found).toBeDefined();
-			expect(found!.id).toBe(entry2.id);
-			expect(found!.content).toBe('content 2');
+			assert.isDefined(found);
+			assert.strictEqual(found!.id, entry2.id);
+			assert.strictEqual(found!.content, 'content 2');
 		});
 
 		test('find_entry_by_id returns undefined for non-existent id', () => {
@@ -201,7 +199,7 @@ describe('DiskfileHistory', () => {
 			const result = history.find_entry_by_id(unknown_id);
 
 			// Verify undefined is returned
-			expect(result).toBeUndefined();
+			assert.ok(result === undefined);
 		});
 
 		test('get_content returns content from entry', () => {
@@ -212,7 +210,7 @@ describe('DiskfileHistory', () => {
 			const content = history.get_content(entry.id);
 
 			// Verify content was retrieved
-			expect(content).toBe('specific content');
+			assert.strictEqual(content, 'specific content');
 		});
 
 		test('get_content returns null for non-existent id', () => {
@@ -224,7 +222,7 @@ describe('DiskfileHistory', () => {
 			const content = history.get_content(unknown_id);
 
 			// Verify null is returned
-			expect(content).toBeNull();
+			assert.isNull(content);
 		});
 	});
 
@@ -236,26 +234,26 @@ describe('DiskfileHistory', () => {
 			const newest = history.add_entry('newest content');
 
 			// Verify we have multiple entries
-			expect(history.entries.length).toBe(3);
+			assert.strictEqual(history.entries.length, 3);
 
 			// Clear all except current
 			history.clear_except_current();
 
 			// Verify only newest remains
-			expect(history.entries.length).toBe(1);
-			expect(history.entries[0]!.id).toBe(newest.id);
-			expect(history.entries[0]!.content).toBe('newest content');
+			assert.strictEqual(history.entries.length, 1);
+			assert.strictEqual(history.entries[0]!.id, newest.id);
+			assert.strictEqual(history.entries[0]!.content, 'newest content');
 		});
 
 		test('clear_except_current handles empty history', () => {
 			// Start with empty history
-			expect(history.entries.length).toBe(0);
+			assert.strictEqual(history.entries.length, 0);
 
 			// Call clear - should not error
 			history.clear_except_current();
 
 			// Should still be empty
-			expect(history.entries.length).toBe(0);
+			assert.strictEqual(history.entries.length, 0);
 		});
 
 		test('clear_except_current with keep predicate preserves matching entries', () => {
@@ -268,9 +266,9 @@ describe('DiskfileHistory', () => {
 			history.clear_except_current((entry) => entry.is_original_state);
 
 			// Verify newest and original entries were kept
-			expect(history.entries.length).toBe(2);
-			expect(history.entries[0]!.id).toBe(newest.id);
-			expect(history.entries[1]!.id).toBe(original.id);
+			assert.strictEqual(history.entries.length, 2);
+			assert.strictEqual(history.entries[0]!.id, newest.id);
+			assert.strictEqual(history.entries[1]!.id, original.id);
 		});
 
 		test('clear_except_current with single entry does nothing', () => {
@@ -281,8 +279,8 @@ describe('DiskfileHistory', () => {
 			history.clear_except_current();
 
 			// Verify entry is still there
-			expect(history.entries.length).toBe(1);
-			expect(history.entries[0]!.id).toBe(entry.id);
+			assert.strictEqual(history.entries.length, 1);
+			assert.strictEqual(history.entries[0]!.id, entry.id);
 		});
 	});
 
@@ -295,8 +293,8 @@ describe('DiskfileHistory', () => {
 			const second = history.add_entry(TEST_CONTENT, {is_unsaved_edit: true});
 
 			// Both entries should be added since they represent different states
-			expect(history.entries.length).toBe(2);
-			expect(second.is_unsaved_edit).toBe(true);
+			assert.strictEqual(history.entries.length, 2);
+			assert.ok(second.is_unsaved_edit);
 		});
 
 		test('complex editing workflow', () => {
@@ -317,17 +315,17 @@ describe('DiskfileHistory', () => {
 			const latest = history.add_entry('latest edit', {is_unsaved_edit: true});
 
 			// Verify state
-			expect(history.entries.length).toBe(5);
-			expect(history.current_entry).toEqual(latest);
+			assert.strictEqual(history.entries.length, 5);
+			assert.deepEqual(history.current_entry, latest);
 
 			// Clear except saved and current
 			history.clear_except_current((entry) => entry.is_disk_change);
 
 			// Should have original, saved, and latest
-			expect(history.entries.length).toBe(3);
-			expect(history.entries[0]!.id).toBe(latest.id);
-			expect(history.entries[1]!.id).toBe(saved.id);
-			expect(history.entries[2]!.id).toBe(original.id);
+			assert.strictEqual(history.entries.length, 3);
+			assert.strictEqual(history.entries[0]!.id, latest.id);
+			assert.strictEqual(history.entries[1]!.id, saved.id);
+			assert.strictEqual(history.entries[2]!.id, original.id);
 		});
 	});
 });

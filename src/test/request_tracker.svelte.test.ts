@@ -1,8 +1,6 @@
-// @slop Claude Opus 4
-
 // @vitest-environment jsdom
 
-import {test, expect, describe, vi, beforeEach, afterEach} from 'vitest';
+import {test, describe, vi, beforeEach, afterEach, assert} from 'vitest';
 
 import {RequestTracker} from '$lib/request_tracker.svelte.js';
 import {JSONRPC_INTERNAL_ERROR, JSONRPC_VERSION, JsonrpcErrorCode} from '$lib/jsonrpc.js';
@@ -37,27 +35,27 @@ describe('RequestTracker', () => {
 		test('creates with default timeout', () => {
 			const tracker = new RequestTracker();
 
-			expect(tracker).toBeInstanceOf(RequestTracker);
-			expect(tracker.request_timeout_ms).toBe(120_000);
-			expect(tracker.pending_requests.size).toBe(0);
+			assert.instanceOf(tracker, RequestTracker);
+			assert.strictEqual(tracker.request_timeout_ms, 120_000);
+			assert.strictEqual(tracker.pending_requests.size, 0);
 		});
 
 		test('creates with custom timeout', () => {
 			const custom_timeout = 5000;
 			const tracker = new RequestTracker(custom_timeout);
 
-			expect(tracker.request_timeout_ms).toBe(custom_timeout);
-			expect(tracker.pending_requests).toBeInstanceOf(Map);
+			assert.strictEqual(tracker.request_timeout_ms, custom_timeout);
+			assert.instanceOf(tracker.pending_requests, Map);
 		});
 
 		test('handles zero or negative timeout values', () => {
 			// Zero timeout should be allowed but would cause immediate timeouts
 			const zero_tracker = new RequestTracker(0);
-			expect(zero_tracker.request_timeout_ms).toBe(0);
+			assert.strictEqual(zero_tracker.request_timeout_ms, 0);
 
 			// Negative timeout should be allowed (though it's an edge case)
 			const negative_tracker = new RequestTracker(-1000);
-			expect(negative_tracker.request_timeout_ms).toBe(-1000);
+			assert.strictEqual(negative_tracker.request_timeout_ms, -1000);
 		});
 	});
 
@@ -68,21 +66,21 @@ describe('RequestTracker', () => {
 			const deferred = tracker.track_request(id);
 
 			// Should return a deferred promise with the correct interface
-			expect(deferred).toBeDefined();
-			expect(deferred.promise).toBeInstanceOf(Promise);
-			expect(deferred.resolve).toBeInstanceOf(Function);
-			expect(deferred.reject).toBeInstanceOf(Function);
+			assert.isDefined(deferred);
+			assert.instanceOf(deferred.promise, Promise);
+			assert.instanceOf(deferred.resolve, Function);
+			assert.instanceOf(deferred.reject, Function);
 
 			// Request should be stored with the correct properties
-			expect(tracker.pending_requests.has(id)).toBe(true);
+			assert.ok(tracker.pending_requests.has(id));
 
 			const request = tracker.pending_requests.get(id);
-			expect(request).toBeDefined();
-			expect(request?.deferred).toBe(deferred);
-			expect(request?.status).toBe('pending');
-			expect(request?.timeout).toBeDefined();
-			expect(request?.created).toBeDefined();
-			expect(typeof request?.created).toBe('string');
+			assert.isDefined(request);
+			assert.strictEqual(request?.deferred, deferred);
+			assert.strictEqual(request?.status, 'pending');
+			assert.isDefined(request?.timeout);
+			assert.isDefined(request?.created);
+			assert.strictEqual(typeof request?.created, 'string');
 
 			// Clean up
 			tracker.cancel_request(id);
@@ -96,10 +94,10 @@ describe('RequestTracker', () => {
 			const deferred1 = tracker.track_request(id1);
 			const deferred2 = tracker.track_request(id2);
 
-			expect(deferred1).not.toBe(deferred2);
-			expect(tracker.pending_requests.size).toBe(2);
-			expect(tracker.pending_requests.get(id1)?.deferred).toBe(deferred1);
-			expect(tracker.pending_requests.get(id2)?.deferred).toBe(deferred2);
+			assert.notStrictEqual(deferred1, deferred2);
+			assert.strictEqual(tracker.pending_requests.size, 2);
+			assert.strictEqual(tracker.pending_requests.get(id1)?.deferred, deferred1);
+			assert.strictEqual(tracker.pending_requests.get(id2)?.deferred, deferred2);
 
 			// Add promise handlers to catch rejections
 			const promise1 = deferred1.promise.catch(() => {
@@ -128,7 +126,7 @@ describe('RequestTracker', () => {
 				return err; // Return to ensure promise settles
 			});
 
-			expect(tracker.pending_requests.has(id)).toBe(true);
+			assert.ok(tracker.pending_requests.has(id));
 
 			// Fast-forward time to trigger timeout
 			vi.advanceTimersByTime(1001);
@@ -136,11 +134,11 @@ describe('RequestTracker', () => {
 			await Promise.resolve(); // Allow promise microtasks to process
 
 			// Request should be removed and promise rejected with timeout error
-			expect(tracker.pending_requests.has(id)).toBe(false);
-			expect(rejection_error).toBeDefined();
-			expect(rejection_error).toBeInstanceOf(ThrownJsonrpcError);
-			expect(rejection_error.code).toBe(JSONRPC_INTERNAL_ERROR);
-			expect(rejection_error.message).toBe(`request timed out: ${id}`);
+			assert.ok(!tracker.pending_requests.has(id));
+			assert.isDefined(rejection_error);
+			assert.instanceOf(rejection_error, ThrownJsonrpcError);
+			assert.strictEqual(rejection_error.code, JSONRPC_INTERNAL_ERROR);
+			assert.strictEqual(rejection_error.message, `request timed out: ${id}`);
 		});
 
 		test('cleans up previous request with same id', () => {
@@ -152,18 +150,18 @@ describe('RequestTracker', () => {
 			// Track first request
 			const deferred1 = tracker.track_request(id);
 			const timeout1 = tracker.pending_requests.get(id)?.timeout;
-			expect(timeout1).toBeDefined();
+			assert.isDefined(timeout1);
 
 			// Track second request with same id
 			const deferred2 = tracker.track_request(id);
 
 			// Verify timeout was cleared for first request
-			expect(clear_timeout_spy).toHaveBeenCalledWith(timeout1);
-			expect(deferred1).not.toBe(deferred2);
+			assert.ok(clear_timeout_spy.mock.calls.some((call) => call[0] === timeout1));
+			assert.notStrictEqual(deferred1, deferred2);
 
 			// Only one request should exist
-			expect(tracker.pending_requests.size).toBe(1);
-			expect(tracker.pending_requests.get(id)?.deferred).toBe(deferred2);
+			assert.strictEqual(tracker.pending_requests.size, 1);
+			assert.strictEqual(tracker.pending_requests.get(id)?.deferred, deferred2);
 
 			// Clean up
 			tracker.cancel_request(id);
@@ -207,10 +205,10 @@ describe('RequestTracker', () => {
 			const result = await promise1;
 
 			// The promise should have timed out rather than be settled directly
-			expect(result).toBe('timeout');
+			assert.strictEqual(result, 'timeout');
 
 			// The first promise should not be directly resolved or rejected by the tracker
-			expect(promise1_settled).toBe(false);
+			assert.ok(!(promise1_settled));
 
 			// Cancel all requests to clean up
 			tracker.cancel_all_requests();
@@ -231,14 +229,14 @@ describe('RequestTracker', () => {
 			tracker.resolve_request(id, response);
 
 			// Verify timeout was cleared
-			expect(clear_timeout_spy).toHaveBeenCalledWith(timeout);
+			assert.ok(clear_timeout_spy.mock.calls.some((call) => call[0] === timeout));
 
 			// Verify request status was updated before resolution
-			expect(tracker.pending_requests.has(id)).toBe(false);
+			assert.ok(!tracker.pending_requests.has(id));
 
 			// Verify promise resolves with correct value
 			const result = await deferred.promise;
-			expect(result).toBe(response);
+			assert.strictEqual(result, response);
 		});
 
 		test('logs warning for unknown request id', () => {
@@ -249,8 +247,8 @@ describe('RequestTracker', () => {
 
 			tracker.resolve_request(unknown_id, response);
 
-			expect(warn_spy).toHaveBeenCalledTimes(1);
-			expect(warn_spy).toHaveBeenCalledWith(`received response for unknown request: ${unknown_id}`);
+			assert.strictEqual(warn_spy.mock.calls.length, 1);
+			assert.deepEqual(warn_spy.mock.calls[0], [`received response for unknown request: ${unknown_id}`]);
 		});
 
 		test('handles various data types', async () => {
@@ -269,7 +267,7 @@ describe('RequestTracker', () => {
 				const response = create_jsonrpc_response(id, {method});
 				tracker.resolve_request(id, response);
 				const result = await deferred.promise;
-				expect(result).toBe(response);
+				assert.strictEqual(result, response);
 			});
 
 			await Promise.all(promises);
@@ -296,7 +294,7 @@ describe('RequestTracker', () => {
 			tracker.resolve_request(id, create_jsonrpc_response(id, {test: 'result'}));
 
 			await promise;
-			expect(status_when_resolved).toBe('success');
+			assert.strictEqual(status_when_resolved, 'success');
 		});
 	});
 
@@ -318,15 +316,14 @@ describe('RequestTracker', () => {
 			tracker.reject_request(id, error);
 
 			// Verify timeout was cleared
-			expect(clear_timeout_spy).toHaveBeenCalledWith(timeout);
-			expect(tracker.pending_requests.has(id)).toBe(false);
+			assert.ok(clear_timeout_spy.mock.calls.some((call) => call[0] === timeout));
+			assert.ok(!tracker.pending_requests.has(id));
 
 			// Verify promise rejects with the correct error
-			await expect(deferred.promise).rejects.toBeInstanceOf(ThrownJsonrpcError);
-
 			const rejection_error = await deferred.promise.catch((err) => err);
-			expect(rejection_error.code).toBe(error.error.code);
-			expect(rejection_error.message).toBe(error.error.message);
+			assert.instanceOf(rejection_error, ThrownJsonrpcError);
+			assert.strictEqual(rejection_error.code, error.error.code);
+			assert.strictEqual(rejection_error.message, error.error.message);
 		});
 
 		test('logs warning for unknown request id', () => {
@@ -339,8 +336,8 @@ describe('RequestTracker', () => {
 				error: {code: JsonrpcErrorCode.parse(-32000), message: 'test'},
 			});
 
-			expect(warn_spy).toHaveBeenCalledTimes(1);
-			expect(warn_spy).toHaveBeenCalledWith(`received error for unknown request: ${unknown_id}`);
+			assert.strictEqual(warn_spy.mock.calls.length, 1);
+			assert.deepEqual(warn_spy.mock.calls[0], [`received error for unknown request: ${unknown_id}`]);
 		});
 
 		test('handles various error types', async () => {
@@ -379,13 +376,12 @@ describe('RequestTracker', () => {
 			for (const {id, error} of test_cases) {
 				const deferred = tracker.track_request(id);
 				tracker.reject_request(id, error);
-				await expect(deferred.promise).rejects.toBeInstanceOf(ThrownJsonrpcError);
-
 				const rejection_error = await deferred.promise.catch((err) => err);
-				expect(rejection_error.code).toBe(error.error.code);
-				expect(rejection_error.message).toBe(error.error.message);
+				assert.instanceOf(rejection_error, ThrownJsonrpcError);
+				assert.strictEqual(rejection_error.code, error.error.code);
+				assert.strictEqual(rejection_error.message, error.error.message);
 
-				expect(tracker.pending_requests.has(id)).toBe(false);
+				assert.ok(!tracker.pending_requests.has(id));
 			}
 		});
 
@@ -416,7 +412,7 @@ describe('RequestTracker', () => {
 			});
 			await promise;
 
-			expect(status_when_rejected).toBe('failure');
+			assert.strictEqual(status_when_rejected, 'failure');
 		});
 	});
 
@@ -439,12 +435,13 @@ describe('RequestTracker', () => {
 			tracker.handle_message(message);
 
 			// Verify resolve_request was called with correct arguments
-			expect(resolve_spy).toHaveBeenCalledWith(id, message);
+			assert.ok(resolve_spy.mock.calls.length > 0);
+			assert.deepEqual(resolve_spy.mock.calls[0], [id, message] as any);
 
 			// Verify promise resolves with correct value
 			const response = await deferred.promise;
-			expect(response).toBe(message);
-			expect(tracker.pending_requests.has(id)).toBe(false);
+			assert.strictEqual(response, message as any);
+			assert.ok(!tracker.pending_requests.has(id));
 		});
 
 		test('rejects request with error when message contains error', async () => {
@@ -466,15 +463,15 @@ describe('RequestTracker', () => {
 			tracker.handle_message(message);
 
 			// Verify reject_request was called with correct arguments
-			expect(reject_spy).toHaveBeenCalledWith(id, message);
+			assert.ok(reject_spy.mock.calls.length > 0);
+			assert.deepEqual(reject_spy.mock.calls[0], [id, message] as any);
 
 			// Verify promise rejects with correct error
-			await expect(deferred.promise).rejects.toBeInstanceOf(ThrownJsonrpcError);
-
 			const rejection_error = await deferred.promise.catch((err) => err);
-			expect(rejection_error.code).toBe(message.error.code);
-			expect(rejection_error.message).toBe(message.error.message);
-			expect(tracker.pending_requests.has(id)).toBe(false);
+			assert.instanceOf(rejection_error, ThrownJsonrpcError);
+			assert.strictEqual(rejection_error.code, message.error.code);
+			assert.strictEqual(rejection_error.message, message.error.message);
+			assert.ok(!tracker.pending_requests.has(id));
 		});
 
 		test('ignores notification messages (no id)', () => {
@@ -494,11 +491,11 @@ describe('RequestTracker', () => {
 			});
 
 			// Verify no resolve/reject was called
-			expect(resolve_spy).not.toHaveBeenCalled();
-			expect(reject_spy).not.toHaveBeenCalled();
+			assert.strictEqual(resolve_spy.mock.calls.length, 0);
+			assert.strictEqual(reject_spy.mock.calls.length, 0);
 
 			// Original request should still be pending
-			expect(tracker.pending_requests.has(id)).toBe(true);
+			assert.ok(tracker.pending_requests.has(id));
 
 			// Clean up
 			tracker.cancel_request(id);
@@ -521,11 +518,11 @@ describe('RequestTracker', () => {
 			});
 
 			// Verify no resolve/reject was called
-			expect(resolve_spy).not.toHaveBeenCalled();
-			expect(reject_spy).not.toHaveBeenCalled();
+			assert.strictEqual(resolve_spy.mock.calls.length, 0);
+			assert.strictEqual(reject_spy.mock.calls.length, 0);
 
 			// Original request should still be pending
-			expect(tracker.pending_requests.has(id)).toBe(true);
+			assert.ok(tracker.pending_requests.has(id));
 
 			// Clean up
 			tracker.cancel_request(id);
@@ -546,11 +543,11 @@ describe('RequestTracker', () => {
 			tracker.handle_message({});
 
 			// Verify no resolve/reject was called
-			expect(resolve_spy).not.toHaveBeenCalled();
-			expect(reject_spy).not.toHaveBeenCalled();
+			assert.strictEqual(resolve_spy.mock.calls.length, 0);
+			assert.strictEqual(reject_spy.mock.calls.length, 0);
 
 			// Original request should still be pending
-			expect(tracker.pending_requests.has(id)).toBe(true);
+			assert.ok(tracker.pending_requests.has(id));
 
 			// Clean up
 			tracker.cancel_request(id);
@@ -574,8 +571,9 @@ describe('RequestTracker', () => {
 			tracker.handle_message(message);
 
 			// Verify resolve_request was called with correct arguments
-			expect(resolve_spy).toHaveBeenCalledWith(id, message);
-			expect(tracker.pending_requests.has(id)).toBe(false);
+			assert.ok(resolve_spy.mock.calls.length > 0);
+			assert.deepEqual(resolve_spy.mock.calls[0], [id, message] as any);
+			assert.ok(!tracker.pending_requests.has(id));
 		});
 
 		test('prioritizes error over result if both exist in the message', async () => {
@@ -598,14 +596,14 @@ describe('RequestTracker', () => {
 			tracker.handle_message(message);
 
 			// Should call reject_request, not resolve_request
-			expect(reject_spy).toHaveBeenCalledWith(id, message);
+			assert.ok(reject_spy.mock.calls.length > 0);
+			assert.deepEqual(reject_spy.mock.calls[0], [id, message] as any);
 
 			// Promise should be rejected with the error
-			await expect(deferred.promise).rejects.toBeInstanceOf(ThrownJsonrpcError);
-
 			const rejection_error = await deferred.promise.catch((err) => err);
-			expect(rejection_error.code).toBe(message.error.code);
-			expect(rejection_error.message).toBe(message.error.message);
+			assert.instanceOf(rejection_error, ThrownJsonrpcError);
+			assert.strictEqual(rejection_error.code, message.error.code);
+			assert.strictEqual(rejection_error.message, message.error.message);
 		});
 	});
 
@@ -621,10 +619,10 @@ describe('RequestTracker', () => {
 			tracker.cancel_request(id);
 
 			// Verify timeout was cleared
-			expect(clear_timeout_spy).toHaveBeenCalledWith(timeout);
+			assert.ok(clear_timeout_spy.mock.calls.some((call) => call[0] === timeout));
 
 			// Request should be removed
-			expect(tracker.pending_requests.has(id)).toBe(false);
+			assert.ok(!tracker.pending_requests.has(id));
 		});
 
 		test('does nothing for unknown request id', () => {
@@ -635,7 +633,7 @@ describe('RequestTracker', () => {
 			tracker.cancel_request(unknown_id);
 
 			// Should not attempt to clear any timeout
-			expect(clear_timeout_spy).not.toHaveBeenCalled();
+			assert.strictEqual(clear_timeout_spy.mock.calls.length, 0);
 		});
 
 		test('handles cancel without affecting other requests', () => {
@@ -649,8 +647,8 @@ describe('RequestTracker', () => {
 			tracker.cancel_request(id1);
 
 			// Only the specified request should be removed
-			expect(tracker.pending_requests.has(id1)).toBe(false);
-			expect(tracker.pending_requests.has(id2)).toBe(true);
+			assert.ok(!tracker.pending_requests.has(id1));
+			assert.ok(tracker.pending_requests.has(id2));
 
 			// Clean up
 			tracker.cancel_request(id2);
@@ -691,14 +689,14 @@ describe('RequestTracker', () => {
 			const result = await promise;
 
 			// Result should be timeout, not a resolution or rejection
-			expect(result).toBe('timeout');
+			assert.strictEqual(result, 'timeout');
 
 			// Request should be removed
-			expect(tracker.pending_requests.has(id)).toBe(false);
+			assert.ok(!tracker.pending_requests.has(id));
 
 			// Promise should be neither resolved nor rejected directly
-			expect(was_resolved).toBe(false);
-			expect(was_rejected).toBe(false);
+			assert.ok(!(was_resolved));
+			assert.ok(!(was_rejected));
 		});
 	});
 
@@ -718,18 +716,22 @@ describe('RequestTracker', () => {
 			const timeout2 = tracker.pending_requests.get(id2)?.timeout;
 
 			// Set up promise rejection tracking
-			const promise1 = expect(deferred1.promise).rejects.toBeInstanceOf(ThrownJsonrpcError);
-			const promise2 = expect(deferred2.promise).rejects.toBeInstanceOf(ThrownJsonrpcError);
+			const promise1 = deferred1.promise.catch((err) => {
+				assert.instanceOf(err, ThrownJsonrpcError);
+			});
+			const promise2 = deferred2.promise.catch((err) => {
+				assert.instanceOf(err, ThrownJsonrpcError);
+			});
 
 			// Cancel all requests
 			tracker.cancel_all_requests(custom_reason);
 
 			// Verify timeouts were cleared
-			expect(clear_timeout_spy).toHaveBeenCalledWith(timeout1);
-			expect(clear_timeout_spy).toHaveBeenCalledWith(timeout2);
+			assert.ok(clear_timeout_spy.mock.calls.some((call) => call[0] === timeout1));
+			assert.ok(clear_timeout_spy.mock.calls.some((call) => call[0] === timeout2));
 
 			// All requests should be removed
-			expect(tracker.pending_requests.size).toBe(0);
+			assert.strictEqual(tracker.pending_requests.size, 0);
 
 			// Wait for promise rejections to complete
 			await Promise.allSettled([promise1, promise2]);
@@ -740,10 +742,12 @@ describe('RequestTracker', () => {
 			const id = 'req_1';
 
 			const deferred = tracker.track_request(id);
-			const promise = expect(deferred.promise).rejects.toBeInstanceOf(ThrownJsonrpcError);
+			const promise = deferred.promise.catch((err) => {
+				assert.instanceOf(err, ThrownJsonrpcError);
+			});
 
 			tracker.cancel_all_requests();
-			expect(tracker.pending_requests.size).toBe(0);
+			assert.strictEqual(tracker.pending_requests.size, 0);
 
 			await promise;
 		});
@@ -755,7 +759,7 @@ describe('RequestTracker', () => {
 			tracker.cancel_all_requests();
 
 			// Should not attempt to clear any timeouts
-			expect(clear_timeout_spy).not.toHaveBeenCalled();
+			assert.strictEqual(clear_timeout_spy.mock.calls.length, 0);
 		});
 
 		test('sets failure status before rejecting', async () => {
@@ -781,7 +785,7 @@ describe('RequestTracker', () => {
 			tracker.cancel_all_requests();
 			await promise;
 
-			expect(status_when_rejected).toBe('failure');
+			assert.strictEqual(status_when_rejected, 'failure');
 		});
 
 		test('rejects with ThrownJsonrpcError instance when cancelling all requests', async () => {
@@ -791,7 +795,9 @@ describe('RequestTracker', () => {
 			const deferred = tracker.track_request(id);
 
 			// Set up testing for ThrownJsonrpcError instance
-			const promise = expect(deferred.promise).rejects.toBeInstanceOf(ThrownJsonrpcError);
+			const promise = deferred.promise.catch((err) => {
+				assert.instanceOf(err, ThrownJsonrpcError);
+			});
 
 			tracker.cancel_all_requests();
 
@@ -813,12 +819,12 @@ describe('RequestTracker', () => {
 			const deferred2 = tracker.track_request(id);
 
 			// Should be different deferred objects
-			expect(deferred1).not.toBe(deferred2);
-			expect(tracker.pending_requests.size).toBe(1);
-			expect(tracker.pending_requests.get(id)?.deferred).toBe(deferred2);
+			assert.notStrictEqual(deferred1, deferred2);
+			assert.strictEqual(tracker.pending_requests.size, 1);
+			assert.strictEqual(tracker.pending_requests.get(id)?.deferred, deferred2);
 
 			// Should have cleared the timeout from the first request
-			expect(clear_timeout_spy).toHaveBeenCalledWith(timeout1);
+			assert.ok(clear_timeout_spy.mock.calls.some((call) => call[0] === timeout1));
 
 			// Clean up
 			tracker.cancel_request(id);
@@ -835,14 +841,14 @@ describe('RequestTracker', () => {
 
 			for (const {id, method} of test_cases) {
 				const deferred = tracker.track_request(id);
-				expect(tracker.pending_requests.has(id)).toBe(true);
+				assert.ok(tracker.pending_requests.has(id));
 
 				const response = create_jsonrpc_response(id, {method});
 				tracker.resolve_request(id, response);
-				expect(tracker.pending_requests.has(id)).toBe(false);
+				assert.ok(!tracker.pending_requests.has(id));
 
 				const result = await deferred.promise;
-				expect(result).toBe(response);
+				assert.strictEqual(result, response);
 			}
 		});
 
@@ -860,13 +866,13 @@ describe('RequestTracker', () => {
 			});
 
 			const result = await deferred.promise;
-			expect(result).toEqual({
+			assert.deepEqual(result as any, {
 				jsonrpc: JSONRPC_VERSION,
 				id,
 				method: 'test',
 				result: null,
 			});
-			expect(tracker.pending_requests.has(id)).toBe(false);
+			assert.ok(!tracker.pending_requests.has(id));
 		});
 
 		test('request timeout uses correct error object', async () => {
@@ -882,9 +888,9 @@ describe('RequestTracker', () => {
 			vi.advanceTimersByTime(101);
 
 			const error = await error_promise;
-			expect(error).toBeInstanceOf(ThrownJsonrpcError);
-			expect(error.code).toBe(JSONRPC_INTERNAL_ERROR);
-			expect(error.message).toBe(`request timed out: ${id}`);
+			assert.instanceOf(error, ThrownJsonrpcError);
+			assert.strictEqual(error.code, JSONRPC_INTERNAL_ERROR);
+			assert.strictEqual(error.message, `request timed out: ${id}`);
 		});
 
 		test('handles undefined timeout when clearing timeouts', () => {
@@ -903,7 +909,7 @@ describe('RequestTracker', () => {
 			tracker.cancel_request(id);
 
 			// Request should be removed
-			expect(tracker.pending_requests.has(id)).toBe(false);
+			assert.ok(!tracker.pending_requests.has(id));
 
 			// Cleanup
 			clearTimeout(original_timeout);
@@ -951,7 +957,7 @@ describe('RequestTracker', () => {
 
 			// Promise should resolve with first value
 			const result = await deferred.promise;
-			expect(result).toEqual({
+			assert.deepEqual(result, {
 				jsonrpc: '2.0',
 				id,
 				result: {
@@ -960,7 +966,7 @@ describe('RequestTracker', () => {
 			});
 
 			// Warnings should be logged for the duplicate calls
-			expect(warn_spy).toHaveBeenCalledTimes(2);
+			assert.strictEqual(warn_spy.mock.calls.length, 2);
 		});
 	});
 
@@ -971,8 +977,8 @@ describe('RequestTracker', () => {
 
 			// Track the request
 			const deferred = tracker.track_request(id);
-			expect(tracker.pending_requests.has(id)).toBe(true);
-			expect(tracker.pending_requests.get(id)?.status).toBe('pending');
+			assert.ok(tracker.pending_requests.has(id));
+			assert.strictEqual(tracker.pending_requests.get(id)?.status, 'pending');
 
 			// Resolve the request
 			const response = create_jsonrpc_response(id, {status: 'success'});
@@ -982,11 +988,11 @@ describe('RequestTracker', () => {
 			const result = await deferred.promise;
 
 			// Request should be resolved and removed
-			expect(result).toEqual({
+			assert.deepEqual(result, {
 				...response,
 				result: {status: 'success'},
 			});
-			expect(tracker.pending_requests.has(id)).toBe(false);
+			assert.ok(!tracker.pending_requests.has(id));
 		});
 
 		test('handles simultaneous requests with different IDs', async () => {
@@ -1000,7 +1006,7 @@ describe('RequestTracker', () => {
 			}));
 
 			// All requests should be pending
-			expect(tracker.pending_requests.size).toBe(ids.length);
+			assert.strictEqual(tracker.pending_requests.size, ids.length);
 
 			// Resolve them in reverse order
 			for (let i = ids.length - 1; i >= 0; i--) {
@@ -1014,14 +1020,14 @@ describe('RequestTracker', () => {
 
 			// Verify each result matches its request
 			results.forEach((result, index) => {
-				expect(result.id).toBe(ids[index]);
+				assert.strictEqual(result.id, ids[index]);
 				if (is_jsonrpc_response(result)) {
-					expect(result.result.test).toBe('result');
+					assert.strictEqual(result.result.test, 'result');
 				}
 			});
 
 			// All requests should be removed
-			expect(tracker.pending_requests.size).toBe(0);
+			assert.strictEqual(tracker.pending_requests.size, 0);
 		});
 
 		test('handles a mix of resolved, rejected, and timed out requests', async () => {
@@ -1051,19 +1057,19 @@ describe('RequestTracker', () => {
 
 			// Set up promises to check results
 			const resolve_promise = resolve_deferred.promise.then((result) => {
-				expect(result).toHaveProperty('method', 'test_method');
+				assert.strictEqual((result as any).method, 'test_method');
 				return true;
 			});
 
 			const reject_promise = reject_deferred.promise.catch((error) => {
-				expect(error).toBeInstanceOf(ThrownJsonrpcError);
-				expect(error.message).toBe('rejected');
+				assert.instanceOf(error, ThrownJsonrpcError);
+				assert.strictEqual(error.message, 'rejected');
 				return true;
 			});
 
 			const timeout_promise = timeout_deferred.promise.catch((error) => {
-				expect(error).toBeInstanceOf(ThrownJsonrpcError);
-				expect(error.message).toBe(`request timed out: ${timeout_id}`);
+				assert.instanceOf(error, ThrownJsonrpcError);
+				assert.strictEqual(error.message, `request timed out: ${timeout_id}`);
 				return true;
 			});
 
@@ -1071,7 +1077,7 @@ describe('RequestTracker', () => {
 			await Promise.allSettled([resolve_promise, reject_promise, timeout_promise]);
 
 			// All requests should be removed
-			expect(tracker.pending_requests.size).toBe(0);
+			assert.strictEqual(tracker.pending_requests.size, 0);
 		});
 	});
 });

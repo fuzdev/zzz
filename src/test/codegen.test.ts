@@ -1,8 +1,6 @@
-// @slop Claude Opus 4
-
 // @vitest-environment jsdom
 
-import {test, expect, describe} from 'vitest';
+import {test, describe, assert} from 'vitest';
 import {
 	ImportBuilder,
 	get_executor_phases,
@@ -26,7 +24,7 @@ describe('ImportBuilder', () => {
 			imports.add_type('$lib/types.js', 'Foo');
 			imports.add_type('$lib/types.js', 'Bar');
 
-			expect(imports.build()).toBe(`import type {Bar, Foo} from '$lib/types.js';`);
+			assert.strictEqual(imports.build(), `import type {Bar, Foo} from '$lib/types.js';`);
 		});
 
 		test('add_types helper adds multiple types at once', () => {
@@ -34,15 +32,15 @@ describe('ImportBuilder', () => {
 
 			imports.add_types('$lib/types.js', 'TypeA', 'TypeB', 'TypeC');
 
-			expect(imports.build()).toBe(`import type {TypeA, TypeB, TypeC} from '$lib/types.js';`);
+			assert.strictEqual(imports.build(), `import type {TypeA, TypeB, TypeC} from '$lib/types.js';`);
 		});
 
 		test('empty imports returns empty string', () => {
 			const imports = new ImportBuilder();
 
-			expect(imports.build()).toBe('');
-			expect(imports.has_imports()).toBe(false);
-			expect(imports.import_count).toBe(0);
+			assert.strictEqual(imports.build(), '');
+			assert.ok(!imports.has_imports());
+			assert.strictEqual(imports.import_count, 0);
 		});
 	});
 
@@ -54,7 +52,7 @@ describe('ImportBuilder', () => {
 			imports.add_type('$lib/utils.js', 'HelperType');
 			imports.add('$lib/utils.js', 'another_helper');
 
-			expect(imports.build()).toBe(
+			assert.strictEqual(imports.build(),
 				`import {another_helper, helper, type HelperType} from '$lib/utils.js';`,
 			);
 		});
@@ -67,7 +65,7 @@ describe('ImportBuilder', () => {
 			imports.add('$lib/mixed.js', 'value'); // This makes it mixed
 			imports.add_type('$lib/mixed.js', 'TypeC');
 
-			expect(imports.build()).toBe(
+			assert.strictEqual(imports.build(),
 				`import {value, type TypeA, type TypeB, type TypeC} from '$lib/mixed.js';`,
 			);
 		});
@@ -84,7 +82,7 @@ describe('ImportBuilder', () => {
 			imports.add('$lib/mixed.js', 'm_value');
 
 			// Should sort values first (alphabetically), then types (alphabetically)
-			expect(imports.build()).toBe(
+			assert.strictEqual(imports.build(),
 				`import {a_value, m_value, z_value, type AType, type MType, type ZType} from '$lib/mixed.js';`,
 			);
 		});
@@ -96,7 +94,7 @@ describe('ImportBuilder', () => {
 
 			imports.add('$lib/action_specs.js', '* as specs');
 
-			expect(imports.build()).toBe(`import * as specs from '$lib/action_specs.js';`);
+			assert.strictEqual(imports.build(), `import * as specs from '$lib/action_specs.js';`);
 		});
 
 		test('namespace import with other imports from same module', () => {
@@ -108,9 +106,9 @@ describe('ImportBuilder', () => {
 			const result = imports.build();
 			const lines = result.split('\n');
 
-			expect(lines).toHaveLength(2);
-			expect(lines).toContain(`import * as utils from '$lib/utils.js';`);
-			expect(lines).toContain(`import {something} from '$lib/other.js';`);
+			assert.strictEqual((lines).length, 2);
+			assert.include(lines, `import * as utils from '$lib/utils.js';`);
+			assert.include(lines, `import {something} from '$lib/other.js';`);
 		});
 
 		test('add_many with namespace import', () => {
@@ -118,7 +116,7 @@ describe('ImportBuilder', () => {
 
 			imports.add_many('$lib/helpers.js', '* as helpers');
 
-			expect(imports.build()).toBe(`import * as helpers from '$lib/helpers.js';`);
+			assert.strictEqual(imports.build(), `import * as helpers from '$lib/helpers.js';`);
 		});
 
 		test('namespace imports are not mixed with regular imports', () => {
@@ -129,7 +127,7 @@ describe('ImportBuilder', () => {
 			imports.add('$lib/module.js', 'specific');
 
 			// Namespace imports should be on their own line
-			expect(imports.build()).toBe(`import * as mod from '$lib/module.js';`);
+			assert.strictEqual(imports.build(), `import * as mod from '$lib/module.js';`);
 		});
 	});
 
@@ -140,7 +138,7 @@ describe('ImportBuilder', () => {
 			imports.add_type('$lib/utils.js', 'Item');
 			imports.add('$lib/utils.js', 'Item'); // Upgrades to value
 
-			expect(imports.build()).toBe(`import {Item} from '$lib/utils.js';`);
+			assert.strictEqual(imports.build(), `import {Item} from '$lib/utils.js';`);
 		});
 
 		test('type import does not downgrade existing value import', () => {
@@ -149,7 +147,7 @@ describe('ImportBuilder', () => {
 			imports.add('$lib/utils.js', 'Item');
 			imports.add_type('$lib/utils.js', 'Item'); // Should not downgrade
 
-			expect(imports.build()).toBe(`import {Item} from '$lib/utils.js';`);
+			assert.strictEqual(imports.build(), `import {Item} from '$lib/utils.js';`);
 		});
 
 		test('duplicate imports are deduplicated', () => {
@@ -159,7 +157,7 @@ describe('ImportBuilder', () => {
 			imports.add_type('$lib/types.js', 'Foo');
 			imports.add_type('$lib/types.js', 'Foo');
 
-			expect(imports.build()).toBe(`import type {Foo} from '$lib/types.js';`);
+			assert.strictEqual(imports.build(), `import type {Foo} from '$lib/types.js';`);
 		});
 
 		test('namespace imports override previous imports', () => {
@@ -168,7 +166,7 @@ describe('ImportBuilder', () => {
 			imports.add('$lib/module.js', 'foo');
 			imports.add('$lib/module.js', '* as module'); // Should override
 
-			expect(imports.build()).toBe(`import * as module from '$lib/module.js';`);
+			assert.strictEqual(imports.build(), `import * as module from '$lib/module.js';`);
 		});
 	});
 
@@ -183,10 +181,10 @@ describe('ImportBuilder', () => {
 			const result = imports.build();
 			const lines = result.split('\n');
 
-			expect(lines).toHaveLength(3);
-			expect(lines).toContain(`import type {TypeA, TypeB} from '$lib/types.js';`);
-			expect(lines).toContain(`import {util} from '$lib/utils.js';`);
-			expect(lines).toContain(`import type {SchemaA, SchemaB} from '$lib/schemas.js';`);
+			assert.strictEqual((lines).length, 3);
+			assert.include(lines, `import type {TypeA, TypeB} from '$lib/types.js';`);
+			assert.include(lines, `import {util} from '$lib/utils.js';`);
+			assert.include(lines, `import type {SchemaA, SchemaB} from '$lib/schemas.js';`);
 		});
 
 		test('imports are sorted alphabetically within modules', () => {
@@ -196,7 +194,7 @@ describe('ImportBuilder', () => {
 			imports.add_type('$lib/types.js', 'Apple');
 			imports.add_type('$lib/types.js', 'Middle');
 
-			expect(imports.build()).toBe(`import type {Apple, Middle, Zebra} from '$lib/types.js';`);
+			assert.strictEqual(imports.build(), `import type {Apple, Middle, Zebra} from '$lib/types.js';`);
 		});
 
 		test('handles imports with underscores and numbers correctly', () => {
@@ -208,7 +206,7 @@ describe('ImportBuilder', () => {
 			imports.add_type('$lib/types.js', 'PUBLIC_TYPE');
 
 			// Underscores sort before letters in most locales
-			expect(imports.build()).toBe(
+			assert.strictEqual(imports.build(),
 				`import type {PUBLIC_TYPE, Type_1, Type_2, _Private_Type} from '$lib/types.js';`,
 			);
 		});
@@ -228,13 +226,13 @@ describe('ImportBuilder', () => {
 			const lines = imports.preview();
 
 			// Module order should be based on insertion order
-			expect(lines[0]).toContain('$lib/third.js');
-			expect(lines[1]).toContain('$lib/first.js');
-			expect(lines[2]).toContain('$lib/second.js');
+			assert.include(lines[0], '$lib/third.js');
+			assert.include(lines[1], '$lib/first.js');
+			assert.include(lines[2], '$lib/second.js');
 
 			// But items within modules are sorted
-			expect(lines[0]).toBe(`import type {Type3, Type3b} from '$lib/third.js';`);
-			expect(lines[1]).toBe(`import type {Type1, Type1b} from '$lib/first.js';`);
+			assert.strictEqual(lines[0], `import type {Type3, Type3b} from '$lib/third.js';`);
+			assert.strictEqual(lines[1], `import type {Type1, Type1b} from '$lib/first.js';`);
 		});
 
 		test('handles mixed namespace and regular imports across modules', () => {
@@ -247,11 +245,11 @@ describe('ImportBuilder', () => {
 
 			const lines = imports.preview();
 
-			expect(lines).toHaveLength(4);
-			expect(lines).toContain(`import * as specs from '$lib/specs.js';`);
-			expect(lines).toContain(`import type {TypeA} from '$lib/types.js';`);
-			expect(lines).toContain(`import {helper} from '$lib/utils.js';`);
-			expect(lines).toContain(`import * as schemas from '$lib/schemas.js';`);
+			assert.strictEqual((lines).length, 4);
+			assert.include(lines, `import * as specs from '$lib/specs.js';`);
+			assert.include(lines, `import type {TypeA} from '$lib/types.js';`);
+			assert.include(lines, `import {helper} from '$lib/utils.js';`);
+			assert.include(lines, `import * as schemas from '$lib/schemas.js';`);
 		});
 	});
 
@@ -259,27 +257,27 @@ describe('ImportBuilder', () => {
 		test('has_imports returns correct state', () => {
 			const imports = new ImportBuilder();
 
-			expect(imports.has_imports()).toBe(false);
+			assert.ok(!imports.has_imports());
 
 			imports.add_type('$lib/types.js', 'Foo');
 
-			expect(imports.has_imports()).toBe(true);
+			assert.ok(imports.has_imports());
 		});
 
 		test('import_count returns correct count', () => {
 			const imports = new ImportBuilder();
 
-			expect(imports.import_count).toBe(0);
+			assert.strictEqual(imports.import_count, 0);
 
 			imports.add_type('$lib/types.js', 'Foo');
-			expect(imports.import_count).toBe(1);
+			assert.strictEqual(imports.import_count, 1);
 
 			imports.add('$lib/utils.js', 'bar');
-			expect(imports.import_count).toBe(2);
+			assert.strictEqual(imports.import_count, 2);
 
 			// Adding to existing module doesn't increase count
 			imports.add_type('$lib/types.js', 'Bar');
-			expect(imports.import_count).toBe(2);
+			assert.strictEqual(imports.import_count, 2);
 		});
 
 		test('preview returns array of import statements', () => {
@@ -290,9 +288,9 @@ describe('ImportBuilder', () => {
 
 			const preview = imports.preview();
 
-			expect(preview).toHaveLength(2);
-			expect(preview[0]).toBe(`import type {Bar, Foo} from '$lib/types.js';`);
-			expect(preview[1]).toBe(`import {helper} from '$lib/utils.js';`);
+			assert.strictEqual((preview).length, 2);
+			assert.strictEqual(preview[0], `import type {Bar, Foo} from '$lib/types.js';`);
+			assert.strictEqual(preview[1], `import {helper} from '$lib/utils.js';`);
 		});
 
 		test('clear removes all imports', () => {
@@ -301,12 +299,12 @@ describe('ImportBuilder', () => {
 			imports.add_types('$lib/types.js', 'Foo', 'Bar');
 			imports.add('$lib/utils.js', 'helper');
 
-			expect(imports.import_count).toBe(2);
+			assert.strictEqual(imports.import_count, 2);
 
 			imports.clear();
 
-			expect(imports.import_count).toBe(0);
-			expect(imports.build()).toBe('');
+			assert.strictEqual(imports.import_count, 0);
+			assert.strictEqual(imports.build(), '');
 		});
 
 		test('chaining works correctly', () => {
@@ -319,8 +317,8 @@ describe('ImportBuilder', () => {
 				.clear()
 				.add_type('$lib/final.js', 'Final');
 
-			expect(result).toBe(imports); // Chainable
-			expect(imports.build()).toBe(`import type {Final} from '$lib/final.js';`);
+			assert.strictEqual(result, imports); // Chainable
+			assert.strictEqual(imports.build(), `import type {Final} from '$lib/final.js';`);
 		});
 	});
 
@@ -330,7 +328,7 @@ describe('ImportBuilder', () => {
 
 			imports.add_many('$lib/utils.js', 'util_a', 'util_b', 'util_c');
 
-			expect(imports.build()).toBe(`import {util_a, util_b, util_c} from '$lib/utils.js';`);
+			assert.strictEqual(imports.build(), `import {util_a, util_b, util_c} from '$lib/utils.js';`);
 		});
 
 		test('add_many can handle namespace imports', () => {
@@ -339,7 +337,7 @@ describe('ImportBuilder', () => {
 			imports.add_many('$lib/all.js', '* as all', 'specific');
 
 			// Only the namespace import should be used
-			expect(imports.build()).toBe(`import * as all from '$lib/all.js';`);
+			assert.strictEqual(imports.build(), `import * as all from '$lib/all.js';`);
 		});
 	});
 
@@ -350,8 +348,8 @@ describe('ImportBuilder', () => {
 			imports.add('$lib/module.js', '');
 
 			// Empty imports should be ignored
-			expect(imports.build()).toBe('');
-			expect(imports.has_imports()).toBe(false);
+			assert.strictEqual(imports.build(), '');
+			assert.ok(!imports.has_imports());
 		});
 
 		test('handles special characters in import names', () => {
@@ -360,7 +358,7 @@ describe('ImportBuilder', () => {
 			imports.add('$lib/module.js', '$special');
 			imports.add('$lib/module.js', '_underscore');
 
-			expect(imports.build()).toBe(`import {$special, _underscore} from '$lib/module.js';`);
+			assert.strictEqual(imports.build(), `import {$special, _underscore} from '$lib/module.js';`);
 		});
 	});
 });
@@ -369,7 +367,7 @@ describe('get_executor_phases', () => {
 	describe('request_response actions', () => {
 		test('frontend initiator - ping spec', () => {
 			// ping has initiator: 'both'
-			expect(get_executor_phases(ping_action_spec, 'frontend')).toEqual([
+			assert.deepEqual(get_executor_phases(ping_action_spec, 'frontend'), [
 				'send_request',
 				'receive_response',
 				'send_error',
@@ -377,7 +375,7 @@ describe('get_executor_phases', () => {
 				'receive_request',
 				'send_response',
 			]);
-			expect(get_executor_phases(ping_action_spec, 'backend')).toEqual([
+			assert.deepEqual(get_executor_phases(ping_action_spec, 'backend'), [
 				'send_request',
 				'receive_response',
 				'send_error',
@@ -389,13 +387,13 @@ describe('get_executor_phases', () => {
 
 		test('frontend initiator - session_load spec', () => {
 			// load_session has initiator: 'frontend'
-			expect(get_executor_phases(session_load_action_spec, 'frontend')).toEqual([
+			assert.deepEqual(get_executor_phases(session_load_action_spec, 'frontend'), [
 				'send_request',
 				'receive_response',
 				'send_error',
 				'receive_error',
 			]);
-			expect(get_executor_phases(session_load_action_spec, 'backend')).toEqual([
+			assert.deepEqual(get_executor_phases(session_load_action_spec, 'backend'), [
 				'receive_request',
 				'send_response',
 				'send_error',
@@ -404,13 +402,13 @@ describe('get_executor_phases', () => {
 
 		test('frontend initiator - completion_create spec', () => {
 			// create_completion has initiator: 'frontend'
-			expect(get_executor_phases(completion_create_action_spec, 'frontend')).toEqual([
+			assert.deepEqual(get_executor_phases(completion_create_action_spec, 'frontend'), [
 				'send_request',
 				'receive_response',
 				'send_error',
 				'receive_error',
 			]);
-			expect(get_executor_phases(completion_create_action_spec, 'backend')).toEqual([
+			assert.deepEqual(get_executor_phases(completion_create_action_spec, 'backend'), [
 				'receive_request',
 				'send_response',
 				'send_error',
@@ -421,16 +419,16 @@ describe('get_executor_phases', () => {
 	describe('remote_notification actions', () => {
 		test('backend initiator - filer_change spec', () => {
 			// filer_change has initiator: 'backend'
-			expect(get_executor_phases(filer_change_action_spec, 'frontend')).toEqual(['receive']);
-			expect(get_executor_phases(filer_change_action_spec, 'backend')).toEqual(['send']);
+			assert.deepEqual(get_executor_phases(filer_change_action_spec, 'frontend'), ['receive']);
+			assert.deepEqual(get_executor_phases(filer_change_action_spec, 'backend'), ['send']);
 		});
 	});
 
 	describe('local_call actions', () => {
 		test('frontend initiator - toggle_main_menu spec', () => {
 			// toggle_main_menu has initiator: 'frontend'
-			expect(get_executor_phases(toggle_main_menu_action_spec, 'frontend')).toEqual(['execute']);
-			expect(get_executor_phases(toggle_main_menu_action_spec, 'backend')).toEqual([]);
+			assert.deepEqual(get_executor_phases(toggle_main_menu_action_spec, 'frontend'), ['execute']);
+			assert.deepEqual(get_executor_phases(toggle_main_menu_action_spec, 'backend'), []);
 		});
 	});
 
@@ -438,7 +436,7 @@ describe('get_executor_phases', () => {
 		test('phases are returned in correct order', () => {
 			const frontend_phases = get_executor_phases(ping_action_spec, 'frontend');
 			// Send phases should come before receive phases
-			expect(frontend_phases.indexOf('send_request')).toBeLessThan(
+			assert.ok(frontend_phases.indexOf('send_request') <
 				frontend_phases.indexOf('receive_request'),
 			);
 		});
@@ -448,7 +446,7 @@ describe('get_executor_phases', () => {
 				...toggle_main_menu_action_spec,
 				initiator: 'backend' as const,
 			};
-			expect(get_executor_phases(spec_with_backend_only, 'frontend')).toEqual([]);
+			assert.deepEqual(get_executor_phases(spec_with_backend_only, 'frontend'), []);
 		});
 	});
 });
@@ -460,29 +458,29 @@ describe('get_handler_return_type', () => {
 
 			// ping_action_spec is a request/response action
 			const result = get_handler_return_type(ping_action_spec, 'receive_request', imports, './');
-			expect(result).toBe(`ActionOutputs['ping'] | Promise<ActionOutputs['ping']>`);
+			assert.strictEqual(result, `ActionOutputs['ping'] | Promise<ActionOutputs['ping']>`);
 
 			// Check that ActionOutputs was added to imports
 			const built = imports.build();
-			expect(built).toContain('ActionOutputs');
-			expect(built).toContain('./action_collections.js');
+			assert.include(built, 'ActionOutputs');
+			assert.include(built, './action_collections.js');
 		});
 
 		test('other phases return void and do not add imports', () => {
 			const imports = new ImportBuilder();
 
-			expect(get_handler_return_type(session_load_action_spec, 'send_request', imports, './')).toBe(
+			assert.strictEqual(get_handler_return_type(session_load_action_spec, 'send_request', imports, './'),
 				'void | Promise<void>',
 			);
-			expect(
+			assert.strictEqual(
 				get_handler_return_type(session_load_action_spec, 'send_response', imports, './'),
-			).toBe('void | Promise<void>');
-			expect(
+				'void | Promise<void>');
+			assert.strictEqual(
 				get_handler_return_type(session_load_action_spec, 'receive_response', imports, './'),
-			).toBe('void | Promise<void>');
+				'void | Promise<void>');
 
 			// Should not add ActionOutputs for void returns
-			expect(imports.build()).toBe('');
+			assert.strictEqual(imports.build(), '');
 		});
 	});
 
@@ -497,10 +495,10 @@ describe('get_handler_return_type', () => {
 				imports,
 				'./',
 			);
-			expect(result).toBe(`ActionOutputs['toggle_main_menu']`);
+			assert.strictEqual(result, `ActionOutputs['toggle_main_menu']`);
 
 			// Should add ActionOutputs import
-			expect(imports.build()).toContain('ActionOutputs');
+			assert.include(imports.build(), 'ActionOutputs');
 		});
 
 		test('execute phase returns Promise for async local_call', () => {
@@ -513,7 +511,7 @@ describe('get_handler_return_type', () => {
 			};
 
 			const result = get_handler_return_type(async_local_spec, 'execute', imports, './');
-			expect(result).toBe(
+			assert.strictEqual(result, 
 				`ActionOutputs['toggle_main_menu'] | Promise<ActionOutputs['toggle_main_menu']>`,
 			);
 		});
@@ -523,15 +521,15 @@ describe('get_handler_return_type', () => {
 		test('all phases return void', () => {
 			const imports = new ImportBuilder();
 
-			expect(get_handler_return_type(filer_change_action_spec, 'send', imports, './')).toBe(
+			assert.strictEqual(get_handler_return_type(filer_change_action_spec, 'send', imports, './'),
 				'void | Promise<void>',
 			);
-			expect(get_handler_return_type(filer_change_action_spec, 'receive', imports, './')).toBe(
+			assert.strictEqual(get_handler_return_type(filer_change_action_spec, 'receive', imports, './'),
 				'void | Promise<void>',
 			);
 
 			// Should not add imports for void returns
-			expect(imports.build()).toBe('');
+			assert.strictEqual(imports.build(), '');
 		});
 	});
 
@@ -541,15 +539,15 @@ describe('get_handler_return_type', () => {
 
 			// First call adds import
 			get_handler_return_type(ping_action_spec, 'receive_request', imports, './');
-			expect(imports.import_count).toBe(1);
+			assert.strictEqual(imports.import_count, 1);
 
 			// Second call doesn't add duplicate
 			get_handler_return_type(session_load_action_spec, 'receive_request', imports, './');
-			expect(imports.import_count).toBe(1);
+			assert.strictEqual(imports.import_count, 1);
 
 			// Void return doesn't add import
 			get_handler_return_type(ping_action_spec, 'send_request', imports, './');
-			expect(imports.import_count).toBe(1);
+			assert.strictEqual(imports.import_count, 1);
 		});
 	});
 });
@@ -560,52 +558,52 @@ describe('generate_phase_handlers', () => {
 		const imports = new ImportBuilder();
 		const result = generate_phase_handlers(toggle_main_menu_action_spec, 'backend', imports);
 
-		expect(result).toBe('toggle_main_menu?: never');
-		expect(imports.has_imports()).toBe(false);
+		assert.strictEqual(result, 'toggle_main_menu?: never');
+		assert.ok(!imports.has_imports());
 	});
 
 	test('generates handlers for request_response action', () => {
 		const imports = new ImportBuilder();
 		const result = generate_phase_handlers(session_load_action_spec, 'frontend', imports);
 
-		expect(result).toContain('session_load?: {');
-		expect(result).toContain('send_request?:');
-		expect(result).toContain('receive_response?:');
-		expect(result).not.toContain('receive_request');
+		assert.include(result, 'session_load?: {');
+		assert.include(result, 'send_request?:');
+		assert.include(result, 'receive_response?:');
+		assert.notInclude(result, 'receive_request');
 
 		// Check imports were added
-		expect(imports.has_imports()).toBe(true);
+		assert.ok(imports.has_imports());
 		const import_str = imports.build();
-		expect(import_str).toContain('ActionEvent');
-		expect(import_str).toContain('Frontend');
+		assert.include(import_str, 'ActionEvent');
+		assert.include(import_str, 'Frontend');
 	});
 
 	test('generates handlers for notification action', () => {
 		const imports = new ImportBuilder();
 		const result = generate_phase_handlers(filer_change_action_spec, 'backend', imports);
 
-		expect(result).toContain('filer_change?: {');
-		expect(result).toContain('send?:');
-		expect(result).not.toContain('receive?:');
+		assert.include(result, 'filer_change?: {');
+		assert.include(result, 'send?:');
+		assert.notInclude(result, 'receive?:');
 
 		const import_str = imports.build();
-		expect(import_str).toContain('ActionEvent');
-		expect(import_str).toContain('Backend');
+		assert.include(import_str, 'ActionEvent');
+		assert.include(import_str, 'Backend');
 	});
 
 	test('generates handlers for local_call action', () => {
 		const imports = new ImportBuilder();
 		const result = generate_phase_handlers(toggle_main_menu_action_spec, 'frontend', imports);
 
-		expect(result).toContain('toggle_main_menu?: {');
-		expect(result).toContain('execute?:');
-		expect(result).toContain(`ActionOutputs['toggle_main_menu']`);
-		expect(result).not.toContain('Promise'); // It's a sync action
+		assert.include(result, 'toggle_main_menu?: {');
+		assert.include(result, 'execute?:');
+		assert.include(result, `ActionOutputs['toggle_main_menu']`);
+		assert.notInclude(result, 'Promise'); // It's a sync action
 
 		const import_str = imports.build();
-		expect(import_str).toContain('ActionEvent');
-		expect(import_str).toContain('ActionOutputs'); // Added by get_handler_return_type
-		expect(import_str).toContain('Frontend');
+		assert.include(import_str, 'ActionEvent');
+		assert.include(import_str, 'ActionOutputs'); // Added by get_handler_return_type
+		assert.include(import_str, 'Frontend');
 	});
 
 	test('uses type-only imports when appropriate', () => {
@@ -617,7 +615,7 @@ describe('generate_phase_handlers', () => {
 		const lines = import_str.split('\n');
 		lines.forEach((line) => {
 			if (line.trim()) {
-				expect(line).toMatch(/^import type/);
+				assert.match(line, /^import type/);
 			}
 		});
 	});
@@ -626,10 +624,10 @@ describe('generate_phase_handlers', () => {
 		const imports = new ImportBuilder();
 		const result = generate_phase_handlers(ping_action_spec, 'frontend', imports);
 
-		expect(result).toContain('send_request?:');
-		expect(result).toContain('receive_response?:');
-		expect(result).toContain('receive_request?:');
-		expect(result).toContain('send_response?:');
+		assert.include(result, 'send_request?:');
+		assert.include(result, 'receive_response?:');
+		assert.include(result, 'receive_request?:');
+		assert.include(result, 'send_response?:');
 	});
 
 	test('uses phase and step type parameters in handler signature', () => {
@@ -637,16 +635,16 @@ describe('generate_phase_handlers', () => {
 		const result = generate_phase_handlers(ping_action_spec, 'frontend', imports);
 
 		// Should use the new type parameter syntax instead of data override
-		expect(result).toContain(
+		assert.include(result, 
 			`action_event: ActionEvent<'ping', Frontend, 'send_request', 'handling'>`,
 		);
-		expect(result).toContain(
+		assert.include(result, 
 			`action_event: ActionEvent<'ping', Frontend, 'receive_response', 'handling'>`,
 		);
-		expect(result).toContain(
+		assert.include(result, 
 			`action_event: ActionEvent<'ping', Frontend, 'receive_request', 'handling'>`,
 		);
-		expect(result).toContain(
+		assert.include(result, 
 			`action_event: ActionEvent<'ping', Frontend, 'send_response', 'handling'>`,
 		);
 	});
@@ -656,12 +654,12 @@ describe('generate_phase_handlers', () => {
 		// ping has receive_request handler on backend which returns output
 		const result = generate_phase_handlers(ping_action_spec, 'backend', imports);
 
-		expect(result).toContain('receive_request?:');
-		expect(result).toContain(`ActionOutputs['ping'] | Promise<ActionOutputs['ping']>`);
+		assert.include(result, 'receive_request?:');
+		assert.include(result, `ActionOutputs['ping'] | Promise<ActionOutputs['ping']>`);
 
 		// Check that ActionOutputs was imported
 		const import_str = imports.build();
-		expect(import_str).toContain('ActionOutputs');
+		assert.include(import_str, 'ActionOutputs');
 	});
 
 	test('handler formatting is consistent', () => {
@@ -670,9 +668,9 @@ describe('generate_phase_handlers', () => {
 
 		// Check indentation and formatting
 		const lines = result.split('\n');
-		expect(lines[0]).toMatch(/^ping\?: \{$/);
-		expect(lines[1]).toMatch(/^\t\t/); // Two tabs for handler definitions
-		expect(lines[lines.length - 1]).toMatch(/^\t\}$/); // One tab for closing brace
+		assert.match(lines[0]!, /^ping\?: \{$/);
+		assert.match(lines[1]!, /^\t\t/); // Two tabs for handler definitions
+		assert.match(lines[lines.length - 1]!, /^\t\}$/); // One tab for closing brace
 	});
 
 	test('imports are deduplicated across multiple specs', () => {
@@ -686,9 +684,9 @@ describe('generate_phase_handlers', () => {
 		const import_str = imports.build();
 
 		// Should have exactly one import of each type
-		expect(import_str.match(/ActionEvent/g)?.length).toBe(1);
-		expect(import_str.match(/Frontend/g)?.length).toBe(1);
-		expect(import_str.match(/ActionOutputs/g)?.length).toBe(1);
+		assert.strictEqual(import_str.match(/ActionEvent/g)?.length, 1);
+		assert.strictEqual(import_str.match(/Frontend/g)?.length, 1);
+		assert.strictEqual(import_str.match(/ActionOutputs/g)?.length, 1);
 	});
 
 	test('frontend generates correct relative import paths', () => {
@@ -696,9 +694,9 @@ describe('generate_phase_handlers', () => {
 		generate_phase_handlers(ping_action_spec, 'frontend', imports);
 
 		const import_str = imports.build();
-		expect(import_str).toContain("from './action_event.js'");
-		expect(import_str).toContain("from './frontend.svelte.js'");
-		expect(import_str).toContain("from './action_collections.js'");
+		assert.include(import_str, "from './action_event.js'");
+		assert.include(import_str, "from './frontend.svelte.js'");
+		assert.include(import_str, "from './action_collections.js'");
 	});
 
 	test('backend generates correct relative import paths', () => {
@@ -706,8 +704,8 @@ describe('generate_phase_handlers', () => {
 		generate_phase_handlers(ping_action_spec, 'backend', imports);
 
 		const import_str = imports.build();
-		expect(import_str).toContain("from '../action_event.js'");
-		expect(import_str).toContain("from './backend.js'");
-		expect(import_str).toContain("from '../action_collections.js'");
+		assert.include(import_str, "from '../action_event.js'");
+		assert.include(import_str, "from './backend.js'");
+		assert.include(import_str, "from '../action_collections.js'");
 	});
 });
