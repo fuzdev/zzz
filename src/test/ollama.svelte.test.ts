@@ -23,7 +23,7 @@ describe('Ollama', () => {
 
 		assert.strictEqual(ollama.host, OLLAMA_URL);
 		assert.strictEqual(ollama.list_status, 'initial');
-		assert.ok(!(ollama.available));
+		assert.ok(!ollama.available);
 		assert.typeOf(ollama.models.length, 'number');
 	});
 
@@ -31,8 +31,8 @@ describe('Ollama', () => {
 		const app = create_test_app();
 		const ollama = new Ollama({app});
 
-		assert.strictEqual((ollama.pending_actions).length, 0);
-		assert.strictEqual((ollama.completed_actions).length, 0);
+		assert.strictEqual(ollama.pending_actions.length, 0);
+		assert.strictEqual(ollama.completed_actions.length, 0);
 
 		// Add a pending action
 		app.actions.add_from_json({
@@ -53,8 +53,8 @@ describe('Ollama', () => {
 			},
 		});
 
-		assert.strictEqual((ollama.pending_actions).length, 1);
-		assert.strictEqual((ollama.completed_actions).length, 0);
+		assert.strictEqual(ollama.pending_actions.length, 1);
+		assert.strictEqual(ollama.completed_actions.length, 0);
 
 		// Add a completed action
 		app.actions.add_from_json({
@@ -75,8 +75,8 @@ describe('Ollama', () => {
 			},
 		});
 
-		assert.strictEqual((ollama.pending_actions).length, 1);
-		assert.strictEqual((ollama.completed_actions).length, 1);
+		assert.strictEqual(ollama.pending_actions.length, 1);
+		assert.strictEqual(ollama.completed_actions.length, 1);
 	});
 
 	test('should derive models from app.models', () => {
@@ -90,7 +90,7 @@ describe('Ollama', () => {
 
 		const ollama = new Ollama({app});
 
-		assert.strictEqual((ollama.models).length, 2);
+		assert.strictEqual(ollama.models.length, 2);
 		assert.strictEqual(ollama.models.length, 2);
 		assert.include(ollama.model_names, 'llama3.2:1b');
 		assert.include(ollama.model_names, 'gemma3:1b');
@@ -134,7 +134,7 @@ describe('Ollama', () => {
 		ollama.clear_model_details(model!);
 
 		assert.ok(model!.ollama_show_response === undefined);
-		assert.ok(!(model!.ollama_show_response_loaded));
+		assert.ok(!model!.ollama_show_response_loaded);
 		assert.ok(model!.ollama_show_response_error === undefined);
 	});
 
@@ -162,7 +162,7 @@ describe('Ollama', () => {
 		assert.isNull(ollama.ps_response);
 		assert.strictEqual(ollama.ps_status, 'initial');
 		assert.isNull(ollama.ps_error);
-		assert.ok(!(ollama.ps_polling_enabled));
+		assert.ok(!ollama.ps_polling_enabled);
 		assert.deepEqual(ollama.running_models, []);
 		assert.strictEqual(ollama.running_model_names.size, 0);
 	});
@@ -195,7 +195,7 @@ describe('Ollama', () => {
 			],
 		};
 
-		assert.strictEqual((ollama.running_models).length, 2);
+		assert.strictEqual(ollama.running_models.length, 2);
 		assert.strictEqual(ollama.running_models[0]!.name, 'llama3.2:1b');
 		assert.strictEqual(ollama.running_models[0]!.size_vram, 1024 * 1024 * 1024);
 		assert.strictEqual(ollama.running_models[1]!.name, 'gemma:2b');
@@ -220,11 +220,11 @@ describe('Ollama', () => {
 
 		// Stop polling
 		ollama.stop_ps_polling();
-		assert.ok(!(ollama.ps_polling_enabled));
+		assert.ok(!ollama.ps_polling_enabled);
 
 		// Stopping again should be safe
 		ollama.stop_ps_polling();
-		assert.ok(!(ollama.ps_polling_enabled));
+		assert.ok(!ollama.ps_polling_enabled);
 	});
 
 	test('should filter ollama actions correctly', () => {
@@ -286,10 +286,19 @@ describe('Ollama', () => {
 			},
 		});
 
-		assert.strictEqual((ollama.actions).length, 2);
-		assert.include(ollama.actions.map((a) => a.method), 'ollama_pull');
-		assert.include(ollama.actions.map((a) => a.method), 'ollama_list');
-		assert.notInclude(ollama.actions.map((a) => a.method), 'completion_create');
+		assert.strictEqual(ollama.actions.length, 2);
+		assert.include(
+			ollama.actions.map((a) => a.method),
+			'ollama_pull',
+		);
+		assert.include(
+			ollama.actions.map((a) => a.method),
+			'ollama_list',
+		);
+		assert.notInclude(
+			ollama.actions.map((a) => a.method),
+			'completion_create',
+		);
 	});
 
 	test('should filter read operations when show_read_actions is false', () => {
@@ -334,13 +343,13 @@ describe('Ollama', () => {
 		});
 
 		// With show_read_actions = false (default)
-		assert.ok(!(ollama.show_read_actions));
-		assert.strictEqual((ollama.filtered_actions).length, 1);
+		assert.ok(!ollama.show_read_actions);
+		assert.strictEqual(ollama.filtered_actions.length, 1);
 		assert.strictEqual(ollama.filtered_actions[0]!.method, 'ollama_pull');
 
 		// With show_read_actions = true
 		ollama.show_read_actions = true;
-		assert.strictEqual((ollama.filtered_actions).length, 2);
+		assert.strictEqual(ollama.filtered_actions.length, 2);
 	});
 
 	test('should handle action progress tracking', () => {
@@ -366,7 +375,7 @@ describe('Ollama', () => {
 			},
 		});
 
-		assert.strictEqual((ollama.pending_actions).length, 1);
+		assert.strictEqual(ollama.pending_actions.length, 1);
 		assert.deepEqual(ollama.pending_actions[0]!.action_event_data?.progress, {
 			status: 'downloading',
 			completed: 50,
@@ -408,10 +417,10 @@ describe('Ollama', () => {
 		const app = create_test_app();
 		const ollama = new Ollama({app});
 
-		assert.strictEqual((ollama.actions).length, 0);
-		assert.strictEqual((ollama.pending_actions).length, 0);
-		assert.strictEqual((ollama.completed_actions).length, 0);
-		assert.strictEqual((ollama.filtered_actions).length, 0);
+		assert.strictEqual(ollama.actions.length, 0);
+		assert.strictEqual(ollama.pending_actions.length, 0);
+		assert.strictEqual(ollama.completed_actions.length, 0);
+		assert.strictEqual(ollama.filtered_actions.length, 0);
 	});
 
 	test('should handle failed actions', () => {
@@ -436,8 +445,8 @@ describe('Ollama', () => {
 			},
 		});
 
-		assert.strictEqual((ollama.pending_actions).length, 0);
-		assert.strictEqual((ollama.completed_actions).length, 1);
+		assert.strictEqual(ollama.pending_actions.length, 0);
+		assert.strictEqual(ollama.completed_actions.length, 1);
 		assert.strictEqual(ollama.completed_actions[0]!.action_event_data?.step, 'failed');
 	});
 
@@ -451,7 +460,7 @@ describe('Ollama', () => {
 
 		const ollama = new Ollama({app});
 
-		assert.strictEqual((ollama.models).length, 1);
+		assert.strictEqual(ollama.models.length, 1);
 		assert.strictEqual(ollama.models[0]!.name, 'ollama_model');
 		assert.strictEqual(ollama.models[0]!.provider_name, 'ollama');
 	});
@@ -462,7 +471,7 @@ describe('Ollama', () => {
 
 		ollama.ps_response = {models: []};
 
-		assert.strictEqual((ollama.running_models).length, 0);
+		assert.strictEqual(ollama.running_models.length, 0);
 		assert.strictEqual(ollama.running_model_names.size, 0);
 	});
 });

@@ -141,7 +141,7 @@ describe('Socket', () => {
 
 			assert.strictEqual(mock_socket.close_code, DEFAULT_CLOSE_CODE);
 			assert.isNull(socket.ws);
-			assert.ok(!(socket.open));
+			assert.ok(!socket.open);
 		});
 
 		test('connection success updates state correctly', () => {
@@ -176,7 +176,7 @@ describe('Socket', () => {
 
 			// Not connected yet
 			const sent = socket.send(TEST_MESSAGE.BASIC);
-			assert.ok(!(sent));
+			assert.ok(!sent);
 			assert.strictEqual(socket.queued_message_count, 1);
 		});
 
@@ -277,7 +277,7 @@ describe('Socket', () => {
 			// Simulate unexpected close
 			mock_socket.dispatchEvent('close');
 
-			assert.ok(!(socket.open));
+			assert.ok(!socket.open);
 			assert.strictEqual(socket.status, 'failure');
 
 			// Should reconnect after delay

@@ -284,7 +284,8 @@ describe('IndexedCollection - Schema Validation', () => {
 		collection.query('by_string_b', 'not-an-email');
 		assert.ok(
 			console_error_spy.mock.calls.some(
-				([msg]) => typeof msg === 'string' && msg.includes('Query validation failed for index by_string_b'),
+				([msg]) =>
+					typeof msg === 'string' && msg.includes('Query validation failed for index by_string_b'),
 			),
 		);
 
@@ -292,7 +293,8 @@ describe('IndexedCollection - Schema Validation', () => {
 		collection.query('by_number', 5);
 		assert.ok(
 			console_error_spy.mock.calls.some(
-				([msg]) => typeof msg === 'string' && msg.includes('Query validation failed for index by_number'),
+				([msg]) =>
+					typeof msg === 'string' && msg.includes('Query validation failed for index by_number'),
 			),
 		);
 

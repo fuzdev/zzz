@@ -27,7 +27,7 @@ const assert_parse_success = <T>(schema: z.ZodType<T>, input: unknown, expected?
 
 const assert_parse_failure = (schema: z.ZodType, input: unknown) => {
 	const result = schema.safeParse(input);
-	assert.ok(!(result.success));
+	assert.ok(!result.success);
 	return result.success ? undefined : result.error;
 };
 

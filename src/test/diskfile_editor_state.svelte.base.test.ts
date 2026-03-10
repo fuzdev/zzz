@@ -40,8 +40,8 @@ describe('initialization', () => {
 	test('editor_state initializes with correct values', () => {
 		assert.strictEqual(editor_state.original_content, TEST_CONTENT);
 		assert.strictEqual(editor_state.current_content, TEST_CONTENT);
-		assert.ok(!(editor_state.has_changes));
-		assert.ok(!(editor_state.content_was_modified_by_user));
+		assert.ok(!editor_state.has_changes);
+		assert.ok(!editor_state.content_was_modified_by_user);
 		assert.isNull(editor_state.unsaved_edit_entry_id);
 		assert.strictEqual(editor_state.last_seen_disk_content, TEST_CONTENT);
 
@@ -60,8 +60,8 @@ describe('initialization', () => {
 
 		// The initial entry should contain the original content
 		assert.strictEqual(history!.entries[0]!.content, TEST_CONTENT);
-		assert.ok(!(history!.entries[0]!.is_unsaved_edit));
-		assert.ok(!(history!.entries[0]!.is_disk_change));
+		assert.ok(!history!.entries[0]!.is_unsaved_edit);
+		assert.ok(!history!.entries[0]!.is_disk_change);
 		assert.ok(history!.entries[0]!.is_original_state);
 	});
 
@@ -82,7 +82,7 @@ describe('initialization', () => {
 		// Check state properties
 		assert.isNull(null_editor_state.original_content);
 		assert.strictEqual(null_editor_state.current_content, '');
-		assert.ok(!(null_editor_state.has_changes));
+		assert.ok(!null_editor_state.has_changes);
 		assert.isNull(null_editor_state.last_seen_disk_content);
 
 		// History should still be created
@@ -104,7 +104,7 @@ describe('content editing', () => {
 
 	test('content modifications track user edits flag', () => {
 		// Initial state - no user edits
-		assert.ok(!(editor_state.content_was_modified_by_user));
+		assert.ok(!editor_state.content_was_modified_by_user);
 
 		// Change content - should mark as user-edited
 		editor_state.current_content = 'User edit';
@@ -112,12 +112,12 @@ describe('content editing', () => {
 
 		// Change back to original - should clear user-edited flag
 		editor_state.current_content = TEST_CONTENT;
-		assert.ok(!(editor_state.content_was_modified_by_user));
+		assert.ok(!editor_state.content_was_modified_by_user);
 	});
 
 	test('has_changes tracks difference between current and original content', () => {
 		// Initial state - no changes
-		assert.ok(!(editor_state.has_changes));
+		assert.ok(!editor_state.has_changes);
 
 		// Make a change
 		editor_state.current_content = 'Changed content';
@@ -125,7 +125,7 @@ describe('content editing', () => {
 
 		// Change back to original
 		editor_state.current_content = TEST_CONTENT;
-		assert.ok(!(editor_state.has_changes));
+		assert.ok(!editor_state.has_changes);
 	});
 
 	test('editing content preserves selection state', () => {
@@ -159,8 +159,8 @@ describe('content editing', () => {
 		editor_state.current_content = TEST_CONTENT;
 
 		// Flags should be cleared
-		assert.ok(!(editor_state.content_was_modified_by_user));
-		assert.ok(!(editor_state.has_changes));
+		assert.ok(!editor_state.content_was_modified_by_user);
+		assert.ok(!editor_state.has_changes);
 	});
 });
 
@@ -195,7 +195,8 @@ describe('content metrics', () => {
 		// Verify token calculations
 		assert.ok(editor_state.current_token_count > 0);
 		assert.strictEqual(editor_state.current_token_count, editor_state.current_token_count);
-		assert.strictEqual(editor_state.token_diff, 
+		assert.strictEqual(
+			editor_state.token_diff,
 			editor_state.current_token_count - editor_state.original_token_count,
 		);
 
@@ -272,8 +273,8 @@ describe('file management', () => {
 		assert.strictEqual(editor_state.diskfile, another_diskfile);
 		assert.strictEqual(editor_state.original_content, another_content);
 		assert.strictEqual(editor_state.current_content, another_content);
-		assert.ok(!(editor_state.has_changes));
-		assert.ok(!(editor_state.content_was_modified_by_user));
+		assert.ok(!editor_state.has_changes);
+		assert.ok(!editor_state.content_was_modified_by_user);
 
 		// History should be initialized for the new file
 		const new_history = app.get_diskfile_history(another_path);
@@ -312,8 +313,8 @@ describe('file management', () => {
 
 		// Verify state is reset
 		assert.strictEqual(editor_state.current_content, TEST_CONTENT);
-		assert.ok(!(editor_state.has_changes));
-		assert.ok(!(editor_state.content_was_modified_by_user));
+		assert.ok(!editor_state.has_changes);
+		assert.ok(!editor_state.content_was_modified_by_user);
 		assert.isNull(editor_state.unsaved_edit_entry_id);
 		assert.isNull(editor_state.selected_history_entry_id);
 	});
@@ -322,7 +323,7 @@ describe('file management', () => {
 describe('derived state', () => {
 	test('derived property has_history is accurate', () => {
 		// Initial state - only one entry, should not have history
-		assert.ok(!(editor_state.has_history));
+		assert.ok(!editor_state.has_history);
 
 		// Add an entry
 		editor_state.current_content = 'New content';
@@ -333,7 +334,7 @@ describe('derived state', () => {
 
 	test('derived property has_unsaved_edits is accurate', async () => {
 		// Initial state - no unsaved edits
-		assert.ok(!(editor_state.has_unsaved_edits));
+		assert.ok(!editor_state.has_unsaved_edits);
 
 		// Make an edit
 		editor_state.current_content = 'Unsaved edit';
@@ -345,13 +346,13 @@ describe('derived state', () => {
 		await editor_state.save_changes();
 
 		// No more unsaved edits
-		assert.ok(!(editor_state.has_unsaved_edits));
+		assert.ok(!editor_state.has_unsaved_edits);
 	});
 
 	test('derived properties for UI state management', () => {
 		// Initial state
-		assert.ok(!(editor_state.can_clear_history));
-		assert.ok(!(editor_state.can_clear_unsaved_edits));
+		assert.ok(!editor_state.can_clear_history);
+		assert.ok(!editor_state.can_clear_unsaved_edits);
 
 		// Add a saved entry
 		const history = app.get_diskfile_history(TEST_PATH)!;
@@ -402,18 +403,18 @@ describe('saving changes', () => {
 		assert.ok(result);
 		assert.strictEqual(test_diskfile.content, 'Content to save');
 		assert.strictEqual(editor_state.last_seen_disk_content, 'Content to save');
-		assert.ok(!(editor_state.content_was_modified_by_user));
+		assert.ok(!editor_state.content_was_modified_by_user);
 	});
 
 	test('save_changes with no changes returns false', async () => {
 		// Don't make any changes
-		assert.ok(!(editor_state.has_changes));
+		assert.ok(!editor_state.has_changes);
 
 		// Try to save
 		const result = await editor_state.save_changes();
 
 		// Verify nothing was saved
-		assert.ok(!(result));
+		assert.ok(!result);
 	});
 
 	test('save_changes creates history entry with correct properties', async () => {
@@ -426,7 +427,7 @@ describe('saving changes', () => {
 		// Check history entry
 		const history = app.get_diskfile_history(TEST_PATH)!;
 		assert.strictEqual(history.entries[0]!.content, 'Content to be saved');
-		assert.ok(!(history.entries[0]!.is_unsaved_edit));
-		assert.ok(!(history.entries[0]!.is_disk_change));
+		assert.ok(!history.entries[0]!.is_unsaved_edit);
+		assert.ok(!history.entries[0]!.is_disk_change);
 	});
 });

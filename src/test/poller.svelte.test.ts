@@ -18,7 +18,7 @@ describe('Poller', () => {
 		const poll_fn = vi.fn();
 		const poller = new Poller({poll_fn});
 
-		assert.ok(!(poller.active));
+		assert.ok(!poller.active);
 	});
 
 	test('should start polling with immediate execution by default', () => {
@@ -77,7 +77,7 @@ describe('Poller', () => {
 		assert.strictEqual(poll_fn.mock.calls.length, 1);
 
 		poller.stop();
-		assert.ok(!(poller.active));
+		assert.ok(!poller.active);
 
 		// Should not poll after stopping
 		vi.advanceTimersByTime(Poller.DEFAULT_INTERVAL);
@@ -109,7 +109,7 @@ describe('Poller', () => {
 		poller.stop();
 		poller.stop();
 
-		assert.ok(!(poller.active));
+		assert.ok(!poller.active);
 	});
 
 	test('should handle async poll functions', () => {
@@ -184,7 +184,7 @@ describe('Poller', () => {
 
 		// Set interval while inactive
 		poller.set_interval(5_000);
-		assert.ok(!(poller.active));
+		assert.ok(!poller.active);
 
 		// Start and verify new interval is used
 		poller.start();
@@ -215,7 +215,7 @@ describe('Poller', () => {
 		assert.ok(poller.active);
 
 		poller.dispose();
-		assert.ok(!(poller.active));
+		assert.ok(!poller.active);
 
 		// Should not poll after disposal
 		vi.advanceTimersByTime(Poller.DEFAULT_INTERVAL);
@@ -231,7 +231,7 @@ describe('Poller', () => {
 		assert.ok(poller.active);
 
 		poller.stop();
-		assert.ok(!(poller.active));
+		assert.ok(!poller.active);
 
 		poller.start();
 		assert.ok(poller.active);

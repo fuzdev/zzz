@@ -104,7 +104,10 @@ test('format_prompt_content - uses different part types as defaults', () => {
 	];
 
 	const result = format_prompt_content(parts as any);
-	assert.strictEqual(result, '<File>\nFile content\n</File>\n\n<Fragment>\nSequence content\n</Fragment>');
+	assert.strictEqual(
+		result,
+		'<File>\nFile content\n</File>\n\n<Fragment>\nSequence content\n</Fragment>',
+	);
 });
 
 test('format_prompt_content - uses different default XML tag names for different part types', () => {
@@ -130,7 +133,8 @@ test('format_prompt_content - uses different default XML tag names for different
 	];
 
 	const result = format_prompt_content(parts as any);
-	assert.strictEqual(result,
+	assert.strictEqual(
+		result,
 		'<File>\nFile content\n</File>\n\n<Fragment>\nText content\n</Fragment>\n\n<Fragment>\nSequence content\n</Fragment>',
 	);
 });
@@ -178,7 +182,8 @@ test('format_prompt_content - handles explicitly empty string values', () => {
 	];
 
 	const result = format_prompt_content(parts as any);
-	assert.strictEqual(result,
+	assert.strictEqual(
+		result,
 		'<div data-test class="container">\nContent with explicit empty value\n</div>',
 	);
 });
@@ -214,7 +219,8 @@ test('format_prompt_content - handles multiple attributes with mix of empty and 
 	];
 
 	const result = format_prompt_content(parts as any);
-	assert.strictEqual(result,
+	assert.strictEqual(
+		result,
 		'<div class="container" id="main" data-test="true" hidden disabled>\nMultiple attributes\n</div>',
 	);
 });
@@ -251,7 +257,8 @@ test('format_prompt_content - trims attribute keys before rendering', () => {
 	];
 
 	const result = format_prompt_content(parts as any);
-	assert.strictEqual(result,
+	assert.strictEqual(
+		result,
 		'<div class="container" data-test="true">\nContent with trimmed keys\n</div>',
 	);
 });
@@ -353,7 +360,8 @@ test('format_prompt_content - combines path attribute with other attributes for 
 	});
 
 	const result = format_prompt_content([diskfile_part] as any);
-	assert.strictEqual(result,
+	assert.strictEqual(
+		result,
 		'<code path="src/utils.js" language="javascript" highlight>\nFile with multiple attributes\n</code>',
 	);
 });

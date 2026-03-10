@@ -19,13 +19,13 @@ describe('get_schema_class_info', () => {
 		const boolean_info = get_schema_class_info(boolean_schema);
 
 		assert.strictEqual(string_info?.type, 'ZodString');
-		assert.ok(!(string_info?.is_array));
+		assert.ok(!string_info?.is_array);
 
 		assert.strictEqual(number_info?.type, 'ZodNumber');
-		assert.ok(!(number_info?.is_array));
+		assert.ok(!number_info?.is_array);
 
 		assert.strictEqual(boolean_info?.type, 'ZodBoolean');
-		assert.ok(!(boolean_info?.is_array));
+		assert.ok(!boolean_info?.is_array);
 	});
 
 	test('identifies array schemas correctly', () => {
@@ -57,7 +57,7 @@ describe('get_schema_class_info', () => {
 
 		// Default shouldn't change the core type
 		assert.strictEqual(string_default_info?.type, 'ZodString');
-		assert.ok(!(string_default_info?.is_array));
+		assert.ok(!string_default_info?.is_array);
 
 		// This is what's failing in the test - default-wrapped arrays should still be identified as arrays
 		assert.strictEqual(array_default_info?.type, 'ZodArray');
@@ -72,7 +72,7 @@ describe('get_schema_class_info', () => {
 
 		const object_info = get_schema_class_info(object_schema);
 		assert.strictEqual(object_info?.type, 'ZodObject');
-		assert.ok(!(object_info?.is_array));
+		assert.ok(!object_info?.is_array);
 	});
 
 	test('detects class names set with cell_class', () => {

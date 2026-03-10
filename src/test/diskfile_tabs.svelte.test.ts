@@ -90,7 +90,7 @@ describe('DiskfileTabs', () => {
 
 			assert.instanceOf(tab, DiskfileTab);
 			assert.strictEqual(tab.diskfile_id, TEST_DISKFILE_ID_1);
-			assert.ok(!(tab.is_preview));
+			assert.ok(!tab.is_preview);
 			assert.isNull(tabs.preview_tab_id);
 			assert.strictEqual(tabs.selected_tab_id, tab.id);
 			assert.include(tabs.tab_order, tab.id);
@@ -322,7 +322,7 @@ describe('DiskfileTabs', () => {
 			assert.strictEqual(tabs.items.size, 0);
 			assert.notInclude(tabs.tab_order, tab.id);
 			assert.isNull(tabs.selected_tab_id);
-			assert.strictEqual((tabs.recently_closed_tabs).length, 1);
+			assert.strictEqual(tabs.recently_closed_tabs.length, 1);
 			assert.strictEqual(tabs.recently_closed_tabs[0]!.id, tab.id);
 		});
 
@@ -340,7 +340,7 @@ describe('DiskfileTabs', () => {
 
 			assert.strictEqual(tabs.items.size, 2);
 			assert.strictEqual(tabs.selected_tab_id, tab3.id); // Should select the most recently opened (tab3)
-			assert.strictEqual((tabs.recently_closed_tabs).length, 1);
+			assert.strictEqual(tabs.recently_closed_tabs.length, 1);
 			assert.strictEqual(tabs.recently_closed_tabs[0]!.id, tab2.id);
 		});
 
@@ -358,7 +358,7 @@ describe('DiskfileTabs', () => {
 			// State should be unchanged
 			assert.strictEqual(tabs.items.size, initial_size);
 			assert.strictEqual(tabs.selected_tab_id, initial_selected);
-			assert.strictEqual((tabs.recently_closed_tabs).length, 0);
+			assert.strictEqual(tabs.recently_closed_tabs.length, 0);
 		});
 
 		test('close_tab clears preview_tab_id if closing preview tab', () => {
@@ -417,7 +417,7 @@ describe('DiskfileTabs', () => {
 
 			// Initial state - verify we have 3 tabs before closing
 			assert.strictEqual(tabs.items.size, 3);
-			assert.strictEqual((tabs.tab_order).length, 3);
+			assert.strictEqual(tabs.tab_order.length, 3);
 			assert.isNull(tabs.preview_tab_id); // No preview tab now since last one is permanent
 			assert.strictEqual(tabs.selected_tab_id, permanent.id);
 
@@ -426,10 +426,10 @@ describe('DiskfileTabs', () => {
 
 			// All state should be cleared
 			assert.strictEqual(tabs.items.size, 0);
-			assert.strictEqual((tabs.tab_order).length, 0);
+			assert.strictEqual(tabs.tab_order.length, 0);
 			assert.isNull(tabs.preview_tab_id);
 			assert.isNull(tabs.selected_tab_id);
-			assert.strictEqual((tabs.recently_closed_tabs).length, 3);
+			assert.strictEqual(tabs.recently_closed_tabs.length, 3);
 		});
 	});
 
@@ -446,7 +446,7 @@ describe('DiskfileTabs', () => {
 
 			assert.ok(result);
 			assert.isNull(tabs.preview_tab_id);
-			assert.ok(!(preview_tab.is_preview));
+			assert.ok(!preview_tab.is_preview);
 		});
 
 		test('promote_preview_to_permanent returns false if no preview tab', () => {
@@ -456,7 +456,7 @@ describe('DiskfileTabs', () => {
 			// Try to promote
 			const result = tabs.promote_preview_to_permanent();
 
-			assert.ok(!(result));
+			assert.ok(!result);
 		});
 
 		test('open_tab makes a preview tab permanent', () => {
@@ -500,19 +500,19 @@ describe('DiskfileTabs', () => {
 
 			assert.strictEqual(tabs.items.size, 1);
 			assert.strictEqual(tabs.items.by_id.values().next().value?.diskfile_id, TEST_DISKFILE_ID_2);
-			assert.strictEqual((tabs.recently_closed_tabs).length, 1);
+			assert.strictEqual(tabs.recently_closed_tabs.length, 1);
 		});
 
 		test('reopen_last_closed_tab does nothing if no closed tabs', () => {
 			// Initial state
-			assert.strictEqual((tabs.recently_closed_tabs).length, 0);
+			assert.strictEqual(tabs.recently_closed_tabs.length, 0);
 			assert.strictEqual(tabs.items.size, 0);
 
 			// Try to reopen
 			tabs.reopen_last_closed_tab();
 
 			// State should be unchanged
-			assert.strictEqual((tabs.recently_closed_tabs).length, 0);
+			assert.strictEqual(tabs.recently_closed_tabs.length, 0);
 			assert.strictEqual(tabs.items.size, 0);
 		});
 
@@ -595,7 +595,7 @@ describe('DiskfileTabs', () => {
 			tabs.reopen_last_closed_tab();
 
 			// Verify the reopened tab is in history
-			assert.strictEqual((tabs.recent_tabs).length, 1);
+			assert.strictEqual(tabs.recent_tabs.length, 1);
 			assert.strictEqual(tabs.recent_tabs[0]!.id, tabs.selected_tab_id);
 		});
 
@@ -609,7 +609,7 @@ describe('DiskfileTabs', () => {
 			}
 
 			// Verify history is limited to max size
-			assert.strictEqual((tabs.recent_tabs).length, 3);
+			assert.strictEqual(tabs.recent_tabs.length, 3);
 		});
 
 		test('removes closed tabs from history', () => {
@@ -753,7 +753,7 @@ describe('DiskfileTabs', () => {
 
 			// Should select tab2 directly
 			assert.strictEqual(result.resulting_tab_id, tab2.id);
-			assert.ok(!(result.created_preview));
+			assert.ok(!result.created_preview);
 			assert.strictEqual(tabs.selected_tab_id, tab2.id);
 		});
 
@@ -801,7 +801,10 @@ describe('DiskfileTabs', () => {
 
 			// But it should have the closed tab's diskfile
 			if (tabs.preview_tab_id && tabs.items.by_id.get(tabs.preview_tab_id)) {
-				assert.strictEqual(tabs.items.by_id.get(tabs.preview_tab_id)?.diskfile_id, TEST_DISKFILE_ID_3);
+				assert.strictEqual(
+					tabs.items.by_id.get(tabs.preview_tab_id)?.diskfile_id,
+					TEST_DISKFILE_ID_3,
+				);
 			}
 		});
 
@@ -814,7 +817,7 @@ describe('DiskfileTabs', () => {
 
 			// Should return null without changing selection
 			assert.isNull(result.resulting_tab_id);
-			assert.ok(!(result.created_preview));
+			assert.ok(!result.created_preview);
 		});
 
 		test('closed tabs are remembered even after closing all tabs', () => {
@@ -846,7 +849,7 @@ describe('DiskfileTabs', () => {
 			tabs.tab_order = [tab1.id];
 
 			// ordered_tabs should include both tabs
-			assert.strictEqual((tabs.ordered_tabs).length, 2);
+			assert.strictEqual(tabs.ordered_tabs.length, 2);
 			assert.strictEqual(tabs.ordered_tabs[0]!.id, tab1.id);
 			assert.strictEqual(tabs.ordered_tabs[1]!.id, tab2.id);
 		});
@@ -940,7 +943,7 @@ describe('DiskfileTabs', () => {
 
 			// Double-click simulation - promote to permanent
 			tabs.open_tab(preview.id);
-			assert.ok(!(preview.is_preview));
+			assert.ok(!preview.is_preview);
 			assert.isNull(tabs.preview_tab_id);
 
 			// Create a new preview
@@ -1022,7 +1025,7 @@ describe('DiskfileTabs', () => {
 			tabs.select_tab(tab4.id);
 
 			// History should only contain last 3
-			assert.strictEqual((tabs.recent_tab_ids).length, 3);
+			assert.strictEqual(tabs.recent_tab_ids.length, 3);
 			assert.strictEqual(tabs.recent_tab_ids[0]!, tab4.id);
 			assert.strictEqual(tabs.recent_tab_ids[1]!, tab3.id);
 			assert.strictEqual(tabs.recent_tab_ids[2]!, tab2.id);

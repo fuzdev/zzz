@@ -301,7 +301,8 @@ describe('update_env_variable - whitespace handling', () => {
 		});
 
 		const result = fs.get_file('/test/.env');
-		assert.strictEqual(result,
+		assert.strictEqual(
+			result,
 			'  INDENT_KEY  =  "spaced"  \nTARGET_KEY="new"\n\t\tTAB_KEY\t=\t"tabbed"\t',
 		);
 

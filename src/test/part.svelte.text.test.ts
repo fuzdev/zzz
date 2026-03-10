@@ -44,7 +44,7 @@ describe('TextPart initialization', () => {
 		assert.strictEqual(part.token_count, 0);
 		assert.strictEqual(part.name, '');
 		assert.ok(part.enabled);
-		assert.ok(!(part.has_xml_tag));
+		assert.ok(!part.has_xml_tag);
 		assert.strictEqual(part.xml_tag_name, '');
 		assert.deepEqual(part.attributes, []);
 		assert.isNull(part.start);
@@ -93,8 +93,8 @@ describe('TextPart initialization', () => {
 		assert.strictEqual(part.summary, 'Test summary text');
 		assert.strictEqual(part.start, 5);
 		assert.strictEqual(part.end, 20);
-		assert.ok(!(part.enabled));
-		assert.strictEqual((part.attributes).length, 1);
+		assert.ok(!part.enabled);
+		assert.strictEqual(part.attributes.length, 1);
 		const first_attr = part.attributes[0];
 		if (!first_attr) throw new Error('Expected first attribute');
 		assert.strictEqual(first_attr.key, 'attr1');
@@ -165,7 +165,7 @@ describe('TextPart serialization', () => {
 		assert.strictEqual(json.name, 'Test part');
 		assert.strictEqual(json.start, 10);
 		assert.strictEqual(json.end, 20);
-		assert.ok(!(json.has_xml_tag));
+		assert.ok(!json.has_xml_tag);
 		assert.ok(json.enabled);
 	});
 
@@ -292,7 +292,7 @@ describe('TextPart attribute management', () => {
 
 		// Add attribute
 		part.add_attribute({key: 'class', value: 'highlight'});
-		assert.strictEqual((part.attributes).length, 1);
+		assert.strictEqual(part.attributes.length, 1);
 		let first_attr = part.attributes[0];
 		if (!first_attr) throw new Error('Expected first attribute');
 		assert.strictEqual(first_attr.key, 'class');
@@ -310,11 +310,11 @@ describe('TextPart attribute management', () => {
 
 		// Remove attribute
 		part.remove_attribute(attr_id);
-		assert.strictEqual((part.attributes).length, 0);
+		assert.strictEqual(part.attributes.length, 0);
 
 		// Attempting to update non-existent attribute returns false
 		const fake_update = part.update_attribute(create_uuid(), {key: 'test', value: 'test'});
-		assert.ok(!(fake_update));
+		assert.ok(!fake_update);
 	});
 
 	test('updates attribute key and value together', () => {
@@ -345,7 +345,7 @@ describe('TextPart attribute management', () => {
 
 		const json = part.to_json();
 
-		assert.strictEqual((json.attributes).length, 2);
+		assert.strictEqual(json.attributes.length, 2);
 		const json_attr0 = json.attributes[0];
 		const json_attr1 = json.attributes[1];
 		if (!json_attr0 || !json_attr1) throw new Error('Expected both attributes in JSON');
@@ -355,7 +355,7 @@ describe('TextPart attribute management', () => {
 		// Verify they're properly restored
 		const new_part = app.cell_registry.instantiate('TextPart', json);
 
-		assert.strictEqual((new_part.attributes).length, 2);
+		assert.strictEqual(new_part.attributes.length, 2);
 		const new_attr0 = new_part.attributes[0];
 		const new_attr1 = new_part.attributes[1];
 		if (!new_attr0 || !new_attr1) throw new Error('Expected both attributes in restored part');

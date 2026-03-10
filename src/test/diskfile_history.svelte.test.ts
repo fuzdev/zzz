@@ -49,9 +49,9 @@ describe('DiskfileHistory', () => {
 			assert.strictEqual(entry.content, TEST_CONTENT);
 			assert.isDefined(entry.id);
 			assert.strictEqual(typeof entry.created, 'number');
-			assert.ok(!(entry.is_disk_change));
-			assert.ok(!(entry.is_unsaved_edit));
-			assert.ok(!(entry.is_original_state));
+			assert.ok(!entry.is_disk_change);
+			assert.ok(!entry.is_unsaved_edit);
+			assert.ok(!entry.is_original_state);
 		});
 
 		test('add_entry with custom options sets all properties', () => {

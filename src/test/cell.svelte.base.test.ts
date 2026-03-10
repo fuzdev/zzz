@@ -110,7 +110,7 @@ describe('Cell initialization', () => {
 
 		// Test schema info for a scalar type
 		const text_info = test_cell.field_schema_info.get('text');
-		assert.ok(!(text_info?.is_array));
+		assert.ok(!text_info?.is_array);
 		assert.strictEqual(text_info?.type, 'ZodString');
 	});
 });

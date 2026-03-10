@@ -84,7 +84,10 @@ describe('update_env_variable - basic functionality', () => {
 			write_file: fs.write_file,
 		});
 
-		assert.strictEqual(fs.get_file('/test/.env'), 'EXISTING_KEY="existing_value"\nNEW_KEY="new_value"');
+		assert.strictEqual(
+			fs.get_file('/test/.env'),
+			'EXISTING_KEY="existing_value"\nNEW_KEY="new_value"',
+		);
 	});
 
 	test('creates file if it does not exist', async () => {
@@ -140,7 +143,8 @@ describe('update_env_variable - formatting preservation', () => {
 			write_file: fs.write_file,
 		});
 
-		assert.strictEqual(fs.get_file('/test/.env'),
+		assert.strictEqual(
+			fs.get_file('/test/.env'),
 			'# This is a comment\nAPI_KEY="new_value"\n# Another comment',
 		);
 	});

@@ -230,13 +230,13 @@ describe('saving history changes', () => {
 
 	test('save_changes with no changes returns false', async () => {
 		// Don't make any changes
-		assert.ok(!(editor_state.has_changes));
+		assert.ok(!editor_state.has_changes);
 
 		// Try to save
 		const result = await editor_state.save_changes();
 
 		// Verify nothing was saved
-		assert.ok(!(result));
+		assert.ok(!result);
 	});
 
 	test('save_changes updates the diskfile content', async () => {

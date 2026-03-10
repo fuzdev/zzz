@@ -243,36 +243,51 @@ describe('IndexedCollection - Query Capabilities', () => {
 		// Find c1 items with string_b=b1
 		const c1_items = collection.where('by_string_c', 'c1');
 		const b1_c1_items = c1_items.filter((item) => item.string_b === 'b1');
-		assert.strictEqual((b1_c1_items).length, 1);
+		assert.strictEqual(b1_c1_items.length, 1);
 		assert.strictEqual(b1_c1_items[0]!.string_a, 'a1');
 
 		// Find boolean_a=true items with number_a=5
 		const boolean_a_true_items = collection.where('by_boolean_a', 'y');
 		const high_value_boolean_a_true = boolean_a_true_items.filter((item) => item.number_a === 5);
-		assert.strictEqual((high_value_boolean_a_true).length, 2);
-		assert.include(high_value_boolean_a_true.map((i) => i.string_a), 'a2');
-		assert.include(high_value_boolean_a_true.map((i) => i.string_a), 'b2');
+		assert.strictEqual(high_value_boolean_a_true.length, 2);
+		assert.include(
+			high_value_boolean_a_true.map((i) => i.string_a),
+			'a2',
+		);
+		assert.include(
+			high_value_boolean_a_true.map((i) => i.string_a),
+			'b2',
+		);
 	});
 
 	test('queries with array values', () => {
 		// Query by array_a (checks if any tag matches)
 		const tag1_items = collection.where('by_array_a', 'tag1');
-		assert.strictEqual((tag1_items).length, 3);
-		assert.include(tag1_items.map((i) => i.string_a), 'a1');
-		assert.include(tag1_items.map((i) => i.string_a), 'a2');
-		assert.include(tag1_items.map((i) => i.string_a), 'b2');
+		assert.strictEqual(tag1_items.length, 3);
+		assert.include(
+			tag1_items.map((i) => i.string_a),
+			'a1',
+		);
+		assert.include(
+			tag1_items.map((i) => i.string_a),
+			'a2',
+		);
+		assert.include(
+			tag1_items.map((i) => i.string_a),
+			'b2',
+		);
 
 		// Multiple tags intersection (using multiple queries)
 		const tag2_items = collection.where('by_array_a', 'tag2');
 		const tag2_and_tag3_items = tag2_items.filter((item) => item.array_a.includes('tag3'));
-		assert.strictEqual((tag2_and_tag3_items).length, 1);
+		assert.strictEqual(tag2_and_tag3_items.length, 1);
 		assert.strictEqual(tag2_and_tag3_items[0]!.string_a, 'a1');
 	});
 
 	test('derived index queries', () => {
 		// Test the recent_boolean_a_true derived index
 		const recent_boolean_a_true = collection.derived_index('recent_boolean_a_true');
-		assert.strictEqual((recent_boolean_a_true).length, 3); // All boolean_a=true items
+		assert.strictEqual(recent_boolean_a_true.length, 3); // All boolean_a=true items
 
 		// Verify order (most recent first)
 		const rbt0 = recent_boolean_a_true[0];
@@ -287,20 +302,20 @@ describe('IndexedCollection - Query Capabilities', () => {
 
 		// Test the high_number_a derived index which should include all items with number_a >= 4
 		const high_number_a = collection.derived_index('high_number_a');
-		assert.strictEqual((high_number_a).length, 4);
+		assert.strictEqual(high_number_a.length, 4);
 		assert.deepEqual(high_number_a.map((i) => i.string_a).sort(), ['a1', 'a2', 'b1', 'b2'].sort());
 	});
 
 	test('first/latest with multi-index', () => {
 		// Get first c1 item
 		const first_c1 = collection.first('by_string_c', 'c1', 1);
-		assert.strictEqual((first_c1).length, 1);
+		assert.strictEqual(first_c1.length, 1);
 		const first_c1_item = first_c1[0];
 		assert.isDefined(first_c1_item);
 
 		// Get latest c2 item
 		const latest_c2 = collection.latest('by_string_c', 'c2', 1);
-		assert.strictEqual((latest_c2).length, 1);
+		assert.strictEqual(latest_c2.length, 1);
 		const latest_c2_item = latest_c2[0];
 		assert.isDefined(latest_c2_item);
 	});
@@ -320,8 +335,14 @@ describe('IndexedCollection - Query Capabilities', () => {
 		const recent_items = collection.values.filter(
 			(item) => item.date_a.getTime() > now - 1000 * 60 * 60 * 24 * 7,
 		);
-		assert.include(recent_items.map((i) => i.string_a), 'b1'); // 5 days ago
-		assert.include(recent_items.map((i) => i.string_a), 'b2'); // 3 days ago
+		assert.include(
+			recent_items.map((i) => i.string_a),
+			'b1',
+		); // 5 days ago
+		assert.include(
+			recent_items.map((i) => i.string_a),
+			'b2',
+		); // 3 days ago
 	});
 
 	test('adding items affects derived queries correctly', () => {
@@ -356,7 +377,7 @@ describe('IndexedCollection - Query Capabilities', () => {
 
 		// Check that recent_boolean_a_true updates correctly
 		const recent_boolean_a_true = collection.derived_index('recent_boolean_a_true');
-		assert.strictEqual((recent_boolean_a_true).length, 2);
+		assert.strictEqual(recent_boolean_a_true.length, 2);
 		const rbt0 = recent_boolean_a_true[0];
 		const rbt1 = recent_boolean_a_true[1];
 		assert.isDefined(rbt0);
@@ -367,7 +388,7 @@ describe('IndexedCollection - Query Capabilities', () => {
 		// Check that high_number_a updates correctly
 		const high_number_a = collection.derived_index('high_number_a');
 		assert.notInclude(high_number_a, item_to_remove);
-		assert.strictEqual((high_number_a).length, 3); // Started with 4, removed 1
+		assert.strictEqual(high_number_a.length, 3); // Started with 4, removed 1
 	});
 
 	test('dynamic ordering of query results', () => {
@@ -434,33 +455,33 @@ describe('IndexedCollection - Search Patterns', () => {
 	test('word-based search', () => {
 		// Find items with "alpha" in string_a
 		const alpha_items = collection.where('by_word', 'alpha');
-		assert.strictEqual((alpha_items).length, 2);
+		assert.strictEqual(alpha_items.length, 2);
 
 		// Find items with "beta" in string_a
 		const beta_items = collection.where('by_word', 'beta');
-		assert.strictEqual((beta_items).length, 2);
+		assert.strictEqual(beta_items.length, 2);
 
 		// Find items with both "alpha" and "beta" (intersection)
 		const alpha_beta_items = alpha_items.filter((item) =>
 			item.string_a.toLowerCase().includes('beta'),
 		);
-		assert.strictEqual((alpha_beta_items).length, 1);
+		assert.strictEqual(alpha_beta_items.length, 1);
 		assert.strictEqual(alpha_beta_items[0]!.string_a, 'alpha beta gamma');
 	});
 
 	test('range-based categorization', () => {
 		// Find high-number_a items
 		const high_number_a = collection.where('by_number_a_range', 'high');
-		assert.strictEqual((high_number_a).length, 1);
+		assert.strictEqual(high_number_a.length, 1);
 		assert.strictEqual(high_number_a[0]!.number_a, 5);
 
 		// Find mid-number_a items
 		const mid_number_a = collection.where('by_number_a_range', 'mid');
-		assert.strictEqual((mid_number_a).length, 2);
+		assert.strictEqual(mid_number_a.length, 2);
 
 		// Find low-number_a items
 		const low_number_a = collection.where('by_number_a_range', 'low');
-		assert.strictEqual((low_number_a).length, 1);
+		assert.strictEqual(low_number_a.length, 1);
 		assert.strictEqual(low_number_a[0]!.number_a, 2);
 	});
 });

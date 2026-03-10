@@ -120,7 +120,7 @@ describe('ScopedFs - symlink security', () => {
 		);
 
 		const exists = await scoped_fs.exists(FILE_PATHS.SYMLINK);
-		assert.ok(!(exists));
+		assert.ok(!exists);
 	});
 
 	test('should reject symlinks in parent directories', async () => {
@@ -277,7 +277,7 @@ describe('ScopedFs - symlink security', () => {
 
 		// Should return false rather than throwing for exists()
 		const result = await scoped_fs.exists(FILE_PATHS.SYMLINK);
-		assert.ok(!(result));
+		assert.ok(!result);
 
 		// access should not be called since the symlink is detected first
 		assert.strictEqual(vi.mocked(fs.access).mock.calls.length, 0);
@@ -313,7 +313,7 @@ describe('ScopedFs - symlink security', () => {
 
 			// Should safely return false without throwing
 			const is_safe = await scoped_fs.is_path_safe(path);
-			assert.ok(!(is_safe));
+			assert.ok(!is_safe);
 		}
 	});
 });

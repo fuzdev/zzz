@@ -74,30 +74,30 @@ describe('parse_allowed_origins', () => {
 
 	test('parses single origin', () => {
 		const patterns = parse_allowed_origins('http://localhost:3000');
-		assert.strictEqual((patterns).length, 1);
+		assert.strictEqual(patterns.length, 1);
 		assert.instanceOf(patterns[0], RegExp);
 	});
 
 	test('parses multiple comma-separated origins', () => {
 		const patterns = parse_allowed_origins('http://localhost:3000,https://example.com');
-		assert.strictEqual((patterns).length, 2);
+		assert.strictEqual(patterns.length, 2);
 	});
 
 	test('trims whitespace from origins', () => {
 		const patterns = parse_allowed_origins('  http://localhost:3000  ,  https://example.com  ');
-		assert.strictEqual((patterns).length, 2);
+		assert.strictEqual(patterns.length, 2);
 	});
 
 	test('filters out empty entries', () => {
 		const patterns = parse_allowed_origins('http://localhost:3000,,https://example.com,');
-		assert.strictEqual((patterns).length, 2);
+		assert.strictEqual(patterns.length, 2);
 	});
 
 	test('handles complex patterns', () => {
 		const patterns = parse_allowed_origins(
 			'https://*.example.com,http://localhost:*,https://*.test.com:*',
 		);
-		assert.strictEqual((patterns).length, 3);
+		assert.strictEqual(patterns.length, 3);
 	});
 });
 
@@ -147,9 +147,18 @@ describe('pattern_to_regexp', () => {
 		});
 
 		test('throws on paths in patterns', () => {
-			assert.throws(() => parse_allowed_origins('http://example.com/api'), /Paths not allowed in origin patterns/);
-			assert.throws(() => parse_allowed_origins('https://example.com/api/v1'), /Paths not allowed in origin patterns/);
-			assert.throws(() => parse_allowed_origins('http://localhost:3000/'), /Paths not allowed in origin patterns/);
+			assert.throws(
+				() => parse_allowed_origins('http://example.com/api'),
+				/Paths not allowed in origin patterns/,
+			);
+			assert.throws(
+				() => parse_allowed_origins('https://example.com/api/v1'),
+				/Paths not allowed in origin patterns/,
+			);
+			assert.throws(
+				() => parse_allowed_origins('http://localhost:3000/'),
+				/Paths not allowed in origin patterns/,
+			);
 		});
 
 		test('matches IPv6 localhost', () => {
@@ -368,21 +377,45 @@ describe('pattern_to_regexp', () => {
 		});
 
 		test('throws on wildcards in wrong positions', () => {
-			assert.throws(() => parse_allowed_origins('http://ex*ample.com'), /Wildcards must be complete labels/);
-			assert.throws(() => parse_allowed_origins('http://example*.com'), /Wildcards must be complete labels/);
-			assert.throws(() => parse_allowed_origins('http://*example.com'), /Wildcards must be complete labels/);
-			assert.throws(() => parse_allowed_origins('http://example.*com'), /Wildcards must be complete labels/);
+			assert.throws(
+				() => parse_allowed_origins('http://ex*ample.com'),
+				/Wildcards must be complete labels/,
+			);
+			assert.throws(
+				() => parse_allowed_origins('http://example*.com'),
+				/Wildcards must be complete labels/,
+			);
+			assert.throws(
+				() => parse_allowed_origins('http://*example.com'),
+				/Wildcards must be complete labels/,
+			);
+			assert.throws(
+				() => parse_allowed_origins('http://example.*com'),
+				/Wildcards must be complete labels/,
+			);
 		});
 
 		test('throws on invalid port wildcards', () => {
-			assert.throws(() => parse_allowed_origins('http://example.com:*000'), /Invalid origin pattern/);
+			assert.throws(
+				() => parse_allowed_origins('http://example.com:*000'),
+				/Invalid origin pattern/,
+			);
 			assert.throws(() => parse_allowed_origins('http://example.com:3*'), /Invalid origin pattern/);
 		});
 
 		test('throws on wildcards in IPv6 addresses', () => {
-			assert.throws(() => parse_allowed_origins('http://[*::1]:3000'), /Wildcards not allowed in IPv6 addresses/);
-			assert.throws(() => parse_allowed_origins('https://[2001:db8:*::1]'), /Wildcards not allowed in IPv6 addresses/);
-			assert.throws(() => parse_allowed_origins('http://[::ffff:*.0.0.1]:8080'), /Wildcards not allowed in IPv6 addresses/);
+			assert.throws(
+				() => parse_allowed_origins('http://[*::1]:3000'),
+				/Wildcards not allowed in IPv6 addresses/,
+			);
+			assert.throws(
+				() => parse_allowed_origins('https://[2001:db8:*::1]'),
+				/Wildcards not allowed in IPv6 addresses/,
+			);
+			assert.throws(
+				() => parse_allowed_origins('http://[::ffff:*.0.0.1]:8080'),
+				/Wildcards not allowed in IPv6 addresses/,
+			);
 		});
 	});
 
@@ -475,7 +508,7 @@ describe('pattern_to_regexp', () => {
 		test('handles IPv6 addresses', () => {
 			// Note: Zone identifiers (e.g., %lo0) are not supported by URL constructor
 			const patterns = parse_allowed_origins('http://[::1]:3000,https://[2001:db8::1]');
-			assert.strictEqual((patterns).length, 2);
+			assert.strictEqual(patterns.length, 2);
 
 			// Test various IPv6 formats
 			assert.ok(should_allow_origin('http://[::1]:3000', patterns));

@@ -129,7 +129,10 @@ describe('Part factory method', () => {
 			name: 'Test',
 		};
 
-		assert.throws(() => Part.create(app, invalid_json as any), /Missing required "type" field in part JSON/);
+		assert.throws(
+			() => Part.create(app, invalid_json as any),
+			/Missing required "type" field in part JSON/,
+		);
 	});
 });
 

@@ -208,7 +208,7 @@ describe('RequestTracker', () => {
 			assert.strictEqual(result, 'timeout');
 
 			// The first promise should not be directly resolved or rejected by the tracker
-			assert.ok(!(promise1_settled));
+			assert.ok(!promise1_settled);
 
 			// Cancel all requests to clean up
 			tracker.cancel_all_requests();
@@ -248,7 +248,9 @@ describe('RequestTracker', () => {
 			tracker.resolve_request(unknown_id, response);
 
 			assert.strictEqual(warn_spy.mock.calls.length, 1);
-			assert.deepEqual(warn_spy.mock.calls[0], [`received response for unknown request: ${unknown_id}`]);
+			assert.deepEqual(warn_spy.mock.calls[0], [
+				`received response for unknown request: ${unknown_id}`,
+			]);
 		});
 
 		test('handles various data types', async () => {
@@ -337,7 +339,9 @@ describe('RequestTracker', () => {
 			});
 
 			assert.strictEqual(warn_spy.mock.calls.length, 1);
-			assert.deepEqual(warn_spy.mock.calls[0], [`received error for unknown request: ${unknown_id}`]);
+			assert.deepEqual(warn_spy.mock.calls[0], [
+				`received error for unknown request: ${unknown_id}`,
+			]);
 		});
 
 		test('handles various error types', async () => {
@@ -695,8 +699,8 @@ describe('RequestTracker', () => {
 			assert.ok(!tracker.pending_requests.has(id));
 
 			// Promise should be neither resolved nor rejected directly
-			assert.ok(!(was_resolved));
-			assert.ok(!(was_rejected));
+			assert.ok(!was_resolved);
+			assert.ok(!was_rejected);
 		});
 	});
 

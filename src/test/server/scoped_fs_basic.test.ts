@@ -242,7 +242,11 @@ describe('ScopedFs - file operations', () => {
 		vi.mocked(fs.writeFile).mockResolvedValueOnce();
 
 		await scoped_fs.write_file(FILE_PATHS.ALLOWED, test_content);
-		assert.deepEqual(vi.mocked(fs.writeFile).mock.calls[0], [FILE_PATHS.ALLOWED, test_content, 'utf8']);
+		assert.deepEqual(vi.mocked(fs.writeFile).mock.calls[0], [
+			FILE_PATHS.ALLOWED,
+			test_content,
+			'utf8',
+		]);
 	});
 
 	test('write_file - should throw for paths outside allowed directories', async () => {
@@ -411,7 +415,7 @@ describe('ScopedFs - existence checking', () => {
 		const scoped_fs = create_test_instance();
 
 		const exists = await scoped_fs.exists(FILE_PATHS.OUTSIDE);
-		assert.ok(!(exists));
+		assert.ok(!exists);
 		assert.strictEqual(vi.mocked(fs.access).mock.calls.length, 0);
 	});
 });

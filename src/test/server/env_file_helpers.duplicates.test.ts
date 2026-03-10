@@ -117,7 +117,10 @@ describe('update_env_variable - duplicate keys (LAST wins behavior)', () => {
 			write_file: fs.write_file,
 		});
 
-		assert.strictEqual(fs.get_file('/test/.env'), 'API_KEY="first"\nOTHER_KEY="value"\nAPI_KEY="new"');
+		assert.strictEqual(
+			fs.get_file('/test/.env'),
+			'API_KEY="first"\nOTHER_KEY="value"\nAPI_KEY="new"',
+		);
 	});
 
 	test('updates LAST occurrence when separated by comments', async () => {

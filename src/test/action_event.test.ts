@@ -90,7 +90,10 @@ describe('ActionEvent', () => {
 			env.executor = 'frontend';
 
 			// filer_change has initiator: 'backend', so frontend can't initiate send
-			assert.throws(() => create_action_event(env, filer_change_action_spec, {}), /executor 'frontend' cannot initiate action 'filer_change'/);
+			assert.throws(
+				() => create_action_event(env, filer_change_action_spec, {}),
+				/executor 'frontend' cannot initiate action 'filer_change'/,
+			);
 		});
 	});
 
@@ -369,7 +372,10 @@ describe('ActionEvent', () => {
 			const event = create_action_event(env, ping_action_spec, undefined);
 			event.parse();
 
-			assert.throws(() => event.handle_sync(), /handle_sync can only be used with synchronous local_call actions/);
+			assert.throws(
+				() => event.handle_sync(),
+				/handle_sync can only be used with synchronous local_call actions/,
+			);
 		});
 
 		test('is no-op when already failed', () => {
@@ -421,7 +427,10 @@ describe('ActionEvent', () => {
 			await event.handle_async();
 
 			// Can't go from send_request to send_response
-			assert.throws(() => event.transition('send_response'), /Invalid phase transition from 'send_request' to 'send_response'/);
+			assert.throws(
+				() => event.transition('send_response'),
+				/Invalid phase transition from 'send_request' to 'send_response'/,
+			);
 		});
 
 		test('throws when not in handled step', () => {
@@ -429,7 +438,10 @@ describe('ActionEvent', () => {
 			const event = create_action_event(env, ping_action_spec, undefined);
 
 			// Still in initial step
-			assert.throws(() => event.transition('receive_response'), /cannot transition from step 'initial' - must be 'handled'/);
+			assert.throws(
+				() => event.transition('receive_response'),
+				/cannot transition from step 'initial' - must be 'handled'/,
+			);
 		});
 
 		test('carries data forward in transitions', async () => {
@@ -608,9 +620,15 @@ describe('ActionEvent', () => {
 			const env = new TestEnvironment([ping_action_spec]);
 			const event = create_action_event(env, ping_action_spec, undefined);
 
-			assert.throws(() => event.set_request({} as any), /can only set request in receive_request phase/);
+			assert.throws(
+				() => event.set_request({} as any),
+				/can only set request in receive_request phase/,
+			);
 
-			assert.throws(() => event.set_notification({} as any), /can only set notification in receive phase/);
+			assert.throws(
+				() => event.set_notification({} as any),
+				/can only set notification in receive phase/,
+			);
 		});
 	});
 
@@ -676,7 +694,7 @@ describe('ActionEvent', () => {
 
 			event.parse();
 
-			assert.strictEqual((changes).length, 1);
+			assert.strictEqual(changes.length, 1);
 			assert.deepEqual(changes[0], {
 				old_step: 'initial',
 				new_step: 'parsed',
@@ -761,7 +779,10 @@ describe('ActionEvent', () => {
 				notification: null,
 			};
 
-			assert.throws(() => create_action_event_from_json(json as any, env), /no spec found for method 'unknown_method'/);
+			assert.throws(
+				() => create_action_event_from_json(json as any, env),
+				/no spec found for method 'unknown_method'/,
+			);
 		});
 	});
 
@@ -790,7 +811,10 @@ describe('ActionEvent', () => {
 
 			const event = create_action_event(env, ping_action_spec, undefined);
 
-			assert.throws(() => event.app, /action_event\.app.*can only be accessed in frontend environments/);
+			assert.throws(
+				() => event.app,
+				/action_event\.app.*can only be accessed in frontend environments/,
+			);
 		});
 
 		test('backend getter throws for frontend environment', () => {
@@ -799,7 +823,10 @@ describe('ActionEvent', () => {
 
 			const event = create_action_event(env, ping_action_spec, undefined);
 
-			assert.throws(() => event.backend, /action_event\.backend.*can only be accessed in backend environments/);
+			assert.throws(
+				() => event.backend,
+				/action_event\.backend.*can only be accessed in backend environments/,
+			);
 		});
 	});
 

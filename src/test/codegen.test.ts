@@ -32,7 +32,10 @@ describe('ImportBuilder', () => {
 
 			imports.add_types('$lib/types.js', 'TypeA', 'TypeB', 'TypeC');
 
-			assert.strictEqual(imports.build(), `import type {TypeA, TypeB, TypeC} from '$lib/types.js';`);
+			assert.strictEqual(
+				imports.build(),
+				`import type {TypeA, TypeB, TypeC} from '$lib/types.js';`,
+			);
 		});
 
 		test('empty imports returns empty string', () => {
@@ -52,7 +55,8 @@ describe('ImportBuilder', () => {
 			imports.add_type('$lib/utils.js', 'HelperType');
 			imports.add('$lib/utils.js', 'another_helper');
 
-			assert.strictEqual(imports.build(),
+			assert.strictEqual(
+				imports.build(),
 				`import {another_helper, helper, type HelperType} from '$lib/utils.js';`,
 			);
 		});
@@ -65,7 +69,8 @@ describe('ImportBuilder', () => {
 			imports.add('$lib/mixed.js', 'value'); // This makes it mixed
 			imports.add_type('$lib/mixed.js', 'TypeC');
 
-			assert.strictEqual(imports.build(),
+			assert.strictEqual(
+				imports.build(),
 				`import {value, type TypeA, type TypeB, type TypeC} from '$lib/mixed.js';`,
 			);
 		});
@@ -82,7 +87,8 @@ describe('ImportBuilder', () => {
 			imports.add('$lib/mixed.js', 'm_value');
 
 			// Should sort values first (alphabetically), then types (alphabetically)
-			assert.strictEqual(imports.build(),
+			assert.strictEqual(
+				imports.build(),
 				`import {a_value, m_value, z_value, type AType, type MType, type ZType} from '$lib/mixed.js';`,
 			);
 		});
@@ -106,7 +112,7 @@ describe('ImportBuilder', () => {
 			const result = imports.build();
 			const lines = result.split('\n');
 
-			assert.strictEqual((lines).length, 2);
+			assert.strictEqual(lines.length, 2);
 			assert.include(lines, `import * as utils from '$lib/utils.js';`);
 			assert.include(lines, `import {something} from '$lib/other.js';`);
 		});
@@ -181,7 +187,7 @@ describe('ImportBuilder', () => {
 			const result = imports.build();
 			const lines = result.split('\n');
 
-			assert.strictEqual((lines).length, 3);
+			assert.strictEqual(lines.length, 3);
 			assert.include(lines, `import type {TypeA, TypeB} from '$lib/types.js';`);
 			assert.include(lines, `import {util} from '$lib/utils.js';`);
 			assert.include(lines, `import type {SchemaA, SchemaB} from '$lib/schemas.js';`);
@@ -194,7 +200,10 @@ describe('ImportBuilder', () => {
 			imports.add_type('$lib/types.js', 'Apple');
 			imports.add_type('$lib/types.js', 'Middle');
 
-			assert.strictEqual(imports.build(), `import type {Apple, Middle, Zebra} from '$lib/types.js';`);
+			assert.strictEqual(
+				imports.build(),
+				`import type {Apple, Middle, Zebra} from '$lib/types.js';`,
+			);
 		});
 
 		test('handles imports with underscores and numbers correctly', () => {
@@ -206,7 +215,8 @@ describe('ImportBuilder', () => {
 			imports.add_type('$lib/types.js', 'PUBLIC_TYPE');
 
 			// Underscores sort before letters in most locales
-			assert.strictEqual(imports.build(),
+			assert.strictEqual(
+				imports.build(),
 				`import type {PUBLIC_TYPE, Type_1, Type_2, _Private_Type} from '$lib/types.js';`,
 			);
 		});
@@ -245,7 +255,7 @@ describe('ImportBuilder', () => {
 
 			const lines = imports.preview();
 
-			assert.strictEqual((lines).length, 4);
+			assert.strictEqual(lines.length, 4);
 			assert.include(lines, `import * as specs from '$lib/specs.js';`);
 			assert.include(lines, `import type {TypeA} from '$lib/types.js';`);
 			assert.include(lines, `import {helper} from '$lib/utils.js';`);
@@ -288,7 +298,7 @@ describe('ImportBuilder', () => {
 
 			const preview = imports.preview();
 
-			assert.strictEqual((preview).length, 2);
+			assert.strictEqual(preview.length, 2);
 			assert.strictEqual(preview[0], `import type {Bar, Foo} from '$lib/types.js';`);
 			assert.strictEqual(preview[1], `import {helper} from '$lib/utils.js';`);
 		});
@@ -436,8 +446,8 @@ describe('get_executor_phases', () => {
 		test('phases are returned in correct order', () => {
 			const frontend_phases = get_executor_phases(ping_action_spec, 'frontend');
 			// Send phases should come before receive phases
-			assert.ok(frontend_phases.indexOf('send_request') <
-				frontend_phases.indexOf('receive_request'),
+			assert.ok(
+				frontend_phases.indexOf('send_request') < frontend_phases.indexOf('receive_request'),
 			);
 		});
 
@@ -469,15 +479,18 @@ describe('get_handler_return_type', () => {
 		test('other phases return void and do not add imports', () => {
 			const imports = new ImportBuilder();
 
-			assert.strictEqual(get_handler_return_type(session_load_action_spec, 'send_request', imports, './'),
+			assert.strictEqual(
+				get_handler_return_type(session_load_action_spec, 'send_request', imports, './'),
 				'void | Promise<void>',
 			);
 			assert.strictEqual(
 				get_handler_return_type(session_load_action_spec, 'send_response', imports, './'),
-				'void | Promise<void>');
+				'void | Promise<void>',
+			);
 			assert.strictEqual(
 				get_handler_return_type(session_load_action_spec, 'receive_response', imports, './'),
-				'void | Promise<void>');
+				'void | Promise<void>',
+			);
 
 			// Should not add ActionOutputs for void returns
 			assert.strictEqual(imports.build(), '');
@@ -511,7 +524,8 @@ describe('get_handler_return_type', () => {
 			};
 
 			const result = get_handler_return_type(async_local_spec, 'execute', imports, './');
-			assert.strictEqual(result, 
+			assert.strictEqual(
+				result,
 				`ActionOutputs['toggle_main_menu'] | Promise<ActionOutputs['toggle_main_menu']>`,
 			);
 		});
@@ -521,10 +535,12 @@ describe('get_handler_return_type', () => {
 		test('all phases return void', () => {
 			const imports = new ImportBuilder();
 
-			assert.strictEqual(get_handler_return_type(filer_change_action_spec, 'send', imports, './'),
+			assert.strictEqual(
+				get_handler_return_type(filer_change_action_spec, 'send', imports, './'),
 				'void | Promise<void>',
 			);
-			assert.strictEqual(get_handler_return_type(filer_change_action_spec, 'receive', imports, './'),
+			assert.strictEqual(
+				get_handler_return_type(filer_change_action_spec, 'receive', imports, './'),
 				'void | Promise<void>',
 			);
 
@@ -635,16 +651,20 @@ describe('generate_phase_handlers', () => {
 		const result = generate_phase_handlers(ping_action_spec, 'frontend', imports);
 
 		// Should use the new type parameter syntax instead of data override
-		assert.include(result, 
+		assert.include(
+			result,
 			`action_event: ActionEvent<'ping', Frontend, 'send_request', 'handling'>`,
 		);
-		assert.include(result, 
+		assert.include(
+			result,
 			`action_event: ActionEvent<'ping', Frontend, 'receive_response', 'handling'>`,
 		);
-		assert.include(result, 
+		assert.include(
+			result,
 			`action_event: ActionEvent<'ping', Frontend, 'receive_request', 'handling'>`,
 		);
-		assert.include(result, 
+		assert.include(
+			result,
 			`action_event: ActionEvent<'ping', Frontend, 'send_response', 'handling'>`,
 		);
 	});

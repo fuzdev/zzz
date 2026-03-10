@@ -182,7 +182,7 @@ describe('disk change detection', () => {
 		});
 
 		// Verify the entry isn't marked as a disk change yet
-		assert.ok(!(entry.is_disk_change));
+		assert.ok(!entry.is_disk_change);
 		assert.ok(entry.is_unsaved_edit);
 
 		// Make a disk change that matches the existing entry's content
@@ -191,7 +191,7 @@ describe('disk change detection', () => {
 
 		// The existing entry should now be marked as a disk change and not an unsaved edit
 		assert.ok(history.entries[0]!.is_disk_change);
-		assert.ok(!(history.entries[0]!.is_unsaved_edit));
+		assert.ok(!history.entries[0]!.is_unsaved_edit);
 
 		// No new entry should be created
 		assert.strictEqual(history.entries.length, 2); // Original + our added entry
@@ -276,7 +276,7 @@ describe('save changes behavior', () => {
 		assert.strictEqual(editor_state.last_seen_disk_content, 'User edit to save');
 
 		// User modified flag should be cleared
-		assert.ok(!(editor_state.content_was_modified_by_user));
+		assert.ok(!editor_state.content_was_modified_by_user);
 	});
 
 	test('saving during disk changes preserves selected content', async () => {
@@ -374,6 +374,6 @@ describe('edge cases', () => {
 		editor_state.current_content = 'Disk content';
 
 		// User modified state should be false since it matches disk content
-		assert.ok(!(editor_state.content_was_modified_by_user));
+		assert.ok(!editor_state.content_was_modified_by_user);
 	});
 });

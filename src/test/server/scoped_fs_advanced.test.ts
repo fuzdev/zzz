@@ -404,7 +404,7 @@ describe('ScopedFs - advanced security features', () => {
 
 		// Should detect symlink and return false without calling access
 		const exists = await scoped_fs.exists('/allowed/path/evil-symlink');
-		assert.ok(!(exists));
+		assert.ok(!exists);
 		assert.strictEqual(vi.mocked(fs.access).mock.calls.length, 0);
 	});
 });
@@ -439,7 +439,11 @@ describe('ScopedFs - error handling and edge cases', () => {
 
 		// Should proceed despite ENOENT - file may not exist yet
 		await scoped_fs.write_file(FILE_PATHS.NONEXISTENT, 'new content');
-		assert.deepEqual(vi.mocked(fs.writeFile).mock.calls[0], [FILE_PATHS.NONEXISTENT, 'new content', 'utf8']);
+		assert.deepEqual(vi.mocked(fs.writeFile).mock.calls[0], [
+			FILE_PATHS.NONEXISTENT,
+			'new content',
+			'utf8',
+		]);
 	});
 
 	test('should ignore ENOENT errors when checking parent directories', async () => {
@@ -571,7 +575,11 @@ describe('ScopedFs - error handling and edge cases', () => {
 		vi.mocked(fs.writeFile).mockResolvedValueOnce();
 
 		await scoped_fs.write_file(deep_nonexistent_path, 'content');
-		assert.deepEqual(vi.mocked(fs.writeFile).mock.calls[0], [deep_nonexistent_path, 'content', 'utf8']);
+		assert.deepEqual(vi.mocked(fs.writeFile).mock.calls[0], [
+			deep_nonexistent_path,
+			'content',
+			'utf8',
+		]);
 	});
 
 	test('should handle extreme edge cases gracefully', async () => {
@@ -622,7 +630,11 @@ describe('ScopedFs - advanced use cases', () => {
 		// Verify all operations happened with correct parameters
 		assert.strictEqual(content, 'file content');
 		assert.deepEqual(vi.mocked(fs.mkdir).mock.calls[0], [workflow_dir, undefined]);
-		assert.deepEqual(vi.mocked(fs.writeFile).mock.calls[0], [source_file, 'original content', 'utf8']);
+		assert.deepEqual(vi.mocked(fs.writeFile).mock.calls[0], [
+			source_file,
+			'original content',
+			'utf8',
+		]);
 		assert.deepEqual(vi.mocked(fs.readFile).mock.calls[0], [source_file, 'utf8']);
 		assert.deepEqual(vi.mocked(fs.copyFile).mock.calls[0], [source_file, dest_file, undefined]);
 		assert.deepEqual(vi.mocked(fs.rm).mock.calls[0], [source_file, undefined]);
