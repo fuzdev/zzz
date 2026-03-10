@@ -191,7 +191,7 @@ describe('Socket', () => {
 			assert.strictEqual(mock_socket.sent_messages.length, 1);
 			const first_message = mock_socket.sent_messages[0];
 			assert.isDefined(first_message);
-			assert.deepEqual(JSON.parse(first_message!), TEST_MESSAGE.BASIC);
+			assert.deepEqual(JSON.parse(first_message), TEST_MESSAGE.BASIC);
 		});
 
 		test('message queueing sends queued messages when reconnected', () => {
@@ -238,7 +238,7 @@ describe('Socket', () => {
 			// Check error reason
 			const failed_message = Array.from(socket.failed_messages.values())[0];
 			assert.isDefined(failed_message);
-			assert.strictEqual(failed_message!.reason, error_message);
+			assert.strictEqual(failed_message.reason, error_message);
 		});
 
 		test('clear_failed_messages removes all failed messages', () => {

@@ -88,55 +88,32 @@ describe('ScopedFs - construction and initialization', () => {
 	});
 });
 
+const path_allowed_cases: Array<[label: string, path: string, expected: boolean]> = [
+	// Within allowed directories
+	['allowed root /allowed/path', '/allowed/path', true],
+	['allowed root /allowed/other/path/', '/allowed/other/path/', true],
+	['allowed root /another/allowed/directory', '/another/allowed/directory', true],
+	['nested file in allowed path', FILE_PATHS.ALLOWED, true],
+	['deep nested file in allowed path', FILE_PATHS.NESTED, true],
+	['subdirectory in allowed path', '/allowed/path/subdir/', true],
+	// Outside allowed directories
+	['file outside allowed paths', FILE_PATHS.OUTSIDE, false],
+	['directory outside allowed paths', DIR_PATHS.OUTSIDE, false],
+	['parent of allowed path', '/allowed', false],
+	['similar prefix but not allowed', '/allowed-other', false],
+	// Relative paths
+	['relative path (no prefix)', 'relative/path', false],
+	['dot-relative path', './relative/path', false],
+	['parent-relative path', '../relative/path', false],
+	// Path traversal
+	['traversal via ../', FILE_PATHS.TRAVERSAL, false],
+	['traversal to non-allowed sibling', '/allowed/path/../not-allowed', false],
+];
+
 describe('ScopedFs - path validation', () => {
-	test('is_path_allowed - should return true for paths within allowed directories', () => {
+	test.each(path_allowed_cases)('is_path_allowed - %s', (_label, path, expected) => {
 		const scoped_fs = create_test_instance();
-
-		const valid_paths = [
-			...TEST_ALLOWED_PATHS,
-			FILE_PATHS.ALLOWED,
-			FILE_PATHS.NESTED,
-			'/allowed/path/subdir/',
-		];
-
-		for (const path of valid_paths) {
-			assert.ok(scoped_fs.is_path_allowed(path));
-		}
-	});
-
-	test('is_path_allowed - should return false for paths outside allowed directories', () => {
-		const scoped_fs = create_test_instance();
-
-		const invalid_paths = [
-			FILE_PATHS.OUTSIDE,
-			DIR_PATHS.OUTSIDE,
-			'/allowed', // parent of allowed path
-			'/allowed-other', // similar prefix
-		];
-
-		for (const path of invalid_paths) {
-			assert.ok(!scoped_fs.is_path_allowed(path));
-		}
-	});
-
-	test('is_path_allowed - should reject relative paths', () => {
-		const scoped_fs = create_test_instance();
-
-		const relative_paths = ['relative/path', './relative/path', '../relative/path'];
-
-		for (const path of relative_paths) {
-			assert.ok(!scoped_fs.is_path_allowed(path));
-		}
-	});
-
-	test('is_path_allowed - should detect path traversal attempts', () => {
-		const scoped_fs = create_test_instance();
-
-		const traversal_paths = [FILE_PATHS.TRAVERSAL, '/allowed/path/../not-allowed'];
-
-		for (const path of traversal_paths) {
-			assert.ok(!scoped_fs.is_path_allowed(path));
-		}
+		assert.strictEqual(scoped_fs.is_path_allowed(path), expected);
 	});
 
 	test('is_path_allowed - should handle special cases correctly', () => {

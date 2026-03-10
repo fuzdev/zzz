@@ -137,7 +137,7 @@ describe('Sortable', () => {
 
 			const first_sorter = sorters[0];
 			assert.isDefined(first_sorter);
-			assert.strictEqual(sortable.active_key, first_sorter!.key);
+			assert.strictEqual(sortable.active_key, first_sorter.key);
 
 			// Change sorters to new array without the current active key
 			current_sorters = [sorters[2]!, sorters[3]!];

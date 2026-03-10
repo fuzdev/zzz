@@ -48,21 +48,21 @@ describe('initialization', () => {
 		// Selected history entry should be initialized to the current entry
 		const history = app.get_diskfile_history(TEST_PATH);
 		assert.isDefined(history);
-		assert.strictEqual(history!.entries.length, 1);
-		assert.strictEqual(editor_state.selected_history_entry_id, history!.entries[0]!.id);
-		assert.strictEqual(history!.entries[0]!.content, TEST_CONTENT);
+		assert.strictEqual(history.entries.length, 1);
+		assert.strictEqual(editor_state.selected_history_entry_id, history.entries[0]!.id);
+		assert.strictEqual(history.entries[0]!.content, TEST_CONTENT);
 	});
 
 	test('editor_state initializes with correct history entry', () => {
 		const history = app.get_diskfile_history(TEST_PATH);
 		assert.isDefined(history);
-		assert.strictEqual(history!.entries.length, 1);
+		assert.strictEqual(history.entries.length, 1);
 
 		// The initial entry should contain the original content
-		assert.strictEqual(history!.entries[0]!.content, TEST_CONTENT);
-		assert.ok(!history!.entries[0]!.is_unsaved_edit);
-		assert.ok(!history!.entries[0]!.is_disk_change);
-		assert.ok(history!.entries[0]!.is_original_state);
+		assert.strictEqual(history.entries[0]!.content, TEST_CONTENT);
+		assert.ok(!history.entries[0]!.is_unsaved_edit);
+		assert.ok(!history.entries[0]!.is_disk_change);
+		assert.ok(history.entries[0]!.is_original_state);
 	});
 
 	test('editor_state handles initialization with null content', () => {
@@ -88,7 +88,7 @@ describe('initialization', () => {
 		// History should still be created
 		const history = app.get_diskfile_history(null_diskfile.path);
 		assert.isDefined(history);
-		assert.strictEqual(history!.entries.length, 0); // No entries for null content
+		assert.strictEqual(history.entries.length, 0); // No entries for null content
 	});
 });
 
@@ -146,7 +146,7 @@ describe('content editing', () => {
 		// Content should be updated in the selected entry
 		const updated_entry = history.find_entry_by_id(editor_state.selected_history_entry_id!);
 		assert.isDefined(updated_entry);
-		assert.strictEqual(updated_entry!.content, 'Second edit');
+		assert.strictEqual(updated_entry.content, 'Second edit');
 	});
 
 	test('editing to match original content clears user modified flag', () => {
@@ -279,8 +279,8 @@ describe('file management', () => {
 		// History should be initialized for the new file
 		const new_history = app.get_diskfile_history(another_path);
 		assert.isDefined(new_history);
-		assert.strictEqual(new_history!.entries.length, 1);
-		assert.strictEqual(new_history!.entries[0]!.content, another_content);
+		assert.strictEqual(new_history.entries.length, 1);
+		assert.strictEqual(new_history.entries[0]!.content, another_content);
 	});
 
 	test('update_diskfile does nothing when same diskfile is provided', () => {

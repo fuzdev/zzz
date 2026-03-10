@@ -67,7 +67,7 @@ describe('IndexedCollection - Edge Cases', () => {
 		// Test retrieving with null values
 		const null_item = collection.by_optional('by_number_a', null);
 		assert.isDefined(null_item);
-		assert.strictEqual(null_item!.string_a, 'a2');
+		assert.strictEqual(null_item.string_a, 'a2');
 
 		// Test filtering with non-existing value
 		assert.ok(collection.by_optional('by_number_a', 999) === undefined);
@@ -89,7 +89,7 @@ describe('IndexedCollection - Edge Cases', () => {
 		collection.add(item5);
 		const null_item_after = collection.by_optional('by_number_a', null);
 		assert.isDefined(null_item_after);
-		assert.strictEqual(null_item_after!.string_a, 'a5');
+		assert.strictEqual(null_item_after.string_a, 'a5');
 	});
 
 	test('handling duplicates in single indexes', () => {

@@ -185,8 +185,8 @@ describe('DiskfileHistory', () => {
 
 			// Verify the right entry was found
 			assert.isDefined(found);
-			assert.strictEqual(found!.id, entry2.id);
-			assert.strictEqual(found!.content, 'content 2');
+			assert.strictEqual(found.id, entry2.id);
+			assert.strictEqual(found.content, 'content 2');
 		});
 
 		test('find_entry_by_id returns undefined for non-existent id', () => {

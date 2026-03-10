@@ -248,8 +248,8 @@ describe('XML use cases', () => {
 		const second_attr = result![1];
 		assert.isDefined(first_attr);
 		assert.isDefined(second_attr);
-		assert.match(first_attr!.id, uuid_regex);
-		assert.match(second_attr!.id, uuid_regex);
+		assert.match(first_attr.id, uuid_regex);
+		assert.match(second_attr.id, uuid_regex);
 	});
 
 	test('integration with record of attributes', () => {

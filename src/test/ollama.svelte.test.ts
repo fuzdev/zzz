@@ -128,7 +128,7 @@ describe('Ollama', () => {
 		const model = app.models.find_by_name('test_model');
 
 		assert.isDefined(model);
-		assert.ok(model!.ollama_show_response_loaded);
+		assert.ok(model.ollama_show_response_loaded);
 		assert.deepEqual(model!.ollama_show_response, {license: 'MIT'});
 
 		ollama.clear_model_details(model!);

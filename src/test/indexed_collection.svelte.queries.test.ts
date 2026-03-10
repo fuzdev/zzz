@@ -296,9 +296,9 @@ describe('IndexedCollection - Query Capabilities', () => {
 		assert.isDefined(rbt0);
 		assert.isDefined(rbt1);
 		assert.isDefined(rbt2);
-		assert.strictEqual(rbt0!.string_a, 'b2'); // 3 days ago
-		assert.strictEqual(rbt1!.string_a, 'a1'); // 10 days ago
-		assert.strictEqual(rbt2!.string_a, 'a2'); // 20 days ago
+		assert.strictEqual(rbt0.string_a, 'b2'); // 3 days ago
+		assert.strictEqual(rbt1.string_a, 'a1'); // 10 days ago
+		assert.strictEqual(rbt2.string_a, 'a2'); // 20 days ago
 
 		// Test the high_number_a derived index which should include all items with number_a >= 4
 		const high_number_a = collection.derived_index('high_number_a');
@@ -382,8 +382,8 @@ describe('IndexedCollection - Query Capabilities', () => {
 		const rbt1 = recent_boolean_a_true[1];
 		assert.isDefined(rbt0);
 		assert.isDefined(rbt1);
-		assert.strictEqual(rbt0!.string_a, 'a1');
-		assert.strictEqual(rbt1!.string_a, 'a2');
+		assert.strictEqual(rbt0.string_a, 'a1');
+		assert.strictEqual(rbt1.string_a, 'a2');
 
 		// Check that high_number_a updates correctly
 		const high_number_a = collection.derived_index('high_number_a');
