@@ -234,7 +234,7 @@
 						"name": "action_specs",
 						"kind": "variable",
 						"source_line": 89,
-						"type_signature": "({ method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async:..."
+						"type_signature": "({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async:..."
 					},
 					{
 						"name": "ActionInputs",
@@ -714,7 +714,7 @@
 						"name": "get_initial_phase",
 						"kind": "function",
 						"source_line": 133,
-						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", initiator: \"frontend\" | \"backend\" | \"both\", executor: \"frontend\" | \"backend\"): \"send_request\" | \"execute\" | ... 7 more ... | null",
+						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", initiator: \"both\" | \"frontend\" | \"backend\", executor: \"frontend\" | \"backend\"): \"send_request\" | \"execute\" | ... 7 more ... | null",
 						"return_type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | null",
 						"parameters": [
 							{
@@ -723,7 +723,7 @@
 							},
 							{
 								"name": "initiator",
-								"type": "\"frontend\" | \"backend\" | \"both\""
+								"type": "\"both\" | \"frontend\" | \"backend\""
 							},
 							{
 								"name": "executor",
@@ -949,7 +949,7 @@
 									},
 									{
 										"name": "spec",
-										"type": "{ method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async: ..."
+										"type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async: ..."
 									},
 									{
 										"name": "data",
@@ -1087,7 +1087,7 @@
 						"kind": "function",
 						"doc_comment": "Create an action event from a spec and initial input.",
 						"source_line": 458,
-						"type_signature": "<TMethod extends ActionMethod>(environment: ActionEventEnvironment, spec: { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<...>; ... 4 more ...; async: true; } | { ...; } | { ...; }, input: unknown, initial_phase?: \"send_request\" | ... 8 more ... | undefined): ActionEvent<...>",
+						"type_signature": "<TMethod extends ActionMethod>(environment: ActionEventEnvironment, spec: { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<...>; ... 4 more ...; async: true; } | { ...; } | { ...; }, input: unknown, initial_phase?: \"send_request\" | ... 8 more ... | undefined): ActionEvent<...>",
 						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"parameters": [
 							{
@@ -1096,7 +1096,7 @@
 							},
 							{
 								"name": "spec",
-								"type": "{ method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async: ..."
+								"type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async: ..."
 							},
 							{
 								"name": "input",
@@ -1648,7 +1648,7 @@
 						"name": "all_action_specs",
 						"kind": "variable",
 						"source_line": 356,
-						"type_signature": "({ method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async:..."
+						"type_signature": "({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async:..."
 					}
 				],
 				"dependencies": [
@@ -8158,7 +8158,7 @@
 								"name": "lookup_action_spec",
 								"kind": "function",
 								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\"): { ...; } | ... 2 more ... | undefined",
-								"return_type": "{ method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async: ...",
+								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async: ...",
 								"parameters": [
 									{
 										"name": "method",
@@ -15395,7 +15395,7 @@
 								"name": "add_schema",
 								"kind": "function",
 								"doc_comment": "Add a schema to the appropriate registries.",
-								"type_signature": "(name: VocabName, schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; ... 5 more ...; async: true; } | { ...; } | { ...; }): void",
+								"type_signature": "(name: VocabName, schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; ... 5 more ...; async: true; } | { ...; } | { ...; }): void",
 								"return_type": "void",
 								"parameters": [
 									{
@@ -15404,7 +15404,7 @@
 									},
 									{
 										"name": "schema",
-										"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | { method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 4 more ...; async: true; } | { ...; } | { ...; }"
+										"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 4 more ...; async: true; } | { ...; } | { ...; }"
 									}
 								]
 							},
@@ -15439,7 +15439,7 @@
 								"kind": "function",
 								"doc_comment": "Get an action specification by method name.",
 								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\"): { ...; } | ... 2 more ... | undefined",
-								"return_type": "{ method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async: ...",
+								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async: ...",
 								"parameters": [
 									{
 										"name": "method",
@@ -16757,7 +16757,7 @@
 								"name": "lookup_action_spec",
 								"kind": "function",
 								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\"): { ...; } | ... 2 more ... | undefined",
-								"return_type": "{ method: string; initiator: \"frontend\" | \"backend\" | \"both\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async: ...",
+								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async: ...",
 								"parameters": [
 									{
 										"name": "method",

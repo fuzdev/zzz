@@ -13,7 +13,7 @@
 import {Hono} from 'hono';
 import {Logger} from '@fuzdev/fuz_util/log.js';
 import type {UpgradeWebSocket} from 'hono/ws';
-import {parse_allowed_origins, verify_request_source} from '@fuzdev/fuz_app/middleware/origin.js';
+import {parse_allowed_origins, verify_request_source} from '@fuzdev/fuz_app/http/origin.js';
 
 import {Backend} from './backend.js';
 import type {ZzzServerEnv} from './server_env.js';
