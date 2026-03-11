@@ -15,7 +15,7 @@
 		"zod": "npm:zod@^4",
 		"@electric-sql/pglite": "npm:@electric-sql/pglite@^0.3",
 		"@fuzdev/fuz_app/": "../fuz_app/src/lib/",
-		"@fuzdev/fuz_util/": "npm:/@fuzdev/fuz_util@^0.52.0/",
+		"@fuzdev/fuz_util/": "npm:/@fuzdev/fuz_util@^0.53.4/",
 		"@fuzdev/gro/": "npm:/@fuzdev/gro@^0.195.2/",
 		"ollama": "npm:ollama@^0.6",
 		"@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@^0.71.2",
