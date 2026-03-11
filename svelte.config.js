@@ -3,7 +3,7 @@ import {svelte_preprocess_mdz} from '@fuzdev/fuz_ui/svelte_preprocess_mdz.js';
 import {svelte_preprocess_fuz_code} from '@fuzdev/fuz_code/svelte_preprocess_fuz_code.js';
 // TODO debugging
 // import {create_csp_directives} from '@fuzdev/fuz_ui/csp.js';
-// import {csp_trusted_sources_of_ryanatkn} from '@fuzdev/fuz_ui/csp_of_ryanatkn.js';
+// import {csp_trusted_sources_of_fuzdev} from '@fuzdev/fuz_ui/csp_of_fuzdev.js';
 
 // Dynamically import adapter based on the ZZZ_BUILD env var.
 // ZZZ_BUILD=node for production Node server, otherwise static for GitHub Pages.
@@ -29,7 +29,7 @@ export default {
 		alias: {$routes: 'src/routes', '@fuzdev/zzz': 'src/lib'},
 		// csp: {
 		// 	directives: create_csp_directives({
-		// 		trusted_sources: csp_trusted_sources_of_ryanatkn,
+		// 		trusted_sources: csp_trusted_sources_of_fuzdev,
 		// 		directives: {
 		// 			'connect-src': [
 		// 				'self',
