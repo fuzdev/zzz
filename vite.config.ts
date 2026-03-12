@@ -16,7 +16,7 @@ export default defineConfig(({mode}) => ({
 					include: ['src/test/**/*.test.ts'],
 					exclude: ['src/test/**/*.db.test.ts'],
 					maxWorkers: max_workers,
-					sequence: {groupOrder: 2},
+					sequence: {groupOrder: 1},
 				},
 			},
 			{
@@ -26,7 +26,7 @@ export default defineConfig(({mode}) => ({
 					include: ['src/test/**/*.db.test.ts'],
 					isolate: false,
 					fileParallelism: false,
-					sequence: {groupOrder: 1},
+					sequence: {groupOrder: 2},
 				},
 			},
 		],
