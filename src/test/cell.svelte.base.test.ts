@@ -106,7 +106,7 @@ describe('Cell initialization', () => {
 		// Test schema info for an array type
 		const items_info = test_cell.field_schema_info.get('items');
 		assert.ok(items_info?.is_array);
-		assert.strictEqual(items_info?.type, 'ZodArray');
+		assert.strictEqual(items_info.type, 'ZodArray');
 
 		// Test schema info for a scalar type
 		const text_info = test_cell.field_schema_info.get('text');
@@ -475,13 +475,13 @@ describe('Cell date formatting', () => {
 		assert.instanceOf(test_cell.updated_date, Date);
 
 		// Verify formatted strings exist
-		assert.ok(test_cell.created_formatted_short_date !== null);
-		assert.ok(test_cell.created_formatted_datetime !== null);
-		assert.ok(test_cell.created_formatted_time !== null);
+		assert.ok(test_cell.created_formatted_short_date);
+		assert.ok(test_cell.created_formatted_datetime);
+		assert.ok(test_cell.created_formatted_time);
 
-		assert.ok(test_cell.updated_formatted_short_date !== null);
-		assert.ok(test_cell.updated_formatted_datetime !== null);
-		assert.ok(test_cell.updated_formatted_time !== null);
+		assert.ok(test_cell.updated_formatted_short_date);
+		assert.ok(test_cell.updated_formatted_datetime);
+		assert.ok(test_cell.updated_formatted_time);
 	});
 
 	test('handles null updated date', () => {
@@ -494,10 +494,10 @@ describe('Cell date formatting', () => {
 			},
 		});
 
-		assert.ok(test_cell.updated_date !== null);
-		assert.ok(test_cell.updated_formatted_short_date !== null);
-		assert.ok(test_cell.updated_formatted_datetime !== null);
-		assert.ok(test_cell.updated_formatted_time !== null);
+		assert.ok(test_cell.updated_date);
+		assert.ok(test_cell.updated_formatted_short_date);
+		assert.ok(test_cell.updated_formatted_datetime);
+		assert.ok(test_cell.updated_formatted_time);
 	});
 });
 

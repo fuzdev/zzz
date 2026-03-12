@@ -1,20 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 
-import {
-	BackendProviderRemote,
-	type BackendProviderOptions,
-	type CompletionHandlerOptions,
-} from './backend_provider.js';
+import {BackendProviderRemote, type CompletionHandlerOptions} from './backend_provider.js';
 import {to_completion_result} from '../response_helpers.js';
 import type {ActionOutputs} from '../action_collections.js';
 import type {CompletionMessage} from '../completion_types.js';
 
 export class BackendProviderClaude extends BackendProviderRemote<Anthropic> {
 	readonly name = 'claude';
-
-	constructor(options: BackendProviderOptions) {
-		super(options);
-	}
 
 	protected override create_client(): void {
 		this.client = this.api_key ? new Anthropic({apiKey: this.api_key}) : null;

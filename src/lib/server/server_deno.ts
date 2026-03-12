@@ -48,7 +48,7 @@ export const start_server_deno = async (): Promise<void> => {
 		}
 	}
 
-	const {app, backend} = await create_zzz_app({env, upgradeWebSocket});
+	const {app, backend} = create_zzz_app({env, upgradeWebSocket});
 
 	// Health check (always available, even before full backend)
 	app.get('/health', (c) => c.json({status: 'ok', version: VERSION}));
@@ -77,7 +77,7 @@ export const start_server_deno = async (): Promise<void> => {
 			}
 		}
 		await backend.destroy();
-		server.shutdown();
+		await server.shutdown();
 	};
 
 	Deno.addSignalListener('SIGINT', () => void shutdown());

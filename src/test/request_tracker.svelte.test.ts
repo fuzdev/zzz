@@ -76,11 +76,11 @@ describe('RequestTracker', () => {
 
 			const request = tracker.pending_requests.get(id);
 			assert.isDefined(request);
-			assert.strictEqual(request?.deferred, deferred);
-			assert.strictEqual(request?.status, 'pending');
-			assert.isDefined(request?.timeout);
-			assert.isDefined(request?.created);
-			assert.strictEqual(typeof request?.created, 'string');
+			assert.strictEqual(request.deferred, deferred);
+			assert.strictEqual(request.status, 'pending');
+			assert.isDefined(request.timeout);
+			assert.isDefined(request.created);
+			assert.strictEqual(typeof request.created, 'string');
 
 			// Clean up
 			tracker.cancel_request(id);

@@ -13,11 +13,11 @@ import {Hono} from 'hono';
 import {serve, type HttpBindings} from '@hono/node-server';
 import {createNodeWebSocket} from '@hono/node-ws';
 import {Logger} from '@fuzdev/fuz_util/log.js';
-import {ALLOWED_ORIGINS} from '$env/static/private';
 import {
 	SECRET_ANTHROPIC_API_KEY,
 	SECRET_OPENAI_API_KEY,
 	SECRET_GOOGLE_API_KEY,
+	ALLOWED_ORIGINS,
 } from '$env/static/private';
 import {DEV} from 'esm-env';
 
@@ -59,7 +59,7 @@ const create_server = async (): Promise<void> => {
 	const {injectWebSocket, upgradeWebSocket} = createNodeWebSocket({app: new Hono()});
 
 	// Create the shared zzz app
-	const {app, backend} = await create_zzz_app({env, upgradeWebSocket});
+	const {app, backend} = create_zzz_app({env, upgradeWebSocket});
 
 	// In production with the Node adapter, mount the SvelteKit handler to serve the frontend.
 	if (!DEV) {

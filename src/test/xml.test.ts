@@ -19,16 +19,16 @@ const test_uuid_a = '123e4567-e89b-12d3-a456-426614174000';
 const assert_parse_success = <T>(schema: z.ZodType<T>, input: unknown, expected?: T) => {
 	const result = schema.safeParse(input);
 	assert.ok(result.success);
-	if (result.success && expected !== undefined) {
+	if (expected !== undefined) {
 		assert.deepEqual(result.data, expected);
 	}
-	return result.success ? result.data : undefined;
+	return result.data;
 };
 
 const assert_parse_failure = (schema: z.ZodType, input: unknown) => {
 	const result = schema.safeParse(input);
 	assert.ok(!result.success);
-	return result.success ? undefined : result.error;
+	return result.error;
 };
 
 describe('XmlAttributeKey', () => {
@@ -167,32 +167,32 @@ describe('XmlAttributeWithDefaults', () => {
 	test('generates uuid when missing', () => {
 		const attr_no_id = {key: 'class', value: 'test'};
 		const result = assert_parse_success(XmlAttributeWithDefaults, attr_no_id);
-		assert.match(result!.id, uuid_regex);
+		assert.match(result.id, uuid_regex);
 	});
 
 	test('applies key default when missing', () => {
 		const attr_no_key = {id: test_uuid_a, value: 'test'};
 		const result = assert_parse_success(XmlAttributeWithDefaults, attr_no_key);
-		assert.strictEqual(result?.key, 'attr');
+		assert.strictEqual(result.key, 'attr');
 	});
 
 	test('applies value default when missing', () => {
 		const attr_no_value = {id: test_uuid_a, key: 'disabled'};
 		const result = assert_parse_success(XmlAttributeWithDefaults, attr_no_value);
-		assert.strictEqual(result?.value, '');
+		assert.strictEqual(result.value, '');
 	});
 
 	test('applies all defaults when minimal input', () => {
 		const result = assert_parse_success(XmlAttributeWithDefaults, {});
-		assert.match(result!.id, uuid_regex);
-		assert.strictEqual(result?.key, 'attr');
-		assert.strictEqual(result?.value, '');
+		assert.match(result.id, uuid_regex);
+		assert.strictEqual(result.key, 'attr');
+		assert.strictEqual(result.value, '');
 	});
 
 	test('handles undefined id explicitly', () => {
 		const attr = {id: undefined, key: 'test', value: 'value'};
 		const result = assert_parse_success(XmlAttributeWithDefaults, attr);
-		assert.match(result!.id, uuid_regex);
+		assert.match(result.id, uuid_regex);
 	});
 
 	test('strict mode rejects extra properties', () => {
@@ -243,9 +243,9 @@ describe('XML use cases', () => {
 			{key: 'id', value: 'main'},
 		];
 		const result = assert_parse_success(AttributeArray, attrs);
-		assert.strictEqual(result!.length, 2);
-		const first_attr = result![0];
-		const second_attr = result![1];
+		assert.strictEqual(result.length, 2);
+		const first_attr = result[0];
+		const second_attr = result[1];
 		assert.isDefined(first_attr);
 		assert.isDefined(second_attr);
 		assert.match(first_attr.id, uuid_regex);
@@ -267,7 +267,7 @@ describe('error handling', () => {
 		const invalid_attr = {id: 'not-uuid', key: '', value: 123};
 		const error = assert_parse_failure(XmlAttributeWithDefaults, invalid_attr);
 
-		const issue_paths = error?.issues.map((i) => i.path.join('.')) || [];
+		const issue_paths = error.issues.map((i) => i.path.join('.'));
 		assert.include(issue_paths, 'id');
 		assert.include(issue_paths, 'key');
 		assert.include(issue_paths, 'value');

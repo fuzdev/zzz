@@ -57,7 +57,7 @@ export interface ZzzApp {
  * This is the shared factory called by both entry points.
  * The caller is responsible for HTTP binding and WebSocket injection.
  */
-export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzApp> => {
+export const create_zzz_app = (options: CreateZzzAppOptions): ZzzApp => {
 	const {env, upgradeWebSocket} = options;
 
 	// TODO better config

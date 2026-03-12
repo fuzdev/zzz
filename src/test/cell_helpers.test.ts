@@ -89,7 +89,7 @@ describe('get_schema_class_info', () => {
 
 		const info = get_schema_class_info(array_schema);
 		assert.ok(info?.is_array);
-		assert.strictEqual(info?.element_class, 'ElementClass');
+		assert.strictEqual(info.element_class, 'ElementClass');
 	});
 
 	test('handles default-wrapped array with element metadata', () => {
@@ -98,7 +98,7 @@ describe('get_schema_class_info', () => {
 
 		const info = get_schema_class_info(array_schema);
 		assert.ok(info?.is_array);
-		assert.strictEqual(info?.element_class, 'ElementClass');
+		assert.strictEqual(info.element_class, 'ElementClass');
 	});
 
 	test('reads element class from nested element schema', () => {
@@ -111,7 +111,7 @@ describe('get_schema_class_info', () => {
 		// Verify that get_schema_class_info can read element metadata
 		const info = get_schema_class_info(array_schema);
 		assert.ok(info?.is_array);
-		assert.strictEqual(info?.element_class, 'DirectElementClass');
+		assert.strictEqual(info.element_class, 'DirectElementClass');
 	});
 
 	test('handles ZodDefault containing a ZodArray', () => {
@@ -206,7 +206,7 @@ describe('get_schema_class_info', () => {
 		// Verify metadata is found correctly through the wrappers
 		const info = get_schema_class_info(nested_schema);
 		assert.ok(info?.is_array);
-		assert.strictEqual(info?.element_class, 'NestedElement');
+		assert.strictEqual(info.element_class, 'NestedElement');
 	});
 });
 

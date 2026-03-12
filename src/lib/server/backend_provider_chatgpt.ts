@@ -1,20 +1,12 @@
 import OpenAI from 'openai';
 
-import {
-	BackendProviderRemote,
-	type BackendProviderOptions,
-	type CompletionHandlerOptions,
-} from './backend_provider.js';
+import {BackendProviderRemote, type CompletionHandlerOptions} from './backend_provider.js';
 import {to_completion_result} from '../response_helpers.js';
 import type {ActionOutputs} from '../action_collections.js';
 import type {CompletionMessage} from '../completion_types.js';
 
 export class BackendProviderChatgpt extends BackendProviderRemote<OpenAI> {
 	readonly name = 'chatgpt';
-
-	constructor(options: BackendProviderOptions) {
-		super(options);
-	}
 
 	protected override create_client(): void {
 		this.client = this.api_key ? new OpenAI({apiKey: this.api_key}) : null;
