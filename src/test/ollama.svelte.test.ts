@@ -129,13 +129,13 @@ describe('Ollama', () => {
 
 		assert.isDefined(model);
 		assert.ok(model.ollama_show_response_loaded);
-		assert.deepEqual(model!.ollama_show_response, {license: 'MIT'});
+		assert.deepEqual(model.ollama_show_response, {license: 'MIT'});
 
-		ollama.clear_model_details(model!);
+		ollama.clear_model_details(model);
 
-		assert.ok(model!.ollama_show_response === undefined);
-		assert.ok(!model!.ollama_show_response_loaded);
-		assert.ok(model!.ollama_show_response_error === undefined);
+		assert.ok(model.ollama_show_response === undefined);
+		assert.ok(!model.ollama_show_response_loaded);
+		assert.ok(model.ollama_show_response_error === undefined);
 	});
 
 	test('should handle model_by_name map', () => {

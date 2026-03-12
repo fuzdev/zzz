@@ -83,9 +83,9 @@ describe('Sortable', () => {
 			assert.isDefined(first_sorter);
 			assert.strictEqual(sortable.items, items);
 			assert.strictEqual(sortable.sorters, sorters);
-			assert.strictEqual(sortable.active_key, first_sorter!.key);
+			assert.strictEqual(sortable.active_key, first_sorter.key);
 			assert.strictEqual(sortable.active_sorter, first_sorter);
-			assert.strictEqual(sortable.active_sort_fn, first_sorter!.fn);
+			assert.strictEqual(sortable.active_sort_fn, first_sorter.fn);
 		});
 
 		test('uses default key when provided', () => {
@@ -112,7 +112,7 @@ describe('Sortable', () => {
 			const first_sorter = sorters[0];
 			assert.isDefined(first_sorter);
 			assert.strictEqual(sortable.default_key, 'invalid_key');
-			assert.strictEqual(sortable.active_key, first_sorter!.key);
+			assert.strictEqual(sortable.active_key, first_sorter.key);
 		});
 
 		test('handles empty sorters array', () => {
@@ -163,13 +163,13 @@ describe('Sortable', () => {
 			assert.isDefined(sorter_at_2);
 
 			// Set active key to the second sorter
-			sortable.active_key = sorter_at_1!.key;
+			sortable.active_key = sorter_at_1.key;
 
 			// Change sorters but keep the active key
-			current_sorters = [sorter_at_1!, sorter_at_2!];
+			current_sorters = [sorter_at_1, sorter_at_2];
 			sortable.update_active_key();
 
-			assert.strictEqual(sortable.active_key, sorter_at_1!.key);
+			assert.strictEqual(sortable.active_key, sorter_at_1.key);
 		});
 	});
 
@@ -179,7 +179,7 @@ describe('Sortable', () => {
 			assert.isDefined(sorter_0);
 			const sortable = new Sortable(
 				() => items,
-				() => [sorter_0!],
+				() => [sorter_0],
 			);
 			const sorted = sortable.sorted_items;
 
@@ -192,14 +192,14 @@ describe('Sortable', () => {
 			assert.isDefined(item2);
 			assert.isDefined(item3);
 
-			assert.strictEqual(item0!.name, 'Apple');
-			assert.strictEqual(item1!.name, 'Apple');
-			assert.strictEqual(item2!.name, 'Banana');
-			assert.strictEqual(item3!.name, 'Cherry');
+			assert.strictEqual(item0.name, 'Apple');
+			assert.strictEqual(item1.name, 'Apple');
+			assert.strictEqual(item2.name, 'Banana');
+			assert.strictEqual(item3.name, 'Cherry');
 
 			// Verify that items with the same name are sorted by cid as fallback
-			assert.strictEqual(item0!.cid, 40); // First "Apple" has higher cid
-			assert.strictEqual(item1!.cid, 10); // Second "Apple" has lower cid
+			assert.strictEqual(item0.cid, 40); // First "Apple" has higher cid
+			assert.strictEqual(item1.cid, 10); // Second "Apple" has lower cid
 		});
 
 		test('sorts text values in descending order', () => {
@@ -207,7 +207,7 @@ describe('Sortable', () => {
 			assert.isDefined(sorter_1);
 			const sortable = new Sortable(
 				() => items,
-				() => [sorter_1!],
+				() => [sorter_1],
 			);
 			const sorted = sortable.sorted_items;
 
@@ -220,14 +220,14 @@ describe('Sortable', () => {
 			assert.isDefined(item2);
 			assert.isDefined(item3);
 
-			assert.strictEqual(item0!.name, 'Cherry');
-			assert.strictEqual(item1!.name, 'Banana');
-			assert.strictEqual(item2!.name, 'Apple');
-			assert.strictEqual(item3!.name, 'Apple');
+			assert.strictEqual(item0.name, 'Cherry');
+			assert.strictEqual(item1.name, 'Banana');
+			assert.strictEqual(item2.name, 'Apple');
+			assert.strictEqual(item3.name, 'Apple');
 
 			// Verify that items with the same name are sorted by cid as fallback
-			assert.strictEqual(item2!.cid, 40); // First "Apple" has higher cid
-			assert.strictEqual(item3!.cid, 10); // Second "Apple" has lower cid
+			assert.strictEqual(item2.cid, 40); // First "Apple" has higher cid
+			assert.strictEqual(item3.cid, 10); // Second "Apple" has lower cid
 		});
 	});
 
@@ -237,7 +237,7 @@ describe('Sortable', () => {
 			assert.isDefined(sorter_2);
 			const sortable = new Sortable(
 				() => items,
-				() => [sorter_2!],
+				() => [sorter_2],
 			);
 			const sorted = sortable.sorted_items;
 
@@ -250,10 +250,10 @@ describe('Sortable', () => {
 			assert.isDefined(item2);
 			assert.isDefined(item3);
 
-			assert.strictEqual(item0!.value, 5);
-			assert.strictEqual(item1!.value, 10);
-			assert.strictEqual(item2!.value, 15);
-			assert.strictEqual(item3!.value, 20);
+			assert.strictEqual(item0.value, 5);
+			assert.strictEqual(item1.value, 10);
+			assert.strictEqual(item2.value, 15);
+			assert.strictEqual(item3.value, 20);
 		});
 
 		test('sorts numeric values in descending order', () => {
@@ -261,7 +261,7 @@ describe('Sortable', () => {
 			assert.isDefined(sorter_3);
 			const sortable = new Sortable(
 				() => items,
-				() => [sorter_3!],
+				() => [sorter_3],
 			);
 			const sorted = sortable.sorted_items;
 
@@ -274,10 +274,10 @@ describe('Sortable', () => {
 			assert.isDefined(item2);
 			assert.isDefined(item3);
 
-			assert.strictEqual(item0!.value, 20);
-			assert.strictEqual(item1!.value, 15);
-			assert.strictEqual(item2!.value, 10);
-			assert.strictEqual(item3!.value, 5);
+			assert.strictEqual(item0.value, 20);
+			assert.strictEqual(item1.value, 15);
+			assert.strictEqual(item2.value, 10);
+			assert.strictEqual(item3.value, 5);
 		});
 
 		test('maintains stable sort order with equal values using cid', () => {
@@ -303,9 +303,9 @@ describe('Sortable', () => {
 			assert.isDefined(item2);
 
 			// Items with equal values should be sorted by cid
-			assert.strictEqual(item0!.cid, 300);
-			assert.strictEqual(item1!.cid, 200);
-			assert.strictEqual(item2!.cid, 100);
+			assert.strictEqual(item0.cid, 300);
+			assert.strictEqual(item1.cid, 200);
+			assert.strictEqual(item2.cid, 100);
 		});
 	});
 
@@ -342,7 +342,7 @@ describe('Sortable', () => {
 			assert.isDefined(first_item);
 
 			// Initially sorted by name (first sorter)
-			assert.strictEqual(first_item!.name, 'Apple');
+			assert.strictEqual(first_item.name, 'Apple');
 
 			// Change to sort by value
 			sortable.active_key = 'value';
@@ -351,7 +351,7 @@ describe('Sortable', () => {
 			assert.isDefined(first_item_after);
 
 			// Should now be sorted by value
-			assert.strictEqual(first_item_after!.value, 5);
+			assert.strictEqual(first_item_after.value, 5);
 		});
 	});
 });

@@ -47,7 +47,7 @@ describe('unsaved edit creation', () => {
 
 		// Verify the new entry
 		const history = app.get_diskfile_history(TEST_PATH)!;
-		const new_entry = history.find_entry_by_id(editor_state.unsaved_edit_entry_id!);
+		const new_entry = history.find_entry_by_id(editor_state.unsaved_edit_entry_id);
 
 		assert.include(new_entry, {
 			content: new_content,
@@ -76,7 +76,7 @@ describe('unsaved edit creation', () => {
 
 		// Verify the entry content was updated
 		const history = app.get_diskfile_history(TEST_PATH)!;
-		const updated_entry = history.find_entry_by_id(unsaved_id!);
+		const updated_entry = history.find_entry_by_id(unsaved_id);
 
 		assert.include(updated_entry, {
 			content: 'Third edit',
@@ -277,8 +277,8 @@ describe('managing unsaved edits', () => {
 		assert.notStrictEqual(unsaved1_id, unsaved2_id);
 
 		// Verify both entries in history
-		const unsaved1 = history.find_entry_by_id(unsaved1_id!);
-		const unsaved2 = history.find_entry_by_id(unsaved2_id!);
+		const unsaved1 = history.find_entry_by_id(unsaved1_id);
+		const unsaved2 = history.find_entry_by_id(unsaved2_id);
 
 		assert.include(unsaved1, {
 			content: 'Modified 1',

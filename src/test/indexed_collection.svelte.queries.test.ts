@@ -373,7 +373,7 @@ describe('IndexedCollection - Query Capabilities', () => {
 		const item_to_remove = items[4]; // b2 (most recent boolean_a=true)
 		assert.isDefined(item_to_remove);
 
-		collection.remove(item_to_remove!.id);
+		collection.remove(item_to_remove.id);
 
 		// Check that recent_boolean_a_true updates correctly
 		const recent_boolean_a_true = collection.derived_index('recent_boolean_a_true');

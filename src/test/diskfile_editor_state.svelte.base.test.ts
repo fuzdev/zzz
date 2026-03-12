@@ -144,7 +144,7 @@ describe('content editing', () => {
 		assert.ok(editor_state.selected_history_entry_id !== null);
 
 		// Content should be updated in the selected entry
-		const updated_entry = history.find_entry_by_id(editor_state.selected_history_entry_id!);
+		const updated_entry = history.find_entry_by_id(editor_state.selected_history_entry_id);
 		assert.isDefined(updated_entry);
 		assert.strictEqual(updated_entry.content, 'Second edit');
 	});

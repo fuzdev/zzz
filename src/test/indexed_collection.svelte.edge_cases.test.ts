@@ -350,7 +350,7 @@ describe('IndexedCollection - Edge Cases', () => {
 		assert.strictEqual(x_results.length, 1);
 		const x_result_0 = x_results[0];
 		assert.isDefined(x_result_0);
-		assert.strictEqual(x_result_0!.string_a, 'x1');
+		assert.strictEqual(x_result_0.string_a, 'x1');
 		assert.deepEqual(compute_fn.mock.calls[compute_fn.mock.calls.length - 1], ['x']);
 
 		// Test removing an item triggers onremove
@@ -464,7 +464,7 @@ describe('IndexedCollection - Edge Cases', () => {
 		// Store the item reference first to ensure it exists
 		const item1_ref = collection.by_optional('by_string_a', 'a1');
 		assert.isDefined(item1_ref); // Make sure we found it
-		collection.remove(item1_ref!.id);
+		collection.remove(item1_ref.id);
 
 		assert.strictEqual(stats.count, 3);
 		assert.strictEqual(stats.boolean_a_true_count, 1);
