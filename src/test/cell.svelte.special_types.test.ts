@@ -100,7 +100,7 @@ test('Cell.encode_property uses $state.snapshot for values', () => {
 	const test_date = new Date(`${TEST_YEAR}-01-15`);
 	const encoded_date = cell.test_encode(test_date, 'date_field');
 	assert.ok(encoded_date instanceof Date);
-	assert.strictEqual((encoded_date).getFullYear(), TEST_YEAR);
+	assert.strictEqual(encoded_date.getFullYear(), TEST_YEAR);
 
 	// Test with nested object
 	const test_object = {outer: {inner: 42}};
