@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type {Snippet} from 'svelte';
-	import Themed from '@fuzdev/fuz_ui/Themed.svelte';
+	import ThemeRoot from '@fuzdev/fuz_ui/ThemeRoot.svelte';
 	import ContextmenuRoot from '@fuzdev/fuz_ui/ContextmenuRoot.svelte';
 
 	import {Frontend, frontend_context} from './frontend.svelte.js';
@@ -27,7 +27,7 @@
 	frontend_context.set(app);
 </script>
 
-<Themed>
+<ThemeRoot>
 	<ContextmenuRoot>
 		<MainDialog />
 		<DeskMenu />
@@ -38,4 +38,4 @@
 			</div>
 		</Dashboard>
 	</ContextmenuRoot>
-</Themed>
+</ThemeRoot>
