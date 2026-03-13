@@ -58,7 +58,7 @@
 			"@sveltejs/acorn-typescript": "^1.0.9",
 			"@sveltejs/adapter-node": "^5.4.0",
 			"@sveltejs/adapter-static": "^3.0.10",
-			"@sveltejs/kit": "^2.53.4",
+			"@sveltejs/kit": "^2.54.0",
 			"@sveltejs/vite-plugin-svelte": "^6.2.4",
 			"@types/deno": "^2.5.0",
 			"@types/estree": "^1.0.8",
@@ -71,9 +71,9 @@
 			"ollama": "^0.6.3",
 			"prettier": "^3.7.4",
 			"prettier-plugin-svelte": "^3.4.1",
-			"svelte": "^5.53.7",
+			"svelte": "^5.53.10",
 			"svelte-check": "^4.3.5",
-			"svelte2tsx": "^0.7.47",
+			"svelte2tsx": "^0.7.52",
 			"tslib": "^2.8.1",
 			"typescript": "^5.9.3",
 			"typescript-eslint": "^8.48.1",
@@ -15779,7 +15779,7 @@
 					{
 						"name": "BackendProviderChatgpt",
 						"kind": "class",
-						"source_line": 12,
+						"source_line": 8,
 						"extends": ["BackendProviderRemote<OpenAI>"],
 						"implements": [],
 						"members": [
@@ -15787,17 +15787,6 @@
 								"name": "name",
 								"kind": "variable",
 								"modifiers": ["readonly"]
-							},
-							{
-								"name": "constructor",
-								"kind": "constructor",
-								"type_signature": "(options: BackendProviderOptions): BackendProviderChatgpt",
-								"parameters": [
-									{
-										"name": "options",
-										"type": "BackendProviderOptions"
-									}
-								]
 							},
 							{
 								"name": "create_client",
@@ -15843,7 +15832,7 @@
 					{
 						"name": "BackendProviderClaude",
 						"kind": "class",
-						"source_line": 12,
+						"source_line": 8,
 						"extends": ["BackendProviderRemote<Anthropic>"],
 						"implements": [],
 						"members": [
@@ -15851,17 +15840,6 @@
 								"name": "name",
 								"kind": "variable",
 								"modifiers": ["readonly"]
-							},
-							{
-								"name": "constructor",
-								"kind": "constructor",
-								"type_signature": "(options: BackendProviderOptions): BackendProviderClaude",
-								"parameters": [
-									{
-										"name": "options",
-										"type": "BackendProviderOptions"
-									}
-								]
 							},
 							{
 								"name": "create_client",
@@ -15907,7 +15885,7 @@
 					{
 						"name": "BackendProviderGemini",
 						"kind": "class",
-						"source_line": 13,
+						"source_line": 9,
 						"extends": ["BackendProviderRemote<GoogleGenerativeAI>"],
 						"implements": [],
 						"members": [
@@ -15915,17 +15893,6 @@
 								"name": "name",
 								"kind": "variable",
 								"modifiers": ["readonly"]
-							},
-							{
-								"name": "constructor",
-								"kind": "constructor",
-								"type_signature": "(options: BackendProviderOptions): BackendProviderGemini",
-								"parameters": [
-									{
-										"name": "options",
-										"type": "BackendProviderOptions"
-									}
-								]
 							},
 							{
 								"name": "create_client",
@@ -16874,8 +16841,8 @@
 						"kind": "function",
 						"doc_comment": "Create the zzz Hono app with Backend, providers, and endpoints.\n\nThis is the shared factory called by both entry points.\nThe caller is responsible for HTTP binding and WebSocket injection.",
 						"source_line": 60,
-						"type_signature": "(options: CreateZzzAppOptions): Promise<ZzzApp>",
-						"return_type": "Promise<ZzzApp>",
+						"type_signature": "(options: CreateZzzAppOptions): ZzzApp",
+						"return_type": "ZzzApp",
 						"parameters": [
 							{
 								"name": "options",
