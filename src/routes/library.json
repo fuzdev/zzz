@@ -17578,7 +17578,7 @@
 								"name": "env_file_path",
 								"kind": "variable",
 								"type_signature": "string",
-								"doc_comment": "Path to the .env file (defaults to ./.env)"
+								"doc_comment": "Path to the .env file (defaults to `./.env`)"
 							},
 							{
 								"name": "read_file",
