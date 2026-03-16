@@ -24,6 +24,8 @@ import {Threads} from './threads.svelte.js';
 import {Time} from './time.svelte.js';
 import {Space} from './space.svelte.js';
 import {Spaces} from './spaces.svelte.js';
+import {Terminal} from './terminal.svelte.js';
+import {TerminalPreset} from './terminal_preset.svelte.js';
 import {Ui} from './ui.svelte.js';
 import type {Cell} from './cell.svelte.js';
 
@@ -50,6 +52,8 @@ export const cell_classes = {
 	Space,
 	Spaces,
 	Socket,
+	Terminal,
+	TerminalPreset,
 	Turn,
 	Thread,
 	Threads,

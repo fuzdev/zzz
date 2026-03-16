@@ -11,7 +11,15 @@ const config: CreateGroConfig = async (base_config) => {
 			gro_plugin_deno_server({
 				entry: 'src/lib/server/server.ts',
 				port: 8999,
-				permissions: ['--allow-net', '--allow-read', '--allow-write', '--allow-env'],
+				permissions: [
+					'--allow-net',
+					'--allow-read',
+					'--allow-write',
+					'--allow-env',
+					'--allow-run',
+					'--allow-ffi',
+					'--allow-sys',
+				],
 				flags: ['--no-check', '--sloppy-imports'],
 			}),
 		);
@@ -24,7 +32,7 @@ const config: CreateGroConfig = async (base_config) => {
 					'--no-check',
 					'--sloppy-imports',
 					'--include',
-					'../../blake3/crates/blake3_wasm/pkg/deno', // embeds WASM binary for blake3
+					'node_modules/@fuzdev/blake3_wasm',
 				],
 			}),
 		];

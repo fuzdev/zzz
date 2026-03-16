@@ -338,4 +338,32 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 			app.update_provider_status(output.status);
 		},
 	},
+
+	terminal_create: {
+		receive_response: ({data: {output}}) => {
+			console.log('[frontend_action_handlers] terminal created:', output.terminal_id);
+		},
+		receive_error: ({data: {error}}) => {
+			console.error('[frontend_action_handlers] terminal_create failed:', error);
+		},
+	},
+
+	terminal_data_send: {},
+
+	terminal_data: {
+		receive: ({app, data: {input}}) => {
+			app.terminal_writers.get(input.terminal_id)?.(input.data);
+		},
+	},
+
+	terminal_resize: {},
+
+	terminal_close: {
+		receive_response: ({data: {output}}) => {
+			console.log('[frontend_action_handlers] terminal closed, exit_code:', output.exit_code);
+		},
+		receive_error: ({data: {error}}) => {
+			console.error('[frontend_action_handlers] terminal_close failed:', error);
+		},
+	},
 };

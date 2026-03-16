@@ -2,9 +2,9 @@
 
 > nice web things for the tired
 
-`@fuzdev/zzz` — local-first AI forge: chat + files + prompts in one app.
+`@fuzdev/zzz` — local-first AI forge: chat + files + prompts + terminals in one app.
 SvelteKit frontend, Hono/Deno backend, Svelte 5 runes, Zod schemas.
-v0.0.1, no auth, no database yet. 26 cell classes, 20 action specs, 4 AI providers.
+v0.0.1, no auth, no database yet. 28 cell classes, 25 action specs, 4 AI providers.
 
 For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
@@ -14,7 +14,8 @@ For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 2. **Edit files** on disk — scoped filesystem, syntax highlighting, multi-tab editor
 3. **Build prompts** — reusable content templates composed from text parts and file references
 4. **Manage models** — Ollama local models + Claude/ChatGPT/Gemini via BYOK API keys
-5. **Symmetric actions** — JSON-RPC 2.0 between frontend and backend, same ActionPeer on both sides
+5. **Run commands** — in-browser command runner with streamed output via xterm.js (interactive terminal pending PTY support)
+6. **Symmetric actions** — JSON-RPC 2.0 between frontend and backend, same ActionPeer on both sides
 
 ## Key Principles
 
@@ -63,6 +64,7 @@ src/
 │   │   ├── server.ts            # Deno server entry (dev + production)
 │   │   ├── backend_action_handlers.ts
 │   │   ├── backend_provider_*.ts # Ollama, Claude, ChatGPT, Gemini
+│   │   ├── backend_pty_manager.ts  # PTY process management
 │   │   ├── scoped_fs.ts
 │   │   ├── security.ts
 │   │   └── backend_action_types.gen.ts
@@ -75,8 +77,8 @@ src/
 │   │   ├── cli/                 # CLI infrastructure
 │   │   └── commands/            # init, daemon, open, status
 │   │
-│   ├── *.svelte.ts               # Cell state classes (26 classes)
-│   ├── action_specs.ts           # All 20 action spec definitions
+│   ├── *.svelte.ts               # Cell state classes (28 classes)
+│   ├── action_specs.ts           # All 25 action spec definitions
 │   ├── action_event.ts           # Action lifecycle state machine
 │   ├── action_peer.ts            # Symmetric send/receive
 │   ├── cell.svelte.ts            # Base Cell class
@@ -88,7 +90,7 @@ src/
 │   ├── frontend_action_types.gen.ts
 │   └── action_metatypes.gen.ts
 │
-├── routes/                       # SvelteKit routes (16 dirs)
+├── routes/                       # SvelteKit routes (17 dirs)
 │   ├── about/
 │   ├── actions/
 │   ├── bots/
@@ -104,6 +106,7 @@ src/
 │   ├── repos/
 │   ├── settings/
 │   ├── tabs/
+│   ├── terminals/
 │   └── views/
 │
 ├── test/                         # Tests (not co-located)
@@ -125,7 +128,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed data flow, content
 
 ## Cell Classes
 
-26 registered classes in `src/lib/cell_classes.ts`:
+28 registered classes in `src/lib/cell_classes.ts`:
 
 | Class            | Source file                    | Purpose                              |
 | ---------------- | ------------------------------ | ------------------------------------ |
@@ -153,12 +156,14 @@ See [docs/architecture.md](docs/architecture.md) for detailed data flow, content
 | `Turn`           | `turn.svelte.ts`              | Single conversation message          |
 | `Thread`         | `thread.svelte.ts`            | Linear conversation with one model   |
 | `Threads`        | `threads.svelte.ts`           | Collection of threads                |
+| `Terminal`       | `terminal.svelte.ts`          | PTY terminal process state           |
+| `TerminalPreset` | `terminal_preset.svelte.ts`   | Saved terminal command config        |
 | `Time`           | `time.svelte.ts`              | Reactive time state                  |
 | `Ui`             | `ui.svelte.ts`                | UI state (menus, layout)             |
 
 ## Action Specs
 
-20 specs in `src/lib/action_specs.ts`:
+25 specs in `src/lib/action_specs.ts`:
 
 | Method                   | Kind                  | Initiator  | Purpose                          |
 | ------------------------ | --------------------- | ---------- | -------------------------------- |
@@ -182,6 +187,11 @@ See [docs/architecture.md](docs/architecture.md) for detailed data flow, content
 | `ollama_unload`          | `request_response`    | `frontend` | Unload Ollama model from memory  |
 | `provider_load_status`   | `request_response`    | `frontend` | Check provider availability      |
 | `provider_update_api_key`| `request_response`    | `frontend` | Update provider API key          |
+| `terminal_create`        | `request_response`    | `frontend` | Spawn PTY terminal process       |
+| `terminal_data_send`     | `request_response`    | `frontend` | Send stdin to terminal           |
+| `terminal_data`          | `remote_notification` | `backend`  | Stream stdout/stderr to frontend |
+| `terminal_resize`        | `request_response`    | `frontend` | Update PTY dimensions            |
+| `terminal_close`         | `request_response`    | `frontend` | Kill terminal process            |
 
 ## Development Workflow
 
@@ -279,6 +289,71 @@ Action kinds:
 | `remote_notification` | WebSocket only    | Backend pushes to frontend      |
 | `local_call`          | None (in-process) | Frontend-only                   |
 
+### Adding an Action (End-to-End)
+
+Adding a new action touches up to 6 files. Here's the full workflow:
+
+**1. Define the spec** in `src/lib/action_specs.ts`:
+
+```typescript
+export const my_action_spec = {
+  method: 'my_action',
+  kind: 'request_response',       // or 'remote_notification', 'local_call'
+  initiator: 'frontend',          // or 'backend', 'both'
+  auth: 'public',
+  side_effects: true,             // or null for read-only
+  input: z.strictObject({ foo: z.string() }),
+  output: z.strictObject({ bar: z.number() }),
+  async: true,
+  description: 'What this action does.',
+} satisfies ActionSpecUnion;
+```
+
+Add it to the `all_action_specs` array at the bottom of the file.
+
+**2. Run `gro gen`** — regenerates 4 files:
+- `action_collections.ts` — `ActionInputs`/`ActionOutputs` type maps
+- `action_metatypes.ts` — `ActionMethod` union, `ActionsApi` interface
+- `frontend_action_types.ts` — `FrontendActionHandlers` type
+- `server/backend_action_types.ts` — `BackendActionHandlers` type
+
+**3. Add backend handler** in `src/lib/server/backend_action_handlers.ts`:
+
+```typescript
+my_action: {
+  receive_request: async ({backend, data: {input}}) => {
+    // input is typed from the spec's input schema
+    return {bar: 42}; // must match spec's output schema
+  },
+},
+```
+
+**4. Add frontend handler** in `src/lib/frontend_action_handlers.ts`:
+
+```typescript
+my_action: {
+  // For request_response:
+  receive_response: ({app, data: {output}}) => { /* handle success */ },
+  receive_error: ({data: {error}}) => { /* handle error */ },
+  // For remote_notification:
+  receive: ({app, data: {input}}) => { /* handle notification */ },
+},
+```
+
+**5. Call from frontend** via `app.api`:
+
+```typescript
+// Returns Result<{value: OutputType}, {error: JsonrpcError}>
+const result = await app.api.my_action({foo: 'hello'});
+if (result.ok) {
+  console.log(result.value.bar); // 42
+}
+```
+
+**6. For `remote_notification` actions**, also add to `BackendActionsApi`
+in `src/lib/server/backend_actions_api.ts` — follow the `terminal_data`
+or `completion_progress` pattern.
+
 ### Zod Schema Conventions
 
 - Always use `z.strictObject()` (not `z.object()`) for action specs — unknown keys are rejected
@@ -350,7 +425,7 @@ From `src/lib/server/.env.development.example`:
 - **No authentication** — development use only, anyone with network access can use it
 - **No database** — all state is in-memory, lost on restart (pglite planned)
 - **No undo/history** — file edits are permanent
-- **No terminal integration** — no shell access from the UI
+- **No real PTY** — `Deno.Command` `pty: true` is silently ignored; terminals work as command output viewers (no echo, no prompt, no interactivity). `node-pty` incompatible with deno compile. Next step: Deno FFI to `forkpty()`
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
 - **Backend is reference impl** — may be replaced by Rust daemon (`fuzd`)
@@ -367,4 +442,4 @@ The CLI and daemon lifecycle use `@fuzdev/fuz_app/cli/*` helpers: `DaemonInfo`
 schema, `write_daemon_info`, `read_daemon_info`, `is_daemon_running`,
 `stop_daemon`. The server writes `~/.zzz/run/daemon.json` (not `server.json`).
 
-Last updated: 2026-02-24
+Last updated: 2026-03-16

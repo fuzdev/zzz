@@ -22,31 +22,32 @@ The server provides:
 - File watching and change notifications
 - Origin-based request verification
 
-**Not included yet**: Authentication, database, terminal access.
+**Not included yet**: Authentication, database.
 
 ## Files
 
-| File                             | Purpose                                                      |
-| -------------------------------- | ------------------------------------------------------------ |
-| `create_zzz_app.ts`              | Shared app factory — Backend, providers, endpoints           |
-| `server_env.ts`                  | Env loading (replaces `$env` for server)                     |
+| File                             | Purpose                                                          |
+| -------------------------------- | ---------------------------------------------------------------- |
+| `create_zzz_app.ts`              | Shared app factory — Backend, providers, endpoints               |
+| `server_env.ts`                  | Env loading (replaces `$env` for server)                         |
 | `server.ts`                      | Deno entry — calls factory, binds `Deno.serve`, daemon lifecycle |
-| `backend.ts`                     | `Backend` class - core state, action handling, file watchers |
-| `backend_action_handlers.ts`     | Handler implementations for all backend actions              |
-| `backend_actions_api.ts`         | Backend-initiated notifications (streaming, file changes)    |
-| `backend_provider.ts`            | Base classes for AI providers                                |
-| `backend_provider_ollama.ts`     | Ollama provider (local)                                      |
-| `backend_provider_claude.ts`     | Claude/Anthropic provider (remote)                           |
-| `backend_provider_chatgpt.ts`    | OpenAI provider (remote)                                     |
-| `backend_provider_gemini.ts`     | Google Gemini provider (remote)                              |
-| `scoped_fs.ts`                   | Secure filesystem wrapper                                    |
-| `security.ts`                    | Origin verification middleware                               |
-| `register_http_actions.ts`       | HTTP endpoint registration                                   |
-| `register_websocket_actions.ts`  | WebSocket endpoint registration                              |
-| `backend_websocket_transport.ts` | WebSocket transport implementation                           |
-| `env_file_helpers.ts`            | `.env` file manipulation                                     |
-| `helpers.ts`                     | Completion response persistence                              |
-| `server_helpers.ts`              | Server utilities                                             |
+| `backend.ts`                     | `Backend` class - core state, action handling, file watchers     |
+| `backend_action_handlers.ts`     | Handler implementations for all backend actions                  |
+| `backend_actions_api.ts`         | Backend-initiated notifications (streaming, file changes)        |
+| `backend_provider.ts`            | Base classes for AI providers                                    |
+| `backend_provider_ollama.ts`     | Ollama provider (local)                                          |
+| `backend_provider_claude.ts`     | Claude/Anthropic provider (remote)                               |
+| `backend_provider_chatgpt.ts`    | OpenAI provider (remote)                                         |
+| `backend_provider_gemini.ts`     | Google Gemini provider (remote)                                  |
+| `scoped_fs.ts`                   | Secure filesystem wrapper                                        |
+| `security.ts`                    | Origin verification middleware                                   |
+| `register_http_actions.ts`       | HTTP endpoint registration                                       |
+| `register_websocket_actions.ts`  | WebSocket endpoint registration                                  |
+| `backend_websocket_transport.ts` | WebSocket transport implementation                               |
+| `backend_pty_manager.ts`         | PTY process management for terminals                             |
+| `env_file_helpers.ts`            | `.env` file manipulation                                         |
+| `helpers.ts`                     | Completion response persistence                                  |
+| `server_helpers.ts`              | Server utilities                                                 |
 
 **Generated files** (do not edit):
 
@@ -333,25 +334,55 @@ await backend.api.ollama_progress({
 
 ## Adding Features
 
-### Adding an Action Handler
+### Adding an Action (Full Workflow)
 
-1. Define spec in `../action_specs.ts`
-2. Run `gro gen` to regenerate types
-3. Add handler in `backend_action_handlers.ts`:
+Adding a `request_response` action touches 4-6 files:
+
+1. **Define spec** in `../action_specs.ts` — add to `all_action_specs` array
+2. **Run `gro gen`** — regenerates `BackendActionHandlers` type and 3 other files
+3. **Add backend handler** in `backend_action_handlers.ts`
+4. **Add frontend handler** in `../frontend_action_handlers.ts`
+5. **Call from frontend** via `app.api.method_name(input)` — returns `Result`
+6. **For `remote_notification` only**: add to `BackendActionsApi` interface + impl
+
+Backend handler:
 
 ```typescript
 my_action: {
   receive_request: async ({backend, data: {input}}) => {
-    // Validate input
-    const {param} = input;
-
-    // Perform operation
+    const {param} = input; // typed from spec
     const result = await doSomething(param);
-
-    // Return output (must match spec's output schema)
-    return {result};
+    return {result}; // must match spec output schema
   },
 },
+```
+
+Frontend handler (for `request_response`):
+
+```typescript
+my_action: {
+  receive_response: ({app, data: {output}}) => { /* update UI state */ },
+  receive_error: ({data: {error}}) => { console.error(error); },
+},
+```
+
+Frontend handler (for `remote_notification`):
+
+```typescript
+my_notification: {
+  receive: ({app, data: {input}}) => { /* handle push from backend */ },
+},
+```
+
+Frontend call:
+
+```typescript
+const result = await app.api.my_action({param: 'value'});
+if (result.ok) {
+	// result.value is typed from the output schema
+} else {
+	// result.error has code, message, data
+}
 ```
 
 ### Adding a Provider
@@ -438,4 +469,3 @@ From `../constants.ts` (**frontend/SvelteKit only** — server uses `server_env.
 | `ZZZ_DIR_RUN`                       | `run` subdirectory       |
 | `ZZZ_DIR_CACHE`                     | `cache` subdirectory     |
 | `BACKEND_ARTIFICIAL_RESPONSE_DELAY` | Testing delay (ms)       |
-

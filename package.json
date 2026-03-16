@@ -71,8 +71,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@fuzdev/blake3_wasm": "^0.1.0",
     "@fuzdev/gro": "^0.197.0",
     "@google/generative-ai": "^0.24.1",
+    "@xterm/xterm": "^6.0.0",
     "date-fns": "^4.1.0",
     "esm-env": "^1.2.2",
     "hono": "^4.12.7",

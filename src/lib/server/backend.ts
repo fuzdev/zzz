@@ -17,6 +17,7 @@ import type {BackendActionHandlers} from './backend_action_types.js';
 import type {ActionEventEnvironment, ActionExecutor} from '../action_event_types.js';
 import type {ActionMethod} from '../action_metatypes.js';
 import {create_backend_actions_api, type BackendActionsApi} from './backend_actions_api.js';
+import {PtyManager} from './backend_pty_manager.js';
 import {ActionPeer} from '../action_peer.js';
 import type {JsonrpcMessageFromServerToClient} from '../jsonrpc.js';
 import type {BackendProvider} from './backend_provider.js';
@@ -104,6 +105,11 @@ export class Backend implements ActionEventEnvironment {
 	readonly api: BackendActionsApi = create_backend_actions_api(this);
 
 	/**
+	 * Manages spawned PTY processes for terminal integration.
+	 */
+	readonly pty_manager: PtyManager;
+
+	/**
 	 * Scoped filesystem interface that restricts operations to allowed directories.
 	 */
 	readonly scoped_fs: ScopedFs;
@@ -147,6 +153,8 @@ export class Backend implements ActionEventEnvironment {
 		this.scoped_fs = new ScopedFs([this.zzz_dir, ...this.scoped_dirs]);
 
 		this.log = options.log === undefined ? new Logger('[backend]') : options.log;
+
+		this.pty_manager = new PtyManager({api: this.api, log: this.log});
 
 		// TODO maybe do this in an `init` method
 		// Set up filer watcher for zzz_dir (always watched for app data)
@@ -224,6 +232,9 @@ export class Backend implements ActionEventEnvironment {
 		this.#destroyed = true;
 
 		this.log?.info('Destroying backend');
+
+		// Kill all terminal processes
+		await this.pty_manager.destroy();
 
 		// Clean up all filer watchers
 		const cleanup_promises: Array<Promise<void>> = [];

@@ -353,6 +353,88 @@ export const provider_update_api_key_action_spec = {
 	description: 'Update the API key for an AI provider.',
 } satisfies ActionSpecUnion;
 
+export const terminal_create_action_spec = {
+	method: 'terminal_create',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: 'public',
+	side_effects: true,
+	input: z.strictObject({
+		command: z.string(),
+		args: z.array(z.string()).default(() => []),
+		cwd: z.string().optional(),
+		preset_id: Uuid.optional(),
+	}),
+	output: z.strictObject({
+		terminal_id: Uuid,
+	}),
+	async: true,
+	description: 'Spawn a PTY process and return the terminal ID.',
+} satisfies ActionSpecUnion;
+
+export const terminal_data_send_action_spec = {
+	method: 'terminal_data_send',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: 'public',
+	side_effects: true,
+	input: z.strictObject({
+		terminal_id: Uuid,
+		data: z.string(),
+	}),
+	output: z.null(),
+	async: true,
+	description: 'Send stdin bytes to a terminal.',
+} satisfies ActionSpecUnion;
+
+export const terminal_data_action_spec = {
+	method: 'terminal_data',
+	kind: 'remote_notification',
+	initiator: 'backend',
+	auth: null,
+	side_effects: true,
+	input: z.strictObject({
+		terminal_id: Uuid,
+		data: z.string(),
+	}),
+	output: z.void(),
+	async: true,
+	description: 'Stream stdout/stderr bytes from a terminal to the frontend.',
+} satisfies ActionSpecUnion;
+
+export const terminal_resize_action_spec = {
+	method: 'terminal_resize',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: 'public',
+	side_effects: true,
+	input: z.strictObject({
+		terminal_id: Uuid,
+		cols: z.number().int(),
+		rows: z.number().int(),
+	}),
+	output: z.null(),
+	async: true,
+	description: 'Update PTY dimensions for a terminal.',
+} satisfies ActionSpecUnion;
+
+export const terminal_close_action_spec = {
+	method: 'terminal_close',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: 'public',
+	side_effects: true,
+	input: z.strictObject({
+		terminal_id: Uuid,
+		signal: z.string().default('SIGTERM').optional(),
+	}),
+	output: z.strictObject({
+		exit_code: z.number().nullable(),
+	}),
+	async: true,
+	description: 'Kill a terminal process and return the exit code.',
+} satisfies ActionSpecUnion;
+
 export const all_action_specs: Array<ActionSpecUnion> = [
 	ping_action_spec,
 	session_load_action_spec,
@@ -374,4 +456,9 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	ollama_unload_action_spec,
 	provider_load_status_action_spec,
 	provider_update_api_key_action_spec,
+	terminal_create_action_spec,
+	terminal_data_send_action_spec,
+	terminal_data_action_spec,
+	terminal_resize_action_spec,
+	terminal_close_action_spec,
 ];

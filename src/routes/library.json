@@ -82,8 +82,10 @@
 		},
 		"dependencies": {
 			"@anthropic-ai/sdk": "^0.71.2",
+			"@fuzdev/blake3_wasm": "^0.1.0",
 			"@fuzdev/gro": "^0.197.0",
 			"@google/generative-ai": "^0.24.1",
+			"@xterm/xterm": "^6.0.0",
 			"date-fns": "^4.1.0",
 			"esm-env": "^1.2.2",
 			"hono": "^4.12.7",
@@ -220,40 +222,40 @@
 						"kind": "type",
 						"doc_comment": "All method types combined.",
 						"source_line": 16,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 13 more ...; provider_update_api_key: \"provider_update_api_key\"; }>"
+						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 18 more ...; terminal_close: \"terminal_close\"; }>"
 					},
 					{
 						"name": "ActionSpecs",
 						"kind": "type",
 						"doc_comment": "Action specifications indexed by method name.\nThese represent the complete action spec definitions.",
-						"source_line": 44,
-						"type_signature": "{ readonly ping: { method: string; kind: \"request_response\"; initiator: \"both\"; auth: \"public\"; side_effects: null; input: ZodOptional<ZodVoid>; output: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; async: true; description: string; }; ... 18 more ...; readonly provider_update_api_key:..."
+						"source_line": 49,
+						"type_signature": "{ readonly ping: { method: string; kind: \"request_response\"; initiator: \"both\"; auth: \"public\"; side_effects: null; input: ZodOptional<ZodVoid>; output: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; async: true; description: string; }; ... 23 more ...; readonly terminal_close: { ...; }..."
 					},
 					{
 						"name": "action_specs",
 						"kind": "variable",
-						"source_line": 89,
+						"source_line": 104,
 						"type_signature": "({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async:..."
 					},
 					{
 						"name": "ActionInputs",
 						"kind": "type",
 						"doc_comment": "Action parameter schemas indexed by method name.\nThese represent the input data for each action,\ne.g. JSON-RPC request/notification params and local call arguments.",
-						"source_line": 96,
-						"type_signature": "{ readonly ping: ZodOptional<ZodVoid>; readonly session_load: ZodOptional<ZodVoid>; readonly filer_change: ZodObject<{ change: ZodObject<{ type: ZodEnum<{ add: \"add\"; change: \"change\"; delete: \"delete\"; }>; path: $ZodBranded<...>; }, $strict>; disknode: ZodObject<...>; }, $strict>; ... 16 more ...; readonly provider..."
+						"source_line": 111,
+						"type_signature": "{ readonly ping: ZodOptional<ZodVoid>; readonly session_load: ZodOptional<ZodVoid>; readonly filer_change: ZodObject<{ change: ZodObject<{ type: ZodEnum<{ add: \"add\"; change: \"change\"; delete: \"delete\"; }>; path: $ZodBranded<...>; }, $strict>; disknode: ZodObject<...>; }, $strict>; ... 21 more ...; readonly terminal..."
 					},
 					{
 						"name": "ActionOutputs",
 						"kind": "type",
 						"doc_comment": "Action result schemas indexed by method name.\nThese represent the output data for each action,\ne.g. JSON-RPC response results and local call return values.",
-						"source_line": 146,
+						"source_line": 171,
 						"type_signature": "{ readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; readonly session_load: ZodObject<{ data: ZodObject<{ zzz_dir: $ZodBranded<ZodPipe<ZodPipe<...>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; scoped_dirs: ZodReadonly<...>; files: ZodArray<...>; provider_status: ZodAr..."
 					},
 					{
 						"name": "ActionEventDatas",
 						"kind": "type",
 						"doc_comment": "Action event data types indexed by method name.\nThese represent the full discriminated union of all possible states\nfor each action's event data, properly typed with inputs and outputs.",
-						"source_line": 196,
+						"source_line": 231,
 						"type_signature": "ActionEventDatas",
 						"properties": [
 							{
@@ -355,6 +357,31 @@
 								"name": "provider_update_api_key",
 								"kind": "variable",
 								"type_signature": "ActionEventRequestResponseData<'provider_update_api_key'>"
+							},
+							{
+								"name": "terminal_create",
+								"kind": "variable",
+								"type_signature": "ActionEventRequestResponseData<'terminal_create'>"
+							},
+							{
+								"name": "terminal_data_send",
+								"kind": "variable",
+								"type_signature": "ActionEventRequestResponseData<'terminal_data_send'>"
+							},
+							{
+								"name": "terminal_data",
+								"kind": "variable",
+								"type_signature": "ActionEventRemoteNotificationData<'terminal_data'>"
+							},
+							{
+								"name": "terminal_resize",
+								"kind": "variable",
+								"type_signature": "ActionEventRequestResponseData<'terminal_resize'>"
+							},
+							{
+								"name": "terminal_close",
+								"kind": "variable",
+								"type_signature": "ActionEventRequestResponseData<'terminal_close'>"
 							}
 						]
 					}
@@ -636,7 +663,7 @@
 						"name": "is_send_request_with_parsed_input",
 						"kind": "function",
 						"source_line": 95,
-						"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\">(data: { ...; }): data is ({ ...; } & { ...; }) | ({ ...; } & { ...; })",
+						"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\">(data: { ...; }): data is ({ ...; } & { ...; }) | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
@@ -649,7 +676,7 @@
 						"name": "is_notification_send_with_parsed_input",
 						"kind": "function",
 						"source_line": 103,
-						"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\">(data: { ...; }): data is ({ ...; } & { ...; }) | ({ ...; } & { ...; })",
+						"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\">(data: { ...; }): data is ({ ...; } & { ...; }) | ({ ...; } & { ...; })",
 						"return_type": "boolean",
 						"parameters": [
 							{
@@ -764,7 +791,7 @@
 						"name": "create_initial_data",
 						"kind": "function",
 						"source_line": 163,
-						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", method: \"ping\" | ... 18 more ... | \"provider_update_api_key\", executor: \"frontend\" | \"backend\", input: unknown): { ...; }",
+						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", method: \"ping\" | ... 23 more ... | \"terminal_close\", executor: \"frontend\" | \"backend\", input: unknown): { ...; }",
 						"return_type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }",
 						"parameters": [
 							{
@@ -777,7 +804,7 @@
 							},
 							{
 								"name": "method",
-								"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\""
+								"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\""
 							},
 							{
 								"name": "executor",
@@ -793,12 +820,12 @@
 						"name": "extract_action_result",
 						"kind": "function",
 						"source_line": 184,
-						"type_signature": "(event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): Result<...>",
+						"type_signature": "(event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): Result<...>",
 						"return_type": "Result<{ value: unknown; }, { error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }>",
 						"parameters": [
 							{
 								"name": "event",
-								"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 mor..."
+								"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"..."
 							}
 						]
 					}
@@ -940,7 +967,7 @@
 							{
 								"name": "constructor",
 								"kind": "constructor",
-								"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", TEnvironment extends ActionEventEnvironment = ActionEventEnvironment, TPhase extends ActionEventPhase = \"send_request\" | ... 7 more ... | \"receive\", TStep extends ActionEventStep = \"initial\" | ... 3 more ... | \"failed\">(environment: TEnvironment, spec: { ...; } | ... 1 more ... | { ...; }, data: ActionEventDatas[TMethod]): ActionEvent<...>",
+								"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\", TEnvironment extends ActionEventEnvironment = ActionEventEnvironment, TPhase extends ActionEventPhase = \"send_request\" | ... 7 more ... | \"receive\", TStep extends ActionEventStep = \"initial\" | ... 3 more ... | \"failed\">(environment: TEnvironment, spec: { ...; } | ... 1 more ... | { ...; }, data: ActionEventDatas[TMethod]): ActionEvent<...>",
 								"parameters": [
 									{
 										"name": "environment",
@@ -1130,8 +1157,8 @@
 						"name": "parse_action_event",
 						"kind": "function",
 						"source_line": 499,
-						"type_signature": "(raw_json: unknown, environment: ActionEventEnvironment): ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | ... 13 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
-						"return_type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 mor...",
+						"type_signature": "(raw_json: unknown, environment: ActionEventEnvironment): ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | ... 18 more ... | \"terminal_close\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
+						"return_type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"...",
 						"parameters": [
 							{
 								"name": "raw_json",
@@ -1224,48 +1251,48 @@
 						"kind": "type",
 						"doc_comment": "All action method names. Request/response actions have two types per method.",
 						"source_line": 11,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 13 more ...; provider_update_api_key: \"provider_update_api_key\"; }>"
+						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 18 more ...; terminal_close: \"terminal_close\"; }>"
 					},
 					{
 						"name": "RequestResponseActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all request_response actions.",
-						"source_line": 38,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; completion_create: \"completion_create\"; ... 9 more ...; provider_update_api_key: \"provider_update_api_key\"; }>"
+						"source_line": 43,
+						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; completion_create: \"completion_create\"; ... 13 more ...; terminal_close: \"terminal_close\"; }>"
 					},
 					{
 						"name": "RemoteNotificationActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all remote_notification actions.",
-						"source_line": 61,
-						"type_signature": "ZodEnum<{ filer_change: \"filer_change\"; completion_progress: \"completion_progress\"; ollama_progress: \"ollama_progress\"; }>"
+						"source_line": 70,
+						"type_signature": "ZodEnum<{ filer_change: \"filer_change\"; completion_progress: \"completion_progress\"; ollama_progress: \"ollama_progress\"; terminal_data: \"terminal_data\"; }>"
 					},
 					{
 						"name": "LocalCallActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all local_call actions.",
-						"source_line": 71,
+						"source_line": 81,
 						"type_signature": "ZodEnum<{ toggle_main_menu: \"toggle_main_menu\"; }>"
 					},
 					{
 						"name": "FrontendActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all actions that may be handled on the client.",
-						"source_line": 77,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 13 more ...; provider_update_api_key: \"provider_update_api_key\"; }>"
+						"source_line": 87,
+						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 18 more ...; terminal_close: \"terminal_close\"; }>"
 					},
 					{
 						"name": "BackendActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all actions that may be handled on the server.",
-						"source_line": 104,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 12 more ...; provider_update_api_key: \"provider_update_api_key\"; }>"
+						"source_line": 119,
+						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 17 more ...; terminal_close: \"terminal_close\"; }>"
 					},
 					{
 						"name": "ActionsApi",
 						"kind": "type",
 						"doc_comment": "Interface for action dispatch functions.\nAll async methods return Result types for type-safe error handling.\nSync methods (like toggle_main_menu) return values directly.",
-						"source_line": 132,
+						"source_line": 152,
 						"type_signature": "ActionsApi",
 						"properties": [
 							{
@@ -1367,6 +1394,31 @@
 								"name": "provider_update_api_key",
 								"kind": "variable",
 								"type_signature": "(\n\t\tinput: ActionInputs['provider_update_api_key'],\n\t) => Promise<\n\t\tResult<{value: ActionOutputs['provider_update_api_key']}, {error: JsonrpcErrorJson}>\n\t>"
+							},
+							{
+								"name": "terminal_create",
+								"kind": "variable",
+								"type_signature": "(\n\t\tinput: ActionInputs['terminal_create'],\n\t) => Promise<Result<{value: ActionOutputs['terminal_create']}, {error: JsonrpcErrorJson}>>"
+							},
+							{
+								"name": "terminal_data_send",
+								"kind": "variable",
+								"type_signature": "(\n\t\tinput: ActionInputs['terminal_data_send'],\n\t) => Promise<Result<{value: ActionOutputs['terminal_data_send']}, {error: JsonrpcErrorJson}>>"
+							},
+							{
+								"name": "terminal_data",
+								"kind": "variable",
+								"type_signature": "(\n\t\tinput: ActionInputs['terminal_data'],\n\t) => Promise<Result<{value: ActionOutputs['terminal_data']}, {error: JsonrpcErrorJson}>>"
+							},
+							{
+								"name": "terminal_resize",
+								"kind": "variable",
+								"type_signature": "(\n\t\tinput: ActionInputs['terminal_resize'],\n\t) => Promise<Result<{value: ActionOutputs['terminal_resize']}, {error: JsonrpcErrorJson}>>"
+							},
+							{
+								"name": "terminal_close",
+								"kind": "variable",
+								"type_signature": "(\n\t\tinput: ActionInputs['terminal_close'],\n\t) => Promise<Result<{value: ActionOutputs['terminal_close']}, {error: JsonrpcErrorJson}>>"
 							}
 						]
 					}
@@ -1644,9 +1696,39 @@
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; api_key: ZodString; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
 					},
 					{
-						"name": "all_action_specs",
+						"name": "terminal_create_action_spec",
 						"kind": "variable",
 						"source_line": 356,
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ command: ZodString; args: ZodDefault<ZodArray<ZodString>>; cwd: ZodOptional<...>; preset_id: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
+					},
+					{
+						"name": "terminal_data_send_action_spec",
+						"kind": "variable",
+						"source_line": 375,
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; data: ZodString; }, $strict>; output: ZodNull; async: true; description: string; }"
+					},
+					{
+						"name": "terminal_data_action_spec",
+						"kind": "variable",
+						"source_line": 390,
+						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; data: ZodString; }, $strict>; output: ZodVoid; async: true; description: string; }"
+					},
+					{
+						"name": "terminal_resize_action_spec",
+						"kind": "variable",
+						"source_line": 405,
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; cols: ZodNumber; rows: ZodNumber; }, $strict>; output: ZodNull; async: true; description: string; }"
+					},
+					{
+						"name": "terminal_close_action_spec",
+						"kind": "variable",
+						"source_line": 421,
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; signal: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
+					},
+					{
+						"name": "all_action_specs",
+						"kind": "variable",
+						"source_line": 438,
 						"type_signature": "({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async:..."
 					}
 				],
@@ -1680,7 +1762,7 @@
 						"name": "ActionJsonInput",
 						"kind": "type",
 						"source_line": 20,
-						"type_signature": "{ method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_..."
+						"type_signature": "{ method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_dat..."
 					},
 					{
 						"name": "ActionOptions",
@@ -1766,12 +1848,12 @@
 							{
 								"name": "listen_to_action_event",
 								"kind": "function",
-								"type_signature": "(action_event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): () => void",
+								"type_signature": "(action_event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): () => void",
 								"return_type": "() => void",
 								"parameters": [
 									{
 										"name": "action_event",
-										"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 mor..."
+										"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"..."
 									}
 								]
 							},
@@ -1938,7 +2020,7 @@
 						"name": "ActionsJsonInput",
 						"kind": "type",
 						"source_line": 18,
-						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 14 more ... | \"provider_update_api_key\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined;..."
+						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 19 more ... | \"terminal_close\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_e..."
 					},
 					{
 						"name": "ActionsOptions",
@@ -1988,12 +2070,12 @@
 								"name": "set_json",
 								"kind": "function",
 								"doc_comment": "Override to populate the indexed collection after parsing JSON.",
-								"type_signature": "(value?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 14 more ... | \"provider_update_api_key\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ...; } | undefined; }[] | undefined; } | undefined): void",
+								"type_signature": "(value?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 19 more ... | \"terminal_close\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ...; } | undefined; }[] | undefined; } | undefined): void",
 								"return_type": "void",
 								"parameters": [
 									{
 										"name": "value",
-										"type": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 14 more ... | \"provider_update_api_key\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined;...",
+										"type": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 19 more ... | \"terminal_close\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_e...",
 										"optional": true
 									}
 								]
@@ -2013,12 +2095,12 @@
 							{
 								"name": "add_from_json",
 								"kind": "function",
-								"type_signature": "(action_json: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ...; } | undefined; }): Action",
+								"type_signature": "(action_json: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ...; } | undefined; }): Action",
 								"return_type": "Action",
 								"parameters": [
 									{
 										"name": "action_json",
-										"type": "{ method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_..."
+										"type": "{ method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_dat..."
 									}
 								]
 							}
@@ -2083,7 +2165,7 @@
 					"frontend.svelte.ts",
 					"frontend_action_handlers.ts"
 				],
-				"dependents": ["DashboardActions.svelte"]
+				"dependents": ["DashboardActions.svelte", "TerminalView.svelte"]
 			},
 			{
 				"path": "capabilities.svelte.ts",
@@ -2729,32 +2811,32 @@
 					{
 						"name": "cell_classes",
 						"kind": "variable",
-						"source_line": 30,
-						"type_signature": "{ Parts: typeof Parts; Capabilities: typeof Capabilities; Chat: typeof Chat; Chats: typeof Chats; Diskfile: typeof Diskfile; DiskfileTab: typeof DiskfileTab; DiskfileTabs: typeof DiskfileTabs; ... 20 more ...; Ui: typeof Ui; }"
+						"source_line": 32,
+						"type_signature": "{ Parts: typeof Parts; Capabilities: typeof Capabilities; Chat: typeof Chat; Chats: typeof Chats; Diskfile: typeof Diskfile; DiskfileTab: typeof DiskfileTab; DiskfileTabs: typeof DiskfileTabs; ... 22 more ...; Ui: typeof Ui; }"
 					},
 					{
 						"name": "CellClasses",
 						"kind": "type",
-						"source_line": 61,
-						"type_signature": "{ Parts: typeof Parts; Capabilities: typeof Capabilities; Chat: typeof Chat; Chats: typeof Chats; Diskfile: typeof Diskfile; DiskfileTab: typeof DiskfileTab; DiskfileTabs: typeof DiskfileTabs; ... 20 more ...; Ui: typeof Ui; }"
+						"source_line": 65,
+						"type_signature": "{ Parts: typeof Parts; Capabilities: typeof Capabilities; Chat: typeof Chat; Chats: typeof Chats; Diskfile: typeof Diskfile; DiskfileTab: typeof DiskfileTab; DiskfileTabs: typeof DiskfileTabs; ... 22 more ...; Ui: typeof Ui; }"
 					},
 					{
 						"name": "CellClassNames",
 						"kind": "type",
-						"source_line": 63,
-						"type_signature": "\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 14 more ... | \"Ui\""
+						"source_line": 67,
+						"type_signature": "\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 16 more ... | \"Ui\""
 					},
 					{
 						"name": "CellRegistryMap",
 						"kind": "type",
-						"source_line": 65,
+						"source_line": 69,
 						"type_signature": "CellRegistryMap"
 					},
 					{
 						"name": "is_cell_type",
 						"kind": "function",
 						"doc_comment": "Type guard to check if a cell is an instance of a specific cell class.",
-						"source_line": 72,
+						"source_line": 76,
 						"type_signature": "<K extends CellClassNames>(cell: Cell<any> | null | undefined, class_name: K): cell is CellRegistryMap[K]",
 						"return_type": "boolean",
 						"parameters": [
@@ -2772,9 +2854,9 @@
 						"name": "get_cell_class_names",
 						"kind": "function",
 						"doc_comment": "Get a list of all registered cell class names.",
-						"source_line": 80,
-						"type_signature": "(): (\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 14 more ... | \"Ui\")[]",
-						"return_type": "(\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 14 more ... | \"Ui\")[]",
+						"source_line": 84,
+						"type_signature": "(): (\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 16 more ... | \"Ui\")[]",
+						"return_type": "(\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 16 more ... | \"Ui\")[]",
 						"parameters": []
 					}
 				],
@@ -2801,6 +2883,8 @@
 					"socket.svelte.ts",
 					"space.svelte.ts",
 					"spaces.svelte.ts",
+					"terminal.svelte.ts",
+					"terminal_preset.svelte.ts",
 					"thread.svelte.ts",
 					"threads.svelte.ts",
 					"time.svelte.ts",
@@ -3186,6 +3270,8 @@
 					"socket.svelte.ts",
 					"space.svelte.ts",
 					"spaces.svelte.ts",
+					"terminal.svelte.ts",
+					"terminal_preset.svelte.ts",
 					"thread_types.ts",
 					"threads.svelte.ts",
 					"time.svelte.ts",
@@ -3568,6 +3654,8 @@
 					"socket.svelte.ts",
 					"space.svelte.ts",
 					"spaces.svelte.ts",
+					"terminal.svelte.ts",
+					"terminal_preset.svelte.ts",
 					"thread.svelte.ts",
 					"threads.svelte.ts",
 					"time.svelte.ts",
@@ -7603,6 +7691,31 @@
 								"name": "provider_update_api_key",
 								"kind": "variable",
 								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<\n\t\t\t\t'provider_update_api_key',\n\t\t\t\tFrontend,\n\t\t\t\t'receive_response',\n\t\t\t\t'handling'\n\t\t\t>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+							},
+							{
+								"name": "terminal_create",
+								"kind": "variable",
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_create', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_create', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_create', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_create', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+							},
+							{
+								"name": "terminal_data_send",
+								"kind": "variable",
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+							},
+							{
+								"name": "terminal_data",
+								"kind": "variable",
+								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'terminal_data', Frontend, 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+							},
+							{
+								"name": "terminal_resize",
+								"kind": "variable",
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+							},
+							{
+								"name": "terminal_close",
+								"kind": "variable",
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_close', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_close', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_close', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_close', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							}
 						]
 					}
@@ -7807,25 +7920,25 @@
 					{
 						"name": "frontend_context",
 						"kind": "variable",
-						"source_line": 49,
+						"source_line": 50,
 						"type_signature": "{ get: (error_message?: string | undefined) => Frontend; get_maybe: () => Frontend | undefined; set: (value: Frontend) => Frontend; }"
 					},
 					{
 						"name": "FrontendJson",
 						"kind": "type",
-						"source_line": 51,
+						"source_line": 52,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; ui: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "FrontendJsonInput",
 						"kind": "type",
-						"source_line": 56,
+						"source_line": 57,
 						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; ui?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; show_main_dialog?: boolean | undefined; ... 6 more ...; desk_pinned?: boolean | undefined; } | undefined; }"
 					},
 					{
 						"name": "FrontendOptions",
 						"kind": "type",
-						"source_line": 58,
+						"source_line": 59,
 						"type_signature": "FrontendOptions",
 						"extends": ["OmitStrict<CellOptions<typeof FrontendJson>, 'app'>"],
 						"properties": [
@@ -7886,7 +7999,7 @@
 						"name": "Frontend",
 						"kind": "class",
 						"doc_comment": "The base frontend app, typically used by creating your own `App extends Frontend`.\nGettable with `frontend_context.get()` inside a `<FrontendRoot>`.",
-						"source_line": 78,
+						"source_line": 79,
 						"extends": ["Cell<typeof FrontendJson>"],
 						"implements": ["ActionEventEnvironment"],
 						"members": [
@@ -8018,6 +8131,13 @@
 								"type_signature": "ZzzOptions['bots']"
 							},
 							{
+								"name": "terminal_writers",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"doc_comment": "Callback registry for terminal data routing.\nTerminalView components register their write callback on mount.",
+								"type_signature": "Map<Uuid, (data: string) => void>"
+							},
+							{
 								"name": "provider_status",
 								"kind": "variable",
 								"doc_comment": "Tracks which providers are available (configured with API keys).",
@@ -8139,12 +8259,12 @@
 							{
 								"name": "lookup_action_handler",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send_request\" | ... 7 more ... | \"receive\"): ((event: any) => any) | undefined",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\", phase: \"send_request\" | ... 7 more ... | \"receive\"): ((event: any) => any) | undefined",
 								"return_type": "((event: any) => any) | undefined",
 								"parameters": [
 									{
 										"name": "method",
-										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\""
+										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\""
 									},
 									{
 										"name": "phase",
@@ -8155,20 +8275,20 @@
 							{
 								"name": "lookup_action_spec",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\"): { ...; } | ... 2 more ... | undefined",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\"): { ...; } | ... 2 more ... | undefined",
 								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async: ...",
 								"parameters": [
 									{
 										"name": "method",
-										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\""
+										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\""
 									}
 								]
 							},
 							{
 								"name": "lookup_action_input_schema",
 								"kind": "function",
-								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly ping: ZodOptional<ZodVoid>; readonly session_load: ZodOptional<ZodVoid>; ... 17 more ...; readonly provider_update_api_key: ZodObject<...>; }[TMethod] | undefined",
-								"return_type": "{ readonly ping: ZodOptional<ZodVoid>; readonly session_load: ZodOptional<ZodVoid>; readonly filer_change: ZodObject<{ change: ZodObject<{ type: ZodEnum<{ add: \"add\"; change: \"change\"; delete: \"delete\"; }>; path: $ZodBranded<...>; }, $strict>; disknode: ZodObject<...>; }, $strict>; ... 16 more ...; readonly provider...",
+								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly ping: ZodOptional<ZodVoid>; readonly session_load: ZodOptional<ZodVoid>; ... 22 more ...; readonly terminal_close: ZodObject<...>; }[TMethod] | undefined",
+								"return_type": "{ readonly ping: ZodOptional<ZodVoid>; readonly session_load: ZodOptional<ZodVoid>; readonly filer_change: ZodObject<{ change: ZodObject<{ type: ZodEnum<{ add: \"add\"; change: \"change\"; delete: \"delete\"; }>; path: $ZodBranded<...>; }, $strict>; disknode: ZodObject<...>; }, $strict>; ... 21 more ...; readonly terminal...",
 								"parameters": [
 									{
 										"name": "method",
@@ -8179,7 +8299,7 @@
 							{
 								"name": "lookup_action_output_schema",
 								"kind": "function",
-								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 18 more ...; readonly provider_update_api_key: ZodObject<...>; }[TMethod] | undefined",
+								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 23 more ...; readonly terminal_close: ZodObject<...>; }[TMethod] | undefined",
 								"return_type": "{ readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; readonly session_load: ZodObject<{ data: ZodObject<{ zzz_dir: $ZodBranded<ZodPipe<...>, \"DiskfileDirectoryPath\", \"out\">; scoped_dirs: ZodReadonly<...>; files: ZodArray<...>; provider_status: ZodArray<...>; }, $strict>; }, $...",
 								"parameters": [
 									{
@@ -8191,12 +8311,12 @@
 							{
 								"name": "is_valid_phase_for_method",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send_request\" | ... 7 more ... | \"receive\"): boolean",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\", phase: \"send_request\" | ... 7 more ... | \"receive\"): boolean",
 								"return_type": "boolean",
 								"parameters": [
 									{
 										"name": "method",
-										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\""
+										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\""
 									},
 									{
 										"name": "phase",
@@ -8780,88 +8900,94 @@
 						"type_signature": "\"⏍\""
 					},
 					{
-						"name": "GLYPH_IDEA",
+						"name": "GLYPH_TERMINAL",
 						"kind": "variable",
 						"source_line": 83,
+						"type_signature": "\"⌨\""
+					},
+					{
+						"name": "GLYPH_IDEA",
+						"kind": "variable",
+						"source_line": 84,
 						"type_signature": "\"⌆\""
 					},
 					{
 						"name": "GLYPH_PING",
 						"kind": "variable",
-						"source_line": 85,
+						"source_line": 86,
 						"type_signature": "\"⥀\""
 					},
 					{
 						"name": "GLYPH_HEARTBEAT",
 						"kind": "variable",
-						"source_line": 86,
+						"source_line": 87,
 						"type_signature": "\"∽\""
 					},
 					{
 						"name": "GLYPH_RESPONSE",
 						"kind": "variable",
-						"source_line": 87,
+						"source_line": 88,
 						"type_signature": "\"⮑\""
 					},
 					{
 						"name": "GLYPH_SESSION",
 						"kind": "variable",
-						"source_line": 88,
+						"source_line": 89,
 						"type_signature": "\"⏣\""
 					},
 					{
 						"name": "GLYPH_ACTION_TYPE_LOCAL_CALL",
 						"kind": "variable",
-						"source_line": 90,
+						"source_line": 91,
 						"type_signature": "\"⤳\""
 					},
 					{
 						"name": "GLYPH_ACTION_TYPE_REMOTE_NOTIFICATION",
 						"kind": "variable",
-						"source_line": 91,
+						"source_line": 92,
 						"type_signature": "\"⥙\""
 					},
 					{
 						"name": "GLYPH_ACTION_TYPE_REQUEST_RESPONSE",
 						"kind": "variable",
-						"source_line": 92,
+						"source_line": 93,
 						"type_signature": "\"⥮\""
 					},
 					{
 						"name": "GLYPH_EXTERNAL_LINK",
 						"kind": "variable",
-						"source_line": 94,
+						"source_line": 95,
 						"type_signature": "\"🡵\""
 					},
 					{
 						"name": "GLYPH_ARROW_RIGHT",
 						"kind": "variable",
-						"source_line": 96,
+						"source_line": 97,
 						"type_signature": "\"→\""
 					},
 					{
 						"name": "GLYPH_ARROW_LEFT",
 						"kind": "variable",
-						"source_line": 97,
+						"source_line": 98,
 						"type_signature": "\"←\""
 					},
 					{
 						"name": "get_glyph_for_action_method",
 						"kind": "function",
-						"source_line": 99,
-						"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\"): string",
+						"source_line": 100,
+						"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\"): string",
 						"return_type": "string",
 						"parameters": [
 							{
 								"name": "method",
-								"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\""
+								"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\""
 							}
 						]
 					},
 					{
 						"name": "get_glyph_for_action_kind",
 						"kind": "function",
-						"source_line": 116,
+						"source_line": 117,
 						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\"): string",
 						"return_type": "string",
 						"parameters": [
@@ -11215,7 +11341,7 @@
 					{
 						"name": "NavLinkItem",
 						"kind": "type",
-						"source_line": 19,
+						"source_line": 20,
 						"type_signature": "NavLinkItem",
 						"properties": [
 							{
@@ -11238,7 +11364,7 @@
 					{
 						"name": "NavItem",
 						"kind": "type",
-						"source_line": 26,
+						"source_line": 27,
 						"type_signature": "NavItem",
 						"properties": [
 							{
@@ -11256,7 +11382,7 @@
 					{
 						"name": "to_nav_link_href",
 						"kind": "function",
-						"source_line": 36,
+						"source_line": 37,
 						"type_signature": "(app: Frontend, label: string, href: string): string",
 						"return_type": "string",
 						"parameters": [
@@ -11277,7 +11403,7 @@
 					{
 						"name": "main_nav_items_default",
 						"kind": "variable",
-						"source_line": 54,
+						"source_line": 55,
 						"type_signature": "NavItem[]"
 					}
 				],
@@ -15436,12 +15562,12 @@
 								"name": "get_action_spec",
 								"kind": "function",
 								"doc_comment": "Get an action specification by method name.",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\"): { ...; } | ... 2 more ... | undefined",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\"): { ...; } | ... 2 more ... | undefined",
 								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async: ...",
 								"parameters": [
 									{
 										"name": "method",
-										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\""
+										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\""
 									}
 								]
 							},
@@ -15559,7 +15685,7 @@
 						"name": "backend_action_handlers",
 						"kind": "variable",
 						"doc_comment": "Handle client messages and produce appropriate server responses.\nEach returns a value or throws a `ThrownJsonrpcError`.\nOrganized by method and phase for symmetric handling.",
-						"source_line": 23,
+						"source_line": 24,
 						"type_signature": "BackendActionHandlers"
 					}
 				],
@@ -15568,7 +15694,8 @@
 					"diskfile_types.ts",
 					"jsonrpc_errors.ts",
 					"server/env_file_helpers.ts",
-					"server/helpers.ts"
+					"server/helpers.ts",
+					"zod_helpers.ts"
 				],
 				"dependents": ["server/create_zzz_app.ts"]
 			},
@@ -15686,6 +15813,31 @@
 								"name": "provider_update_api_key",
 								"kind": "variable",
 								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', Backend, 'receive_request', 'handling'>,\n\t\t) =>\n\t\t\t| ActionOutputs['provider_update_api_key']\n\t\t\t| Promise<ActionOutputs['provider_update_api_key']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+							},
+							{
+								"name": "terminal_create",
+								"kind": "variable",
+								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'terminal_create', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['terminal_create'] | Promise<ActionOutputs['terminal_create']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'terminal_create', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_create', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+							},
+							{
+								"name": "terminal_data_send",
+								"kind": "variable",
+								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['terminal_data_send'] | Promise<ActionOutputs['terminal_data_send']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+							},
+							{
+								"name": "terminal_data",
+								"kind": "variable",
+								"type_signature": "{\n\t\tsend?: (\n\t\t\taction_event: ActionEvent<'terminal_data', Backend, 'send', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+							},
+							{
+								"name": "terminal_resize",
+								"kind": "variable",
+								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['terminal_resize'] | Promise<ActionOutputs['terminal_resize']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+							},
+							{
+								"name": "terminal_close",
+								"kind": "variable",
+								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'terminal_close', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['terminal_close'] | Promise<ActionOutputs['terminal_close']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'terminal_close', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_close', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							}
 						]
 					}
@@ -15697,7 +15849,7 @@
 					{
 						"name": "BackendActionsApi",
 						"kind": "type",
-						"source_line": 26,
+						"source_line": 27,
 						"type_signature": "BackendActionsApi",
 						"properties": [
 							{
@@ -15714,13 +15866,18 @@
 								"name": "ollama_progress",
 								"kind": "variable",
 								"type_signature": "(input: ActionInputs['ollama_progress']) => Promise<void>"
+							},
+							{
+								"name": "terminal_data",
+								"kind": "variable",
+								"type_signature": "(input: ActionInputs['terminal_data']) => Promise<void>"
 							}
 						]
 					},
 					{
 						"name": "create_backend_actions_api",
 						"kind": "function",
-						"source_line": 32,
+						"source_line": 34,
 						"type_signature": "(backend: Backend): BackendActionsApi",
 						"return_type": "BackendActionsApi",
 						"parameters": [
@@ -15734,7 +15891,7 @@
 						"name": "handle_filer_change",
 						"kind": "function",
 						"doc_comment": "Handle file system changes and notify clients.",
-						"source_line": 139,
+						"source_line": 175,
 						"type_signature": "(change: WatcherChange, disknode: Disknode, backend: Backend, dir: string, filer: Filer): void",
 						"return_type": "void",
 						"parameters": [
@@ -16445,6 +16602,170 @@
 				]
 			},
 			{
+				"path": "server/backend_pty_manager.ts",
+				"declarations": [
+					{
+						"name": "PtyProcess",
+						"kind": "type",
+						"source_line": 6,
+						"type_signature": "PtyProcess",
+						"properties": [
+							{
+								"name": "process",
+								"kind": "variable",
+								"type_signature": "Deno.ChildProcess"
+							},
+							{
+								"name": "terminal_id",
+								"kind": "variable",
+								"type_signature": "Uuid"
+							},
+							{
+								"name": "command",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "args",
+								"kind": "variable",
+								"type_signature": "Array<string>"
+							},
+							{
+								"name": "stdin_writer",
+								"kind": "variable",
+								"type_signature": "WritableStreamDefaultWriter<Uint8Array>"
+							}
+						]
+					},
+					{
+						"name": "PtyManagerOptions",
+						"kind": "type",
+						"source_line": 14,
+						"type_signature": "PtyManagerOptions",
+						"properties": [
+							{
+								"name": "api",
+								"kind": "variable",
+								"type_signature": "BackendActionsApi"
+							},
+							{
+								"name": "log",
+								"kind": "variable",
+								"type_signature": "Logger | null"
+							}
+						]
+					},
+					{
+						"name": "PtyManager",
+						"kind": "class",
+						"doc_comment": "Manages spawned PTY processes keyed by terminal_id.",
+						"source_line": 22,
+						"members": [
+							{
+								"name": "log",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "Logger | null"
+							},
+							{
+								"name": "constructor",
+								"kind": "constructor",
+								"type_signature": "(options: PtyManagerOptions): PtyManager",
+								"parameters": [
+									{
+										"name": "options",
+										"type": "PtyManagerOptions"
+									}
+								]
+							},
+							{
+								"name": "spawn",
+								"kind": "function",
+								"doc_comment": "Spawn a new PTY process and begin streaming its output.",
+								"type_signature": "(terminal_id: string & $brand<\"Uuid\">, command: string, args: string[], cwd?: string | undefined): void",
+								"return_type": "void",
+								"parameters": [
+									{
+										"name": "terminal_id",
+										"type": "string & $brand<\"Uuid\">"
+									},
+									{
+										"name": "command",
+										"type": "string"
+									},
+									{
+										"name": "args",
+										"type": "string[]"
+									},
+									{
+										"name": "cwd",
+										"type": "string | undefined",
+										"optional": true
+									}
+								]
+							},
+							{
+								"name": "write",
+								"kind": "function",
+								"doc_comment": "Write data to a terminal's stdin.",
+								"type_signature": "(terminal_id: string & $brand<\"Uuid\">, data: string): Promise<void>",
+								"return_type": "Promise<void>",
+								"parameters": [
+									{
+										"name": "terminal_id",
+										"type": "string & $brand<\"Uuid\">"
+									},
+									{
+										"name": "data",
+										"type": "string"
+									}
+								]
+							},
+							{
+								"name": "kill",
+								"kind": "function",
+								"doc_comment": "Kill a terminal process.",
+								"type_signature": "(terminal_id: string & $brand<\"Uuid\">, signal?: string | undefined): Promise<number | null>",
+								"return_type": "Promise<number | null>",
+								"parameters": [
+									{
+										"name": "terminal_id",
+										"type": "string & $brand<\"Uuid\">"
+									},
+									{
+										"name": "signal",
+										"type": "string | undefined",
+										"optional": true
+									}
+								]
+							},
+							{
+								"name": "has",
+								"kind": "function",
+								"doc_comment": "Check if a terminal exists and is tracked.",
+								"type_signature": "(terminal_id: string & $brand<\"Uuid\">): boolean",
+								"return_type": "boolean",
+								"parameters": [
+									{
+										"name": "terminal_id",
+										"type": "string & $brand<\"Uuid\">"
+									}
+								]
+							},
+							{
+								"name": "destroy",
+								"kind": "function",
+								"doc_comment": "Kill all terminal processes. Called on backend shutdown.",
+								"type_signature": "(): Promise<void>",
+								"return_type": "Promise<void>",
+								"parameters": []
+							}
+						]
+					}
+				],
+				"dependents": ["server/backend.ts"]
+			},
+			{
 				"path": "server/backend_websocket_transport.ts",
 				"declarations": [
 					{
@@ -16541,14 +16862,14 @@
 						"name": "FilerChangeHandler",
 						"kind": "type",
 						"doc_comment": "Function type for handling file system changes.",
-						"source_line": 36,
+						"source_line": 37,
 						"type_signature": "FilerChangeHandler"
 					},
 					{
 						"name": "FilerInstance",
 						"kind": "type",
 						"doc_comment": "Structure to hold a Filer and its cleanup function.",
-						"source_line": 47,
+						"source_line": 48,
 						"type_signature": "FilerInstance",
 						"properties": [
 							{
@@ -16566,7 +16887,7 @@
 					{
 						"name": "BackendOptions",
 						"kind": "type",
-						"source_line": 52,
+						"source_line": 53,
 						"type_signature": "BackendOptions",
 						"properties": [
 							{
@@ -16617,7 +16938,7 @@
 						"name": "Backend",
 						"kind": "class",
 						"doc_comment": "Server for managing the Zzz application state and handling client messages.",
-						"source_line": 87,
+						"source_line": 88,
 						"extends": [],
 						"implements": ["ActionEventEnvironment"],
 						"members": [
@@ -16659,6 +16980,13 @@
 								"modifiers": ["readonly"],
 								"doc_comment": "API for backend-initiated actions.",
 								"type_signature": "BackendActionsApi"
+							},
+							{
+								"name": "pty_manager",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"doc_comment": "Manages spawned PTY processes for terminal integration.",
+								"type_signature": "PtyManager"
 							},
 							{
 								"name": "scoped_fs",
@@ -16705,12 +17033,12 @@
 							{
 								"name": "lookup_action_handler",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\", phase: \"send_request\" | ... 7 more ... | \"receive\"): ((event: any) => any) | undefined",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\", phase: \"send_request\" | ... 7 more ... | \"receive\"): ((event: any) => any) | undefined",
 								"return_type": "((event: any) => any) | undefined",
 								"parameters": [
 									{
 										"name": "method",
-										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\""
+										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\""
 									},
 									{
 										"name": "phase",
@@ -16721,12 +17049,12 @@
 							{
 								"name": "lookup_action_spec",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\"): { ...; } | ... 2 more ... | undefined",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\"): { ...; } | ... 2 more ... | undefined",
 								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async: ...",
 								"parameters": [
 									{
 										"name": "method",
-										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 10 more ... | \"provider_update_api_key\""
+										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 15 more ... | \"terminal_close\""
 									}
 								]
 							},
@@ -16783,6 +17111,7 @@
 					"diskfile_types.ts",
 					"jsonrpc_errors.ts",
 					"server/backend_actions_api.ts",
+					"server/backend_pty_manager.ts",
 					"server/scoped_fs.ts"
 				],
 				"dependents": ["server/create_zzz_app.ts"]
@@ -18402,6 +18731,183 @@
 					"space.svelte.ts"
 				],
 				"dependents": ["DeskMenu.svelte", "cell_classes.ts", "frontend.svelte.ts"]
+			},
+			{
+				"path": "terminal_preset.svelte.ts",
+				"declarations": [
+					{
+						"name": "TerminalPresetJson",
+						"kind": "type",
+						"source_line": 6,
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 4 more ...; cwd: ZodOptional<...>; }, $strict>"
+					},
+					{
+						"name": "TerminalPresetJsonInput",
+						"kind": "type",
+						"source_line": 13,
+						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; name?: string | undefined; command?: string | undefined; args?: string[] | undefined; cwd?: string | undefined; }"
+					},
+					{
+						"name": "TerminalPresetOptions",
+						"kind": "type",
+						"source_line": 15,
+						"type_signature": "TerminalPresetOptions",
+						"extends": ["CellOptions<typeof TerminalPresetJson>"],
+						"properties": []
+					},
+					{
+						"name": "TerminalPreset",
+						"kind": "class",
+						"source_line": 17,
+						"extends": ["Cell<typeof TerminalPresetJson>"],
+						"implements": [],
+						"members": [
+							{
+								"name": "name",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "command",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "args",
+								"kind": "variable",
+								"type_signature": "Array<string>"
+							},
+							{
+								"name": "cwd",
+								"kind": "variable",
+								"type_signature": "string | undefined"
+							},
+							{
+								"name": "constructor",
+								"kind": "constructor",
+								"type_signature": "(options: TerminalPresetOptions): TerminalPreset",
+								"parameters": [
+									{
+										"name": "options",
+										"type": "TerminalPresetOptions"
+									}
+								]
+							}
+						]
+					}
+				],
+				"dependencies": ["cell.svelte.ts", "cell_types.ts"],
+				"dependents": ["cell_classes.ts"]
+			},
+			{
+				"path": "terminal.svelte.ts",
+				"declarations": [
+					{
+						"name": "TerminalStatus",
+						"kind": "type",
+						"source_line": 7,
+						"type_signature": "ZodEnum<{ running: \"running\"; stopped: \"stopped\"; exited: \"exited\"; }>"
+					},
+					{
+						"name": "TerminalJson",
+						"kind": "type",
+						"source_line": 10,
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 7 more ...; preset_id: ZodDefault<...>; }, $strict>"
+					},
+					{
+						"name": "TerminalJsonInput",
+						"kind": "type",
+						"source_line": 20,
+						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; name?: string | undefined; command?: string | undefined; args?: string[] | undefined; cwd?: string | undefined; status?: \"running\" | ... 2 more ... | undefined; exit_code?: number | ... 1 more ... | undefined; preset_id?: string |..."
+					},
+					{
+						"name": "TerminalOptions",
+						"kind": "type",
+						"source_line": 22,
+						"type_signature": "TerminalOptions",
+						"extends": ["CellOptions<typeof TerminalJson>"],
+						"properties": []
+					},
+					{
+						"name": "Terminal",
+						"kind": "class",
+						"source_line": 24,
+						"extends": ["Cell<typeof TerminalJson>"],
+						"implements": [],
+						"members": [
+							{
+								"name": "name",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "command",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "args",
+								"kind": "variable",
+								"type_signature": "Array<string>"
+							},
+							{
+								"name": "cwd",
+								"kind": "variable",
+								"type_signature": "string | undefined"
+							},
+							{
+								"name": "status",
+								"kind": "variable",
+								"type_signature": "TerminalStatus"
+							},
+							{
+								"name": "exit_code",
+								"kind": "variable",
+								"type_signature": "number | null"
+							},
+							{
+								"name": "preset_id",
+								"kind": "variable",
+								"type_signature": "Uuid | null"
+							},
+							{
+								"name": "constructor",
+								"kind": "constructor",
+								"type_signature": "(options: TerminalOptions): Terminal",
+								"parameters": [
+									{
+										"name": "options",
+										"type": "TerminalOptions"
+									}
+								]
+							}
+						]
+					}
+				],
+				"dependencies": ["cell.svelte.ts", "cell_types.ts", "zod_helpers.ts"],
+				"dependents": ["cell_classes.ts"]
+			},
+			{
+				"path": "TerminalView.svelte",
+				"declarations": [
+					{
+						"name": "TerminalView",
+						"kind": "component",
+						"props": [
+							{
+								"name": "terminal_id",
+								"type": "Uuid"
+							},
+							{
+								"name": "onclose",
+								"type": "(exit_code: number | null) => void",
+								"optional": true
+							}
+						],
+						"source_line": 1
+					}
+				],
+				"dependencies": ["app.svelte.ts"]
 			},
 			{
 				"path": "thread_helpers.ts",
@@ -20339,9 +20845,11 @@
 					"prompt.svelte.ts",
 					"request_tracker.svelte.ts",
 					"response_helpers.ts",
+					"server/backend_action_handlers.ts",
 					"server/backend_websocket_transport.ts",
 					"server/register_http_actions.ts",
 					"socket.svelte.ts",
+					"terminal.svelte.ts",
 					"turn.svelte.ts",
 					"turn_types.ts",
 					"url_params_helpers.ts",

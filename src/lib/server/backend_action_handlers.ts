@@ -7,6 +7,7 @@ import type {CompletionOptions, CompletionHandlerOptions} from './backend_provid
 import {save_completion_response_to_disk} from './helpers.js';
 import type {OllamaListResponse, OllamaPsResponse, OllamaShowResponse} from '../ollama_helpers.js';
 import {update_env_variable} from './env_file_helpers.js';
+import {create_uuid} from '../zod_helpers.js';
 
 // TODO refactor to a plugin architecture
 
@@ -489,6 +490,74 @@ export const backend_action_handlers: BackendActionHandlers = {
 			);
 
 			return {status};
+		},
+	},
+
+	terminal_create: {
+		receive_request: ({backend, data: {input}}) => {
+			const terminal_id = create_uuid();
+			console.log(
+				`[backend_action_handlers.terminal_create.receive_request] creating terminal ${terminal_id}: ${input.command}`,
+			);
+
+			try {
+				backend.pty_manager.spawn(terminal_id, input.command, input.args, input.cwd);
+				return {terminal_id};
+			} catch (error) {
+				console.error(`[backend_action_handlers.terminal_create.receive_request] failed:`, error);
+				throw jsonrpc_errors.internal_error(
+					`failed to create terminal: ${error instanceof Error ? error.message : 'unknown error'}`,
+				);
+			}
+		},
+	},
+
+	terminal_data_send: {
+		receive_request: async ({backend, data: {input}}) => {
+			// silently ignore writes to terminals that have already exited
+			if (!backend.pty_manager.has(input.terminal_id)) {
+				return null;
+			}
+			try {
+				await backend.pty_manager.write(input.terminal_id, input.data);
+				return null;
+			} catch (error) {
+				console.error(
+					`[backend_action_handlers.terminal_data_send.receive_request] failed:`,
+					error,
+				);
+				throw jsonrpc_errors.internal_error(
+					`failed to send data to terminal: ${error instanceof Error ? error.message : 'unknown error'}`,
+				);
+			}
+		},
+	},
+
+	terminal_resize: {
+		receive_request: ({data: {input}}) => {
+			// TODO Deno PTY resize API — not yet available in stable Deno.Command
+			console.log(
+				`[backend_action_handlers.terminal_resize.receive_request] resize terminal ${input.terminal_id} to ${input.cols}x${input.rows} (not yet implemented)`,
+			);
+			return null;
+		},
+	},
+
+	terminal_close: {
+		receive_request: async ({backend, data: {input}}) => {
+			console.log(
+				`[backend_action_handlers.terminal_close.receive_request] closing terminal ${input.terminal_id}`,
+			);
+
+			try {
+				const exit_code = await backend.pty_manager.kill(input.terminal_id, input.signal);
+				return {exit_code};
+			} catch (error) {
+				console.error(`[backend_action_handlers.terminal_close.receive_request] failed:`, error);
+				throw jsonrpc_errors.internal_error(
+					`failed to close terminal: ${error instanceof Error ? error.message : 'unknown error'}`,
+				);
+			}
 		},
 	},
 

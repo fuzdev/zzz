@@ -24,6 +24,7 @@ import {Spaces} from './spaces.svelte.js';
 import type {ZzzOptions} from './config_helpers.js';
 import {BOTS_DEFAULT} from './config_defaults.js';
 import {DiskfileDirectoryPath, DiskfilePath} from './diskfile_types.js';
+import type {Uuid} from './zod_helpers.js';
 import {cell_classes} from './cell_classes.js';
 import {CellJson} from './cell_types.js';
 import {Ui, UiJson} from './ui.svelte.js';
@@ -105,6 +106,12 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly spaces: Spaces;
 
 	readonly bots: ZzzOptions['bots'];
+
+	/**
+	 * Callback registry for terminal data routing.
+	 * TerminalView components register their write callback on mount.
+	 */
+	readonly terminal_writers: Map<Uuid, (data: string) => void> = new Map();
 
 	// TODO maybe instead of this pattern with getters/setters, using an encoder?
 	#zzz_dir: DiskfileDirectoryPath | null | undefined = $state(null); // TODO should this be undefined?

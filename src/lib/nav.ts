@@ -13,6 +13,7 @@ import {
 	GLYPH_PROMPT,
 	GLYPH_PROVIDER,
 	GLYPH_SETTINGS,
+	GLYPH_TERMINAL,
 } from './glyphs.js';
 import type {Frontend} from './frontend.svelte.js';
 
@@ -58,6 +59,7 @@ export const main_nav_items_default: Array<NavItem> = [
 			{label: 'chats', href: resolve('/chats'), icon: GLYPH_CHAT},
 			{label: 'prompts', href: resolve('/prompts'), icon: GLYPH_PROMPT},
 			{label: 'files', href: resolve('/files'), icon: GLYPH_FILE},
+			{label: 'terminals', href: resolve('/terminals'), icon: GLYPH_TERMINAL},
 		],
 	},
 	{

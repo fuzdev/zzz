@@ -7,6 +7,7 @@ import {
 	filer_change_action_spec,
 	completion_progress_action_spec,
 	ollama_progress_action_spec,
+	terminal_data_action_spec,
 } from '../action_specs.js';
 import {
 	map_watcher_change_to_diskfile_change,
@@ -27,6 +28,7 @@ export interface BackendActionsApi {
 	filer_change: (input: ActionInputs['filer_change']) => Promise<void>;
 	completion_progress: (input: ActionInputs['completion_progress']) => Promise<void>;
 	ollama_progress: (input: ActionInputs['ollama_progress']) => Promise<void>;
+	terminal_data: (input: ActionInputs['terminal_data']) => Promise<void>;
 }
 
 export const create_backend_actions_api = (backend: Backend): BackendActionsApi => {
@@ -125,6 +127,40 @@ export const create_backend_actions_api = (backend: Backend): BackendActionsApi 
 			} catch (error) {
 				backend.log?.error(
 					'[backend_actions_api.ollama_progress] unexpected error in ollama_progress:',
+					error,
+				);
+			}
+		},
+		terminal_data: async (input: ActionInputs['terminal_data']) => {
+			const transport = backend.peer.transports.get_transport(
+				backend.peer.default_send_options.transport_name,
+			);
+			if (!transport) {
+				return; // no clients connected
+			}
+
+			try {
+				const event = create_action_event(backend, terminal_data_action_spec, input, 'send');
+
+				await event.parse().handle_async();
+
+				if (event.data.step === 'handled' && event.data.notification) {
+					const result = await backend.peer.send(event.data.notification);
+					if (result !== null) {
+						backend.log?.error(
+							'[backend_actions_api.terminal_data] failed to send terminal_data notification:',
+							result.error,
+						);
+					}
+				} else if (event.data.step === 'failed') {
+					backend.log?.error(
+						'[backend_actions_api.terminal_data] failed to create terminal_data notification:',
+						event.data.error,
+					);
+				}
+			} catch (error) {
+				backend.log?.error(
+					'[backend_actions_api.terminal_data] unexpected error in terminal_data:',
 					error,
 				);
 			}

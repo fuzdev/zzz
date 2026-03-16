@@ -80,6 +80,7 @@ export const GLYPH_SPACE = '⌂'; // space/container
 export const GLYPH_DESK = '⍟'; // desk/system menu
 export const GLYPH_PIN = '⏍'; // pin/tack
 
+export const GLYPH_TERMINAL = '⌨'; // ⌨ ⍄ ⎙
 export const GLYPH_IDEA = '⌆'; // TODO use
 
 export const GLYPH_PING = '⥀';
