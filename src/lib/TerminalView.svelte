@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '@xterm/xterm/css/xterm.css';
 	import {onMount} from 'svelte';
+	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 
 	import {app_context} from './app.svelte.js';
 	import type {Uuid} from './zod_helpers.js';
@@ -18,6 +19,35 @@
 	let container_width: number = $state(0);
 	let container_height: number = $state(0);
 	let xterm_instance: any = $state(null);
+	let data_version: number = $state(0); // incremented on each write to trigger re-derivation
+
+	const get_terminal_text = (): string => {
+		if (!xterm_instance) return '';
+		const buffer = xterm_instance.buffer.active;
+		const lines: Array<string> = [];
+		for (let i = 0; i < buffer.length; i++) {
+			const line = buffer.getLine(i);
+			if (!line) continue;
+			const text = line.translateToString(true);
+			// join wrapped lines (long lines split across multiple rows)
+			if (line.isWrapped && lines.length > 0) {
+				lines[lines.length - 1] += text;
+			} else {
+				lines.push(text);
+			}
+		}
+		// trim trailing empty lines and right-trim all lines
+		while (lines.length > 0 && lines[lines.length - 1]!.trim() === '') {
+			lines.pop();
+		}
+		return lines.map((l) => l.replace(/\s+$/, '')).join('\n');
+	};
+
+	// re-derives when xterm_instance is set or data_version changes
+	const terminal_text: string = $derived.by(() => {
+		void data_version; // track to re-derive on new data
+		return get_terminal_text();
+	});
 
 	// reactively resize xterm when container dimensions change
 	$effect(() => {
@@ -46,6 +76,7 @@
 			} else {
 				pending_data.push(data);
 			}
+			data_version++;
 		});
 
 		const setup = async (): Promise<void> => {
@@ -111,7 +142,10 @@
 <div class="terminal_view">
 	<div class="terminal_header">
 		<span class="terminal_id">terminal {terminal_id.slice(0, 8)}</span>
-		<button type="button" onclick={handle_close}>close</button>
+		<div class="terminal_actions">
+			<CopyToClipboard text={terminal_text} class="plain" />
+			<button type="button" onclick={handle_close}>close</button>
+		</div>
 	</div>
 	<div
 		class="terminal_container"
@@ -138,6 +172,11 @@
 	.terminal_id {
 		font-size: var(--font_size_sm);
 		opacity: 0.7;
+	}
+	.terminal_actions {
+		display: flex;
+		gap: var(--space_xs);
+		align-items: center;
 	}
 	.terminal_container {
 		flex: 1;

@@ -2165,7 +2165,7 @@
 					"frontend.svelte.ts",
 					"frontend_action_handlers.ts"
 				],
-				"dependents": ["DashboardActions.svelte", "TerminalView.svelte"]
+				"dependents": ["DashboardActions.svelte", "TerminalRunner.svelte", "TerminalView.svelte"]
 			},
 			{
 				"path": "capabilities.svelte.ts",
@@ -9060,6 +9060,8 @@
 					"ProviderDetail.svelte",
 					"ProviderLink.svelte",
 					"SocketMessageQueue.svelte",
+					"TerminalPresetBar.svelte",
+					"TerminalRunner.svelte",
 					"ThreadContextmenu.svelte",
 					"ThreadListitem.svelte",
 					"TurnContextmenu.svelte",
@@ -15676,7 +15678,7 @@
 						]
 					}
 				],
-				"dependents": ["TurnList.svelte"]
+				"dependents": ["TerminalRunner.svelte", "TurnList.svelte"]
 			},
 			{
 				"path": "server/backend_action_handlers.ts",
@@ -18888,6 +18890,93 @@
 				"dependents": ["cell_classes.ts"]
 			},
 			{
+				"path": "TerminalCommandInput.svelte",
+				"declarations": [
+					{
+						"name": "TerminalCommandInput",
+						"kind": "component",
+						"props": [
+							{
+								"name": "onsend",
+								"type": "(command_text: string) => void"
+							}
+						],
+						"source_line": 1
+					}
+				],
+				"dependents": ["TerminalRunner.svelte"]
+			},
+			{
+				"path": "TerminalPresetBar.svelte",
+				"declarations": [
+					{
+						"name": "TerminalPresetBar",
+						"kind": "component",
+						"props": [
+							{
+								"name": "presets",
+								"type": "Array<TerminalPreset>"
+							},
+							{
+								"name": "onrun",
+								"type": "(preset: TerminalPreset) => void"
+							}
+						],
+						"source_line": 1
+					}
+				],
+				"dependencies": ["glyphs.ts"],
+				"dependents": ["TerminalRunner.svelte"]
+			},
+			{
+				"path": "TerminalRunItem.svelte",
+				"declarations": [
+					{
+						"name": "TerminalRunItem",
+						"kind": "component",
+						"props": [
+							{
+								"name": "terminal_id",
+								"type": "Uuid"
+							},
+							{
+								"name": "command",
+								"type": "string"
+							},
+							{
+								"name": "args",
+								"type": "Array<string>"
+							},
+							{
+								"name": "onclose",
+								"type": "(exit_code: number | null) => void"
+							}
+						],
+						"source_line": 1
+					}
+				],
+				"dependencies": ["TerminalView.svelte"],
+				"dependents": ["TerminalRunner.svelte"]
+			},
+			{
+				"path": "TerminalRunner.svelte",
+				"declarations": [
+					{
+						"name": "TerminalRunner",
+						"kind": "component",
+						"source_line": 1
+					}
+				],
+				"dependencies": [
+					"TerminalCommandInput.svelte",
+					"TerminalPresetBar.svelte",
+					"TerminalRunItem.svelte",
+					"app.svelte.ts",
+					"glyphs.ts",
+					"scrollable.svelte.ts"
+				]
+			},
+			{
 				"path": "TerminalView.svelte",
 				"declarations": [
 					{
@@ -18907,7 +18996,8 @@
 						"source_line": 1
 					}
 				],
-				"dependencies": ["app.svelte.ts"]
+				"dependencies": ["app.svelte.ts"],
+				"dependents": ["TerminalRunItem.svelte"]
 			},
 			{
 				"path": "thread_helpers.ts",

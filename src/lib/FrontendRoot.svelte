@@ -24,6 +24,7 @@
 		children: Snippet<[zzz: Frontend]>;
 	} = $props();
 
+	// svelte-ignore state_referenced_locally
 	frontend_context.set(app);
 </script>
 
