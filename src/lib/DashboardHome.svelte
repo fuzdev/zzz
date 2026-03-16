@@ -106,7 +106,7 @@
 							<ProviderLink
 								{provider}
 								icon="svg"
-								class="menu_item row justify-content:start gap_xs py_xs"
+								class="menuitem row justify-content:start gap_xs py_xs"
 							/>
 						</li>
 					{:else}
@@ -126,7 +126,7 @@
 				<ul class="unstyled">
 					{#each app.models.ordered_by_name as model (model.name)}
 						<li>
-							<ModelLink {model} icon class="menu_item row justify-content:start gap_xs py_xs" />
+							<ModelLink {model} icon class="menuitem row justify-content:start gap_xs py_xs" />
 						</li>
 					{:else}
 						<p>no models available yet</p>
