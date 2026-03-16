@@ -25,7 +25,7 @@ For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
 ## Development Stage
 
-Early development, v0.0.1. Breaking changes are expected and welcome. No authentication — development use only. All state is in-memory (no database yet). The Hono/Node.js backend is a reference implementation that may be replaced by a Rust daemon (`fuzd`). Deno is a shortcut for the CLI and production server — long-term both migrate to Rust fuz/fuzd.
+Early development, v0.0.1. Breaking changes are expected and welcome. No authentication — development use only. All state is in-memory (no database yet). The Hono/Deno backend is a reference implementation that may be replaced by a Rust daemon (`fuzd`). Deno is a shortcut — long-term the CLI and daemon migrate to Rust fuz/fuzd.
 
 See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 
