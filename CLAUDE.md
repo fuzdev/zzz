@@ -425,7 +425,7 @@ From `src/lib/server/.env.development.example`:
 - **No authentication** — development use only, anyone with network access can use it
 - **No database** — all state is in-memory, lost on restart (pglite planned)
 - **No undo/history** — file edits are permanent
-- **No real PTY** — `Deno.Command` `pty: true` is silently ignored; terminals work as command output viewers (no echo, no prompt, no interactivity). `node-pty` incompatible with deno compile. Next step: Deno FFI to `forkpty()`
+- **No real PTY** — `Deno.Command` `pty: true` is silently ignored; terminals work as command output viewers (no echo, no prompt, no interactivity). stdout/stderr are separate pipes that race into one xterm, causing garbled formatting from complex programs (simple commands work fine). `node-pty` incompatible with deno compile. Next step: Deno FFI to `forkpty()`
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
 - **Backend is reference impl** — may be replaced by Rust daemon (`fuzd`)
