@@ -51,14 +51,14 @@
 			"@fuzdev/fuz_app": "file:../fuz_app",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.55.0",
-			"@fuzdev/fuz_ui": "^0.189.0",
+			"@fuzdev/fuz_ui": "^0.189.1",
 			"@fuzdev/fuz_util": "^0.54.0",
 			"@jridgewell/trace-mapping": "^0.3.31",
 			"@ryanatkn/eslint-config": "^0.10.1",
 			"@sveltejs/acorn-typescript": "^1.0.9",
 			"@sveltejs/adapter-node": "^5.4.0",
 			"@sveltejs/adapter-static": "^3.0.10",
-			"@sveltejs/kit": "^2.54.0",
+			"@sveltejs/kit": "^2.55.0",
 			"@sveltejs/vite-plugin-svelte": "^6.2.4",
 			"@types/deno": "^2.5.0",
 			"@types/estree": "^1.0.8",
@@ -71,7 +71,7 @@
 			"ollama": "^0.6.3",
 			"prettier": "^3.7.4",
 			"prettier-plugin-svelte": "^3.4.1",
-			"svelte": "^5.53.10",
+			"svelte": "^5.53.12",
 			"svelte-check": "^4.3.5",
 			"svelte2tsx": "^0.7.52",
 			"tslib": "^2.8.1",
@@ -85,8 +85,6 @@
 			"@anthropic-ai/sdk": "^0.71.2",
 			"@fuzdev/gro": "^0.197.0",
 			"@google/generative-ai": "^0.24.1",
-			"@hono/node-server": "^1.19.6",
-			"@hono/node-ws": "^1.2.0",
 			"date-fns": "^4.1.0",
 			"esm-env": "^1.2.2",
 			"hono": "^4.12.7",
@@ -4883,7 +4881,6 @@
 					"frontend_websocket_transport.ts",
 					"helpers.ts",
 					"part.svelte.ts",
-					"server/server.ts",
 					"socket.svelte.ts"
 				]
 			},
@@ -16798,7 +16795,7 @@
 						"name": "CreateZzzAppOptions",
 						"kind": "type",
 						"doc_comment": "Options for creating a zzz app.",
-						"source_line": 37,
+						"source_line": 34,
 						"type_signature": "CreateZzzAppOptions",
 						"properties": [
 							{
@@ -16806,12 +16803,6 @@
 								"kind": "variable",
 								"type_signature": "ZzzServerEnv",
 								"doc_comment": "Server environment configuration."
-							},
-							{
-								"name": "upgradeWebSocket",
-								"kind": "variable",
-								"type_signature": "UpgradeWebSocket",
-								"doc_comment": "Runtime-specific WebSocket upgrade function."
 							}
 						]
 					},
@@ -16819,7 +16810,7 @@
 						"name": "ZzzApp",
 						"kind": "type",
 						"doc_comment": "The created zzz app and its backend.",
-						"source_line": 47,
+						"source_line": 42,
 						"type_signature": "ZzzApp",
 						"properties": [
 							{
@@ -16839,8 +16830,8 @@
 					{
 						"name": "create_zzz_app",
 						"kind": "function",
-						"doc_comment": "Create the zzz Hono app with Backend, providers, and endpoints.\n\nThis is the shared factory called by both entry points.\nThe caller is responsible for HTTP binding and WebSocket injection.",
-						"source_line": 60,
+						"doc_comment": "Create the zzz Hono app with Backend, providers, and endpoints.\n\nThis is the shared factory called by the server entry point.",
+						"source_line": 54,
 						"type_signature": "(options: CreateZzzAppOptions): ZzzApp",
 						"return_type": "ZzzApp",
 						"parameters": [
@@ -16851,7 +16842,7 @@
 						]
 					}
 				],
-				"module_comment": "Shared zzz app factory.\n\nCreates the Hono app with Backend, AI providers, and action endpoints.\nUsed by both Node.js (SvelteKit dev) and Deno (compiled CLI) entry points.\n\nRuntime-specific concerns (HTTP binding, WebSocket adapter, SvelteKit handler)\nstay in the entry points. This factory is runtime-agnostic.",
+				"module_comment": "Shared zzz app factory.\n\nCreates the Hono app with Backend, AI providers, and action endpoints.\nCalled by the server entry point (`server.ts`).",
 				"dependencies": [
 					"action_collections.ts",
 					"config.ts",
@@ -16865,7 +16856,7 @@
 					"server/register_http_actions.ts",
 					"server/register_websocket_actions.ts"
 				],
-				"dependents": ["server/server.ts", "server/server_deno.ts"]
+				"dependents": ["server/server.ts"]
 			},
 			{
 				"path": "server/env_file_helpers.ts",
@@ -17407,30 +17398,13 @@
 				"dependents": ["server/backend.ts", "server/helpers.ts"]
 			},
 			{
-				"path": "server/server_deno.ts",
-				"declarations": [
-					{
-						"name": "start_server_deno",
-						"kind": "function",
-						"doc_comment": "Start the zzz server using Deno runtime.\n\nCreates the full backend with providers, WebSocket, and HTTP RPC\nendpoints via `create_zzz_app`, then serves with `Deno.serve`.",
-						"source_line": 33,
-						"type_signature": "(): Promise<void>",
-						"return_type": "Promise<void>",
-						"parameters": []
-					}
-				],
-				"module_comment": "Deno entry point for zzz server.\n\nProduction entry point when running the compiled binary (`zzz daemon start`).\nUses the shared `create_zzz_app` factory for the Hono app, then binds\nwith `Deno.serve` and handles daemon lifecycle (PID file, signals).",
-				"dependencies": ["server/create_zzz_app.ts", "server/server_env.ts", "zzz/build_info.ts"],
-				"dependents": ["zzz/commands/daemon.ts"]
-			},
-			{
 				"path": "server/server_env.ts",
 				"declarations": [
 					{
 						"name": "ZzzServerEnv",
 						"kind": "type",
 						"doc_comment": "Server environment values needed to create a zzz app.",
-						"source_line": 14,
+						"source_line": 13,
 						"type_signature": "ZzzServerEnv",
 						"properties": [
 							{
@@ -17511,7 +17485,7 @@
 						"name": "load_server_env",
 						"kind": "function",
 						"doc_comment": "Load server env from a generic env reader function.\n\nWorks with `process.env`, `Deno.env.get`, or any `(key) => string | undefined`.\nDefaults can override missing env values.",
-						"source_line": 50,
+						"source_line": 49,
 						"type_signature": "(env_get: (key: string) => string | undefined, defaults?: Partial<ZzzServerEnv> | undefined): ZzzServerEnv",
 						"return_type": "ZzzServerEnv",
 						"parameters": [
@@ -17529,8 +17503,8 @@
 						]
 					}
 				],
-				"module_comment": "Server environment configuration.\n\nRuntime-agnostic env loading for the zzz server. Replaces `$env/static/*`\nimports so both Node.js (SvelteKit dev) and Deno (compiled CLI) entry\npoints can share the same server setup.",
-				"dependents": ["server/server.ts", "server/server_deno.ts"]
+				"module_comment": "Server environment configuration.\n\nEnv loading for the zzz Deno server. Reads from `Deno.env.get` with\nconfigurable defaults, replacing `$env/static/*` imports.",
+				"dependents": ["server/server.ts"]
 			},
 			{
 				"path": "server/server_helpers.ts",
@@ -17556,9 +17530,20 @@
 			},
 			{
 				"path": "server/server.ts",
-				"declarations": [],
-				"module_comment": "Node.js server entry point.\n\nUsed for SvelteKit dev mode and Node.js production builds.\nDelegates to `create_zzz_app` for the shared Hono app setup,\nthen handles Node-specific concerns: HTTP binding, WebSocket injection,\nSvelteKit handler mounting.",
-				"dependencies": ["constants.ts", "server/create_zzz_app.ts", "server/server_env.ts"]
+				"declarations": [
+					{
+						"name": "start_server",
+						"kind": "function",
+						"doc_comment": "Start the zzz server using Deno runtime.\n\nCreates the full backend with providers, WebSocket, and HTTP RPC\nendpoints via `create_zzz_app`, then serves with `Deno.serve`.",
+						"source_line": 32,
+						"type_signature": "(): Promise<void>",
+						"return_type": "Promise<void>",
+						"parameters": []
+					}
+				],
+				"module_comment": "Deno server entry point for zzz.\n\nSingle entry point for both dev mode (`gro dev` via `gro_plugin_deno_server`)\nand production (`zzz daemon start`). Uses the shared `create_zzz_app` factory\nfor the Hono app, then binds with `Deno.serve` and handles daemon lifecycle.",
+				"dependencies": ["server/create_zzz_app.ts", "server/server_env.ts", "zzz/build_info.ts"],
+				"dependents": ["zzz/commands/daemon.ts"]
 			},
 			{
 				"path": "Settings.svelte",
@@ -20380,7 +20365,7 @@
 						"type_signature": "\"zzz\""
 					}
 				],
-				"dependents": ["server/server_deno.ts", "zzz/cli.ts", "zzz/cli/cli_help.ts"]
+				"dependents": ["server/server.ts", "zzz/cli.ts", "zzz/cli/cli_help.ts"]
 			},
 			{
 				"path": "zzz/cli_config.ts",
@@ -20749,7 +20734,7 @@
 						"type_signature": "ZodObject<{ _: ZodDefault<ZodArray<ZodString>>; }, $strict>"
 					}
 				],
-				"module_comment": "Per-command Zod schemas for CLI argument validation.\n\nCentralized here to avoid importing runtime deps (e.g., server_deno.ts)\nwhen only schemas are needed (e.g., for help generation).",
+				"module_comment": "Per-command Zod schemas for CLI argument validation.\n\nCentralized here to avoid importing runtime deps (e.g., server.ts)\nwhen only schemas are needed (e.g., for help generation).",
 				"dependents": ["zzz/cli/cli_help.ts", "zzz/main.ts"]
 			},
 			{
@@ -20823,7 +20808,7 @@
 					}
 				],
 				"module_comment": "zzz daemon commands (start, stop, status).\n\nThe zzz CLI runs in Deno, so daemon start uses the Deno server entry point.\n\nRouting (`zzz daemon start|stop|status`) is handled by\ncreate_subcommand_router in main.ts.",
-				"dependencies": ["server/server_deno.ts", "zzz/log.ts"],
+				"dependencies": ["server/server.ts", "zzz/log.ts"],
 				"dependents": ["zzz/main.ts"]
 			},
 			{

@@ -2,17 +2,14 @@
  * Shared zzz app factory.
  *
  * Creates the Hono app with Backend, AI providers, and action endpoints.
- * Used by both Node.js (SvelteKit dev) and Deno (compiled CLI) entry points.
- *
- * Runtime-specific concerns (HTTP binding, WebSocket adapter, SvelteKit handler)
- * stay in the entry points. This factory is runtime-agnostic.
+ * Called by the server entry point (`server.ts`).
  *
  * @module
  */
 
 import {Hono} from 'hono';
+import {upgradeWebSocket} from 'hono/deno';
 import {Logger} from '@fuzdev/fuz_util/log.js';
-import type {UpgradeWebSocket} from 'hono/ws';
 import {parse_allowed_origins, verify_request_source} from '@fuzdev/fuz_app/http/origin.js';
 
 import {Backend} from './backend.js';
@@ -37,8 +34,6 @@ const log = new Logger('[server]');
 export interface CreateZzzAppOptions {
 	/** Server environment configuration. */
 	env: ZzzServerEnv;
-	/** Runtime-specific WebSocket upgrade function. */
-	upgradeWebSocket: UpgradeWebSocket;
 }
 
 /**
@@ -54,11 +49,10 @@ export interface ZzzApp {
 /**
  * Create the zzz Hono app with Backend, providers, and endpoints.
  *
- * This is the shared factory called by both entry points.
- * The caller is responsible for HTTP binding and WebSocket injection.
+ * This is the shared factory called by the server entry point.
  */
 export const create_zzz_app = (options: CreateZzzAppOptions): ZzzApp => {
-	const {env, upgradeWebSocket} = options;
+	const {env} = options;
 
 	// TODO better config
 	const config = create_config();

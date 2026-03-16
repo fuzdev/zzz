@@ -122,13 +122,11 @@ Config: `deno.json` (imports, tasks, excludes) + `gro.config.ts` (plugin setup).
 
 ## Server Entry Point
 
-`src/lib/server/server_deno.ts` — Deno entry point, wired to `zzz daemon start`.
-Calls the shared `create_zzz_app()` factory (in `create_zzz_app.ts`) which builds
-the full Hono app with Backend, AI providers, WebSocket, and HTTP RPC endpoints.
-Env is loaded via `server_env.ts` (runtime-agnostic, no `$env` dependency).
-
-The Node.js entry (`server.ts`) calls the same factory for SvelteKit dev mode,
-passing `$env` values as defaults.
+`src/lib/server/server.ts` — Deno server entry point, used by both `gro dev`
+(via `gro_plugin_deno_server`) and `zzz daemon start`. Calls the shared
+`create_zzz_app()` factory (in `create_zzz_app.ts`) which builds the full Hono
+app with Backend, AI providers, WebSocket, and HTTP RPC endpoints. Env is loaded
+via `server_env.ts` from `Deno.env.get` (no `$env` dependency).
 
 ## Development
 

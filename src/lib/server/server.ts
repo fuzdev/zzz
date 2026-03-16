@@ -1,121 +1,95 @@
 /**
- * Node.js server entry point.
+ * Deno server entry point for zzz.
  *
- * Used for SvelteKit dev mode and Node.js production builds.
- * Delegates to `create_zzz_app` for the shared Hono app setup,
- * then handles Node-specific concerns: HTTP binding, WebSocket injection,
- * SvelteKit handler mounting.
+ * Single entry point for both dev mode (`gro dev` via `gro_plugin_deno_server`)
+ * and production (`zzz daemon start`). Uses the shared `create_zzz_app` factory
+ * for the Hono app, then binds with `Deno.serve` and handles daemon lifecycle.
  *
  * @module
  */
 
-import {Hono} from 'hono';
-import {serve, type HttpBindings} from '@hono/node-server';
-import {createNodeWebSocket} from '@hono/node-ws';
-import {Logger} from '@fuzdev/fuz_util/log.js';
 import {
-	SECRET_ANTHROPIC_API_KEY,
-	SECRET_OPENAI_API_KEY,
-	SECRET_GOOGLE_API_KEY,
-	ALLOWED_ORIGINS,
-} from '$env/static/private';
-import {DEV} from 'esm-env';
+	write_daemon_info,
+	read_daemon_info,
+	is_daemon_running,
+	get_daemon_info_path,
+} from '@fuzdev/fuz_app/cli/daemon.js';
+import {create_deno_runtime} from '@fuzdev/fuz_app/runtime/deno.js';
 
-import pkg from '../../../package.json' with {type: 'json'};
-import {create_zzz_app} from './create_zzz_app.js';
-import {load_server_env} from './server_env.js';
-import {
-	API_PATH_FOR_HTTP_RPC,
-	SERVER_HOST,
-	SERVER_PROXIED_PORT,
-	WEBSOCKET_PATH,
-	ZZZ_DIR,
-	ZZZ_SCOPED_DIRS,
-	BACKEND_ARTIFICIAL_RESPONSE_DELAY,
-} from '../constants.js';
+import {VERSION} from '../zzz/build_info.ts';
+import {create_zzz_app} from './create_zzz_app.ts';
+import {load_server_env} from './server_env.ts';
 
-const log = new Logger('[server]');
+/** Shared runtime for daemon lifecycle and server operations. */
+const daemon_runtime = create_deno_runtime([]);
 
-const create_server = async (): Promise<void> => {
-	// Load env — in Node/SvelteKit mode, we use the $env values that are
-	// already parsed in constants.ts, passed as defaults.
-	const env = load_server_env((key) => process.env[key], {
-		zzz_dir: ZZZ_DIR,
-		scoped_dirs: ZZZ_SCOPED_DIRS,
-		port: SERVER_PROXIED_PORT,
-		host: SERVER_HOST,
-		allowed_origins: ALLOWED_ORIGINS,
-		websocket_path: WEBSOCKET_PATH,
-		api_path: API_PATH_FOR_HTTP_RPC,
-		artificial_delay: BACKEND_ARTIFICIAL_RESPONSE_DELAY,
-		app_version: pkg.version,
-		secret_anthropic_api_key: SECRET_ANTHROPIC_API_KEY || undefined,
-		secret_openai_api_key: SECRET_OPENAI_API_KEY || undefined,
-		secret_google_api_key: SECRET_GOOGLE_API_KEY || undefined,
+/**
+ * Start the zzz server using Deno runtime.
+ *
+ * Creates the full backend with providers, WebSocket, and HTTP RPC
+ * endpoints via `create_zzz_app`, then serves with `Deno.serve`.
+ */
+export const start_server = async (): Promise<void> => {
+	const env = load_server_env((key) => Deno.env.get(key), {
+		port: 4460,
+		host: 'localhost',
+		zzz_dir: `${Deno.env.get('HOME') ?? '.'}/.zzz`,
+		app_version: VERSION,
 	});
 
-	// Node WebSocket adapter — needs a temporary Hono app for setup,
-	// then the real app is created by the factory.
-	const {injectWebSocket, upgradeWebSocket} = createNodeWebSocket({app: new Hono()});
-
-	// Create the shared zzz app
-	const {app, backend} = create_zzz_app({env, upgradeWebSocket});
-
-	// In production with the Node adapter, mount the SvelteKit handler to serve the frontend.
-	if (!DEV) {
-		try {
-			// Dynamically import the handler from the SvelteKit build output.
-
-			// TODO we don't want the path statically analyzed and bundled so the path is constructed --
-			// instead this should probably be configured as an external in the Gro server plugin
-			const handler_path = '../../' + 'build/handler.js'; // eslint-disable-line no-useless-concat
-
-			const {handler} = await import(handler_path);
-
-			// Let SvelteKit handle everything else, including serving prerendered pages and static assets.
-			// Pass Node.js native request/response objects to the SvelteKit handler.
-
-			// TODO this casting is hacky, declaring the `hono` instance above like this causes
-			// the HttpBindings type to propagate to other interfaces, which I don't want right now
-			(app as unknown as Hono<{Bindings: HttpBindings}>).use('*', async (c) => {
-				await handler(c.env.incoming, c.env.outgoing);
-				// The handler writes directly to c.env.outgoing, so return a Response with
-				// the x-hono-already-sent header to tell Hono not to process the response.
-				return new Response(null, {headers: {'x-hono-already-sent': 'true'}});
-			});
-		} catch (error) {
-			log.error(
-				'failed to load SvelteKit handler -- was the Node adapter correctly used with `ZZZ_BUILD=node gro build`?',
-				error,
-			);
-			throw error;
+	// Check for stale daemon info from a previous crash
+	const stale = await read_daemon_info(daemon_runtime, 'zzz');
+	if (stale) {
+		if (await is_daemon_running(daemon_runtime, stale.pid)) {
+			console.warn('[server] found running server', stale);
+		} else {
+			console.warn(`[server] stale daemon.json (pid ${stale.pid} not running), replacing`);
 		}
 	}
 
-	const hono = serve(
-		{
-			hostname: env.host,
-			port: env.port,
-			fetch: app.fetch,
-		},
-		(info) => {
-			log.info(`listening on http://${info.address}:${info.port}`);
-		},
-	);
+	const {app, backend} = create_zzz_app({env});
 
-	injectWebSocket(hono);
+	// Health check (always available, even before full backend)
+	app.get('/health', (c) => c.json({status: 'ok', version: VERSION}));
 
-	const shutdown = async (signal: string): Promise<void> => {
-		log.info(`received ${signal}, shutting down...`);
+	// Write daemon info for CLI discovery
+	await write_daemon_info(daemon_runtime, 'zzz', {
+		version: 1,
+		pid: Deno.pid,
+		port: env.port,
+		started: new Date().toISOString(),
+		app_version: env.app_version,
+	});
+
+	console.log(`[server] Listening on http://${env.host}:${env.port} (Deno)`);
+	const server = Deno.serve({port: env.port, hostname: env.host}, app.fetch);
+
+	// Cleanup on shutdown
+	const shutdown = async (): Promise<void> => {
+		console.log('[server] shutting down...');
+		const daemon_path = get_daemon_info_path(daemon_runtime, 'zzz');
+		if (daemon_path) {
+			try {
+				await daemon_runtime.remove(daemon_path);
+			} catch {
+				// already removed
+			}
+		}
 		await backend.destroy();
-		process.exit(0);
+		await server.shutdown();
 	};
 
-	process.on('SIGINT', () => void shutdown('SIGINT'));
-	process.on('SIGTERM', () => void shutdown('SIGTERM'));
+	Deno.addSignalListener('SIGINT', () => void shutdown());
+	Deno.addSignalListener('SIGTERM', () => void shutdown());
+
+	// Wait for server to close
+	await server.finished;
 };
 
-void create_server().catch((error) => {
-	log.error('error starting server:', error);
-	throw error;
-});
+// Auto-start when run directly
+if (import.meta.url === Deno.mainModule) {
+	start_server().catch((error) => {
+		console.error('[server] Failed to start:', error);
+		Deno.exit(1);
+	});
+}

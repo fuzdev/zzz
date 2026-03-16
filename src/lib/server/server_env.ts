@@ -1,9 +1,8 @@
 /**
  * Server environment configuration.
  *
- * Runtime-agnostic env loading for the zzz server. Replaces `$env/static/*`
- * imports so both Node.js (SvelteKit dev) and Deno (compiled CLI) entry
- * points can share the same server setup.
+ * Env loading for the zzz Deno server. Reads from `Deno.env.get` with
+ * configurable defaults, replacing `$env/static/*` imports.
  *
  * @module
  */

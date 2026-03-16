@@ -1,6 +1,6 @@
 # Server (Backend Reference Implementation)
 
-This directory contains Zzz's backend server - a **reference implementation** using Hono and Node.js. The architecture demonstrated here may be implemented in Rust via `fuzd` in the future.
+This directory contains Zzz's backend server - a **reference implementation** using Hono and Deno. The architecture demonstrated here may be implemented in Rust via `fuzd` in the future.
 
 ## Contents
 
@@ -29,9 +29,8 @@ The server provides:
 | File                             | Purpose                                                      |
 | -------------------------------- | ------------------------------------------------------------ |
 | `create_zzz_app.ts`              | Shared app factory — Backend, providers, endpoints           |
-| `server_env.ts`                  | Runtime-agnostic env loading (replaces `$env` for server)    |
-| `server.ts`                      | Node.js entry — calls factory, binds `@hono/node-server`     |
-| `server_deno.ts`                 | Deno entry — calls factory, binds `Deno.serve`               |
+| `server_env.ts`                  | Env loading (replaces `$env` for server)                     |
+| `server.ts`                      | Deno entry — calls factory, binds `Deno.serve`, daemon lifecycle |
 | `backend.ts`                     | `Backend` class - core state, action handling, file watchers |
 | `backend_action_handlers.ts`     | Handler implementations for all backend actions              |
 | `backend_actions_api.ts`         | Backend-initiated notifications (streaming, file changes)    |
@@ -48,7 +47,6 @@ The server provides:
 | `env_file_helpers.ts`            | `.env` file manipulation                                     |
 | `helpers.ts`                     | Completion response persistence                              |
 | `server_helpers.ts`              | Server utilities                                             |
-| `server_deno.ts`                 | Deno entry point (production/CLI, `Deno.serve`, daemon info) |
 
 **Generated files** (do not edit):
 
@@ -59,14 +57,15 @@ The server provides:
 
 ### Server Initialization Flow
 
-Two entry points share a common factory:
+Single Deno entry point calls the shared factory:
 
 ```
 server_env.ts: load_server_env(env_get, defaults)
     │
     ▼
-create_zzz_app.ts: create_zzz_app({env, upgradeWebSocket})
+create_zzz_app.ts: create_zzz_app({env})
     │
+    ├── Import upgradeWebSocket from hono/deno
     ├── Parse allowed_origins → security patterns
     ├── Create Hono app with logging + origin verification
     ├── Create Backend instance (ScopedFs, Filer, handlers)
@@ -76,22 +75,13 @@ create_zzz_app.ts: create_zzz_app({env, upgradeWebSocket})
     └── Return {app, backend}
     │
     ▼
-Entry points:
-    │
-    ├── server.ts (Node.js / SvelteKit)
-    │   ├── Load env from $env/static/* via constants.ts defaults
-    │   ├── createNodeWebSocket → upgradeWebSocket
-    │   ├── Call create_zzz_app()
-    │   ├── [Production] Mount SvelteKit handler
-    │   ├── Bind via @hono/node-server
-    │   └── injectWebSocket on bound server
-    │
-    └── server_deno.ts (Deno / compiled CLI)
-        ├── Load env from Deno.env.get
-        ├── Import upgradeWebSocket from hono/deno
-        ├── Call create_zzz_app()
-        ├── Write daemon.json via fuz_app write_daemon_info
-        └── Bind via Deno.serve
+server.ts (Deno — dev via gro_plugin_deno_server, prod via zzz daemon start)
+    ├── Load env from Deno.env.get
+    ├── Call create_zzz_app()
+    ├── Add /health endpoint
+    ├── Write daemon.json via fuz_app write_daemon_info
+    ├── Bind via Deno.serve
+    └── Signal handlers for graceful shutdown
 ```
 
 ### Backend Class
@@ -396,7 +386,7 @@ export class BackendProviderNewProvider extends BackendProviderRemote<SDKClient>
 }
 ```
 
-2. Register in `server.ts`:
+2. Register in `create_zzz_app.ts`:
 
 ```typescript
 backend.add_provider(new BackendProviderNewProvider(provider_options));
@@ -449,15 +439,3 @@ From `../constants.ts` (**frontend/SvelteKit only** — server uses `server_env.
 | `ZZZ_DIR_CACHE`                     | `cache` subdirectory     |
 | `BACKEND_ARTIFICIAL_RESPONSE_DELAY` | Testing delay (ms)       |
 
-## Known Issues
-
-### `createNodeWebSocket` dummy app (minor)
-
-In `server.ts`, `createNodeWebSocket` is initialized with a throwaway Hono app,
-but routes are registered on the factory-created app. This likely works because
-`upgradeWebSocket` returns middleware (not tied to the app), but it's fragile.
-
-### Duplicate `/health` endpoint (minor)
-
-`server_deno.ts` adds a `/health` route after `create_zzz_app()`. If the factory
-ever adds its own health check, they'll conflict.

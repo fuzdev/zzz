@@ -1,7 +1,7 @@
 /**
  * Per-command Zod schemas for CLI argument validation.
  *
- * Centralized here to avoid importing runtime deps (e.g., server_deno.ts)
+ * Centralized here to avoid importing runtime deps (e.g., server.ts)
  * when only schemas are needed (e.g., for help generation).
  *
  * @module

@@ -3,7 +3,7 @@
 > nice web things for the tired
 
 `@fuzdev/zzz` — local-first AI forge: chat + files + prompts in one app.
-SvelteKit frontend, Hono/Node.js backend, Svelte 5 runes, Zod schemas.
+SvelteKit frontend, Hono/Deno backend, Svelte 5 runes, Zod schemas.
 v0.0.1, no auth, no database yet. 26 cell classes, 20 action specs, 4 AI providers.
 
 For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
@@ -58,10 +58,9 @@ The global daemon runs on port 4460 with state at `~/.zzz/`. Built via
 ```
 src/
 ├── lib/                          # Published as @fuzdev/zzz
-│   ├── server/                   # Backend (Hono/Node.js reference impl)
+│   ├── server/                   # Backend (Hono/Deno reference impl)
 │   │   ├── backend.ts
-│   │   ├── server.ts            # Node.js entry (dev mode)
-│   │   ├── server_deno.ts       # Deno entry (production/CLI)
+│   │   ├── server.ts            # Deno server entry (dev + production)
 │   │   ├── backend_action_handlers.ts
 │   │   ├── backend_provider_*.ts # Ollama, Claude, ChatGPT, Gemini
 │   │   ├── scoped_fs.ts

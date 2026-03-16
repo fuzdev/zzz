@@ -21,7 +21,7 @@ import {log} from '../log.js';
 import type {ZzzRuntime} from '../runtime/types.ts';
 import type {DaemonStartArgs, DaemonStopArgs, DaemonStatusArgs} from '../cli/schemas.ts';
 import type {ZzzGlobalArgs} from '../cli/cli_args.ts';
-import {start_server_deno} from '../../server/server_deno.ts';
+import {start_server} from '../../server/server.ts';
 
 /**
  * Start the daemon in foreground mode.
@@ -38,7 +38,7 @@ export const daemon_start = async (
 	if (args.host) runtime.env_set('HOST', args.host);
 
 	// Start Deno server (zzz CLI always runs in Deno)
-	await start_server_deno();
+	await start_server();
 };
 
 /**
