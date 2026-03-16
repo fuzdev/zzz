@@ -19,6 +19,7 @@
 	}
 
 	let runs: Array<RunEntry> = $state([]);
+	let error_message: string | null = $state(null);
 
 	const scrollable = new Scrollable();
 
@@ -33,13 +34,17 @@
 	];
 
 	const create_terminal = async (command: string, args: Array<string>): Promise<void> => {
+		error_message = null;
 		const result = await app.api.terminal_create({command, args});
-		if (result.ok) {
+		if (result.ok && result.value?.terminal_id) {
 			runs.push({
 				terminal_id: result.value.terminal_id,
 				command,
 				args,
 			});
+		} else {
+			const msg = result.ok ? 'unknown error' : (result.error?.message ?? 'unknown error');
+			error_message = `failed to run "${command}${args.length ? ' ' + args.join(' ') : ''}": ${msg}`;
 		}
 	};
 
@@ -84,6 +89,10 @@
 		<p class="empty_state">no commands run yet — use a preset or type a command below</p>
 	{/if}
 
+	{#if error_message}
+		<p class="error_message">{error_message}</p>
+	{/if}
+
 	<div class="input_area">
 		{#if presets.length > 0}
 			<TerminalPresetBar {presets} onrun={handle_preset} />
@@ -125,6 +134,12 @@
 		opacity: 0.5;
 		text-align: center;
 		padding: var(--space_xl);
+	}
+	.error_message {
+		color: var(--color_c_50, #f88);
+		padding: 0 var(--space_md);
+		margin: 0;
+		font-size: var(--font_size_sm);
 	}
 	.input_area {
 		display: flex;
