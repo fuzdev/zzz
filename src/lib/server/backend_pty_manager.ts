@@ -62,8 +62,9 @@ export class PtyManager {
 
 		this.#processes.set(terminal_id, pty_process);
 
-		// stream stdout
+		// stream stdout and stderr
 		void this.#stream_output(terminal_id, process.stdout);
+		void this.#stream_output(terminal_id, process.stderr);
 
 		// watch for process exit
 		void process.status.then((status) => {
