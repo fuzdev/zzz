@@ -2,7 +2,6 @@
 	import {slide} from 'svelte/transition';
 	import type {Snippet} from 'svelte';
 	import type {SvelteHTMLElements} from 'svelte/elements';
-	import {DEV} from 'esm-env';
 
 	import {Reorderable, type ReorderableOptions} from './reorderable.svelte.js';
 	import PartSummary from './PartSummary.svelte';
@@ -29,13 +28,11 @@
 
 	const reorderable = $derived(onreorder ? new Reorderable(reorderable_options) : null);
 
-	if (DEV) {
-		$effect(() => {
-			if (!onreorder && !!reorderable_options) {
-				console.error('`reorderable_options` provided to `PartList` without `onreorder`');
-			}
-		});
-	}
+	$effect(() => {
+		if (!onreorder && !!reorderable_options) {
+			console.error('`reorderable_options` provided to `PartList` without `onreorder`');
+		}
+	});
 </script>
 
 <!-- TODO create part button -->

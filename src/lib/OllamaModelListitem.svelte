@@ -30,7 +30,7 @@
 <ModelContextmenu {model}>
 	<button
 		type="button"
-		class="menu_item selectable plain text-align:start p_sm border-radius:0 font-weight:400"
+		class="menuitem selectable plain text-align:start p_sm border_radius_0 font-weight:400"
 		class:selected
 		{onclick}
 	>

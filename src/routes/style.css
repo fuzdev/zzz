@@ -311,11 +311,11 @@ a.chip {
 }
 
 /* TODO this is a hack because .plain doesn't compose with .selectable and .deselectable in fuz_css */
-.plain.selectable.deselectable:not(.menu_item) {
+.plain.selectable.deselectable:not(.menuitem) {
 	border: none;
 	color: var(--text_color);
 }
-.plain.selectable.deselectable:not(.menu_item).selected {
+.plain.selectable.deselectable:not(.menuitem).selected {
 	background-color: transparent;
 	box-shadow: var(--shadow_inset_top_xs)
 		color-mix(
@@ -324,7 +324,7 @@ a.chip {
 			transparent
 		);
 }
-.plain.selectable.deselectable:not(.menu_item).selected:hover {
+.plain.selectable.deselectable:not(.menuitem).selected:hover {
 	box-shadow: var(--shadow_inset_top_sm)
 		color-mix(
 			in hsl,
@@ -332,7 +332,7 @@ a.chip {
 			transparent
 		);
 }
-.plain.selectable.deselectable:not(.menu_item).selected:active {
+.plain.selectable.deselectable:not(.menuitem).selected:active {
 	box-shadow: var(--shadow_inset_bottom_xs)
 		color-mix(
 			in hsl,
@@ -342,23 +342,23 @@ a.chip {
 }
 
 /* TODO upstream but maybe not exactly like this, fixes the contextmenu active state */
-.plain.selectable.deselectable.menu_item.selected:active {
+.plain.selectable.deselectable.menuitem.selected:active {
 	background-color: var(--shade_30);
 }
 
-/* TODO hacky for buttons as menu_items, fix upstream, need to think about composability of the classes if it even makes sense */
-button.menu_item.plain {
+/* TODO hacky for buttons as menuitems, fix upstream, need to think about composability of the classes if it even makes sense */
+button.menuitem.plain {
 	box-shadow: none !important;
 }
 /* TODO also hacky */
-button.menu_item.selected.plain {
+button.menuitem.selected.plain {
 	--button_text_color: var(--text_80);
 }
-button.menu_item.plain:hover:not(.selected) {
+button.menuitem.plain:hover:not(.selected) {
 	background-color: var(--shade_60);
 }
 /* TODO hacky */
-button.menu_item[disabled] {
+button.menuitem[disabled] {
 	cursor: default;
 }
 

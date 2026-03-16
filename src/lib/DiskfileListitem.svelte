@@ -29,7 +29,7 @@
 	<div
 		role="button"
 		tabindex="0"
-		class="menu_item compact ellipsis cursor_pointer"
+		class="menuitem compact ellipsis cursor_pointer"
 		class:selected
 		{...attrs}
 		onclick={onselect

@@ -9,7 +9,7 @@ import {DEV} from 'esm-env';
  */
 export interface UpdateEnvVariableOptions {
 	/**
-	 * Path to the .env file (defaults to ./.env)
+	 * Path to the .env file (defaults to `./.env`)
 	 */
 	env_file_path?: string;
 	/**

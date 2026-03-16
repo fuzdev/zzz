@@ -56,7 +56,7 @@
 			<div class="box mt_lg">
 				<ErrorMessage>
 					<p>
-						Backend is not available. Chats require a backend connection to communicate with AI
+						Server is not available. Chats require a server connection to communicate with AI
 						models.
 					</p>
 					<p class="mt_md">
