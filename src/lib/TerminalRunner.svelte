@@ -18,7 +18,7 @@
 		args: Array<string>;
 	}
 
-	let runs: Array<RunEntry> = $state([]);
+	const runs: Array<RunEntry> = $state([]);
 	let error_message: string | null = $state(null);
 
 	const scrollable = new Scrollable();
@@ -99,9 +99,10 @@
 		{/if}
 
 		<div class="default_presets">
-			{#each default_presets as preset}
+			{#each default_presets as preset (preset)}
 				<button type="button" onclick={() => handle_default_preset(preset)}>
-					{GLYPH_PLAY} {preset.name}
+					{GLYPH_PLAY}
+					{preset.name}
 				</button>
 			{/each}
 		</div>
@@ -139,7 +140,6 @@
 		color: var(--color_c_50, #f88);
 		padding: 0 var(--space_md);
 		margin: 0;
-		font-size: var(--font_size_sm);
 	}
 	.input_area {
 		display: flex;
