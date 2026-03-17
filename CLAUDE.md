@@ -64,7 +64,8 @@ src/
 │   │   ├── server.ts            # Deno server entry (dev + production)
 │   │   ├── backend_action_handlers.ts
 │   │   ├── backend_provider_*.ts # Ollama, Claude, ChatGPT, Gemini
-│   │   ├── backend_pty_manager.ts  # PTY process management
+│   │   ├── pty_ffi.ts              # Deno FFI bindings for libfuz_pty.so
+│   │   ├── backend_pty_manager.ts  # PTY process management (FFI or fallback)
 │   │   ├── scoped_fs.ts
 │   │   ├── security.ts
 │   │   └── backend_action_types.gen.ts
@@ -200,6 +201,10 @@ See [docs/architecture.md](docs/architecture.md) for detailed data flow, content
 ```bash
 cp src/lib/server/.env.development.example .env.development
 npm install
+
+# Optional: build fuz_pty for real PTY support (echo, prompts, colors, resize)
+# Without this, terminals fall back to Deno.Command pipes (no interactivity)
+cd ~/dev/private_fuz && cargo build -p fuz_pty --release
 ```
 
 ### Daily Commands
@@ -425,7 +430,7 @@ From `src/lib/server/.env.development.example`:
 - **No authentication** — development use only, anyone with network access can use it
 - **No database** — all state is in-memory, lost on restart (pglite planned)
 - **No undo/history** — file edits are permanent
-- **No real PTY** — `Deno.Command` `pty: true` is silently ignored; terminals work as command output viewers (no echo, no prompt, no interactivity). stdout/stderr are separate pipes that race into one xterm, causing garbled formatting from complex programs (simple commands work fine). `node-pty` incompatible with deno compile. Next step: Deno FFI to `forkpty()`
+- **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
 - **Backend is reference impl** — may be replaced by Rust daemon (`fuzd`)

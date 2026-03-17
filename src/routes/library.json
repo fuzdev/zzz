@@ -16607,11 +16607,61 @@
 				"path": "server/backend_pty_manager.ts",
 				"declarations": [
 					{
-						"name": "PtyProcess",
+						"name": "FfiPtyProcess",
 						"kind": "type",
-						"source_line": 6,
-						"type_signature": "PtyProcess",
+						"doc_comment": "FFI-backed PTY process — real terminal via forkpty.",
+						"source_line": 20,
+						"type_signature": "FfiPtyProcess",
 						"properties": [
+							{
+								"name": "kind",
+								"kind": "variable",
+								"type_signature": "'ffi'"
+							},
+							{
+								"name": "pid",
+								"kind": "variable",
+								"type_signature": "number"
+							},
+							{
+								"name": "master_fd",
+								"kind": "variable",
+								"type_signature": "number"
+							},
+							{
+								"name": "terminal_id",
+								"kind": "variable",
+								"type_signature": "Uuid"
+							},
+							{
+								"name": "command",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "args",
+								"kind": "variable",
+								"type_signature": "Array<string>"
+							},
+							{
+								"name": "reading",
+								"kind": "variable",
+								"type_signature": "boolean"
+							}
+						]
+					},
+					{
+						"name": "FallbackPtyProcess",
+						"kind": "type",
+						"doc_comment": "Fallback PTY process — Deno.Command with piped stdin/stdout/stderr.",
+						"source_line": 33,
+						"type_signature": "FallbackPtyProcess",
+						"properties": [
+							{
+								"name": "kind",
+								"kind": "variable",
+								"type_signature": "'fallback'"
+							},
 							{
 								"name": "process",
 								"kind": "variable",
@@ -16640,9 +16690,15 @@
 						]
 					},
 					{
+						"name": "PtyProcess",
+						"kind": "type",
+						"source_line": 42,
+						"type_signature": "PtyProcess"
+					},
+					{
 						"name": "PtyManagerOptions",
 						"kind": "type",
-						"source_line": 14,
+						"source_line": 44,
 						"type_signature": "PtyManagerOptions",
 						"properties": [
 							{
@@ -16660,14 +16716,20 @@
 					{
 						"name": "PtyManager",
 						"kind": "class",
-						"doc_comment": "Manages spawned PTY processes keyed by terminal_id.",
-						"source_line": 22,
+						"doc_comment": "Manages spawned PTY processes keyed by terminal_id.\nUses real PTY via FFI when available, falls back to Deno.Command pipes.",
+						"source_line": 53,
 						"members": [
 							{
 								"name": "log",
 								"kind": "variable",
 								"modifiers": ["readonly"],
 								"type_signature": "Logger | null"
+							},
+							{
+								"name": "use_ffi",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "boolean"
 							},
 							{
 								"name": "constructor",
@@ -16684,7 +16746,7 @@
 								"name": "spawn",
 								"kind": "function",
 								"doc_comment": "Spawn a new PTY process and begin streaming its output.",
-								"type_signature": "(terminal_id: string & $brand<\"Uuid\">, command: string, args: string[], cwd?: string | undefined): void",
+								"type_signature": "(terminal_id: string & $brand<\"Uuid\">, command: string, args: string[], cwd?: string | undefined, cols?: number, rows?: number): void",
 								"return_type": "void",
 								"parameters": [
 									{
@@ -16703,6 +16765,16 @@
 										"name": "cwd",
 										"type": "string | undefined",
 										"optional": true
+									},
+									{
+										"name": "cols",
+										"type": "number",
+										"default_value": "80"
+									},
+									{
+										"name": "rows",
+										"type": "number",
+										"default_value": "24"
 									}
 								]
 							},
@@ -16720,6 +16792,27 @@
 									{
 										"name": "data",
 										"type": "string"
+									}
+								]
+							},
+							{
+								"name": "resize",
+								"kind": "function",
+								"doc_comment": "Resize the PTY window. Only works in FFI mode.",
+								"type_signature": "(terminal_id: string & $brand<\"Uuid\">, cols: number, rows: number): void",
+								"return_type": "void",
+								"parameters": [
+									{
+										"name": "terminal_id",
+										"type": "string & $brand<\"Uuid\">"
+									},
+									{
+										"name": "cols",
+										"type": "number"
+									},
+									{
+										"name": "rows",
+										"type": "number"
 									}
 								]
 							},
@@ -16765,6 +16858,7 @@
 						]
 					}
 				],
+				"dependencies": ["server/pty_ffi.ts"],
 				"dependents": ["server/backend.ts"]
 			},
 			{
@@ -17278,6 +17372,217 @@
 				],
 				"dependencies": ["action_collections.ts", "server/scoped_fs.ts"],
 				"dependents": ["server/backend_action_handlers.ts"]
+			},
+			{
+				"path": "server/pty_ffi.ts",
+				"declarations": [
+					{
+						"name": "is_ffi_available",
+						"kind": "function",
+						"doc_comment": "Check if the FFI library is available.",
+						"source_line": 100,
+						"type_signature": "(): boolean",
+						"return_type": "boolean",
+						"parameters": []
+					},
+					{
+						"name": "PtySpawnResult",
+						"kind": "type",
+						"source_line": 113,
+						"type_signature": "PtySpawnResult",
+						"properties": [
+							{
+								"name": "pid",
+								"kind": "variable",
+								"type_signature": "number"
+							},
+							{
+								"name": "master_fd",
+								"kind": "variable",
+								"type_signature": "number"
+							}
+						]
+					},
+					{
+						"name": "pty_spawn",
+						"kind": "function",
+						"doc_comment": "Spawn a process in a new PTY.",
+						"source_line": 121,
+						"type_signature": "(command: string, args: string[], cwd?: string | undefined, cols?: number, rows?: number): PtySpawnResult",
+						"return_type": "PtySpawnResult",
+						"parameters": [
+							{
+								"name": "command",
+								"type": "string"
+							},
+							{
+								"name": "args",
+								"type": "string[]"
+							},
+							{
+								"name": "cwd",
+								"type": "string | undefined",
+								"optional": true
+							},
+							{
+								"name": "cols",
+								"type": "number",
+								"default_value": "80"
+							},
+							{
+								"name": "rows",
+								"type": "number",
+								"default_value": "24"
+							}
+						]
+					},
+					{
+						"name": "pty_read",
+						"kind": "function",
+						"doc_comment": "Read available data from the PTY. Returns null when no data (EAGAIN) or on EOF/error.",
+						"source_line": 163,
+						"type_signature": "(master_fd: number): Uint8Array<ArrayBufferLike> | null",
+						"return_type": "Uint8Array<ArrayBufferLike> | null",
+						"parameters": [
+							{
+								"name": "master_fd",
+								"type": "number"
+							}
+						]
+					},
+					{
+						"name": "pty_read_status",
+						"kind": "function",
+						"doc_comment": "Read from PTY, distinguishing EAGAIN (no data yet) from EOF/error.\nReturns: bytes read (Uint8Array), 'eagain', or 'eof'.",
+						"source_line": 174,
+						"type_signature": "(master_fd: number): Uint8Array<ArrayBufferLike> | \"eagain\" | \"eof\"",
+						"return_type": "Uint8Array<ArrayBufferLike> | \"eagain\" | \"eof\"",
+						"parameters": [
+							{
+								"name": "master_fd",
+								"type": "number"
+							}
+						]
+					},
+					{
+						"name": "pty_write",
+						"kind": "function",
+						"doc_comment": "Write data to the PTY.",
+						"source_line": 187,
+						"type_signature": "(master_fd: number, data: Uint8Array<ArrayBufferLike>): number",
+						"return_type": "number",
+						"parameters": [
+							{
+								"name": "master_fd",
+								"type": "number"
+							},
+							{
+								"name": "data",
+								"type": "Uint8Array<ArrayBufferLike>"
+							}
+						]
+					},
+					{
+						"name": "pty_resize",
+						"kind": "function",
+						"doc_comment": "Resize the PTY window.",
+						"source_line": 199,
+						"type_signature": "(master_fd: number, cols: number, rows: number): void",
+						"return_type": "void",
+						"parameters": [
+							{
+								"name": "master_fd",
+								"type": "number"
+							},
+							{
+								"name": "cols",
+								"type": "number"
+							},
+							{
+								"name": "rows",
+								"type": "number"
+							}
+						]
+					},
+					{
+						"name": "pty_close",
+						"kind": "function",
+						"doc_comment": "Close the PTY master fd.",
+						"source_line": 210,
+						"type_signature": "(master_fd: number): void",
+						"return_type": "void",
+						"parameters": [
+							{
+								"name": "master_fd",
+								"type": "number"
+							}
+						]
+					},
+					{
+						"name": "pty_kill",
+						"kind": "function",
+						"doc_comment": "Send a signal to a process. Defaults to SIGTERM.",
+						"source_line": 221,
+						"type_signature": "(pid: number, signal?: number): void",
+						"return_type": "void",
+						"parameters": [
+							{
+								"name": "pid",
+								"type": "number"
+							},
+							{
+								"name": "signal",
+								"type": "number",
+								"default_value": "SIGTERM"
+							}
+						]
+					},
+					{
+						"name": "PtyWaitResult",
+						"kind": "type",
+						"source_line": 226,
+						"type_signature": "PtyWaitResult",
+						"properties": [
+							{
+								"name": "exited",
+								"kind": "variable",
+								"type_signature": "boolean"
+							},
+							{
+								"name": "status",
+								"kind": "variable",
+								"type_signature": "number"
+							}
+						]
+					},
+					{
+						"name": "pty_waitpid",
+						"kind": "function",
+						"doc_comment": "Non-blocking waitpid. Returns whether the process has exited and its status.",
+						"source_line": 234,
+						"type_signature": "(pid: number): PtyWaitResult",
+						"return_type": "PtyWaitResult",
+						"parameters": [
+							{
+								"name": "pid",
+								"type": "number"
+							}
+						]
+					},
+					{
+						"name": "SIGTERM",
+						"kind": "variable",
+						"source_line": 244,
+						"type_signature": "15"
+					},
+					{
+						"name": "SIGKILL",
+						"kind": "variable",
+						"source_line": 244,
+						"type_signature": "9"
+					}
+				],
+				"dependents": ["server/backend_pty_manager.ts"]
 			},
 			{
 				"path": "server/register_http_actions.ts",

@@ -12,6 +12,20 @@ npm install
 
 Optionally add API keys to `.env.development` for remote providers (Anthropic, OpenAI, Google). Ollama requires no key.
 
+### PTY support (optional)
+
+Terminal integration uses a Rust shared library (`fuz_pty`) for real PTY
+support via Deno FFI. Without it, terminals fall back to `Deno.Command` pipes
+(commands run but no echo, no prompt, no interactivity).
+
+```bash
+cd ~/dev/private_fuz && cargo build -p fuz_pty --release
+```
+
+This produces `target/release/libfuz_pty.so`, which zzz loads at runtime via
+`Deno.dlopen()`. The dev server needs `--allow-ffi` (already set in
+`gro.config.ts`).
+
 ## Commands
 
 | Command | Purpose |

@@ -44,7 +44,8 @@ The server provides:
 | `register_http_actions.ts`       | HTTP endpoint registration                                       |
 | `register_websocket_actions.ts`  | WebSocket endpoint registration                                  |
 | `backend_websocket_transport.ts` | WebSocket transport implementation                               |
-| `backend_pty_manager.ts`         | PTY process management for terminals                             |
+| `pty_ffi.ts`                     | Deno FFI bindings for `libfuz_pty.so` (PTY operations)           |
+| `backend_pty_manager.ts`         | PTY process management (FFI real PTY or fallback pipes)          |
 | `env_file_helpers.ts`            | `.env` file manipulation                                         |
 | `helpers.ts`                     | Completion response persistence                                  |
 | `server_helpers.ts`              | Server utilities                                                 |
@@ -331,6 +332,26 @@ await backend.api.ollama_progress({
 	_meta: {progressToken},
 });
 ```
+
+## PTY Management
+
+Terminal processes are managed by `PtyManager` in `backend_pty_manager.ts`.
+On construction, it checks `is_ffi_available()` from `pty_ffi.ts` to select
+between two modes:
+
+**FFI mode** (real PTY): Loads `libfuz_pty.so` via `Deno.dlopen()`. Uses
+`forkpty()` for a single merged output stream with echo, prompts, colors,
+and resize support. The read loop polls the master fd with 10ms delay on
+EAGAIN. Requires `--allow-ffi` (set in `gro.config.ts`).
+
+**Fallback mode** (pipes): Uses `Deno.Command` with piped stdin/stdout/stderr.
+No echo, no prompt, no interactivity. stdout and stderr race into xterm.
+Used when `libfuz_pty.so` is not found.
+
+Build the library: `cd ~/dev/private_fuz && cargo build -p fuz_pty --release`
+
+The mode is logged on startup: `PTY mode: FFI (real PTY)` or
+`PTY mode: fallback (Deno.Command pipes)`.
 
 ## Adding Features
 

@@ -534,11 +534,18 @@ export const backend_action_handlers: BackendActionHandlers = {
 	},
 
 	terminal_resize: {
-		receive_request: ({data: {input}}) => {
-			// TODO Deno PTY resize API — not yet available in stable Deno.Command
-			console.log(
-				`[backend_action_handlers.terminal_resize.receive_request] resize terminal ${input.terminal_id} to ${input.cols}x${input.rows} (not yet implemented)`,
-			);
+		receive_request: ({backend, data: {input}}) => {
+			if (!backend.pty_manager.has(input.terminal_id)) {
+				return null;
+			}
+			try {
+				backend.pty_manager.resize(input.terminal_id, input.cols, input.rows);
+			} catch (error) {
+				console.log(
+					`[backend_action_handlers.terminal_resize.receive_request] resize failed for ${input.terminal_id}:`,
+					error,
+				);
+			}
 			return null;
 		},
 	},
