@@ -112,7 +112,7 @@ export class RequestTracker {
 	/**
 	 * Reject a pending request with the given error.
 	 * @param id - the request id
-	 * @param error_message - the complete JsonrpcErrorMessage object
+	 * @param error_message - the complete `JsonrpcErrorMessage` object
 	 */
 	reject_request(id: JsonrpcRequestId, error_message: JsonrpcErrorMessage): void {
 		const request = this.pending_requests.get(id);
