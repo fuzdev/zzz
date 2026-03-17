@@ -31,9 +31,9 @@ export interface UpdateEnvVariableOptions {
  * - **Inline comments**: Preserved after the value (e.g., `KEY=value # comment`)
  * - **Quote style**: Preserved from original (quoted/unquoted)
  *
- * @param key - The environment variable name (e.g., 'SOME_CONFIGURATION_KEY')
- * @param value - The new value for the environment variable
- * @param options - Optional configuration for file path and operations
+ * @param key - the environment variable name (e.g., 'SOME_CONFIGURATION_KEY')
+ * @param value - the new value for the environment variable
+ * @param options - optional configuration for file path and operations
  */
 export async function update_env_variable(
 	key: string,
@@ -104,9 +104,9 @@ export async function update_env_variable(
  * Finds the index of the last occurrence of a key in the lines array.
  * Ignores empty lines and commented lines.
  *
- * @param lines - Array of lines from the .env file
- * @param key - The key to search for
- * @returns Index of the last matching line, or -1 if not found
+ * @param lines - array of lines from the .env file
+ * @param key - the key to search for
+ * @returns index of the last matching line, or -1 if not found
  */
 const find_last_key_line_index = (lines: Array<string>, key: string): number => {
 	let last_match_idx = -1;
@@ -135,8 +135,8 @@ const find_last_key_line_index = (lines: Array<string>, key: string): number => 
  * - `"value#inside" # comment` → ` # comment` (# inside quotes is not a comment)
  * - `value#comment` → `#comment` (no space before # is still a comment)
  *
- * @param value_part - The part of the line after the `=` sign
- * @returns The inline comment including the `#` and any whitespace before it
+ * @param value_part - the part of the line after the `=` sign
+ * @returns the inline comment including the `#` and any whitespace before it
  */
 const extract_inline_comment = (value_part: string): string => {
 	const trimmed_value = value_part.trim();
@@ -178,9 +178,9 @@ const extract_inline_comment = (value_part: string): string => {
  * - Odd number (1, 3, 5...): quote IS escaped
  * - Even number (0, 2, 4...): quote is NOT escaped
  *
- * @param str - The string containing the quote
- * @param quote_pos - The position of the quote to check
- * @returns True if the quote is escaped
+ * @param str - the string containing the quote
+ * @param quote_pos - the position of the quote to check
+ * @returns `true` if the quote is escaped
  */
 const is_quote_escaped = (str: string, quote_pos: number): boolean => {
 	let backslash_count = 0;
@@ -201,8 +201,8 @@ const QUOTE_CHARS = ['"', "'"] as const;
 /**
  * Checks if a value string starts with a quote character.
  *
- * @param value - The trimmed value string to check
- * @returns True if the value starts with " or '
+ * @param value - the trimmed value string to check
+ * @returns `true` if the value starts with " or '
  */
 const is_quoted_value = (value: string): boolean =>
 	QUOTE_CHARS.some((char) => value.startsWith(char));

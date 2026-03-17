@@ -62,9 +62,9 @@ export class Sortable<T> {
 	/**
 	 * Create a new Sortable instance with reactive sources.
 	 *
-	 * @param items_getter Function that returns the current items array
-	 * @param sorters_getter Function that returns the current sorters
-	 * @param key_getter_default Optional function that returns the current default sort key
+	 * @param items_getter - function that returns the current items array
+	 * @param sorters_getter - function that returns the current sorters
+	 * @param key_getter_default - optional function that returns the current default sort key
 	 */
 	constructor(
 		items_getter: Thunk<Array<T>>,

@@ -57,7 +57,7 @@ export class Transports {
 	/**
 	 * Gets either the current transport or the first ready transport
 	 * depending on `allow_fallback`, or throws an error.
-	 * @param transport_name Optional transport to use instead of the current
+	 * @param transport_name - optional transport to use instead of the current
 	 * @throws when no transport available or ready
 	 */
 	get_transport(transport_name?: TransportName): Transport | null {
@@ -87,7 +87,7 @@ export class Transports {
 
 	/**
 	 * Gets the specified transport, defaulting to the current, or throws an error.
-	 * @param transport_name Optional transport type to use instead of the current
+	 * @param transport_name - optional transport type to use instead of the current
 	 * @throws when no transport available or ready
 	 */
 	#get_exact(transport_name?: TransportName): Transport | null {
@@ -104,7 +104,7 @@ export class Transports {
 
 	/**
 	 * Gets the appropriate transport or throws an error.
-	 * @param transport_name Optional transport type or array of types to use instead of the current
+	 * @param transport_name - optional transport type or array of types to use instead of the current
 	 * @throws when no transport available or ready
 	 */
 	#get_first_ready(transport_name?: TransportName | Array<TransportName>): Transport | null {

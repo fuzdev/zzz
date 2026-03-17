@@ -24,7 +24,7 @@ import {get_zzz_dir} from '../cli_config.ts';
 /**
  * Check if the daemon is running.
  *
- * @returns Daemon info if running, null otherwise.
+ * @returns daemon info if running, null otherwise
  */
 const check_daemon = async (
 	runtime: Pick<ZzzRuntime, 'env_get' | 'stat' | 'read_file' | 'run_command' | 'remove'>,

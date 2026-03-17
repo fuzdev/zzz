@@ -360,8 +360,8 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * Navigates to a tab by id. If the tab doesn't exist but was previously closed,
 	 * creates a preview tab for that diskfile.
 	 *
-	 * @param tab_id The tab id to navigate to
-	 * @returns Object containing the resulting tab id and a boolean indicating if a new tab was created
+	 * @param tab_id - the tab id to navigate to
+	 * @returns object containing the resulting tab id and a boolean indicating if a new tab was created
 	 */
 	navigate_to_tab(tab_id: Uuid): {resulting_tab_id: Uuid | null; created_preview: boolean} {
 		console.log('DiskfileTabs.navigate_to_tab', {tab_id});

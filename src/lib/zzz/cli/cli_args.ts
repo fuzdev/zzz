@@ -46,9 +46,9 @@ export const extract_global_flags = create_extract_global_flags(ZzzGlobalArgs, {
 /**
  * Parse args and dispatch to handler, with error handling.
  *
- * @param remaining - Remaining args after global flag extraction.
- * @param schema - Zod schema for the command.
- * @param handler - Command handler to call with parsed args.
+ * @param remaining - remaining args after global flag extraction
+ * @param schema - Zod schema for the command
+ * @param handler - command handler to call with parsed args
  */
 export const dispatch = async <T extends Record<string, unknown>>(
 	remaining: ParsedArgs,
@@ -77,10 +77,10 @@ export interface SubcommandRoute<TContext> {
 /**
  * Create a subcommand router from route definitions.
  *
- * @param routes - Map of subcommand names to route definitions.
- * @param default_handler - Optional handler for when no subcommand is provided.
- * @param error_message - Error message for unknown subcommands.
- * @returns Router function.
+ * @param routes - map of subcommand names to route definitions
+ * @param default_handler - optional handler for when no subcommand is provided
+ * @param error_message - error message for unknown subcommands
+ * @returns router function
  */
 export const create_subcommand_router = <TContext>(
 	routes: Record<string, SubcommandRoute<TContext>>,

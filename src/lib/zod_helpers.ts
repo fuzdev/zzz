@@ -54,8 +54,8 @@ export type UuidWithDefault = z.infer<typeof UuidWithDefault>;
 
 /**
  * Gets the innermost type of a zod schema by unwrapping wrappers like transforms, ZodOptional, ZodDefault, etc.
- * @param schema The schema to unwrap
- * @returns The innermost schema without wrappers
+ * @param schema - the schema to unwrap
+ * @returns the innermost schema without wrappers
  */
 export const get_innermost_type = (schema: z.ZodType): z.ZodType => {
 	const def = schema._zod.def;
@@ -103,9 +103,9 @@ export const zod_get_schema_keys = <T extends z.ZodType>(schema: T): Array<Schem
 /**
  * Get the Zod schema for a specific field in an object schema.
  *
- * @param schema The object schema
- * @param key The property name
- * @returns The field's schema, or throws if not found
+ * @param schema - the object schema
+ * @param key - the property name
+ * @returns the field's schema, or throws if not found
  */
 export const get_field_schema = (schema: z.ZodType, key: string): z.ZodType => {
 	const field = maybe_get_field_schema(schema, key);
@@ -118,9 +118,9 @@ export const get_field_schema = (schema: z.ZodType, key: string): z.ZodType => {
 /**
  * Get the Zod schema for a specific field in an object schema, returning undefined if not found.
  *
- * @param schema The object schema
- * @param key The property name
- * @returns The field's schema, or undefined if not found
+ * @param schema - the object schema
+ * @param key - the property name
+ * @returns the field's schema, or undefined if not found
  */
 export const maybe_get_field_schema = (schema: z.ZodType, key: string): z.ZodType | undefined => {
 	const inner = get_innermost_type(schema);

@@ -54,8 +54,8 @@ export class RequestTracker {
 
 	/**
 	 * Track a new request with the given id.
-	 * @param id The request id
-	 * @returns A deferred promise that will be resolved when the response is received
+	 * @param id - the request id
+	 * @returns a deferred promise that will be resolved when the response is received
 	 */
 	track_request(id: JsonrpcRequestId): Deferred<JsonrpcResponseOrError> {
 		const deferred = create_deferred<JsonrpcResponseOrError>();
@@ -88,8 +88,8 @@ export class RequestTracker {
 
 	/**
 	 * Resolve a pending request with the given response data.
-	 * @param id The request id
-	 * @param response The response data
+	 * @param id - the request id
+	 * @param response - the response data
 	 */
 	resolve_request(id: JsonrpcRequestId, response: JsonrpcResponseOrError): void {
 		const request = this.pending_requests.get(id);
@@ -111,8 +111,8 @@ export class RequestTracker {
 
 	/**
 	 * Reject a pending request with the given error.
-	 * @param id The request id
-	 * @param error_message The complete JsonrpcErrorMessage object
+	 * @param id - the request id
+	 * @param error_message - the complete JsonrpcErrorMessage object
 	 */
 	reject_request(id: JsonrpcRequestId, error_message: JsonrpcErrorMessage): void {
 		const request = this.pending_requests.get(id);
@@ -160,7 +160,7 @@ export class RequestTracker {
 
 	/**
 	 * Cancel a pending request.
-	 * @param id The request id
+	 * @param id - the request id
 	 */
 	cancel_request(id: JsonrpcRequestId): void {
 		const request = this.pending_requests.get(id);
@@ -179,7 +179,7 @@ export class RequestTracker {
 
 	/**
 	 * Cancel all pending requests.
-	 * @param reason Optional reason to include in rejection
+	 * @param reason - optional reason to include in rejection
 	 */
 	cancel_all_requests(reason?: string): void {
 		for (const [id, request] of this.pending_requests.entries()) {

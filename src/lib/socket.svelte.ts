@@ -164,7 +164,7 @@ export class Socket extends Cell<typeof SocketJson> {
 
 	/**
 	 * Connects to the WebSocket server.
-	 * @param url The WebSocket URL to connect to
+	 * @param url - the WebSocket URL to connect to
 	 */
 	connect(url: string | null = null): void {
 		// Skip connection attempt on the server side
@@ -207,7 +207,7 @@ export class Socket extends Cell<typeof SocketJson> {
 
 	/**
 	 * Disconnects from the WebSocket server.
-	 * @param code The close code to use (default: 1000 - normal closure)
+	 * @param code - the close code to use (default: 1000 - normal closure)
 	 */
 	disconnect(code: number = DEFAULT_CLOSE_CODE): void {
 		this.#cancel_reconnect();
@@ -237,8 +237,8 @@ export class Socket extends Cell<typeof SocketJson> {
 
 	/**
 	 * Sends a message through the WebSocket.
-	 * @param data The data to send
-	 * @returns True if the message was sent immediately, false if queued or failed
+	 * @param data - the data to send
+	 * @returns `true` if the message was sent immediately, `false` if queued or failed
 	 */
 	send(data: object): boolean {
 		if (this.can_send) {
@@ -259,7 +259,7 @@ export class Socket extends Cell<typeof SocketJson> {
 
 	/**
 	 * Updates the connection URL and reconnects if currently connected.
-	 * @param url The new WebSocket URL
+	 * @param url - the new WebSocket URL
 	 */
 	update_url(url: string): void {
 		if (this.url === url) return;
@@ -413,8 +413,8 @@ export class Socket extends Cell<typeof SocketJson> {
 
 	/**
 	 * Add a message handler and return a function to remove it.
-	 * @param handler The message handler to add
-	 * @returns A function that removes the handler when called
+	 * @param handler - the message handler to add
+	 * @returns a function that removes the handler when called
 	 */
 	add_message_handler(handler: SocketActionHandler): () => void {
 		this.#message_handlers.add(handler);
@@ -423,8 +423,8 @@ export class Socket extends Cell<typeof SocketJson> {
 
 	/**
 	 * Add an error handler and return a function to remove it.
-	 * @param handler The error handler to add
-	 * @returns A function that removes the handler when called
+	 * @param handler - the error handler to add
+	 * @returns a function that removes the handler when called
 	 */
 	add_error_handler(handler: SocketErrorHandler): () => void {
 		this.#error_handlers.add(handler);

@@ -29,8 +29,8 @@ export interface ZzzParsedArgs {
  * Phase 2: extract_global_flags for --help/-h, --version/-v.
  * Phase 3: Extract command and subcommand from positionals.
  *
- * @param args - Raw CLI arguments from Deno.args.
- * @returns Parsed argument structure.
+ * @param args - raw CLI arguments from Deno.args
+ * @returns parsed argument structure
  */
 export const parse_zzz_args = (args: Array<string>): ZzzParsedArgs => {
 	const raw = argv_parse(args);

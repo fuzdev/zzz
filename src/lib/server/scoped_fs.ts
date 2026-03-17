@@ -37,7 +37,7 @@ export class ScopedFs {
 
 	/**
 	 * Create a new ScopedFs instance with the specified allowed paths.
-	 * @param allowed_paths Array of absolute paths that operations will be restricted to
+	 * @param allowed_paths - array of absolute paths that operations will be restricted to
 	 */
 	constructor(allowed_paths: Array<string> | ReadonlyArray<string>) {
 		try {

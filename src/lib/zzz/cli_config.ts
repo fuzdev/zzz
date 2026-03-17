@@ -41,8 +41,8 @@ export type ZzzCliOptions = z.infer<typeof ZzzCliOptions>;
 /**
  * Get the CLI config directory path (~/.zzz).
  *
- * @param runtime - Runtime with env_get capability.
- * @returns Path to config directory, or null if $HOME is not set.
+ * @param runtime - runtime with env_get capability
+ * @returns path to config directory, or null if $HOME is not set
  */
 export const get_zzz_dir = (runtime: Pick<EnvDeps, 'env_get'>): string | null =>
 	get_app_dir(runtime, 'zzz');
@@ -50,8 +50,8 @@ export const get_zzz_dir = (runtime: Pick<EnvDeps, 'env_get'>): string | null =>
 /**
  * Get the CLI config file path (~/.zzz/config.json).
  *
- * @param runtime - Runtime with env_get capability.
- * @returns Path to config.json, or null if $HOME is not set.
+ * @param runtime - runtime with env_get capability
+ * @returns path to config.json, or null if $HOME is not set
  */
 export const get_zzz_config_path = (runtime: Pick<EnvDeps, 'env_get'>): string | null =>
 	get_config_path(runtime, 'zzz');
@@ -59,8 +59,8 @@ export const get_zzz_config_path = (runtime: Pick<EnvDeps, 'env_get'>): string |
 /**
  * Load CLI configuration from ~/.zzz/config.json.
  *
- * @param runtime - Runtime with file read capability.
- * @returns Parsed config, or null if file doesn't exist or is invalid.
+ * @param runtime - runtime with file read capability
+ * @returns parsed config, or null if file doesn't exist or is invalid
  */
 export const load_zzz_cli_config = async (
 	runtime: Pick<EnvDeps, 'env_get'> & FsReadDeps,
@@ -73,8 +73,8 @@ export const load_zzz_cli_config = async (
 /**
  * Save CLI configuration to ~/.zzz/config.json.
  *
- * @param runtime - Runtime with file write capability.
- * @param config - Configuration to save.
+ * @param runtime - runtime with file write capability
+ * @param config - configuration to save
  */
 export const save_zzz_cli_config = async (
 	runtime: Pick<EnvDeps, 'env_get'> & FsWriteDeps,

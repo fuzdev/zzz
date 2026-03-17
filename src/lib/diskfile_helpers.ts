@@ -32,8 +32,8 @@ export const map_watcher_change_to_diskfile_change = (
 // TODO @many refactor source/disk files with Gro Disknode too
 /**
  * Helper function to convert a `SerializableDisknode` to the `DiskfileJson` format.
- * @param disknode The source file to convert
- * @param existing_id Optional existing UUID to preserve id stability across updates
+ * @param disknode - the source file to convert
+ * @param existing_id - optional existing UUID to preserve id stability across updates
  */
 export const disknode_to_diskfile_json = (
 	disknode: SerializableDisknode,

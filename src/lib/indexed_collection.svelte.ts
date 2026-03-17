@@ -70,11 +70,11 @@ export interface IndexedCollectionOptions<
  * A helper class for managing collections with incremental updates,
  * efficient querying, and automatic index maintenance.
  *
- * @param T - The type of items stored in the collection
- * @param TKeySingle - Type-safe keys for single value indexes
- * @param TKeyMulti - Type-safe keys for multi value indexes
- * @param TKeyDerived - Type-safe keys for derived indexes
- * @param TKeyDynamic - Type-safe keys for dynamic function indexes
+ * @param T - the type of items stored in the collection
+ * @param TKeySingle - type-safe keys for single value indexes
+ * @param TKeyMulti - type-safe keys for multi value indexes
+ * @param TKeyDerived - type-safe keys for derived indexes
+ * @param TKeyDynamic - type-safe keys for dynamic function indexes
  */
 export class IndexedCollection<
 	T extends IndexedItem,
@@ -220,8 +220,8 @@ export class IndexedCollection<
 
 	/**
 	 * Ensures that the index exists and is of the expected type.
-	 * @param key - The index key to check
-	 * @param expected_type - The expected type of the index
+	 * @param key - the index key to check
+	 * @param expected_type - the expected type of the index
 	 * @throws Error if index doesn't exist or has wrong type
 	 */
 	#ensure_index(key: string, expected_type: IndexType): void {
