@@ -24,7 +24,11 @@ cd ~/dev/private_fuz && cargo build -p fuz_pty --release
 
 This produces `target/release/libfuz_pty.so`, which zzz loads at runtime via
 `Deno.dlopen()`. The dev server needs `--allow-ffi` (already set in
-`gro.config.ts`).
+`gro.config.ts`). The compiled binary also has `--allow-ffi`.
+
+For bundled/compiled binaries, place `libfuz_pty.so` next to the `zzz`
+executable. The library lookup checks exe-relative path first, then falls back
+to the dev path (`~/dev/private_fuz/target/release/`).
 
 ## Commands
 
@@ -79,6 +83,7 @@ Components use `PascalCase` with domain prefixes:
 | `Ollama` | Ollama-specific | `OllamaManager`, `OllamaPullModel` |
 | `Part` | Content parts | `PartView`, `PartEditorForText` |
 | `Prompt` | Prompts | `PromptList`, `PromptPickerDialog` |
+| `Terminal` | Terminals | `TerminalRunner`, `TerminalView`, `TerminalContextmenu` |
 | `Thread` | Threads | `ThreadList`, `ThreadContextmenu` |
 | `Turn` | Turns | `TurnView`, `TurnListitem` |
 

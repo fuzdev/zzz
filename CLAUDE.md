@@ -14,7 +14,7 @@ For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 2. **Edit files** on disk — scoped filesystem, syntax highlighting, multi-tab editor
 3. **Build prompts** — reusable content templates composed from text parts and file references
 4. **Manage models** — Ollama local models + Claude/ChatGPT/Gemini via BYOK API keys
-5. **Run commands** — in-browser command runner with streamed output via xterm.js (interactive terminal pending PTY support)
+5. **Run terminals** — interactive PTY terminals via xterm.js with preset commands, contextmenu copy, and restart
 6. **Symmetric actions** — JSON-RPC 2.0 between frontend and backend, same ActionPeer on both sides
 
 ## Key Principles
@@ -430,7 +430,7 @@ From `src/lib/server/.env.development.example`:
 - **No authentication** — development use only, anyone with network access can use it
 - **No database** — all state is in-memory, lost on restart (pglite planned)
 - **No undo/history** — file edits are permanent
-- **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
+- **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
 - **Backend is reference impl** — may be replaced by Rust daemon (`fuzd`)

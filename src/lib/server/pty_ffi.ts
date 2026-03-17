@@ -1,22 +1,22 @@
 // Deno FFI bindings for libfuz_pty — PTY spawn/read/write/resize/close/kill/waitpid.
 // Loaded via Deno.dlopen() from the fuz_pty Rust crate.
 
-import {join} from 'node:path';
+import {dirname, join} from 'node:path';
 import {existsSync} from 'node:fs';
 
 const LIB_NAME = 'libfuz_pty';
 
 const get_library_path = (): string | null => {
-	// dev path: ~/dev/private_fuz/target/release/
-	const dev_path = join(
-		(Deno as any).env?.get?.('HOME') ?? process.env.HOME ?? '',
-		'dev',
-		'private_fuz',
-		'target',
-		'release',
-		`${LIB_NAME}.so`,
-	);
+	// 1. Next to the executable (production/bundled)
+	const exe_dir = dirname(Deno.execPath());
+	const exe_path = join(exe_dir, `${LIB_NAME}.so`);
+	if (existsSync(exe_path)) return exe_path;
+
+	// 2. Dev path: ~/dev/private_fuz/target/release/
+	const home = (Deno as any).env?.get?.('HOME') ?? process.env.HOME ?? '';
+	const dev_path = join(home, 'dev', 'private_fuz', 'target', 'release', `${LIB_NAME}.so`);
 	if (existsSync(dev_path)) return dev_path;
+
 	return null;
 };
 
@@ -171,9 +171,7 @@ export const pty_read = (master_fd: number): Uint8Array | null => {
  * Read from PTY, distinguishing EAGAIN (no data yet) from EOF/error.
  * Returns: bytes read (Uint8Array), 'eagain', or 'eof'.
  */
-export const pty_read_status = (
-	master_fd: number,
-): Uint8Array | 'eagain' | 'eof' => {
+export const pty_read_status = (master_fd: number): Uint8Array | 'eagain' | 'eof' => {
 	const l = ensure_lib();
 	const n = l.symbols.fuz_pty_read(master_fd, read_buf, BigInt(READ_BUF_SIZE));
 	if (n > 0) return read_buf.slice(0, n);
@@ -186,7 +184,11 @@ export const pty_read_status = (
  */
 export const pty_write = (master_fd: number, data: Uint8Array): number => {
 	const l = ensure_lib();
-	const n = l.symbols.fuz_pty_write(master_fd, data as Uint8Array<ArrayBuffer>, BigInt(data.length));
+	const n = l.symbols.fuz_pty_write(
+		master_fd,
+		data as Uint8Array<ArrayBuffer>,
+		BigInt(data.length),
+	);
 	if (n < 0) {
 		throw new Error('fuz_pty_write failed');
 	}

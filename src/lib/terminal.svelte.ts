@@ -25,7 +25,7 @@ export class Terminal extends Cell<typeof TerminalJson> {
 	name: string = $state()!;
 	command: string = $state()!;
 	args: Array<string> = $state()!;
-	cwd: string | undefined = $state()!;
+	cwd: string | undefined = $state();
 	status: TerminalStatus = $state()!;
 	exit_code: number | null = $state()!;
 	preset_id: Uuid | null = $state()!;

@@ -342,7 +342,9 @@ between two modes:
 **FFI mode** (real PTY): Loads `libfuz_pty.so` via `Deno.dlopen()`. Uses
 `forkpty()` for a single merged output stream with echo, prompts, colors,
 and resize support. The read loop polls the master fd with 10ms delay on
-EAGAIN. Requires `--allow-ffi` (set in `gro.config.ts`).
+EAGAIN. Requires `--allow-ffi` (set in `gro.config.ts` for both dev server
+and compiled binary). Library lookup: exe-relative path first, then
+`~/dev/private_fuz/target/release/`.
 
 **Fallback mode** (pipes): Uses `Deno.Command` with piped stdin/stdout/stderr.
 No echo, no prompt, no interactivity. stdout and stderr race into xterm.

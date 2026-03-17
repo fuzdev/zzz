@@ -18,7 +18,7 @@ export class TerminalPreset extends Cell<typeof TerminalPresetJson> {
 	name: string = $state()!;
 	command: string = $state()!;
 	args: Array<string> = $state()!;
-	cwd: string | undefined = $state()!;
+	cwd: string | undefined = $state();
 
 	constructor(options: TerminalPresetOptions) {
 		super(TerminalPresetJson, options);

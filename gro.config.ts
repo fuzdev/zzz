@@ -31,6 +31,7 @@ const config: CreateGroConfig = async (base_config) => {
 				flags: [
 					'--no-check',
 					'--sloppy-imports',
+					'--allow-ffi',
 					'--include',
 					'node_modules/@fuzdev/blake3_wasm',
 				],

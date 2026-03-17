@@ -3,12 +3,11 @@
 
 	import {app_context} from './app.svelte.js';
 	import type {Uuid} from './zod_helpers.js';
-	import type {TerminalPreset} from './terminal_preset.svelte.js';
+	import {TerminalPreset} from './terminal_preset.svelte.js';
 	import TerminalRunItem from './TerminalRunItem.svelte';
 	import TerminalPresetBar from './TerminalPresetBar.svelte';
 	import TerminalCommandInput from './TerminalCommandInput.svelte';
 	import {Scrollable} from './scrollable.svelte.js';
-	import {GLYPH_PLAY} from './glyphs.js';
 
 	const app = app_context.get();
 
@@ -23,15 +22,18 @@
 
 	const scrollable = new Scrollable();
 
-	// TODO seed default presets — for now use hardcoded list
-	const presets: Array<TerminalPreset> = $state([]);
-
-	// TODO replace with actual TerminalPreset Cell instances
-	const default_presets = [
+	const default_preset_configs = [
 		{name: 'check', command: 'gro', args: ['check']},
 		{name: 'build', command: 'gro', args: ['build']},
 		{name: 'dev', command: 'gro', args: ['dev']},
 	];
+
+	// Seed preset Cell instances from defaults
+	const presets: Array<TerminalPreset> = $state(
+		default_preset_configs.map(
+			(p) => new TerminalPreset({app, json: {name: p.name, command: p.command, args: p.args}}),
+		),
+	);
 
 	const create_terminal = async (command: string, args: Array<string>): Promise<void> => {
 		error_message = null;
@@ -58,8 +60,13 @@
 		void create_terminal(preset.command, preset.args);
 	};
 
-	const handle_default_preset = (p: {command: string; args: Array<string>}): void => {
-		void create_terminal(p.command, p.args);
+	const handle_preset_create = (name: string, command: string, args: Array<string>): void => {
+		presets.push(new TerminalPreset({app, json: {name, command, args}}));
+	};
+
+	const handle_preset_delete = (preset: TerminalPreset): void => {
+		const index = presets.indexOf(preset);
+		if (index !== -1) presets.splice(index, 1);
 	};
 
 	const handle_close =
@@ -67,6 +74,21 @@
 		(_exit_code: number | null): void => {
 			// keep in history — don't remove
 		};
+
+	const handle_restart = (run: RunEntry) => async (): Promise<void> => {
+		await app.api.terminal_close({terminal_id: run.terminal_id});
+		const result = await app.api.terminal_create({command: run.command, args: run.args});
+		if (result.ok && result.value?.terminal_id) {
+			const index = runs.indexOf(run);
+			if (index !== -1) {
+				runs[index] = {
+					terminal_id: result.value.terminal_id,
+					command: run.command,
+					args: run.args,
+				};
+			}
+		}
+	};
 </script>
 
 <div class="terminal_runner">
@@ -79,6 +101,7 @@
 						command={run.command}
 						args={run.args}
 						onclose={handle_close(run.terminal_id)}
+						onrestart={handle_restart(run)}
 					/>
 				</div>
 			{/each}
@@ -94,19 +117,12 @@
 	{/if}
 
 	<div class="input_area">
-		{#if presets.length > 0}
-			<TerminalPresetBar {presets} onrun={handle_preset} />
-		{/if}
-
-		<div class="default_presets">
-			{#each default_presets as preset (preset)}
-				<button type="button" onclick={() => handle_default_preset(preset)}>
-					{GLYPH_PLAY}
-					{preset.name}
-				</button>
-			{/each}
-		</div>
-
+		<TerminalPresetBar
+			{presets}
+			onrun={handle_preset}
+			oncreate={handle_preset_create}
+			ondelete={handle_preset_delete}
+		/>
 		<TerminalCommandInput onsend={handle_send} />
 	</div>
 </div>
@@ -147,10 +163,5 @@
 		gap: var(--space_sm);
 		padding: var(--space_md);
 		border-top: 1px solid var(--border_color, #333);
-	}
-	.default_presets {
-		display: flex;
-		gap: var(--space_xs);
-		flex-wrap: wrap;
 	}
 </style>

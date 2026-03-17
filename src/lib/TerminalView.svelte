@@ -9,9 +9,10 @@
 	interface Props {
 		terminal_id: Uuid;
 		onclose?: (exit_code: number | null) => void;
+		get_text?: (fn: () => string) => void;
 	}
 
-	const {terminal_id, onclose}: Props = $props();
+	const {terminal_id, onclose, get_text}: Props = $props();
 
 	const app = app_context.get();
 
@@ -99,6 +100,9 @@
 			}
 
 			xterm_instance = term;
+
+			// expose text getter to parent
+			get_text?.(get_terminal_text);
 
 			// replay any buffered data
 			for (const data of pending_data) {

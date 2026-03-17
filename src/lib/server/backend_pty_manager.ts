@@ -60,7 +60,9 @@ export class PtyManager {
 		this.#api = options.api;
 		this.log = options.log === undefined ? new Logger('[pty_manager]') : options.log;
 		this.use_ffi = is_ffi_available();
-		this.log?.info(`PTY mode: ${this.use_ffi ? 'FFI (real PTY)' : 'fallback (Deno.Command pipes)'}`);
+		this.log?.info(
+			`PTY mode: ${this.use_ffi ? 'FFI (real PTY)' : 'fallback (Deno.Command pipes)'}`,
+		);
 	}
 
 	/**
@@ -149,12 +151,7 @@ export class PtyManager {
 		this.#processes.delete(terminal_id);
 	}
 
-	#spawn_fallback(
-		terminal_id: Uuid,
-		command: string,
-		args: Array<string>,
-		cwd?: string,
-	): void {
+	#spawn_fallback(terminal_id: Uuid, command: string, args: Array<string>, cwd?: string): void {
 		const cmd = new Deno.Command(command, {
 			args,
 			stdin: 'piped',
