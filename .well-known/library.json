@@ -14289,7 +14289,7 @@
 								"optional": true
 							},
 							{
-								"name": "compact",
+								"name": "sm",
 								"type": "boolean | undefined",
 								"optional": true
 							},
