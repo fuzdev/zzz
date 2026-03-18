@@ -45,7 +45,7 @@
 				onclick={() => (browser.browserified = !browser.browserified)}
 				class:color_i={!browser.browserified}
 				class:color_h={browser.browserified}
-				class="inline compact">{browser.browserified ? 'un' : ''}browserify!</button
+				class="inline sm">{browser.browserified ? 'un' : ''}browserify!</button
 			> I'm planning to make a native version of Zzz.
 		</p>
 		<p>
@@ -55,7 +55,7 @@
 			to
 			<button
 				type="button"
-				class="inline compact"
+				class="inline sm"
 				class:color_d={app.ui.show_sidebar}
 				class:color_f={!app.ui.show_sidebar}
 				onclick={() => {

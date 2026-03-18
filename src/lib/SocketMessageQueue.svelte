@@ -185,7 +185,7 @@
 					<div class="display:flex gap_xs align-items:center flex-wrap:wrap">
 						<input
 							type="checkbox"
-							class="m_0 plain compact font_size_md"
+							class="m_0 plain sm font_size_md"
 							checked={selected}
 							onclick={(e) => toggle_queued_message_selection(message.id, e.currentTarget.checked)}
 						/>

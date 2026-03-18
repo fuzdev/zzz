@@ -79,7 +79,7 @@
 	{/if}
 	<button
 		type="button"
-		class="plain compact"
+		class="plain sm"
 		onclick={() => {
 			show_file_picker = true;
 		}}

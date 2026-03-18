@@ -51,6 +51,6 @@
 	heading="Pick a part"
 >
 	{#snippet children(part, pick)}
-		<PartListitem {part} compact onclick={() => pick(part)} />
+		<PartListitem {part} sm onclick={() => pick(part)} />
 	{/snippet}
 </PickerDialog>

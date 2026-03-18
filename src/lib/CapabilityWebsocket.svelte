@@ -188,7 +188,7 @@
 				<label class="display:flex gap_xs align-items:center my_sm">
 					<input
 						type="checkbox"
-						class="compact font_size_sm"
+						class="sm font_size_sm"
 						bind:checked={
 							() => socket.auto_reconnect,
 							(v) => {
@@ -259,13 +259,13 @@
 						min="10000"
 						max="600000"
 						step="10000"
-						class="flex:1 compact plain"
+						class="flex:1 sm plain"
 						bind:value={socket.heartbeat_interval}
 					/>
 					<input
 						id="heartbeat_interval_{pid}"
 						type="text"
-						class="input_xs compact plain"
+						class="input_xs sm plain"
 						bind:value={socket.heartbeat_interval}
 					/>
 				</div>
@@ -287,13 +287,13 @@
 						min="100"
 						max="10000"
 						step="100"
-						class="flex:1 compact plain"
+						class="flex:1 sm plain"
 						bind:value={socket.reconnect_delay}
 					/>
 					<input
 						id="reconnect_delay_{pid}"
 						type="text"
-						class="input_xs compact plain"
+						class="input_xs sm plain"
 						bind:value={socket.reconnect_delay}
 					/>
 				</div>
@@ -315,23 +315,20 @@
 						min="1000"
 						max="300000"
 						step="1000"
-						class="flex:1 compact plain"
+						class="flex:1 sm plain"
 						bind:value={socket.reconnect_delay_max}
 					/>
 					<input
 						id="reconnect_delay_max_{pid}"
 						type="text"
-						class="input_xs compact plain"
+						class="input_xs sm plain"
 						bind:value={socket.reconnect_delay_max}
 					/>
 				</div>
 			</div>
 
 			<div class="display:flex justify-content:end">
-				<ConfirmButton
-					onconfirm={reset_to_defaults}
-					class="plain font_size_sm compact font-weight:600"
-				>
+				<ConfirmButton onconfirm={reset_to_defaults} class="plain font_size_sm sm font-weight:600">
 					reset to defaults
 
 					{#snippet popover_content(popover)}

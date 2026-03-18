@@ -23,7 +23,7 @@
 		<h4 class="mt_0 mb_0">action history</h4>
 		<div class="display:flex gap_xs align-items:center">
 			<label class="display:flex gap_xs align-items:center mb_0">
-				<input type="checkbox" class="compact" bind:checked={ollama.show_read_actions} />
+				<input type="checkbox" class="sm" bind:checked={ollama.show_read_actions} />
 				<small>show read actions</small>
 			</label>
 			<button

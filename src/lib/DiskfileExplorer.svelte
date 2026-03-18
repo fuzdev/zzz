@@ -76,7 +76,7 @@
 			<div class="display:flex gap_xs2">
 				<PendingButton
 					pending={TODO_create_file_pending}
-					class="plain compact"
+					class="plain sm"
 					title="create file in {zzz_dir}"
 					onclick={create_file}
 				>
@@ -84,7 +84,7 @@
 				</PendingButton>
 				<PendingButton
 					pending={TODO_create_folder_pending}
-					class="plain compact"
+					class="plain sm"
 					title="create folder in {zzz_dir}"
 					onclick={create_folder}
 				>
@@ -93,7 +93,7 @@
 				{#if app.diskfiles.items.size > 1}
 					<button
 						type="button"
-						class="plain compact selectable deselectable"
+						class="plain sm selectable deselectable"
 						class:selected={editor.show_sort_controls}
 						title="toggle sort controls"
 						onclick={() => editor.toggle_sort_controls()}

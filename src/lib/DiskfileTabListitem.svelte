@@ -58,7 +58,7 @@
 			</div>
 			<button
 				type="button"
-				class="tab_close_button plain icon_button compact border_radius_md ml_sm"
+				class="tab_close_button plain icon_button sm border_radius_md ml_sm"
 				onclick={(e) => {
 					swallow(e);
 					onclose(tab);

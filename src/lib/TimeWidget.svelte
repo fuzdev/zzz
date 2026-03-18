@@ -7,8 +7,8 @@
 		value: Date;
 	} = $props();
 
-	const timestamp = format_timestamp(value);
-	const [time_number_part, time_am_pm_part] = timestamp.split(' ');
+	const timestamp = $derived(format_timestamp(value));
+	const [time_number_part, time_am_pm_part] = $derived(timestamp.split(' '));
 </script>
 
 <div class="font_family_serif font_size_xl3">

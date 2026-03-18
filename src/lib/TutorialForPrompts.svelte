@@ -23,7 +23,7 @@
 				</p>
 				<button
 					type="button"
-					class="compact"
+					class="sm"
 					onclick={() => {
 						app.ui.tutorial_for_prompts = false;
 					}}>okay</button

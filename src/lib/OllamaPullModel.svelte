@@ -78,7 +78,7 @@
 					{#each models_not_downloaded as model (model.id)}
 						<button
 							type="button"
-							class="compact"
+							class="sm"
 							onclick={() => (ollama.pull_model_name = model.name)}
 							disabled={ollama.pull_model_name === model.name || ollama.pull_is_pulling(model.name)}
 						>
@@ -90,7 +90,7 @@
 		</fieldset>
 
 		<label class="display:flex gap_xs align-items:center">
-			<input type="checkbox" class="compact" bind:checked={ollama.pull_insecure} />
+			<input type="checkbox" class="sm" bind:checked={ollama.pull_insecure} />
 			<span>allow insecure connections</span>
 		</label>
 

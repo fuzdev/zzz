@@ -23,14 +23,14 @@
 
 <div class="display:flex gap_xs2 align-items:center" class:dormant_wrapper={!attribute.key}>
 	<input
-		class="plain compact"
+		class="plain sm"
 		class:dormant
 		placeholder="key"
 		value={attribute.key}
 		oninput={(e) => onupdate({key: e.currentTarget.value})}
 	/>
 	<input
-		class="plain compact"
+		class="plain sm"
 		class:dormant
 		placeholder="value"
 		value={attribute.value}
@@ -39,7 +39,7 @@
 	<ConfirmButton
 		onconfirm={onremove}
 		title="remove attribute {attribute.key || ''}"
-		class="plain compact"
+		class="plain sm"
 	>
 		<Glyph glyph={GLYPH_REMOVE} />
 	</ConfirmButton>

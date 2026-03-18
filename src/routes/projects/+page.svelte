@@ -53,7 +53,7 @@
 		<p>
 			Here's a very rough sketch of <button
 				type="button"
-				class="inline compact color_g"
+				class="inline sm color_g"
 				onclick={() => {
 					projects.previewing = !projects.previewing;
 				}}>what projects could look like</button

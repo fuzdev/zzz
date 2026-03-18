@@ -30,7 +30,7 @@
 			prompts.remove_part(part.id);
 		}
 	}}
-	class="plain compact"
+	class="plain sm"
 	title="remove part {'"' + part.name + '"'}"
 >
 	<Glyph glyph={GLYPH_REMOVE} />

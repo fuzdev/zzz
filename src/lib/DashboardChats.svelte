@@ -36,7 +36,7 @@
 				{#if chats.items.size > 1}
 					<button
 						type="button"
-						class="plain compact selectable deselectable"
+						class="plain sm selectable deselectable"
 						class:selected={chats.show_sort_controls}
 						title="toggle sort controls"
 						onclick={() => chats.toggle_sort_controls()}

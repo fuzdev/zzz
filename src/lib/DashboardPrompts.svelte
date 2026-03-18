@@ -79,7 +79,7 @@
 				{#if app.prompts.items.size > 1}
 					<button
 						type="button"
-						class="plain compact selectable deselectable"
+						class="plain sm selectable deselectable"
 						class:selected={app.prompts.show_sort_controls}
 						title="toggle sort controls"
 						onclick={() => app.prompts.toggle_sort_controls()}

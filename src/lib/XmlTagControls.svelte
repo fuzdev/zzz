@@ -23,7 +23,7 @@
 				part.xml_tag_name_default}'"
 		>
 			<input
-				class="plain compact"
+				class="plain sm"
 				type="checkbox"
 				bind:checked={
 					() => part.has_xml_tag,
@@ -36,7 +36,7 @@
 			<small>xml tag</small>
 		</label>
 		<input
-			class="plain flex:1 compact"
+			class="plain flex:1 sm"
 			class:dormant={!part.has_xml_tag}
 			placeholder={part.has_xml_tag
 				? GLYPH_PLACEHOLDER + ' ' + part.xml_tag_name_default
@@ -46,7 +46,7 @@
 		/>
 		<button
 			type="button"
-			class="plain compact"
+			class="plain sm"
 			title="add xml attribute"
 			onclick={() => part.add_attribute()}
 		>

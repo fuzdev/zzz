@@ -80,7 +80,7 @@
 				<header>
 					<button
 						type="button"
-						class="plain compact font_size_lg text-align:left font-weight:400"
+						class="plain sm font_size_lg text-align:left font-weight:400"
 						onclick={() => (show_model_picker = true)}
 					>
 						{thread.model.name}

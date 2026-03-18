@@ -49,7 +49,7 @@
 
 		{#if model.downloaded === false}
 			{#if model.provider_name === 'ollama' && !model.downloaded}
-				<button type="button" class="plain compact" onclick={() => model.navigate_to_download()}>
+				<button type="button" class="plain sm" onclick={() => model.navigate_to_download()}>
 					<Glyph glyph={GLYPH_DOWNLOAD} />&nbsp; download
 				</button>
 			{/if}
