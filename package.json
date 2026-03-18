@@ -39,7 +39,7 @@
     "@changesets/changelog-git": "^0.2.1",
     "@fuzdev/fuz_code": "^0.45.1",
     "@fuzdev/fuz_css": "^0.57.0",
-    "@fuzdev/fuz_ui": "^0.190.0",
+    "@fuzdev/fuz_ui": "^0.191.1",
     "@fuzdev/fuz_util": "^0.55.0",
     "@jridgewell/trace-mapping": "^0.3.31",
     "@ryanatkn/eslint-config": "^0.9.0",
@@ -68,7 +68,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
-    "@fuzdev/gro": "^0.197.0",
+    "@fuzdev/gro": "^0.197.1",
     "@google/generative-ai": "^0.24.1",
     "@hono/node-server": "^1.19.6",
     "@hono/node-ws": "^1.2.0",
