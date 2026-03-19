@@ -70,8 +70,8 @@
 			"ollama": "^0.6.3",
 			"prettier": "^3.7.4",
 			"prettier-plugin-svelte": "^3.4.1",
-			"svelte": "^5.53.12",
-			"svelte-check": "^4.3.5",
+			"svelte": "^5.54.0",
+			"svelte-check": "^4.4.5",
 			"svelte2tsx": "^0.7.52",
 			"tslib": "^2.8.1",
 			"typescript": "^5.9.3",
@@ -83,7 +83,7 @@
 		"dependencies": {
 			"@anthropic-ai/sdk": "^0.71.2",
 			"@fuzdev/blake3_wasm": "^0.1.0",
-			"@fuzdev/gro": "^0.197.0",
+			"@fuzdev/gro": "^0.197.1",
 			"@google/generative-ai": "^0.24.1",
 			"@xterm/xterm": "^6.0.0",
 			"date-fns": "^4.1.0",
@@ -5167,6 +5167,7 @@
 					"ModelContextmenu.svelte",
 					"PartContextmenu.svelte",
 					"PromptContextmenu.svelte",
+					"TerminalContextmenu.svelte",
 					"ThreadContextmenu.svelte",
 					"TurnContextmenu.svelte"
 				]
@@ -5742,12 +5743,12 @@
 							{
 								"name": "disknode",
 								"type": "{ id: string & $brand<\"DiskfilePath\">; source_dir: string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">; contents: string | null; ctime: number | null; mtime: number | null; dependents: [...][]; dependencies: [...][]; }",
-								"description": "The source file to convert"
+								"description": "the source file to convert"
 							},
 							{
 								"name": "existing_id",
 								"type": "string & $brand<\"Uuid\">",
-								"description": "Optional existing `Uuid` to preserve id stability across updates",
+								"description": "optional existing `Uuid` to preserve id stability across updates",
 								"default_value": "create_uuid()"
 							}
 						]
@@ -6227,12 +6228,12 @@
 								"doc_comment": "Navigates to a tab by id. If the tab doesn't exist but was previously closed,\ncreates a preview tab for that diskfile.",
 								"type_signature": "(tab_id: string & $brand<\"Uuid\">): { resulting_tab_id: (string & $brand<\"Uuid\">) | null; created_preview: boolean; }",
 								"return_type": "{ resulting_tab_id: (string & $brand<\"Uuid\">) | null; created_preview: boolean; }",
-								"return_description": "Object containing the resulting tab id and a boolean indicating if a new tab was created",
+								"return_description": "object containing the resulting tab id and a boolean indicating if a new tab was created",
 								"parameters": [
 									{
 										"name": "tab_id",
 										"type": "string & $brand<\"Uuid\">",
-										"description": "The tab id to navigate to"
+										"description": "the tab id to navigate to"
 									}
 								]
 							},
@@ -7998,7 +7999,7 @@
 					{
 						"name": "Frontend",
 						"kind": "class",
-						"doc_comment": "The base frontend app, typically used by creating your own `App extends Frontend`.\nGettable with `frontend_context.get()` inside a `<FrontendRoot>`.",
+						"doc_comment": "The base frontend app, typically used by creating your own `App extends Frontend`.\nGettable with `frontend_context.get()` inside a `FrontendRoot`.",
 						"source_line": 79,
 						"extends": ["Cell<typeof FrontendJson>"],
 						"implements": ["ActionEventEnvironment"],
@@ -9061,7 +9062,7 @@
 					"ProviderLink.svelte",
 					"SocketMessageQueue.svelte",
 					"TerminalPresetBar.svelte",
-					"TerminalRunner.svelte",
+					"TerminalRunItem.svelte",
 					"ThreadContextmenu.svelte",
 					"ThreadListitem.svelte",
 					"TurnContextmenu.svelte",
@@ -15285,12 +15286,12 @@
 								"doc_comment": "Track a new request with the given id.",
 								"type_signature": "(id: string | number): Deferred<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; _meta?: { [x: string]: unknown; } | undefined; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { ...; }; }>",
 								"return_type": "Deferred<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; _meta?: { [x: string]: unknown; } | undefined; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | ... 4 more ... | (number & $brand<...>); messag...",
-								"return_description": "A deferred promise that will be resolved when the response is received",
+								"return_description": "a deferred promise that will be resolved when the response is received",
 								"parameters": [
 									{
 										"name": "id",
 										"type": "string | number",
-										"description": "The request id"
+										"description": "the request id"
 									}
 								]
 							},
@@ -15304,12 +15305,12 @@
 									{
 										"name": "id",
 										"type": "string | number",
-										"description": "The request id"
+										"description": "the request id"
 									},
 									{
 										"name": "response",
 										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; _meta?: { [x: string]: unknown; } | undefined; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | ... 4 more ... | (number & $brand<...>); message: string...",
-										"description": "The response data"
+										"description": "the response data"
 									}
 								]
 							},
@@ -15323,12 +15324,12 @@
 									{
 										"name": "id",
 										"type": "string | number",
-										"description": "The request id"
+										"description": "the request id"
 									},
 									{
 										"name": "error_message",
 										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }",
-										"description": "The complete `JsonrpcErrorMessage` object"
+										"description": "the complete `JsonrpcErrorMessage` object"
 									}
 								]
 							},
@@ -15355,7 +15356,7 @@
 									{
 										"name": "id",
 										"type": "string | number",
-										"description": "The request id"
+										"description": "the request id"
 									}
 								]
 							},
@@ -15370,7 +15371,7 @@
 										"name": "reason",
 										"type": "string | undefined",
 										"optional": true,
-										"description": "Optional reason to include in rejection"
+										"description": "optional reason to include in rejection"
 									}
 								]
 							}
@@ -17296,17 +17297,17 @@
 							{
 								"name": "key",
 								"type": "string",
-								"description": "The environment variable name (e.g., 'SOME_CONFIGURATION_KEY')"
+								"description": "the environment variable name (e.g., 'SOME_CONFIGURATION_KEY')"
 							},
 							{
 								"name": "value",
 								"type": "string",
-								"description": "The new value for the environment variable"
+								"description": "the new value for the environment variable"
 							},
 							{
 								"name": "options",
 								"type": "UpdateEnvVariableOptions",
-								"description": "Optional configuration for file path and operations",
+								"description": "optional configuration for file path and operations",
 								"default_value": "{}"
 							}
 						]
@@ -17468,7 +17469,7 @@
 						"name": "pty_write",
 						"kind": "function",
 						"doc_comment": "Write data to the PTY.",
-						"source_line": 187,
+						"source_line": 185,
 						"type_signature": "(master_fd: number, data: Uint8Array<ArrayBufferLike>): number",
 						"return_type": "number",
 						"parameters": [
@@ -17486,7 +17487,7 @@
 						"name": "pty_resize",
 						"kind": "function",
 						"doc_comment": "Resize the PTY window.",
-						"source_line": 199,
+						"source_line": 201,
 						"type_signature": "(master_fd: number, cols: number, rows: number): void",
 						"return_type": "void",
 						"parameters": [
@@ -17508,7 +17509,7 @@
 						"name": "pty_close",
 						"kind": "function",
 						"doc_comment": "Close the PTY master fd.",
-						"source_line": 210,
+						"source_line": 212,
 						"type_signature": "(master_fd: number): void",
 						"return_type": "void",
 						"parameters": [
@@ -17522,7 +17523,7 @@
 						"name": "pty_kill",
 						"kind": "function",
 						"doc_comment": "Send a signal to a process. Defaults to SIGTERM.",
-						"source_line": 221,
+						"source_line": 223,
 						"type_signature": "(pid: number, signal?: number): void",
 						"return_type": "void",
 						"parameters": [
@@ -17540,7 +17541,7 @@
 					{
 						"name": "PtyWaitResult",
 						"kind": "type",
-						"source_line": 226,
+						"source_line": 228,
 						"type_signature": "PtyWaitResult",
 						"properties": [
 							{
@@ -17559,7 +17560,7 @@
 						"name": "pty_waitpid",
 						"kind": "function",
 						"doc_comment": "Non-blocking waitpid. Returns whether the process has exited and its status.",
-						"source_line": 234,
+						"source_line": 236,
 						"type_signature": "(pid: number): PtyWaitResult",
 						"return_type": "PtyWaitResult",
 						"parameters": [
@@ -17572,13 +17573,13 @@
 					{
 						"name": "SIGTERM",
 						"kind": "variable",
-						"source_line": 244,
+						"source_line": 246,
 						"type_signature": "15"
 					},
 					{
 						"name": "SIGKILL",
 						"kind": "variable",
-						"source_line": 244,
+						"source_line": 246,
 						"type_signature": "9"
 					}
 				],
@@ -17680,7 +17681,7 @@
 					{
 						"name": "register_websocket_actions",
 						"kind": "function",
-						"doc_comment": "Registers websocket endpoints for all service actions in the schema registry.",
+						"doc_comment": "Registers WebSocket endpoints for all service actions in the schema registry.",
 						"source_line": 27,
 						"type_signature": "({ path, app, backend, upgradeWebSocket, artificial_delay, transport, }: RegisterWebsocketActionsOptions): void",
 						"return_type": "void",
@@ -17730,7 +17731,7 @@
 									{
 										"name": "allowed_paths",
 										"type": "readonly string[] | string[]",
-										"description": "Array of absolute paths that operations will be restricted to"
+										"description": "array of absolute paths that operations will be restricted to"
 									}
 								]
 							},
@@ -18449,7 +18450,7 @@
 									{
 										"name": "url",
 										"type": "string | null",
-										"description": "The WebSocket URL to connect to",
+										"description": "the WebSocket URL to connect to",
 										"default_value": "null"
 									}
 								]
@@ -18464,7 +18465,7 @@
 									{
 										"name": "code",
 										"type": "number",
-										"description": "The close code to use (default: 1000 - normal closure)",
+										"description": "the close code to use (default: 1000 - normal closure)",
 										"default_value": "DEFAULT_CLOSE_CODE"
 									}
 								]
@@ -18475,12 +18476,12 @@
 								"doc_comment": "Sends a message through the WebSocket.",
 								"type_signature": "(data: object): boolean",
 								"return_type": "boolean",
-								"return_description": "True if the message was sent immediately, false if queued or failed",
+								"return_description": "`true` if the message was sent immediately, `false` if queued or failed",
 								"parameters": [
 									{
 										"name": "data",
 										"type": "object",
-										"description": "The data to send"
+										"description": "the data to send"
 									}
 								]
 							},
@@ -18494,7 +18495,7 @@
 									{
 										"name": "url",
 										"type": "string",
-										"description": "The new WebSocket URL"
+										"description": "the new WebSocket URL"
 									}
 								]
 							},
@@ -18543,12 +18544,12 @@
 								"doc_comment": "Add a message handler and return a function to remove it.",
 								"type_signature": "(handler: SocketActionHandler): () => void",
 								"return_type": "() => void",
-								"return_description": "A function that removes the handler when called",
+								"return_description": "a function that removes the handler when called",
 								"parameters": [
 									{
 										"name": "handler",
 										"type": "SocketActionHandler",
-										"description": "The message handler to add"
+										"description": "the message handler to add"
 									}
 								]
 							},
@@ -18558,12 +18559,12 @@
 								"doc_comment": "Add an error handler and return a function to remove it.",
 								"type_signature": "(handler: SocketErrorHandler): () => void",
 								"return_type": "() => void",
-								"return_description": "A function that removes the handler when called",
+								"return_description": "a function that removes the handler when called",
 								"parameters": [
 									{
 										"name": "handler",
 										"type": "SocketErrorHandler",
-										"description": "The error handler to add"
+										"description": "the error handler to add"
 									}
 								]
 							}
@@ -18697,18 +18698,18 @@
 									{
 										"name": "items_getter",
 										"type": "Thunk<T[]>",
-										"description": "Function that returns the current items array"
+										"description": "function that returns the current items array"
 									},
 									{
 										"name": "sorters_getter",
 										"type": "Thunk<Sorter<T>[]>",
-										"description": "Function that returns the current sorters"
+										"description": "function that returns the current sorters"
 									},
 									{
 										"name": "key_getter_default",
 										"type": "Thunk<string | undefined> | undefined",
 										"optional": true,
-										"description": "Optional function that returns the current default sort key"
+										"description": "optional function that returns the current default sort key"
 									}
 								]
 							},
@@ -19104,7 +19105,7 @@
 					}
 				],
 				"dependencies": ["cell.svelte.ts", "cell_types.ts"],
-				"dependents": ["cell_classes.ts"]
+				"dependents": ["TerminalRunner.svelte", "cell_classes.ts"]
 			},
 			{
 				"path": "terminal.svelte.ts",
@@ -19212,6 +19213,32 @@
 				"dependents": ["TerminalRunner.svelte"]
 			},
 			{
+				"path": "TerminalContextmenu.svelte",
+				"declarations": [
+					{
+						"name": "TerminalContextmenu",
+						"kind": "component",
+						"props": [
+							{
+								"name": "get_terminal_text",
+								"type": "Thunk<string> | null"
+							},
+							{
+								"name": "display_command",
+								"type": "string"
+							},
+							{
+								"name": "children",
+								"type": "Snippet"
+							}
+						],
+						"source_line": 1
+					}
+				],
+				"dependencies": ["ContextmenuEntryCopyToClipboard.svelte"],
+				"dependents": ["TerminalRunItem.svelte"]
+			},
+			{
 				"path": "TerminalPresetBar.svelte",
 				"declarations": [
 					{
@@ -19225,6 +19252,16 @@
 							{
 								"name": "onrun",
 								"type": "(preset: TerminalPreset) => void"
+							},
+							{
+								"name": "oncreate",
+								"type": "(name: string, command: string, args: Array<string>) => void",
+								"optional": true
+							},
+							{
+								"name": "ondelete",
+								"type": "(preset: TerminalPreset) => void",
+								"optional": true
 							}
 						],
 						"source_line": 1
@@ -19255,12 +19292,17 @@
 							{
 								"name": "onclose",
 								"type": "(exit_code: number | null) => void"
+							},
+							{
+								"name": "onrestart",
+								"type": "() => void",
+								"optional": true
 							}
 						],
 						"source_line": 1
 					}
 				],
-				"dependencies": ["TerminalView.svelte"],
+				"dependencies": ["TerminalContextmenu.svelte", "TerminalView.svelte", "glyphs.ts"],
 				"dependents": ["TerminalRunner.svelte"]
 			},
 			{
@@ -19277,8 +19319,8 @@
 					"TerminalPresetBar.svelte",
 					"TerminalRunItem.svelte",
 					"app.svelte.ts",
-					"glyphs.ts",
-					"scrollable.svelte.ts"
+					"scrollable.svelte.ts",
+					"terminal_preset.svelte.ts"
 				]
 			},
 			{
@@ -19295,6 +19337,11 @@
 							{
 								"name": "onclose",
 								"type": "(exit_code: number | null) => void",
+								"optional": true
+							},
+							{
+								"name": "get_text",
+								"type": "(fn: () => string) => void",
 								"optional": true
 							}
 						],
@@ -20294,7 +20341,7 @@
 										"name": "transport_name",
 										"type": "string | undefined",
 										"optional": true,
-										"description": "Optional transport to use instead of the current"
+										"description": "optional transport to use instead of the current"
 									}
 								],
 								"throws": [
@@ -21089,16 +21136,16 @@
 					{
 						"name": "get_innermost_type",
 						"kind": "function",
-						"doc_comment": "Gets the innermost type of a zod schema by unwrapping wrappers like transforms, ZodOptional, ZodDefault, etc.",
+						"doc_comment": "Gets the innermost type of a Zod schema by unwrapping wrappers like transforms, `ZodOptional`, `ZodDefault`, etc.",
 						"source_line": 60,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
 						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-						"return_description": "The innermost schema without wrappers",
+						"return_description": "the innermost schema without wrappers",
 						"parameters": [
 							{
 								"name": "schema",
 								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-								"description": "The schema to unwrap"
+								"description": "the schema to unwrap"
 							}
 						]
 					},
@@ -21132,42 +21179,42 @@
 					{
 						"name": "get_field_schema",
 						"kind": "function",
-						"doc_comment": "Get the Zod schema for a specific field in an object schema.",
+						"doc_comment": "Gets the Zod schema for a specific field in an object schema.",
 						"source_line": 110,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>, key: string): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
 						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-						"return_description": "The field's schema, or throws if not found",
+						"return_description": "the field's schema, or throws if not found",
 						"parameters": [
 							{
 								"name": "schema",
 								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-								"description": "The object schema"
+								"description": "the object schema"
 							},
 							{
 								"name": "key",
 								"type": "string",
-								"description": "The property name"
+								"description": "the property name"
 							}
 						]
 					},
 					{
 						"name": "maybe_get_field_schema",
 						"kind": "function",
-						"doc_comment": "Get the Zod schema for a specific field in an object schema, returning undefined if not found.",
+						"doc_comment": "Gets the Zod schema for a specific field in an object schema, returning undefined if not found.",
 						"source_line": 125,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>, key: string): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
 						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
-						"return_description": "The field's schema, or undefined if not found",
+						"return_description": "the field's schema, or undefined if not found",
 						"parameters": [
 							{
 								"name": "schema",
 								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-								"description": "The object schema"
+								"description": "the object schema"
 							},
 							{
 								"name": "key",
 								"type": "string",
-								"description": "The property name"
+								"description": "the property name"
 							}
 						]
 					},
@@ -21293,12 +21340,12 @@
 						"source_line": 47,
 						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\">): string | null",
 						"return_type": "string | null",
-						"return_description": "Path to config directory, or null if $HOME is not set.",
+						"return_description": "path to config directory, or null if $HOME is not set",
 						"parameters": [
 							{
 								"name": "runtime",
 								"type": "Pick<EnvDeps, \"env_get\">",
-								"description": "Runtime with env_get capability."
+								"description": "runtime with env_get capability"
 							}
 						]
 					},
@@ -21309,12 +21356,12 @@
 						"source_line": 56,
 						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\">): string | null",
 						"return_type": "string | null",
-						"return_description": "Path to config.json, or null if $HOME is not set.",
+						"return_description": "path to config.json, or null if $HOME is not set",
 						"parameters": [
 							{
 								"name": "runtime",
 								"type": "Pick<EnvDeps, \"env_get\">",
-								"description": "Runtime with env_get capability."
+								"description": "runtime with env_get capability"
 							}
 						]
 					},
@@ -21325,12 +21372,12 @@
 						"source_line": 65,
 						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\"> & FsReadDeps): Promise<{ zzz_config_port: number; } | null>",
 						"return_type": "Promise<{ zzz_config_port: number; } | null>",
-						"return_description": "Parsed config, or null if file doesn't exist or is invalid.",
+						"return_description": "parsed config, or null if file doesn't exist or is invalid",
 						"parameters": [
 							{
 								"name": "runtime",
 								"type": "Pick<EnvDeps, \"env_get\"> & FsReadDeps",
-								"description": "Runtime with file read capability."
+								"description": "runtime with file read capability"
 							}
 						]
 					},
@@ -21345,12 +21392,12 @@
 							{
 								"name": "runtime",
 								"type": "Pick<EnvDeps, \"env_get\"> & FsWriteDeps",
-								"description": "Runtime with file write capability."
+								"description": "runtime with file write capability"
 							},
 							{
 								"name": "config",
 								"type": "{ zzz_config_port: number; }",
-								"description": "Configuration to save."
+								"description": "configuration to save"
 							}
 						]
 					}
@@ -21397,12 +21444,12 @@
 						"source_line": 35,
 						"type_signature": "(args: string[]): ZzzParsedArgs",
 						"return_type": "ZzzParsedArgs",
-						"return_description": "Parsed argument structure.",
+						"return_description": "parsed argument structure",
 						"parameters": [
 							{
 								"name": "args",
 								"type": "string[]",
-								"description": "Raw CLI arguments from Deno.args."
+								"description": "raw CLI arguments from Deno.args"
 							}
 						]
 					},
@@ -21468,17 +21515,17 @@
 							{
 								"name": "remaining",
 								"type": "ParsedArgs",
-								"description": "Remaining args after global flag extraction."
+								"description": "remaining args after global flag extraction"
 							},
 							{
 								"name": "schema",
 								"type": "ZodType<T, unknown, $ZodTypeInternals<T, unknown>>",
-								"description": "Zod schema for the command."
+								"description": "Zod schema for the command"
 							},
 							{
 								"name": "handler",
 								"type": "(args: T) => Promise<void>",
-								"description": "Command handler to call with parsed args."
+								"description": "command handler to call with parsed args"
 							}
 						]
 					},
@@ -21513,22 +21560,22 @@
 						"source_line": 85,
 						"type_signature": "<TContext>(routes: Record<string, SubcommandRoute<TContext>>, default_handler: ((ctx: TContext, flags: { help: boolean; version: boolean; }) => Promise<void>) | undefined, error_message: string): (remaining: ParsedArgs, ctx: TContext, flags: { ...; }) => Promise<...>",
 						"return_type": "(remaining: ParsedArgs, ctx: TContext, flags: { help: boolean; version: boolean; }) => Promise<void>",
-						"return_description": "Router function.",
+						"return_description": "router function",
 						"parameters": [
 							{
 								"name": "routes",
 								"type": "Record<string, SubcommandRoute<TContext>>",
-								"description": "Map of subcommand names to route definitions."
+								"description": "map of subcommand names to route definitions"
 							},
 							{
 								"name": "default_handler",
 								"type": "((ctx: TContext, flags: { help: boolean; version: boolean; }) => Promise<void>) | undefined",
-								"description": "Optional handler for when no subcommand is provided."
+								"description": "optional handler for when no subcommand is provided"
 							},
 							{
 								"name": "error_message",
 								"type": "string",
-								"description": "Error message for unknown subcommands."
+								"description": "error message for unknown subcommands"
 							}
 						]
 					}
