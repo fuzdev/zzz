@@ -50,7 +50,7 @@
 			"@changesets/changelog-git": "^0.2.1",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.57.0",
-			"@fuzdev/fuz_ui": "^0.190.0",
+			"@fuzdev/fuz_ui": "^0.191.1",
 			"@fuzdev/fuz_util": "^0.55.0",
 			"@jridgewell/trace-mapping": "^0.3.31",
 			"@ryanatkn/eslint-config": "^0.9.0",
@@ -79,7 +79,7 @@
 		},
 		"dependencies": {
 			"@anthropic-ai/sdk": "^0.71.2",
-			"@fuzdev/gro": "^0.197.0",
+			"@fuzdev/gro": "^0.197.1",
 			"@google/generative-ai": "^0.24.1",
 			"@hono/node-server": "^1.19.6",
 			"@hono/node-ws": "^1.2.0",
@@ -2331,7 +2331,7 @@
 					{
 						"name": "app_context",
 						"kind": "variable",
-						"doc_comment": "This is an example of a user-typed alias of `frontend_context`.\nI like this pattern in my apps but there are other patterns too!",
+						"doc_comment": "This is an example of a user-typed alias of `frontend_context`.\nI like this pattern in my apps but there are other patterns too.",
 						"source_line": 17,
 						"type_signature": "{ get: (error_message?: string | undefined) => App; get_maybe: () => App | undefined; set: (value: App) => App; }"
 					},
@@ -2348,7 +2348,7 @@
 					{
 						"name": "App",
 						"kind": "class",
-						"doc_comment": "The `App` is the user's implementation of the Zzz client app.\nIt extends Zzz and should be able to customize as much as possible,\nincluding both behaviors and types. (both a work in progress)",
+						"doc_comment": "The `App` is the user's implementation of the Zzz client app.\nIt extends `Frontend` and should be able to customize as much as possible,\nincluding both behaviors and types. (both a work in progress)",
 						"source_line": 26,
 						"extends": [
 							"Frontend"
@@ -2442,7 +2442,7 @@
 								"name": "error_message",
 								"kind": "variable",
 								"type_signature": "string | null",
-								"doc_comment": "Error message if any"
+								"doc_comment": "Error message if any."
 							},
 							{
 								"name": "updated",
@@ -3176,7 +3176,7 @@
 					{
 						"name": "HANDLED",
 						"kind": "variable",
-						"doc_comment": "Sentinel value to indicate a parser has completely handled a property",
+						"doc_comment": "Sentinel value to indicate a parser has completely handled a property.",
 						"source_line": 5,
 						"type_signature": "unique symbol"
 					},
@@ -3247,7 +3247,7 @@
 					{
 						"name": "CellValueDecoder",
 						"kind": "type",
-						"doc_comment": "Type helper for decoders that includes base schema properties.\nUse this instead of ValueParser when creating decoders for cells\nto properly type the base properties.",
+						"doc_comment": "Type helper for decoders that includes base schema properties.\nUse this instead of `ValueParser` when creating decoders for cells\nto properly type the base properties.",
 						"source_line": 35,
 						"type_signature": "CellValueDecoder<TSchema, TKey>",
 						"generic_params": [
@@ -3348,7 +3348,7 @@
 					{
 						"name": "CellRegistry",
 						"kind": "class",
-						"doc_comment": "Registry for managing cell classes and their instances.\nThe goal is to allow dynamic instantiation of all cells from serializable JSON.\nThis class does not currently justify its weight/complexity and may be removed in the future,\nbut I want to continue exploring the ideas behind it until we get fully snapshottable UI.",
+						"doc_comment": "Registry for managing cell classes and their instances.\nThe goal is to allow dynamic instantiation of all cells from serializable JSON.\n`CellRegistry` does not currently justify its weight/complexity and may be removed in the future,\nbut I want to continue exploring the ideas behind it until we get fully snapshottable UI.",
 						"source_line": 32,
 						"members": [
 							{
@@ -3715,7 +3715,7 @@
 								"modifiers": [
 									"protected"
 								],
-								"doc_comment": "Type-safe decoders for custom field decoding.\nOverride in subclasses to handle special field types.\n\nEach decoder function takes a value of any type and should either:\n1. Return a value (including null) to be assigned to the property\n2. Return undefined to use the default decoding behavior\n3. Return HANDLED to indicate the decoder has fully processed the property\n   (virtual properties MUST return HANDLED if they exist in schema but not in class)",
+								"doc_comment": "Type-safe decoders for custom field decoding.\nOverride in subclasses to handle special field types.\n\nEach decoder function takes a value of any type and should either:\n1. Return a value (including null) to be assigned to the property\n2. Return undefined to use the default decoding behavior\n3. Return `HANDLED` to indicate the decoder has fully processed the property\n   (virtual properties MUST return `HANDLED` if they exist in schema but not in class)",
 								"type_signature": "CellValueDecoder<TSchema>"
 							},
 							{
@@ -3803,7 +3803,7 @@
 								"modifiers": [
 									"protected"
 								],
-								"doc_comment": "Initialize the instance with `options.json` data if provided.\nMust be called before using the instance -\nthe current pattern is calling it at the end of subclass constructors.\n\nWe should investigate deferring to callers so e.g. instantiating from the registry\nwould init automatically, subclasses need no init logic (which can get unwieldy with inheritance),\nand then callers could always do custom init patterns if they wanted.\n\nCan't be called automatically by the Cell's constructor because\nthe subclass' constructor needs to run first to support field initialization.\nA design goal behind the Cell is to support normal TS and Svelte patterns\nwith the most power and least intrusion. (there's a balance to find from Zzz's POV)",
+								"doc_comment": "Initialize the instance with `options.json` data if provided.\nMust be called before using the instance -\nthe current pattern is calling it at the end of subclass constructors.\n\nWe should investigate deferring to callers so e.g. instantiating from the registry\nwould init automatically, subclasses need no init logic (which can get unwieldy with inheritance),\nand then callers could always do custom init patterns if they wanted.\n\nCan't be called automatically by the `Cell`'s constructor because\nthe subclass' constructor needs to run first to support field initialization.\nA design goal behind the `Cell` is to support normal TS and Svelte patterns\nwith the most power and least intrusion. (there's a balance to find from Zzz's POV)",
 								"type_signature": "(): void",
 								"return_type": "void",
 								"parameters": []
@@ -3830,7 +3830,7 @@
 								"modifiers": [
 									"protected"
 								],
-								"doc_comment": "Register this cell in the global cell registry.\nCalled automatically by init().",
+								"doc_comment": "Register this cell in the global cell registry.\nCalled automatically by `init()`.",
 								"type_signature": "(): void",
 								"return_type": "void",
 								"parameters": []
@@ -3841,7 +3841,7 @@
 								"modifiers": [
 									"protected"
 								],
-								"doc_comment": "Unregister this cell from the global cell registry.\nCalled automatically by dispose().",
+								"doc_comment": "Unregister this cell from the global cell registry.\nCalled automatically by `dispose()`.",
 								"type_signature": "(): void",
 								"return_type": "void",
 								"parameters": []
@@ -3891,7 +3891,7 @@
 							{
 								"name": "encode_property",
 								"kind": "function",
-								"doc_comment": "Encode a value during serialization. Can be overridden for custom encoding logic.\nDefaults to Svelte's `$state.snapshot`,\nwhich handles most cases and uses `toJSON` when available,\nso overriding `to_json` is sufficient for most cases before overriding `encode`.",
+								"doc_comment": "Encode a value during serialization. Can be overridden for custom encoding logic.\nDefaults to Svelte's `$state.snapshot`,\nwhich handles most cases and uses `toJSON` when available,\nso overriding `to_json` is sufficient for most cases before overriding `encode_property`.",
 								"type_signature": "(value: unknown, _key: string): unknown",
 								"return_type": "unknown",
 								"parameters": [
@@ -3928,7 +3928,7 @@
 								"modifiers": [
 									"protected"
 								],
-								"doc_comment": "Process a single schema property during JSON deserialization.\nThis method handles the workflow for mapping schema properties to instance properties.\n\nFlow:\n1. If a decoder exists for this property, try to use it\n2. If decoder returns HANDLED, consider the property fully handled (short circuit)\n3. If decoder returns a value other than HANDLED or undefined, use that value\n4. If decoder returns undefined, fall through to standard decoding\n5. For properties not directly represented in the class instance but defined\n   in the schema, the decoder MUST return HANDLED to indicate proper handling",
+								"doc_comment": "Process a single schema property during JSON deserialization.\nThis method handles the workflow for mapping schema properties to instance properties.\n\nFlow:\n1. If a decoder exists for this property, try to use it\n2. If decoder returns `HANDLED`, consider the property fully handled (short circuit)\n3. If decoder returns a value other than `HANDLED` or undefined, use that value\n4. If decoder returns undefined, fall through to standard decoding\n5. For properties not directly represented in the class instance but defined\n   in the schema, the decoder MUST return `HANDLED` to indicate proper handling",
 								"type_signature": "(key: SchemaKeys<TSchema>, value: unknown): void",
 								"return_type": "void",
 								"parameters": [
@@ -5025,7 +5025,7 @@
 						"kind": "class",
 						"doc_comment": "Manages imports for generated code, building them on demand.\nAutomatically optimizes type-only imports to use `import type` syntax.\n\nWhy this matters:\n- `import type` statements are completely removed during compilation\n- Mixed imports like `import { type A, B }` cannot be safely removed\n- This ensures optimal tree-shaking and smaller bundle sizes",
 						"examples": [
-							"```typescript\nconst imports = new ImportBuilder();\nimports.add_types('./types.js', 'Foo', 'Bar');\nimports.add('./utils.js', 'helper');\nimports.add_type('./utils.js', 'HelperOptions');\nimports.add('./action_specs.js', '* as specs');\n\n// Generates:\n// import type {Foo, Bar} from './types.js';\n// import {helper, type HelperOptions} from './utils.js';\n// import * as specs from './action_specs.js';\n```"
+							"```ts\nconst imports = new ImportBuilder();\nimports.add_types('./types.js', 'Foo', 'Bar');\nimports.add('./utils.js', 'helper');\nimports.add_type('./utils.js', 'HelperOptions');\nimports.add('./action_specs.js', '* as specs');\n\n// Generates:\n// import type {Foo, Bar} from './types.js';\n// import {helper, type HelperOptions} from './utils.js';\n// import * as specs from './action_specs.js';\n```"
 						],
 						"source_line": 43,
 						"members": [
@@ -5109,7 +5109,7 @@
 							{
 								"name": "build",
 								"kind": "function",
-								"doc_comment": "Generate the import statements.\nIf all imports from a module are types, uses `import type` syntax.",
+								"doc_comment": "Generates the import statements.\nIf all imports from a module are types, uses `import type` syntax.",
 								"type_signature": "(): string",
 								"return_type": "string",
 								"parameters": []
@@ -5162,7 +5162,7 @@
 					{
 						"name": "get_handler_return_type",
 						"kind": "function",
-						"doc_comment": "Gets the handler return type for a specific phase and spec.\nAlso adds necessary imports to the ImportBuilder.",
+						"doc_comment": "Gets the handler return type for a specific phase and spec.\nAlso adds necessary imports to the `ImportBuilder`.",
 						"source_line": 278,
 						"type_signature": "(spec: { method: \"completion_create\" | \"completion_progress\" | \"directory_create\" | \"diskfile_delete\" | \"diskfile_update\" | \"filer_change\" | \"ollama_copy\" | \"ollama_create\" | ... 11 more ... | \"toggle_main_menu\"; ... 6 more ...; async: true; } | { ...; } | { ...; }, phase: \"send_request\" | ... 7 more ... | \"execute\", imports: ImportBuilder, path_prefix: string): string",
 						"return_type": "string",
@@ -5188,7 +5188,7 @@
 					{
 						"name": "generate_phase_handlers",
 						"kind": "function",
-						"doc_comment": "Generates the phase handlers for an action spec using the unified ActionEvent type\nwith the new phase/step type parameters.",
+						"doc_comment": "Generates the phase handlers for an action spec using the unified `ActionEvent` type\nwith the new phase/step type parameters.",
 						"source_line": 307,
 						"type_signature": "(spec: { method: \"completion_create\" | \"completion_progress\" | \"directory_create\" | \"diskfile_delete\" | \"diskfile_update\" | \"filer_change\" | \"ollama_copy\" | \"ollama_create\" | ... 11 more ... | \"toggle_main_menu\"; ... 6 more ...; async: true; } | { ...; } | { ...; }, executor: \"frontend\" | \"backend\", imports: ImportBuilder): string",
 						"return_type": "string",
@@ -6482,7 +6482,7 @@
 					{
 						"name": "map_watcher_change_to_diskfile_change",
 						"kind": "function",
-						"doc_comment": "Maps watcher change types to diskfile change types",
+						"doc_comment": "Maps watcher change types to diskfile change types.",
 						"source_line": 25,
 						"type_signature": "(type: WatcherChangeType): \"add\" | \"change\" | \"delete\"",
 						"return_type": "\"add\" | \"change\" | \"delete\"",
@@ -6496,7 +6496,7 @@
 					{
 						"name": "disknode_to_diskfile_json",
 						"kind": "function",
-						"doc_comment": "Helper function to convert a `SerializableDisknode` to the `DiskfileJson` format.",
+						"doc_comment": "Converts a `SerializableDisknode` to the `DiskfileJson` format.",
 						"source_line": 38,
 						"type_signature": "(disknode: { id: string & $brand<\"DiskfilePath\">; source_dir: string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">; contents: string | null; ctime: number | null; mtime: number | null; dependents: [...][]; dependencies: [...][]; }, existing_id?: string & $brand<...>): { ...; }",
 						"return_type": "{ id: string & $brand<\"Uuid\">; created: string & $brand<\"Datetime\">; updated: string & $brand<\"Datetime\">; path: (string & $brand<\"DiskfilePath\">) | null; source_dir: string & ... 1 more ... & $brand<...>; content: string | null; dependents: [...][] | null; dependencies: [...][] | null; }",
@@ -6509,7 +6509,7 @@
 							{
 								"name": "existing_id",
 								"type": "string & $brand<\"Uuid\">",
-								"description": "Optional existing UUID to preserve id stability across updates",
+								"description": "Optional existing `Uuid` to preserve id stability across updates",
 								"default_value": "create_uuid()"
 							}
 						]
@@ -6769,7 +6769,7 @@
 								"modifiers": [
 									"readonly"
 								],
-								"doc_comment": "Derived from parent collection's state",
+								"doc_comment": "Derived from parent collection's state.",
 								"type_signature": "boolean"
 							},
 							{
@@ -6778,7 +6778,7 @@
 								"modifiers": [
 									"readonly"
 								],
-								"doc_comment": "Derived from parent collection's state",
+								"doc_comment": "Derived from parent collection's state.",
 								"type_signature": "boolean"
 							},
 							{
@@ -8164,7 +8164,7 @@
 							{
 								"name": "to_relative_path",
 								"kind": "function",
-								"doc_comment": "The value `undefined` means uninitialized, `null` means loading, `''` means none",
+								"doc_comment": "The value `undefined` means uninitialized, `null` means loading, `''` means none.",
 								"type_signature": "(path: string): string | null | undefined",
 								"return_type": "string | null | undefined",
 								"parameters": [
@@ -8949,7 +8949,7 @@
 					{
 						"name": "Frontend",
 						"kind": "class",
-						"doc_comment": "The base frontend app, typically used by creating your own `App extends Frontend`.\nGettable with `frontend_context.get()` inside a `<FrontendRoot>`.",
+						"doc_comment": "The base frontend app, typically used by creating your own `App extends Frontend`.\nGettable with `frontend_context.get()` inside a `FrontendRoot`.",
 						"source_line": 78,
 						"extends": [
 							"Cell<typeof FrontendJson>"
@@ -10054,7 +10054,7 @@
 					{
 						"name": "estimate_token_count",
 						"kind": "function",
-						"doc_comment": "Quick and dirty token count estimate using `ESTIMATED_CHARS_PER_TOKEN`.\nReal tokenizers are heavy and little benefit for our cases right now,\nespecially because each LLM may tokenize differently!",
+						"doc_comment": "Quick and dirty token count estimate using `ESTIMATED_CHARS_PER_TOKEN`.\nReal tokenizers are heavy and of little benefit for our cases right now,\nespecially because each LLM may tokenize differently.",
 						"source_line": 17,
 						"type_signature": "(text: string): number",
 						"return_type": "number",
@@ -10156,7 +10156,7 @@
 					{
 						"name": "IndexedItem",
 						"kind": "type",
-						"doc_comment": "Interface for objects that can be stored in an indexed collection.",
+						"doc_comment": "Interface for objects that can be stored in an `IndexedCollection`.",
 						"source_line": 16,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; }, $strict>"
 					},
@@ -10220,7 +10220,7 @@
 								"name": "extractor",
 								"kind": "variable",
 								"type_signature": "(item: T) => K",
-								"doc_comment": "Function that extracts the key from an item"
+								"doc_comment": "Function that extracts the key from an item."
 							}
 						]
 					},
@@ -10335,7 +10335,7 @@
 					{
 						"name": "create_derived_index",
 						"kind": "function",
-						"doc_comment": "Create an incremental derived collection index.",
+						"doc_comment": "Creates an incremental derived collection index.",
 						"source_line": 215,
 						"type_signature": "<T extends IndexedItem, TResult extends Array<T> = T[]>(options: DerivedIndexOptions<T, TResult>): IndexDefinition<T, TResult, void>",
 						"return_type": "IndexDefinition<T, TResult, void>",
@@ -10370,19 +10370,19 @@
 								"name": "factory",
 								"kind": "variable",
 								"type_signature": "(collection: IndexedCollection<T>) => F",
-								"doc_comment": "Function that creates a query function from the collection"
+								"doc_comment": "Function that creates a query function from the collection."
 							},
 							{
 								"name": "onadd",
 								"kind": "variable",
 								"type_signature": "(fn: F, item: T, collection: IndexedCollection<T>) => F",
-								"doc_comment": "Optional custom add handler"
+								"doc_comment": "Optional custom add handler."
 							},
 							{
 								"name": "onremove",
 								"kind": "variable",
 								"type_signature": "(fn: F, item: T, collection: IndexedCollection<T>) => F",
-								"doc_comment": "Optional custom remove handler"
+								"doc_comment": "Optional custom remove handler."
 							}
 						]
 					},
@@ -10587,7 +10587,7 @@
 								"modifiers": [
 									"readonly"
 								],
-								"doc_comment": "The main source of turth, the full collection keyed by Uuid.",
+								"doc_comment": "The main source of truth, the full collection keyed by `Uuid`.",
 								"type_signature": "SvelteMap<Uuid, T>"
 							},
 							{
@@ -10711,7 +10711,7 @@
 							{
 								"name": "query",
 								"kind": "function",
-								"doc_comment": "Query an index with parameters.\n\nThis method is type-aware when the index has a `query_schema` that defines `TQuery`.",
+								"doc_comment": "Query an index with parameters.\n\nThis method is type-aware when the index has a `query_schema` that defines TQuery.",
 								"type_signature": "<TResult = any, TQuery = any>(key: TKeySingle | TKeyMulti | TKeyDerived | TKeyDynamic, query: TQuery): TResult",
 								"return_type": "TResult",
 								"parameters": [
@@ -11122,7 +11122,7 @@
 					{
 						"name": "create_jsonrpc_error_message_from_thrown",
 						"kind": "function",
-						"doc_comment": "Creates a JSON-RPC error response from any error.\nHandles JsonrpcError and regular Error objects.",
+						"doc_comment": "Creates a JSON-RPC error response from any error.\nHandles `ThrownJsonrpcError` and regular Error objects.",
 						"source_line": 75,
 						"type_signature": "(id: string | number | null, error: any): { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; }; }",
 						"return_type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }",
@@ -11530,7 +11530,7 @@
 						"type_signature": "ZodUnion<readonly [ZodObject<{ jsonrpc: ZodLiteral<\"2.0\">; id: ZodUnion<readonly [ZodString, ZodNumber]>; method: ZodString; params: ZodOptional<ZodObject<{ _meta: ZodOptional<ZodObject<{ progressToken: ZodOptional<...>; }, $loose>>; }, $loose>>; }, $loose>, ZodObject<...>, ZodObject<...>, ZodObject<...>]>"
 					}
 				],
-				"module_comment": "Following MCP, Zzz supports a subset of JSON-RPC 2.0 as its message format\n(A2A too, but I haven't looked into if they support the full spec).\nIt can be used by multiple transports including http and websocket.\n\nThese are the JSON-RPC types from the MCP draft in May 2025,\nchanged to include a prefix on all identifiers.\nIt's also defined with Zod schemas instead of plain TS like the MCP library.\n\nMCP messages are a subset of JSON-RPC:\n\n- `params` does not support the positional array format,\n\t\tand `result` supports only `object` values, instead of being any JSON value.\n- MCP does not support batching,\n\t\tsee https://github.com/modelcontextprotocol/modelcontextprotocol/pull/416\n\t\tand https://github.com/modelcontextprotocol/modelcontextprotocol/pull/228\n\n@source https://github.com/modelcontextprotocol/typescript-sdk\n@see https://modelcontextprotocol.io/\n@license https://github.com/modelcontextprotocol/typescript-sdk/blob/main/LICENSE\n\nMIT License\n\nCopyright (c) 2024 Anthropic, PBC\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
+				"module_comment": "Following MCP, Zzz supports a subset of JSON-RPC 2.0 as its message format\n(A2A too, but I haven't looked into if they support the full spec).\nIt can be used by multiple transports including HTTP and WebSocket.\n\nThese are the JSON-RPC types from the MCP draft in May 2025,\nchanged to include a prefix on all identifiers.\nIt's also defined with Zod schemas instead of plain TS like the MCP library.\n\nMCP messages are a subset of JSON-RPC:\n\n- `params` does not support the positional array format,\n\t\tand `result` supports only `object` values, instead of being any JSON value.\n- MCP does not support batching,\n\t\tsee https://github.com/modelcontextprotocol/modelcontextprotocol/pull/416\n\t\tand https://github.com/modelcontextprotocol/modelcontextprotocol/pull/228\n\n@source https://github.com/modelcontextprotocol/typescript-sdk\n@see https://modelcontextprotocol.io/\n@license https://github.com/modelcontextprotocol/typescript-sdk/blob/main/LICENSE\n\nMIT License\n\nCopyright (c) 2024 Anthropic, PBC\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
 				"dependents": [
 					"action_event_data.ts",
 					"action_peer.ts",
@@ -12689,7 +12689,7 @@
 					{
 						"name": "Ollama",
 						"kind": "class",
-						"doc_comment": "Ollama client state management with simplified API.\nModel data is stored in app.models, not here.\n\n## Status Display Pattern\n\nFor unified status display (available/unavailable/checking), components should use:\n- `app.capabilities.ollama.status` - unified status (prioritizes provider status)\n- `app.capabilities.ollama.error_message` - unified error message\n\nThis ensures consistency with other providers (Claude, ChatGPT, Gemini) and maintains\na single source of truth. The capabilities layer prioritizes backend provider status\n(authoritative - checks if Ollama is installed) over action-level status (checks if API responds).\n\nThe lower-level properties here (`list_status`, `list_error`, `provider_error`, etc.) are\noperational state that `capabilities.ollama` derives from. Use these for:\n- Operational state (models, pulling, creating, etc.)\n- Action-specific error handling\n- Internal state management",
+						"doc_comment": "Ollama client state management with simplified API.\nModel data is stored in `app.models`, not here.\n\n## Status Display Pattern\n\nFor unified status display (available/unavailable/checking), components should use:\n- `app.capabilities.ollama.status` - unified status (prioritizes provider status)\n- `app.capabilities.ollama.error_message` - unified error message\n\nThis ensures consistency with other providers (Claude, ChatGPT, Gemini) and maintains\na single source of truth. The `Capabilities` layer prioritizes backend provider status\n(authoritative - checks if Ollama is installed) over action-level status (checks if API responds).\n\nThe lower-level properties here (`list_status`, `list_error`, `provider_error`, etc.) are\noperational state that `capabilities.ollama` derives from. Use these for:\n- Operational state (models, pulling, creating, etc.)\n- Action-specific error handling\n- Internal state management",
 						"source_line": 66,
 						"extends": [
 							"Cell<typeof OllamaJson>"
@@ -13802,7 +13802,7 @@
 								"modifiers": [
 									"readonly"
 								],
-								"doc_comment": "`content` with a max length"
+								"doc_comment": "`content` with a max length."
 							},
 							{
 								"name": "name",
@@ -16980,7 +16980,7 @@
 					{
 						"name": "RequestTracker",
 						"kind": "class",
-						"doc_comment": "Tracks RPC requests and their responses to manage promises and timeouts.\nUsed by transports to handle the request-response lifecycle.",
+						"doc_comment": "Tracks JSON-RPC requests and their responses to manage promises and timeouts.\nUsed by transports to handle the request-response lifecycle.",
 						"source_line": 47,
 						"members": [
 							{
@@ -17048,7 +17048,7 @@
 							{
 								"name": "reject_request",
 								"kind": "function",
-								"doc_comment": "Reject a pending request with the given error.",
+								"doc_comment": "Rejects a pending request with the given error.",
 								"type_signature": "(id: string | number, error_message: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }): void",
 								"return_type": "void",
 								"parameters": [
@@ -17060,14 +17060,14 @@
 									{
 										"name": "error_message",
 										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }",
-										"description": "The complete JsonrpcErrorMessage object"
+										"description": "The complete `JsonrpcErrorMessage` object"
 									}
 								]
 							},
 							{
 								"name": "handle_message",
 								"kind": "function",
-								"doc_comment": "Handle an incoming JSON-RPC message. Resolves or rejects the associated request.\nIgnores notifications and unknown/invalid messages.",
+								"doc_comment": "Handles an incoming JSON-RPC message. Resolves or rejects the associated request.\nIgnores notifications and unknown/invalid messages.",
 								"type_signature": "(message: any): void",
 								"return_type": "void",
 								"parameters": [
@@ -17124,7 +17124,7 @@
 					{
 						"name": "to_completion_response_text",
 						"kind": "function",
-						"doc_comment": "Extracts the text content from a completion response",
+						"doc_comment": "Extracts the text content from a completion response.",
 						"source_line": 12,
 						"type_signature": "(completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { type: \"claude\"; value: any; } | { ...; } | { ...; }; } | null | undefined): string | null",
 						"return_type": "string | null",
@@ -17138,7 +17138,7 @@
 					{
 						"name": "to_completion_result",
 						"kind": "function",
-						"doc_comment": "Creates a standardized completion response message from provider-specific responses.",
+						"doc_comment": "Creates a standardized `CompletionResponse` message from provider-specific responses.",
 						"source_line": 38,
 						"type_signature": "(provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\", model: string, api_response: unknown, progress_token?: (string & $brand<\"Uuid\">) | undefined): { completion_response: { ...; }; _meta?: { ...; } | undefined; }",
 						"return_type": "{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { ...; } | { ...; } | { ...; }; }; _meta?: { ...; } | undefined; }",
@@ -18245,7 +18245,7 @@
 								"modifiers": [
 									"protected"
 								],
-								"doc_comment": "Sends streaming progress notification to frontend",
+								"doc_comment": "Sends streaming progress notification to frontend.",
 								"type_signature": "(progress_token: string & $brand<\"Uuid\">, chunk: { [x: string]: unknown; model?: string | undefined; created_at?: string | undefined; done?: boolean | undefined; message?: { [x: string]: unknown; role: string; content: string; } | undefined; } | undefined): Promise<...>",
 								"return_type": "Promise<void>",
 								"parameters": [
@@ -18265,7 +18265,7 @@
 								"modifiers": [
 									"protected"
 								],
-								"doc_comment": "Logs streaming chunk information",
+								"doc_comment": "Logs streaming chunk information.",
 								"type_signature": "(chunk: unknown): void",
 								"return_type": "void",
 								"parameters": [
@@ -18281,7 +18281,7 @@
 								"modifiers": [
 									"protected"
 								],
-								"doc_comment": "Logs streaming completion information",
+								"doc_comment": "Logs streaming completion information.",
 								"type_signature": "(accumulated_length: number): void",
 								"return_type": "void",
 								"parameters": [
@@ -18297,7 +18297,7 @@
 								"modifiers": [
 									"protected"
 								],
-								"doc_comment": "Logs non-streaming response information",
+								"doc_comment": "Logs non-streaming response information.",
 								"type_signature": "(response: unknown): void",
 								"return_type": "void",
 								"parameters": [
@@ -18313,7 +18313,7 @@
 								"modifiers": [
 									"protected"
 								],
-								"doc_comment": "Logs final API response information",
+								"doc_comment": "Logs final API response information.",
 								"type_signature": "(api_response: unknown): void",
 								"return_type": "void",
 								"parameters": [
@@ -18689,7 +18689,7 @@
 								"modifiers": [
 									"readonly"
 								],
-								"doc_comment": "Scoped filesystem interface that restricts operations to allowed directories.",
+								"doc_comment": "`ScopedFs` filesystem interface that restricts operations to allowed directories.",
 								"type_signature": "ScopedFs"
 							},
 							{
@@ -19014,7 +19014,7 @@
 					{
 						"name": "register_websocket_actions",
 						"kind": "function",
-						"doc_comment": "Registers websocket endpoints for all service actions in the schema registry.",
+						"doc_comment": "Registers WebSocket endpoints for all service actions in the schema registry.",
 						"source_line": 28,
 						"type_signature": "({ path, app, backend, upgradeWebSocket, transport, }: RegisterWebsocketActionsOptions): void",
 						"return_type": "void",
@@ -19049,7 +19049,7 @@
 					{
 						"name": "ScopedFs",
 						"kind": "class",
-						"doc_comment": "Provides a secure wrapper around filesystem operations to prevent path traversal attacks and\nunauthorized file access.\n\nSecurity features:\n- Restricts operations to specified allowed paths\n- Prevents path traversal attacks by normalizing all paths\n- Blocks access to symlinks to avoid arbitrary file access\n- Requires absolute paths to avoid relative path confusion\n- Validates the entire path hierarchy for each operation\n\nThis class should be used whenever performing filesystem operations on\nuser-provided or untrusted input paths to ensure proper access boundaries.",
+						"doc_comment": "Provides a secure wrapper around filesystem operations to prevent path traversal attacks and\nunauthorized file access.\n\nSecurity features:\n- Restricts operations to specified allowed paths\n- Prevents path traversal attacks by normalizing all paths\n- Blocks access to symlinks to avoid arbitrary file access\n- Requires absolute paths to avoid relative path confusion\n- Validates the entire path hierarchy for each operation\n\n`ScopedFs` should be used whenever performing filesystem operations on\nuser-provided or untrusted input paths to ensure proper access boundaries.",
 						"source_line": 35,
 						"members": [
 							{
@@ -19424,7 +19424,7 @@
 							{
 								"name": "allowed_patterns",
 								"type": "RegExp[]",
-								"description": "Array of compiled regex patterns from parse_allowed_origins"
+								"description": "Array of compiled regex patterns from `parse_allowed_origins`"
 							}
 						]
 					}
@@ -20115,7 +20115,7 @@
 							{
 								"name": "active_key",
 								"kind": "variable",
-								"doc_comment": "Current active sort key",
+								"doc_comment": "Current active sort key.",
 								"type_signature": "string"
 							},
 							{
@@ -20148,7 +20148,7 @@
 							{
 								"name": "constructor",
 								"kind": "constructor",
-								"doc_comment": "Create a new Sortable instance with reactive sources.",
+								"doc_comment": "Creates a new `Sortable` instance with reactive sources.",
 								"type_signature": "<T>(items_getter: Thunk<T[]>, sorters_getter: Thunk<Sorter<T>[]>, key_getter_default?: Thunk<string | undefined> | undefined): Sortable<T>",
 								"parameters": [
 									{
@@ -20182,7 +20182,7 @@
 					{
 						"name": "sort_by_text",
 						"kind": "function",
-						"doc_comment": "Create a text sorter with optional direction.\nFalls back to cell's cid for equal values.",
+						"doc_comment": "Creates a text sorter with optional direction.\nFalls back to cell's `cid` for equal values.",
 						"source_line": 121,
 						"type_signature": "<T extends Cell<any>>(key: string, label: string, field: keyof T, direction?: \"asc\" | \"desc\"): Sorter<T>",
 						"return_type": "Sorter<T>",
@@ -20209,7 +20209,7 @@
 					{
 						"name": "sort_by_numeric",
 						"kind": "function",
-						"doc_comment": "Create a numeric sorter with optional direction.\nFalls back to cell's cid for equal values.",
+						"doc_comment": "Creates a numeric sorter with optional direction.\nFalls back to cell's `cid` for equal values.",
 						"source_line": 144,
 						"type_signature": "<T extends Cell<any>>(key: string, label: string, field: keyof T, direction?: \"asc\" | \"desc\"): Sorter<T>",
 						"return_type": "Sorter<T>",
@@ -21205,7 +21205,7 @@
 							{
 								"name": "destroy",
 								"kind": "function",
-								"doc_comment": "Override Cell's destroy method to ensure timer cleanup.",
+								"doc_comment": "Override `Cell`'s destroy method to ensure timer cleanup.",
 								"type_signature": "(): void",
 								"return_type": "void",
 								"parameters": []
@@ -22210,7 +22210,7 @@
 					{
 						"name": "to_subschema",
 						"kind": "function",
-						"doc_comment": "Helper to extract subschema from a Zod def, following Zod 4 patterns.",
+						"doc_comment": "Extracts subschema from a Zod def, following Zod 4 patterns.",
 						"source_line": 56,
 						"type_signature": "(def: $ZodTypeDef): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
 						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
@@ -22224,7 +22224,7 @@
 					{
 						"name": "get_innermost_type",
 						"kind": "function",
-						"doc_comment": "Gets the innermost type of a zod schema by unwrapping wrappers like transforms, ZodOptional, ZodDefault, etc.",
+						"doc_comment": "Gets the innermost type of a Zod schema by unwrapping wrappers like transforms, `ZodOptional`, `ZodDefault`, etc.",
 						"source_line": 72,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
 						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
@@ -22267,7 +22267,7 @@
 					{
 						"name": "get_field_schema",
 						"kind": "function",
-						"doc_comment": "Get the Zod schema for a specific field in an object schema.",
+						"doc_comment": "Gets the Zod schema for a specific field in an object schema.",
 						"source_line": 122,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>, key: string): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
 						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
@@ -22288,7 +22288,7 @@
 					{
 						"name": "maybe_get_field_schema",
 						"kind": "function",
-						"doc_comment": "Get the Zod schema for a specific field in an object schema, returning undefined if not found.",
+						"doc_comment": "Gets the Zod schema for a specific field in an object schema, returning undefined if not found.",
 						"source_line": 137,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>, key: string): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
 						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
