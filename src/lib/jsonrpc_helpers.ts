@@ -70,7 +70,7 @@ export const create_jsonrpc_error_message = (
 
 /**
  * Creates a JSON-RPC error response from any error.
- * Handles JsonrpcError and regular Error objects.
+ * Handles `ThrownJsonrpcError` and regular Error objects.
  */
 export const create_jsonrpc_error_message_from_thrown = (
 	id: JsonrpcRequestId | null,

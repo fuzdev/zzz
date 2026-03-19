@@ -81,7 +81,7 @@ export abstract class Part<T extends z.ZodType = typeof PartJsonBase> extends Ce
 	readonly token_count: number | null | undefined = $derived.by(() =>
 		this.content == null ? this.content : estimate_token_count(this.content),
 	);
-	/** `content` with a max length */
+	/** `content` with a max length. */
 	readonly content_preview = $derived.by(() =>
 		this.content && this.content.length > CONTENT_PREVIEW_LENGTH
 			? this.content.substring(0, CONTENT_PREVIEW_LENGTH)
@@ -190,7 +190,7 @@ export const TextPartSchema = z.instanceof(TextPart);
 export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 	override readonly type = 'diskfile';
 
-	/** Path property with private backing field */
+	/** Path property with private backing field. */
 	#path: DiskfilePath | null = $state()!;
 
 	/**

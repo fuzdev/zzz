@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {get_innermost_type} from './zod_helpers.js';
 
-/** Sentinel value to indicate a parser has completely handled a property */
+/** Sentinel value to indicate a parser has completely handled a property. */
 export const HANDLED = Symbol('HANDLED_BY_PARSER');
 
 // Constants for date formatting
@@ -29,7 +29,7 @@ export type ValueParser<
 
 /**
  * Type helper for decoders that includes base schema properties.
- * Use this instead of ValueParser when creating decoders for cells
+ * Use this instead of `ValueParser` when creating decoders for cells
  * to properly type the base properties.
  */
 export type CellValueDecoder<

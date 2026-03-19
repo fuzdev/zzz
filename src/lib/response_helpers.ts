@@ -7,7 +7,7 @@ import type {ModelName} from './model.svelte.js';
 
 // TODO hacky, shouldn't exist
 /**
- * Extracts the text content from a completion response
+ * Extracts the text content from a completion response.
  */
 export const to_completion_response_text = (
 	completion_response: ActionOutputs['completion_create']['completion_response'] | null | undefined,
@@ -33,7 +33,7 @@ export const to_completion_response_text = (
 
 // TODO hacky, probably refactor
 /**
- * Creates a standardized completion response message from provider-specific responses.
+ * Creates a standardized `CompletionResponse` message from provider-specific responses.
  */
 export const to_completion_result = (
 	provider_name: ProviderName,

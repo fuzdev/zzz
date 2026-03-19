@@ -50,7 +50,7 @@ export const should_allow_origin = (origin: string, allowed_patterns: Array<RegE
  * - Preventing embedding of your service in unexpected sites
  * - Basic source verification (but NOT security-critical CSRF protection)
  *
- * @param allowed_patterns - Array of compiled regex patterns from parse_allowed_origins
+ * @param allowed_patterns - Array of compiled regex patterns from `parse_allowed_origins`
  */
 export const verify_request_source =
 	(allowed_patterns: Array<RegExp>): Handler =>

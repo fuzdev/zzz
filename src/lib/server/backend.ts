@@ -107,7 +107,7 @@ export class Backend implements ActionEventEnvironment {
 	readonly api: BackendActionsApi = create_backend_actions_api(this);
 
 	/**
-	 * Scoped filesystem interface that restricts operations to allowed directories.
+	 * `ScopedFs` filesystem interface that restricts operations to allowed directories.
 	 */
 	readonly scoped_fs: ScopedFs;
 

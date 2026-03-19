@@ -95,7 +95,7 @@ export abstract class BackendProvider<TClient = unknown> {
 		}
 	}
 
-	/** Sends streaming progress notification to frontend */
+	/** Sends streaming progress notification to frontend. */
 	protected async send_streaming_progress(
 		progress_token: Uuid,
 		chunk: ActionInputs['completion_progress']['chunk'],
@@ -106,12 +106,12 @@ export abstract class BackendProvider<TClient = unknown> {
 		});
 	}
 
-	/** Logs streaming chunk information */
+	/** Logs streaming chunk information. */
 	protected log_streaming_chunk(chunk: unknown): void {
 		console.log(`[create_completion] ${this.name} streaming chunk:`, chunk);
 	}
 
-	/** Logs streaming completion information */
+	/** Logs streaming completion information. */
 	protected log_streaming_completion(accumulated_length: number): void {
 		console.log(
 			`[create_completion] ${this.name} streaming completed, final content length:`,
@@ -119,12 +119,12 @@ export abstract class BackendProvider<TClient = unknown> {
 		);
 	}
 
-	/** Logs non-streaming response information */
+	/** Logs non-streaming response information. */
 	protected log_non_streaming_response(response: unknown): void {
 		console.log(`[create_completion] ${this.name} non-streaming response:`, response);
 	}
 
-	/** Logs final API response information */
+	/** Logs final API response information. */
 	protected log_api_response(api_response: unknown): void {
 		console.log(`${this.name} api_response`, api_response);
 	}

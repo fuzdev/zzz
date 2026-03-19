@@ -45,7 +45,7 @@ export type OllamaOptions = CellOptions<typeof OllamaJson>;
 
 /**
  * Ollama client state management with simplified API.
- * Model data is stored in app.models, not here.
+ * Model data is stored in `app.models`, not here.
  *
  * ## Status Display Pattern
  *
@@ -54,7 +54,7 @@ export type OllamaOptions = CellOptions<typeof OllamaJson>;
  * - `app.capabilities.ollama.error_message` - unified error message
  *
  * This ensures consistency with other providers (Claude, ChatGPT, Gemini) and maintains
- * a single source of truth. The capabilities layer prioritizes backend provider status
+ * a single source of truth. The `Capabilities` layer prioritizes backend provider status
  * (authoritative - checks if Ollama is installed) over action-level status (checks if API responds).
  *
  * The lower-level properties here (`list_status`, `list_error`, `provider_error`, etc.) are

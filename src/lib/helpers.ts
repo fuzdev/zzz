@@ -11,8 +11,8 @@ export const ESTIMATED_CHARS_PER_TOKEN = 3;
 
 /**
  * Quick and dirty token count estimate using `ESTIMATED_CHARS_PER_TOKEN`.
- * Real tokenizers are heavy and little benefit for our cases right now,
- * especially because each LLM may tokenize differently!
+ * Real tokenizers are heavy and of little benefit for our cases right now,
+ * especially because each LLM may tokenize differently.
  */
 export const estimate_token_count = (text: string): number =>
 	Math.ceil(text.length / ESTIMATED_CHARS_PER_TOKEN);

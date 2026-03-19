@@ -41,7 +41,7 @@ export class RequestTrackerItem {
 }
 
 /**
- * Tracks RPC requests and their responses to manage promises and timeouts.
+ * Tracks JSON-RPC requests and their responses to manage promises and timeouts.
  * Used by transports to handle the request-response lifecycle.
  */
 export class RequestTracker {
@@ -110,9 +110,9 @@ export class RequestTracker {
 	}
 
 	/**
-	 * Reject a pending request with the given error.
+	 * Rejects a pending request with the given error.
 	 * @param id The request id
-	 * @param error_message The complete JsonrpcErrorMessage object
+	 * @param error_message The complete `JsonrpcErrorMessage` object
 	 */
 	reject_request(id: JsonrpcRequestId, error_message: JsonrpcErrorMessage): void {
 		const request = this.pending_requests.get(id);
@@ -138,7 +138,7 @@ export class RequestTracker {
 	}
 
 	/**
-	 * Handle an incoming JSON-RPC message. Resolves or rejects the associated request.
+	 * Handles an incoming JSON-RPC message. Resolves or rejects the associated request.
 	 * Ignores notifications and unknown/invalid messages.
 	 */
 	handle_message(message: any): void {

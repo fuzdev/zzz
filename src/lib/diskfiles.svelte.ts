@@ -158,7 +158,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	// TODO make this a derived property?
-	/** The value `undefined` means uninitialized, `null` means loading, `''` means none */
+	/** The value `undefined` means uninitialized, `null` means loading, `''` means none. */
 	to_relative_path(path: string): string | null | undefined {
 		const {zzz_dir} = this.app;
 		return zzz_dir && to_relative_path(path, zzz_dir);

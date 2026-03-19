@@ -1,7 +1,7 @@
 /**
  * Server info file utilities (server.json)
  *
- * server.json lives at `{zzz_dir}/{ZZZ_DIR_RUN}/server.json` and tracks the running server.
+ * `server.json` lives at `{zzz_dir}/{ZZZ_DIR_RUN}/server.json` and tracks the running server.
  * Written on startup, removed on clean shutdown.
  * Following the private_fuz daemon.rs pattern.
  */
@@ -12,10 +12,10 @@ import {process_is_pid_running} from '@fuzdev/fuz_util/process.js';
 
 import {ZZZ_DIR_RUN} from '../constants.js';
 
-/** Current server.json schema version */
+/** Current `server.json` schema version. */
 const SERVER_INFO_VERSION = 1;
 
-/** File name for server info in `ZZZ_DIR_RUN` */
+/** File name for server info in `ZZZ_DIR_RUN`. */
 const SERVER_INFO_FILE = 'server.json';
 
 /**
@@ -24,13 +24,13 @@ const SERVER_INFO_FILE = 'server.json';
 export const ServerInfo = z.strictObject({
 	/** Schema version (must be 1) */
 	version: z.number(),
-	/** Server process ID */
+	/** Server process ID. */
 	pid: z.number(),
-	/** Port the server is listening on */
+	/** Port the server is listening on. */
 	port: z.number(),
-	/** ISO timestamp when server started */
+	/** ISO timestamp when server started. */
 	started: z.string(),
-	/** Package version of zzz */
+	/** Package version of zzz. */
 	zzz_version: z.string(),
 });
 export type ServerInfo = z.infer<typeof ServerInfo>;

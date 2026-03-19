@@ -29,7 +29,7 @@ export type ScopedFsPath = z.infer<typeof ScopedFsPath>;
  * - Requires absolute paths to avoid relative path confusion
  * - Validates the entire path hierarchy for each operation
  *
- * This class should be used whenever performing filesystem operations on
+ * `ScopedFs` should be used whenever performing filesystem operations on
  * user-provided or untrusted input paths to ensure proper access boundaries.
  */
 export class ScopedFs {

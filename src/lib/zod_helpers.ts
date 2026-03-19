@@ -51,7 +51,7 @@ export const UuidWithDefault = Uuid.default(create_uuid);
 export type UuidWithDefault = z.infer<typeof UuidWithDefault>;
 
 /**
- * Helper to extract subschema from a Zod def, following Zod 4 patterns.
+ * Extracts subschema from a Zod def, following Zod 4 patterns.
  */
 export const to_subschema = (def: z.core.$ZodTypeDef): z.ZodType | undefined => {
 	if ('innerType' in def) {
@@ -65,8 +65,8 @@ export const to_subschema = (def: z.core.$ZodTypeDef): z.ZodType | undefined => 
 };
 
 /**
- * Gets the innermost type of a zod schema by unwrapping wrappers like transforms, ZodOptional, ZodDefault, etc.
- * @param schema The schema to unwrap
+ * Gets the innermost type of a Zod schema by unwrapping wrappers like transforms, `ZodOptional`, `ZodDefault`, etc.
+ * @param schema - The schema to unwrap
  * @returns The innermost schema without wrappers
  */
 export const get_innermost_type = (schema: z.ZodType): z.ZodType => {
@@ -113,10 +113,10 @@ export const zod_get_schema_keys = <T extends z.ZodType>(schema: T): Array<Schem
 };
 
 /**
- * Get the Zod schema for a specific field in an object schema.
+ * Gets the Zod schema for a specific field in an object schema.
  *
- * @param schema The object schema
- * @param key The property name
+ * @param schema - The object schema
+ * @param key - The property name
  * @returns The field's schema, or throws if not found
  */
 export const get_field_schema = (schema: z.ZodType, key: string): z.ZodType => {
@@ -128,10 +128,10 @@ export const get_field_schema = (schema: z.ZodType, key: string): z.ZodType => {
 };
 
 /**
- * Get the Zod schema for a specific field in an object schema, returning undefined if not found.
+ * Gets the Zod schema for a specific field in an object schema, returning undefined if not found.
  *
- * @param schema The object schema
- * @param key The property name
+ * @param schema - The object schema
+ * @param key - The property name
  * @returns The field's schema, or undefined if not found
  */
 export const maybe_get_field_schema = (schema: z.ZodType, key: string): z.ZodType | undefined => {

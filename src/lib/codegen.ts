@@ -27,7 +27,7 @@ interface ImportItem {
  * - This ensures optimal tree-shaking and smaller bundle sizes
  *
  * @example
- * ```typescript
+ * ```ts
  * const imports = new ImportBuilder();
  * imports.add_types('./types.js', 'Foo', 'Bar');
  * imports.add('./utils.js', 'helper');
@@ -111,7 +111,7 @@ export class ImportBuilder {
 	}
 
 	/**
-	 * Generate the import statements.
+	 * Generates the import statements.
 	 * If all imports from a module are types, uses `import type` syntax.
 	 */
 	build(): string {
@@ -150,7 +150,7 @@ export class ImportBuilder {
 
 	/**
 	 * Internal helper to generate import statements from the current state.
-	 * Shared by both build() and preview() methods.
+	 * Shared by both `build()` and `preview()` methods.
 	 */
 	#generate_import_statements(): Array<string> {
 		const statements: Array<string> = [];
@@ -273,7 +273,7 @@ export const get_executor_phases = (
 
 /**
  * Gets the handler return type for a specific phase and spec.
- * Also adds necessary imports to the ImportBuilder.
+ * Also adds necessary imports to the `ImportBuilder`.
  */
 export const get_handler_return_type = (
 	spec: ActionSpecUnion,
@@ -301,7 +301,7 @@ export const get_handler_return_type = (
 };
 
 /**
- * Generates the phase handlers for an action spec using the unified ActionEvent type
+ * Generates the phase handlers for an action spec using the unified `ActionEvent` type
  * with the new phase/step type parameters.
  */
 export const generate_phase_handlers = (

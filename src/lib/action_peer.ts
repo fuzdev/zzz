@@ -120,7 +120,7 @@ export class ActionPeer {
 	}
 
 	/**
-	 * Process a single JSON-RPC message, returning a response message if any.
+	 * Processes a single JSON-RPC message, returning a response message if any.
 	 */
 	async #receive_message(message: unknown): Promise<JsonrpcMessageFromServerToClient | null> {
 		if (is_jsonrpc_request(message)) {
@@ -137,7 +137,7 @@ export class ActionPeer {
 	}
 
 	/**
-	 * Process a JSON-RPC request. Returns the response message.
+	 * Processes a JSON-RPC request. Returns the response message.
 	 */
 	async #receive_request(request: JsonrpcRequest): Promise<JsonrpcMessageFromServerToClient> {
 		const spec = this.environment.lookup_action_spec(request.method as ActionMethod); // TODO @many try not to cast, idk what the best design is here
@@ -208,7 +208,7 @@ export class ActionPeer {
 	}
 
 	/**
-	 * Process a JSON-RPC notification. Returns nothing, no response exists.
+	 * Processes a JSON-RPC notification. Returns nothing, no response exists.
 	 */
 	async #receive_notification(notification: JsonrpcNotification): Promise<void> {
 		const spec = this.environment.lookup_action_spec(notification.method as ActionMethod); // TODO @many try not to cast, idk what the best design is here
