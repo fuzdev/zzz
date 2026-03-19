@@ -42,7 +42,7 @@
 		<p>
 			This creates a new custom modelfile, to download a builtin model see <button
 				type="button"
-				class="inline compact"
+				class="inline sm"
 				onclick={onshowpull}>pull model</button
 			>.
 		</p>

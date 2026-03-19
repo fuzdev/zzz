@@ -18,7 +18,7 @@
 				</p>
 				<button
 					type="button"
-					class="compact"
+					class="sm"
 					onclick={() => {
 						app.ui.tutorial_for_diskfiles = false;
 					}}>ok</button

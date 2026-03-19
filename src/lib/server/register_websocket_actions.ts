@@ -22,7 +22,7 @@ export interface RegisterWebsocketActionsOptions {
 }
 
 /**
- * Registers websocket endpoints for all service actions in the schema registry.
+ * Registers WebSocket endpoints for all service actions in the schema registry.
  */
 export const register_websocket_actions = ({
 	path,

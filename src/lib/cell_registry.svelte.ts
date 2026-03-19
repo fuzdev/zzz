@@ -26,7 +26,7 @@ export class ClassNotRegisteredError extends Error {
 /**
  * Registry for managing cell classes and their instances.
  * The goal is to allow dynamic instantiation of all cells from serializable JSON.
- * This class does not currently justify its weight/complexity and may be removed in the future,
+ * `CellRegistry` does not currently justify its weight/complexity and may be removed in the future,
  * but I want to continue exploring the ideas behind it until we get fully snapshottable UI.
  */
 export class CellRegistry {

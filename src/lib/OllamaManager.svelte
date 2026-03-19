@@ -191,7 +191,7 @@
 					<p>
 						no models found, <button
 							type="button"
-							class="inline compact"
+							class="inline sm"
 							disabled={ollama.manager_selected_view === 'pull'}
 							onclick={() => ollama.set_manager_view('pull', null)}>pull a model</button
 						>

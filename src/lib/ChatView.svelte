@@ -55,7 +55,7 @@
 								}
 								active_content="simple"
 								inactive_content="multi"
-								class="plain compact"
+								class="plain sm"
 								title="toggle chat to ${chat.view_mode === 'multi' ? 'simple' : 'multi'} view"
 							>
 								<Glyph glyph={GLYPH_VIEW} class="mr_xs" />

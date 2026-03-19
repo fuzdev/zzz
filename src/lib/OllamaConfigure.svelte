@@ -62,7 +62,7 @@
 	<section class="width_atmost_md display:flex flex-direction:column gap_lg">
 		<p>
 			Ollama is a local LLM provider. {#if !error_message && capabilities.backend_available}
-				Want to <button type="button" class="inline compact color_a" onclick={onshowpull}
+				Want to <button type="button" class="inline sm color_a" onclick={onshowpull}
 					>pull a model</button
 				>?{/if}
 		</p>

@@ -31,10 +31,10 @@ export class DiskfileTab extends Cell<typeof DiskfileTabJson> {
 	 */
 	readonly tabs: DiskfileTabs;
 
-	/** Derived from parent collection's state */
+	/** Derived from parent collection's state. */
 	readonly is_preview: boolean = $derived.by(() => this.tabs.preview_tab_id === this.id);
 
-	/** Derived from parent collection's state */
+	/** Derived from parent collection's state. */
 	readonly is_selected: boolean = $derived.by(() => this.tabs.selected_tab_id === this.id);
 
 	readonly diskfile: Diskfile | undefined = $derived(

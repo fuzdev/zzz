@@ -74,7 +74,7 @@ export interface FrontendOptions extends OmitStrict<CellOptions<typeof FrontendJ
 
 /**
  * The base frontend app, typically used by creating your own `App extends Frontend`.
- * Gettable with `frontend_context.get()` inside a `<FrontendRoot>`.
+ * Gettable with `frontend_context.get()` inside a `FrontendRoot`.
  */
 export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEnvironment {
 	readonly executor: ActionExecutor = 'frontend';
@@ -118,7 +118,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 	/**
 	 * The `zzz_dir` is the path to Zzz's primary directory on the server's filesystem.
-	 * The server's `scoped_fs` instance restricts operations to this directory.
+	 * The server's `ScopedFs` instance restricts operations to this directory.
 	 * The value is `undefined` when uninitialized,
 	 * `null` when loading, and `''` when disabled or no server.
 	 */

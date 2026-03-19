@@ -14,7 +14,7 @@
 
 <input
 	type="checkbox"
-	class="plain compact"
+	class="plain sm"
 	style:height="auto"
 	title="this thread is {thread.enabled ? 'enabled' : 'disabled'} and {thread.enabled
 		? ''

@@ -20,7 +20,7 @@ export const to_relative_path = (path: string, parent: string): string =>
 	strip_start(strip_start(path, parent), '/');
 
 /**
- * Maps watcher change types to diskfile change types
+ * Maps watcher change types to diskfile change types.
  */
 export const map_watcher_change_to_diskfile_change = (
 	type: WatcherChangeType,
@@ -31,9 +31,9 @@ export const map_watcher_change_to_diskfile_change = (
 
 // TODO @many refactor source/disk files with Gro Disknode too
 /**
- * Helper function to convert a `SerializableDisknode` to the `DiskfileJson` format.
+ * Converts a `SerializableDisknode` to the `DiskfileJson` format.
  * @param disknode - the source file to convert
- * @param existing_id - optional existing UUID to preserve id stability across updates
+ * @param existing_id - optional existing `Uuid` to preserve id stability across updates
  */
 export const disknode_to_diskfile_json = (
 	disknode: SerializableDisknode,

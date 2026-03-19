@@ -83,7 +83,7 @@ export class IndexedCollection<
 	TKeyDerived extends string = string,
 	TKeyDynamic extends string = string,
 > {
-	/** The main source of turth, the full collection keyed by Uuid. */
+	/** The main source of truth, the full collection keyed by `Uuid`. */
 	readonly by_id: SvelteMap<Uuid, T> = new SvelteMap();
 
 	// TODO change to `ReadonlyArray`s? problem is downstream usage type errors
@@ -221,7 +221,7 @@ export class IndexedCollection<
 	/**
 	 * Ensures that the index exists and is of the expected type.
 	 * @param key - the index key to check
-	 * @param expected_type - the expected type of the index
+	 * @param expected_type - the expected `IndexType` of the index
 	 * @throws Error if index doesn't exist or has wrong type
 	 */
 	#ensure_index(key: string, expected_type: IndexType): void {
@@ -241,7 +241,7 @@ export class IndexedCollection<
 	/**
 	 * Query an index with parameters.
 	 *
-	 * This method is type-aware when the index has a `query_schema` that defines `TQuery`.
+	 * This method is type-aware when the index has a `query_schema` that defines TQuery.
 	 */
 	query<TResult = any, TQuery = any>(
 		key: TKeySingle | TKeyMulti | TKeyDerived | TKeyDynamic,

@@ -126,7 +126,7 @@ export class Time extends Cell<typeof TimeJson> {
 	}
 
 	/**
-	 * Override Cell's destroy method to ensure timer cleanup.
+	 * Override `Cell`'s destroy method to ensure timer cleanup.
 	 */
 	destroy(): void {
 		this.stop();

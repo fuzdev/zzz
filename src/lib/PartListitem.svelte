@@ -8,13 +8,13 @@
 		part,
 		selected,
 		onclick,
-		compact = true,
+		sm = true,
 		attrs,
 	}: {
 		part: PartUnion;
 		selected?: boolean | undefined;
 		onclick?: ((part: PartUnion) => void) | undefined;
-		compact?: boolean | undefined;
+		sm?: boolean | undefined;
 		attrs?: SvelteHTMLElements['button'] | undefined;
 	} = $props();
 </script>
@@ -25,7 +25,7 @@
 		class="listitem width:100%"
 		{...attrs}
 		class:selected
-		class:compact
+		class:sm
 		onclick={onclick ? () => onclick(part) : undefined}
 	>
 		<div class="p_xs font_size_sm">

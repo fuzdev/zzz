@@ -24,7 +24,7 @@
 		<ConfirmButton
 			onconfirm={() => editor_state.clear_history()}
 			position="right"
-			class="plain compact"
+			class="plain sm"
 			disabled={!editor_state.can_clear_history}
 			title={editor_state.can_clear_history
 				? 'Clear history entries except the current disk state'
@@ -37,7 +37,7 @@
 			onconfirm={() => {
 				editor_state.clear_unsaved_edits();
 			}}
-			class="plain compact"
+			class="plain sm"
 			disabled={!editor_state.can_clear_unsaved_edits}
 			title={editor_state.can_clear_unsaved_edits
 				? 'Remove all unsaved edit entries from history'
@@ -54,7 +54,7 @@
 			<button
 				transition:slide
 				type="button"
-				class="listitem compact"
+				class="listitem sm"
 				class:selected
 				class:content_matches
 				class:plain={!selected && !content_matches}
@@ -80,7 +80,7 @@
 		background-color: var(--shade_10);
 	}
 
-	.listitem.compact {
+	.listitem.sm {
 		padding: var(--space_xs2) var(--space_xs);
 		font-size: var(--font_size_sm);
 		display: flex;

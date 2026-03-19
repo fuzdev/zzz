@@ -37,7 +37,7 @@ export interface Capability<T> {
 	// TODO maybe rename to `request_id` as it's used elsewhere?
 	/** Message id of the last request for this capability's info, if any. */
 	message_id: JsonrpcRequestId | null;
-	/** Error message if any */
+	/** Error message if any. */
 	error_message: string | null;
 	/** Timestamp when the capability was last checked. */
 	updated: number | null;

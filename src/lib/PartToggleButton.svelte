@@ -14,7 +14,7 @@
 
 <input
 	type="checkbox"
-	class="plain compact"
+	class="plain sm"
 	title="this part is {part.enabled ? 'enabled' : 'disabled'} and {part.enabled
 		? ''
 		: 'not '}included in the prompt"

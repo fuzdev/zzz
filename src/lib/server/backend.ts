@@ -110,7 +110,7 @@ export class Backend implements ActionEventEnvironment {
 	readonly pty_manager: PtyManager;
 
 	/**
-	 * Scoped filesystem interface that restricts operations to allowed directories.
+	 * `ScopedFs` filesystem interface that restricts operations to allowed directories.
 	 */
 	readonly scoped_fs: ScopedFs;
 

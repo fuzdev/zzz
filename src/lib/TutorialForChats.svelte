@@ -21,7 +21,7 @@
 				</p>
 				<button
 					type="button"
-					class="compact"
+					class="sm"
 					onclick={() => {
 						app.ui.tutorial_for_chats = false;
 					}}>k</button

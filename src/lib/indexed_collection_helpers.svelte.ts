@@ -11,7 +11,7 @@ import {UuidWithDefault} from './zod_helpers.js';
 // consider the whole graph's POV, not just individual collections, for relationships/transactions
 
 /**
- * Interface for objects that can be stored in an indexed collection.
+ * Interface for objects that can be stored in an `IndexedCollection`.
  */
 export const IndexedItem = z.strictObject({
 	id: UuidWithDefault,
@@ -39,7 +39,7 @@ export interface IndexOptions<T extends IndexedItem, TQuery = any> {
  * Options for single-value indexes.
  */
 export interface SingleIndexOptions<T extends IndexedItem, K> extends IndexOptions<T, K> {
-	/** Function that extracts the key from an item */
+	/** Function that extracts the key from an item. */
 	extractor: (item: T) => K;
 }
 
@@ -210,7 +210,7 @@ export interface DerivedIndexOptions<
 }
 
 /**
- * Create an incremental derived collection index.
+ * Creates an incremental derived collection index.
  */
 export const create_derived_index = <T extends IndexedItem, TResult extends Array<T> = Array<T>>(
 	options: DerivedIndexOptions<T, TResult>,
@@ -267,13 +267,13 @@ export interface DynamicIndexOptions<
 	T extends IndexedItem,
 	F extends (...args: Array<any>) => any,
 > extends IndexOptions<T, Parameters<F>[0]> {
-	/** Function that creates a query function from the collection */
+	/** Function that creates a query function from the collection. */
 	factory: (collection: IndexedCollection<T>) => F;
 
-	/** Optional custom add handler */
+	/** Optional custom add handler. */
 	onadd?: (fn: F, item: T, collection: IndexedCollection<T>) => F;
 
-	/** Optional custom remove handler */
+	/** Optional custom remove handler. */
 	onremove?: (fn: F, item: T, collection: IndexedCollection<T>) => F;
 }
 

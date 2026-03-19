@@ -112,8 +112,8 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	 * Each decoder function takes a value of any type and should either:
 	 * 1. Return a value (including null) to be assigned to the property
 	 * 2. Return undefined to use the default decoding behavior
-	 * 3. Return HANDLED to indicate the decoder has fully processed the property
-	 *    (virtual properties MUST return HANDLED if they exist in schema but not in class)
+	 * 3. Return `HANDLED` to indicate the decoder has fully processed the property
+	 *    (virtual properties MUST return `HANDLED` if they exist in schema but not in class)
 	 */
 	protected decoders: CellValueDecoder<TSchema> = {};
 
@@ -127,7 +127,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	readonly updated_formatted_datetime: string = $derived(format_datetime(this.updated_date));
 	readonly updated_formatted_time: string = $derived(format_time(this.updated_date));
 
-	/** Stored only between construction and initialization */
+	/** Stored only between construction and initialization. */
 	#initial_json: z.input<TSchema> | undefined;
 
 	constructor(schema: TSchema, options: CellOptions<TSchema>) {
@@ -148,9 +148,9 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	 * would init automatically, subclasses need no init logic (which can get unwieldy with inheritance),
 	 * and then callers could always do custom init patterns if they wanted.
 	 *
-	 * Can't be called automatically by the Cell's constructor because
+	 * Can't be called automatically by the `Cell`'s constructor because
 	 * the subclass' constructor needs to run first to support field initialization.
-	 * A design goal behind the Cell is to support normal TS and Svelte patterns
+	 * A design goal behind the `Cell` is to support normal TS and Svelte patterns
 	 * with the most power and least intrusion. (there's a balance to find from Zzz's POV)
 	 */
 	protected init(): void {
@@ -184,12 +184,12 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 		this.dispose();
 	}
 
-	/** Flag to track registration status - prevents double registration */
+	/** Flag to track registration status - prevents double registration. */
 	#registered = false;
 
 	/**
 	 * Register this cell in the global cell registry.
-	 * Called automatically by init().
+	 * Called automatically by `init()`.
 	 */
 	protected register(): void {
 		if (this.#registered) {
@@ -203,7 +203,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 
 	/**
 	 * Unregister this cell from the global cell registry.
-	 * Called automatically by dispose().
+	 * Called automatically by `dispose()`.
 	 */
 	protected unregister(): void {
 		if (!this.#registered) return;
@@ -328,7 +328,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	 * Encode a value during serialization. Can be overridden for custom encoding logic.
 	 * Defaults to Svelte's `$state.snapshot`,
 	 * which handles most cases and uses `toJSON` when available,
-	 * so overriding `to_json` is sufficient for most cases before overriding `encode`.
+	 * so overriding `to_json` is sufficient for most cases before overriding `encode_property`.
 	 */
 	encode_property(value: unknown, _key: string): unknown {
 		return $state.snapshot(value);
@@ -381,11 +381,11 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	 *
 	 * Flow:
 	 * 1. If a decoder exists for this property, try to use it
-	 * 2. If decoder returns HANDLED, consider the property fully handled (short circuit)
-	 * 3. If decoder returns a value other than HANDLED or undefined, use that value
+	 * 2. If decoder returns `HANDLED`, consider the property fully handled (short circuit)
+	 * 3. If decoder returns a value other than `HANDLED` or undefined, use that value
 	 * 4. If decoder returns undefined, fall through to standard decoding
 	 * 5. For properties not directly represented in the class instance but defined
-	 *    in the schema, the decoder MUST return HANDLED to indicate proper handling
+	 *    in the schema, the decoder MUST return `HANDLED` to indicate proper handling
 	 */
 	protected assign_property(key: SchemaKeys<TSchema>, value: unknown): void {
 		// 1. Check if we have a property and decoder for this key

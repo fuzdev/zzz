@@ -53,7 +53,7 @@ export const UuidWithDefault = Uuid.default(create_uuid);
 export type UuidWithDefault = z.infer<typeof UuidWithDefault>;
 
 /**
- * Gets the innermost type of a zod schema by unwrapping wrappers like transforms, ZodOptional, ZodDefault, etc.
+ * Gets the innermost type of a Zod schema by unwrapping wrappers like transforms, `ZodOptional`, `ZodDefault`, etc.
  * @param schema - the schema to unwrap
  * @returns the innermost schema without wrappers
  */
@@ -101,7 +101,7 @@ export const zod_get_schema_keys = <T extends z.ZodType>(schema: T): Array<Schem
 };
 
 /**
- * Get the Zod schema for a specific field in an object schema.
+ * Gets the Zod schema for a specific field in an object schema.
  *
  * @param schema - the object schema
  * @param key - the property name
@@ -116,7 +116,7 @@ export const get_field_schema = (schema: z.ZodType, key: string): z.ZodType => {
 };
 
 /**
- * Get the Zod schema for a specific field in an object schema, returning undefined if not found.
+ * Gets the Zod schema for a specific field in an object schema, returning undefined if not found.
  *
  * @param schema - the object schema
  * @param key - the property name

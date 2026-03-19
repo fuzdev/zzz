@@ -31,7 +31,7 @@ export class Sortable<T> {
 	#key_getter_default: Thunk<string | undefined> | undefined;
 	readonly default_key: string | undefined = $derived.by(() => this.#key_getter_default?.());
 
-	/** Current active sort key */
+	/** Current active sort key. */
 	active_key: string = $state('');
 
 	/**
@@ -60,7 +60,7 @@ export class Sortable<T> {
 	});
 
 	/**
-	 * Create a new Sortable instance with reactive sources.
+	 * Creates a new `Sortable` instance with reactive sources.
 	 *
 	 * @param items_getter - function that returns the current items array
 	 * @param sorters_getter - function that returns the current sorters
@@ -115,8 +115,8 @@ export class Sortable<T> {
 
 // TODO @many these arent used in a typesafe way, asserting cell subtypes, maybe require the cell?
 /**
- * Create a text sorter with optional direction.
- * Falls back to cell's cid for equal values.
+ * Creates a text sorter with optional direction.
+ * Falls back to cell's `cid` for equal values.
  */
 export const sort_by_text = <T extends Cell<any>>(
 	key: string,
@@ -138,8 +138,8 @@ export const sort_by_text = <T extends Cell<any>>(
 
 // TODO @many these arent used in a typesafe way, asserting cell subtypes, maybe require the cell?
 /**
- * Create a numeric sorter with optional direction.
- * Falls back to cell's cid for equal values.
+ * Creates a numeric sorter with optional direction.
+ * Falls back to cell's `cid` for equal values.
  */
 export const sort_by_numeric = <T extends Cell<any>>(
 	key: string,
