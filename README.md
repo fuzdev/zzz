@@ -73,7 +73,7 @@ Zzz builds on a great deal of software.
 - I started using [Claude](https://claude.ai/) in late 2024 after making the initial prototype,
   and in late 2025 I started doing much of the coding with Claude Code, Opus 4.5
   being the first over some threshold for me for this project
-  - see `NOTE: AI-generated, human-reviewed` and similar disclaimers
+  - see `NOTE: AI-generated` and similar disclaimers
 
 ## License 🐦
 

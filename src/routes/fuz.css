@@ -3,6 +3,7 @@
 /* Theme Variables */
 
 :root {
+	--bg_100: var(--lighten_100);
 	--bg_80: var(--lighten_80);
 	--border_color: var(--shade_30);
 	--border_color_10: hsl(var(--tint_hue) 60% 20% / 7%);
@@ -223,6 +224,7 @@
 }
 
 :root.dark {
+	--bg_100: var(--darken_100);
 	--bg_80: var(--darken_80);
 	--border_color_10: hsl(var(--tint_hue) 60% 80% / 14%);
 	--border_color_20: hsl(var(--tint_hue) 60% 80% / 22%);
@@ -1350,6 +1352,9 @@ a.chip {
 .color_i_50 {
 	color: var(--color_i_50);
 	--text_color: var(--color_i_50);
+}
+.bg_100 {
+	background-color: var(--bg_100);
 }
 .border_color_20 {
 	border-color: var(--border_color_20);
