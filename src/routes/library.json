@@ -4602,7 +4602,7 @@
 						"name": "click_outside",
 						"kind": "function",
 						"doc_comment": "Creates an attachment that calls `callback` when a mousedown occurs outside the element.",
-						"source_line": 6,
+						"source_line": 7,
 						"type_signature": "(callback: () => void): Attachment<HTMLElement>",
 						"return_type": "Attachment<HTMLElement>",
 						"parameters": [
