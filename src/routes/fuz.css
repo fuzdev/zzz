@@ -754,6 +754,7 @@ body {
 }
 
 :where(label:not(.unstyled)) {
+	display: block;
 	color: var(--text_color);
 	cursor: pointer;
 }
