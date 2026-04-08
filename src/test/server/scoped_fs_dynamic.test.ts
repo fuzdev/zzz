@@ -1,10 +1,9 @@
-import {test, vi, beforeEach, afterEach, describe, assert} from 'vitest';
+import {test, vi, beforeEach, describe, assert} from 'vitest';
 import * as fs from 'node:fs/promises';
-import * as fs_sync from 'node:fs';
 
 import {ScopedFs} from '$lib/server/scoped_fs.js';
 
-// Mock fs/promises and fs modules
+// Mock fs/promises
 vi.mock('node:fs/promises', () => ({
 	readFile: vi.fn(),
 	writeFile: vi.fn(),
@@ -17,17 +16,8 @@ vi.mock('node:fs/promises', () => ({
 	access: vi.fn(),
 }));
 
-vi.mock('node:fs', () => ({
-	existsSync: vi.fn(),
-}));
-
-let console_spy: any;
-
 beforeEach(() => {
 	vi.clearAllMocks();
-	console_spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-	vi.mocked(fs_sync.existsSync).mockReturnValue(true);
 
 	// Default lstat mock returning a non-symlink file
 	vi.mocked(fs.lstat).mockImplementation(() =>
@@ -37,10 +27,6 @@ beforeEach(() => {
 			isFile: () => true,
 		} as any),
 	);
-});
-
-afterEach(() => {
-	console_spy.mockRestore();
 });
 
 describe('ScopedFs - add_path', () => {

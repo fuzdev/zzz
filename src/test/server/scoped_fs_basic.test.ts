@@ -1,10 +1,14 @@
-import {test, vi, beforeEach, afterEach, describe, assert} from 'vitest';
+import {test, vi, beforeEach, describe, assert} from 'vitest';
 import * as fs from 'node:fs/promises';
-import * as fs_sync from 'node:fs';
+import type {Stats, BigIntStats} from 'node:fs';
 
-import {ScopedFs, SymlinkNotAllowedError} from '$lib/server/scoped_fs.js';
+import {
+	ScopedFs,
+	PathNotAllowedError,
+	SymlinkNotAllowedError,
+} from '$lib/server/scoped_fs.js';
 
-// Mock fs/promises and fs modules
+// Mock fs/promises
 vi.mock('node:fs/promises', () => ({
 	readFile: vi.fn(),
 	writeFile: vi.fn(),
@@ -15,10 +19,6 @@ vi.mock('node:fs/promises', () => ({
 	lstat: vi.fn(),
 	copyFile: vi.fn(),
 	access: vi.fn(),
-}));
-
-vi.mock('node:fs', () => ({
-	existsSync: vi.fn(),
 }));
 
 // Test constants
@@ -37,15 +37,8 @@ const DIR_PATHS = {
 
 const create_test_instance = () => new ScopedFs(TEST_ALLOWED_PATHS);
 
-// Setup/cleanup for each test
-let console_spy: any;
-
 beforeEach(() => {
 	vi.clearAllMocks();
-	console_spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-	// Default mock implementations
-	vi.mocked(fs_sync.existsSync).mockReturnValue(true);
 
 	// Default lstat mock returning a non-symlink file
 	vi.mocked(fs.lstat).mockImplementation(() =>
@@ -55,10 +48,6 @@ beforeEach(() => {
 			isFile: () => true,
 		} as any),
 	);
-});
-
-afterEach(() => {
-	console_spy.mockRestore();
 });
 
 describe('ScopedFs - construction and initialization', () => {
@@ -85,6 +74,28 @@ describe('ScopedFs - construction and initialization', () => {
 		// Empty path array should work but won't allow any paths
 		const empty_scoped_fs = new ScopedFs([]);
 		assert.ok(!empty_scoped_fs.is_path_allowed('/any/path'));
+	});
+
+	test('constructor - should deduplicate paths', () => {
+		const scoped_fs = new ScopedFs(['/path/a', '/path/a', '/path/b', '/path/b']);
+		assert.strictEqual(scoped_fs.allowed_paths.length, 2);
+	});
+
+	test('constructor - should deduplicate paths that normalize to the same value', () => {
+		const scoped_fs = new ScopedFs(['/path/a', '/path/a/']);
+		assert.strictEqual(scoped_fs.allowed_paths.length, 1);
+	});
+
+	test('exists - should use the normalized path for fs.access', async () => {
+		const scoped_fs = create_test_instance();
+
+		vi.mocked(fs.access).mockResolvedValueOnce();
+
+		await scoped_fs.exists('/allowed/path/./subdir/../file.txt');
+
+		// fs.access should receive the normalized path, not the original
+		assert.strictEqual(vi.mocked(fs.access).mock.calls.length, 1);
+		assert.strictEqual(vi.mocked(fs.access).mock.calls[0]![0], '/allowed/path/file.txt');
 	});
 });
 
@@ -157,6 +168,44 @@ describe('ScopedFs - path validation', () => {
 	});
 });
 
+describe('ScopedFs - operations use normalized paths', () => {
+	test('read_file passes normalized path to fs', async () => {
+		const scoped_fs = create_test_instance();
+		vi.mocked(fs.readFile).mockResolvedValueOnce('content' as any);
+
+		await scoped_fs.read_file('/allowed/path/./subdir/../file.txt');
+		assert.strictEqual(vi.mocked(fs.readFile).mock.calls[0]![0], '/allowed/path/file.txt');
+	});
+
+	test('write_file passes normalized path to fs', async () => {
+		const scoped_fs = create_test_instance();
+		vi.mocked(fs.writeFile).mockResolvedValueOnce();
+
+		await scoped_fs.write_file('/allowed/path/./subdir/../file.txt', 'data');
+		assert.strictEqual(vi.mocked(fs.writeFile).mock.calls[0]![0], '/allowed/path/file.txt');
+	});
+
+	test('rm passes normalized path to fs', async () => {
+		const scoped_fs = create_test_instance();
+		vi.mocked(fs.rm).mockResolvedValueOnce();
+
+		await scoped_fs.rm('/allowed/path/./subdir/../file.txt');
+		assert.strictEqual(vi.mocked(fs.rm).mock.calls[0]![0], '/allowed/path/file.txt');
+	});
+
+	test('copy_file passes normalized paths to fs for both source and destination', async () => {
+		const scoped_fs = create_test_instance();
+		vi.mocked(fs.copyFile).mockResolvedValueOnce();
+
+		await scoped_fs.copy_file(
+			'/allowed/path/./a/../src.txt',
+			'/allowed/other/path/./b/../dst.txt',
+		);
+		assert.strictEqual(vi.mocked(fs.copyFile).mock.calls[0]![0], '/allowed/path/src.txt');
+		assert.strictEqual(vi.mocked(fs.copyFile).mock.calls[0]![1], '/allowed/other/path/dst.txt');
+	});
+});
+
 describe('ScopedFs - file operations', () => {
 	test('read_file - should read files in allowed paths', async () => {
 		const scoped_fs = create_test_instance();
@@ -206,8 +255,8 @@ describe('ScopedFs - file operations', () => {
 		try {
 			await scoped_fs.read_file(FILE_PATHS.OUTSIDE);
 			assert.fail('Expected error to be thrown');
-		} catch (e: any) {
-			assert.include(e.message, 'Path is not allowed');
+		} catch (e) {
+			assert.instanceOf(e, PathNotAllowedError);
 		}
 		assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 0);
 	});
@@ -232,8 +281,8 @@ describe('ScopedFs - file operations', () => {
 		try {
 			await scoped_fs.write_file(FILE_PATHS.OUTSIDE, 'content');
 			assert.fail('Expected error to be thrown');
-		} catch (e: any) {
-			assert.include(e.message, 'Path is not allowed');
+		} catch (e) {
+			assert.instanceOf(e, PathNotAllowedError);
 		}
 		assert.strictEqual(vi.mocked(fs.writeFile).mock.calls.length, 0);
 	});
@@ -255,8 +304,8 @@ describe('ScopedFs - directory operations', () => {
 		try {
 			await scoped_fs.mkdir(DIR_PATHS.OUTSIDE);
 			assert.fail('Expected error to be thrown');
-		} catch (e: any) {
-			assert.include(e.message, 'Path is not allowed');
+		} catch (e) {
+			assert.instanceOf(e, PathNotAllowedError);
 		}
 		assert.strictEqual(vi.mocked(fs.mkdir).mock.calls.length, 0);
 	});
@@ -278,8 +327,8 @@ describe('ScopedFs - directory operations', () => {
 		try {
 			await scoped_fs.readdir(DIR_PATHS.OUTSIDE);
 			assert.fail('Expected error to be thrown');
-		} catch (e: any) {
-			assert.include(e.message, 'Path is not allowed');
+		} catch (e) {
+			assert.instanceOf(e, PathNotAllowedError);
 		}
 		assert.strictEqual(vi.mocked(fs.readdir).mock.calls.length, 0);
 	});
@@ -299,8 +348,8 @@ describe('ScopedFs - directory operations', () => {
 		try {
 			await scoped_fs.rm(DIR_PATHS.OUTSIDE);
 			assert.fail('Expected error to be thrown');
-		} catch (e: any) {
-			assert.include(e.message, 'Path is not allowed');
+		} catch (e) {
+			assert.instanceOf(e, PathNotAllowedError);
 		}
 		assert.strictEqual(vi.mocked(fs.rm).mock.calls.length, 0);
 	});
@@ -312,7 +361,7 @@ describe('ScopedFs - stat operations', () => {
 		const mock_stats = {
 			isFile: () => true,
 			isDirectory: () => false,
-		} as fs_sync.Stats;
+		} as Stats;
 
 		vi.mocked(fs.stat).mockResolvedValueOnce(mock_stats);
 
@@ -327,8 +376,8 @@ describe('ScopedFs - stat operations', () => {
 		try {
 			await scoped_fs.stat(FILE_PATHS.OUTSIDE);
 			assert.fail('Expected error to be thrown');
-		} catch (e: any) {
-			assert.include(e.message, 'Path is not allowed');
+		} catch (e) {
+			assert.instanceOf(e, PathNotAllowedError);
 		}
 		assert.strictEqual(vi.mocked(fs.stat).mock.calls.length, 0);
 	});
@@ -359,13 +408,13 @@ describe('ScopedFs - stat operations', () => {
 			mtimeMs: BigInt(Date.now()),
 			isFile: () => true,
 			isDirectory: () => false,
-		} as unknown as fs_sync.BigIntStats;
+		} as unknown as BigIntStats;
 
 		vi.mocked(fs.stat).mockResolvedValueOnce(bigint_stats);
 
 		const result = await scoped_fs.stat(FILE_PATHS.ALLOWED, {bigint: true});
 		assert.strictEqual(result, bigint_stats as any);
-		assert.strictEqual(typeof (result as unknown as fs_sync.BigIntStats).size, 'bigint');
+		assert.strictEqual(typeof (result as unknown as BigIntStats).size, 'bigint');
 	});
 });
 
@@ -440,8 +489,8 @@ describe('ScopedFs - copy operations', () => {
 			try {
 				await scoped_fs.copy_file(source, destination);
 				assert.fail('Expected error to be thrown');
-			} catch (e: any) {
-				assert.include(e.message, 'Path is not allowed');
+			} catch (e) {
+				assert.instanceOf(e, PathNotAllowedError);
 			}
 		}
 

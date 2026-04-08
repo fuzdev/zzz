@@ -1,10 +1,9 @@
-import {test, vi, beforeEach, afterEach, describe, assert} from 'vitest';
+import {test, vi, beforeEach, describe, assert} from 'vitest';
 import * as fs from 'node:fs/promises';
-import * as fs_sync from 'node:fs';
 
 import {ScopedFs, PathNotAllowedError, SymlinkNotAllowedError} from '$lib/server/scoped_fs.js';
 
-// Mock fs/promises and fs modules
+// Mock fs/promises
 vi.mock('node:fs/promises', () => ({
 	readFile: vi.fn(),
 	writeFile: vi.fn(),
@@ -17,10 +16,6 @@ vi.mock('node:fs/promises', () => ({
 	access: vi.fn(),
 }));
 
-vi.mock('node:fs', () => ({
-	existsSync: vi.fn(),
-}));
-
 // Test constants
 const TEST_ALLOWED_PATHS = ['/allowed/path', '/allowed/other/path/', '/another/allowed/directory'];
 const FILE_PATHS = {
@@ -31,8 +26,6 @@ const FILE_PATHS = {
 	TRAVERSAL_SIMPLE: '/allowed/path/../../../etc/passwd',
 	TRAVERSAL_COMPLEX: '/allowed/path/subdir/.././../../etc/passwd',
 	TRAVERSAL_MIXED: '/allowed/path/./foo/../../etc/passwd',
-	TRAVERSAL_WINDOWS: '/allowed/path\\..\\..\\Windows\\System32\\config\\sam',
-	UNICODE_TRAVERSAL: '/allowed/path/ＮＮ/．．/．．/etc/passwd', // Unicode lookalikes
 };
 const DIR_PATHS = {
 	ALLOWED: '/allowed/path/dir',
@@ -44,15 +37,8 @@ const DIR_PATHS = {
 
 const create_test_instance = () => new ScopedFs(TEST_ALLOWED_PATHS);
 
-// Setup/cleanup for each test
-let console_spy: any;
-
 beforeEach(() => {
 	vi.clearAllMocks();
-	console_spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-	// Default mock implementations
-	vi.mocked(fs_sync.existsSync).mockReturnValue(true);
 
 	// Default lstat mock returning a non-symlink file
 	vi.mocked(fs.lstat).mockImplementation(() =>
@@ -62,10 +48,6 @@ beforeEach(() => {
 			isFile: () => true,
 		} as any),
 	);
-});
-
-afterEach(() => {
-	console_spy.mockRestore();
 });
 
 describe('ScopedFs - symlink security', () => {
@@ -125,12 +107,6 @@ describe('ScopedFs - symlink security', () => {
 
 	test('should reject symlinks in parent directories', async () => {
 		const scoped_fs = create_test_instance();
-
-		// First make sure we have existsSync return true for relevant paths
-		vi.mocked(fs_sync.existsSync).mockImplementation((path) => {
-			// Return true for our test directory path and all parent directories
-			return String(path).includes('symlink-dir') || String(path).includes('/allowed/path');
-		});
 
 		// Setup mocks to simulate a parent directory that is a symlink
 		vi.mocked(fs.lstat).mockImplementation(async (path) => {
@@ -318,6 +294,35 @@ describe('ScopedFs - symlink security', () => {
 	});
 });
 
+describe('ScopedFs - null byte rejection', () => {
+	test('should reject paths containing null bytes', () => {
+		const scoped_fs = create_test_instance();
+
+		const null_byte_paths = [
+			'/allowed/path/\0file.txt',
+			'/allowed/path/file\0.txt',
+			'/allowed/path/\0../../etc/passwd',
+		];
+
+		for (const path of null_byte_paths) {
+			assert.ok(!scoped_fs.is_path_allowed(path));
+		}
+	});
+
+	test('should throw PathNotAllowedError for null byte paths in operations', async () => {
+		const scoped_fs = create_test_instance();
+
+		try {
+			await scoped_fs.read_file('/allowed/path/\0file.txt');
+			assert.fail('Expected error to be thrown');
+		} catch (e) {
+			assert.instanceOf(e, PathNotAllowedError);
+		}
+
+		assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 0);
+	});
+});
+
 describe('ScopedFs - path traversal security', () => {
 	test('should reject standard path traversal attempts', async () => {
 		const scoped_fs = create_test_instance();
@@ -346,6 +351,24 @@ describe('ScopedFs - path traversal security', () => {
 				assert.instanceOf(e, PathNotAllowedError);
 			}
 		}
+	});
+
+	test('backslashes are literal on POSIX and do not enable traversal', () => {
+		const scoped_fs = create_test_instance();
+
+		// On POSIX, backslash is a valid filename character, not a separator.
+		// normalize leaves it as-is, so this is a literal path segment, not traversal.
+		const backslash_path = '/allowed/path\\..\\..\\Windows\\System32\\config\\sam';
+		assert.ok(!scoped_fs.is_path_allowed(backslash_path));
+	});
+
+	test('fullwidth Unicode lookalikes are literal characters, not traversal', () => {
+		const scoped_fs = create_test_instance();
+
+		// Fullwidth ．．is NOT .. — normalize treats it as a regular directory name
+		const unicode_path = '/allowed/path/ＮＮ/．．/．．/etc/passwd';
+		// This stays inside /allowed/path/ after normalization, so it IS allowed
+		assert.ok(scoped_fs.is_path_allowed(unicode_path));
 	});
 
 	test('should safely normalize legitimate paths', async () => {

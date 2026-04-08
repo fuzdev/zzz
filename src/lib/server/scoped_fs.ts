@@ -14,6 +14,7 @@ import {z} from 'zod';
 export const ScopedFsPath = z
 	.string()
 	.refine((p) => p.startsWith('/'), {message: 'Path must be absolute'})
+	.refine((p) => !p.includes('\0'), {message: 'Path must not contain null bytes'})
 	.transform((p) => normalize(p.trim()))
 	.brand('ScopedFsPath');
 export type ScopedFsPath = z.infer<typeof ScopedFsPath>;
@@ -33,7 +34,7 @@ export type ScopedFsPath = z.infer<typeof ScopedFsPath>;
  * user-provided or untrusted input paths to ensure proper access boundaries.
  */
 export class ScopedFs {
-	#allowed_paths: Array<ScopedFsPath>;
+	#allowed_paths: Array<ScopedFsPath> = [];
 
 	/** The current set of allowed paths. */
 	get allowed_paths(): ReadonlyArray<ScopedFsPath> {
@@ -45,15 +46,8 @@ export class ScopedFs {
 	 * @param allowed_paths - array of absolute paths that operations will be restricted to
 	 */
 	constructor(allowed_paths: Array<string> | ReadonlyArray<string>) {
-		try {
-			this.#allowed_paths = allowed_paths
-				.filter(Boolean)
-				.map((p) => ScopedFsPath.parse(ensure_end(p, '/')));
-		} catch (error) {
-			if (error instanceof z.ZodError) {
-				throw new Error(`Invalid path in allowed_paths: ${error.message}`);
-			}
-			throw error;
+		for (const p of allowed_paths) {
+			if (p) this.add_path(p);
 		}
 	}
 
@@ -114,16 +108,10 @@ export class ScopedFs {
 			// and normalizes all path traversal attempts
 			const normalized_path = ScopedFsPath.parse(path_to_check);
 
-			// Check if within allowed paths
-			for (const allowed_path of this.allowed_paths) {
-				if (!allowed_path) continue;
-
+			// Check if within allowed paths (allowed_path always has trailing slash from add_path)
+			for (const allowed_path of this.#allowed_paths) {
 				if (
-					// Root directory is special
-					(allowed_path === '/' && normalized_path.startsWith('/')) ||
-					// Direct path match
-					normalized_path === allowed_path ||
-					// Path is inside directory (allowed_path already has trailing slash)
+					// Path is inside directory or exact match with trailing slash
 					normalized_path.startsWith(allowed_path) ||
 					// Handle case where path equals directory but without trailing slash
 					// e.g., '/dir' matches '/dir/'
@@ -181,7 +169,7 @@ export class ScopedFs {
 	}
 
 	async readdir(
-		path: fs_types.PathLike,
+		path: string,
 		options?:
 			| (fs_types.ObjectEncodingOptions & {
 					withFileTypes?: false | undefined;
@@ -191,7 +179,7 @@ export class ScopedFs {
 			| null,
 	): Promise<Array<string>>;
 	async readdir(
-		path: fs_types.PathLike,
+		path: string,
 		options: fs_types.ObjectEncodingOptions & {
 			withFileTypes: true;
 			recursive?: boolean | undefined;
@@ -227,8 +215,8 @@ export class ScopedFs {
 			return false;
 		}
 		try {
-			await this.#ensure_safe_path(path_to_check);
-			await fs.access(ScopedFsPath.parse(path_to_check));
+			const safe_path = await this.#ensure_safe_path(path_to_check);
+			await fs.access(safe_path);
 			return true;
 		} catch {
 			return false;
@@ -238,6 +226,12 @@ export class ScopedFs {
 	/**
 	 * Ensures a path is safe by validating it.
 	 * Throws an error if the path is not allowed or contains symlinks.
+	 *
+	 * NOTE: There is an inherent TOCTOU gap between the symlink check (`lstat`) and the
+	 * caller's subsequent filesystem operation. A symlink could be created after validation.
+	 * This is not fixable in userspace Node.js — `O_NOFOLLOW` only covers the final path
+	 * component and `openat2(RESOLVE_NO_SYMLINKS)` is not exposed. Kernel-level sandboxing
+	 * (namespaces, seccomp, landlock) is needed for airtight enforcement.
 	 */
 	async #ensure_safe_path(path_to_check: string): Promise<string> {
 		let normalized_path: ScopedFsPath;
@@ -259,7 +253,7 @@ export class ScopedFs {
 			}
 		} catch (error) {
 			// If error is due to non-existence, ignore
-			if (!((error as NodeJS.ErrnoException).code === 'ENOENT')) {
+			if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
 				throw error;
 			}
 		}
@@ -276,7 +270,7 @@ export class ScopedFs {
 					throw new SymlinkNotAllowedError(parent);
 				}
 			} catch (error) {
-				if (!((error as NodeJS.ErrnoException).code === 'ENOENT')) {
+				if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
 					throw error;
 				}
 			}

@@ -1,10 +1,9 @@
-import {test, vi, beforeEach, afterEach, describe, assert} from 'vitest';
+import {test, vi, beforeEach, describe, assert} from 'vitest';
 import * as fs from 'node:fs/promises';
-import * as fs_sync from 'node:fs';
 
 import {ScopedFs, SymlinkNotAllowedError} from '$lib/server/scoped_fs.js';
 
-// Mock fs/promises and fs modules
+// Mock fs/promises
 vi.mock('node:fs/promises', () => ({
 	readFile: vi.fn(),
 	writeFile: vi.fn(),
@@ -15,10 +14,6 @@ vi.mock('node:fs/promises', () => ({
 	lstat: vi.fn(),
 	copyFile: vi.fn(),
 	access: vi.fn(),
-}));
-
-vi.mock('node:fs', () => ({
-	existsSync: vi.fn(),
 }));
 
 // Test constants
@@ -44,15 +39,8 @@ const DIR_PATHS = {
 
 const create_test_instance = () => new ScopedFs(TEST_ALLOWED_PATHS);
 
-// Setup/cleanup for each test
-let console_spy: any;
-
 beforeEach(() => {
 	vi.clearAllMocks();
-	console_spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-	// Default mock implementations
-	vi.mocked(fs_sync.existsSync).mockReturnValue(true);
 
 	// Default lstat mock returning a non-symlink file
 	vi.mocked(fs.lstat).mockImplementation(() =>
@@ -62,10 +50,6 @@ beforeEach(() => {
 			isFile: () => true,
 		} as any),
 	);
-});
-
-afterEach(() => {
-	console_spy.mockRestore();
 });
 
 // Helper to create ENOENT error with proper code property
@@ -101,11 +85,6 @@ const setup_mock_filesystem = () => {
 		'/another/allowed': {isDir: true, isSymlink: false},
 		'/another/allowed/directory': {isDir: true, isSymlink: false},
 	};
-
-	vi.mocked(fs_sync.existsSync).mockImplementation((pathStr) => {
-		if (typeof pathStr !== 'string') return false;
-		return (filesystem as any)[pathStr] !== undefined;
-	});
 
 	vi.mocked(fs.lstat).mockImplementation(async (pathStr) => {
 		const entry = (filesystem as any)[pathStr as string];
@@ -339,7 +318,6 @@ describe('ScopedFs - advanced security features', () => {
 		for (const {path, symlink_at} of symlink_test_cases) {
 			// Reset mocks for each test case
 			vi.mocked(fs.lstat).mockReset();
-			vi.mocked(fs_sync.existsSync).mockReturnValue(true);
 
 			// Setup a custom lstat implementation for this test case
 			vi.mocked(fs.lstat).mockImplementation(async (p) => {
@@ -562,11 +540,6 @@ describe('ScopedFs - error handling and edge cases', () => {
 	test('should handle nonexistent parent directories correctly', async () => {
 		const scoped_fs = create_test_instance();
 		const deep_nonexistent_path = '/allowed/path/does/not/exist/yet/file.txt';
-
-		// Setup existsSync to simulate missing directories
-		vi.mocked(fs_sync.existsSync).mockImplementation((p) => {
-			return String(p) === '/allowed/path'; // Only the base allowed path exists
-		});
 
 		// The path itself is allowed since it's under an allowed directory
 		assert.ok(scoped_fs.is_path_allowed(deep_nonexistent_path));
