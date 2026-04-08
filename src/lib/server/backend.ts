@@ -12,7 +12,8 @@ import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
 import type {ActionEventPhase, ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 
 import type {ZzzOptions} from '../config_helpers.js';
-import {DiskfileDirectoryPath} from '../diskfile_types.js';
+import {DiskfileDirectoryPath, type SerializableDisknode} from '../diskfile_types.js';
+import {to_serializable_disknode} from '../diskfile_helpers.js';
 import type {WorkspaceInfoJson} from '../workspace.svelte.js';
 import {ScopedFs} from './scoped_fs.js';
 import type {BackendActionHandlers} from './backend_action_types.js';
@@ -284,14 +285,17 @@ export class Backend implements ActionEventEnvironment {
 	 *
 	 * @param path - absolute directory path
 	 * @param opened_at - optional timestamp to preserve (e.g. from persisted state)
-	 * @returns the workspace info (existing or newly created)
+	 * @returns the workspace info and initial file tree
 	 */
-	async workspace_open(path: string, opened_at?: string): Promise<WorkspaceInfoJson> {
+	async workspace_open(
+		path: string,
+		opened_at?: string,
+	): Promise<{workspace: WorkspaceInfoJson; files: Array<SerializableDisknode>}> {
 		const resolved = DiskfileDirectoryPath.parse(resolve(path));
 
-		// Already open?
+		// Already open? Return existing with current files
 		const existing = this.workspaces.get(resolved);
-		if (existing) return existing;
+		if (existing) return {workspace: existing, files: this.#collect_filer_files(resolved)};
 
 		// Validate the directory exists
 		try {
@@ -308,7 +312,10 @@ export class Backend implements ActionEventEnvironment {
 
 		// Add to ScopedFs and start watching
 		this.scoped_fs.add_path(resolved);
-		this.#start_filer(resolved);
+		const filer_instance = this.#start_filer(resolved);
+
+		// TODO: verify cleanup_promise resolves after initial scan completes — if it resolves earlier, files may be empty
+		await filer_instance.cleanup_promise;
 
 		const info: WorkspaceInfoJson = {
 			path: resolved,
@@ -321,9 +328,24 @@ export class Backend implements ActionEventEnvironment {
 
 		if (!this.#restoring_workspaces) {
 			void this.#persist_workspaces();
+			// TODO: workspace_changed broadcasts to ALL clients including the originator — harmless (workspaces.add deduplicates by path) but wastes a round trip
+			void this.api.workspace_changed({type: 'open', workspace: info});
 		}
 
-		return info;
+		return {workspace: info, files: this.#collect_filer_files(resolved)};
+	}
+
+	/**
+	 * Collect all files from a Filer as SerializableDisknode array.
+	 */
+	#collect_filer_files(dir: string): Array<SerializableDisknode> {
+		const filer_instance = this.filers.get(dir);
+		if (!filer_instance) return [];
+		const files: Array<SerializableDisknode> = [];
+		for (const file of filer_instance.filer.files.values()) {
+			files.push(to_serializable_disknode(file, dir));
+		}
+		return files;
 	}
 
 	/**
@@ -349,12 +371,14 @@ export class Backend implements ActionEventEnvironment {
 			this.scoped_fs.remove_path(resolved);
 		}
 
+		const workspace = this.workspaces.get(resolved)!;
 		this.workspaces.delete(resolved);
 
 		this.log?.info(`workspace closed: ${resolved}`);
 
 		// Persist in background
 		void this.#persist_workspaces();
+		void this.api.workspace_changed({type: 'close', workspace});
 
 		return true;
 	}
@@ -394,7 +418,8 @@ export class Backend implements ActionEventEnvironment {
 	}
 
 	/**
-	 * Restore persisted workspaces from disk on startup.
+	 * Restore persisted workspaces from disk on startup, then ensure
+	 * scoped_dirs are also represented as workspace entries.
 	 * Re-opens each workspace (registers with ScopedFs, starts Filer).
 	 * Silently skips workspaces whose directories no longer exist.
 	 */
@@ -425,6 +450,29 @@ export class Backend implements ActionEventEnvironment {
 			if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
 				this.log?.warn(`failed to restore workspaces: ${error}`);
 			}
+		}
+
+		// Ensure scoped_dirs have workspace entries — these are derived from
+		// env config so we don't persist them (they're re-created each startup)
+		this.#ensure_scoped_dir_workspaces();
+	}
+
+	/**
+	 * Create workspace entries for scoped_dirs that aren't already in the workspace map.
+	 * These aren't persisted — they're always derived from env config on startup.
+	 */
+	#ensure_scoped_dir_workspaces(): void {
+		for (const dir of this.scoped_dirs) {
+			if (dir === this.zzz_dir) continue; // zzz_dir is internal, not a workspace
+			if (this.workspaces.has(dir)) continue;
+
+			const info: WorkspaceInfoJson = {
+				path: dir,
+				name: basename(dir.replace(/\/$/, '')),
+				opened_at: new Date().toISOString(),
+			};
+			this.workspaces.set(dir, info);
+			this.log?.info(`workspace created from scoped_dir: ${dir}`);
 		}
 	}
 }

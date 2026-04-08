@@ -12,7 +12,6 @@ import type {Uuid} from './zod_helpers.js';
 // TODO: workspace history — soft-close keeps workspace in set for later re-opening (needs DB)
 // TODO: pull-based lazy activation — only start Filers when a client connects or requests data (see grimoire lore)
 // TODO: hooks/automation — respond to fs events within workspaces
-// TODO: workspace_open should send the initial file tree to the frontend (currently relies on filer_change notifications)
 
 export const WorkspacesJson = CellJson.extend({
 	items: z.array(WorkspaceJson).default(() => []),

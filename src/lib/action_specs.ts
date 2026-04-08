@@ -448,6 +448,7 @@ export const workspace_open_action_spec = {
 	}),
 	output: z.strictObject({
 		workspace: WorkspaceInfoJson,
+		files: z.array(SerializableDisknode),
 	}),
 	async: true,
 	description: 'Open a workspace directory — registers with ScopedFs and starts file watching.',
@@ -481,6 +482,21 @@ export const workspace_list_action_spec = {
 	description: 'List all open workspaces.',
 } satisfies ActionSpecUnion;
 
+export const workspace_changed_action_spec = {
+	method: 'workspace_changed',
+	kind: 'remote_notification',
+	initiator: 'backend',
+	auth: null,
+	side_effects: true,
+	input: z.strictObject({
+		type: z.enum(['open', 'close']),
+		workspace: WorkspaceInfoJson,
+	}),
+	output: z.void(),
+	async: true,
+	description: 'Notifies frontends when a workspace is opened or closed.',
+} satisfies ActionSpecUnion;
+
 export const all_action_specs: Array<ActionSpecUnion> = [
 	ping_action_spec,
 	session_load_action_spec,
@@ -510,4 +526,5 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	workspace_open_action_spec,
 	workspace_close_action_spec,
 	workspace_list_action_spec,
+	workspace_changed_action_spec,
 ];

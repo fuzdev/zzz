@@ -6,7 +6,7 @@ Development workflow, extension points, and common patterns.
 
 ```bash
 git clone https://github.com/fuzdev/zzz.git && cd zzz
-cp src/lib/server/.env.development.example .env.development
+deno task dev:setup
 npm install
 ```
 

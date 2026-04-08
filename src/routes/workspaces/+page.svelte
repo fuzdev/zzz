@@ -1,5 +1,5 @@
 <script lang="ts">
-	// TODO: handle ?workspace= query param — auto-activate workspace on page load (sent by `zzz <dir>` CLI)
+	import {page} from '$app/state';
 	import {frontend_context} from '$lib/frontend.svelte.js';
 	import {DiskfileDirectoryPath} from '$lib/diskfile_types.js';
 	import Glyph from '$lib/Glyph.svelte';
@@ -11,6 +11,26 @@
 	let new_path = $state('');
 	let opening = $state(false);
 	let error_message: string | null = $state(null);
+
+	// Auto-open/activate workspace from query param (e.g. from `zzz <dir>` CLI)
+	const workspace_param = $derived(page.url.searchParams.get('workspace'));
+
+	$effect(() => {
+		if (!workspace_param) return;
+		const normalized = workspace_param.endsWith('/') ? workspace_param : workspace_param + '/';
+		const path = DiskfileDirectoryPath.parse(normalized);
+		const existing = app.workspaces.get_by_path(path);
+		if (existing) {
+			app.workspaces.activate(existing.id);
+		} else {
+			void app.api.workspace_open({path}).then((result) => {
+				if (result.ok) {
+					const ws = app.workspaces.get_by_path(path);
+					if (ws) app.workspaces.activate(ws.id);
+				}
+			});
+		}
+	});
 
 	const handle_open = async (): Promise<void> => {
 		const raw = new_path.trim();

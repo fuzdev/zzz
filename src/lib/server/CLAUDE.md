@@ -107,9 +107,10 @@ class Backend implements ActionEventEnvironment {
 	lookup_action_spec(method): ActionSpecUnion | undefined;
 	lookup_provider(name): BackendProvider;
 	receive(message): Promise<JsonrpcMessage | null>;
-	workspace_open(path): Promise<WorkspaceInfoJson>;
+	workspace_open(path): Promise<{workspace: WorkspaceInfoJson; files: Array<SerializableDisknode>}>;
 	workspace_close(path): Promise<boolean>;
 	workspace_list(): Array<WorkspaceInfoJson>;
+	workspaces_ready(): Promise<void>;
 	destroy(): Promise<void>;
 }
 ```

@@ -83,32 +83,36 @@
 						<EditableText bind:value={app.spaces.active.name} />
 						<span class="text_50 font_size_sm">directories</span>
 					</h3>
-					{#if app.scoped_dirs.length}
+					{#if app.workspaces.items.by_id.size > 0}
 						<ul class="unstyled">
-							{#each app.scoped_dirs as dir_path (dir_path)}
-								{@const included = app.spaces.active.directory_paths.includes(dir_path)}
+							{#each app.workspaces.items.values as workspace (workspace.id)}
+								{@const included = app.spaces.active.directory_paths.includes(workspace.path)}
 								<li>
 									<button
 										type="button"
 										class="width:100% gap_sm"
 										class:selected={included}
-										onclick={() => {
+										onclick={async () => {
 											if (included) {
-												app.spaces.active!.remove_directory(dir_path);
+												app.spaces.active!.remove_directory(workspace.path);
 											} else {
-												app.spaces.active!.add_directory(dir_path);
+												// ensure workspace is open on the backend before adding to space
+												if (!app.workspaces.get_by_path(workspace.path)) {
+													await app.api.workspace_open({path: workspace.path});
+												}
+												app.spaces.active!.add_directory(workspace.path);
 											}
 										}}
 									>
 										<span class="flex:1 font_size_sm text-align:left font_family_mono"
-											>{dir_path}</span
+											>{workspace.path}</span
 										>
 									</button>
 								</li>
 							{/each}
 						</ul>
 					{:else}
-						<p class="text_50">no directories available</p>
+						<p class="text_50">no workspaces open</p>
 					{/if}
 				</section>
 			{/if}

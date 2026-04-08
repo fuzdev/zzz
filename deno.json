@@ -2,7 +2,9 @@
 	"unstable": ["sloppy-imports"],
 	"exclude": ["**/*.test.ts", "**/*.svelte.ts", "**/*.gen.ts", "src/test/"],
 	"tasks": {
-		"dev:start": "NODE_ENV=development deno run --allow-all src/lib/zzz/main.ts daemon start",
+		"dev:setup": "deno run --allow-read --allow-write --allow-env --allow-run=openssl scripts/dev_setup.ts",
+		"prod:setup": "deno run --allow-read --allow-write --allow-env --allow-run=openssl scripts/prod_setup.ts",
+		"dev:start": "NODE_ENV=development deno run --allow-all --env=.env.development src/lib/zzz/main.ts daemon start",
 		"install": "gro build && mkdir -p ~/.zzz/bin && cp dist_cli/zzz ~/.zzz/bin/zzz",
 		"check": "deno check src/lib/zzz/**/*.ts"
 	},

@@ -40,11 +40,10 @@ and it will have a production build with the Node adapter and Hono server soon.
 
 To run Zzz, we need an `.env.development` file in your project root.
 
-In your terminal, copy over
-[src/lib/server/.env.development.example](/src/lib/server/.env.development.example):
+In your terminal, run the setup script (idempotent — safe to re-run):
 
 ```bash
-cp src/lib/server/.env.development.example .env.development --update=none
+deno task dev:setup
 ```
 
 You can edit `.env.development` with your API keys,

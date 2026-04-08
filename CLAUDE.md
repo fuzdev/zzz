@@ -4,7 +4,7 @@
 
 `@fuzdev/zzz` — local-first AI forge: chat + files + prompts + terminals in one app.
 SvelteKit frontend, Hono/Deno backend, Svelte 5 runes, Zod schemas.
-v0.0.1, no auth, no database yet. 28 cell classes, 25 action specs, 4 AI providers.
+v0.0.1, no auth, no database yet. 32 cell classes, 29 action specs, 4 AI providers.
 
 For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
@@ -79,7 +79,7 @@ src/
 │   │   └── commands/            # init, daemon, open, status
 │   │
 │   ├── *.svelte.ts               # Cell state classes (28 classes)
-│   ├── action_specs.ts           # All 25 action spec definitions
+│   ├── action_specs.ts           # All 29 action spec definitions
 │   ├── action_event.ts           # Action lifecycle state machine
 │   ├── action_peer.ts            # Symmetric send/receive
 │   ├── cell.svelte.ts            # Base Cell class
@@ -130,7 +130,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed data flow, content
 
 ## Cell Classes
 
-30 registered classes in `src/lib/cell_classes.ts`:
+32 registered classes in `src/lib/cell_classes.ts`:
 
 | Class            | Source file                    | Purpose                              |
 | ---------------- | ------------------------------ | ------------------------------------ |
@@ -167,7 +167,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed data flow, content
 
 ## Action Specs
 
-28 specs in `src/lib/action_specs.ts`:
+29 specs in `src/lib/action_specs.ts`:
 
 | Method                   | Kind                  | Initiator  | Purpose                          |
 | ------------------------ | --------------------- | ---------- | -------------------------------- |
@@ -199,13 +199,14 @@ See [docs/architecture.md](docs/architecture.md) for detailed data flow, content
 | `workspace_open`         | `request_response`    | `frontend` | Open workspace directory         |
 | `workspace_close`        | `request_response`    | `frontend` | Close workspace directory        |
 | `workspace_list`         | `request_response`    | `frontend` | List open workspaces             |
+| `workspace_changed`      | `remote_notification` | `backend`  | Workspace open/close notification|
 
 ## Development Workflow
 
 ### Setup
 
 ```bash
-cp src/lib/server/.env.development.example .env.development
+deno task dev:setup
 npm install
 
 # Optional: build fuz_pty for real PTY support (echo, prompts, colors, resize)
@@ -402,7 +403,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 
 ## Environment Variables
 
-From `src/lib/server/.env.development.example`:
+From `.env.development.example`:
 
 | Variable                              | Purpose                                    |
 | ------------------------------------- | ------------------------------------------ |

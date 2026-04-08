@@ -12,6 +12,7 @@ import type {Datetime} from './zod_helpers.js';
  * The wire format for workspace info shared between frontend and backend.
  * Used in action spec inputs/outputs and for JSON persistence.
  */
+// TODO: include id in WorkspaceInfoJson so frontend and backend share the same workspace identity instead of regenerating UUIDs on each sync
 export const WorkspaceInfoJson = z.strictObject({
 	/** Absolute directory path for this workspace. */
 	path: DiskfileDirectoryPath,

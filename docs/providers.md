@@ -241,7 +241,7 @@ Local providers (Ollama): `available` = `true` when service responds.
 2. Implement `create_client()`, `handle_streaming_completion()`, `handle_non_streaming_completion()`
 3. Register in `src/lib/server/server.ts`: `backend.add_provider(new BackendProviderNewProvider(provider_options))`
 4. Add response helper in `src/lib/response_helpers.ts`
-5. Add env var to `.env.development.example`: `SECRET_NEWPROVIDER_API_KEY=`
+5. Add env var to `.env.development.example` and `.env.production.example`: `SECRET_NEWPROVIDER_API_KEY=`
 6. Add default models to `src/lib/config_defaults.ts` (`models_default`)
 
 See [src/lib/server/CLAUDE.md](../src/lib/server/CLAUDE.md) for detailed backend architecture.

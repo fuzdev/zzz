@@ -370,6 +370,13 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 	workspace_open: {
 		receive_response: ({app, data: {output}}) => {
 			app.workspaces.add(output.workspace);
+			// populate diskfiles from initial file tree
+			for (const disknode of output.files) {
+				app.diskfiles.handle_change({
+					change: {type: 'add', path: disknode.id},
+					disknode,
+				});
+			}
 		},
 		receive_error: ({data: {error}}) => {
 			console.error('[frontend_action_handlers] workspace_open failed:', error);
@@ -396,6 +403,19 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 		},
 		receive_error: ({data: {error}}) => {
 			console.error('[frontend_action_handlers] workspace_list failed:', error);
+		},
+	},
+
+	workspace_changed: {
+		receive: ({app, data: {input}}) => {
+			if (input.type === 'open') {
+				app.workspaces.add(input.workspace);
+			} else {
+				const workspace = app.workspaces.get_by_path(input.workspace.path);
+				if (workspace) {
+					app.workspaces.remove(workspace.id);
+				}
+			}
 		},
 	},
 };

@@ -575,8 +575,7 @@ export const backend_action_handlers: BackendActionHandlers = {
 	workspace_open: {
 		receive_request: async ({backend, data: {input}}) => {
 			try {
-				const workspace = await backend.workspace_open(input.path);
-				return {workspace};
+				return await backend.workspace_open(input.path);
 			} catch (error) {
 				console.error(`[backend_action_handlers.workspace_open.receive_request] failed:`, error);
 				throw jsonrpc_errors.internal_error(
