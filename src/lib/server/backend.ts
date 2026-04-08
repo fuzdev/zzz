@@ -437,7 +437,9 @@ export class Backend implements ActionEventEnvironment {
 						await this.workspace_open(entry.path, entry.opened_at); // eslint-disable-line no-await-in-loop
 					} catch (error) {
 						// directory may have been removed — skip silently
-						this.log?.warn(`skipping persisted workspace ${entry.path}: ${error instanceof Error ? error.message : error}`);
+						this.log?.warn(
+							`skipping persisted workspace ${entry.path}: ${error instanceof Error ? error.message : error}`,
+						);
 					}
 				}
 			} finally {

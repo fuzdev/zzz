@@ -16029,7 +16029,7 @@
 						"name": "handle_filer_change",
 						"kind": "function",
 						"doc_comment": "Handle file system changes and notify clients.",
-						"source_line": 216,
+						"source_line": 211,
 						"type_signature": "(change: WatcherChange, disknode: Disknode, backend: Backend, dir: string, filer: Filer): void",
 						"return_type": "void",
 						"parameters": [
@@ -17413,7 +17413,7 @@
 						"name": "CreateZzzAppOptions",
 						"kind": "type",
 						"doc_comment": "Options for creating a zzz app.",
-						"source_line": 34,
+						"source_line": 35,
 						"type_signature": "CreateZzzAppOptions",
 						"properties": [
 							{
@@ -17428,7 +17428,7 @@
 						"name": "ZzzApp",
 						"kind": "type",
 						"doc_comment": "The created zzz app and its backend.",
-						"source_line": 42,
+						"source_line": 43,
 						"type_signature": "ZzzApp",
 						"properties": [
 							{
@@ -17449,7 +17449,7 @@
 						"name": "create_zzz_app",
 						"kind": "function",
 						"doc_comment": "Create the zzz Hono app with Backend, providers, and endpoints.\n\nThis is the shared factory called by the server entry point.",
-						"source_line": 54,
+						"source_line": 55,
 						"type_signature": "(options: CreateZzzAppOptions): ZzzApp",
 						"return_type": "ZzzApp",
 						"parameters": [
@@ -17472,7 +17472,8 @@
 					"server/backend_provider_gemini.ts",
 					"server/backend_provider_ollama.ts",
 					"server/register_http_actions.ts",
-					"server/register_websocket_actions.ts"
+					"server/register_websocket_actions.ts",
+					"server/security.ts"
 				],
 				"dependents": ["server/server.ts"]
 			},
@@ -18266,6 +18267,91 @@
 				"dependents": ["server/backend.ts", "server/helpers.ts"]
 			},
 			{
+				"path": "server/security.ts",
+				"declarations": [
+					{
+						"name": "LOCAL_HOSTNAMES",
+						"kind": "variable",
+						"doc_comment": "Default set of hostnames considered safe for local-only binding.\nIncludes all common ways to address localhost.",
+						"source_line": 16,
+						"type_signature": "ReadonlySet<string>"
+					},
+					{
+						"name": "OPEN_HOST_ADDRESSES",
+						"kind": "variable",
+						"doc_comment": "Addresses that bind to all network interfaces.\nThese are dangerous without authentication because they expose the daemon to the LAN.",
+						"source_line": 27,
+						"type_signature": "ReadonlySet<string>"
+					},
+					{
+						"name": "is_open_host",
+						"kind": "function",
+						"doc_comment": "Check whether a bind address is a wildcard that exposes to the network.",
+						"source_line": 35,
+						"type_signature": "(host: string): boolean",
+						"return_type": "boolean",
+						"return_description": "true if the host binds to all interfaces",
+						"parameters": [
+							{
+								"name": "host",
+								"type": "string",
+								"description": "the bind address to check"
+							}
+						]
+					},
+					{
+						"name": "extract_hostname",
+						"kind": "function",
+						"doc_comment": "Extract the hostname portion from a Host header value.\nHandles IPv6 brackets: `[::1]:3000` → `[::1]`\nHandles regular: `localhost:3000` → `localhost`",
+						"source_line": 45,
+						"type_signature": "(host: string): string",
+						"return_type": "string",
+						"return_description": "the hostname without port",
+						"parameters": [
+							{
+								"name": "host",
+								"type": "string",
+								"description": "the raw Host header value"
+							}
+						]
+					},
+					{
+						"name": "build_allowed_hostnames",
+						"kind": "function",
+						"doc_comment": "Build the set of allowed hostnames for Host header validation\nbased on the server's bind address.\n\nWhen binding to `localhost` or `127.0.0.1`, both are allowed\n(they refer to the same interface). When binding to `0.0.0.0`,\nall local hostnames are allowed since we can't know which\ninterface the request arrived on.",
+						"source_line": 82,
+						"type_signature": "(bind_host: string): Set<string>",
+						"return_type": "Set<string>",
+						"return_description": "set of hostnames to accept in the Host header",
+						"parameters": [
+							{
+								"name": "bind_host",
+								"type": "string",
+								"description": "the address the server is binding to"
+							}
+						]
+					},
+					{
+						"name": "create_host_validation_middleware",
+						"kind": "function",
+						"doc_comment": "Create middleware that validates the Host header against an allowlist.\n\nBlocks requests whose Host header hostname doesn't match any allowed value.\nThe port portion of the Host header is stripped before comparison.\nRequests without a Host header are allowed through (non-browser clients like curl or CLI).",
+						"source_line": 120,
+						"type_signature": "(allowed_hostnames: Set<string>): Handler",
+						"return_type": "Handler",
+						"return_description": "Hono middleware handler",
+						"parameters": [
+							{
+								"name": "allowed_hostnames",
+								"type": "Set<string>",
+								"description": "set of allowed hostnames (without port)"
+							}
+						]
+					}
+				],
+				"module_comment": "Host header validation middleware for DNS rebinding defense-in-depth.\n\nValidates that the Host header matches expected local hostnames.\nRequests without a Host header are allowed (HTTP/1.0, CLI tools).",
+				"dependents": ["server/create_zzz_app.ts", "server/server.ts"]
+			},
+			{
 				"path": "server/server_env.ts",
 				"declarations": [
 					{
@@ -18403,14 +18489,19 @@
 						"name": "start_server",
 						"kind": "function",
 						"doc_comment": "Start the zzz server using Deno runtime.\n\nCreates the full backend with providers, WebSocket, and HTTP RPC\nendpoints via `create_zzz_app`, then serves with `Deno.serve`.",
-						"source_line": 32,
+						"source_line": 33,
 						"type_signature": "(): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": []
 					}
 				],
 				"module_comment": "Deno server entry point for zzz.\n\nSingle entry point for both dev mode (`gro dev` via `gro_plugin_deno_server`)\nand production (`zzz daemon start`). Uses the shared `create_zzz_app` factory\nfor the Hono app, then binds with `Deno.serve` and handles daemon lifecycle.",
-				"dependencies": ["server/create_zzz_app.ts", "server/server_env.ts", "zzz/build_info.ts"],
+				"dependencies": [
+					"server/create_zzz_app.ts",
+					"server/security.ts",
+					"server/server_env.ts",
+					"zzz/build_info.ts"
+				],
 				"dependents": ["zzz/commands/daemon.ts"]
 			},
 			{
@@ -22145,7 +22236,7 @@
 						"name": "daemon_stop",
 						"kind": "function",
 						"doc_comment": "Stop the running daemon.",
-						"source_line": 47,
+						"source_line": 46,
 						"type_signature": "(runtime: RuntimeDeps, _args: { _: string[]; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -22167,7 +22258,7 @@
 						"name": "daemon_status",
 						"kind": "function",
 						"doc_comment": "Show daemon status.",
-						"source_line": 65,
+						"source_line": 64,
 						"type_signature": "(runtime: RuntimeDeps, args: { _: string[]; json: boolean; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -22227,7 +22318,7 @@
 						"name": "open",
 						"kind": "function",
 						"doc_comment": "Open the zzz UI in a browser, auto-starting the daemon if needed.",
-						"source_line": 87,
+						"source_line": 90,
 						"type_signature": "(runtime: RuntimeDeps, args: { _: string[]; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [

@@ -12,6 +12,7 @@ import {upgradeWebSocket} from 'hono/deno';
 import {Logger} from '@fuzdev/fuz_util/log.js';
 import {parse_allowed_origins, verify_request_source} from '@fuzdev/fuz_app/http/origin.js';
 
+import {build_allowed_hostnames, create_host_validation_middleware} from './security.js';
 import {Backend} from './backend.js';
 import type {ZzzServerEnv} from './server_env.js';
 import {backend_action_handlers} from './backend_action_handlers.js';
@@ -77,6 +78,10 @@ export const create_zzz_app = (options: CreateZzzAppOptions): ZzzApp => {
 		await next();
 		log.info(`[request_end] ${c.req.method} ${c.req.url}`);
 	});
+
+	// Security: validate Host header (DNS rebinding defense-in-depth)
+	const allowed_hostnames = build_allowed_hostnames(env.host);
+	app.use(create_host_validation_middleware(allowed_hostnames));
 
 	// Security: verify origin of incoming requests
 	app.use(verify_request_source(allowed_origins));

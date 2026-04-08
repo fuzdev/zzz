@@ -75,7 +75,11 @@ describe('Workspaces', () => {
 		const workspaces = new Workspaces({app});
 		const path = DiskfileDirectoryPath.parse('/home/user/project/');
 
-		const workspace = workspaces.add({path, name: 'project', opened_at: '2026-01-01T00:00:00.000Z'});
+		const workspace = workspaces.add({
+			path,
+			name: 'project',
+			opened_at: '2026-01-01T00:00:00.000Z',
+		});
 
 		assert.strictEqual(workspaces.items.by_id.size, 1);
 		assert.strictEqual(workspaces.active_id, workspace.id);

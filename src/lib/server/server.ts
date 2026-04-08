@@ -19,6 +19,7 @@ import {create_deno_runtime} from '@fuzdev/fuz_app/runtime/deno.js';
 import {VERSION} from '../zzz/build_info.ts';
 import {create_zzz_app} from './create_zzz_app.ts';
 import {load_server_env} from './server_env.ts';
+import {is_open_host} from './security.ts';
 
 /** Shared runtime for daemon lifecycle and server operations. */
 const daemon_runtime = create_deno_runtime([]);
@@ -36,6 +37,20 @@ export const start_server = async (): Promise<void> => {
 		zzz_dir: `${Deno.env.get('HOME') ?? '.'}/.zzz`,
 		app_version: VERSION,
 	});
+
+	// Validate binding address — refuse to expose to network without authentication
+	// TODO allow 0.0.0.0 binding once bearer token auth is implemented —
+	// generate token on start, write to daemon.json, require on all requests.
+	// See tx's bearer_auth.ts in fuz_app for the pattern. Consider requiring
+	// a keeper account (like tx) instead of or in addition to a bearer token.
+	if (is_open_host(env.host)) {
+		console.error(
+			`[server] FATAL: binding to '${env.host}' exposes zzz to your entire network.\n` +
+				`  zzz has no authentication — anyone on your network could read/write files and run commands.\n` +
+				`  Use --host localhost (default) or --host 127.0.0.1 instead.`,
+		);
+		Deno.exit(1);
+	}
 
 	// Check for stale daemon info from a previous crash
 	const stale = await read_daemon_info(daemon_runtime, 'zzz');

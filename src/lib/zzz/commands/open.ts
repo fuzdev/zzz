@@ -27,7 +27,10 @@ import {get_zzz_dir} from '../cli_config.ts';
  * @returns daemon info if running, null otherwise
  */
 const check_daemon = async (
-	runtime: Pick<ZzzRuntime, 'env_get' | 'stat' | 'read_text_file' | 'run_command' | 'remove' | 'warn'>,
+	runtime: Pick<
+		ZzzRuntime,
+		'env_get' | 'stat' | 'read_text_file' | 'run_command' | 'remove' | 'warn'
+	>,
 ): Promise<DaemonInfo | null> => {
 	const info = await read_daemon_info(runtime, 'zzz');
 	if (!info) return null;

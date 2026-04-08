@@ -2,11 +2,7 @@ import {test, vi, beforeEach, describe, assert} from 'vitest';
 import * as fs from 'node:fs/promises';
 import type {Stats, BigIntStats} from 'node:fs';
 
-import {
-	ScopedFs,
-	PathNotAllowedError,
-	SymlinkNotAllowedError,
-} from '$lib/server/scoped_fs.js';
+import {ScopedFs, PathNotAllowedError, SymlinkNotAllowedError} from '$lib/server/scoped_fs.js';
 
 // Mock fs/promises
 vi.mock('node:fs/promises', () => ({
@@ -197,10 +193,7 @@ describe('ScopedFs - operations use normalized paths', () => {
 		const scoped_fs = create_test_instance();
 		vi.mocked(fs.copyFile).mockResolvedValueOnce();
 
-		await scoped_fs.copy_file(
-			'/allowed/path/./a/../src.txt',
-			'/allowed/other/path/./b/../dst.txt',
-		);
+		await scoped_fs.copy_file('/allowed/path/./a/../src.txt', '/allowed/other/path/./b/../dst.txt');
 		assert.strictEqual(vi.mocked(fs.copyFile).mock.calls[0]![0], '/allowed/path/src.txt');
 		assert.strictEqual(vi.mocked(fs.copyFile).mock.calls[0]![1], '/allowed/other/path/dst.txt');
 	});

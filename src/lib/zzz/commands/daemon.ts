@@ -34,9 +34,8 @@ export const daemon_start = async (
 	_flags: ZzzGlobalArgs,
 ): Promise<void> => {
 	// Override env with CLI flags (these take precedence)
-	if (args.port) runtime.env_set('PORT', String(args.port));
-	if (args.host) runtime.env_set('HOST', args.host);
-
+	if (args.port) runtime.env_set('PUBLIC_SERVER_PROXIED_PORT', String(args.port));
+	if (args.host) runtime.env_set('PUBLIC_SERVER_HOST', args.host);
 	// Start Deno server (zzz CLI always runs in Deno)
 	await start_server();
 };

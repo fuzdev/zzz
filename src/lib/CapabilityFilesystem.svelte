@@ -11,9 +11,7 @@
 
 	// workspace paths that aren't in the original scoped_dirs
 	const workspace_paths = $derived(
-		app.workspaces.items.values
-			.map((w) => w.path)
-			.filter((p) => !scoped_dirs.includes(p)),
+		app.workspaces.items.values.map((w) => w.path).filter((p) => !scoped_dirs.includes(p)),
 	);
 </script>
 

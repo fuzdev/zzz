@@ -56,7 +56,8 @@ export const load_server_env = (
 			parse_comma_separated(env_get('PUBLIC_ZZZ_SCOPED_DIRS')) ?? defaults?.scoped_dirs ?? [],
 		port: parseInt(env_get('PUBLIC_SERVER_PROXIED_PORT') ?? '', 10) || defaults?.port || 4460,
 		host: env_get('PUBLIC_SERVER_HOST') || defaults?.host || 'localhost',
-		allowed_origins: env_get('ALLOWED_ORIGINS') || defaults?.allowed_origins || '',
+		allowed_origins:
+			env_get('ALLOWED_ORIGINS') || defaults?.allowed_origins || 'http://localhost:*',
 		websocket_path: defaults?.websocket_path || '/ws',
 		api_path: defaults?.api_path || '/api/rpc',
 		artificial_delay:

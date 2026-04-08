@@ -26,29 +26,29 @@ The server provides:
 
 ## Files
 
-| File                             | Purpose                                                          |
-| -------------------------------- | ---------------------------------------------------------------- |
-| `create_zzz_app.ts`              | Shared app factory — Backend, providers, endpoints               |
-| `server_env.ts`                  | Env loading (replaces `$env` for server)                         |
-| `server.ts`                      | Deno entry — calls factory, binds `Deno.serve`, daemon lifecycle |
+| File                             | Purpose                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------ |
+| `create_zzz_app.ts`              | Shared app factory — Backend, providers, endpoints                       |
+| `server_env.ts`                  | Env loading (replaces `$env` for server)                                 |
+| `server.ts`                      | Deno entry — calls factory, binds `Deno.serve`, daemon lifecycle         |
 | `backend.ts`                     | `Backend` class - core state, action handling, file watchers, workspaces |
-| `backend_action_handlers.ts`     | Handler implementations for all backend actions                  |
-| `backend_actions_api.ts`         | Backend-initiated notifications (streaming, file changes)        |
-| `backend_provider.ts`            | Base classes for AI providers                                    |
-| `backend_provider_ollama.ts`     | Ollama provider (local)                                          |
-| `backend_provider_claude.ts`     | Claude/Anthropic provider (remote)                               |
-| `backend_provider_chatgpt.ts`    | OpenAI provider (remote)                                         |
-| `backend_provider_gemini.ts`     | Google Gemini provider (remote)                                  |
-| `scoped_fs.ts`                   | Secure filesystem wrapper                                        |
-| `security.ts`                    | Origin verification middleware                                   |
-| `register_http_actions.ts`       | HTTP endpoint registration                                       |
-| `register_websocket_actions.ts`  | WebSocket endpoint registration                                  |
-| `backend_websocket_transport.ts` | WebSocket transport implementation                               |
-| `pty_ffi.ts`                     | Deno FFI bindings for `libfuz_pty.so` (PTY operations)           |
-| `backend_pty_manager.ts`         | PTY process management (FFI real PTY or fallback pipes)          |
-| `env_file_helpers.ts`            | `.env` file manipulation                                         |
-| `helpers.ts`                     | Completion response persistence                                  |
-| `server_helpers.ts`              | Server utilities                                                 |
+| `backend_action_handlers.ts`     | Handler implementations for all backend actions                          |
+| `backend_actions_api.ts`         | Backend-initiated notifications (streaming, file changes)                |
+| `backend_provider.ts`            | Base classes for AI providers                                            |
+| `backend_provider_ollama.ts`     | Ollama provider (local)                                                  |
+| `backend_provider_claude.ts`     | Claude/Anthropic provider (remote)                                       |
+| `backend_provider_chatgpt.ts`    | OpenAI provider (remote)                                                 |
+| `backend_provider_gemini.ts`     | Google Gemini provider (remote)                                          |
+| `scoped_fs.ts`                   | Secure filesystem wrapper                                                |
+| `security.ts`                    | Host header validation middleware (DNS rebinding defense)                |
+| `register_http_actions.ts`       | HTTP endpoint registration                                               |
+| `register_websocket_actions.ts`  | WebSocket endpoint registration                                          |
+| `backend_websocket_transport.ts` | WebSocket transport implementation                                       |
+| `pty_ffi.ts`                     | Deno FFI bindings for `libfuz_pty.so` (PTY operations)                   |
+| `backend_pty_manager.ts`         | PTY process management (FFI real PTY or fallback pipes)                  |
+| `env_file_helpers.ts`            | `.env` file manipulation                                                 |
+| `helpers.ts`                     | Completion response persistence                                          |
+| `server_helpers.ts`              | Server utilities                                                         |
 
 **Generated files** (do not edit):
 
@@ -69,7 +69,8 @@ create_zzz_app.ts: create_zzz_app({env})
     │
     ├── Import upgradeWebSocket from hono/deno
     ├── Parse allowed_origins → security patterns
-    ├── Create Hono app with logging + origin verification
+    ├── Build allowed_hostnames from bind address
+    ├── Create Hono app with logging + Host validation + origin verification
     ├── Create Backend instance (ScopedFs, Filer, handlers)
     ├── Add providers (Ollama, Claude, ChatGPT, Gemini)
     ├── Register WebSocket endpoint
@@ -79,6 +80,7 @@ create_zzz_app.ts: create_zzz_app({env})
     ▼
 server.ts (Deno — dev via gro_plugin_deno_server, prod via zzz daemon start)
     ├── Load env from Deno.env.get
+    ├── Validate bind address (refuse 0.0.0.0 without auth)
     ├── Call create_zzz_app()
     ├── Add /health endpoint
     ├── Write daemon.json via fuz_app write_daemon_info
@@ -120,7 +122,7 @@ class Backend implements ActionEventEnvironment {
 ```
 HTTP/WebSocket Request
     ↓
-Hono middleware (logging, origin check)
+Hono middleware (logging, Host validation, origin check)
     ↓
 register_*_actions handler
     ↓
@@ -209,6 +211,15 @@ Return final CompletionResult
 
 ## Security
 
+Three layers protect the daemon (no authentication yet — localhost-only):
+
+1. **Binding restriction** — refuses to start on `0.0.0.0`/`::` (network-exposed addresses)
+2. **Host header validation** (`security.ts`) — rejects requests where `Host` isn't a loopback address (DNS rebinding defense)
+3. **Origin/Referer verification** (`fuz_app/http/origin.ts`) — rejects browser requests from non-allowed origins; defaults to `http://localhost:*`
+
+Requests without `Host` or `Origin`/`Referer` headers are allowed through (CLI, curl).
+Bearer token auth is planned — see grimoire `lore/zzz/TODO.md` security section.
+
 ### ScopedFs
 
 Secure filesystem wrapper preventing path traversal and symlink attacks:
@@ -241,31 +252,38 @@ class ScopedFs {
 - Parent directories validated recursively
 - Zod schema validation via `ScopedFsPath`
 
-### Origin Verification
+### Host Header Validation
 
-NOT CSRF protection - simple origin/referer allowlist:
+DNS rebinding defense-in-depth via `security.ts`:
 
 ```typescript
-// Parse patterns from env
-const patterns = parse_allowed_origins(ALLOWED_ORIGINS);
+const allowed_hostnames = build_allowed_hostnames(env.host);
+app.use(create_host_validation_middleware(allowed_hostnames));
+```
 
-// Middleware checks requests
+Extracts hostname from Host header (strips port, handles IPv6 brackets),
+checks against allowed set. When bound to `localhost`, allows `localhost`
+and `127.0.0.1`. Requests without a Host header pass through (CLI/curl).
+
+### Origin Verification
+
+Origin/referer allowlist from `fuz_app/http/origin.ts`:
+
+```typescript
+const patterns = parse_allowed_origins(env.allowed_origins);
 app.use(verify_request_source(patterns));
 ```
 
-**Pattern support**:
+Defaults to `http://localhost:*` when `ALLOWED_ORIGINS` is unset.
 
-- Exact: `https://api.example.com`
-- Wildcard subdomain: `https://*.example.com`
-- Wildcard port: `http://localhost:*`
-- IPv6: `http://[::1]:3000`
-- Combined: `https://*.example.com:*`
+**Pattern support**: exact, wildcard subdomain (`*.example.com`),
+wildcard port (`localhost:*`), IPv6, combined.
 
 **Behavior**:
 
 1. Check `Origin` header first
 2. Fall back to `Referer` header
-3. Allow requests without either (curl, direct access)
+3. Allow requests without either (CLI, curl — not browsers)
 
 ## Action Handling
 

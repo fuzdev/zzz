@@ -434,7 +434,7 @@ From `.env.development.example`:
 
 ## Known Limitations
 
-- **No authentication** — development use only, anyone with network access can use it
+- **No authentication** — development use only, localhost-only binding enforced. Host header validation and origin checking provide defense-in-depth. Bearer token auth planned.
 - **No database** — all state is in-memory, lost on restart (pglite planned). Workspaces persist to JSON file as a stopgap
 - **No undo/history** — file edits are permanent
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found

@@ -142,12 +142,7 @@ export const create_backend_actions_api = (backend: Backend): BackendActionsApi 
 			}
 
 			try {
-				const event = create_action_event(
-					backend,
-					workspace_changed_action_spec,
-					input,
-					'send',
-				);
+				const event = create_action_event(backend, workspace_changed_action_spec, input, 'send');
 
 				await event.parse().handle_async();
 
