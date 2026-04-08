@@ -27,6 +27,8 @@ import {Spaces} from './spaces.svelte.js';
 import {Terminal} from './terminal.svelte.js';
 import {TerminalPreset} from './terminal_preset.svelte.js';
 import {Ui} from './ui.svelte.js';
+import {Workspace} from './workspace.svelte.js';
+import {Workspaces} from './workspaces.svelte.js';
 import type {Cell} from './cell.svelte.js';
 
 export const cell_classes = {
@@ -60,6 +62,8 @@ export const cell_classes = {
 	Time,
 	TextPart,
 	Ui,
+	Workspace,
+	Workspaces,
 } satisfies Record<string, typeof Cell<any>>;
 
 export type CellClasses = typeof cell_classes;

@@ -33,7 +33,7 @@ workspace management.
 ```bash
 zzz                          # start daemon if needed, open browser
 zzz <file>                   # open browser focused on file
-zzz <dir>                    # open browser scoped to directory
+zzz <dir>                    # open workspace (calls workspace_open on daemon)
 
 zzz init                     # initialize ~/.zzz/
 zzz daemon start             # start daemon (foreground)

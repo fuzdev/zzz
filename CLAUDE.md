@@ -108,7 +108,8 @@ src/
 │   ├── settings/
 │   ├── tabs/
 │   ├── terminals/
-│   └── views/
+│   ├── views/
+│   └── workspaces/
 │
 ├── test/                         # Tests (not co-located)
 │   ├── cell.svelte.*.test.ts
@@ -129,7 +130,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed data flow, content
 
 ## Cell Classes
 
-28 registered classes in `src/lib/cell_classes.ts`:
+30 registered classes in `src/lib/cell_classes.ts`:
 
 | Class            | Source file                    | Purpose                              |
 | ---------------- | ------------------------------ | ------------------------------------ |
@@ -161,10 +162,12 @@ See [docs/architecture.md](docs/architecture.md) for detailed data flow, content
 | `TerminalPreset` | `terminal_preset.svelte.ts`   | Saved terminal command config        |
 | `Time`           | `time.svelte.ts`              | Reactive time state                  |
 | `Ui`             | `ui.svelte.ts`                | UI state (menus, layout)             |
+| `Workspace`      | `workspace.svelte.ts`         | Open workspace directory             |
+| `Workspaces`     | `workspaces.svelte.ts`        | Collection of workspaces             |
 
 ## Action Specs
 
-25 specs in `src/lib/action_specs.ts`:
+28 specs in `src/lib/action_specs.ts`:
 
 | Method                   | Kind                  | Initiator  | Purpose                          |
 | ------------------------ | --------------------- | ---------- | -------------------------------- |
@@ -193,6 +196,9 @@ See [docs/architecture.md](docs/architecture.md) for detailed data flow, content
 | `terminal_data`          | `remote_notification` | `backend`  | Stream stdout/stderr to frontend |
 | `terminal_resize`        | `request_response`    | `frontend` | Update PTY dimensions            |
 | `terminal_close`         | `request_response`    | `frontend` | Kill terminal process            |
+| `workspace_open`         | `request_response`    | `frontend` | Open workspace directory         |
+| `workspace_close`        | `request_response`    | `frontend` | Close workspace directory        |
+| `workspace_list`         | `request_response`    | `frontend` | List open workspaces             |
 
 ## Development Workflow
 
@@ -388,7 +394,7 @@ The `.zzz/` directory stores app data. Configured via `PUBLIC_ZZZ_DIR`.
 
 | Subdirectory | Purpose                                |
 | ------------ | -------------------------------------- |
-| `state/`     | Persistent data (completions logs)     |
+| `state/`     | Persistent data (completions, workspaces.json) |
 | `cache/`     | Regenerable data, safe to delete       |
 | `run/`       | Runtime ephemeral (daemon.json: PID, port) |
 
@@ -428,7 +434,7 @@ From `src/lib/server/.env.development.example`:
 ## Known Limitations
 
 - **No authentication** — development use only, anyone with network access can use it
-- **No database** — all state is in-memory, lost on restart (pglite planned)
+- **No database** — all state is in-memory, lost on restart (pglite planned). Workspaces persist to JSON file as a stopgap
 - **No undo/history** — file edits are permanent
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI

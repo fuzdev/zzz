@@ -568,6 +568,44 @@ export const backend_action_handlers: BackendActionHandlers = {
 		},
 	},
 
+	workspace_open: {
+		receive_request: async ({backend, data: {input}}) => {
+			try {
+				const workspace = await backend.workspace_open(input.path);
+				return {workspace};
+			} catch (error) {
+				console.error(`[backend_action_handlers.workspace_open.receive_request] failed:`, error);
+				throw jsonrpc_errors.internal_error(
+					`failed to open workspace: ${error instanceof Error ? error.message : 'unknown error'}`,
+				);
+			}
+		},
+	},
+
+	workspace_close: {
+		receive_request: async ({backend, data: {input}}) => {
+			try {
+				const closed = await backend.workspace_close(input.path);
+				if (!closed) {
+					throw jsonrpc_errors.invalid_params(`workspace not open: ${input.path}`);
+				}
+				return null;
+			} catch (error) {
+				if (error instanceof ThrownJsonrpcError) throw error;
+				console.error(`[backend_action_handlers.workspace_close.receive_request] failed:`, error);
+				throw jsonrpc_errors.internal_error(
+					`failed to close workspace: ${error instanceof Error ? error.message : 'unknown error'}`,
+				);
+			}
+		},
+	},
+
+	workspace_list: {
+		receive_request: ({backend}) => {
+			return {workspaces: backend.workspace_list()};
+		},
+	},
+
 	provider_update_api_key: {
 		receive_request: async ({backend, data: {input}}) => {
 			const {provider_name, api_key} = input;

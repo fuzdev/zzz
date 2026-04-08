@@ -21,6 +21,7 @@ import {Parts} from './parts.svelte.js';
 import {Time} from './time.svelte.js';
 import {Ollama} from './ollama.svelte.js';
 import {Spaces} from './spaces.svelte.js';
+import {Workspaces} from './workspaces.svelte.js';
 import type {ZzzOptions} from './config_helpers.js';
 import {BOTS_DEFAULT} from './config_defaults.js';
 import {DiskfileDirectoryPath, DiskfilePath} from './diskfile_types.js';
@@ -104,6 +105,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly capabilities: Capabilities;
 	readonly ollama: Ollama;
 	readonly spaces: Spaces;
+	readonly workspaces: Workspaces;
 
 	readonly bots: ZzzOptions['bots'];
 
@@ -197,6 +199,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.capabilities = new Capabilities({app: this});
 		this.ollama = new Ollama({app: this});
 		this.spaces = new Spaces({app: this});
+		this.workspaces = new Workspaces({app: this});
 
 		this.bots = options.bots ?? BOTS_DEFAULT;
 

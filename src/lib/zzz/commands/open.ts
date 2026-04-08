@@ -115,11 +115,44 @@ export const open = async (
 		runtime.exit(1);
 	}
 
-	// Build URL
+	// Resolve the target path
 	const target = resolve_path(runtime, args._[0]);
+
+	// If a directory was specified, tell the daemon to open it as a workspace
+	if (target) {
+		const workspace_path = target.endsWith('/') ? target : target + '/';
+		try {
+			const response = await fetch(`http://localhost:${daemon_info.port}/api/rpc`, {
+				method: 'POST',
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({
+					jsonrpc: '2.0',
+					id: 1,
+					method: 'workspace_open',
+					params: {path: workspace_path},
+				}),
+			});
+			if (!response.ok) {
+				log.warn(`workspace_open request failed: ${response.status}`);
+			} else {
+				const result = await response.json();
+				if (result.error) {
+					log.warn(`workspace_open error: ${result.error.message}`);
+				} else {
+					log.info(`Workspace opened: ${workspace_path}`);
+				}
+			}
+		} catch (error) {
+			log.warn(
+				`Failed to contact daemon: ${error instanceof Error ? error.message : 'unknown error'}`,
+			);
+		}
+	}
+
+	// Build URL
 	let url = `http://localhost:${daemon_info.port}`;
 	if (target) {
-		url += `?open=${encodeURIComponent(target)}`;
+		url += `/workspaces?workspace=${encodeURIComponent(target)}`;
 	}
 
 	log.info(`Opening ${colors.cyan}${url}${colors.reset}`);

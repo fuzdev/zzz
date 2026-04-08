@@ -1,7 +1,8 @@
 import {Filer} from '@fuzdev/gro/filer.js';
 import type {Disknode} from '@fuzdev/gro/disknode.js';
 import type {WatcherChange} from '@fuzdev/gro/watch_dir.js';
-import {resolve} from 'node:path';
+import {basename, resolve} from 'node:path';
+import * as fs from 'node:fs/promises';
 import {Logger} from '@fuzdev/fuz_util/log.js';
 import type {BackendProviderOllama} from './backend_provider_ollama.js';
 import type {BackendProviderGemini} from './backend_provider_gemini.js';
@@ -12,6 +13,7 @@ import type {ActionEventPhase, ActionSpecUnion} from '@fuzdev/fuz_app/actions/ac
 
 import type {ZzzOptions} from '../config_helpers.js';
 import {DiskfileDirectoryPath} from '../diskfile_types.js';
+import type {WorkspaceInfoJson} from '../workspace.svelte.js';
 import {ScopedFs} from './scoped_fs.js';
 import type {BackendActionHandlers} from './backend_action_types.js';
 import type {ActionEventEnvironment, ActionExecutor} from '../action_event_types.js';
@@ -158,23 +160,26 @@ export class Backend implements ActionEventEnvironment {
 
 		// TODO maybe do this in an `init` method
 		// Set up filer watcher for zzz_dir (always watched for app data)
-		const zzz_filer = new Filer({watch_dir_options: {dir: this.zzz_dir}});
-		const zzz_cleanup = zzz_filer.watch((change, disknode) => {
-			this.#handle_filer_change(change, disknode, this, this.zzz_dir, zzz_filer);
-		});
-		this.filers.set(this.zzz_dir, {filer: zzz_filer, cleanup_promise: zzz_cleanup});
+		this.#start_filer(this.zzz_dir);
 
 		// Set up filer watchers for each scoped directory (user files)
 		for (const dir of this.scoped_dirs) {
-			// Skip if same as zzz_dir (already watching)
-			if (dir === this.zzz_dir) continue;
-
-			const filer = new Filer({watch_dir_options: {dir}});
-			const cleanup_promise = filer.watch((change, disknode) => {
-				this.#handle_filer_change(change, disknode, this, dir, filer);
-			});
-			this.filers.set(dir, {filer, cleanup_promise});
+			if (dir === this.zzz_dir) continue; // already watching
+			this.#start_filer(dir);
 		}
+	}
+
+	/**
+	 * Start a Filer for the given directory and register it.
+	 */
+	#start_filer(dir: string): FilerInstance {
+		const filer = new Filer({watch_dir_options: {dir}});
+		const cleanup_promise = filer.watch((change, disknode) => {
+			this.#handle_filer_change(change, disknode, this, dir, filer);
+		});
+		const instance: FilerInstance = {filer, cleanup_promise};
+		this.filers.set(dir, instance);
+		return instance;
 	}
 
 	// TODO @api better type safety
@@ -252,5 +257,111 @@ export class Backend implements ActionEventEnvironment {
 		}
 		this.providers.push(provider);
 		this.log?.info(`added provider: ${provider.name}`);
+	}
+
+	// -- Workspace management --
+
+	/** Tracks open workspaces by path. */
+	readonly workspaces: Map<string, WorkspaceInfoJson> = new Map();
+
+	/**
+	 * Open a workspace directory — adds to ScopedFs, starts a Filer, and persists.
+	 *
+	 * @returns the workspace info (existing or newly created)
+	 */
+	async workspace_open(path: string): Promise<WorkspaceInfoJson> {
+		const resolved = DiskfileDirectoryPath.parse(resolve(path));
+
+		// Already open?
+		const existing = this.workspaces.get(resolved);
+		if (existing) return existing;
+
+		// Validate the directory exists
+		try {
+			const stat = await fs.stat(resolved);
+			if (!stat.isDirectory()) {
+				throw new Error(`not a directory: ${resolved}`);
+			}
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+				throw new Error(`directory does not exist: ${resolved}`);
+			}
+			throw error;
+		}
+
+		// Add to ScopedFs and start watching
+		this.scoped_fs.add_path(resolved);
+		this.#start_filer(resolved);
+
+		const info: WorkspaceInfoJson = {
+			path: resolved,
+			name: basename(resolved.replace(/\/$/, '')),
+			opened_at: new Date().toISOString(),
+		};
+		this.workspaces.set(resolved, info);
+
+		this.log?.info(`workspace opened: ${resolved}`);
+
+		// Persist in background
+		void this.#persist_workspaces();
+
+		return info;
+	}
+
+	/**
+	 * Close a workspace directory — stops Filer, removes from ScopedFs, and persists.
+	 */
+	async workspace_close(path: string): Promise<boolean> {
+		const resolved = DiskfileDirectoryPath.parse(resolve(path));
+
+		if (!this.workspaces.has(resolved)) return false;
+
+		// Stop the Filer
+		const filer_instance = this.filers.get(resolved);
+		if (filer_instance) {
+			const cleanup = await filer_instance.cleanup_promise;
+			cleanup();
+			this.filers.delete(resolved);
+		}
+
+		// Remove from ScopedFs (only if it wasn't an initial scoped_dir)
+		if (!this.scoped_dirs.includes(resolved)) {
+			this.scoped_fs.remove_path(resolved);
+		}
+
+		this.workspaces.delete(resolved);
+
+		this.log?.info(`workspace closed: ${resolved}`);
+
+		// Persist in background
+		void this.#persist_workspaces();
+
+		return true;
+	}
+
+	/**
+	 * List all open workspaces.
+	 */
+	workspace_list(): Array<WorkspaceInfoJson> {
+		return Array.from(this.workspaces.values());
+	}
+
+	/** Path to the workspaces persistence file. */
+	get #workspaces_file(): string {
+		return `${this.zzz_dir}state/workspaces.json`;
+	}
+
+	/**
+	 * Persist open workspaces to disk.
+	 */
+	async #persist_workspaces(): Promise<void> {
+		try {
+			const data = JSON.stringify(this.workspace_list(), null, '\t');
+			// Ensure state directory exists
+			await fs.mkdir(`${this.zzz_dir}state`, {recursive: true});
+			await fs.writeFile(this.#workspaces_file, data, 'utf8');
+		} catch (error) {
+			this.log?.warn(`failed to persist workspaces: ${error}`);
+		}
 	}
 }

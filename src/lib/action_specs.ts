@@ -11,6 +11,7 @@ import {
 import {ProviderStatus, ProviderName} from './provider_types.js';
 import {CompletionMessage, CompletionRequest, CompletionResponse} from './completion_types.js';
 import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
+import {WorkspaceInfoJson} from './workspace.svelte.js';
 import {JsonrpcRequestId} from './jsonrpc.js';
 import {
 	OllamaListRequest,
@@ -435,6 +436,50 @@ export const terminal_close_action_spec = {
 	description: 'Kill a terminal process and return the exit code.',
 } satisfies ActionSpecUnion;
 
+export const workspace_open_action_spec = {
+	method: 'workspace_open',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: 'public',
+	side_effects: true,
+	input: z.strictObject({
+		path: DiskfileDirectoryPath,
+	}),
+	output: z.strictObject({
+		workspace: WorkspaceInfoJson,
+	}),
+	async: true,
+	description: 'Open a workspace directory — registers with ScopedFs and starts file watching.',
+} satisfies ActionSpecUnion;
+
+export const workspace_close_action_spec = {
+	method: 'workspace_close',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: 'public',
+	side_effects: true,
+	input: z.strictObject({
+		path: DiskfileDirectoryPath,
+	}),
+	output: z.null(),
+	async: true,
+	description: 'Close a workspace directory — stops file watching and removes from ScopedFs.',
+} satisfies ActionSpecUnion;
+
+export const workspace_list_action_spec = {
+	method: 'workspace_list',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: 'public',
+	side_effects: null,
+	input: z.void().optional(),
+	output: z.strictObject({
+		workspaces: z.array(WorkspaceInfoJson),
+	}),
+	async: true,
+	description: 'List all open workspaces.',
+} satisfies ActionSpecUnion;
+
 export const all_action_specs: Array<ActionSpecUnion> = [
 	ping_action_spec,
 	session_load_action_spec,
@@ -461,4 +506,7 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	terminal_data_action_spec,
 	terminal_resize_action_spec,
 	terminal_close_action_spec,
+	workspace_open_action_spec,
+	workspace_close_action_spec,
+	workspace_list_action_spec,
 ];

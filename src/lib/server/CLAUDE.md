@@ -31,7 +31,7 @@ The server provides:
 | `create_zzz_app.ts`              | Shared app factory — Backend, providers, endpoints               |
 | `server_env.ts`                  | Env loading (replaces `$env` for server)                         |
 | `server.ts`                      | Deno entry — calls factory, binds `Deno.serve`, daemon lifecycle |
-| `backend.ts`                     | `Backend` class - core state, action handling, file watchers     |
+| `backend.ts`                     | `Backend` class - core state, action handling, file watchers, workspaces |
 | `backend_action_handlers.ts`     | Handler implementations for all backend actions                  |
 | `backend_actions_api.ts`         | Backend-initiated notifications (streaming, file changes)        |
 | `backend_provider.ts`            | Base classes for AI providers                                    |
@@ -101,11 +101,15 @@ class Backend implements ActionEventEnvironment {
 	readonly filers: Map<string, FilerInstance>;
 	readonly action_registry: ActionRegistry;
 	readonly providers: Array<BackendProvider>;
+	readonly workspaces: Map<string, WorkspaceInfoJson>;
 
 	lookup_action_handler(method, phase): Handler | undefined;
 	lookup_action_spec(method): ActionSpecUnion | undefined;
 	lookup_provider(name): BackendProvider;
 	receive(message): Promise<JsonrpcMessage | null>;
+	workspace_open(path): Promise<WorkspaceInfoJson>;
+	workspace_close(path): Promise<boolean>;
+	workspace_list(): Array<WorkspaceInfoJson>;
 	destroy(): Promise<void>;
 }
 ```

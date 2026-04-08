@@ -366,4 +366,36 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 			console.error('[frontend_action_handlers] terminal_close failed:', error);
 		},
 	},
+
+	workspace_open: {
+		receive_response: ({app, data: {output}}) => {
+			app.workspaces.add(output.workspace);
+		},
+		receive_error: ({data: {error}}) => {
+			console.error('[frontend_action_handlers] workspace_open failed:', error);
+		},
+	},
+
+	workspace_close: {
+		receive_response: ({app, data: {input}}) => {
+			const workspace = app.workspaces.get_by_path(input.path);
+			if (workspace) {
+				app.workspaces.remove(workspace.id);
+			}
+		},
+		receive_error: ({data: {error}}) => {
+			console.error('[frontend_action_handlers] workspace_close failed:', error);
+		},
+	},
+
+	workspace_list: {
+		receive_response: ({app, data: {output}}) => {
+			for (const workspace_data of output.workspaces) {
+				app.workspaces.add(workspace_data);
+			}
+		},
+		receive_error: ({data: {error}}) => {
+			console.error('[frontend_action_handlers] workspace_list failed:', error);
+		},
+	},
 };

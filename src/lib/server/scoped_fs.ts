@@ -33,7 +33,12 @@ export type ScopedFsPath = z.infer<typeof ScopedFsPath>;
  * user-provided or untrusted input paths to ensure proper access boundaries.
  */
 export class ScopedFs {
-	readonly allowed_paths: ReadonlyArray<ScopedFsPath>;
+	#allowed_paths: Array<ScopedFsPath>;
+
+	/** The current set of allowed paths. */
+	get allowed_paths(): ReadonlyArray<ScopedFsPath> {
+		return this.#allowed_paths;
+	}
 
 	/**
 	 * Create a new ScopedFs instance with the specified allowed paths.
@@ -41,14 +46,60 @@ export class ScopedFs {
 	 */
 	constructor(allowed_paths: Array<string> | ReadonlyArray<string>) {
 		try {
-			this.allowed_paths = Object.freeze(
-				allowed_paths.filter(Boolean).map((p) => ScopedFsPath.parse(ensure_end(p, '/'))),
-			);
+			this.#allowed_paths = allowed_paths
+				.filter(Boolean)
+				.map((p) => ScopedFsPath.parse(ensure_end(p, '/')));
 		} catch (error) {
 			if (error instanceof z.ZodError) {
 				throw new Error(`Invalid path in allowed_paths: ${error.message}`);
 			}
 			throw error;
+		}
+	}
+
+	/**
+	 * Add a path to the allowed set. No-op if already present.
+	 *
+	 * @param path - absolute directory path to allow
+	 * @returns true if the path was added, false if already allowed
+	 */
+	add_path(path: string): boolean {
+		const normalized = ScopedFsPath.parse(ensure_end(path, '/'));
+		if (this.#allowed_paths.some((p) => p === normalized)) {
+			return false;
+		}
+		this.#allowed_paths.push(normalized);
+		return true;
+	}
+
+	/**
+	 * Remove a path from the allowed set.
+	 *
+	 * @param path - absolute directory path to remove
+	 * @returns true if the path was removed, false if not found
+	 */
+	remove_path(path: string): boolean {
+		const normalized = ScopedFsPath.parse(ensure_end(path, '/'));
+		const index = this.#allowed_paths.findIndex((p) => p === normalized);
+		if (index === -1) {
+			return false;
+		}
+		this.#allowed_paths.splice(index, 1);
+		return true;
+	}
+
+	/**
+	 * Check if a directory path is in the allowed set.
+	 *
+	 * @param path - absolute directory path to check
+	 * @returns true if the path is an allowed root
+	 */
+	has_path(path: string): boolean {
+		try {
+			const normalized = ScopedFsPath.parse(ensure_end(path, '/'));
+			return this.#allowed_paths.some((p) => p === normalized);
+		} catch {
+			return false;
 		}
 	}
 
