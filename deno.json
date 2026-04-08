@@ -1,4 +1,5 @@
 {
+	"nodeModulesDir": "manual",
 	"unstable": ["sloppy-imports"],
 	"exclude": ["**/*.test.ts", "**/*.svelte.ts", "**/*.gen.ts", "src/test/"],
 	"tasks": {
