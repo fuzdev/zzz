@@ -10,7 +10,7 @@
  */
 
 import {z} from 'zod';
-import type {EnvDeps, FsReadDeps, FsWriteDeps} from '@fuzdev/fuz_app/runtime/deps.js';
+import type {EnvDeps, FsReadDeps, FsWriteDeps, LogDeps} from '@fuzdev/fuz_app/runtime/deps.js';
 import {
 	get_app_dir,
 	get_config_path,
@@ -63,7 +63,7 @@ export const get_zzz_config_path = (runtime: Pick<EnvDeps, 'env_get'>): string |
  * @returns parsed config, or null if file doesn't exist or is invalid
  */
 export const load_zzz_cli_config = async (
-	runtime: Pick<EnvDeps, 'env_get'> & FsReadDeps,
+	runtime: Pick<EnvDeps, 'env_get'> & FsReadDeps & LogDeps,
 ): Promise<ZzzCliOptions | null> => {
 	const config_path = get_zzz_config_path(runtime);
 	if (!config_path) return null;

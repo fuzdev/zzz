@@ -82,7 +82,7 @@
 		},
 		"dependencies": {
 			"@anthropic-ai/sdk": "^0.71.2",
-			"@fuzdev/blake3_wasm": "^0.1.0",
+			"@fuzdev/blake3_wasm": "^0.1.1",
 			"@fuzdev/gro": "^0.197.3",
 			"@google/generative-ai": "^0.24.1",
 			"@xterm/xterm": "^6.0.0",
@@ -21800,13 +21800,13 @@
 						"kind": "function",
 						"doc_comment": "Load CLI configuration from ~/.zzz/config.json.",
 						"source_line": 65,
-						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\"> & FsReadDeps): Promise<{ zzz_config_port: number; } | null>",
+						"type_signature": "(runtime: Pick<EnvDeps, \"env_get\"> & FsReadDeps & LogDeps): Promise<{ zzz_config_port: number; } | null>",
 						"return_type": "Promise<{ zzz_config_port: number; } | null>",
 						"return_description": "parsed config, or null if file doesn't exist or is invalid",
 						"parameters": [
 							{
 								"name": "runtime",
-								"type": "Pick<EnvDeps, \"env_get\"> & FsReadDeps",
+								"type": "Pick<EnvDeps, \"env_get\"> & FsReadDeps & LogDeps",
 								"description": "runtime with file read capability"
 							}
 						]
@@ -22285,13 +22285,13 @@
 					{
 						"name": "logger",
 						"kind": "variable",
-						"source_line": 9,
-						"type_signature": "any"
+						"source_line": 10,
+						"type_signature": "Logger"
 					},
 					{
 						"name": "log",
 						"kind": "variable",
-						"source_line": 11,
+						"source_line": 12,
 						"type_signature": "CliLogger"
 					}
 				],

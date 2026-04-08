@@ -637,8 +637,8 @@ export const backend_action_handlers: BackendActionHandlers = {
 				// 1. Update .env file (persistence)
 				await update_env_variable(env_var_name, api_key);
 
-				// 2. Update process.env (runtime)
-				process.env[env_var_name] = api_key;
+				// 2. Update Deno env (runtime)
+				Deno.env.set(env_var_name, api_key);
 
 				// 3. Update provider client (explicit API)
 				const provider = backend.lookup_provider(provider_name);

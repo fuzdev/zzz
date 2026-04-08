@@ -13,7 +13,7 @@ const get_library_path = (): string | null => {
 	if (existsSync(exe_path)) return exe_path;
 
 	// 2. Dev path: ~/dev/private_fuz/target/release/
-	const home = (Deno as any).env?.get?.('HOME') ?? process.env.HOME ?? '';
+	const home = Deno.env.get('HOME') ?? '';
 	const dev_path = join(home, 'dev', 'private_fuz', 'target', 'release', `${LIB_NAME}.so`);
 	if (existsSync(dev_path)) return dev_path;
 
