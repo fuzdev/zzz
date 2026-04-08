@@ -6,6 +6,7 @@ import {Workspace} from '$lib/workspace.svelte.js';
 import {Workspaces} from '$lib/workspaces.svelte.js';
 import {Frontend} from '$lib/frontend.svelte.js';
 import {DiskfileDirectoryPath} from '$lib/diskfile_types.js';
+import type {Uuid} from '$lib/zod_helpers.js';
 import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
 
 let app: Frontend;
@@ -165,7 +166,7 @@ describe('Workspaces', () => {
 		const path = DiskfileDirectoryPath.parse('/path/a/');
 
 		const a = workspaces.add({path, name: 'a', opened_at: ''});
-		workspaces.activate('nonexistent-id');
+		workspaces.activate('nonexistent-id' as Uuid);
 
 		assert.strictEqual(workspaces.active_id, a.id);
 	});

@@ -255,6 +255,12 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 				});
 			}
 		}
+
+		if (Array.isArray(data.workspaces)) {
+			for (const workspace_data of data.workspaces) {
+				this.workspaces.add(workspace_data);
+			}
+		}
 	}
 
 	add_providers(providers_json: Array<ProviderJsonInput>): void {

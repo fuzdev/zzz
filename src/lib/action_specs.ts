@@ -62,6 +62,7 @@ export const session_load_action_spec = {
 			scoped_dirs: z.readonly(z.array(DiskfileDirectoryPath)),
 			files: z.array(SerializableDisknode),
 			provider_status: z.array(ProviderStatus),
+			workspaces: z.array(WorkspaceInfoJson),
 		}),
 	}),
 	async: true,

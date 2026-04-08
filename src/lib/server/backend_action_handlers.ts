@@ -56,6 +56,7 @@ export const backend_action_handlers: BackendActionHandlers = {
 					zzz_dir: backend.zzz_dir,
 					scoped_dirs: backend.scoped_dirs,
 					provider_status,
+					workspaces: backend.workspace_list(),
 				},
 			};
 		},

@@ -1620,163 +1620,163 @@
 					{
 						"name": "filer_change_action_spec",
 						"kind": "variable",
-						"source_line": 71,
+						"source_line": 72,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ change: ZodObject<{ type: ZodEnum<{ add: \"add\"; change: \"change\"; delete: \"delete\"; }>; path: $ZodBranded<...>; }, $strict>; disknode: ZodObject<...>; }, $strict>; output: ZodVoid; async: true; des..."
 					},
 					{
 						"name": "diskfile_update_action_spec",
 						"kind": "variable",
-						"source_line": 86,
+						"source_line": 87,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; content: ZodString; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "diskfile_delete_action_spec",
 						"kind": "variable",
-						"source_line": 101,
+						"source_line": 102,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "directory_create_action_spec",
 						"kind": "variable",
-						"source_line": 115,
+						"source_line": 116,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "completion_create_action_spec",
 						"kind": "variable",
-						"source_line": 129,
+						"source_line": 130,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<...>; model: ZodString; prompt: ZodString; completion_messages: ZodOpti..."
 					},
 					{
 						"name": "completion_progress_action_spec",
 						"kind": "variable",
-						"source_line": 147,
+						"source_line": 148,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ chunk: ZodOptional<ZodObject<{ model: ZodOptional<ZodString>; created_at: ZodOptional<...>; done: ZodOptional<...>; message: ZodOptional<...>; }, $loose>>; _meta: ZodOptional<...>; }, $strict>; out..."
 					},
 					{
 						"name": "ollama_progress_action_spec",
 						"kind": "variable",
-						"source_line": 188,
+						"source_line": 189,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ status: ZodString; digest: ZodOptional<ZodString>; total: ZodOptional<...>; completed: ZodOptional<...>; _meta: ZodOptional<...>; }, $strict>; output: ZodVoid; async: true; description: string; }"
 					},
 					{
 						"name": "toggle_main_menu_action_spec",
 						"kind": "variable",
-						"source_line": 205,
+						"source_line": 206,
 						"type_signature": "{ method: string; kind: \"local_call\"; initiator: \"frontend\"; auth: null; side_effects: true; input: ZodOptional<ZodObject<{ show: ZodOptional<ZodBoolean>; }, $strict>>; output: ZodObject<...>; async: false; description: string; }"
 					},
 					{
 						"name": "ollama_list_action_spec",
 						"kind": "variable",
-						"source_line": 217,
+						"source_line": 218,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: null; input: ZodOptional<ZodVoid>; output: ZodUnion<readonly [ZodObject<{ models: ZodArray<ZodObject<{ details: ZodOptional<...>; ... 4 more ...; size: ZodNumber; }, $loose>>; }, $loose>, ZodNull]>; async: true; descript..."
 					},
 					{
 						"name": "ollama_ps_action_spec",
 						"kind": "variable",
-						"source_line": 229,
+						"source_line": 230,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: null; input: ZodOptional<ZodVoid>; output: ZodUnion<readonly [ZodObject<{ models: ZodArray<ZodObject<{ details: ZodOptional<...>; ... 5 more ...; size_vram: ZodNumber; }, $loose>>; }, $loose>, ZodNull]>; async: true; des..."
 					},
 					{
 						"name": "ollama_show_action_spec",
 						"kind": "variable",
-						"source_line": 241,
+						"source_line": 242,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: null; input: ZodObject<{ model: ZodString; system: ZodOptional<ZodString>; template: ZodOptional<...>; options: ZodOptional<...>; }, $loose>; output: ZodUnion<...>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_pull_action_spec",
 						"kind": "variable",
-						"source_line": 253,
+						"source_line": 254,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ model: ZodString; insecure: ZodOptional<ZodBoolean>; stream: ZodOptional<...>; _meta: ZodOptional<...>; }, $strict>; output: ZodOptional<...>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_delete_action_spec",
 						"kind": "variable",
-						"source_line": 269,
+						"source_line": 270,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ model: ZodString; }, $loose>; output: ZodOptional<...>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_copy_action_spec",
 						"kind": "variable",
-						"source_line": 281,
+						"source_line": 282,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ source: ZodString; destination: ZodString; }, $loose>; output: ZodOptional<...>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_create_action_spec",
 						"kind": "variable",
-						"source_line": 293,
+						"source_line": 294,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ model: ZodString; from: ZodOptional<ZodString>; ... 8 more ...; _meta: ZodOptional<...>; }, $strict>; output: ZodOptional<...>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_unload_action_spec",
 						"kind": "variable",
-						"source_line": 309,
+						"source_line": 310,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ model: ZodString; }, $strict>; output: ZodOptional<...>; async: true; description: string; }"
 					},
 					{
 						"name": "provider_load_status_action_spec",
 						"kind": "variable",
-						"source_line": 323,
+						"source_line": 324,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: null; input: ZodObject<{ provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; reload: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; description: str..."
 					},
 					{
 						"name": "provider_update_api_key_action_spec",
 						"kind": "variable",
-						"source_line": 340,
+						"source_line": 341,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; api_key: ZodString; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_create_action_spec",
 						"kind": "variable",
-						"source_line": 357,
+						"source_line": 358,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ command: ZodString; args: ZodDefault<ZodArray<ZodString>>; cwd: ZodOptional<...>; preset_id: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_data_send_action_spec",
 						"kind": "variable",
-						"source_line": 376,
+						"source_line": 377,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; data: ZodString; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_data_action_spec",
 						"kind": "variable",
-						"source_line": 391,
+						"source_line": 392,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; data: ZodString; }, $strict>; output: ZodVoid; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_resize_action_spec",
 						"kind": "variable",
-						"source_line": 406,
+						"source_line": 407,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; cols: ZodNumber; rows: ZodNumber; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_close_action_spec",
 						"kind": "variable",
-						"source_line": 422,
+						"source_line": 423,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; signal: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
 					},
 					{
 						"name": "workspace_open_action_spec",
 						"kind": "variable",
-						"source_line": 439,
+						"source_line": 440,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; }, $strict>; output: ZodObject<...>; async: true; description: stri..."
 					},
 					{
 						"name": "workspace_close_action_spec",
 						"kind": "variable",
-						"source_line": 455,
+						"source_line": 456,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "workspace_list_action_spec",
 						"kind": "variable",
-						"source_line": 469,
+						"source_line": 470,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: null; input: ZodOptional<ZodVoid>; output: ZodObject<{ workspaces: ZodArray<ZodObject<{ path: $ZodBranded<...>; name: ZodString; opened_at: ZodString; }, $strict>>; }, $strict>; async: true; description: string; }"
 					},
 					{
 						"name": "all_action_specs",
 						"kind": "variable",
-						"source_line": 483,
+						"source_line": 484,
 						"type_signature": "({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: true | null; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }; async:..."
 					}
 				],
@@ -8254,12 +8254,12 @@
 							{
 								"name": "receive_session",
 								"kind": "function",
-								"type_signature": "(data: { zzz_dir: string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">; scoped_dirs: readonly (string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">)[]; files: { ...; }[]; provider_status: ({ ...; } | { ...; })[]; }): void",
+								"type_signature": "(data: { zzz_dir: string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">; scoped_dirs: readonly (string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">)[]; files: { ...; }[]; provider_status: ({ ...; } | { ...; })[]; workspaces: { ...; }[]; }): void",
 								"return_type": "void",
 								"parameters": [
 									{
 										"name": "data",
-										"type": "{ zzz_dir: string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">; scoped_dirs: readonly (string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">)[]; files: { ...; }[]; provider_status: ({ ...; } | { ...; })[]; }"
+										"type": "{ zzz_dir: string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">; scoped_dirs: readonly (string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">)[]; files: { ...; }[]; provider_status: ({ ...; } | { ...; })[]; workspaces: { ...; }[]; }"
 									}
 								]
 							},
@@ -8379,7 +8379,7 @@
 								"name": "lookup_action_output_schema",
 								"kind": "function",
 								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 26 more ...; readonly workspace_list: ZodObject<...>; }[TMethod] | undefined",
-								"return_type": "{ readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; readonly session_load: ZodObject<{ data: ZodObject<{ zzz_dir: $ZodBranded<ZodPipe<...>, \"DiskfileDirectoryPath\", \"out\">; scoped_dirs: ZodReadonly<...>; files: ZodArray<...>; provider_status: ZodArray<...>; }, $strict>; }, $...",
+								"return_type": "{ readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; readonly session_load: ZodObject<{ data: ZodObject<{ zzz_dir: $ZodBranded<ZodPipe<...>, \"DiskfileDirectoryPath\", \"out\">; scoped_dirs: ZodReadonly<...>; files: ZodArray<...>; provider_status: ZodArray<...>; workspaces: ZodAr...",
 								"parameters": [
 									{
 										"name": "method",
@@ -8989,7 +8989,7 @@
 						"name": "GLYPH_WORKSPACE",
 						"kind": "variable",
 						"source_line": 84,
-						"type_signature": "\"⌗\""
+						"type_signature": "\"⊞\""
 					},
 					{
 						"name": "GLYPH_IDEA",
@@ -17313,20 +17313,27 @@
 								"name": "workspace_open",
 								"kind": "function",
 								"doc_comment": "Open a workspace directory — adds to ScopedFs, starts a Filer, and persists.",
-								"type_signature": "(path: string): Promise<{ path: string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">; name: string; opened_at: string; }>",
+								"type_signature": "(path: string, opened_at?: string | undefined): Promise<{ path: string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">; name: string; opened_at: string; }>",
 								"return_type": "Promise<{ path: string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">; name: string; opened_at: string; }>",
 								"return_description": "the workspace info (existing or newly created)",
 								"parameters": [
 									{
 										"name": "path",
-										"type": "string"
+										"type": "string",
+										"description": "absolute directory path"
+									},
+									{
+										"name": "opened_at",
+										"type": "string | undefined",
+										"optional": true,
+										"description": "optional timestamp to preserve (e.g. from persisted state)"
 									}
 								]
 							},
 							{
 								"name": "workspace_close",
 								"kind": "function",
-								"doc_comment": "Close a workspace directory — stops Filer, removes from ScopedFs, and persists.",
+								"doc_comment": "Close a workspace directory — stops Filer, removes from ScopedFs, and persists.\nPreserves Filers and ScopedFs entries for initial scoped_dirs.",
 								"type_signature": "(path: string): Promise<boolean>",
 								"return_type": "Promise<boolean>",
 								"parameters": [
@@ -17858,7 +17865,7 @@
 						"name": "ScopedFs",
 						"kind": "class",
 						"doc_comment": "Provides a secure wrapper around filesystem operations to prevent path traversal attacks and\nunauthorized file access.\n\nSecurity features:\n- Restricts operations to specified allowed paths\n- Prevents path traversal attacks by normalizing all paths\n- Blocks access to symlinks to avoid arbitrary file access\n- Requires absolute paths to avoid relative path confusion\n- Validates the entire path hierarchy for each operation\n\n`ScopedFs` should be used whenever performing filesystem operations on\nuser-provided or untrusted input paths to ensure proper access boundaries.",
-						"source_line": 35,
+						"source_line": 36,
 						"members": [
 							{
 								"name": "constructor",
@@ -18019,12 +18026,12 @@
 							{
 								"name": "readdir",
 								"kind": "function",
-								"type_signature": "(path: PathLike, options?: BufferEncoding | (ObjectEncodingOptions & { withFileTypes?: false | undefined; recursive?: boolean | undefined; }) | null | undefined): Promise<...>",
+								"type_signature": "(path: string, options?: BufferEncoding | (ObjectEncodingOptions & { withFileTypes?: false | undefined; recursive?: boolean | undefined; }) | null | undefined): Promise<...>",
 								"return_type": "Promise<string[]>",
 								"parameters": [
 									{
 										"name": "path",
-										"type": "PathLike"
+										"type": "string"
 									},
 									{
 										"name": "options",
@@ -18036,12 +18043,12 @@
 							{
 								"name": "readdir",
 								"kind": "function",
-								"type_signature": "(path: PathLike, options?: BufferEncoding | (ObjectEncodingOptions & { withFileTypes?: false | undefined; recursive?: boolean | undefined; }) | null | undefined): Promise<...>",
+								"type_signature": "(path: string, options?: BufferEncoding | (ObjectEncodingOptions & { withFileTypes?: false | undefined; recursive?: boolean | undefined; }) | null | undefined): Promise<...>",
 								"return_type": "Promise<string[]>",
 								"parameters": [
 									{
 										"name": "path",
-										"type": "PathLike"
+										"type": "string"
 									},
 									{
 										"name": "options",
@@ -18053,12 +18060,12 @@
 							{
 								"name": "readdir",
 								"kind": "function",
-								"type_signature": "(path: PathLike, options?: BufferEncoding | (ObjectEncodingOptions & { withFileTypes?: false | undefined; recursive?: boolean | undefined; }) | null | undefined): Promise<...>",
+								"type_signature": "(path: string, options?: BufferEncoding | (ObjectEncodingOptions & { withFileTypes?: false | undefined; recursive?: boolean | undefined; }) | null | undefined): Promise<...>",
 								"return_type": "Promise<string[]>",
 								"parameters": [
 									{
 										"name": "path",
-										"type": "PathLike"
+										"type": "string"
 									},
 									{
 										"name": "options",
@@ -18157,7 +18164,7 @@
 						"name": "PathNotAllowedError",
 						"kind": "class",
 						"doc_comment": "Error thrown when a path is not allowed",
-						"source_line": 292,
+						"source_line": 286,
 						"extends": ["Error"],
 						"implements": [],
 						"members": [
@@ -18187,7 +18194,7 @@
 						"name": "SymlinkNotAllowedError",
 						"kind": "class",
 						"doc_comment": "Error thrown when a path is a symlink",
-						"source_line": 303,
+						"source_line": 297,
 						"extends": ["Error"],
 						"implements": [],
 						"members": [

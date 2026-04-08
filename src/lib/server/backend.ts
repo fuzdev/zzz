@@ -167,12 +167,20 @@ export class Backend implements ActionEventEnvironment {
 			if (dir === this.zzz_dir) continue; // already watching
 			this.#start_filer(dir);
 		}
+
+		// Restore persisted workspaces in background
+		// TODO consider lazy activation — only start Filers when a client connects or requests workspace data
+		void this.#restore_workspaces();
 	}
 
 	/**
 	 * Start a Filer for the given directory and register it.
+	 * Returns existing instance if already watching this directory.
 	 */
 	#start_filer(dir: string): FilerInstance {
+		const existing = this.filers.get(dir);
+		if (existing) return existing;
+
 		const filer = new Filer({watch_dir_options: {dir}});
 		const cleanup_promise = filer.watch((change, disknode) => {
 			this.#handle_filer_change(change, disknode, this, dir, filer);
@@ -260,16 +268,22 @@ export class Backend implements ActionEventEnvironment {
 	}
 
 	// -- Workspace management --
+	// TODO: extract to a Workspaces manager class (like PtyManager) when complexity grows
 
 	/** Tracks open workspaces by path. */
 	readonly workspaces: Map<string, WorkspaceInfoJson> = new Map();
 
+	/** Suppresses persistence during restore to avoid N redundant writes. */
+	#restoring_workspaces = false;
+
 	/**
 	 * Open a workspace directory — adds to ScopedFs, starts a Filer, and persists.
 	 *
+	 * @param path - absolute directory path
+	 * @param opened_at - optional timestamp to preserve (e.g. from persisted state)
 	 * @returns the workspace info (existing or newly created)
 	 */
-	async workspace_open(path: string): Promise<WorkspaceInfoJson> {
+	async workspace_open(path: string, opened_at?: string): Promise<WorkspaceInfoJson> {
 		const resolved = DiskfileDirectoryPath.parse(resolve(path));
 
 		// Already open?
@@ -296,36 +310,39 @@ export class Backend implements ActionEventEnvironment {
 		const info: WorkspaceInfoJson = {
 			path: resolved,
 			name: basename(resolved.replace(/\/$/, '')),
-			opened_at: new Date().toISOString(),
+			opened_at: opened_at ?? new Date().toISOString(),
 		};
 		this.workspaces.set(resolved, info);
 
 		this.log?.info(`workspace opened: ${resolved}`);
 
-		// Persist in background
-		void this.#persist_workspaces();
+		if (!this.#restoring_workspaces) {
+			void this.#persist_workspaces();
+		}
 
 		return info;
 	}
 
 	/**
 	 * Close a workspace directory — stops Filer, removes from ScopedFs, and persists.
+	 * Preserves Filers and ScopedFs entries for initial scoped_dirs.
 	 */
 	async workspace_close(path: string): Promise<boolean> {
 		const resolved = DiskfileDirectoryPath.parse(resolve(path));
 
 		if (!this.workspaces.has(resolved)) return false;
 
-		// Stop the Filer
-		const filer_instance = this.filers.get(resolved);
-		if (filer_instance) {
-			const cleanup = await filer_instance.cleanup_promise;
-			cleanup();
-			this.filers.delete(resolved);
-		}
+		const is_initial_scoped_dir = this.scoped_dirs.includes(resolved);
 
-		// Remove from ScopedFs (only if it wasn't an initial scoped_dir)
-		if (!this.scoped_dirs.includes(resolved)) {
+		// Only stop the Filer if it wasn't started for an initial scoped_dir
+		if (!is_initial_scoped_dir) {
+			const filer_instance = this.filers.get(resolved);
+			if (filer_instance) {
+				const cleanup = await filer_instance.cleanup_promise;
+				cleanup();
+				this.filers.delete(resolved);
+			}
+
 			this.scoped_fs.remove_path(resolved);
 		}
 
@@ -362,6 +379,41 @@ export class Backend implements ActionEventEnvironment {
 			await fs.writeFile(this.#workspaces_file, data, 'utf8');
 		} catch (error) {
 			this.log?.warn(`failed to persist workspaces: ${error}`);
+		}
+	}
+
+	/**
+	 * Restore persisted workspaces from disk on startup.
+	 * Re-opens each workspace (registers with ScopedFs, starts Filer).
+	 * Silently skips workspaces whose directories no longer exist.
+	 */
+	async #restore_workspaces(): Promise<void> {
+		try {
+			const raw = await fs.readFile(this.#workspaces_file, 'utf8');
+			const parsed = JSON.parse(raw);
+			if (!Array.isArray(parsed)) return;
+
+			this.#restoring_workspaces = true;
+			try {
+				for (const entry of parsed) {
+					if (!entry?.path) continue;
+					try {
+						await this.workspace_open(entry.path, entry.opened_at); // eslint-disable-line no-await-in-loop
+					} catch (error) {
+						// directory may have been removed — skip silently
+						this.log?.warn(`skipping persisted workspace ${entry.path}: ${error instanceof Error ? error.message : error}`);
+					}
+				}
+			} finally {
+				this.#restoring_workspaces = false;
+			}
+
+			this.log?.info(`restored ${this.workspaces.size} workspace(s)`);
+		} catch (error) {
+			// No persisted file or invalid JSON — start fresh
+			if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+				this.log?.warn(`failed to restore workspaces: ${error}`);
+			}
 		}
 	}
 }

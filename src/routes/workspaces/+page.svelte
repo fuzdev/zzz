@@ -1,4 +1,5 @@
 <script lang="ts">
+	// TODO: handle ?workspace= query param — auto-activate workspace on page load (sent by `zzz <dir>` CLI)
 	import {frontend_context} from '$lib/frontend.svelte.js';
 	import {DiskfileDirectoryPath} from '$lib/diskfile_types.js';
 	import Glyph from '$lib/Glyph.svelte';
