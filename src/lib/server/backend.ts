@@ -168,10 +168,13 @@ export class Backend implements ActionEventEnvironment {
 			this.#start_filer(dir);
 		}
 
-		// Restore persisted workspaces in background
+		// Restore persisted workspaces — session_load awaits this to avoid partial results
 		// TODO consider lazy activation — only start Filers when a client connects or requests workspace data
-		void this.#restore_workspaces();
+		this.#workspaces_ready = this.#restore_workspaces();
 	}
+
+	/** Resolves when persisted workspaces have been restored. */
+	readonly #workspaces_ready: Promise<void>;
 
 	/**
 	 * Start a Filer for the given directory and register it.
@@ -354,6 +357,14 @@ export class Backend implements ActionEventEnvironment {
 		void this.#persist_workspaces();
 
 		return true;
+	}
+
+	/**
+	 * Wait for persisted workspaces to finish restoring.
+	 * Call before returning workspace data to clients.
+	 */
+	async workspaces_ready(): Promise<void> {
+		await this.#workspaces_ready;
 	}
 
 	/**

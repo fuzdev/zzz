@@ -21215,19 +21215,19 @@
 					{
 						"name": "WorkspacesJson",
 						"kind": "type",
-						"source_line": 16,
+						"source_line": 17,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; items: ZodDefault<...>; active_id: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "WorkspacesJsonInput",
 						"kind": "type",
-						"source_line": 21,
+						"source_line": 22,
 						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { path: string; id?: string | undefined; created?: string | undefined; updated?: string | undefined; name?: string | undefined; opened_at?: string | undefined; }[] | undefined; active_id?: string | ... 1 more ... | undefin..."
 					},
 					{
 						"name": "WorkspacesOptions",
 						"kind": "type",
-						"source_line": 23,
+						"source_line": 24,
 						"type_signature": "WorkspacesOptions",
 						"extends": ["CellOptions<typeof WorkspacesJson>"],
 						"properties": []
@@ -21236,7 +21236,7 @@
 						"name": "Workspaces",
 						"kind": "class",
 						"doc_comment": "Collection of open workspaces.\n\nManages the set of directories the daemon is watching and serving.\nEach workspace has a unique path used as the index key.",
-						"source_line": 31,
+						"source_line": 32,
 						"extends": ["Cell<typeof WorkspacesJson>"],
 						"implements": [],
 						"members": [

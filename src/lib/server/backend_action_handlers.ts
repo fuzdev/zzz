@@ -36,6 +36,9 @@ export const backend_action_handlers: BackendActionHandlers = {
 
 	session_load: {
 		receive_request: async ({backend}) => {
+			// Ensure restored workspaces are ready before returning session data
+			await backend.workspaces_ready();
+
 			// TODO change so this only returns metadata, not file contents
 			// Access filers through server and collect all files
 			const files_array: Array<SerializableDisknode> = [];
