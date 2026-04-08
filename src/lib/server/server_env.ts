@@ -1,16 +1,65 @@
 /**
  * Server environment configuration.
  *
- * Env loading for the zzz Deno server. Reads from `Deno.env.get` with
- * configurable defaults, replacing `$env/static/*` imports.
+ * Zod schema for the zzz Deno server env. Uses `load_env` from fuz_app
+ * for schema-validated loading with clear error messages.
  *
  * @module
  */
 
+import {z} from 'zod';
+import {load_env, EnvValidationError, log_env_validation_error} from '@fuzdev/fuz_app/env/load.js';
+
 /**
- * Server environment values needed to create a zzz app.
+ * Zod schema for zzz server environment variables.
+ *
+ * Field names match the env var keys — `load_env` reads each key from the schema shape.
+ * Defaults are set so the daemon starts with zero configuration.
  */
-export interface ZzzServerEnv {
+export const ZzzServerEnv = z.strictObject({
+	PUBLIC_ZZZ_DIR: z.string().default('.zzz').meta({description: 'Zzz app data directory'}),
+	PUBLIC_ZZZ_SCOPED_DIRS: z
+		.string()
+		.default('')
+		.meta({description: 'Comma-separated filesystem paths the server can access'}),
+	PUBLIC_SERVER_PROXIED_PORT: z.coerce
+		.number()
+		.default(4460)
+		.meta({description: 'Port for the Hono backend server'}),
+	PUBLIC_SERVER_HOST: z
+		.string()
+		.default('localhost')
+		.meta({description: 'Hostname for the server'}),
+	ALLOWED_ORIGINS: z
+		.string()
+		.default('http://localhost:*')
+		.meta({description: 'Comma-separated origin patterns for request verification'}),
+	PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY: z.coerce
+		.number()
+		.default(0)
+		.meta({description: 'Artificial response delay in ms (testing)'}),
+	SECRET_ANTHROPIC_API_KEY: z
+		.string()
+		.optional()
+		.meta({description: 'Anthropic API key for Claude provider', sensitivity: 'secret'}),
+	SECRET_OPENAI_API_KEY: z
+		.string()
+		.optional()
+		.meta({description: 'OpenAI API key for ChatGPT provider', sensitivity: 'secret'}),
+	SECRET_GOOGLE_API_KEY: z
+		.string()
+		.optional()
+		.meta({description: 'Google API key for Gemini provider', sensitivity: 'secret'}),
+});
+export type ZzzServerEnv = z.infer<typeof ZzzServerEnv>;
+
+/**
+ * Parsed server env with derived values ready for use.
+ *
+ * Separates raw env loading from the derived shapes callers need
+ * (e.g., `scoped_dirs` as an array, `port` as a number).
+ */
+export interface ZzzServerConfig {
 	/** Zzz app data directory (e.g., `.zzz` or `~/.zzz/`). */
 	zzz_dir: string;
 	/** Filesystem paths the server can access for user files. */
@@ -38,50 +87,55 @@ export interface ZzzServerEnv {
 }
 
 /**
- * Load server env from a generic env reader function.
- *
- * Works with `process.env`, `Deno.env.get`, or any `(key) => string | undefined`.
- * Defaults can override missing env values.
- *
- * @param env_get - function to read environment variables
- * @param defaults - override defaults for any field
- */
-export const load_server_env = (
-	env_get: (key: string) => string | undefined,
-	defaults?: Partial<ZzzServerEnv>,
-): ZzzServerEnv => {
-	return {
-		zzz_dir: env_get('PUBLIC_ZZZ_DIR') || defaults?.zzz_dir || '.zzz',
-		scoped_dirs:
-			parse_comma_separated(env_get('PUBLIC_ZZZ_SCOPED_DIRS')) ?? defaults?.scoped_dirs ?? [],
-		port: parseInt(env_get('PUBLIC_SERVER_PROXIED_PORT') ?? '', 10) || defaults?.port || 4460,
-		host: env_get('PUBLIC_SERVER_HOST') || defaults?.host || 'localhost',
-		allowed_origins:
-			env_get('ALLOWED_ORIGINS') || defaults?.allowed_origins || 'http://localhost:*',
-		websocket_path: defaults?.websocket_path || '/ws',
-		api_path: defaults?.api_path || '/api/rpc',
-		artificial_delay:
-			parseInt(env_get('PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY') ?? '', 10) ||
-			defaults?.artificial_delay ||
-			0,
-		app_version: defaults?.app_version || '0.0.1',
-		secret_anthropic_api_key:
-			env_get('SECRET_ANTHROPIC_API_KEY') || defaults?.secret_anthropic_api_key,
-		secret_openai_api_key: env_get('SECRET_OPENAI_API_KEY') || defaults?.secret_openai_api_key,
-		secret_google_api_key: env_get('SECRET_GOOGLE_API_KEY') || defaults?.secret_google_api_key,
-	};
-};
-
-/**
  * Parse a comma-separated string into an array, trimming whitespace.
  *
- * @returns array of non-empty strings, or null if input is empty/undefined
+ * @returns array of non-empty strings
  */
-const parse_comma_separated = (value: string | undefined): Array<string> | null => {
-	if (!value) return null;
-	const parts = value
+const parse_comma_separated = (value: string): Array<string> => {
+	if (!value) return [];
+	return value
 		.split(',')
 		.map((p) => p.trim())
 		.filter(Boolean);
-	return parts.length > 0 ? parts : null;
+};
+
+/**
+ * Load and validate server env, then derive the config callers need.
+ *
+ * Uses `load_env` from fuz_app for Zod-validated loading.
+ * The `overrides` parameter lets CLI flags and startup defaults
+ * take precedence over env vars.
+ *
+ * @param get_env - function to read environment variables
+ * @param overrides - values that take precedence over env vars
+ */
+export const load_server_env = (
+	get_env: (key: string) => string | undefined,
+	overrides?: Partial<ZzzServerConfig>,
+): ZzzServerConfig => {
+	let raw: ZzzServerEnv;
+	try {
+		raw = load_env(ZzzServerEnv, get_env);
+	} catch (err) {
+		if (err instanceof EnvValidationError) {
+			log_env_validation_error(err, 'zzz');
+			throw err;
+		}
+		throw err;
+	}
+
+	return {
+		zzz_dir: overrides?.zzz_dir ?? raw.PUBLIC_ZZZ_DIR,
+		scoped_dirs: overrides?.scoped_dirs ?? parse_comma_separated(raw.PUBLIC_ZZZ_SCOPED_DIRS),
+		port: overrides?.port ?? raw.PUBLIC_SERVER_PROXIED_PORT,
+		host: overrides?.host ?? raw.PUBLIC_SERVER_HOST,
+		allowed_origins: overrides?.allowed_origins ?? raw.ALLOWED_ORIGINS,
+		websocket_path: overrides?.websocket_path ?? '/ws',
+		api_path: overrides?.api_path ?? '/api/rpc',
+		artificial_delay: overrides?.artificial_delay ?? raw.PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY,
+		app_version: overrides?.app_version ?? '0.0.1',
+		secret_anthropic_api_key: overrides?.secret_anthropic_api_key ?? raw.SECRET_ANTHROPIC_API_KEY,
+		secret_openai_api_key: overrides?.secret_openai_api_key ?? raw.SECRET_OPENAI_API_KEY,
+		secret_google_api_key: overrides?.secret_google_api_key ?? raw.SECRET_GOOGLE_API_KEY,
+	};
 };

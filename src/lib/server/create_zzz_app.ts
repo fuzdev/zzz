@@ -14,7 +14,7 @@ import {parse_allowed_origins, verify_request_source} from '@fuzdev/fuz_app/http
 
 import {build_allowed_hostnames, create_host_validation_middleware} from './security.js';
 import {Backend} from './backend.js';
-import type {ZzzServerEnv} from './server_env.js';
+import type {ZzzServerConfig} from './server_env.js';
 import {backend_action_handlers} from './backend_action_handlers.js';
 import {register_http_actions} from './register_http_actions.js';
 import {register_websocket_actions} from './register_websocket_actions.js';
@@ -34,7 +34,7 @@ const log = new Logger('[server]');
  */
 export interface CreateZzzAppOptions {
 	/** Server environment configuration. */
-	env: ZzzServerEnv;
+	env: ZzzServerConfig;
 }
 
 /**
@@ -83,7 +83,10 @@ export const create_zzz_app = (options: CreateZzzAppOptions): ZzzApp => {
 	const allowed_hostnames = build_allowed_hostnames(env.host);
 	app.use(create_host_validation_middleware(allowed_hostnames));
 
-	// Security: verify origin of incoming requests
+	// Security: verify origin of incoming requests.
+	// This runs for ALL routes including WebSocket upgrade (GET /ws).
+	// Browsers always send Origin on WebSocket upgrades (spec-enforced),
+	// so malicious pages cannot connect — their origin won't match.
 	app.use(verify_request_source(allowed_origins));
 
 	const backend = new Backend({

@@ -17419,7 +17419,7 @@
 							{
 								"name": "env",
 								"kind": "variable",
-								"type_signature": "ZzzServerEnv",
+								"type_signature": "ZzzServerConfig",
 								"doc_comment": "Server environment configuration."
 							}
 						]
@@ -18357,9 +18357,16 @@
 					{
 						"name": "ZzzServerEnv",
 						"kind": "type",
-						"doc_comment": "Server environment values needed to create a zzz app.",
-						"source_line": 13,
-						"type_signature": "ZzzServerEnv",
+						"doc_comment": "Zod schema for zzz server environment variables.\n\nField names match the env var keys — `load_env` reads each key from the schema shape.\nDefaults are set so the daemon starts with zero configuration.",
+						"source_line": 19,
+						"type_signature": "ZodObject<{ PUBLIC_ZZZ_DIR: ZodDefault<ZodString>; PUBLIC_ZZZ_SCOPED_DIRS: ZodDefault<ZodString>; PUBLIC_SERVER_PROXIED_PORT: ZodDefault<ZodCoercedNumber<unknown>>; ... 5 more ...; SECRET_GOOGLE_API_KEY: ZodOptional<...>; }, $strict>"
+					},
+					{
+						"name": "ZzzServerConfig",
+						"kind": "type",
+						"doc_comment": "Parsed server env with derived values ready for use.\n\nSeparates raw env loading from the derived shapes callers need\n(e.g., `scoped_dirs` as an array, `port` as a number).",
+						"source_line": 62,
+						"type_signature": "ZzzServerConfig",
 						"properties": [
 							{
 								"name": "zzz_dir",
@@ -18438,26 +18445,26 @@
 					{
 						"name": "load_server_env",
 						"kind": "function",
-						"doc_comment": "Load server env from a generic env reader function.\n\nWorks with `process.env`, `Deno.env.get`, or any `(key) => string | undefined`.\nDefaults can override missing env values.",
-						"source_line": 49,
-						"type_signature": "(env_get: (key: string) => string | undefined, defaults?: Partial<ZzzServerEnv> | undefined): ZzzServerEnv",
-						"return_type": "ZzzServerEnv",
+						"doc_comment": "Load and validate server env, then derive the config callers need.\n\nUses `load_env` from fuz_app for Zod-validated loading.\nThe `overrides` parameter lets CLI flags and startup defaults\ntake precedence over env vars.",
+						"source_line": 112,
+						"type_signature": "(get_env: (key: string) => string | undefined, overrides?: Partial<ZzzServerConfig> | undefined): ZzzServerConfig",
+						"return_type": "ZzzServerConfig",
 						"parameters": [
 							{
-								"name": "env_get",
+								"name": "get_env",
 								"type": "(key: string) => string | undefined",
 								"description": "function to read environment variables"
 							},
 							{
-								"name": "defaults",
-								"type": "Partial<ZzzServerEnv> | undefined",
+								"name": "overrides",
+								"type": "Partial<ZzzServerConfig> | undefined",
 								"optional": true,
-								"description": "override defaults for any field"
+								"description": "values that take precedence over env vars"
 							}
 						]
 					}
 				],
-				"module_comment": "Server environment configuration.\n\nEnv loading for the zzz Deno server. Reads from `Deno.env.get` with\nconfigurable defaults, replacing `$env/static/*` imports.",
+				"module_comment": "Server environment configuration.\n\nZod schema for the zzz Deno server env. Uses `load_env` from fuz_app\nfor schema-validated loading with clear error messages.",
 				"dependents": ["server/server.ts"]
 			},
 			{
@@ -18489,7 +18496,7 @@
 						"name": "start_server",
 						"kind": "function",
 						"doc_comment": "Start the zzz server using Deno runtime.\n\nCreates the full backend with providers, WebSocket, and HTTP RPC\nendpoints via `create_zzz_app`, then serves with `Deno.serve`.",
-						"source_line": 33,
+						"source_line": 34,
 						"type_signature": "(): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": []

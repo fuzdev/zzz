@@ -15,6 +15,7 @@ import {
 	get_daemon_info_path,
 } from '@fuzdev/fuz_app/cli/daemon.js';
 import {create_deno_runtime} from '@fuzdev/fuz_app/runtime/deno.js';
+import {load_env_file} from '@fuzdev/fuz_app/env/dotenv.js';
 
 import {VERSION} from '../zzz/build_info.ts';
 import {create_zzz_app} from './create_zzz_app.ts';
@@ -31,10 +32,25 @@ const daemon_runtime = create_deno_runtime([]);
  * endpoints via `create_zzz_app`, then serves with `Deno.serve`.
  */
 export const start_server = async (): Promise<void> => {
+	// Load .env file if present — values don't override existing env vars.
+	// When running under `gro dev`, Vite already loads .env files into the
+	// spawned Deno process. For `zzz daemon start`, this is the only loader.
+	const dotenv = await load_env_file(daemon_runtime, '.env');
+	if (dotenv) {
+		for (const [key, value] of Object.entries(dotenv)) {
+			if (Deno.env.get(key) === undefined) {
+				Deno.env.set(key, value);
+			}
+		}
+	}
+
+	// Set runtime defaults for env vars that need dynamic values.
+	// These only apply when the var isn't already set (by .env, CLI flags, or gro dev).
+	if (Deno.env.get('PUBLIC_ZZZ_DIR') === undefined) {
+		Deno.env.set('PUBLIC_ZZZ_DIR', `${Deno.env.get('HOME') ?? '.'}/.zzz`);
+	}
+
 	const env = load_server_env((key) => Deno.env.get(key), {
-		port: 4460,
-		host: 'localhost',
-		zzz_dir: `${Deno.env.get('HOME') ?? '.'}/.zzz`,
 		app_version: VERSION,
 	});
 
