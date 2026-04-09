@@ -159,7 +159,7 @@
 		<span class="terminal_id">terminal {terminal_id.slice(0, 8)}</span>
 		<div class="terminal_actions">
 			<CopyToClipboard text={terminal_text} class="plain" />
-			<button type="button" onclick={handle_close}>close</button>
+			<button type="button" onclick={handle_close} disabled={exited}>close</button>
 		</div>
 	</div>
 	<div

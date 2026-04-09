@@ -103,7 +103,7 @@
 		opacity: 0.8;
 	}
 	.run_status {
-		font-size: var(--font_size_xs);
+		font-size: var(--font_size_sm);
 	}
 	.running {
 		color: var(--color_a_50, #8f8);
