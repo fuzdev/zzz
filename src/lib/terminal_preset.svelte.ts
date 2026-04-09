@@ -17,7 +17,7 @@ export interface TerminalPresetOptions extends CellOptions<typeof TerminalPreset
 export class TerminalPreset extends Cell<typeof TerminalPresetJson> {
 	name: string = $state()!;
 	command: string = $state()!;
-	args: Array<string> = $state()!;
+	args: Array<string> = $state.raw()!;
 	cwd: string | undefined = $state();
 
 	constructor(options: TerminalPresetOptions) {

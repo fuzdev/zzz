@@ -104,8 +104,8 @@ export const MyThingJson = CellJson.extend({
 
 ```typescript
 export class MyThing extends Cell<typeof MyThingJson> {
-  name: string = $state()!;
-  value: number = $state()!;
+  name: string = $state.raw()!;
+  value: number = $state.raw()!;
 
   readonly doubled = $derived(this.value * 2);
 
@@ -358,15 +358,15 @@ All imports use `.js` extensions (ESM convention).
 ### Svelte 5 Runes in State Classes
 
 ```typescript
-// Schema fields — $state()! initialized by Cell.init()
-name: string = $state()!;
+// Schema fields — $state.raw()! by default, initialized by Cell.init()
+name: string = $state.raw()!;
+
+// $state()! only for arrays/objects mutated in place (push, splice, etc.)
+thread_ids: Array<Uuid> = $state()!;
 
 // Derived values
 readonly doubled = $derived(this.count * 2);
 readonly complex = $derived.by(() => expensiveCalculation(this.count));
-
-// Raw state (no deep reactivity) — for large objects
-response: CompletionResponse = $state.raw();
 ```
 
 No `$effect` in Cell classes — effects belong in Svelte components only.

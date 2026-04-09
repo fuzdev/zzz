@@ -13,7 +13,7 @@ import type {Uuid} from './zod_helpers.js';
  */
 export class DiskfileEditorState {
 	app: Frontend;
-	diskfile: Diskfile = $state()!; // TODO maybe should be nullable to make initialization easier?
+	diskfile: Diskfile = $state.raw()!; // TODO maybe should be nullable to make initialization easier?
 
 	// Store the id of the unsaved edit entry
 	unsaved_edit_entry_id: Uuid | null = $state(null);

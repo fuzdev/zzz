@@ -32,7 +32,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	selected_tab_id: Uuid | null = $state()!;
 	preview_tab_id: Uuid | null = $state()!;
 	tab_order: Array<Uuid> = $state()!;
-	recent_tab_ids: Array<Uuid> = $state()!;
+	recent_tab_ids: Array<Uuid> = $state.raw()!;
 	max_tab_history: number = $state()!;
 
 	items: IndexedCollection<DiskfileTab> = new IndexedCollection();

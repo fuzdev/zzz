@@ -180,10 +180,10 @@ From `cell.svelte.ts`:
 export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements CellJson {
   readonly cid = ++global_cell_count; // monotonic client-side ordering
 
-  // Base properties from CellJson
-  id: Uuid = $state()!;
-  created: Datetime = $state()!;
-  updated: Datetime = $state()!;
+  // Base properties from CellJson — $state.raw() by default
+  id: Uuid = $state.raw()!;
+  created: Datetime = $state.raw()!;
+  updated: Datetime = $state.raw()!;
 
   readonly schema!: TSchema;
   readonly schema_keys: Array<SchemaKeys<TSchema>> = $derived(...);
@@ -226,13 +226,13 @@ export const ChatJson = CellJson.extend({
 	selected_thread_id: Uuid.nullable().default(null),
 }).meta({cell_class_name: 'Chat'});
 
-// 2. Class: $state for schema fields, $derived for computed
+// 2. Class: $state.raw by default, $state only for in-place-mutated arrays
 export class Chat extends Cell<typeof ChatJson> {
-	name: string = $state()!;
-	thread_ids: Array<Uuid> = $state()!;
-	main_input: string = $state()!;
-	view_mode: ChatViewMode = $state()!;
-	selected_thread_id: Uuid | null = $state()!;
+	name: string = $state.raw()!;
+	thread_ids: Array<Uuid> = $state()!; // $state because push/splice used
+	main_input: string = $state.raw()!;
+	view_mode: ChatViewMode = $state.raw()!;
+	selected_thread_id: Uuid | null = $state.raw()!;
 
 	readonly threads: Array<Thread> = $derived.by(() => {
 		const result: Array<Thread> = [];
@@ -325,8 +325,8 @@ Conversation messages with role:
 
 ```typescript
 class Turn extends Cell<typeof TurnJson> {
-	part_ids: Array<Uuid> = $state()!;
-	role: CompletionRole = $state()!; // 'user' | 'assistant' | 'system'
+	part_ids: Array<Uuid> = $state()!; // $state because push/splice used
+	role: CompletionRole = $state.raw()!; // 'user' | 'assistant' | 'system'
 	request: CompletionRequest | undefined = $state.raw();
 	response: CompletionResponse | undefined = $state.raw();
 
@@ -348,9 +348,9 @@ Linear conversation with one model. Sends messages via the action system:
 
 ```typescript
 class Thread extends Cell<typeof ThreadJson> {
-  model_name: string = $state()!;
+  model_name: string = $state.raw()!;
   readonly turns: IndexedCollection<Turn> = new IndexedCollection();
-  enabled: boolean = $state()!;
+  enabled: boolean = $state.raw()!;
 
   async send_message(content: string): Promise<Turn | null> {
     const user_turn = this.add_user_turn(content);

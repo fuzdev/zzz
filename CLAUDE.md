@@ -249,12 +249,12 @@ export const ChatJson = CellJson.extend({
   selected_thread_id: Uuid.nullable().default(null),
 }).meta({cell_class_name: 'Chat'});
 
-// 2. Class with $state for schema fields, $derived for computed
+// 2. Class with $state.raw for most fields, $state for in-place-mutated arrays
 export class Chat extends Cell<typeof ChatJson> {
-  name: string = $state()!;
-  thread_ids: Array<Uuid> = $state()!;
-  view_mode: ChatViewMode = $state()!;
-  selected_thread_id: Uuid | null = $state()!;
+  name: string = $state.raw()!;
+  thread_ids: Array<Uuid> = $state()!; // $state because push/splice used
+  view_mode: ChatViewMode = $state.raw()!;
+  selected_thread_id: Uuid | null = $state.raw()!;
 
   readonly threads: Array<Thread> = $derived.by(() => {
     const result: Array<Thread> = [];
@@ -374,8 +374,9 @@ or `completion_progress` pattern.
 
 ### State Class Rules
 
-- Schema fields use `$state()!` (non-null assertion, set by `init()`)
-- Computed values use `$derived` or `$derived.by(() => ...)`
+- Schema fields use `$state.raw()!` by default (non-null assertion, set by `init()`)
+- Use `$state()!` only for arrays/objects mutated in place (push, splice, index assignment)
+- Computed values use `readonly $derived` or `readonly $derived.by(() => ...)` — always `readonly` unless reassignment is explicitly needed
 - No `$effect` inside Cell classes — effects belong in components
 - Constructor must call `this.init()` as the last statement
 - Always register new Cell classes in `cell_classes.ts`

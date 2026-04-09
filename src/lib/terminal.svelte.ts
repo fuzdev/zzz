@@ -24,7 +24,7 @@ export interface TerminalOptions extends CellOptions<typeof TerminalJson> {} // 
 export class Terminal extends Cell<typeof TerminalJson> {
 	name: string = $state()!;
 	command: string = $state()!;
-	args: Array<string> = $state()!;
+	args: Array<string> = $state.raw()!;
 	cwd: string | undefined = $state();
 	status: TerminalStatus = $state()!;
 	exit_code: number | null = $state()!;
