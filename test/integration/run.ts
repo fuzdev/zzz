@@ -1,0 +1,286 @@
+#!/usr/bin/env -S deno run --allow-net --allow-run --allow-read --allow-env
+
+/**
+ * Integration test runner for zzz backends.
+ *
+ * Usage:
+ *   deno task test:integration --backend=rust
+ *   deno task test:integration --backend=deno
+ *   deno task test:integration --backend=both   (default)
+ *   deno task test:integration --filter=ping     (substring match on test name)
+ *
+ * Starts a backend, runs the test suite against it, stops it, reports results.
+ * When running both backends, prints a comparison table at the end.
+ */
+
+import {backends, type BackendConfig} from './config.ts';
+import {run_tests, type TestResult} from './tests.ts';
+
+// -- Child process tracking ---------------------------------------------------
+
+/** Active backend processes — killed on SIGINT so Ctrl+C doesn't leak them. */
+const active_children: Set<Deno.ChildProcess> = new Set();
+
+Deno.addSignalListener('SIGINT', () => {
+	console.log('\n  Interrupted — stopping backends...');
+	for (const child of active_children) {
+		try {
+			child.kill('SIGTERM');
+		} catch {
+			// Already exited
+		}
+	}
+	Deno.exit(130); // 128 + SIGINT(2)
+});
+
+// -- Formatting ---------------------------------------------------------------
+
+const fmt_ms = (ms: number): string => (ms < 10 ? `${ms.toFixed(1)}ms` : `${Math.round(ms)}ms`);
+
+// -- Backend lifecycle --------------------------------------------------------
+
+const parse_args = (): {backend: string; filter: string | undefined} => {
+	let backend = 'both';
+	let filter: string | undefined;
+
+	for (const arg of Deno.args) {
+		if (arg.startsWith('--backend=')) {
+			backend = arg.slice('--backend='.length);
+		} else if (arg.startsWith('--filter=')) {
+			filter = arg.slice('--filter='.length);
+		}
+	}
+
+	return {backend, filter};
+};
+
+const wait_for_health = async (config: BackendConfig): Promise<boolean> => {
+	const url = `${config.base_url}${config.health_path}`;
+	const deadline = Date.now() + config.startup_timeout_ms;
+	const poll_interval = 250;
+
+	while (Date.now() < deadline) {
+		try {
+			const res = await fetch(url);
+			if (res.ok) {
+				await res.body?.cancel();
+				return true;
+			}
+			await res.body?.cancel();
+		} catch {
+			// Server not ready yet
+		}
+		await new Promise((r) => setTimeout(r, poll_interval));
+	}
+	return false;
+};
+
+const start_backend = async (config: BackendConfig): Promise<Deno.ChildProcess> => {
+	console.log(`\n  Starting ${config.name} backend: ${config.start_command.join(' ')}`);
+
+	const [cmd, ...args] = config.start_command;
+	const child = new Deno.Command(cmd, {
+		args,
+		stdout: 'null',
+		stderr: 'piped',
+		env: config.env ? {...Deno.env.toObject(), ...config.env} : undefined,
+	}).spawn();
+
+	const healthy = await wait_for_health(config);
+	if (!healthy) {
+		child.kill('SIGTERM');
+		// Drain stderr for diagnostic output before throwing
+		try {
+			const err_text = (await new Response(child.stderr).text()).trim();
+			if (err_text) {
+				console.error(
+					`\n  ${config.name} stderr:\n${err_text.split('\n').map((l) => '    ' + l).join('\n')}`,
+				);
+			}
+		} catch {
+			// Process already collected
+		}
+		throw new Error(`${config.name} backend failed to start within ${config.startup_timeout_ms}ms`);
+	}
+
+	console.log(`  ${config.name} backend ready at ${config.base_url}`);
+	active_children.add(child);
+	return child;
+};
+
+const stop_backend = async (name: string, child: Deno.ChildProcess): Promise<void> => {
+	console.log(`  Stopping ${name} backend`);
+	active_children.delete(child);
+	try {
+		child.kill('SIGTERM');
+	} catch {
+		// Already exited
+	}
+	// Drain stderr so the process isn't blocked on a full pipe
+	try {
+		await child.stderr.cancel();
+	} catch {
+		// Already consumed or closed
+	}
+	// Wait for the process to actually exit to avoid port conflicts
+	try {
+		await child.status;
+	} catch {
+		// Process already collected
+	}
+};
+
+// -- Per-backend run ----------------------------------------------------------
+
+interface BackendRun {
+	name: string;
+	results: TestResult[];
+	passed: number;
+	failed: number;
+	total_ms: number;
+}
+
+const run_for_backend = async (config: BackendConfig, filter?: string): Promise<BackendRun> => {
+	console.log(`\n${'='.repeat(60)}`);
+	console.log(`  Backend: ${config.name}`);
+	console.log(`${'='.repeat(60)}`);
+
+	let child: Deno.ChildProcess | null = null;
+	try {
+		child = await start_backend(config);
+		const results = await run_tests(config, filter);
+
+		let passed = 0;
+		let failed = 0;
+
+		for (const r of results) {
+			const time = fmt_ms(r.duration_ms).padStart(8);
+			if (r.passed) {
+				console.log(`  PASS ${time}  ${r.name}`);
+				passed++;
+			} else {
+				console.log(`  FAIL ${time}  ${r.name}`);
+				console.log(`               ${r.error}`);
+				failed++;
+			}
+		}
+
+		const total_ms = results.reduce((sum, r) => sum + r.duration_ms, 0);
+		console.log(`\n  ${passed} passed, ${failed} failed in ${fmt_ms(total_ms)}`);
+		return {name: config.name, results, passed, failed, total_ms};
+	} finally {
+		if (child) await stop_backend(config.name, child);
+	}
+};
+
+// -- Comparison table ---------------------------------------------------------
+
+/** Tests with a fixed wait floor that skews timing comparison. */
+const SILENCE_TESTS = new Set(['notification_ws']);
+
+/** Format speedup ratio: >= 10 → 1 decimal, < 10 → 2 decimals. */
+const fmt_ratio = (r: number): string => (r >= 10 ? `${r.toFixed(1)}x` : `${r.toFixed(2)}x`);
+
+/** Format speedup/slowdown comparison (baseline / current). */
+const fmt_comparison = (baseline: number, current: number): string => {
+	const ratio = baseline / current;
+	if (ratio >= 1) return `${fmt_ratio(ratio)} faster`;
+	return `${fmt_ratio(1 / ratio)} slower`;
+};
+
+const print_comparison = (runs: BackendRun[]): void => {
+	if (runs.length < 2) return;
+
+	// Build lookup: test name → duration per backend
+	const by_test = new Map<string, Map<string, number>>();
+	for (const run of runs) {
+		for (const r of run.results) {
+			if (!by_test.has(r.name)) by_test.set(r.name, new Map());
+			by_test.get(r.name)!.set(run.name, r.duration_ms);
+		}
+	}
+
+	const names = runs.map((r) => r.name);
+	const col_w = 10;
+
+	console.log(`\n${'='.repeat(60)}`);
+	console.log(`  Comparison (${names[1]} vs ${names[0]})`);
+	console.log(`${'='.repeat(60)}\n`);
+
+	const header = '  ' + 'test'.padEnd(36) + names.map((n) => n.padStart(col_w)).join('');
+	console.log(header);
+	console.log('  ' + '-'.repeat(header.length - 2));
+
+	const totals = names.map(() => 0);
+	const totals_excl = names.map(() => 0);
+
+	for (const [test_name, timings] of by_test) {
+		const is_silence = SILENCE_TESTS.has(test_name);
+		const times = names.map((n) => timings.get(n) ?? 0);
+
+		times.forEach((t, i) => {
+			totals[i] += t;
+			if (!is_silence) totals_excl[i] += t;
+		});
+
+		const time_cols = times.map((t) => fmt_ms(t).padStart(col_w)).join('');
+
+		let cmp_str = '';
+		if (times.length >= 2 && times[0] > 0 && times[1] > 0) {
+			cmp_str = is_silence ? '  (silence)' : `  ${fmt_comparison(times[0], times[1])}`;
+		}
+
+		const label = is_silence ? `${test_name} *` : test_name;
+		console.log(`  ${label.padEnd(36)}${time_cols}${cmp_str}`);
+	}
+
+	// Totals
+	console.log('  ' + '-'.repeat(header.length - 2));
+	const total_cols = totals.map((t) => fmt_ms(t).padStart(col_w)).join('');
+	console.log(`  ${'total'.padEnd(36)}${total_cols}`);
+
+	const excl_cols = totals_excl.map((t) => fmt_ms(t).padStart(col_w)).join('');
+	const excl_cmp =
+		totals_excl[0] > 0 && totals_excl[1] > 0
+			? `  ${fmt_comparison(totals_excl[0], totals_excl[1])}`
+			: '';
+	console.log(`  ${'total (excl silence)'.padEnd(36)}${excl_cols}${excl_cmp}`);
+
+	console.log('\n  * silence tests have a fixed wait floor — excluded from comparison');
+};
+
+// -- Main ---------------------------------------------------------------------
+
+const main = async (): Promise<void> => {
+	const {backend: backend_arg, filter} = parse_args();
+	const targets: BackendConfig[] = [];
+
+	if (backend_arg === 'both') {
+		targets.push(backends.deno, backends.rust);
+	} else if (backends[backend_arg]) {
+		targets.push(backends[backend_arg]);
+	} else {
+		console.error(`Unknown backend: ${backend_arg}. Use: deno, rust, or both`);
+		Deno.exit(1);
+	}
+
+	const runs: BackendRun[] = [];
+	let all_passed = true;
+	for (const config of targets) {
+		const run = await run_for_backend(config, filter);
+		runs.push(run);
+		if (run.failed > 0) all_passed = false;
+	}
+
+	print_comparison(runs);
+
+	console.log(`\n${'='.repeat(60)}`);
+	if (all_passed) {
+		console.log('  All backends passed');
+	} else {
+		console.log('  Some tests failed');
+		Deno.exit(1);
+	}
+};
+
+await main();

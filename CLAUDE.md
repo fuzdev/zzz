@@ -26,7 +26,7 @@ For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
 ## Development Stage
 
-Early development, v0.0.1. Breaking changes are expected and welcome. No authentication — development use only. All state is in-memory (no database yet). The Hono/Deno backend is a reference implementation that may be replaced by a Rust daemon (`fuzd`). Deno is a shortcut — long-term the CLI and daemon migrate to Rust fuz/fuzd.
+Early development, v0.0.1. Breaking changes are expected and welcome. No authentication — development use only. All state is in-memory (no database yet). The Hono/Deno backend is the reference implementation. A Rust backend (`crates/zzz_server`) is in development — Phase 1 (ping, static files, integration test harness) is complete. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
 
 See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 
@@ -53,10 +53,24 @@ The global daemon runs on port 4460 with state at `~/.zzz/`. Built via
 - [docs/providers.md](docs/providers.md) — AI provider integration, adding new providers
 - [src/lib/server/CLAUDE.md](src/lib/server/CLAUDE.md) — Backend server architecture, providers, security
 - [src/lib/zzz/CLAUDE.md](src/lib/zzz/CLAUDE.md) — CLI architecture, commands, runtime abstraction
+- [crates/CLAUDE.md](crates/CLAUDE.md) — Rust backend (zzz_server)
 
 ## Repository Structure
 
 ```
+crates/                               # Rust workspace
+│   ├── CLAUDE.md                     # Rust backend docs
+│   └── zzz_server/                   # Axum JSON-RPC server (Phase 1: ping only)
+│       └── src/
+│           ├── main.rs               # Entry point, arg parsing, graceful shutdown
+│           ├── rpc.rs                # JSON-RPC types, dispatch, HTTP handler
+│           ├── ws.rs                 # WebSocket handler
+│           └── error.rs              # Error types
+test/
+│   └── integration/                  # Cross-backend integration tests (Deno)
+│       ├── run.ts                    # Test runner (--backend=deno|rust|both)
+│       ├── config.ts                 # Backend configurations
+│       └── tests.ts                  # Test cases
 src/
 ├── lib/                          # Published as @fuzdev/zzz
 │   ├── server/                   # Backend (Hono/Deno reference impl)
@@ -220,10 +234,32 @@ cd ~/dev/private_fuz && cargo build -p fuz_pty --release
 | --------------- | ------------------------------------------ |
 | `gro check`     | All checks (typecheck, test, gen, format, lint) |
 | `gro typecheck` | Type checking only (faster iteration)      |
-| `gro test`      | Run Vitest tests                           |
+| `gro test`      | Run Vitest unit tests                      |
+| `deno task test` | All tests (Vitest + integration)            |
+| `deno task test:integration` | Cross-backend parity tests (Rust + Deno) |
 | `gro gen`       | Regenerate `*.gen.ts` files                |
 | `gro format`    | Format with Prettier                       |
 | `gro build`     | Production build                           |
+
+### Rust Backend
+
+Shadow implementation of the Deno server using axum. Phase 1: only `ping`,
+no auth, no DB. The Deno server is ground truth — 18 integration tests verify
+both backends produce identical JSON-RPC responses.
+
+```bash
+cargo build -p zzz_server                          # Build
+cargo clippy -p zzz_server                         # Lint
+./target/debug/zzz_server --port 1174              # Run (add --static-dir ./build after gro build)
+deno task test:integration --backend=rust           # Integration tests (Rust)
+deno task test:integration --backend=deno           # Integration tests (Deno)
+deno task test:integration --backend=both           # Both (default, shows comparison)
+deno task test:integration --filter=ping            # Substring match on test name
+```
+
+Requires `~/dev/private_fuz` as a sibling directory (path deps).
+See [crates/CLAUDE.md](crates/CLAUDE.md) for architecture, endpoints,
+prerequisites, and what the integration tests check.
 
 ### Naming Conventions
 
@@ -441,7 +477,7 @@ From `.env.development.example`:
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Backend is reference impl** — may be replaced by Rust daemon (`fuzd`)
+- **Rust backend is Phase 1** — only `ping` action implemented; no auth, no DB, no action system. Batch JSON-RPC requests not yet supported. See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
 
 ## fuz_app
 

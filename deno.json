@@ -7,7 +7,9 @@
 		"prod:setup": "deno run --allow-read --allow-write --allow-env --allow-run=openssl scripts/prod_setup.ts",
 		"dev:start": "NODE_ENV=development deno run --allow-all --env=.env.development src/lib/zzz/main.ts daemon start",
 		"install": "gro build && mkdir -p ~/.zzz/bin && cp dist_cli/zzz ~/.zzz/bin/zzz",
-		"check": "deno check src/lib/zzz/**/*.ts"
+		"check": "deno check src/lib/zzz/**/*.ts",
+		"test": "gro test && deno task test:integration",
+		"test:integration": "deno run --allow-net --allow-run --allow-read --allow-env test/integration/run.ts"
 	},
 	"imports": {
 		"@std/": "jsr:@std/",
