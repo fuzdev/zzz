@@ -367,6 +367,18 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 		},
 	},
 
+	terminal_exited: {
+		receive: ({app, data: {input}}) => {
+			console.log(
+				'[frontend_action_handlers] terminal exited:',
+				input.terminal_id,
+				'exit_code:',
+				input.exit_code,
+			);
+			app.terminal_exit_handlers.get(input.terminal_id)?.(input.exit_code);
+		},
+	},
+
 	workspace_open: {
 		receive_response: ({app, data: {output}}) => {
 			app.workspaces.add(output.workspace);

@@ -39,6 +39,7 @@ export const ActionMethods = z.enum([
 	'terminal_data',
 	'terminal_resize',
 	'terminal_close',
+	'terminal_exited',
 	'workspace_open',
 	'workspace_close',
 	'workspace_list',
@@ -76,6 +77,7 @@ export const ActionSpecs = {
 	terminal_data: specs.terminal_data_action_spec,
 	terminal_resize: specs.terminal_resize_action_spec,
 	terminal_close: specs.terminal_close_action_spec,
+	terminal_exited: specs.terminal_exited_action_spec,
 	workspace_open: specs.workspace_open_action_spec,
 	workspace_close: specs.workspace_close_action_spec,
 	workspace_list: specs.workspace_list_action_spec,
@@ -107,6 +109,7 @@ export interface ActionSpecs {
 	terminal_data: typeof specs.terminal_data_action_spec;
 	terminal_resize: typeof specs.terminal_resize_action_spec;
 	terminal_close: typeof specs.terminal_close_action_spec;
+	terminal_exited: typeof specs.terminal_exited_action_spec;
 	workspace_open: typeof specs.workspace_open_action_spec;
 	workspace_close: typeof specs.workspace_close_action_spec;
 	workspace_list: typeof specs.workspace_list_action_spec;
@@ -146,6 +149,7 @@ export const ActionInputs = {
 	terminal_data: specs.terminal_data_action_spec.input,
 	terminal_resize: specs.terminal_resize_action_spec.input,
 	terminal_close: specs.terminal_close_action_spec.input,
+	terminal_exited: specs.terminal_exited_action_spec.input,
 	workspace_open: specs.workspace_open_action_spec.input,
 	workspace_close: specs.workspace_close_action_spec.input,
 	workspace_list: specs.workspace_list_action_spec.input,
@@ -177,6 +181,7 @@ export interface ActionInputs {
 	terminal_data: z.infer<typeof specs.terminal_data_action_spec.input>;
 	terminal_resize: z.infer<typeof specs.terminal_resize_action_spec.input>;
 	terminal_close: z.infer<typeof specs.terminal_close_action_spec.input>;
+	terminal_exited: z.infer<typeof specs.terminal_exited_action_spec.input>;
 	workspace_open: z.infer<typeof specs.workspace_open_action_spec.input>;
 	workspace_close: z.infer<typeof specs.workspace_close_action_spec.input>;
 	workspace_list: z.infer<typeof specs.workspace_list_action_spec.input>;
@@ -214,6 +219,7 @@ export const ActionOutputs = {
 	terminal_data: specs.terminal_data_action_spec.output,
 	terminal_resize: specs.terminal_resize_action_spec.output,
 	terminal_close: specs.terminal_close_action_spec.output,
+	terminal_exited: specs.terminal_exited_action_spec.output,
 	workspace_open: specs.workspace_open_action_spec.output,
 	workspace_close: specs.workspace_close_action_spec.output,
 	workspace_list: specs.workspace_list_action_spec.output,
@@ -245,6 +251,7 @@ export interface ActionOutputs {
 	terminal_data: z.infer<typeof specs.terminal_data_action_spec.output>;
 	terminal_resize: z.infer<typeof specs.terminal_resize_action_spec.output>;
 	terminal_close: z.infer<typeof specs.terminal_close_action_spec.output>;
+	terminal_exited: z.infer<typeof specs.terminal_exited_action_spec.output>;
 	workspace_open: z.infer<typeof specs.workspace_open_action_spec.output>;
 	workspace_close: z.infer<typeof specs.workspace_close_action_spec.output>;
 	workspace_list: z.infer<typeof specs.workspace_list_action_spec.output>;
@@ -282,6 +289,7 @@ export interface ActionEventDatas {
 	terminal_data: ActionEventRemoteNotificationData<'terminal_data'>;
 	terminal_resize: ActionEventRequestResponseData<'terminal_resize'>;
 	terminal_close: ActionEventRequestResponseData<'terminal_close'>;
+	terminal_exited: ActionEventRemoteNotificationData<'terminal_exited'>;
 	workspace_open: ActionEventRequestResponseData<'workspace_open'>;
 	workspace_close: ActionEventRequestResponseData<'workspace_close'>;
 	workspace_list: ActionEventRequestResponseData<'workspace_list'>;

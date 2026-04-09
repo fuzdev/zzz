@@ -264,6 +264,11 @@ export interface BackendActionHandlers {
 			action_event: ActionEvent<'terminal_close', Backend, 'send_error', 'handling'>,
 		) => void | Promise<void>;
 	};
+	terminal_exited?: {
+		send?: (
+			action_event: ActionEvent<'terminal_exited', Backend, 'send', 'handling'>,
+		) => void | Promise<void>;
+	};
 	workspace_open?: {
 		receive_request?: (
 			action_event: ActionEvent<'workspace_open', Backend, 'receive_request', 'handling'>,

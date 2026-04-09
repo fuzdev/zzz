@@ -437,6 +437,21 @@ export const terminal_close_action_spec = {
 	description: 'Kill a terminal process and return the exit code.',
 } satisfies ActionSpecUnion;
 
+export const terminal_exited_action_spec = {
+	method: 'terminal_exited',
+	kind: 'remote_notification',
+	initiator: 'backend',
+	auth: null,
+	side_effects: true,
+	input: z.strictObject({
+		terminal_id: Uuid,
+		exit_code: z.number().nullable(),
+	}),
+	output: z.void(),
+	async: true,
+	description: 'Notify the frontend that a terminal process exited naturally.',
+} satisfies ActionSpecUnion;
+
 export const workspace_open_action_spec = {
 	method: 'workspace_open',
 	kind: 'request_response',
@@ -523,6 +538,7 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	terminal_data_action_spec,
 	terminal_resize_action_spec,
 	terminal_close_action_spec,
+	terminal_exited_action_spec,
 	workspace_open_action_spec,
 	workspace_close_action_spec,
 	workspace_list_action_spec,

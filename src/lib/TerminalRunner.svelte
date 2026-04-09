@@ -23,6 +23,7 @@
 	const scrollable = new Scrollable();
 
 	const default_preset_configs = [
+		{name: 'echo hello world', command: 'echo', args: ['hello', 'world']},
 		{name: 'check', command: 'gro', args: ['check']},
 		{name: 'build', command: 'gro', args: ['build']},
 		{name: 'dev', command: 'gro', args: ['dev']},
@@ -76,7 +77,8 @@
 		};
 
 	const handle_restart = (run: RunEntry) => async (): Promise<void> => {
-		await app.api.terminal_close({terminal_id: run.terminal_id});
+		// close may fail if the terminal already exited — ignore
+		await app.api.terminal_close({terminal_id: run.terminal_id}).catch(() => undefined);
 		const result = await app.api.terminal_create({command: run.command, args: run.args});
 		if (result.ok && result.value?.terminal_id) {
 			const index = runs.indexOf(run);

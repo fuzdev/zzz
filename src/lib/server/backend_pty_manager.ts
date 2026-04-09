@@ -125,11 +125,13 @@ export class PtyManager {
 				// process exited — collect exit status
 				this.log?.info(`terminal ${terminal_id} EOF`);
 				const wait = pty_waitpid(pty.pid);
+				const exit_code = wait.exited ? wait.status : null;
 				if (wait.exited) {
 					this.log?.info(`terminal ${terminal_id} exited with status ${wait.status}`);
 				}
 				pty_close(pty.master_fd);
 				this.#processes.delete(terminal_id);
+				void this.#api.terminal_exited({terminal_id, exit_code});
 				return;
 			}
 
@@ -182,6 +184,7 @@ export class PtyManager {
 		void process.status.then((status) => {
 			this.log?.info(`terminal ${terminal_id} exited with code ${status.code}`);
 			this.#processes.delete(terminal_id);
+			void this.#api.terminal_exited({terminal_id, exit_code: status.code});
 		});
 	}
 

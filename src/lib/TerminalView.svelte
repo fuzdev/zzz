@@ -80,6 +80,11 @@
 			data_version++;
 		});
 
+		// register exit handler for backend-initiated exit notifications
+		app.terminal_exit_handlers.set(terminal_id, (exit_code: number | null) => {
+			onclose?.(exit_code);
+		});
+
 		const setup = async (): Promise<void> => {
 			const {Terminal} = await import('@xterm/xterm');
 
@@ -133,13 +138,14 @@
 		return () => {
 			destroyed = true;
 			app.terminal_writers.delete(terminal_id);
+			app.terminal_exit_handlers.delete(terminal_id);
 			term?.dispose();
 		};
 	});
 
 	const handle_close = async (): Promise<void> => {
 		const result = await app.api.terminal_close({terminal_id});
-		onclose?.(result.ok ? result.value.exit_code : null);
+		onclose?.(result.ok ? (result.value?.exit_code ?? null) : null);
 	};
 </script>
 

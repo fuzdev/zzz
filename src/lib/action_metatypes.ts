@@ -34,6 +34,7 @@ export const ActionMethod = z.enum([
 	'terminal_data',
 	'terminal_resize',
 	'terminal_close',
+	'terminal_exited',
 	'workspace_open',
 	'workspace_close',
 	'workspace_list',
@@ -79,6 +80,7 @@ export const RemoteNotificationActionMethod = z.enum([
 	'completion_progress',
 	'ollama_progress',
 	'terminal_data',
+	'terminal_exited',
 	'workspace_changed',
 ]);
 export type RemoteNotificationActionMethod = z.infer<typeof RemoteNotificationActionMethod>;
@@ -118,6 +120,7 @@ export const FrontendActionMethod = z.enum([
 	'terminal_data',
 	'terminal_resize',
 	'terminal_close',
+	'terminal_exited',
 	'workspace_open',
 	'workspace_close',
 	'workspace_list',
@@ -153,6 +156,7 @@ export const BackendActionMethod = z.enum([
 	'terminal_data',
 	'terminal_resize',
 	'terminal_close',
+	'terminal_exited',
 	'workspace_open',
 	'workspace_close',
 	'workspace_list',
@@ -241,6 +245,9 @@ export interface ActionsApi {
 	terminal_close: (
 		input: ActionInputs['terminal_close'],
 	) => Promise<Result<{value: ActionOutputs['terminal_close']}, {error: JsonrpcErrorJson}>>;
+	terminal_exited: (
+		input: ActionInputs['terminal_exited'],
+	) => Promise<Result<{value: ActionOutputs['terminal_exited']}, {error: JsonrpcErrorJson}>>;
 	workspace_open: (
 		input: ActionInputs['workspace_open'],
 	) => Promise<Result<{value: ActionOutputs['workspace_open']}, {error: JsonrpcErrorJson}>>;

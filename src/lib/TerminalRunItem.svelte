@@ -3,6 +3,7 @@
 	import TerminalContextmenu from './TerminalContextmenu.svelte';
 	import type {Uuid} from './zod_helpers.js';
 	import {GLYPH_RETRY} from './glyphs.js';
+	import {app_context} from './app.svelte.js';
 
 	interface Props {
 		terminal_id: Uuid;
@@ -14,13 +15,17 @@
 
 	const {terminal_id, command, args, onclose, onrestart}: Props = $props();
 
+	const app = app_context.get();
+
 	let exit_code: number | null = $state(null);
 	let exited = $state(false);
 	let text_getter: (() => string) | null = $state(null);
+	let stdin_input: string = $state('');
 
 	const display_command = $derived(args.length > 0 ? `${command} ${args.join(' ')}` : command);
 
 	const handle_close = (code: number | null): void => {
+		if (exited) return; // already handled via terminal_exited notification
 		exit_code = code;
 		exited = true;
 		onclose(code);
@@ -28,6 +33,18 @@
 
 	const handle_get_text = (fn: () => string): void => {
 		text_getter = fn;
+	};
+
+	const send_stdin = (): void => {
+		if (!stdin_input || exited) return;
+		void app.api.terminal_data_send({terminal_id, data: stdin_input + '\n'});
+		stdin_input = '';
+	};
+
+	const handle_stdin_keydown = (e: KeyboardEvent): void => {
+		if (e.key === 'Enter') {
+			send_stdin();
+		}
 	};
 </script>
 
@@ -53,6 +70,17 @@
 		<div class="run_output">
 			<TerminalView {terminal_id} onclose={handle_close} get_text={handle_get_text} />
 		</div>
+		{#if !exited}
+			<div class="stdin_input">
+				<input
+					type="text"
+					bind:value={stdin_input}
+					placeholder="send input to terminal..."
+					onkeydown={handle_stdin_keydown}
+				/>
+				<button type="button" onclick={send_stdin} disabled={!stdin_input}>send</button>
+			</div>
+		{/if}
 	</div>
 </TerminalContextmenu>
 
@@ -92,5 +120,17 @@
 	}
 	.run_output {
 		height: 300px;
+	}
+	.stdin_input {
+		display: flex;
+		gap: var(--space_xs);
+		padding: var(--space_xs) var(--space_sm);
+		border-top: 1px solid var(--border_color, #333);
+		background: var(--bg_2, #1a1a2e);
+	}
+	.stdin_input input {
+		flex: 1;
+		font-family: monospace;
+		font-size: var(--font_size_sm);
 	}
 </style>

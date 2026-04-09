@@ -328,6 +328,11 @@ export interface FrontendActionHandlers {
 			action_event: ActionEvent<'terminal_close', Frontend, 'receive_error', 'handling'>,
 		) => void | Promise<void>;
 	};
+	terminal_exited?: {
+		receive?: (
+			action_event: ActionEvent<'terminal_exited', Frontend, 'receive', 'handling'>,
+		) => void | Promise<void>;
+	};
 	workspace_open?: {
 		send_request?: (
 			action_event: ActionEvent<'workspace_open', Frontend, 'send_request', 'handling'>,

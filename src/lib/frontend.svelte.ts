@@ -115,6 +115,12 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	 */
 	readonly terminal_writers: Map<Uuid, (data: string) => void> = new Map();
 
+	/**
+	 * Callback registry for terminal exit notifications.
+	 * TerminalView components register their exit callback on mount.
+	 */
+	readonly terminal_exit_handlers: Map<Uuid, (exit_code: number | null) => void> = new Map();
+
 	// TODO maybe instead of this pattern with getters/setters, using an encoder?
 	#zzz_dir: DiskfileDirectoryPath | null | undefined = $state(null); // TODO should this be undefined?
 
