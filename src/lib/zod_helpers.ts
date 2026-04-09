@@ -58,7 +58,7 @@ export type UuidWithDefault = z.infer<typeof UuidWithDefault>;
  * @returns the innermost schema without wrappers
  */
 export const get_innermost_type = (schema: z.ZodType): z.ZodType => {
-	const def = schema._zod.def;
+	const def = schema.def;
 
 	// Handle wrapper types that need unwrapping
 	if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable) {
@@ -85,7 +85,7 @@ export const get_innermost_type = (schema: z.ZodType): z.ZodType => {
 
 export const get_innermost_type_name = (schema: z.ZodType): string => {
 	const innermost = get_innermost_type(schema);
-	const def = innermost._zod.def;
+	const def = innermost.def;
 	return def.type;
 };
 
