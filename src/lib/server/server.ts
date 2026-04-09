@@ -96,7 +96,13 @@ export const start_server = async (): Promise<void> => {
 	const server = Deno.serve({port: env.port, hostname: env.host}, app.fetch);
 
 	// Cleanup on shutdown
+	let shutting_down = false;
 	const shutdown = async (): Promise<void> => {
+		if (shutting_down) {
+			// Second signal — force exit
+			Deno.exit(1);
+		}
+		shutting_down = true;
 		console.log('[server] shutting down...');
 		const daemon_path = get_daemon_info_path(daemon_runtime, 'zzz');
 		if (daemon_path) {
@@ -108,6 +114,7 @@ export const start_server = async (): Promise<void> => {
 		}
 		await backend.destroy();
 		await server.shutdown();
+		Deno.exit(0);
 	};
 
 	Deno.addSignalListener('SIGINT', () => void shutdown());

@@ -12,6 +12,7 @@ import {
 	get_daemon_info_path,
 	read_daemon_info,
 	is_daemon_running,
+	check_daemon_health,
 	type DaemonInfo,
 } from '@fuzdev/fuz_app/cli/daemon.js';
 
@@ -35,9 +36,16 @@ const check_daemon = async (
 	const info = await read_daemon_info(runtime, 'zzz');
 	if (!info) return null;
 
-	// Check if process is actually running
-	const running = await is_daemon_running(runtime, info.pid);
-	if (running) return info;
+	// Check if process is actually running and responding
+	const pid_alive = await is_daemon_running(runtime, info.pid);
+	if (!pid_alive) {
+		// Process is dead — fall through to stale cleanup
+	} else if (await check_daemon_health(info.port)) {
+		return info;
+	} else {
+		// PID alive but not responding — treat as not running
+		log.warn(`Daemon process alive (pid ${info.pid}) but not responding on port ${info.port}`);
+	}
 
 	// Stale — clean up
 	const daemon_path = get_daemon_info_path(runtime, 'zzz');

@@ -22221,7 +22221,7 @@
 						"name": "daemon_start",
 						"kind": "function",
 						"doc_comment": "Start the daemon in foreground mode.\n\nCLI flags --port and --host override config values.",
-						"source_line": 31,
+						"source_line": 32,
 						"type_signature": "(runtime: RuntimeDeps, args: { _: string[]; port?: number | undefined; host?: string | undefined; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -22243,7 +22243,7 @@
 						"name": "daemon_stop",
 						"kind": "function",
 						"doc_comment": "Stop the running daemon.",
-						"source_line": 46,
+						"source_line": 47,
 						"type_signature": "(runtime: RuntimeDeps, _args: { _: string[]; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -22265,7 +22265,7 @@
 						"name": "daemon_status",
 						"kind": "function",
 						"doc_comment": "Show daemon status.",
-						"source_line": 64,
+						"source_line": 65,
 						"type_signature": "(runtime: RuntimeDeps, args: { _: string[]; json: boolean; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -22325,7 +22325,7 @@
 						"name": "open",
 						"kind": "function",
 						"doc_comment": "Open the zzz UI in a browser, auto-starting the daemon if needed.",
-						"source_line": 90,
+						"source_line": 98,
 						"type_signature": "(runtime: RuntimeDeps, args: { _: string[]; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -22355,7 +22355,7 @@
 						"name": "status",
 						"kind": "function",
 						"doc_comment": "Show current system state.",
-						"source_line": 19,
+						"source_line": 24,
 						"type_signature": "(runtime: RuntimeDeps, args: { _: string[]; json: boolean; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [

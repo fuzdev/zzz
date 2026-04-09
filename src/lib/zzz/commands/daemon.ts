@@ -14,6 +14,7 @@ import {
 	get_daemon_info_path,
 	read_daemon_info,
 	is_daemon_running,
+	check_daemon_health,
 	stop_daemon,
 } from '@fuzdev/fuz_app/cli/daemon.js';
 
@@ -76,18 +77,28 @@ export const daemon_status = async (
 		return;
 	}
 
-	// Check if process is actually running
-	const running = await is_daemon_running(runtime, info.pid);
+	// Check if process is actually running, then probe health
+	const pid_alive = await is_daemon_running(runtime, info.pid);
+	const healthy = pid_alive ? await check_daemon_health(info.port) : false;
 
 	if (args.json) {
-		console.log(JSON.stringify({running, ...info}));
-	} else if (running) {
+		console.log(JSON.stringify({running: pid_alive, healthy, ...info}));
+	} else if (pid_alive && healthy) {
 		console.log(`${colors.green}Daemon running${colors.reset}`);
 		console.log(`  PID:     ${info.pid}`);
 		console.log(`  Port:    ${info.port}`);
 		console.log(`  Version: ${info.app_version}`);
 		console.log(`  Started: ${info.started}`);
 		console.log(`  URL:     ${colors.cyan}http://localhost:${info.port}${colors.reset}`);
+	} else if (pid_alive) {
+		console.log(`${colors.yellow}Daemon process alive but not responding${colors.reset}`);
+		console.log(`  PID:     ${info.pid}`);
+		console.log(`  Port:    ${info.port} (not listening)`);
+		console.log(`  Version: ${info.app_version}`);
+		console.log(`  Started: ${info.started}`);
+		log.warn(
+			'The process exists but is not serving on the expected port. It may be a different process.',
+		);
 	} else {
 		log.warn('Stale daemon.json found (process not running)');
 		const daemon_path = get_daemon_info_path(runtime, 'zzz');

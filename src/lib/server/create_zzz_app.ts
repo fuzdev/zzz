@@ -62,9 +62,10 @@ export const create_zzz_app = (options: CreateZzzAppOptions): ZzzApp => {
 	const allowed_origins = parse_allowed_origins(env.allowed_origins);
 
 	log.info('creating server', {
-		config,
 		zzz_dir: env.zzz_dir,
 		scoped_dirs: env.scoped_dirs,
+		providers: config.providers.map((p) => p.name),
+		models: config.models.length,
 		allowed_origins,
 	});
 
