@@ -20,8 +20,8 @@ export type BrowserOptions = CellOptions<typeof BrowserJson>;
 
 export class Browser extends Cell<typeof BrowserJson> {
 	tabs: BrowserTabs = new BrowserTabs({app: this.app});
-	edited_url: string = $state()!;
-	browserified: boolean = $state()!;
+	edited_url: string = $state.raw()!;
+	browserified: boolean = $state.raw()!;
 
 	/** True when the edited URL differs from the selected tab's URL. */
 	readonly url_edited: boolean = $derived(this.edited_url !== this.tabs.selected_url);

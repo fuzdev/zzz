@@ -22,13 +22,13 @@ export type TerminalJsonInput = z.input<typeof TerminalJson>;
 export interface TerminalOptions extends CellOptions<typeof TerminalJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
 
 export class Terminal extends Cell<typeof TerminalJson> {
-	name: string = $state()!;
-	command: string = $state()!;
+	name: string = $state.raw()!;
+	command: string = $state.raw()!;
 	args: Array<string> = $state.raw()!;
-	cwd: string | undefined = $state();
-	status: TerminalStatus = $state()!;
-	exit_code: number | null = $state()!;
-	preset_id: Uuid | null = $state()!;
+	cwd: string | undefined = $state.raw();
+	status: TerminalStatus = $state.raw()!;
+	exit_code: number | null = $state.raw()!;
+	preset_id: Uuid | null = $state.raw()!;
 
 	constructor(options: TerminalOptions) {
 		super(TerminalJson, options);

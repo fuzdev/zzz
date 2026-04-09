@@ -17,7 +17,7 @@
 		clear_icon?: Snippet | string | undefined;
 	} = $props();
 
-	let cleared_value = $state('');
+	let cleared_value = $state.raw('');
 
 	const has_value = $derived(!!value);
 

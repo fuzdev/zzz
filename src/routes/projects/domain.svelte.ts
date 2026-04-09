@@ -7,9 +7,9 @@ export type DomainOptions = CellOptions<typeof DomainJson>;
  * Represents a domain in a project.
  */
 export class Domain extends Cell<typeof DomainJson> {
-	name: string = $state()!;
-	status: 'active' | 'pending' | 'inactive' = $state()!;
-	ssl: boolean = $state()!;
+	name: string = $state.raw()!;
+	status: 'active' | 'pending' | 'inactive' = $state.raw()!;
+	ssl: boolean = $state.raw()!;
 
 	constructor(options: DomainOptions) {
 		super(DomainJson, options);

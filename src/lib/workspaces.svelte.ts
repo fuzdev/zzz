@@ -39,7 +39,7 @@ export class Workspaces extends Cell<typeof WorkspacesJson> {
 		],
 	});
 
-	active_id: Uuid | null = $state()!;
+	active_id: Uuid | null = $state.raw()!;
 
 	readonly active: Workspace | undefined = $derived(
 		this.active_id ? this.items.by_id.get(this.active_id) : undefined,

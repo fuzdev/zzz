@@ -32,7 +32,7 @@ export class Sortable<T> {
 	readonly default_key: string | undefined = $derived.by(() => this.#key_getter_default?.());
 
 	/** Current active sort key. */
-	active_key: string = $state('');
+	active_key: string = $state.raw('');
 
 	/**
 	 * The currently active sorter.

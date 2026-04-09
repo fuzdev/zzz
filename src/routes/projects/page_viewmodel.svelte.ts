@@ -86,12 +86,12 @@ const render_markdown = (text: string): string => {
 export class PageViewmodel {
 	readonly projects: Projects;
 
-	project_id: Uuid = $state()!;
-	page_id: Uuid = $state()!;
+	project_id: Uuid = $state.raw()!;
+	page_id: Uuid = $state.raw()!;
 
-	title: string = $state()!;
-	path: string = $state()!;
-	content: string = $state()!;
+	title: string = $state.raw()!;
+	path: string = $state.raw()!;
+	content: string = $state.raw()!;
 
 	/** Whether the form has unsaved changes. */
 	readonly has_changes = $derived.by(

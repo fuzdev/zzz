@@ -14,7 +14,7 @@ export type SpaceJsonInput = z.input<typeof SpaceJson>;
 export interface SpaceOptions extends CellOptions<typeof SpaceJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
 
 export class Space extends Cell<typeof SpaceJson> {
-	name: string = $state()!;
+	name: string = $state.raw()!;
 	directory_paths: Array<DiskfileDirectoryPath> = $state()!;
 
 	readonly directory_count: number = $derived(this.directory_paths.length);

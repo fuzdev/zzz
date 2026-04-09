@@ -18,7 +18,7 @@
 	}
 
 	const runs: Array<RunEntry> = $state([]);
-	let error_message: string | null = $state(null);
+	let error_message: string | null = $state.raw(null);
 
 	const scrollable = new Scrollable();
 

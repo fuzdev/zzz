@@ -16,16 +16,16 @@ export class DiskfileEditorState {
 	diskfile: Diskfile = $state.raw()!; // TODO maybe should be nullable to make initialization easier?
 
 	// Store the id of the unsaved edit entry
-	unsaved_edit_entry_id: Uuid | null = $state(null);
+	unsaved_edit_entry_id: Uuid | null = $state.raw(null);
 
 	// Track which history entry is currently selected in the UI
-	selected_history_entry_id: Uuid | null = $state(null);
+	selected_history_entry_id: Uuid | null = $state.raw(null);
 
 	// Used to track if the user has edited the content
-	content_was_modified_by_user: boolean = $state(false);
+	content_was_modified_by_user: boolean = $state.raw(false);
 
 	// Track last seen disk content to detect changes
-	last_seen_disk_content: string | null = $state(null);
+	last_seen_disk_content: string | null = $state.raw(null);
 
 	// Basic derived states
 	readonly original_content: string | null = $derived(this.diskfile.content);

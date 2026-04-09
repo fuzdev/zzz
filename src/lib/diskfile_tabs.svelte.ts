@@ -29,11 +29,11 @@ export type DiskfileTabsOptions = CellOptions<typeof DiskfileTabsJson>;
  * Manages tabs for diskfiles in the editor with preview behavior.
  */
 export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
-	selected_tab_id: Uuid | null = $state()!;
-	preview_tab_id: Uuid | null = $state()!;
+	selected_tab_id: Uuid | null = $state.raw()!;
+	preview_tab_id: Uuid | null = $state.raw()!;
 	tab_order: Array<Uuid> = $state()!;
 	recent_tab_ids: Array<Uuid> = $state.raw()!;
-	max_tab_history: number = $state()!;
+	max_tab_history: number = $state.raw()!;
 
 	items: IndexedCollection<DiskfileTab> = new IndexedCollection();
 

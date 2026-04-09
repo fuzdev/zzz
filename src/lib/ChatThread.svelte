@@ -34,10 +34,10 @@
 		attrs?: SvelteHTMLElements['div'] | undefined;
 	} = $props();
 
-	let input = $state('');
+	let input = $state.raw('');
 	const input_token_count = $derived(estimate_token_count(input));
 	let content_input: {focus: () => void} | undefined;
-	let pending = $state(false);
+	let pending = $state.raw(false);
 
 	const send = async () => {
 		const parsed = input.trim();
@@ -56,7 +56,7 @@
 
 	const empty = $derived(!turn_count);
 
-	let show_model_picker = $state(false);
+	let show_model_picker = $state.raw(false);
 
 	// Show loading indicator for local models (Ollama) when they're not loaded
 	const is_local_model = $derived(thread.model.provider_name === 'ollama');

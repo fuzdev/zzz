@@ -75,8 +75,8 @@ export abstract class Part<T extends z.ZodType = typeof PartJsonBase> extends Ce
 
 	abstract get content(): string | null | undefined;
 
-	start: number | null = $state()!;
-	end: number | null = $state()!;
+	start: number | null = $state.raw()!;
+	end: number | null = $state.raw()!;
 	readonly length: number | null | undefined = $derived.by(() => this.content?.length);
 	readonly token_count: number | null | undefined = $derived.by(() =>
 		this.content == null ? this.content : estimate_token_count(this.content),
@@ -90,13 +90,13 @@ export abstract class Part<T extends z.ZodType = typeof PartJsonBase> extends Ce
 
 	// TODO rethink these patterns, see A2A Parts
 	// Common properties for all part types
-	name: string = $state()!;
-	has_xml_tag: boolean = $state()!;
-	xml_tag_name: string = $state()!;
+	name: string = $state.raw()!;
+	has_xml_tag: boolean = $state.raw()!;
+	xml_tag_name: string = $state.raw()!;
 	attributes: Array<XmlAttributeWithDefaults> = $state()!; // TODO if kept, name `xml_attributes`?
-	enabled: boolean = $state()!;
-	title: string | null = $state()!;
-	summary: string | null = $state()!;
+	enabled: boolean = $state.raw()!;
+	title: string | null = $state.raw()!;
+	summary: string | null = $state.raw()!;
 
 	readonly xml_tag_name_default: string = $derived.by(() =>
 		this.type === 'diskfile' ? 'File' : 'Fragment',
@@ -174,7 +174,7 @@ export const PartSchema = z.instanceof(Part);
 export class TextPart extends Part<typeof TextPartJson> {
 	override readonly type = 'text';
 
-	override content: string = $state()!;
+	override content: string = $state.raw()!;
 
 	constructor(options: TextPartOptions) {
 		super(TextPartJson, options);
@@ -191,7 +191,7 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 	override readonly type = 'diskfile';
 
 	/** Path property with private backing field. */
-	#path: DiskfilePath | null = $state()!;
+	#path: DiskfilePath | null = $state.raw()!;
 
 	/**
 	 * Writable value that determines `this.diskfile`.

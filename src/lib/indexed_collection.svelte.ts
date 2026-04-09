@@ -97,7 +97,7 @@ export class IndexedCollection<
 	// need to ensure we have the right lazy perf characteristics
 	// and currently we eagerly compute indexes
 	/** Stores all index values in a reactive object. */
-	readonly indexes: Record<string, any> = $state({}); // TODO should this be `$state.raw`? I dont think we want to apply deep reactivity to the index values
+	readonly indexes: Record<string, any> = $state({}); // $state() because index properties are written in place
 
 	// Map of index types for type safety and runtime checks
 	readonly #index_types: Map<string, IndexType> = new Map();

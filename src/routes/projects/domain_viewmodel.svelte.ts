@@ -20,12 +20,12 @@ export interface DomainViewmodelOptions {
 export class DomainViewmodel {
 	readonly projects: Projects;
 
-	project_id: Uuid = $state()!;
-	domain_id: Uuid | null = $state()!;
+	project_id: Uuid = $state.raw()!;
+	domain_id: Uuid | null = $state.raw()!;
 
-	domain_name: string = $state()!;
-	domain_status: 'active' | 'pending' | 'inactive' = $state()!;
-	ssl_enabled: boolean = $state()!;
+	domain_name: string = $state.raw()!;
+	domain_status: 'active' | 'pending' | 'inactive' = $state.raw()!;
+	ssl_enabled: boolean = $state.raw()!;
 
 	/** Whether the form has unsaved changes. */
 	readonly has_changes = $derived.by(

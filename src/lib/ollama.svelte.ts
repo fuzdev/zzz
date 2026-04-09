@@ -65,53 +65,54 @@ export type OllamaOptions = CellOptions<typeof OllamaJson>;
  */
 export class Ollama extends Cell<typeof OllamaJson> {
 	// Private serializable state
-	#host: string = $state()!;
+	#host: string = $state.raw()!;
 
 	// Runtime-only state
 	list_response: OllamaListResponse | null = $state.raw(null);
-	list_status: AsyncStatus = $state('initial');
-	list_error: string | null = $state(null);
-	list_last_updated: number | null = $state(null);
-	list_round_trip_time: number | null = $state(null);
-	last_refreshed: string | null = $state(null);
+	list_status: AsyncStatus = $state.raw('initial');
+	list_error: string | null = $state.raw(null);
+	list_last_updated: number | null = $state.raw(null);
+	list_round_trip_time: number | null = $state.raw(null);
+	last_refreshed: string | null = $state.raw(null);
 
 	// Track if Ollama has ever successfully responded
-	ever_responded: boolean = $state(false);
+	ever_responded: boolean = $state.raw(false);
 
 	// PS (running models) state
 	ps_response: OllamaPsResponse | null = $state.raw(null);
-	ps_status: AsyncStatus = $state('initial');
-	ps_error: string | null = $state(null);
-	ps_polling_enabled: boolean = $state(false);
+	ps_status: AsyncStatus = $state.raw('initial');
+	ps_error: string | null = $state.raw(null);
+	ps_polling_enabled: boolean = $state.raw(false);
 
 	readonly #ps_poller: Poller;
 
 	// Pull model state
-	pull_model_name: string = $state('');
-	pull_insecure: boolean = $state(false);
+	pull_model_name: string = $state.raw('');
+	pull_insecure: boolean = $state.raw(false);
 	readonly pulling_models: SvelteSet<string> = new SvelteSet();
 
 	// Copy model state
-	copy_source_model: string = $state('');
-	copy_destination_model: string = $state('');
-	copy_is_copying: boolean = $state(false);
+	copy_source_model: string = $state.raw('');
+	copy_destination_model: string = $state.raw('');
+	copy_is_copying: boolean = $state.raw(false);
 
 	// Create model state
-	create_model_name: string = $state('');
-	create_from_model: string = $state('');
-	create_system_prompt: string = $state('');
-	create_template: string = $state('');
-	create_is_creating: boolean = $state(false);
+	create_model_name: string = $state.raw('');
+	create_from_model: string = $state.raw('');
+	create_system_prompt: string = $state.raw('');
+	create_template: string = $state.raw('');
+	create_is_creating: boolean = $state.raw(false);
 
 	// Manager view state
-	manager_selected_view: 'configure' | 'model' | 'pull' | 'copy' | 'create' = $state('configure');
+	manager_selected_view: 'configure' | 'model' | 'pull' | 'copy' | 'create' =
+		$state.raw('configure');
 	// TODO maybe should be an id and serialized? think about this when dealing with adding routes
 	// for navigation
-	manager_selected_model: Model | null = $state(null);
-	manager_last_active_view: {view: string; model: Model | null} | null = $state(null);
+	manager_selected_model: Model | null = $state.raw(null);
+	manager_last_active_view: {view: string; model: Model | null} | null = $state.raw(null);
 
 	// UI state for actions
-	show_read_actions: boolean = $state(false);
+	show_read_actions: boolean = $state.raw(false);
 
 	// Getters and setters for serializable state
 	get host(): string {

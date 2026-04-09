@@ -122,7 +122,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly terminal_exit_handlers: Map<Uuid, (exit_code: number | null) => void> = new Map();
 
 	// TODO maybe instead of this pattern with getters/setters, using an encoder?
-	#zzz_dir: DiskfileDirectoryPath | null | undefined = $state(null); // TODO should this be undefined?
+	#zzz_dir: DiskfileDirectoryPath | null | undefined = $state.raw(null); // TODO should this be undefined?
 
 	/**
 	 * The `zzz_dir` is the path to Zzz's primary directory on the server's filesystem.
@@ -138,7 +138,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.#zzz_dir = parsed == null ? parsed : parsed.data;
 	}
 
-	#scoped_dirs: ReadonlyArray<DiskfileDirectoryPath> = $state([]);
+	#scoped_dirs: ReadonlyArray<DiskfileDirectoryPath> = $state.raw([]);
 
 	/**
 	 * Additional filesystem paths the server can access for user files.
@@ -170,7 +170,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly diskfile_histories: SvelteMap<DiskfilePath, DiskfileHistory> = new SvelteMap();
 
 	/** See into Zzz's future. */
-	futuremode = $state(false);
+	futuremode = $state.raw(false);
 
 	constructor(options: FrontendOptions = EMPTY_OBJECT) {
 		// Pass this instance as its own zzz reference - casting hacks around the circular reference

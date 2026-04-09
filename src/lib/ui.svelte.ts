@@ -18,18 +18,18 @@ export type UiJsonInput = z.input<typeof UiJson>;
 
 export interface UiOptions extends CellOptions<typeof UiJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
 export class Ui extends Cell<typeof UiJson> {
-	show_main_dialog: boolean = $state()!;
-	show_sidebar: boolean = $state()!;
-	tutorial_for_database: boolean = $state()!;
-	tutorial_for_chats: boolean = $state()!;
-	tutorial_for_prompts: boolean = $state()!;
-	tutorial_for_diskfiles: boolean = $state()!;
-	show_desk_menu: boolean = $state()!;
-	desk_pinned: boolean = $state()!;
+	show_main_dialog: boolean = $state.raw()!;
+	show_sidebar: boolean = $state.raw()!;
+	tutorial_for_database: boolean = $state.raw()!;
+	tutorial_for_chats: boolean = $state.raw()!;
+	tutorial_for_prompts: boolean = $state.raw()!;
+	tutorial_for_diskfiles: boolean = $state.raw()!;
+	show_desk_menu: boolean = $state.raw()!;
+	desk_pinned: boolean = $state.raw()!;
 
 	// TODO revisit this API, maybe with an associated attachment?
 	/** Consumed by components like `ContentEditor` for focusing elements. */
-	pending_element_to_focus_key: string | number | null = $state(null);
+	pending_element_to_focus_key: string | number | null = $state.raw(null);
 
 	constructor(options: UiOptions) {
 		super(UiJson, options);

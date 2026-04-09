@@ -5,7 +5,7 @@
 
 	const {onsend}: Props = $props();
 
-	let input = $state('');
+	let input = $state.raw('');
 
 	const send = (): void => {
 		const trimmed = input.trim();

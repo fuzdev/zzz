@@ -54,12 +54,12 @@ export class Time extends Cell<typeof TimeJson> {
 	/**
 	 * The interval in milliseconds between time updates.
 	 */
-	interval: number = $state(Time.DEFAULT_INTERVAL);
+	interval: number = $state.raw(Time.DEFAULT_INTERVAL);
 
 	/**
 	 * Whether the interval timer is currently running.
 	 */
-	running: boolean = $state(false);
+	running: boolean = $state.raw(false);
 
 	#timer?: NodeJS.Timeout;
 

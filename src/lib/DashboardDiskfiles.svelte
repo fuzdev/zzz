@@ -23,7 +23,7 @@
 		selected_tab ? diskfiles.items.by_id.get(selected_tab.diskfile_id) : undefined,
 	);
 
-	let show_diskfile_picker = $state(false);
+	let show_diskfile_picker = $state.raw(false);
 
 	onMount(() => {
 		void capabilities.init_backend_check();

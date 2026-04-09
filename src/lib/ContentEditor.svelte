@@ -43,7 +43,7 @@
 		onsave?: ((value: string) => void) | undefined;
 	} = $props();
 
-	let textarea_el: HTMLTextAreaElement | undefined = $state();
+	let textarea_el: HTMLTextAreaElement | undefined = $state.raw();
 
 	const token_count = $derived(token_count_prop ?? estimate_token_count(content));
 

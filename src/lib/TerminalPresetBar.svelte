@@ -11,9 +11,9 @@
 
 	const {presets, onrun, oncreate, ondelete}: Props = $props();
 
-	let adding = $state(false);
-	let new_name = $state('');
-	let new_command = $state('');
+	let adding = $state.raw(false);
+	let new_name = $state.raw('');
+	let new_command = $state.raw('');
 
 	const handle_add_submit = (): void => {
 		const trimmed = new_command.trim();

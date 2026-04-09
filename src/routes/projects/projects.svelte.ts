@@ -28,11 +28,11 @@ export type ProjectsOptions = CellOptions<typeof ProjectsJson>;
  */
 export class Projects extends Cell<typeof ProjectsJson> {
 	projects: Array<Project> = $state([]);
-	current_project_id: Uuid | null = $state(null);
-	current_page_id: Uuid | null = $state(null);
-	current_domain_id: Uuid | null = $state(null);
+	current_project_id: Uuid | null = $state.raw(null);
+	current_page_id: Uuid | null = $state.raw(null);
+	current_domain_id: Uuid | null = $state.raw(null);
 	expanded_projects: Record<string, boolean> = $state({});
-	previewing: boolean = $state(false);
+	previewing: boolean = $state.raw(false);
 
 	/** Map of project name to project for checking uniqueness */
 	readonly items_by_name = $derived.by(() => {

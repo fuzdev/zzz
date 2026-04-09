@@ -40,9 +40,9 @@ export interface WorkspaceOptions extends CellOptions<typeof WorkspaceJson> {} /
  * its directory with ScopedFs and starts a Filer for file watching.
  */
 export class Workspace extends Cell<typeof WorkspaceJson> {
-	path: DiskfileDirectoryPath = $state()!;
-	name: string = $state()!;
-	opened_at: Datetime = $state()!;
+	path: DiskfileDirectoryPath = $state.raw()!;
+	name: string = $state.raw()!;
+	opened_at: Datetime = $state.raw()!;
 
 	constructor(options: WorkspaceOptions) {
 		super(WorkspaceJson, options);

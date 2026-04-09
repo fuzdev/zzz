@@ -18,7 +18,7 @@
 	const app = frontend_context.get();
 	const {capabilities, ollama} = app;
 
-	let checking = $state(false);
+	let checking = $state.raw(false);
 
 	onMount(() => {
 		void capabilities.init_ollama_check();

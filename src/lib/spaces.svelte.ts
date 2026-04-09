@@ -31,7 +31,7 @@ export class Spaces extends Cell<typeof SpacesJson> {
 		],
 	});
 
-	active_id: Uuid | null = $state()!;
+	active_id: Uuid | null = $state.raw()!;
 
 	readonly active: Space | undefined = $derived(
 		this.active_id ? this.items.by_id.get(this.active_id) : undefined,

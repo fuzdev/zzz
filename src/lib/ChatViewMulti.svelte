@@ -17,7 +17,7 @@
 	} = $props();
 
 	let content_input: {focus: () => void} | undefined;
-	let pending = $state(false); // TODO refactor request state
+	let pending = $state.raw(false); // TODO refactor request state
 
 	const send_to_all = async () => {
 		if (!count) return;
@@ -34,7 +34,7 @@
 
 	const count = $derived(chat.enabled_threads.length);
 
-	let show_model_picker = $state(false);
+	let show_model_picker = $state.raw(false);
 </script>
 
 <div class="column_fluid">

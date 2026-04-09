@@ -17,10 +17,10 @@
 
 	const app = app_context.get();
 
-	let exit_code: number | null = $state(null);
-	let exited = $state(false);
-	let text_getter: (() => string) | null = $state(null);
-	let stdin_input: string = $state('');
+	let exit_code: number | null = $state.raw(null);
+	let exited = $state.raw(false);
+	let text_getter: (() => string) | null = $state.raw(null);
+	let stdin_input: string = $state.raw('');
 
 	const display_command = $derived(args.length > 0 ? `${command} ${args.join(' ')}` : command);
 

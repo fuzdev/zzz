@@ -22,7 +22,7 @@ export class RequestTrackerItem {
 	readonly id: JsonrpcRequestId;
 	readonly deferred: Deferred<JsonrpcResponseOrError>;
 	readonly created: Datetime;
-	status: AsyncStatus = $state()!;
+	status: AsyncStatus = $state.raw()!;
 	timeout: NodeJS.Timeout | undefined = $state.raw();
 
 	constructor(

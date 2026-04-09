@@ -19,7 +19,7 @@ export interface ThreadOptions extends CellOptions<typeof ThreadJson> {} // esli
  * record of interactions between the user and the AI.
  */
 export class Thread extends Cell<typeof ThreadJson> {
-	model_name: string = $state()!;
+	model_name: string = $state.raw()!;
 	readonly model: Model = $derived.by(() => {
 		const model = this.app.models.find_by_name(this.model_name);
 		if (!model) throw new Error(`Model "${this.model_name}" not found`); // TODO do this differently?
@@ -28,7 +28,7 @@ export class Thread extends Cell<typeof ThreadJson> {
 
 	readonly turns: IndexedCollection<Turn> = new IndexedCollection();
 
-	enabled: boolean = $state()!;
+	enabled: boolean = $state.raw()!;
 
 	readonly content: string = $derived(render_messages_to_string(this.turns.by_id.values()));
 	readonly length: number = $derived(this.content.length);

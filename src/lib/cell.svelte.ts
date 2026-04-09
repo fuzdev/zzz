@@ -72,9 +72,9 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	readonly cid = ++global_cell_count;
 
 	// Base properties from CellJson
-	id: Uuid = $state()!;
-	created: Datetime = $state()!;
-	updated: Datetime = $state()!;
+	id: Uuid = $state.raw()!;
+	created: Datetime = $state.raw()!;
+	updated: Datetime = $state.raw()!;
 
 	// the `!` is needed for `$derived(` to work over `$derived.by(`
 	readonly schema!: TSchema;

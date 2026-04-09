@@ -15,10 +15,10 @@ export type TerminalPresetJsonInput = z.input<typeof TerminalPresetJson>;
 export interface TerminalPresetOptions extends CellOptions<typeof TerminalPresetJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
 
 export class TerminalPreset extends Cell<typeof TerminalPresetJson> {
-	name: string = $state()!;
-	command: string = $state()!;
+	name: string = $state.raw()!;
+	command: string = $state.raw()!;
 	args: Array<string> = $state.raw()!;
-	cwd: string | undefined = $state();
+	cwd: string | undefined = $state.raw();
 
 	constructor(options: TerminalPresetOptions) {
 		super(TerminalPresetJson, options);

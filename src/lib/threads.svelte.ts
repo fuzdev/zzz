@@ -35,7 +35,7 @@ export class Threads extends Cell<typeof ThreadsJson> {
 		],
 	});
 
-	selected_id: Uuid | null = $state(null);
+	selected_id: Uuid | null = $state.raw(null);
 	readonly selected: Thread | undefined = $derived(
 		this.selected_id ? this.items.by_id.get(this.selected_id) : undefined,
 	);

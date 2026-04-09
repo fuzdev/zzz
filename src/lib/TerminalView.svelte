@@ -16,12 +16,12 @@
 
 	const app = app_context.get();
 
-	let container_el: HTMLDivElement | undefined = $state();
-	let container_width: number = $state(0);
-	let container_height: number = $state(0);
-	let xterm_instance: any = $state(null);
-	let data_version: number = $state(0); // incremented on each write to trigger re-derivation
-	let exited = $state(false);
+	let container_el: HTMLDivElement | undefined = $state.raw();
+	let container_width: number = $state.raw(0);
+	let container_height: number = $state.raw(0);
+	let xterm_instance: any = $state.raw(null);
+	let data_version: number = $state.raw(0); // incremented on each write to trigger re-derivation
+	let exited = $state.raw(false);
 
 	const get_terminal_text = (): string => {
 		if (!xterm_instance) return '';

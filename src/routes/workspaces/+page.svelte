@@ -8,9 +8,9 @@
 
 	const app = frontend_context.get();
 
-	let new_path = $state('');
-	let opening = $state(false);
-	let error_message: string | null = $state(null);
+	let new_path = $state.raw('');
+	let opening = $state.raw(false);
+	let error_message: string | null = $state.raw(null);
 
 	// Auto-open/activate workspace from query param (e.g. from `zzz <dir>` CLI)
 	const workspace_param = $derived(page.url.searchParams.get('workspace'));

@@ -25,7 +25,7 @@ export interface ActionOptions extends CellOptions<typeof ActionJson> {} // esli
  * Represents a single action in the system, tracking its full lifecycle through action events.
  */
 export class Action extends Cell<typeof ActionJson> {
-	method: ActionMethod = $state()!;
+	method: ActionMethod = $state.raw()!;
 
 	// TODO maybe use a decoder to make this an `ActionEvent`
 	action_event_data: ActionEventData | undefined = $state.raw();

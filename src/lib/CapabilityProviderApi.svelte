@@ -23,9 +23,9 @@
 	const capability = $derived(capabilities[provider_name]);
 	const provider = $derived(app.providers.find_by_name(provider_name));
 
-	let api_key_input = $state('');
-	let updating = $state(false);
-	let checking = $state(false);
+	let api_key_input = $state.raw('');
+	let updating = $state.raw(false);
+	let checking = $state.raw(false);
 
 	const api_key_input_normalized = $derived(api_key_input.trim());
 

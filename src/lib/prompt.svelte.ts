@@ -27,7 +27,7 @@ export interface PromptOptions extends CellOptions<typeof PromptJson> {
 }
 
 export class Prompt extends Cell<typeof PromptJson> {
-	name: string = $state()!;
+	name: string = $state.raw()!;
 	parts: Array<PartUnion> = $state()!;
 
 	readonly content: string = $derived(format_prompt_content(this.parts));

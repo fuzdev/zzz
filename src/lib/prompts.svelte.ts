@@ -61,8 +61,8 @@ export class Prompts extends Cell<typeof PromptsJson> {
 		],
 	});
 
-	#selected_id: Uuid | null = $state()!;
-	selected_id_last_non_null: Uuid | null = $state()!;
+	#selected_id: Uuid | null = $state.raw()!;
+	selected_id_last_non_null: Uuid | null = $state.raw()!;
 	get selected_id(): Uuid | null {
 		return this.#selected_id;
 	}
@@ -76,7 +76,7 @@ export class Prompts extends Cell<typeof PromptsJson> {
 	);
 
 	/** Controls visibility of sort controls in the prompts list. */
-	show_sort_controls: boolean = $state()!;
+	show_sort_controls: boolean = $state.raw()!;
 
 	/** Ordered array of prompts derived from the `manual_order` index. */
 	readonly ordered_items: Array<Prompt> = $derived(this.items.derived_index('manual_order'));

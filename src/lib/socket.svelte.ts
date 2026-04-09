@@ -59,27 +59,27 @@ export interface FailedMessage extends QueuedMessage {
  */
 export class Socket extends Cell<typeof SocketJson> {
 	// Private serializable state with getters/setters
-	#url: string | null = $state()!;
-	#url_input: string = $state()!; // TODO better name? is ambiguous, it's un-applied (not quite unsaved/temporary)
-	#heartbeat_interval: number = $state()!;
-	#reconnect_delay: number = $state()!;
-	#reconnect_delay_max: number = $state()!;
-	#auto_reconnect: boolean = $state()!;
+	#url: string | null = $state.raw()!;
+	#url_input: string = $state.raw()!; // TODO better name? is ambiguous, it's un-applied (not quite unsaved/temporary)
+	#heartbeat_interval: number = $state.raw()!;
+	#reconnect_delay: number = $state.raw()!;
+	#reconnect_delay_max: number = $state.raw()!;
+	#auto_reconnect: boolean = $state.raw()!;
 
 	// Runtime-only state (not serialized)
-	ws: WebSocket | null = $state(null);
-	open: boolean = $state(false);
-	status: AsyncStatus = $state('initial'); // 'initial' | 'pending' | 'success' | 'failure'
-	last_send_time: number | null = $state(null);
-	last_receive_time: number | null = $state(null);
-	last_connect_time: number | null = $state(null);
-	heartbeat_timeout: NodeJS.Timeout | null = $state(null);
+	ws: WebSocket | null = $state.raw(null);
+	open: boolean = $state.raw(false);
+	status: AsyncStatus = $state.raw('initial'); // 'initial' | 'pending' | 'success' | 'failure'
+	last_send_time: number | null = $state.raw(null);
+	last_receive_time: number | null = $state.raw(null);
+	last_connect_time: number | null = $state.raw(null);
+	heartbeat_timeout: NodeJS.Timeout | null = $state.raw(null);
 
 	// Keep track of connection attempts
-	reconnect_count: number = $state(0);
-	reconnect_attempt: number = $state(0); // increments on each reconnect attempt for animation triggering
-	reconnect_timeout: NodeJS.Timeout | null = $state(null);
-	current_reconnect_delay: number = $state(0);
+	reconnect_count: number = $state.raw(0);
+	reconnect_attempt: number = $state.raw(0); // increments on each reconnect attempt for animation triggering
+	reconnect_timeout: NodeJS.Timeout | null = $state.raw(null);
+	current_reconnect_delay: number = $state.raw(0);
 
 	// TODO need to think about garbage cleanup
 	// Message handling

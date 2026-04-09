@@ -15,7 +15,7 @@
 
 	// TODO could potentially be removed from the collection by some external process,
 	// so having this state be component-local solves some problems but not all
-	let selected_action: Action | null = $state(null);
+	let selected_action: Action | null = $state.raw(null);
 </script>
 
 <div class="column p_lg height:100%">

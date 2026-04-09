@@ -22,12 +22,12 @@ export interface ProjectViewmodelOptions {
 export class ProjectViewmodel {
 	readonly projects: Projects;
 
-	project_id: Uuid = $state()!;
+	project_id: Uuid = $state.raw()!;
 
-	edited_name: string = $state()!;
-	edited_description: string = $state()!;
+	edited_name: string = $state.raw()!;
+	edited_description: string = $state.raw()!;
 
-	editing_project: boolean = $state(false);
+	editing_project: boolean = $state.raw(false);
 
 	/** Whether the form has unsaved changes. */
 	readonly has_changes = $derived.by(

@@ -20,7 +20,7 @@ export type DiskfilesEditorOptions = CellOptions<typeof DiskfilesEditorJson>;
  */
 export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	/** Controls visibility of sort controls in the file explorer. */
-	show_sort_controls: boolean = $state(false);
+	show_sort_controls: boolean = $state.raw(false);
 
 	/** Tabs for managing the open diskfiles. */
 	readonly tabs: DiskfileTabs = new DiskfileTabs({app: this.app});

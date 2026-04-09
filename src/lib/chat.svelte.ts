@@ -28,11 +28,11 @@ export type ChatJsonInput = z.input<typeof ChatJson>;
 export interface ChatOptions extends CellOptions<typeof ChatJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
 
 export class Chat extends Cell<typeof ChatJson> {
-	name: string = $state()!;
+	name: string = $state.raw()!;
 	thread_ids: Array<Uuid> = $state()!;
-	main_input: string = $state()!;
-	view_mode: ChatViewMode = $state()!;
-	selected_thread_id: Uuid | null = $state()!;
+	main_input: string = $state.raw()!;
+	view_mode: ChatViewMode = $state.raw()!;
+	selected_thread_id: Uuid | null = $state.raw()!;
 
 	readonly main_input_length: number = $derived(this.main_input.length);
 	readonly main_input_token_count: number = $derived(estimate_token_count(this.main_input));
@@ -63,7 +63,7 @@ export class Chat extends Cell<typeof ChatJson> {
 	);
 
 	// TODO refactor
-	init_name_status: AsyncStatus = $state('initial');
+	init_name_status: AsyncStatus = $state.raw('initial');
 
 	constructor(options: ChatOptions) {
 		super(ChatJson, options);

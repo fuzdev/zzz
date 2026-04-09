@@ -20,8 +20,8 @@ export type ProjectOptions = CellOptions<typeof ProjectJson>;
  * Represents a project with pages and domains.
  */
 export class Project extends Cell<typeof ProjectJson> {
-	name: string = $state()!;
-	description: string = $state()!;
+	name: string = $state.raw()!;
+	description: string = $state.raw()!;
 	pages: Array<Page> = $state([]);
 	domains: Array<Domain> = $state([]);
 	repos: Array<Repo> = $state([]);

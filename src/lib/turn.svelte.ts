@@ -16,11 +16,11 @@ export interface TurnOptions extends CellOptions<typeof TurnJson> {} // eslint-d
  */
 export class Turn extends Cell<typeof TurnJson> {
 	part_ids: Array<Uuid> = $state()!;
-	thread_id: Uuid | null | undefined = $state();
-	role: CompletionRole = $state()!;
+	thread_id: Uuid | null | undefined = $state.raw();
+	role: CompletionRole = $state.raw()!;
 	request: CompletionRequest | undefined = $state.raw();
 	response: CompletionResponse | undefined = $state.raw();
-	error_message: string | undefined = $state();
+	error_message: string | undefined = $state.raw();
 
 	readonly parts: Array<PartUnion> = $derived(
 		this.part_ids

@@ -35,10 +35,10 @@
 	const sidebar_width = $derived(app.ui.show_sidebar ? SIDEBAR_WIDTH_MAX : 0);
 	const desk_width = $derived(app.ui.show_desk_menu && app.ui.desk_pinned ? DESK_WIDTH : 0);
 
-	let futureclicks = $state(0);
+	let futureclicks = $state.raw(0);
 	const FUTURECLICKS = 3;
 	// Track if futureclicks has been activated at least once
-	let futureclicks_activated = $state(false);
+	let futureclicks_activated = $state.raw(false);
 	onNavigate((navigation) => {
 		// Only reset clicks when navigating away from the root page
 		// and we're not already in activated state

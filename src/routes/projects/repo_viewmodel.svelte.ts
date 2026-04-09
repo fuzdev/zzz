@@ -21,10 +21,10 @@ export interface RepoViewmodelOptions {
 export class RepoViewmodel {
 	readonly projects: Projects;
 
-	project_id: Uuid = $state()!;
-	repo_id: Uuid | null = $state()!;
+	project_id: Uuid = $state.raw()!;
+	repo_id: Uuid | null = $state.raw()!;
 
-	git_url: string = $state()!;
+	git_url: string = $state.raw()!;
 	checkouts: Array<RepoCheckout> = $state([]);
 
 	/** Whether the form has unsaved changes. */

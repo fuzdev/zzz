@@ -20,7 +20,7 @@
 	const page_viewmodel = $derived(projects.current_page_viewmodel);
 
 	// Preview mode state
-	let preview_mode = $state(false);
+	let preview_mode = $state.raw(false);
 
 	// Toggle preview mode
 	const toggle_preview = () => {

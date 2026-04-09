@@ -19,8 +19,8 @@
 		on_remove_tag: (index: number, tag_index: number) => void;
 	} = $props();
 
-	let tag_input = $state('');
-	let tag_el: HTMLInputElement | undefined = $state();
+	let tag_input = $state.raw('');
+	let tag_el: HTMLInputElement | undefined = $state.raw();
 </script>
 
 <div class="panel p_sm mb_md">

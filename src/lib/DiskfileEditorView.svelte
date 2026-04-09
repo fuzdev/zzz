@@ -30,7 +30,7 @@
 	const editor_state = new DiskfileEditorState({app, diskfile});
 
 	// Reference to the content editor component
-	let content_editor: {focus: () => void} | undefined = $state();
+	let content_editor: {focus: () => void} | undefined = $state.raw();
 
 	// TODO refactor, try to remove
 	$effect(() => {

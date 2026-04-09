@@ -40,8 +40,8 @@
 	const {capabilities} = app;
 
 	// Track URL state for reset/undo functionality
-	let previous_url = $state('');
-	let has_undo_state = $state(false);
+	let previous_url = $state.raw('');
+	let has_undo_state = $state.raw(false);
 
 	// Reset the socket configuration to defaults
 	const reset_to_defaults = () => {

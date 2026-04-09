@@ -17,7 +17,7 @@ export interface DiskfileTabOptions extends CellOptions<typeof DiskfileTabJson> 
 }
 
 export class DiskfileTab extends Cell<typeof DiskfileTabJson> {
-	diskfile_id: Uuid = $state()!;
+	diskfile_id: Uuid = $state.raw()!;
 
 	/**
 	 * Reference to the parent tabs collection,

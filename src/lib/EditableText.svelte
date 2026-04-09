@@ -21,10 +21,10 @@
 		input_attrs?: SvelteHTMLElements['input'];
 	} = $props();
 
-	let is_editing = $state(false);
-	let edited_value = $state('');
-	let input_el: HTMLInputElement | undefined = $state();
-	let span_el: HTMLSpanElement | undefined = $state();
+	let is_editing = $state.raw(false);
+	let edited_value = $state.raw('');
+	let input_el: HTMLInputElement | undefined = $state.raw();
+	let span_el: HTMLSpanElement | undefined = $state.raw();
 
 	export const save = async (): Promise<void> => {
 		const trimmed = edited_value.trim(); // TODO parse with an optional zod schema
