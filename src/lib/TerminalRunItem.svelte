@@ -70,17 +70,16 @@
 		<div class="run_output">
 			<TerminalView {terminal_id} onclose={handle_close} get_text={handle_get_text} />
 		</div>
-		{#if !exited}
-			<div class="stdin_input">
-				<input
-					type="text"
-					bind:value={stdin_input}
-					placeholder="send input to terminal..."
-					onkeydown={handle_stdin_keydown}
-				/>
-				<button type="button" onclick={send_stdin} disabled={!stdin_input}>send</button>
-			</div>
-		{/if}
+		<div class="stdin_input">
+			<input
+				type="text"
+				bind:value={stdin_input}
+				placeholder={exited ? 'process exited' : 'send input to terminal...'}
+				onkeydown={handle_stdin_keydown}
+				disabled={exited}
+			/>
+			<button type="button" onclick={send_stdin} disabled={exited || !stdin_input}>send</button>
+		</div>
 	</div>
 </TerminalContextmenu>
 

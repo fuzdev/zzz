@@ -21,6 +21,7 @@
 	let container_height: number = $state(0);
 	let xterm_instance: any = $state(null);
 	let data_version: number = $state(0); // incremented on each write to trigger re-derivation
+	let exited = $state(false);
 
 	const get_terminal_text = (): string => {
 		if (!xterm_instance) return '';
@@ -82,6 +83,7 @@
 
 		// register exit handler for backend-initiated exit notifications
 		app.terminal_exit_handlers.set(terminal_id, (exit_code: number | null) => {
+			exited = true;
 			onclose?.(exit_code);
 		});
 
@@ -92,6 +94,7 @@
 
 			term = new Terminal({
 				cursorBlink: true,
+				convertEol: true,
 				fontSize: 14,
 				fontFamily: 'monospace',
 				theme: {
@@ -144,7 +147,9 @@
 	});
 
 	const handle_close = async (): Promise<void> => {
+		if (exited) return; // already exited via notification
 		const result = await app.api.terminal_close({terminal_id});
+		exited = true;
 		onclose?.(result.ok ? (result.value?.exit_code ?? null) : null);
 	};
 </script>

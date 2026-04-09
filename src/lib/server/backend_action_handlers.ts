@@ -560,6 +560,12 @@ export const backend_action_handlers: BackendActionHandlers = {
 				`[backend_action_handlers.terminal_close.receive_request] closing terminal ${input.terminal_id}`,
 			);
 
+			// idempotent — already-exited terminals return null exit_code
+			if (!backend.pty_manager.has(input.terminal_id)) {
+				// TODO maybe improve return value
+				return {exit_code: null};
+			}
+
 			try {
 				const exit_code = await backend.pty_manager.kill(input.terminal_id, input.signal);
 				return {exit_code};
