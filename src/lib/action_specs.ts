@@ -37,7 +37,7 @@ export const ping_action_spec = {
 	kind: 'request_response',
 	initiator: 'both',
 	auth: 'public',
-	side_effects: null,
+	side_effects: false,
 	input: z.void().optional(),
 	output: z.strictObject({
 		ping_id: JsonrpcRequestId,
@@ -53,7 +53,7 @@ export const session_load_action_spec = {
 	// or should the server be calling actions internally too?
 	initiator: 'frontend',
 	auth: 'public',
-	side_effects: null,
+	side_effects: false,
 	input: z.void().optional(),
 	output: z.strictObject({
 		data: z.strictObject({
@@ -220,7 +220,7 @@ export const ollama_list_action_spec = {
 	kind: 'request_response',
 	initiator: 'frontend',
 	auth: 'public',
-	side_effects: null,
+	side_effects: false,
 	input: OllamaListRequest,
 	output: z.union([OllamaListResponse, z.null()]),
 	async: true,
@@ -232,7 +232,7 @@ export const ollama_ps_action_spec = {
 	kind: 'request_response',
 	initiator: 'frontend',
 	auth: 'public',
-	side_effects: null,
+	side_effects: false,
 	input: OllamaPsRequest,
 	output: z.union([OllamaPsResponse, z.null()]),
 	async: true,
@@ -244,7 +244,7 @@ export const ollama_show_action_spec = {
 	kind: 'request_response',
 	initiator: 'frontend',
 	auth: 'public',
-	side_effects: null,
+	side_effects: false,
 	input: OllamaShowRequest,
 	output: z.union([OllamaShowResponse, z.null()]),
 	async: true,
@@ -326,7 +326,7 @@ export const provider_load_status_action_spec = {
 	kind: 'request_response',
 	initiator: 'frontend',
 	auth: 'public',
-	side_effects: null,
+	side_effects: false,
 	input: z.strictObject({
 		provider_name: ProviderName,
 		reload: z.boolean().default(true).optional(),
@@ -488,7 +488,7 @@ export const workspace_list_action_spec = {
 	kind: 'request_response',
 	initiator: 'frontend',
 	auth: 'public',
-	side_effects: null,
+	side_effects: false,
 	input: z.void().optional(),
 	output: z.strictObject({
 		workspaces: z.array(WorkspaceInfoJson),

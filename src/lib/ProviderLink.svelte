@@ -3,6 +3,7 @@
 	import {resolve} from '$app/paths';
 	import type {SvelteHTMLElements} from 'svelte/elements';
 	import {page} from '$app/state';
+	import {DEV} from 'esm-env';
 
 	import type {Provider} from './provider.svelte.js';
 	import {GLYPH_PROVIDER} from './glyphs.js';
@@ -27,11 +28,15 @@
 		fallback?: Snippet | undefined;
 	} = $props();
 
-	if (icon && children) {
-		console.error('icon and children are mutually exclusive');
-	}
-	if (fallback && fallback_attrs) {
-		console.error('fallback and fallback_attrs are mutually exclusive');
+	if (DEV) {
+		$effect.pre(() => {
+			if (icon && children) {
+				console.error('icon and children are mutually exclusive');
+			}
+			if (fallback && fallback_attrs) {
+				console.error('fallback and fallback_attrs are mutually exclusive');
+			}
+		});
 	}
 
 	const selected = $derived(

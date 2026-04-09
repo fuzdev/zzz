@@ -22,7 +22,11 @@
 		children?: Snippet<[enabled: boolean]> | undefined;
 	} = $props();
 
-	if (DEV && label && children) throw new Error('cannot provide both label and children');
+	if (DEV) {
+		$effect.pre(() => {
+			if (label && children) throw new Error('cannot provide both label and children');
+		});
+	}
 
 	const final_children = $derived(children ?? children_default);
 </script>
