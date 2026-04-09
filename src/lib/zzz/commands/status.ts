@@ -36,7 +36,7 @@ export const status = async (
 		daemon_info = info;
 		pid_alive = await is_daemon_running(runtime, info.pid);
 		if (pid_alive) {
-			healthy = await check_daemon_health(info.port);
+			healthy = await check_daemon_health(runtime, info.port);
 		}
 	}
 
@@ -45,9 +45,7 @@ export const status = async (
 			JSON.stringify(
 				{
 					daemon:
-						pid_alive && daemon_info
-							? {running: true, healthy, ...daemon_info}
-							: {running: false},
+						pid_alive && daemon_info ? {running: true, healthy, ...daemon_info} : {running: false},
 					// TODO: workspaces, repos, watched state
 				},
 				null,

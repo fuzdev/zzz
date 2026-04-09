@@ -30,7 +30,7 @@ import {get_zzz_dir} from '../cli_config.ts';
 const check_daemon = async (
 	runtime: Pick<
 		ZzzRuntime,
-		'env_get' | 'stat' | 'read_text_file' | 'run_command' | 'remove' | 'warn'
+		'env_get' | 'stat' | 'read_text_file' | 'run_command' | 'fetch' | 'remove' | 'warn'
 	>,
 ): Promise<DaemonInfo | null> => {
 	const info = await read_daemon_info(runtime, 'zzz');
@@ -40,7 +40,7 @@ const check_daemon = async (
 	const pid_alive = await is_daemon_running(runtime, info.pid);
 	if (!pid_alive) {
 		// Process is dead — fall through to stale cleanup
-	} else if (await check_daemon_health(info.port)) {
+	} else if (await check_daemon_health(runtime, info.port)) {
 		return info;
 	} else {
 		// PID alive but not responding — treat as not running

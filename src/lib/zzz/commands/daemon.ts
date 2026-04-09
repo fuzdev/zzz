@@ -79,7 +79,7 @@ export const daemon_status = async (
 
 	// Check if process is actually running, then probe health
 	const pid_alive = await is_daemon_running(runtime, info.pid);
-	const healthy = pid_alive ? await check_daemon_health(info.port) : false;
+	const healthy = pid_alive ? await check_daemon_health(runtime, info.port) : false;
 
 	if (args.json) {
 		console.log(JSON.stringify({running: pid_alive, healthy, ...info}));

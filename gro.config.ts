@@ -28,10 +28,7 @@ const config: CreateGroConfig = async (base_config) => {
 			gro_plugin_deno_compile({
 				entry: 'src/lib/zzz/main.ts',
 				output_name: 'zzz',
-				flags: [
-					'--no-check',
-					'--sloppy-imports',
-				],
+				flags: ['--no-check', '--sloppy-imports'],
 			}),
 		];
 	};
