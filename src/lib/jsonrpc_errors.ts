@@ -1,4 +1,7 @@
-// @slop Claude Opus 4
+// TODO: Phase 5 — import standard error codes from @fuzdev/fuz_app/http/jsonrpc_errors.js
+// when the branded JsonrpcErrorCode types are unified between zzz and fuz_app.
+// Currently kept local because zzz's JsonrpcErrorCode (from jsonrpc.ts) uses a different
+// Zod brand than fuz_app's, making the types nominally incompatible.
 
 import {
 	JSONRPC_INTERNAL_ERROR,

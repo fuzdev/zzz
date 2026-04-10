@@ -1,3 +1,8 @@
+// TODO: Phase 5 — consolidate overlapping types with fuz_app/http/jsonrpc.js.
+// zzz keeps its own jsonrpc.ts because it includes MCP-specific types
+// (progressToken, _meta, notification schemas, full union types) that
+// fuz_app's minimal envelope schemas don't have.
+
 /**
  * Following MCP, Zzz supports a subset of JSON-RPC 2.0 as its message format
  * (A2A too, but I haven't looked into if they support the full spec).

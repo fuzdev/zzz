@@ -1,39 +1,28 @@
 /**
  * Server environment configuration.
  *
- * Zod schema for the zzz Deno server env. Uses `load_env` from fuz_app
- * for schema-validated loading with clear error messages.
+ * Extends `BaseServerEnv` from fuz_app with zzz-specific fields.
+ * Uses `load_env` from fuz_app for schema-validated loading.
  *
  * @module
  */
 
 import {z} from 'zod';
+import {BaseServerEnv} from '@fuzdev/fuz_app/server/env.js';
 import {load_env, EnvValidationError, log_env_validation_error} from '@fuzdev/fuz_app/env/load.js';
 
 /**
  * Zod schema for zzz server environment variables.
  *
- * Field names match the env var keys — `load_env` reads each key from the schema shape.
- * Defaults are set so the daemon starts with zero configuration.
+ * Extends `BaseServerEnv` with zzz-specific fields for app data,
+ * scoped directories, AI provider API keys, and testing configuration.
  */
-export const ZzzServerEnv = z.strictObject({
+export const ZzzServerEnv = BaseServerEnv.extend({
 	PUBLIC_ZZZ_DIR: z.string().default('.zzz').meta({description: 'Zzz app data directory'}),
 	PUBLIC_ZZZ_SCOPED_DIRS: z
 		.string()
 		.default('')
 		.meta({description: 'Comma-separated filesystem paths the server can access'}),
-	PUBLIC_SERVER_PROXIED_PORT: z.coerce
-		.number()
-		.default(4460)
-		.meta({description: 'Port for the Hono backend server'}),
-	PUBLIC_SERVER_HOST: z
-		.string()
-		.default('localhost')
-		.meta({description: 'Hostname for the server'}),
-	ALLOWED_ORIGINS: z
-		.string()
-		.default('http://localhost:*')
-		.meta({description: 'Comma-separated origin patterns for request verification'}),
 	PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY: z.coerce
 		.number()
 		.default(0)
@@ -60,6 +49,8 @@ export type ZzzServerEnv = z.infer<typeof ZzzServerEnv>;
  * (e.g., `scoped_dirs` as an array, `port` as a number).
  */
 export interface ZzzServerConfig {
+	/** Full validated env object. */
+	env: ZzzServerEnv;
 	/** Zzz app data directory (e.g., `.zzz` or `~/.zzz/`). */
 	zzz_dir: string;
 	/** Filesystem paths the server can access for user files. */
@@ -68,8 +59,6 @@ export interface ZzzServerConfig {
 	port: number;
 	/** Hostname for the server. */
 	host: string;
-	/** Comma-separated origin patterns for request verification. */
-	allowed_origins: string;
 	/** WebSocket endpoint path. */
 	websocket_path: string;
 	/** HTTP RPC endpoint path. */
@@ -125,11 +114,11 @@ export const load_server_env = (
 	}
 
 	return {
+		env: raw,
 		zzz_dir: overrides?.zzz_dir ?? raw.PUBLIC_ZZZ_DIR,
 		scoped_dirs: overrides?.scoped_dirs ?? parse_comma_separated(raw.PUBLIC_ZZZ_SCOPED_DIRS),
-		port: overrides?.port ?? raw.PUBLIC_SERVER_PROXIED_PORT,
-		host: overrides?.host ?? raw.PUBLIC_SERVER_HOST,
-		allowed_origins: overrides?.allowed_origins ?? raw.ALLOWED_ORIGINS,
+		port: overrides?.port ?? raw.PORT,
+		host: overrides?.host ?? raw.HOST,
 		websocket_path: overrides?.websocket_path ?? '/ws',
 		api_path: overrides?.api_path ?? '/api/rpc',
 		artificial_delay: overrides?.artificial_delay ?? raw.PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY,

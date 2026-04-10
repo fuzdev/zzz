@@ -4,7 +4,7 @@
 
 `@fuzdev/zzz` — local-first AI forge: chat + files + prompts + terminals in one app.
 SvelteKit frontend, Hono/Deno backend, Svelte 5 runes, Zod schemas.
-v0.0.1, no auth, no database yet. 32 cell classes, 29 action specs, 4 AI providers.
+v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PGlite DB. 32 cell classes, 29 action specs, 4 AI providers.
 
 For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
@@ -26,7 +26,7 @@ For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
 ## Development Stage
 
-Early development, v0.0.1. Breaking changes are expected and welcome. No authentication — development use only. All state is in-memory (no database yet). The Hono/Deno backend is the reference implementation. A Rust backend (`crates/zzz_server`) is in development — Phase 1 (ping, static files, integration test harness) is complete. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
+Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on the RPC endpoint (cookie sessions, bearer tokens, bootstrap flow); WebSocket transport has origin verification only (no session auth — localhost-only binding). PGlite in-memory DB for auth; domain state (files, terminals) still in-memory. The Hono/Deno backend is the reference implementation. A Rust backend (`crates/zzz_server`) is in development — Phase 1 (ping, static files, integration test harness) is complete. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
 
 See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 
@@ -244,8 +244,8 @@ cd ~/dev/private_fuz && cargo build -p fuz_pty --release
 ### Rust Backend
 
 Shadow implementation of the Deno server using axum. Phase 1: only `ping`,
-no auth, no DB. The Deno server is ground truth — 18 integration tests verify
-both backends produce identical JSON-RPC responses.
+no auth, no DB. The Deno server (with full fuz_app auth stack) is ground truth —
+18 integration tests verify both backends produce identical JSON-RPC responses.
 
 ```bash
 cargo build -p zzz_server                          # Build
@@ -318,7 +318,7 @@ export const diskfile_update_action_spec = {
   description: 'Write content to a file on disk',
   kind: 'request_response',
   initiator: 'frontend',
-  auth: 'public',
+  auth: 'authenticated',
   side_effects: true,
   input: z.strictObject({
     path: DiskfilePath,
@@ -440,24 +440,39 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 
 ## Environment Variables
 
-From `.env.development.example`:
+### Server (BaseServerEnv from fuz_app)
+
+| Variable               | Purpose                                  |
+| ---------------------- | ---------------------------------------- |
+| `NODE_ENV`             | `development` or `production`            |
+| `PORT`                 | HTTP server port (default 4040)          |
+| `HOST`                 | Bind address (default `localhost`)       |
+| `DATABASE_URL`         | `memory://`, `file://`, or `postgres://` |
+| `SECRET_COOKIE_KEYS`   | HMAC signing keys (min 32 chars)         |
+| `ALLOWED_ORIGINS`      | Origin patterns for API verification     |
+| `BOOTSTRAP_TOKEN_PATH` | One-shot admin bootstrap token path      |
+
+### zzz-specific server vars
+
+| Variable                                   | Purpose                            |
+| ------------------------------------------ | ---------------------------------- |
+| `PUBLIC_ZZZ_DIR`                           | Zzz app directory (default `.zzz`) |
+| `PUBLIC_ZZZ_SCOPED_DIRS`                   | Comma-separated filesystem paths   |
+| `PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY` | Testing delay (ms)                 |
+| `SECRET_ANTHROPIC_API_KEY`                 | Claude API key                     |
+| `SECRET_OPENAI_API_KEY`                    | OpenAI API key                     |
+| `SECRET_GOOGLE_API_KEY`                    | Google Gemini API key              |
+
+### SvelteKit frontend vars (PUBLIC_*)
 
 | Variable                              | Purpose                                    |
 | ------------------------------------- | ------------------------------------------ |
-| `PUBLIC_ZZZ_DIR`                      | Zzz app directory (default `.zzz`)         |
-| `PUBLIC_ZZZ_SCOPED_DIRS`              | Comma-separated user file paths            |
 | `PUBLIC_SERVER_PROTOCOL`              | `http` or `https`                          |
-| `PUBLIC_SERVER_HOST`                  | Server hostname                            |
+| `PUBLIC_SERVER_HOST`                  | Server hostname (frontend)                 |
 | `PUBLIC_SERVER_PORT`                  | SvelteKit dev server port                  |
 | `PUBLIC_SERVER_API_PATH`              | API endpoint path                          |
 | `PUBLIC_WEBSOCKET_URL`               | WebSocket URL                              |
-| `PUBLIC_SERVER_PROXIED_PORT`          | Hono backend port                          |
-| `PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY` | Testing delay in ms                  |
-| `ALLOWED_ORIGINS`                     | Origin allowlist patterns                  |
-| `SECRET_OPENAI_API_KEY`              | OpenAI API key                             |
-| `SECRET_ANTHROPIC_API_KEY`           | Anthropic API key                          |
-| `SECRET_GOOGLE_API_KEY`              | Google Gemini API key                      |
-| `SECRET_GITHUB_API_TOKEN`            | GitHub API token                           |
+| `PUBLIC_SERVER_PROXIED_PORT`          | Hono backend port (frontend)               |
 
 ## Avoid
 
@@ -471,8 +486,8 @@ From `.env.development.example`:
 
 ## Known Limitations
 
-- **No authentication** — development use only, localhost-only binding enforced. Host header validation and origin checking provide defense-in-depth. Bearer token auth planned.
-- **No database** — all state is in-memory, lost on restart (pglite planned). Workspaces persist to JSON file as a stopgap
+- **WebSocket has no session auth** — RPC endpoint (HTTP) enforces per-action auth via fuz_app (cookie sessions, bearer tokens, bootstrap). WebSocket transport only has origin verification — `backend.receive()` / ActionPeer skips auth checks. Acceptable for localhost-only binding. See zzz lore security section.
+- **Domain state is in-memory** — auth/accounts are in PGlite DB, but zzz domain state (files, terminals, workspaces) is in-memory, lost on restart. Workspaces persist to JSON file as a stopgap.
 - **No undo/history** — file edits are permanent
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI

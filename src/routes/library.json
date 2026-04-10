@@ -48,12 +48,14 @@
 		},
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
-			"@fuzdev/fuz_app": "^0.7.0",
+			"@electric-sql/pglite": "^0.3.16",
+			"@fuzdev/fuz_app": "^0.7.1",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.58.0",
 			"@fuzdev/fuz_ui": "^0.191.4",
 			"@fuzdev/fuz_util": "^0.55.0",
 			"@jridgewell/trace-mapping": "^0.3.31",
+			"@node-rs/argon2": "^2.0.2",
 			"@ryanatkn/eslint-config": "^0.10.1",
 			"@sveltejs/acorn-typescript": "^1.0.9",
 			"@sveltejs/adapter-static": "^3.0.10",
@@ -68,6 +70,7 @@
 			"jsdom": "^27.2.0",
 			"magic-string": "^0.30.21",
 			"ollama": "^0.6.3",
+			"pg": "^8.20.0",
 			"prettier": "^3.7.4",
 			"prettier-plugin-svelte": "^3.4.1",
 			"svelte": "^5.55.2",
@@ -1635,7 +1638,7 @@
 						"name": "session_load_action_spec",
 						"kind": "variable",
 						"source_line": 49,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodObject<{ data: ZodObject<{ zzz_dir: $ZodBranded<ZodPipe<...>, \"DiskfileDirectoryPath\", \"out\">; scoped_dirs: ZodReadonly<...>; files: ZodArray<...>; provider_status: ZodArray..."
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodObject<{ data: ZodObject<{ zzz_dir: $ZodBranded<...>; scoped_dirs: ZodReadonly<...>; files: ZodArray<...>; provider_status: ZodArray<...>; workspaces: ZodArray<...>; ..."
 					},
 					{
 						"name": "filer_change_action_spec",
@@ -1647,25 +1650,25 @@
 						"name": "diskfile_update_action_spec",
 						"kind": "variable",
 						"source_line": 87,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; content: ZodString; }, $strict>; output: ZodNull; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; content: ZodString; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "diskfile_delete_action_spec",
 						"kind": "variable",
 						"source_line": 102,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>; output: ZodNull; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "directory_create_action_spec",
 						"kind": "variable",
 						"source_line": 116,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>; output: ZodNull; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "completion_create_action_spec",
 						"kind": "variable",
 						"source_line": 130,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<...>; model: ZodString; prompt: ZodString; completion_messages: ZodOpti..."
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<...>; model: ZodString; prompt: ZodString; completion_messages: ..."
 					},
 					{
 						"name": "completion_progress_action_spec",
@@ -1689,73 +1692,73 @@
 						"name": "ollama_list_action_spec",
 						"kind": "variable",
 						"source_line": 218,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodUnion<readonly [ZodObject<{ models: ZodArray<ZodObject<{ details: ZodOptional<...>; ... 4 more ...; size: ZodNumber; }, $loose>>; }, $loose>, ZodNull]>; async: true; descrip..."
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodUnion<readonly [ZodObject<{ models: ZodArray<...>; }, $loose>, ZodNull]>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_ps_action_spec",
 						"kind": "variable",
 						"source_line": 230,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodUnion<readonly [ZodObject<{ models: ZodArray<ZodObject<{ details: ZodOptional<...>; ... 5 more ...; size_vram: ZodNumber; }, $loose>>; }, $loose>, ZodNull]>; async: true; de..."
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodUnion<readonly [ZodObject<{ models: ZodArray<...>; }, $loose>, ZodNull]>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_show_action_spec",
 						"kind": "variable",
 						"source_line": 242,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: false; input: ZodObject<{ model: ZodString; system: ZodOptional<ZodString>; template: ZodOptional<...>; options: ZodOptional<...>; }, $loose>; output: ZodUnion<...>; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: false; input: ZodObject<{ model: ZodString; system: ZodOptional<ZodString>; template: ZodOptional<...>; options: ZodOptional<...>; }, $loose>; output: ZodUnion<...>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_pull_action_spec",
 						"kind": "variable",
 						"source_line": 254,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ model: ZodString; insecure: ZodOptional<ZodBoolean>; stream: ZodOptional<...>; _meta: ZodOptional<...>; }, $strict>; output: ZodOptional<...>; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ model: ZodString; insecure: ZodOptional<ZodBoolean>; stream: ZodOptional<...>; _meta: ZodOptional<...>; }, $strict>; output: ZodOptional<...>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_delete_action_spec",
 						"kind": "variable",
 						"source_line": 270,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ model: ZodString; }, $loose>; output: ZodOptional<...>; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ model: ZodString; }, $loose>; output: ZodOptional<...>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_copy_action_spec",
 						"kind": "variable",
 						"source_line": 282,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ source: ZodString; destination: ZodString; }, $loose>; output: ZodOptional<...>; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ source: ZodString; destination: ZodString; }, $loose>; output: ZodOptional<...>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_create_action_spec",
 						"kind": "variable",
 						"source_line": 294,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ model: ZodString; from: ZodOptional<ZodString>; ... 8 more ...; _meta: ZodOptional<...>; }, $strict>; output: ZodOptional<...>; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ model: ZodString; from: ZodOptional<ZodString>; ... 8 more ...; _meta: ZodOptional<...>; }, $strict>; output: ZodOptional<...>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_unload_action_spec",
 						"kind": "variable",
 						"source_line": 310,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ model: ZodString; }, $strict>; output: ZodOptional<...>; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ model: ZodString; }, $strict>; output: ZodOptional<...>; async: true; description: string; }"
 					},
 					{
 						"name": "provider_load_status_action_spec",
 						"kind": "variable",
 						"source_line": 324,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: false; input: ZodObject<{ provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; reload: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; description: st..."
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: false; input: ZodObject<{ provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; reload: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; descript..."
 					},
 					{
 						"name": "provider_update_api_key_action_spec",
 						"kind": "variable",
 						"source_line": 341,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; api_key: ZodString; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"keeper\"; side_effects: true; input: ZodObject<{ provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; api_key: ZodString; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_create_action_spec",
 						"kind": "variable",
 						"source_line": 358,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ command: ZodString; args: ZodDefault<ZodArray<ZodString>>; cwd: ZodOptional<...>; preset_id: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ command: ZodString; args: ZodDefault<ZodArray<ZodString>>; cwd: ZodOptional<...>; preset_id: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_data_send_action_spec",
 						"kind": "variable",
 						"source_line": 377,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; data: ZodString; }, $strict>; output: ZodNull; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; data: ZodString; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_data_action_spec",
@@ -1767,13 +1770,13 @@
 						"name": "terminal_resize_action_spec",
 						"kind": "variable",
 						"source_line": 407,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; cols: ZodNumber; rows: ZodNumber; }, $strict>; output: ZodNull; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; cols: ZodNumber; rows: ZodNumber; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_close_action_spec",
 						"kind": "variable",
 						"source_line": 423,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; signal: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; signal: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_exited_action_spec",
@@ -1785,19 +1788,19 @@
 						"name": "workspace_open_action_spec",
 						"kind": "variable",
 						"source_line": 455,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; }, $strict>; output: ZodObject<...>; async: true; description: stri..."
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; }, $strict>; output: ZodObject<...>; async: true; descriptio..."
 					},
 					{
 						"name": "workspace_close_action_spec",
 						"kind": "variable",
 						"source_line": 472,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; }, $strict>; output: ZodNull; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; }, $strict>; output: ZodNull; async: true; description: stri..."
 					},
 					{
 						"name": "workspace_list_action_spec",
 						"kind": "variable",
 						"source_line": 486,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"public\"; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodObject<{ workspaces: ZodArray<ZodObject<{ path: $ZodBranded<...>; name: ZodString; opened_at: ZodString; }, $strict>>; }, $strict>; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodObject<{ workspaces: ZodArray<...>; }, $strict>; async: true; description: string; }"
 					},
 					{
 						"name": "workspace_changed_action_spec",
@@ -1827,7 +1830,8 @@
 					"action_metatypes.gen.ts",
 					"frontend_action_types.gen.ts",
 					"server/backend_action_types.gen.ts",
-					"server/backend_actions_api.ts"
+					"server/backend_actions_api.ts",
+					"server/zzz_rpc_actions.ts"
 				]
 			},
 			{
@@ -5890,7 +5894,8 @@
 					"diskfiles.svelte.ts",
 					"server/backend.ts",
 					"server/backend_action_handlers.ts",
-					"server/backend_actions_api.ts"
+					"server/backend_actions_api.ts",
+					"server/zzz_rpc_actions.ts"
 				]
 			},
 			{
@@ -6457,6 +6462,7 @@
 					"server/backend.ts",
 					"server/backend_action_handlers.ts",
 					"server/backend_actions_api.ts",
+					"server/zzz_rpc_actions.ts",
 					"space.svelte.ts",
 					"workspace.svelte.ts"
 				]
@@ -10116,27 +10122,27 @@
 						"name": "JsonrpcErrorName",
 						"kind": "type",
 						"doc_comment": "Includes standard JSON-RPC error codes and application-specific errors.",
-						"source_line": 22,
+						"source_line": 25,
 						"type_signature": "JsonrpcErrorName"
 					},
 					{
 						"name": "JSONRPC_ERROR_CODES",
 						"kind": "variable",
 						"doc_comment": "Extended JSON-RPC error codes with application-specific errors.",
-						"source_line": 42,
+						"source_line": 45,
 						"type_signature": "{ readonly parse_error: -32700; readonly invalid_request: -32600; readonly method_not_found: -32601; readonly invalid_params: -32602; readonly internal_error: -32603; readonly unauthenticated: -32700 | ... 4 more ... | (number & $brand<...>); ... 7 more ...; readonly ai_provider_error: -32700 | ... 4 more ... | (num..."
 					},
 					{
 						"name": "jsonrpc_error_messages",
 						"kind": "variable",
-						"source_line": 98,
+						"source_line": 101,
 						"type_signature": "{ readonly parse_error: (data?: unknown) => { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; readonly invalid_request: (data?: unknown) => { ...; }; ... 11 more ...; readonly ai_provider_error: (provider?: stri..."
 					},
 					{
 						"name": "ThrownJsonrpcError",
 						"kind": "class",
 						"doc_comment": "Custom error class for JSON-RPC errors.",
-						"source_line": 207,
+						"source_line": 210,
 						"extends": ["Error"],
 						"implements": [],
 						"members": [
@@ -10180,7 +10186,7 @@
 					{
 						"name": "jsonrpc_errors",
 						"kind": "variable",
-						"source_line": 227,
+						"source_line": 230,
 						"type_signature": "{ readonly parse_error: (data?: unknown) => ThrownJsonrpcError; readonly invalid_request: (data?: unknown) => ThrownJsonrpcError; readonly method_not_found: (method?: string | undefined, data?: unknown) => ThrownJsonrpcError; ... 10 more ...; readonly ai_provider_error: (provider?: string | undefined, message?: stri..."
 					}
 				],
@@ -10196,8 +10202,8 @@
 					"server/backend_action_handlers.ts",
 					"server/backend_provider.ts",
 					"server/backend_websocket_transport.ts",
-					"server/register_http_actions.ts",
-					"server/register_websocket_actions.ts"
+					"server/register_websocket_actions.ts",
+					"server/zzz_rpc_actions.ts"
 				]
 			},
 			{
@@ -10206,7 +10212,7 @@
 					{
 						"name": "create_jsonrpc_request",
 						"kind": "function",
-						"source_line": 21,
+						"source_line": 25,
 						"type_signature": "(method: string, params: { [x: string]: unknown; _meta?: { [x: string]: unknown; progressToken?: string | number | undefined; } | undefined; } | undefined, id: string | number): { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { ...; } | undefined; }",
 						"return_type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; _meta?: { [x: string]: unknown; progressToken?: string | number | undefined; } | undefined; } | undefined; }",
 						"parameters": [
@@ -10227,7 +10233,7 @@
 					{
 						"name": "create_jsonrpc_response",
 						"kind": "function",
-						"source_line": 38,
+						"source_line": 42,
 						"type_signature": "(id: string | number, result: { [x: string]: unknown; _meta?: { [x: string]: unknown; } | undefined; }): { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; _meta?: { [x: string]: unknown; } | undefined; }; }",
 						"return_type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; _meta?: { [x: string]: unknown; } | undefined; }; }",
 						"parameters": [
@@ -10244,7 +10250,7 @@
 					{
 						"name": "create_jsonrpc_notification",
 						"kind": "function",
-						"source_line": 47,
+						"source_line": 51,
 						"type_signature": "(method: string, params: { [x: string]: unknown; _meta?: { [x: string]: unknown; } | undefined; } | undefined): { [x: string]: unknown; jsonrpc: \"2.0\"; method: string; params?: { [x: string]: unknown; _meta?: { [x: string]: unknown; } | undefined; } | undefined; }",
 						"return_type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; method: string; params?: { [x: string]: unknown; _meta?: { [x: string]: unknown; } | undefined; } | undefined; }",
 						"parameters": [
@@ -10261,7 +10267,7 @@
 					{
 						"name": "create_jsonrpc_error_message",
 						"kind": "function",
-						"source_line": 62,
+						"source_line": 66,
 						"type_signature": "(id: string | number | null, error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }): { ...; }",
 						"return_type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }",
 						"parameters": [
@@ -10279,7 +10285,7 @@
 						"name": "create_jsonrpc_error_message_from_thrown",
 						"kind": "function",
 						"doc_comment": "Creates a JSON-RPC error response from any error.\nHandles `ThrownJsonrpcError` and regular Error objects.",
-						"source_line": 75,
+						"source_line": 79,
 						"type_signature": "(id: string | number | null, error: any): { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; }; }",
 						"return_type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }",
 						"parameters": [
@@ -10296,7 +10302,7 @@
 					{
 						"name": "to_jsonrpc_message_id",
 						"kind": "function",
-						"source_line": 107,
+						"source_line": 111,
 						"type_signature": "(message_or_id: unknown): string | number | null",
 						"return_type": "string | number | null",
 						"parameters": [
@@ -10309,7 +10315,7 @@
 					{
 						"name": "is_jsonrpc_request_id",
 						"kind": "function",
-						"source_line": 117,
+						"source_line": 121,
 						"type_signature": "(id: unknown): id is string | number",
 						"return_type": "boolean",
 						"parameters": [
@@ -10322,7 +10328,7 @@
 					{
 						"name": "is_jsonrpc_object",
 						"kind": "function",
-						"source_line": 122,
+						"source_line": 126,
 						"type_signature": "(message: unknown): message is { jsonrpc: \"2.0\"; }",
 						"return_type": "boolean",
 						"parameters": [
@@ -10335,7 +10341,7 @@
 					{
 						"name": "is_jsonrpc_message",
 						"kind": "function",
-						"source_line": 128,
+						"source_line": 132,
 						"type_signature": "(message: unknown): message is { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; _meta?: { [x: string]: unknown; progressToken?: string | number | undefined; } | undefined; } | undefined; } | { ...; } | { ...; } | { ...; }",
 						"return_type": "boolean",
 						"parameters": [
@@ -10348,7 +10354,7 @@
 					{
 						"name": "is_jsonrpc_request",
 						"kind": "function",
-						"source_line": 133,
+						"source_line": 137,
 						"type_signature": "(message: unknown): message is { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; _meta?: { [x: string]: unknown; progressToken?: string | number | undefined; } | undefined; } | undefined; }",
 						"return_type": "boolean",
 						"parameters": [
@@ -10361,7 +10367,7 @@
 					{
 						"name": "is_jsonrpc_notification",
 						"kind": "function",
-						"source_line": 136,
+						"source_line": 140,
 						"type_signature": "(message: unknown): message is { [x: string]: unknown; jsonrpc: \"2.0\"; method: string; params?: { [x: string]: unknown; _meta?: { [x: string]: unknown; } | undefined; } | undefined; }",
 						"return_type": "boolean",
 						"parameters": [
@@ -10374,7 +10380,7 @@
 					{
 						"name": "is_jsonrpc_response",
 						"kind": "function",
-						"source_line": 139,
+						"source_line": 143,
 						"type_signature": "(message: unknown): message is { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; _meta?: { [x: string]: unknown; } | undefined; }; }",
 						"return_type": "boolean",
 						"parameters": [
@@ -10387,7 +10393,7 @@
 					{
 						"name": "is_jsonrpc_error_message",
 						"kind": "function",
-						"source_line": 142,
+						"source_line": 146,
 						"type_signature": "(message: unknown): message is { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }",
 						"return_type": "boolean",
 						"parameters": [
@@ -10400,7 +10406,7 @@
 					{
 						"name": "is_jsonrpc_singular_message",
 						"kind": "function",
-						"source_line": 145,
+						"source_line": 149,
 						"type_signature": "(message: unknown): message is { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; _meta?: { [x: string]: unknown; progressToken?: string | number | undefined; } | undefined; } | undefined; } | { ...; } | { ...; } | { ...; }",
 						"return_type": "boolean",
 						"parameters": [
@@ -10414,7 +10420,7 @@
 						"name": "to_jsonrpc_params",
 						"kind": "function",
 						"doc_comment": "Normalizes input to JSON-RPC params format.\nReturns undefined for null/undefined, wraps primitives in {value}.",
-						"source_line": 152,
+						"source_line": 156,
 						"type_signature": "(input: unknown): Record<string, any> | undefined",
 						"return_type": "Record<string, any> | undefined",
 						"parameters": [
@@ -10428,7 +10434,7 @@
 						"name": "to_jsonrpc_result",
 						"kind": "function",
 						"doc_comment": "Normalizes output to JSON-RPC result format.\nReturns empty object for null/undefined, wraps primitives in {value}.",
-						"source_line": 171,
+						"source_line": 175,
 						"type_signature": "(output: unknown): Record<string, any>",
 						"return_type": "Record<string, any>",
 						"parameters": [
@@ -10442,20 +10448,20 @@
 						"name": "JSONRPC_ERROR_CODE_TO_HTTP_STATUS",
 						"kind": "variable",
 						"doc_comment": "Maps JSON-RPC error codes to HTTP status codes.",
-						"source_line": 205,
+						"source_line": 209,
 						"type_signature": "Record<-32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">), number>"
 					},
 					{
 						"name": "HTTP_STATUS_TO_JSONRPC_ERROR_CODE",
 						"kind": "variable",
 						"doc_comment": "Maps HTTP status codes to JSON-RPC error codes.",
-						"source_line": 214,
+						"source_line": 218,
 						"type_signature": "Record<number, -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">)>"
 					},
 					{
 						"name": "jsonrpc_error_code_to_http_status",
 						"kind": "function",
-						"source_line": 222,
+						"source_line": 226,
 						"type_signature": "(code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">)): number",
 						"return_type": "number",
 						"parameters": [
@@ -10468,7 +10474,7 @@
 					{
 						"name": "http_status_to_jsonrpc_error_code",
 						"kind": "function",
-						"source_line": 226,
+						"source_line": 230,
 						"type_signature": "(status: number): -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">)",
 						"return_type": "-32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">)",
 						"parameters": [
@@ -10486,7 +10492,6 @@
 					"frontend_http_transport.ts",
 					"frontend_websocket_transport.ts",
 					"server/backend_websocket_transport.ts",
-					"server/register_http_actions.ts",
 					"server/register_websocket_actions.ts"
 				]
 			},
@@ -10496,190 +10501,190 @@
 					{
 						"name": "JSONRPC_VERSION",
 						"kind": "variable",
-						"source_line": 49,
+						"source_line": 54,
 						"type_signature": "\"2.0\""
 					},
 					{
 						"name": "JSONRPC_LATEST_PROTOCOL_VERSION",
 						"kind": "variable",
-						"source_line": 50,
+						"source_line": 55,
 						"type_signature": "\"DRAFT-2025-v2\""
 					},
 					{
 						"name": "JsonrpcRequestId",
 						"kind": "type",
 						"doc_comment": "A uniquely identifying id for a request in JSON-RPC.\n\nLike MCP but unlike JSON-RPC, the type excludes null.",
-						"source_line": 57,
+						"source_line": 62,
 						"type_signature": "ZodUnion<readonly [ZodString, ZodNumber]>"
 					},
 					{
 						"name": "JsonrpcMethod",
 						"kind": "type",
 						"doc_comment": "A JSON-RPC method name, a string with no constraints.",
-						"source_line": 63,
+						"source_line": 68,
 						"type_signature": "ZodString"
 					},
 					{
 						"name": "JsonrpcProgressToken",
 						"kind": "type",
 						"doc_comment": "A progress token, used to associate progress notifications with the original request.",
-						"source_line": 69,
+						"source_line": 74,
 						"type_signature": "ZodUnion<readonly [ZodString, ZodNumber]>"
 					},
 					{
 						"name": "JsonrpcMcpMeta",
 						"kind": "type",
-						"source_line": 72,
+						"source_line": 77,
 						"type_signature": "ZodObject<{}, $loose>"
 					},
 					{
 						"name": "JsonrpcRequestParamsMeta",
 						"kind": "type",
-						"source_line": 75,
+						"source_line": 80,
 						"type_signature": "ZodObject<{ progressToken: ZodOptional<ZodUnion<readonly [ZodString, ZodNumber]>>; }, $loose>"
 					},
 					{
 						"name": "JsonrpcRequestParams",
 						"kind": "type",
-						"source_line": 87,
+						"source_line": 92,
 						"type_signature": "ZodObject<{ _meta: ZodOptional<ZodObject<{ progressToken: ZodOptional<ZodUnion<readonly [ZodString, ZodNumber]>>; }, $loose>>; }, $loose>"
 					},
 					{
 						"name": "JsonrpcNotificationParams",
 						"kind": "type",
-						"source_line": 92,
+						"source_line": 97,
 						"type_signature": "ZodObject<{ _meta: ZodOptional<ZodObject<{}, $loose>>; }, $loose>"
 					},
 					{
 						"name": "JsonrpcParams",
 						"kind": "type",
-						"source_line": 101,
+						"source_line": 106,
 						"type_signature": "ZodUnion<readonly [ZodObject<{ _meta: ZodOptional<ZodObject<{ progressToken: ZodOptional<ZodUnion<readonly [ZodString, ZodNumber]>>; }, $loose>>; }, $loose>, ZodObject<...>]>"
 					},
 					{
 						"name": "JsonrpcResult",
 						"kind": "type",
-						"source_line": 104,
+						"source_line": 109,
 						"type_signature": "ZodObject<{ _meta: ZodOptional<ZodObject<{}, $loose>>; }, $loose>"
 					},
 					{
 						"name": "JsonrpcRequest",
 						"kind": "type",
 						"doc_comment": "A request that expects a response.",
-						"source_line": 116,
+						"source_line": 121,
 						"type_signature": "ZodObject<{ jsonrpc: ZodLiteral<\"2.0\">; id: ZodUnion<readonly [ZodString, ZodNumber]>; method: ZodString; params: ZodOptional<ZodObject<{ _meta: ZodOptional<ZodObject<{ progressToken: ZodOptional<...>; }, $loose>>; }, $loose>>; }, $loose>"
 					},
 					{
 						"name": "JsonrpcNotification",
 						"kind": "type",
 						"doc_comment": "A notification which does not expect a response.",
-						"source_line": 127,
+						"source_line": 132,
 						"type_signature": "ZodObject<{ jsonrpc: ZodLiteral<\"2.0\">; method: ZodString; params: ZodOptional<ZodObject<{ _meta: ZodOptional<ZodObject<{}, $loose>>; }, $loose>>; }, $loose>"
 					},
 					{
 						"name": "JsonrpcResponse",
 						"kind": "type",
 						"doc_comment": "A successful (non-error) response to a request.",
-						"source_line": 137,
+						"source_line": 142,
 						"type_signature": "ZodObject<{ jsonrpc: ZodLiteral<\"2.0\">; id: ZodUnion<readonly [ZodString, ZodNumber]>; result: ZodObject<{ _meta: ZodOptional<ZodObject<{}, $loose>>; }, $loose>; }, $loose>"
 					},
 					{
 						"name": "JSONRPC_PARSE_ERROR",
 						"kind": "variable",
-						"source_line": 146,
+						"source_line": 151,
 						"type_signature": "-32700"
 					},
 					{
 						"name": "JSONRPC_INVALID_REQUEST",
 						"kind": "variable",
-						"source_line": 147,
+						"source_line": 152,
 						"type_signature": "-32600"
 					},
 					{
 						"name": "JSONRPC_METHOD_NOT_FOUND",
 						"kind": "variable",
-						"source_line": 148,
+						"source_line": 153,
 						"type_signature": "-32601"
 					},
 					{
 						"name": "JSONRPC_INVALID_PARAMS",
 						"kind": "variable",
-						"source_line": 149,
+						"source_line": 154,
 						"type_signature": "-32602"
 					},
 					{
 						"name": "JSONRPC_INTERNAL_ERROR",
 						"kind": "variable",
-						"source_line": 150,
+						"source_line": 155,
 						"type_signature": "-32603"
 					},
 					{
 						"name": "JSONRPC_SERVER_ERROR_START",
 						"kind": "variable",
-						"source_line": 151,
+						"source_line": 156,
 						"type_signature": "-32000"
 					},
 					{
 						"name": "JSONRPC_SERVER_ERROR_END",
 						"kind": "variable",
-						"source_line": 152,
+						"source_line": 157,
 						"type_signature": "-32099"
 					},
 					{
 						"name": "JsonrpcServerErrorCode",
 						"kind": "type",
-						"source_line": 155,
+						"source_line": 160,
 						"type_signature": "$ZodBranded<ZodNumber, \"JsonrpcServerErrorCode\", \"out\">"
 					},
 					{
 						"name": "JsonrpcErrorCode",
 						"kind": "type",
-						"source_line": 162,
+						"source_line": 167,
 						"type_signature": "ZodUnion<readonly [ZodLiteral<-32700>, ZodLiteral<-32600>, ZodLiteral<-32601>, ZodLiteral<-32602>, ZodLiteral<-32603>, $ZodBranded<...>]>"
 					},
 					{
 						"name": "JsonrpcErrorJson",
 						"kind": "type",
-						"source_line": 172,
+						"source_line": 177,
 						"type_signature": "ZodObject<{ code: ZodUnion<readonly [ZodLiteral<-32700>, ZodLiteral<-32600>, ZodLiteral<-32601>, ZodLiteral<-32602>, ZodLiteral<-32603>, $ZodBranded<...>]>; message: ZodString; data: ZodOptional<...>; }, $loose>"
 					},
 					{
 						"name": "JsonrpcErrorMessage",
 						"kind": "type",
 						"doc_comment": "A response to a request that indicates an error occurred.",
-						"source_line": 192,
+						"source_line": 197,
 						"type_signature": "ZodObject<{ jsonrpc: ZodLiteral<\"2.0\">; id: ZodNullable<ZodUnion<readonly [ZodString, ZodNumber]>>; error: ZodObject<{ code: ZodUnion<readonly [ZodLiteral<-32700>, ... 4 more ..., $ZodBranded<...>]>; message: ZodString; data: ZodOptional<...>; }, $loose>; }, $loose>"
 					},
 					{
 						"name": "JsonrpcResponseOrError",
 						"kind": "type",
 						"doc_comment": "Convenience helper union.",
-						"source_line": 202,
+						"source_line": 207,
 						"type_signature": "ZodUnion<readonly [ZodObject<{ jsonrpc: ZodLiteral<\"2.0\">; id: ZodUnion<readonly [ZodString, ZodNumber]>; result: ZodObject<{ _meta: ZodOptional<ZodObject<{}, $loose>>; }, $loose>; }, $loose>, ZodObject<...>]>"
 					},
 					{
 						"name": "JsonrpcMessage",
 						"kind": "type",
 						"doc_comment": "Refers to any valid JSON-RPC object that can be decoded off the wire, or encoded to be sent.",
-						"source_line": 208,
+						"source_line": 213,
 						"type_signature": "ZodUnion<readonly [ZodObject<{ jsonrpc: ZodLiteral<\"2.0\">; id: ZodUnion<readonly [ZodString, ZodNumber]>; method: ZodString; params: ZodOptional<ZodObject<{ _meta: ZodOptional<ZodObject<{ progressToken: ZodOptional<...>; }, $loose>>; }, $loose>>; }, $loose>, ZodObject<...>, ZodObject<...>, ZodObject<...>]>"
 					},
 					{
 						"name": "JsonrpcMessageFromClientToServer",
 						"kind": "type",
-						"source_line": 219,
+						"source_line": 224,
 						"type_signature": "ZodUnion<readonly [ZodObject<{ jsonrpc: ZodLiteral<\"2.0\">; id: ZodUnion<readonly [ZodString, ZodNumber]>; method: ZodString; params: ZodOptional<ZodObject<{ _meta: ZodOptional<ZodObject<{ progressToken: ZodOptional<...>; }, $loose>>; }, $loose>>; }, $loose>, ZodObject<...>]>"
 					},
 					{
 						"name": "JsonrpcMessageFromServerToClient",
 						"kind": "type",
-						"source_line": 227,
+						"source_line": 232,
 						"type_signature": "ZodUnion<readonly [ZodObject<{ jsonrpc: ZodLiteral<\"2.0\">; method: ZodString; params: ZodOptional<ZodObject<{ _meta: ZodOptional<ZodObject<{}, $loose>>; }, $loose>>; }, $loose>, ZodObject<...>, ZodObject<...>]>"
 					},
 					{
 						"name": "JsonrpcSingularMessage",
 						"kind": "type",
-						"source_line": 236,
+						"source_line": 241,
 						"type_signature": "ZodUnion<readonly [ZodObject<{ jsonrpc: ZodLiteral<\"2.0\">; id: ZodUnion<readonly [ZodString, ZodNumber]>; method: ZodString; params: ZodOptional<ZodObject<{ _meta: ZodOptional<ZodObject<{ progressToken: ZodOptional<...>; }, $loose>>; }, $loose>>; }, $loose>, ZodObject<...>, ZodObject<...>, ZodObject<...>]>"
 					}
 				],
@@ -17456,22 +17461,40 @@
 						"name": "CreateZzzAppOptions",
 						"kind": "type",
 						"doc_comment": "Options for creating a zzz app.",
-						"source_line": 35,
+						"source_line": 46,
 						"type_signature": "CreateZzzAppOptions",
 						"properties": [
 							{
-								"name": "env",
+								"name": "config",
 								"kind": "variable",
 								"type_signature": "ZzzServerConfig",
 								"doc_comment": "Server environment configuration."
+							},
+							{
+								"name": "password",
+								"kind": "variable",
+								"type_signature": "PasswordHashDeps",
+								"doc_comment": "Password hashing deps — `argon2_password_deps` for production, stubs for tests."
+							},
+							{
+								"name": "runtime",
+								"kind": "variable",
+								"type_signature": "{\n\t\tstat: (path: string) => Promise<StatResult | null>;\n\t\tread_text_file: (path: string) => Promise<string>;\n\t\tremove: (path: string) => Promise<void>;\n\t}",
+								"doc_comment": "Runtime filesystem operations.\nProvided by `create_deno_runtime` or `create_node_runtime`."
+							},
+							{
+								"name": "get_connection_ip",
+								"kind": "variable",
+								"type_signature": "(c: Context) => string | undefined",
+								"doc_comment": "Extract the raw TCP connection IP from the Hono context."
 							}
 						]
 					},
 					{
 						"name": "ZzzApp",
 						"kind": "type",
-						"doc_comment": "The created zzz app and its backend.",
-						"source_line": 43,
+						"doc_comment": "The created zzz app and related instances.",
+						"source_line": 67,
 						"type_signature": "ZzzApp",
 						"properties": [
 							{
@@ -17484,17 +17507,41 @@
 								"name": "backend",
 								"kind": "variable",
 								"type_signature": "Backend",
-								"doc_comment": "Backend instance for lifecycle management."
+								"doc_comment": "zzz domain Backend instance for lifecycle management."
+							},
+							{
+								"name": "app_backend",
+								"kind": "variable",
+								"type_signature": "AppBackend",
+								"doc_comment": "fuz_app backend for database and auth."
+							},
+							{
+								"name": "surface",
+								"kind": "variable",
+								"type_signature": "AppSurface",
+								"doc_comment": "Generated attack surface."
+							},
+							{
+								"name": "env",
+								"kind": "variable",
+								"type_signature": "ZzzServerEnv",
+								"doc_comment": "Validated environment."
+							},
+							{
+								"name": "close",
+								"kind": "variable",
+								"type_signature": "() => Promise<void>",
+								"doc_comment": "Close database connection."
 							}
 						]
 					},
 					{
 						"name": "create_zzz_app",
 						"kind": "function",
-						"doc_comment": "Create the zzz Hono app with Backend, providers, and endpoints.\n\nThis is the shared factory called by the server entry point.",
-						"source_line": 55,
-						"type_signature": "(options: CreateZzzAppOptions): ZzzApp",
-						"return_type": "ZzzApp",
+						"doc_comment": "Create the zzz Hono app with auth, database, Backend, providers, and endpoints.\n\nThis is the shared factory called by the server entry point.\nUses `create_app_backend` for database + auth, `create_app_server` for\nmiddleware assembly, and wires zzz's domain Backend through route deps.",
+						"source_line": 89,
+						"type_signature": "(options: CreateZzzAppOptions): Promise<ZzzApp>",
+						"return_type": "Promise<ZzzApp>",
 						"parameters": [
 							{
 								"name": "options",
@@ -17503,7 +17550,7 @@
 						]
 					}
 				],
-				"module_comment": "Shared zzz app factory.\n\nCreates the Hono app with Backend, AI providers, and action endpoints.\nCalled by the server entry point (`server.ts`).",
+				"module_comment": "Runtime-agnostic zzz app factory.\n\nCreates the full application by combining fuz_app's `create_app_backend`\nand `create_app_server` with zzz's domain Backend, AI providers, and\nWebSocket endpoint. Called by the server entry point (`server.ts`).",
 				"dependencies": [
 					"action_collections.ts",
 					"config.ts",
@@ -17514,11 +17561,34 @@
 					"server/backend_provider_claude.ts",
 					"server/backend_provider_gemini.ts",
 					"server/backend_provider_ollama.ts",
-					"server/register_http_actions.ts",
-					"server/register_websocket_actions.ts",
-					"server/security.ts"
+					"server/db/zzz_schema.ts",
+					"server/routes/account.ts",
+					"server/security.ts",
+					"server/server_env.ts",
+					"server/zzz_route_specs.ts"
 				],
 				"dependents": ["server/server.ts"]
+			},
+			{
+				"path": "server/db/zzz_schema.ts",
+				"declarations": [
+					{
+						"name": "init_zzz_schema",
+						"kind": "function",
+						"doc_comment": "Initialize the zzz database schema.\n\nCurrently only auth tables (from `create_app_backend`).\nZzz-specific tables will be added here when persistent state is needed.",
+						"source_line": 20,
+						"type_signature": "(_db: Db): Promise<void>",
+						"return_type": "Promise<void>",
+						"parameters": [
+							{
+								"name": "_db",
+								"type": "Db"
+							}
+						]
+					}
+				],
+				"module_comment": "Database schema initialization for zzz.\n\nRuns fuz_app auth migrations. No zzz-specific DDL yet\n(all domain state is in-memory via Cells).",
+				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
 				"path": "server/env_file_helpers.ts",
@@ -17577,7 +17647,7 @@
 						]
 					}
 				],
-				"dependents": ["server/backend_action_handlers.ts"]
+				"dependents": ["server/backend_action_handlers.ts", "server/zzz_rpc_actions.ts"]
 			},
 			{
 				"path": "server/helpers.ts",
@@ -17609,7 +17679,7 @@
 					}
 				],
 				"dependencies": ["action_collections.ts", "server/scoped_fs.ts"],
-				"dependents": ["server/backend_action_handlers.ts"]
+				"dependents": ["server/backend_action_handlers.ts", "server/zzz_rpc_actions.ts"]
 			},
 			{
 				"path": "server/pty_ffi.ts",
@@ -17823,56 +17893,6 @@
 				"dependents": ["server/backend_pty_manager.ts"]
 			},
 			{
-				"path": "server/register_http_actions.ts",
-				"declarations": [
-					{
-						"name": "RegisterActionsOptions",
-						"kind": "type",
-						"source_line": 14,
-						"type_signature": "RegisterActionsOptions",
-						"properties": [
-							{
-								"name": "path",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "app",
-								"kind": "variable",
-								"type_signature": "Hono"
-							},
-							{
-								"name": "backend",
-								"kind": "variable",
-								"type_signature": "Backend"
-							},
-							{
-								"name": "artificial_delay",
-								"kind": "variable",
-								"type_signature": "number",
-								"doc_comment": "Artificial response delay in ms (testing)."
-							}
-						]
-					},
-					{
-						"name": "register_http_actions",
-						"kind": "function",
-						"doc_comment": "Registers HTTP endpoints for all service actions in the schema registry.",
-						"source_line": 25,
-						"type_signature": "({ path, app, backend, artificial_delay, }: RegisterActionsOptions): void",
-						"return_type": "void",
-						"parameters": [
-							{
-								"name": "__0",
-								"type": "RegisterActionsOptions"
-							}
-						]
-					}
-				],
-				"dependencies": ["jsonrpc_errors.ts", "jsonrpc_helpers.ts", "zod_helpers.ts"],
-				"dependents": ["server/create_zzz_app.ts"]
-			},
-			{
 				"path": "server/register_websocket_actions.ts",
 				"declarations": [
 					{
@@ -17935,6 +17955,19 @@
 					"jsonrpc_helpers.ts",
 					"server/backend_websocket_transport.ts"
 				],
+				"dependents": ["server/server.ts"]
+			},
+			{
+				"path": "server/routes/account.ts",
+				"declarations": [
+					{
+						"name": "zzz_session_config",
+						"kind": "variable",
+						"source_line": 9,
+						"type_signature": "SessionOptions<string>"
+					}
+				],
+				"module_comment": "zzz session configuration.",
 				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
@@ -18400,17 +18433,23 @@
 					{
 						"name": "ZzzServerEnv",
 						"kind": "type",
-						"doc_comment": "Zod schema for zzz server environment variables.\n\nField names match the env var keys — `load_env` reads each key from the schema shape.\nDefaults are set so the daemon starts with zero configuration.",
-						"source_line": 19,
-						"type_signature": "ZodObject<{ PUBLIC_ZZZ_DIR: ZodDefault<ZodString>; PUBLIC_ZZZ_SCOPED_DIRS: ZodDefault<ZodString>; PUBLIC_SERVER_PROXIED_PORT: ZodDefault<ZodCoercedNumber<unknown>>; ... 5 more ...; SECRET_GOOGLE_API_KEY: ZodOptional<...>; }, $strict>"
+						"doc_comment": "Zod schema for zzz server environment variables.\n\nExtends `BaseServerEnv` with zzz-specific fields for app data,\nscoped directories, AI provider API keys, and testing configuration.",
+						"source_line": 20,
+						"type_signature": "ZodObject<{ NODE_ENV: ZodEnum<{ development: \"development\"; production: \"production\"; }>; PORT: ZodDefault<ZodCoercedNumber<unknown>>; HOST: ZodDefault<ZodString>; ... 15 more ...; SECRET_GOOGLE_API_KEY: ZodOptional<...>; }, $strict>"
 					},
 					{
 						"name": "ZzzServerConfig",
 						"kind": "type",
 						"doc_comment": "Parsed server env with derived values ready for use.\n\nSeparates raw env loading from the derived shapes callers need\n(e.g., `scoped_dirs` as an array, `port` as a number).",
-						"source_line": 62,
+						"source_line": 51,
 						"type_signature": "ZzzServerConfig",
 						"properties": [
+							{
+								"name": "env",
+								"kind": "variable",
+								"type_signature": "ZzzServerEnv",
+								"doc_comment": "Full validated env object."
+							},
 							{
 								"name": "zzz_dir",
 								"kind": "variable",
@@ -18434,12 +18473,6 @@
 								"kind": "variable",
 								"type_signature": "string",
 								"doc_comment": "Hostname for the server."
-							},
-							{
-								"name": "allowed_origins",
-								"kind": "variable",
-								"type_signature": "string",
-								"doc_comment": "Comma-separated origin patterns for request verification."
 							},
 							{
 								"name": "websocket_path",
@@ -18489,7 +18522,7 @@
 						"name": "load_server_env",
 						"kind": "function",
 						"doc_comment": "Load and validate server env, then derive the config callers need.\n\nUses `load_env` from fuz_app for Zod-validated loading.\nThe `overrides` parameter lets CLI flags and startup defaults\ntake precedence over env vars.",
-						"source_line": 112,
+						"source_line": 101,
 						"type_signature": "(get_env: (key: string) => string | undefined, overrides?: Partial<ZzzServerConfig> | undefined): ZzzServerConfig",
 						"return_type": "ZzzServerConfig",
 						"parameters": [
@@ -18507,30 +18540,8 @@
 						]
 					}
 				],
-				"module_comment": "Server environment configuration.\n\nZod schema for the zzz Deno server env. Uses `load_env` from fuz_app\nfor schema-validated loading with clear error messages.",
-				"dependents": ["server/server.ts"]
-			},
-			{
-				"path": "server/server_helpers.ts",
-				"declarations": [
-					{
-						"name": "noop_middleware",
-						"kind": "function",
-						"source_line": 3,
-						"type_signature": "(c: Context<any, any, BlankInput>, next: Next): any",
-						"return_type": "any",
-						"parameters": [
-							{
-								"name": "c",
-								"type": "Context<any, any, BlankInput>"
-							},
-							{
-								"name": "next",
-								"type": "Next"
-							}
-						]
-					}
-				]
+				"module_comment": "Server environment configuration.\n\nExtends `BaseServerEnv` from fuz_app with zzz-specific fields.\nUses `load_env` from fuz_app for schema-validated loading.",
+				"dependents": ["server/create_zzz_app.ts", "server/server.ts"]
 			},
 			{
 				"path": "server/server.ts",
@@ -18538,21 +18549,136 @@
 					{
 						"name": "start_server",
 						"kind": "function",
-						"doc_comment": "Start the zzz server using Deno runtime.\n\nCreates the full backend with providers, WebSocket, and HTTP RPC\nendpoints via `create_zzz_app`, then serves with `Deno.serve`.",
-						"source_line": 34,
+						"doc_comment": "Start the zzz server using Deno runtime.\n\nCreates the full backend with auth, database, providers, WebSocket, and HTTP RPC\nendpoints via `create_zzz_app`, then serves with `Deno.serve`.",
+						"source_line": 39,
 						"type_signature": "(): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": []
 					}
 				],
-				"module_comment": "Deno server entry point for zzz.\n\nSingle entry point for both dev mode (`gro dev` via `gro_plugin_deno_server`)\nand production (`zzz daemon start`). Uses the shared `create_zzz_app` factory\nfor the Hono app, then binds with `Deno.serve` and handles daemon lifecycle.",
+				"module_comment": "Deno server entry point for zzz.\n\nSingle entry point for both dev mode (`gro dev` via `gro_plugin_deno_server`)\nand production (`zzz daemon start`). Uses the shared `create_zzz_app` factory\nfor the Hono app with fuz_app auth stack, then binds with `Deno.serve`\nand handles daemon lifecycle.",
 				"dependencies": [
 					"server/create_zzz_app.ts",
+					"server/register_websocket_actions.ts",
 					"server/security.ts",
 					"server/server_env.ts",
 					"zzz/build_info.ts"
 				],
 				"dependents": ["zzz/commands/daemon.ts"]
+			},
+			{
+				"path": "server/zzz_route_specs.ts",
+				"declarations": [
+					{
+						"name": "ZzzAppRouteDeps",
+						"kind": "type",
+						"doc_comment": "zzz-specific deps not available in AppServerContext.",
+						"source_line": 32,
+						"type_signature": "ZzzAppRouteDeps",
+						"properties": [
+							{
+								"name": "zzz",
+								"kind": "variable",
+								"type_signature": "ZzzRpcDeps"
+							},
+							{
+								"name": "version",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "get_uptime_ms",
+								"kind": "variable",
+								"type_signature": "() => number"
+							},
+							{
+								"name": "audit_sse",
+								"kind": "variable",
+								"type_signature": "AuditLogRouteOptions['stream']",
+								"doc_comment": "Audit log SSE stream config."
+							}
+						]
+					},
+					{
+						"name": "create_zzz_app_route_specs",
+						"kind": "function",
+						"doc_comment": "Build all zzz route specs.\n\nUsed by production server, integration tests, and attack surface helpers.\nDoes NOT include bootstrap routes (those are factory-managed by `create_app_server`).",
+						"source_line": 46,
+						"type_signature": "(ctx: AppServerContext, zzz_deps: ZzzAppRouteDeps): RouteSpec[]",
+						"return_type": "RouteSpec[]",
+						"parameters": [
+							{
+								"name": "ctx",
+								"type": "AppServerContext"
+							},
+							{
+								"name": "zzz_deps",
+								"type": "ZzzAppRouteDeps"
+							}
+						]
+					},
+					{
+						"name": "create_zzz_rpc_endpoint_spec",
+						"kind": "function",
+						"doc_comment": "Build the RPC endpoint spec for surface generation.",
+						"source_line": 84,
+						"type_signature": "(zzz_deps: ZzzRpcDeps): RpcEndpointSpec",
+						"return_type": "RpcEndpointSpec",
+						"parameters": [
+							{
+								"name": "zzz_deps",
+								"type": "ZzzRpcDeps"
+							}
+						]
+					}
+				],
+				"module_comment": "Shared zzz route spec factory.\n\nUsed by the production server, integration tests, and attack surface helpers.\nDoes NOT include bootstrap routes (factory-managed by `create_app_server`).",
+				"dependencies": ["server/zzz_rpc_actions.ts"],
+				"dependents": ["server/create_zzz_app.ts"]
+			},
+			{
+				"path": "server/zzz_rpc_actions.ts",
+				"declarations": [
+					{
+						"name": "ZzzRpcDeps",
+						"kind": "type",
+						"doc_comment": "Dependencies for creating zzz RPC actions.",
+						"source_line": 52,
+						"type_signature": "ZzzRpcDeps",
+						"properties": [
+							{
+								"name": "backend",
+								"kind": "variable",
+								"type_signature": "Backend"
+							}
+						]
+					},
+					{
+						"name": "create_zzz_rpc_actions",
+						"kind": "function",
+						"doc_comment": "Create all zzz RPC actions.\n\nReturns `RpcAction[]` for `create_rpc_endpoint`.\nEach handler captures the Backend instance via closure and calls\nthe domain logic directly (no double-dispatch through `backend.receive()`).",
+						"source_line": 63,
+						"type_signature": "(deps: ZzzRpcDeps): RpcAction[]",
+						"return_type": "RpcAction[]",
+						"parameters": [
+							{
+								"name": "deps",
+								"type": "ZzzRpcDeps"
+							}
+						]
+					}
+				],
+				"module_comment": "RPC actions for zzz — bridges backend domain logic to fuz_app's RPC endpoint.\n\nEach `RpcAction` combines an action spec with a handler that calls\nthe Backend's domain logic directly. The fuz_app RPC dispatcher handles\nenvelope parsing, auth checking, and input validation — handlers only\nimplement the business logic.",
+				"dependencies": [
+					"action_specs.ts",
+					"diskfile_helpers.ts",
+					"diskfile_types.ts",
+					"jsonrpc_errors.ts",
+					"server/env_file_helpers.ts",
+					"server/helpers.ts",
+					"zod_helpers.ts"
+				],
+				"dependents": ["server/zzz_route_specs.ts"]
 			},
 			{
 				"path": "Settings.svelte",
@@ -21865,7 +21991,7 @@
 					"response_helpers.ts",
 					"server/backend_action_handlers.ts",
 					"server/backend_websocket_transport.ts",
-					"server/register_http_actions.ts",
+					"server/zzz_rpc_actions.ts",
 					"socket.svelte.ts",
 					"terminal.svelte.ts",
 					"turn.svelte.ts",

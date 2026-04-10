@@ -26,8 +26,9 @@ export const backends: Record<string, BackendConfig> = {
 		health_path: '/health',
 		startup_timeout_ms: 15_000,
 		// Override port so .env.development values don't conflict with test expectations.
-		// Deno's --env flag won't override vars already in the process environment.
-		env: {PUBLIC_SERVER_PROXIED_PORT: '4460'},
+		// PORT is the server bind var (BaseServerEnv); PUBLIC_SERVER_PROXIED_PORT
+		// is the SvelteKit frontend var. Both need to agree.
+		env: {PORT: '4460', PUBLIC_SERVER_PROXIED_PORT: '4460'},
 	},
 	rust: {
 		name: 'rust',

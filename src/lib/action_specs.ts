@@ -52,7 +52,7 @@ export const session_load_action_spec = {
 	// TODO @api is this actually a good restriction to have?
 	// or should the server be calling actions internally too?
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: false,
 	input: z.void().optional(),
 	output: z.strictObject({
@@ -88,7 +88,7 @@ export const diskfile_update_action_spec = {
 	method: 'diskfile_update',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: z.strictObject({
 		path: DiskfilePath,
@@ -103,7 +103,7 @@ export const diskfile_delete_action_spec = {
 	method: 'diskfile_delete',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: z.strictObject({
 		path: DiskfilePath,
@@ -117,7 +117,7 @@ export const directory_create_action_spec = {
 	method: 'directory_create',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: z.strictObject({
 		path: DiskfilePath,
@@ -131,7 +131,7 @@ export const completion_create_action_spec = {
 	method: 'completion_create',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: z.strictObject({
 		completion_request: CompletionRequest,
@@ -219,7 +219,7 @@ export const ollama_list_action_spec = {
 	method: 'ollama_list',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: false,
 	input: OllamaListRequest,
 	output: z.union([OllamaListResponse, z.null()]),
@@ -231,7 +231,7 @@ export const ollama_ps_action_spec = {
 	method: 'ollama_ps',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: false,
 	input: OllamaPsRequest,
 	output: z.union([OllamaPsResponse, z.null()]),
@@ -243,7 +243,7 @@ export const ollama_show_action_spec = {
 	method: 'ollama_show',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: false,
 	input: OllamaShowRequest,
 	output: z.union([OllamaShowResponse, z.null()]),
@@ -255,7 +255,7 @@ export const ollama_pull_action_spec = {
 	method: 'ollama_pull',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: z.strictObject(
 		OllamaPullRequest.extend({
@@ -271,7 +271,7 @@ export const ollama_delete_action_spec = {
 	method: 'ollama_delete',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: OllamaDeleteRequest,
 	output: z.void().optional(),
@@ -283,7 +283,7 @@ export const ollama_copy_action_spec = {
 	method: 'ollama_copy',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: OllamaCopyRequest,
 	output: z.void().optional(),
@@ -295,7 +295,7 @@ export const ollama_create_action_spec = {
 	method: 'ollama_create',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: z.strictObject(
 		OllamaCreateRequest.extend({
@@ -311,7 +311,7 @@ export const ollama_unload_action_spec = {
 	method: 'ollama_unload',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: z.strictObject({
 		model: z.string(),
@@ -325,7 +325,7 @@ export const provider_load_status_action_spec = {
 	method: 'provider_load_status',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: false,
 	input: z.strictObject({
 		provider_name: ProviderName,
@@ -342,7 +342,7 @@ export const provider_update_api_key_action_spec = {
 	method: 'provider_update_api_key',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'keeper',
 	side_effects: true,
 	input: z.strictObject({
 		provider_name: ProviderName,
@@ -359,7 +359,7 @@ export const terminal_create_action_spec = {
 	method: 'terminal_create',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: z.strictObject({
 		command: z.string(),
@@ -378,7 +378,7 @@ export const terminal_data_send_action_spec = {
 	method: 'terminal_data_send',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: z.strictObject({
 		terminal_id: Uuid,
@@ -408,7 +408,7 @@ export const terminal_resize_action_spec = {
 	method: 'terminal_resize',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: z.strictObject({
 		terminal_id: Uuid,
@@ -424,7 +424,7 @@ export const terminal_close_action_spec = {
 	method: 'terminal_close',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: z.strictObject({
 		terminal_id: Uuid,
@@ -456,7 +456,7 @@ export const workspace_open_action_spec = {
 	method: 'workspace_open',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: z.strictObject({
 		path: DiskfileDirectoryPath,
@@ -473,7 +473,7 @@ export const workspace_close_action_spec = {
 	method: 'workspace_close',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: true,
 	input: z.strictObject({
 		path: DiskfileDirectoryPath,
@@ -487,7 +487,7 @@ export const workspace_list_action_spec = {
 	method: 'workspace_list',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: 'authenticated',
 	side_effects: false,
 	input: z.void().optional(),
 	output: z.strictObject({

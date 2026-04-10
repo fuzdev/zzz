@@ -23,6 +23,7 @@ import type {ZzzRuntime} from '../runtime/types.ts';
 import type {DaemonStartArgs, DaemonStopArgs, DaemonStatusArgs} from '../cli/schemas.ts';
 import type {ZzzGlobalArgs} from '../cli/cli_args.ts';
 import {start_server} from '../../server/server.ts';
+import {ZZZ_DEFAULT_PORT} from '../cli_config.ts';
 
 /**
  * Start the daemon in foreground mode.
@@ -34,9 +35,20 @@ export const daemon_start = async (
 	args: DaemonStartArgs,
 	_flags: ZzzGlobalArgs,
 ): Promise<void> => {
-	// Override env with CLI flags (these take precedence)
-	if (args.port) runtime.env_set('PUBLIC_SERVER_PROXIED_PORT', String(args.port));
-	if (args.host) runtime.env_set('PUBLIC_SERVER_HOST', args.host);
+	// Set daemon port — CLI flag > env > daemon default (4460).
+	// PORT/HOST are the server bind vars (BaseServerEnv); PUBLIC_SERVER_PROXIED_PORT/HOST
+	// are the SvelteKit frontend vars (tell the frontend where the backend is).
+	// Without this, BaseServerEnv defaults PORT to 4040 which doesn't match the
+	// daemon's advertised default of 4460.
+	const port = args.port ?? (runtime.env_get('PORT') ? undefined : ZZZ_DEFAULT_PORT);
+	if (port !== undefined) {
+		runtime.env_set('PORT', String(port));
+		runtime.env_set('PUBLIC_SERVER_PROXIED_PORT', String(port));
+	}
+	if (args.host) {
+		runtime.env_set('HOST', args.host);
+		runtime.env_set('PUBLIC_SERVER_HOST', args.host);
+	}
 	// Start Deno server (zzz CLI always runs in Deno)
 	await start_server();
 };

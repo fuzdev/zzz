@@ -1,3 +1,7 @@
+// TODO: Phase 5 — extract helpers that overlap with fuz_app/http/jsonrpc_errors.js
+// Currently kept in zzz because ActionPeer, transports, and action_event use
+// the full set of message builders and type guards (MCP-specific).
+
 import {DEV} from 'esm-env';
 
 import {
