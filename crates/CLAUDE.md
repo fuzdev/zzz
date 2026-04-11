@@ -62,14 +62,15 @@ before tests. Rust backend runs unauthenticated (Phase 1, no auth).
 `method_not_found_ws`, `invalid_request_ws`, `notification_ws`,
 `multi_message_ws` — 6 tests verify identical WS behaviour.
 
-**HTTP tests (Rust only for now):** `ping_http`, `ping_numeric_id`,
-`null_id_is_request`, `parse_error_http`, `parse_error_empty_body`,
-`method_not_found_http`, `invalid_request_*` (4 variants),
-`notification_http` — 11 tests skipped on Deno due to fuz_app
-`create_rpc_endpoint` wire format differences (HTTP status codes,
-parse error envelope format, missing request ID in handler context).
-See TODOs in `test/integration/tests.ts` and
-`grimoire/lore/zzz/TODO.md` for the specific parity gaps.
+**HTTP tests (both backends):** `null_id_is_invalid`, `parse_error_http`,
+`parse_error_empty_body`, `method_not_found_http`, `invalid_request_*`
+(4 variants), `notification_http` ��� 9 tests verify identical HTTP behaviour.
+Error `data` field (Zod issues on Deno, absent on Rust) is stripped before
+comparison since it's optional per JSON-RPC spec.
+
+**HTTP tests (Rust only):** `ping_http`, `ping_numeric_id` — skipped on Deno
+because the ping handler returns `{ping_id: 'rpc'}` instead of echoing the
+request id. Needs `request_id` in `ActionContext` (fuz_app) + zzz handler update.
 
 **Cross-backend:** `health_check` — 1 test on both backends.
 
@@ -108,19 +109,26 @@ crates/zzz_server/src/
 Uses `fuz_common::JsonRpcError` for the error object type (spec-compliant,
 includes optional `data` field). Defines its own envelope types
 (`JsonRpcResponse`, `JsonRpcErrorResponse`) because zzz classifies arbitrary
-JSON-RPC messages via `Value` (notifications, bare parse errors, non-object
-values) — `fuz_common`'s single response type targets typed request/response.
+JSON-RPC messages via `Value` — `fuz_common`'s single response type targets
+typed request/response.
 
-Message processing (`rpc::process_message`) parses raw `serde_json::Value`
-and classifies per JSON-RPC 2.0:
+Message classification (`rpc::classify_and_dispatch`) parses raw
+`serde_json::Value` and returns an `RpcOutcome` enum:
 
-- **Request** (has `method` + `id`) → dispatch → response
-- **Notification** (has `method`, no `id`) → no response
-- **Invalid** (missing `method`, bad `jsonrpc`, non-object) → error response
+- **`Success`** (has `method` + valid `id`) → dispatch → id + result
+- **`Error`** (invalid envelope, unknown method, bad id) → id + error
+- **`Notification`** (has `method`, no `id`) → caller decides
 
-Wire format matches the Deno server exactly:
-- Parse errors: bare `{code, message}` with HTTP 400
-- All other responses: full JSON-RPC envelope with HTTP 200
+The `RpcOutcome` enum is transport-agnostic. Each transport applies its
+own semantics:
+
+- **HTTP** (`rpc_handler`): maps error codes to HTTP statuses (matching
+  `fuz_app`'s `jsonrpc_error_code_to_http_status`), wraps parse errors in
+  full JSON-RPC envelopes, rejects notifications as `invalid_request`
+- **WS** (`ws.rs`): sends bare parse errors, silences notifications
+
+Id validation matches `fuz_app`: id must be string or number (excludes
+null, per MCP). Non-object values get `id: null`.
 
 ## Known Phase 1 Limitations
 

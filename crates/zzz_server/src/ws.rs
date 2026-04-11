@@ -3,7 +3,7 @@ use axum::response::Response;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 
-use crate::rpc;
+use crate::rpc::{self, RpcOutcome};
 
 /// Axum handler for `GET /ws` — upgrades to WebSocket.
 // TODO Phase 2: Add connection tracking for broadcast notifications
@@ -21,7 +21,7 @@ async fn handle_connection(socket: WebSocket) {
             _ => continue,
         };
 
-        // 1. Parse JSON — on failure send bare error object (matching Deno)
+        // 1. Parse JSON — on failure send bare error object (matching Deno ActionPeer)
         let Ok(value) = serde_json::from_str::<Value>(&text) else {
             tracing::debug!("ws: JSON parse error");
             if let Ok(json) = serde_json::to_string(&rpc::parse_error())
@@ -38,13 +38,12 @@ async fn handle_connection(socket: WebSocket) {
             "ws message"
         );
 
-        // 2. Process the message (handles request vs notification vs invalid)
-        let response = rpc::process_message(&value);
-
-        // Null means notification — no response sent
-        if response.is_null() {
-            continue;
-        }
+        // 2. Classify and dispatch, then apply WS transport semantics
+        let response = match rpc::classify_and_dispatch(&value) {
+            RpcOutcome::Success { id, result } => rpc::success_response(id, result),
+            RpcOutcome::Error { id, error } => rpc::error_response(id, error),
+            RpcOutcome::Notification => continue, // WS: silence — no response sent
+        };
 
         // 3. Send response
         if let Ok(json) = serde_json::to_string(&response)

@@ -129,6 +129,23 @@ const sort_keys = (v: unknown): unknown => {
 	return sorted;
 };
 
+/**
+ * Strip `error.data` from a JSON-RPC response body.
+ *
+ * Deno (fuz_app) includes Zod validation issues in `error.data`,
+ * Rust omits it. Both are correct — `data` is optional per JSON-RPC spec.
+ * Stripping it lets us test wire format parity without coupling to Zod.
+ */
+const strip_error_data = (v: unknown): unknown => {
+	if (v === null || typeof v !== 'object' || Array.isArray(v)) return v;
+	const obj = v as Record<string, unknown>;
+	if ('error' in obj && typeof obj.error === 'object' && obj.error !== null) {
+		const {data: _, ...error_rest} = obj.error as Record<string, unknown>;
+		return {...obj, error: error_rest};
+	}
+	return v;
+};
+
 const assert_deep_equal = (actual: unknown, expected: unknown, label: string): void => {
 	const a = JSON.stringify(sort_keys(actual));
 	const e = JSON.stringify(sort_keys(expected));
@@ -174,10 +191,10 @@ interface WsCase {
 
 // -- HTTP cases ---------------------------------------------------------------
 
-// TODO Deno HTTP RPC parity — fuz_app's create_rpc_endpoint has wire format
-// differences from the Rust backend. Each skip documents the specific gap.
-// See grimoire/lore/zzz/TODO.md "Integration Test Parity" for the full list.
-// Once fuz_app is aligned, remove the skips and these tests become cross-backend.
+// Rust backend wire format aligned with fuz_app's create_rpc_endpoint (2026-04-11).
+// HTTP status mapping, parse error envelopes, notification rejection, and id
+// validation now match Deno. Remaining skips: ping_http/ping_numeric_id need
+// request_id in ActionContext (fuz_app item 5) + zzz ping handler update (item 6).
 const http_cases: readonly HttpCase[] = [
 	// Ping — happy path
 	{
@@ -185,9 +202,7 @@ const http_cases: readonly HttpCase[] = [
 		body: {jsonrpc: '2.0', id: 'test-1', method: 'ping'},
 		status: 200,
 		expected: {jsonrpc: '2.0', id: 'test-1', result: {ping_id: 'test-1'}},
-		// TODO Deno returns {ping_id: 'rpc'} because fuz_app ActionContext doesn't
-		// include the JSON-RPC request ID. Fix: thread request_id through ActionContext
-		// (fuz_app action_rpc.ts:41-52), then update zzz_rpc_actions.ts:70.
+		// Deno returns {ping_id: 'rpc'} — needs request_id in ActionContext (items 5-6)
 		skip: ['deno'],
 	},
 	{
@@ -195,105 +210,91 @@ const http_cases: readonly HttpCase[] = [
 		body: {jsonrpc: '2.0', id: 42, method: 'ping'},
 		status: 200,
 		expected: {jsonrpc: '2.0', id: 42, result: {ping_id: 42}},
-		skip: ['deno'], // same as ping_http
+		skip: ['deno'], // same — needs request_id in ActionContext
 	},
 	{
-		name: 'null_id_is_request',
+		name: 'null_id_is_invalid',
 		body: {jsonrpc: '2.0', id: null, method: 'nonexistent'},
-		status: 200,
+		status: 400,
 		expected: {
 			jsonrpc: '2.0',
 			id: null,
-			error: {code: -32601, message: 'method not found: nonexistent'},
+			error: {code: -32600, message: 'invalid request'},
 		},
-		comment: 'id:null is a request not a notification — uses method_not_found to avoid ping output validation',
-		// TODO Deno returns HTTP 404 for method_not_found. Fix: fuz_app should return
-		// HTTP 200 for all JSON-RPC responses (error info in body per convention).
-		// File: fuz_app/src/lib/http/jsonrpc_errors.ts:230-244
-		skip: ['deno'],
+		comment: 'id:null is not a valid JsonrpcRequestId (string|number only, per MCP)',
 	},
 
-	// Parse errors — bare error object, status 400
+	// Parse errors — full JSON-RPC envelope, HTTP 400
 	{
 		name: 'parse_error_http',
 		body: 'not json at all',
 		status: 400,
-		expected: {code: -32700, message: 'parse error'},
-		// TODO Deno wraps parse errors in full JSON-RPC envelope {jsonrpc, id: null, error}.
-		// Rust returns bare error {code, message}. Pick one format and align both.
-		// File: fuz_app/src/lib/actions/action_rpc.ts:287-292
-		skip: ['deno'],
+		expected: {jsonrpc: '2.0', id: null, error: {code: -32700, message: 'parse error'}},
 	},
 	{
 		name: 'parse_error_empty_body',
 		body: '',
 		status: 400,
-		expected: {code: -32700, message: 'parse error'},
-		skip: ['deno'], // same as parse_error_http
+		expected: {jsonrpc: '2.0', id: null, error: {code: -32700, message: 'parse error'}},
 	},
 
-	// Method not found
+	// Method not found — HTTP 404
 	{
 		name: 'method_not_found_http',
 		body: {jsonrpc: '2.0', id: 'mnf-1', method: 'nonexistent'},
-		status: 200,
+		status: 404,
 		expected: {
 			jsonrpc: '2.0',
 			id: 'mnf-1',
 			error: {code: -32601, message: 'method not found: nonexistent'},
 		},
-		// TODO Deno returns HTTP 404. Fix: fuz_app HTTP status mapping.
-		skip: ['deno'],
 	},
 
-	// Invalid requests — status 200, JSON-RPC error envelope
+	// Invalid requests — HTTP 400
 	{
 		name: 'invalid_request_missing_method',
 		body: {jsonrpc: '2.0', id: 'ir-1'},
-		status: 200,
+		status: 400,
 		expected: {jsonrpc: '2.0', id: 'ir-1', error: {code: -32600, message: 'invalid request'}},
 		comment: 'valid JSON-RPC object with id but no method',
-		// TODO Deno returns HTTP 400. Fix: fuz_app HTTP status mapping.
-		skip: ['deno'],
 	},
 	{
 		name: 'invalid_request_not_object',
 		body: '"just a string"',
-		status: 200,
+		status: 400,
 		expected: {
 			jsonrpc: '2.0',
-			id: 'just a string',
+			id: null,
 			error: {code: -32600, message: 'invalid request'},
 		},
-		comment: 'Deno to_jsonrpc_message_id extracts raw value as id for strings/numbers',
-		skip: ['deno'], // same status issue
+		comment: 'non-object body — fuz_app safeParse returns id: null',
 	},
 	{
 		name: 'invalid_request_bad_version',
 		body: {jsonrpc: '1.0', id: 'bv-1', method: 'ping'},
-		status: 200,
+		status: 400,
 		expected: {jsonrpc: '2.0', id: 'bv-1', error: {code: -32600, message: 'invalid request'}},
 		comment: 'wrong jsonrpc version',
-		skip: ['deno'],
 	},
 	{
 		name: 'invalid_request_missing_version',
 		body: {id: 'mv-1', method: 'ping'},
-		status: 200,
+		status: 400,
 		expected: {jsonrpc: '2.0', id: 'mv-1', error: {code: -32600, message: 'invalid request'}},
 		comment: 'missing jsonrpc field entirely',
-		skip: ['deno'],
 	},
 
-	// Notifications — has method but no id → null response, status 200
+	// Notifications — has method but no id → rejected on HTTP
 	{
 		name: 'notification_http',
 		body: {jsonrpc: '2.0', method: 'ping'},
-		status: 200,
-		expected: null,
-		// TODO Deno rejects notifications (fuz_app JsonrpcRequest schema requires id).
-		// Fix: support notifications in fuz_app/src/lib/http/jsonrpc.ts:36-43.
-		skip: ['deno'],
+		status: 400,
+		expected: {
+			jsonrpc: '2.0',
+			id: null,
+			error: {code: -32600, message: 'invalid request'},
+		},
+		comment: 'HTTP requires id — notifications rejected until WS Phase 5',
 	},
 ];
 
@@ -403,7 +404,9 @@ const run_http_case = async (
 	if (c.expected === null) {
 		assert_equal(body, null, 'body');
 	} else {
-		assert_deep_equal(body, c.expected, 'body');
+		// Strip error.data before comparing — Deno includes Zod issues,
+		// Rust omits data. Both are correct per JSON-RPC spec.
+		assert_deep_equal(strip_error_data(body), strip_error_data(c.expected), 'body');
 	}
 };
 

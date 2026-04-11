@@ -3,18 +3,13 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use fuz_common::{
-    JsonRpcError, JSONRPC_INVALID_REQUEST, JSONRPC_METHOD_NOT_FOUND, JSONRPC_PARSE_ERROR,
-    JSONRPC_VERSION,
+    JsonRpcError, JSONRPC_INVALID_PARAMS, JSONRPC_INVALID_REQUEST,
+    JSONRPC_METHOD_NOT_FOUND, JSONRPC_PARSE_ERROR, JSONRPC_VERSION,
 };
 use serde::Serialize;
 use serde_json::{Map, Value};
 
 // -- JSON-RPC types -----------------------------------------------------------
-//
-// zzz defines its own envelope types rather than using `fuz_common::JsonRpcResponse`
-// because zzz classifies arbitrary JSON-RPC messages via Value (notifications return
-// Value::Null, parse errors return bare error objects). fuz_common's single response
-// type targets typed request/response. The error object type IS shared from fuz_common.
 
 /// Successful JSON-RPC 2.0 response.
 #[derive(Debug, Serialize)]
@@ -60,7 +55,7 @@ pub fn method_not_found(method: &str) -> JsonRpcError {
 
 // -- Response builders --------------------------------------------------------
 
-fn success_response(id: Value, result: Value) -> Value {
+pub fn success_response(id: Value, result: Value) -> Value {
     serde_json::to_value(JsonRpcResponse {
         jsonrpc: JSONRPC_VERSION,
         id,
@@ -78,6 +73,24 @@ pub fn error_response(id: Value, error: JsonRpcError) -> Value {
     .unwrap_or_default()
 }
 
+// -- HTTP status mapping ------------------------------------------------------
+
+/// Map a JSON-RPC error code to an HTTP status code.
+///
+/// Matches `fuz_app`'s `jsonrpc_error_code_to_http_status` from
+/// `fuz_app/src/lib/http/jsonrpc_errors.ts:230-244`.
+/// Returns 500 for unrecognized codes.
+const fn error_code_to_http_status(code: i32) -> StatusCode {
+    match code {
+        // -32700, -32600, -32602 → 400
+        JSONRPC_PARSE_ERROR | JSONRPC_INVALID_REQUEST | JSONRPC_INVALID_PARAMS => {
+            StatusCode::BAD_REQUEST
+        }
+        JSONRPC_METHOD_NOT_FOUND => StatusCode::NOT_FOUND, // -32601 → 404
+        _ => StatusCode::INTERNAL_SERVER_ERROR,            // -32603 and others → 500
+    }
+}
+
 // -- Dispatch -----------------------------------------------------------------
 
 /// Route a method to its handler.
@@ -90,69 +103,115 @@ fn dispatch_method(method: &str, id: &Value) -> Result<Value, JsonRpcError> {
     }
 }
 
-// -- Message processing -------------------------------------------------------
+// -- Message classification ---------------------------------------------------
+
+/// Classification result from `classify_and_dispatch`.
+///
+/// Transport-agnostic — callers apply transport-specific semantics:
+/// - HTTP: `Notification` → reject as `invalid_request`; `Error` → mapped HTTP status
+/// - WS: `Notification` → silence (no response sent); `Error` → send envelope
+pub enum RpcOutcome {
+    /// Successful dispatch — id and result for the response envelope.
+    Success { id: Value, result: Value },
+    /// Error — id and error object for the error response envelope.
+    Error { id: Value, error: JsonRpcError },
+    /// Notification (has method, no id) — caller decides behavior.
+    Notification,
+}
 
 /// Classify and process a parsed JSON value as a JSON-RPC message.
 ///
 /// Distinguishes between:
-/// - Request (has `method` + `id`) → dispatch and return response
-/// - Notification (has `method`, no `id`) → return `Value::Null` (no response)
-/// - Invalid (missing `method` or bad `jsonrpc`) → return error envelope
+/// - Request (has `method` + valid `id`) → dispatch and return `Success`/`Error`
+/// - Notification (has `method`, no `id`) → return `Notification`
+/// - Invalid (missing `method`, bad `jsonrpc`, non-object, null id) → return `Error`
 ///
-/// This matches the Deno `ActionPeer.#receive_message()` classification.
+/// Id validation matches `fuz_app`: id must be string or number (excludes null,
+/// following MCP). Non-object values always get `id: null` (matching
+/// `create_rpc_endpoint`'s safeParse failure path, not `ActionPeer`'s
+/// `to_jsonrpc_message_id`).
 // TODO Phase 2: Support batch requests (JSON arrays)
-pub fn process_message(value: &Value) -> Value {
+pub fn classify_and_dispatch(value: &Value) -> RpcOutcome {
     let Some(obj) = value.as_object() else {
-        // Match Deno: to_jsonrpc_message_id uses the raw value as id for strings/numbers
-        let id = if value.is_string() || value.is_number() {
-            value.clone()
-        } else {
-            Value::Null
+        // Non-object body: fuz_app returns id: null (safeParse fails, no object to extract from)
+        return RpcOutcome::Error {
+            id: Value::Null,
+            error: invalid_request(),
         };
-        return error_response(id, invalid_request());
     };
 
     // Validate jsonrpc version
     let jsonrpc = obj.get("jsonrpc").and_then(Value::as_str);
     if jsonrpc != Some(JSONRPC_VERSION) {
         let id = extract_id(obj);
-        return error_response(id, invalid_request());
+        return RpcOutcome::Error {
+            id,
+            error: invalid_request(),
+        };
     }
 
     // Must have method
     let Some(method) = obj.get("method").and_then(Value::as_str) else {
         let id = extract_id(obj);
-        return error_response(id, invalid_request());
+        return RpcOutcome::Error {
+            id,
+            error: invalid_request(),
+        };
     };
 
-    // No `id` field → notification (no response)
-    let id = match obj.get("id") {
-        Some(id_val) => id_val.clone(),
-        None => return Value::Null,
+    // No `id` field → notification (caller decides behavior)
+    let Some(id_val) = obj.get("id") else {
+        return RpcOutcome::Notification;
+    };
+
+    // Validate id is string or number (fuz_app's JsonrpcRequestId excludes null, per MCP)
+    let id = if id_val.is_string() || id_val.is_number() {
+        id_val.clone()
+    } else {
+        // null, bool, array, object ids → invalid request (safeParse would fail)
+        return RpcOutcome::Error {
+            id: Value::Null,
+            error: invalid_request(),
+        };
     };
 
     // Dispatch request
     match dispatch_method(method, &id) {
-        Ok(result) => success_response(id, result),
-        Err(err) => error_response(id, err),
+        Ok(result) => RpcOutcome::Success { id, result },
+        Err(err) => RpcOutcome::Error { id, error: err },
     }
 }
 
-/// Extract `id` from a JSON-RPC message object, defaulting to `null`.
+/// Extract `id` from a JSON-RPC message object for error responses.
+///
+/// Matches `fuz_app`'s safeParse failure path: extracts id only if it's
+/// a string or number, otherwise returns null.
 fn extract_id(obj: &Map<String, Value>) -> Value {
-    obj.get("id").cloned().unwrap_or(Value::Null)
+    match obj.get("id") {
+        Some(id) if id.is_string() || id.is_number() => id.clone(),
+        _ => Value::Null,
+    }
 }
 
 // -- HTTP handler -------------------------------------------------------------
 
 /// Axum handler for `POST /rpc`.
+///
+/// Applies HTTP-specific transport semantics:
+/// - Parse errors → full JSON-RPC envelope, HTTP 400
+/// - Notifications → rejected as `invalid_request`, HTTP 400
+/// - Error responses → HTTP status mapped from JSON-RPC error code
 // TODO Phase 2: Add request/response tracing middleware
 pub async fn rpc_handler(body: Bytes) -> Response {
     // 1. Parse body as generic JSON value
     let Ok(value) = serde_json::from_slice::<Value>(&body) else {
         tracing::debug!("JSON parse error");
-        // Match Deno behaviour: bare error object, status 400
-        return (StatusCode::BAD_REQUEST, Json(parse_error())).into_response();
+        // Full envelope (matches fuz_app), HTTP 400
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(error_response(Value::Null, parse_error())),
+        )
+            .into_response();
     };
 
     tracing::debug!(
@@ -160,7 +219,18 @@ pub async fn rpc_handler(body: Bytes) -> Response {
         "rpc request"
     );
 
-    // 2. Process and return (always status 200, matching Deno behaviour)
-    let response = process_message(&value);
-    Json(response).into_response()
+    // 2. Classify and dispatch, then apply HTTP transport semantics
+    match classify_and_dispatch(&value) {
+        RpcOutcome::Success { id, result } => Json(success_response(id, result)).into_response(),
+        RpcOutcome::Error { id, error } => {
+            let status = error_code_to_http_status(error.code);
+            (status, Json(error_response(id, error))).into_response()
+        }
+        RpcOutcome::Notification => {
+            // HTTP requires id — reject notifications (fuz_app's safeParse enforces this)
+            let error = invalid_request();
+            let status = error_code_to_http_status(error.code);
+            (status, Json(error_response(Value::Null, error))).into_response()
+        }
+    }
 }
