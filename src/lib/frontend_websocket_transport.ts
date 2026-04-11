@@ -115,7 +115,6 @@ export class FrontendWebsocketTransport implements Transport {
 		return this.#socket.connected;
 	}
 
-	// TODO ? not called, maybe add to base class?
 	dispose(): void {
 		if (this.#remove_message_handler) {
 			this.#remove_message_handler();

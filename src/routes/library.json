@@ -16025,7 +16025,7 @@
 					{
 						"name": "BackendActionsApi",
 						"kind": "type",
-						"source_line": 29,
+						"source_line": 26,
 						"type_signature": "BackendActionsApi",
 						"properties": [
 							{
@@ -16063,7 +16063,7 @@
 					{
 						"name": "create_backend_actions_api",
 						"kind": "function",
-						"source_line": 38,
+						"source_line": 76,
 						"type_signature": "(backend: Backend): BackendActionsApi",
 						"return_type": "BackendActionsApi",
 						"parameters": [
@@ -16077,7 +16077,7 @@
 						"name": "handle_filer_change",
 						"kind": "function",
 						"doc_comment": "Handle file system changes and notify clients.",
-						"source_line": 247,
+						"source_line": 92,
 						"type_signature": "(change: WatcherChange, disknode: Disknode, backend: Backend, dir: string, filer: Filer): void",
 						"return_type": "void",
 						"parameters": [
@@ -17528,6 +17528,12 @@
 								"doc_comment": "Validated environment."
 							},
 							{
+								"name": "allowed_origins",
+								"kind": "variable",
+								"type_signature": "Array<RegExp>",
+								"doc_comment": "Parsed allowed origin patterns (from `validate_server_env`)."
+							},
+							{
 								"name": "close",
 								"kind": "variable",
 								"type_signature": "() => Promise<void>",
@@ -17539,7 +17545,7 @@
 						"name": "create_zzz_app",
 						"kind": "function",
 						"doc_comment": "Create the zzz Hono app with auth, database, Backend, providers, and endpoints.\n\nThis is the shared factory called by the server entry point.\nUses `create_app_backend` for database + auth, `create_app_server` for\nmiddleware assembly, and wires zzz's domain Backend through route deps.",
-						"source_line": 89,
+						"source_line": 91,
 						"type_signature": "(options: CreateZzzAppOptions): Promise<ZzzApp>",
 						"return_type": "Promise<ZzzApp>",
 						"parameters": [
@@ -20802,13 +20808,18 @@
 								"name": "is_ready",
 								"kind": "variable",
 								"type_signature": "() => boolean"
+							},
+							{
+								"name": "dispose",
+								"kind": "variable",
+								"type_signature": "() => void"
 							}
 						]
 					},
 					{
 						"name": "Transports",
 						"kind": "class",
-						"source_line": 29,
+						"source_line": 30,
 						"members": [
 							{
 								"name": "allow_fallback",
@@ -22105,7 +22116,7 @@
 					}
 				],
 				"module_comment": "zzz CLI configuration.\n\nManages CLI-specific configuration stored at ~/.zzz/config.json.\n\nThe CLI config uses the `zzz_config_` prefix for all fields to make\nthe source self-documenting in code.",
-				"dependents": ["zzz/commands/init.ts", "zzz/commands/open.ts"]
+				"dependents": ["zzz/commands/daemon.ts", "zzz/commands/init.ts", "zzz/commands/open.ts"]
 			},
 			{
 				"path": "zzz/cli.ts",
@@ -22395,7 +22406,7 @@
 						"name": "daemon_start",
 						"kind": "function",
 						"doc_comment": "Start the daemon in foreground mode.\n\nCLI flags --port and --host override config values.",
-						"source_line": 32,
+						"source_line": 33,
 						"type_signature": "(runtime: RuntimeDeps, args: { _: string[]; port?: number | undefined; host?: string | undefined; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -22417,7 +22428,7 @@
 						"name": "daemon_stop",
 						"kind": "function",
 						"doc_comment": "Stop the running daemon.",
-						"source_line": 47,
+						"source_line": 59,
 						"type_signature": "(runtime: RuntimeDeps, _args: { _: string[]; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -22439,7 +22450,7 @@
 						"name": "daemon_status",
 						"kind": "function",
 						"doc_comment": "Show daemon status.",
-						"source_line": 65,
+						"source_line": 77,
 						"type_signature": "(runtime: RuntimeDeps, args: { _: string[]; json: boolean; }, _flags: { help: boolean; version: boolean; }): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": [
@@ -22459,7 +22470,7 @@
 					}
 				],
 				"module_comment": "zzz daemon commands (start, stop, status).\n\nThe zzz CLI runs in Deno, so daemon start uses the Deno server entry point.\n\nRouting (`zzz daemon start|stop|status`) is handled by\ncreate_subcommand_router in main.ts.",
-				"dependencies": ["server/server.ts", "zzz/log.ts"],
+				"dependencies": ["server/server.ts", "zzz/cli_config.ts", "zzz/log.ts"],
 				"dependents": ["zzz/main.ts"]
 			},
 			{

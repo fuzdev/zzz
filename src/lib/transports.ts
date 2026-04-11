@@ -24,6 +24,7 @@ export interface Transport {
 	send(message: JsonrpcNotification): Promise<JsonrpcErrorMessage | null>;
 	send(message: JsonrpcMessageFromClientToServer): Promise<JsonrpcMessageFromServerToClient | null>;
 	is_ready: () => boolean;
+	dispose?: () => void;
 }
 
 export class Transports {
