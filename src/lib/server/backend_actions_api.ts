@@ -57,10 +57,7 @@ const send_notification = async (
 			return;
 		}
 
-		const notification = create_jsonrpc_notification(
-			spec.method,
-			to_jsonrpc_params(parsed.data),
-		);
+		const notification = create_jsonrpc_notification(spec.method, to_jsonrpc_params(parsed.data));
 
 		const result = await backend.peer.send(notification);
 		if (result !== null) {

@@ -210,7 +210,7 @@
 					}
 				],
 				"dependencies": ["action_collections.ts"],
-				"dependents": ["action_event.ts"]
+				"dependents": ["action_event.ts", "server/backend_actions_api.ts"]
 			},
 			{
 				"path": "action_collections.gen.ts",
@@ -1207,7 +1207,7 @@
 					"jsonrpc_helpers.ts",
 					"zod_helpers.ts"
 				],
-				"dependents": ["action_peer.ts", "frontend_actions_api.ts", "server/backend_actions_api.ts"]
+				"dependents": ["action_peer.ts", "frontend_actions_api.ts"]
 			},
 			{
 				"path": "action_helpers.ts",
@@ -10527,6 +10527,7 @@
 					"action_peer.ts",
 					"frontend_http_transport.ts",
 					"frontend_websocket_transport.ts",
+					"server/backend_actions_api.ts",
 					"server/backend_websocket_transport.ts",
 					"server/register_websocket_actions.ts"
 				]
@@ -15871,7 +15872,7 @@
 					{
 						"name": "BackendActionsApi",
 						"kind": "type",
-						"source_line": 25,
+						"source_line": 24,
 						"type_signature": "BackendActionsApi",
 						"properties": [
 							{
@@ -15909,7 +15910,7 @@
 					{
 						"name": "create_backend_actions_api",
 						"kind": "function",
-						"source_line": 75,
+						"source_line": 74,
 						"type_signature": "(backend: Backend): BackendActionsApi",
 						"return_type": "BackendActionsApi",
 						"parameters": [
@@ -15923,7 +15924,7 @@
 						"name": "handle_filer_change",
 						"kind": "function",
 						"doc_comment": "Handle file system changes and notify clients.",
-						"source_line": 91,
+						"source_line": 90,
 						"type_signature": "(change: WatcherChange, disknode: Disknode, backend: Backend, dir: string, filer: Filer): void",
 						"return_type": "void",
 						"parameters": [
@@ -15951,10 +15952,12 @@
 					}
 				],
 				"dependencies": [
-					"action_event.ts",
+					"action_collection_helpers.ts",
 					"action_specs.ts",
 					"diskfile_helpers.ts",
-					"diskfile_types.ts"
+					"diskfile_types.ts",
+					"jsonrpc_helpers.ts",
+					"zod_helpers.ts"
 				],
 				"dependents": ["server/backend.ts", "server/create_zzz_app.ts"]
 			},
@@ -17194,18 +17197,9 @@
 							{
 								"name": "lookup_action_handler",
 								"kind": "function",
-								"type_signature": "(_method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", _phase: \"send_request\" | ... 7 more ... | \"receive\"): ((event: any) => any) | undefined",
-								"return_type": "((event: any) => any) | undefined",
-								"parameters": [
-									{
-										"name": "_method",
-										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\""
-									},
-									{
-										"name": "_phase",
-										"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
-									}
-								]
+								"type_signature": "(): undefined",
+								"return_type": "undefined",
+								"parameters": []
 							},
 							{
 								"name": "lookup_action_spec",
@@ -18450,7 +18444,7 @@
 						"name": "ZzzHandlerContext",
 						"kind": "type",
 						"doc_comment": "Per-request context passed to every handler.\nMirrors Rust's `HandlerContext` — transport constructs it, handler borrows it.",
-						"source_line": 26,
+						"source_line": 27,
 						"type_signature": "ZzzHandlerContext",
 						"properties": [
 							{
@@ -18467,18 +18461,25 @@
 						]
 					},
 					{
-						"name": "ZzzHandler",
+						"name": "ZzzHandledMethod",
 						"kind": "type",
-						"doc_comment": "Handler function: pure (input, ctx) -> output.",
-						"source_line": 35,
-						"type_signature": "ZzzHandler"
+						"doc_comment": "Methods handled by zzz_action_handlers (request_response only, excludes remote_notifications).",
+						"source_line": 34,
+						"type_signature": "ZzzHandledMethod"
+					},
+					{
+						"name": "ZzzActionHandlers",
+						"kind": "type",
+						"doc_comment": "Typed handler map — each handler has per-method input/output types.",
+						"source_line": 45,
+						"type_signature": "ZzzActionHandlers"
 					},
 					{
 						"name": "zzz_action_handlers",
 						"kind": "variable",
 						"doc_comment": "All 23 request_response handlers as pure functions.\n\nLogic sourced from the RPC versions (cleaner than the old WS handlers —\nno Deno-only bug in provider_update_api_key, no console.log noise).",
-						"source_line": 43,
-						"type_signature": "Record<string, ZzzHandler>"
+						"source_line": 58,
+						"type_signature": "ZzzActionHandlers"
 					}
 				],
 				"module_comment": "Unified action handlers for zzz.\n\nSingle source of truth for all 23 request_response handlers.\nBoth HTTP RPC and WebSocket dispatch call these same functions.\nHandler signature mirrors Rust's `fn(params, ctx) -> Result<Value>`.",
@@ -21922,6 +21923,7 @@
 					"prompt.svelte.ts",
 					"request_tracker.svelte.ts",
 					"response_helpers.ts",
+					"server/backend_actions_api.ts",
 					"server/backend_websocket_transport.ts",
 					"server/zzz_action_handlers.ts",
 					"socket.svelte.ts",
