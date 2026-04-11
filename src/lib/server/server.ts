@@ -136,7 +136,9 @@ export const start_server = async (): Promise<void> => {
 				}
 				case 'logout':
 				case 'session_revoke_all':
-				case 'password_change': {
+				case 'password_change':
+				case 'token_revoke':
+				case 'token_revoke_all': {
 					if (event.account_id) {
 						const count = transport.close_sockets_for_account(event.account_id as Uuid);
 						if (count) log.info(`Closed ${count} socket(s) for ${event.event_type}`);

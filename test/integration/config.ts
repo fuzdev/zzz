@@ -4,6 +4,19 @@
  * Each backend defines how to start/stop it and which endpoints to hit.
  */
 
+export interface AuthConfig {
+	/** Path to the bootstrap endpoint. */
+	readonly bootstrap_path: string;
+	/** Token value to write to the token file and send in the bootstrap request. */
+	readonly token: string;
+	/** Filesystem path where the token file is written before server start. */
+	readonly token_file: string;
+	/** Username for the bootstrapped admin account. */
+	readonly username: string;
+	/** Password for the bootstrapped admin account. */
+	readonly password: string;
+}
+
 export interface BackendConfig {
 	readonly name: string;
 	readonly start_command: readonly string[];
@@ -14,7 +27,12 @@ export interface BackendConfig {
 	readonly startup_timeout_ms: number;
 	/** Extra env vars merged into the child process environment. */
 	readonly env?: Readonly<Record<string, string>>;
+	/** Auth setup — if present, the runner bootstraps an admin account before tests. */
+	readonly auth?: AuthConfig;
 }
+
+const INTEGRATION_BOOTSTRAP_TOKEN = 'zzz-integration-test-token';
+const INTEGRATION_TOKEN_FILE = '/tmp/zzz_integration_bootstrap_token';
 
 export const backends: Record<string, BackendConfig> = {
 	deno: {
@@ -22,13 +40,24 @@ export const backends: Record<string, BackendConfig> = {
 		start_command: ['deno', 'task', 'dev:start'],
 		base_url: 'http://localhost:4460',
 		rpc_path: '/api/rpc',
-		ws_path: '/ws',
+		ws_path: '/api/ws',
 		health_path: '/health',
 		startup_timeout_ms: 15_000,
 		// Override port so .env.development values don't conflict with test expectations.
 		// PORT is the server bind var (BaseServerEnv); PUBLIC_SERVER_PROXIED_PORT
 		// is the SvelteKit frontend var. Both need to agree.
-		env: {PORT: '4460', PUBLIC_SERVER_PROXIED_PORT: '4460'},
+		env: {
+			PORT: '4460',
+			PUBLIC_SERVER_PROXIED_PORT: '4460',
+			BOOTSTRAP_TOKEN_PATH: INTEGRATION_TOKEN_FILE,
+		},
+		auth: {
+			bootstrap_path: '/api/account/bootstrap',
+			token: INTEGRATION_BOOTSTRAP_TOKEN,
+			token_file: INTEGRATION_TOKEN_FILE,
+			username: 'testadmin',
+			password: 'test-password-integration-123',
+		},
 	},
 	rust: {
 		name: 'rust',

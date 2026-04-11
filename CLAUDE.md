@@ -486,7 +486,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 
 ## Known Limitations
 
-- **WebSocket auth is upgrade-time only** — Session auth is enforced at WebSocket upgrade via `require_auth` middleware (cookie session required). Sockets are closed on session revocation, logout, and password change via audit events. No per-message revalidation — event-driven revocation is sufficient. ActionPeer itself has no auth awareness.
+- **WebSocket auth** — Auth is enforced at upgrade time via `require_auth` middleware (cookie sessions, bearer tokens). Per-action auth checks enforce spec-level auth (e.g. `keeper` requires `daemon_token` + keeper role). Batch JSON-RPC and role-based auth are rejected (not yet supported). Sockets are closed on session/token revocation, logout, and password change via audit events. No per-message session revalidation — event-driven revocation is sufficient. ActionPeer itself has no auth awareness.
 - **Domain state is in-memory** — auth/accounts are in PGlite DB, but zzz domain state (files, terminals, workspaces) is in-memory, lost on restart. Workspaces persist to JSON file as a stopgap.
 - **No undo/history** — file edits are permanent
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found

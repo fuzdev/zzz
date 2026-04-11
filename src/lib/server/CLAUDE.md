@@ -148,9 +148,11 @@ Origin verification middleware
     ↓
 require_auth middleware (reject 401 if unauthenticated)
     ↓
-register_websocket_actions handler (extract account_id + token_hash)
+register_websocket_actions handler (extract account_id, credential_type, token_hash)
     ↓
 transport.add_connection(ws, token_hash, account_id)
+    ↓
+Per-action auth check (reject batch, check keeper/role auth)
     ↓
 backend.receive(json) → ActionPeer lifecycle
     ↓
@@ -193,17 +195,26 @@ Four layers protect the daemon:
 
 ### WebSocket Auth
 
-WebSocket connections are authenticated at upgrade time:
+WebSocket connections are authenticated at upgrade time, and per-action auth
+is enforced on each message:
 
 1. **Path under `/api/*`** — fuz_app's session + request_context middleware
-   resolves the session cookie automatically.
+   resolves the session cookie automatically. Bearer token auth (API tokens,
+   daemon tokens) is also resolved.
 2. **`require_auth` middleware** — rejects unauthenticated upgrades with 401.
-3. **Session extraction** — `register_websocket_actions` extracts the account
-   ID and hashed session token from the Hono context, passes them to the
-   transport's `add_connection()`.
-4. **Audit event revocation** — `server.ts` hooks `on_audit_event` to close
-   sockets on `session_revoke`, `logout`, `session_revoke_all`, and
-   `password_change` events.
+3. **Auth extraction** — `register_websocket_actions` extracts the account ID,
+   credential type, and (for session auth) hashed session token from the Hono
+   context. Bearer token connections pass `null` for token_hash — they're still
+   reachable via `close_sockets_for_account` but not `close_sockets_for_session`.
+4. **Per-action auth** — Each incoming WS message is checked against the action
+   spec's `auth` field before reaching `backend.receive()`. `keeper` actions
+   require `daemon_token` credential type AND the keeper role (matching
+   `require_keeper` parity). Role-based auth (`{role: string}`) is rejected
+   as not yet supported. Batch JSON-RPC arrays are rejected. `public` and
+   `authenticated` actions pass through (upgrade-time auth is sufficient).
+5. **Audit event revocation** — `server.ts` hooks `on_audit_event` to close
+   sockets on `session_revoke`, `logout`, `session_revoke_all`,
+   `password_change`, `token_revoke`, and `token_revoke_all` events.
 
 No per-message session revalidation — event-driven revocation via audit events
 is sufficient. ActionPeer and Backend have no auth awareness; auth stays in the

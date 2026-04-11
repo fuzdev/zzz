@@ -9,3 +9,4 @@ export const DEFAULT_RETRY_COUNT = 3;
 
 // WebSocket protocol and connection settings
 export const DEFAULT_CLOSE_CODE = 1000; // Normal closure
+export const WS_CLOSE_SESSION_REVOKED = 4001; // Server revoked the session

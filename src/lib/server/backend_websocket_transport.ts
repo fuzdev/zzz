@@ -2,6 +2,7 @@ import type {WSContext} from 'hono/ws';
 
 import {create_uuid, Uuid} from '../zod_helpers.js';
 import type {Transport} from '../transports.js';
+import {WS_CLOSE_SESSION_REVOKED} from '../socket_helpers.js';
 import type {
 	JsonrpcMessageFromClientToServer,
 	JsonrpcMessageFromServerToClient,
@@ -33,27 +34,30 @@ export class BackendWebsocketTransport implements Transport {
 	#connection_account_ids: Map<Uuid, Uuid> = new Map();
 
 	/**
-	 * Add a new WebSocket connection with session auth info.
+	 * Add a new WebSocket connection with auth info.
+	 * Session connections pass a token hash for targeted revocation.
+	 * Bearer token connections (api_token, daemon_token) pass null —
+	 * they're still reachable via {@link close_sockets_for_account}.
 	 */
-	add_connection(ws: WSContext, token_hash: string, account_id: Uuid): Uuid {
+	add_connection(ws: WSContext, token_hash: string | null, account_id: Uuid): Uuid {
 		const connection_id = create_uuid();
 		this.#connections.set(connection_id, ws);
 		this.#connection_ids.set(ws, connection_id);
-		this.#connection_token_hashes.set(connection_id, token_hash);
+		if (token_hash !== null) {
+			this.#connection_token_hashes.set(connection_id, token_hash);
+		}
 		this.#connection_account_ids.set(connection_id, account_id);
 		return connection_id;
 	}
 
 	/**
 	 * Remove a WebSocket connection and its auth tracking data.
+	 * Idempotent — safe to call after revocation has already cleaned up.
 	 */
 	remove_connection(ws: WSContext): void {
 		const connection_id = this.#connection_ids.get(ws);
 		if (connection_id) {
-			this.#connections.delete(connection_id);
-			this.#connection_ids.delete(ws);
-			this.#connection_token_hashes.delete(connection_id);
-			this.#connection_account_ids.delete(connection_id);
+			this.#cleanup_connection(connection_id, ws);
 		}
 	}
 
@@ -96,14 +100,21 @@ export class BackendWebsocketTransport implements Transport {
 	}
 
 	/**
-	 * Close a connection and clean up all tracking state.
+	 * Remove all tracking state for a connection.
 	 */
-	#revoke_connection(connection_id: Uuid, ws: WSContext): void {
+	#cleanup_connection(connection_id: Uuid, ws: WSContext): void {
 		this.#connections.delete(connection_id);
 		this.#connection_ids.delete(ws);
 		this.#connection_token_hashes.delete(connection_id);
 		this.#connection_account_ids.delete(connection_id);
-		ws.close(4001, 'Session revoked');
+	}
+
+	/**
+	 * Clean up a connection and close its socket with a revocation code.
+	 */
+	#revoke_connection(connection_id: Uuid, ws: WSContext): void {
+		this.#cleanup_connection(connection_id, ws);
+		ws.close(WS_CLOSE_SESSION_REVOKED, 'Session revoked');
 	}
 
 	// TODO needs implementation, only broadcasts notifications for now

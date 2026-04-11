@@ -9,7 +9,7 @@
 		"install": "gro build && mkdir -p ~/.zzz/bin && cp dist_cli/zzz ~/.zzz/bin/zzz",
 		"check": "deno check src/lib/zzz/**/*.ts",
 		"test": "gro test && deno task test:integration",
-		"test:integration": "deno run --allow-net --allow-run --allow-read --allow-env test/integration/run.ts"
+		"test:integration": "deno run --allow-net --allow-run --allow-read --allow-write --allow-env test/integration/run.ts"
 	},
 	"imports": {
 		"@std/": "jsr:@std/",

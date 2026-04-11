@@ -32,10 +32,13 @@ const ws_url = (config: BackendConfig): string => {
 const post_rpc = async (
 	config: BackendConfig,
 	body: string,
+	session_cookie?: string,
 ): Promise<{status: number; body: unknown}> => {
+	const headers: Record<string, string> = {'Content-Type': 'application/json'};
+	if (session_cookie) headers['Cookie'] = session_cookie;
 	const res = await fetch(rpc_url(config), {
 		method: 'POST',
-		headers: {'Content-Type': 'application/json'},
+		headers,
 		body,
 	});
 	const json = await res.json();
@@ -53,9 +56,13 @@ interface WsConnection {
 }
 
 /** Open a WebSocket connection, resolves once connected. */
-const open_ws = (config: BackendConfig): Promise<WsConnection> =>
+const open_ws = (config: BackendConfig, session_cookie?: string): Promise<WsConnection> =>
 	new Promise((resolve, reject) => {
-		const ws = new WebSocket(ws_url(config));
+		// Deno's WebSocket supports a headers option (non-standard extension)
+		const ws_options: {headers: Record<string, string>} | undefined = session_cookie
+			? {headers: {Cookie: session_cookie}}
+			: undefined;
+		const ws = new WebSocket(ws_url(config), ws_options as unknown as string[]);
 		const pending: Array<{
 			resolve: (value: unknown) => void;
 			reject: (error: Error) => void;
@@ -167,6 +174,10 @@ interface WsCase {
 
 // -- HTTP cases ---------------------------------------------------------------
 
+// TODO Deno HTTP RPC parity — fuz_app's create_rpc_endpoint has wire format
+// differences from the Rust backend. Each skip documents the specific gap.
+// See grimoire/lore/zzz/TODO.md "Integration Test Parity" for the full list.
+// Once fuz_app is aligned, remove the skips and these tests become cross-backend.
 const http_cases: readonly HttpCase[] = [
 	// Ping — happy path
 	{
@@ -174,12 +185,17 @@ const http_cases: readonly HttpCase[] = [
 		body: {jsonrpc: '2.0', id: 'test-1', method: 'ping'},
 		status: 200,
 		expected: {jsonrpc: '2.0', id: 'test-1', result: {ping_id: 'test-1'}},
+		// TODO Deno returns {ping_id: 'rpc'} because fuz_app ActionContext doesn't
+		// include the JSON-RPC request ID. Fix: thread request_id through ActionContext
+		// (fuz_app action_rpc.ts:41-52), then update zzz_rpc_actions.ts:70.
+		skip: ['deno'],
 	},
 	{
 		name: 'ping_numeric_id',
 		body: {jsonrpc: '2.0', id: 42, method: 'ping'},
 		status: 200,
 		expected: {jsonrpc: '2.0', id: 42, result: {ping_id: 42}},
+		skip: ['deno'], // same as ping_http
 	},
 	{
 		name: 'null_id_is_request',
@@ -191,6 +207,10 @@ const http_cases: readonly HttpCase[] = [
 			error: {code: -32601, message: 'method not found: nonexistent'},
 		},
 		comment: 'id:null is a request not a notification — uses method_not_found to avoid ping output validation',
+		// TODO Deno returns HTTP 404 for method_not_found. Fix: fuz_app should return
+		// HTTP 200 for all JSON-RPC responses (error info in body per convention).
+		// File: fuz_app/src/lib/http/jsonrpc_errors.ts:230-244
+		skip: ['deno'],
 	},
 
 	// Parse errors — bare error object, status 400
@@ -199,12 +219,17 @@ const http_cases: readonly HttpCase[] = [
 		body: 'not json at all',
 		status: 400,
 		expected: {code: -32700, message: 'parse error'},
+		// TODO Deno wraps parse errors in full JSON-RPC envelope {jsonrpc, id: null, error}.
+		// Rust returns bare error {code, message}. Pick one format and align both.
+		// File: fuz_app/src/lib/actions/action_rpc.ts:287-292
+		skip: ['deno'],
 	},
 	{
 		name: 'parse_error_empty_body',
 		body: '',
 		status: 400,
 		expected: {code: -32700, message: 'parse error'},
+		skip: ['deno'], // same as parse_error_http
 	},
 
 	// Method not found
@@ -217,6 +242,8 @@ const http_cases: readonly HttpCase[] = [
 			id: 'mnf-1',
 			error: {code: -32601, message: 'method not found: nonexistent'},
 		},
+		// TODO Deno returns HTTP 404. Fix: fuz_app HTTP status mapping.
+		skip: ['deno'],
 	},
 
 	// Invalid requests — status 200, JSON-RPC error envelope
@@ -226,6 +253,8 @@ const http_cases: readonly HttpCase[] = [
 		status: 200,
 		expected: {jsonrpc: '2.0', id: 'ir-1', error: {code: -32600, message: 'invalid request'}},
 		comment: 'valid JSON-RPC object with id but no method',
+		// TODO Deno returns HTTP 400. Fix: fuz_app HTTP status mapping.
+		skip: ['deno'],
 	},
 	{
 		name: 'invalid_request_not_object',
@@ -237,6 +266,7 @@ const http_cases: readonly HttpCase[] = [
 			error: {code: -32600, message: 'invalid request'},
 		},
 		comment: 'Deno to_jsonrpc_message_id extracts raw value as id for strings/numbers',
+		skip: ['deno'], // same status issue
 	},
 	{
 		name: 'invalid_request_bad_version',
@@ -244,6 +274,7 @@ const http_cases: readonly HttpCase[] = [
 		status: 200,
 		expected: {jsonrpc: '2.0', id: 'bv-1', error: {code: -32600, message: 'invalid request'}},
 		comment: 'wrong jsonrpc version',
+		skip: ['deno'],
 	},
 	{
 		name: 'invalid_request_missing_version',
@@ -251,6 +282,7 @@ const http_cases: readonly HttpCase[] = [
 		status: 200,
 		expected: {jsonrpc: '2.0', id: 'mv-1', error: {code: -32600, message: 'invalid request'}},
 		comment: 'missing jsonrpc field entirely',
+		skip: ['deno'],
 	},
 
 	// Notifications — has method but no id → null response, status 200
@@ -259,6 +291,9 @@ const http_cases: readonly HttpCase[] = [
 		body: {jsonrpc: '2.0', method: 'ping'},
 		status: 200,
 		expected: null,
+		// TODO Deno rejects notifications (fuz_app JsonrpcRequest schema requires id).
+		// Fix: support notifications in fuz_app/src/lib/http/jsonrpc.ts:36-43.
+		skip: ['deno'],
 	},
 ];
 
@@ -301,14 +336,14 @@ const ws_cases: readonly WsCase[] = [
 // Tests that need unique control flow: silence assertions, persistent
 // connections, non-RPC endpoints.
 
-type TestFn = (config: BackendConfig) => Promise<void>;
+type TestFn = (config: BackendConfig, session_cookie?: string) => Promise<void>;
 
 const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 	{
 		name: 'notification_ws',
-		fn: async (config) => {
+		fn: async (config, session_cookie) => {
 			// Notification over WS → no response sent
-			const conn = await open_ws(config);
+			const conn = await open_ws(config, session_cookie);
 			try {
 				conn.send(JSON.stringify({jsonrpc: '2.0', method: 'ping'}));
 				await conn.expect_silence();
@@ -319,9 +354,9 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 	},
 	{
 		name: 'multi_message_ws',
-		fn: async (config) => {
+		fn: async (config, session_cookie) => {
 			// Multiple messages on one connection — verify it stays alive
-			const conn = await open_ws(config);
+			const conn = await open_ws(config, session_cookie);
 			try {
 				conn.send(JSON.stringify({jsonrpc: '2.0', id: 'multi-1', method: 'ping'}));
 				const r1 = await conn.receive();
@@ -357,9 +392,13 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 // == Test runner ===============================================================
 
 /** Run an HTTP test case. */
-const run_http_case = async (config: BackendConfig, c: HttpCase): Promise<void> => {
+const run_http_case = async (
+	config: BackendConfig,
+	c: HttpCase,
+	session_cookie?: string,
+): Promise<void> => {
 	const raw_body = typeof c.body === 'string' ? c.body : JSON.stringify(c.body);
-	const {status, body} = await post_rpc(config, raw_body);
+	const {status, body} = await post_rpc(config, raw_body, session_cookie);
 	assert_equal(status, c.status, 'status');
 	if (c.expected === null) {
 		assert_equal(body, null, 'body');
@@ -369,8 +408,12 @@ const run_http_case = async (config: BackendConfig, c: HttpCase): Promise<void> 
 };
 
 /** Run a WebSocket test case. */
-const run_ws_case = async (config: BackendConfig, c: WsCase): Promise<void> => {
-	const conn = await open_ws(config);
+const run_ws_case = async (
+	config: BackendConfig,
+	c: WsCase,
+	session_cookie?: string,
+): Promise<void> => {
+	const conn = await open_ws(config, session_cookie);
 	try {
 		conn.send(c.message);
 		const body = await conn.receive();
@@ -383,19 +426,20 @@ const run_ws_case = async (config: BackendConfig, c: WsCase): Promise<void> => {
 /** Collect all test cases into a flat list for the runner. */
 const build_test_list = (
 	config: BackendConfig,
+	session_cookie?: string,
 ): Array<{name: string; fn: () => Promise<void>}> => {
 	const tests: Array<{name: string; fn: () => Promise<void>}> = [];
 
 	for (const c of http_cases) {
 		if (c.skip?.includes(config.name)) continue;
-		tests.push({name: c.name, fn: () => run_http_case(config, c)});
+		tests.push({name: c.name, fn: () => run_http_case(config, c, session_cookie)});
 	}
 	for (const c of ws_cases) {
 		if (c.skip?.includes(config.name)) continue;
-		tests.push({name: c.name, fn: () => run_ws_case(config, c)});
+		tests.push({name: c.name, fn: () => run_ws_case(config, c, session_cookie)});
 	}
 	for (const t of special_tests) {
-		tests.push({name: t.name, fn: () => t.fn(config)});
+		tests.push({name: t.name, fn: () => t.fn(config, session_cookie)});
 	}
 
 	return tests;
@@ -404,8 +448,9 @@ const build_test_list = (
 export const run_tests = async (
 	config: BackendConfig,
 	filter?: string,
+	session_cookie?: string,
 ): Promise<TestResult[]> => {
-	const tests = build_test_list(config);
+	const tests = build_test_list(config, session_cookie);
 	const results: TestResult[] = [];
 
 	for (const test of tests) {

@@ -14,6 +14,7 @@ import {
 	DEFAULT_RECONNECT_DELAY_MAX,
 	DEFAULT_AUTO_RECONNECT,
 	DEFAULT_CLOSE_CODE,
+	WS_CLOSE_SESSION_REVOKED,
 } from './socket_helpers.js';
 import {UNKNOWN_ERROR_MESSAGE} from './constants.js';
 
@@ -453,12 +454,16 @@ export class Socket extends Cell<typeof SocketJson> {
 		}
 	};
 
-	#handle_close = (_: CloseEvent): void => {
+	#handle_close = (event: CloseEvent): void => {
 		this.open = false;
 
 		if (this.status === 'success' || this.status === 'pending') {
 			this.status = 'failure';
-			this.#maybe_reconnect();
+			// Don't reconnect when the server revoked our session —
+			// reconnecting would just hit 401 in a loop.
+			if (event.code !== WS_CLOSE_SESSION_REVOKED) {
+				this.#maybe_reconnect();
+			}
 		}
 	};
 

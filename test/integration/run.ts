@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-net --allow-run --allow-read --allow-env
+#!/usr/bin/env -S deno run --allow-net --allow-run --allow-read --allow-write --allow-env
 
 /**
  * Integration test runner for zzz backends.
@@ -130,6 +130,66 @@ const stop_backend = async (name: string, child: Deno.ChildProcess): Promise<voi
 	}
 };
 
+// -- Auth setup ---------------------------------------------------------------
+
+/**
+ * Write the bootstrap token file before the server starts.
+ * The server reads this path at startup to determine bootstrap availability.
+ */
+const write_bootstrap_token = async (config: BackendConfig): Promise<void> => {
+	if (!config.auth) return;
+	await Deno.writeTextFile(config.auth.token_file, config.auth.token);
+};
+
+/**
+ * Bootstrap an admin account and return the session cookie.
+ * Must be called after the server is healthy. Token file must already exist.
+ */
+const setup_auth = async (config: BackendConfig): Promise<string | undefined> => {
+	if (!config.auth) return undefined;
+
+	const {auth} = config;
+
+	// Bootstrap: create admin account + get session cookie
+	const res = await fetch(`${config.base_url}${auth.bootstrap_path}`, {
+		method: 'POST',
+		headers: {'Content-Type': 'application/json'},
+		body: JSON.stringify({
+			token: auth.token,
+			username: auth.username,
+			password: auth.password,
+		}),
+	});
+
+	if (!res.ok) {
+		const body = await res.text();
+		throw new Error(`Bootstrap failed (${res.status}): ${body}`);
+	}
+
+	await res.json(); // consume body
+
+	// Extract all Set-Cookie values (session + signature cookies)
+	const set_cookies = res.headers.getSetCookie();
+	if (set_cookies.length === 0) {
+		throw new Error('Bootstrap succeeded but no session cookie in response');
+	}
+
+	// Build Cookie header: "name=value; name2=value2"
+	const cookie = set_cookies.map((c) => c.split(';')[0]).join('; ');
+	console.log(`  Auth bootstrapped (${set_cookies.length} cookie(s))`);
+	return cookie;
+};
+
+/** Clean up the bootstrap token file if it still exists. */
+const cleanup_auth = async (config: BackendConfig): Promise<void> => {
+	if (!config.auth) return;
+	try {
+		await Deno.remove(config.auth.token_file);
+	} catch {
+		// Already deleted by bootstrap or doesn't exist
+	}
+};
+
 // -- Per-backend run ----------------------------------------------------------
 
 interface BackendRun {
@@ -147,8 +207,10 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 
 	let child: Deno.ChildProcess | null = null;
 	try {
+		await write_bootstrap_token(config);
 		child = await start_backend(config);
-		const results = await run_tests(config, filter);
+		const session_cookie = await setup_auth(config);
+		const results = await run_tests(config, filter, session_cookie);
 
 		let passed = 0;
 		let failed = 0;
@@ -169,6 +231,7 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 		console.log(`\n  ${passed} passed, ${failed} failed in ${fmt_ms(total_ms)}`);
 		return {name: config.name, results, passed, failed, total_ms};
 	} finally {
+		await cleanup_auth(config);
 		if (child) await stop_backend(config.name, child);
 	}
 };

@@ -55,18 +55,23 @@ integration test configs handle this difference.
 ## Integration Tests
 
 The key deliverable. Tests start a backend, run JSON-RPC assertions, and
-stop it. The same 18 tests run against both backends to verify parity:
+stop it. Deno backend bootstraps auth (admin account + session cookie)
+before tests. Rust backend runs unauthenticated (Phase 1, no auth).
 
-- `ping_http`, `ping_numeric_id`, `ping_ws` — round-trip with string/numeric IDs, WebSocket
-- `null_id_is_request` — `id: null` is a request (not notification), gets a response
-- `parse_error_http`, `parse_error_empty_body`, `parse_error_ws` — invalid/empty JSON → bare error, HTTP 400
-- `method_not_found_http`, `method_not_found_ws` — unknown method → JSON-RPC error
-- `invalid_request_missing_method`, `invalid_request_not_object` — missing method, non-object body
-- `invalid_request_bad_version`, `invalid_request_missing_version` — wrong/absent `jsonrpc` field
-- `invalid_request_ws` — invalid request over WebSocket
-- `notification_http`, `notification_ws` — notifications (no `id`) produce no response
-- `multi_message_ws` — connection stays alive across multiple messages
-- `health_check` — GET /health → 200
+**WS tests (both backends):** `ping_ws`, `parse_error_ws`,
+`method_not_found_ws`, `invalid_request_ws`, `notification_ws`,
+`multi_message_ws` — 6 tests verify identical WS behaviour.
+
+**HTTP tests (Rust only for now):** `ping_http`, `ping_numeric_id`,
+`null_id_is_request`, `parse_error_http`, `parse_error_empty_body`,
+`method_not_found_http`, `invalid_request_*` (4 variants),
+`notification_http` — 11 tests skipped on Deno due to fuz_app
+`create_rpc_endpoint` wire format differences (HTTP status codes,
+parse error envelope format, missing request ID in handler context).
+See TODOs in `test/integration/tests.ts` and
+`grimoire/lore/zzz/TODO.md` for the specific parity gaps.
+
+**Cross-backend:** `health_check` — 1 test on both backends.
 
 ```bash
 deno task test:integration --backend=rust   # Rust only
