@@ -1,13 +1,16 @@
 mod error;
+mod handlers;
 mod rpc;
 mod ws;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use axum::routing::{get, post};
-use axum::Router;
+use axum::{Json, Router};
 use error::ServerError;
+use serde::Serialize;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
@@ -32,13 +35,13 @@ async fn main() {
 async fn run() -> Result<(), ServerError> {
     let config = parse_args();
 
+    let app_state = Arc::new(handlers::App::new());
+
     let mut app = Router::new()
         .route("/rpc", post(rpc::rpc_handler))
         .route("/ws", get(ws::ws_handler))
-        .route(
-            "/health",
-            get(|| async { axum::Json(serde_json::json!({"status": "ok"})) }),
-        );
+        .route("/health", get(health_handler))
+        .with_state(app_state);
 
     if let Some(ref dir) = config.static_dir {
         tracing::info!(dir = %dir.display(), "serving static files");
@@ -67,6 +70,15 @@ async fn run() -> Result<(), ServerError> {
 
     tracing::info!("server shutdown complete");
     Ok(())
+}
+
+#[derive(Serialize)]
+struct HealthResponse {
+    status: &'static str,
+}
+
+async fn health_handler() -> Json<HealthResponse> {
+    Json(HealthResponse { status: "ok" })
 }
 
 struct Config {

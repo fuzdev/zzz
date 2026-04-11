@@ -243,9 +243,11 @@ cd ~/dev/private_fuz && cargo build -p fuz_pty --release
 
 ### Rust Backend
 
-Shadow implementation of the Deno server using axum. Phase 1: only `ping`,
-no auth, no DB. The Deno server (with full fuz_app auth stack) is ground truth —
-18 integration tests verify both backends produce identical JSON-RPC responses.
+Shadow implementation of the Deno server using axum. Phase 1: `ping`,
+`workspace_list`, `workspace_open`, `workspace_close` — no auth, no DB.
+App/Ctx/dispatch pattern (long-lived state + per-request context + match
+dispatch). The Deno server (with full fuz_app auth stack) is ground truth —
+22 integration tests verify both backends produce identical JSON-RPC responses.
 
 ```bash
 cargo build -p zzz_server                          # Build
@@ -492,7 +494,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Rust backend is Phase 1** — only `ping` action implemented; no auth, no DB, no action system. Batch JSON-RPC requests not yet supported. See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
+- **Rust backend is Phase 1** — `ping`, `workspace_list`, `workspace_open`, `workspace_close` implemented with App/Ctx/dispatch pattern; no auth, no DB. Batch JSON-RPC requests not yet supported. See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
 
 ## fuz_app
 

@@ -220,8 +220,7 @@ interface WsCase {
 
 // Rust backend wire format aligned with fuz_app's create_rpc_endpoint (2026-04-11).
 // HTTP status mapping, parse error envelopes, notification rejection, and id
-// validation now match Deno. Remaining skips: ping_http/ping_numeric_id need
-// request_id in ActionContext (fuz_app item 5) + zzz ping handler update (item 6).
+// validation now match Deno. All tests pass on both backends with 0 skips.
 const http_cases: readonly HttpCase[] = [
 	// Ping — happy path
 	{
@@ -229,15 +228,12 @@ const http_cases: readonly HttpCase[] = [
 		body: {jsonrpc: '2.0', id: 'test-1', method: 'ping'},
 		status: 200,
 		expected: {jsonrpc: '2.0', id: 'test-1', result: {ping_id: 'test-1'}},
-		// Deno returns {ping_id: 'rpc'} — needs request_id in ActionContext (items 5-6)
-		skip: ['deno'],
 	},
 	{
 		name: 'ping_numeric_id',
 		body: {jsonrpc: '2.0', id: 42, method: 'ping'},
 		status: 200,
 		expected: {jsonrpc: '2.0', id: 42, result: {ping_id: 42}},
-		skip: ['deno'], // same — needs request_id in ActionContext
 	},
 	{
 		name: 'null_id_is_invalid',
@@ -413,6 +409,209 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 			assert_equal(res.status, 200, 'status');
 			const body = await res.json();
 			assert_equal(body.status, 'ok', 'health status');
+		},
+	},
+	{
+		name: 'workspace_open_and_list',
+		fn: async (config, session_cookie) => {
+			const tmp_dir = await Deno.makeTempDir({prefix: 'zzz_test_'});
+			try {
+				// 1. Open workspace
+				const open_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wo-1',
+						method: 'workspace_open',
+						params: {path: tmp_dir},
+					}),
+					session_cookie,
+				);
+				assert_equal(open_res.status, 200, 'open status');
+				const open_rpc = open_res.body as Record<string, unknown>;
+				assert_equal(open_rpc.id, 'wo-1', 'open id');
+				const open_result = open_rpc.result as Record<string, unknown>;
+				const workspace = open_result.workspace as Record<string, unknown>;
+
+				// Shape assertions — handles Deno/Rust differences
+				assert_equal(typeof workspace.path, 'string', 'path is string');
+				assert_equal((workspace.path as string).endsWith('/'), true, 'path ends with /');
+				assert_equal(typeof workspace.name, 'string', 'name is string');
+				assert_equal(typeof workspace.opened_at, 'string', 'opened_at is string');
+				assert_equal(Array.isArray(open_result.files), true, 'files is array');
+
+				// 2. List workspaces — opened workspace must appear
+				const list_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wl-1',
+						method: 'workspace_list',
+					}),
+					session_cookie,
+				);
+				assert_equal(list_res.status, 200, 'list status');
+				const list_rpc = list_res.body as Record<string, unknown>;
+				const list_result = list_rpc.result as Record<string, unknown>;
+				const workspaces = list_result.workspaces as Array<Record<string, unknown>>;
+				assert_equal(Array.isArray(workspaces), true, 'workspaces is array');
+				const found = workspaces.some((w) => w.path === workspace.path);
+				assert_equal(found, true, 'opened workspace in list');
+			} finally {
+				await Deno.remove(tmp_dir, {recursive: true});
+			}
+		},
+	},
+	{
+		name: 'workspace_open_idempotent',
+		fn: async (config, session_cookie) => {
+			const tmp_dir = await Deno.makeTempDir({prefix: 'zzz_test_'});
+			try {
+				// Open same path twice
+				const r1 = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wi-1',
+						method: 'workspace_open',
+						params: {path: tmp_dir},
+					}),
+					session_cookie,
+				);
+				assert_equal(r1.status, 200, 'first open status');
+				const w1 = ((r1.body as Record<string, unknown>).result as Record<string, unknown>)
+					.workspace as Record<string, unknown>;
+
+				const r2 = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wi-2',
+						method: 'workspace_open',
+						params: {path: tmp_dir},
+					}),
+					session_cookie,
+				);
+				assert_equal(r2.status, 200, 'second open status');
+				const w2 = ((r2.body as Record<string, unknown>).result as Record<string, unknown>)
+					.workspace as Record<string, unknown>;
+
+				// Same opened_at — workspace was not re-created
+				assert_equal(w1.opened_at, w2.opened_at, 'same opened_at');
+				assert_equal(w1.path, w2.path, 'same path');
+			} finally {
+				await Deno.remove(tmp_dir, {recursive: true});
+			}
+		},
+	},
+	{
+		name: 'workspace_open_nonexistent',
+		fn: async (config, session_cookie) => {
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'wne-1',
+					method: 'workspace_open',
+					params: {path: `/tmp/zzz_nonexistent_${Date.now()}`},
+				}),
+				session_cookie,
+			);
+			assert_equal(res.status, 500, 'status');
+			const r = res.body as Record<string, unknown>;
+			assert_equal(r.id, 'wne-1', 'id');
+			const error = r.error as Record<string, unknown>;
+			assert_equal(error.code, -32603, 'error code');
+			assert_equal(
+				(error.message as string).startsWith(
+					'failed to open workspace: directory does not exist:',
+				),
+				true,
+				'error message format',
+			);
+		},
+	},
+	{
+		name: 'workspace_close',
+		fn: async (config, session_cookie) => {
+			const tmp_dir = await Deno.makeTempDir({prefix: 'zzz_test_'});
+			try {
+				// 1. Open workspace
+				const open_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wc-open',
+						method: 'workspace_open',
+						params: {path: tmp_dir},
+					}),
+					session_cookie,
+				);
+				assert_equal(open_res.status, 200, 'open status');
+				const workspace = (
+					(open_res.body as Record<string, unknown>).result as Record<string, unknown>
+				).workspace as Record<string, unknown>;
+
+				// 2. Close workspace — use the normalized path from open response
+				const close_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wc-close',
+						method: 'workspace_close',
+						params: {path: workspace.path},
+					}),
+					session_cookie,
+				);
+				assert_equal(close_res.status, 200, 'close status');
+				const close_rpc = close_res.body as Record<string, unknown>;
+				assert_equal(close_rpc.result, null, 'close result is null');
+
+				// 3. List — workspace should be gone
+				const list_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wc-list',
+						method: 'workspace_list',
+					}),
+					session_cookie,
+				);
+				assert_equal(list_res.status, 200, 'list status');
+				const list_result = (list_res.body as Record<string, unknown>).result as Record<
+					string,
+					unknown
+				>;
+				const workspaces = list_result.workspaces as Array<Record<string, unknown>>;
+				const found = workspaces.some((w) => w.path === workspace.path);
+				assert_equal(found, false, 'closed workspace not in list');
+
+				// 4. Close again — should error (not open)
+				// Rust returns -32602 (invalid_params, 400); Deno returns -32603
+				// (internal_error, 500) due to ThrownJsonrpcError class mismatch
+				// between zzz and fuz_app (see TODO in src/lib/jsonrpc_errors.ts)
+				const close2_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wc-close2',
+						method: 'workspace_close',
+						params: {path: workspace.path},
+					}),
+					session_cookie,
+				);
+				assert_equal(close2_res.status >= 400, true, 'double close fails');
+				const close2_rpc = close2_res.body as Record<string, unknown>;
+				const error = close2_rpc.error as Record<string, unknown>;
+				assert_equal(typeof error.code, 'number', 'double close has error code');
+				assert_equal(
+					(error.message as string).startsWith('workspace not open:'),
+					true,
+					'double close error message format',
+				);
+			} finally {
+				await Deno.remove(tmp_dir, {recursive: true});
+			}
 		},
 	},
 ];

@@ -1,17 +1,21 @@
+use std::sync::Arc;
+
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::State;
 use axum::response::Response;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 
-use crate::rpc::{self, RpcOutcome};
+use crate::handlers::{self, App, Ctx};
+use crate::rpc::{self, Classified};
 
 /// Axum handler for `GET /ws` — upgrades to WebSocket.
 // TODO Phase 2: Add connection tracking for broadcast notifications
-pub async fn ws_handler(ws: WebSocketUpgrade) -> Response {
-    ws.on_upgrade(handle_connection)
+pub async fn ws_handler(State(app): State<Arc<App>>, ws: WebSocketUpgrade) -> Response {
+    ws.on_upgrade(move |socket| handle_connection(socket, app))
 }
 
-async fn handle_connection(socket: WebSocket) {
+async fn handle_connection(socket: WebSocket, app: Arc<App>) {
     let (mut tx, mut rx) = socket.split();
 
     while let Some(Ok(msg)) = rx.next().await {
@@ -39,15 +43,22 @@ async fn handle_connection(socket: WebSocket) {
             "ws message"
         );
 
-        // 2. Classify and dispatch, then apply WS transport semantics
-        let json = match rpc::classify_and_dispatch(&value) {
-            RpcOutcome::Success { id, result } => {
-                serde_json::to_string(&rpc::success_response(id, result))
+        // 2. Classify, then dispatch + apply WS transport semantics
+        let json = match rpc::classify(&value) {
+            Classified::Request { method, id, params } => {
+                let ctx = Ctx {
+                    app: &app,
+                    request_id: &id,
+                };
+                match handlers::dispatch(method, params, &ctx).await {
+                    Ok(result) => serde_json::to_string(&rpc::success_response(id, result)),
+                    Err(error) => serde_json::to_string(&rpc::error_response(id, error)),
+                }
             }
-            RpcOutcome::Error { id, error } => {
+            Classified::Invalid { id, error } => {
                 serde_json::to_string(&rpc::error_response(id, error))
             }
-            RpcOutcome::Notification => continue, // WS: silence — no response sent
+            Classified::Notification => continue, // WS: silence — no response sent
         };
 
         // 3. Send response

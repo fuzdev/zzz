@@ -66,8 +66,8 @@ export const create_zzz_rpc_actions = (deps: ZzzRpcDeps): Array<RpcAction> => {
 	return [
 		{
 			spec: ping_action_spec as RequestResponseActionSpec,
-			handler: (() => ({
-				ping_id: 'rpc', // RPC endpoint doesn't have a JSON-RPC request id in the handler context
+			handler: ((_input, ctx) => ({
+				ping_id: ctx.request_id,
 			})) satisfies ActionHandler,
 		},
 		{
