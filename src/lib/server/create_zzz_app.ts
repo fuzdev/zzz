@@ -25,7 +25,6 @@ import {
 	type ZzzServerConfig,
 	type ZzzServerEnv,
 } from './server_env.js';
-import {backend_action_handlers} from './backend_action_handlers.js';
 import {action_specs} from '../action_collections.js';
 import {handle_filer_change} from './backend_actions_api.js';
 import {BackendProviderOllama} from './backend_provider_ollama.js';
@@ -141,7 +140,6 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 		scoped_dirs: config.scoped_dirs.length > 0 ? config.scoped_dirs : undefined,
 		config: zzz_config,
 		action_specs,
-		action_handlers: backend_action_handlers,
 		handle_filer_change,
 	});
 

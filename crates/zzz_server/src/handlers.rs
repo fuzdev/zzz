@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::AtomicBool;
 use std::sync::RwLock;
 
+use deadpool_postgres::Pool;
 use fuz_common::JsonRpcError;
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::auth::{Keyring, RequestContext};
 use crate::rpc;
 
 // -- App state (long-lived, shared via Arc) -----------------------------------
@@ -15,12 +18,28 @@ use crate::rpc;
 /// Constructed once in `main`, wrapped in `Arc`, passed as axum `State`.
 pub struct App {
     pub workspaces: RwLock<HashMap<String, WorkspaceInfo>>,
+    pub db_pool: Pool,
+    pub keyring: Keyring,
+    pub allowed_origins: Vec<String>,
+    pub bootstrap_token_path: Option<String>,
+    pub bootstrap_available: AtomicBool,
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(
+        db_pool: Pool,
+        keyring: Keyring,
+        allowed_origins: Vec<String>,
+        bootstrap_token_path: Option<String>,
+        bootstrap_available: bool,
+    ) -> Self {
         Self {
             workspaces: RwLock::new(HashMap::new()),
+            db_pool,
+            keyring,
+            allowed_origins,
+            bootstrap_token_path,
+            bootstrap_available: AtomicBool::new(bootstrap_available),
         }
     }
 }
@@ -31,13 +50,10 @@ impl App {
 ///
 /// Borrows `App` and the request id from the parsed envelope.
 /// The transport constructs this before calling `dispatch`.
-///
-/// Future fields (added lazily — handlers that don't need them don't pay):
-/// - `auth: Option<&'a AuthIdentity>` — from transport middleware
-/// - `db()` method — lazy DB connection from pool in `App`
 pub struct Ctx<'a> {
     pub app: &'a App,
     pub request_id: &'a Value,
+    pub auth: Option<&'a RequestContext>,
 }
 
 // -- Domain types -------------------------------------------------------------
@@ -91,12 +107,9 @@ fn to_normalized_dir(path: &Path) -> Result<String, JsonRpcError> {
 
 /// Route a method to its handler.
 ///
+/// Auth is checked by the transport BEFORE calling dispatch.
 /// Async to support future handlers that need DB or external I/O.
-/// Current handlers are synchronous — no await points, zero async overhead.
-///
 /// Match statement dispatch — zero overhead, compiler can inline.
-/// `params` is the `params` field from the JSON-RPC envelope (or `Value::Null`
-/// if absent).
 #[allow(clippy::unused_async)] // async for forward compat — DB handlers will await
 pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     match method {

@@ -27,33 +27,46 @@ The server provides:
 
 ## Files
 
-| File                            | Purpose                                                             |
-| ------------------------------- | ------------------------------------------------------------------- |
-| `create_zzz_app.ts`             | Shared app factory — `create_app_backend` + `create_app_server`     |
-| `server_env.ts`                 | Env schema (extends `BaseServerEnv`) + loader                       |
-| `server.ts`                     | Deno entry — calls factory, binds `Deno.serve`, daemon lifecycle    |
-| `zzz_route_specs.ts`            | Route spec factory (auth, admin, RPC endpoint)                      |
-| `zzz_rpc_actions.ts`            | RPC actions bridging Backend handlers to fuz_app `RpcAction` format |
-| `routes/account.ts`             | Session config (`zzz_session_config`)                               |
-| `db/zzz_schema.ts`              | Database schema init (auth migrations, zzz-specific DDL)            |
-| `backend.ts`                    | `Backend` class - core domain state, file watchers, workspaces      |
-| `backend_action_handlers.ts`    | Handler implementations for all backend actions (ActionPeer path)   |
-| `backend_actions_api.ts`        | Backend-initiated notifications (streaming, file changes)           |
-| `backend_provider.ts`           | Base classes for AI providers                                       |
-| `backend_provider_ollama.ts`    | Ollama provider (local)                                             |
-| `backend_provider_claude.ts`    | Claude/Anthropic provider (remote)                                  |
-| `backend_provider_chatgpt.ts`   | OpenAI provider (remote)                                            |
-| `backend_provider_gemini.ts`    | Google Gemini provider (remote)                                     |
-| `scoped_fs.ts`                  | Secure filesystem wrapper                                           |
-| `security.ts`                   | Host header validation middleware (DNS rebinding defense)           |
-| `register_websocket_actions.ts` | WebSocket endpoint registration                                     |
-
-**Generated files** (do not edit):
-
-- `backend_action_types.ts` - Handler type definitions
-- `backend_action_types.gen.ts` - Generated handler types
+| File                            | Purpose                                                                     |
+| ------------------------------- | --------------------------------------------------------------------------- |
+| `create_zzz_app.ts`             | Shared app factory — `create_app_backend` + `create_app_server`             |
+| `server_env.ts`                 | Env schema (extends `BaseServerEnv`) + loader                               |
+| `server.ts`                     | Deno entry — calls factory, binds `Deno.serve`, daemon lifecycle            |
+| `zzz_route_specs.ts`            | Route spec factory (auth, admin, RPC endpoint)                              |
+| `zzz_action_handlers.ts`        | Unified handler implementations — single source of truth for all 23 actions |
+| `zzz_rpc_actions.ts`            | Thin adapter wrapping unified handlers for fuz_app `RpcAction` format       |
+| `routes/account.ts`             | Session config (`zzz_session_config`)                                       |
+| `db/zzz_schema.ts`              | Database schema init (auth migrations, zzz-specific DDL)                    |
+| `backend.ts`                    | `Backend` class - core domain state, file watchers, workspaces              |
+| `backend_actions_api.ts`        | Backend-initiated notifications (streaming, file changes)                   |
+| `backend_provider.ts`           | Base classes for AI providers                                               |
+| `backend_provider_ollama.ts`    | Ollama provider (local)                                                     |
+| `backend_provider_claude.ts`    | Claude/Anthropic provider (remote)                                          |
+| `backend_provider_chatgpt.ts`   | OpenAI provider (remote)                                                    |
+| `backend_provider_gemini.ts`    | Google Gemini provider (remote)                                             |
+| `scoped_fs.ts`                  | Secure filesystem wrapper                                                   |
+| `security.ts`                   | Host header validation middleware (DNS rebinding defense)                   |
+| `register_websocket_actions.ts` | WebSocket endpoint with direct handler dispatch                             |
 
 ## Architecture
+
+### Handler Dispatch
+
+All 23 request_response handlers live in `zzz_action_handlers.ts` as pure
+functions with signature `(input, ctx) → output`, mirroring the Rust backend's
+`fn(params, ctx) → Result<Value>`. Both HTTP RPC and WebSocket transports
+call the same handlers:
+
+- **HTTP RPC** — `zzz_rpc_actions.ts` wraps handlers for fuz_app's `RpcAction`
+  format. fuz_app handles envelope parsing, auth, and input validation.
+- **WebSocket** — `register_websocket_actions.ts` dispatches directly: spec
+  lookup → Zod input validation → handler call → DEV-only output validation →
+  JSON-RPC response. Auth enforced at transport layer.
+
+```
+Handler context (per-request):
+  ZzzHandlerContext { backend: Backend, request_id: string | number | null }
+```
 
 ### Server Initialization Flow
 
@@ -65,7 +78,7 @@ create_zzz_app.ts: create_zzz_app({config, password, runtime, get_connection_ip}
     │
     ├── validate_server_env() — keyring + origin patterns from BaseServerEnv
     ├── create_app_backend() — DB + auth migrations
-    ├── Create Backend instance (domain state: ScopedFs, Filer, handlers)
+    ├── Create Backend instance (domain state: ScopedFs, Filer)
     ├── Add providers (Ollama, Claude, ChatGPT, Gemini)
     ├── create_app_server() with:
     │   ├── zzz_session_config (cookie auth)
@@ -90,7 +103,7 @@ server.ts (Deno — dev via gro_plugin_deno_server, prod via zzz daemon start)
 zzz has two distinct "backend" concepts:
 
 1. **`AppBackend`** (fuz_app) — database, auth migrations, keyring, password deps
-2. **`Backend`** (zzz domain) — files, terminals, AI providers, workspaces, ActionPeer
+2. **`Backend`** (zzz domain) — files, terminals, AI providers, workspaces, ActionPeer (notifications only)
 
 The `AppBackend` is passed to `create_app_server` for auth infrastructure.
 The zzz `Backend` is threaded through route deps for domain logic.
@@ -132,7 +145,7 @@ create_rpc_endpoint dispatcher:
     ├── Check auth (per-action)
     ├── Validate params (Zod)
     ├── Transaction scope (mutations vs reads)
-    └── Call handler (captures Backend via closure)
+    └── Call unified handler (zzz_action_handlers)
     ↓
 JSON-RPC response
 ```
@@ -152,9 +165,12 @@ register_websocket_actions handler (extract account_id, credential_type, token_h
     ↓
 transport.add_connection(ws, token_hash, account_id)
     ↓
-Per-action auth check (reject batch, check keeper/role auth)
-    ↓
-backend.receive(json) → ActionPeer lifecycle
+Direct dispatch:
+    ├── Per-action auth check (reject batch, check keeper/role auth)
+    ├── Spec lookup + Zod input validation
+    ├── Call unified handler (zzz_action_handlers)
+    ├── DEV-only output validation
+    └── JSON-RPC response
     ↓
 JSON-RPC response via WebSocket
 ```
@@ -207,7 +223,7 @@ is enforced on each message:
    context. Bearer token connections pass `null` for token_hash — they're still
    reachable via `close_sockets_for_account` but not `close_sockets_for_session`.
 4. **Per-action auth** — Each incoming WS message is checked against the action
-   spec's `auth` field before reaching `backend.receive()`. `keeper` actions
+   spec's `auth` field before dispatching to the handler. `keeper` actions
    require `daemon_token` credential type AND the keeper role (matching
    `require_keeper` parity). Role-based auth (`{role: string}`) is rejected
    as not yet supported. Batch JSON-RPC arrays are rejected. `public` and
@@ -227,9 +243,12 @@ transport and middleware layers.
 Adding a `request_response` action touches these files:
 
 1. **Define spec** in `../action_specs.ts` — set appropriate `auth` level
-2. **Run `gro gen`** — regenerates handler types
-3. **Add RPC handler** in `zzz_rpc_actions.ts` — `{spec, handler}` in the actions array
-4. **Add backend handler** in `backend_action_handlers.ts` — for ActionPeer (WebSocket) path
-5. **Add frontend handler** in `../frontend_action_handlers.ts`
+2. **Run `gro gen`** — regenerates collection types
+3. **Add handler** in `zzz_action_handlers.ts` — pure function `(input, ctx) → output`
+4. **Add frontend handler** in `../frontend_action_handlers.ts`
+
+Both HTTP RPC and WebSocket paths automatically pick up the new handler — no
+separate registration needed. The RPC adapter iterates `all_action_specs` and
+looks up handlers by method name.
 
 For `remote_notification` (server push): add to `BackendActionsApi` interface + impl.

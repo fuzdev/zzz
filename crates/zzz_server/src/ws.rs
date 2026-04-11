@@ -10,6 +10,7 @@ use crate::handlers::{self, App, Ctx};
 use crate::rpc::{self, Classified};
 
 /// Axum handler for `GET /ws` — upgrades to WebSocket.
+// TODO Phase 2b: Add auth on WS upgrade (cookie session verification)
 // TODO Phase 2: Add connection tracking for broadcast notifications
 pub async fn ws_handler(State(app): State<Arc<App>>, ws: WebSocketUpgrade) -> Response {
     ws.on_upgrade(move |socket| handle_connection(socket, app))
@@ -44,11 +45,13 @@ async fn handle_connection(socket: WebSocket, app: Arc<App>) {
         );
 
         // 2. Classify, then dispatch + apply WS transport semantics
+        // TODO Phase 2b: resolve auth from upgrade headers, check per-action auth
         let json = match rpc::classify(&value) {
             Classified::Request { method, id, params } => {
                 let ctx = Ctx {
                     app: &app,
                     request_id: &id,
+                    auth: None, // TODO Phase 2b: WS auth
                 };
                 match handlers::dispatch(method, params, &ctx).await {
                     Ok(result) => serde_json::to_string(&rpc::success_response(id, result)),

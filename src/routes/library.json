@@ -1829,7 +1829,6 @@
 					"action_collections.ts",
 					"action_metatypes.gen.ts",
 					"frontend_action_types.gen.ts",
-					"server/backend_action_types.gen.ts",
 					"server/backend_actions_api.ts",
 					"server/register_websocket_actions.ts",
 					"server/zzz_rpc_actions.ts"
@@ -5894,9 +5893,8 @@
 					"diskfile_types.ts",
 					"diskfiles.svelte.ts",
 					"server/backend.ts",
-					"server/backend_action_handlers.ts",
 					"server/backend_actions_api.ts",
-					"server/zzz_rpc_actions.ts"
+					"server/zzz_action_handlers.ts"
 				]
 			},
 			{
@@ -6461,9 +6459,8 @@
 					"frontend.svelte.ts",
 					"part.svelte.ts",
 					"server/backend.ts",
-					"server/backend_action_handlers.ts",
 					"server/backend_actions_api.ts",
-					"server/zzz_rpc_actions.ts",
+					"server/zzz_action_handlers.ts",
 					"space.svelte.ts",
 					"workspace.svelte.ts"
 				]
@@ -10239,11 +10236,10 @@
 					"jsonrpc_helpers.ts",
 					"request_tracker.svelte.ts",
 					"server/backend.ts",
-					"server/backend_action_handlers.ts",
 					"server/backend_provider.ts",
 					"server/backend_websocket_transport.ts",
 					"server/register_websocket_actions.ts",
-					"server/zzz_rpc_actions.ts"
+					"server/zzz_action_handlers.ts"
 				]
 			},
 			{
@@ -15870,196 +15866,6 @@
 				"dependents": ["TerminalRunner.svelte", "TurnList.svelte"]
 			},
 			{
-				"path": "server/backend_action_handlers.ts",
-				"declarations": [
-					{
-						"name": "backend_action_handlers",
-						"kind": "variable",
-						"doc_comment": "Handle client messages and produce appropriate server responses.\nEach returns a value or throws a `ThrownJsonrpcError`.\nOrganized by method and phase for symmetric handling.",
-						"source_line": 24,
-						"type_signature": "BackendActionHandlers"
-					}
-				],
-				"dependencies": [
-					"diskfile_helpers.ts",
-					"diskfile_types.ts",
-					"jsonrpc_errors.ts",
-					"server/env_file_helpers.ts",
-					"server/helpers.ts",
-					"zod_helpers.ts"
-				],
-				"dependents": ["server/create_zzz_app.ts"]
-			},
-			{
-				"path": "server/backend_action_types.gen.ts",
-				"declarations": [],
-				"dependencies": ["action_specs.ts"]
-			},
-			{
-				"path": "server/backend_action_types.ts",
-				"declarations": [
-					{
-						"name": "BackendActionHandlers",
-						"kind": "type",
-						"doc_comment": "Backend action handlers organized by method and phase.\nGenerated using spec.initiator to determine valid phases:\n- initiator: 'backend' → send/execute phases\n- initiator: 'frontend' → receive phases\n- initiator: 'both' → all valid phases",
-						"source_line": 14,
-						"type_signature": "BackendActionHandlers",
-						"properties": [
-							{
-								"name": "ping",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ping', Backend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ping', Backend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ping', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ping', Backend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'ping', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['ping'] | Promise<ActionOutputs['ping']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'ping', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "session_load",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'session_load', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['session_load'] | Promise<ActionOutputs['session_load']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'session_load', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'session_load', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "filer_change",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend?: (\n\t\t\taction_event: ActionEvent<'filer_change', Backend, 'send', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "diskfile_update",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['diskfile_update'] | Promise<ActionOutputs['diskfile_update']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "diskfile_delete",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['diskfile_delete'] | Promise<ActionOutputs['diskfile_delete']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "directory_create",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'directory_create', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['directory_create'] | Promise<ActionOutputs['directory_create']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'directory_create', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'directory_create', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "completion_create",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'completion_create', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['completion_create'] | Promise<ActionOutputs['completion_create']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'completion_create', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'completion_create', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "completion_progress",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend?: (\n\t\t\taction_event: ActionEvent<'completion_progress', Backend, 'send', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_progress",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend?: (\n\t\t\taction_event: ActionEvent<'ollama_progress', Backend, 'send', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "toggle_main_menu",
-								"kind": "variable",
-								"type_signature": "never"
-							},
-							{
-								"name": "ollama_list",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'ollama_list', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['ollama_list'] | Promise<ActionOutputs['ollama_list']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'ollama_list', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_list', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_ps",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['ollama_ps'] | Promise<ActionOutputs['ollama_ps']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_show",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'ollama_show', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['ollama_show'] | Promise<ActionOutputs['ollama_show']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'ollama_show', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_show', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_pull",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['ollama_pull'] | Promise<ActionOutputs['ollama_pull']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_delete",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['ollama_delete'] | Promise<ActionOutputs['ollama_delete']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_copy",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['ollama_copy'] | Promise<ActionOutputs['ollama_copy']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_create",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'ollama_create', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['ollama_create'] | Promise<ActionOutputs['ollama_create']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'ollama_create', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_create', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_unload",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['ollama_unload'] | Promise<ActionOutputs['ollama_unload']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "provider_load_status",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['provider_load_status'] | Promise<ActionOutputs['provider_load_status']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "provider_update_api_key",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', Backend, 'receive_request', 'handling'>,\n\t\t) =>\n\t\t\t| ActionOutputs['provider_update_api_key']\n\t\t\t| Promise<ActionOutputs['provider_update_api_key']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "terminal_create",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'terminal_create', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['terminal_create'] | Promise<ActionOutputs['terminal_create']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'terminal_create', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_create', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "terminal_data_send",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['terminal_data_send'] | Promise<ActionOutputs['terminal_data_send']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "terminal_data",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend?: (\n\t\t\taction_event: ActionEvent<'terminal_data', Backend, 'send', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "terminal_resize",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['terminal_resize'] | Promise<ActionOutputs['terminal_resize']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "terminal_close",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'terminal_close', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['terminal_close'] | Promise<ActionOutputs['terminal_close']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'terminal_close', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_close', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "terminal_exited",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend?: (\n\t\t\taction_event: ActionEvent<'terminal_exited', Backend, 'send', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "workspace_open",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'workspace_open', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['workspace_open'] | Promise<ActionOutputs['workspace_open']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'workspace_open', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'workspace_open', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "workspace_close",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'workspace_close', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['workspace_close'] | Promise<ActionOutputs['workspace_close']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'workspace_close', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'workspace_close', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "workspace_list",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'workspace_list', Backend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['workspace_list'] | Promise<ActionOutputs['workspace_list']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'workspace_list', Backend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'workspace_list', Backend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "workspace_changed",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend?: (\n\t\t\taction_event: ActionEvent<'workspace_changed', Backend, 'send', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							}
-						]
-					}
-				]
-			},
-			{
 				"path": "server/backend_actions_api.ts",
 				"declarations": [
 					{
@@ -17223,14 +17029,14 @@
 						"name": "FilerChangeHandler",
 						"kind": "type",
 						"doc_comment": "Function type for handling file system changes.",
-						"source_line": 40,
+						"source_line": 38,
 						"type_signature": "FilerChangeHandler"
 					},
 					{
 						"name": "FilerInstance",
 						"kind": "type",
 						"doc_comment": "Structure to hold a Filer and its cleanup function.",
-						"source_line": 51,
+						"source_line": 49,
 						"type_signature": "FilerInstance",
 						"properties": [
 							{
@@ -17248,7 +17054,7 @@
 					{
 						"name": "BackendOptions",
 						"kind": "type",
-						"source_line": 56,
+						"source_line": 54,
 						"type_signature": "BackendOptions",
 						"properties": [
 							{
@@ -17276,12 +17082,6 @@
 								"doc_comment": "Action specifications that determine what the backend can do."
 							},
 							{
-								"name": "action_handlers",
-								"kind": "variable",
-								"type_signature": "BackendActionHandlers",
-								"doc_comment": "Handler function for processing client messages."
-							},
-							{
 								"name": "handle_filer_change",
 								"kind": "variable",
 								"type_signature": "FilerChangeHandler",
@@ -17299,7 +17099,7 @@
 						"name": "Backend",
 						"kind": "class",
 						"doc_comment": "Server for managing the Zzz application state and handling client messages.",
-						"source_line": 91,
+						"source_line": 85,
 						"extends": [],
 						"implements": ["ActionEventEnvironment"],
 						"members": [
@@ -17394,15 +17194,15 @@
 							{
 								"name": "lookup_action_handler",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", phase: \"send_request\" | ... 7 more ... | \"receive\"): ((event: any) => any) | undefined",
+								"type_signature": "(_method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", _phase: \"send_request\" | ... 7 more ... | \"receive\"): ((event: any) => any) | undefined",
 								"return_type": "((event: any) => any) | undefined",
 								"parameters": [
 									{
-										"name": "method",
+										"name": "_method",
 										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\""
 									},
 									{
-										"name": "phase",
+										"name": "_phase",
 										"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
 									}
 								]
@@ -17428,19 +17228,6 @@
 									{
 										"name": "provider_name",
 										"type": "T"
-									}
-								]
-							},
-							{
-								"name": "receive",
-								"kind": "function",
-								"doc_comment": "Process a singular JSON-RPC message and return a response.\nLike MCP, Zzz breaks from JSON-RPC by not supporting batching.",
-								"type_signature": "(message: unknown): Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; _meta?: { [x: string]: unknown; } | undefined; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { ...; }; } | { ...; } | null>",
-								"return_type": "Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; _meta?: { [x: string]: unknown; } | undefined; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | ... 4 more ... | (number & $brand<...>); message...",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "unknown"
 									}
 								]
 							},
@@ -17542,7 +17329,7 @@
 						"name": "CreateZzzAppOptions",
 						"kind": "type",
 						"doc_comment": "Options for creating a zzz app.",
-						"source_line": 46,
+						"source_line": 45,
 						"type_signature": "CreateZzzAppOptions",
 						"properties": [
 							{
@@ -17575,7 +17362,7 @@
 						"name": "ZzzApp",
 						"kind": "type",
 						"doc_comment": "The created zzz app and related instances.",
-						"source_line": 67,
+						"source_line": 66,
 						"type_signature": "ZzzApp",
 						"properties": [
 							{
@@ -17626,7 +17413,7 @@
 						"name": "create_zzz_app",
 						"kind": "function",
 						"doc_comment": "Create the zzz Hono app with auth, database, Backend, providers, and endpoints.\n\nThis is the shared factory called by the server entry point.\nUses `create_app_backend` for database + auth, `create_app_server` for\nmiddleware assembly, and wires zzz's domain Backend through route deps.",
-						"source_line": 91,
+						"source_line": 90,
 						"type_signature": "(options: CreateZzzAppOptions): Promise<ZzzApp>",
 						"return_type": "Promise<ZzzApp>",
 						"parameters": [
@@ -17642,7 +17429,6 @@
 					"action_collections.ts",
 					"config.ts",
 					"server/backend.ts",
-					"server/backend_action_handlers.ts",
 					"server/backend_actions_api.ts",
 					"server/backend_provider_chatgpt.ts",
 					"server/backend_provider_claude.ts",
@@ -17734,7 +17520,7 @@
 						]
 					}
 				],
-				"dependents": ["server/backend_action_handlers.ts", "server/zzz_rpc_actions.ts"]
+				"dependents": ["server/zzz_action_handlers.ts"]
 			},
 			{
 				"path": "server/helpers.ts",
@@ -17766,7 +17552,7 @@
 					}
 				],
 				"dependencies": ["action_collections.ts", "server/scoped_fs.ts"],
-				"dependents": ["server/backend_action_handlers.ts", "server/zzz_rpc_actions.ts"]
+				"dependents": ["server/zzz_action_handlers.ts"]
 			},
 			{
 				"path": "server/pty_ffi.ts",
@@ -17985,7 +17771,7 @@
 					{
 						"name": "RegisterWebsocketActionsOptions",
 						"kind": "type",
-						"source_line": 19,
+						"source_line": 34,
 						"type_signature": "RegisterWebsocketActionsOptions",
 						"properties": [
 							{
@@ -18026,7 +17812,7 @@
 						"name": "register_websocket_actions",
 						"kind": "function",
 						"doc_comment": "Registers WebSocket endpoints for all service actions in the schema registry.",
-						"source_line": 33,
+						"source_line": 48,
 						"type_signature": "({ path, app, backend, upgradeWebSocket, artificial_delay, transport, }: RegisterWebsocketActionsOptions): void",
 						"return_type": "void",
 						"parameters": [
@@ -18037,11 +17823,13 @@
 						]
 					}
 				],
+				"module_comment": "WebSocket endpoint with direct handler dispatch.\n\nReplaces the old `backend.receive(json)` → ActionPeer → ActionEvent path\nwith: spec lookup → Zod input validation → handler call → JSON-RPC response.\nKeeps existing per-action auth checking at the transport layer.",
 				"dependencies": [
 					"action_specs.ts",
 					"jsonrpc_errors.ts",
 					"jsonrpc_helpers.ts",
-					"server/backend_websocket_transport.ts"
+					"server/backend_websocket_transport.ts",
+					"server/zzz_action_handlers.ts"
 				],
 				"dependents": ["server/server.ts"]
 			},
@@ -18656,6 +18444,55 @@
 				"dependents": ["zzz/commands/daemon.ts"]
 			},
 			{
+				"path": "server/zzz_action_handlers.ts",
+				"declarations": [
+					{
+						"name": "ZzzHandlerContext",
+						"kind": "type",
+						"doc_comment": "Per-request context passed to every handler.\nMirrors Rust's `HandlerContext` — transport constructs it, handler borrows it.",
+						"source_line": 26,
+						"type_signature": "ZzzHandlerContext",
+						"properties": [
+							{
+								"name": "backend",
+								"kind": "variable",
+								"type_signature": "Backend"
+							},
+							{
+								"name": "request_id",
+								"kind": "variable",
+								"type_signature": "string | number | null",
+								"doc_comment": "From the JSON-RPC envelope."
+							}
+						]
+					},
+					{
+						"name": "ZzzHandler",
+						"kind": "type",
+						"doc_comment": "Handler function: pure (input, ctx) -> output.",
+						"source_line": 35,
+						"type_signature": "ZzzHandler"
+					},
+					{
+						"name": "zzz_action_handlers",
+						"kind": "variable",
+						"doc_comment": "All 23 request_response handlers as pure functions.\n\nLogic sourced from the RPC versions (cleaner than the old WS handlers —\nno Deno-only bug in provider_update_api_key, no console.log noise).",
+						"source_line": 43,
+						"type_signature": "Record<string, ZzzHandler>"
+					}
+				],
+				"module_comment": "Unified action handlers for zzz.\n\nSingle source of truth for all 23 request_response handlers.\nBoth HTTP RPC and WebSocket dispatch call these same functions.\nHandler signature mirrors Rust's `fn(params, ctx) -> Result<Value>`.",
+				"dependencies": [
+					"diskfile_helpers.ts",
+					"diskfile_types.ts",
+					"jsonrpc_errors.ts",
+					"server/env_file_helpers.ts",
+					"server/helpers.ts",
+					"zod_helpers.ts"
+				],
+				"dependents": ["server/register_websocket_actions.ts", "server/zzz_rpc_actions.ts"]
+			},
+			{
 				"path": "server/zzz_route_specs.ts",
 				"declarations": [
 					{
@@ -18732,7 +18569,7 @@
 						"name": "ZzzRpcDeps",
 						"kind": "type",
 						"doc_comment": "Dependencies for creating zzz RPC actions.",
-						"source_line": 52,
+						"source_line": 18,
 						"type_signature": "ZzzRpcDeps",
 						"properties": [
 							{
@@ -18745,8 +18582,8 @@
 					{
 						"name": "create_zzz_rpc_actions",
 						"kind": "function",
-						"doc_comment": "Create all zzz RPC actions.\n\nReturns `RpcAction[]` for `create_rpc_endpoint`.\nEach handler captures the Backend instance via closure and calls\nthe domain logic directly (no double-dispatch through `backend.receive()`).",
-						"source_line": 63,
+						"doc_comment": "Create all zzz RPC actions.\n\nReturns `RpcAction[]` for `create_rpc_endpoint`.\nEach handler wraps the unified handler with the fuz_app ActionContext adapter.",
+						"source_line": 28,
 						"type_signature": "(deps: ZzzRpcDeps): RpcAction[]",
 						"return_type": "RpcAction[]",
 						"parameters": [
@@ -18757,16 +18594,8 @@
 						]
 					}
 				],
-				"module_comment": "RPC actions for zzz — bridges backend domain logic to fuz_app's RPC endpoint.\n\nEach `RpcAction` combines an action spec with a handler that calls\nthe Backend's domain logic directly. The fuz_app RPC dispatcher handles\nenvelope parsing, auth checking, and input validation — handlers only\nimplement the business logic.",
-				"dependencies": [
-					"action_specs.ts",
-					"diskfile_helpers.ts",
-					"diskfile_types.ts",
-					"jsonrpc_errors.ts",
-					"server/env_file_helpers.ts",
-					"server/helpers.ts",
-					"zod_helpers.ts"
-				],
+				"module_comment": "RPC actions for zzz — thin adapter from unified handlers to fuz_app's `RpcAction` format.\n\nMaps `(input, ActionContext) -> handler(input, {backend, request_id})`.\nAll business logic lives in `zzz_action_handlers.ts`.",
+				"dependencies": ["action_specs.ts", "server/zzz_action_handlers.ts"],
 				"dependents": ["server/zzz_route_specs.ts"]
 			},
 			{
@@ -22093,9 +21922,8 @@
 					"prompt.svelte.ts",
 					"request_tracker.svelte.ts",
 					"response_helpers.ts",
-					"server/backend_action_handlers.ts",
 					"server/backend_websocket_transport.ts",
-					"server/zzz_rpc_actions.ts",
+					"server/zzz_action_handlers.ts",
 					"socket.svelte.ts",
 					"terminal.svelte.ts",
 					"turn.svelte.ts",

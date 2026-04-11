@@ -97,22 +97,21 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 	},
 };
 
-// Backend (server/backend_action_handlers.ts)
-export const backend_action_handlers: BackendActionHandlers = {
-	completion_create: {
-		receive_request: async ({backend, data: {input}}) => {
-			const {prompt, provider_name, model, completion_messages} = input.completion_request;
-			const progress_token = input._meta?.progressToken;
-			const provider = backend.lookup_provider(provider_name);
-			const handler = provider.get_handler(!!progress_token);
-			return await handler({
-				model,
-				prompt,
-				completion_messages,
-				completion_options,
-				progress_token,
-			});
-		},
+// Backend (server/zzz_action_handlers.ts)
+// Unified handler — called by both HTTP RPC and WebSocket paths
+export const zzz_action_handlers: Record<string, ZzzHandler> = {
+	completion_create: async (input, ctx) => {
+		const {prompt, provider_name, model, completion_messages} = input.completion_request;
+		const progress_token = input._meta?.progressToken;
+		const provider = ctx.backend.lookup_provider(provider_name);
+		const handler = provider.get_handler(!!progress_token);
+		return await handler({
+			model,
+			prompt,
+			completion_messages,
+			completion_options,
+			progress_token,
+		});
 	},
 };
 ```
@@ -381,20 +380,18 @@ User types message in Chat UI
     → app.api.completion_create(request)
       → ActionEvent send_request phase
         → Transport.send(JSON-RPC request)
-          → Backend.peer.receive(message)
-            → ActionEvent receive_request phase
-              → backend_action_handlers.completion_create.receive_request()
-                → backend.lookup_provider(provider_name)
-                → provider.get_handler(!!progress_token)
-                → handler({model, prompt, ...})
-                  → For each chunk: backend.api.completion_progress({token, chunk})
-                → Return {completion_response}
-              → ActionEvent send_response phase
-                → JSON-RPC response via Transport
-                  → Frontend receive_response phase
-                    → turn.content = response_text
-                    → turn.response = completion_response
-                      → Svelte reactivity updates UI
+          → WS dispatch: spec lookup → Zod validate → handler call
+            → zzz_action_handlers.completion_create(input, ctx)
+              → ctx.backend.lookup_provider(provider_name)
+              → provider.get_handler(!!progress_token)
+              → handler({model, prompt, ...})
+                → For each chunk: backend.api.completion_progress({token, chunk})
+              → Return {completion_response}
+            → JSON-RPC response via WebSocket
+              → Frontend receive_response phase
+                → turn.content = response_text
+                → turn.response = completion_response
+                  → Svelte reactivity updates UI
 ```
 
 ### Streaming Progress

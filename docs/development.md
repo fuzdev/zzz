@@ -55,7 +55,6 @@ Never run `gro dev` — the user manages the dev server.
 | `src/lib/action_metatypes.gen.ts` | Action method types |
 | `src/lib/action_collections.gen.ts` | Action spec collections |
 | `src/lib/frontend_action_types.gen.ts` | Frontend handler types |
-| `src/lib/server/backend_action_types.gen.ts` | Backend handler types |
 | `src/routes/library.gen.ts` | Route metadata |
 
 Run `gro gen` after changing `action_specs.ts`.
@@ -164,16 +163,16 @@ my_action: {
 },
 ```
 
-4. Add backend handler (`src/lib/server/backend_action_handlers.ts`):
+4. Add handler (`src/lib/server/zzz_action_handlers.ts`):
 
 ```typescript
-my_action: {
-  receive_request: async ({backend, data: {input}}) => {
-    const {message} = input;
-    return {result: `Processed: ${message}`};
-  },
+my_action: async (input, ctx) => {
+  const {message} = input;
+  return {result: `Processed: ${message}`};
 },
 ```
+
+Both HTTP RPC and WebSocket paths automatically pick up the new handler.
 
 ### Adding a New Route
 

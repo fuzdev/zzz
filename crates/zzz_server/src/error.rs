@@ -11,4 +11,8 @@ pub enum ServerError {
     },
     #[error("server error")]
     Serve(#[source] std::io::Error),
+    #[error("database error: {0}")]
+    Database(String),
+    #[error("configuration error: {0}")]
+    Config(String),
 }

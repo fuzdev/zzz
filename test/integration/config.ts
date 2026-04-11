@@ -34,6 +34,10 @@ export interface BackendConfig {
 const INTEGRATION_BOOTSTRAP_TOKEN = 'zzz-integration-test-token';
 const INTEGRATION_TOKEN_FILE = '/tmp/zzz_integration_bootstrap_token';
 
+/** Test database URL — defaults to postgres://localhost/zzz_test. */
+export const TEST_DATABASE_URL =
+	Deno.env.get('TEST_DATABASE_URL') ?? 'postgres://localhost/zzz_test';
+
 export const backends: Record<string, BackendConfig> = {
 	deno: {
 		name: 'deno',
@@ -50,6 +54,9 @@ export const backends: Record<string, BackendConfig> = {
 			PORT: '4460',
 			PUBLIC_SERVER_PROXIED_PORT: '4460',
 			BOOTSTRAP_TOKEN_PATH: INTEGRATION_TOKEN_FILE,
+			DATABASE_URL: TEST_DATABASE_URL,
+			SECRET_COOKIE_KEYS: 'integration-test-cookie-key-min-32-chars',
+			ALLOWED_ORIGINS: 'http://localhost:*',
 		},
 		auth: {
 			bootstrap_path: '/api/account/bootstrap',
@@ -67,5 +74,18 @@ export const backends: Record<string, BackendConfig> = {
 		ws_path: '/ws',
 		health_path: '/health',
 		startup_timeout_ms: 60_000, // includes compile time on first run
+		env: {
+			DATABASE_URL: TEST_DATABASE_URL,
+			SECRET_COOKIE_KEYS: 'integration-test-cookie-key-min-32-chars',
+			BOOTSTRAP_TOKEN_PATH: INTEGRATION_TOKEN_FILE,
+			ALLOWED_ORIGINS: 'http://localhost:*',
+		},
+		auth: {
+			bootstrap_path: '/bootstrap',
+			token: INTEGRATION_BOOTSTRAP_TOKEN,
+			token_file: INTEGRATION_TOKEN_FILE,
+			username: 'testadmin',
+			password: 'test-password-integration-123',
+		},
 	},
 };

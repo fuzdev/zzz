@@ -97,8 +97,9 @@ export const start_server = async (): Promise<void> => {
 	});
 
 	// Register WebSocket endpoint on the assembled app.
-	// WS is a separate transport from the RPC endpoint — it goes through
-	// backend.receive() (ActionPeer) for bidirectional action communication.
+	// WS dispatches directly to unified handlers (zzz_action_handlers),
+	// bypassing ActionPeer for request handling. ActionPeer is still used
+	// for backend-initiated notifications (streaming, file changes).
 	// The WS path is under /api/* so fuz_app's session + request_context
 	// middleware runs automatically. We add origin verification and require_auth
 	// to reject unauthenticated upgrades.

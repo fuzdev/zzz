@@ -3,7 +3,10 @@ import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 
 import type {FilerChangeHandler, Backend} from './backend.js';
 import type {ActionInputs} from '../action_collections.js';
-import {create_action_event} from '../action_event.js';
+import {safe_parse_action_input} from '../action_collection_helpers.js';
+import {create_jsonrpc_notification, to_jsonrpc_params} from '../jsonrpc_helpers.js';
+import {format_zod_validation_error} from '../zod_helpers.js';
+import type {ActionMethod} from '../action_metatypes.js';
 import {
 	filer_change_action_spec,
 	completion_progress_action_spec,
@@ -18,10 +21,6 @@ import {
 } from '../diskfile_helpers.js';
 import {DiskfilePath, SerializableDisknode} from '../diskfile_types.js';
 
-// TODO @api think about unification between frontend|backend_actions_api.ts
-// (also think about unification with backend_action_handlers.ts)
-// think about unification with frontend_actions_api.ts and see it for better patterns
-
 export interface BackendActionsApi {
 	filer_change: (input: ActionInputs['filer_change']) => Promise<void>;
 	completion_progress: (input: ActionInputs['completion_progress']) => Promise<void>;
@@ -32,9 +31,9 @@ export interface BackendActionsApi {
 }
 
 /**
- * Sends a backend-initiated notification through the action event lifecycle.
- * Skips silently if no transport is available (e.g., at startup before any clients connect),
- * since `peer.send` would log a spurious error for the missing transport.
+ * Sends a backend-initiated notification directly — validates input with Zod,
+ * creates a JsonrpcNotification, and sends via peer.
+ * Skips silently if no transport is available (e.g., at startup before any clients connect).
  */
 const send_notification = async (
 	backend: Backend,
@@ -49,22 +48,25 @@ const send_notification = async (
 	}
 
 	try {
-		const event = create_action_event(backend, spec, input, 'send');
-
-		await event.parse().handle_async();
-
-		if (event.data.step === 'handled' && event.data.notification) {
-			const result = await backend.peer.send(event.data.notification);
-			if (result !== null) {
-				backend.log?.error(
-					`[backend_actions_api.${spec.method}] failed to send notification:`,
-					result.error,
-				);
-			}
-		} else if (event.data.step === 'failed') {
+		const parsed = safe_parse_action_input(spec.method as ActionMethod, input);
+		if (!parsed.success) {
 			backend.log?.error(
-				`[backend_actions_api.${spec.method}] failed to create notification:`,
-				event.data.error,
+				`[backend_actions_api.${spec.method}] input validation failed:`,
+				format_zod_validation_error(parsed.error),
+			);
+			return;
+		}
+
+		const notification = create_jsonrpc_notification(
+			spec.method,
+			to_jsonrpc_params(parsed.data),
+		);
+
+		const result = await backend.peer.send(notification);
+		if (result !== null) {
+			backend.log?.error(
+				`[backend_actions_api.${spec.method}] failed to send notification:`,
+				result.error,
 			);
 		}
 	} catch (error) {

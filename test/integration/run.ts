@@ -13,7 +13,7 @@
  * When running both backends, prints a comparison table at the end.
  */
 
-import {backends, type BackendConfig} from './config.ts';
+import {backends, type BackendConfig, TEST_DATABASE_URL} from './config.ts';
 import {run_tests, type TestResult} from './tests.ts';
 
 // -- Child process tracking ---------------------------------------------------
@@ -190,6 +190,45 @@ const cleanup_auth = async (config: BackendConfig): Promise<void> => {
 	}
 };
 
+/**
+ * Clean auth tables in the test database before a backend run.
+ *
+ * Uses TRUNCATE CASCADE to reset all auth state. Runs directly via
+ * `psql` since we don't want a Postgres client library in the test runner.
+ */
+const clean_database = async (): Promise<void> => {
+	const cmd = new Deno.Command('psql', {
+		args: [
+			TEST_DATABASE_URL,
+			'-c',
+			`TRUNCATE auth_session, permit, actor, account, bootstrap_lock, app_settings CASCADE;
+			 INSERT INTO bootstrap_lock (id, bootstrapped) VALUES (1, false) ON CONFLICT (id) DO UPDATE SET bootstrapped = false;
+			 INSERT INTO app_settings (id) VALUES (1) ON CONFLICT DO NOTHING;`,
+		],
+		stdout: 'null',
+		stderr: 'piped',
+	});
+	const child = cmd.spawn();
+	const status = await child.status;
+	if (!status.success) {
+		// On first run, tables may not exist yet — that's fine, migrations will create them
+		const stderr_text = (await new Response(child.stderr).text()).trim();
+		if (stderr_text.includes('does not exist')) {
+			console.log('  DB cleanup skipped (tables not yet created)');
+		} else {
+			console.warn(`  DB cleanup warning: ${stderr_text}`);
+		}
+	} else {
+		// Drain stderr
+		try {
+			await child.stderr.cancel();
+		} catch {
+			// Already consumed
+		}
+		console.log('  DB cleaned');
+	}
+};
+
 // -- Per-backend run ----------------------------------------------------------
 
 interface BackendRun {
@@ -207,6 +246,7 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 
 	let child: Deno.ChildProcess | null = null;
 	try {
+		await clean_database();
 		await write_bootstrap_token(config);
 		child = await start_backend(config);
 		const session_cookie = await setup_auth(config);

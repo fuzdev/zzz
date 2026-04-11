@@ -13,6 +13,7 @@ path = "src/main.rs"
 fuz_common.workspace = true
 tokio.workspace = true
 axum.workspace = true
+axum-extra.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -22,6 +23,15 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 futures-util.workspace = true
 tokio-util.workspace = true
+tokio-postgres.workspace = true
+deadpool-postgres.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+blake3.workspace = true
+base64.workspace = true
+uuid.workspace = true
+argon2.workspace = true
+rand.workspace = true
 
 [lints]
 workspace = true

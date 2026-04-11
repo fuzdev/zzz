@@ -1,0 +1,375 @@
+use deadpool_postgres::{Config, Pool, Runtime, SslMode};
+use tokio_postgres::NoTls;
+
+use crate::error::ServerError;
+
+// -- Pool creation ------------------------------------------------------------
+
+/// Create a connection pool from `DATABASE_URL`.
+///
+/// Parses the URL into `deadpool_postgres::Config` and builds the pool.
+/// Fails fast if the URL is missing or malformed.
+pub fn create_pool(database_url: &str) -> Result<Pool, ServerError> {
+    let pg_config: tokio_postgres::Config = database_url
+        .parse()
+        .map_err(|e| ServerError::Database(format!("invalid DATABASE_URL: {e}")))?;
+
+    let mut cfg = Config::new();
+    if let Some(host) = pg_config.get_hosts().first() {
+        match host {
+            tokio_postgres::config::Host::Tcp(h) => cfg.host = Some(h.clone()),
+            #[cfg(unix)]
+            tokio_postgres::config::Host::Unix(p) => {
+                cfg.host = Some(p.to_string_lossy().into_owned());
+            }
+        }
+    }
+    if let Some(port) = pg_config.get_ports().first() {
+        cfg.port = Some(*port);
+    }
+    if let Some(user) = pg_config.get_user() {
+        cfg.user = Some(user.to_owned());
+    }
+    if let Some(dbname) = pg_config.get_dbname() {
+        cfg.dbname = Some(dbname.to_owned());
+    }
+    if let Some(password) = pg_config.get_password() {
+        cfg.password = Some(String::from_utf8_lossy(password).into_owned());
+    }
+    cfg.ssl_mode = Some(SslMode::Disable);
+
+    cfg.create_pool(Some(Runtime::Tokio1), NoTls)
+        .map_err(|e| ServerError::Database(format!("failed to create pool: {e}")))
+}
+
+// -- Migrations ---------------------------------------------------------------
+
+/// Run auth table DDL (CREATE TABLE IF NOT EXISTS).
+///
+/// Mirrors `fuz_app`'s auth DDL from `src/lib/auth/ddl.ts`.
+/// Safe to run on every startup — all statements use IF NOT EXISTS.
+pub async fn run_migrations(pool: &Pool) -> Result<(), ServerError> {
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| ServerError::Database(format!("migration connection failed: {e}")))?;
+
+    client
+        .batch_execute(AUTH_DDL)
+        .await
+        .map_err(|e| ServerError::Database(format!("migration failed: {e}")))?;
+
+    tracing::info!("auth migrations complete");
+    Ok(())
+}
+
+/// Auth DDL — mirrors `fuz_app`'s `src/lib/auth/ddl.ts`.
+const AUTH_DDL: &str = r"
+CREATE TABLE IF NOT EXISTS account (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  username TEXT UNIQUE NOT NULL,
+  email TEXT,
+  email_verified BOOLEAN NOT NULL DEFAULT false,
+  password_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by UUID,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by UUID
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_account_email
+  ON account (LOWER(email)) WHERE email IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_account_username_ci
+  ON account (LOWER(username));
+
+CREATE TABLE IF NOT EXISTS actor (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id UUID NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ,
+  updated_by UUID REFERENCES actor(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_actor_account ON actor(account_id);
+
+CREATE TABLE IF NOT EXISTS permit (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_id UUID NOT NULL REFERENCES actor(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ,
+  revoked_by UUID REFERENCES actor(id) ON DELETE SET NULL,
+  granted_by UUID REFERENCES actor(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_permit_actor ON permit(actor_id);
+CREATE UNIQUE INDEX IF NOT EXISTS permit_actor_role_active_unique
+  ON permit (actor_id, role) WHERE revoked_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS auth_session (
+  id TEXT PRIMARY KEY,
+  account_id UUID NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_session_account ON auth_session(account_id);
+CREATE INDEX IF NOT EXISTS idx_auth_session_expires ON auth_session(expires_at);
+
+CREATE TABLE IF NOT EXISTS bootstrap_lock (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  bootstrapped BOOLEAN NOT NULL DEFAULT false
+);
+
+INSERT INTO bootstrap_lock (id, bootstrapped)
+  SELECT 1, EXISTS(SELECT 1 FROM account)
+  ON CONFLICT DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  open_signup BOOLEAN NOT NULL DEFAULT false,
+  updated_at TIMESTAMPTZ,
+  updated_by UUID
+);
+
+INSERT INTO app_settings (id) VALUES (1) ON CONFLICT DO NOTHING;
+";
+
+// -- Auth queries -------------------------------------------------------------
+
+/// Row from the `auth_session` table.
+#[derive(Debug)]
+pub struct AuthSessionRow {
+    pub id: String,
+    pub account_id: uuid::Uuid,
+}
+
+/// Row from the `account` table (fields needed for request context).
+#[derive(Debug, Clone)]
+pub struct AccountRow {
+    pub id: uuid::Uuid,
+    pub username: String,
+}
+
+/// Row from the `actor` table.
+#[derive(Debug, Clone)]
+pub struct ActorRow {
+    pub id: uuid::Uuid,
+    pub account_id: uuid::Uuid,
+    pub name: String,
+}
+
+/// Row from the `permit` table (active permits only).
+#[derive(Debug, Clone)]
+pub struct PermitRow {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub role: String,
+}
+
+/// Look up a valid (non-expired) session by its token hash.
+pub async fn query_session_get_valid(
+    client: &deadpool_postgres::Object,
+    token_hash: &str,
+) -> Result<Option<AuthSessionRow>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            "SELECT id, account_id FROM auth_session WHERE id = $1 AND expires_at > NOW()",
+            &[&token_hash],
+        )
+        .await?;
+
+    Ok(row.map(|r| AuthSessionRow {
+        id: r.get(0),
+        account_id: r.get(1),
+    }))
+}
+
+/// Look up an account by id.
+pub async fn query_account_by_id(
+    client: &deadpool_postgres::Object,
+    account_id: &uuid::Uuid,
+) -> Result<Option<AccountRow>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            "SELECT id, username FROM account WHERE id = $1",
+            &[account_id],
+        )
+        .await?;
+
+    Ok(row.map(|r| AccountRow {
+        id: r.get(0),
+        username: r.get(1),
+    }))
+}
+
+/// Look up an actor by account id.
+pub async fn query_actor_by_account(
+    client: &deadpool_postgres::Object,
+    account_id: &uuid::Uuid,
+) -> Result<Option<ActorRow>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            "SELECT id, account_id, name FROM actor WHERE account_id = $1",
+            &[account_id],
+        )
+        .await?;
+
+    Ok(row.map(|r| ActorRow {
+        id: r.get(0),
+        account_id: r.get(1),
+        name: r.get(2),
+    }))
+}
+
+/// Look up active (non-revoked, non-expired) permits for an actor.
+pub async fn query_permits_for_actor(
+    client: &deadpool_postgres::Object,
+    actor_id: &uuid::Uuid,
+) -> Result<Vec<PermitRow>, tokio_postgres::Error> {
+    let rows = client
+        .query(
+            "SELECT id, actor_id, role FROM permit
+             WHERE actor_id = $1
+               AND revoked_at IS NULL
+               AND (expires_at IS NULL OR expires_at > NOW())
+             ORDER BY created_at",
+            &[actor_id],
+        )
+        .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| PermitRow {
+            id: r.get(0),
+            actor_id: r.get(1),
+            role: r.get(2),
+        })
+        .collect())
+}
+
+/// Touch a session — update `last_seen_at` and extend expiry if < 1 day remaining.
+///
+/// Fire-and-forget: caller should spawn this without blocking the request.
+pub async fn query_session_touch(
+    client: &deadpool_postgres::Object,
+    token_hash: &str,
+) -> Result<(), tokio_postgres::Error> {
+    client
+        .execute(
+            "UPDATE auth_session
+             SET last_seen_at = NOW(),
+                 expires_at = CASE
+                   WHEN expires_at - NOW() < INTERVAL '1 day'
+                     THEN NOW() + INTERVAL '30 days'
+                   ELSE expires_at
+                 END
+             WHERE id = $1",
+            &[&token_hash],
+        )
+        .await?;
+    Ok(())
+}
+
+/// Create a new auth session.
+pub async fn query_create_session(
+    client: &deadpool_postgres::Object,
+    token_hash: &str,
+    account_id: &uuid::Uuid,
+) -> Result<(), tokio_postgres::Error> {
+    client
+        .execute(
+            "INSERT INTO auth_session (id, account_id, expires_at)
+             VALUES ($1, $2, NOW() + INTERVAL '30 days')",
+            &[&token_hash, account_id],
+        )
+        .await?;
+    Ok(())
+}
+
+/// Create an account and return the row.
+pub async fn query_create_account(
+    client: &deadpool_postgres::Object,
+    username: &str,
+    password_hash: &str,
+) -> Result<AccountRow, tokio_postgres::Error> {
+    let row = client
+        .query_one(
+            "INSERT INTO account (username, password_hash) VALUES ($1, $2)
+             RETURNING id, username",
+            &[&username, &password_hash],
+        )
+        .await?;
+
+    Ok(AccountRow {
+        id: row.get(0),
+        username: row.get(1),
+    })
+}
+
+/// Create an actor for an account.
+pub async fn query_create_actor(
+    client: &deadpool_postgres::Object,
+    account_id: &uuid::Uuid,
+    name: &str,
+) -> Result<ActorRow, tokio_postgres::Error> {
+    let row = client
+        .query_one(
+            "INSERT INTO actor (account_id, name) VALUES ($1, $2)
+             RETURNING id, account_id, name",
+            &[account_id, &name],
+        )
+        .await?;
+
+    Ok(ActorRow {
+        id: row.get(0),
+        account_id: row.get(1),
+        name: row.get(2),
+    })
+}
+
+/// Grant a permit to an actor (idempotent — ON CONFLICT DO NOTHING).
+pub async fn query_grant_permit(
+    client: &deadpool_postgres::Object,
+    actor_id: &uuid::Uuid,
+    role: &str,
+) -> Result<PermitRow, tokio_postgres::Error> {
+    // Try insert; if already exists (active permit for same role), fetch it
+    let inserted = client
+        .query_opt(
+            "INSERT INTO permit (actor_id, role)
+             VALUES ($1, $2)
+             ON CONFLICT (actor_id, role) WHERE revoked_at IS NULL
+             DO NOTHING
+             RETURNING id, actor_id, role",
+            &[actor_id, &role],
+        )
+        .await?;
+
+    if let Some(row) = inserted {
+        return Ok(PermitRow {
+            id: row.get(0),
+            actor_id: row.get(1),
+            role: row.get(2),
+        });
+    }
+
+    // Already existed — fetch it
+    let row = client
+        .query_one(
+            "SELECT id, actor_id, role FROM permit
+             WHERE actor_id = $1 AND role = $2 AND revoked_at IS NULL",
+            &[actor_id, &role],
+        )
+        .await?;
+
+    Ok(PermitRow {
+        id: row.get(0),
+        actor_id: row.get(1),
+        role: row.get(2),
+    })
+}

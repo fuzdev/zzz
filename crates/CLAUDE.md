@@ -4,10 +4,12 @@ Shadow implementation of the Deno/Hono server using axum. Same JSON-RPC 2.0
 protocol, same wire format — the Deno server is ground truth and the
 integration tests enforce identical behaviour between both backends.
 
-Phase 1 scope: `ping`, `workspace_list`, `workspace_open`, and `workspace_close`
-are implemented. No auth, no database. The purpose is to validate the build
-pipeline, static file serving, protocol compatibility, and the App/Ctx/dispatch
-pattern for handler dispatch. All other methods return `method_not_found`.
+Phase 2a scope: `ping`, `workspace_list`, `workspace_open`, and
+`workspace_close` are implemented with full cookie-based auth. Database
+(PostgreSQL via `tokio-postgres`/`deadpool-postgres`), HMAC-SHA256 cookie
+signing (`fuz_session`), blake3 session hashing, per-action auth checks,
+and a bootstrap endpoint for first-time account creation. All other methods
+return `method_not_found`.
 
 ## Prerequisites
 
@@ -21,14 +23,23 @@ pattern for handler dispatch. All other methods return `method_not_found`.
 If the path dep is missing, `cargo build` will fail with
 `failed to read .../private_fuz/crates/fuz_common/Cargo.toml`.
 
+**PostgreSQL** is required. Create the development and test databases:
+
+```bash
+createdb zzz       # development
+createdb zzz_test  # integration tests
+```
+
 ## Build and Run
 
 ```bash
 cargo build -p zzz_server
 cargo clippy -p zzz_server        # workspace lints: pedantic + nursery
 
-# Run (port defaults to 1174; add --static-dir after `gro build`)
-./target/debug/zzz_server --port 1174 --static-dir ./build
+# Run (requires DATABASE_URL and SECRET_COOKIE_KEYS)
+DATABASE_URL=postgres://localhost/zzz \
+SECRET_COOKIE_KEYS=dev-only-not-for-production-use-000 \
+./target/debug/zzz_server --port 1174
 
 # Quick smoke test
 curl http://localhost:1174/health
@@ -41,23 +52,74 @@ curl -X POST http://localhost:1174/rpc \
 CLI args (`--port`, `--static-dir`) take precedence over env vars
 (`ZZZ_PORT`, `ZZZ_STATIC_DIR`).
 
+### Required Environment Variables
+
+| Variable             | Purpose                                            |
+|----------------------|----------------------------------------------------|
+| `DATABASE_URL`       | PostgreSQL connection (e.g. `postgres://localhost/zzz`) |
+| `SECRET_COOKIE_KEYS` | HMAC signing keys (min 32 chars, `__` separator for rotation) |
+
+### Optional Environment Variables
+
+| Variable               | Purpose                                    |
+|------------------------|--------------------------------------------|
+| `BOOTSTRAP_TOKEN_PATH` | Path to bootstrap token file               |
+| `ALLOWED_ORIGINS`      | Comma-separated origin patterns            |
+| `ZZZ_PORT`             | Server port (default 1174, CLI overrides)  |
+| `ZZZ_STATIC_DIR`       | Static file directory                      |
+
 ## Endpoints
 
-| Method | Path      | Description                    |
-|--------|-----------|--------------------------------|
-| POST   | `/rpc`    | JSON-RPC 2.0 (HTTP transport)  |
-| GET    | `/ws`     | JSON-RPC 2.0 (WebSocket)       |
-| GET    | `/health` | Health check (`{"status":"ok"}`) |
-| GET    | `/*`      | Static files (if `--static-dir`) |
+| Method | Path         | Description                              |
+|--------|--------------|------------------------------------------|
+| POST   | `/rpc`       | JSON-RPC 2.0 (HTTP transport, auth-gated) |
+| POST   | `/bootstrap` | One-shot admin account creation          |
+| GET    | `/ws`        | JSON-RPC 2.0 (WebSocket, no auth yet)    |
+| GET    | `/health`    | Health check (`{"status":"ok"}`)         |
+| GET    | `/*`         | Static files (if `--static-dir`)         |
 
 Note: the Deno server uses `/api/rpc`; the Rust server uses `/rpc`. The
 integration test configs handle this difference.
 
+## Auth
+
+Cookie-based session auth mirroring fuz_app's auth stack:
+
+1. **Keyring** — HMAC-SHA256 cookie signing with key rotation support.
+   Keys from `SECRET_COOKIE_KEYS` env, separated by `__`. First key signs,
+   all keys verify.
+
+2. **Cookie format** — `fuz_session` cookie containing signed
+   `{session_token}:{expires_at}.{base64_signature}`. 30-day expiry,
+   `Secure; HttpOnly; SameSite=Strict`.
+
+3. **Session validation** — Cookie → HMAC verify → blake3 hash token →
+   `auth_session` table lookup → build `RequestContext` (account, actor,
+   permits). Sessions touched (last_seen_at updated) fire-and-forget.
+
+4. **Per-action auth** — Each RPC method has an auth level:
+   - `public` — no auth required (`ping`)
+   - `authenticated` — valid session required (workspace_*, session_load, etc.)
+   - `keeper` — keeper role permit required (`provider_update_api_key`)
+
+5. **Bootstrap** — `POST /bootstrap` creates first admin account with keeper
+   + admin permits. Reads token from `BOOTSTRAP_TOKEN_PATH`, timing-safe
+   compare, Argon2 password hashing, all in a transaction with bootstrap_lock.
+
+6. **Origin verification** — `ALLOWED_ORIGINS` patterns checked on requests
+   with an `Origin` header. Supports exact match, wildcard port
+   (`http://localhost:*`), subdomain wildcard (`https://*.example.com`).
+
+**Not yet implemented:** Bearer token auth, daemon token rotation, WebSocket
+upgrade auth (WS currently has no auth), account management routes
+(login/logout/signup).
+
 ## Integration Tests
 
-The key deliverable. Tests start a backend, run JSON-RPC assertions, and
-stop it. Deno backend bootstraps auth (admin account + session cookie)
-before tests. Rust backend runs unauthenticated (Phase 1, no auth).
+22 tests verify identical Deno/Rust behaviour. Both backends now bootstrap
+auth (admin account + session cookie) before tests. The test database
+(`zzz_test` by default, configurable via `TEST_DATABASE_URL`) is cleaned
+(TRUNCATE CASCADE) before each backend run.
 
 **WS tests (both backends):** `ping_ws`, `parse_error_ws`,
 `method_not_found_ws`, `invalid_request_ws`, `notification_ws`,
@@ -66,24 +128,15 @@ before tests. Rust backend runs unauthenticated (Phase 1, no auth).
 **HTTP tests (both backends):** `null_id_is_invalid`, `parse_error_http`,
 `parse_error_empty_body`, `method_not_found_http`, `invalid_request_*`
 (4 variants), `notification_http` — 9 tests verify identical HTTP behaviour.
-Error `data` field (Zod validation issues on Deno, absent on Rust) is
-normalized before comparison — Rust omits `data` pending Phase 2 validation
-detail support (see TODO in `rpc.rs`).
 
 **HTTP tests (both backends):** `ping_http`, `ping_numeric_id` — ping handler
-echoes the JSON-RPC request id back as `ping_id`. Both backends produce
-identical responses.
+echoes the JSON-RPC request id back as `ping_id`.
 
 **Cross-backend:** `health_check` — 1 test on both backends.
 
-**Workspace tests (both backends):** `workspace_open_and_list` (open temp dir,
-verify response shape, list includes workspace), `workspace_open_idempotent`
-(open same path twice, same `opened_at`), `workspace_open_nonexistent`
-(nonexistent path returns -32603), `workspace_close` (open, close, verify
-removal from list, double-close returns error) — 4 tests. Shape assertions
-handle Deno/Rust differences (populated vs empty `files`, additional Cell
-fields). Double-close error code/status differs due to zzz/fuz_app
-`ThrownJsonrpcError` class mismatch — test checks error presence, not code.
+**Workspace tests (both backends):** `workspace_open_and_list`,
+`workspace_open_idempotent`, `workspace_open_nonexistent`,
+`workspace_close` — 4 tests.
 
 ```bash
 deno task test:integration --backend=rust   # Rust only
@@ -92,101 +145,90 @@ deno task test:integration --backend=both   # Both (default)
 deno task test:integration --filter=ping    # Substring match on test name
 ```
 
-The test runner (`test/integration/run.ts`) starts the backend via
-`cargo run` or `deno task dev:start`, polls `/health` until ready, runs
-the suite, then sends SIGTERM and waits for exit. Backend configs
-(ports, paths) are in `test/integration/config.ts`.
-
-Tests are **table-driven**: most cases are rows in `http_cases` and
-`ws_cases` arrays — adding a test is adding one object. Special tests
-(silence assertions, persistent connections, non-RPC endpoints) are
-separate functions.
-
-When running `--backend=both`, a comparison table shows per-test
-timing with speedup multipliers (e.g. `2.08x faster`). Silence tests
-(`notification_ws`) have a fixed wait floor and are excluded from
-the overall comparison.
+The test runner cleans the `zzz_test` database, writes a bootstrap token,
+starts the backend, bootstraps an admin account, runs tests with the session
+cookie, then stops the backend and cleans up.
 
 ## Architecture
 
 ```
 crates/zzz_server/src/
-├── main.rs      # Entry, run() → Result pattern, graceful shutdown (CancellationToken)
-├── handlers.rs  # App (server state), Ctx (per-request), dispatch, handler functions
-├── rpc.rs       # JSON-RPC classify, error constructors, HTTP handler
-├── ws.rs        # WebSocket upgrade + message loop
-└── error.rs     # ServerError (Bind, Serve)
+├── main.rs        # Entry, config parsing, DB/keyring init, graceful shutdown
+├── handlers.rs    # App (server state), Ctx (per-request + auth), dispatch
+├── rpc.rs         # JSON-RPC classify, HTTP handler with auth pipeline
+├── ws.rs          # WebSocket upgrade + message loop (Phase 2b: add auth)
+├── auth.rs        # Keyring, cookie parsing, session validation, per-action auth
+├── bootstrap.rs   # POST /bootstrap handler (account + session creation)
+├── db.rs          # Connection pool, migrations, auth queries
+├── scoped_fs.rs   # (Phase 2b) Scoped filesystem — path validation, symlink rejection
+└── error.rs       # ServerError (Bind, Serve, Database, Config)
 ```
 
-Uses `fuz_common::JsonRpcError` for the error object type (spec-compliant,
-includes optional `data` field). Defines its own envelope types
-(`JsonRpcResponse`, `JsonRpcErrorResponse`) because zzz classifies arbitrary
-JSON-RPC messages via `Value` — `fuz_common`'s single response type targets
-typed request/response.
-
 **App/Ctx/dispatch pattern**: `App` holds long-lived server state (workspaces
-in `RwLock<HashMap>`, future: `tokio-postgres` pool), constructed once in
-`main`, wrapped in `Arc`. `Ctx` is per-request context (borrows `App` and
-`request_id`), constructed by each transport before calling
-`handlers::dispatch`. Future fields added lazily — `auth`, `db()` method
-(handlers that don't need them don't pay). Dispatch is async for forward
-compat (DB handlers will await); current handlers are sync with zero async
-overhead. Match statement dispatch — zero overhead, compiler can inline.
+in `RwLock<HashMap>`, `deadpool_postgres::Pool`, `Keyring`, origin config),
+constructed once in `main`, wrapped in `Arc`. `Ctx` is per-request context
+(borrows `App`, `request_id`, `auth: Option<&RequestContext>`), constructed
+by each transport before calling `handlers::dispatch`.
 
-Message classification (`rpc::classify`) parses raw `serde_json::Value` and
-returns a `Classified` enum:
+**Auth pipeline** (HTTP RPC path):
+1. Origin verification (if `Origin` header present)
+2. Parse `fuz_session` cookie from `Cookie` header
+3. Verify HMAC signature via keyring
+4. Hash session token (blake3) → look up in `auth_session` table
+5. Build `RequestContext` (account → actor → permits)
+6. Check per-action auth level before dispatch
 
-- **`Request`** (has `method` + valid `id` + `params`) → ready for dispatch
-- **`Invalid`** (invalid envelope, bad id) → id + error
-- **`Notification`** (has `method`, no `id`) → caller decides
+**Message classification** (`rpc::classify`) is transport-agnostic:
+- HTTP: origin check → auth → classify → auth check → dispatch
+- WS: classify → dispatch (no auth yet)
 
-The `Classified` enum is transport-agnostic. Each transport applies its
-own semantics:
+## Known Issues
 
-- **HTTP** (`rpc_handler`): maps error codes to HTTP statuses (matching
-  `fuz_app`'s `jsonrpc_error_code_to_http_status`), rejects notifications
-  as `invalid_request`
-- **WS** (`ws.rs`): silences notifications
+- **Auth error codes are wrong** — `auth.rs` uses `-32000` (unauthenticated) and
+  `-32001` (forbidden), but fuz_app uses `-32001` and `-32002` respectively.
+  The HTTP status mapping in `rpc.rs` also needs `-32001 → 401` and `-32002 → 403`.
+- **`build_request_context` uses `String` error type** — should use a proper
+  error enum for structured error handling.
+- **No auth-rejection integration tests** — all tests send valid cookies.
+  Missing: unauthenticated request to authenticated method, invalid/expired
+  cookie, keeper method without keeper role.
 
-Both transports wrap all errors (including parse errors) in full JSON-RPC
-envelopes `{jsonrpc, id, error}`. Both construct `Ctx` from `Arc<App>` and
-the request id, then call `handlers::dispatch(method, params, &ctx)`.
+## Known Limitations
 
-Id validation matches `fuz_app`: id must be string or number (excludes
-null, per MCP). Non-object values get `id: null`.
-
-## Known Phase 1 Limitations
-
-- Only `ping`, `workspace_list`, `workspace_open`, `workspace_close` — match dispatch in `handlers::dispatch()`
+- Only 4 RPC methods (`ping`, `workspace_list`, `workspace_open`, `workspace_close`)
 - No batch request support (JSON arrays)
-- No auth, no database, no file operations
+- No WebSocket auth (deferred to Phase 2b)
 - No WebSocket connection tracking for broadcast notifications
-- Minimal logging (`tracing::debug` for requests)
+- No bearer token auth, daemon token rotation, or account management routes
+- No file operations (diskfile_update, etc. — Phase 2b)
+- No scoped filesystem enforcement (needed for file operations)
 
 ## Design Decisions
 
-- **DB**: `tokio-postgres` with connection pool in `App`. Lazy `db()` method
-  on `Ctx` — handlers that don't need DB don't pay for a pool checkout.
+- **DB**: `tokio-postgres` + `deadpool-postgres` pool in `App`. Required at
+  startup — server fails fast if `DATABASE_URL` is missing or unreachable.
+  Migrations run on every startup (CREATE TABLE IF NOT EXISTS).
+- **Cookie signing**: Pure Rust HMAC-SHA256 via `hmac`/`sha2` crates.
+  Compatible with fuz_app's keyring format (same `value.base64(signature)`).
+- **Session hashing**: `blake3` crate for token → storage key hashing.
+  Compatible with fuz_app's `hash_blake3` (same hex output).
+- **Password hashing**: Argon2id via `argon2` crate (bootstrap only).
 - **Dispatch is async**: forward compat for DB/IO handlers. Current handlers
   are sync (no await points, zero overhead). `#[allow(clippy::unused_async)]`.
-- **Codegen**: action specs will generate Rust handler signatures and dispatch
-  match arms once patterns stabilize. Goal: maximum performance + clean design.
 - **`std::sync::RwLock`** (not tokio): current handlers are sync. When async
-  handlers arrive, scope lock guards before await points (current pattern
-  already does this). Switch to `tokio::sync::RwLock` only if needed.
-- **TS unification next**: after Rust refinements, unify the 23 duplicate
-  TypeScript handlers into a single file with shared dispatch. Fix
-  `ThrownJsonrpcError` class mismatch (zzz vs fuz_app) during unification.
-- **Path handling**: `workspace_open` canonicalizes (must exist, follows
-  symlinks). `workspace_close` does pure HashMap lookup (clients send the
-  normalized path back, no filesystem calls). Both normalize trailing `/`.
-- **Error messages**: match Deno format — `"failed to open workspace: ..."`,
-  `"workspace not open: ..."`. Include trailing `/` in error paths for parity
-  with Deno's `resolve()` output. Tests verify message format prefixes.
-- **UTF-8 paths**: explicit rejection via `to_str()` — no lossy replacement
-  with U+FFFD. Fails fast on non-UTF-8 paths instead of silently corrupting.
+  handlers arrive, scope lock guards before await points.
+- **Session touch**: fire-and-forget via `tokio::spawn` — doesn't block
+  the request pipeline.
 
 ## What's Next
 
-Phase 2 (SAES design), Phase 3 (codegen from Zod specs), Phase 4 (full
-action port). See the [Rust Backends quest](../../grimoire/quests/rust-backends.md).
+**Phase 2b** (next):
+1. Fix auth error codes (`-32001`/`-32002`) and HTTP status mapping
+2. Replace `String` error type in `build_request_context` with proper enum
+3. Add auth-rejection integration tests (unauthenticated, invalid cookie, keeper)
+4. Add `ScopedFs` and filesystem actions (`diskfile_update`, `diskfile_delete`,
+   `directory_create`) with integration tests
+5. WebSocket upgrade auth (cookie session verification)
+
+Phase 3 (codegen from Zod specs), Phase 4 (full action port). See the
+[Rust Backends quest](../../grimoire/quests/rust-backends.md).

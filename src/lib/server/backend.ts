@@ -9,20 +9,18 @@ import type {BackendProviderGemini} from './backend_provider_gemini.js';
 import type {BackendProviderChatgpt} from './backend_provider_chatgpt.js';
 import type {BackendProviderClaude} from './backend_provider_claude.js';
 import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
-import type {ActionEventPhase, ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
+import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 
 import type {ZzzOptions} from '../config_helpers.js';
 import {DiskfileDirectoryPath, type SerializableDisknode} from '../diskfile_types.js';
 import {to_serializable_disknode} from '../diskfile_helpers.js';
 import type {WorkspaceInfoJson} from '../workspace.svelte.js';
 import {ScopedFs} from './scoped_fs.js';
-import type {BackendActionHandlers} from './backend_action_types.js';
 import type {ActionEventEnvironment, ActionExecutor} from '../action_event_types.js';
 import type {ActionMethod} from '../action_metatypes.js';
 import {create_backend_actions_api, type BackendActionsApi} from './backend_actions_api.js';
 import {PtyManager} from './backend_pty_manager.js';
 import {ActionPeer} from '../action_peer.js';
-import type {JsonrpcMessageFromServerToClient} from '../jsonrpc.js';
 import type {BackendProvider} from './backend_provider.js';
 import {jsonrpc_errors} from '../jsonrpc_errors.js';
 
@@ -70,10 +68,6 @@ export interface BackendOptions {
 	 * Action specifications that determine what the backend can do.
 	 */
 	action_specs: Array<ActionSpecUnion>;
-	/**
-	 * Handler function for processing client messages.
-	 */
-	action_handlers: BackendActionHandlers;
 	/**
 	 * Handler function for file system changes.
 	 */
@@ -130,8 +124,6 @@ export class Backend implements ActionEventEnvironment {
 		return this.action_registry.specs;
 	}
 
-	readonly #action_handlers: BackendActionHandlers;
-
 	// TODO wrapper class?
 	/** Available AI providers. */
 	readonly providers: Array<BackendProvider> = [];
@@ -149,7 +141,6 @@ export class Backend implements ActionEventEnvironment {
 		this.config = options.config;
 
 		this.action_registry = new ActionRegistry(options.action_specs);
-		this.#action_handlers = options.action_handlers;
 		this.#handle_filer_change = options.handle_filer_change;
 
 		// ScopedFs uses scoped_dirs for user file access, plus zzz_dir for app data
@@ -194,14 +185,10 @@ export class Backend implements ActionEventEnvironment {
 		return instance;
 	}
 
-	// TODO @api better type safety
-	lookup_action_handler(
-		method: ActionMethod,
-		phase: ActionEventPhase,
-	): ((event: any) => any) | undefined {
-		const method_handlers = this.#action_handlers[method as keyof BackendActionHandlers];
-		if (!method_handlers) return undefined;
-		return method_handlers[phase as keyof BackendActionHandlers[keyof BackendActionHandlers]];
+	// Shim — Backend implements ActionEventEnvironment for ActionPeer,
+	// but no backend code path calls ActionEvent.handle_async().
+	lookup_action_handler(): undefined {
+		return undefined;
 	}
 
 	lookup_action_spec(method: ActionMethod): ActionSpecUnion | undefined {
@@ -216,26 +203,9 @@ export class Backend implements ActionEventEnvironment {
 		return provider as BackendProviders[T];
 	}
 
-	/**
-	 * Process a singular JSON-RPC message and return a response.
-	 * Like MCP, Zzz breaks from JSON-RPC by not supporting batching.
-	 */
-	async receive(message: unknown): Promise<JsonrpcMessageFromServerToClient | null> {
-		this.#check_destroyed();
-		return this.peer.receive(message);
-	}
-
 	#destroyed = false;
 	get destroyed(): boolean {
 		return this.#destroyed;
-	}
-
-	// TODO maybe use a decorator for this?
-	/** Throws if the backend has been destroyed. */
-	#check_destroyed(): void {
-		if (this.#destroyed) {
-			throw new Error('Server has been destroyed');
-		}
 	}
 
 	/**

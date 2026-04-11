@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::body::Bytes;
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use fuz_common::{
@@ -12,6 +12,10 @@ use fuz_common::{
 use serde::Serialize;
 use serde_json::{Map, Value};
 
+use crate::auth::{
+    build_request_context, check_action_auth, check_origin, method_auth,
+    parse_session_from_cookies, RequestContext,
+};
 use crate::handlers::{self, App, Ctx};
 
 // -- JSON-RPC types -----------------------------------------------------------
@@ -213,16 +217,53 @@ fn extract_id(obj: &Map<String, Value>) -> Value {
     }
 }
 
+// -- Auth resolution for HTTP -------------------------------------------------
+
+/// Resolve request context from HTTP headers (Cookie header).
+///
+/// Returns `None` if no session cookie or session is invalid.
+async fn resolve_http_auth(
+    headers: &HeaderMap,
+    app: &App,
+) -> Option<RequestContext> {
+    let cookie_header = headers
+        .get(axum::http::header::COOKIE)?
+        .to_str()
+        .ok()?;
+
+    let session_token = parse_session_from_cookies(cookie_header, &app.keyring)?;
+
+    match build_request_context(&app.db_pool, &session_token).await {
+        Ok(ctx) => ctx,
+        Err(e) => {
+            tracing::warn!(error = %e, "auth context build failed");
+            None
+        }
+    }
+}
+
 // -- HTTP handler -------------------------------------------------------------
 
 /// Axum handler for `POST /rpc`.
 ///
 /// Applies HTTP-specific transport semantics:
+/// - Origin verification before processing
+/// - Auth context resolution from Cookie header
+/// - Per-action auth check before dispatch
 /// - Parse errors → full JSON-RPC envelope, HTTP 400
 /// - Notifications → rejected as `invalid_request`, HTTP 400
 /// - Error responses → HTTP status mapped from JSON-RPC error code
-// TODO Phase 2: Add request/response tracing middleware
-pub async fn rpc_handler(State(app): State<Arc<App>>, body: Bytes) -> Response {
+pub async fn rpc_handler(
+    State(app): State<Arc<App>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    // Origin verification
+    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok())
+        && !check_origin(origin, &app.allowed_origins) {
+            return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
+        }
+
     // 1. Parse body as generic JSON value
     let Ok(value) = serde_json::from_slice::<Value>(&body) else {
         tracing::debug!("JSON parse error");
@@ -238,12 +279,23 @@ pub async fn rpc_handler(State(app): State<Arc<App>>, body: Bytes) -> Response {
         "rpc request"
     );
 
-    // 2. Classify, then dispatch + apply HTTP transport semantics
+    // 2. Resolve auth context (cookie → session → account/actor/permits)
+    let auth_context = resolve_http_auth(&headers, &app).await;
+
+    // 3. Classify, check auth, then dispatch
     match classify(&value) {
         Classified::Request { method, id, params } => {
+            // Per-action auth check
+            let spec_auth = method_auth(method);
+            if let Some(auth_error) = check_action_auth(spec_auth, auth_context.as_ref()) {
+                let status = error_code_to_http_status(auth_error.code);
+                return (status, Json(error_response(id, auth_error))).into_response();
+            }
+
             let ctx = Ctx {
                 app: &app,
                 request_id: &id,
+                auth: auth_context.as_ref(),
             };
             match handlers::dispatch(method, params, &ctx).await {
                 Ok(result) => Json(success_response(id, result)).into_response(),
