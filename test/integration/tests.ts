@@ -118,6 +118,12 @@ const open_ws = (config: BackendConfig, session_cookie?: string): Promise<WsConn
 
 // -- Assertion helpers --------------------------------------------------------
 
+const assert_equal = (actual: unknown, expected: unknown, label: string): void => {
+	if (actual !== expected) {
+		throw new Error(`${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+	}
+};
+
 /** Recursively sort object keys so key order doesn't affect comparison. */
 const sort_keys = (v: unknown): unknown => {
 	if (v === null || typeof v !== 'object') return v;
@@ -129,23 +135,7 @@ const sort_keys = (v: unknown): unknown => {
 	return sorted;
 };
 
-/**
- * Strip `error.data` from a JSON-RPC response body.
- *
- * Deno (fuz_app) includes Zod validation issues in `error.data`,
- * Rust omits it. Both are correct — `data` is optional per JSON-RPC spec.
- * Stripping it lets us test wire format parity without coupling to Zod.
- */
-const strip_error_data = (v: unknown): unknown => {
-	if (v === null || typeof v !== 'object' || Array.isArray(v)) return v;
-	const obj = v as Record<string, unknown>;
-	if ('error' in obj && typeof obj.error === 'object' && obj.error !== null) {
-		const {data: _, ...error_rest} = obj.error as Record<string, unknown>;
-		return {...obj, error: error_rest};
-	}
-	return v;
-};
-
+/** Exact deep equality (key-order-independent). */
 const assert_deep_equal = (actual: unknown, expected: unknown, label: string): void => {
 	const a = JSON.stringify(sort_keys(actual));
 	const e = JSON.stringify(sort_keys(expected));
@@ -154,10 +144,47 @@ const assert_deep_equal = (actual: unknown, expected: unknown, label: string): v
 	}
 };
 
-const assert_equal = (actual: unknown, expected: unknown, label: string): void => {
-	if (actual !== expected) {
-		throw new Error(`${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+/**
+ * Omit `error.data` from a JSON-RPC error response ONLY when the expected
+ * response doesn't specify it. This handles a known asymmetry: Deno (fuz_app)
+ * includes Zod validation issues in `error.data`, Rust omits it pending
+ * Phase 2 validation detail support. See TODO in `crates/zzz_server/src/rpc.rs`.
+ *
+ * NOT a general tolerance — if expected specifies `error.data`, exact match
+ * is enforced. If actual has unexpected non-data fields, the comparison fails.
+ */
+const normalize_error_data = (
+	actual: unknown,
+	expected: unknown,
+): {actual: unknown; expected: unknown} => {
+	if (
+		actual !== null &&
+		typeof actual === 'object' &&
+		!Array.isArray(actual) &&
+		expected !== null &&
+		typeof expected === 'object' &&
+		!Array.isArray(expected)
+	) {
+		const a = actual as Record<string, unknown>;
+		const e = expected as Record<string, unknown>;
+		if (
+			'error' in a &&
+			typeof a.error === 'object' &&
+			a.error !== null &&
+			'error' in e &&
+			typeof e.error === 'object' &&
+			e.error !== null
+		) {
+			const a_err = a.error as Record<string, unknown>;
+			const e_err = e.error as Record<string, unknown>;
+			// Only omit if actual has data but expected doesn't mention it
+			if ('data' in a_err && !('data' in e_err)) {
+				const {data: _, ...a_err_rest} = a_err;
+				return {actual: {...a, error: a_err_rest}, expected};
+			}
+		}
 	}
+	return {actual, expected};
 };
 
 // == Table-driven test cases ==================================================
@@ -309,7 +336,7 @@ const ws_cases: readonly WsCase[] = [
 	{
 		name: 'parse_error_ws',
 		message: 'not json at all',
-		expected: {code: -32700, message: 'parse error'},
+		expected: {jsonrpc: '2.0', id: null, error: {code: -32700, message: 'parse error'}},
 	},
 	{
 		name: 'method_not_found_ws',
@@ -404,9 +431,10 @@ const run_http_case = async (
 	if (c.expected === null) {
 		assert_equal(body, null, 'body');
 	} else {
-		// Strip error.data before comparing — Deno includes Zod issues,
-		// Rust omits data. Both are correct per JSON-RPC spec.
-		assert_deep_equal(strip_error_data(body), strip_error_data(c.expected), 'body');
+		// Exact match. error.data is normalized only when actual includes it
+		// but expected doesn't — handles Deno/Rust validation detail asymmetry.
+		const normalized = normalize_error_data(body, c.expected);
+		assert_deep_equal(normalized.actual, normalized.expected, 'body');
 	}
 };
 

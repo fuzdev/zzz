@@ -21,10 +21,11 @@ async fn handle_connection(socket: WebSocket) {
             _ => continue,
         };
 
-        // 1. Parse JSON — on failure send bare error object (matching Deno ActionPeer)
+        // 1. Parse JSON — on failure send full envelope (matching Deno)
         let Ok(value) = serde_json::from_str::<Value>(&text) else {
             tracing::debug!("ws: JSON parse error");
-            if let Ok(json) = serde_json::to_string(&rpc::parse_error())
+            if let Ok(json) =
+                serde_json::to_string(&rpc::error_response(Value::Null, rpc::parse_error()))
                 && tx.send(Message::Text(json.into())).await.is_err()
             {
                 tracing::debug!("ws: send failed, client disconnected");
@@ -39,14 +40,18 @@ async fn handle_connection(socket: WebSocket) {
         );
 
         // 2. Classify and dispatch, then apply WS transport semantics
-        let response = match rpc::classify_and_dispatch(&value) {
-            RpcOutcome::Success { id, result } => rpc::success_response(id, result),
-            RpcOutcome::Error { id, error } => rpc::error_response(id, error),
+        let json = match rpc::classify_and_dispatch(&value) {
+            RpcOutcome::Success { id, result } => {
+                serde_json::to_string(&rpc::success_response(id, result))
+            }
+            RpcOutcome::Error { id, error } => {
+                serde_json::to_string(&rpc::error_response(id, error))
+            }
             RpcOutcome::Notification => continue, // WS: silence — no response sent
         };
 
         // 3. Send response
-        if let Ok(json) = serde_json::to_string(&response)
+        if let Ok(json) = json
             && tx.send(Message::Text(json.into())).await.is_err()
         {
             tracing::debug!("ws: send failed, client disconnected");

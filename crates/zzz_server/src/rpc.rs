@@ -28,6 +28,10 @@ pub struct JsonRpcErrorResponse {
 }
 
 // -- Error constructors -------------------------------------------------------
+// TODO Phase 2: Include validation details in error `data` field to match
+// fuz_app's behavior (Zod issues as `{issues: [{code, path, message, ...}]}`).
+// Currently Rust error responses omit `data`. See integration test
+// `normalize_error_data` for the cross-backend handling of this gap.
 
 pub fn parse_error() -> JsonRpcError {
     JsonRpcError {
@@ -55,22 +59,20 @@ pub fn method_not_found(method: &str) -> JsonRpcError {
 
 // -- Response builders --------------------------------------------------------
 
-pub fn success_response(id: Value, result: Value) -> Value {
-    serde_json::to_value(JsonRpcResponse {
+pub const fn success_response(id: Value, result: Value) -> JsonRpcResponse {
+    JsonRpcResponse {
         jsonrpc: JSONRPC_VERSION,
         id,
         result,
-    })
-    .unwrap_or_default()
+    }
 }
 
-pub fn error_response(id: Value, error: JsonRpcError) -> Value {
-    serde_json::to_value(JsonRpcErrorResponse {
+pub const fn error_response(id: Value, error: JsonRpcError) -> JsonRpcErrorResponse {
+    JsonRpcErrorResponse {
         jsonrpc: JSONRPC_VERSION,
         id,
         error,
-    })
-    .unwrap_or_default()
+    }
 }
 
 // -- HTTP status mapping ------------------------------------------------------
@@ -206,7 +208,6 @@ pub async fn rpc_handler(body: Bytes) -> Response {
     // 1. Parse body as generic JSON value
     let Ok(value) = serde_json::from_slice::<Value>(&body) else {
         tracing::debug!("JSON parse error");
-        // Full envelope (matches fuz_app), HTTP 400
         return (
             StatusCode::BAD_REQUEST,
             Json(error_response(Value::Null, parse_error())),

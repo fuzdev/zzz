@@ -69,7 +69,11 @@ export const register_websocket_actions = ({
 						json = JSON.parse(String(event.data)); // eslint-disable-line @typescript-eslint/no-base-to-string
 					} catch (error) {
 						backend.log?.error(`[ws] JSON parse error:`, error);
-						ws.send(JSON.stringify(jsonrpc_error_messages.parse_error()));
+						ws.send(
+							JSON.stringify(
+								create_jsonrpc_error_message(null, jsonrpc_error_messages.parse_error()),
+							),
+						);
 						return;
 					}
 

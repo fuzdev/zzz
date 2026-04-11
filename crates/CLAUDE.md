@@ -123,9 +123,12 @@ The `RpcOutcome` enum is transport-agnostic. Each transport applies its
 own semantics:
 
 - **HTTP** (`rpc_handler`): maps error codes to HTTP statuses (matching
-  `fuz_app`'s `jsonrpc_error_code_to_http_status`), wraps parse errors in
-  full JSON-RPC envelopes, rejects notifications as `invalid_request`
-- **WS** (`ws.rs`): sends bare parse errors, silences notifications
+  `fuz_app`'s `jsonrpc_error_code_to_http_status`), rejects notifications
+  as `invalid_request`
+- **WS** (`ws.rs`): silences notifications
+
+Both transports wrap all errors (including parse errors) in full JSON-RPC
+envelopes `{jsonrpc, id, error}`.
 
 Id validation matches `fuz_app`: id must be string or number (excludes
 null, per MCP). Non-object values get `id: null`.
