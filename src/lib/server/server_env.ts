@@ -119,7 +119,7 @@ export const load_server_env = (
 		scoped_dirs: overrides?.scoped_dirs ?? parse_comma_separated(raw.PUBLIC_ZZZ_SCOPED_DIRS),
 		port: overrides?.port ?? raw.PORT,
 		host: overrides?.host ?? raw.HOST,
-		websocket_path: overrides?.websocket_path ?? '/ws',
+		websocket_path: overrides?.websocket_path ?? '/api/ws',
 		api_path: overrides?.api_path ?? '/api/rpc',
 		artificial_delay: overrides?.artificial_delay ?? raw.PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY,
 		app_version: overrides?.app_version ?? '0.0.1',

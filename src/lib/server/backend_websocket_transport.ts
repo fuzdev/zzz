@@ -1,5 +1,3 @@
-// @slop Claude Opus 4
-
 import type {WSContext} from 'hono/ws';
 
 import {create_uuid, Uuid} from '../zod_helpers.js';
@@ -30,25 +28,82 @@ export class BackendWebsocketTransport implements Transport {
 	// Reverse map to find connection ID by socket
 	#connection_ids: WeakMap<WSContext, Uuid> = new WeakMap();
 
+	// Session auth tracking — parallel maps keyed by connection ID
+	#connection_token_hashes: Map<Uuid, string> = new Map();
+	#connection_account_ids: Map<Uuid, Uuid> = new Map();
+
 	/**
-	 * Add a new WebSocket connection.
+	 * Add a new WebSocket connection with session auth info.
 	 */
-	add_connection(ws: WSContext): Uuid {
+	add_connection(ws: WSContext, token_hash: string, account_id: Uuid): Uuid {
 		const connection_id = create_uuid();
 		this.#connections.set(connection_id, ws);
 		this.#connection_ids.set(ws, connection_id);
+		this.#connection_token_hashes.set(connection_id, token_hash);
+		this.#connection_account_ids.set(connection_id, account_id);
 		return connection_id;
 	}
 
 	/**
-	 * Remove a WebSocket connection.
+	 * Remove a WebSocket connection and its auth tracking data.
 	 */
 	remove_connection(ws: WSContext): void {
 		const connection_id = this.#connection_ids.get(ws);
 		if (connection_id) {
 			this.#connections.delete(connection_id);
 			this.#connection_ids.delete(ws);
+			this.#connection_token_hashes.delete(connection_id);
+			this.#connection_account_ids.delete(connection_id);
 		}
+	}
+
+	/**
+	 * Close all sockets associated with a specific session token hash.
+	 *
+	 * @returns the number of sockets closed
+	 */
+	close_sockets_for_session(token_hash: string): number {
+		let count = 0;
+		for (const [connection_id, hash] of this.#connection_token_hashes) {
+			if (hash === token_hash) {
+				const ws = this.#connections.get(connection_id);
+				if (ws) {
+					this.#revoke_connection(connection_id, ws);
+					count++;
+				}
+			}
+		}
+		return count;
+	}
+
+	/**
+	 * Close all sockets associated with a specific account.
+	 *
+	 * @returns the number of sockets closed
+	 */
+	close_sockets_for_account(account_id: Uuid): number {
+		let count = 0;
+		for (const [connection_id, id] of this.#connection_account_ids) {
+			if (id === account_id) {
+				const ws = this.#connections.get(connection_id);
+				if (ws) {
+					this.#revoke_connection(connection_id, ws);
+					count++;
+				}
+			}
+		}
+		return count;
+	}
+
+	/**
+	 * Close a connection and clean up all tracking state.
+	 */
+	#revoke_connection(connection_id: Uuid, ws: WSContext): void {
+		this.#connections.delete(connection_id);
+		this.#connection_ids.delete(ws);
+		this.#connection_token_hashes.delete(connection_id);
+		this.#connection_account_ids.delete(connection_id);
+		ws.close(4001, 'Session revoked');
 	}
 
 	// TODO needs implementation, only broadcasts notifications for now

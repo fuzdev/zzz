@@ -10,6 +10,7 @@
  */
 
 import {upgradeWebSocket} from 'hono/deno';
+import {Logger} from '@fuzdev/fuz_util/log.js';
 import {
 	write_daemon_info,
 	read_daemon_info,
@@ -20,12 +21,17 @@ import {create_deno_runtime} from '@fuzdev/fuz_app/runtime/deno.js';
 import {load_env_file} from '@fuzdev/fuz_app/env/dotenv.js';
 import {argon2_password_deps} from '@fuzdev/fuz_app/auth/password_argon2.js';
 import {verify_request_source} from '@fuzdev/fuz_app/http/origin.js';
+import {require_auth} from '@fuzdev/fuz_app/auth/request_context.js';
 
+import type {Uuid} from '../zod_helpers.ts';
 import {VERSION} from '../zzz/build_info.ts';
 import {create_zzz_app} from './create_zzz_app.ts';
 import {load_server_env} from './server_env.ts';
 import {is_open_host} from './security.ts';
 import {register_websocket_actions} from './register_websocket_actions.ts';
+import {BackendWebsocketTransport} from './backend_websocket_transport.ts';
+
+const log = new Logger('[server]');
 
 /** Shared runtime for daemon lifecycle and server operations. */
 const daemon_runtime = create_deno_runtime([]);
@@ -79,7 +85,7 @@ export const start_server = async (): Promise<void> => {
 		}
 	}
 
-	const {app, backend, close, allowed_origins} = await create_zzz_app({
+	const {app, backend, app_backend, close, allowed_origins} = await create_zzz_app({
 		config,
 		password: argon2_password_deps,
 		runtime: daemon_runtime,
@@ -93,9 +99,18 @@ export const start_server = async (): Promise<void> => {
 	// Register WebSocket endpoint on the assembled app.
 	// WS is a separate transport from the RPC endpoint — it goes through
 	// backend.receive() (ActionPeer) for bidirectional action communication.
+	// The WS path is under /api/* so fuz_app's session + request_context
+	// middleware runs automatically. We add origin verification and require_auth
+	// to reject unauthenticated upgrades.
 	if (config.websocket_path) {
 		// Origin check for WebSocket connections (browsers always send Origin on WS upgrades)
 		app.use(config.websocket_path, verify_request_source(allowed_origins));
+
+		// Reject unauthenticated WebSocket upgrades — session middleware has
+		// already resolved the cookie by this point (path is under /api/*).
+		app.use(config.websocket_path, require_auth);
+
+		const transport = new BackendWebsocketTransport();
 
 		register_websocket_actions({
 			path: config.websocket_path,
@@ -103,7 +118,35 @@ export const start_server = async (): Promise<void> => {
 			backend,
 			upgradeWebSocket,
 			artificial_delay: config.artificial_delay,
+			transport,
 		});
+
+		// Close WebSockets when sessions are revoked via audit events.
+		const original_on_audit_event = app_backend.deps.on_audit_event;
+		app_backend.deps.on_audit_event = (event) => {
+			original_on_audit_event(event);
+			switch (event.event_type) {
+				case 'session_revoke': {
+					const token_hash = (event.metadata as {session_id?: string} | null)?.session_id;
+					if (token_hash) {
+						const count = transport.close_sockets_for_session(token_hash);
+						if (count) log.info(`Closed ${count} socket(s) for revoked session`);
+					}
+					break;
+				}
+				case 'logout':
+				case 'session_revoke_all':
+				case 'password_change': {
+					if (event.account_id) {
+						const count = transport.close_sockets_for_account(event.account_id as Uuid);
+						if (count) log.info(`Closed ${count} socket(s) for ${event.event_type}`);
+					}
+					break;
+				}
+				default:
+					break;
+			}
+		};
 	}
 
 	// Write daemon info for CLI discovery

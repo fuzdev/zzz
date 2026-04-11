@@ -140,11 +140,17 @@ JSON-RPC response
 ### Request Flow (WebSocket)
 
 ```
-GET /ws (upgrade)
+GET /api/ws (upgrade)
+    ↓
+fuz_app middleware (session, request context, bearer auth)
     ↓
 Origin verification middleware
     ↓
-register_websocket_actions handler
+require_auth middleware (reject 401 if unauthenticated)
+    ↓
+register_websocket_actions handler (extract account_id + token_hash)
+    ↓
+transport.add_connection(ws, token_hash, account_id)
     ↓
 backend.receive(json) → ActionPeer lifecycle
     ↓
@@ -185,20 +191,23 @@ Four layers protect the daemon:
 3. **Origin/Referer verification** (fuz_app middleware) — rejects browser cross-origin requests
 4. **Authentication** (fuz_app) — cookie sessions + bearer tokens, bootstrap flow for initial admin
 
-### WebSocket Auth Gap
+### WebSocket Auth
 
-WebSocket connections have origin verification but **no session auth**. The RPC
-endpoint enforces per-action auth (cookie sessions, bearer tokens) via fuz_app
-middleware, but WS goes through `backend.receive()` / ActionPeer which skips
-all auth checks. Any action available via WS can be called without credentials.
+WebSocket connections are authenticated at upgrade time:
 
-**Mitigation**: Binding restriction (localhost only) + origin verification
-prevents network and cross-origin attacks. Sufficient for single-user local
-development. Must be resolved before allowing network binding (`0.0.0.0`).
+1. **Path under `/api/*`** — fuz_app's session + request_context middleware
+   resolves the session cookie automatically.
+2. **`require_auth` middleware** — rejects unauthenticated upgrades with 401.
+3. **Session extraction** — `register_websocket_actions` extracts the account
+   ID and hashed session token from the Hono context, passes them to the
+   transport's `add_connection()`.
+4. **Audit event revocation** — `server.ts` hooks `on_audit_event` to close
+   sockets on `session_revoke`, `logout`, `session_revoke_all`, and
+   `password_change` events.
 
-**Resolution path**: Authenticate at WS upgrade (session cookie or bearer
-token), build `RequestContext` via `build_request_context()`, check per-message
-with `has_role()`. See fuz_app's `request_context.ts` and zzz lore TODO.
+No per-message session revalidation — event-driven revocation via audit events
+is sufficient. ActionPeer and Backend have no auth awareness; auth stays in the
+transport and middleware layers.
 
 ## Adding Features
 

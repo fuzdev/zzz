@@ -26,7 +26,7 @@ For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
 ## Development Stage
 
-Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on the RPC endpoint (cookie sessions, bearer tokens, bootstrap flow); WebSocket transport has origin verification only (no session auth — localhost-only binding). PGlite in-memory DB for auth; domain state (files, terminals) still in-memory. The Hono/Deno backend is the reference implementation. A Rust backend (`crates/zzz_server`) is in development — Phase 1 (ping, static files, integration test harness) is complete. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
+Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PGlite in-memory DB for auth; domain state (files, terminals) still in-memory. The Hono/Deno backend is the reference implementation. A Rust backend (`crates/zzz_server`) is in development — Phase 1 (ping, static files, integration test harness) is complete. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
 
 See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 
@@ -486,7 +486,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 
 ## Known Limitations
 
-- **WebSocket has no session auth** — RPC endpoint (HTTP) enforces per-action auth via fuz_app (cookie sessions, bearer tokens, bootstrap). WebSocket transport only has origin verification — `backend.receive()` / ActionPeer skips auth checks. Acceptable for localhost-only binding. See zzz lore security section.
+- **WebSocket auth is upgrade-time only** — Session auth is enforced at WebSocket upgrade via `require_auth` middleware (cookie session required). Sockets are closed on session revocation, logout, and password change via audit events. No per-message revalidation — event-driven revocation is sufficient. ActionPeer itself has no auth awareness.
 - **Domain state is in-memory** — auth/accounts are in PGlite DB, but zzz domain state (files, terminals, workspaces) is in-memory, lost on restart. Workspaces persist to JSON file as a stopgap.
 - **No undo/history** — file edits are permanent
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found

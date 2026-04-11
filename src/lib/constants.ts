@@ -103,7 +103,7 @@ export const API_URL_FOR_HTTP_RPC: string = SERVER_URL + API_PATH_FOR_HTTP_RPC;
  * */
 export const WEBSOCKET_URL: string = PUBLIC_WEBSOCKET_URL
 	? PathWithoutTrailingSlash.parse(PUBLIC_WEBSOCKET_URL)
-	: 'ws://localhost:8999/ws';
+	: 'ws://localhost:8999/api/ws';
 
 export const WEBSOCKET_URL_OBJECT: URL | null = WEBSOCKET_URL ? new URL(WEBSOCKET_URL) : null;
 

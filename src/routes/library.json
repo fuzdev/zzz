@@ -17090,7 +17090,7 @@
 					{
 						"name": "BackendWebsocketTransport",
 						"kind": "class",
-						"source_line": 24,
+						"source_line": 22,
 						"extends": [],
 						"implements": ["Transport"],
 						"members": [
@@ -17102,9 +17102,30 @@
 							{
 								"name": "add_connection",
 								"kind": "function",
-								"doc_comment": "Add a new WebSocket connection.",
-								"type_signature": "(ws: WSContext<unknown>): string & $brand<\"Uuid\">",
+								"doc_comment": "Add a new WebSocket connection with session auth info.",
+								"type_signature": "(ws: WSContext<unknown>, token_hash: string, account_id: string & $brand<\"Uuid\">): string & $brand<\"Uuid\">",
 								"return_type": "string & $brand<\"Uuid\">",
+								"parameters": [
+									{
+										"name": "ws",
+										"type": "WSContext<unknown>"
+									},
+									{
+										"name": "token_hash",
+										"type": "string"
+									},
+									{
+										"name": "account_id",
+										"type": "string & $brand<\"Uuid\">"
+									}
+								]
+							},
+							{
+								"name": "remove_connection",
+								"kind": "function",
+								"doc_comment": "Remove a WebSocket connection and its auth tracking data.",
+								"type_signature": "(ws: WSContext<unknown>): void",
+								"return_type": "void",
 								"parameters": [
 									{
 										"name": "ws",
@@ -17113,15 +17134,30 @@
 								]
 							},
 							{
-								"name": "remove_connection",
+								"name": "close_sockets_for_session",
 								"kind": "function",
-								"doc_comment": "Remove a WebSocket connection.",
-								"type_signature": "(ws: WSContext<unknown>): void",
-								"return_type": "void",
+								"doc_comment": "Close all sockets associated with a specific session token hash.",
+								"type_signature": "(token_hash: string): number",
+								"return_type": "number",
+								"return_description": "the number of sockets closed",
 								"parameters": [
 									{
-										"name": "ws",
-										"type": "WSContext<unknown>"
+										"name": "token_hash",
+										"type": "string"
+									}
+								]
+							},
+							{
+								"name": "close_sockets_for_account",
+								"kind": "function",
+								"doc_comment": "Close all sockets associated with a specific account.",
+								"type_signature": "(account_id: string & $brand<\"Uuid\">): number",
+								"return_type": "number",
+								"return_description": "the number of sockets closed",
+								"parameters": [
+									{
+										"name": "account_id",
+										"type": "string & $brand<\"Uuid\">"
 									}
 								]
 							},
@@ -17172,7 +17208,7 @@
 					}
 				],
 				"dependencies": ["jsonrpc_errors.ts", "jsonrpc_helpers.ts", "zod_helpers.ts"],
-				"dependents": ["server/register_websocket_actions.ts"]
+				"dependents": ["server/register_websocket_actions.ts", "server/server.ts"]
 			},
 			{
 				"path": "server/backend.ts",
@@ -17943,7 +17979,7 @@
 					{
 						"name": "RegisterWebsocketActionsOptions",
 						"kind": "type",
-						"source_line": 13,
+						"source_line": 16,
 						"type_signature": "RegisterWebsocketActionsOptions",
 						"properties": [
 							{
@@ -17984,7 +18020,7 @@
 						"name": "register_websocket_actions",
 						"kind": "function",
 						"doc_comment": "Registers WebSocket endpoints for all service actions in the schema registry.",
-						"source_line": 27,
+						"source_line": 30,
 						"type_signature": "({ path, app, backend, upgradeWebSocket, artificial_delay, transport, }: RegisterWebsocketActionsOptions): void",
 						"return_type": "void",
 						"parameters": [
@@ -18595,7 +18631,7 @@
 						"name": "start_server",
 						"kind": "function",
 						"doc_comment": "Start the zzz server using Deno runtime.\n\nCreates the full backend with auth, database, providers, WebSocket, and HTTP RPC\nendpoints via `create_zzz_app`, then serves with `Deno.serve`.",
-						"source_line": 39,
+						"source_line": 45,
 						"type_signature": "(): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": []
@@ -18603,6 +18639,7 @@
 				],
 				"module_comment": "Deno server entry point for zzz.\n\nSingle entry point for both dev mode (`gro dev` via `gro_plugin_deno_server`)\nand production (`zzz daemon start`). Uses the shared `create_zzz_app` factory\nfor the Hono app with fuz_app auth stack, then binds with `Deno.serve`\nand handles daemon lifecycle.",
 				"dependencies": [
+					"server/backend_websocket_transport.ts",
 					"server/create_zzz_app.ts",
 					"server/register_websocket_actions.ts",
 					"server/security.ts",

@@ -47,9 +47,9 @@ describe('load_server_env', () => {
 		assert.strictEqual(config.env.ALLOWED_ORIGINS, 'https://example.com');
 	});
 
-	test('defaults websocket_path to /ws', () => {
+	test('defaults websocket_path to /api/ws', () => {
 		const config = load_server_env(base_env);
-		assert.strictEqual(config.websocket_path, '/ws');
+		assert.strictEqual(config.websocket_path, '/api/ws');
 	});
 
 	test('defaults api_path to /api/rpc', () => {
