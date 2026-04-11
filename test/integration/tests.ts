@@ -10,7 +10,7 @@
  * separate functions in `special_tests`.
  */
 
-import type {BackendConfig} from './config.ts';
+import {INTEGRATION_SCOPED_DIR, type BackendConfig} from './config.ts';
 
 export interface TestResult {
 	name: string;
@@ -532,6 +532,68 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		},
 	},
 	{
+		name: 'auth_required_without_cookie',
+		fn: async (config) => {
+			// Authenticated action without any Cookie header → 401
+			const {status, body} = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'auth-1',
+					method: 'workspace_list',
+				}),
+				// no session_cookie
+			);
+			assert_equal(status, 401, 'status');
+			const r = body as Record<string, unknown>;
+			assert_equal(r.id, 'auth-1', 'id');
+			const error = r.error as Record<string, unknown>;
+			assert_equal(error.code, -32001, 'error code');
+			assert_equal(error.message, 'unauthenticated', 'error message');
+		},
+	},
+	{
+		name: 'auth_required_invalid_cookie',
+		fn: async (config) => {
+			// Authenticated action with garbage cookie → 401
+			const {status, body} = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'auth-2',
+					method: 'workspace_list',
+				}),
+				'fuz_session=garbage-invalid-cookie-value',
+			);
+			assert_equal(status, 401, 'status');
+			const r = body as Record<string, unknown>;
+			assert_equal(r.id, 'auth-2', 'id');
+			const error = r.error as Record<string, unknown>;
+			assert_equal(error.code, -32001, 'error code');
+			assert_equal(error.message, 'unauthenticated', 'error message');
+		},
+	},
+	{
+		name: 'auth_public_no_cookie',
+		fn: async (config) => {
+			// Public action without any Cookie header → 200 success
+			const {status, body} = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'auth-3',
+					method: 'ping',
+				}),
+				// no session_cookie
+			);
+			assert_equal(status, 200, 'status');
+			const r = body as Record<string, unknown>;
+			assert_equal(r.id, 'auth-3', 'id');
+			const result = r.result as Record<string, unknown>;
+			assert_equal(result.ping_id, 'auth-3', 'ping_id');
+		},
+	},
+	{
 		name: 'workspace_close',
 		fn: async (config, session_cookie) => {
 			const tmp_dir = await Deno.makeTempDir({prefix: 'zzz_test_'});
@@ -612,6 +674,149 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 			} finally {
 				await Deno.remove(tmp_dir, {recursive: true});
 			}
+		},
+	},
+
+	// -- WebSocket auth tests -----------------------------------------------------
+	{
+		name: 'ws_auth_required',
+		fn: async (config) => {
+			// Attempt WebSocket connect without cookies → should be rejected
+			const url = ws_url(config);
+			await new Promise<void>((resolve, reject) => {
+				const ws = new WebSocket(url);
+				const timer = setTimeout(() => {
+					ws.close();
+					reject(new Error('WebSocket timeout — expected rejection'));
+				}, 5_000);
+
+				ws.onopen = () => {
+					clearTimeout(timer);
+					ws.close();
+					reject(new Error('WebSocket connected without auth — expected rejection'));
+				};
+
+				ws.onerror = () => {
+					clearTimeout(timer);
+					// Error before open = connection rejected (401 at upgrade)
+					resolve();
+				};
+
+				ws.onclose = (event) => {
+					clearTimeout(timer);
+					// Closed without ever opening = rejection
+					if (event.code !== 1000) {
+						resolve();
+					} else {
+						reject(new Error('WebSocket closed normally — expected rejection'));
+					}
+				};
+			});
+		},
+	},
+
+	// -- Filesystem tests ---------------------------------------------------------
+	{
+		name: 'diskfile_update_and_read',
+		fn: async (config, session_cookie) => {
+			const file_path = `${INTEGRATION_SCOPED_DIR}/test_write.txt`;
+			const content = 'hello from integration test';
+
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'dfu-1',
+					method: 'diskfile_update',
+					params: {path: file_path, content},
+				}),
+				session_cookie,
+			);
+			assert_equal(res.status, 200, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			assert_equal(rpc.result, null, 'result is null');
+
+			// Verify the file exists and has the right content
+			const actual = await Deno.readTextFile(file_path);
+			assert_equal(actual, content, 'file content');
+		},
+	},
+	{
+		name: 'diskfile_delete',
+		fn: async (config, session_cookie) => {
+			const file_path = `${INTEGRATION_SCOPED_DIR}/test_delete.txt`;
+			// Create the file first
+			await Deno.writeTextFile(file_path, 'to be deleted');
+
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'dfd-1',
+					method: 'diskfile_delete',
+					params: {path: file_path},
+				}),
+				session_cookie,
+			);
+			assert_equal(res.status, 200, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			assert_equal(rpc.result, null, 'result is null');
+
+			// Verify file is gone
+			try {
+				await Deno.stat(file_path);
+				throw new Error('file should not exist after delete');
+			} catch (e) {
+				if (!(e instanceof Deno.errors.NotFound)) throw e;
+			}
+		},
+	},
+	{
+		name: 'directory_create',
+		fn: async (config, session_cookie) => {
+			const dir_path = `${INTEGRATION_SCOPED_DIR}/nested/deep/dir`;
+
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'dc-1',
+					method: 'directory_create',
+					params: {path: dir_path},
+				}),
+				session_cookie,
+			);
+			assert_equal(res.status, 200, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			assert_equal(rpc.result, null, 'result is null');
+
+			// Verify directory exists
+			const stat = await Deno.stat(dir_path);
+			assert_equal(stat.isDirectory, true, 'is directory');
+		},
+	},
+	{
+		name: 'diskfile_update_outside_scope',
+		fn: async (config, session_cookie) => {
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'dfo-1',
+					method: 'diskfile_update',
+					params: {path: '/tmp/zzz_outside_scope/evil.txt', content: 'nope'},
+				}),
+				session_cookie,
+			);
+			assert_equal(res.status, 500, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			const error = rpc.error as Record<string, unknown>;
+			assert_equal(error.code, -32603, 'error code');
+			assert_equal(
+				(error.message as string).startsWith('failed to write file:'),
+				true,
+				'error message format',
+			);
 		},
 	},
 ];

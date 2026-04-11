@@ -10,6 +10,7 @@ use serde_json::Value;
 
 use crate::auth::{Keyring, RequestContext};
 use crate::rpc;
+use crate::scoped_fs::ScopedFs;
 
 // -- App state (long-lived, shared via Arc) -----------------------------------
 
@@ -23,6 +24,7 @@ pub struct App {
     pub allowed_origins: Vec<String>,
     pub bootstrap_token_path: Option<String>,
     pub bootstrap_available: AtomicBool,
+    pub scoped_fs: ScopedFs,
 }
 
 impl App {
@@ -32,6 +34,7 @@ impl App {
         allowed_origins: Vec<String>,
         bootstrap_token_path: Option<String>,
         bootstrap_available: bool,
+        scoped_fs: ScopedFs,
     ) -> Self {
         Self {
             workspaces: RwLock::new(HashMap::new()),
@@ -40,6 +43,7 @@ impl App {
             allowed_origins,
             bootstrap_token_path,
             bootstrap_available: AtomicBool::new(bootstrap_available),
+            scoped_fs,
         }
     }
 }
@@ -108,15 +112,16 @@ fn to_normalized_dir(path: &Path) -> Result<String, JsonRpcError> {
 /// Route a method to its handler.
 ///
 /// Auth is checked by the transport BEFORE calling dispatch.
-/// Async to support future handlers that need DB or external I/O.
 /// Match statement dispatch — zero overhead, compiler can inline.
-#[allow(clippy::unused_async)] // async for forward compat — DB handlers will await
 pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     match method {
         "ping" => handle_ping(ctx),
         "workspace_list" => handle_workspace_list(ctx),
         "workspace_open" => handle_workspace_open(params, ctx),
         "workspace_close" => handle_workspace_close(params, ctx),
+        "diskfile_update" => handle_diskfile_update(params, ctx).await,
+        "diskfile_delete" => handle_diskfile_delete(params, ctx).await,
+        "directory_create" => handle_directory_create(params, ctx).await,
         other => Err(rpc::method_not_found(other)),
     }
 }
@@ -248,6 +253,57 @@ fn handle_workspace_close(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRp
             "workspace not open: {path}"
         )));
     }
+
+    Ok(Value::Null)
+}
+
+// -- Filesystem handlers ------------------------------------------------------
+
+async fn handle_diskfile_update(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+    let path = params
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'path' parameter"))?;
+    let content = params
+        .get("content")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'content' parameter"))?;
+
+    ctx.app
+        .scoped_fs
+        .write_file(path, content)
+        .await
+        .map_err(|e| rpc::internal_error(&format!("failed to write file: {e}")))?;
+
+    Ok(Value::Null)
+}
+
+async fn handle_diskfile_delete(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+    let path = params
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'path' parameter"))?;
+
+    ctx.app
+        .scoped_fs
+        .rm(path)
+        .await
+        .map_err(|e| rpc::internal_error(&format!("failed to delete file: {e}")))?;
+
+    Ok(Value::Null)
+}
+
+async fn handle_directory_create(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+    let path = params
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'path' parameter"))?;
+
+    ctx.app
+        .scoped_fs
+        .mkdir(path)
+        .await
+        .map_err(|e| rpc::internal_error(&format!("failed to create directory: {e}")))?;
 
     Ok(Value::Null)
 }

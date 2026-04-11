@@ -13,7 +13,7 @@
  * When running both backends, prints a comparison table at the end.
  */
 
-import {backends, type BackendConfig, TEST_DATABASE_URL} from './config.ts';
+import {backends, type BackendConfig, INTEGRATION_SCOPED_DIR, TEST_DATABASE_URL} from './config.ts';
 import {run_tests, type TestResult} from './tests.ts';
 
 // -- Child process tracking ---------------------------------------------------
@@ -229,6 +229,28 @@ const clean_database = async (): Promise<void> => {
 	}
 };
 
+// -- Scoped filesystem setup --------------------------------------------------
+
+/** Create (or recreate) the scoped directory for filesystem tests. */
+const setup_scoped_dir = async (): Promise<void> => {
+	try {
+		await Deno.remove(INTEGRATION_SCOPED_DIR, {recursive: true});
+	} catch {
+		// Didn't exist
+	}
+	await Deno.mkdir(INTEGRATION_SCOPED_DIR, {recursive: true});
+	console.log(`  Scoped dir ready: ${INTEGRATION_SCOPED_DIR}`);
+};
+
+/** Clean up the scoped directory after a backend run. */
+const cleanup_scoped_dir = async (): Promise<void> => {
+	try {
+		await Deno.remove(INTEGRATION_SCOPED_DIR, {recursive: true});
+	} catch {
+		// Already gone
+	}
+};
+
 // -- Per-backend run ----------------------------------------------------------
 
 interface BackendRun {
@@ -247,6 +269,7 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 	let child: Deno.ChildProcess | null = null;
 	try {
 		await clean_database();
+		await setup_scoped_dir();
 		await write_bootstrap_token(config);
 		child = await start_backend(config);
 		const session_cookie = await setup_auth(config);
@@ -272,6 +295,7 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 		return {name: config.name, results, passed, failed, total_ms};
 	} finally {
 		await cleanup_auth(config);
+		await cleanup_scoped_dir();
 		if (child) await stop_backend(config.name, child);
 	}
 };

@@ -26,7 +26,7 @@ For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
 ## Development Stage
 
-Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) still in-memory. The Hono/Deno backend is the reference implementation. A Rust backend (`crates/zzz_server`) is in development — Phase 2a (cookie session auth, PostgreSQL, bootstrap, per-action auth checks) is complete with 22 integration tests verifying parity. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
+Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) still in-memory. The Hono/Deno backend is the reference implementation. A Rust backend (`crates/zzz_server`) is in development — Phase 2b (cookie session auth on HTTP + WebSocket, filesystem actions with ScopedFs, PostgreSQL, bootstrap, per-action auth checks) is complete with 30 integration tests verifying parity. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
 
 See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 
@@ -60,7 +60,7 @@ The global daemon runs on port 4460 with state at `~/.zzz/`. Built via
 ```
 crates/                               # Rust workspace
 │   ├── CLAUDE.md                     # Rust backend docs
-│   └── zzz_server/                   # Axum JSON-RPC server (Phase 2a: auth)
+│   └── zzz_server/                   # Axum JSON-RPC server (Phase 2b: auth + fs)
 │       └── src/
 │           ├── main.rs               # Entry point, config, DB/keyring init, shutdown
 │           ├── handlers.rs           # App state, Ctx (per-request + auth), dispatch
@@ -69,6 +69,7 @@ crates/                               # Rust workspace
 │           ├── auth.rs               # Keyring, cookie parsing, session validation, auth checks
 │           ├── bootstrap.rs          # POST /bootstrap (first admin account creation)
 │           ├── db.rs                 # Connection pool, migrations, auth queries
+│           ├── scoped_fs.rs          # Scoped filesystem (path validation, symlink rejection)
 │           └── error.rs              # Error types
 test/
 │   └── integration/                  # Cross-backend integration tests (Deno)
@@ -248,11 +249,12 @@ cd ~/dev/private_fuz && cargo build -p fuz_pty --release
 
 ### Rust Backend
 
-Shadow implementation of the Deno server using axum. Phase 2a: `ping`,
-`workspace_list`, `workspace_open`, `workspace_close` with full cookie-based
-auth. PostgreSQL via `tokio-postgres`/`deadpool-postgres`, HMAC-SHA256 cookie
+Shadow implementation of the Deno server using axum. Phase 2b: `ping`,
+`workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create` with
+full cookie-based auth on HTTP and WebSocket, `ScopedFs` path safety.
+PostgreSQL via `tokio-postgres`/`deadpool-postgres`, HMAC-SHA256 cookie
 signing, blake3 session hashing, per-action auth checks, bootstrap endpoint.
-The Deno server is ground truth — 22 integration tests verify both backends
+The Deno server is ground truth — 30 integration tests verify both backends
 produce identical JSON-RPC responses.
 
 ```bash
@@ -502,7 +504,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Rust backend is Phase 2a** — `ping`, `workspace_list`, `workspace_open`, `workspace_close` with cookie session auth, PostgreSQL, and bootstrap. No bearer tokens, no daemon token rotation, no WebSocket auth, no filesystem actions yet. Batch JSON-RPC requests not yet supported. See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
+- **Rust backend is Phase 2b** — 7 RPC methods (`ping`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`) with cookie session auth on HTTP and WebSocket, `ScopedFs`, PostgreSQL, bootstrap. No bearer tokens, no daemon token rotation, no WebSocket connection tracking or event-driven revocation. Batch JSON-RPC requests not yet supported. See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
 
 ## fuz_app
 

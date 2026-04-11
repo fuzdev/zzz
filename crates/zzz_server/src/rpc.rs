@@ -12,10 +12,7 @@ use fuz_common::{
 use serde::Serialize;
 use serde_json::{Map, Value};
 
-use crate::auth::{
-    build_request_context, check_action_auth, check_origin, method_auth,
-    parse_session_from_cookies, RequestContext,
-};
+use crate::auth::{check_action_auth, check_origin, method_auth, resolve_auth_from_headers};
 use crate::handlers::{self, App, Ctx};
 
 // -- JSON-RPC types -----------------------------------------------------------
@@ -114,6 +111,8 @@ const fn error_code_to_http_status(code: i32) -> StatusCode {
             StatusCode::BAD_REQUEST
         }
         JSONRPC_METHOD_NOT_FOUND => StatusCode::NOT_FOUND, // -32601 → 404
+        -32001 => StatusCode::UNAUTHORIZED,                // unauthenticated → 401
+        -32002 => StatusCode::FORBIDDEN,                   // forbidden → 403
         _ => StatusCode::INTERNAL_SERVER_ERROR,            // -32603 and others → 500
     }
 }
@@ -217,31 +216,6 @@ fn extract_id(obj: &Map<String, Value>) -> Value {
     }
 }
 
-// -- Auth resolution for HTTP -------------------------------------------------
-
-/// Resolve request context from HTTP headers (Cookie header).
-///
-/// Returns `None` if no session cookie or session is invalid.
-async fn resolve_http_auth(
-    headers: &HeaderMap,
-    app: &App,
-) -> Option<RequestContext> {
-    let cookie_header = headers
-        .get(axum::http::header::COOKIE)?
-        .to_str()
-        .ok()?;
-
-    let session_token = parse_session_from_cookies(cookie_header, &app.keyring)?;
-
-    match build_request_context(&app.db_pool, &session_token).await {
-        Ok(ctx) => ctx,
-        Err(e) => {
-            tracing::warn!(error = %e, "auth context build failed");
-            None
-        }
-    }
-}
-
 // -- HTTP handler -------------------------------------------------------------
 
 /// Axum handler for `POST /rpc`.
@@ -280,7 +254,7 @@ pub async fn rpc_handler(
     );
 
     // 2. Resolve auth context (cookie → session → account/actor/permits)
-    let auth_context = resolve_http_auth(&headers, &app).await;
+    let auth_context = resolve_auth_from_headers(&headers, &app.keyring, &app.db_pool).await;
 
     // 3. Classify, check auth, then dispatch
     match classify(&value) {

@@ -170,6 +170,17 @@ pub fn hash_session_token(token: &str) -> String {
     blake3::hash(token.as_bytes()).to_hex().to_string()
 }
 
+// -- Auth errors --------------------------------------------------------------
+
+/// Errors from building a request context (pool or query failures).
+#[derive(Debug, thiserror::Error)]
+pub enum AuthError {
+    #[error("pool error: {0}")]
+    Pool(#[from] deadpool_postgres::PoolError),
+    #[error("query error: {0}")]
+    Query(#[from] tokio_postgres::Error),
+}
+
 // -- Request context ----------------------------------------------------------
 
 /// Authenticated request context — account + actor + active permits.
@@ -196,42 +207,31 @@ impl RequestContext {
 pub async fn build_request_context(
     pool: &deadpool_postgres::Pool,
     session_token: &str,
-) -> Result<Option<RequestContext>, String> {
-    let client = pool
-        .get()
-        .await
-        .map_err(|e| format!("pool error: {e}"))?;
+) -> Result<Option<RequestContext>, AuthError> {
+    let client = pool.get().await?;
 
     // Hash token → look up session
     let token_hash = hash_session_token(session_token);
-    let session = query_session_get_valid(&client, &token_hash)
-        .await
-        .map_err(|e| format!("session query error: {e}"))?;
+    let session = query_session_get_valid(&client, &token_hash).await?;
 
     let Some(session) = session else {
         return Ok(None);
     };
 
     // Build context: account → actor → permits
-    let account = query_account_by_id(&client, &session.account_id)
-        .await
-        .map_err(|e| format!("account query error: {e}"))?;
+    let account = query_account_by_id(&client, &session.account_id).await?;
 
     let Some(account) = account else {
         return Ok(None);
     };
 
-    let actor = query_actor_by_account(&client, &account.id)
-        .await
-        .map_err(|e| format!("actor query error: {e}"))?;
+    let actor = query_actor_by_account(&client, &account.id).await?;
 
     let Some(actor) = actor else {
         return Ok(None);
     };
 
-    let permits = query_permits_for_actor(&client, &actor.id)
-        .await
-        .map_err(|e| format!("permits query error: {e}"))?;
+    let permits = query_permits_for_actor(&client, &actor.id).await?;
 
     // Touch session (fire-and-forget — don't block the request)
     let touch_pool = pool.clone();
@@ -261,14 +261,18 @@ pub enum ActionAuth {
     Public,
     /// Must have a valid session.
     Authenticated,
-    /// Must have keeper role (requires `daemon_token` in `fuz_app`, but for
-    /// Phase 2a we check keeper permit on cookie sessions).
+    /// Must have keeper role. In `fuz_app` this requires `daemon_token`
+    /// credential type; the Rust backend checks keeper permit on cookie sessions.
     Keeper,
 }
 
 /// JSON-RPC error codes for auth failures.
-const JSONRPC_UNAUTHENTICATED: i32 = -32000;
-const JSONRPC_FORBIDDEN: i32 = -32001;
+///
+/// Matches `fuz_app/src/lib/http/jsonrpc_errors.ts`:
+/// - unauthenticated: -32001 → HTTP 401
+/// - forbidden: -32002 → HTTP 403
+const JSONRPC_UNAUTHENTICATED: i32 = -32001;
+const JSONRPC_FORBIDDEN: i32 = -32002;
 
 /// Check per-action auth.
 ///
@@ -369,6 +373,31 @@ pub fn check_origin(origin: &str, allowed_patterns: &[String]) -> bool {
                 }
     }
     false
+}
+
+/// Resolve request context from HTTP headers (Cookie header).
+///
+/// Returns `None` if no session cookie or session is invalid.
+/// Used by both HTTP RPC and WebSocket upgrade handlers.
+pub async fn resolve_auth_from_headers(
+    headers: &axum::http::HeaderMap,
+    keyring: &Keyring,
+    pool: &deadpool_postgres::Pool,
+) -> Option<RequestContext> {
+    let cookie_header = headers
+        .get(axum::http::header::COOKIE)?
+        .to_str()
+        .ok()?;
+
+    let session_token = parse_session_from_cookies(cookie_header, keyring)?;
+
+    match build_request_context(pool, &session_token).await {
+        Ok(ctx) => ctx,
+        Err(e) => {
+            tracing::warn!(error = %e, "auth context build failed");
+            None
+        }
+    }
 }
 
 /// Parse `ALLOWED_ORIGINS` env value into a list of patterns.

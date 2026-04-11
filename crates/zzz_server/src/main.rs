@@ -4,6 +4,7 @@ mod db;
 mod error;
 mod handlers;
 mod rpc;
+mod scoped_fs;
 mod ws;
 
 use std::net::SocketAddr;
@@ -64,12 +65,15 @@ async fn run() -> Result<(), ServerError> {
         .map(auth::parse_allowed_origins)
         .unwrap_or_default();
 
+    let scoped_fs = scoped_fs::ScopedFs::new(config.scoped_dirs);
+
     let app_state = Arc::new(handlers::App::new(
         pool,
         keyring,
         allowed_origins,
         config.bootstrap_token_path,
         bootstrap_available,
+        scoped_fs,
     ));
 
     let mut app = Router::new()
@@ -126,6 +130,7 @@ struct Config {
     secret_cookie_keys: String,
     bootstrap_token_path: Option<String>,
     allowed_origins: Option<String>,
+    scoped_dirs: Vec<PathBuf>,
 }
 
 fn parse_config() -> Result<Config, ServerError> {
@@ -183,6 +188,14 @@ fn parse_config() -> Result<Config, ServerError> {
     let bootstrap_token_path = std::env::var("BOOTSTRAP_TOKEN_PATH").ok();
     let allowed_origins = std::env::var("ALLOWED_ORIGINS").ok();
 
+    let scoped_dirs = std::env::var("PUBLIC_ZZZ_SCOPED_DIRS")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .collect();
+
     Ok(Config {
         port: port.unwrap_or(DEFAULT_PORT),
         static_dir,
@@ -190,6 +203,7 @@ fn parse_config() -> Result<Config, ServerError> {
         secret_cookie_keys,
         bootstrap_token_path,
         allowed_origins,
+        scoped_dirs,
     })
 }
 
