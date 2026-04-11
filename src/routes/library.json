@@ -7888,7 +7888,7 @@
 							{
 								"name": "constructor",
 								"kind": "constructor",
-								"type_signature": "(url: string, headers?: Record<string, string> | undefined): FrontendHttpTransport",
+								"type_signature": "(url: string, headers?: Record<string, string> | undefined, has_side_effects?: ((method: string) => boolean) | undefined): FrontendHttpTransport",
 								"parameters": [
 									{
 										"name": "url",
@@ -7897,6 +7897,11 @@
 									{
 										"name": "headers",
 										"type": "Record<string, string> | undefined",
+										"optional": true
+									},
+									{
+										"name": "has_side_effects",
+										"type": "((method: string) => boolean) | undefined",
 										"optional": true
 									}
 								]
@@ -7954,9 +7959,39 @@
 				"path": "frontend_websocket_transport.ts",
 				"declarations": [
 					{
+						"name": "WebsocketConnection",
+						"kind": "type",
+						"doc_comment": "Minimal interface for a WebSocket connection, decoupled from the concrete Socket Cell.",
+						"source_line": 29,
+						"type_signature": "WebsocketConnection",
+						"properties": [
+							{
+								"name": "send",
+								"kind": "variable",
+								"type_signature": "(data: object) => boolean"
+							},
+							{
+								"name": "connected",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "boolean"
+							},
+							{
+								"name": "add_message_handler",
+								"kind": "variable",
+								"type_signature": "(handler: (event: MessageEvent) => void) => () => void"
+							},
+							{
+								"name": "add_error_handler",
+								"kind": "variable",
+								"type_signature": "(handler: (event: Event) => void) => () => void"
+							}
+						]
+					},
+					{
 						"name": "FrontendWebsocketTransport",
 						"kind": "class",
-						"source_line": 27,
+						"source_line": 36,
 						"extends": [],
 						"implements": ["Transport"],
 						"members": [
@@ -7968,11 +8003,15 @@
 							{
 								"name": "constructor",
 								"kind": "constructor",
-								"type_signature": "(socket: Socket, request_timeout_ms?: number | undefined): FrontendWebsocketTransport",
+								"type_signature": "(connection: WebsocketConnection, receive: (data: unknown) => Promise<unknown>, request_timeout_ms?: number | undefined): FrontendWebsocketTransport",
 								"parameters": [
 									{
-										"name": "socket",
-										"type": "Socket"
+										"name": "connection",
+										"type": "WebsocketConnection"
+									},
+									{
+										"name": "receive",
+										"type": "(data: unknown) => Promise<unknown>"
 									},
 									{
 										"name": "request_timeout_ms",
@@ -16025,7 +16064,7 @@
 					{
 						"name": "BackendActionsApi",
 						"kind": "type",
-						"source_line": 26,
+						"source_line": 25,
 						"type_signature": "BackendActionsApi",
 						"properties": [
 							{
@@ -16063,7 +16102,7 @@
 					{
 						"name": "create_backend_actions_api",
 						"kind": "function",
-						"source_line": 76,
+						"source_line": 75,
 						"type_signature": "(backend: Backend): BackendActionsApi",
 						"return_type": "BackendActionsApi",
 						"parameters": [
@@ -16077,7 +16116,7 @@
 						"name": "handle_filer_change",
 						"kind": "function",
 						"doc_comment": "Handle file system changes and notify clients.",
-						"source_line": 92,
+						"source_line": 91,
 						"type_signature": "(change: WatcherChange, disknode: Disknode, backend: Backend, dir: string, filer: Filer): void",
 						"return_type": "void",
 						"parameters": [

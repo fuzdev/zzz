@@ -216,11 +216,18 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		// Set up transports, adding websocket first so it'll be the default
 		if (options.socket_url) {
 			this.socket.connect(options.socket_url);
-			this.peer.transports.register_transport(new FrontendWebsocketTransport(this.socket));
+			this.peer.transports.register_transport(
+				new FrontendWebsocketTransport(this.socket, (data) => this.peer.receive(data)),
+			);
 		}
 		if (options.http_rpc_url) {
 			this.peer.transports.register_transport(
-				new FrontendHttpTransport(options.http_rpc_url, options.http_headers),
+				new FrontendHttpTransport(
+					options.http_rpc_url,
+					options.http_headers,
+					(method) =>
+						this.action_registry.spec_by_method.get(method as ActionMethod)?.side_effects ?? true,
+				),
 			);
 		}
 

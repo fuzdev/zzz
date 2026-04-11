@@ -24,10 +24,16 @@ export class FrontendHttpTransport implements Transport {
 
 	#url: string;
 	#headers: Record<string, string>;
+	#has_side_effects: ((method: string) => boolean) | undefined;
 
-	constructor(url: string, headers?: Record<string, string>) {
+	constructor(
+		url: string,
+		headers?: Record<string, string>,
+		has_side_effects?: (method: string) => boolean,
+	) {
 		this.#url = url;
 		this.#headers = headers ?? {'content-type': 'application/json', accept: 'application/json'};
+		this.#has_side_effects = has_side_effects;
 	}
 
 	async send(message: JsonrpcRequest): Promise<JsonrpcResponseOrError>;
@@ -36,13 +42,29 @@ export class FrontendHttpTransport implements Transport {
 		message: JsonrpcMessageFromClientToServer,
 	): Promise<JsonrpcMessageFromServerToClient | null> {
 		try {
-			const response = await fetch(this.#url, {
-				method: 'POST', // TODO support GET when `!spec.side_effects`
-				headers: this.#headers, // TODO support custom headers, maybe just as a second arg
-				body: JSON.stringify(message),
-				// TODO
-				// signal: AbortSignal.timeout(REQUEST_TIMEOUT),
-			});
+			let response: Response;
+			if (this.#has_side_effects && !this.#has_side_effects(message.method) && 'id' in message) {
+				// GET for read-only actions (matching fuz_app's create_rpc_endpoint GET convention)
+				const search_params = new URLSearchParams();
+				search_params.set('method', message.method);
+				search_params.set('id', String(message.id));
+				if (message.params !== undefined) {
+					search_params.set('params', JSON.stringify(message.params));
+				}
+				const separator = this.#url.includes('?') ? '&' : '?';
+				response = await fetch(`${this.#url}${separator}${search_params.toString()}`, {
+					method: 'GET',
+					headers: this.#headers,
+				});
+			} else {
+				response = await fetch(this.#url, {
+					method: 'POST',
+					headers: this.#headers,
+					body: JSON.stringify(message),
+					// TODO
+					// signal: AbortSignal.timeout(REQUEST_TIMEOUT),
+				});
+			}
 
 			const result = await response.json();
 

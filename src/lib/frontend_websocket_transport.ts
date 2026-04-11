@@ -1,6 +1,5 @@
 // @slop Claude Opus 4
 
-import type {Socket} from './socket.svelte.js';
 import {RequestTracker} from './request_tracker.svelte.js';
 import {ThrownJsonrpcError, jsonrpc_error_messages} from './jsonrpc_errors.js';
 import {
@@ -24,20 +23,36 @@ import {UNKNOWN_ERROR_MESSAGE} from './constants.js';
 
 // TODO logging - maybe add a getter to Cell that falls back to the app logger?
 
+/**
+ * Minimal interface for a WebSocket connection, decoupled from the concrete Socket Cell.
+ */
+export interface WebsocketConnection {
+	send: (data: object) => boolean;
+	readonly connected: boolean;
+	add_message_handler: (handler: (event: MessageEvent) => void) => () => void;
+	add_error_handler: (handler: (event: Event) => void) => () => void;
+}
+
 export class FrontendWebsocketTransport implements Transport {
 	readonly transport_name = 'frontend_websocket_rpc' as const;
 
-	#socket: Socket;
+	#connection: WebsocketConnection;
+	#receive: (data: unknown) => Promise<unknown>;
 	#request_tracker: RequestTracker;
 	#remove_message_handler: (() => void) | null;
 	#remove_error_handler: (() => void) | null;
 
-	constructor(socket: Socket, request_timeout_ms?: number) {
-		this.#socket = socket;
+	constructor(
+		connection: WebsocketConnection,
+		receive: (data: unknown) => Promise<unknown>,
+		request_timeout_ms?: number,
+	) {
+		this.#connection = connection;
+		this.#receive = receive;
 		this.#request_tracker = new RequestTracker(request_timeout_ms);
 
 		// TODO maybe we want to do this setup elsewhere, not hardcoded like this
-		this.#remove_message_handler = socket.add_message_handler(async (event) => {
+		this.#remove_message_handler = connection.add_message_handler(async (event) => {
 			try {
 				const data = JSON.parse(event.data);
 
@@ -48,7 +63,7 @@ export class FrontendWebsocketTransport implements Transport {
 					this.#request_tracker.handle_message(data);
 				} else if (is_jsonrpc_request(data) || is_jsonrpc_notification(data)) {
 					// This is a new request/notification from the server
-					await socket.app.peer.receive(data);
+					await this.#receive(data);
 				} else {
 					console.warn('[ws_transport] received unknown message type:', data);
 				}
@@ -59,7 +74,7 @@ export class FrontendWebsocketTransport implements Transport {
 			}
 		});
 
-		this.#remove_error_handler = socket.add_error_handler((event) => {
+		this.#remove_error_handler = connection.add_error_handler((event) => {
 			console.error('[ws_transport] WebSocket error:', event);
 		});
 	}
@@ -81,14 +96,14 @@ export class FrontendWebsocketTransport implements Transport {
 			if (is_jsonrpc_request(message)) {
 				// TODO track the whole request?
 				const deferred = this.#request_tracker.track_request(message.id);
-				this.#socket.send(message);
+				this.#connection.send(message);
 
 				// Return the promise that will resolve when the response is received
 				const result = await deferred.promise;
 				return result;
 			} else if (is_jsonrpc_notification(message)) {
 				// For notifications, just send without tracking
-				this.#socket.send(message);
+				this.#connection.send(message);
 				return null;
 			}
 			// Invalid message type - return error with id if available
@@ -112,7 +127,7 @@ export class FrontendWebsocketTransport implements Transport {
 	}
 
 	is_ready(): boolean {
-		return this.#socket.connected;
+		return this.#connection.connected;
 	}
 
 	dispose(): void {
