@@ -1,16 +1,25 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::RwLock;
 
 use deadpool_postgres::Pool;
 use fuz_common::JsonRpcError;
 use serde::Serialize;
 use serde_json::Value;
+use tokio::sync::mpsc;
 
 use crate::auth::{Keyring, RequestContext};
 use crate::rpc;
 use crate::scoped_fs::ScopedFs;
+
+// -- Connection tracking types ------------------------------------------------
+
+/// Unique ID for a WebSocket connection, allocated via `App::next_connection_id`.
+pub type ConnectionId = u64;
+
+/// Handle to a connected WebSocket client — messages sent here are forwarded to the WS sink.
+pub type ConnectionSender = mpsc::UnboundedSender<String>;
 
 // -- App state (long-lived, shared via Arc) -----------------------------------
 
@@ -25,9 +34,16 @@ pub struct App {
     pub bootstrap_token_path: Option<String>,
     pub bootstrap_available: AtomicBool,
     pub scoped_fs: ScopedFs,
+    pub zzz_dir: String,
+    pub scoped_dirs: Vec<String>,
+    /// Monotonic counter for assigning unique connection IDs.
+    next_connection_id: AtomicU64,
+    /// Active WebSocket connections — keyed by `ConnectionId`, value is a channel sender.
+    pub connections: RwLock<HashMap<ConnectionId, ConnectionSender>>,
 }
 
 impl App {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         db_pool: Pool,
         keyring: Keyring,
@@ -35,6 +51,8 @@ impl App {
         bootstrap_token_path: Option<String>,
         bootstrap_available: bool,
         scoped_fs: ScopedFs,
+        zzz_dir: String,
+        scoped_dirs: Vec<String>,
     ) -> Self {
         Self {
             workspaces: RwLock::new(HashMap::new()),
@@ -44,6 +62,48 @@ impl App {
             bootstrap_token_path,
             bootstrap_available: AtomicBool::new(bootstrap_available),
             scoped_fs,
+            zzz_dir,
+            scoped_dirs,
+            next_connection_id: AtomicU64::new(1),
+            connections: RwLock::new(HashMap::new()),
+        }
+    }
+
+    /// Allocate a new connection ID and register the sender.
+    ///
+    /// Returns the ID — caller must call `remove_connection` on disconnect.
+    pub fn add_connection(&self, sender: ConnectionSender) -> ConnectionId {
+        let id = self
+            .next_connection_id
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if let Ok(mut conns) = self.connections.write() {
+            conns.insert(id, sender);
+        }
+        id
+    }
+
+    /// Remove a connection by ID (called on WS disconnect).
+    pub fn remove_connection(&self, id: ConnectionId) {
+        if let Ok(mut conns) = self.connections.write() {
+            conns.remove(&id);
+        }
+    }
+
+    /// Broadcast a message to all connected clients.
+    pub fn broadcast(&self, message: &str) {
+        if let Ok(conns) = self.connections.read() {
+            for sender in conns.values() {
+                let _ = sender.send(message.to_owned());
+            }
+        }
+    }
+
+    /// Send a message to a specific connection.
+    pub fn send_to(&self, id: ConnectionId, message: &str) {
+        if let Ok(conns) = self.connections.read() {
+            if let Some(sender) = conns.get(&id) {
+                let _ = sender.send(message.to_owned());
+            }
         }
     }
 }
@@ -91,6 +151,20 @@ struct WorkspaceOpenResult {
     files: Vec<Value>, // always empty — no file watching in Rust backend yet
 }
 
+#[derive(Serialize)]
+struct SessionLoadData {
+    files: Vec<Value>,         // always empty — no filers in Rust backend yet
+    zzz_dir: String,
+    scoped_dirs: Vec<String>,
+    provider_status: Vec<Value>, // always empty — no providers in Rust backend yet
+    workspaces: Vec<WorkspaceInfo>,
+}
+
+#[derive(Serialize)]
+struct SessionLoadResult {
+    data: SessionLoadData,
+}
+
 // -- Path helpers -------------------------------------------------------------
 
 /// Convert a resolved path to a normalized directory string with trailing `/`.
@@ -116,12 +190,14 @@ fn to_normalized_dir(path: &Path) -> Result<String, JsonRpcError> {
 pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     match method {
         "ping" => handle_ping(ctx),
+        "session_load" => handle_session_load(ctx),
         "workspace_list" => handle_workspace_list(ctx),
         "workspace_open" => handle_workspace_open(params, ctx),
         "workspace_close" => handle_workspace_close(params, ctx),
         "diskfile_update" => handle_diskfile_update(params, ctx).await,
         "diskfile_delete" => handle_diskfile_delete(params, ctx).await,
         "directory_create" => handle_directory_create(params, ctx).await,
+        "provider_load_status" => handle_provider_load_status(),
         other => Err(rpc::method_not_found(other)),
     }
 }
@@ -133,6 +209,33 @@ fn handle_ping(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
         ping_id: ctx.request_id,
     };
     serde_json::to_value(result).map_err(|_| rpc::internal_error("serialization failed"))
+}
+
+fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+    let workspaces: Vec<WorkspaceInfo> = {
+        let ws = ctx
+            .app
+            .workspaces
+            .read()
+            .map_err(|_| rpc::internal_error("lock poisoned"))?;
+        ws.values().cloned().collect()
+    };
+    let result = SessionLoadResult {
+        data: SessionLoadData {
+            files: vec![],
+            zzz_dir: ctx.app.zzz_dir.clone(),
+            scoped_dirs: ctx.app.scoped_dirs.clone(),
+            provider_status: vec![],
+            workspaces,
+        },
+    };
+    serde_json::to_value(result).map_err(|_| rpc::internal_error("serialization failed"))
+}
+
+fn handle_provider_load_status() -> Result<Value, JsonRpcError> {
+    // Stub — no providers configured in the Rust backend yet
+    serde_json::to_value(Vec::<Value>::new())
+        .map_err(|_| rpc::internal_error("serialization failed"))
 }
 
 fn handle_workspace_list(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {

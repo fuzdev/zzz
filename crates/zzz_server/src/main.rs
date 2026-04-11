@@ -65,6 +65,12 @@ async fn run() -> Result<(), ServerError> {
         .map(auth::parse_allowed_origins)
         .unwrap_or_default();
 
+    let scoped_dir_strings: Vec<String> = config
+        .scoped_dirs
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+
     let scoped_fs = scoped_fs::ScopedFs::new(config.scoped_dirs);
 
     let app_state = Arc::new(handlers::App::new(
@@ -74,6 +80,8 @@ async fn run() -> Result<(), ServerError> {
         config.bootstrap_token_path,
         bootstrap_available,
         scoped_fs,
+        config.zzz_dir,
+        scoped_dir_strings,
     ));
 
     let mut app = Router::new()
@@ -131,6 +139,7 @@ struct Config {
     bootstrap_token_path: Option<String>,
     allowed_origins: Option<String>,
     scoped_dirs: Vec<PathBuf>,
+    zzz_dir: String,
 }
 
 fn parse_config() -> Result<Config, ServerError> {
@@ -196,6 +205,8 @@ fn parse_config() -> Result<Config, ServerError> {
         .map(PathBuf::from)
         .collect();
 
+    let zzz_dir = std::env::var("PUBLIC_ZZZ_DIR").unwrap_or_else(|_| ".zzz/".to_owned());
+
     Ok(Config {
         port: port.unwrap_or(DEFAULT_PORT),
         static_dir,
@@ -204,6 +215,7 @@ fn parse_config() -> Result<Config, ServerError> {
         bootstrap_token_path,
         allowed_origins,
         scoped_dirs,
+        zzz_dir,
     })
 }
 

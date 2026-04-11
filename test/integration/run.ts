@@ -15,6 +15,8 @@
 
 import {backends, type BackendConfig, INTEGRATION_SCOPED_DIR, TEST_DATABASE_URL} from './config.ts';
 import {run_tests, type TestResult} from './tests.ts';
+// @ts-ignore — npm specifier, resolved at runtime by Deno
+import {hash as blake3_hash} from 'npm:@fuzdev/blake3_wasm';
 
 // -- Child process tracking ---------------------------------------------------
 
@@ -190,6 +192,89 @@ const cleanup_auth = async (config: BackendConfig): Promise<void> => {
 	}
 };
 
+// -- Non-keeper user setup ----------------------------------------------------
+
+/** Bytes-to-hex helper. */
+const bytes_to_hex = (bytes: Uint8Array): string =>
+	Array.from(bytes)
+		.map((b) => b.toString(16).padStart(2, '0'))
+		.join('');
+
+/**
+ * Sign a value with HMAC-SHA256 using the test cookie key.
+ *
+ * Returns `{value}.{base64(signature)}` — same format as auth.rs `Keyring::sign`.
+ */
+const hmac_sign = async (value: string, key_str: string): Promise<string> => {
+	const encoder = new TextEncoder();
+	const key = await crypto.subtle.importKey(
+		'raw',
+		encoder.encode(key_str),
+		{name: 'HMAC', hash: 'SHA-256'},
+		false,
+		['sign'],
+	);
+	const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(value));
+	// Standard base64 (not URL-safe) — matches Rust's STANDARD engine
+	const sig_b64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
+	return `${value}.${sig_b64}`;
+};
+
+/**
+ * Create a non-keeper authenticated user directly in the test database.
+ *
+ * Inserts account + actor (no keeper permit) + session via psql,
+ * then signs a session cookie using HMAC-SHA256.
+ */
+const setup_non_keeper_user = async (config: BackendConfig): Promise<string | undefined> => {
+	if (!config.auth || !config.env) return undefined;
+
+	const cookie_key = config.env.SECRET_COOKIE_KEYS;
+	if (!cookie_key) return undefined;
+
+	const session_token = 'test-non-keeper-session-token';
+	const token_hash = bytes_to_hex(blake3_hash(new TextEncoder().encode(session_token)));
+
+	// expires_at: 30 days from now (seconds since epoch)
+	const expires_at = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
+
+	// Insert account, actor (no keeper permit), and session via psql
+	const sql = `
+		INSERT INTO account (id, username, password_hash)
+		VALUES ('00000000-0000-0000-0000-000000000002', 'testuser', '$argon2id$v=19$m=19456,t=2,p=1$dummy$dummyhash000000000000000000000000000')
+		ON CONFLICT DO NOTHING;
+
+		INSERT INTO actor (id, account_id, name)
+		VALUES ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000002', 'testuser')
+		ON CONFLICT DO NOTHING;
+
+		INSERT INTO auth_session (id, account_id, expires_at)
+		VALUES ('${token_hash}', '00000000-0000-0000-0000-000000000002', NOW() + INTERVAL '30 days')
+		ON CONFLICT DO NOTHING;
+	`;
+
+	const cmd = new Deno.Command('psql', {
+		args: [TEST_DATABASE_URL, '-c', sql],
+		stdout: 'null',
+		stderr: 'piped',
+	});
+	const child = cmd.spawn();
+	const status = await child.status;
+	if (!status.success) {
+		const stderr_text = (await new Response(child.stderr).text()).trim();
+		console.warn(`  Non-keeper user setup warning: ${stderr_text}`);
+		return undefined;
+	}
+	await child.stderr.cancel();
+
+	// Sign the cookie: {session_token}:{expires_at}.{signature}
+	const cookie_value = await hmac_sign(`${session_token}:${expires_at}`, cookie_key);
+	// Set both cookie names: Rust uses fuz_session, Deno uses zzz_session
+	const cookie = `fuz_session=${cookie_value}; zzz_session=${cookie_value}`;
+	console.log('  Non-keeper user created');
+	return cookie;
+};
+
 /**
  * Clean auth tables in the test database before a backend run.
  *
@@ -273,7 +358,8 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 		await write_bootstrap_token(config);
 		child = await start_backend(config);
 		const session_cookie = await setup_auth(config);
-		const results = await run_tests(config, filter, session_cookie);
+		const non_keeper_cookie = await setup_non_keeper_user(config);
+		const results = await run_tests(config, filter, session_cookie, non_keeper_cookie);
 
 		let passed = 0;
 		let failed = 0;

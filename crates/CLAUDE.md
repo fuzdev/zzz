@@ -4,13 +4,16 @@ Shadow implementation of the Deno/Hono server using axum. Same JSON-RPC 2.0
 protocol, same wire format — the Deno server is ground truth and the
 integration tests enforce identical behaviour between both backends.
 
-Phase 2b complete: cookie-based auth on both HTTP and WebSocket, filesystem
+Phase 2b+ complete: cookie-based auth on both HTTP and WebSocket, filesystem
 actions (`diskfile_update`, `diskfile_delete`, `directory_create`) with
-`ScopedFs` path safety, per-action auth checks on all transports, and a
-bootstrap endpoint for first-time account creation. Database (PostgreSQL via
-`tokio-postgres`/`deadpool-postgres`), HMAC-SHA256 cookie signing
-(`fuz_session`), blake3 session hashing. All other methods return
-`method_not_found`.
+`ScopedFs` path safety, per-action auth checks on all transports, a
+bootstrap endpoint for first-time account creation, `session_load` handler
+(returns zzz_dir, scoped_dirs, workspaces), `provider_load_status` stub
+(returns empty array), and WebSocket connection tracking with
+`broadcast`/`send_to` infrastructure for future remote_notification
+actions. Database (PostgreSQL via `tokio-postgres`/`deadpool-postgres`),
+HMAC-SHA256 cookie signing (`fuz_session`), blake3 session hashing.
+All other methods return `method_not_found`.
 
 ## Prerequisites
 
@@ -117,15 +120,18 @@ management routes (login/logout/signup), event-driven socket revocation.
 
 ## Integration Tests
 
-30 tests verify identical Deno/Rust behaviour. Both backends bootstrap
-auth (admin account + session cookie) before tests. The test database
-(`zzz_test` by default, configurable via `TEST_DATABASE_URL`) is cleaned
-(TRUNCATE CASCADE) before each backend run. A scoped directory
-(`/tmp/zzz_integration_scoped`) is created for filesystem tests.
+37 tests verify identical Deno/Rust behaviour. Both backends bootstrap
+auth (admin account + session cookie) and create a non-keeper user
+(account + actor + session, no keeper permit, cookie signed via HMAC-SHA256)
+before tests. The test database (`zzz_test` by default, configurable via
+`TEST_DATABASE_URL`) is cleaned (TRUNCATE CASCADE) before each backend run.
+A scoped directory (`/tmp/zzz_integration_scoped`) is created for filesystem
+tests.
 
 **WS tests (both backends):** `ping_ws`, `parse_error_ws`,
 `method_not_found_ws`, `invalid_request_ws`, `notification_ws`,
-`multi_message_ws` — 6 tests verify identical WS behaviour.
+`multi_message_ws`, `ws_workspace_list` — 7 tests verify identical WS
+behaviour including authenticated actions over WebSocket.
 
 **HTTP tests (both backends):** `null_id_is_invalid`, `parse_error_http`,
 `parse_error_empty_body`, `method_not_found_http`, `invalid_request_*`
@@ -141,15 +147,23 @@ echoes the JSON-RPC request id back as `ping_id`.
 `workspace_close` — 4 tests.
 
 **Auth tests (both backends):** `auth_required_without_cookie`,
-`auth_required_invalid_cookie`, `auth_public_no_cookie` — 3 tests verify
-auth enforcement (unauthenticated → -32001/401, public → success).
+`auth_required_invalid_cookie`, `auth_public_no_cookie`,
+`auth_keeper_forbidden` — 4 tests verify auth enforcement (unauthenticated
+→ -32001/401, public → success, non-keeper calling keeper action → -32002/403).
 
 **WebSocket auth test (both backends):** `ws_auth_required` — 1 test verifies
 unauthenticated WS upgrade is rejected.
 
+**Session/provider tests (both backends):** `session_load_basic`,
+`provider_load_status_empty` — 2 tests verify session data loading and
+provider status stub.
+
 **Filesystem tests (both backends):** `diskfile_update_and_read`,
-`diskfile_delete`, `directory_create`, `diskfile_update_outside_scope` —
-4 tests verify scoped filesystem operations and path rejection.
+`diskfile_delete`, `directory_create`, `diskfile_update_outside_scope`,
+`diskfile_update_path_traversal`, `diskfile_update_relative_path`,
+`diskfile_delete_nonexistent` — 7 tests verify scoped filesystem operations,
+path traversal rejection, relative path rejection, and nonexistent file
+deletion.
 
 ```bash
 deno task test:integration --backend=rust   # Rust only
@@ -166,10 +180,10 @@ cookie, then stops the backend and cleans up.
 
 ```
 crates/zzz_server/src/
-├── main.rs        # Entry, config parsing, DB/keyring init, graceful shutdown
-├── handlers.rs    # App (server state), Ctx (per-request + auth), dispatch
+├── main.rs        # Entry, config parsing (incl. PUBLIC_ZZZ_DIR), DB/keyring init, graceful shutdown
+├── handlers.rs    # App (server state + connection tracking), Ctx (per-request + auth), dispatch
 ├── rpc.rs         # JSON-RPC classify, HTTP handler with auth pipeline
-├── ws.rs          # WebSocket upgrade with cookie auth + message loop
+├── ws.rs          # WebSocket upgrade with cookie auth, connection tracking, select! message loop
 ├── auth.rs        # Keyring, cookie parsing, session validation, per-action auth
 ├── bootstrap.rs   # POST /bootstrap handler (account + session creation)
 ├── db.rs          # Connection pool, migrations, auth queries
@@ -179,9 +193,11 @@ crates/zzz_server/src/
 
 **App/Ctx/dispatch pattern**: `App` holds long-lived server state (workspaces
 in `RwLock<HashMap>`, `deadpool_postgres::Pool`, `Keyring`, origin config,
-`ScopedFs`), constructed once in `main`, wrapped in `Arc`. `Ctx` is per-request
-context (borrows `App`, `request_id`, `auth: Option<&RequestContext>`),
-constructed by each transport before calling `handlers::dispatch`.
+`ScopedFs`, `zzz_dir`, `scoped_dirs`, connection tracking via `AtomicU64` +
+`RwLock<HashMap<ConnectionId, UnboundedSender>>`), constructed once in `main`,
+wrapped in `Arc`. `Ctx` is per-request context (borrows `App`, `request_id`,
+`auth: Option<&RequestContext>`), constructed by each transport before calling
+`handlers::dispatch`.
 
 **Auth pipeline** (HTTP RPC path):
 1. Origin verification (if `Origin` header present)
@@ -197,19 +213,21 @@ constructed by each transport before calling `handlers::dispatch`.
 
 ## Known Issues
 
-- **No keeper auth-rejection test** — missing: keeper method without keeper
-  role (requires a non-keeper authenticated user).
 - **No per-message WS session revalidation** — upgrade-time auth only. Event-
   driven revocation (matching Deno) not yet implemented.
+- **error.data gap** — Deno includes Zod validation details in `error.data`
+  for -32602 errors; Rust omits `error.data`. The integration test
+  `normalize_error_data` function handles this. No other error format
+  asymmetries exist.
 
 ## Known Limitations
 
-- 7 RPC methods (`ping`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`)
+- 9 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `provider_load_status` stub)
 - No batch request support (JSON arrays)
-- No WebSocket connection tracking for broadcast notifications
 - No bearer token auth, daemon token rotation, or account management routes
 - No file watching / `filer_change` notifications
 - No completion/streaming, Ollama, or terminal actions
+- `provider_load_status` returns `[]` — no provider integration yet
 
 ## Design Decisions
 
@@ -232,10 +250,10 @@ constructed by each transport before calling `handlers::dispatch`.
 
 **Phase 3** (next):
 1. Bearer token auth (API tokens, daemon tokens)
-2. WebSocket connection tracking for broadcast notifications
-3. Event-driven socket revocation (session/token revoke, logout, password change)
-4. Keeper auth-rejection integration test (non-keeper user)
-5. Codegen from Zod specs (action input/output types)
+2. Event-driven socket revocation (session/token revoke, logout, password change)
+3. Use connection tracking for `completion_progress` and `filer_change` notifications
+4. Codegen from Zod specs (action input/output types)
+5. Real `provider_load_status` implementation (check Ollama availability)
 
 Phase 4 (full action port: completions, Ollama, terminals). See the
 [Rust Backends quest](../../grimoire/quests/rust-backends.md).

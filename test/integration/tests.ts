@@ -715,6 +715,74 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		},
 	},
 
+	// -- Session load + provider status -------------------------------------------
+	{
+		name: 'session_load_basic',
+		fn: async (config, session_cookie) => {
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'sl-1',
+					method: 'session_load',
+				}),
+				session_cookie,
+			);
+			assert_equal(res.status, 200, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			assert_equal(rpc.id, 'sl-1', 'id');
+			const result = rpc.result as Record<string, unknown>;
+			const data = result.data as Record<string, unknown>;
+			assert_equal(typeof data.zzz_dir, 'string', 'zzz_dir is string');
+			assert_equal(Array.isArray(data.scoped_dirs), true, 'scoped_dirs is array');
+			assert_equal(Array.isArray(data.files), true, 'files is array');
+			assert_equal(Array.isArray(data.provider_status), true, 'provider_status is array');
+			assert_equal(Array.isArray(data.workspaces), true, 'workspaces is array');
+		},
+	},
+	{
+		name: 'provider_load_status_empty',
+		fn: async (config, session_cookie) => {
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'pls-1',
+					method: 'provider_load_status',
+					params: {provider_name: 'ollama'},
+				}),
+				session_cookie,
+			);
+			assert_equal(res.status, 200, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			assert_equal(rpc.id, 'pls-1', 'id');
+			// Deno returns {status: {...}}, Rust stub returns []
+			// Verify it's a success (has result, no error)
+			assert_equal('result' in rpc, true, 'has result');
+			assert_equal('error' in rpc, false, 'no error');
+		},
+	},
+
+	// -- WebSocket authenticated action test --------------------------------------
+	{
+		name: 'ws_workspace_list',
+		fn: async (config, session_cookie) => {
+			// Authenticated action over WS — workspace_list returns {workspaces: [...]}
+			const conn = await open_ws(config, session_cookie);
+			try {
+				conn.send(
+					JSON.stringify({jsonrpc: '2.0', id: 'wsl-1', method: 'workspace_list'}),
+				);
+				const r = (await conn.receive()) as Record<string, unknown>;
+				assert_equal(r.id, 'wsl-1', 'id');
+				const result = r.result as Record<string, unknown>;
+				assert_equal(Array.isArray(result.workspaces), true, 'workspaces is array');
+			} finally {
+				conn.close();
+			}
+		},
+	},
+
 	// -- Filesystem tests ---------------------------------------------------------
 	{
 		name: 'diskfile_update_and_read',
@@ -819,6 +887,110 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 			);
 		},
 	},
+	{
+		name: 'diskfile_update_path_traversal',
+		fn: async (config, session_cookie) => {
+			// Path traversal via ../ — normalized path escapes scope
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'dft-1',
+					method: 'diskfile_update',
+					params: {path: `${INTEGRATION_SCOPED_DIR}/../../../tmp/evil.txt`, content: 'nope'},
+				}),
+				session_cookie,
+			);
+			assert_equal(res.status, 500, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			const error = rpc.error as Record<string, unknown>;
+			assert_equal(error.code, -32603, 'error code');
+		},
+	},
+	{
+		name: 'diskfile_update_relative_path',
+		fn: async (config, session_cookie) => {
+			// Relative path (not absolute) → rejected
+			// Deno rejects at Zod validation (400/-32602), Rust at ScopedFs (500/-32603)
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'dfr-1',
+					method: 'diskfile_update',
+					params: {path: 'relative/path.txt', content: 'nope'},
+				}),
+				session_cookie,
+			);
+			assert_equal(res.status >= 400, true, 'error status');
+			const rpc = res.body as Record<string, unknown>;
+			const error = rpc.error as Record<string, unknown>;
+			assert_equal(typeof error.code, 'number', 'has error code');
+			// -32602 (Deno: invalid params from Zod) or -32603 (Rust: ScopedFs rejection)
+			assert_equal(
+				error.code === -32602 || error.code === -32603,
+				true,
+				`error code is validation or internal (got ${error.code})`,
+			);
+		},
+	},
+	{
+		name: 'diskfile_delete_nonexistent',
+		fn: async (config, session_cookie) => {
+			// Delete a file that doesn't exist → error
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'dfdn-1',
+					method: 'diskfile_delete',
+					params: {path: `${INTEGRATION_SCOPED_DIR}/does_not_exist_${Date.now()}.txt`},
+				}),
+				session_cookie,
+			);
+			assert_equal(res.status, 500, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			const error = rpc.error as Record<string, unknown>;
+			assert_equal(error.code, -32603, 'error code');
+		},
+	},
+];
+
+// == Non-keeper tests =========================================================
+//
+// Tests that require a non-keeper authenticated cookie (separate from the
+// admin session cookie used by most tests).
+
+type NonKeeperTestFn = (
+	config: BackendConfig,
+	session_cookie?: string,
+	non_keeper_cookie?: string,
+) => Promise<void>;
+
+const non_keeper_tests: ReadonlyArray<{name: string; fn: NonKeeperTestFn}> = [
+	{
+		name: 'auth_keeper_forbidden',
+		fn: async (config, _session_cookie, non_keeper_cookie) => {
+			// Authenticated non-keeper user calling a keeper action → 403
+			if (!non_keeper_cookie) throw new Error('non_keeper_cookie not available');
+			const {status, body} = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'akf-1',
+					method: 'provider_update_api_key',
+					params: {provider_name: 'claude', api_key: 'sk-test'},
+				}),
+				non_keeper_cookie,
+			);
+			assert_equal(status, 403, 'status');
+			const r = body as Record<string, unknown>;
+			assert_equal(r.id, 'akf-1', 'id');
+			const error = r.error as Record<string, unknown>;
+			assert_equal(error.code, -32002, 'error code');
+			assert_equal(error.message, 'forbidden', 'error message');
+		},
+	},
 ];
 
 // == Test runner ===============================================================
@@ -862,6 +1034,7 @@ const run_ws_case = async (
 const build_test_list = (
 	config: BackendConfig,
 	session_cookie?: string,
+	non_keeper_cookie?: string,
 ): Array<{name: string; fn: () => Promise<void>}> => {
 	const tests: Array<{name: string; fn: () => Promise<void>}> = [];
 
@@ -876,6 +1049,9 @@ const build_test_list = (
 	for (const t of special_tests) {
 		tests.push({name: t.name, fn: () => t.fn(config, session_cookie)});
 	}
+	for (const t of non_keeper_tests) {
+		tests.push({name: t.name, fn: () => t.fn(config, session_cookie, non_keeper_cookie)});
+	}
 
 	return tests;
 };
@@ -884,8 +1060,9 @@ export const run_tests = async (
 	config: BackendConfig,
 	filter?: string,
 	session_cookie?: string,
+	non_keeper_cookie?: string,
 ): Promise<TestResult[]> => {
-	const tests = build_test_list(config, session_cookie);
+	const tests = build_test_list(config, session_cookie, non_keeper_cookie);
 	const results: TestResult[] = [];
 
 	for (const test of tests) {

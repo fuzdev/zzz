@@ -18,7 +18,8 @@ use crate::rpc::{self, Classified};
 /// Authenticates at upgrade time via cookie session. Rejects with 401
 /// if unauthenticated. Mirrors `register_websocket_actions.ts`'s
 /// `require_auth` middleware.
-// TODO Phase 2: Add connection tracking for broadcast notifications
+///
+/// On upgrade, registers the connection for `broadcast`/`send_to` support.
 pub async fn ws_handler(
     State(app): State<Arc<App>>,
     headers: HeaderMap,
@@ -37,62 +38,79 @@ pub async fn ws_handler(
 async fn handle_connection(socket: WebSocket, app: Arc<App>, auth_context: RequestContext) {
     let (mut tx, mut rx) = socket.split();
 
-    while let Some(Ok(msg)) = rx.next().await {
-        let text = match msg {
-            Message::Text(t) => t,
-            Message::Close(_) => break,
-            _ => continue,
-        };
+    // Register connection for broadcast/send_to support
+    let (notify_tx, mut notify_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let conn_id = app.add_connection(notify_tx);
 
-        // 1. Parse JSON — on failure send full envelope (matching Deno)
-        let Ok(value) = serde_json::from_str::<Value>(&text) else {
-            tracing::debug!("ws: JSON parse error");
-            if let Ok(json) =
-                serde_json::to_string(&rpc::error_response(Value::Null, rpc::parse_error()))
-                && tx.send(Message::Text(json.into())).await.is_err()
-            {
-                tracing::debug!("ws: send failed, client disconnected");
-                break;
-            }
-            continue;
-        };
-
-        tracing::debug!(
-            method = value.get("method").and_then(|v| v.as_str()).unwrap_or("<none>"),
-            "ws message"
-        );
-
-        // 2. Classify, check per-action auth, then dispatch
-        let json = match rpc::classify(&value) {
-            Classified::Request { method, id, params } => {
-                // Per-action auth check
-                let spec_auth = method_auth(method);
-                if let Some(auth_error) = check_action_auth(spec_auth, Some(&auth_context)) {
-                    serde_json::to_string(&rpc::error_response(id, auth_error))
-                } else {
-                    let ctx = Ctx {
-                        app: &app,
-                        request_id: &id,
-                        auth: Some(&auth_context),
-                    };
-                    match handlers::dispatch(method, params, &ctx).await {
-                        Ok(result) => serde_json::to_string(&rpc::success_response(id, result)),
-                        Err(error) => serde_json::to_string(&rpc::error_response(id, error)),
-                    }
+    loop {
+        tokio::select! {
+            // Server-initiated message (broadcast or send_to)
+            Some(msg) = notify_rx.recv() => {
+                if tx.send(Message::Text(msg.into())).await.is_err() {
+                    break;
                 }
             }
-            Classified::Invalid { id, error } => {
-                serde_json::to_string(&rpc::error_response(id, error))
-            }
-            Classified::Notification => continue, // WS: silence — no response sent
-        };
+            // Client message
+            msg = rx.next() => {
+                let Some(Ok(msg)) = msg else { break };
+                let text = match msg {
+                    Message::Text(t) => t,
+                    Message::Close(_) => break,
+                    _ => continue,
+                };
 
-        // 3. Send response
-        if let Ok(json) = json
-            && tx.send(Message::Text(json.into())).await.is_err()
-        {
-            tracing::debug!("ws: send failed, client disconnected");
-            break;
+                // 1. Parse JSON — on failure send full envelope (matching Deno)
+                let Ok(value) = serde_json::from_str::<Value>(&text) else {
+                    tracing::debug!("ws: JSON parse error");
+                    if let Ok(json) =
+                        serde_json::to_string(&rpc::error_response(Value::Null, rpc::parse_error()))
+                        && tx.send(Message::Text(json.into())).await.is_err()
+                    {
+                        break;
+                    }
+                    continue;
+                };
+
+                tracing::debug!(
+                    method = value.get("method").and_then(|v| v.as_str()).unwrap_or("<none>"),
+                    "ws message"
+                );
+
+                // 2. Classify, check per-action auth, then dispatch
+                let json = match rpc::classify(&value) {
+                    Classified::Request { method, id, params } => {
+                        let spec_auth = method_auth(method);
+                        if let Some(auth_error) = check_action_auth(spec_auth, Some(&auth_context)) {
+                            serde_json::to_string(&rpc::error_response(id, auth_error))
+                        } else {
+                            let ctx = Ctx {
+                                app: &app,
+                                request_id: &id,
+                                auth: Some(&auth_context),
+                            };
+                            match handlers::dispatch(method, params, &ctx).await {
+                                Ok(result) => serde_json::to_string(&rpc::success_response(id, result)),
+                                Err(error) => serde_json::to_string(&rpc::error_response(id, error)),
+                            }
+                        }
+                    }
+                    Classified::Invalid { id, error } => {
+                        serde_json::to_string(&rpc::error_response(id, error))
+                    }
+                    Classified::Notification => continue,
+                };
+
+                // 3. Send response
+                if let Ok(json) = json
+                    && tx.send(Message::Text(json.into())).await.is_err()
+                {
+                    break;
+                }
+            }
         }
     }
+
+    // Disconnect: clean up connection tracking
+    app.remove_connection(conn_id);
+    tracing::debug!(conn_id, "ws: connection closed");
 }
