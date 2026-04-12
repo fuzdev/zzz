@@ -34,10 +34,11 @@ pub struct JsonRpcErrorResponse {
 }
 
 // -- Error constructors -------------------------------------------------------
-// TODO Phase 2: Include validation details in error `data` field to match
-// fuz_app's behavior (Zod issues as `{issues: [{code, path, message, ...}]}`).
-// Currently Rust error responses omit `data`. See integration test
-// `normalize_error_data` for the cross-backend handling of this gap.
+// Intentional divergence: Rust omits `error.data` for security — Zod validation
+// details (field names, types, enum values) can leak schema info to unauthenticated
+// callers on public actions. Deno includes them for DX. Future: environment-conditional
+// in both backends (include in dev, strip in prod). See `normalize_error_data`
+// in integration tests for cross-backend handling.
 
 pub fn parse_error() -> JsonRpcError {
     JsonRpcError {

@@ -294,10 +294,6 @@ const account_test_list: ReadonlyArray<{
 	},
 	{
 		name: 'session_list',
-		// Rust only for now — Deno response format includes account_id field
-		// that Rust omits, and the session ID formats may differ.
-		// Cross-backend once formats are aligned.
-		skip: ['deno'],
 		fn: async (config) => {
 			const paths = config.account_paths;
 			if (!paths) throw new Error('account_paths not configured');
@@ -317,9 +313,10 @@ const account_test_list: ReadonlyArray<{
 			const sessions = r.sessions as Array<Record<string, unknown>>;
 			assert_equal(Array.isArray(sessions), true, 'sessions is array');
 			assert_equal(sessions.length > 0, true, 'at least one session');
-			// Check session shape
+			// Check session shape (matches fuz_app AuthSessionJson)
 			const s = sessions[0];
 			assert_equal(typeof s.id, 'string', 'session has id');
+			assert_equal(typeof s.account_id, 'string', 'session has account_id');
 			assert_equal(typeof s.created_at, 'string', 'session has created_at');
 			assert_equal(typeof s.last_seen_at, 'string', 'session has last_seen_at');
 			assert_equal(typeof s.expires_at, 'string', 'session has expires_at');
@@ -327,8 +324,6 @@ const account_test_list: ReadonlyArray<{
 	},
 	{
 		name: 'session_revoke',
-		// Rust only — session ID format and route path differ between backends
-		skip: ['deno'],
 		fn: async (config) => {
 			const paths = config.account_paths;
 			if (!paths) throw new Error('account_paths not configured');
@@ -355,16 +350,14 @@ const account_test_list: ReadonlyArray<{
 			>;
 			assert_equal(sessions.length >= 2, true, 'at least 2 sessions');
 
-			// Find a session to revoke that is NOT our current session (cookie1's session).
-			// We'll revoke based on the second session by finding its token hash.
-			// Since we can't easily identify which session belongs to which cookie,
-			// we'll revoke the first session in the list and verify the other still works.
+			// Revoke the first session in the list and verify the other still works
 			const session_to_revoke = sessions[0];
 			const revoke_path = paths.session_revoke.replace(':id', session_to_revoke.id as string);
 			const revoke_res = await post_account(config, revoke_path, {}, {cookie: cookie1});
 			assert_equal(revoke_res.status, 200, 'revoke status');
 			const rr = revoke_res.body as Record<string, unknown>;
 			assert_equal(rr.ok, true, 'revoke ok');
+			assert_equal(rr.revoked, true, 'revoke revoked');
 
 			// Verify at least one cookie still works (we might have revoked our own,
 			// but the other should still be valid)

@@ -635,16 +635,19 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 				}),
 				{cookie: session_cookie},
 			);
-			assert_equal(res.status, 200, 'status');
 			const rpc = res.body as Record<string, unknown>;
 			assert_equal(rpc.id, 'pls-1', 'id');
-			// TODO Cross-backend divergence: Deno returns {status: ProviderStatus}
-			// per the action spec output schema. Rust stub returns [] (empty array)
-			// which is a different shape — silently succeeds with wrong type.
-			// Fix when implementing Rust providers. Consider returning
-			// method_not_found or a spec-conformant stub instead of [].
-			assert_equal('result' in rpc, true, 'has result');
-			assert_equal('error' in rpc, false, 'no error');
+			if (config.name === 'rust') {
+				// Rust has no provider support — returns method_not_found
+				assert_equal(res.status, 404, 'status');
+				const error = rpc.error as Record<string, unknown>;
+				assert_equal(error.code, -32601, 'error code');
+			} else {
+				// Deno returns {status: ProviderStatus} per the action spec
+				assert_equal(res.status, 200, 'status');
+				assert_equal('result' in rpc, true, 'has result');
+				assert_equal('error' in rpc, false, 'no error');
+			}
 		},
 	},
 

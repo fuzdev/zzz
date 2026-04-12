@@ -291,7 +291,8 @@ pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Val
         "diskfile_update" => handle_diskfile_update(params, ctx).await,
         "diskfile_delete" => handle_diskfile_delete(params, ctx).await,
         "directory_create" => handle_directory_create(params, ctx).await,
-        "provider_load_status" => handle_provider_load_status(),
+        // provider_load_status — in method_auth as Authenticated, but no handler
+        // yet. Falls through to method_not_found until Rust providers land.
         "terminal_create" => handle_terminal_create(params, ctx).await,
         "terminal_data_send" => handle_terminal_data_send(params, ctx).await,
         "terminal_resize" => handle_terminal_resize(params, ctx).await,
@@ -328,14 +329,6 @@ fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
         },
     };
     serde_json::to_value(result).map_err(|_| rpc::internal_error("serialization failed"))
-}
-
-fn handle_provider_load_status() -> Result<Value, JsonRpcError> {
-    // TODO Stub — returns `[]` but Deno returns `{status: ProviderStatus}` per spec.
-    // This is a shape divergence: the stub silently succeeds with the wrong type.
-    // Fix when implementing Rust providers, or return a spec-conformant empty stub.
-    serde_json::to_value(Vec::<Value>::new())
-        .map_err(|_| rpc::internal_error("serialization failed"))
 }
 
 fn handle_workspace_list(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {

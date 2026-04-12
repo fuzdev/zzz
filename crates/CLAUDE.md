@@ -163,9 +163,11 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
 
 ## Integration Tests
 
-74 tests on Rust, 65 on Deno (account session management tests are
-Rust-only where formats differ). Both backends bootstrap auth (admin account
-+ session cookie), create a non-keeper user (account + actor + session, no
+74 tests on both backends, all cross-backend (0 skips). One test
+(`provider_load_status_empty`) branches on backend name — Rust returns
+`method_not_found`, Deno returns the spec response. Both backends bootstrap
+auth (admin account + session cookie), create a non-keeper user (account +
+actor + session, no
 keeper permit, cookie signed via HMAC-SHA256), and insert API tokens into
 the `api_token` table before tests. The test database (`zzz_test` by default,
 configurable via `TEST_DATABASE_URL`) is cleaned (TRUNCATE CASCADE) before
@@ -254,15 +256,15 @@ actions), session revocation via DB delete, browser context discard
 (Origin/Referer headers → bearer silently ignored), empty bearer value
 handling, and cookie-over-bearer priority.
 
-**Account management tests (both backends unless noted):**
+**Account management tests (both backends):**
 `login_success`, `login_invalid_password`, `login_nonexistent_user`,
 `logout_clears_session`, `logout_unauthenticated`,
 `password_change_revokes_all`, `password_wrong_current`,
-`session_list` (Rust only), `session_revoke` (Rust only) — 9 tests verify
-login with valid/invalid/nonexistent credentials, logout with session
-invalidation and cookie clearing, password change with full session + token
-revocation and re-login verification, session listing, and single session
-revocation.
+`session_list`, `session_revoke` — 9 tests verify login with
+valid/invalid/nonexistent credentials, logout with session invalidation and
+cookie clearing, password change with full session + token revocation and
+re-login verification, session listing (with `account_id` field), and single
+session revocation (idempotent with `revoked` field).
 
 ```bash
 deno task test:integration --backend=rust   # Rust only
@@ -323,9 +325,11 @@ before calling `handlers::dispatch`.
   connections via `close_sockets_for_session`/`close_sockets_for_account`).
   Per-message session recheck is not done — the event-driven approach is
   sufficient for current needs.
-- **error.data gap** — Deno includes Zod validation details in `error.data`
-  for -32602 errors; Rust omits `error.data`. The integration test
-  `normalize_error_data` function handles this.
+- **error.data intentional divergence** — Deno includes Zod validation details
+  in `error.data` for -32602 errors; Rust omits for security (no schema leak to
+  unauthenticated callers). The integration test `normalize_error_data` function
+  handles this. Future: environment-conditional in both (include in dev, strip
+  in prod).
 
 ### Cross-Backend Response Divergences
 
@@ -336,18 +340,18 @@ identical JSON-RPC envelopes for all auth failures.
 | Issue | Status | Detail |
 |-------|--------|--------|
 | Bearer invalid/expired token | **Resolved** | Both backends soft-fail → JSON-RPC `-32001` unauthenticated |
-| `provider_load_status` shape | Open — stub | Deno: `{status: ProviderStatus}` per spec. Rust: `[]` (empty array). Fix when implementing Rust providers. Smell: the stub silently returns success with wrong shape instead of returning `method_not_found` or a typed stub. |
-| `session_list` response | Open — Rust-only | Deno includes `account_id` field, Rust omits. Tests skip Deno (`account_tests.ts`). Align schemas when making cross-backend. |
-| `session_revoke` format | Open — Rust-only | Session ID format and route paths differ. Tests skip Deno. |
-| `error.data` (validation) | Open — cosmetic | Deno includes Zod issues in `error.data` for -32602; Rust omits. Handled by `normalize_error_data` in tests. Low priority — consider adding validation details to Rust `-32602` errors for developer experience. |
+| `provider_load_status` shape | **Resolved** | Rust now returns `-32601 method_not_found` instead of wrong-shape `[]` stub. Test is backend-aware. Will return spec-conformant response when Rust providers are implemented. |
+| `session_list` response | **Resolved** | Both backends now return `{sessions: [{id, account_id, created_at, last_seen_at, expires_at}]}` matching fuz_app `AuthSessionJson`. Tests are cross-backend. |
+| `session_revoke` format | **Resolved** | Both backends now return `{ok: true, revoked: boolean}` with idempotent 200 responses. Route paths differ by design (handled by test config `account_paths`). Tests are cross-backend. |
+| `error.data` (validation) | Intentional | Deno includes Zod issues in `error.data` for -32602; Rust omits. Intentional divergence — Rust's omission is the safer production default, Deno's inclusion aids DX. Handled by `normalize_error_data` in tests. Future: environment-conditional in both backends (include in dev, strip in prod). |
 
 ## Known Limitations
 
-- 14 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_load_status` stub, `provider_update_api_key` keeper-only)
+- 13 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_update_api_key` keeper-only) + `provider_load_status` returns `method_not_found` (no provider support yet)
 - 4 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (file watcher via `notify` crate, recursive, ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz`), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast)
 - No batch request support (JSON arrays)
 - No completion/streaming or Ollama actions
-- `provider_load_status` returns `[]` — no provider integration yet
+- `provider_load_status` returns `method_not_found` — no provider integration yet
 - No signup route (requires invite system)
 - No token management routes (GET /tokens, POST /tokens/create, etc.)
 - No SSE/realtime audit event broadcasting

@@ -93,6 +93,7 @@ struct ErrorBody {
 #[derive(Serialize)]
 struct SessionInfo {
     id: String,
+    account_id: String,
     created_at: String,
     last_seen_at: String,
     expires_at: String,
@@ -106,6 +107,12 @@ struct SessionsListResponse {
 #[derive(Serialize)]
 struct OkResponse {
     ok: bool,
+}
+
+#[derive(Serialize)]
+struct RevokeResponse {
+    ok: bool,
+    revoked: bool,
 }
 
 // -- POST /login --------------------------------------------------------------
@@ -413,10 +420,12 @@ async fn sessions_list_inner(app: &App, headers: &HeaderMap) -> Result<Response,
             error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
         })?;
 
+    let account_id_str = resolved.context.account.id.to_string();
     let sessions: Vec<SessionInfo> = rows
         .into_iter()
         .map(|r| SessionInfo {
             id: r.id,
+            account_id: account_id_str.clone(),
             created_at: r.created_at,
             last_seen_at: r.last_seen_at,
             expires_at: r.expires_at,
@@ -471,7 +480,8 @@ async fn session_revoke_inner(
     })?;
 
     if !deleted {
-        return Err(error_json(StatusCode::NOT_FOUND, "session_not_found"));
+        // Idempotent — session already gone or belongs to another account
+        return Ok(Json(RevokeResponse { ok: true, revoked: false }).into_response());
     }
 
     // Close WebSocket connections for this session
@@ -480,5 +490,5 @@ async fn session_revoke_inner(
         tracing::info!(count = closed, "session revoke: closed WebSocket connections");
     }
 
-    Ok(Json(OkResponse { ok: true }).into_response())
+    Ok(Json(RevokeResponse { ok: true, revoked: true }).into_response())
 }
