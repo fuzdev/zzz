@@ -10,33 +10,8 @@
  */
 
 import {type BackendConfig, TEST_DATABASE_URL} from './config.ts';
-import {assert_equal, post_rpc} from './test_helpers.ts';
+import {assert_equal, post_rpc, sql_escape} from './test_helpers.ts';
 import type {TestResult} from './tests.ts';
-// @ts-ignore — npm specifier, resolved at runtime by Deno
-import {hash as blake3_hash} from 'npm:@fuzdev/blake3_wasm';
-
-// -- Helpers ------------------------------------------------------------------
-
-/** Bytes-to-hex helper. */
-const bytes_to_hex = (bytes: Uint8Array): string =>
-	Array.from(bytes)
-		.map((b) => b.toString(16).padStart(2, '0'))
-		.join('');
-
-/** HMAC-SHA256 sign (same as run.ts / bearer_tests.ts). */
-const hmac_sign = async (value: string, key_str: string): Promise<string> => {
-	const encoder = new TextEncoder();
-	const key = await crypto.subtle.importKey(
-		'raw',
-		encoder.encode(key_str),
-		{name: 'HMAC', hash: 'SHA-256'},
-		false,
-		['sign'],
-	);
-	const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(value));
-	const sig_b64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
-	return `${value}.${sig_b64}`;
-};
 
 /** POST JSON to an account route. */
 const post_account = async (
@@ -87,11 +62,11 @@ const create_test_user = async (
 	const actor_id = crypto.randomUUID();
 	const sql = `
 		INSERT INTO account (id, username, password_hash)
-		VALUES ('${account_id}', '${username}', '${password_hash}')
+		VALUES ('${sql_escape(account_id)}', '${sql_escape(username)}', '${sql_escape(password_hash)}')
 		ON CONFLICT DO NOTHING;
 
 		INSERT INTO actor (id, account_id, name)
-		VALUES ('${actor_id}', '${account_id}', '${username}')
+		VALUES ('${sql_escape(actor_id)}', '${sql_escape(account_id)}', '${sql_escape(username)}')
 		ON CONFLICT DO NOTHING;
 	`;
 	const cmd = new Deno.Command('psql', {

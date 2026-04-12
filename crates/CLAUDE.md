@@ -118,7 +118,7 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
 
 4. **Bearer token auth** — `Authorization: Bearer <token>` header. Token
    hashed with blake3, looked up in `api_token` table. Browser context
-   rejected (Origin/Referer headers present → bearer ignored). Token
+   silently discarded (Origin/Referer headers present → bearer ignored). Token
    `last_used_at` touched fire-and-forget. Sets `CredentialType::ApiToken`.
 
 5. **Daemon token auth** — `X-Daemon-Token` header. Token is a 43-char
@@ -163,7 +163,7 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
 
 ## Integration Tests
 
-74 tests on Rust, 63 on Deno (bearer, account, and session tests are
+74 tests on Rust, 65 on Deno (account session management tests are
 Rust-only where formats differ). Both backends bootstrap auth (admin account
 + session cookie), create a non-keeper user (account + actor + session, no
 keeper permit, cookie signed via HMAC-SHA256), and insert API tokens into
@@ -243,16 +243,16 @@ authenticated actions but are rejected from keeper actions.
 **Bearer token tests (both backends unless noted):**
 `bearer_token_auth`, `bearer_token_invalid`, `bearer_token_expired`,
 `bearer_token_public_action`, `bearer_token_ws`,
-`bearer_token_ws_rejected_invalid`, `keeper_requires_daemon_token`
-(Rust only), `ws_revocation_on_session_delete`,
+`bearer_token_ws_rejected_invalid`, `keeper_requires_daemon_token`,
+`ws_revocation_on_session_delete`,
 `bearer_rejects_browser_context_origin`,
 `bearer_rejects_browser_context_referer`, `bearer_empty_value`,
-`bearer_cookie_priority` (Rust only) — 12 tests verify API token auth via
+`bearer_cookie_priority` — 12 tests verify API token auth via
 `Authorization: Bearer` header on HTTP and WebSocket, expired/invalid token
 rejection, keeper credential enforcement (API tokens can't access keeper
-actions), session revocation via DB delete, browser context rejection
-(Origin/Referer headers → bearer ignored), empty bearer value handling,
-and cookie-over-bearer priority.
+actions), session revocation via DB delete, browser context discard
+(Origin/Referer headers → bearer silently ignored), empty bearer value
+handling, and cookie-over-bearer priority.
 
 **Account management tests (both backends unless noted):**
 `login_success`, `login_invalid_password`, `login_nonexistent_user`,
@@ -319,15 +319,31 @@ before calling `handlers::dispatch`.
 ## Known Issues
 
 - **No per-message WS session revalidation** — upgrade-time auth only. Event-
-  driven revocation (matching Deno) not yet implemented.
+  driven revocation covers logout and password change (closes matching WS
+  connections via `close_sockets_for_session`/`close_sockets_for_account`).
+  Per-message session recheck is not done — the event-driven approach is
+  sufficient for current needs.
 - **error.data gap** — Deno includes Zod validation details in `error.data`
   for -32602 errors; Rust omits `error.data`. The integration test
-  `normalize_error_data` function handles this. No other error format
-  asymmetries exist.
+  `normalize_error_data` function handles this.
+
+### Cross-Backend Response Divergences
+
+Tracked asymmetries between Deno (ground truth) and Rust backends. Bearer
+auth response format (issue #1) was resolved — both backends now produce
+identical JSON-RPC envelopes for all auth failures.
+
+| Issue | Status | Detail |
+|-------|--------|--------|
+| Bearer invalid/expired token | **Resolved** | Both backends soft-fail → JSON-RPC `-32001` unauthenticated |
+| `provider_load_status` shape | Open — stub | Deno: `{status: ProviderStatus}` per spec. Rust: `[]` (empty array). Fix when implementing Rust providers. Smell: the stub silently returns success with wrong shape instead of returning `method_not_found` or a typed stub. |
+| `session_list` response | Open — Rust-only | Deno includes `account_id` field, Rust omits. Tests skip Deno (`account_tests.ts`). Align schemas when making cross-backend. |
+| `session_revoke` format | Open — Rust-only | Session ID format and route paths differ. Tests skip Deno. |
+| `error.data` (validation) | Open — cosmetic | Deno includes Zod issues in `error.data` for -32602; Rust omits. Handled by `normalize_error_data` in tests. Low priority — consider adding validation details to Rust `-32602` errors for developer experience. |
 
 ## Known Limitations
 
-- 13 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_load_status` stub)
+- 14 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_load_status` stub, `provider_update_api_key` keeper-only)
 - 4 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (file watcher via `notify` crate, recursive, ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz`), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast)
 - No batch request support (JSON arrays)
 - No completion/streaming or Ollama actions

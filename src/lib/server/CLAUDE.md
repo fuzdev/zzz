@@ -126,11 +126,17 @@ The RPC endpoint (`create_rpc_endpoint`) handles all zzz domain actions:
 
 ### Auth Levels
 
-| Auth            | Actions                                                         |
-| --------------- | --------------------------------------------------------------- |
-| `public`        | `ping`                                                          |
-| `authenticated` | All file, terminal, workspace, completion, ollama, provider ops |
-| `keeper`        | `provider_update_api_key`                                       |
+| Auth            | Actions                                                         | Credential Requirement                 |
+| --------------- | --------------------------------------------------------------- | -------------------------------------- |
+| `public`        | `ping`                                                          | None                                   |
+| `authenticated` | All file, terminal, workspace, completion, ollama, provider ops | Any (session, API token, daemon token) |
+| `keeper`        | `provider_update_api_key`                                       | `daemon_token` only                    |
+
+`keeper` actions require the `daemon_token` credential type (via `X-Daemon-Token`
+header) AND the keeper role. Session cookies and API tokens cannot access keeper
+actions even if the account has the keeper permit. Enforced on both HTTP RPC
+(via `check_action_auth` in fuz_app) and WebSocket (via per-action auth in
+`register_websocket_actions`).
 
 ### Request Flow (RPC)
 

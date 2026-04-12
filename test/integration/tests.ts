@@ -533,9 +533,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 				assert_equal(found, false, 'closed workspace not in list');
 
 				// 4. Close again — should error (not open)
-				// Rust returns -32602 (invalid_params, 400); Deno returns -32603
-				// (internal_error, 500) due to ThrownJsonrpcError class mismatch
-				// between zzz and fuz_app (see TODO in src/lib/jsonrpc_errors.ts)
+				// Both backends return -32602 (invalid_params, 400).
 				const close2_res = await post_rpc(
 					config,
 					JSON.stringify({
@@ -546,10 +544,10 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					}),
 					{cookie: session_cookie},
 				);
-				assert_equal(close2_res.status >= 400, true, 'double close fails');
+				assert_equal(close2_res.status, 400, 'double close status');
 				const close2_rpc = close2_res.body as Record<string, unknown>;
 				const error = close2_rpc.error as Record<string, unknown>;
-				assert_equal(typeof error.code, 'number', 'double close has error code');
+				assert_equal(error.code, -32602, 'double close error code');
 				assert_equal(
 					(error.message as string).startsWith('workspace not open:'),
 					true,
@@ -640,8 +638,11 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 			assert_equal(res.status, 200, 'status');
 			const rpc = res.body as Record<string, unknown>;
 			assert_equal(rpc.id, 'pls-1', 'id');
-			// Deno returns {status: {...}}, Rust stub returns []
-			// Verify it's a success (has result, no error)
+			// TODO Cross-backend divergence: Deno returns {status: ProviderStatus}
+			// per the action spec output schema. Rust stub returns [] (empty array)
+			// which is a different shape — silently succeeds with wrong type.
+			// Fix when implementing Rust providers. Consider returning
+			// method_not_found or a spec-conformant stub instead of [].
 			assert_equal('result' in rpc, true, 'has result');
 			assert_equal('error' in rpc, false, 'no error');
 		},
@@ -959,8 +960,8 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 	{
 		name: 'diskfile_update_relative_path',
 		fn: async (config, session_cookie) => {
-			// Relative path (not absolute) → rejected
-			// Deno rejects at Zod validation (400/-32602), Rust at ScopedFs (500/-32603)
+			// Relative path (not absolute) → rejected as invalid params
+			// Deno rejects at Zod validation, Rust rejects at handler validation.
 			const res = await post_rpc(
 				config,
 				JSON.stringify({
@@ -971,16 +972,10 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 				}),
 				{cookie: session_cookie},
 			);
-			assert_equal(res.status >= 400, true, 'error status');
+			assert_equal(res.status, 400, 'status');
 			const rpc = res.body as Record<string, unknown>;
 			const error = rpc.error as Record<string, unknown>;
-			assert_equal(typeof error.code, 'number', 'has error code');
-			// -32602 (Deno: invalid params from Zod) or -32603 (Rust: ScopedFs rejection)
-			assert_equal(
-				error.code === -32602 || error.code === -32603,
-				true,
-				`error code is validation or internal (got ${error.code})`,
-			);
+			assert_equal(error.code, -32602, 'error code');
 		},
 	},
 	{
@@ -1299,8 +1294,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 				);
 				const write_res = (await conn.receive()) as Record<string, unknown>;
 				assert_equal(write_res.id, 'twr-2', 'write id');
-				// Deno WS returns {} for null-output actions, Rust returns null
-				assert_equal('result' in write_res, true, 'write has result');
+				assert_equal(write_res.result, null, 'write result is null');
 
 				// Collect terminal_data notifications until we see our echoed text
 				let got_echo = false;
@@ -1366,8 +1360,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 				);
 				const resize_res = (await conn.receive()) as Record<string, unknown>;
 				assert_equal(resize_res.id, 'trl-2', 'resize id');
-				// Deno WS returns {} for null-output actions, Rust returns null
-				assert_equal('result' in resize_res, true, 'resize has result');
+				assert_equal(resize_res.result, null, 'resize result is null');
 
 				// Clean up
 				conn.send(

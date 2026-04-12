@@ -17,8 +17,11 @@ import {backends, type BackendConfig, INTEGRATION_SCOPED_DIR, TEST_DATABASE_URL}
 import {run_tests, type TestResult} from './tests.ts';
 import {run_bearer_tests, setup_bearer_tokens} from './bearer_tests.ts';
 import {run_account_tests} from './account_tests.ts';
+import {hmac_sign, sql_escape} from './test_helpers.ts';
 // @ts-ignore — npm specifier, resolved at runtime by Deno
 import {hash as blake3_hash} from 'npm:@fuzdev/blake3_wasm';
+// @ts-ignore — npm specifier, resolved at runtime by Deno
+import {to_hex} from 'npm:@fuzdev/fuz_util/hex.js';
 
 // -- Child process tracking ---------------------------------------------------
 
@@ -196,33 +199,6 @@ const cleanup_auth = async (config: BackendConfig): Promise<void> => {
 
 // -- Non-keeper user setup ----------------------------------------------------
 
-/** Bytes-to-hex helper. */
-const bytes_to_hex = (bytes: Uint8Array): string =>
-	Array.from(bytes)
-		.map((b) => b.toString(16).padStart(2, '0'))
-		.join('');
-
-/**
- * Sign a value with HMAC-SHA256.
- *
- * Returns `{value}.{base64(signature)}` — same format as auth.rs `Keyring::sign`
- * and fuz_app's `sign_with_crypto_key`.
- */
-const hmac_sign = async (value: string, key_str: string): Promise<string> => {
-	const encoder = new TextEncoder();
-	const key = await crypto.subtle.importKey(
-		'raw',
-		encoder.encode(key_str),
-		{name: 'HMAC', hash: 'SHA-256'},
-		false,
-		['sign'],
-	);
-	const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(value));
-	// Standard base64 (not URL-safe) — matches Rust's STANDARD engine
-	const sig_b64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
-	return `${value}.${sig_b64}`;
-};
-
 /**
  * Create a non-keeper authenticated user directly in the test database.
  *
@@ -236,7 +212,7 @@ const setup_non_keeper_user = async (config: BackendConfig): Promise<string | un
 	if (!cookie_key) return undefined;
 
 	const session_token = 'test-non-keeper-session-token';
-	const token_hash = bytes_to_hex(blake3_hash(new TextEncoder().encode(session_token)));
+	const token_hash = to_hex(blake3_hash(new TextEncoder().encode(session_token)));
 
 	// expires_at: 30 days from now (seconds since epoch)
 	const expires_at = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
@@ -252,7 +228,7 @@ const setup_non_keeper_user = async (config: BackendConfig): Promise<string | un
 		ON CONFLICT DO NOTHING;
 
 		INSERT INTO auth_session (id, account_id, expires_at)
-		VALUES ('${token_hash}', '00000000-0000-0000-0000-000000000002', NOW() + INTERVAL '30 days')
+		VALUES ('${sql_escape(token_hash)}', '00000000-0000-0000-0000-000000000002', NOW() + INTERVAL '30 days')
 		ON CONFLICT DO NOTHING;
 	`;
 

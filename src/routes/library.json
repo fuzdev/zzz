@@ -49,7 +49,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.3.16",
-			"@fuzdev/fuz_app": "^0.7.1",
+			"@fuzdev/fuz_app": "^0.8.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.58.0",
 			"@fuzdev/fuz_ui": "^0.191.4",
@@ -10732,7 +10732,8 @@
 					"action_specs.ts",
 					"jsonrpc_errors.ts",
 					"jsonrpc_helpers.ts",
-					"request_tracker.svelte.ts"
+					"request_tracker.svelte.ts",
+					"server/register_websocket_actions.ts"
 				]
 			},
 			{
@@ -17765,7 +17766,7 @@
 					{
 						"name": "RegisterWebsocketActionsOptions",
 						"kind": "type",
-						"source_line": 34,
+						"source_line": 33,
 						"type_signature": "RegisterWebsocketActionsOptions",
 						"properties": [
 							{
@@ -17806,7 +17807,7 @@
 						"name": "register_websocket_actions",
 						"kind": "function",
 						"doc_comment": "Registers WebSocket endpoints for all service actions in the schema registry.",
-						"source_line": 48,
+						"source_line": 47,
 						"type_signature": "({ path, app, backend, upgradeWebSocket, artificial_delay, transport, }: RegisterWebsocketActionsOptions): void",
 						"return_type": "void",
 						"parameters": [
@@ -17820,6 +17821,7 @@
 				"module_comment": "WebSocket endpoint with direct handler dispatch.\n\nReplaces the old `backend.receive(json)` → ActionPeer → ActionEvent path\nwith: spec lookup → Zod input validation → handler call → JSON-RPC response.\nKeeps existing per-action auth checking at the transport layer.",
 				"dependencies": [
 					"action_specs.ts",
+					"jsonrpc.ts",
 					"jsonrpc_errors.ts",
 					"jsonrpc_helpers.ts",
 					"server/backend_websocket_transport.ts",

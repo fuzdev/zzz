@@ -331,7 +331,9 @@ fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
 }
 
 fn handle_provider_load_status() -> Result<Value, JsonRpcError> {
-    // Stub — no providers configured in the Rust backend yet
+    // TODO Stub — returns `[]` but Deno returns `{status: ProviderStatus}` per spec.
+    // This is a shape divergence: the stub silently succeeds with the wrong type.
+    // Fix when implementing Rust providers, or return a spec-conformant empty stub.
     serde_json::to_value(Vec::<Value>::new())
         .map_err(|_| rpc::internal_error("serialization failed"))
 }
@@ -504,6 +506,9 @@ async fn handle_diskfile_update(params: &Value, ctx: &Ctx<'_>) -> Result<Value, 
         .get("path")
         .and_then(Value::as_str)
         .ok_or_else(|| rpc::invalid_params("missing or invalid 'path' parameter"))?;
+    if !path.starts_with('/') {
+        return Err(rpc::invalid_params("path must be absolute"));
+    }
     let content = params
         .get("content")
         .and_then(Value::as_str)
@@ -523,6 +528,9 @@ async fn handle_diskfile_delete(params: &Value, ctx: &Ctx<'_>) -> Result<Value, 
         .get("path")
         .and_then(Value::as_str)
         .ok_or_else(|| rpc::invalid_params("missing or invalid 'path' parameter"))?;
+    if !path.starts_with('/') {
+        return Err(rpc::invalid_params("path must be absolute"));
+    }
 
     ctx.app
         .scoped_fs
@@ -538,6 +546,9 @@ async fn handle_directory_create(params: &Value, ctx: &Ctx<'_>) -> Result<Value,
         .get("path")
         .and_then(Value::as_str)
         .ok_or_else(|| rpc::invalid_params("missing or invalid 'path' parameter"))?;
+    if !path.starts_with('/') {
+        return Err(rpc::invalid_params("path must be absolute"));
+    }
 
     ctx.app
         .scoped_fs

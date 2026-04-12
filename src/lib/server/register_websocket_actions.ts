@@ -21,13 +21,12 @@ import {all_action_specs} from '../action_specs.js';
 import type {Backend} from './backend.js';
 import {BackendWebsocketTransport} from './backend_websocket_transport.js';
 import {jsonrpc_error_messages} from '../jsonrpc_errors.js';
+import {JSONRPC_VERSION} from '../jsonrpc.js';
 import {
 	create_jsonrpc_error_message,
 	create_jsonrpc_error_message_from_thrown,
-	create_jsonrpc_response,
 	to_jsonrpc_message_id,
 	is_jsonrpc_request,
-	to_jsonrpc_result,
 } from '../jsonrpc_helpers.js';
 import {zzz_action_handlers, type ZzzHandledMethod} from './zzz_action_handlers.js';
 
@@ -220,7 +219,10 @@ export const register_websocket_actions = ({
 							}
 						}
 
-						ws.send(JSON.stringify(create_jsonrpc_response(id, to_jsonrpc_result(output))));
+						// Send result directly — null stays null, matching the HTTP RPC path.
+						// (to_jsonrpc_result wraps null → {} for MCP compat, but action specs
+						// define output: z.null() and both backends should return null.)
+						ws.send(JSON.stringify({jsonrpc: JSONRPC_VERSION, id, result: output}));
 					} catch (error) {
 						backend.log?.error('[ws] handler error:', method, error);
 						ws.send(JSON.stringify(create_jsonrpc_error_message_from_thrown(id, error)));

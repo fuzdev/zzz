@@ -258,7 +258,7 @@ safety, PTY terminals via `fuz_pty` native crate, and WebSocket connection
 tracking (`broadcast`/`send_to`). PostgreSQL via `tokio-postgres`/`deadpool-postgres`,
 HMAC-SHA256 cookie signing, blake3 session/token hashing, per-action auth
 checks with credential type enforcement, bootstrap endpoint.
-The Deno server is ground truth — 74 integration tests (63 cross-backend)
+The Deno server is ground truth — 74 integration tests (65 cross-backend)
 verify both backends produce identical JSON-RPC responses.
 
 ```bash
@@ -502,13 +502,14 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 
 ## Known Limitations
 
-- **WebSocket auth** — Auth is enforced at upgrade time via `require_auth` middleware (cookie sessions, bearer tokens). Per-action auth checks enforce spec-level auth (e.g. `keeper` requires `daemon_token` + keeper role). Batch JSON-RPC and role-based auth are rejected (not yet supported). Sockets are closed on session/token revocation, logout, and password change via audit events. No per-message session revalidation — event-driven revocation is sufficient. ActionPeer itself has no auth awareness.
+- **WebSocket auth** — Auth is enforced at upgrade time via `require_auth` middleware (cookie sessions, bearer tokens — bearer silently discarded in browser context via Origin/Referer defense). Per-action auth checks enforce spec-level auth (e.g. `keeper` requires `daemon_token` + keeper role). Batch JSON-RPC and role-based auth are rejected (not yet supported). Sockets are closed on session/token revocation, logout, and password change via audit events. No per-message session revalidation — event-driven revocation is sufficient. ActionPeer itself has no auth awareness.
+- **Bearer auth soft-fails** — fuz_app's bearer middleware soft-fails for invalid/expired/empty tokens (calls `next()`, no error response). Auth enforcement happens downstream via `check_action_auth` (JSON-RPC) or `require_auth` (routes). Both Deno and Rust backends produce identical `{code: -32001, message: "unauthenticated"}` JSON-RPC errors. Public actions are not blocked by bad bearer credentials.
 - **Domain state is in-memory** — auth/accounts are in PGlite DB, but zzz domain state (files, terminals, workspaces) is in-memory, lost on restart. Workspaces persist to JSON file as a stopgap.
 - **No undo/history** — file edits are permanent
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Rust backend is Phase 3** — 13 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_load_status` stub) with full auth stack (cookie sessions, bearer tokens via `Authorization: Bearer`, daemon tokens via `X-Daemon-Token` with 30s rotation) on HTTP and WebSocket, account management routes (login, logout, password change, session list/revoke), `ScopedFs`, PTY terminals via `fuz_pty`, PostgreSQL, bootstrap, WebSocket connection tracking with active `workspace_changed`, `filer_change`, `terminal_data`, and `terminal_exited` notifications. Event-driven socket revocation active (logout closes per-session, password change closes per-account). 74 integration tests. Batch JSON-RPC requests not yet supported. See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
+- **Rust backend is Phase 3** — 14 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_load_status` stub, `provider_update_api_key` keeper-only) with full auth stack (cookie sessions, bearer tokens via `Authorization: Bearer`, daemon tokens via `X-Daemon-Token` with 30s rotation) on HTTP and WebSocket, account management routes (login, logout, password change, session list/revoke), `ScopedFs`, PTY terminals via `fuz_pty`, PostgreSQL, bootstrap, WebSocket connection tracking with active `workspace_changed`, `filer_change`, `terminal_data`, and `terminal_exited` notifications. Event-driven socket revocation active (logout closes per-session, password change closes per-account). 74 integration tests. Batch JSON-RPC requests not yet supported. See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
 
 ## fuz_app
 
@@ -522,4 +523,4 @@ The CLI and daemon lifecycle use `@fuzdev/fuz_app/cli/*` helpers: `DaemonInfo`
 schema, `write_daemon_info`, `read_daemon_info`, `is_daemon_running`,
 `stop_daemon`. The server writes `~/.zzz/run/daemon.json` (not `server.json`).
 
-Last updated: 2026-04-11
+Last updated: 2026-04-12

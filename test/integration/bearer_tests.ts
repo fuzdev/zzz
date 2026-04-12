@@ -8,28 +8,24 @@
  */
 
 import {type BackendConfig, TEST_DATABASE_URL} from './config.ts';
-import {assert_equal, open_ws, post_rpc} from './test_helpers.ts';
+import {assert_equal, hmac_sign, open_ws, post_rpc, sql_escape} from './test_helpers.ts';
 import type {TestResult} from './tests.ts';
 // @ts-ignore — npm specifier, resolved at runtime by Deno
 import {hash as blake3_hash} from 'npm:@fuzdev/blake3_wasm';
+// @ts-ignore — npm specifier, resolved at runtime by Deno
+import {to_hex} from 'npm:@fuzdev/fuz_util/hex.js';
 
 // -- Token setup helpers ------------------------------------------------------
 
-/** Bytes-to-hex helper. */
-const bytes_to_hex = (bytes: Uint8Array): string =>
-	Array.from(bytes)
-		.map((b) => b.toString(16).padStart(2, '0'))
-		.join('');
-
 /** Raw token value used in integration tests. */
 const BEARER_TOKEN_RAW = 'zzz-integration-test-api-token-value';
-const BEARER_TOKEN_HASH = bytes_to_hex(
+const BEARER_TOKEN_HASH = to_hex(
 	blake3_hash(new TextEncoder().encode(BEARER_TOKEN_RAW)),
 );
 
 /** Expired token for negative tests. */
 const EXPIRED_TOKEN_RAW = 'zzz-integration-test-expired-token';
-const EXPIRED_TOKEN_HASH = bytes_to_hex(
+const EXPIRED_TOKEN_HASH = to_hex(
 	blake3_hash(new TextEncoder().encode(EXPIRED_TOKEN_RAW)),
 );
 
@@ -52,12 +48,12 @@ export const setup_bearer_tokens = async (): Promise<void> => {
 
 			-- Valid API token (no expiry)
 			INSERT INTO api_token (id, account_id, name, token_hash)
-			VALUES ('test-api-token-1', admin_id, 'integration-test-token', '${BEARER_TOKEN_HASH}')
+			VALUES ('test-api-token-1', admin_id, 'integration-test-token', '${sql_escape(BEARER_TOKEN_HASH)}')
 			ON CONFLICT DO NOTHING;
 
 			-- Expired API token
 			INSERT INTO api_token (id, account_id, name, token_hash, expires_at)
-			VALUES ('test-api-token-expired', admin_id, 'expired-token', '${EXPIRED_TOKEN_HASH}', NOW() - INTERVAL '1 day')
+			VALUES ('test-api-token-expired', admin_id, 'expired-token', '${sql_escape(EXPIRED_TOKEN_HASH)}', NOW() - INTERVAL '1 day')
 			ON CONFLICT DO NOTHING;
 		END $$;
 	`;
@@ -109,10 +105,9 @@ const bearer_test_list: ReadonlyArray<{
 	{
 		name: 'bearer_token_invalid',
 		fn: async (config) => {
-			// Invalid bearer token → 401. Response format differs:
-			// - Rust: JSON-RPC envelope {id, error: {code: -32001, message}}
-			// - Deno: plain {error: "invalid_token"} from bearer middleware
-			// Assert status and presence of error, not shape.
+			// Invalid bearer token → 401 with JSON-RPC envelope.
+			// Both backends now soft-fail invalid bearer tokens, so the RPC
+			// layer produces a consistent JSON-RPC unauthenticated error.
 			const {status, body} = await post_rpc(
 				config,
 				JSON.stringify({
@@ -124,13 +119,16 @@ const bearer_test_list: ReadonlyArray<{
 			);
 			assert_equal(status, 401, 'status');
 			const r = body as Record<string, unknown>;
-			assert_equal('error' in r, true, 'has error field');
+			assert_equal(r.id, 'bt-inv-1', 'id');
+			const error = r.error as Record<string, unknown>;
+			assert_equal(error.code, -32001, 'error code');
+			assert_equal(error.message, 'unauthenticated', 'error message');
 		},
 	},
 	{
 		name: 'bearer_token_expired',
 		fn: async (config) => {
-			// Expired bearer token → 401 (same cross-backend tolerance as invalid)
+			// Expired bearer token → 401 with JSON-RPC envelope (same as invalid)
 			const {status, body} = await post_rpc(
 				config,
 				JSON.stringify({
@@ -142,7 +140,10 @@ const bearer_test_list: ReadonlyArray<{
 			);
 			assert_equal(status, 401, 'status');
 			const r = body as Record<string, unknown>;
-			assert_equal('error' in r, true, 'has error field');
+			assert_equal(r.id, 'bt-exp-1', 'id');
+			const error = r.error as Record<string, unknown>;
+			assert_equal(error.code, -32001, 'error code');
+			assert_equal(error.message, 'unauthenticated', 'error message');
 		},
 	},
 	{
@@ -202,9 +203,7 @@ const bearer_test_list: ReadonlyArray<{
 	},
 	{
 		name: 'keeper_requires_daemon_token',
-		// Deno's HTTP RPC check_action_auth only checks role, not credential_type.
-		// The Rust backend enforces daemon_token for keeper on all transports.
-		skip: ['deno'],
+		// Both backends enforce daemon_token credential type for keeper actions.
 		fn: async (config) => {
 			// API token (bearer) with keeper role account calling keeper action → 403
 			// The admin account has keeper permit, but bearer credential type is
@@ -244,14 +243,14 @@ const bearer_test_list: ReadonlyArray<{
 			// connection still works for existing messages (no per-message
 			// revalidation) but new connections fail.
 			const dedicated_token = 'zzz-revocation-test-session-token';
-			const token_hash = bytes_to_hex(
+			const token_hash = to_hex(
 				blake3_hash(new TextEncoder().encode(dedicated_token)),
 			);
 
 			// Create a dedicated session in the DB
 			const create_sql = `
 				INSERT INTO auth_session (id, account_id, expires_at)
-				SELECT '${token_hash}', id, NOW() + INTERVAL '30 days'
+				SELECT '${sql_escape(token_hash)}', id, NOW() + INTERVAL '30 days'
 				FROM account WHERE username = 'testadmin'
 				ON CONFLICT DO NOTHING;
 			`;
@@ -271,7 +270,8 @@ const bearer_test_list: ReadonlyArray<{
 				`${dedicated_token}:${expires_at}`,
 				cookie_key,
 			);
-			const cookie = `fuz_session=${cookie_value}`;
+			// Both cookie names: Rust uses fuz_session, Deno uses zzz_session
+			const cookie = `fuz_session=${cookie_value}; zzz_session=${cookie_value}`;
 
 			// Verify the session works
 			const {status} = await post_rpc(
@@ -282,7 +282,7 @@ const bearer_test_list: ReadonlyArray<{
 			assert_equal(status, 200, 'session works before delete');
 
 			// Delete the session from DB
-			const delete_sql = `DELETE FROM auth_session WHERE id = '${token_hash}';`;
+			const delete_sql = `DELETE FROM auth_session WHERE id = '${sql_escape(token_hash)}';`;
 			const delete_cmd = new Deno.Command('psql', {
 				args: [TEST_DATABASE_URL, '-c', delete_sql],
 				stdout: 'null',
@@ -306,11 +306,9 @@ const bearer_test_list: ReadonlyArray<{
 	},
 	{
 		name: 'bearer_rejects_browser_context_origin',
-		// Deno returns 403 from bearer middleware directly; Rust falls through
-		// to RPC layer (bearer rejected → no auth → JSON-RPC unauthenticated 401).
-		// Both reject — just different status codes.
+		// Both backends silently discard bearer in browser context (Origin present).
+		// Bearer is ignored → no auth → unauthenticated 401.
 		fn: async (config) => {
-			// Bearer token with Origin header → bearer ignored, request fails
 			const headers: Record<string, string> = {
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${BEARER_TOKEN_RAW}`,
@@ -325,14 +323,15 @@ const bearer_test_list: ReadonlyArray<{
 					method: 'workspace_list',
 				}),
 			});
-			await res.json();
-			// Rust: 401 (falls through to no auth), Deno: 403 (middleware rejects)
-			assert_equal(res.status >= 400 && res.status < 500, true, 'client error status');
+			const body = (await res.json()) as Record<string, unknown>;
+			assert_equal(res.status, 401, 'status');
+			const error = body.error as Record<string, unknown>;
+			assert_equal(error.code, -32001, 'error code');
 		},
 	},
 	{
 		name: 'bearer_rejects_browser_context_referer',
-		// Same defense-in-depth but triggered by Referer instead of Origin
+		// Same defense-in-depth but triggered by Referer instead of Origin.
 		fn: async (config) => {
 			const headers: Record<string, string> = {
 				'Content-Type': 'application/json',
@@ -348,14 +347,17 @@ const bearer_test_list: ReadonlyArray<{
 					method: 'workspace_list',
 				}),
 			});
-			await res.json();
-			assert_equal(res.status >= 400 && res.status < 500, true, 'client error status');
+			const body = (await res.json()) as Record<string, unknown>;
+			assert_equal(res.status, 401, 'status');
+			const error = body.error as Record<string, unknown>;
+			assert_equal(error.code, -32001, 'error code');
 		},
 	},
 	{
 		name: 'bearer_empty_value',
 		fn: async (config) => {
-			// "Authorization: Bearer " with nothing after → treated as no auth
+			// "Authorization: Bearer " with nothing after → treated as no auth.
+			// Both backends soft-fail → JSON-RPC unauthenticated error.
 			const {status, body} = await post_rpc(
 				config,
 				JSON.stringify({
@@ -365,30 +367,30 @@ const bearer_test_list: ReadonlyArray<{
 				}),
 				{bearer: ''},
 			);
-			// Empty bearer falls through to no auth → 401
 			assert_equal(status, 401, 'status');
 			const r = body as Record<string, unknown>;
-			assert_equal('error' in r, true, 'has error field');
+			assert_equal(r.id, 'bt-empty-1', 'id');
+			const error = r.error as Record<string, unknown>;
+			assert_equal(error.code, -32001, 'error code');
+			assert_equal(error.message, 'unauthenticated', 'error message');
 		},
 	},
 	{
 		name: 'bearer_cookie_priority',
-		// Deno's bearer middleware is fail-closed: when Authorization: Bearer is
-		// present with an invalid token, it returns 401 before cookie auth runs.
-		// Rust tries cookie first, then bearer — cookie wins.
-		skip: ['deno'],
+		// Both backends try cookie auth first. If cookie succeeds, bearer
+		// is not checked — cookie wins even when bearer is invalid.
 		fn: async (config) => {
 			// When both cookie and bearer are present, cookie should win.
 			// Use a valid cookie + invalid bearer — if cookie wins, request succeeds.
 			// We need the session cookie, so create a dedicated session.
 			const dedicated_token = 'zzz-priority-test-session-token';
-			const token_hash = bytes_to_hex(
+			const token_hash = to_hex(
 				blake3_hash(new TextEncoder().encode(dedicated_token)),
 			);
 
 			const create_sql = `
 				INSERT INTO auth_session (id, account_id, expires_at)
-				SELECT '${token_hash}', id, NOW() + INTERVAL '30 days'
+				SELECT '${sql_escape(token_hash)}', id, NOW() + INTERVAL '30 days'
 				FROM account WHERE username = 'testadmin'
 				ON CONFLICT DO NOTHING;
 			`;
@@ -406,7 +408,8 @@ const bearer_test_list: ReadonlyArray<{
 				`${dedicated_token}:${expires_at}`,
 				cookie_key,
 			);
-			const cookie = `fuz_session=${cookie_value}`;
+			// Both cookie names: Rust uses fuz_session, Deno uses zzz_session
+			const cookie = `fuz_session=${cookie_value}; zzz_session=${cookie_value}`;
 
 			// Send both valid cookie AND invalid bearer
 			const headers: Record<string, string> = {
@@ -433,22 +436,6 @@ const bearer_test_list: ReadonlyArray<{
 		},
 	},
 ];
-
-// -- HMAC signing helper (duplicated from run.ts for independence) -------------
-
-const hmac_sign = async (value: string, key_str: string): Promise<string> => {
-	const encoder = new TextEncoder();
-	const key = await crypto.subtle.importKey(
-		'raw',
-		encoder.encode(key_str),
-		{name: 'HMAC', hash: 'SHA-256'},
-		false,
-		['sign'],
-	);
-	const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(value));
-	const sig_b64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
-	return `${value}.${sig_b64}`;
-};
 
 // -- Test runner --------------------------------------------------------------
 

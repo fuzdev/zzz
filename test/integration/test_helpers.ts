@@ -1,11 +1,43 @@
 /**
  * Shared helpers for integration tests.
  *
- * Assertion utilities, HTTP/WebSocket helpers, and common types
- * used across test modules.
+ * Assertion utilities, HTTP/WebSocket helpers, crypto helpers,
+ * and common types used across test modules.
  */
 
 import {type BackendConfig} from './config.ts';
+
+// -- Crypto helpers -----------------------------------------------------------
+
+/**
+ * HMAC-SHA256 sign a value.
+ *
+ * Returns `{value}.{base64(signature)}` — same format as auth.rs `Keyring::sign`
+ * and fuz_app's `sign_with_crypto_key`.
+ */
+export const hmac_sign = async (value: string, key_str: string): Promise<string> => {
+	const encoder = new TextEncoder();
+	const key = await crypto.subtle.importKey(
+		'raw',
+		encoder.encode(key_str),
+		{name: 'HMAC', hash: 'SHA-256'},
+		false,
+		['sign'],
+	);
+	const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(value));
+	const sig_b64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
+	return `${value}.${sig_b64}`;
+};
+
+// -- SQL helpers --------------------------------------------------------------
+
+/**
+ * Escape a string for safe SQL single-quote interpolation.
+ *
+ * Doubles single quotes per the SQL standard. Use at every `'${...}'`
+ * interpolation site when building SQL for psql.
+ */
+export const sql_escape = (value: string): string => value.replaceAll("'", "''");
 
 // -- URL helpers --------------------------------------------------------------
 
