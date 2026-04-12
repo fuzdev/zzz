@@ -10,6 +10,7 @@ publish = false
 
 [workspace.dependencies]
 fuz_common = { path = "../private_fuz/crates/fuz_common" }
+fuz_pty = { path = "../private_fuz/crates/fuz_pty" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 axum = { version = "0.8", features = ["ws"] }
 axum-extra = { version = "0.10", features = ["cookie"] }

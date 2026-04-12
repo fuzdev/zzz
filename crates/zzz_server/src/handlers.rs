@@ -11,6 +11,7 @@ use tokio::sync::mpsc;
 
 use crate::auth::{Keyring, RequestContext};
 use crate::filer::WorkspaceWatcher;
+use crate::pty_manager::PtyManager;
 use crate::rpc;
 use crate::scoped_fs::ScopedFs;
 
@@ -43,6 +44,8 @@ pub struct App {
     pub connections: RwLock<HashMap<ConnectionId, ConnectionSender>>,
     /// Active file watchers — keyed by normalized workspace path.
     pub watchers: RwLock<HashMap<String, WorkspaceWatcher>>,
+    /// PTY terminal manager.
+    pub pty_manager: PtyManager,
 }
 
 impl App {
@@ -70,6 +73,7 @@ impl App {
             next_connection_id: AtomicU64::new(1),
             connections: RwLock::new(HashMap::new()),
             watchers: RwLock::new(HashMap::new()),
+            pty_manager: PtyManager::new(),
         }
     }
 
@@ -218,6 +222,10 @@ pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Val
         "diskfile_delete" => handle_diskfile_delete(params, ctx).await,
         "directory_create" => handle_directory_create(params, ctx).await,
         "provider_load_status" => handle_provider_load_status(),
+        "terminal_create" => handle_terminal_create(params, ctx).await,
+        "terminal_data_send" => handle_terminal_data_send(params, ctx).await,
+        "terminal_resize" => handle_terminal_resize(params, ctx).await,
+        "terminal_close" => handle_terminal_close(params, ctx).await,
         other => Err(rpc::method_not_found(other)),
     }
 }
@@ -468,4 +476,120 @@ async fn handle_directory_create(params: &Value, ctx: &Ctx<'_>) -> Result<Value,
         .map_err(|e| rpc::internal_error(&format!("failed to create directory: {e}")))?;
 
     Ok(Value::Null)
+}
+
+// -- Terminal handlers --------------------------------------------------------
+
+#[derive(Serialize)]
+struct TerminalCreateResult {
+    terminal_id: String,
+}
+
+#[derive(Serialize)]
+struct TerminalCloseResult {
+    exit_code: Option<i32>,
+}
+
+async fn handle_terminal_create(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+    let command = params
+        .get("command")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'command' parameter"))?;
+
+    let args: Vec<String> = match params.get("args") {
+        Some(Value::Array(arr)) => arr
+            .iter()
+            .map(|v| {
+                v.as_str()
+                    .map(String::from)
+                    .ok_or_else(|| rpc::invalid_params("args must be an array of strings"))
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        Some(Value::Null) | None => vec![],
+        _ => return Err(rpc::invalid_params("args must be an array of strings")),
+    };
+
+    let cwd = params.get("cwd").and_then(Value::as_str);
+
+    let terminal_id = uuid::Uuid::new_v4().to_string();
+
+    ctx.app
+        .pty_manager
+        .spawn(&terminal_id, command, &args, cwd, Arc::clone(&ctx.app_arc))
+        .await
+        .map_err(|e| rpc::internal_error(&format!("failed to create terminal: {e}")))?;
+
+    serde_json::to_value(TerminalCreateResult { terminal_id })
+        .map_err(|_| rpc::internal_error("serialization failed"))
+}
+
+async fn handle_terminal_data_send(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+    let terminal_id = params
+        .get("terminal_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'terminal_id' parameter"))?;
+
+    let data = params
+        .get("data")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'data' parameter"))?;
+
+    // No-ops silently if terminal doesn't exist (matching Deno behavior)
+    ctx.app.pty_manager.write(terminal_id, data).await;
+
+    Ok(Value::Null)
+}
+
+async fn handle_terminal_resize(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+    let terminal_id = params
+        .get("terminal_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'terminal_id' parameter"))?;
+
+    let cols = params
+        .get("cols")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'cols' parameter"))?;
+
+    let rows = params
+        .get("rows")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'rows' parameter"))?;
+
+    // No-ops silently if terminal doesn't exist; resize failures are non-fatal
+    #[expect(clippy::cast_possible_truncation, reason = "terminal dimensions fit u16")]
+    {
+        ctx.app
+            .pty_manager
+            .resize(terminal_id, cols as u16, rows as u16)
+            .await;
+    }
+
+    Ok(Value::Null)
+}
+
+async fn handle_terminal_close(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+    let terminal_id = params
+        .get("terminal_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'terminal_id' parameter"))?;
+
+    let signal_str = params
+        .get("signal")
+        .and_then(Value::as_str)
+        .unwrap_or("SIGTERM");
+
+    let signal = match signal_str {
+        "SIGKILL" => libc::SIGKILL,
+        _ => libc::SIGTERM, // default to SIGTERM
+    };
+
+    // Return {exit_code: null} if terminal doesn't exist (matching Deno behavior)
+    let Some(exit_code) = ctx.app.pty_manager.kill(terminal_id, signal).await else {
+        return serde_json::to_value(TerminalCloseResult { exit_code: None })
+            .map_err(|_| rpc::internal_error("serialization failed"));
+    };
+
+    serde_json::to_value(TerminalCloseResult { exit_code })
+        .map_err(|_| rpc::internal_error("serialization failed"))
 }

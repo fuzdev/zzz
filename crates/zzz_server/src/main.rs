@@ -4,6 +4,7 @@ mod db;
 mod error;
 mod filer;
 mod handlers;
+mod pty_manager;
 mod rpc;
 mod scoped_fs;
 mod ws;

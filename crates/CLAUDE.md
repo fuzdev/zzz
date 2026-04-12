@@ -6,13 +6,16 @@ integration tests enforce identical behaviour between both backends.
 
 Phase 2b+ complete: cookie-based auth on both HTTP and WebSocket, filesystem
 actions (`diskfile_update`, `diskfile_delete`, `directory_create`) with
-`ScopedFs` path safety, per-action auth checks on all transports, a
+`ScopedFs` path safety, terminal actions (`terminal_create`, `terminal_data_send`,
+`terminal_resize`, `terminal_close`) via `fuz_pty` native crate dependency
+(real PTY via `forkpty`), per-action auth checks on all transports, a
 bootstrap endpoint for first-time account creation, `session_load` handler
 (returns zzz_dir, scoped_dirs, workspaces), `provider_load_status` stub
 (returns empty array), `workspace_changed` notifications (broadcast to all
-connected WebSocket clients on open/close), file watching via `notify` crate
-(`filer_change` notifications on file add/change/delete within open
-workspaces), and WebSocket connection tracking with `broadcast`/`send_to`
+connected WebSocket clients on open/close), `terminal_data` and `terminal_exited`
+notifications (broadcast on PTY output and process exit), file watching via
+`notify` crate (`filer_change` notifications on file add/change/delete within
+open workspaces), and WebSocket connection tracking with `broadcast`/`send_to`
 infrastructure. Database (PostgreSQL via `tokio-postgres`/`deadpool-postgres`),
 HMAC-SHA256 cookie signing (`fuz_session`), blake3 session hashing.
 All other methods return `method_not_found`.
@@ -23,11 +26,11 @@ All other methods return `method_not_found`.
 
 ```
 ~/dev/zzz/               (this repo)
-~/dev/private_fuz/        (path dep: fuz_common)
+~/dev/private_fuz/        (path deps: fuz_common, fuz_pty)
 ```
 
-If the path dep is missing, `cargo build` will fail with
-`failed to read .../private_fuz/crates/fuz_common/Cargo.toml`.
+If a path dep is missing, `cargo build` will fail with
+`failed to read .../private_fuz/crates/{crate}/Cargo.toml`.
 
 **PostgreSQL** is required. Create the development and test databases:
 
@@ -122,7 +125,7 @@ management routes (login/logout/signup), event-driven socket revocation.
 
 ## Integration Tests
 
-40 tests verify identical Deno/Rust behaviour. Both backends bootstrap
+45 tests verify identical Deno/Rust behaviour. Both backends bootstrap
 auth (admin account + session cookie) and create a non-keeper user
 (account + actor + session, no keeper permit, cookie signed via HMAC-SHA256)
 before tests. The test database (`zzz_test` by default, configurable via
@@ -173,6 +176,12 @@ provider status stub.
 path traversal rejection, relative path rejection, and nonexistent file
 deletion.
 
+**Terminal tests (both backends):** `terminal_create_echo`,
+`terminal_close`, `terminal_data_send_missing`, `terminal_close_missing`,
+`terminal_resize_missing` — 5 tests verify PTY spawn/read/close lifecycle,
+`terminal_data`/`terminal_exited` notifications over WebSocket, explicit
+process kill, and silent return behavior for missing terminal IDs.
+
 ```bash
 deno task test:integration --backend=rust   # Rust only
 deno task test:integration --backend=deno   # Deno only
@@ -196,15 +205,16 @@ crates/zzz_server/src/
 ├── bootstrap.rs   # POST /bootstrap handler (account + session creation)
 ├── db.rs          # Connection pool, migrations, auth queries
 ├── filer.rs       # File watcher (notify crate) → filer_change notifications via broadcast
+├── pty_manager.rs # PTY terminal manager (fuz_pty crate) → terminal_data/exited notifications
 ├── scoped_fs.rs   # Scoped filesystem — path validation, symlink rejection
 └── error.rs       # ServerError (Bind, Serve, Database, Config)
 ```
 
 **App/Ctx/dispatch pattern**: `App` holds long-lived server state (workspaces
 in `RwLock<HashMap>`, `deadpool_postgres::Pool`, `Keyring`, origin config,
-`ScopedFs`, `zzz_dir`, `scoped_dirs`, connection tracking via `AtomicU64` +
-`RwLock<HashMap<ConnectionId, UnboundedSender>>`, file watchers via
-`RwLock<HashMap<String, WorkspaceWatcher>>`), constructed once in `main`,
+`ScopedFs`, `zzz_dir`, `scoped_dirs`, `PtyManager`, connection tracking via
+`AtomicU64` + `RwLock<HashMap<ConnectionId, UnboundedSender>>`, file watchers
+via `RwLock<HashMap<String, WorkspaceWatcher>>`), constructed once in `main`,
 wrapped in `Arc`. `Ctx` is per-request context (borrows `App` + holds
 `Arc<App>` for spawning tasks, `request_id`,
 `auth: Option<&RequestContext>`), constructed by each transport before calling
@@ -233,11 +243,11 @@ wrapped in `Arc`. `Ctx` is per-request context (borrows `App` + holds
 
 ## Known Limitations
 
-- 9 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `provider_load_status` stub)
-- 2 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (file watcher via `notify` crate, recursive, ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz`)
+- 13 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_load_status` stub)
+- 4 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (file watcher via `notify` crate, recursive, ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz`), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast)
 - No batch request support (JSON arrays)
 - No bearer token auth, daemon token rotation, or account management routes
-- No completion/streaming, Ollama, or terminal actions
+- No completion/streaming or Ollama actions
 - `provider_load_status` returns `[]` — no provider integration yet
 
 ## Design Decisions
@@ -256,6 +266,12 @@ wrapped in `Arc`. `Ctx` is per-request context (borrows `App` + holds
   handlers arrive, scope lock guards before await points.
 - **Session touch**: fire-and-forget via `tokio::spawn` — doesn't block
   the request pipeline.
+- **PTY terminals**: `fuz_pty` as a native crate dependency (no FFI
+  indirection). `PtyManager` in `App` manages spawned processes with async
+  read loops via `tokio::spawn`. Each terminal gets a `CancellationToken` so
+  `terminal_close` can stop the read loop before killing the process. Matching
+  Deno behavior: 10ms poll interval, 50ms wait after kill before waitpid,
+  silent returns for missing terminal IDs.
 
 ## What's Next
 
@@ -267,5 +283,5 @@ wrapped in `Arc`. `Ctx` is per-request context (borrows `App` + holds
 5. Real `provider_load_status` implementation (check Ollama availability)
 6. Ollama integration (`ollama_list`, `ollama_ps`, completion pipeline)
 
-Phase 4 (full action port: completions, Ollama, terminals). See the
-[Rust Backends quest](../../grimoire/quests/rust-backends.md).
+Phase 4 (full action port: completions, Ollama). Terminal actions are
+complete. See the [Rust Backends quest](../../grimoire/quests/rust-backends.md).

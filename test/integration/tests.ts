@@ -1132,6 +1132,185 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 			assert_equal(error.code, -32603, 'error code');
 		},
 	},
+
+	// -- Terminal tests -----------------------------------------------------------
+
+	{
+		name: 'terminal_create_echo',
+		fn: async (config, session_cookie) => {
+			// Spawn "echo hello" via WS, receive terminal_data notification with
+			// output containing "hello", then terminal_exited with exit_code 0.
+			const conn = await open_ws(config, session_cookie);
+			try {
+				await ensure_ws_registered(conn);
+
+				// Create terminal
+				conn.send(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'tc-1',
+						method: 'terminal_create',
+						params: {command: 'echo', args: ['hello']},
+					}),
+				);
+				const create_res = (await conn.receive()) as Record<string, unknown>;
+				assert_equal(create_res.id, 'tc-1', 'create id');
+				const create_result = create_res.result as Record<string, unknown>;
+				assert_equal(typeof create_result.terminal_id, 'string', 'terminal_id is string');
+				assert_equal(
+					(create_result.terminal_id as string).length > 0,
+					true,
+					'terminal_id not empty',
+				);
+
+				// Collect notifications — expect terminal_data with "hello" and
+				// terminal_exited with exit_code 0. Order may vary, collect up to 10.
+				let got_data = false;
+				let got_exited = false;
+				let exit_code: number | null = null;
+				for (let i = 0; i < 10 && !(got_data && got_exited); i++) {
+					const msg = (await conn.receive(5_000)) as Record<string, unknown>;
+					if (msg.method === 'terminal_data') {
+						const params = msg.params as Record<string, unknown>;
+						assert_equal(
+							params.terminal_id,
+							create_result.terminal_id,
+							'data terminal_id matches',
+						);
+						if ((params.data as string).includes('hello')) {
+							got_data = true;
+						}
+					} else if (msg.method === 'terminal_exited') {
+						const params = msg.params as Record<string, unknown>;
+						assert_equal(
+							params.terminal_id,
+							create_result.terminal_id,
+							'exited terminal_id matches',
+						);
+						exit_code = params.exit_code as number | null;
+						got_exited = true;
+					}
+				}
+				assert_equal(got_data, true, 'received terminal_data with hello');
+				assert_equal(got_exited, true, 'received terminal_exited');
+				assert_equal(exit_code, 0, 'exit_code is 0');
+			} finally {
+				conn.close();
+			}
+		},
+	},
+	{
+		name: 'terminal_close',
+		fn: async (config, session_cookie) => {
+			// Spawn a long-running process, then close it explicitly.
+			// The close response and terminal_exited notification may arrive
+			// in either order — collect both.
+			const conn = await open_ws(config, session_cookie);
+			try {
+				await ensure_ws_registered(conn);
+
+				conn.send(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'tcl-1',
+						method: 'terminal_create',
+						params: {command: 'sleep', args: ['60']},
+					}),
+				);
+				const create_res = (await conn.receive()) as Record<string, unknown>;
+				assert_equal(create_res.id, 'tcl-1', 'create id');
+				const terminal_id = (create_res.result as Record<string, unknown>)
+					.terminal_id as string;
+
+				// Close the terminal
+				conn.send(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'tcl-2',
+						method: 'terminal_close',
+						params: {terminal_id},
+					}),
+				);
+
+				// Collect up to 3 messages — expect the close response and
+				// possibly a terminal_exited notification (order varies by backend)
+				let got_close_response = false;
+				for (let i = 0; i < 3 && !got_close_response; i++) {
+					const msg = (await conn.receive(5_000)) as Record<string, unknown>;
+					if (msg.id === 'tcl-2') {
+						got_close_response = true;
+						const close_result = msg.result as Record<string, unknown>;
+						assert_equal(
+							close_result.exit_code === null || typeof close_result.exit_code === 'number',
+							true,
+							'exit_code is number or null',
+						);
+					}
+					// terminal_exited or terminal_data notifications are fine — skip them
+				}
+				assert_equal(got_close_response, true, 'received close response');
+			} finally {
+				conn.close();
+			}
+		},
+	},
+	{
+		name: 'terminal_data_send_missing',
+		fn: async (config, session_cookie) => {
+			// terminal_data_send with a nonexistent terminal_id → silent null
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'tdsm-1',
+					method: 'terminal_data_send',
+					params: {terminal_id: '00000000-0000-0000-0000-000000000000', data: 'hello'},
+				}),
+				session_cookie,
+			);
+			assert_equal(res.status, 200, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			assert_equal(rpc.result, null, 'result is null');
+		},
+	},
+	{
+		name: 'terminal_close_missing',
+		fn: async (config, session_cookie) => {
+			// terminal_close with a nonexistent terminal_id → {exit_code: null}
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'tclm-1',
+					method: 'terminal_close',
+					params: {terminal_id: '00000000-0000-0000-0000-000000000000'},
+				}),
+				session_cookie,
+			);
+			assert_equal(res.status, 200, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			assert_deep_equal(rpc.result, {exit_code: null}, 'result');
+		},
+	},
+	{
+		name: 'terminal_resize_missing',
+		fn: async (config, session_cookie) => {
+			// terminal_resize with a nonexistent terminal_id → silent null
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'trm-1',
+					method: 'terminal_resize',
+					params: {terminal_id: '00000000-0000-0000-0000-000000000000', cols: 80, rows: 24},
+				}),
+				session_cookie,
+			);
+			assert_equal(res.status, 200, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			assert_equal(rpc.result, null, 'result is null');
+		},
+	},
 ];
 
 // == Non-keeper tests =========================================================

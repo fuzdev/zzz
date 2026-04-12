@@ -512,6 +512,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuz_pty"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2161,7 +2168,9 @@ dependencies = [
  "deadpool-postgres",
  "futures-util",
  "fuz_common",
+ "fuz_pty",
  "hmac 0.12.1",
+ "libc",
  "notify",
  "rand 0.8.5",
  "serde",
