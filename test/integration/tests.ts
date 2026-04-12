@@ -317,7 +317,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 				const open_result = open_rpc.result as Record<string, unknown>;
 				const workspace = open_result.workspace as Record<string, unknown>;
 
-				// Shape assertions — handles Deno/Rust differences
+				// WorkspaceInfoJson shape (path, name, opened_at)
 				assert_equal(typeof workspace.path, 'string', 'path is string');
 				assert_equal((workspace.path as string).endsWith('/'), true, 'path ends with /');
 				assert_equal(typeof workspace.name, 'string', 'name is string');
@@ -645,8 +645,14 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 			} else {
 				// Deno returns {status: ProviderStatus} per the action spec
 				assert_equal(res.status, 200, 'status');
-				assert_equal('result' in rpc, true, 'has result');
-				assert_equal('error' in rpc, false, 'no error');
+				const result = rpc.result as Record<string, unknown>;
+				const status = result.status as Record<string, unknown>;
+				assert_equal(status.name, 'ollama', 'status.name');
+				assert_equal(typeof status.available, 'boolean', 'status.available is boolean');
+				assert_equal(typeof status.checked_at, 'number', 'status.checked_at is number');
+				if (status.available === false) {
+					assert_equal(typeof status.error, 'string', 'status.error is string when unavailable');
+				}
 			}
 		},
 	},

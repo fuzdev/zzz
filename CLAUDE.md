@@ -249,17 +249,17 @@ cd ~/dev/private_fuz && cargo build -p fuz_pty --release
 
 ### Rust Backend
 
-Shadow implementation of the Deno server using axum. Phase 2b+: `ping`,
+Shadow implementation of the Deno server using axum. 13 RPC methods: `ping`,
 `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`,
 `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`,
-`terminal_close`, `provider_load_status` (stub) with cookie session auth
+`terminal_close`, `provider_update_api_key` (keeper-only). Cookie session auth
 and bearer token auth (API tokens) on HTTP and WebSocket, `ScopedFs` path
 safety, PTY terminals via `fuz_pty` native crate, and WebSocket connection
 tracking (`broadcast`/`send_to`). PostgreSQL via `tokio-postgres`/`deadpool-postgres`,
 HMAC-SHA256 cookie signing, blake3 session/token hashing, per-action auth
 checks with credential type enforcement, bootstrap endpoint.
-The Deno server is ground truth — 74 integration tests (65 cross-backend)
-verify both backends produce identical JSON-RPC responses.
+The Deno server is ground truth — 74 integration tests on both backends
+(all cross-backend, 0 skips) verify identical JSON-RPC responses.
 
 ```bash
 cargo build -p zzz_server                          # Build
@@ -509,7 +509,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Rust backend is Phase 3** — 14 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_load_status` stub, `provider_update_api_key` keeper-only) with full auth stack (cookie sessions, bearer tokens via `Authorization: Bearer`, daemon tokens via `X-Daemon-Token` with 30s rotation) on HTTP and WebSocket, account management routes (login, logout, password change, session list/revoke), `ScopedFs`, PTY terminals via `fuz_pty`, PostgreSQL, bootstrap, WebSocket connection tracking with active `workspace_changed`, `filer_change`, `terminal_data`, and `terminal_exited` notifications. Event-driven socket revocation active (logout closes per-session, password change closes per-account). 74 integration tests. Batch JSON-RPC requests not yet supported. See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
+- **Rust backend is Phase 3** — 13 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_update_api_key` keeper-only) with full auth stack (cookie sessions, bearer tokens via `Authorization: Bearer`, daemon tokens via `X-Daemon-Token` with 30s rotation) on HTTP and WebSocket, account management routes (login, logout, password change, session list/revoke with cross-backend parity), `ScopedFs`, PTY terminals via `fuz_pty`, PostgreSQL, bootstrap, WebSocket connection tracking with active `workspace_changed`, `filer_change`, `terminal_data`, and `terminal_exited` notifications. Event-driven socket revocation active (logout closes per-session, password change closes per-account). 74 integration tests on both backends (all cross-backend, 0 skips). No provider support yet (`provider_load_status` returns `method_not_found`). No batch JSON-RPC, no completion/streaming, no Ollama actions. See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
 
 ## fuz_app
 
