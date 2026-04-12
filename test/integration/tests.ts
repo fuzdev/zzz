@@ -12,6 +12,14 @@
  */
 
 import {INTEGRATION_SCOPED_DIR, type BackendConfig} from './config.ts';
+import {
+	post_rpc,
+	open_ws,
+	ensure_ws_registered,
+	assert_equal,
+	assert_deep_equal,
+	ws_url,
+} from './test_helpers.ts';
 
 export interface TestResult {
 	name: string;
@@ -19,143 +27,6 @@ export interface TestResult {
 	duration_ms: number;
 	error?: string;
 }
-
-// -- Helpers ------------------------------------------------------------------
-
-const rpc_url = (config: BackendConfig): string => `${config.base_url}${config.rpc_path}`;
-const ws_url = (config: BackendConfig): string => {
-	const url = new URL(config.ws_path, config.base_url);
-	url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-	return url.href;
-};
-
-/** POST a raw string body to the RPC endpoint. */
-const post_rpc = async (
-	config: BackendConfig,
-	body: string,
-	session_cookie?: string,
-): Promise<{status: number; body: unknown}> => {
-	const headers: Record<string, string> = {'Content-Type': 'application/json'};
-	if (session_cookie) headers['Cookie'] = session_cookie;
-	const res = await fetch(rpc_url(config), {
-		method: 'POST',
-		headers,
-		body,
-	});
-	const json = await res.json();
-	return {status: res.status, body: json};
-};
-
-// -- WebSocket helpers --------------------------------------------------------
-
-/** Persistent WebSocket connection handle for multi-message tests. */
-interface WsConnection {
-	send(message: string): void;
-	receive(timeout_ms?: number): Promise<unknown>;
-	expect_silence(timeout_ms?: number): Promise<void>;
-	close(): void;
-}
-
-/** Open a WebSocket connection, resolves once connected. */
-const open_ws = (config: BackendConfig, session_cookie?: string): Promise<WsConnection> =>
-	new Promise((resolve, reject) => {
-		// Deno's WebSocket supports a headers option (non-standard extension)
-		const ws_options: {headers: Record<string, string>} | undefined = session_cookie
-			? {headers: {Cookie: session_cookie}}
-			: undefined;
-		const ws = new WebSocket(ws_url(config), ws_options as unknown as string[]);
-		const pending: Array<{
-			resolve: (value: unknown) => void;
-			reject: (error: Error) => void;
-			timer: ReturnType<typeof setTimeout>;
-			silent: boolean;
-		}> = [];
-
-		ws.onmessage = (event) => {
-			const data = JSON.parse(String(event.data));
-			const waiter = pending.shift();
-			if (!waiter) return;
-			clearTimeout(waiter.timer);
-			if (waiter.silent) {
-				waiter.reject(new Error(`expected no response, got: ${JSON.stringify(data)}`));
-			} else {
-				waiter.resolve(data);
-			}
-		};
-
-		ws.onerror = (event) => {
-			const err = new Error(`WebSocket error: ${event}`);
-			if (pending.length > 0) {
-				const waiter = pending.shift()!;
-				clearTimeout(waiter.timer);
-				waiter.reject(err);
-			} else {
-				reject(err);
-			}
-		};
-
-		ws.onopen = () =>
-			resolve({
-				send: (message) => ws.send(message),
-				receive: (timeout_ms = 5_000) =>
-					new Promise((res, rej) => {
-						const timer = setTimeout(() => {
-							pending.shift();
-							rej(new Error('WebSocket response timeout'));
-						}, timeout_ms);
-						pending.push({resolve: res, reject: rej, timer, silent: false});
-					}),
-				expect_silence: (timeout_ms = 1_000) =>
-					new Promise((res, rej) => {
-						const timer = setTimeout(() => {
-							pending.shift();
-							res();
-						}, timeout_ms);
-						pending.push({resolve: res, reject: rej, timer, silent: true});
-					}),
-				close: () => ws.close(),
-			});
-	});
-
-/**
- * Ensure a WebSocket connection is fully registered on the server.
- *
- * After `open_ws` resolves (onopen), the server's `handle_connection` task
- * may not have called `add_connection` yet. A round-trip RPC proves the
- * connection loop is running and the connection is in `app.connections`.
- */
-const ensure_ws_registered = async (conn: WsConnection): Promise<void> => {
-	conn.send(JSON.stringify({jsonrpc: '2.0', id: '_warmup', method: 'ping'}));
-	await conn.receive();
-};
-
-// -- Assertion helpers --------------------------------------------------------
-
-const assert_equal = (actual: unknown, expected: unknown, label: string): void => {
-	if (actual !== expected) {
-		throw new Error(`${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
-	}
-};
-
-/** Recursively sort object keys so key order doesn't affect comparison. */
-const sort_keys = (v: unknown): unknown => {
-	if (v === null || typeof v !== 'object') return v;
-	if (Array.isArray(v)) return v.map(sort_keys);
-	const sorted: Record<string, unknown> = {};
-	for (const k of Object.keys(v as Record<string, unknown>).sort()) {
-		sorted[k] = sort_keys((v as Record<string, unknown>)[k]);
-	}
-	return sorted;
-};
-
-/** Exact deep equality (key-order-independent). */
-const assert_deep_equal = (actual: unknown, expected: unknown, label: string): void => {
-	const a = JSON.stringify(sort_keys(actual));
-	const e = JSON.stringify(sort_keys(expected));
-	if (a !== e) {
-		throw new Error(`${label}\n  expected: ${e}\n  actual:   ${a}`);
-	}
-};
 
 /**
  * Omit `error.data` from a JSON-RPC error response ONLY when the expected
@@ -380,7 +251,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		name: 'notification_ws',
 		fn: async (config, session_cookie) => {
 			// Notification over WS → no response sent
-			const conn = await open_ws(config, session_cookie);
+			const conn = await open_ws(config, {cookie: session_cookie});
 			try {
 				conn.send(JSON.stringify({jsonrpc: '2.0', method: 'ping'}));
 				await conn.expect_silence();
@@ -393,7 +264,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		name: 'multi_message_ws',
 		fn: async (config, session_cookie) => {
 			// Multiple messages on one connection — verify it stays alive
-			const conn = await open_ws(config, session_cookie);
+			const conn = await open_ws(config, {cookie: session_cookie});
 			try {
 				conn.send(JSON.stringify({jsonrpc: '2.0', id: 'multi-1', method: 'ping'}));
 				const r1 = await conn.receive();
@@ -438,7 +309,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'workspace_open',
 						params: {path: tmp_dir},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				assert_equal(open_res.status, 200, 'open status');
 				const open_rpc = open_res.body as Record<string, unknown>;
@@ -461,7 +332,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						id: 'wl-1',
 						method: 'workspace_list',
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				assert_equal(list_res.status, 200, 'list status');
 				const list_rpc = list_res.body as Record<string, unknown>;
@@ -489,7 +360,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'workspace_open',
 						params: {path: tmp_dir},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				assert_equal(r1.status, 200, 'first open status');
 				const w1 = ((r1.body as Record<string, unknown>).result as Record<string, unknown>)
@@ -503,7 +374,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'workspace_open',
 						params: {path: tmp_dir},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				assert_equal(r2.status, 200, 'second open status');
 				const w2 = ((r2.body as Record<string, unknown>).result as Record<string, unknown>)
@@ -528,7 +399,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					method: 'workspace_open',
 					params: {path: `/tmp/zzz_nonexistent_${Date.now()}`},
 				}),
-				session_cookie,
+				{cookie: session_cookie},
 			);
 			assert_equal(res.status, 500, 'status');
 			const r = res.body as Record<string, unknown>;
@@ -576,7 +447,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					id: 'auth-2',
 					method: 'workspace_list',
 				}),
-				'fuz_session=garbage-invalid-cookie-value',
+				{cookie: 'fuz_session=garbage-invalid-cookie-value'},
 			);
 			assert_equal(status, 401, 'status');
 			const r = body as Record<string, unknown>;
@@ -620,7 +491,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'workspace_open',
 						params: {path: tmp_dir},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				assert_equal(open_res.status, 200, 'open status');
 				const workspace = (
@@ -636,7 +507,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'workspace_close',
 						params: {path: workspace.path},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				assert_equal(close_res.status, 200, 'close status');
 				const close_rpc = close_res.body as Record<string, unknown>;
@@ -650,7 +521,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						id: 'wc-list',
 						method: 'workspace_list',
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				assert_equal(list_res.status, 200, 'list status');
 				const list_result = (list_res.body as Record<string, unknown>).result as Record<
@@ -673,7 +544,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'workspace_close',
 						params: {path: workspace.path},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				assert_equal(close2_res.status >= 400, true, 'double close fails');
 				const close2_rpc = close2_res.body as Record<string, unknown>;
@@ -739,7 +610,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					id: 'sl-1',
 					method: 'session_load',
 				}),
-				session_cookie,
+				{cookie: session_cookie},
 			);
 			assert_equal(res.status, 200, 'status');
 			const rpc = res.body as Record<string, unknown>;
@@ -764,7 +635,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					method: 'provider_load_status',
 					params: {provider_name: 'ollama'},
 				}),
-				session_cookie,
+				{cookie: session_cookie},
 			);
 			assert_equal(res.status, 200, 'status');
 			const rpc = res.body as Record<string, unknown>;
@@ -781,7 +652,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		name: 'ws_workspace_list',
 		fn: async (config, session_cookie) => {
 			// Authenticated action over WS — workspace_list returns {workspaces: [...]}
-			const conn = await open_ws(config, session_cookie);
+			const conn = await open_ws(config, {cookie: session_cookie});
 			try {
 				conn.send(
 					JSON.stringify({jsonrpc: '2.0', id: 'wsl-1', method: 'workspace_list'}),
@@ -802,7 +673,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		fn: async (config, session_cookie) => {
 			// Open a WS connection, then open a workspace via HTTP
 			// → WS client should receive a workspace_changed notification
-			const conn = await open_ws(config, session_cookie);
+			const conn = await open_ws(config, {cookie: session_cookie});
 			await ensure_ws_registered(conn);
 			const tmp_dir = await Deno.makeTempDir({prefix: 'zzz_test_wc_'});
 			try {
@@ -815,7 +686,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'workspace_open',
 						params: {path: tmp_dir},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				assert_equal(open_res.status, 200, 'open status');
 
@@ -842,7 +713,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'workspace_close',
 						params: {path: tmp_dir},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				await Deno.remove(tmp_dir, {recursive: true});
 			}
@@ -864,7 +735,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'workspace_open',
 						params: {path: tmp_dir},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				assert_equal(open_res.status, 200, 'open status');
 				const workspace = (
@@ -872,7 +743,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 				).workspace as Record<string, unknown>;
 
 				// Now open WS connection
-				const conn = await open_ws(config, session_cookie);
+				const conn = await open_ws(config, {cookie: session_cookie});
 				await ensure_ws_registered(conn);
 				try {
 					// Close workspace via HTTP
@@ -884,7 +755,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 							method: 'workspace_close',
 							params: {path: workspace.path},
 						}),
-						session_cookie,
+						{cookie: session_cookie},
 					);
 					assert_equal(close_res.status, 200, 'close status');
 
@@ -920,11 +791,11 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'workspace_open',
 						params: {path: tmp_dir},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 
 				// Open WS after first open
-				const conn = await open_ws(config, session_cookie);
+				const conn = await open_ws(config, {cookie: session_cookie});
 				await ensure_ws_registered(conn);
 				try {
 					// Second open (idempotent — should NOT broadcast)
@@ -936,7 +807,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 							method: 'workspace_open',
 							params: {path: tmp_dir},
 						}),
-						session_cookie,
+						{cookie: session_cookie},
 					);
 
 					// Should NOT receive any notification
@@ -954,7 +825,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'workspace_close',
 						params: {path: tmp_dir},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				await Deno.remove(tmp_dir, {recursive: true});
 			}
@@ -976,7 +847,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					method: 'diskfile_update',
 					params: {path: file_path, content},
 				}),
-				session_cookie,
+				{cookie: session_cookie},
 			);
 			assert_equal(res.status, 200, 'status');
 			const rpc = res.body as Record<string, unknown>;
@@ -1002,7 +873,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					method: 'diskfile_delete',
 					params: {path: file_path},
 				}),
-				session_cookie,
+				{cookie: session_cookie},
 			);
 			assert_equal(res.status, 200, 'status');
 			const rpc = res.body as Record<string, unknown>;
@@ -1030,7 +901,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					method: 'directory_create',
 					params: {path: dir_path},
 				}),
-				session_cookie,
+				{cookie: session_cookie},
 			);
 			assert_equal(res.status, 200, 'status');
 			const rpc = res.body as Record<string, unknown>;
@@ -1052,7 +923,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					method: 'diskfile_update',
 					params: {path: '/tmp/zzz_outside_scope/evil.txt', content: 'nope'},
 				}),
-				session_cookie,
+				{cookie: session_cookie},
 			);
 			assert_equal(res.status, 500, 'status');
 			const rpc = res.body as Record<string, unknown>;
@@ -1077,7 +948,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					method: 'diskfile_update',
 					params: {path: `${INTEGRATION_SCOPED_DIR}/../../../tmp/evil.txt`, content: 'nope'},
 				}),
-				session_cookie,
+				{cookie: session_cookie},
 			);
 			assert_equal(res.status, 500, 'status');
 			const rpc = res.body as Record<string, unknown>;
@@ -1098,7 +969,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					method: 'diskfile_update',
 					params: {path: 'relative/path.txt', content: 'nope'},
 				}),
-				session_cookie,
+				{cookie: session_cookie},
 			);
 			assert_equal(res.status >= 400, true, 'error status');
 			const rpc = res.body as Record<string, unknown>;
@@ -1124,7 +995,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					method: 'diskfile_delete',
 					params: {path: `${INTEGRATION_SCOPED_DIR}/does_not_exist_${Date.now()}.txt`},
 				}),
-				session_cookie,
+				{cookie: session_cookie},
 			);
 			assert_equal(res.status, 500, 'status');
 			const rpc = res.body as Record<string, unknown>;
@@ -1148,7 +1019,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'directory_create',
 						params: {path: dir_path},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				assert_equal(r1.status, 200, 'first create status');
 
@@ -1161,7 +1032,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'directory_create',
 						params: {path: dir_path},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				assert_equal(r2.status, 200, 'second create status');
 				assert_equal((r2.body as Record<string, unknown>).result, null, 'result is null');
@@ -1189,7 +1060,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'workspace_open',
 						params: {path: file_path},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				assert_equal(res.status, 500, 'status');
 				const rpc = res.body as Record<string, unknown>;
@@ -1219,12 +1090,12 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'workspace_open',
 						params: {path: tmp_dir},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 				assert_equal(open_res.status, 200, 'open status');
 
 				// Open WS and wait for connection to register
-				const conn = await open_ws(config, session_cookie);
+				const conn = await open_ws(config, {cookie: session_cookie});
 				try {
 					await ensure_ws_registered(conn);
 
@@ -1262,7 +1133,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						method: 'workspace_close',
 						params: {path: tmp_dir},
 					}),
-					session_cookie,
+					{cookie: session_cookie},
 				);
 			} finally {
 				try {
@@ -1281,7 +1152,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		fn: async (config, session_cookie) => {
 			// Spawn "echo hello" via WS, receive terminal_data notification with
 			// output containing "hello", then terminal_exited with exit_code 0.
-			const conn = await open_ws(config, session_cookie);
+			const conn = await open_ws(config, {cookie: session_cookie});
 			try {
 				await ensure_ws_registered(conn);
 
@@ -1346,7 +1217,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 			// Spawn a long-running process, then close it explicitly.
 			// The close response and terminal_exited notification may arrive
 			// in either order — collect both.
-			const conn = await open_ws(config, session_cookie);
+			const conn = await open_ws(config, {cookie: session_cookie});
 			try {
 				await ensure_ws_registered(conn);
 
@@ -1399,7 +1270,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		name: 'terminal_write_and_read',
 		fn: async (config, session_cookie) => {
 			// Spawn cat, write data, verify it's echoed back via terminal_data
-			const conn = await open_ws(config, session_cookie);
+			const conn = await open_ws(config, {cookie: session_cookie});
 			try {
 				await ensure_ws_registered(conn);
 
@@ -1467,7 +1338,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		name: 'terminal_resize_live',
 		fn: async (config, session_cookie) => {
 			// Spawn a process, resize it, verify no error
-			const conn = await open_ws(config, session_cookie);
+			const conn = await open_ws(config, {cookie: session_cookie});
 			try {
 				await ensure_ws_registered(conn);
 
@@ -1520,7 +1391,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		name: 'terminal_create_with_cwd',
 		fn: async (config, session_cookie) => {
 			// Spawn pwd with explicit cwd, verify output contains the cwd path
-			const conn = await open_ws(config, session_cookie);
+			const conn = await open_ws(config, {cookie: session_cookie});
 			try {
 				await ensure_ws_registered(conn);
 
@@ -1559,7 +1430,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 			// Spawning a nonexistent binary. Two valid behaviors:
 			// - Rust (forkpty): spawn succeeds, child exits 127, terminal_exited notification
 			// - Deno fallback (Deno.Command): spawn fails, error response
-			const conn = await open_ws(config, session_cookie);
+			const conn = await open_ws(config, {cookie: session_cookie});
 			try {
 				await ensure_ws_registered(conn);
 
@@ -1614,7 +1485,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					method: 'terminal_data_send',
 					params: {terminal_id: '00000000-0000-0000-0000-000000000000', data: 'hello'},
 				}),
-				session_cookie,
+				{cookie: session_cookie},
 			);
 			assert_equal(res.status, 200, 'status');
 			const rpc = res.body as Record<string, unknown>;
@@ -1633,7 +1504,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					method: 'terminal_close',
 					params: {terminal_id: '00000000-0000-0000-0000-000000000000'},
 				}),
-				session_cookie,
+				{cookie: session_cookie},
 			);
 			assert_equal(res.status, 200, 'status');
 			const rpc = res.body as Record<string, unknown>;
@@ -1652,7 +1523,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					method: 'terminal_resize',
 					params: {terminal_id: '00000000-0000-0000-0000-000000000000', cols: 80, rows: 24},
 				}),
-				session_cookie,
+				{cookie: session_cookie},
 			);
 			assert_equal(res.status, 200, 'status');
 			const rpc = res.body as Record<string, unknown>;
@@ -1685,7 +1556,7 @@ const non_keeper_tests: ReadonlyArray<{name: string; fn: NonKeeperTestFn}> = [
 					id: 'nka-1',
 					method: 'workspace_list',
 				}),
-				non_keeper_cookie,
+				{cookie: non_keeper_cookie},
 			);
 			assert_equal(status, 200, 'status');
 			const r = body as Record<string, unknown>;
@@ -1707,7 +1578,7 @@ const non_keeper_tests: ReadonlyArray<{name: string; fn: NonKeeperTestFn}> = [
 					method: 'provider_update_api_key',
 					params: {provider_name: 'claude', api_key: 'sk-test'},
 				}),
-				non_keeper_cookie,
+				{cookie: non_keeper_cookie},
 			);
 			assert_equal(status, 403, 'status');
 			const r = body as Record<string, unknown>;
@@ -1728,7 +1599,7 @@ const run_http_case = async (
 	session_cookie?: string,
 ): Promise<void> => {
 	const raw_body = typeof c.body === 'string' ? c.body : JSON.stringify(c.body);
-	const {status, body} = await post_rpc(config, raw_body, session_cookie);
+	const {status, body} = await post_rpc(config, raw_body, session_cookie ? {cookie: session_cookie} : undefined);
 	assert_equal(status, c.status, 'status');
 	if (c.expected === null) {
 		assert_equal(body, null, 'body');
@@ -1746,7 +1617,7 @@ const run_ws_case = async (
 	c: WsCase,
 	session_cookie?: string,
 ): Promise<void> => {
-	const conn = await open_ws(config, session_cookie);
+	const conn = await open_ws(config, {cookie: session_cookie});
 	try {
 		conn.send(c.message);
 		const body = await conn.receive();

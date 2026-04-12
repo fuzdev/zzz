@@ -84,7 +84,7 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 |--------|--------------|------------------------------------------|
 | POST   | `/rpc`       | JSON-RPC 2.0 (HTTP transport, auth-gated) |
 | POST   | `/bootstrap` | One-shot admin account creation          |
-| GET    | `/ws`        | JSON-RPC 2.0 (WebSocket, cookie auth)    |
+| GET    | `/ws`        | JSON-RPC 2.0 (WebSocket, cookie/bearer)  |
 | GET    | `/health`    | Health check (`{"status":"ok"}`)         |
 | GET    | `/*`         | Static files (if `--static-dir`)         |
 
@@ -93,7 +93,7 @@ integration test configs handle this difference.
 
 ## Auth
 
-Cookie-based session auth mirroring fuz_app's auth stack:
+Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
 
 1. **Keyring** — HMAC-SHA256 cookie signing with key rotation support.
    Keys from `SECRET_COOKIE_KEYS` env, separated by `__`. First key signs,
@@ -107,34 +107,52 @@ Cookie-based session auth mirroring fuz_app's auth stack:
    `auth_session` table lookup → build `RequestContext` (account, actor,
    permits). Sessions touched (last_seen_at updated) fire-and-forget.
 
-4. **Per-action auth** — Each RPC method has an auth level:
-   - `public` — no auth required (`ping`)
-   - `authenticated` — valid session required (workspace_*, session_load, etc.)
-   - `keeper` — keeper role permit required (`provider_update_api_key`)
+4. **Bearer token auth** — `Authorization: Bearer <token>` header. Token
+   hashed with blake3, looked up in `api_token` table. Browser context
+   rejected (Origin/Referer headers present → bearer ignored). Token
+   `last_used_at` touched fire-and-forget. Sets `CredentialType::ApiToken`.
 
-5. **Bootstrap** — `POST /bootstrap` creates first admin account with keeper
+5. **Auth pipeline** — Both transports try cookie first, then bearer.
+   `ResolvedAuth` carries `credential_type` (`Session`, `ApiToken`,
+   `DaemonToken`) and optional `token_hash` (session connections only —
+   bearer connections have `None`, revocable only via account-level).
+
+6. **Per-action auth** — Each RPC method has an auth level:
+   - `public` — no auth required (`ping`)
+   - `authenticated` — valid session or bearer token required (workspace_*, session_load, etc.)
+   - `keeper` — requires `DaemonToken` credential type AND keeper role permit (`provider_update_api_key`). API tokens and session cookies cannot access keeper actions even if the account has the keeper permit.
+
+7. **Bootstrap** — `POST /bootstrap` creates first admin account with keeper
    + admin permits. Reads token from `BOOTSTRAP_TOKEN_PATH`, timing-safe
    compare, Argon2 password hashing, all in a transaction with bootstrap_lock.
 
-6. **Origin verification** — `ALLOWED_ORIGINS` patterns checked on requests
+8. **Origin verification** — `ALLOWED_ORIGINS` patterns checked on requests
    with an `Origin` header. Supports exact match, wildcard port
    (`http://localhost:*`), subdomain wildcard (`https://*.example.com`).
 
-**Not yet implemented:** Bearer token auth, daemon token rotation, account
-management routes (login/logout/signup), event-driven socket revocation.
-Connection metadata (token hash, account ID) is tracked per connection —
-`close_sockets_for_session` and `close_sockets_for_account` methods exist
-but have no callers yet (need audit event hooks or account management routes).
+9. **Socket revocation** — `close_sockets_for_session(token_hash)` and
+   `close_sockets_for_account(account_id)` methods on `App` close matching
+   WebSocket connections by dropping the channel sender. Session connections
+   are revocable per-session or per-account; bearer connections are revocable
+   only per-account. No callers yet (need account management routes or audit
+   event hooks).
+
+**Not yet implemented:** Daemon token auth (`X-Daemon-Token` header with
+in-memory token rotation), daemon token rotation, account management routes
+(login/logout/signup), audit event system for triggering socket revocation.
 
 ## Integration Tests
 
-53 tests verify identical Deno/Rust behaviour. Both backends bootstrap
-auth (admin account + session cookie) and create a non-keeper user
-(account + actor + session, no keeper permit, cookie signed via HMAC-SHA256)
-before tests. The test database (`zzz_test` by default, configurable via
-`TEST_DATABASE_URL`) is cleaned (TRUNCATE CASCADE) before each backend run.
-A scoped directory (`/tmp/zzz_integration_scoped`) is created for filesystem
-tests.
+65 tests on Rust, 63 on Deno (some bearer tests are Rust-only). Both backends bootstrap auth (admin account + session cookie),
+create a non-keeper user (account + actor + session, no keeper permit,
+cookie signed via HMAC-SHA256), and insert API tokens into the `api_token`
+table before tests. The test database (`zzz_test` by default, configurable
+via `TEST_DATABASE_URL`) is cleaned (TRUNCATE CASCADE) before each backend
+run. A scoped directory (`/tmp/zzz_integration_scoped`) is created for
+filesystem tests. Tests are split across modules: `tests.ts` (core RPC,
+auth, filesystem, terminal tests), `bearer_tests.ts` (bearer token auth,
+keeper credential enforcement, session revocation), `test_helpers.ts`
+(shared assertion and HTTP/WS helpers).
 
 **WS tests (both backends):** `ping_ws`, `parse_error_ws`,
 `method_not_found_ws`, `invalid_request_ws`, `notification_ws`,
@@ -200,6 +218,20 @@ missing terminal IDs.
 `auth_keeper_forbidden` — 2 tests verify non-keeper users can access
 authenticated actions but are rejected from keeper actions.
 
+**Bearer token tests (both backends unless noted):**
+`bearer_token_auth`, `bearer_token_invalid`, `bearer_token_expired`,
+`bearer_token_public_action`, `bearer_token_ws`,
+`bearer_token_ws_rejected_invalid`, `keeper_requires_daemon_token`
+(Rust only), `ws_revocation_on_session_delete`,
+`bearer_rejects_browser_context_origin`,
+`bearer_rejects_browser_context_referer`, `bearer_empty_value`,
+`bearer_cookie_priority` (Rust only) — 12 tests verify API token auth via
+`Authorization: Bearer` header on HTTP and WebSocket, expired/invalid token
+rejection, keeper credential enforcement (API tokens can't access keeper
+actions), session revocation via DB delete, browser context rejection
+(Origin/Referer headers → bearer ignored), empty bearer value handling,
+and cookie-over-bearer priority.
+
 ```bash
 deno task test:integration --backend=rust   # Rust only
 deno task test:integration --backend=deno   # Deno only
@@ -240,11 +272,10 @@ wrapped in `Arc`. `Ctx` is per-request context (borrows `App` + holds
 
 **Auth pipeline** (HTTP RPC path):
 1. Origin verification (if `Origin` header present)
-2. Parse `fuz_session` cookie from `Cookie` header
-3. Verify HMAC signature via keyring
-4. Hash session token (blake3) → look up in `auth_session` table
-5. Build `RequestContext` (account → actor → permits)
-6. Check per-action auth level before dispatch
+2. Try cookie auth: parse `fuz_session` cookie → HMAC verify → blake3 hash → `auth_session` lookup
+3. If no cookie: try bearer auth: `Authorization: Bearer` → reject browser context → blake3 hash → `api_token` lookup
+4. Build `RequestContext` (account → actor → permits) with `CredentialType`
+5. Check per-action auth level (keeper actions require `DaemonToken` credential type)
 
 **Message classification** (`rpc::classify`) is transport-agnostic:
 - HTTP: origin check → auth → classify → auth check → dispatch
@@ -264,7 +295,8 @@ wrapped in `Arc`. `Ctx` is per-request context (borrows `App` + holds
 - 13 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_load_status` stub)
 - 4 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (file watcher via `notify` crate, recursive, ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz`), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast)
 - No batch request support (JSON arrays)
-- No bearer token auth, daemon token rotation, or account management routes
+- Bearer token auth (API tokens) supported; no daemon token auth (`X-Daemon-Token`), no daemon token rotation, no account management routes
+- Socket revocation infrastructure exists but no callers (needs account management routes or audit events)
 - No completion/streaming or Ollama actions
 - `provider_load_status` returns `[]` — no provider integration yet
 
@@ -294,12 +326,13 @@ wrapped in `Arc`. `Ctx` is per-request context (borrows `App` + holds
 ## What's Next
 
 **Phase 3** (next):
-1. Bearer token auth (API tokens, daemon tokens)
-2. Event-driven socket revocation (session/token revoke, logout, password change)
-3. Use connection tracking for `completion_progress` notifications
-4. Codegen from Zod specs (action input/output types)
-5. Real `provider_load_status` implementation (check Ollama availability)
-6. Ollama integration (`ollama_list`, `ollama_ps`, completion pipeline)
+1. Daemon token auth (`X-Daemon-Token` header with in-memory token rotation)
+2. Account management routes (login/logout/signup) with audit events
+3. Event-driven socket revocation (wire audit events to `close_sockets_for_*`)
+4. Use connection tracking for `completion_progress` notifications
+5. Codegen from Zod specs (action input/output types)
+6. Real `provider_load_status` implementation (check Ollama availability)
+7. Ollama integration (`ollama_list`, `ollama_ps`, completion pipeline)
 
 Phase 4 (full action port: completions, Ollama). Terminal actions are
 complete. See the [Rust Backends quest](../../grimoire/quests/rust-backends.md).

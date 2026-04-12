@@ -39,11 +39,14 @@ pub async fn ws_handler(
 async fn handle_connection(socket: WebSocket, app: Arc<App>, resolved: ResolvedAuth) {
     let (mut tx, mut rx) = socket.split();
 
-    // Register connection with auth metadata for targeted revocation
+    // Register connection with auth metadata for targeted revocation.
+    // Bearer token connections pass None for token_hash — they're revocable
+    // only via account-level revocation (matching Deno behavior).
     let (notify_tx, mut notify_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
     let account_id = Some(resolved.context.account.id);
-    let conn_id = app.add_connection(notify_tx, Some(resolved.token_hash), account_id);
+    let conn_id = app.add_connection(notify_tx, resolved.token_hash, account_id);
     let auth_context = resolved.context;
+    let credential_type = resolved.credential_type;
 
     loop {
         tokio::select! {
@@ -83,7 +86,7 @@ async fn handle_connection(socket: WebSocket, app: Arc<App>, resolved: ResolvedA
                 let json = match rpc::classify(&value) {
                     Classified::Request { method, id, params } => {
                         let spec_auth = method_auth(method);
-                        if let Some(auth_error) = check_action_auth(spec_auth, Some(&auth_context)) {
+                        if let Some(auth_error) = check_action_auth(spec_auth, Some(&auth_context), Some(credential_type)) {
                             serde_json::to_string(&rpc::error_response(id, auth_error))
                         } else {
                             let ctx = Ctx {

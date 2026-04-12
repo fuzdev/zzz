@@ -276,16 +276,17 @@ pub async fn rpc_handler(
         "rpc request"
     );
 
-    // 2. Resolve auth context (cookie → session → account/actor/permits)
+    // 2. Resolve auth context (cookie → bearer → None)
     let resolved = resolve_auth_from_headers(&headers, &app.keyring, &app.db_pool).await;
     let auth_context = resolved.as_ref().map(|r| &r.context);
+    let credential_type = resolved.as_ref().map(|r| r.credential_type);
 
     // 3. Classify, check auth, then dispatch
     match classify(&value) {
         Classified::Request { method, id, params } => {
             // Per-action auth check
             let spec_auth = method_auth(method);
-            if let Some(auth_error) = check_action_auth(spec_auth, auth_context) {
+            if let Some(auth_error) = check_action_auth(spec_auth, auth_context, credential_type) {
                 let status = error_code_to_http_status(auth_error.code);
                 return (status, Json(error_response(id, auth_error))).into_response();
             }

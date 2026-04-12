@@ -15,6 +15,7 @@
 
 import {backends, type BackendConfig, INTEGRATION_SCOPED_DIR, TEST_DATABASE_URL} from './config.ts';
 import {run_tests, type TestResult} from './tests.ts';
+import {run_bearer_tests, setup_bearer_tokens} from './bearer_tests.ts';
 // @ts-ignore — npm specifier, resolved at runtime by Deno
 import {hash as blake3_hash} from 'npm:@fuzdev/blake3_wasm';
 
@@ -287,7 +288,7 @@ const clean_database = async (): Promise<void> => {
 		args: [
 			TEST_DATABASE_URL,
 			'-c',
-			`TRUNCATE auth_session, permit, actor, account, bootstrap_lock, app_settings CASCADE;
+			`TRUNCATE api_token, auth_session, permit, actor, account, bootstrap_lock, app_settings CASCADE;
 			 INSERT INTO bootstrap_lock (id, bootstrapped) VALUES (1, false) ON CONFLICT (id) DO UPDATE SET bootstrapped = false;
 			 INSERT INTO app_settings (id) VALUES (1) ON CONFLICT DO NOTHING;`,
 		],
@@ -360,7 +361,10 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 		child = await start_backend(config);
 		const session_cookie = await setup_auth(config);
 		const non_keeper_cookie = await setup_non_keeper_user(config);
+		await setup_bearer_tokens();
 		const results = await run_tests(config, filter, session_cookie, non_keeper_cookie);
+		const bearer_results = await run_bearer_tests(config, filter);
+		results.push(...bearer_results);
 
 		let passed = 0;
 		let failed = 0;

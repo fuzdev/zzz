@@ -7,6 +7,7 @@ use crate::db::{
     AccountRow, ActorRow, PermitRow,
     query_account_by_id, query_actor_by_account, query_permits_for_actor,
     query_session_get_valid, query_session_touch,
+    query_validate_api_token, query_api_token_touch,
 };
 use fuz_common::JsonRpcError;
 
@@ -181,6 +182,21 @@ pub enum AuthError {
     Query(#[from] tokio_postgres::Error),
 }
 
+// -- Credential type ----------------------------------------------------------
+
+/// How the request was authenticated.
+///
+/// Mirrors `fuz_app`'s `credential_type` context key:
+/// - `Session` — cookie-based session (`fuz_session`)
+/// - `ApiToken` — `Authorization: Bearer <token>` looked up in `api_token` table
+/// - `DaemonToken` — `X-Daemon-Token` header (not yet implemented in Rust)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CredentialType {
+    Session,
+    ApiToken,
+    DaemonToken,
+}
+
 // -- Request context ----------------------------------------------------------
 
 /// Authenticated request context — account + actor + active permits.
@@ -277,10 +293,15 @@ const JSONRPC_FORBIDDEN: i32 = -32002;
 /// Check per-action auth.
 ///
 /// Returns `None` if authorized, `Some(error)` if not.
-/// Mirrors `fuz_app`'s `check_action_auth` from `action_rpc.ts`.
+/// Mirrors `fuz_app`'s `check_action_auth` from `action_rpc.ts` and
+/// the keeper check from `register_websocket_actions.ts`.
+///
+/// Keeper actions require both `daemon_token` credential type AND the
+/// keeper role permit — API tokens with keeper permit are rejected.
 pub fn check_action_auth(
     auth: ActionAuth,
     context: Option<&RequestContext>,
+    credential_type: Option<CredentialType>,
 ) -> Option<JsonRpcError> {
     match auth {
         ActionAuth::Public => None,
@@ -303,14 +324,19 @@ pub fn check_action_auth(
                     data: None,
                 });
             };
-            if ctx.has_role("keeper") {
-                None
-            } else {
+            // Keeper actions require daemon_token credential type AND keeper role.
+            // API tokens and session cookies cannot access keeper actions even if
+            // the account has the keeper permit.
+            if credential_type != Some(CredentialType::DaemonToken)
+                || !ctx.has_role("keeper")
+            {
                 Some(JsonRpcError {
                     code: JSONRPC_FORBIDDEN,
                     message: "forbidden".to_owned(),
                     data: None,
                 })
+            } else {
+                None
             }
         }
     }
@@ -383,10 +409,28 @@ pub fn check_origin(origin: &str, allowed_patterns: &[String]) -> bool {
 pub struct ResolvedAuth {
     pub context: RequestContext,
     /// blake3 hash of the session token (for targeted socket revocation).
-    pub token_hash: String,
+    /// `None` for bearer token connections (revocable only via account-level revocation).
+    pub token_hash: Option<String>,
+    /// How this request was authenticated.
+    pub credential_type: CredentialType,
 }
 
 pub async fn resolve_auth_from_headers(
+    headers: &axum::http::HeaderMap,
+    keyring: &Keyring,
+    pool: &deadpool_postgres::Pool,
+) -> Option<ResolvedAuth> {
+    // Try cookie auth first
+    if let Some(resolved) = resolve_cookie_from_headers(headers, keyring, pool).await {
+        return Some(resolved);
+    }
+
+    // Fall back to bearer token auth
+    resolve_bearer_from_headers(headers, pool).await
+}
+
+/// Resolve auth from cookie session (`fuz_session`).
+async fn resolve_cookie_from_headers(
     headers: &axum::http::HeaderMap,
     keyring: &Keyring,
     pool: &deadpool_postgres::Pool,
@@ -402,14 +446,117 @@ pub async fn resolve_auth_from_headers(
     match build_request_context(pool, &session_token).await {
         Ok(Some(context)) => Some(ResolvedAuth {
             context,
-            token_hash,
+            token_hash: Some(token_hash),
+            credential_type: CredentialType::Session,
         }),
         Ok(None) => None,
         Err(e) => {
-            tracing::warn!(error = %e, "auth context build failed");
+            tracing::warn!(error = %e, "cookie auth context build failed");
             None
         }
     }
+}
+
+/// Resolve auth from `Authorization: Bearer <token>` header.
+///
+/// Mirrors `fuz_app`'s `bearer_auth.ts`:
+/// - Case-insensitive "Bearer " prefix (RFC 7235 §2.1)
+/// - Rejects requests with `Origin` or `Referer` headers (defense-in-depth
+///   against browser-initiated bearer usage)
+/// - Hashes token with blake3, looks up in `api_token` table
+/// - Touches `last_used_at` fire-and-forget
+async fn resolve_bearer_from_headers(
+    headers: &axum::http::HeaderMap,
+    pool: &deadpool_postgres::Pool,
+) -> Option<ResolvedAuth> {
+    let auth_header = headers
+        .get(axum::http::header::AUTHORIZATION)?
+        .to_str()
+        .ok()?;
+
+    // Case-insensitive "Bearer " prefix check (RFC 7235 §2.1)
+    if auth_header.len() < 7 || !auth_header[..7].eq_ignore_ascii_case("bearer ") {
+        return None;
+    }
+
+    // Defense-in-depth: reject bearer tokens from browser contexts
+    if headers.contains_key("origin") || headers.contains_key("referer") {
+        tracing::debug!("bearer auth rejected: browser context (Origin/Referer present)");
+        return None;
+    }
+
+    let raw_token = &auth_header[7..];
+    if raw_token.is_empty() {
+        return None;
+    }
+
+    // Hash and look up in api_token table
+    let token_hash = blake3::hash(raw_token.as_bytes()).to_hex().to_string();
+
+    let client = match pool.get().await {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!(error = %e, "bearer auth pool error");
+            return None;
+        }
+    };
+
+    let token_row = match query_validate_api_token(&client, &token_hash).await {
+        Ok(Some(row)) => row,
+        Ok(None) => return None,
+        Err(e) => {
+            tracing::warn!(error = %e, "bearer auth token query failed");
+            return None;
+        }
+    };
+
+    // Build request context from the token's account
+    let account = match query_account_by_id(&client, &token_row.account_id).await {
+        Ok(Some(a)) => a,
+        Ok(None) => return None,
+        Err(e) => {
+            tracing::warn!(error = %e, "bearer auth account query failed");
+            return None;
+        }
+    };
+
+    let actor = match query_actor_by_account(&client, &account.id).await {
+        Ok(Some(a)) => a,
+        Ok(None) => return None,
+        Err(e) => {
+            tracing::warn!(error = %e, "bearer auth actor query failed");
+            return None;
+        }
+    };
+
+    let permits = match query_permits_for_actor(&client, &actor.id).await {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(error = %e, "bearer auth permits query failed");
+            return None;
+        }
+    };
+
+    // Touch token usage (fire-and-forget)
+    let touch_pool = pool.clone();
+    let touch_id = token_row.id.clone();
+    tokio::spawn(async move {
+        if let Ok(client) = touch_pool.get().await
+            && let Err(e) = query_api_token_touch(&client, &touch_id).await
+        {
+            tracing::warn!(error = %e, "api token touch failed");
+        }
+    });
+
+    Some(ResolvedAuth {
+        context: RequestContext {
+            account,
+            actor,
+            permits,
+        },
+        token_hash: None, // bearer connections have no session token_hash
+        credential_type: CredentialType::ApiToken,
+    })
 }
 
 /// Parse `ALLOWED_ORIGINS` env value into a list of patterns.

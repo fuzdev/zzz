@@ -137,6 +137,19 @@ CREATE TABLE IF NOT EXISTS app_settings (
 );
 
 INSERT INTO app_settings (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS api_token (
+  id TEXT PRIMARY KEY,
+  account_id UUID NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  token_hash TEXT NOT NULL,
+  expires_at TIMESTAMPTZ,
+  last_used_at TIMESTAMPTZ,
+  last_used_ip TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_token_account ON api_token(account_id);
 ";
 
 // -- Auth queries -------------------------------------------------------------
@@ -250,6 +263,49 @@ pub async fn query_permits_for_actor(
             role: r.get(2),
         })
         .collect())
+}
+
+/// Row from the `api_token` table (fields needed for bearer auth).
+#[derive(Debug)]
+pub struct ApiTokenRow {
+    pub id: String,
+    pub account_id: uuid::Uuid,
+}
+
+/// Look up a valid (non-expired) API token by its blake3 hash.
+///
+/// Mirrors `fuz_app`'s `query_validate_api_token` from `api_token_queries.ts`.
+pub async fn query_validate_api_token(
+    client: &deadpool_postgres::Object,
+    token_hash: &str,
+) -> Result<Option<ApiTokenRow>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            "SELECT id, account_id FROM api_token
+             WHERE token_hash = $1
+               AND (expires_at IS NULL OR expires_at > NOW())",
+            &[&token_hash],
+        )
+        .await?;
+
+    Ok(row.map(|r| ApiTokenRow {
+        id: r.get(0),
+        account_id: r.get(1),
+    }))
+}
+
+/// Touch an API token — update `last_used_at` (fire-and-forget).
+pub async fn query_api_token_touch(
+    client: &deadpool_postgres::Object,
+    token_id: &str,
+) -> Result<(), tokio_postgres::Error> {
+    client
+        .execute(
+            "UPDATE api_token SET last_used_at = NOW() WHERE id = $1",
+            &[&token_id],
+        )
+        .await?;
+    Ok(())
 }
 
 /// Touch a session — update `last_seen_at` and extend expiry if < 1 day remaining.

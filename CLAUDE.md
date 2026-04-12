@@ -252,13 +252,14 @@ cd ~/dev/private_fuz && cargo build -p fuz_pty --release
 Shadow implementation of the Deno server using axum. Phase 2b+: `ping`,
 `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`,
 `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`,
-`terminal_close`, `provider_load_status` (stub) with full cookie-based auth
-on HTTP and WebSocket, `ScopedFs` path safety, PTY terminals via `fuz_pty`
-native crate, and WebSocket connection tracking (`broadcast`/`send_to`).
-PostgreSQL via `tokio-postgres`/`deadpool-postgres`, HMAC-SHA256 cookie
-signing, blake3 session hashing, per-action auth checks, bootstrap endpoint.
-The Deno server is ground truth — 53 integration tests verify both backends
-produce identical JSON-RPC responses.
+`terminal_close`, `provider_load_status` (stub) with cookie session auth
+and bearer token auth (API tokens) on HTTP and WebSocket, `ScopedFs` path
+safety, PTY terminals via `fuz_pty` native crate, and WebSocket connection
+tracking (`broadcast`/`send_to`). PostgreSQL via `tokio-postgres`/`deadpool-postgres`,
+HMAC-SHA256 cookie signing, blake3 session/token hashing, per-action auth
+checks with credential type enforcement, bootstrap endpoint.
+The Deno server is ground truth — 65 integration tests (63 cross-backend)
+verify both backends produce identical JSON-RPC responses.
 
 ```bash
 cargo build -p zzz_server                          # Build
@@ -507,7 +508,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Rust backend is Phase 2b+** — 13 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_load_status` stub) with cookie session auth on HTTP and WebSocket, `ScopedFs`, PTY terminals via `fuz_pty`, PostgreSQL, bootstrap, WebSocket connection tracking with active `workspace_changed`, `filer_change`, `terminal_data`, and `terminal_exited` notifications. No bearer tokens, no daemon token rotation, no event-driven socket revocation. Batch JSON-RPC requests not yet supported. See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
+- **Rust backend is Phase 2b+** — 13 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_load_status` stub) with cookie session auth and bearer token auth (API tokens via `Authorization: Bearer`) on HTTP and WebSocket, `ScopedFs`, PTY terminals via `fuz_pty`, PostgreSQL, bootstrap, WebSocket connection tracking with active `workspace_changed`, `filer_change`, `terminal_data`, and `terminal_exited` notifications. Keeper actions require `daemon_token` credential type. No daemon token auth (`X-Daemon-Token`), no daemon token rotation, no event-driven socket revocation (infrastructure exists, no callers). Batch JSON-RPC requests not yet supported. See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
 
 ## fuz_app
 
