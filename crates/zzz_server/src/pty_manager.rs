@@ -62,7 +62,7 @@ impl PtyManager {
     ) -> Result<(), String> {
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
         let pty = Pty::spawn(command, &arg_refs, cwd, 80, 24)
-            .map_err(|e| format!("failed to spawn PTY: {e}"))?;
+            .map_err(|e| e.to_string())?;
 
         let cancel = CancellationToken::new();
         let cancel_clone = cancel.clone();

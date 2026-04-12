@@ -1133,6 +1133,147 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		},
 	},
 
+	{
+		name: 'directory_create_already_exists',
+		fn: async (config, session_cookie) => {
+			// Creating an already-existing directory should succeed (idempotent)
+			const dir_path = `${INTEGRATION_SCOPED_DIR}/idempotent_dir_${Date.now()}`;
+			try {
+				// Create it once
+				const r1 = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'dcae-1',
+						method: 'directory_create',
+						params: {path: dir_path},
+					}),
+					session_cookie,
+				);
+				assert_equal(r1.status, 200, 'first create status');
+
+				// Create it again — should still succeed
+				const r2 = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'dcae-2',
+						method: 'directory_create',
+						params: {path: dir_path},
+					}),
+					session_cookie,
+				);
+				assert_equal(r2.status, 200, 'second create status');
+				assert_equal((r2.body as Record<string, unknown>).result, null, 'result is null');
+			} finally {
+				try {
+					await Deno.remove(dir_path, {recursive: true});
+				} catch {
+					// ignore cleanup errors
+				}
+			}
+		},
+	},
+	{
+		name: 'workspace_open_not_directory',
+		fn: async (config, session_cookie) => {
+			// Opening a file (not a directory) as a workspace → error
+			const file_path = `${INTEGRATION_SCOPED_DIR}/not_a_dir_${Date.now()}.txt`;
+			try {
+				await Deno.writeTextFile(file_path, 'content');
+				const res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wond-1',
+						method: 'workspace_open',
+						params: {path: file_path},
+					}),
+					session_cookie,
+				);
+				assert_equal(res.status, 500, 'status');
+				const rpc = res.body as Record<string, unknown>;
+				const error = rpc.error as Record<string, unknown>;
+				assert_equal(error.code, -32603, 'error code');
+			} finally {
+				try {
+					await Deno.remove(file_path);
+				} catch {
+					// ignore cleanup errors
+				}
+			}
+		},
+	},
+	{
+		name: 'filer_change_on_file_create',
+		fn: async (config, session_cookie) => {
+			// Open a workspace, create a file in it, verify filer_change notification
+			const tmp_dir = await Deno.makeTempDir({prefix: 'zzz_test_filer_'});
+			try {
+				// Open workspace
+				const open_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'fc-open',
+						method: 'workspace_open',
+						params: {path: tmp_dir},
+					}),
+					session_cookie,
+				);
+				assert_equal(open_res.status, 200, 'open status');
+
+				// Open WS and wait for connection to register
+				const conn = await open_ws(config, session_cookie);
+				try {
+					await ensure_ws_registered(conn);
+
+					// Create a file in the workspace
+					const new_file = `${tmp_dir}/filer_test_${Date.now()}.txt`;
+					await Deno.writeTextFile(new_file, 'hello from filer test');
+
+					// Wait for filer_change notification (file watchers have latency)
+					let got_notification = false;
+					for (let i = 0; i < 5 && !got_notification; i++) {
+						try {
+							const msg = (await conn.receive(3_000)) as Record<string, unknown>;
+							if (msg.method === 'filer_change') {
+								const params = msg.params as Record<string, unknown>;
+								const change = params.change as Record<string, unknown>;
+								assert_equal(typeof change.path, 'string', 'change has path');
+								assert_equal(typeof change.type, 'string', 'change has type');
+								got_notification = true;
+							}
+						} catch {
+							// timeout — retry
+						}
+					}
+					assert_equal(got_notification, true, 'received filer_change notification');
+				} finally {
+					conn.close();
+				}
+
+				// Clean up workspace
+				await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'fc-close',
+						method: 'workspace_close',
+						params: {path: tmp_dir},
+					}),
+					session_cookie,
+				);
+			} finally {
+				try {
+					await Deno.remove(tmp_dir, {recursive: true});
+				} catch {
+					// ignore
+				}
+			}
+		},
+	},
+
 	// -- Terminal tests -----------------------------------------------------------
 
 	{
@@ -1255,6 +1396,213 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		},
 	},
 	{
+		name: 'terminal_write_and_read',
+		fn: async (config, session_cookie) => {
+			// Spawn cat, write data, verify it's echoed back via terminal_data
+			const conn = await open_ws(config, session_cookie);
+			try {
+				await ensure_ws_registered(conn);
+
+				// Create terminal running cat (echoes stdin to stdout)
+				conn.send(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'twr-1',
+						method: 'terminal_create',
+						params: {command: 'cat', args: []},
+					}),
+				);
+				const create_res = (await conn.receive()) as Record<string, unknown>;
+				assert_equal(create_res.id, 'twr-1', 'create id');
+				const terminal_id = (create_res.result as Record<string, unknown>)
+					.terminal_id as string;
+
+				// Write data to the terminal
+				conn.send(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'twr-2',
+						method: 'terminal_data_send',
+						params: {terminal_id, data: 'integration test\n'},
+					}),
+				);
+				const write_res = (await conn.receive()) as Record<string, unknown>;
+				assert_equal(write_res.id, 'twr-2', 'write id');
+				// Deno WS returns {} for null-output actions, Rust returns null
+				assert_equal('result' in write_res, true, 'write has result');
+
+				// Collect terminal_data notifications until we see our echoed text
+				let got_echo = false;
+				for (let i = 0; i < 20 && !got_echo; i++) {
+					const msg = (await conn.receive(5_000)) as Record<string, unknown>;
+					if (msg.method === 'terminal_data') {
+						const params = msg.params as Record<string, unknown>;
+						if ((params.data as string).includes('integration test')) {
+							got_echo = true;
+						}
+					}
+				}
+				assert_equal(got_echo, true, 'received echoed data');
+
+				// Clean up
+				conn.send(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'twr-3',
+						method: 'terminal_close',
+						params: {terminal_id},
+					}),
+				);
+				// Drain close response (and any notifications)
+				for (let i = 0; i < 3; i++) {
+					const msg = (await conn.receive(5_000)) as Record<string, unknown>;
+					if (msg.id === 'twr-3') break;
+				}
+			} finally {
+				conn.close();
+			}
+		},
+	},
+	{
+		name: 'terminal_resize_live',
+		fn: async (config, session_cookie) => {
+			// Spawn a process, resize it, verify no error
+			const conn = await open_ws(config, session_cookie);
+			try {
+				await ensure_ws_registered(conn);
+
+				conn.send(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'trl-1',
+						method: 'terminal_create',
+						params: {command: 'sleep', args: ['60']},
+					}),
+				);
+				const create_res = (await conn.receive()) as Record<string, unknown>;
+				assert_equal(create_res.id, 'trl-1', 'create id');
+				const terminal_id = (create_res.result as Record<string, unknown>)
+					.terminal_id as string;
+
+				// Resize
+				conn.send(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'trl-2',
+						method: 'terminal_resize',
+						params: {terminal_id, cols: 120, rows: 40},
+					}),
+				);
+				const resize_res = (await conn.receive()) as Record<string, unknown>;
+				assert_equal(resize_res.id, 'trl-2', 'resize id');
+				// Deno WS returns {} for null-output actions, Rust returns null
+				assert_equal('result' in resize_res, true, 'resize has result');
+
+				// Clean up
+				conn.send(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'trl-3',
+						method: 'terminal_close',
+						params: {terminal_id},
+					}),
+				);
+				for (let i = 0; i < 3; i++) {
+					const msg = (await conn.receive(5_000)) as Record<string, unknown>;
+					if (msg.id === 'trl-3') break;
+				}
+			} finally {
+				conn.close();
+			}
+		},
+	},
+	{
+		name: 'terminal_create_with_cwd',
+		fn: async (config, session_cookie) => {
+			// Spawn pwd with explicit cwd, verify output contains the cwd path
+			const conn = await open_ws(config, session_cookie);
+			try {
+				await ensure_ws_registered(conn);
+
+				conn.send(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'tcc-1',
+						method: 'terminal_create',
+						params: {command: 'pwd', args: [], cwd: '/tmp'},
+					}),
+				);
+				const create_res = (await conn.receive()) as Record<string, unknown>;
+				assert_equal(create_res.id, 'tcc-1', 'create id');
+				const terminal_id = (create_res.result as Record<string, unknown>)
+					.terminal_id as string;
+
+				let got_tmp = false;
+				for (let i = 0; i < 10 && !got_tmp; i++) {
+					const msg = (await conn.receive(5_000)) as Record<string, unknown>;
+					if (
+						msg.method === 'terminal_data' &&
+						((msg.params as Record<string, unknown>).data as string).includes('/tmp')
+					) {
+						got_tmp = true;
+					}
+				}
+				assert_equal(got_tmp, true, 'pwd output contains /tmp');
+			} finally {
+				conn.close();
+			}
+		},
+	},
+	{
+		name: 'terminal_create_nonexistent_command',
+		fn: async (config, session_cookie) => {
+			// Spawning a nonexistent binary. Two valid behaviors:
+			// - Rust (forkpty): spawn succeeds, child exits 127, terminal_exited notification
+			// - Deno fallback (Deno.Command): spawn fails, error response
+			const conn = await open_ws(config, session_cookie);
+			try {
+				await ensure_ws_registered(conn);
+
+				conn.send(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'tcne-1',
+						method: 'terminal_create',
+						params: {command: '/nonexistent/binary_zzz_test', args: []},
+					}),
+				);
+				const create_res = (await conn.receive()) as Record<string, unknown>;
+				assert_equal(create_res.id, 'tcne-1', 'create id');
+
+				if (create_res.error) {
+					// Deno fallback: spawn failed → error response
+					const error = create_res.error as Record<string, unknown>;
+					assert_equal(error.code, -32603, 'error code');
+				} else {
+					// Rust / Deno FFI: forkpty succeeded, child exits 127
+					const create_result = create_res.result as Record<string, unknown>;
+					assert_equal(typeof create_result.terminal_id, 'string', 'terminal_id is string');
+
+					let got_exited = false;
+					let exit_code: number | null = null;
+					for (let i = 0; i < 10 && !got_exited; i++) {
+						const msg = (await conn.receive(5_000)) as Record<string, unknown>;
+						if (msg.method === 'terminal_exited') {
+							got_exited = true;
+							exit_code = (msg.params as Record<string, unknown>).exit_code as
+								| number
+								| null;
+						}
+					}
+					assert_equal(got_exited, true, 'received terminal_exited');
+					assert_equal(exit_code, 127, 'exit_code is 127 (command not found)');
+				}
+			} finally {
+				conn.close();
+			}
+		},
+	},
+	{
 		name: 'terminal_data_send_missing',
 		fn: async (config, session_cookie) => {
 			// terminal_data_send with a nonexistent terminal_id → silent null
@@ -1325,6 +1673,27 @@ type NonKeeperTestFn = (
 ) => Promise<void>;
 
 const non_keeper_tests: ReadonlyArray<{name: string; fn: NonKeeperTestFn}> = [
+	{
+		name: 'non_keeper_authenticated_action',
+		fn: async (config, _session_cookie, non_keeper_cookie) => {
+			// Non-keeper users CAN access authenticated (non-keeper) actions
+			if (!non_keeper_cookie) throw new Error('non_keeper_cookie not available');
+			const {status, body} = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'nka-1',
+					method: 'workspace_list',
+				}),
+				non_keeper_cookie,
+			);
+			assert_equal(status, 200, 'status');
+			const r = body as Record<string, unknown>;
+			assert_equal(r.id, 'nka-1', 'id');
+			const result = r.result as Record<string, unknown>;
+			assert_equal(Array.isArray(result.workspaces), true, 'has workspaces array');
+		},
+	},
 	{
 		name: 'auth_keeper_forbidden',
 		fn: async (config, _session_cookie, non_keeper_cookie) => {

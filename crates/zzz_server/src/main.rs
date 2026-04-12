@@ -86,6 +86,8 @@ async fn run() -> Result<(), ServerError> {
         scoped_dir_strings,
     ));
 
+    let app_state_for_shutdown = Arc::clone(&app_state);
+
     let mut app = Router::new()
         .route("/rpc", post(rpc::rpc_handler))
         .route("/ws", get(ws::ws_handler))
@@ -117,6 +119,9 @@ async fn run() -> Result<(), ServerError> {
         .with_graceful_shutdown(shutdown.cancelled_owned())
         .await
         .map_err(ServerError::Serve)?;
+
+    // Clean up spawned terminal processes before exiting
+    app_state_for_shutdown.pty_manager.destroy().await;
 
     tracing::info!("server shutdown complete");
     Ok(())

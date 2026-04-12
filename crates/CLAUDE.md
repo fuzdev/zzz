@@ -122,10 +122,13 @@ Cookie-based session auth mirroring fuz_app's auth stack:
 
 **Not yet implemented:** Bearer token auth, daemon token rotation, account
 management routes (login/logout/signup), event-driven socket revocation.
+Connection metadata (token hash, account ID) is tracked per connection —
+`close_sockets_for_session` and `close_sockets_for_account` methods exist
+but have no callers yet (need audit event hooks or account management routes).
 
 ## Integration Tests
 
-45 tests verify identical Deno/Rust behaviour. Both backends bootstrap
+53 tests verify identical Deno/Rust behaviour. Both backends bootstrap
 auth (admin account + session cookie) and create a non-keeper user
 (account + actor + session, no keeper permit, cookie signed via HMAC-SHA256)
 before tests. The test database (`zzz_test` by default, configurable via
@@ -170,17 +173,32 @@ unauthenticated WS upgrade is rejected.
 provider status stub.
 
 **Filesystem tests (both backends):** `diskfile_update_and_read`,
-`diskfile_delete`, `directory_create`, `diskfile_update_outside_scope`,
-`diskfile_update_path_traversal`, `diskfile_update_relative_path`,
-`diskfile_delete_nonexistent` — 7 tests verify scoped filesystem operations,
-path traversal rejection, relative path rejection, and nonexistent file
-deletion.
+`diskfile_delete`, `directory_create`, `directory_create_already_exists`,
+`diskfile_update_outside_scope`, `diskfile_update_path_traversal`,
+`diskfile_update_relative_path`, `diskfile_delete_nonexistent` — 8 tests
+verify scoped filesystem operations, idempotent directory creation, path
+traversal rejection, relative path rejection, and nonexistent file deletion.
+
+**Workspace edge cases (both backends):** `workspace_open_not_directory` —
+1 test verifies opening a file (not a directory) returns an error.
+
+**File watcher tests (both backends):** `filer_change_on_file_create` —
+1 test verifies `filer_change` notifications are broadcast when files are
+created in an open workspace.
 
 **Terminal tests (both backends):** `terminal_create_echo`,
-`terminal_close`, `terminal_data_send_missing`, `terminal_close_missing`,
-`terminal_resize_missing` — 5 tests verify PTY spawn/read/close lifecycle,
-`terminal_data`/`terminal_exited` notifications over WebSocket, explicit
-process kill, and silent return behavior for missing terminal IDs.
+`terminal_close`, `terminal_write_and_read`, `terminal_resize_live`,
+`terminal_create_with_cwd`, `terminal_create_nonexistent_command`,
+`terminal_data_send_missing`, `terminal_close_missing`,
+`terminal_resize_missing` — 9 tests verify PTY spawn/read/write/close
+lifecycle, `terminal_data`/`terminal_exited` notifications over WebSocket,
+stdin write with echo verification, live resize, explicit cwd, nonexistent
+command handling, explicit process kill, and silent return behavior for
+missing terminal IDs.
+
+**Non-keeper tests (both backends):** `non_keeper_authenticated_action`,
+`auth_keeper_forbidden` — 2 tests verify non-keeper users can access
+authenticated actions but are rejected from keeper actions.
 
 ```bash
 deno task test:integration --backend=rust   # Rust only

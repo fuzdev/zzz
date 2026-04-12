@@ -23,6 +23,17 @@ pub type ConnectionId = u64;
 /// Handle to a connected WebSocket client — messages sent here are forwarded to the WS sink.
 pub type ConnectionSender = mpsc::UnboundedSender<String>;
 
+/// Metadata for an active WebSocket connection.
+///
+/// Tracks the channel sender plus auth context for targeted revocation:
+/// - `token_hash`: blake3 hash of the session token (for session-level revocation)
+/// - `account_id`: account UUID (for account-level revocation on logout/password change)
+pub struct ConnectionInfo {
+    pub sender: ConnectionSender,
+    pub token_hash: Option<String>,
+    pub account_id: Option<uuid::Uuid>,
+}
+
 // -- App state (long-lived, shared via Arc) -----------------------------------
 
 /// Server state shared across all requests.
@@ -40,8 +51,8 @@ pub struct App {
     pub scoped_dirs: Vec<String>,
     /// Monotonic counter for assigning unique connection IDs.
     next_connection_id: AtomicU64,
-    /// Active WebSocket connections — keyed by `ConnectionId`, value is a channel sender.
-    pub connections: RwLock<HashMap<ConnectionId, ConnectionSender>>,
+    /// Active WebSocket connections — keyed by `ConnectionId`.
+    pub connections: RwLock<HashMap<ConnectionId, ConnectionInfo>>,
     /// Active file watchers — keyed by normalized workspace path.
     pub watchers: RwLock<HashMap<String, WorkspaceWatcher>>,
     /// PTY terminal manager.
@@ -77,15 +88,27 @@ impl App {
         }
     }
 
-    /// Allocate a new connection ID and register the sender.
+    /// Allocate a new connection ID and register the sender with auth metadata.
     ///
     /// Returns the ID — caller must call `remove_connection` on disconnect.
-    pub fn add_connection(&self, sender: ConnectionSender) -> ConnectionId {
+    pub fn add_connection(
+        &self,
+        sender: ConnectionSender,
+        token_hash: Option<String>,
+        account_id: Option<uuid::Uuid>,
+    ) -> ConnectionId {
         let id = self
             .next_connection_id
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if let Ok(mut conns) = self.connections.write() {
-            conns.insert(id, sender);
+            conns.insert(
+                id,
+                ConnectionInfo {
+                    sender,
+                    token_hash,
+                    account_id,
+                },
+            );
         }
         id
     }
@@ -100,8 +123,8 @@ impl App {
     /// Broadcast a message to all connected clients.
     pub fn broadcast(&self, message: &str) {
         if let Ok(conns) = self.connections.read() {
-            for sender in conns.values() {
-                let _ = sender.send(message.to_owned());
+            for info in conns.values() {
+                let _ = info.sender.send(message.to_owned());
             }
         }
     }
@@ -109,10 +132,52 @@ impl App {
     /// Send a message to a specific connection.
     pub fn send_to(&self, id: ConnectionId, message: &str) {
         if let Ok(conns) = self.connections.read()
-            && let Some(sender) = conns.get(&id)
+            && let Some(info) = conns.get(&id)
         {
-            let _ = sender.send(message.to_owned());
+            let _ = info.sender.send(message.to_owned());
         }
+    }
+
+    /// Close all WebSocket connections for a given session token hash.
+    ///
+    /// Used for session revocation — the sender is dropped, which causes
+    /// the WS handler's `notify_rx.recv()` to return `None` and break
+    /// the connection loop.
+    ///
+    /// Returns the number of connections closed.
+    pub fn close_sockets_for_session(&self, target_hash: &str) -> usize {
+        let mut count = 0;
+        if let Ok(mut conns) = self.connections.write() {
+            conns.retain(|_, info| {
+                let matches = info
+                    .token_hash
+                    .as_deref()
+                    .is_some_and(|h| h == target_hash);
+                if matches {
+                    count += 1;
+                }
+                !matches // retain = keep non-matching
+            });
+        }
+        count
+    }
+
+    /// Close all WebSocket connections for a given account.
+    ///
+    /// Used on logout, password change, and token revocation.
+    /// Returns the number of connections closed.
+    pub fn close_sockets_for_account(&self, target_id: uuid::Uuid) -> usize {
+        let mut count = 0;
+        if let Ok(mut conns) = self.connections.write() {
+            conns.retain(|_, info| {
+                let matches = info.account_id.is_some_and(|id| id == target_id);
+                if matches {
+                    count += 1;
+                }
+                !matches
+            });
+        }
+        count
     }
 }
 
@@ -584,11 +649,13 @@ async fn handle_terminal_close(params: &Value, ctx: &Ctx<'_>) -> Result<Value, J
         _ => libc::SIGTERM, // default to SIGTERM
     };
 
-    // Return {exit_code: null} if terminal doesn't exist (matching Deno behavior)
-    let Some(exit_code) = ctx.app.pty_manager.kill(terminal_id, signal).await else {
-        return serde_json::to_value(TerminalCloseResult { exit_code: None })
-            .map_err(|_| rpc::internal_error("serialization failed"));
-    };
+    // Returns {exit_code: null} if terminal doesn't exist (matching Deno behavior)
+    let exit_code = ctx
+        .app
+        .pty_manager
+        .kill(terminal_id, signal)
+        .await
+        .flatten();
 
     serde_json::to_value(TerminalCloseResult { exit_code })
         .map_err(|_| rpc::internal_error("serialization failed"))

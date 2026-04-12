@@ -379,20 +379,32 @@ pub fn check_origin(origin: &str, allowed_patterns: &[String]) -> bool {
 ///
 /// Returns `None` if no session cookie or session is invalid.
 /// Used by both HTTP RPC and WebSocket upgrade handlers.
+/// Resolved auth context with connection tracking metadata.
+pub struct ResolvedAuth {
+    pub context: RequestContext,
+    /// blake3 hash of the session token (for targeted socket revocation).
+    pub token_hash: String,
+}
+
 pub async fn resolve_auth_from_headers(
     headers: &axum::http::HeaderMap,
     keyring: &Keyring,
     pool: &deadpool_postgres::Pool,
-) -> Option<RequestContext> {
+) -> Option<ResolvedAuth> {
     let cookie_header = headers
         .get(axum::http::header::COOKIE)?
         .to_str()
         .ok()?;
 
     let session_token = parse_session_from_cookies(cookie_header, keyring)?;
+    let token_hash = hash_session_token(&session_token);
 
     match build_request_context(pool, &session_token).await {
-        Ok(ctx) => ctx,
+        Ok(Some(context)) => Some(ResolvedAuth {
+            context,
+            token_hash,
+        }),
+        Ok(None) => None,
         Err(e) => {
             tracing::warn!(error = %e, "auth context build failed");
             None

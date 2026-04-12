@@ -8,7 +8,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 
 use crate::auth::{
-    check_action_auth, method_auth, resolve_auth_from_headers, RequestContext,
+    check_action_auth, method_auth, resolve_auth_from_headers, ResolvedAuth,
 };
 use crate::handlers::{self, App, Ctx};
 use crate::rpc::{self, Classified};
@@ -19,28 +19,31 @@ use crate::rpc::{self, Classified};
 /// if unauthenticated. Mirrors `register_websocket_actions.ts`'s
 /// `require_auth` middleware.
 ///
-/// On upgrade, registers the connection for `broadcast`/`send_to` support.
+/// On upgrade, registers the connection with auth metadata for targeted
+/// socket revocation.
 pub async fn ws_handler(
     State(app): State<Arc<App>>,
     headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Response {
     // Resolve auth from Cookie header
-    let auth_context = resolve_auth_from_headers(&headers, &app.keyring, &app.db_pool).await;
+    let resolved = resolve_auth_from_headers(&headers, &app.keyring, &app.db_pool).await;
 
-    let Some(auth_context) = auth_context else {
+    let Some(resolved) = resolved else {
         return (StatusCode::UNAUTHORIZED, "unauthenticated").into_response();
     };
 
-    ws.on_upgrade(move |socket| handle_connection(socket, app, auth_context))
+    ws.on_upgrade(move |socket| handle_connection(socket, app, resolved))
 }
 
-async fn handle_connection(socket: WebSocket, app: Arc<App>, auth_context: RequestContext) {
+async fn handle_connection(socket: WebSocket, app: Arc<App>, resolved: ResolvedAuth) {
     let (mut tx, mut rx) = socket.split();
 
-    // Register connection for broadcast/send_to support
+    // Register connection with auth metadata for targeted revocation
     let (notify_tx, mut notify_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-    let conn_id = app.add_connection(notify_tx);
+    let account_id = Some(resolved.context.account.id);
+    let conn_id = app.add_connection(notify_tx, Some(resolved.token_hash), account_id);
+    let auth_context = resolved.context;
 
     loop {
         tokio::select! {
