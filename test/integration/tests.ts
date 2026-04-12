@@ -7,7 +7,8 @@
  * Most tests are data-driven tables (http_cases, ws_cases) — adding a test
  * case is just adding a row. Special tests that need unique control flow
  * (silence assertions, persistent connections, non-RPC endpoints) are
- * separate functions in `special_tests`.
+ * separate functions in `special_tests`. Tests requiring a non-keeper
+ * authenticated cookie are in `non_keeper_tests`.
  */
 
 import {INTEGRATION_SCOPED_DIR, type BackendConfig} from './config.ts';
@@ -115,6 +116,18 @@ const open_ws = (config: BackendConfig, session_cookie?: string): Promise<WsConn
 				close: () => ws.close(),
 			});
 	});
+
+/**
+ * Ensure a WebSocket connection is fully registered on the server.
+ *
+ * After `open_ws` resolves (onopen), the server's `handle_connection` task
+ * may not have called `add_connection` yet. A round-trip RPC proves the
+ * connection loop is running and the connection is in `app.connections`.
+ */
+const ensure_ws_registered = async (conn: WsConnection): Promise<void> => {
+	conn.send(JSON.stringify({jsonrpc: '2.0', id: '_warmup', method: 'ping'}));
+	await conn.receive();
+};
 
 // -- Assertion helpers --------------------------------------------------------
 
@@ -779,6 +792,171 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 				assert_equal(Array.isArray(result.workspaces), true, 'workspaces is array');
 			} finally {
 				conn.close();
+			}
+		},
+	},
+
+	// -- workspace_changed notification tests -------------------------------------
+	{
+		name: 'workspace_changed_on_open',
+		fn: async (config, session_cookie) => {
+			// Open a WS connection, then open a workspace via HTTP
+			// → WS client should receive a workspace_changed notification
+			const conn = await open_ws(config, session_cookie);
+			await ensure_ws_registered(conn);
+			const tmp_dir = await Deno.makeTempDir({prefix: 'zzz_test_wc_'});
+			try {
+				// Open workspace via HTTP RPC
+				const open_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wco-1',
+						method: 'workspace_open',
+						params: {path: tmp_dir},
+					}),
+					session_cookie,
+				);
+				assert_equal(open_res.status, 200, 'open status');
+
+				// WS should receive workspace_changed notification
+				const notification = (await conn.receive()) as Record<string, unknown>;
+				assert_equal(notification.jsonrpc, '2.0', 'jsonrpc version');
+				assert_equal(notification.method, 'workspace_changed', 'method');
+				assert_equal('id' in notification, false, 'no id (notification)');
+				const params = notification.params as Record<string, unknown>;
+				assert_equal(params.type, 'open', 'change type');
+				const workspace = params.workspace as Record<string, unknown>;
+				assert_equal(typeof workspace.path, 'string', 'workspace.path is string');
+				assert_equal((workspace.path as string).endsWith('/'), true, 'path ends with /');
+				assert_equal(typeof workspace.name, 'string', 'workspace.name is string');
+				assert_equal(typeof workspace.opened_at, 'string', 'workspace.opened_at is string');
+			} finally {
+				conn.close();
+				// Clean up: close workspace
+				await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wco-cleanup',
+						method: 'workspace_close',
+						params: {path: tmp_dir},
+					}),
+					session_cookie,
+				);
+				await Deno.remove(tmp_dir, {recursive: true});
+			}
+		},
+	},
+	{
+		name: 'workspace_changed_on_close',
+		fn: async (config, session_cookie) => {
+			// Open a workspace, then open WS, then close the workspace
+			// → WS client should receive a workspace_changed close notification
+			const tmp_dir = await Deno.makeTempDir({prefix: 'zzz_test_wc_'});
+			try {
+				// Open workspace first
+				const open_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wcc-open',
+						method: 'workspace_open',
+						params: {path: tmp_dir},
+					}),
+					session_cookie,
+				);
+				assert_equal(open_res.status, 200, 'open status');
+				const workspace = (
+					(open_res.body as Record<string, unknown>).result as Record<string, unknown>
+				).workspace as Record<string, unknown>;
+
+				// Now open WS connection
+				const conn = await open_ws(config, session_cookie);
+				await ensure_ws_registered(conn);
+				try {
+					// Close workspace via HTTP
+					const close_res = await post_rpc(
+						config,
+						JSON.stringify({
+							jsonrpc: '2.0',
+							id: 'wcc-close',
+							method: 'workspace_close',
+							params: {path: workspace.path},
+						}),
+						session_cookie,
+					);
+					assert_equal(close_res.status, 200, 'close status');
+
+					// WS should receive workspace_changed close notification
+					const notification = (await conn.receive()) as Record<string, unknown>;
+					assert_equal(notification.jsonrpc, '2.0', 'jsonrpc version');
+					assert_equal(notification.method, 'workspace_changed', 'method');
+					assert_equal('id' in notification, false, 'no id (notification)');
+					const params = notification.params as Record<string, unknown>;
+					assert_equal(params.type, 'close', 'change type');
+					const ws_info = params.workspace as Record<string, unknown>;
+					assert_equal(ws_info.path, workspace.path, 'same workspace path');
+				} finally {
+					conn.close();
+				}
+			} finally {
+				await Deno.remove(tmp_dir, {recursive: true});
+			}
+		},
+	},
+	{
+		name: 'workspace_changed_idempotent_no_notification',
+		fn: async (config, session_cookie) => {
+			// Opening an already-open workspace should NOT send a notification
+			const tmp_dir = await Deno.makeTempDir({prefix: 'zzz_test_wc_'});
+			try {
+				// First open (creates workspace)
+				await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wci-1',
+						method: 'workspace_open',
+						params: {path: tmp_dir},
+					}),
+					session_cookie,
+				);
+
+				// Open WS after first open
+				const conn = await open_ws(config, session_cookie);
+				await ensure_ws_registered(conn);
+				try {
+					// Second open (idempotent — should NOT broadcast)
+					await post_rpc(
+						config,
+						JSON.stringify({
+							jsonrpc: '2.0',
+							id: 'wci-2',
+							method: 'workspace_open',
+							params: {path: tmp_dir},
+						}),
+						session_cookie,
+					);
+
+					// Should NOT receive any notification
+					await conn.expect_silence();
+				} finally {
+					conn.close();
+				}
+			} finally {
+				// Cleanup
+				await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wci-cleanup',
+						method: 'workspace_close',
+						params: {path: tmp_dir},
+					}),
+					session_cookie,
+				);
+				await Deno.remove(tmp_dir, {recursive: true});
 			}
 		},
 	},

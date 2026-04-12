@@ -201,9 +201,10 @@ const bytes_to_hex = (bytes: Uint8Array): string =>
 		.join('');
 
 /**
- * Sign a value with HMAC-SHA256 using the test cookie key.
+ * Sign a value with HMAC-SHA256.
  *
- * Returns `{value}.{base64(signature)}` — same format as auth.rs `Keyring::sign`.
+ * Returns `{value}.{base64(signature)}` — same format as auth.rs `Keyring::sign`
+ * and fuz_app's `sign_with_crypto_key`.
  */
 const hmac_sign = async (value: string, key_str: string): Promise<string> => {
 	const encoder = new TextEncoder();

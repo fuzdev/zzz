@@ -85,6 +85,7 @@ async fn handle_connection(socket: WebSocket, app: Arc<App>, auth_context: Reque
                         } else {
                             let ctx = Ctx {
                                 app: &app,
+                                app_arc: Arc::clone(&app),
                                 request_id: &id,
                                 auth: Some(&auth_context),
                             };

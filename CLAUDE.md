@@ -256,7 +256,7 @@ on HTTP and WebSocket, `ScopedFs` path safety, and WebSocket connection
 tracking (`broadcast`/`send_to`). PostgreSQL via `tokio-postgres`/
 `deadpool-postgres`, HMAC-SHA256 cookie signing, blake3 session hashing,
 per-action auth checks, bootstrap endpoint. The Deno server is ground truth
-— 37 integration tests verify both backends produce identical JSON-RPC
+— 40 integration tests verify both backends produce identical JSON-RPC
 responses.
 
 ```bash
@@ -506,7 +506,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Rust backend is Phase 2b+** — 9 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `provider_load_status` stub) with cookie session auth on HTTP and WebSocket, `ScopedFs`, PostgreSQL, bootstrap, WebSocket connection tracking (`broadcast`/`send_to`). No bearer tokens, no daemon token rotation, no event-driven socket revocation. Batch JSON-RPC requests not yet supported. See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
+- **Rust backend is Phase 2b+** — 9 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `provider_load_status` stub) with cookie session auth on HTTP and WebSocket, `ScopedFs`, PostgreSQL, bootstrap, WebSocket connection tracking with active `workspace_changed` and `filer_change` notifications. No bearer tokens, no daemon token rotation, no event-driven socket revocation. Batch JSON-RPC requests not yet supported. See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
 
 ## fuz_app
 

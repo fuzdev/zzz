@@ -31,6 +31,7 @@ base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
 argon2 = "0.5"
 rand = "0.8"
+notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

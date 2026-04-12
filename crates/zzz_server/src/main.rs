@@ -2,6 +2,7 @@ mod auth;
 mod bootstrap;
 mod db;
 mod error;
+mod filer;
 mod handlers;
 mod rpc;
 mod scoped_fs;

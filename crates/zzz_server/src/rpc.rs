@@ -79,6 +79,29 @@ pub fn internal_error(detail: &str) -> JsonRpcError {
     }
 }
 
+// -- Notification builder -----------------------------------------------------
+
+/// JSON-RPC 2.0 notification (no `id` field — server-initiated push).
+#[derive(Debug, Serialize)]
+pub struct JsonRpcNotification {
+    pub jsonrpc: &'static str,
+    pub method: String,
+    pub params: Value,
+}
+
+/// Build a JSON-RPC notification string for broadcasting to WebSocket clients.
+///
+/// Returns the serialized JSON string. On serialization failure (shouldn't
+/// happen with valid `Value` inputs), returns an empty string.
+pub fn notification(method: &str, params: Value) -> String {
+    let n = JsonRpcNotification {
+        jsonrpc: JSONRPC_VERSION,
+        method: method.to_owned(),
+        params,
+    };
+    serde_json::to_string(&n).unwrap_or_default()
+}
+
 // -- Response builders --------------------------------------------------------
 
 pub const fn success_response(id: Value, result: Value) -> JsonRpcResponse {
@@ -268,6 +291,7 @@ pub async fn rpc_handler(
 
             let ctx = Ctx {
                 app: &app,
+                app_arc: Arc::clone(&app),
                 request_id: &id,
                 auth: auth_context.as_ref(),
             };

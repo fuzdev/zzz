@@ -9,9 +9,11 @@ actions (`diskfile_update`, `diskfile_delete`, `directory_create`) with
 `ScopedFs` path safety, per-action auth checks on all transports, a
 bootstrap endpoint for first-time account creation, `session_load` handler
 (returns zzz_dir, scoped_dirs, workspaces), `provider_load_status` stub
-(returns empty array), and WebSocket connection tracking with
-`broadcast`/`send_to` infrastructure for future remote_notification
-actions. Database (PostgreSQL via `tokio-postgres`/`deadpool-postgres`),
+(returns empty array), `workspace_changed` notifications (broadcast to all
+connected WebSocket clients on open/close), file watching via `notify` crate
+(`filer_change` notifications on file add/change/delete within open
+workspaces), and WebSocket connection tracking with `broadcast`/`send_to`
+infrastructure. Database (PostgreSQL via `tokio-postgres`/`deadpool-postgres`),
 HMAC-SHA256 cookie signing (`fuz_session`), blake3 session hashing.
 All other methods return `method_not_found`.
 
@@ -120,7 +122,7 @@ management routes (login/logout/signup), event-driven socket revocation.
 
 ## Integration Tests
 
-37 tests verify identical Deno/Rust behaviour. Both backends bootstrap
+40 tests verify identical Deno/Rust behaviour. Both backends bootstrap
 auth (admin account + session cookie) and create a non-keeper user
 (account + actor + session, no keeper permit, cookie signed via HMAC-SHA256)
 before tests. The test database (`zzz_test` by default, configurable via
@@ -145,6 +147,12 @@ echoes the JSON-RPC request id back as `ping_id`.
 **Workspace tests (both backends):** `workspace_open_and_list`,
 `workspace_open_idempotent`, `workspace_open_nonexistent`,
 `workspace_close` — 4 tests.
+
+**Workspace notification tests (both backends):**
+`workspace_changed_on_open`, `workspace_changed_on_close`,
+`workspace_changed_idempotent_no_notification` — 3 tests verify
+`workspace_changed` notifications are broadcast to WebSocket clients on
+workspace open/close, and that idempotent opens do not broadcast.
 
 **Auth tests (both backends):** `auth_required_without_cookie`,
 `auth_required_invalid_cookie`, `auth_public_no_cookie`,
@@ -181,12 +189,13 @@ cookie, then stops the backend and cleans up.
 ```
 crates/zzz_server/src/
 ├── main.rs        # Entry, config parsing (incl. PUBLIC_ZZZ_DIR), DB/keyring init, graceful shutdown
-├── handlers.rs    # App (server state + connection tracking), Ctx (per-request + auth), dispatch
-├── rpc.rs         # JSON-RPC classify, HTTP handler with auth pipeline
+├── handlers.rs    # App (server state + connection tracking + watchers), Ctx, dispatch
+├── rpc.rs         # JSON-RPC classify + notification builder, HTTP handler with auth pipeline
 ├── ws.rs          # WebSocket upgrade with cookie auth, connection tracking, select! message loop
 ├── auth.rs        # Keyring, cookie parsing, session validation, per-action auth
 ├── bootstrap.rs   # POST /bootstrap handler (account + session creation)
 ├── db.rs          # Connection pool, migrations, auth queries
+├── filer.rs       # File watcher (notify crate) → filer_change notifications via broadcast
 ├── scoped_fs.rs   # Scoped filesystem — path validation, symlink rejection
 └── error.rs       # ServerError (Bind, Serve, Database, Config)
 ```
@@ -194,8 +203,10 @@ crates/zzz_server/src/
 **App/Ctx/dispatch pattern**: `App` holds long-lived server state (workspaces
 in `RwLock<HashMap>`, `deadpool_postgres::Pool`, `Keyring`, origin config,
 `ScopedFs`, `zzz_dir`, `scoped_dirs`, connection tracking via `AtomicU64` +
-`RwLock<HashMap<ConnectionId, UnboundedSender>>`), constructed once in `main`,
-wrapped in `Arc`. `Ctx` is per-request context (borrows `App`, `request_id`,
+`RwLock<HashMap<ConnectionId, UnboundedSender>>`, file watchers via
+`RwLock<HashMap<String, WorkspaceWatcher>>`), constructed once in `main`,
+wrapped in `Arc`. `Ctx` is per-request context (borrows `App` + holds
+`Arc<App>` for spawning tasks, `request_id`,
 `auth: Option<&RequestContext>`), constructed by each transport before calling
 `handlers::dispatch`.
 
@@ -223,9 +234,9 @@ wrapped in `Arc`. `Ctx` is per-request context (borrows `App`, `request_id`,
 ## Known Limitations
 
 - 9 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `provider_load_status` stub)
+- 2 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (file watcher via `notify` crate, recursive, ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz`)
 - No batch request support (JSON arrays)
 - No bearer token auth, daemon token rotation, or account management routes
-- No file watching / `filer_change` notifications
 - No completion/streaming, Ollama, or terminal actions
 - `provider_load_status` returns `[]` — no provider integration yet
 
@@ -251,9 +262,10 @@ wrapped in `Arc`. `Ctx` is per-request context (borrows `App`, `request_id`,
 **Phase 3** (next):
 1. Bearer token auth (API tokens, daemon tokens)
 2. Event-driven socket revocation (session/token revoke, logout, password change)
-3. Use connection tracking for `completion_progress` and `filer_change` notifications
+3. Use connection tracking for `completion_progress` notifications
 4. Codegen from Zod specs (action input/output types)
 5. Real `provider_load_status` implementation (check Ollama availability)
+6. Ollama integration (`ollama_list`, `ollama_ps`, completion pipeline)
 
 Phase 4 (full action port: completions, Ollama, terminals). See the
 [Rust Backends quest](../../grimoire/quests/rust-backends.md).

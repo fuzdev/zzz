@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use deadpool_postgres::Pool;
 use fuz_common::JsonRpcError;
@@ -10,6 +10,7 @@ use serde_json::Value;
 use tokio::sync::mpsc;
 
 use crate::auth::{Keyring, RequestContext};
+use crate::filer::WorkspaceWatcher;
 use crate::rpc;
 use crate::scoped_fs::ScopedFs;
 
@@ -40,6 +41,8 @@ pub struct App {
     next_connection_id: AtomicU64,
     /// Active WebSocket connections — keyed by `ConnectionId`, value is a channel sender.
     pub connections: RwLock<HashMap<ConnectionId, ConnectionSender>>,
+    /// Active file watchers — keyed by normalized workspace path.
+    pub watchers: RwLock<HashMap<String, WorkspaceWatcher>>,
 }
 
 impl App {
@@ -66,6 +69,7 @@ impl App {
             scoped_dirs,
             next_connection_id: AtomicU64::new(1),
             connections: RwLock::new(HashMap::new()),
+            watchers: RwLock::new(HashMap::new()),
         }
     }
 
@@ -100,10 +104,10 @@ impl App {
 
     /// Send a message to a specific connection.
     pub fn send_to(&self, id: ConnectionId, message: &str) {
-        if let Ok(conns) = self.connections.read() {
-            if let Some(sender) = conns.get(&id) {
-                let _ = sender.send(message.to_owned());
-            }
+        if let Ok(conns) = self.connections.read()
+            && let Some(sender) = conns.get(&id)
+        {
+            let _ = sender.send(message.to_owned());
         }
     }
 }
@@ -116,6 +120,9 @@ impl App {
 /// The transport constructs this before calling `dispatch`.
 pub struct Ctx<'a> {
     pub app: &'a App,
+    /// Clone of the `Arc<App>` — handlers that need to spawn tasks (e.g.
+    /// file watchers) can clone this to move into the spawned future.
+    pub app_arc: Arc<App>,
     pub request_id: &'a Value,
     pub auth: Option<&'a RequestContext>,
 }
@@ -131,6 +138,19 @@ pub struct WorkspaceInfo {
     pub path: String,
     pub name: String,
     pub opened_at: String,
+}
+
+// -- Notification params ------------------------------------------------------
+
+/// Params for `workspace_changed` `remote_notification`.
+///
+/// Matches the TypeScript `workspace_changed_action_spec` input schema:
+/// `{ type: 'open' | 'close', workspace: WorkspaceInfoJson }`.
+#[derive(Serialize)]
+struct WorkspaceChangedParams<'a> {
+    #[serde(rename = "type")]
+    change_type: &'a str,
+    workspace: &'a WorkspaceInfo,
 }
 
 // -- Typed response structs (avoid json!() macro allocation) ------------------
@@ -322,6 +342,29 @@ fn handle_workspace_open(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpc
         workspaces.entry(normalized).or_insert(info).clone()
     };
 
+    // Start file watcher for the new workspace
+    match crate::filer::start_watching(&workspace.path, Arc::clone(&ctx.app_arc)) {
+        Ok(watcher) => {
+            if let Ok(mut watchers) = ctx.app.watchers.write() {
+                watchers.insert(workspace.path.clone(), watcher);
+            }
+        }
+        Err(e) => {
+            tracing::warn!(path = %workspace.path, error = %e, "failed to start file watcher");
+        }
+    }
+
+    // Broadcast workspace_changed notification to all connected clients
+    let notification = rpc::notification(
+        "workspace_changed",
+        serde_json::to_value(&WorkspaceChangedParams {
+            change_type: "open",
+            workspace: &workspace,
+        })
+        .unwrap_or_default(),
+    );
+    ctx.app.broadcast(&notification);
+
     let result = WorkspaceOpenResult {
         workspace,
         files: vec![],
@@ -348,14 +391,30 @@ fn handle_workspace_close(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRp
             .workspaces
             .write()
             .map_err(|_| rpc::internal_error("lock poisoned"))?;
-        workspaces.remove(&key).is_some()
+        workspaces.remove(&key)
     };
 
-    if !removed {
+    let Some(workspace) = removed else {
         return Err(rpc::invalid_params(&format!(
             "workspace not open: {path}"
         )));
+    };
+
+    // Stop file watcher for the closed workspace (dropped = stopped)
+    if let Ok(mut watchers) = ctx.app.watchers.write() {
+        watchers.remove(&key);
     }
+
+    // Broadcast workspace_changed notification to all connected clients
+    let notification = rpc::notification(
+        "workspace_changed",
+        serde_json::to_value(&WorkspaceChangedParams {
+            change_type: "close",
+            workspace: &workspace,
+        })
+        .unwrap_or_default(),
+    );
+    ctx.app.broadcast(&notification);
 
     Ok(Value::Null)
 }
