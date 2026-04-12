@@ -1,4 +1,5 @@
 import {test, vi, beforeEach, describe, assert} from 'vitest';
+import {assert_rejects} from '@fuzdev/fuz_util/testing.js';
 import * as fs from 'node:fs/promises';
 
 import {ScopedFs} from '$lib/server/scoped_fs.js';
@@ -66,12 +67,8 @@ describe('ScopedFs - add_path', () => {
 		const scoped_fs = new ScopedFs([]);
 
 		// Before adding, file ops should fail
-		try {
-			await scoped_fs.read_file('/new/path/file.txt');
-			assert.fail('Expected error');
-		} catch (e: any) {
-			assert.include(e.message, 'Path is not allowed');
-		}
+		const error = await assert_rejects(() => scoped_fs.read_file('/new/path/file.txt'));
+		assert.include(error.message, 'Path is not allowed');
 
 		// After adding, file ops should succeed
 		scoped_fs.add_path('/new/path');
@@ -132,12 +129,8 @@ describe('ScopedFs - remove_path', () => {
 
 		// After removing, file ops should fail
 		scoped_fs.remove_path('/removable/path');
-		try {
-			await scoped_fs.read_file('/removable/path/file.txt');
-			assert.fail('Expected error');
-		} catch (e: any) {
-			assert.include(e.message, 'Path is not allowed');
-		}
+		const error = await assert_rejects(() => scoped_fs.read_file('/removable/path/file.txt'));
+		assert.include(error.message, 'Path is not allowed');
 	});
 
 	test('throws for relative paths', () => {

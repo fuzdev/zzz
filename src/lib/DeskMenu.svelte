@@ -16,7 +16,7 @@
 
 {#if app.ui.show_desk_menu}
 	<aside
-		class="desk_sidebar unstyled p_md"
+		class="desk-sidebar unstyled p_md"
 		{@attach app.ui.desk_pinned ? null : click_outside(() => app.ui.toggle_desk_menu(false))}
 	>
 		<div>
@@ -27,7 +27,7 @@
 					</h2>
 					<button
 						type="button"
-						class="icon_button compact"
+						class="icon-button compact"
 						class:selected={app.ui.desk_pinned}
 						title={app.ui.desk_pinned ? 'unpin desk' : 'pin desk'}
 						onclick={() => app.ui.toggle_desk_pinned()}
@@ -55,7 +55,7 @@
 							{#if space.name !== SCRATCHPAD_NAME}
 								<ConfirmButton
 									onconfirm={() => app.spaces.remove(space.id)}
-									class="icon_button compact plain deselectable"
+									class="icon-button compact plain deselectable"
 									title="delete space"
 								>
 									<Glyph glyph={GLYPH_DELETE} />
@@ -121,7 +121,7 @@
 {/if}
 
 <style>
-	.desk_sidebar {
+	.desk-sidebar {
 		position: fixed;
 		top: 0;
 		right: 0;

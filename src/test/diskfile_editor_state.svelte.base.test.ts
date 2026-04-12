@@ -6,7 +6,8 @@ import {DiskfileEditorState} from '$lib/diskfile_editor_state.svelte.js';
 import {DiskfilePath, SerializableDisknode} from '$lib/diskfile_types.js';
 import {Frontend} from '$lib/frontend.svelte.js';
 import {Diskfile} from '$lib/diskfile.svelte.js';
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+
+import {monkeypatch_zzz_for_tests} from './test_helpers.js';
 
 // Constants for testing
 const TEST_PATH = DiskfilePath.parse('/path/to/test.txt');

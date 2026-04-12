@@ -52,7 +52,7 @@
 			{#if onclose}
 				<button
 					type="button"
-					class="icon_button plain"
+					class="icon-button plain"
 					onclick={() => onclose(model)}
 					title="close"
 				>
@@ -107,7 +107,7 @@
 					{#snippet popover_content(popover)}
 						<button
 							type="button"
-							class="color_c icon_button"
+							class="color_c icon-button"
 							title="confirm delete"
 							onclick={() => {
 								// TODO async confirmation
@@ -148,7 +148,7 @@
 			</div>
 			<button
 				type="button"
-				class="color_c icon_button plain"
+				class="color_c icon-button plain"
 				onclick={() => onshow(model)}
 				title="retry loading details"
 			>

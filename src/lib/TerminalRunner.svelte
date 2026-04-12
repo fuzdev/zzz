@@ -108,9 +108,9 @@
 	};
 </script>
 
-<div class="terminal_runner">
-	<div class="run_history" {@attach scrollable.container} {@attach scrollable.target}>
-		<div class="run_list">
+<div class="terminal-runner">
+	<div class="run-history" {@attach scrollable.container} {@attach scrollable.target}>
+		<div class="run-list">
 			{#each runs as run (run.terminal_id)}
 				<div transition:slide>
 					<TerminalRunItem
@@ -126,14 +126,14 @@
 	</div>
 
 	{#if runs.length === 0}
-		<p class="empty_state">no commands run yet — use a preset or type a command below</p>
+		<p class="empty-state">no commands run yet — use a preset or type a command below</p>
 	{/if}
 
 	{#if error_message}
-		<p class="error_message">{error_message}</p>
+		<p class="error-message">{error_message}</p>
 	{/if}
 
-	<div class="input_area">
+	<div class="input-area">
 		<TerminalPresetBar
 			{presets}
 			onrun={handle_preset}
@@ -145,36 +145,36 @@
 </div>
 
 <style>
-	.terminal_runner {
+	.terminal-runner {
 		display: flex;
 		flex-direction: column;
 		height: 100%;
 		min-height: 0;
 	}
-	.run_history {
+	.run-history {
 		flex: 1;
 		overflow: auto;
 		scrollbar-width: thin;
 		display: flex;
 		flex-direction: column-reverse;
 	}
-	.run_list {
+	.run-list {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space_md);
 		padding: var(--space_md);
 	}
-	.empty_state {
+	.empty-state {
 		opacity: 0.5;
 		text-align: center;
 		padding: var(--space_xl);
 	}
-	.error_message {
+	.error-message {
 		color: var(--color_c_50, #f88);
 		padding: 0 var(--space_md);
 		margin: 0;
 	}
-	.input_area {
+	.input-area {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space_sm);

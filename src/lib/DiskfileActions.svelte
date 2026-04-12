@@ -35,7 +35,7 @@
 			onclipboardtext={(text) => {
 				editor_state.current_content += text;
 			}}
-			class="plain icon_button font_size_lg"
+			class="plain icon-button font_size_lg"
 		>
 			<Glyph glyph={GLYPH_PASTE} />
 		</PasteFromClipboard>
@@ -46,7 +46,7 @@
 	<!-- Delete button is always available -->
 	<ConfirmButton
 		onconfirm={() => app.diskfiles.delete(diskfile.path)}
-		class="plain icon_button"
+		class="plain icon-button"
 		title="delete file"
 	>
 		<Glyph glyph={GLYPH_DELETE} />

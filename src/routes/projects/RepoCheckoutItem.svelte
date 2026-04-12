@@ -56,7 +56,7 @@
 					{tag}
 					<button
 						type="button"
-						class="icon_button plain font_size_xs ml_xs"
+						class="icon-button plain font_size_xs ml_xs"
 						title="Remove tag"
 						onclick={() => on_remove_tag(index, tag_index)}><Glyph glyph={GLYPH_DELETE} /></button
 					>

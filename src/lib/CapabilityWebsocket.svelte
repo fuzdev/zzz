@@ -116,7 +116,7 @@
 					/>
 					<button
 						type="button"
-						class="icon_button plain"
+						class="icon-button plain"
 						title={has_undo_state ? `undo to ${previous_url}` : 'reset url to default'}
 						disabled={is_default_url && !has_undo_state}
 						onclick={() => {
@@ -209,7 +209,7 @@
 					<div class="row flex:1 gap_xs" transition:slide>
 						<button
 							type="button"
-							class="color_d font_size_xl icon_button plain"
+							class="color_d font_size_xl icon-button plain"
 							title="cancel reconnection attempt"
 							onclick={() => {
 								socket.cancel_reconnect();
@@ -229,7 +229,7 @@
 							</div>
 							{#key socket.reconnect_attempt}
 								<div
-									class="progress_fill bg_d_6"
+									class="progress-fill bg_d_6"
 									style:animation-duration="{socket.current_reconnect_delay}ms"
 								></div>
 							{/key}
@@ -265,7 +265,7 @@
 					<input
 						id="heartbeat_interval_{pid}"
 						type="text"
-						class="input_xs sm plain"
+						class="input-xs sm plain"
 						bind:value={socket.heartbeat_interval}
 					/>
 				</div>
@@ -293,7 +293,7 @@
 					<input
 						id="reconnect_delay_{pid}"
 						type="text"
-						class="input_xs sm plain"
+						class="input-xs sm plain"
 						bind:value={socket.reconnect_delay}
 					/>
 				</div>
@@ -321,7 +321,7 @@
 					<input
 						id="reconnect_delay_max_{pid}"
 						type="text"
-						class="input_xs sm plain"
+						class="input-xs sm plain"
 						bind:value={socket.reconnect_delay_max}
 					/>
 				</div>
@@ -334,7 +334,7 @@
 					{#snippet popover_content(popover)}
 						<button
 							type="button"
-							class="color_c icon_button"
+							class="color_c icon-button"
 							title="confirm reset settings"
 							onclick={() => {
 								reset_to_defaults();
@@ -418,7 +418,7 @@
 		}
 	}
 
-	.progress_fill {
+	.progress-fill {
 		position: absolute;
 		width: 100%;
 		height: 100%;

@@ -34,9 +34,9 @@
 </script>
 
 <div class="flex:1 height:100% display:flex align-items:start">
-	<div class="column_fixed">
+	<div class="column-fixed">
 		{#if chat}
-			<section class="column_section" transition:slide>
+			<section class="column-section" transition:slide>
 				<!-- TODO needs work -->
 				<div class="font_size_lg display:flex align-items:center">
 					<Glyph glyph={GLYPH_CHAT} />
@@ -64,7 +64,7 @@
 						<ConfirmButton
 							onconfirm={() => chat.id && chats.remove(chat.id)}
 							title="delete chat {'"' + chat.name + '"'}"
-							class="plain icon_button"
+							class="plain icon-button"
 						>
 							<Glyph glyph={GLYPH_DELETE} />
 							{#snippet popover_button_content()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
@@ -75,7 +75,7 @@
 		{/if}
 
 		{#if thread_count && (chat.view_mode !== 'simple' || thread_count > 1)}
-			<section class="column_section">
+			<section class="column-section">
 				<header
 					class="mt_0 mb_lg font_size_lg display:flex justify-content:space-between"
 					title="threads are the individual threads of conversation in a chat -- each chat can have many threads, comprising its history"
@@ -90,10 +90,10 @@
 		{#if chat.view_mode === 'multi'}
 			<Details>
 				{#snippet summary()}manage threads{/snippet}
-				<section class="column_section">
+				<section class="column-section">
 					<ChatThreadAddByModel {chat} />
 				</section>
-				<section class="column_section">
+				<section class="column-section">
 					<ChatThreadManageByTag {chat} />
 				</section>
 			</Details>
@@ -101,7 +101,7 @@
 	</div>
 
 	{#if !thread_count}
-		<div class="column_fluid p_md">
+		<div class="column-fluid p_md">
 			<ChatInitializer {chat} oninit={(chat_id) => chats.navigate_to(chat_id)} />
 		</div>
 	{:else if chat.view_mode === 'simple'}

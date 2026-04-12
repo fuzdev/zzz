@@ -30,7 +30,7 @@
 
 <!-- TODO this contextmenu appears as a duplicate, I think a de-duped key is the best fix, not manually disabling it -->
 <ModelContextmenu {model}
-	><a {...rest} href={resolve(`/models/${model.name}`)} class:selected
+	><a {...rest} href={resolve(`/models/${model.name}`)} class="selected-plain" class:selected
 		>{#if children}
 			{@render children()}
 		{:else}
@@ -43,14 +43,3 @@
 		{/if}</a
 	></ModelContextmenu
 >
-
-<style>
-	a {
-		font-weight: 600;
-	}
-	/* TODO breaks convention, but I think it looks better in a lot of cases, maybe extract a class? `plain_selected_link` or `plain`? */
-	.selected {
-		font-weight: 400;
-		text-decoration: none;
-	}
-</style>

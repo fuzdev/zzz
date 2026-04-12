@@ -37,8 +37,8 @@
 	let show_model_picker = $state.raw(false);
 </script>
 
-<div class="column_fluid">
-	<div class="column_bg_1 p_sm">
+<div class="column-fluid">
+	<div class="column-bg-1 p_sm">
 		<ContentEditor
 			bind:this={content_input}
 			bind:content={chat.main_input}
@@ -81,7 +81,7 @@
 					<ChatThread
 						{thread}
 						onsend={(input) => chat.send_to_thread(thread.id, input)}
-						turns_attrs={{class: 'max_height_sm'}}
+						turns_attrs={{class: 'max-height-sm'}}
 						attrs={{class: 'p_md'}}
 					/>
 				</li>

@@ -19,11 +19,11 @@
 </script>
 
 <!-- TODO the transition is janky because it resizes the content, instead it should just hide with overflow -->
-<div class="browser_tab_container" class:selected={tab.selected}>
+<div class="browser-tab-container" class:selected={tab.selected}>
 	<div
 		role="button"
 		tabindex="0"
-		class="browser_tab_button border-radius:0 plain px_sm py_xs"
+		class="browser-tab-button border-radius:0 plain px_sm py_xs"
 		class:selected={tab.selected}
 		onclick={() => onselect(index)}
 		onkeydown={(e) => {
@@ -41,7 +41,7 @@
 		</div>
 		<button
 			type="button"
-			class="tab_close_button plain icon_button sm border_radius_md ml_sm"
+			class="tab-close-button plain icon-button sm border_radius_md ml_sm"
 			onclick={(e) => {
 				swallow(e);
 				onclose(index);
@@ -55,14 +55,14 @@
 </div>
 
 <style>
-	.browser_tab_container {
+	.browser-tab-container {
 		display: flex;
 		align-items: center;
 		min-width: 10rem;
 		max-width: 30rem;
 	}
 
-	.browser_tab_button {
+	.browser-tab-button {
 		flex: 1;
 		display: flex;
 		align-items: center;
@@ -72,7 +72,7 @@
 		width: 100%;
 		cursor: pointer;
 	}
-	.browser_tab_button:hover {
+	.browser-tab-button:hover {
 		box-shadow: var(--shadow_inset_bottom_xs)
 			color-mix(
 				in hsl,
@@ -80,7 +80,7 @@
 				transparent
 			);
 	}
-	.browser_tab_button:active {
+	.browser-tab-button:active {
 		box-shadow: var(--shadow_inset_top_xs)
 			color-mix(
 				in hsl,
@@ -88,7 +88,7 @@
 				transparent
 			);
 	}
-	.browser_tab_button.selected {
+	.browser-tab-button.selected {
 		color: var(--text_90);
 		box-shadow: var(--shadow_inset_top_sm)
 			color-mix(

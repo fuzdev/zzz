@@ -49,7 +49,10 @@
 		style:grid-template-columns="320px 1fr"
 		style:gap="var(--space_md)"
 	>
-		<div class="overflow:auto scrollbar-width:thin border_right">
+		<div
+			class="overflow:auto scrollbar-width:thin"
+			style:border-right="1px solid var(--border_color)"
+		>
 			<ActionList
 				limit={100}
 				selected_action_id={selected_action?.id}
@@ -90,9 +93,3 @@
 		</div>
 	</div>
 </div>
-
-<style>
-	.border_right {
-		border-right: 1px solid var(--color_border);
-	}
-</style>

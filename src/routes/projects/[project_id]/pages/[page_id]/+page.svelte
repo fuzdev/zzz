@@ -48,15 +48,15 @@
 </script>
 
 {#if preview_mode}
-	<div class="preview_fullscreen" class:offset_for_sidebar={app.ui.show_sidebar}>
-		<div class="markdown_preview p_lg">
+	<div class="preview-fullscreen" class:offset-for-sidebar={app.ui.show_sidebar}>
+		<div class="markdown-preview p_lg">
 			<Mdz content={page_viewmodel?.content ?? ''} />
 		</div>
 
 		<!-- preview toggle button in top-right corner -->
 		<button
 			type="button"
-			class="position:fixed top:0 right:0 icon_button plain border-radius:0"
+			class="position:fixed top:0 right:0 icon-button plain border-radius:0"
 			aria-label="close preview"
 			title="close preview"
 			onclick={toggle_preview}
@@ -65,7 +65,7 @@
 		</button>
 	</div>
 {:else}
-	<div class="editor_layout">
+	<div class="editor-layout">
 		<!-- TODO @many refactor for better component instance stability for e.g. transitions -->
 		<ProjectSidebar />
 		{#if project}
@@ -73,7 +73,7 @@
 			<PagesSidebar />
 		{/if}
 
-		<div class="editor_content">
+		<div class="editor-content">
 			{#if page_viewmodel && project}
 				<div class="height:100% column p_lg">
 					<div>
@@ -132,17 +132,17 @@
 						</div>
 					</div>
 
-					<div class="editor_area">
-						<div class="panel p_md content_area">
+					<div class="editor-area">
+						<div class="panel p_md content-area">
 							<textarea
 								bind:value={page_viewmodel.content}
-								class="width:100% height:100% markdown_editor"
+								class="width:100% height:100% markdown-editor"
 								placeholder="{GLYPH_PLACEHOLDER} markup"
 							></textarea>
 						</div>
 
-						<div class="panel p_md preview_area">
-							<div class="markdown_preview"><Mdz content={page_viewmodel.content} /></div>
+						<div class="panel p_md preview-area">
+							<div class="markdown-preview"><Mdz content={page_viewmodel.content} /></div>
 						</div>
 					</div>
 				</div>
@@ -154,31 +154,31 @@
 {/if}
 
 <style>
-	.editor_layout {
+	.editor-layout {
 		display: flex;
 		height: 100%;
 		overflow: hidden;
 	}
 
-	.editor_content {
+	.editor-content {
 		height: 100%;
 		flex: 1;
 		overflow: auto;
 	}
 
-	.editor_area {
+	.editor-area {
 		display: flex;
 		gap: var(--font_size_md);
 		flex: 1;
 	}
 
-	.content_area,
-	.preview_area {
+	.content-area,
+	.preview-area {
 		width: 50%;
 		overflow: auto;
 	}
 
-	.markdown_editor {
+	.markdown-editor {
 		width: 100%;
 		height: 100%;
 		resize: none;
@@ -191,11 +191,11 @@
 		outline: none;
 	}
 
-	.markdown_preview {
+	.markdown-preview {
 		padding: var(--font_size_xs);
 	}
 
-	.preview_fullscreen {
+	.preview-fullscreen {
 		position: fixed;
 		top: 0;
 		left: 0;
@@ -205,7 +205,7 @@
 		z-index: 1000;
 		overflow: auto;
 	}
-	.preview_fullscreen.offset_for_sidebar {
+	.preview-fullscreen.offset-for-sidebar {
 		padding-left: var(--sidebar_width);
 	}
 </style>

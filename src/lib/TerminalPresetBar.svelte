@@ -35,9 +35,9 @@
 	};
 </script>
 
-<div class="terminal_preset_bar">
+<div class="terminal-preset-bar">
 	{#each presets as preset (preset.id)}
-		<span class="preset_item">
+		<span class="preset-item">
 			<button type="button" onclick={() => onrun(preset)}>
 				{GLYPH_PLAY}
 				{preset.name || preset.command}
@@ -45,7 +45,7 @@
 			{#if ondelete}
 				<button
 					type="button"
-					class="preset_delete"
+					class="preset-delete"
 					onclick={() => ondelete(preset)}
 					title="delete preset"
 				>
@@ -57,19 +57,19 @@
 
 	{#if oncreate}
 		{#if adding}
-			<span class="preset_add_form">
+			<span class="preset-add-form">
 				<input
 					type="text"
 					bind:value={new_name}
 					placeholder="name"
-					class="preset_input preset_input_name"
+					class="preset-input preset-input-name"
 					onkeydown={handle_add_keydown}
 				/>
 				<input
 					type="text"
 					bind:value={new_command}
 					placeholder="command args..."
-					class="preset_input preset_input_command"
+					class="preset-input preset-input-command"
 					onkeydown={handle_add_keydown}
 				/>
 				<button type="button" onclick={handle_add_submit}>{GLYPH_ADD}</button>
@@ -84,38 +84,38 @@
 </div>
 
 <style>
-	.terminal_preset_bar {
+	.terminal-preset-bar {
 		display: flex;
 		gap: var(--space_xs);
 		flex-wrap: wrap;
 		align-items: center;
 	}
-	.preset_item {
+	.preset-item {
 		display: inline-flex;
 		align-items: center;
 		gap: 0;
 	}
-	.preset_delete {
+	.preset-delete {
 		font-size: var(--font_size_xs);
 		padding: var(--space_xs2);
 		opacity: 0.5;
 	}
-	.preset_delete:hover {
+	.preset-delete:hover {
 		opacity: 1;
 	}
-	.preset_add_form {
+	.preset-add-form {
 		display: inline-flex;
 		gap: var(--space_xs);
 		align-items: center;
 	}
-	.preset_input {
+	.preset-input {
 		font-size: var(--font_size_sm);
 		padding: var(--space_xs);
 	}
-	.preset_input_name {
+	.preset-input-name {
 		width: 6em;
 	}
-	.preset_input_command {
+	.preset-input-command {
 		width: 12em;
 	}
 </style>

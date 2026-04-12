@@ -62,12 +62,12 @@
 	}}
 />
 
-<div class="browser_container">
+<div class="browser-container">
 	<!-- browser chrome/header -->
-	<div class="browser_chrome">
+	<div class="browser-chrome">
 		<!-- tab bar -->
 		<ul
-			class="browser_tab_bar unstyled display:flex overflow-x:auto overflow-y:hidden scrollbar-width:thin"
+			class="browser-tab-bar unstyled display:flex overflow-x:auto overflow-y:hidden scrollbar-width:thin"
 			{@attach tabs_reorderable.list({
 				onreorder: (from_index, to_index) => browser.reorder_tab(from_index, to_index),
 			})}
@@ -103,7 +103,7 @@
 			<div class="browser_nav_buttons display:flex gap_xs">
 				<button
 					type="button"
-					class="icon_button plain p_xs border_radius_lg"
+					class="icon-button plain p_xs border_radius_lg"
 					title="back"
 					onclick={() => browser.go_back()}
 					disabled
@@ -112,7 +112,7 @@
 				</button>
 				<button
 					type="button"
-					class="icon_button plain p_xs border_radius_lg"
+					class="icon-button plain p_xs border_radius_lg"
 					title="forward"
 					onclick={() => browser.go_forward()}
 					disabled
@@ -121,7 +121,7 @@
 				</button>
 				<button
 					type="button"
-					class="icon_button plain p_xs border_radius_lg"
+					class="icon-button plain p_xs border_radius_lg"
 					title="refresh"
 					onclick={() => browser.refresh()}
 				>
@@ -130,12 +130,12 @@
 			</div>
 
 			<!-- address bar -->
-			<div class="browser_address_bar flex:1">
+			<div class="browser-address-bar flex:1">
 				<input
 					type="text"
 					bind:value={browser.edited_url}
 					class="width:100% plain"
-					class:url_edited={browser.url_edited}
+					class:url-edited={browser.url_edited}
 					onkeypress={(e) => {
 						if (e.key === 'Enter') {
 							browser.submit_edited_url();
@@ -149,7 +149,7 @@
 			<div class="display:flex gap_xs">
 				<button
 					type="button"
-					class="icon_button plain p_xs"
+					class="icon-button plain p_xs"
 					title="main menu"
 					onclick={() => {
 						// eslint-disable-next-line no-alert
@@ -161,7 +161,7 @@
 	</div>
 
 	<!-- selected tab content area -->
-	<div class="browser_content">
+	<div class="browser-content">
 		{#if browser.tabs.selected_tab}
 			<BrowserTabContent tab={browser.tabs.selected_tab}>
 				{@render children()}
@@ -171,7 +171,7 @@
 </div>
 
 <style>
-	.browser_container {
+	.browser-container {
 		height: 100%;
 		width: 100%;
 		display: flex;
@@ -179,26 +179,26 @@
 		border-left: 1px solid var(--border_color_10);
 	}
 
-	.browser_chrome {
+	.browser-chrome {
 		border-bottom: 1px solid var(--border_color_10);
 		flex-shrink: 0;
 	}
 
-	.browser_tab_bar {
+	.browser-tab-bar {
 		border-bottom: 1px solid var(--border_color_10);
 	}
 
-	.browser_content {
+	.browser-content {
 		flex: 1;
 		overflow: auto;
 		position: relative;
 	}
 
-	.browser_address_bar input {
+	.browser-address-bar input {
 		background: transparent;
 	}
 
-	.browser_address_bar input.url_edited {
+	.browser-address-bar input.url-edited {
 		box-shadow: var(--shadow_xs)
 			color-mix(
 				in hsl,

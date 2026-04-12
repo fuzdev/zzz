@@ -36,11 +36,11 @@
 							>
 								<div class="ellipsis row flex:1 pr_xs">{domain.name || '[new domain]'}</div>
 								<span
-									class="status_dot {domain.status === 'active'
-										? 'status_active'
+									class="status-dot {domain.status === 'active'
+										? 'status-active'
 										: domain.status === 'pending'
-											? 'status_pending'
-											: 'status_inactive'}"
+											? 'status-pending'
+											: 'status-inactive'}"
 								></span>
 							</NavLink>
 						</li>
@@ -52,7 +52,7 @@
 </aside>
 
 <style>
-	.status_dot {
+	.status-dot {
 		display: inline-block;
 		width: 7px;
 		height: 7px;
@@ -60,15 +60,15 @@
 		flex-shrink: 0;
 	}
 
-	.status_active {
+	.status-active {
 		background-color: var(--color_a_50);
 	}
 
-	.status_pending {
+	.status-pending {
 		background-color: var(--color_e_50);
 	}
 
-	.status_inactive {
+	.status-inactive {
 		background-color: var(--text_50);
 	}
 </style>

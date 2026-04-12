@@ -55,43 +55,25 @@
 			{/if}
 		{/if}
 
-		<div class="specs_grid">
+		<div class="column gap_xs">
 			{#if model.context_window}
-				<div class="spec_item">
-					<span class="spec_label">context:</span>
+				<div class="display:flex flex-wrap:wrap gap_xs font_size_sm">
+					<span class="text_50 font-weight:600">context:</span>
 					<span>{model.context_window.toLocaleString()} tokens</span>
 				</div>
 			{/if}
 			{#if model.parameter_count}
-				<div class="spec_item">
-					<span class="spec_label">parameters:</span>
+				<div class="display:flex flex-wrap:wrap gap_xs font_size_sm">
+					<span class="text_50 font-weight:600">parameters:</span>
 					<span>{model.parameter_count.toLocaleString()}B</span>
 				</div>
 			{/if}
 			{#if model.filesize}
-				<div class="spec_item">
-					<span class="spec_label">size:</span>
+				<div class="display:flex flex-wrap:wrap gap_xs font_size_sm">
+					<span class="text_50 font-weight:600">size:</span>
 					<span>{format_gigabytes(model.filesize)}</span>
 				</div>
 			{/if}
 		</div>
 	</div>
 </ModelContextmenu>
-
-<style>
-	.specs_grid {
-		display: grid;
-		grid-template-columns: 1fr;
-		gap: var(--space_xs);
-	}
-	.spec_item {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space_xs);
-		font-size: var(--font_size_sm);
-	}
-	.spec_label {
-		color: var(--color_text_2);
-		font-weight: 600;
-	}
-</style>

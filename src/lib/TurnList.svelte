@@ -21,7 +21,7 @@
 
 <div
 	{...attrs}
-	class="turn_list {attrs?.class}"
+	class="turn-list {attrs?.class}"
 	{@attach scrollable.container}
 	{@attach scrollable.target}
 >
@@ -35,7 +35,7 @@
 </div>
 
 <style>
-	.turn_list {
+	.turn-list {
 		display: flex;
 		flex-direction: column-reverse; /* makes scrolling start at the bottom */
 		overflow: auto;

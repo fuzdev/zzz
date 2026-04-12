@@ -24,10 +24,10 @@
 
 <PartContextmenu {part}>
 	<div
-		class="part_summary display:flex justify-content:space-between gap_xs2 font_size_sm position:relative panel"
+		class="part-summary display:flex justify-content:space-between gap_xs2 font_size_sm position:relative panel"
 		class:dormant={!part.enabled}
 	>
-		<div class="progress_bar" style:width="{percent}%"></div>
+		<div class="progress-bar" style:width="{percent}%"></div>
 		<div class="flex:1 pl_sm py_xs3 ellipsis">
 			<Glyph glyph={get_part_type_glyph(part)} />&nbsp;
 			{part.name}
@@ -41,7 +41,7 @@
 </PartContextmenu>
 
 <style>
-	.progress_bar {
+	.progress-bar {
 		position: absolute;
 		left: 0;
 		top: 0;
@@ -55,7 +55,7 @@
 	.controls {
 		visibility: hidden;
 	}
-	.part_summary:hover .controls {
+	.part-summary:hover .controls {
 		visibility: visible;
 	}
 </style>

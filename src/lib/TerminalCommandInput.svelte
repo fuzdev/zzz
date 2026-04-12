@@ -21,7 +21,7 @@
 	};
 </script>
 
-<div class="terminal_command_input">
+<div class="terminal-command-input">
 	<input
 		type="text"
 		bind:value={input}
@@ -32,11 +32,11 @@
 </div>
 
 <style>
-	.terminal_command_input {
+	.terminal-command-input {
 		display: flex;
 		gap: var(--space_sm);
 	}
-	.terminal_command_input input {
+	.terminal-command-input input {
 		flex: 1;
 	}
 </style>

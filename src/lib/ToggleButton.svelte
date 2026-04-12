@@ -23,7 +23,7 @@
 	} = $props();
 </script>
 
-<button type="button" class="plain icon_button" {...rest} onclick={() => (active = !active)}>
+<button type="button" class="plain icon-button" {...rest} onclick={() => (active = !active)}>
 	{@render rest.children?.()}
 	<span class="position:relative">
 		<span style:visibility="hidden" class="display:inline-flex flex-direction:column height:0">

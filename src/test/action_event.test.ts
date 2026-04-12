@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import {test, describe, assert} from 'vitest';
+import {assert_rejects} from '@fuzdev/fuz_util/testing.js';
 
 import {create_action_event, create_action_event_from_json} from '$lib/action_event.js';
 import type {ActionEventEnvironment, ActionExecutor} from '$lib/action_event_types.js';
@@ -318,12 +319,8 @@ describe('ActionEvent', () => {
 			const event = create_action_event(env, ping_action_spec, undefined);
 
 			// Not parsed yet
-			try {
-				await event.handle_async();
-				assert.fail('expected handle_async to throw');
-			} catch (e: any) {
-				assert.include(e.message, "cannot handle from step 'initial' - must be 'parsed'");
-			}
+			const error = await assert_rejects(() => event.handle_async());
+			assert.include(error.message, "cannot handle from step 'initial' - must be 'parsed'");
 		});
 
 		test('is no-op when already failed', async () => {

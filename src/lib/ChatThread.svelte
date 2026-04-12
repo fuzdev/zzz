@@ -75,7 +75,12 @@
 
 <ModelContextmenu model={thread.model}>
 	<ThreadContextmenu {thread}>
-		<div {...attrs} class="chat_thread {attrs?.class}" class:empty class:dormant={!thread.enabled}>
+		<div
+			{...attrs}
+			class="chat-thread column gap_md shade_00 border_radius_xs {attrs?.class}"
+			class:empty
+			class:dormant={!thread.enabled}
+		>
 			<div class="display:flex justify-content:space-between align-items:start">
 				<header>
 					<button
@@ -146,15 +151,7 @@
 </ModelContextmenu>
 
 <style>
-	.chat_thread {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space_md);
-		background-color: var(--shade_00);
-		border-radius: var(--border_radius_xs);
-	}
-
-	.chat_thread.empty {
+	.chat-thread.empty {
 		justify-content: center;
 	}
 </style>

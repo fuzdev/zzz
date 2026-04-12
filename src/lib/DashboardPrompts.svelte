@@ -66,7 +66,7 @@
 </script>
 
 <div class="display:flex width:100% height:100%">
-	<div class="column_fixed">
+	<div class="column-fixed">
 		<div class="p_sm pl_0">
 			<div class="row gap_xs2 mb_xs pl_xs2">
 				<button
@@ -96,8 +96,8 @@
 
 	{#if app.prompts.selected}
 		<PromptContextmenu prompt={app.prompts.selected}>
-			<div class="column_fixed pr_sm">
-				<section class="column_section">
+			<div class="column-fixed pr_sm">
+				<section class="column-section">
 					<div class="font_size_lg display:flex align-items:center">
 						<Glyph glyph={GLYPH_PROMPT} />
 						<EditableText bind:value={app.prompts.selected.name} />
@@ -117,7 +117,7 @@
 						<ConfirmButton
 							onconfirm={() => app.prompts.selected && app.prompts.remove(app.prompts.selected)}
 							title="delete prompt {'"' + app.prompts.selected.name + '"'}"
-							class="plain icon_button"
+							class="plain icon-button"
 						>
 							<Glyph glyph={GLYPH_DELETE} />
 							{#snippet popover_button_content()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
@@ -125,7 +125,7 @@
 					</div>
 					<ContentPreview content={app.prompts.selected.content} />
 				</section>
-				<section class="column_section">
+				<section class="column-section">
 					<header class="font_size_lg mb_lg"><Glyph glyph={GLYPH_PART} /> parts</header>
 					<PartList
 						parts={app.prompts.selected.parts}
@@ -137,8 +137,8 @@
 				</section>
 			</div>
 
-			<div class="column_fluid">
-				<div class="column_bg_1 column gap_md p_sm">
+			<div class="column-fluid">
+				<div class="column-bg-1 column gap_md p_sm">
 					<div class="display:flex justify-content:space-between">
 						<div class="display:flex flex-wrap:wrap gap_xs">
 							<button type="button" class="plain font_size_sm" onclick={add_text_part}>

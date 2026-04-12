@@ -15,7 +15,7 @@
 <div class="p_lg">
 	<h1><Glyph glyph={GLYPH_PROVIDER} /> providers</h1>
 	<aside>⚠️ This information is incomplete and may be incorrect or outdated.</aside>
-	<div class="providers_grid">
+	<div class="providers-grid">
 		{#each app.providers.items as provider (provider)}
 			<div class="panel p_lg align-self:start">
 				<div class="font_size_xl mb_lg">
@@ -71,7 +71,7 @@
 </div>
 
 <style>
-	.providers_grid {
+	.providers-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 		gap: var(--space_lg);

@@ -24,14 +24,14 @@
 		<h3 class="mt_0 mb_sm">Referenced by part</h3>
 
 		<div class="column gap_xs">
-			<div class="part_reference">
+			<div class="part-reference">
 				<PartSummary {part} />
 
 				{#if referenced_by_prompts?.length}
-					<div class="prompt_refs font_size_xs mt_xs2">
+					<div class="prompt-refs font_size_xs mt_xs2">
 						<span class="text_50">In prompt{referenced_by_prompts.length !== 1 ? 's' : ''}:</span>
 						{#each referenced_by_prompts as prompt (prompt.id)}
-							<a href={resolve(`/prompts/${prompt.id}`)} class="prompt_ref">
+							<a href={resolve(`/prompts/${prompt.id}`)} class="prompt-ref">
 								{prompt.name}
 							</a>
 						{/each}
@@ -43,20 +43,20 @@
 {/if}
 
 <style>
-	.part_reference {
+	.part-reference {
 		padding: var(--space_xs2);
 		background: var(--shade_20);
 		border-radius: var(--border_radius_xs);
 	}
 
-	.prompt_refs {
+	.prompt-refs {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--space_xs2);
 		align-items: center;
 	}
 
-	.prompt_ref {
+	.prompt-ref {
 		padding: var(--space_xs3) var(--space_xs2);
 		background: var(--shade_30);
 		border-radius: var(--border_radius_xs);
@@ -64,7 +64,7 @@
 		color: inherit;
 	}
 
-	.prompt_ref:hover {
+	.prompt-ref:hover {
 		background: var(--shade_40);
 	}
 </style>

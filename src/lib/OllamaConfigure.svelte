@@ -50,7 +50,7 @@
 		{#if last_active_view && onback}
 			<button
 				type="button"
-				class="icon_button plain"
+				class="icon-button plain"
 				onclick={onback}
 				title="back to {last_active_view}"
 			>

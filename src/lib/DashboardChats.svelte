@@ -23,7 +23,7 @@
 </script>
 
 <ChatsContextmenu attrs={{class: 'display:flex width:100% height:100%'}}>
-	<div class="column_fixed">
+	<div class="column-fixed">
 		<div class="py_sm pr_sm">
 			<div class="row gap_xs2 mb_xs pl_xs2">
 				<button
@@ -79,7 +79,7 @@
 		{/if}
 	</div>
 
-	<div class="column_fluid">
+	<div class="column-fluid">
 		{#if chats.selected}
 			<ChatContextmenu chat={chats.selected}>
 				<ChatView chat={chats.selected} />

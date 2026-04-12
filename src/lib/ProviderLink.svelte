@@ -46,7 +46,7 @@
 
 <!-- whitespace is a part tricky here, we want none with glyphs -->
 {#if provider}
-	<a {...rest} href={resolve(`/providers/${provider.name}`)} class:selected
+	<a {...rest} href={resolve(`/providers/${provider.name}`)} class="selected-plain" class:selected
 		>{#if children}
 			{@render children()}
 		{:else}
@@ -70,14 +70,3 @@
 		><Glyph glyph={GLYPH_PROVIDER} /> missing provider</small
 	>
 {/if}
-
-<style>
-	a {
-		font-weight: 600;
-	}
-	/* TODO breaks convention, but I think it looks better in a lot of cases, maybe extract a class? `plain_selected_link` or `plain`? */
-	.selected {
-		font-weight: 400;
-		text-decoration: none;
-	}
-</style>

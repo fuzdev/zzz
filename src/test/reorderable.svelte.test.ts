@@ -110,8 +110,8 @@ describe('Reorderable', () => {
 			assert.strictEqual(reorderable.direction, 'vertical');
 			assert.ok(reorderable.id);
 			assert.notStrictEqual(reorderable.id, new Reorderable().id);
-			assert.strictEqual(reorderable.list_class, 'reorderable_list');
-			assert.strictEqual(reorderable.item_class, 'reorderable_item');
+			assert.strictEqual(reorderable.list_class, 'reorderable-list');
+			assert.strictEqual(reorderable.item_class, 'reorderable-item');
 		});
 
 		test('creates with custom direction', () => {
@@ -130,7 +130,7 @@ describe('Reorderable', () => {
 			assert.strictEqual(reorderable.item_class, 'custom_item');
 			assert.strictEqual(reorderable.dragging_class, 'custom_dragging');
 			// Other styles should have default values
-			assert.strictEqual(reorderable.drag_over_class, 'drag_over');
+			assert.strictEqual(reorderable.drag_over_class, 'drag-over');
 		});
 	});
 

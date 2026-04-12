@@ -115,7 +115,7 @@
 						</button>
 						<button
 							type="button"
-							class="icon_button compact plain"
+							class="icon-button compact plain"
 							title="close workspace"
 							onclick={() => void handle_close(workspace.path)}
 						>

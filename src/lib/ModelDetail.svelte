@@ -48,7 +48,7 @@
 
 <ModelContextmenu tag="div" attrs={{class: 'panel p_lg', ...attrs}} {model}>
 	<section class="row mb_xl3">
-		<div class="glyph_container">
+		<div class="glyph-container">
 			<Glyph glyph={GLYPH_MODEL} size="var(--icon_size_xl)" />
 		</div>
 		<div class="pl_xl">
@@ -201,7 +201,7 @@
 </ModelContextmenu>
 
 <style>
-	.glyph_container {
+	.glyph-container {
 		display: flex;
 		align-items: center;
 		justify-content: center;

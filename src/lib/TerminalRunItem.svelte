@@ -49,12 +49,12 @@
 </script>
 
 <TerminalContextmenu get_terminal_text={text_getter} {display_command}>
-	<div class="terminal_run_item">
-		<div class="run_header">
-			<span class="run_command">$ {display_command}</span>
-			<span class="run_status">
+	<div class="terminal-run-item">
+		<div class="run-header">
+			<span class="run-command">$ {display_command}</span>
+			<span class="run-status">
 				{#if exited}
-					<span class="exit_code" class:error={exit_code !== 0}>
+					<span class="exit-code" class:error={exit_code !== 0}>
 						exited {exit_code ?? '?'}
 					</span>
 				{:else}
@@ -62,15 +62,15 @@
 				{/if}
 			</span>
 			{#if onrestart}
-				<button type="button" class="restart_button" onclick={onrestart} title="restart">
+				<button type="button" class="restart-button" onclick={onrestart} title="restart">
 					{GLYPH_RETRY}
 				</button>
 			{/if}
 		</div>
-		<div class="run_output">
+		<div class="run-output">
 			<TerminalView {terminal_id} onclose={handle_close} get_text={handle_get_text} />
 		</div>
-		<div class="stdin_input">
+		<div class="stdin-input">
 			<input
 				type="text"
 				bind:value={stdin_input}
@@ -84,12 +84,12 @@
 </TerminalContextmenu>
 
 <style>
-	.terminal_run_item {
+	.terminal-run-item {
 		border: 1px solid var(--border_color, #333);
 		border-radius: var(--border_radius, 4px);
 		overflow: hidden;
 	}
-	.run_header {
+	.run-header {
 		display: flex;
 		align-items: center;
 		gap: var(--space_sm);
@@ -97,37 +97,37 @@
 		background: var(--bg_2, #1a1a2e);
 		font-size: var(--font_size_sm);
 	}
-	.run_command {
+	.run-command {
 		flex: 1;
 		font-family: monospace;
 		opacity: 0.8;
 	}
-	.run_status {
+	.run-status {
 		font-size: var(--font_size_sm);
 	}
 	.running {
 		color: var(--color_a_50, #8f8);
 	}
-	.exit_code {
+	.exit-code {
 		opacity: 0.6;
 	}
-	.exit_code.error {
+	.exit-code.error {
 		color: var(--color_c_50, #f88);
 	}
-	.restart_button {
+	.restart-button {
 		font-size: var(--font_size_sm);
 	}
-	.run_output {
+	.run-output {
 		height: 300px;
 	}
-	.stdin_input {
+	.stdin-input {
 		display: flex;
 		gap: var(--space_xs);
 		padding: var(--space_xs) var(--space_sm);
 		border-top: 1px solid var(--border_color, #333);
 		background: var(--bg_2, #1a1a2e);
 	}
-	.stdin_input input {
+	.stdin-input input {
 		flex: 1;
 		font-family: monospace;
 		font-size: var(--font_size_sm);

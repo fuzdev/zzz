@@ -27,7 +27,7 @@
 				>
 				<button
 					type="button"
-					class="plain icon_button font_size_md"
+					class="plain icon-button font_size_md"
 					title="create new chat"
 					onclick={() => {
 						const chat = app.chats.add();
@@ -66,7 +66,7 @@
 				>
 				<button
 					type="button"
-					class="plain icon_button font_size_md"
+					class="plain icon-button font_size_md"
 					title="create new prompt"
 					onclick={() => {
 						const prompt = app.prompts.add();

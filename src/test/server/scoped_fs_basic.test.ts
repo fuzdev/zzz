@@ -1,4 +1,5 @@
 import {test, vi, beforeEach, describe, assert} from 'vitest';
+import {assert_rejects} from '@fuzdev/fuz_util/testing.js';
 import * as fs from 'node:fs/promises';
 import type {Stats, BigIntStats} from 'node:fs';
 
@@ -245,12 +246,8 @@ describe('ScopedFs - file operations', () => {
 	test('read_file - should throw for paths outside allowed directories', async () => {
 		const scoped_fs = create_test_instance();
 
-		try {
-			await scoped_fs.read_file(FILE_PATHS.OUTSIDE);
-			assert.fail('Expected error to be thrown');
-		} catch (e) {
-			assert.instanceOf(e, PathNotAllowedError);
-		}
+		const error = await assert_rejects(() => scoped_fs.read_file(FILE_PATHS.OUTSIDE));
+		assert.instanceOf(error, PathNotAllowedError);
 		assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 0);
 	});
 
@@ -271,12 +268,8 @@ describe('ScopedFs - file operations', () => {
 	test('write_file - should throw for paths outside allowed directories', async () => {
 		const scoped_fs = create_test_instance();
 
-		try {
-			await scoped_fs.write_file(FILE_PATHS.OUTSIDE, 'content');
-			assert.fail('Expected error to be thrown');
-		} catch (e) {
-			assert.instanceOf(e, PathNotAllowedError);
-		}
+		const error = await assert_rejects(() => scoped_fs.write_file(FILE_PATHS.OUTSIDE, 'content'));
+		assert.instanceOf(error, PathNotAllowedError);
 		assert.strictEqual(vi.mocked(fs.writeFile).mock.calls.length, 0);
 	});
 });
@@ -294,12 +287,8 @@ describe('ScopedFs - directory operations', () => {
 	test('mkdir - should throw for paths outside allowed directories', async () => {
 		const scoped_fs = create_test_instance();
 
-		try {
-			await scoped_fs.mkdir(DIR_PATHS.OUTSIDE);
-			assert.fail('Expected error to be thrown');
-		} catch (e) {
-			assert.instanceOf(e, PathNotAllowedError);
-		}
+		const error = await assert_rejects(() => scoped_fs.mkdir(DIR_PATHS.OUTSIDE));
+		assert.instanceOf(error, PathNotAllowedError);
 		assert.strictEqual(vi.mocked(fs.mkdir).mock.calls.length, 0);
 	});
 
@@ -317,12 +306,8 @@ describe('ScopedFs - directory operations', () => {
 	test('readdir - should throw for paths outside allowed directories', async () => {
 		const scoped_fs = create_test_instance();
 
-		try {
-			await scoped_fs.readdir(DIR_PATHS.OUTSIDE);
-			assert.fail('Expected error to be thrown');
-		} catch (e) {
-			assert.instanceOf(e, PathNotAllowedError);
-		}
+		const error = await assert_rejects(() => scoped_fs.readdir(DIR_PATHS.OUTSIDE));
+		assert.instanceOf(error, PathNotAllowedError);
 		assert.strictEqual(vi.mocked(fs.readdir).mock.calls.length, 0);
 	});
 
@@ -338,12 +323,8 @@ describe('ScopedFs - directory operations', () => {
 	test('rm - should throw for paths outside allowed directories', async () => {
 		const scoped_fs = create_test_instance();
 
-		try {
-			await scoped_fs.rm(DIR_PATHS.OUTSIDE);
-			assert.fail('Expected error to be thrown');
-		} catch (e) {
-			assert.instanceOf(e, PathNotAllowedError);
-		}
+		const error = await assert_rejects(() => scoped_fs.rm(DIR_PATHS.OUTSIDE));
+		assert.instanceOf(error, PathNotAllowedError);
 		assert.strictEqual(vi.mocked(fs.rm).mock.calls.length, 0);
 	});
 });
@@ -366,12 +347,8 @@ describe('ScopedFs - stat operations', () => {
 	test('stat - should throw for paths outside allowed directories', async () => {
 		const scoped_fs = create_test_instance();
 
-		try {
-			await scoped_fs.stat(FILE_PATHS.OUTSIDE);
-			assert.fail('Expected error to be thrown');
-		} catch (e) {
-			assert.instanceOf(e, PathNotAllowedError);
-		}
+		const error = await assert_rejects(() => scoped_fs.stat(FILE_PATHS.OUTSIDE));
+		assert.instanceOf(error, PathNotAllowedError);
 		assert.strictEqual(vi.mocked(fs.stat).mock.calls.length, 0);
 	});
 
@@ -479,12 +456,8 @@ describe('ScopedFs - copy operations', () => {
 		];
 
 		for (const {source, destination} of invalid_copy_operations) {
-			try {
-				await scoped_fs.copy_file(source, destination);
-				assert.fail('Expected error to be thrown');
-			} catch (e) {
-				assert.instanceOf(e, PathNotAllowedError);
-			}
+			const error = await assert_rejects(() => scoped_fs.copy_file(source, destination));
+			assert.instanceOf(error, PathNotAllowedError);
 		}
 
 		assert.strictEqual(vi.mocked(fs.copyFile).mock.calls.length, 0);
@@ -504,12 +477,8 @@ describe('ScopedFs - symlink detection', () => {
 			} as any),
 		);
 
-		try {
-			await scoped_fs.read_file('/allowed/path/symlink.txt');
-			assert.fail('Expected error to be thrown');
-		} catch (e) {
-			assert.instanceOf(e, SymlinkNotAllowedError);
-		}
+		const error = await assert_rejects(() => scoped_fs.read_file('/allowed/path/symlink.txt'));
+		assert.instanceOf(error, SymlinkNotAllowedError);
 
 		assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 0);
 	});
@@ -535,12 +504,10 @@ describe('ScopedFs - symlink detection', () => {
 			} as any),
 		);
 
-		try {
-			await scoped_fs.read_file('/allowed/path/symlink-dir/file.txt');
-			assert.fail('Expected error to be thrown');
-		} catch (e) {
-			assert.instanceOf(e, SymlinkNotAllowedError);
-		}
+		const error = await assert_rejects(() =>
+			scoped_fs.read_file('/allowed/path/symlink-dir/file.txt'),
+		);
+		assert.instanceOf(error, SymlinkNotAllowedError);
 
 		assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 0);
 	});

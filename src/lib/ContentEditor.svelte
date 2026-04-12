@@ -104,7 +104,7 @@
 					content = new_content;
 					focus();
 				}}
-				class="plain icon_button font_size_lg"
+				class="plain icon-button font_size_lg"
 			>
 				<!-- TODO should be default -->
 				<Glyph glyph={GLYPH_PASTE} />

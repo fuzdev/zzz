@@ -128,7 +128,7 @@
 							<NavLink
 								href={resolve('/')}
 								title={app.futuremode ? 'futuremode' : 'home'}
-								class="click_effect_scale"
+								class="click-effect-scale"
 								onclick={() => {
 									if (futureclicks_activated) {
 										// If already activated once, toggle immediately when on root
@@ -164,9 +164,9 @@
 							<NavLink href={to_nav_link_href(app, link.label, link.href)}>
 								{#snippet children(selected)}
 									{#if typeof link.icon === 'string'}
-										<Glyph glyph={link.icon} class="icon_xs" /> {link.label}
+										<Glyph glyph={link.icon} class="icon-xs" /> {link.label}
 									{:else}
-										<span class="icon_xs">
+										<span class="icon-xs">
 											<Svg
 												data={link.icon}
 												fill={selected ? 'var(--link_color)' : 'var(--text_90)'}
@@ -187,7 +187,7 @@
 	<!-- sidebar toggle button -->
 	<button
 		type="button"
-		class="position:fixed bottom:0 left:0 icon_button plain border-radius:0 border_top_right_radius_md"
+		class="position:fixed bottom:0 left:0 icon-button plain border-radius:0 border_top_right_radius_md"
 		aria-label={sidebar_button_title}
 		title={sidebar_button_title}
 		onclick={() => app.ui.toggle_sidebar()}
@@ -199,7 +199,7 @@
 	{#if !app.ui.show_desk_menu}
 		<button
 			type="button"
-			class="position:fixed top:0 right:0 icon_button plain border-radius:0 border_bottom_left_radius_md"
+			class="position:fixed top:0 right:0 icon-button plain border-radius:0 border_bottom_left_radius_md"
 			aria-label="desk menu"
 			title="desk menu — switch spaces [~]"
 			onclick={() => app.ui.toggle_desk_menu()}

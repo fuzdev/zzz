@@ -36,12 +36,17 @@
 <!-- 
 	transition:slide -->
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-<a {...rest} {href} class="nav_link {rest.class}" class:selected class:selected_descendent
+<a
+	{...rest}
+	{href}
+	class="nav-link {rest.class}"
+	class:selected
+	class:selected-descendent={selected_descendent}
 	>{@render children(selected, selected_descendent)}</a
 >
 
 <style>
-	.nav_link {
+	.nav-link {
 		display: flex;
 		align-items: center;
 		padding: var(--space_xs2) var(--space_sm);
@@ -51,17 +56,17 @@
 		font-weight: 600;
 		white-space: nowrap;
 	}
-	.nav_link:hover {
+	.nav-link:hover {
 		border-color: var(--border_color_50);
 	}
-	.nav_link:active {
+	.nav-link:active {
 		border-color: var(--color_a_50);
 	}
-	.nav_link.selected {
+	.nav-link.selected {
 		border-color: var(--color_a_50);
 		color: var(--color_a_60);
 	}
-	.nav_link.selected_descendent {
+	.nav-link.selected-descendent {
 		border-color: var(--border_color_50);
 	}
 </style>

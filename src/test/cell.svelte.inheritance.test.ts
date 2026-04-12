@@ -8,7 +8,8 @@ import {CellJson, type SchemaKeys} from '$lib/cell_types.js';
 import {create_uuid, get_datetime_now} from '$lib/zod_helpers.js';
 import {HANDLED} from '$lib/cell_helpers.js';
 import {Frontend} from '$lib/frontend.svelte.js';
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+
+import {monkeypatch_zzz_for_tests} from './test_helpers.js';
 
 // Constants for testing
 const TEST_ID = create_uuid();

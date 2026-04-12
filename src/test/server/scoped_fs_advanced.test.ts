@@ -1,4 +1,5 @@
 import {test, vi, beforeEach, describe, assert} from 'vitest';
+import {assert_rejects} from '@fuzdev/fuz_util/testing.js';
 import * as fs from 'node:fs/promises';
 
 import {ScopedFs, SymlinkNotAllowedError} from '$lib/server/scoped_fs.js';
@@ -263,12 +264,8 @@ describe('ScopedFs - advanced directory operations', () => {
 		const error = new Error('EEXIST: directory already exists');
 		vi.mocked(fs.mkdir).mockRejectedValueOnce(error);
 
-		try {
-			await scoped_fs.mkdir(DIR_PATHS.ALLOWED);
-			assert.fail('Expected error to be thrown');
-		} catch (e) {
-			assert.strictEqual(e, error);
-		}
+		const e = await assert_rejects(() => scoped_fs.mkdir(DIR_PATHS.ALLOWED));
+		assert.strictEqual(e, error);
 	});
 
 	test('rm - should handle various removal options', async () => {
@@ -336,12 +333,8 @@ describe('ScopedFs - advanced security features', () => {
 			});
 
 			// Each case should be rejected with a SymlinkNotAllowedError
-			try {
-				await scoped_fs.read_file(path);
-				assert.fail('Expected error to be thrown');
-			} catch (e) {
-				assert.instanceOf(e, SymlinkNotAllowedError);
-			}
+			const e = await assert_rejects(() => scoped_fs.read_file(path));
+			assert.instanceOf(e, SymlinkNotAllowedError);
 			assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 0);
 		}
 	});
@@ -359,12 +352,8 @@ describe('ScopedFs - advanced security features', () => {
 
 		for (const path of tricky_traversal_paths) {
 			assert.ok(!scoped_fs.is_path_allowed(path));
-			try {
-				await scoped_fs.read_file(path);
-				assert.fail('Expected error to be thrown');
-			} catch (e: any) {
-				assert.include(e.message, 'Path is not allowed');
-			}
+			const error = await assert_rejects(() => scoped_fs.read_file(path));
+			assert.include(error.message, 'Path is not allowed');
 		}
 	});
 
@@ -395,12 +384,8 @@ describe('ScopedFs - error handling and edge cases', () => {
 		vi.mocked(fs.lstat).mockRejectedValue(new Error('Unknown filesystem error'));
 
 		// The error during symlink check should be caught and rethrown
-		try {
-			await scoped_fs.read_file(FILE_PATHS.ALLOWED);
-			assert.fail('Expected error to be thrown');
-		} catch (e: any) {
-			assert.include(e.message, 'Unknown filesystem error');
-		}
+		const error = await assert_rejects(() => scoped_fs.read_file(FILE_PATHS.ALLOWED));
+		assert.include(error.message, 'Unknown filesystem error');
 		assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 0);
 	});
 
@@ -462,12 +447,8 @@ describe('ScopedFs - error handling and edge cases', () => {
 		vi.mocked(fs.lstat).mockRejectedValueOnce(eacces_error);
 
 		// Should throw the EACCES error, not ignore it
-		try {
-			await scoped_fs.read_file(FILE_PATHS.ALLOWED);
-			assert.fail('Expected error to be thrown');
-		} catch (e: any) {
-			assert.include(e.message, 'EACCES');
-		}
+		const error = await assert_rejects(() => scoped_fs.read_file(FILE_PATHS.ALLOWED));
+		assert.include(error.message, 'EACCES');
 		assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 0);
 	});
 
@@ -488,12 +469,8 @@ describe('ScopedFs - error handling and edge cases', () => {
 		vi.mocked(fs.lstat).mockRejectedValueOnce(eacces_error);
 
 		// Should throw the EACCES error from parent check
-		try {
-			await scoped_fs.read_file(nested_path);
-			assert.fail('Expected error to be thrown');
-		} catch (e: any) {
-			assert.include(e.message, 'EACCES');
-		}
+		const error = await assert_rejects(() => scoped_fs.read_file(nested_path));
+		assert.include(error.message, 'EACCES');
 		assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 0);
 	});
 
@@ -527,12 +504,8 @@ describe('ScopedFs - error handling and edge cases', () => {
 			vi.mocked(fs.readFile).mockRejectedValueOnce(error);
 
 			// Error should be passed through
-			try {
-				await scoped_fs.read_file(FILE_PATHS.ALLOWED);
-				assert.fail('Expected error to be thrown');
-			} catch (e: any) {
-				assert.include(e.message, message);
-			}
+			const e = await assert_rejects(() => scoped_fs.read_file(FILE_PATHS.ALLOWED));
+			assert.include(e.message, message);
 			assert.deepEqual(vi.mocked(fs.readFile).mock.calls[0], [FILE_PATHS.ALLOWED, 'utf8']);
 		}
 	});
@@ -799,12 +772,8 @@ describe('ScopedFs - directory path trailing slash handling', () => {
 		// Test invalid paths
 		for (const path of invalid_paths) {
 			assert.ok(!scoped_fs.is_path_allowed(path));
-			try {
-				await scoped_fs.read_file(path);
-				assert.fail('Expected error to be thrown');
-			} catch (e: any) {
-				assert.include(e.message, 'Path is not allowed');
-			}
+			const error = await assert_rejects(() => scoped_fs.read_file(path));
+			assert.include(error.message, 'Path is not allowed');
 		}
 	});
 

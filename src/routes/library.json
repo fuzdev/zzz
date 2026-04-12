@@ -15038,13 +15038,13 @@
 						"name": "LIST_CLASS_DEFAULT",
 						"kind": "variable",
 						"source_line": 43,
-						"type_signature": "\"reorderable_list\""
+						"type_signature": "\"reorderable-list\""
 					},
 					{
 						"name": "ITEM_CLASS_DEFAULT",
 						"kind": "variable",
 						"source_line": 44,
-						"type_signature": "\"reorderable_item\""
+						"type_signature": "\"reorderable-item\""
 					},
 					{
 						"name": "DRAGGING_CLASS_DEFAULT",
@@ -15056,31 +15056,31 @@
 						"name": "DRAG_OVER_CLASS_DEFAULT",
 						"kind": "variable",
 						"source_line": 46,
-						"type_signature": "\"drag_over\""
+						"type_signature": "\"drag-over\""
 					},
 					{
 						"name": "DRAG_OVER_TOP_CLASS_DEFAULT",
 						"kind": "variable",
 						"source_line": 47,
-						"type_signature": "\"drag_over_top\""
+						"type_signature": "\"drag-over-top\""
 					},
 					{
 						"name": "DRAG_OVER_BOTTOM_CLASS_DEFAULT",
 						"kind": "variable",
 						"source_line": 48,
-						"type_signature": "\"drag_over_bottom\""
+						"type_signature": "\"drag-over-bottom\""
 					},
 					{
 						"name": "DRAG_OVER_LEFT_CLASS_DEFAULT",
 						"kind": "variable",
 						"source_line": 49,
-						"type_signature": "\"drag_over_left\""
+						"type_signature": "\"drag-over-left\""
 					},
 					{
 						"name": "DRAG_OVER_RIGHT_CLASS_DEFAULT",
 						"kind": "variable",
 						"source_line": 50,
-						"type_signature": "\"drag_over_right\""
+						"type_signature": "\"drag-over-right\""
 					},
 					{
 						"name": "INVALID_DROP_CLASS_DEFAULT",

@@ -35,7 +35,7 @@
 	const project = $derived(projects.current_project);
 </script>
 
-<div class="repo_layout">
+<div class="repo-layout">
 	<!-- TODO @many refactor for better component instance stability for e.g. transitions -->
 	<ProjectSidebar />
 	{#if project}
@@ -43,7 +43,7 @@
 		<ReposSidebar />
 	{/if}
 
-	<div class="repo_content">
+	<div class="repo-content">
 		{#if project && repos_viewmodel}
 			<div class="p_lg">
 				<h1 class="mb_lg">edit repo</h1>
@@ -129,13 +129,13 @@
 </div>
 
 <style>
-	.repo_layout {
+	.repo-layout {
 		display: flex;
 		height: 100%;
 		overflow: hidden;
 	}
 
-	.repo_content {
+	.repo-content {
 		flex: 1;
 		overflow: auto;
 	}

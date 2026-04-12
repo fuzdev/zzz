@@ -33,7 +33,7 @@
 		<h3 class="mt_0 mb_0">
 			<Glyph glyph={GLYPH_COPY} /> copy model
 		</h3>
-		<button type="button" class="icon_button plain" onclick={onclose} title="close">
+		<button type="button" class="icon-button plain" onclick={onclose} title="close">
 			<Glyph glyph={GLYPH_ARROW_LEFT} />
 		</button>
 	</header>

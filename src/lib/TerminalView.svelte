@@ -154,16 +154,16 @@
 	};
 </script>
 
-<div class="terminal_view">
-	<div class="terminal_header">
-		<span class="terminal_id">terminal {terminal_id.slice(0, 8)}</span>
-		<div class="terminal_actions">
+<div class="terminal-view">
+	<div class="terminal-header">
+		<span class="terminal-id">terminal {terminal_id.slice(0, 8)}</span>
+		<div class="terminal-actions">
 			<CopyToClipboard text={terminal_text} class="plain" />
 			<button type="button" onclick={handle_close} disabled={exited}>close</button>
 		</div>
 	</div>
 	<div
-		class="terminal_container"
+		class="terminal-container"
 		bind:this={container_el}
 		bind:clientWidth={container_width}
 		bind:clientHeight={container_height}
@@ -171,29 +171,29 @@
 </div>
 
 <style>
-	.terminal_view {
+	.terminal-view {
 		display: flex;
 		flex-direction: column;
 		height: 100%;
 		min-height: 300px;
 	}
-	.terminal_header {
+	.terminal-header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		padding: var(--space_xs);
 		background: var(--bg_2, #1a1a2e);
 	}
-	.terminal_id {
+	.terminal-id {
 		font-size: var(--font_size_sm);
 		opacity: 0.7;
 	}
-	.terminal_actions {
+	.terminal-actions {
 		display: flex;
 		gap: var(--space_xs);
 		align-items: center;
 	}
-	.terminal_container {
+	.terminal-container {
 		flex: 1;
 		overflow: hidden;
 	}

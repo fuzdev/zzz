@@ -1,4 +1,5 @@
 import {test, describe, assert} from 'vitest';
+import {assert_rejects} from '@fuzdev/fuz_util/testing.js';
 
 import {update_env_variable} from '$lib/server/env_file_helpers.js';
 
@@ -140,16 +141,14 @@ describe('update_env_variable - error handling', () => {
 			throw new Error(error_message);
 		};
 
-		try {
-			await update_env_variable('API_KEY', 'new_value', {
+		const error = await assert_rejects(() =>
+			update_env_variable('API_KEY', 'new_value', {
 				env_file_path: '/test/.env',
 				read_file: custom_read,
 				write_file: async () => {},
-			});
-			assert.fail('Expected error to be thrown');
-		} catch (e: any) {
-			assert.include(e.message, error_message);
-		}
+			}),
+		);
+		assert.include(error.message, error_message);
 	});
 
 	test('propagates write file error', async () => {
@@ -158,15 +157,13 @@ describe('update_env_variable - error handling', () => {
 			throw new Error(error_message);
 		};
 
-		try {
-			await update_env_variable('API_KEY', 'new_value', {
+		const error = await assert_rejects(() =>
+			update_env_variable('API_KEY', 'new_value', {
 				env_file_path: '/test/.env',
 				read_file: async () => '',
 				write_file: custom_write,
-			});
-			assert.fail('Expected error to be thrown');
-		} catch (e: any) {
-			assert.include(e.message, error_message);
-		}
+			}),
+		);
+		assert.include(error.message, error_message);
 	});
 });

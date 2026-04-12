@@ -47,7 +47,7 @@
 		</ConfirmButton>
 	</small>
 
-	<menu {...attrs} class="unstyled {attrs?.class ?? 'max_height_sm'}">
+	<menu {...attrs} class="unstyled {attrs?.class ?? 'max-height-sm'}">
 		{#each editor_state.content_history as entry (entry.id)}
 			{@const selected = entry.id === editor_state.selected_history_entry_id}
 			{@const content_matches = editor_state.content_matching_entry_ids.includes(entry.id)}
@@ -56,7 +56,7 @@
 				type="button"
 				class="listitem sm"
 				class:selected
-				class:content_matches
+				class:content-matches={content_matches}
 				class:plain={!selected && !content_matches}
 				onclick={() => onselectentry(entry.id)}
 				title={entry.label}
@@ -76,7 +76,7 @@
 </div>
 
 <style>
-	.content_matches:not(.selected) {
+	.content-matches:not(.selected) {
 		background-color: var(--shade_10);
 	}
 
