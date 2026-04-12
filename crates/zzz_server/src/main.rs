@@ -1,5 +1,7 @@
+mod account;
 mod auth;
 mod bootstrap;
+mod daemon_token;
 mod db;
 mod error;
 mod filer;
@@ -75,6 +77,25 @@ async fn run() -> Result<(), ServerError> {
 
     let scoped_fs = scoped_fs::ScopedFs::new(config.scoped_dirs);
 
+    // Daemon token — initialize state, write token to disk
+    let daemon_token_state = match daemon_token::init_daemon_token(&config.zzz_dir).await {
+        Ok(state) => {
+            // Resolve keeper_account_id if an account with keeper role already exists
+            if let Ok(client) = pool.get().await
+                && let Ok(Some(account_id)) =
+                    db::query_keeper_account_id(&client).await
+            {
+                state.write().await.keeper_account_id = Some(account_id);
+                tracing::info!(%account_id, "daemon token: keeper account resolved");
+            }
+            Some(state)
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "daemon token init failed — running without daemon token auth");
+            None
+        }
+    };
+
     let app_state = Arc::new(handlers::App::new(
         pool,
         keyring,
@@ -84,7 +105,11 @@ async fn run() -> Result<(), ServerError> {
         scoped_fs,
         config.zzz_dir,
         scoped_dir_strings,
+        daemon_token_state.clone(),
     ));
+
+    // Spawn daemon token rotation task
+    let rotation_handle = daemon_token_state.map(daemon_token::spawn_rotation_task);
 
     let app_state_for_shutdown = Arc::clone(&app_state);
 
@@ -93,6 +118,11 @@ async fn run() -> Result<(), ServerError> {
         .route("/ws", get(ws::ws_handler))
         .route("/health", get(health_handler))
         .route("/bootstrap", post(bootstrap::bootstrap_handler))
+        .route("/login", post(account::login_handler))
+        .route("/logout", post(account::logout_handler))
+        .route("/password", post(account::password_handler))
+        .route("/sessions", get(account::sessions_list_handler))
+        .route("/sessions/{id}/revoke", post(account::session_revoke_handler))
         .with_state(app_state);
 
     if let Some(ref dir) = config.static_dir {
@@ -119,6 +149,11 @@ async fn run() -> Result<(), ServerError> {
         .with_graceful_shutdown(shutdown.cancelled_owned())
         .await
         .map_err(ServerError::Serve)?;
+
+    // Stop daemon token rotation
+    if let Some(handle) = rotation_handle {
+        handle.abort();
+    }
 
     // Clean up spawned terminal processes before exiting
     app_state_for_shutdown.pty_manager.destroy().await;

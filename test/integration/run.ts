@@ -16,6 +16,7 @@
 import {backends, type BackendConfig, INTEGRATION_SCOPED_DIR, TEST_DATABASE_URL} from './config.ts';
 import {run_tests, type TestResult} from './tests.ts';
 import {run_bearer_tests, setup_bearer_tokens} from './bearer_tests.ts';
+import {run_account_tests} from './account_tests.ts';
 // @ts-ignore — npm specifier, resolved at runtime by Deno
 import {hash as blake3_hash} from 'npm:@fuzdev/blake3_wasm';
 
@@ -365,6 +366,8 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 		const results = await run_tests(config, filter, session_cookie, non_keeper_cookie);
 		const bearer_results = await run_bearer_tests(config, filter);
 		results.push(...bearer_results);
+		const account_results = await run_account_tests(config, filter);
+		results.push(...account_results);
 
 		let passed = 0;
 		let failed = 0;

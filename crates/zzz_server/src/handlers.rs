@@ -10,6 +10,7 @@ use serde_json::Value;
 use tokio::sync::mpsc;
 
 use crate::auth::{Keyring, RequestContext};
+use crate::daemon_token::SharedDaemonTokenState;
 use crate::filer::WorkspaceWatcher;
 use crate::pty_manager::PtyManager;
 use crate::rpc;
@@ -57,6 +58,8 @@ pub struct App {
     pub watchers: RwLock<HashMap<String, WorkspaceWatcher>>,
     /// PTY terminal manager.
     pub pty_manager: PtyManager,
+    /// Daemon token state for `X-Daemon-Token` auth.
+    pub daemon_token_state: Option<SharedDaemonTokenState>,
 }
 
 impl App {
@@ -70,6 +73,7 @@ impl App {
         scoped_fs: ScopedFs,
         zzz_dir: String,
         scoped_dirs: Vec<String>,
+        daemon_token_state: Option<SharedDaemonTokenState>,
     ) -> Self {
         Self {
             workspaces: RwLock::new(HashMap::new()),
@@ -85,6 +89,7 @@ impl App {
             connections: RwLock::new(HashMap::new()),
             watchers: RwLock::new(HashMap::new()),
             pty_manager: PtyManager::new(),
+            daemon_token_state,
         }
     }
 

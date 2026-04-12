@@ -308,6 +308,29 @@ pub async fn query_api_token_touch(
     Ok(())
 }
 
+/// Find the account ID for the keeper role (first active keeper permit).
+///
+/// Used at startup to resolve the daemon token's keeper account.
+/// Mirrors `fuz_app`'s `query_permit_find_account_id_for_role`.
+pub async fn query_keeper_account_id(
+    client: &deadpool_postgres::Object,
+) -> Result<Option<uuid::Uuid>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            "SELECT a.id FROM account a
+             JOIN actor ac ON ac.account_id = a.id
+             JOIN permit p ON p.actor_id = ac.id
+             WHERE p.role = 'keeper'
+               AND p.revoked_at IS NULL
+               AND (p.expires_at IS NULL OR p.expires_at > NOW())
+             LIMIT 1",
+            &[],
+        )
+        .await?;
+
+    Ok(row.map(|r| r.get(0)))
+}
+
 /// Touch a session — update `last_seen_at` and extend expiry if < 1 day remaining.
 ///
 /// Fire-and-forget: caller should spawn this without blocking the request.
@@ -428,4 +451,164 @@ pub async fn query_grant_permit(
         actor_id: row.get(1),
         role: row.get(2),
     })
+}
+
+// -- Account management queries -----------------------------------------------
+
+/// Account row with password hash (for login / password change).
+#[derive(Debug)]
+pub struct AccountWithPasswordHash {
+    pub id: uuid::Uuid,
+    pub username: String,
+    pub password_hash: String,
+}
+
+/// Look up an account by username (case-insensitive) with password hash.
+pub async fn query_account_with_password_hash(
+    client: &deadpool_postgres::Object,
+    username: &str,
+) -> Result<Option<AccountWithPasswordHash>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            "SELECT id, username, password_hash FROM account WHERE LOWER(username) = LOWER($1)",
+            &[&username],
+        )
+        .await?;
+
+    Ok(row.map(|r| AccountWithPasswordHash {
+        id: r.get(0),
+        username: r.get(1),
+        password_hash: r.get(2),
+    }))
+}
+
+/// Look up an account by ID with password hash.
+pub async fn query_account_with_password_hash_by_id(
+    client: &deadpool_postgres::Object,
+    account_id: &uuid::Uuid,
+) -> Result<Option<AccountWithPasswordHash>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            "SELECT id, username, password_hash FROM account WHERE id = $1",
+            &[account_id],
+        )
+        .await?;
+
+    Ok(row.map(|r| AccountWithPasswordHash {
+        id: r.get(0),
+        username: r.get(1),
+        password_hash: r.get(2),
+    }))
+}
+
+/// Delete a session by token hash.
+pub async fn query_delete_session(
+    client: &deadpool_postgres::Object,
+    token_hash: &str,
+) -> Result<(), tokio_postgres::Error> {
+    client
+        .execute("DELETE FROM auth_session WHERE id = $1", &[&token_hash])
+        .await?;
+    Ok(())
+}
+
+/// Delete a session by token hash, scoped to an account.
+///
+/// Returns `true` if a row was deleted, `false` if not found.
+pub async fn query_delete_session_for_account(
+    client: &deadpool_postgres::Object,
+    token_hash: &str,
+    account_id: &uuid::Uuid,
+) -> Result<bool, tokio_postgres::Error> {
+    let count = client
+        .execute(
+            "DELETE FROM auth_session WHERE id = $1 AND account_id = $2",
+            &[&token_hash, account_id],
+        )
+        .await?;
+    Ok(count > 0)
+}
+
+/// Delete all sessions for an account.
+pub async fn query_delete_all_sessions_for_account(
+    client: &deadpool_postgres::Object,
+    account_id: &uuid::Uuid,
+) -> Result<u64, tokio_postgres::Error> {
+    let count = client
+        .execute(
+            "DELETE FROM auth_session WHERE account_id = $1",
+            &[account_id],
+        )
+        .await?;
+    Ok(count)
+}
+
+/// Delete all API tokens for an account.
+pub async fn query_delete_all_tokens_for_account(
+    client: &deadpool_postgres::Object,
+    account_id: &uuid::Uuid,
+) -> Result<u64, tokio_postgres::Error> {
+    let count = client
+        .execute(
+            "DELETE FROM api_token WHERE account_id = $1",
+            &[account_id],
+        )
+        .await?;
+    Ok(count)
+}
+
+/// Update an account's password hash.
+pub async fn query_update_password(
+    client: &deadpool_postgres::Object,
+    account_id: &uuid::Uuid,
+    new_password_hash: &str,
+) -> Result<(), tokio_postgres::Error> {
+    client
+        .execute(
+            "UPDATE account SET password_hash = $1, updated_at = NOW() WHERE id = $2",
+            &[&new_password_hash, account_id],
+        )
+        .await?;
+    Ok(())
+}
+
+/// Session row for listing (no token hash exposed).
+#[derive(Debug)]
+pub struct SessionListRow {
+    pub id: String,
+    pub created_at: String,
+    pub last_seen_at: String,
+    pub expires_at: String,
+}
+
+/// List all sessions for an account (for GET /sessions).
+///
+/// Returns session metadata — the token hash ID is included as the
+/// session identifier but the original token is never exposed.
+pub async fn query_sessions_for_account(
+    client: &deadpool_postgres::Object,
+    account_id: &uuid::Uuid,
+) -> Result<Vec<SessionListRow>, tokio_postgres::Error> {
+    let rows = client
+        .query(
+            "SELECT id,
+                    to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'),
+                    to_char(last_seen_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'),
+                    to_char(expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')
+             FROM auth_session
+             WHERE account_id = $1
+             ORDER BY created_at",
+            &[account_id],
+        )
+        .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| SessionListRow {
+            id: r.get(0),
+            created_at: r.get(1),
+            last_seen_at: r.get(2),
+            expires_at: r.get(3),
+        })
+        .collect())
 }

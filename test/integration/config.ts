@@ -17,6 +17,16 @@ export interface AuthConfig {
 	readonly password: string;
 }
 
+/** Account management route paths (differ between backends). */
+export interface AccountPaths {
+	readonly login: string;
+	readonly logout: string;
+	readonly password: string;
+	readonly sessions: string;
+	/** Template with `:id` placeholder for session revocation. */
+	readonly session_revoke: string;
+}
+
 export interface BackendConfig {
 	readonly name: string;
 	readonly start_command: readonly string[];
@@ -29,6 +39,8 @@ export interface BackendConfig {
 	readonly env?: Readonly<Record<string, string>>;
 	/** Auth setup — if present, the runner bootstraps an admin account before tests. */
 	readonly auth?: AuthConfig;
+	/** Account management route paths (differ between backends). */
+	readonly account_paths?: AccountPaths;
 }
 
 const INTEGRATION_BOOTSTRAP_TOKEN = 'zzz-integration-test-token';
@@ -69,6 +81,13 @@ export const backends: Record<string, BackendConfig> = {
 			username: 'testadmin',
 			password: 'test-password-integration-123',
 		},
+		account_paths: {
+			login: '/api/account/login',
+			logout: '/api/account/logout',
+			password: '/api/account/password',
+			sessions: '/api/account/sessions',
+			session_revoke: '/api/account/sessions/:id/revoke',
+		},
 	},
 	rust: {
 		name: 'rust',
@@ -91,6 +110,13 @@ export const backends: Record<string, BackendConfig> = {
 			token_file: INTEGRATION_TOKEN_FILE,
 			username: 'testadmin',
 			password: 'test-password-integration-123',
+		},
+		account_paths: {
+			login: '/login',
+			logout: '/logout',
+			password: '/password',
+			sessions: '/sessions',
+			session_revoke: '/sessions/:id/revoke',
 		},
 	},
 };

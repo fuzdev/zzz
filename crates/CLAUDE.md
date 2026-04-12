@@ -4,21 +4,25 @@ Shadow implementation of the Deno/Hono server using axum. Same JSON-RPC 2.0
 protocol, same wire format — the Deno server is ground truth and the
 integration tests enforce identical behaviour between both backends.
 
-Phase 2b+ complete: cookie-based auth on both HTTP and WebSocket, filesystem
-actions (`diskfile_update`, `diskfile_delete`, `directory_create`) with
-`ScopedFs` path safety, terminal actions (`terminal_create`, `terminal_data_send`,
-`terminal_resize`, `terminal_close`) via `fuz_pty` native crate dependency
-(real PTY via `forkpty`), per-action auth checks on all transports, a
-bootstrap endpoint for first-time account creation, `session_load` handler
-(returns zzz_dir, scoped_dirs, workspaces), `provider_load_status` stub
-(returns empty array), `workspace_changed` notifications (broadcast to all
-connected WebSocket clients on open/close), `terminal_data` and `terminal_exited`
-notifications (broadcast on PTY output and process exit), file watching via
-`notify` crate (`filer_change` notifications on file add/change/delete within
-open workspaces), and WebSocket connection tracking with `broadcast`/`send_to`
-infrastructure. Database (PostgreSQL via `tokio-postgres`/`deadpool-postgres`),
-HMAC-SHA256 cookie signing (`fuz_session`), blake3 session hashing.
-All other methods return `method_not_found`.
+Phase 3 complete: full auth stack (cookie sessions, bearer tokens, daemon
+tokens), account management routes (login, logout, password change, session
+list, session revocation), filesystem actions (`diskfile_update`,
+`diskfile_delete`, `directory_create`) with `ScopedFs` path safety, terminal
+actions (`terminal_create`, `terminal_data_send`, `terminal_resize`,
+`terminal_close`) via `fuz_pty` native crate dependency (real PTY via
+`forkpty`), per-action auth checks on all transports, a bootstrap endpoint
+for first-time account creation, `session_load` handler (returns zzz_dir,
+scoped_dirs, workspaces), `provider_load_status` stub (returns empty array),
+`workspace_changed` notifications (broadcast to all connected WebSocket
+clients on open/close), `terminal_data` and `terminal_exited` notifications
+(broadcast on PTY output and process exit), file watching via `notify` crate
+(`filer_change` notifications on file add/change/delete within open
+workspaces), WebSocket connection tracking with `broadcast`/`send_to`
+infrastructure, and event-driven socket revocation (logout and password change
+close matching WebSocket connections). Database (PostgreSQL via
+`tokio-postgres`/`deadpool-postgres`), HMAC-SHA256 cookie signing
+(`fuz_session`), blake3 session hashing. All other methods return
+`method_not_found`.
 
 ## Prerequisites
 
@@ -80,16 +84,21 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 
 ## Endpoints
 
-| Method | Path         | Description                              |
-|--------|--------------|------------------------------------------|
-| POST   | `/rpc`       | JSON-RPC 2.0 (HTTP transport, auth-gated) |
-| POST   | `/bootstrap` | One-shot admin account creation          |
-| GET    | `/ws`        | JSON-RPC 2.0 (WebSocket, cookie/bearer)  |
-| GET    | `/health`    | Health check (`{"status":"ok"}`)         |
-| GET    | `/*`         | Static files (if `--static-dir`)         |
+| Method | Path                     | Description                              |
+|--------|--------------------------|------------------------------------------|
+| POST   | `/rpc`                   | JSON-RPC 2.0 (HTTP transport, auth-gated) |
+| POST   | `/bootstrap`             | One-shot admin account creation          |
+| POST   | `/login`                 | Username/password login → session cookie |
+| POST   | `/logout`                | Invalidate session, close WS connections |
+| POST   | `/password`              | Change password, revoke all sessions/tokens |
+| GET    | `/sessions`              | List sessions for authenticated account  |
+| POST   | `/sessions/:id/revoke`   | Revoke a specific session                |
+| GET    | `/ws`                    | JSON-RPC 2.0 (WebSocket, cookie/bearer/daemon) |
+| GET    | `/health`                | Health check (`{"status":"ok"}`)         |
+| GET    | `/*`                     | Static files (if `--static-dir`)         |
 
-Note: the Deno server uses `/api/rpc`; the Rust server uses `/rpc`. The
-integration test configs handle this difference.
+Note: the Deno server uses `/api/rpc`, `/api/account/login`, etc.; the Rust
+server uses `/rpc`, `/login`, etc. The integration test configs handle this.
 
 ## Auth
 
@@ -112,47 +121,60 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
    rejected (Origin/Referer headers present → bearer ignored). Token
    `last_used_at` touched fire-and-forget. Sets `CredentialType::ApiToken`.
 
-5. **Auth pipeline** — Both transports try cookie first, then bearer.
+5. **Daemon token auth** — `X-Daemon-Token` header. Token is a 43-char
+   base64url string (32 random bytes), generated at startup and written to
+   `{zzz_dir}/run/daemon_token`. Rotated every 30 seconds (previous token
+   accepted during rotation race window). Validated with constant-time
+   comparison. Resolves the keeper account for the `RequestContext`. Sets
+   `CredentialType::DaemonToken`. State protected by `tokio::sync::RwLock`.
+
+6. **Auth pipeline** — Both transports try: daemon token → cookie → bearer.
+   Daemon token has highest priority (matches fuz_app middleware order).
    `ResolvedAuth` carries `credential_type` (`Session`, `ApiToken`,
    `DaemonToken`) and optional `token_hash` (session connections only —
-   bearer connections have `None`, revocable only via account-level).
+   bearer and daemon token connections have `None`).
 
-6. **Per-action auth** — Each RPC method has an auth level:
+7. **Per-action auth** — Each RPC method has an auth level:
    - `public` — no auth required (`ping`)
    - `authenticated` — valid session or bearer token required (workspace_*, session_load, etc.)
    - `keeper` — requires `DaemonToken` credential type AND keeper role permit (`provider_update_api_key`). API tokens and session cookies cannot access keeper actions even if the account has the keeper permit.
 
-7. **Bootstrap** — `POST /bootstrap` creates first admin account with keeper
+8. **Bootstrap** — `POST /bootstrap` creates first admin account with keeper
    + admin permits. Reads token from `BOOTSTRAP_TOKEN_PATH`, timing-safe
    compare, Argon2 password hashing, all in a transaction with bootstrap_lock.
 
-8. **Origin verification** — `ALLOWED_ORIGINS` patterns checked on requests
+9. **Origin verification** — `ALLOWED_ORIGINS` patterns checked on requests
    with an `Origin` header. Supports exact match, wildcard port
    (`http://localhost:*`), subdomain wildcard (`https://*.example.com`).
 
-9. **Socket revocation** — `close_sockets_for_session(token_hash)` and
-   `close_sockets_for_account(account_id)` methods on `App` close matching
-   WebSocket connections by dropping the channel sender. Session connections
-   are revocable per-session or per-account; bearer connections are revocable
-   only per-account. No callers yet (need account management routes or audit
-   event hooks).
+10. **Socket revocation** — `close_sockets_for_session(token_hash)` and
+    `close_sockets_for_account(account_id)` methods on `App` close matching
+    WebSocket connections by dropping the channel sender. Session connections
+    are revocable per-session or per-account; bearer connections are revocable
+    only per-account. Called by logout (per-session) and password change
+    (per-account).
 
-**Not yet implemented:** Daemon token auth (`X-Daemon-Token` header with
-in-memory token rotation), daemon token rotation, account management routes
-(login/logout/signup), audit event system for triggering socket revocation.
+11. **Account management** — `POST /login` (username/password → session cookie
+    with enumeration prevention via dummy hash), `POST /logout` (invalidate
+    session + close WS connections), `POST /password` (change password, revoke
+    all sessions + API tokens, close all WS connections), `GET /sessions`
+    (list sessions for account), `POST /sessions/:id/revoke` (revoke specific
+    session, scoped to own account).
 
 ## Integration Tests
 
-65 tests on Rust, 63 on Deno (some bearer tests are Rust-only). Both backends bootstrap auth (admin account + session cookie),
-create a non-keeper user (account + actor + session, no keeper permit,
-cookie signed via HMAC-SHA256), and insert API tokens into the `api_token`
-table before tests. The test database (`zzz_test` by default, configurable
-via `TEST_DATABASE_URL`) is cleaned (TRUNCATE CASCADE) before each backend
-run. A scoped directory (`/tmp/zzz_integration_scoped`) is created for
-filesystem tests. Tests are split across modules: `tests.ts` (core RPC,
-auth, filesystem, terminal tests), `bearer_tests.ts` (bearer token auth,
-keeper credential enforcement, session revocation), `test_helpers.ts`
-(shared assertion and HTTP/WS helpers).
+74 tests on Rust, 63 on Deno (bearer, account, and session tests are
+Rust-only where formats differ). Both backends bootstrap auth (admin account
++ session cookie), create a non-keeper user (account + actor + session, no
+keeper permit, cookie signed via HMAC-SHA256), and insert API tokens into
+the `api_token` table before tests. The test database (`zzz_test` by default,
+configurable via `TEST_DATABASE_URL`) is cleaned (TRUNCATE CASCADE) before
+each backend run. A scoped directory (`/tmp/zzz_integration_scoped`) is
+created for filesystem tests. Tests are split across modules: `tests.ts`
+(core RPC, auth, filesystem, terminal tests), `bearer_tests.ts` (bearer
+token auth, keeper credential enforcement, session revocation),
+`account_tests.ts` (login, logout, password change, session management),
+`test_helpers.ts` (shared assertion and HTTP/WS helpers).
 
 **WS tests (both backends):** `ping_ws`, `parse_error_ws`,
 `method_not_found_ws`, `invalid_request_ws`, `notification_ws`,
@@ -232,6 +254,16 @@ actions), session revocation via DB delete, browser context rejection
 (Origin/Referer headers → bearer ignored), empty bearer value handling,
 and cookie-over-bearer priority.
 
+**Account management tests (both backends unless noted):**
+`login_success`, `login_invalid_password`, `login_nonexistent_user`,
+`logout_clears_session`, `logout_unauthenticated`,
+`password_change_revokes_all`, `password_wrong_current`,
+`session_list` (Rust only), `session_revoke` (Rust only) — 9 tests verify
+login with valid/invalid/nonexistent credentials, logout with session
+invalidation and cookie clearing, password change with full session + token
+revocation and re-login verification, session listing, and single session
+revocation.
+
 ```bash
 deno task test:integration --backend=rust   # Rust only
 deno task test:integration --backend=deno   # Deno only
@@ -247,35 +279,38 @@ cookie, then stops the backend and cleans up.
 
 ```
 crates/zzz_server/src/
-├── main.rs        # Entry, config parsing (incl. PUBLIC_ZZZ_DIR), DB/keyring init, graceful shutdown
-├── handlers.rs    # App (server state + connection tracking + watchers), Ctx, dispatch
-├── rpc.rs         # JSON-RPC classify + notification builder, HTTP handler with auth pipeline
-├── ws.rs          # WebSocket upgrade with cookie auth, connection tracking, select! message loop
-├── auth.rs        # Keyring, cookie parsing, session validation, per-action auth
-├── bootstrap.rs   # POST /bootstrap handler (account + session creation)
-├── db.rs          # Connection pool, migrations, auth queries
-├── filer.rs       # File watcher (notify crate) → filer_change notifications via broadcast
-├── pty_manager.rs # PTY terminal manager (fuz_pty crate) → terminal_data/exited notifications
-├── scoped_fs.rs   # Scoped filesystem — path validation, symlink rejection
-└── error.rs       # ServerError (Bind, Serve, Database, Config)
+├── main.rs          # Entry, config, DB/keyring/daemon-token init, route setup, graceful shutdown
+├── handlers.rs      # App (server state + connection tracking + watchers), Ctx, dispatch
+├── rpc.rs           # JSON-RPC classify + notification builder, HTTP handler with auth pipeline
+├── ws.rs            # WebSocket upgrade with auth, connection tracking, select! message loop
+├── auth.rs          # Keyring, cookie/bearer/daemon-token resolution, per-action auth
+├── daemon_token.rs  # Daemon token state, generation, timing-safe validation, rotation task
+├── account.rs       # Account routes: login, logout, password change, session management
+├── bootstrap.rs     # POST /bootstrap handler (account + session creation)
+├── db.rs            # Connection pool, migrations, auth + account management queries
+├── filer.rs         # File watcher (notify crate) → filer_change notifications via broadcast
+├── pty_manager.rs   # PTY terminal manager (fuz_pty crate) → terminal_data/exited notifications
+├── scoped_fs.rs     # Scoped filesystem — path validation, symlink rejection
+└── error.rs         # ServerError (Bind, Serve, Database, Config)
 ```
 
 **App/Ctx/dispatch pattern**: `App` holds long-lived server state (workspaces
 in `RwLock<HashMap>`, `deadpool_postgres::Pool`, `Keyring`, origin config,
-`ScopedFs`, `zzz_dir`, `scoped_dirs`, `PtyManager`, connection tracking via
-`AtomicU64` + `RwLock<HashMap<ConnectionId, UnboundedSender>>`, file watchers
-via `RwLock<HashMap<String, WorkspaceWatcher>>`), constructed once in `main`,
-wrapped in `Arc`. `Ctx` is per-request context (borrows `App` + holds
-`Arc<App>` for spawning tasks, `request_id`,
-`auth: Option<&RequestContext>`), constructed by each transport before calling
-`handlers::dispatch`.
+`ScopedFs`, `zzz_dir`, `scoped_dirs`, `PtyManager`, `DaemonTokenState`,
+connection tracking via `AtomicU64` + `RwLock<HashMap<ConnectionId,
+ConnectionInfo>>`, file watchers via `RwLock<HashMap<String,
+WorkspaceWatcher>>`), constructed once in `main`, wrapped in `Arc`. `Ctx` is
+per-request context (borrows `App` + holds `Arc<App>` for spawning tasks,
+`request_id`, `auth: Option<&RequestContext>`), constructed by each transport
+before calling `handlers::dispatch`.
 
 **Auth pipeline** (HTTP RPC path):
 1. Origin verification (if `Origin` header present)
-2. Try cookie auth: parse `fuz_session` cookie → HMAC verify → blake3 hash → `auth_session` lookup
-3. If no cookie: try bearer auth: `Authorization: Bearer` → reject browser context → blake3 hash → `api_token` lookup
-4. Build `RequestContext` (account → actor → permits) with `CredentialType`
-5. Check per-action auth level (keeper actions require `DaemonToken` credential type)
+2. Try daemon token auth: `X-Daemon-Token` → timing-safe validate → resolve keeper account
+3. If no daemon token: try cookie auth: `fuz_session` cookie → HMAC verify → blake3 hash → `auth_session` lookup
+4. If no cookie: try bearer auth: `Authorization: Bearer` → reject browser context → blake3 hash → `api_token` lookup
+5. Build `RequestContext` (account → actor → permits) with `CredentialType`
+6. Check per-action auth level (keeper actions require `DaemonToken` credential type)
 
 **Message classification** (`rpc::classify`) is transport-agnostic:
 - HTTP: origin check → auth → classify → auth check → dispatch
@@ -295,10 +330,12 @@ wrapped in `Arc`. `Ctx` is per-request context (borrows `App` + holds
 - 13 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_load_status` stub)
 - 4 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (file watcher via `notify` crate, recursive, ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz`), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast)
 - No batch request support (JSON arrays)
-- Bearer token auth (API tokens) supported; no daemon token auth (`X-Daemon-Token`), no daemon token rotation, no account management routes
-- Socket revocation infrastructure exists but no callers (needs account management routes or audit events)
 - No completion/streaming or Ollama actions
 - `provider_load_status` returns `[]` — no provider integration yet
+- No signup route (requires invite system)
+- No token management routes (GET /tokens, POST /tokens/create, etc.)
+- No SSE/realtime audit event broadcasting
+- No rate limiting on login/password endpoints
 
 ## Design Decisions
 
@@ -309,7 +346,7 @@ wrapped in `Arc`. `Ctx` is per-request context (borrows `App` + holds
   Compatible with fuz_app's keyring format (same `value.base64(signature)`).
 - **Session hashing**: `blake3` crate for token → storage key hashing.
   Compatible with fuz_app's `hash_blake3` (same hex output).
-- **Password hashing**: Argon2id via `argon2` crate (bootstrap only).
+- **Password hashing**: Argon2id via `argon2` crate (bootstrap, login, password change).
 - **Dispatch is async**: filesystem handlers (`diskfile_update`, etc.) use
   `tokio::fs` async I/O. Workspace handlers remain sync (no await points).
 - **`std::sync::RwLock`** (not tokio): current handlers are sync. When async
@@ -325,14 +362,13 @@ wrapped in `Arc`. `Ctx` is per-request context (borrows `App` + holds
 
 ## What's Next
 
-**Phase 3** (next):
-1. Daemon token auth (`X-Daemon-Token` header with in-memory token rotation)
-2. Account management routes (login/logout/signup) with audit events
-3. Event-driven socket revocation (wire audit events to `close_sockets_for_*`)
-4. Use connection tracking for `completion_progress` notifications
-5. Codegen from Zod specs (action input/output types)
-6. Real `provider_load_status` implementation (check Ollama availability)
-7. Ollama integration (`ollama_list`, `ollama_ps`, completion pipeline)
+**Phase 4** (next):
+1. Use connection tracking for `completion_progress` notifications
+2. Real `provider_load_status` implementation (check Ollama availability)
+3. Ollama integration (`ollama_list`, `ollama_ps`, completion pipeline)
+4. Codegen from Zod specs (action input/output types)
+5. Token management routes (create, list, revoke API tokens)
+6. Rate limiting on login/password endpoints
 
-Phase 4 (full action port: completions, Ollama). Terminal actions are
-complete. See the [Rust Backends quest](../../grimoire/quests/rust-backends.md).
+Phase 5 (full action port: completions, Ollama, streaming). Terminal actions
+are complete. See the [Rust Backends quest](../../grimoire/quests/rust-backends.md).

@@ -1,16 +1,13 @@
 use std::sync::Arc;
 
-use argon2::password_hash::{rand_core::OsRng, PasswordHasher, SaltString};
-use argon2::Argon2;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use base64::Engine;
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{self, SESSION_AGE_MAX, SESSION_COOKIE_NAME};
+use crate::account::{generate_session_token, hash_password, sign_session_cookie};
+use crate::auth;
 use crate::db;
 use crate::handlers::App;
 
@@ -150,20 +147,20 @@ async fn bootstrap_inner(app: &App, input: BootstrapInput) -> Result<Response, R
     app.bootstrap_available
         .store(false, std::sync::atomic::Ordering::Relaxed);
 
+    // Set keeper_account_id on daemon token state (if enabled)
+    if let Some(ref daemon_state) = app.daemon_token_state {
+        let mut state = daemon_state.write().await;
+        state.keeper_account_id = Some(account.id);
+        tracing::info!("daemon token keeper_account_id set to {}", account.id);
+    }
+
     // 5. Delete token file (after commit — best effort)
     if let Err(e) = tokio::fs::remove_file(token_path).await {
         tracing::error!(error = %e, path = %token_path, "CRITICAL: failed to delete bootstrap token file");
     }
 
     // 6. Build session cookie and return
-    let cookie_value = app.keyring.sign(&format!(
-        "{session_token}:{}",
-        now_secs() + SESSION_AGE_MAX
-    ));
-    let cookie = format!(
-        "{SESSION_COOKIE_NAME}={cookie_value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age={SESSION_AGE_MAX}"
-    );
-
+    let cookie = sign_session_cookie(&app.keyring, &session_token);
     let mut headers = HeaderMap::new();
     if let Ok(val) = cookie.parse() {
         headers.insert(axum::http::header::SET_COOKIE, val);
@@ -212,27 +209,4 @@ fn timing_safe_eq(a: &[u8], b: &[u8]) -> bool {
         diff |= x ^ y;
     }
     diff == 0
-}
-
-/// Hash a password with Argon2id.
-fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    let hash = argon2.hash_password(password.as_bytes(), &salt)?;
-    Ok(hash.to_string())
-}
-
-/// Generate a cryptographically random session token (base64url, 32 bytes).
-fn generate_session_token() -> String {
-    let mut bytes = [0u8; 32];
-    rand::thread_rng().fill(&mut bytes);
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
-}
-
-/// Current time in seconds since epoch.
-fn now_secs() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
 }

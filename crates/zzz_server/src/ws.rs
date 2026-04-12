@@ -26,8 +26,14 @@ pub async fn ws_handler(
     headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Response {
-    // Resolve auth from Cookie header
-    let resolved = resolve_auth_from_headers(&headers, &app.keyring, &app.db_pool).await;
+    // Resolve auth from headers (daemon token → cookie → bearer)
+    let resolved = resolve_auth_from_headers(
+        &headers,
+        &app.keyring,
+        &app.db_pool,
+        app.daemon_token_state.as_ref(),
+    )
+    .await;
 
     let Some(resolved) = resolved else {
         return (StatusCode::UNAUTHORIZED, "unauthenticated").into_response();

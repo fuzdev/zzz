@@ -276,8 +276,14 @@ pub async fn rpc_handler(
         "rpc request"
     );
 
-    // 2. Resolve auth context (cookie → bearer → None)
-    let resolved = resolve_auth_from_headers(&headers, &app.keyring, &app.db_pool).await;
+    // 2. Resolve auth context (daemon token → cookie → bearer → None)
+    let resolved = resolve_auth_from_headers(
+        &headers,
+        &app.keyring,
+        &app.db_pool,
+        app.daemon_token_state.as_ref(),
+    )
+    .await;
     let auth_context = resolved.as_ref().map(|r| &r.context);
     let credential_type = resolved.as_ref().map(|r| r.credential_type);
 

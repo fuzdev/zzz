@@ -3,6 +3,7 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
+use crate::daemon_token::SharedDaemonTokenState;
 use crate::db::{
     AccountRow, ActorRow, PermitRow,
     query_account_by_id, query_actor_by_account, query_permits_for_actor,
@@ -189,7 +190,7 @@ pub enum AuthError {
 /// Mirrors `fuz_app`'s `credential_type` context key:
 /// - `Session` — cookie-based session (`fuz_session`)
 /// - `ApiToken` — `Authorization: Bearer <token>` looked up in `api_token` table
-/// - `DaemonToken` — `X-Daemon-Token` header (not yet implemented in Rust)
+/// - `DaemonToken` — `X-Daemon-Token` header with timing-safe validation
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CredentialType {
     Session,
@@ -419,8 +420,16 @@ pub async fn resolve_auth_from_headers(
     headers: &axum::http::HeaderMap,
     keyring: &Keyring,
     pool: &deadpool_postgres::Pool,
+    daemon_token_state: Option<&SharedDaemonTokenState>,
 ) -> Option<ResolvedAuth> {
-    // Try cookie auth first
+    // Try daemon token first (highest priority, matches fuz_app middleware order)
+    if let Some(state) = daemon_token_state
+        && let Some(resolved) = resolve_daemon_token_from_headers(headers, state, pool).await
+    {
+        return Some(resolved);
+    }
+
+    // Try cookie auth
     if let Some(resolved) = resolve_cookie_from_headers(headers, keyring, pool).await {
         return Some(resolved);
     }
@@ -556,6 +565,87 @@ async fn resolve_bearer_from_headers(
         },
         token_hash: None, // bearer connections have no session token_hash
         credential_type: CredentialType::ApiToken,
+    })
+}
+
+/// Header name for daemon token authentication.
+const DAEMON_TOKEN_HEADER: &str = "x-daemon-token";
+
+/// Resolve auth from `X-Daemon-Token` header.
+///
+/// Validates the token against current and previous daemon tokens using
+/// timing-safe comparison. If valid, resolves the keeper account from
+/// `state.keeper_account_id` and builds a `RequestContext`.
+///
+/// Mirrors `fuz_app`'s daemon token middleware — daemon token overrides
+/// all other auth methods (highest trust: requires filesystem access to read).
+async fn resolve_daemon_token_from_headers(
+    headers: &axum::http::HeaderMap,
+    daemon_state: &SharedDaemonTokenState,
+    pool: &deadpool_postgres::Pool,
+) -> Option<ResolvedAuth> {
+    let token_value = headers.get(DAEMON_TOKEN_HEADER)?.to_str().ok()?;
+
+    if token_value.is_empty() {
+        return None;
+    }
+
+    // Read lock for validation
+    let state = daemon_state.read().await;
+    if !crate::daemon_token::validate_daemon_token(token_value, &state) {
+        tracing::debug!("daemon token validation failed");
+        return None;
+    }
+
+    // Valid token — resolve keeper account
+    let keeper_account_id = state.keeper_account_id?;
+    drop(state); // release read lock before DB queries
+
+    let client = match pool.get().await {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!(error = %e, "daemon token auth pool error");
+            return None;
+        }
+    };
+
+    let account = match query_account_by_id(&client, &keeper_account_id).await {
+        Ok(Some(a)) => a,
+        Ok(None) => {
+            tracing::warn!("daemon token keeper account not found in DB");
+            return None;
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "daemon token account query failed");
+            return None;
+        }
+    };
+
+    let actor = match query_actor_by_account(&client, &account.id).await {
+        Ok(Some(a)) => a,
+        Ok(None) => return None,
+        Err(e) => {
+            tracing::warn!(error = %e, "daemon token actor query failed");
+            return None;
+        }
+    };
+
+    let permits = match query_permits_for_actor(&client, &actor.id).await {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(error = %e, "daemon token permits query failed");
+            return None;
+        }
+    };
+
+    Some(ResolvedAuth {
+        context: RequestContext {
+            account,
+            actor,
+            permits,
+        },
+        token_hash: None, // daemon token connections have no session token_hash
+        credential_type: CredentialType::DaemonToken,
     })
 }
 
