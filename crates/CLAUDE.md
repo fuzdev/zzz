@@ -12,13 +12,15 @@ actions (`terminal_create`, `terminal_data_send`, `terminal_resize`,
 `terminal_close`) via `fuz_pty` native crate dependency (real PTY via
 `forkpty`), per-action auth checks on all transports, a bootstrap endpoint
 for first-time account creation, `session_load` handler (returns zzz_dir,
-scoped_dirs, workspaces, and recursive file listing from zzz_dir with
-contents), `provider_load_status` stub (returns empty array),
+scoped_dirs, workspaces, and file listing from all filer indexes — zzz_dir,
+scoped_dirs, and open workspaces — with contents), `provider_load_status` stub (returns empty array),
 `workspace_changed` notifications (broadcast to all connected WebSocket
 clients on open/close), `terminal_data` and `terminal_exited` notifications
 (broadcast on PTY output and process exit), file watching via `notify` crate
-(`filer_change` notifications on file add/change/delete — startup watchers on
-`zzz_dir` and `scoped_dirs` matching Deno, plus per-workspace watchers), WebSocket connection tracking with `broadcast`/`send_to`
+(`filer_change` notifications on file add/change/delete with 80ms debouncing,
+per-watcher ignore config, in-memory file index — startup filers on `zzz_dir`
+and `scoped_dirs` matching Deno, plus per-workspace filers with deduplication
+and lifetime tracking), WebSocket connection tracking with `broadcast`/`send_to`
 infrastructure, and event-driven socket revocation (logout and password change
 close matching WebSocket connections). Database (PostgreSQL via
 `tokio-postgres`/`deadpool-postgres`), HMAC-SHA256 cookie signing
@@ -303,7 +305,7 @@ crates/zzz_server/src/
 ├── account.rs       # Account routes: login, logout, password change, session management
 ├── bootstrap.rs     # POST /bootstrap handler (account + session creation)
 ├── db.rs            # Connection pool, migrations, auth + account management queries
-├── filer.rs         # File watcher (notify crate) → filer_change notifications via broadcast
+├── filer.rs         # Filer + FilerManager (notify crate) — file index, debounced watcher, filer_change notifications
 ├── pty_manager.rs   # PTY terminal manager (fuz_pty crate) → terminal_data/exited notifications
 ├── scoped_fs.rs     # Scoped filesystem — path validation, symlink rejection
 └── error.rs         # ServerError (Bind, Serve, Database, Config)
@@ -313,9 +315,10 @@ crates/zzz_server/src/
 in `RwLock<HashMap>`, `deadpool_postgres::Pool`, `Keyring`, origin config,
 `ScopedFs`, `zzz_dir`, `scoped_dirs`, `PtyManager`, `DaemonTokenState`,
 connection tracking via `AtomicU64` + `RwLock<HashMap<ConnectionId,
-ConnectionInfo>>`, file watchers via `RwLock<HashMap<String,
-WorkspaceWatcher>>` — startup watchers on `zzz_dir` and `scoped_dirs`, plus
-per-workspace watchers), constructed once in `main`, wrapped in `Arc`. `Ctx` is
+ConnectionInfo>>`, `FilerManager` with per-watcher ignore config, event
+debouncing, in-memory file index, and lifetime tracking (permanent for
+`zzz_dir`/`scoped_dirs`, workspace-scoped for `workspace_open`; deduplicates
+by path)), constructed once in `main`, wrapped in `Arc`. `Ctx` is
 per-request context (borrows `App` + holds `Arc<App>` for spawning tasks,
 `request_id`, `auth: Option<&RequestContext>`), constructed by each transport
 before calling `handlers::dispatch`.
@@ -362,7 +365,7 @@ identical JSON-RPC envelopes for all auth failures.
 ## Known Limitations
 
 - 13 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_update_api_key` keeper-only) + `provider_load_status` returns `method_not_found` (no provider support yet)
-- 4 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (file watcher via `notify` crate, recursive, ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`; startup watchers on `zzz_dir` and `scoped_dirs` plus per-workspace watchers), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast)
+- 4 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debouncing, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast)
 - No batch request support (JSON arrays)
 - No completion/streaming or Ollama actions
 - `provider_load_status` returns `method_not_found` — no provider integration yet

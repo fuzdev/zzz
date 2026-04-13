@@ -59,74 +59,42 @@ const DEFAULT_IGNORED_DIRS: &[&str] = &[
     "dist",
 ];
 
-/// Check if a path contains any of the given ignored directory components.
-fn is_ignored(path: &Path, extra_ignores: &[String]) -> bool {
-    path.components().any(|c| {
+/// Check if a single directory name is in the ignore lists.
+fn is_ignored_name(name: &str, extra_ignores: &[String]) -> bool {
+    DEFAULT_IGNORED_DIRS.contains(&name) || extra_ignores.iter().any(|ig| ig == name)
+}
+
+/// Check if a path contains any ignored directory component below `source_dir`.
+///
+/// Only checks components after the `source_dir` prefix — root path segments
+/// like `/`, `home`, `user` can never match ignored names and are skipped.
+fn is_ignored(path: &Path, source_dir: &Path, extra_ignores: &[String]) -> bool {
+    let suffix = path.strip_prefix(source_dir).unwrap_or(path);
+    suffix.components().any(|c| {
         let s = c.as_os_str().to_str().unwrap_or("");
-        DEFAULT_IGNORED_DIRS.contains(&s) || extra_ignores.iter().any(|ig| ig == s)
+        is_ignored_name(s, extra_ignores)
     })
 }
 
-// -- File metadata helpers (async, non-blocking) ------------------------------
+// -- File metadata helpers ----------------------------------------------------
 
-/// Read metadata for a file/directory on a blocking thread.
-/// Returns `(None, None)` if the path doesn't exist (e.g. on delete events).
-async fn read_metadata(path: PathBuf) -> (Option<f64>, Option<f64>) {
-    tokio::task::spawn_blocking(move || {
-        let Ok(meta) = std::fs::metadata(&path) else {
-            return (None, None);
-        };
-
-        let ctime = meta
-            .created()
-            .ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs_f64() * 1000.0);
-
-        let mtime = meta
-            .modified()
-            .ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs_f64() * 1000.0);
-
-        (ctime, mtime)
-    })
-    .await
-    .unwrap_or((None, None))
+/// Convert a `SystemTime` to milliseconds since epoch (matching JS `Date` format).
+fn system_time_to_ms(t: std::time::SystemTime) -> Option<f64> {
+    t.duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_secs_f64() * 1000.0)
 }
 
-/// Try to read file contents as UTF-8 on a blocking thread.
-/// Returns `None` for directories, binary files, or read errors.
-async fn read_contents(path: PathBuf) -> Option<String> {
-    tokio::task::spawn_blocking(move || {
-        if path.is_dir() {
-            return None;
-        }
-        std::fs::read_to_string(&path).ok()
-    })
-    .await
-    .unwrap_or(None)
-}
-
-/// Build a `SerializableDisknode` for a file, reading metadata and contents
-/// on blocking threads.
-async fn build_disknode(file_path: &Path, source_dir: &str, is_delete: bool) -> SerializableDisknode {
-    let path_str = file_path.to_string_lossy().to_string();
-
-    let (ctime, mtime, contents) = if is_delete {
-        (None, None, None)
-    } else {
-        let meta_path = file_path.to_path_buf();
-        let content_path = file_path.to_path_buf();
-        let (meta, contents) = tokio::join!(
-            read_metadata(meta_path),
-            read_contents(content_path),
-        );
-        (meta.0, meta.1, contents)
-    };
-
+/// Construct a `SerializableDisknode` from pre-read components.
+fn make_disknode(
+    id: String,
+    source_dir: &str,
+    contents: Option<String>,
+    ctime: Option<f64>,
+    mtime: Option<f64>,
+) -> SerializableDisknode {
     SerializableDisknode {
-        id: path_str,
+        id,
         source_dir: source_dir.to_owned(),
         contents,
         ctime,
@@ -134,6 +102,36 @@ async fn build_disknode(file_path: &Path, source_dir: &str, is_delete: bool) -> 
         dependents: vec![],
         dependencies: vec![],
     }
+}
+
+/// Build a `SerializableDisknode` for a watcher event, reading metadata and
+/// contents on blocking threads (never blocks the tokio runtime).
+async fn build_disknode(file_path: &Path, source_dir: &str, is_delete: bool) -> SerializableDisknode {
+    let path_str = file_path.to_string_lossy().to_string();
+
+    if is_delete {
+        return make_disknode(path_str, source_dir, None, None, None);
+    }
+
+    let path_owned = file_path.to_path_buf();
+    let (meta_result, contents) = tokio::join!(
+        tokio::task::spawn_blocking({
+            let p = path_owned.clone();
+            move || std::fs::metadata(&p).ok()
+        }),
+        tokio::task::spawn_blocking(move || {
+            if path_owned.is_dir() {
+                return None;
+            }
+            std::fs::read_to_string(&path_owned).ok()
+        }),
+    );
+
+    let meta = meta_result.ok().flatten();
+    let ctime = meta.as_ref().and_then(|m| m.created().ok()).and_then(system_time_to_ms);
+    let mtime = meta.as_ref().and_then(|m| m.modified().ok()).and_then(system_time_to_ms);
+
+    make_disknode(path_str, source_dir, contents.unwrap_or(None), ctime, mtime)
 }
 
 // -- Event → notification mapping ---------------------------------------------
@@ -287,7 +285,7 @@ async fn scan_directory(
 
         // Skip ignored directories
         if let Some(name) = path.file_name().and_then(|n| n.to_str())
-            && (DEFAULT_IGNORED_DIRS.contains(&name) || extra_ignores.iter().any(|ig| ig == name))
+            && is_ignored_name(name, extra_ignores)
         {
             continue;
         }
@@ -304,32 +302,11 @@ async fn scan_directory(
             Box::pin(scan_directory(&dir_path, source_dir, extra_ignores, files)).await;
         } else {
             let path_str = path.to_string_lossy().into_owned();
-
-            let ctime = meta
-                .created()
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs_f64() * 1000.0);
-            let mtime = meta
-                .modified()
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs_f64() * 1000.0);
-
+            let ctime = meta.created().ok().and_then(system_time_to_ms);
+            let mtime = meta.modified().ok().and_then(system_time_to_ms);
             let contents = tokio::fs::read_to_string(&path).await.ok();
-
-            files.insert(
-                path_str.clone(),
-                SerializableDisknode {
-                    id: path_str,
-                    source_dir: source_dir.to_owned(),
-                    contents,
-                    ctime,
-                    mtime,
-                    dependents: vec![],
-                    dependencies: vec![],
-                },
-            );
+            let disknode = make_disknode(path_str.clone(), source_dir, contents, ctime, mtime);
+            files.insert(path_str, disknode);
         }
     }
 }
@@ -343,6 +320,7 @@ async fn filer_event_loop(
     files: Arc<RwLock<HashMap<String, SerializableDisknode>>>,
     app: Arc<App>,
 ) {
+    let source_dir_path = Path::new(&source_dir);
     let mut pending: HashMap<PathBuf, PendingEvent> = HashMap::new();
 
     loop {
@@ -370,7 +348,7 @@ async fn filer_event_loop(
                 };
 
                 for file_path in event.paths {
-                    if is_ignored(&file_path, &extra_ignores) {
+                    if is_ignored(&file_path, source_dir_path, &extra_ignores) {
                         continue;
                     }
                     let deadline = Instant::now() + DEBOUNCE_DURATION;
@@ -493,6 +471,11 @@ impl FilerManager {
         config: FilerConfig,
         lifetime: FilerLifetime,
     ) -> Result<bool, notify::Error> {
+        debug_assert!(
+            path.ends_with('/'),
+            "FilerManager paths must have trailing slash: {path}"
+        );
+
         // Fast path — already watching
         {
             let filers = self.filers.read().await;
@@ -529,6 +512,10 @@ impl FilerManager {
     ///
     /// Returns `true` if the filer was actually stopped.
     pub async fn stop_filer(&self, path: &str) -> bool {
+        debug_assert!(
+            path.ends_with('/'),
+            "FilerManager paths must have trailing slash: {path}"
+        );
         let mut filers = self.filers.write().await;
         if let Some(entry) = filers.get(path) {
             if entry.lifetime == FilerLifetime::Permanent {

@@ -12,7 +12,7 @@ mod scoped_fs;
 mod ws;
 
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use axum::routing::{get, post};
@@ -72,16 +72,7 @@ async fn run() -> Result<(), ServerError> {
     let scoped_dir_strings: Vec<String> = config
         .scoped_dirs
         .iter()
-        .map(|p| {
-            let mut s = std::fs::canonicalize(p)
-                .unwrap_or_else(|_| std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf()))
-                .to_string_lossy()
-                .into_owned();
-            if !s.ends_with('/') {
-                s.push('/');
-            }
-            s
-        })
+        .map(|p| resolve_dir(p))
         .collect();
 
     // Include zzz_dir first (like Deno: `new ScopedFs([this.zzz_dir, ...this.scoped_dirs])`)
@@ -235,6 +226,20 @@ struct Config {
     zzz_dir: String,
 }
 
+/// Resolve a path to an absolute, canonical, normalized directory string
+/// with trailing `/`. Tries `canonicalize` (resolves symlinks, requires path
+/// to exist), falls back to `absolute` (no I/O), falls back to the raw path.
+fn resolve_dir(path: &Path) -> String {
+    let mut s = std::fs::canonicalize(path)
+        .unwrap_or_else(|_| std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf()))
+        .to_string_lossy()
+        .into_owned();
+    if !s.ends_with('/') {
+        s.push('/');
+    }
+    s
+}
+
 fn parse_config() -> Result<Config, ServerError> {
     let mut port: Option<u16> = None;
     let mut static_dir: Option<PathBuf> = None;
@@ -300,15 +305,7 @@ fn parse_config() -> Result<Config, ServerError> {
 
     let zzz_dir = {
         let raw = std::env::var("PUBLIC_ZZZ_DIR").unwrap_or_else(|_| ".zzz/".to_owned());
-        let p = PathBuf::from(&raw);
-        let mut s = std::fs::canonicalize(&p)
-            .unwrap_or_else(|_| std::path::absolute(&p).unwrap_or(p))
-            .to_string_lossy()
-            .into_owned();
-        if !s.ends_with('/') {
-            s.push('/');
-        }
-        s
+        resolve_dir(Path::new(&raw))
     };
 
     Ok(Config {

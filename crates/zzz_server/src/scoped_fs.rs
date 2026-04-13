@@ -1,4 +1,5 @@
 use std::path::{Component, Path, PathBuf};
+use std::sync::RwLock;
 
 // -- Errors -------------------------------------------------------------------
 
@@ -25,7 +26,7 @@ pub enum ScopedFsError {
 /// and the caller's subsequent filesystem operation. A symlink could be
 /// created after validation. This is the same caveat as the Deno implementation.
 pub struct ScopedFs {
-    allowed_paths: Vec<PathBuf>,
+    allowed_paths: RwLock<Vec<PathBuf>>,
 }
 
 impl ScopedFs {
@@ -43,13 +44,43 @@ impl ScopedFs {
                 PathBuf::from(s)
             })
             .collect();
-        Self { allowed_paths }
+        Self {
+            allowed_paths: RwLock::new(allowed_paths),
+        }
+    }
+
+    /// Add a path to the allowed set. No-op if already present.
+    ///
+    /// Mirrors `ScopedFs.add_path` in `src/lib/server/scoped_fs.ts`.
+    pub fn add_path(&self, path: &Path) -> bool {
+        let normalized = normalize_trailing_slash(path);
+        let mut paths = self.allowed_paths.write().expect("ScopedFs lock poisoned");
+        if paths.iter().any(|p| p == &normalized) {
+            return false;
+        }
+        paths.push(normalized);
+        true
+    }
+
+    /// Remove a path from the allowed set.
+    ///
+    /// Mirrors `ScopedFs.remove_path` in `src/lib/server/scoped_fs.ts`.
+    pub fn remove_path(&self, path: &Path) -> bool {
+        let normalized = normalize_trailing_slash(path);
+        let mut paths = self.allowed_paths.write().expect("ScopedFs lock poisoned");
+        if let Some(index) = paths.iter().position(|p| p == &normalized) {
+            paths.remove(index);
+            true
+        } else {
+            false
+        }
     }
 
     /// Check if a path falls under one of the allowed directories.
     fn is_path_allowed(&self, path: &Path) -> bool {
         let path_str = path.to_string_lossy();
-        for allowed in &self.allowed_paths {
+        let paths = self.allowed_paths.read().expect("ScopedFs lock poisoned");
+        for allowed in paths.iter() {
             let allowed_str = allowed.to_string_lossy();
             if path_str.starts_with(allowed_str.as_ref())
                 || path_str == allowed_str.trim_end_matches('/')
@@ -151,6 +182,15 @@ impl ScopedFs {
         tokio::fs::create_dir_all(&safe_path).await?;
         Ok(())
     }
+}
+
+/// Ensure a path has a trailing `/` for consistent allowed-path comparison.
+fn normalize_trailing_slash(path: &Path) -> PathBuf {
+    let mut s = path.to_string_lossy().into_owned();
+    if !s.ends_with('/') {
+        s.push('/');
+    }
+    PathBuf::from(s)
 }
 
 /// Normalize a path by resolving `.` and `..` components without filesystem access.

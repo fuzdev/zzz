@@ -1291,6 +1291,102 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		},
 	},
 
+	// -- Workspace scoped_fs tests ------------------------------------------------
+
+	{
+		name: 'workspace_open_adds_to_scoped_fs',
+		fn: async (config, session_cookie) => {
+			// Opening a workspace should allow diskfile_update inside it, even
+			// though it's not in the initial scoped_dirs. Closing should revoke.
+			const tmp_dir = await Deno.makeTempDir({prefix: 'zzz_test_ws_scope_'});
+			const file_path = `${tmp_dir}/scoped_test.txt`;
+			try {
+				// Before opening: write should fail (not in scoped_dirs)
+				const before_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wss-pre',
+						method: 'diskfile_update',
+						params: {path: file_path, content: 'before open'},
+					}),
+					{cookie: session_cookie},
+				);
+				assert_equal(before_res.status, 500, 'pre-open status is error');
+				const before_rpc = before_res.body as Record<string, unknown>;
+				const before_error = before_rpc.error as Record<string, unknown>;
+				assert_equal(before_error.code, -32603, 'pre-open error code');
+
+				// Open workspace
+				const open_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wss-open',
+						method: 'workspace_open',
+						params: {path: tmp_dir},
+					}),
+					{cookie: session_cookie},
+				);
+				assert_equal(open_res.status, 200, 'open status');
+
+				// After opening: write should succeed
+				const during_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wss-during',
+						method: 'diskfile_update',
+						params: {path: file_path, content: 'after open'},
+					}),
+					{cookie: session_cookie},
+				);
+				assert_equal(during_res.status, 200, 'during-open status');
+				const during_rpc = during_res.body as Record<string, unknown>;
+				assert_equal(during_rpc.result, null, 'during-open result is null');
+
+				// Verify file was written
+				const content = await Deno.readTextFile(file_path);
+				assert_equal(content, 'after open', 'file content matches');
+
+				// Close workspace
+				const close_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wss-close',
+						method: 'workspace_close',
+						params: {path: tmp_dir},
+					}),
+					{cookie: session_cookie},
+				);
+				assert_equal(close_res.status, 200, 'close status');
+
+				// After closing: write should fail again
+				const after_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'wss-post',
+						method: 'diskfile_update',
+						params: {path: file_path, content: 'after close'},
+					}),
+					{cookie: session_cookie},
+				);
+				assert_equal(after_res.status, 500, 'post-close status is error');
+				const after_rpc = after_res.body as Record<string, unknown>;
+				const after_error = after_rpc.error as Record<string, unknown>;
+				assert_equal(after_error.code, -32603, 'post-close error code');
+			} finally {
+				try {
+					await Deno.remove(tmp_dir, {recursive: true});
+				} catch {
+					// ignore cleanup errors
+				}
+			}
+		},
+	},
+
 	// -- Terminal tests -----------------------------------------------------------
 
 	{

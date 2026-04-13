@@ -420,6 +420,10 @@ async fn handle_workspace_open(params: &Value, ctx: &Ctx<'_>) -> Result<Value, J
         workspaces.entry(normalized).or_insert(info).clone()
     };
 
+    // Add to ScopedFs so diskfile_update/diskfile_delete/directory_create can
+    // write inside the newly opened workspace (mirrors Deno backend.ts:284)
+    ctx.app.scoped_fs.add_path(Path::new(&workspace.path));
+
     // Start file watcher for the new workspace (deduplicates — reuses existing filer)
     if let Err(e) = ctx
         .app
@@ -481,8 +485,14 @@ async fn handle_workspace_close(params: &Value, ctx: &Ctx<'_>) -> Result<Value, 
         )));
     };
 
-    // Stop file watcher for the closed workspace (permanent filers preserved)
-    ctx.app.filer_manager.stop_filer(&key).await;
+    // Only stop the filer and remove ScopedFs entry if this wasn't an initial
+    // scoped_dir — those filers and ScopedFs entries persist even after close
+    // (mirrors Deno backend.ts:330-341)
+    let is_initial_scoped_dir = ctx.app.scoped_dirs.contains(&key);
+    if !is_initial_scoped_dir {
+        ctx.app.filer_manager.stop_filer(&key).await;
+        ctx.app.scoped_fs.remove_path(Path::new(&key));
+    }
 
     // Broadcast workspace_changed notification to all connected clients
     let notification = rpc::notification(
