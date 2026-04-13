@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::body::Bytes;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -242,7 +242,99 @@ fn extract_id(obj: &Map<String, Value>) -> Value {
 
 // -- HTTP handler -------------------------------------------------------------
 
-/// Axum handler for `POST /rpc`.
+/// Axum handler for `GET /api/rpc`.
+///
+/// Extracts `method`, `id`, and optional `params` from query parameters.
+/// Matches fuz_app's `create_rpc_endpoint` GET handler.
+pub async fn rpc_get_handler(
+    State(app): State<Arc<App>>,
+    headers: HeaderMap,
+    Query(query): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    // Origin verification
+    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok())
+        && !check_origin(origin, &app.allowed_origins) {
+            return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
+        }
+
+    // Extract method
+    let Some(method) = query.get("method") else {
+        let error = invalid_request();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(error_response(Value::Null, error)),
+        )
+            .into_response();
+    };
+
+    // Extract id (required)
+    let Some(id_raw) = query.get("id") else {
+        let error = invalid_request();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(error_response(Value::Null, error)),
+        )
+            .into_response();
+    };
+
+    // Parse id — try as number first, fall back to string
+    let id: Value = if let Ok(n) = id_raw.parse::<u64>() {
+        Value::Number(n.into())
+    } else {
+        Value::String(id_raw.clone())
+    };
+
+    // Parse params from query string (optional)
+    let params: Value = if let Some(params_raw) = query.get("params") {
+        match serde_json::from_str(params_raw) {
+            Ok(v) => v,
+            Err(_) => {
+                let error = invalid_params("params query parameter is not valid JSON");
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(error_response(id, error)),
+                )
+                    .into_response();
+            }
+        }
+    } else {
+        Value::Null
+    };
+
+    // Resolve auth context
+    let resolved = resolve_auth_from_headers(
+        &headers,
+        &app.keyring,
+        &app.db_pool,
+        app.daemon_token_state.as_ref(),
+    )
+    .await;
+    let auth_context = resolved.as_ref().map(|r| &r.context);
+    let credential_type = resolved.as_ref().map(|r| r.credential_type);
+
+    // Per-action auth check
+    let spec_auth = method_auth(method);
+    if let Some(auth_error) = check_action_auth(spec_auth, auth_context, credential_type) {
+        let status = error_code_to_http_status(auth_error.code);
+        return (status, Json(error_response(id, auth_error))).into_response();
+    }
+
+    let ctx = Ctx {
+        app: &app,
+        app_arc: Arc::clone(&app),
+        request_id: &id,
+        auth: auth_context,
+    };
+    match handlers::dispatch(method, &params, &ctx).await {
+        Ok(result) => Json(success_response(id, result)).into_response(),
+        Err(error) => {
+            let status = error_code_to_http_status(error.code);
+            (status, Json(error_response(id, error))).into_response()
+        }
+    }
+}
+
+/// Axum handler for `POST /api/rpc`.
 ///
 /// Applies HTTP-specific transport semantics:
 /// - Origin verification before processing

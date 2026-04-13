@@ -72,10 +72,24 @@ async fn run() -> Result<(), ServerError> {
     let scoped_dir_strings: Vec<String> = config
         .scoped_dirs
         .iter()
-        .map(|p| p.to_string_lossy().into_owned())
+        .map(|p| {
+            let mut s = std::fs::canonicalize(p)
+                .unwrap_or_else(|_| std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf()))
+                .to_string_lossy()
+                .into_owned();
+            if !s.ends_with('/') {
+                s.push('/');
+            }
+            s
+        })
         .collect();
 
-    let scoped_fs = scoped_fs::ScopedFs::new(config.scoped_dirs);
+    // Include zzz_dir first (like Deno: `new ScopedFs([this.zzz_dir, ...this.scoped_dirs])`)
+    // Use canonicalized paths, not raw config paths
+    let mut scoped_fs_paths: Vec<PathBuf> = Vec::with_capacity(1 + scoped_dir_strings.len());
+    scoped_fs_paths.push(PathBuf::from(&config.zzz_dir));
+    scoped_fs_paths.extend(scoped_dir_strings.iter().map(PathBuf::from));
+    let scoped_fs = scoped_fs::ScopedFs::new(scoped_fs_paths);
 
     // Daemon token — initialize state, write token to disk
     let daemon_token_state = match daemon_token::init_daemon_token(&config.zzz_dir).await {
@@ -114,10 +128,11 @@ async fn run() -> Result<(), ServerError> {
     let app_state_for_shutdown = Arc::clone(&app_state);
 
     let mut app = Router::new()
-        .route("/api/rpc", post(rpc::rpc_handler))
+        .route("/api/rpc", get(rpc::rpc_get_handler).post(rpc::rpc_handler))
         .route("/api/ws", get(ws::ws_handler))
         .route("/health", get(health_handler))
         .route("/api/account/bootstrap", post(bootstrap::bootstrap_handler))
+        .route("/api/account/status", get(account::status_handler))
         .route("/api/account/login", post(account::login_handler))
         .route("/api/account/logout", post(account::logout_handler))
         .route("/api/account/password", post(account::password_handler))
@@ -247,7 +262,18 @@ fn parse_config() -> Result<Config, ServerError> {
         .map(PathBuf::from)
         .collect();
 
-    let zzz_dir = std::env::var("PUBLIC_ZZZ_DIR").unwrap_or_else(|_| ".zzz/".to_owned());
+    let zzz_dir = {
+        let raw = std::env::var("PUBLIC_ZZZ_DIR").unwrap_or_else(|_| ".zzz/".to_owned());
+        let p = PathBuf::from(&raw);
+        let mut s = std::fs::canonicalize(&p)
+            .unwrap_or_else(|_| std::path::absolute(&p).unwrap_or(p))
+            .to_string_lossy()
+            .into_owned();
+        if !s.ends_with('/') {
+            s.push('/');
+        }
+        s
+    };
 
     Ok(Config {
         port: port.unwrap_or(DEFAULT_PORT),

@@ -49,6 +49,9 @@ const INTEGRATION_TOKEN_FILE = '/tmp/zzz_integration_bootstrap_token';
 /** Scoped filesystem directory for filesystem integration tests. */
 export const INTEGRATION_SCOPED_DIR = '/tmp/zzz_integration_scoped';
 
+/** Zzz app directory for integration tests. */
+export const INTEGRATION_ZZZ_DIR = '/tmp/zzz_integration_zzz_dir';
+
 /** Test database URL — defaults to postgres://localhost/zzz_test. */
 export const TEST_DATABASE_URL =
 	Deno.env.get('TEST_DATABASE_URL') ?? 'postgres://localhost/zzz_test';
@@ -73,6 +76,7 @@ export const backends: Record<string, BackendConfig> = {
 			SECRET_COOKIE_KEYS: 'integration-test-cookie-key-min-32-chars',
 			ALLOWED_ORIGINS: 'http://localhost:*',
 			PUBLIC_ZZZ_SCOPED_DIRS: INTEGRATION_SCOPED_DIR,
+			PUBLIC_ZZZ_DIR: INTEGRATION_ZZZ_DIR,
 		},
 		auth: {
 			bootstrap_path: '/api/account/bootstrap',
@@ -103,6 +107,7 @@ export const backends: Record<string, BackendConfig> = {
 			BOOTSTRAP_TOKEN_PATH: INTEGRATION_TOKEN_FILE,
 			ALLOWED_ORIGINS: 'http://localhost:*',
 			PUBLIC_ZZZ_SCOPED_DIRS: INTEGRATION_SCOPED_DIR,
+			PUBLIC_ZZZ_DIR: INTEGRATION_ZZZ_DIR,
 		},
 		auth: {
 			bootstrap_path: '/api/account/bootstrap',

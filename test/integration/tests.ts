@@ -11,7 +11,7 @@
  * authenticated cookie are in `non_keeper_tests`.
  */
 
-import {INTEGRATION_SCOPED_DIR, type BackendConfig} from './config.ts';
+import {INTEGRATION_SCOPED_DIR, INTEGRATION_ZZZ_DIR, type BackendConfig} from './config.ts';
 import {
 	post_rpc,
 	open_ws,
@@ -615,11 +615,153 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 			assert_equal(rpc.id, 'sl-1', 'id');
 			const result = rpc.result as Record<string, unknown>;
 			const data = result.data as Record<string, unknown>;
-			assert_equal(typeof data.zzz_dir, 'string', 'zzz_dir is string');
-			assert_equal(Array.isArray(data.scoped_dirs), true, 'scoped_dirs is array');
+
+			// zzz_dir is the canonicalized INTEGRATION_ZZZ_DIR with trailing slash
+			const zzz_dir = data.zzz_dir as string;
+			assert_equal(zzz_dir.startsWith('/'), true, 'zzz_dir is absolute');
+			assert_equal(zzz_dir.endsWith('/'), true, 'zzz_dir has trailing slash');
+
+			// scoped_dirs contains the integration scoped dir, absolute with trailing slash
+			const scoped_dirs = data.scoped_dirs as Array<string>;
+			assert_equal(scoped_dirs.length >= 1, true, `scoped_dirs has entries (got ${scoped_dirs.length})`);
+			assert_equal(scoped_dirs[0].startsWith('/'), true, 'scoped_dirs[0] is absolute');
+			assert_equal(scoped_dirs[0].endsWith('/'), true, 'scoped_dirs[0] has trailing slash');
+
 			assert_equal(Array.isArray(data.files), true, 'files is array');
 			assert_equal(Array.isArray(data.provider_status), true, 'provider_status is array');
 			assert_equal(Array.isArray(data.workspaces), true, 'workspaces is array');
+		},
+	},
+	{
+		name: 'session_load_returns_zzz_dir_files',
+		fn: async (config, session_cookie) => {
+			// Create a test file in zzz_dir before loading session
+			const test_content = 'session load file test';
+			await Deno.writeTextFile(`${INTEGRATION_ZZZ_DIR}/test_session.txt`, test_content);
+
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'slf-1',
+					method: 'session_load',
+				}),
+				{cookie: session_cookie},
+			);
+			assert_equal(res.status, 200, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			const result = rpc.result as Record<string, unknown>;
+			const data = result.data as Record<string, unknown>;
+			const files = data.files as Array<Record<string, unknown>>;
+
+			// Find our test file — fail with useful context if missing
+			const test_file = files.find((f) => (f.id as string).endsWith('/test_session.txt'));
+			if (!test_file) {
+				const ids = files.map((f) => f.id);
+				throw new Error(`test file not found in ${files.length} files: ${JSON.stringify(ids)}`);
+			}
+
+			assert_equal(test_file.contents, test_content, 'file contents match');
+			assert_equal((test_file.source_dir as string).startsWith('/'), true, 'source_dir is absolute');
+			assert_equal((test_file.source_dir as string).endsWith('/'), true, 'source_dir has trailing slash');
+			assert_equal((test_file.id as string).startsWith('/'), true, 'file id is absolute path');
+			assert_deep_equal(test_file.dependents, [], 'dependents is empty array');
+			assert_deep_equal(test_file.dependencies, [], 'dependencies is empty array');
+			assert_equal(typeof test_file.mtime, 'number', 'mtime is number');
+
+			// Clean up
+			await Deno.remove(`${INTEGRATION_ZZZ_DIR}/test_session.txt`);
+		},
+	},
+	{
+		name: 'diskfile_update_in_zzz_dir',
+		fn: async (config, session_cookie) => {
+			// ScopedFs should allow writes to zzz_dir
+			const file_path = `${INTEGRATION_ZZZ_DIR}/test_scoped_write.txt`;
+			const content = 'write to zzz_dir';
+
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'dfu-zzz-1',
+					method: 'diskfile_update',
+					params: {path: file_path, content},
+				}),
+				{cookie: session_cookie},
+			);
+			assert_equal(res.status, 200, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			assert_equal(rpc.result, null, 'result is null');
+
+			// Verify the file exists and has the right content
+			const actual = await Deno.readTextFile(file_path);
+			assert_equal(actual, content, 'file content');
+
+			// Clean up
+			await Deno.remove(file_path);
+		},
+	},
+	{
+		name: 'session_load_returns_nested_files',
+		fn: async (config, session_cookie) => {
+			// Create a file in a subdirectory of zzz_dir
+			await Deno.mkdir(`${INTEGRATION_ZZZ_DIR}/state/nested`, {recursive: true});
+			await Deno.writeTextFile(`${INTEGRATION_ZZZ_DIR}/state/nested/deep.txt`, 'nested content');
+
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'sln-1',
+					method: 'session_load',
+				}),
+				{cookie: session_cookie},
+			);
+			assert_equal(res.status, 200, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			const result = rpc.result as Record<string, unknown>;
+			const data = result.data as Record<string, unknown>;
+			const files = data.files as Array<Record<string, unknown>>;
+
+			const nested_file = files.find((f) => (f.id as string).endsWith('/state/nested/deep.txt'));
+			if (!nested_file) {
+				const ids = files.map((f) => f.id);
+				throw new Error(`nested file not found in ${files.length} files: ${JSON.stringify(ids)}`);
+			}
+			assert_equal(nested_file.contents, 'nested content', 'nested file contents');
+
+			// Clean up
+			await Deno.remove(`${INTEGRATION_ZZZ_DIR}/state`, {recursive: true});
+		},
+	},
+	{
+		name: 'diskfile_update_in_zzz_dir_subdirectory',
+		fn: async (config, session_cookie) => {
+			// ScopedFs should allow writes to existing subdirectories under zzz_dir
+			await Deno.mkdir(`${INTEGRATION_ZZZ_DIR}/state/sub`, {recursive: true});
+			const file_path = `${INTEGRATION_ZZZ_DIR}/state/sub/new_file.txt`;
+			const content = 'nested write';
+
+			const res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'dfu-zzz-sub-1',
+					method: 'diskfile_update',
+					params: {path: file_path, content},
+				}),
+				{cookie: session_cookie},
+			);
+			assert_equal(res.status, 200, 'status');
+			const rpc = res.body as Record<string, unknown>;
+			assert_equal(rpc.result, null, 'result is null');
+
+			const actual = await Deno.readTextFile(file_path);
+			assert_equal(actual, content, 'file content');
+
+			// Clean up
+			await Deno.remove(`${INTEGRATION_ZZZ_DIR}/state`, {recursive: true});
 		},
 	},
 	{

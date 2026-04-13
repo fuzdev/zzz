@@ -246,8 +246,19 @@ struct WorkspaceOpenResult {
 }
 
 #[derive(Serialize)]
+struct SerializableDisknode {
+    id: String,
+    source_dir: String,
+    contents: Option<String>,
+    ctime: Option<f64>,
+    mtime: Option<f64>,
+    dependents: Vec<Value>,
+    dependencies: Vec<Value>,
+}
+
+#[derive(Serialize)]
 struct SessionLoadData {
-    files: Vec<Value>,         // always empty — no filers in Rust backend yet
+    files: Vec<SerializableDisknode>,
     zzz_dir: String,
     scoped_dirs: Vec<String>,
     provider_status: Vec<Value>, // always empty — no providers in Rust backend yet
@@ -284,7 +295,7 @@ fn to_normalized_dir(path: &Path) -> Result<String, JsonRpcError> {
 pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     match method {
         "ping" => handle_ping(ctx),
-        "session_load" => handle_session_load(ctx),
+        "session_load" => handle_session_load(ctx).await,
         "workspace_list" => handle_workspace_list(ctx),
         "workspace_open" => handle_workspace_open(params, ctx),
         "workspace_close" => handle_workspace_close(params, ctx),
@@ -310,7 +321,7 @@ fn handle_ping(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     serde_json::to_value(result).map_err(|_| rpc::internal_error("serialization failed"))
 }
 
-fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+async fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     let workspaces: Vec<WorkspaceInfo> = {
         let ws = ctx
             .app
@@ -319,9 +330,14 @@ fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
             .map_err(|_| rpc::internal_error("lock poisoned"))?;
         ws.values().cloned().collect()
     };
+
+    // Walk zzz_dir to populate initial file listing (matches Deno's Filer behavior)
+    let mut files = Vec::new();
+    collect_files_recursive(&ctx.app.zzz_dir, &ctx.app.zzz_dir, &mut files).await;
+
     let result = SessionLoadResult {
         data: SessionLoadData {
-            files: vec![],
+            files,
             zzz_dir: ctx.app.zzz_dir.clone(),
             scoped_dirs: ctx.app.scoped_dirs.clone(),
             provider_status: vec![],
@@ -329,6 +345,68 @@ fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
         },
     };
     serde_json::to_value(result).map_err(|_| rpc::internal_error("serialization failed"))
+}
+
+/// Recursively collect files from a directory into SerializableDisknode entries.
+async fn collect_files_recursive(
+    dir: &str,
+    source_dir: &str,
+    files: &mut Vec<SerializableDisknode>,
+) {
+    let Ok(mut entries) = tokio::fs::read_dir(dir).await else {
+        return;
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let path = entry.path();
+        let path_str = path.to_string_lossy().into_owned();
+
+        // Skip hidden dirs like .git, and common noise directories
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if matches!(
+                name,
+                ".git" | "node_modules" | ".svelte-kit" | "target" | "dist"
+            ) {
+                continue;
+            }
+        }
+
+        let Ok(meta) = tokio::fs::metadata(&path).await else {
+            continue;
+        };
+
+        if meta.is_dir() {
+            let mut dir_path = path_str.clone();
+            if !dir_path.ends_with('/') {
+                dir_path.push('/');
+            }
+            // Recurse into subdirectory
+            Box::pin(collect_files_recursive(&dir_path, source_dir, files)).await;
+        } else {
+            let ctime = meta
+                .created()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs_f64());
+            let mtime = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs_f64());
+
+            // Read file contents (text files only, skip binary)
+            let contents = tokio::fs::read_to_string(&path).await.ok();
+
+            files.push(SerializableDisknode {
+                id: path_str,
+                source_dir: source_dir.to_owned(),
+                contents,
+                ctime,
+                mtime,
+                dependents: vec![],
+                dependencies: vec![],
+            });
+        }
+    }
 }
 
 fn handle_workspace_list(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {

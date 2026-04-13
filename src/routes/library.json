@@ -7193,19 +7193,19 @@
 					{
 						"name": "DiskfilesJson",
 						"kind": "type",
-						"source_line": 15,
+						"source_line": 16,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; diskfiles: ZodDefault<...>; selected_file_id: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "DiskfilesJsonInput",
 						"kind": "type",
-						"source_line": 20,
+						"source_line": 21,
 						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; diskfiles?: { source_dir: string; id?: string | undefined; created?: string | undefined; updated?: string | undefined; path?: string | ... 1 more ... | undefined; content?: string | ... 1 more ... | undefined; dependents?: [...][]..."
 					},
 					{
 						"name": "DiskfilesOptions",
 						"kind": "type",
-						"source_line": 22,
+						"source_line": 23,
 						"type_signature": "DiskfilesOptions",
 						"extends": ["CellOptions<typeof DiskfilesJson>"],
 						"properties": []
@@ -7213,7 +7213,7 @@
 					{
 						"name": "Diskfiles",
 						"kind": "class",
-						"source_line": 24,
+						"source_line": 25,
 						"extends": ["Cell<typeof DiskfilesJson>"],
 						"implements": [],
 						"members": [

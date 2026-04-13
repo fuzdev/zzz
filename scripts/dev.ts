@@ -12,7 +12,7 @@
 
 import {load_env_file} from '@fuzdev/fuz_app/env/dotenv.js';
 
-import {runtime} from './setup_helpers.ts';
+import {runtime, set_permissions} from './setup_helpers.ts';
 
 const RUST_BACKEND_PORT = 8999;
 const ENV_FILE = '.env.development';
@@ -24,6 +24,25 @@ const env = await load_env_file(runtime, ENV_FILE);
 if (!env) {
 	console.error(`[dev] FATAL: ${ENV_FILE} not found — run: deno task dev:setup`);
 	Deno.exit(1);
+}
+
+// -- Ensure bootstrap token exists --------------------------------------------
+
+const token_path = env.BOOTSTRAP_TOKEN_PATH;
+if (token_path) {
+	try {
+		await Deno.stat(token_path);
+	} catch {
+		// Create directory and token file
+		const dir = token_path.includes('/') ? token_path.substring(0, token_path.lastIndexOf('/')) : '.';
+		await Deno.mkdir(dir, {recursive: true});
+		const token_bytes = new Uint8Array(32);
+		crypto.getRandomValues(token_bytes);
+		const token = Array.from(token_bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+		await Deno.writeTextFile(token_path, token);
+		await set_permissions(token_path, 0o600);
+		console.log(`[dev] created bootstrap token at ${token_path}`);
+	}
 }
 
 // Override port so the Rust backend binds to the same port the Vite proxy expects.
@@ -60,8 +79,8 @@ console.log('[dev] build complete');
 // -- Start Rust backend -------------------------------------------------------
 
 console.log(`[dev] starting zzz_server on port ${RUST_BACKEND_PORT}...`);
-const server_process = new Deno.Command('cargo', {
-	args: ['run', '-p', 'zzz_server', '--', '--port', String(RUST_BACKEND_PORT)],
+const server_process = new Deno.Command('./target/debug/zzz_server', {
+	args: ['--port', String(RUST_BACKEND_PORT)],
 	env: child_env,
 	stdout: 'inherit',
 	stderr: 'inherit',

@@ -13,7 +13,7 @@
  * When running both backends, prints a comparison table at the end.
  */
 
-import {backends, type BackendConfig, INTEGRATION_SCOPED_DIR, TEST_DATABASE_URL} from './config.ts';
+import {backends, type BackendConfig, INTEGRATION_SCOPED_DIR, INTEGRATION_ZZZ_DIR, TEST_DATABASE_URL} from './config.ts';
 import {run_tests, type TestResult} from './tests.ts';
 import {run_bearer_tests, setup_bearer_tokens} from './bearer_tests.ts';
 import {run_account_tests} from './account_tests.ts';
@@ -315,6 +315,28 @@ const cleanup_scoped_dir = async (): Promise<void> => {
 	}
 };
 
+// -- Zzz dir setup ------------------------------------------------------------
+
+/** Create (or recreate) the zzz directory for session_load tests. */
+const setup_zzz_dir = async (): Promise<void> => {
+	try {
+		await Deno.remove(INTEGRATION_ZZZ_DIR, {recursive: true});
+	} catch {
+		// Didn't exist
+	}
+	await Deno.mkdir(INTEGRATION_ZZZ_DIR, {recursive: true});
+	console.log(`  Zzz dir ready: ${INTEGRATION_ZZZ_DIR}`);
+};
+
+/** Clean up the zzz directory after a backend run. */
+const cleanup_zzz_dir = async (): Promise<void> => {
+	try {
+		await Deno.remove(INTEGRATION_ZZZ_DIR, {recursive: true});
+	} catch {
+		// Already gone
+	}
+};
+
 // -- Per-backend run ----------------------------------------------------------
 
 interface BackendRun {
@@ -334,6 +356,7 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 	try {
 		await clean_database();
 		await setup_scoped_dir();
+		await setup_zzz_dir();
 		await write_bootstrap_token(config);
 		child = await start_backend(config);
 		const session_cookie = await setup_auth(config);
@@ -366,6 +389,7 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 	} finally {
 		await cleanup_auth(config);
 		await cleanup_scoped_dir();
+		await cleanup_zzz_dir();
 		if (child) await stop_backend(config.name, child);
 	}
 };

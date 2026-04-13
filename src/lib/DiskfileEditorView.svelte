@@ -27,7 +27,7 @@
 	const app = frontend_context.get();
 
 	// TODO @many refactor, maybe move a collection on `app.diskfiles`? one problem is the contextmenu can't access it without hacking something with context
-	const editor_state = new DiskfileEditorState({app, diskfile});
+	const editor_state = new DiskfileEditorState({app, diskfile}); // TODO make diskfile a getter
 
 	// Reference to the content editor component
 	let content_editor: {focus: () => void} | undefined = $state.raw();

@@ -86,8 +86,10 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 
 | Method | Path                              | Description                              |
 |--------|-----------------------------------|------------------------------------------|
+| GET    | `/api/rpc`                        | JSON-RPC 2.0 (cacheable reads, query params) |
 | POST   | `/api/rpc`                        | JSON-RPC 2.0 (HTTP transport, auth-gated) |
 | POST   | `/api/account/bootstrap`          | One-shot admin account creation          |
+| GET    | `/api/account/status`             | Current account info or 401 + bootstrap status |
 | POST   | `/api/account/login`              | Username/password login → session cookie |
 | POST   | `/api/account/logout`             | Invalidate session, close WS connections |
 | POST   | `/api/account/password`           | Change password, revoke all sessions/tokens |
@@ -154,7 +156,12 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
     only per-account. Called by logout (per-session) and password change
     (per-account).
 
-11. **Account management** — `POST /api/account/login` (username/password →
+11. **Account status** — `GET /api/account/status` returns account info +
+    permits (200) when authenticated, or 401 with optional
+    `bootstrap_available` flag when not. Consumed by fuz_app's `AuthState`
+    for the frontend auth gate (bootstrap → login → verified flow).
+
+12. **Account management** — `POST /api/account/login` (username/password →
     session cookie with enumeration prevention via dummy hash),
     `POST /api/account/logout` (invalidate session + close WS connections),
     `POST /api/account/password` (change password, revoke all sessions + API
