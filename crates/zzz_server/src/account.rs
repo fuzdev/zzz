@@ -240,7 +240,7 @@ async fn login_inner(app: &App, input: LoginInput) -> Result<Response, Response>
         None => (DUMMY_HASH.to_owned(), None),
     };
 
-    let password_valid = verify_password(&input.password, &password_hash);
+    let password_valid = verify_password(input.password.clone(), password_hash).await;
 
     let Some(account) = account.filter(|_| password_valid) else {
         return Err(error_json(StatusCode::UNAUTHORIZED, "invalid_credentials"));
@@ -277,16 +277,20 @@ async fn login_inner(app: &App, input: LoginInput) -> Result<Response, Response>
         .into_response())
 }
 
-/// Verify a password against an Argon2 hash.
+/// Verify a password against an Argon2 hash on a blocking thread.
 ///
-/// Returns `false` on any error (hash parse failure, wrong password).
-fn verify_password(password: &str, hash: &str) -> bool {
-    let Ok(parsed) = argon2::PasswordHash::new(hash) else {
-        return false;
-    };
-    Argon2::default()
-        .verify_password(password.as_bytes(), &parsed)
-        .is_ok()
+/// Returns `false` on any error (hash parse failure, wrong password, task panic).
+async fn verify_password(password: String, hash: String) -> bool {
+    tokio::task::spawn_blocking(move || {
+        let Ok(parsed) = argon2::PasswordHash::new(&hash) else {
+            return false;
+        };
+        Argon2::default()
+            .verify_password(password.as_bytes(), &parsed)
+            .is_ok()
+    })
+    .await
+    .unwrap_or(false)
 }
 
 // -- POST /logout -------------------------------------------------------------
@@ -412,12 +416,12 @@ async fn password_inner(
         })?
         .ok_or_else(|| error_json(StatusCode::UNAUTHORIZED, "invalid_credentials"))?;
 
-    if !verify_password(&input.current_password, &account_with_hash.password_hash) {
+    if !verify_password(input.current_password.clone(), account_with_hash.password_hash).await {
         return Err(error_json(StatusCode::UNAUTHORIZED, "invalid_credentials"));
     }
 
     // Hash new password
-    let new_hash = hash_password(&input.new_password).map_err(|e| {
+    let new_hash = hash_password(input.new_password.clone()).await.map_err(|e| {
         tracing::error!(error = %e, "password: hashing failed");
         error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
     })?;
@@ -461,12 +465,16 @@ async fn password_inner(
     Ok((StatusCode::OK, response_headers, Json(OkResponse { ok: true })).into_response())
 }
 
-/// Hash a password with Argon2id.
-pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    let hash = argon2.hash_password(password.as_bytes(), &salt)?;
-    Ok(hash.to_string())
+/// Hash a password with Argon2id on a blocking thread.
+pub async fn hash_password(password: String) -> Result<String, argon2::password_hash::Error> {
+    tokio::task::spawn_blocking(move || {
+        let salt = SaltString::generate(&mut OsRng);
+        let argon2 = Argon2::default();
+        let hash = argon2.hash_password(password.as_bytes(), &salt)?;
+        Ok(hash.to_string())
+    })
+    .await
+    .unwrap_or(Err(argon2::password_hash::Error::Algorithm))
 }
 
 // -- GET /sessions ------------------------------------------------------------

@@ -153,10 +153,11 @@ const fn event_kind_to_change_type(kind: EventKind) -> Option<&'static str> {
 /// Window for coalescing rapid events on the same path.
 const DEBOUNCE_DURATION: Duration = Duration::from_millis(80);
 
-/// A pending debounced event.
-struct PendingEvent {
+/// A pending debounced notification (broadcast only — index updates are immediate).
+struct PendingNotification {
     change_type: &'static str,
     deadline: Instant,
+    disknode: SerializableDisknode,
 }
 
 // -- Filer configuration ------------------------------------------------------
@@ -321,10 +322,12 @@ async fn filer_event_loop(
     app: Arc<App>,
 ) {
     let source_dir_path = Path::new(&source_dir);
-    let mut pending: HashMap<PathBuf, PendingEvent> = HashMap::new();
+    // Pending notifications — index updates happen immediately, but
+    // filer_change broadcasts are debounced to avoid flooding clients.
+    let mut pending: HashMap<PathBuf, PendingNotification> = HashMap::new();
 
     loop {
-        // If we have pending events, wait until the nearest deadline or a new event
+        // If we have pending notifications, wait until the nearest deadline or a new event
         let timeout = pending
             .values()
             .map(|p| p.deadline)
@@ -351,6 +354,31 @@ async fn filer_event_loop(
                     if is_ignored(&file_path, source_dir_path, &extra_ignores) {
                         continue;
                     }
+
+                    let is_delete = change_type == "delete";
+
+                    // Skip directory events — we only index files.
+                    if !is_delete
+                        && let Ok(meta) = tokio::fs::metadata(&file_path).await
+                        && meta.is_dir()
+                    {
+                        continue;
+                    }
+
+                    let disknode = build_disknode(&file_path, &source_dir, is_delete).await;
+
+                    // Update the file index immediately so reads always
+                    // see the latest state (no debounce on the index).
+                    {
+                        let mut index = files.write().await;
+                        if is_delete {
+                            index.remove(&disknode.id);
+                        } else {
+                            index.insert(disknode.id.clone(), disknode.clone());
+                        }
+                    }
+
+                    // Debounce the notification broadcast
                     let deadline = Instant::now() + DEBOUNCE_DURATION;
                     pending
                         .entry(file_path)
@@ -359,18 +387,20 @@ async fn filer_event_loop(
                             // followed by Modify should still be seen as "add"
                             // by clients (the file is new).
                             p.deadline = deadline;
+                            p.disknode = disknode.clone();
                             if p.change_type != "add" {
                                 p.change_type = change_type;
                             }
                         })
-                        .or_insert(PendingEvent {
+                        .or_insert(PendingNotification {
                             change_type,
                             deadline,
+                            disknode,
                         });
                 }
             }
             None => {
-                // Channel closed or timeout fired — flush ready events
+                // Channel closed or timeout fired — flush ready notifications
                 if pending.is_empty() {
                     // Channel truly closed (no pending, no new events)
                     break;
@@ -378,43 +408,19 @@ async fn filer_event_loop(
             }
         }
 
-        // Flush events whose deadline has passed
+        // Flush notifications whose deadline has passed
         let now = Instant::now();
-        let ready: Vec<(PathBuf, PendingEvent)> = pending
+        let ready: Vec<(PathBuf, PendingNotification)> = pending
             .extract_if(|_, p| p.deadline <= now)
             .collect();
 
-        for (file_path, event) in ready {
-            let is_delete = event.change_type == "delete";
-
-            // Skip directory events — we only index files. On delete we can't
-            // stat so we check if the path was in the index (only files are indexed).
-            if !is_delete
-                && let Ok(meta) = tokio::fs::metadata(&file_path).await
-                && meta.is_dir()
-            {
-                continue;
-            }
-
-            let disknode = build_disknode(&file_path, &source_dir, is_delete).await;
-
-            // Update the file index
-            {
-                let mut index = files.write().await;
-                if is_delete {
-                    index.remove(&disknode.id);
-                } else {
-                    index.insert(disknode.id.clone(), disknode.clone());
-                }
-            }
-
-            // Build and broadcast the notification
+        for (_, event) in ready {
             let params = FilerChangeParams {
                 change: DiskfileChange {
                     change_type: event.change_type.to_owned(),
-                    path: disknode.id.clone(),
+                    path: event.disknode.id.clone(),
                 },
-                disknode,
+                disknode: event.disknode,
             };
 
             let notification = rpc::notification(

@@ -87,7 +87,7 @@ async fn bootstrap_inner(app: &App, input: BootstrapInput) -> Result<Response, R
     }
 
     // 3. Hash password with Argon2 (CPU-intensive, before transaction)
-    let password_hash = hash_password(&input.password).map_err(|e| {
+    let password_hash = hash_password(input.password.clone()).await.map_err(|e| {
         tracing::error!(error = %e, "password hashing failed");
         error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
     })?;

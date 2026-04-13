@@ -95,7 +95,7 @@ export const backends: Record<string, BackendConfig> = {
 	},
 	rust: {
 		name: 'rust',
-		start_command: ['cargo', 'run', '-p', 'zzz_server', '--', '--port', '1174'],
+		start_command: ['cargo', 'run', '--release', '-p', 'zzz_server', '--', '--port', '1174'],
 		base_url: 'http://localhost:1174',
 		rpc_path: '/api/rpc',
 		ws_path: '/api/ws',

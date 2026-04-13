@@ -17,8 +17,9 @@ scoped_dirs, and open workspaces — with contents), `provider_load_status` stub
 `workspace_changed` notifications (broadcast to all connected WebSocket
 clients on open/close), `terminal_data` and `terminal_exited` notifications
 (broadcast on PTY output and process exit), file watching via `notify` crate
-(`filer_change` notifications on file add/change/delete with 80ms debouncing,
-per-watcher ignore config, in-memory file index — startup filers on `zzz_dir`
+(`filer_change` notifications on file add/change/delete with 80ms debounced
+broadcasts and immediate index updates, per-watcher ignore config,
+in-memory file index — startup filers on `zzz_dir`
 and `scoped_dirs` matching Deno, plus per-workspace filers with deduplication
 and lifetime tracking), WebSocket connection tracking with `broadcast`/`send_to`
 infrastructure, and event-driven socket revocation (logout and password change
@@ -305,7 +306,7 @@ crates/zzz_server/src/
 ├── account.rs       # Account routes: login, logout, password change, session management
 ├── bootstrap.rs     # POST /bootstrap handler (account + session creation)
 ├── db.rs            # Connection pool, migrations, auth + account management queries
-├── filer.rs         # Filer + FilerManager (notify crate) — file index, debounced watcher, filer_change notifications
+├── filer.rs         # Filer + FilerManager (notify crate) — immediate file index updates, debounced filer_change broadcasts
 ├── pty_manager.rs   # PTY terminal manager (fuz_pty crate) → terminal_data/exited notifications
 ├── scoped_fs.rs     # Scoped filesystem — path validation, symlink rejection
 └── error.rs         # ServerError (Bind, Serve, Database, Config)
@@ -365,7 +366,7 @@ identical JSON-RPC envelopes for all auth failures.
 ## Known Limitations
 
 - 13 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_update_api_key` keeper-only) + `provider_load_status` returns `method_not_found` (no provider support yet)
-- 4 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debouncing, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast)
+- 4 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debounced broadcasts with immediate index updates, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast)
 - No batch request support (JSON arrays)
 - No completion/streaming or Ollama actions
 - `provider_load_status` returns `method_not_found` — no provider integration yet
@@ -383,7 +384,8 @@ identical JSON-RPC envelopes for all auth failures.
   Compatible with fuz_app's keyring format (same `value.base64(signature)`).
 - **Session hashing**: `blake3` crate for token → storage key hashing.
   Compatible with fuz_app's `hash_blake3` (same hex output).
-- **Password hashing**: Argon2id via `argon2` crate (bootstrap, login, password change).
+- **Password hashing**: Argon2id via `argon2` crate (bootstrap, login, password change),
+  offloaded to `tokio::task::spawn_blocking` to avoid blocking the async runtime.
 - **Dispatch is async**: filesystem handlers (`diskfile_update`, etc.) use
   `tokio::fs` async I/O. Workspace handlers remain sync (no await points).
 - **`std::sync::RwLock`** (not tokio): current handlers are sync. When async
