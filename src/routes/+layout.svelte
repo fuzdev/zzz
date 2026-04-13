@@ -107,7 +107,7 @@
 				content: 'settings',
 				icon: '?',
 				run: () => {
-					console.log('show main dialog');
+					app?.api.toggle_main_menu({show: true});
 				},
 			},
 		},
