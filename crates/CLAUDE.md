@@ -17,8 +17,8 @@ contents), `provider_load_status` stub (returns empty array),
 `workspace_changed` notifications (broadcast to all connected WebSocket
 clients on open/close), `terminal_data` and `terminal_exited` notifications
 (broadcast on PTY output and process exit), file watching via `notify` crate
-(`filer_change` notifications on file add/change/delete within open
-workspaces), WebSocket connection tracking with `broadcast`/`send_to`
+(`filer_change` notifications on file add/change/delete — startup watchers on
+`zzz_dir` and `scoped_dirs` matching Deno, plus per-workspace watchers), WebSocket connection tracking with `broadcast`/`send_to`
 infrastructure, and event-driven socket revocation (logout and password change
 close matching WebSocket connections). Database (PostgreSQL via
 `tokio-postgres`/`deadpool-postgres`), HMAC-SHA256 cookie signing
@@ -314,7 +314,8 @@ in `RwLock<HashMap>`, `deadpool_postgres::Pool`, `Keyring`, origin config,
 `ScopedFs`, `zzz_dir`, `scoped_dirs`, `PtyManager`, `DaemonTokenState`,
 connection tracking via `AtomicU64` + `RwLock<HashMap<ConnectionId,
 ConnectionInfo>>`, file watchers via `RwLock<HashMap<String,
-WorkspaceWatcher>>`), constructed once in `main`, wrapped in `Arc`. `Ctx` is
+WorkspaceWatcher>>` — startup watchers on `zzz_dir` and `scoped_dirs`, plus
+per-workspace watchers), constructed once in `main`, wrapped in `Arc`. `Ctx` is
 per-request context (borrows `App` + holds `Arc<App>` for spawning tasks,
 `request_id`, `auth: Option<&RequestContext>`), constructed by each transport
 before calling `handlers::dispatch`.
@@ -361,7 +362,7 @@ identical JSON-RPC envelopes for all auth failures.
 ## Known Limitations
 
 - 13 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_update_api_key` keeper-only) + `provider_load_status` returns `method_not_found` (no provider support yet)
-- 4 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (file watcher via `notify` crate, recursive, ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz`), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast)
+- 4 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (file watcher via `notify` crate, recursive, ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`; startup watchers on `zzz_dir` and `scoped_dirs` plus per-workspace watchers), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast)
 - No batch request support (JSON arrays)
 - No completion/streaming or Ollama actions
 - `provider_load_status` returns `method_not_found` — no provider integration yet

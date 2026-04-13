@@ -242,7 +242,7 @@ struct WorkspaceListResult {
 #[derive(Serialize)]
 struct WorkspaceOpenResult {
     workspace: WorkspaceInfo,
-    files: Vec<Value>, // always empty — no file watching in Rust backend yet
+    files: Vec<Value>, // always empty — initial files sent via session_load, watcher handles updates
 }
 
 #[derive(Serialize)]

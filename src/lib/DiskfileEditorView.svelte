@@ -69,8 +69,8 @@
 				placeholder={GLYPH_PLACEHOLDER + ' ' + diskfile.path_relative}
 				readonly={false}
 				attrs={{class: 'height:100% border-radius:0'}}
-				onsave={async (value) => {
-					await app.diskfiles.update(diskfile.path, value);
+				onsave={async () => {
+					await editor_state.save_changes();
 				}}
 			/>
 		</div>

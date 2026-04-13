@@ -55,7 +55,6 @@ const IGNORED_DIRS: &[&str] = &[
     ".svelte-kit",
     "target",
     "dist",
-    ".zzz",
 ];
 
 /// Check if a path contains any ignored directory component.
