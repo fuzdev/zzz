@@ -175,7 +175,7 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
 
 ## Integration Tests
 
-78 tests on both backends, all cross-backend (0 skips). One test
+79 tests on both backends, all cross-backend (0 skips). One test
 (`provider_load_status_empty`) branches on backend name — Rust returns
 `method_not_found`, Deno returns the spec response. Both backends bootstrap
 auth (admin account + session cookie), create a non-keeper user (account +
