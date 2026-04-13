@@ -256,29 +256,23 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 	// TODO refactor, probably `app.session`
 	receive_session(data: ActionOutputs['session_load']['data']): void {
-		try {
-			this.zzz_dir = data.zzz_dir;
-			this.scoped_dirs = data.scoped_dirs;
-			this.provider_status = data.provider_status;
+		this.zzz_dir = data.zzz_dir;
+		this.scoped_dirs = data.scoped_dirs;
+		this.provider_status = data.provider_status;
 
-			if (Array.isArray(data.files)) {
-				for (const disknode of data.files) {
-					this.diskfiles.handle_change({
-						change: {type: 'add', path: disknode.id},
-						disknode,
-					});
-				}
+		if (Array.isArray(data.files)) {
+			for (const disknode of data.files) {
+				this.diskfiles.handle_change({
+					change: {type: 'add', path: disknode.id},
+					disknode,
+				});
 			}
+		}
 
-			if (Array.isArray(data.workspaces)) {
-				for (const workspace_data of data.workspaces) {
-					this.workspaces.add(workspace_data);
-				}
+		if (Array.isArray(data.workspaces)) {
+			for (const workspace_data of data.workspaces) {
+				this.workspaces.add(workspace_data);
 			}
-		} catch (e) {
-			console.error('[receive_session] error processing session data:', e);
-			console.error('[receive_session] data:', JSON.stringify(data, null, 2));
-			throw e;
 		}
 	}
 

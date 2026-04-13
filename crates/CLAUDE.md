@@ -12,7 +12,8 @@ actions (`terminal_create`, `terminal_data_send`, `terminal_resize`,
 `terminal_close`) via `fuz_pty` native crate dependency (real PTY via
 `forkpty`), per-action auth checks on all transports, a bootstrap endpoint
 for first-time account creation, `session_load` handler (returns zzz_dir,
-scoped_dirs, workspaces), `provider_load_status` stub (returns empty array),
+scoped_dirs, workspaces, and recursive file listing from zzz_dir with
+contents), `provider_load_status` stub (returns empty array),
 `workspace_changed` notifications (broadcast to all connected WebSocket
 clients on open/close), `terminal_data` and `terminal_exited` notifications
 (broadcast on PTY output and process exit), file watching via `notify` crate
@@ -171,7 +172,7 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
 
 ## Integration Tests
 
-74 tests on both backends, all cross-backend (0 skips). One test
+78 tests on both backends, all cross-backend (0 skips). One test
 (`provider_load_status_empty`) branches on backend name — Rust returns
 `method_not_found`, Deno returns the spec response. Both backends bootstrap
 auth (admin account + session cookie), create a non-keeper user (account +
@@ -219,15 +220,19 @@ workspace open/close, and that idempotent opens do not broadcast.
 unauthenticated WS upgrade is rejected.
 
 **Session/provider tests (both backends):** `session_load_basic`,
-`provider_load_status_empty` — 2 tests verify session data loading and
-provider status stub.
+`session_load_returns_zzz_dir_files`, `session_load_returns_nested_files`,
+`provider_load_status_empty` — 4 tests verify session data loading
+(including zzz_dir file listing with contents and recursive subdirectory
+walk) and provider status stub.
 
 **Filesystem tests (both backends):** `diskfile_update_and_read`,
+`diskfile_update_in_zzz_dir`, `diskfile_update_in_zzz_dir_subdirectory`,
 `diskfile_delete`, `directory_create`, `directory_create_already_exists`,
 `diskfile_update_outside_scope`, `diskfile_update_path_traversal`,
-`diskfile_update_relative_path`, `diskfile_delete_nonexistent` — 8 tests
-verify scoped filesystem operations, idempotent directory creation, path
-traversal rejection, relative path rejection, and nonexistent file deletion.
+`diskfile_update_relative_path`, `diskfile_delete_nonexistent` — 10 tests
+verify scoped filesystem operations (including writes to zzz_dir and nested
+subdirectories), idempotent directory creation, path traversal rejection,
+relative path rejection, and nonexistent file deletion.
 
 **Workspace edge cases (both backends):** `workspace_open_not_directory` —
 1 test verifies opening a file (not a directory) returns an error.

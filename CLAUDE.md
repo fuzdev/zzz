@@ -265,7 +265,7 @@ terminals via `fuz_pty` native crate, and WebSocket connection tracking
 (`broadcast`/`send_to`). PostgreSQL via `tokio-postgres`/`deadpool-postgres`,
 HMAC-SHA256 cookie signing, blake3 session/token hashing, per-action auth
 checks with credential type enforcement, bootstrap endpoint.
-The Deno server is ground truth — 74 integration tests on both backends
+The Deno server is ground truth — 78 integration tests on both backends
 (all cross-backend, 0 skips) verify identical JSON-RPC responses.
 
 AI provider actions (`completion_create`, `ollama_*`, `provider_load_status`)
