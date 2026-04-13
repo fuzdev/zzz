@@ -56,7 +56,7 @@ SECRET_COOKIE_KEYS=dev-only-not-for-production-use-000 \
 
 # Quick smoke test
 curl http://localhost:1174/health
-curl -X POST http://localhost:1174/rpc \
+curl -X POST http://localhost:1174/api/rpc \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":"1","method":"ping"}'
 # → {"jsonrpc":"2.0","id":"1","result":{"ping_id":"1"}}
@@ -84,21 +84,21 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 
 ## Endpoints
 
-| Method | Path                     | Description                              |
-|--------|--------------------------|------------------------------------------|
-| POST   | `/rpc`                   | JSON-RPC 2.0 (HTTP transport, auth-gated) |
-| POST   | `/bootstrap`             | One-shot admin account creation          |
-| POST   | `/login`                 | Username/password login → session cookie |
-| POST   | `/logout`                | Invalidate session, close WS connections |
-| POST   | `/password`              | Change password, revoke all sessions/tokens |
-| GET    | `/sessions`              | List sessions for authenticated account  |
-| POST   | `/sessions/:id/revoke`   | Revoke a specific session                |
-| GET    | `/ws`                    | JSON-RPC 2.0 (WebSocket, cookie/bearer/daemon) |
-| GET    | `/health`                | Health check (`{"status":"ok"}`)         |
-| GET    | `/*`                     | Static files (if `--static-dir`)         |
+| Method | Path                              | Description                              |
+|--------|-----------------------------------|------------------------------------------|
+| POST   | `/api/rpc`                        | JSON-RPC 2.0 (HTTP transport, auth-gated) |
+| POST   | `/api/account/bootstrap`          | One-shot admin account creation          |
+| POST   | `/api/account/login`              | Username/password login → session cookie |
+| POST   | `/api/account/logout`             | Invalidate session, close WS connections |
+| POST   | `/api/account/password`           | Change password, revoke all sessions/tokens |
+| GET    | `/api/account/sessions`           | List sessions for authenticated account  |
+| POST   | `/api/account/sessions/:id/revoke`| Revoke a specific session                |
+| GET    | `/api/ws`                         | JSON-RPC 2.0 (WebSocket, cookie/bearer/daemon) |
+| GET    | `/health`                         | Health check (`{"status":"ok"}`)         |
+| GET    | `/*`                              | Static files (if `--static-dir`)         |
 
-Note: the Deno server uses `/api/rpc`, `/api/account/login`, etc.; the Rust
-server uses `/rpc`, `/login`, etc. The integration test configs handle this.
+Route paths match the Deno server — both backends use the same `/api/*` prefix.
+Integration tests use identical config for both backends.
 
 ## Auth
 
@@ -154,12 +154,13 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
     only per-account. Called by logout (per-session) and password change
     (per-account).
 
-11. **Account management** — `POST /login` (username/password → session cookie
-    with enumeration prevention via dummy hash), `POST /logout` (invalidate
-    session + close WS connections), `POST /password` (change password, revoke
-    all sessions + API tokens, close all WS connections), `GET /sessions`
-    (list sessions for account), `POST /sessions/:id/revoke` (revoke specific
-    session, scoped to own account).
+11. **Account management** — `POST /api/account/login` (username/password →
+    session cookie with enumeration prevention via dummy hash),
+    `POST /api/account/logout` (invalidate session + close WS connections),
+    `POST /api/account/password` (change password, revoke all sessions + API
+    tokens, close all WS connections), `GET /api/account/sessions` (list
+    sessions for account), `POST /api/account/sessions/:id/revoke` (revoke
+    specific session, scoped to own account).
 
 ## Integration Tests
 
@@ -342,7 +343,7 @@ identical JSON-RPC envelopes for all auth failures.
 | Bearer invalid/expired token | **Resolved** | Both backends soft-fail → JSON-RPC `-32001` unauthenticated |
 | `provider_load_status` shape | **Resolved** | Rust now returns `-32601 method_not_found` instead of wrong-shape `[]` stub. Test is backend-aware. Will return spec-conformant response when Rust providers are implemented. |
 | `session_list` response | **Resolved** | Both backends now return `{sessions: [{id, account_id, created_at, last_seen_at, expires_at}]}` matching fuz_app `AuthSessionJson`. Tests are cross-backend. |
-| `session_revoke` format | **Resolved** | Both backends now return `{ok: true, revoked: boolean}` with idempotent 200 responses. Route paths differ by design (handled by test config `account_paths`). Tests are cross-backend. |
+| `session_revoke` format | **Resolved** | Both backends now return `{ok: true, revoked: boolean}` with idempotent 200 responses. Route paths unified (`/api/account/*`). Tests are cross-backend. |
 | `error.data` (validation) | Intentional | Deno includes Zod issues in `error.data` for -32602; Rust omits. Intentional divergence — Rust's omission is the safer production default, Deno's inclusion aids DX. Handled by `normalize_error_data` in tests. Future: environment-conditional in both backends (include in dev, strip in prod). |
 
 ## Known Limitations

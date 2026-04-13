@@ -5,15 +5,19 @@
 	import {GLYPH_RETRY} from './glyphs.js';
 	import {app_context} from './app.svelte.js';
 
-	interface Props {
+	const {
+		terminal_id,
+		command,
+		args,
+		onclose,
+		onrestart,
+	}: {
 		terminal_id: Uuid;
 		command: string;
 		args: Array<string>;
 		onclose: (exit_code: number | null) => void;
 		onrestart?: () => void;
-	}
-
-	const {terminal_id, command, args, onclose, onrestart}: Props = $props();
+	} = $props();
 
 	const app = app_context.get();
 

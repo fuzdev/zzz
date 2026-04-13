@@ -6,13 +6,15 @@
 	import {app_context} from './app.svelte.js';
 	import type {Uuid} from './zod_helpers.js';
 
-	interface Props {
+	const {
+		terminal_id,
+		onclose,
+		get_text,
+	}: {
 		terminal_id: Uuid;
 		onclose?: (exit_code: number | null) => void;
 		get_text?: (fn: () => string) => void;
-	}
-
-	const {terminal_id, onclose, get_text}: Props = $props();
+	} = $props();
 
 	const app = app_context.get();
 

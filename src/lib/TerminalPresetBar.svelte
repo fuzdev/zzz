@@ -2,14 +2,17 @@
 	import type {TerminalPreset} from './terminal_preset.svelte.js';
 	import {GLYPH_PLAY, GLYPH_ADD, GLYPH_REMOVE} from './glyphs.js';
 
-	interface Props {
+	const {
+		presets,
+		onrun,
+		oncreate,
+		ondelete,
+	}: {
 		presets: Array<TerminalPreset>;
 		onrun: (preset: TerminalPreset) => void;
 		oncreate?: (name: string, command: string, args: Array<string>) => void;
 		ondelete?: (preset: TerminalPreset) => void;
-	}
-
-	const {presets, onrun, oncreate, ondelete}: Props = $props();
+	} = $props();
 
 	let adding = $state.raw(false);
 	let new_name = $state.raw('');

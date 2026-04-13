@@ -5,13 +5,15 @@
 
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 
-	interface Props {
+	const {
+		get_terminal_text,
+		display_command,
+		children,
+	}: {
 		get_terminal_text: Thunk<string> | null;
 		display_command: string;
 		children: Snippet;
-	}
-
-	const {get_terminal_text, display_command, children}: Props = $props();
+	} = $props();
 </script>
 
 <Contextmenu {entries} {children} />

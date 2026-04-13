@@ -35,7 +35,7 @@ export default defineConfig(({mode}) => ({
 	resolve: mode === 'test' ? {conditions: ['browser']} : undefined,
 	server: {
 		proxy: {
-			'/api': 'http://localhost:8999', // equal to `PUBLIC_SERVER_HOST + ':' + PUBLIC_SERVER_PROXIED_PORT`
+			'/api': `http://localhost:${process.env.PUBLIC_SERVER_PROXIED_PORT || '8999'}`,
 		},
 	},
 }));

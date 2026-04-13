@@ -1,9 +1,5 @@
 <script lang="ts">
-	interface Props {
-		onsend: (command_text: string) => void;
-	}
-
-	const {onsend}: Props = $props();
+	const {onsend}: {onsend: (command_text: string) => void} = $props();
 
 	let input = $state.raw('');
 

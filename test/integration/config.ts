@@ -93,8 +93,8 @@ export const backends: Record<string, BackendConfig> = {
 		name: 'rust',
 		start_command: ['cargo', 'run', '-p', 'zzz_server', '--', '--port', '1174'],
 		base_url: 'http://localhost:1174',
-		rpc_path: '/rpc',
-		ws_path: '/ws',
+		rpc_path: '/api/rpc',
+		ws_path: '/api/ws',
 		health_path: '/health',
 		startup_timeout_ms: 60_000, // includes compile time on first run
 		env: {
@@ -105,18 +105,18 @@ export const backends: Record<string, BackendConfig> = {
 			PUBLIC_ZZZ_SCOPED_DIRS: INTEGRATION_SCOPED_DIR,
 		},
 		auth: {
-			bootstrap_path: '/bootstrap',
+			bootstrap_path: '/api/account/bootstrap',
 			token: INTEGRATION_BOOTSTRAP_TOKEN,
 			token_file: INTEGRATION_TOKEN_FILE,
 			username: 'testadmin',
 			password: 'test-password-integration-123',
 		},
 		account_paths: {
-			login: '/login',
-			logout: '/logout',
-			password: '/password',
-			sessions: '/sessions',
-			session_revoke: '/sessions/:id/revoke',
+			login: '/api/account/login',
+			logout: '/api/account/logout',
+			password: '/api/account/password',
+			sessions: '/api/account/sessions',
+			session_revoke: '/api/account/sessions/:id/revoke',
 		},
 	},
 };

@@ -114,15 +114,15 @@ async fn run() -> Result<(), ServerError> {
     let app_state_for_shutdown = Arc::clone(&app_state);
 
     let mut app = Router::new()
-        .route("/rpc", post(rpc::rpc_handler))
-        .route("/ws", get(ws::ws_handler))
+        .route("/api/rpc", post(rpc::rpc_handler))
+        .route("/api/ws", get(ws::ws_handler))
         .route("/health", get(health_handler))
-        .route("/bootstrap", post(bootstrap::bootstrap_handler))
-        .route("/login", post(account::login_handler))
-        .route("/logout", post(account::logout_handler))
-        .route("/password", post(account::password_handler))
-        .route("/sessions", get(account::sessions_list_handler))
-        .route("/sessions/{id}/revoke", post(account::session_revoke_handler))
+        .route("/api/account/bootstrap", post(bootstrap::bootstrap_handler))
+        .route("/api/account/login", post(account::login_handler))
+        .route("/api/account/logout", post(account::logout_handler))
+        .route("/api/account/password", post(account::password_handler))
+        .route("/api/account/sessions", get(account::sessions_list_handler))
+        .route("/api/account/sessions/{id}/revoke", post(account::session_revoke_handler))
         .with_state(app_state);
 
     if let Some(ref dir) = config.static_dir {
