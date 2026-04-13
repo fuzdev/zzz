@@ -4,6 +4,7 @@
 	import '$routes/style.css';
 
 	import {onMount} from 'svelte';
+	import {contextmenu_attachment} from '@fuzdev/fuz_ui/contextmenu_state.svelte.js';
 	import {Library} from '@fuzdev/fuz_ui/library.svelte.js';
 	import {BROWSER} from 'esm-env';
 	import {page} from '$app/state';
@@ -97,6 +98,31 @@
 <svelte:head>
 	<title>Zzz</title>
 </svelte:head>
+
+<svelte:body
+	{@attach contextmenu_attachment([
+		{
+			snippet: 'text',
+			props: {
+				content: 'settings',
+				icon: '?',
+				run: () => {
+					console.log('show main dialog');
+				},
+			},
+		},
+		{
+			snippet: 'text',
+			props: {
+				content: 'reload',
+				icon: '⟳',
+				run: () => {
+					location.reload();
+				},
+			},
+		},
+	])}
+/>
 
 {#if auth_state.verified && app}
 	<!-- TODO hacky, docs need to nest gracefully with abosolute positioning, or at least support offset vars -->
