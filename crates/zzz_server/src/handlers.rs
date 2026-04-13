@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 
 use crate::auth::{Keyring, RequestContext};
 use crate::daemon_token::SharedDaemonTokenState;
-use crate::filer::WorkspaceWatcher;
+use crate::filer::{FilerConfig, FilerLifetime, FilerManager};
 use crate::pty_manager::PtyManager;
 use crate::rpc;
 use crate::scoped_fs::ScopedFs;
@@ -54,8 +54,8 @@ pub struct App {
     next_connection_id: AtomicU64,
     /// Active WebSocket connections — keyed by `ConnectionId`.
     pub connections: RwLock<HashMap<ConnectionId, ConnectionInfo>>,
-    /// Active file watchers — keyed by normalized workspace path.
-    pub watchers: RwLock<HashMap<String, WorkspaceWatcher>>,
+    /// Active file watchers — one per unique directory path, with lifetime tracking.
+    pub filer_manager: FilerManager,
     /// PTY terminal manager.
     pub pty_manager: PtyManager,
     /// Daemon token state for `X-Daemon-Token` auth.
@@ -87,7 +87,7 @@ impl App {
             scoped_dirs,
             next_connection_id: AtomicU64::new(1),
             connections: RwLock::new(HashMap::new()),
-            watchers: RwLock::new(HashMap::new()),
+            filer_manager: FilerManager::new(),
             pty_manager: PtyManager::new(),
             daemon_token_state,
         }
@@ -246,19 +246,8 @@ struct WorkspaceOpenResult {
 }
 
 #[derive(Serialize)]
-struct SerializableDisknode {
-    id: String,
-    source_dir: String,
-    contents: Option<String>,
-    ctime: Option<f64>,
-    mtime: Option<f64>,
-    dependents: Vec<Value>,
-    dependencies: Vec<Value>,
-}
-
-#[derive(Serialize)]
 struct SessionLoadData {
-    files: Vec<SerializableDisknode>,
+    files: Vec<crate::filer::SerializableDisknode>,
     zzz_dir: String,
     scoped_dirs: Vec<String>,
     provider_status: Vec<Value>, // always empty — no providers in Rust backend yet
@@ -297,8 +286,8 @@ pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Val
         "ping" => handle_ping(ctx),
         "session_load" => handle_session_load(ctx).await,
         "workspace_list" => handle_workspace_list(ctx),
-        "workspace_open" => handle_workspace_open(params, ctx),
-        "workspace_close" => handle_workspace_close(params, ctx),
+        "workspace_open" => handle_workspace_open(params, ctx).await,
+        "workspace_close" => handle_workspace_close(params, ctx).await,
         "diskfile_update" => handle_diskfile_update(params, ctx).await,
         "diskfile_delete" => handle_diskfile_delete(params, ctx).await,
         "directory_create" => handle_directory_create(params, ctx).await,
@@ -331,9 +320,9 @@ async fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
         ws.values().cloned().collect()
     };
 
-    // Walk zzz_dir to populate initial file listing (matches Deno's Filer behavior)
-    let mut files = Vec::new();
-    collect_files_recursive(&ctx.app.zzz_dir, &ctx.app.zzz_dir, &mut files).await;
+    // Read files from all filer indexes (matches Deno's session_load which
+    // iterates backend.filers.entries() — no filesystem walk at call time)
+    let files = ctx.app.filer_manager.collect_all_files().await;
 
     let result = SessionLoadResult {
         data: SessionLoadData {
@@ -345,68 +334,6 @@ async fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
         },
     };
     serde_json::to_value(result).map_err(|_| rpc::internal_error("serialization failed"))
-}
-
-/// Recursively collect files from a directory into SerializableDisknode entries.
-async fn collect_files_recursive(
-    dir: &str,
-    source_dir: &str,
-    files: &mut Vec<SerializableDisknode>,
-) {
-    let Ok(mut entries) = tokio::fs::read_dir(dir).await else {
-        return;
-    };
-    while let Ok(Some(entry)) = entries.next_entry().await {
-        let path = entry.path();
-        let path_str = path.to_string_lossy().into_owned();
-
-        // Skip hidden dirs like .git, and common noise directories
-        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if matches!(
-                name,
-                ".git" | "node_modules" | ".svelte-kit" | "target" | "dist"
-            ) {
-                continue;
-            }
-        }
-
-        let Ok(meta) = tokio::fs::metadata(&path).await else {
-            continue;
-        };
-
-        if meta.is_dir() {
-            let mut dir_path = path_str.clone();
-            if !dir_path.ends_with('/') {
-                dir_path.push('/');
-            }
-            // Recurse into subdirectory
-            Box::pin(collect_files_recursive(&dir_path, source_dir, files)).await;
-        } else {
-            let ctime = meta
-                .created()
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs_f64());
-            let mtime = meta
-                .modified()
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs_f64());
-
-            // Read file contents (text files only, skip binary)
-            let contents = tokio::fs::read_to_string(&path).await.ok();
-
-            files.push(SerializableDisknode {
-                id: path_str,
-                source_dir: source_dir.to_owned(),
-                contents,
-                ctime,
-                mtime,
-                dependents: vec![],
-                dependencies: vec![],
-            });
-        }
-    }
 }
 
 fn handle_workspace_list(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
@@ -423,7 +350,7 @@ fn handle_workspace_list(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     serde_json::to_value(result).map_err(|_| rpc::internal_error("serialization failed"))
 }
 
-fn handle_workspace_open(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+async fn handle_workspace_open(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     // 1. Extract path from params (zero-copy — no from_value clone)
     let path = params
         .get("path")
@@ -493,16 +420,19 @@ fn handle_workspace_open(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpc
         workspaces.entry(normalized).or_insert(info).clone()
     };
 
-    // Start file watcher for the new workspace
-    match crate::filer::start_watching(&workspace.path, Arc::clone(&ctx.app_arc)) {
-        Ok(watcher) => {
-            if let Ok(mut watchers) = ctx.app.watchers.write() {
-                watchers.insert(workspace.path.clone(), watcher);
-            }
-        }
-        Err(e) => {
-            tracing::warn!(path = %workspace.path, error = %e, "failed to start file watcher");
-        }
+    // Start file watcher for the new workspace (deduplicates — reuses existing filer)
+    if let Err(e) = ctx
+        .app
+        .filer_manager
+        .start_filer(
+            &workspace.path,
+            Arc::clone(&ctx.app_arc),
+            FilerConfig::workspace(&ctx.app.zzz_dir),
+            FilerLifetime::Workspace,
+        )
+        .await
+    {
+        tracing::warn!(path = %workspace.path, error = %e, "failed to start file watcher");
     }
 
     // Broadcast workspace_changed notification to all connected clients
@@ -523,7 +453,7 @@ fn handle_workspace_open(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpc
     serde_json::to_value(result).map_err(|_| rpc::internal_error("serialization failed"))
 }
 
-fn handle_workspace_close(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+async fn handle_workspace_close(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     let path = params
         .get("path")
         .and_then(Value::as_str)
@@ -551,10 +481,8 @@ fn handle_workspace_close(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRp
         )));
     };
 
-    // Stop file watcher for the closed workspace (dropped = stopped)
-    if let Ok(mut watchers) = ctx.app.watchers.write() {
-        watchers.remove(&key);
-    }
+    // Stop file watcher for the closed workspace (permanent filers preserved)
+    ctx.app.filer_manager.stop_filer(&key).await;
 
     // Broadcast workspace_changed notification to all connected clients
     let notification = rpc::notification(

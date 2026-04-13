@@ -122,36 +122,39 @@ async fn run() -> Result<(), ServerError> {
         daemon_token_state.clone(),
     ));
 
-    // Start file watcher on zzz_dir at startup (matches Deno's Backend constructor
-    // which calls `this.#start_filer(this.zzz_dir)` immediately).
-    match filer::start_watching(&app_state.zzz_dir, Arc::clone(&app_state)) {
-        Ok(watcher) => {
-            if let Ok(mut watchers) = app_state.watchers.write() {
-                watchers.insert(app_state.zzz_dir.clone(), watcher);
-            }
-            tracing::info!(path = %app_state.zzz_dir, "started zzz_dir file watcher");
-        }
-        Err(e) => {
-            tracing::warn!(path = %app_state.zzz_dir, error = %e, "failed to start zzz_dir file watcher");
-        }
+    // Start file watchers at startup (matches Deno's Backend constructor
+    // which calls `this.#start_filer(this.zzz_dir)` then iterates scoped_dirs).
+    // zzz_dir uses FilerConfig::zzz_dir() (no .zzz ignore); scoped_dirs use workspace config.
+    match app_state
+        .filer_manager
+        .start_filer(
+            &app_state.zzz_dir,
+            Arc::clone(&app_state),
+            filer::FilerConfig::zzz_dir(),
+            filer::FilerLifetime::Permanent,
+        )
+        .await
+    {
+        Ok(_) => tracing::info!(path = %app_state.zzz_dir, "started zzz_dir filer"),
+        Err(e) => tracing::warn!(path = %app_state.zzz_dir, error = %e, "failed to start zzz_dir filer"),
     }
 
-    // Start file watchers on scoped_dirs at startup (matches Deno's Backend constructor
-    // which iterates scoped_dirs and calls `this.#start_filer(dir)` for each).
     for dir in &app_state.scoped_dirs {
         if *dir == app_state.zzz_dir {
-            continue; // already watching
+            continue;
         }
-        match filer::start_watching(dir, Arc::clone(&app_state)) {
-            Ok(watcher) => {
-                if let Ok(mut watchers) = app_state.watchers.write() {
-                    watchers.insert(dir.clone(), watcher);
-                }
-                tracing::info!(path = %dir, "started scoped_dir file watcher");
-            }
-            Err(e) => {
-                tracing::warn!(path = %dir, error = %e, "failed to start scoped_dir file watcher");
-            }
+        match app_state
+            .filer_manager
+            .start_filer(
+                dir,
+                Arc::clone(&app_state),
+                filer::FilerConfig::workspace(&app_state.zzz_dir),
+                filer::FilerLifetime::Permanent,
+            )
+            .await
+        {
+            Ok(_) => tracing::info!(path = %dir, "started scoped_dir filer"),
+            Err(e) => tracing::warn!(path = %dir, error = %e, "failed to start scoped_dir filer"),
         }
     }
 
