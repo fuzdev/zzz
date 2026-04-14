@@ -3,10 +3,8 @@ import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 
 import type {FilerChangeHandler, Backend} from './backend.js';
 import type {ActionInputs} from '../action_collections.js';
-import {safe_parse_action_input} from '../action_collection_helpers.js';
 import {create_jsonrpc_notification, to_jsonrpc_params} from '../jsonrpc_helpers.js';
 import {format_zod_validation_error} from '../zod_helpers.js';
-import type {ActionMethod} from '../action_metatypes.js';
 import {
 	filer_change_action_spec,
 	completion_progress_action_spec,
@@ -48,7 +46,7 @@ const send_notification = async (
 	}
 
 	try {
-		const parsed = safe_parse_action_input(spec.method as ActionMethod, input);
+		const parsed = spec.input.safeParse(input);
 		if (!parsed.success) {
 			backend.log?.error(
 				`[backend_actions_api.${spec.method}] input validation failed:`,

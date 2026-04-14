@@ -21,7 +21,6 @@ import {
 	is_notification_send_with_parsed_input,
 } from './action_event_helpers.js';
 import type {ActionEventDatas} from './action_collections.js';
-import {safe_parse_action_input, safe_parse_action_output} from './action_collection_helpers.js';
 import {
 	create_jsonrpc_request,
 	create_jsonrpc_response,
@@ -116,7 +115,7 @@ export class ActionEvent<
 			return this;
 		}
 
-		const parsed = safe_parse_action_input(this.spec.method as ActionMethod, this.#data.input);
+		const parsed = this.spec.input.safeParse(this.#data.input);
 		if (parsed.success) {
 			this.#transition_step('parsed', {input: parsed.data});
 		} else {
@@ -364,7 +363,7 @@ export class ActionEvent<
 
 	#complete_handling(output: unknown): void {
 		if (output !== undefined && should_validate_output(this.spec.kind, this.#data.phase)) {
-			const parsed = safe_parse_action_output(this.spec.method as ActionMethod, output);
+			const parsed = this.spec.output.safeParse(output);
 			if (parsed.success) {
 				this.#transition_step('handled', {output: parsed.data});
 			} else {

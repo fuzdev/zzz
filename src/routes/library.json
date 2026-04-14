@@ -134,85 +134,6 @@
 		"version": "0.0.1",
 		"modules": [
 			{
-				"path": "action_collection_helpers.ts",
-				"declarations": [
-					{
-						"name": "parse_action_input",
-						"kind": "function",
-						"doc_comment": "Parse action params with validation.",
-						"source_line": 8,
-						"type_signature": "<TMethod extends keyof typeof ActionInputs>(method: TMethod, data: unknown): ActionInputs[TMethod]",
-						"return_type": "ActionInputs[TMethod]",
-						"parameters": [
-							{
-								"name": "method",
-								"type": "TMethod"
-							},
-							{
-								"name": "data",
-								"type": "unknown"
-							}
-						]
-					},
-					{
-						"name": "parse_action_output",
-						"kind": "function",
-						"doc_comment": "Parse action result with validation.",
-						"source_line": 16,
-						"type_signature": "<TMethod extends keyof typeof ActionOutputs>(method: TMethod, data: unknown): ActionOutputs[TMethod]",
-						"return_type": "ActionOutputs[TMethod]",
-						"parameters": [
-							{
-								"name": "method",
-								"type": "TMethod"
-							},
-							{
-								"name": "data",
-								"type": "unknown"
-							}
-						]
-					},
-					{
-						"name": "safe_parse_action_input",
-						"kind": "function",
-						"doc_comment": "Safe parse action params.",
-						"source_line": 24,
-						"type_signature": "<TMethod extends keyof typeof ActionInputs>(method: TMethod, data: unknown): ZodSafeParseResult<ActionInputs[TMethod]>",
-						"return_type": "ZodSafeParseResult<ActionInputs[TMethod]>",
-						"parameters": [
-							{
-								"name": "method",
-								"type": "TMethod"
-							},
-							{
-								"name": "data",
-								"type": "unknown"
-							}
-						]
-					},
-					{
-						"name": "safe_parse_action_output",
-						"kind": "function",
-						"doc_comment": "Safe parse action result.",
-						"source_line": 33,
-						"type_signature": "<TMethod extends keyof typeof ActionOutputs>(method: TMethod, data: unknown): ZodSafeParseResult<ActionOutputs[TMethod]>",
-						"return_type": "ZodSafeParseResult<ActionOutputs[TMethod]>",
-						"parameters": [
-							{
-								"name": "method",
-								"type": "TMethod"
-							},
-							{
-								"name": "data",
-								"type": "unknown"
-							}
-						]
-					}
-				],
-				"dependencies": ["action_collections.ts"],
-				"dependents": ["action_event.ts", "server/backend_actions_api.ts"]
-			},
-			{
 				"path": "action_collections.gen.ts",
 				"declarations": [],
 				"dependencies": ["action_helpers.ts", "action_specs.ts"]
@@ -417,7 +338,6 @@
 				"dependencies": ["action_specs.ts"],
 				"dependents": [
 					"action.svelte.ts",
-					"action_collection_helpers.ts",
 					"frontend.svelte.ts",
 					"server/backend_provider_ollama.ts",
 					"server/create_zzz_app.ts",
@@ -933,7 +853,7 @@
 					{
 						"name": "ActionEventChangeObserver",
 						"kind": "type",
-						"source_line": 44,
+						"source_line": 43,
 						"type_signature": "ActionEventChangeObserver<TMethod>",
 						"generic_params": [
 							{
@@ -946,7 +866,7 @@
 						"name": "ActionEvent",
 						"kind": "class",
 						"doc_comment": "Action event that manages the lifecycle of an action through its state machine.",
-						"source_line": 53,
+						"source_line": 52,
 						"generic_params": [
 							{
 								"name": "TMethod",
@@ -1125,7 +1045,7 @@
 						"name": "create_action_event",
 						"kind": "function",
 						"doc_comment": "Create an action event from a spec and initial input.",
-						"source_line": 445,
+						"source_line": 444,
 						"type_signature": "<TMethod extends ActionMethod>(environment: ActionEventEnvironment, spec: { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<...>>; ... 4 more ...; async: true; } | { ...; } | { ...; }, input: unknown, initial_phase?: \"send_request\" | ... 8 more ... | undefined): ActionEvent<...>",
 						"return_type": "ActionEvent<TMethod, \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\">",
 						"parameters": [
@@ -1152,7 +1072,7 @@
 						"name": "create_action_event_from_json",
 						"kind": "function",
 						"doc_comment": "Reconstruct an action event from serialized JSON data.",
-						"source_line": 472,
+						"source_line": 471,
 						"type_signature": "<TMethod extends ActionMethod>(json: ActionEventDatas[TMethod], environment: ActionEventEnvironment): ActionEvent<TMethod, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"return_type": "ActionEvent<TMethod, \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\">",
 						"parameters": [
@@ -1169,7 +1089,7 @@
 					{
 						"name": "parse_action_event",
 						"kind": "function",
-						"source_line": 486,
+						"source_line": 485,
 						"type_signature": "(raw_json: unknown, environment: ActionEventEnvironment): ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | ... 23 more ... | \"workspace_changed\", \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"return_type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"parameters": [
@@ -1185,7 +1105,6 @@
 					}
 				],
 				"dependencies": [
-					"action_collection_helpers.ts",
 					"action_event_data.ts",
 					"action_event_helpers.ts",
 					"jsonrpc_errors.ts",
@@ -15870,7 +15789,7 @@
 					{
 						"name": "BackendActionsApi",
 						"kind": "type",
-						"source_line": 24,
+						"source_line": 22,
 						"type_signature": "BackendActionsApi",
 						"properties": [
 							{
@@ -15908,7 +15827,7 @@
 					{
 						"name": "create_backend_actions_api",
 						"kind": "function",
-						"source_line": 74,
+						"source_line": 72,
 						"type_signature": "(backend: Backend): BackendActionsApi",
 						"return_type": "BackendActionsApi",
 						"parameters": [
@@ -15922,7 +15841,7 @@
 						"name": "handle_filer_change",
 						"kind": "function",
 						"doc_comment": "Handle file system changes and notify clients.",
-						"source_line": 90,
+						"source_line": 88,
 						"type_signature": "(change: WatcherChange, disknode: Disknode, backend: Backend, dir: string, filer: Filer): void",
 						"return_type": "void",
 						"parameters": [
@@ -15950,7 +15869,6 @@
 					}
 				],
 				"dependencies": [
-					"action_collection_helpers.ts",
 					"action_specs.ts",
 					"diskfile_helpers.ts",
 					"diskfile_types.ts",
