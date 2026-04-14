@@ -7,9 +7,9 @@ import {Cell, type CellOptions} from './cell.svelte.js';
 import {ActionMethod} from './action_metatypes.js';
 import {ActionSpecs} from './action_collections.js';
 import {CellJson} from './cell_types.js';
-import {ActionEventData} from './action_event_data.js';
-import type {ActionEvent} from './action_event.js';
-import {is_action_complete} from './action_event_helpers.js';
+import {ActionEventData} from '@fuzdev/fuz_app/actions/action_event_data.js';
+import type {ActionEvent} from '@fuzdev/fuz_app/actions/action_event.js';
+import {is_action_complete} from '@fuzdev/fuz_app/actions/action_event_helpers.js';
 
 // TODO this isnt in action_types.ts because of circular dependencies, idk what pattern is best yet
 export const ActionJson = CellJson.extend({

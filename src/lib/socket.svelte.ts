@@ -14,9 +14,9 @@ import {
 	DEFAULT_RECONNECT_DELAY_MAX,
 	DEFAULT_AUTO_RECONNECT,
 	DEFAULT_CLOSE_CODE,
-	WS_CLOSE_SESSION_REVOKED,
 } from './socket_helpers.js';
-import {UNKNOWN_ERROR_MESSAGE} from './constants.js';
+import {WS_CLOSE_SESSION_REVOKED} from '@fuzdev/fuz_app/actions/transports.js';
+import {UNKNOWN_ERROR_MESSAGE} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
 
 // TODO the plan here is to make websockets one of multiple transports, this just gets the proof of concept working
 

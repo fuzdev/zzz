@@ -49,7 +49,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.3.16",
-			"@fuzdev/fuz_app": "^0.10.1",
+			"@fuzdev/fuz_app": "^0.11.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.58.0",
 			"@fuzdev/fuz_ui": "^0.191.4",
@@ -136,7 +136,7 @@
 			{
 				"path": "action_collections.gen.ts",
 				"declarations": [],
-				"dependencies": ["action_helpers.ts", "action_specs.ts"]
+				"dependencies": ["action_specs.ts"]
 			},
 			{
 				"path": "action_collections.ts",
@@ -345,797 +345,6 @@
 				]
 			},
 			{
-				"path": "action_event_data.ts",
-				"declarations": [
-					{
-						"name": "ActionEventData",
-						"kind": "type",
-						"source_line": 16,
-						"type_signature": "ZodObject<{ kind: ZodEnum<{ request_response: \"request_response\"; remote_notification: \"remote_notification\"; local_call: \"local_call\"; }>; phase: ZodEnum<{ send_request: \"send_request\"; ... 7 more ...; execute: \"execute\"; }>; ... 9 more ...; notification: ZodNullable<...>; }, $strict>"
-					},
-					{
-						"name": "ActionEventRequestResponseData",
-						"kind": "type",
-						"source_line": 34,
-						"type_signature": "ActionEventRequestResponseData<TMethod, TInput, TOutput>",
-						"generic_params": [
-							{
-								"name": "TMethod",
-								"constraint": "ActionMethod",
-								"default_type": "ActionMethod"
-							},
-							{
-								"name": "TInput",
-								"default_type": "unknown"
-							},
-							{
-								"name": "TOutput",
-								"default_type": "unknown"
-							}
-						]
-					},
-					{
-						"name": "ActionEventRemoteNotificationData",
-						"kind": "type",
-						"source_line": 434,
-						"type_signature": "ActionEventRemoteNotificationData<TMethod, TInput>",
-						"generic_params": [
-							{
-								"name": "TMethod",
-								"constraint": "ActionMethod",
-								"default_type": "ActionMethod"
-							},
-							{
-								"name": "TInput",
-								"default_type": "unknown"
-							}
-						]
-					},
-					{
-						"name": "ActionEventLocalCallData",
-						"kind": "type",
-						"source_line": 579,
-						"type_signature": "ActionEventLocalCallData<TMethod, TInput, TOutput>",
-						"generic_params": [
-							{
-								"name": "TMethod",
-								"constraint": "ActionMethod",
-								"default_type": "ActionMethod"
-							},
-							{
-								"name": "TInput",
-								"default_type": "unknown"
-							},
-							{
-								"name": "TOutput",
-								"default_type": "unknown"
-							}
-						]
-					},
-					{
-						"name": "ActionEventDataUnion",
-						"kind": "type",
-						"source_line": 656,
-						"type_signature": "ActionEventDataUnion<TMethod, TInput, TOutput>",
-						"generic_params": [
-							{
-								"name": "TMethod",
-								"constraint": "ActionMethod",
-								"default_type": "ActionMethod"
-							},
-							{
-								"name": "TInput",
-								"default_type": "unknown"
-							},
-							{
-								"name": "TOutput",
-								"default_type": "unknown"
-							}
-						]
-					}
-				],
-				"dependencies": ["action_event_types.ts", "action_metatypes.ts"],
-				"dependents": ["action.svelte.ts", "action_event.ts"]
-			},
-			{
-				"path": "action_event_helpers.ts",
-				"declarations": [
-					{
-						"name": "is_request_response",
-						"kind": "function",
-						"source_line": 29,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventRequestResponseData",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_remote_notification",
-						"kind": "function",
-						"source_line": 33,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventRemoteNotificationData",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_local_call",
-						"kind": "function",
-						"source_line": 37,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventLocalCallData",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_send_request",
-						"kind": "function",
-						"source_line": 41,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_receive_request",
-						"kind": "function",
-						"source_line": 46,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_send_response",
-						"kind": "function",
-						"source_line": 51,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_receive_response",
-						"kind": "function",
-						"source_line": 56,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_notification_send",
-						"kind": "function",
-						"source_line": 61,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_notification_receive",
-						"kind": "function",
-						"source_line": 66,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ({ ...; } & { ...; }) | ... 3 more ... | ({ ...; } & { ...; })",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_execute",
-						"kind": "function",
-						"source_line": 71,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is ActionEventLocalCallData & { ...; }",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_initial",
-						"kind": "function",
-						"source_line": 77,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_parsed",
-						"kind": "function",
-						"source_line": 80,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_handling",
-						"kind": "function",
-						"source_line": 83,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_handled",
-						"kind": "function",
-						"source_line": 86,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_failed",
-						"kind": "function",
-						"source_line": 89,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): data is { ...; } & { ...; }",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_send_request_with_parsed_input",
-						"kind": "function",
-						"source_line": 95,
-						"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\">(data: { ...; }): data is ({ ...; } & { ...; }) | ({ ...; } & { ...; })",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "is_notification_send_with_parsed_input",
-						"kind": "function",
-						"source_line": 103,
-						"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\">(data: { ...; }): data is ({ ...; } & { ...; }) | ({ ...; } & { ...; })",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "validate_step_transition",
-						"kind": "function",
-						"source_line": 112,
-						"type_signature": "(from: \"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\", to: \"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\"): void",
-						"return_type": "void",
-						"parameters": [
-							{
-								"name": "from",
-								"type": "\"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\""
-							},
-							{
-								"name": "to",
-								"type": "\"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\""
-							}
-						]
-					},
-					{
-						"name": "validate_phase_for_kind",
-						"kind": "function",
-						"source_line": 119,
-						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"): void",
-						"return_type": "void",
-						"parameters": [
-							{
-								"name": "kind",
-								"type": "\"request_response\" | \"remote_notification\" | \"local_call\""
-							},
-							{
-								"name": "phase",
-								"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
-							}
-						]
-					},
-					{
-						"name": "validate_phase_transition",
-						"kind": "function",
-						"source_line": 126,
-						"type_signature": "(from: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", to: \"send_request\" | \"execute\" | ... 6 more ... | \"receive\"): void",
-						"return_type": "void",
-						"parameters": [
-							{
-								"name": "from",
-								"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
-							},
-							{
-								"name": "to",
-								"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
-							}
-						]
-					},
-					{
-						"name": "get_initial_phase",
-						"kind": "function",
-						"source_line": 133,
-						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", initiator: \"both\" | \"frontend\" | \"backend\", executor: \"frontend\" | \"backend\"): \"send_request\" | \"execute\" | ... 7 more ... | null",
-						"return_type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | null",
-						"parameters": [
-							{
-								"name": "kind",
-								"type": "\"request_response\" | \"remote_notification\" | \"local_call\""
-							},
-							{
-								"name": "initiator",
-								"type": "\"both\" | \"frontend\" | \"backend\""
-							},
-							{
-								"name": "executor",
-								"type": "\"frontend\" | \"backend\""
-							}
-						]
-					},
-					{
-						"name": "should_validate_output",
-						"kind": "function",
-						"source_line": 150,
-						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"): boolean",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "kind",
-								"type": "\"request_response\" | \"remote_notification\" | \"local_call\""
-							},
-							{
-								"name": "phase",
-								"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
-							}
-						]
-					},
-					{
-						"name": "is_action_complete",
-						"kind": "function",
-						"source_line": 154,
-						"type_signature": "(data: { kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }): boolean",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "data",
-								"type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }"
-							}
-						]
-					},
-					{
-						"name": "create_initial_data",
-						"kind": "function",
-						"source_line": 163,
-						"type_signature": "(kind: \"request_response\" | \"remote_notification\" | \"local_call\", phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", method: \"ping\" | ... 28 more ... | \"workspace_changed\", executor: \"frontend\" | \"backend\", input: unknown): { ...; }",
-						"return_type": "{ kind: \"request_response\" | \"remote_notification\" | \"local_call\"; phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"; ... 9 more ...; notification: { ...; } | null; }",
-						"parameters": [
-							{
-								"name": "kind",
-								"type": "\"request_response\" | \"remote_notification\" | \"local_call\""
-							},
-							{
-								"name": "phase",
-								"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
-							},
-							{
-								"name": "method",
-								"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\""
-							},
-							{
-								"name": "executor",
-								"type": "\"frontend\" | \"backend\""
-							},
-							{
-								"name": "input",
-								"type": "unknown"
-							}
-						]
-					},
-					{
-						"name": "extract_action_result",
-						"kind": "function",
-						"source_line": 184,
-						"type_signature": "(event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): Result<...>",
-						"return_type": "Result<{ value: unknown; }, { error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }>",
-						"parameters": [
-							{
-								"name": "event",
-								"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">"
-							}
-						]
-					}
-				],
-				"dependencies": ["action_event_types.ts"],
-				"dependents": ["action.svelte.ts", "action_event.ts", "frontend_actions_api.ts"]
-			},
-			{
-				"path": "action_event_types.ts",
-				"declarations": [
-					{
-						"name": "ActionExecutor",
-						"kind": "type",
-						"source_line": 11,
-						"type_signature": "ZodEnum<{ frontend: \"frontend\"; backend: \"backend\"; }>"
-					},
-					{
-						"name": "ActionEventStep",
-						"kind": "type",
-						"source_line": 14,
-						"type_signature": "ZodEnum<{ initial: \"initial\"; parsed: \"parsed\"; handling: \"handling\"; handled: \"handled\"; failed: \"failed\"; }>"
-					},
-					{
-						"name": "ACTION_EVENT_STEP_TRANSITIONS",
-						"kind": "variable",
-						"source_line": 17,
-						"type_signature": "Record<\"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\", readonly (\"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\")[]>"
-					},
-					{
-						"name": "ACTION_EVENT_PHASE_BY_KIND",
-						"kind": "variable",
-						"source_line": 25,
-						"type_signature": "Record<\"request_response\" | \"remote_notification\" | \"local_call\", readonly (\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\")[]>"
-					},
-					{
-						"name": "ACTION_EVENT_PHASE_TRANSITIONS",
-						"kind": "variable",
-						"source_line": 38,
-						"type_signature": "Record<\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"send_request\" | \"execute\" | ... 7 more ... | null>"
-					},
-					{
-						"name": "ActionEventEnvironment",
-						"kind": "type",
-						"source_line": 50,
-						"type_signature": "ActionEventEnvironment",
-						"properties": [
-							{
-								"name": "executor",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "ActionExecutor"
-							},
-							{
-								"name": "lookup_action_handler",
-								"kind": "variable",
-								"type_signature": "(\n\t\tmethod: ActionMethod,\n\t\tphase: ActionEventPhase,\n\t) => ((event: any) => any) | undefined"
-							},
-							{
-								"name": "lookup_action_spec",
-								"kind": "variable",
-								"type_signature": "(method: ActionMethod) => ActionSpecUnion | undefined"
-							},
-							{
-								"name": "log",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "Logger | null"
-							}
-						]
-					}
-				],
-				"dependents": ["action_event_data.ts", "action_event_helpers.ts", "frontend.svelte.ts"]
-			},
-			{
-				"path": "action_event.ts",
-				"declarations": [
-					{
-						"name": "ActionEventChangeObserver",
-						"kind": "type",
-						"source_line": 43,
-						"type_signature": "ActionEventChangeObserver<TMethod>",
-						"generic_params": [
-							{
-								"name": "TMethod",
-								"constraint": "ActionMethod"
-							}
-						]
-					},
-					{
-						"name": "ActionEvent",
-						"kind": "class",
-						"doc_comment": "Action event that manages the lifecycle of an action through its state machine.",
-						"source_line": 52,
-						"generic_params": [
-							{
-								"name": "TMethod",
-								"constraint": "ActionMethod",
-								"default_type": "ActionMethod"
-							},
-							{
-								"name": "TPhase",
-								"constraint": "ActionEventPhase",
-								"default_type": "ActionEventPhase"
-							},
-							{
-								"name": "TStep",
-								"constraint": "ActionEventStep",
-								"default_type": "ActionEventStep"
-							}
-						],
-						"members": [
-							{
-								"name": "environment",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "ActionEventEnvironment"
-							},
-							{
-								"name": "spec",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "ActionSpecUnion"
-							},
-							{
-								"name": "constructor",
-								"kind": "constructor",
-								"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", TPhase extends ActionEventPhase = \"send_request\" | ... 7 more ... | \"receive\", TStep extends ActionEventStep = \"initial\" | ... 3 more ... | \"failed\">(environment: ActionEventEnvironment, spec: { ...; } | ... 1 more ... | { ...; }, data: ActionEventDatas[TMethod]): ActionEvent<...>",
-								"parameters": [
-									{
-										"name": "environment",
-										"type": "ActionEventEnvironment"
-									},
-									{
-										"name": "spec",
-										"type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }..."
-									},
-									{
-										"name": "data",
-										"type": "ActionEventDatas[TMethod]"
-									}
-								]
-							},
-							{
-								"name": "toJSON",
-								"kind": "function",
-								"type_signature": "(): ActionEventDatas[TMethod]",
-								"return_type": "ActionEventDatas[TMethod]",
-								"parameters": []
-							},
-							{
-								"name": "observe",
-								"kind": "function",
-								"type_signature": "(listener: ActionEventChangeObserver<TMethod>): () => void",
-								"return_type": "() => void",
-								"parameters": [
-									{
-										"name": "listener",
-										"type": "ActionEventChangeObserver<TMethod>"
-									}
-								]
-							},
-							{
-								"name": "set_data",
-								"kind": "function",
-								"type_signature": "(new_data: ActionEventDatas[TMethod]): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "new_data",
-										"type": "ActionEventDatas[TMethod]"
-									}
-								]
-							},
-							{
-								"name": "parse",
-								"kind": "function",
-								"doc_comment": "Parse input data according to the action's schema.",
-								"type_signature": "(): this",
-								"return_type": "this",
-								"parameters": []
-							},
-							{
-								"name": "handle_async",
-								"kind": "function",
-								"doc_comment": "Execute the handler for the current phase.",
-								"type_signature": "(): Promise<void>",
-								"return_type": "Promise<void>",
-								"parameters": []
-							},
-							{
-								"name": "handle_sync",
-								"kind": "function",
-								"doc_comment": "Execute handler synchronously (only for sync local_call actions).",
-								"type_signature": "(): void",
-								"return_type": "void",
-								"parameters": []
-							},
-							{
-								"name": "transition",
-								"kind": "function",
-								"doc_comment": "Transition to a new phase.",
-								"type_signature": "(phase: \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\"): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "phase",
-										"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
-									}
-								]
-							},
-							{
-								"name": "is_complete",
-								"kind": "function",
-								"type_signature": "(): boolean",
-								"return_type": "boolean",
-								"parameters": []
-							},
-							{
-								"name": "update_progress",
-								"kind": "function",
-								"type_signature": "(progress: unknown): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "progress",
-										"type": "unknown"
-									}
-								]
-							},
-							{
-								"name": "set_request",
-								"kind": "function",
-								"type_signature": "(request: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "request",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }"
-									}
-								]
-							},
-							{
-								"name": "set_response",
-								"kind": "function",
-								"type_signature": "(response: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; }; }): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "response",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; }; }"
-									}
-								]
-							},
-							{
-								"name": "set_notification",
-								"kind": "function",
-								"type_signature": "(notification: { [x: string]: unknown; jsonrpc: \"2.0\"; method: string; params?: { [x: string]: unknown; } | undefined; }): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "notification",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; method: string; params?: { [x: string]: unknown; } | undefined; }"
-									}
-								]
-							}
-						]
-					},
-					{
-						"name": "create_action_event",
-						"kind": "function",
-						"doc_comment": "Create an action event from a spec and initial input.",
-						"source_line": 447,
-						"type_signature": "<TMethod extends ActionMethod>(environment: ActionEventEnvironment, spec: { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<...>>; ... 4 more ...; async: true; } | { ...; } | { ...; }, input: unknown, initial_phase?: \"send_request\" | ... 8 more ... | undefined): ActionEvent<...>",
-						"return_type": "ActionEvent<TMethod, \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\">",
-						"parameters": [
-							{
-								"name": "environment",
-								"type": "ActionEventEnvironment"
-							},
-							{
-								"name": "spec",
-								"type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }..."
-							},
-							{
-								"name": "input",
-								"type": "unknown"
-							},
-							{
-								"name": "initial_phase",
-								"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | undefined",
-								"optional": true
-							}
-						]
-					},
-					{
-						"name": "create_action_event_from_json",
-						"kind": "function",
-						"doc_comment": "Reconstruct an action event from serialized JSON data.",
-						"source_line": 474,
-						"type_signature": "<TMethod extends ActionMethod>(json: ActionEventDatas[TMethod], environment: ActionEventEnvironment): ActionEvent<TMethod, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
-						"return_type": "ActionEvent<TMethod, \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\">",
-						"parameters": [
-							{
-								"name": "json",
-								"type": "ActionEventDatas[TMethod]"
-							},
-							{
-								"name": "environment",
-								"type": "ActionEventEnvironment"
-							}
-						]
-					},
-					{
-						"name": "parse_action_event",
-						"kind": "function",
-						"source_line": 488,
-						"type_signature": "(raw_json: unknown, environment: ActionEventEnvironment): ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | ... 23 more ... | \"workspace_changed\", \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
-						"return_type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
-						"parameters": [
-							{
-								"name": "raw_json",
-								"type": "unknown"
-							},
-							{
-								"name": "environment",
-								"type": "ActionEventEnvironment"
-							}
-						]
-					}
-				],
-				"dependencies": ["action_event_data.ts", "action_event_helpers.ts", "zod_helpers.ts"],
-				"dependents": ["action_peer.ts", "frontend_actions_api.ts"]
-			},
-			{
 				"path": "action_helpers.ts",
 				"declarations": [
 					{
@@ -1189,13 +398,12 @@
 							}
 						]
 					}
-				],
-				"dependents": ["action_collections.gen.ts"]
+				]
 			},
 			{
 				"path": "action_metatypes.gen.ts",
 				"declarations": [],
-				"dependencies": ["action_specs.ts", "zod_helpers.ts"]
+				"dependencies": ["action_specs.ts"]
 			},
 			{
 				"path": "action_metatypes.ts",
@@ -1402,148 +610,7 @@
 						]
 					}
 				],
-				"dependents": ["action.svelte.ts", "action_event_data.ts", "actions.svelte.ts"]
-			},
-			{
-				"path": "action_peer.ts",
-				"declarations": [
-					{
-						"name": "ActionPeerSendOptions",
-						"kind": "type",
-						"source_line": 30,
-						"type_signature": "ActionPeerSendOptions",
-						"properties": [
-							{
-								"name": "transport_name",
-								"kind": "variable",
-								"type_signature": "TransportName"
-							}
-						]
-					},
-					{
-						"name": "ActionPeerOptions",
-						"kind": "type",
-						"source_line": 34,
-						"type_signature": "ActionPeerOptions",
-						"properties": [
-							{
-								"name": "environment",
-								"kind": "variable",
-								"type_signature": "ActionEventEnvironment"
-							},
-							{
-								"name": "transports",
-								"kind": "variable",
-								"type_signature": "Transports"
-							},
-							{
-								"name": "default_send_options",
-								"kind": "variable",
-								"type_signature": "Partial<ActionPeerSendOptions>"
-							}
-						]
-					},
-					{
-						"name": "ActionPeer",
-						"kind": "class",
-						"source_line": 44,
-						"members": [
-							{
-								"name": "environment",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "ActionEventEnvironment"
-							},
-							{
-								"name": "transports",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "Transports"
-							},
-							{
-								"name": "default_send_options",
-								"kind": "variable",
-								"type_signature": "ActionPeerSendOptions"
-							},
-							{
-								"name": "constructor",
-								"kind": "constructor",
-								"type_signature": "(options: ActionPeerOptions): ActionPeer",
-								"parameters": [
-									{
-										"name": "options",
-										"type": "ActionPeerOptions"
-									}
-								]
-							},
-							{
-								"name": "send",
-								"kind": "function",
-								"type_signature": "(message: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }, options?: ActionPeerSendOptions | undefined): Promise<...>",
-								"return_type": "Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; };...",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }"
-									},
-									{
-										"name": "options",
-										"type": "ActionPeerSendOptions | undefined",
-										"optional": true
-									}
-								]
-							},
-							{
-								"name": "send",
-								"kind": "function",
-								"type_signature": "(message: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }, options?: ActionPeerSendOptions | undefined): Promise<...>",
-								"return_type": "Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; };...",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }"
-									},
-									{
-										"name": "options",
-										"type": "ActionPeerSendOptions | undefined",
-										"optional": true
-									}
-								]
-							},
-							{
-								"name": "send",
-								"kind": "function",
-								"type_signature": "(message: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }, options?: ActionPeerSendOptions | undefined): Promise<...>",
-								"return_type": "Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; };...",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }"
-									},
-									{
-										"name": "options",
-										"type": "ActionPeerSendOptions | undefined",
-										"optional": true
-									}
-								]
-							},
-							{
-								"name": "receive",
-								"kind": "function",
-								"type_signature": "(message: unknown): Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; method: string; params?: { [x: string]: unknown; } | undefined; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | ... 1 more ... | null; error: { ...; }; } | null>",
-								"return_type": "Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; method: string; params?: { [x: string]: unknown; } | undefined; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | ... 1 more ... | null; error: { ...; }; } | null>",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "unknown"
-									}
-								]
-							}
-						]
-					}
-				],
-				"dependencies": ["action_event.ts", "transports.ts"],
-				"dependents": ["frontend.svelte.ts", "server/backend.ts"]
+				"dependents": ["action.svelte.ts", "actions.svelte.ts"]
 			},
 			{
 				"path": "action_specs.ts",
@@ -1852,12 +919,12 @@
 							{
 								"name": "listen_to_action_event",
 								"kind": "function",
-								"type_signature": "(action_event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): () => void",
+								"type_signature": "(action_event: ActionEvent<string, \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\", \"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\">): () => void",
 								"return_type": "() => void",
 								"parameters": [
 									{
 										"name": "action_event",
-										"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">"
+										"type": "ActionEvent<string, \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\", \"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\">"
 									}
 								]
 							},
@@ -1879,8 +946,6 @@
 				],
 				"dependencies": [
 					"action_collections.ts",
-					"action_event_data.ts",
-					"action_event_helpers.ts",
 					"action_metatypes.ts",
 					"cell.svelte.ts",
 					"cell_types.ts"
@@ -4975,8 +4040,6 @@
 					"CapabilityWebsocket.svelte",
 					"TurnListitem.svelte",
 					"app.svelte.ts",
-					"frontend_http_transport.ts",
-					"frontend_websocket_transport.ts",
 					"helpers.ts",
 					"part.svelte.ts",
 					"socket.svelte.ts"
@@ -7611,398 +6674,162 @@
 						"name": "FrontendActionHandlers",
 						"kind": "type",
 						"doc_comment": "Frontend action handlers organized by method and phase.\nGenerated using spec.initiator to determine valid phases:\n- initiator: 'frontend' → send/execute phases\n- initiator: 'backend' → receive phases\n- initiator: 'both' → all valid phases",
-						"source_line": 13,
+						"source_line": 24,
 						"type_signature": "FrontendActionHandlers",
 						"properties": [
 							{
 								"name": "ping",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ping', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ping', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ping', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ping', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'ping', 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['ping'] | Promise<ActionOutputs['ping']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'ping', 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ping', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ping', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ping', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ping', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_request?: (\n\t\t\taction_event: TypedActionEvent<'ping', 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['ping'] | Promise<ActionOutputs['ping']>;\n\t\tsend_response?: (\n\t\t\taction_event: TypedActionEvent<'ping', 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "session_load",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'session_load', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'session_load', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'session_load', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'session_load', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'session_load', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'session_load', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'session_load', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'session_load', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "filer_change",
 								"kind": "variable",
-								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'filer_change', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: TypedActionEvent<'filer_change', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "diskfile_update",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'diskfile_update', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'diskfile_update', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'diskfile_update', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'diskfile_update', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "diskfile_delete",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'diskfile_delete', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'diskfile_delete', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'diskfile_delete', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'diskfile_delete', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "directory_create",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'directory_create', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'directory_create', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'directory_create', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'directory_create', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'directory_create', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'directory_create', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'directory_create', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'directory_create', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "completion_create",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'completion_create', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'completion_create', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'completion_create', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'completion_create', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'completion_create', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'completion_create', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'completion_create', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'completion_create', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "completion_progress",
 								"kind": "variable",
-								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'completion_progress', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: TypedActionEvent<'completion_progress', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_progress",
 								"kind": "variable",
-								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'ollama_progress', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: TypedActionEvent<'ollama_progress', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "toggle_main_menu",
 								"kind": "variable",
-								"type_signature": "{\n\t\texecute?: (\n\t\t\taction_event: ActionEvent<'toggle_main_menu', 'execute', 'handling'>,\n\t\t) => ActionOutputs['toggle_main_menu'];\n\t}"
+								"type_signature": "{\n\t\texecute?: (\n\t\t\taction_event: TypedActionEvent<'toggle_main_menu', 'execute', 'handling'>,\n\t\t) => ActionOutputs['toggle_main_menu'];\n\t}"
 							},
 							{
 								"name": "ollama_list",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_list', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_list', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_list', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_list', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_list', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_list', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_list', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_list', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_ps",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_ps', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_ps', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_ps', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_ps', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_show",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_show', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_show', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_show', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_show', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_show', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_show', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_show', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_show', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_pull",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_pull', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_pull', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_pull', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_pull', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_delete",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_delete', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_delete', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_delete', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_delete', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_copy",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_copy', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_copy', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_copy', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_copy', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_create",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_create', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_create', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_create', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_create', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_create', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_create', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_create', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_create', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_unload",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_unload', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_unload', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_unload', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_unload', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "provider_load_status",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'provider_load_status', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'provider_load_status', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'provider_load_status', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'provider_load_status', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "provider_update_api_key",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'provider_update_api_key', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'provider_update_api_key', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'provider_update_api_key', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'provider_update_api_key', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "terminal_create",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_create', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_create', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_create', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_create', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'terminal_create', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'terminal_create', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'terminal_create', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'terminal_create', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "terminal_data_send",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'terminal_data_send', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'terminal_data_send', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'terminal_data_send', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'terminal_data_send', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "terminal_data",
 								"kind": "variable",
-								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'terminal_data', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: TypedActionEvent<'terminal_data', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "terminal_resize",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'terminal_resize', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'terminal_resize', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'terminal_resize', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'terminal_resize', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "terminal_close",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_close', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_close', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_close', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_close', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'terminal_close', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'terminal_close', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'terminal_close', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'terminal_close', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "terminal_exited",
 								"kind": "variable",
-								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'terminal_exited', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: TypedActionEvent<'terminal_exited', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "workspace_open",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'workspace_open', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'workspace_open', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'workspace_open', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'workspace_open', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'workspace_open', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'workspace_open', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'workspace_open', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'workspace_open', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "workspace_close",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'workspace_close', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'workspace_close', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'workspace_close', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'workspace_close', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'workspace_close', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'workspace_close', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'workspace_close', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'workspace_close', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "workspace_list",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'workspace_list', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'workspace_list', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'workspace_list', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'workspace_list', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'workspace_list', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'workspace_list', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'workspace_list', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'workspace_list', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "workspace_changed",
 								"kind": "variable",
-								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'workspace_changed', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: TypedActionEvent<'workspace_changed', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							}
 						]
 					}
 				]
-			},
-			{
-				"path": "frontend_actions_api.ts",
-				"declarations": [
-					{
-						"name": "create_frontend_actions_api",
-						"kind": "function",
-						"doc_comment": "Creates the actions API methods for the frontend.\nUses a Proxy to provide dynamic method lookup with full type safety.",
-						"source_line": 26,
-						"type_signature": "(peer: ActionPeer, environment: ActionEventEnvironment, actions?: Actions | undefined): ActionsApi",
-						"return_type": "ActionsApi",
-						"parameters": [
-							{
-								"name": "peer",
-								"type": "ActionPeer"
-							},
-							{
-								"name": "environment",
-								"type": "ActionEventEnvironment"
-							},
-							{
-								"name": "actions",
-								"type": "Actions | undefined",
-								"optional": true
-							}
-						]
-					}
-				],
-				"dependencies": ["action_event.ts", "action_event_helpers.ts"],
-				"dependents": ["frontend.svelte.ts"]
-			},
-			{
-				"path": "frontend_http_transport.ts",
-				"declarations": [
-					{
-						"name": "FrontendHttpTransport",
-						"kind": "class",
-						"source_line": 26,
-						"extends": [],
-						"implements": ["Transport"],
-						"members": [
-							{
-								"name": "transport_name",
-								"kind": "variable",
-								"modifiers": ["readonly"]
-							},
-							{
-								"name": "constructor",
-								"kind": "constructor",
-								"type_signature": "(url: string, headers?: Record<string, string> | undefined, has_side_effects?: ((method: string) => boolean) | undefined): FrontendHttpTransport",
-								"parameters": [
-									{
-										"name": "url",
-										"type": "string"
-									},
-									{
-										"name": "headers",
-										"type": "Record<string, string> | undefined",
-										"optional": true
-									},
-									{
-										"name": "has_side_effects",
-										"type": "((method: string) => boolean) | undefined",
-										"optional": true
-									}
-								]
-							},
-							{
-								"name": "send",
-								"kind": "function",
-								"type_signature": "(message: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }): Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { ...; }>",
-								"return_type": "Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; };...",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }"
-									}
-								]
-							},
-							{
-								"name": "send",
-								"kind": "function",
-								"type_signature": "(message: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }): Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { ...; }>",
-								"return_type": "Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; };...",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }"
-									}
-								]
-							},
-							{
-								"name": "send",
-								"kind": "function",
-								"type_signature": "(message: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }): Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { ...; }>",
-								"return_type": "Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; };...",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }"
-									}
-								]
-							},
-							{
-								"name": "is_ready",
-								"kind": "function",
-								"type_signature": "(): boolean",
-								"return_type": "boolean",
-								"parameters": []
-							}
-						]
-					}
-				],
-				"dependencies": ["constants.ts"],
-				"dependents": ["frontend.svelte.ts"]
-			},
-			{
-				"path": "frontend_websocket_transport.ts",
-				"declarations": [
-					{
-						"name": "WebsocketConnection",
-						"kind": "type",
-						"doc_comment": "Minimal interface for a WebSocket connection, decoupled from the concrete Socket Cell.",
-						"source_line": 30,
-						"type_signature": "WebsocketConnection",
-						"properties": [
-							{
-								"name": "send",
-								"kind": "variable",
-								"type_signature": "(data: object) => boolean"
-							},
-							{
-								"name": "connected",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "boolean"
-							},
-							{
-								"name": "add_message_handler",
-								"kind": "variable",
-								"type_signature": "(handler: (event: MessageEvent) => void) => () => void"
-							},
-							{
-								"name": "add_error_handler",
-								"kind": "variable",
-								"type_signature": "(handler: (event: Event) => void) => () => void"
-							}
-						]
-					},
-					{
-						"name": "FrontendWebsocketTransport",
-						"kind": "class",
-						"source_line": 37,
-						"extends": [],
-						"implements": ["Transport"],
-						"members": [
-							{
-								"name": "transport_name",
-								"kind": "variable",
-								"modifiers": ["readonly"]
-							},
-							{
-								"name": "constructor",
-								"kind": "constructor",
-								"type_signature": "(connection: WebsocketConnection, receive: (data: unknown) => Promise<unknown>, request_timeout_ms?: number | undefined): FrontendWebsocketTransport",
-								"parameters": [
-									{
-										"name": "connection",
-										"type": "WebsocketConnection"
-									},
-									{
-										"name": "receive",
-										"type": "(data: unknown) => Promise<unknown>"
-									},
-									{
-										"name": "request_timeout_ms",
-										"type": "number | undefined",
-										"optional": true
-									}
-								]
-							},
-							{
-								"name": "send",
-								"kind": "function",
-								"type_signature": "(message: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }): Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { ...; }>",
-								"return_type": "Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; };...",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }"
-									}
-								]
-							},
-							{
-								"name": "send",
-								"kind": "function",
-								"type_signature": "(message: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }): Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { ...; }>",
-								"return_type": "Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; };...",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }"
-									}
-								]
-							},
-							{
-								"name": "send",
-								"kind": "function",
-								"type_signature": "(message: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }): Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { ...; }>",
-								"return_type": "Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; };...",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }"
-									}
-								]
-							},
-							{
-								"name": "is_ready",
-								"kind": "function",
-								"type_signature": "(): boolean",
-								"return_type": "boolean",
-								"parameters": []
-							},
-							{
-								"name": "dispose",
-								"kind": "function",
-								"type_signature": "(): void",
-								"return_type": "void",
-								"parameters": []
-							}
-						]
-					}
-				],
-				"dependencies": ["constants.ts", "request_tracker.svelte.ts"],
-				"dependents": ["frontend.svelte.ts"]
 			},
 			{
 				"path": "frontend.svelte.ts",
@@ -8362,28 +7189,28 @@
 							{
 								"name": "lookup_action_handler",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", phase: \"send_request\" | ... 7 more ... | \"receive\"): ((event: any) => any) | undefined",
+								"type_signature": "(method: string, phase: \"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\"): ((event: any) => any) | undefined",
 								"return_type": "((event: any) => any) | undefined",
 								"parameters": [
 									{
 										"name": "method",
-										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\""
+										"type": "string"
 									},
 									{
 										"name": "phase",
-										"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
+										"type": "\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\""
 									}
 								]
 							},
 							{
 								"name": "lookup_action_spec",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\"): { ...; } | ... 2 more ... | undefined",
+								"type_signature": "(method: string): { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 4 more ...; async: true; } | { ...; } | { ...; } | undefined",
 								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }...",
 								"parameters": [
 									{
 										"name": "method",
-										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\""
+										"type": "string"
 									}
 								]
 							},
@@ -8414,7 +7241,7 @@
 							{
 								"name": "is_valid_phase_for_method",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", phase: \"send_request\" | ... 7 more ... | \"receive\"): boolean",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", phase: \"send_request\" | ... 7 more ... | \"execute\"): boolean",
 								"return_type": "boolean",
 								"parameters": [
 									{
@@ -8423,7 +7250,7 @@
 									},
 									{
 										"name": "phase",
-										"type": "\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\""
+										"type": "\"send_request\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\" | \"execute\""
 									}
 								]
 							}
@@ -8432,8 +7259,6 @@
 				],
 				"dependencies": [
 					"action_collections.ts",
-					"action_event_types.ts",
-					"action_peer.ts",
 					"actions.svelte.ts",
 					"capabilities.svelte.ts",
 					"cell.svelte.ts",
@@ -8447,9 +7272,6 @@
 					"diskfile_types.ts",
 					"diskfiles.svelte.ts",
 					"frontend_action_handlers.ts",
-					"frontend_actions_api.ts",
-					"frontend_http_transport.ts",
-					"frontend_websocket_transport.ts",
 					"models.svelte.ts",
 					"ollama.svelte.ts",
 					"parts.svelte.ts",
@@ -14713,203 +13535,6 @@
 				"dependents": ["DashboardDiskfiles.svelte", "PartList.svelte", "ThreadList.svelte"]
 			},
 			{
-				"path": "request_tracker.svelte.ts",
-				"declarations": [
-					{
-						"name": "RequestTrackerItem",
-						"kind": "class",
-						"doc_comment": "Represents a pending request with its associated state.",
-						"source_line": 21,
-						"members": [
-							{
-								"name": "id",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "JsonrpcRequestId"
-							},
-							{
-								"name": "deferred",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "Deferred<JsonrpcResponseOrError>"
-							},
-							{
-								"name": "created",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "Datetime"
-							},
-							{
-								"name": "status",
-								"kind": "variable",
-								"type_signature": "AsyncStatus"
-							},
-							{
-								"name": "timeout",
-								"kind": "variable",
-								"type_signature": "NodeJS.Timeout | undefined"
-							},
-							{
-								"name": "constructor",
-								"kind": "constructor",
-								"type_signature": "(id: string | number, deferred: Deferred<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | ... 4 more ... | (number & $brand<...>); message: string; data?: unknown; }; }>, created: string & $brand<...>, status: AsyncStatus, timeout: Timeout | undefined): RequestTrackerItem",
-								"parameters": [
-									{
-										"name": "id",
-										"type": "string | number"
-									},
-									{
-										"name": "deferred",
-										"type": "Deferred<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; }..."
-									},
-									{
-										"name": "created",
-										"type": "string & $brand<\"Datetime\">"
-									},
-									{
-										"name": "status",
-										"type": "AsyncStatus"
-									},
-									{
-										"name": "timeout",
-										"type": "Timeout | undefined"
-									}
-								]
-							}
-						]
-					},
-					{
-						"name": "RequestTracker",
-						"kind": "class",
-						"doc_comment": "Tracks JSON-RPC requests and their responses to manage promises and timeouts.\nUsed by transports to handle the request-response lifecycle.",
-						"source_line": 47,
-						"members": [
-							{
-								"name": "pending_requests",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "SvelteMap<JsonrpcRequestId, RequestTrackerItem>"
-							},
-							{
-								"name": "request_timeout_ms",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "number"
-							},
-							{
-								"name": "constructor",
-								"kind": "constructor",
-								"type_signature": "(request_timeout_ms?: number): RequestTracker",
-								"parameters": [
-									{
-										"name": "request_timeout_ms",
-										"type": "number",
-										"default_value": "120_000"
-									}
-								]
-							},
-							{
-								"name": "track_request",
-								"kind": "function",
-								"doc_comment": "Track a new request with the given id.",
-								"type_signature": "(id: string | number): Deferred<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | ... 4 more ... | (number & $brand<...>); message: string; data?: unknown; }; }>",
-								"return_type": "Deferred<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; }...",
-								"return_description": "a deferred promise that will be resolved when the response is received",
-								"parameters": [
-									{
-										"name": "id",
-										"type": "string | number",
-										"description": "the request id"
-									}
-								]
-							},
-							{
-								"name": "resolve_request",
-								"kind": "function",
-								"doc_comment": "Resolve a pending request with the given response data.",
-								"type_signature": "(id: string | number, response: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | ... 4 more ... | (number & $brand<...>); message: string; data?: unknown; }; }): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "id",
-										"type": "string | number",
-										"description": "the request id"
-									},
-									{
-										"name": "response",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; }; }",
-										"description": "the response data"
-									}
-								]
-							},
-							{
-								"name": "reject_request",
-								"kind": "function",
-								"doc_comment": "Rejects a pending request with the given error.",
-								"type_signature": "(id: string | number, error_message: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "id",
-										"type": "string | number",
-										"description": "the request id"
-									},
-									{
-										"name": "error_message",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }",
-										"description": "the complete `JsonrpcErrorResponse` object"
-									}
-								]
-							},
-							{
-								"name": "handle_message",
-								"kind": "function",
-								"doc_comment": "Handles an incoming JSON-RPC message. Resolves or rejects the associated request.\nIgnores notifications and unknown/invalid messages.",
-								"type_signature": "(message: any): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "any"
-									}
-								]
-							},
-							{
-								"name": "cancel_request",
-								"kind": "function",
-								"doc_comment": "Cancel a pending request.",
-								"type_signature": "(id: string | number): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "id",
-										"type": "string | number",
-										"description": "the request id"
-									}
-								]
-							},
-							{
-								"name": "cancel_all_requests",
-								"kind": "function",
-								"doc_comment": "Cancel all pending requests.",
-								"type_signature": "(reason?: string | undefined): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "reason",
-										"type": "string | undefined",
-										"optional": true,
-										"description": "optional reason to include in rejection"
-									}
-								]
-							}
-						]
-					}
-				],
-				"dependencies": ["zod_helpers.ts"],
-				"dependents": ["frontend_websocket_transport.ts"]
-			},
-			{
 				"path": "response_helpers.ts",
 				"declarations": [
 					{
@@ -16236,146 +14861,20 @@
 				"dependents": ["server/backend.ts"]
 			},
 			{
-				"path": "server/backend_websocket_transport.ts",
-				"declarations": [
-					{
-						"name": "BackendWebsocketTransport",
-						"kind": "class",
-						"source_line": 23,
-						"extends": [],
-						"implements": ["Transport"],
-						"members": [
-							{
-								"name": "transport_name",
-								"kind": "variable",
-								"modifiers": ["readonly"]
-							},
-							{
-								"name": "add_connection",
-								"kind": "function",
-								"doc_comment": "Add a new WebSocket connection with auth info.\nSession connections pass a token hash for targeted revocation.\nBearer token connections (api_token, daemon_token) pass null —\nthey're still reachable via .",
-								"type_signature": "(ws: WSContext<unknown>, token_hash: string | null, account_id: string & $brand<\"Uuid\">): string & $brand<\"Uuid\">",
-								"return_type": "string & $brand<\"Uuid\">",
-								"parameters": [
-									{
-										"name": "ws",
-										"type": "WSContext<unknown>"
-									},
-									{
-										"name": "token_hash",
-										"type": "string | null"
-									},
-									{
-										"name": "account_id",
-										"type": "string & $brand<\"Uuid\">"
-									}
-								]
-							},
-							{
-								"name": "remove_connection",
-								"kind": "function",
-								"doc_comment": "Remove a WebSocket connection and its auth tracking data.\nIdempotent — safe to call after revocation has already cleaned up.",
-								"type_signature": "(ws: WSContext<unknown>): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "ws",
-										"type": "WSContext<unknown>"
-									}
-								]
-							},
-							{
-								"name": "close_sockets_for_session",
-								"kind": "function",
-								"doc_comment": "Close all sockets associated with a specific session token hash.",
-								"type_signature": "(token_hash: string): number",
-								"return_type": "number",
-								"return_description": "the number of sockets closed",
-								"parameters": [
-									{
-										"name": "token_hash",
-										"type": "string"
-									}
-								]
-							},
-							{
-								"name": "close_sockets_for_account",
-								"kind": "function",
-								"doc_comment": "Close all sockets associated with a specific account.",
-								"type_signature": "(account_id: string & $brand<\"Uuid\">): number",
-								"return_type": "number",
-								"return_description": "the number of sockets closed",
-								"parameters": [
-									{
-										"name": "account_id",
-										"type": "string & $brand<\"Uuid\">"
-									}
-								]
-							},
-							{
-								"name": "send",
-								"kind": "function",
-								"type_signature": "(message: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }): Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { ...; }>",
-								"return_type": "Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; };...",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }"
-									}
-								]
-							},
-							{
-								"name": "send",
-								"kind": "function",
-								"type_signature": "(message: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }): Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { ...; }>",
-								"return_type": "Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; };...",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }"
-									}
-								]
-							},
-							{
-								"name": "send",
-								"kind": "function",
-								"type_signature": "(message: { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }): Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { ...; }>",
-								"return_type": "Promise<{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; result: { [x: string]: unknown; }; } | { [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number | null; error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); message: string; data?: unknown; };...",
-								"parameters": [
-									{
-										"name": "message",
-										"type": "{ [x: string]: unknown; jsonrpc: \"2.0\"; id: string | number; method: string; params?: { [x: string]: unknown; } | undefined; }"
-									}
-								]
-							},
-							{
-								"name": "is_ready",
-								"kind": "function",
-								"type_signature": "(): boolean",
-								"return_type": "boolean",
-								"parameters": []
-							}
-						]
-					}
-				],
-				"dependencies": ["socket_helpers.ts", "zod_helpers.ts"],
-				"dependents": ["server/register_websocket_actions.ts", "server/server.ts"]
-			},
-			{
 				"path": "server/backend.ts",
 				"declarations": [
 					{
 						"name": "FilerChangeHandler",
 						"kind": "type",
 						"doc_comment": "Function type for handling file system changes.",
-						"source_line": 38,
+						"source_line": 41,
 						"type_signature": "FilerChangeHandler"
 					},
 					{
 						"name": "FilerInstance",
 						"kind": "type",
 						"doc_comment": "Structure to hold a Filer and its cleanup function.",
-						"source_line": 49,
+						"source_line": 52,
 						"type_signature": "FilerInstance",
 						"properties": [
 							{
@@ -16393,7 +14892,7 @@
 					{
 						"name": "BackendOptions",
 						"kind": "type",
-						"source_line": 54,
+						"source_line": 57,
 						"type_signature": "BackendOptions",
 						"properties": [
 							{
@@ -16438,7 +14937,7 @@
 						"name": "Backend",
 						"kind": "class",
 						"doc_comment": "Server for managing the Zzz application state and handling client messages.",
-						"source_line": 85,
+						"source_line": 88,
 						"extends": [],
 						"implements": ["ActionEventEnvironment"],
 						"members": [
@@ -16540,12 +15039,12 @@
 							{
 								"name": "lookup_action_spec",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\"): { ...; } | ... 2 more ... | undefined",
+								"type_signature": "(method: string): { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 4 more ...; async: true; } | { ...; } | { ...; } | undefined",
 								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; description: string; kind: \"request_response\"; auth: \"public\" | ... 2 more ... | { ...; }...",
 								"parameters": [
 									{
 										"name": "method",
-										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\""
+										"type": "string"
 									}
 								]
 							},
@@ -16642,7 +15141,6 @@
 					}
 				],
 				"dependencies": [
-					"action_peer.ts",
 					"diskfile_helpers.ts",
 					"diskfile_types.ts",
 					"server/backend_actions_api.ts",
@@ -17153,11 +15651,7 @@
 					}
 				],
 				"module_comment": "WebSocket endpoint with direct handler dispatch.\n\nReplaces the old `backend.receive(json)` → ActionPeer → ActionEvent path\nwith: spec lookup → Zod input validation → handler call → JSON-RPC response.\nKeeps existing per-action auth checking at the transport layer.",
-				"dependencies": [
-					"action_specs.ts",
-					"server/backend_websocket_transport.ts",
-					"server/zzz_action_handlers.ts"
-				],
+				"dependencies": ["action_specs.ts", "server/zzz_action_handlers.ts"],
 				"dependents": ["server/server.ts"]
 			},
 			{
@@ -17761,7 +16255,6 @@
 				],
 				"module_comment": "Deno server entry point for zzz.\n\nSingle entry point for both dev mode (`gro dev` via `gro_plugin_deno_server`)\nand production (`zzz daemon start`). Uses the shared `create_zzz_app` factory\nfor the Hono app with fuz_app auth stack, then binds with `Deno.serve`\nand handles daemon lifecycle.",
 				"dependencies": [
-					"server/backend_websocket_transport.ts",
 					"server/create_zzz_app.ts",
 					"server/register_websocket_actions.ts",
 					"server/security.ts",
@@ -17990,11 +16483,7 @@
 						"type_signature": "4001"
 					}
 				],
-				"dependents": [
-					"CapabilityWebsocket.svelte",
-					"server/backend_websocket_transport.ts",
-					"socket.svelte.ts"
-				]
+				"dependents": ["CapabilityWebsocket.svelte", "socket.svelte.ts"]
 			},
 			{
 				"path": "socket.svelte.ts",
@@ -20041,133 +18530,6 @@
 				"dependents": ["ChatView.svelte", "ClearRestoreButton.svelte"]
 			},
 			{
-				"path": "transports.ts",
-				"declarations": [
-					{
-						"name": "TransportName",
-						"kind": "type",
-						"source_line": 16,
-						"type_signature": "ZodString"
-					},
-					{
-						"name": "Transport",
-						"kind": "type",
-						"source_line": 19,
-						"type_signature": "Transport",
-						"properties": [
-							{
-								"name": "transport_name",
-								"kind": "variable",
-								"type_signature": "TransportName"
-							},
-							{
-								"name": "is_ready",
-								"kind": "variable",
-								"type_signature": "() => boolean"
-							},
-							{
-								"name": "dispose",
-								"kind": "variable",
-								"type_signature": "() => void"
-							}
-						]
-					},
-					{
-						"name": "Transports",
-						"kind": "class",
-						"source_line": 29,
-						"members": [
-							{
-								"name": "allow_fallback",
-								"kind": "variable",
-								"doc_comment": "Whether to allow fallback to other transports if the current one is not available.",
-								"type_signature": "boolean"
-							},
-							{
-								"name": "register_transport",
-								"kind": "function",
-								"doc_comment": "Registers a transport.",
-								"type_signature": "(transport: Transport): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "transport",
-										"type": "Transport"
-									}
-								]
-							},
-							{
-								"name": "set_current_transport",
-								"kind": "function",
-								"type_signature": "(transport_name: string): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "transport_name",
-										"type": "string"
-									}
-								]
-							},
-							{
-								"name": "get_transport",
-								"kind": "function",
-								"doc_comment": "Gets either the current transport or the first ready transport\ndepending on `allow_fallback`, or throws an error.",
-								"type_signature": "(transport_name?: string | undefined): Transport | null",
-								"return_type": "Transport | null",
-								"parameters": [
-									{
-										"name": "transport_name",
-										"type": "string | undefined",
-										"optional": true,
-										"description": "optional transport to use instead of the current"
-									}
-								],
-								"throws": [
-									{
-										"type": "when",
-										"description": "no transport available or ready"
-									}
-								]
-							},
-							{
-								"name": "is_ready",
-								"kind": "function",
-								"type_signature": "(): boolean | null",
-								"return_type": "boolean | null",
-								"parameters": []
-							},
-							{
-								"name": "get_current_transport",
-								"kind": "function",
-								"type_signature": "(): Transport | null",
-								"return_type": "Transport | null",
-								"parameters": []
-							},
-							{
-								"name": "get_current_transport_name",
-								"kind": "function",
-								"type_signature": "(): string | null",
-								"return_type": "string | null",
-								"parameters": []
-							},
-							{
-								"name": "get_transport_by_name",
-								"kind": "function",
-								"type_signature": "(transport_name: string): Transport | null",
-								"return_type": "Transport | null",
-								"parameters": [
-									{
-										"name": "transport_name",
-										"type": "string"
-									}
-								]
-							}
-						]
-					}
-				],
-				"dependents": ["action_peer.ts"]
-			},
-			{
 				"path": "turn_types.ts",
 				"declarations": [
 					{
@@ -21016,56 +19378,56 @@
 					{
 						"name": "Any",
 						"kind": "type",
-						"source_line": 9,
+						"source_line": 8,
 						"type_signature": "ZodAny"
 					},
 					{
 						"name": "HttpStatus",
 						"kind": "type",
-						"source_line": 12,
+						"source_line": 11,
 						"type_signature": "ZodNumber"
 					},
 					{
 						"name": "TypeLiteral",
 						"kind": "type",
-						"source_line": 15,
+						"source_line": 14,
 						"type_signature": "$ZodBranded<ZodString, \"TypeLiteral\", \"out\">"
 					},
 					{
 						"name": "PathWithTrailingSlash",
 						"kind": "type",
-						"source_line": 20,
+						"source_line": 19,
 						"type_signature": "ZodPipe<ZodString, ZodTransform<string, string>>"
 					},
 					{
 						"name": "PathWithoutTrailingSlash",
 						"kind": "type",
-						"source_line": 23,
+						"source_line": 22,
 						"type_signature": "ZodPipe<ZodString, ZodTransform<string, string>>"
 					},
 					{
 						"name": "PathWithLeadingSlash",
 						"kind": "type",
-						"source_line": 26,
+						"source_line": 25,
 						"type_signature": "ZodPipe<ZodString, ZodTransform<string, string>>"
 					},
 					{
 						"name": "PathWithoutLeadingSlash",
 						"kind": "type",
-						"source_line": 29,
+						"source_line": 28,
 						"type_signature": "ZodPipe<ZodString, ZodTransform<string, string>>"
 					},
 					{
 						"name": "SvelteMapSchema",
 						"kind": "type",
-						"source_line": 32,
+						"source_line": 31,
 						"type_signature": "ZodCustom<SvelteMap<unknown, unknown>, SvelteMap<unknown, unknown>>"
 					},
 					{
 						"name": "get_datetime_now",
 						"kind": "function",
 						"doc_comment": "Returns an ISO datetime string that is guaranteed to be monotonically increasing.\nIf called multiple times within the same millisecond, it increments the value\nby one millisecond to ensure uniqueness and order preservation.",
-						"source_line": 40,
+						"source_line": 39,
 						"type_signature": "(): string & $brand<\"Datetime\">",
 						"return_type": "string & $brand<\"Datetime\">",
 						"parameters": []
@@ -21073,69 +19435,20 @@
 					{
 						"name": "Datetime",
 						"kind": "type",
-						"source_line": 43,
+						"source_line": 42,
 						"type_signature": "$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">"
 					},
 					{
 						"name": "DatetimeNow",
 						"kind": "type",
-						"source_line": 45,
+						"source_line": 44,
 						"type_signature": "ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>"
-					},
-					{
-						"name": "create_uuid",
-						"kind": "function",
-						"source_line": 48,
-						"type_signature": "(): string & $brand<\"Uuid\">",
-						"return_type": "string & $brand<\"Uuid\">",
-						"parameters": []
-					},
-					{
-						"name": "Uuid",
-						"kind": "type",
-						"source_line": 50,
-						"type_signature": "$ZodBranded<ZodUUID, \"Uuid\", \"out\">"
-					},
-					{
-						"name": "UuidWithDefault",
-						"kind": "type",
-						"source_line": 52,
-						"type_signature": "ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>"
-					},
-					{
-						"name": "get_innermost_type",
-						"kind": "function",
-						"doc_comment": "Gets the innermost type of a Zod schema by unwrapping wrappers like transforms, `ZodOptional`, `ZodDefault`, etc.",
-						"source_line": 60,
-						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-						"return_description": "the innermost schema without wrappers",
-						"parameters": [
-							{
-								"name": "schema",
-								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-								"description": "the schema to unwrap"
-							}
-						]
-					},
-					{
-						"name": "get_innermost_type_name",
-						"kind": "function",
-						"source_line": 86,
-						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): string",
-						"return_type": "string",
-						"parameters": [
-							{
-								"name": "schema",
-								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>"
-							}
-						]
 					},
 					{
 						"name": "zod_get_schema_keys",
 						"kind": "function",
 						"doc_comment": "Gets all property keys from a Zod object schema.",
-						"source_line": 95,
+						"source_line": 58,
 						"type_signature": "<T extends z.ZodType>(schema: T): SchemaKeys<T>[]",
 						"return_type": "SchemaKeys<T>[]",
 						"parameters": [
@@ -21149,7 +19462,7 @@
 						"name": "get_field_schema",
 						"kind": "function",
 						"doc_comment": "Gets the Zod schema for a specific field in an object schema.",
-						"source_line": 110,
+						"source_line": 73,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>, key: string): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
 						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
 						"return_description": "the field's schema, or throws if not found",
@@ -21170,7 +19483,7 @@
 						"name": "maybe_get_field_schema",
 						"kind": "function",
 						"doc_comment": "Gets the Zod schema for a specific field in an object schema, returning undefined if not found.",
-						"source_line": 125,
+						"source_line": 88,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>, key: string): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
 						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
 						"return_description": "the field's schema, or undefined if not found",
@@ -21191,7 +19504,7 @@
 						"name": "is_array_schema",
 						"kind": "function",
 						"doc_comment": "Checks if a Zod schema is an array or contains an array through wrappers.",
-						"source_line": 137,
+						"source_line": 100,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): boolean",
 						"return_type": "boolean",
 						"parameters": [
@@ -21205,7 +19518,7 @@
 						"name": "get_inner_array_schema",
 						"kind": "function",
 						"doc_comment": "Gets the innermost array schema from a potentially nested schema structure.\nReturns null if no array schema is found.",
-						"source_line": 146,
+						"source_line": 109,
 						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): ZodArray<any> | null",
 						"return_type": "ZodArray<any> | null",
 						"parameters": [
@@ -21219,7 +19532,7 @@
 						"name": "format_zod_validation_error",
 						"kind": "function",
 						"doc_comment": "Formats a Zod validation error with field paths for clearer error messages.",
-						"source_line": 154,
+						"source_line": 117,
 						"type_signature": "(error: ZodError<unknown>): string",
 						"return_type": "string",
 						"parameters": [
@@ -21231,8 +19544,6 @@
 					}
 				],
 				"dependents": [
-					"action_event.ts",
-					"action_metatypes.gen.ts",
 					"action_specs.ts",
 					"cell.svelte.ts",
 					"cell_helpers.ts",
@@ -21254,10 +19565,8 @@
 					"part.svelte.ts",
 					"parts.svelte.ts",
 					"prompt.svelte.ts",
-					"request_tracker.svelte.ts",
 					"response_helpers.ts",
 					"server/backend_actions_api.ts",
-					"server/backend_websocket_transport.ts",
 					"server/zzz_action_handlers.ts",
 					"socket.svelte.ts",
 					"terminal.svelte.ts",

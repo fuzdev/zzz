@@ -1,8 +1,8 @@
 import {describe, test, assert} from 'vitest';
 import {WSContext} from 'hono/ws';
 
-import {BackendWebsocketTransport} from '../../lib/server/backend_websocket_transport.js';
-import {WS_CLOSE_SESSION_REVOKED} from '../../lib/socket_helpers.js';
+import {BackendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws_backend.js';
+import {WS_CLOSE_SESSION_REVOKED} from '@fuzdev/fuz_app/actions/transports.js';
 import type {Uuid} from '../../lib/zod_helpers.js';
 
 interface MockWs {

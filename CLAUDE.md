@@ -100,8 +100,6 @@ src/
 │   │
 │   ├── *.svelte.ts               # Cell state classes (28 classes)
 │   ├── action_specs.ts           # All 29 action spec definitions
-│   ├── action_event.ts           # Action lifecycle state machine
-│   ├── action_peer.ts            # Symmetric send/receive
 │   ├── cell.svelte.ts            # Base Cell class
 │   ├── cell_classes.ts           # Cell class registry
 │   ├── indexed_collection.svelte.ts
@@ -524,14 +522,17 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 
 ## fuz_app
 
-zzz is the reference implementation for Cell and Action patterns. ActionSpec
-types have been extracted to `@fuzdev/fuz_app` — zzz imports them from
-`@fuzdev/fuz_app/actions/action_spec.js` and `@fuzdev/fuz_app/actions/action_registry.js`.
-Cell patterns and the full SAES runtime (ActionEvent, ActionPeer, transports)
-remain in zzz until a second consumer needs them (DA-5).
+zzz is the reference implementation for Cell and Action patterns. The full SAES
+runtime has been extracted to `@fuzdev/fuz_app` — zzz imports ActionSpec,
+ActionEvent, ActionPeer, transports, and `create_rpc_client` from
+`@fuzdev/fuz_app/actions/*.js`. Cell patterns (Cell base class, cell classes,
+IndexedCollection) remain in zzz. The generated `TypedActionEvent` alias
+intersects fuz_app's generic `ActionEvent` with zzz's `ActionEventDatas` map
+for typed input/output in handlers. `Uuid` and `create_uuid` are re-exported
+from `@fuzdev/fuz_app/uuid.js` via `zod_helpers.ts`.
 
 The CLI and daemon lifecycle use `@fuzdev/fuz_app/cli/*` helpers: `DaemonInfo`
 schema, `write_daemon_info`, `read_daemon_info`, `is_daemon_running`,
 `stop_daemon`. The server writes `~/.zzz/run/daemon.json` (not `server.json`).
 
-Last updated: 2026-04-12
+Last updated: 2026-04-14

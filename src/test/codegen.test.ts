@@ -703,23 +703,23 @@ describe('generate_phase_handlers', () => {
 		assert.notInclude(import_str, 'Frontend');
 	});
 
-	test('frontend generates correct relative import paths', () => {
+	test('frontend generates correct import paths', () => {
 		const imports = new ImportBuilder();
 		generate_phase_handlers(ping_action_spec, 'frontend', imports);
 
 		const import_str = imports.build();
-		assert.include(import_str, "from './action_event.js'");
+		assert.include(import_str, "from '@fuzdev/fuz_app/actions/action_event.js'");
 		assert.include(import_str, "from './action_collections.js'");
 		// No environment type import paths
 		assert.notInclude(import_str, 'frontend.svelte.js');
 	});
 
-	test('backend generates correct relative import paths', () => {
+	test('backend generates correct import paths', () => {
 		const imports = new ImportBuilder();
 		generate_phase_handlers(ping_action_spec, 'backend', imports);
 
 		const import_str = imports.build();
-		assert.include(import_str, "from '../action_event.js'");
+		assert.include(import_str, "from '@fuzdev/fuz_app/actions/action_event.js'");
 		assert.include(import_str, "from '../action_collections.js'");
 		// No environment type import paths
 		assert.notInclude(import_str, 'backend.js');

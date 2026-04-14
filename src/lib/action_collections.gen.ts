@@ -6,7 +6,7 @@ import {all_action_specs} from './action_specs.js';
 import {
 	to_action_spec_input_identifier,
 	to_action_spec_output_identifier,
-} from './action_helpers.js';
+} from '@fuzdev/fuz_app/actions/action_codegen.js';
 
 /**
  * Outputs a file with action collection types that can be imported by schemas.ts.
@@ -33,7 +33,7 @@ export const gen: Gen = ({origin_path}) => {
 					? 'ActionEventRemoteNotificationData'
 					: 'ActionEventLocalCallData';
 
-		imports.add_types('./action_event_data.js', data_type);
+		imports.add_types('@fuzdev/fuz_app/actions/action_event_data.js', data_type);
 
 		const type_args =
 			spec.kind === 'remote_notification'

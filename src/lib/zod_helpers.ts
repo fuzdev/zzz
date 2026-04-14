@@ -1,7 +1,6 @@
 import {z} from 'zod';
 import {EMPTY_ARRAY} from '@fuzdev/fuz_util/array.js';
 import {ensure_end, ensure_start, strip_end, strip_start} from '@fuzdev/fuz_util/string.js';
-import {zod_to_subschema} from '@fuzdev/fuz_util/zod.js';
 import {SvelteMap} from 'svelte/reactivity';
 
 import type {SchemaKeys} from './cell_types.js';
@@ -45,49 +44,13 @@ export type Datetime = z.infer<typeof Datetime>;
 export const DatetimeNow = Datetime.default(get_datetime_now);
 export type DatetimeNow = z.infer<typeof DatetimeNow>;
 
-export const create_uuid = (): Uuid => crypto.randomUUID() as Uuid;
+export {create_uuid, Uuid, UuidWithDefault} from '@fuzdev/fuz_app/uuid.js';
 
-export const Uuid = z.uuid().brand('Uuid');
-export type Uuid = z.infer<typeof Uuid>;
-export const UuidWithDefault = Uuid.default(create_uuid);
-export type UuidWithDefault = z.infer<typeof UuidWithDefault>;
-
-/**
- * Gets the innermost type of a Zod schema by unwrapping wrappers like transforms, `ZodOptional`, `ZodDefault`, etc.
- * @param schema - the schema to unwrap
- * @returns the innermost schema without wrappers
- */
-export const get_innermost_type = (schema: z.ZodType): z.ZodType => {
-	const def = schema.def;
-
-	// Handle wrapper types that need unwrapping
-	if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable) {
-		return get_innermost_type(schema.unwrap() as z.ZodType);
-	}
-
-	if (schema instanceof z.ZodDefault) {
-		const subschema = zod_to_subschema(def);
-		if (subschema) {
-			return get_innermost_type(subschema);
-		}
-	}
-
-	// Handle transforms, pipes, and other wrappers
-	if (def.type === 'transform' || def.type === 'pipe' || def.type === 'prefault') {
-		const subschema = zod_to_subschema(def);
-		if (subschema) {
-			return get_innermost_type(subschema);
-		}
-	}
-
-	return schema;
-};
-
-export const get_innermost_type_name = (schema: z.ZodType): string => {
-	const innermost = get_innermost_type(schema);
-	const def = innermost.def;
-	return def.type;
-};
+import {get_innermost_type} from '@fuzdev/fuz_app/actions/action_codegen.js';
+export {
+	get_innermost_type,
+	get_innermost_type_name,
+} from '@fuzdev/fuz_app/actions/action_codegen.js';
 
 /**
  * Gets all property keys from a Zod object schema.

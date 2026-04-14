@@ -112,5 +112,3 @@ export const WEBSOCKET_URL_OBJECT: URL | null = WEBSOCKET_URL ? new URL(WEBSOCKE
  * @no_trailing_slash
  */
 export const WEBSOCKET_PATH: string | undefined = WEBSOCKET_URL_OBJECT?.pathname;
-
-export const UNKNOWN_ERROR_MESSAGE: string = 'unknown error'; // TODO move/configure

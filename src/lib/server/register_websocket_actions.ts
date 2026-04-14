@@ -27,7 +27,7 @@ import {
 import type {Uuid} from '../zod_helpers.js';
 import {all_action_specs} from '../action_specs.js';
 import type {Backend} from './backend.js';
-import {BackendWebsocketTransport} from './backend_websocket_transport.js';
+import {BackendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws_backend.js';
 import {zzz_action_handlers, type ZzzHandledMethod} from './zzz_action_handlers.js';
 
 export interface RegisterWebsocketActionsOptions {

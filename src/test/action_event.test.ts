@@ -3,8 +3,14 @@
 import {test, describe, assert} from 'vitest';
 import {assert_rejects} from '@fuzdev/fuz_util/testing.js';
 
-import {create_action_event, create_action_event_from_json} from '$lib/action_event.js';
-import type {ActionEventEnvironment, ActionExecutor} from '$lib/action_event_types.js';
+import {
+	create_action_event,
+	create_action_event_from_json,
+} from '@fuzdev/fuz_app/actions/action_event.js';
+import type {
+	ActionEventEnvironment,
+	ActionExecutor,
+} from '@fuzdev/fuz_app/actions/action_event_types.js';
 import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 import {
 	ping_action_spec,

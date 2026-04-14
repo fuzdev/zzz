@@ -29,7 +29,7 @@ import {create_zzz_app} from './create_zzz_app.ts';
 import {load_server_env} from './server_env.ts';
 import {is_open_host} from './security.ts';
 import {register_websocket_actions} from './register_websocket_actions.ts';
-import {BackendWebsocketTransport} from './backend_websocket_transport.ts';
+import {BackendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws_backend.js';
 
 const log = new Logger('[server]');
 

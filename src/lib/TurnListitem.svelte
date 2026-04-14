@@ -3,7 +3,7 @@
 
 	import ErrorMessageInline from './ErrorMessageInline.svelte';
 	import type {Turn} from './turn.svelte.js';
-	import {UNKNOWN_ERROR_MESSAGE} from './constants.js';
+	import {UNKNOWN_ERROR_MESSAGE} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
 	import TurnContextmenu from './TurnContextmenu.svelte';
 
 	const {

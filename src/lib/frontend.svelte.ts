@@ -34,19 +34,19 @@ import {Socket} from './socket.svelte.js';
 import {Capabilities} from './capabilities.svelte.js';
 import {DiskfileHistory} from './diskfile_history.svelte.js';
 import {HANDLED} from './cell_helpers.js';
-import {ActionPeer} from './action_peer.js';
-import type {ActionMethod, ActionsApi} from './action_metatypes.js';
-import type {FrontendActionHandlers} from './frontend_action_types.js';
-import {ActionInputs, ActionOutputs, action_specs} from './action_collections.js';
-import {create_frontend_actions_api} from './frontend_actions_api.js';
-import {create_frontend_action_handlers} from './frontend_action_handlers.js';
+import {ActionPeer} from '@fuzdev/fuz_app/actions/action_peer.js';
 import {
 	ActionExecutor,
 	ACTION_EVENT_PHASE_BY_KIND,
 	type ActionEventEnvironment,
-} from './action_event_types.js';
-import {FrontendHttpTransport} from './frontend_http_transport.js';
-import {FrontendWebsocketTransport} from './frontend_websocket_transport.js';
+} from '@fuzdev/fuz_app/actions/action_event_types.js';
+import {FrontendHttpTransport} from '@fuzdev/fuz_app/actions/transports_http.js';
+import {FrontendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws.js';
+import {create_rpc_client} from '@fuzdev/fuz_app/actions/rpc_client.js';
+import type {ActionMethod, ActionsApi} from './action_metatypes.js';
+import type {FrontendActionHandlers} from './frontend_action_types.js';
+import {ActionInputs, ActionOutputs, action_specs} from './action_collections.js';
+import {create_frontend_action_handlers} from './frontend_action_handlers.js';
 
 // TODO this is over-used, see also `app_context` for the user pattern
 export const frontend_context = create_context<Frontend>();
@@ -212,7 +212,11 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 		this.peer = new ActionPeer({environment: this});
 
-		this.api = create_frontend_actions_api(this.peer, this, this.actions);
+		this.api = create_rpc_client({
+			peer: this.peer,
+			environment: this,
+			actions: this.actions as any, // duck-typed — Actions has the right shape
+		}) as unknown as ActionsApi;
 
 		// Set up transports, adding websocket first so it'll be the default
 		if (options.socket_url) {
@@ -314,7 +318,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	}
 
 	lookup_action_handler(
-		method: ActionMethod,
+		method: string,
 		phase: ActionEventPhase,
 	): ((event: any) => any) | undefined {
 		const method_handlers = (this.action_handlers as any)[method];
@@ -322,8 +326,8 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		return method_handlers[phase];
 	}
 
-	lookup_action_spec(method: ActionMethod): ActionSpecUnion | undefined {
-		return this.action_registry.spec_by_method.get(method);
+	lookup_action_spec(method: string): ActionSpecUnion | undefined {
+		return this.action_registry.spec_by_method.get(method as ActionMethod);
 	}
 
 	lookup_action_input_schema<TMethod extends ActionMethod>(

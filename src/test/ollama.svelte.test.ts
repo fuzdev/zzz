@@ -6,7 +6,7 @@ import {Ollama} from '$lib/ollama.svelte.js';
 import {Frontend} from '$lib/frontend.svelte.js';
 import config from '$lib/config.js';
 import {OLLAMA_URL} from '$lib/ollama_helpers.js';
-import {create_action_event} from '$lib/action_event.js';
+import {create_action_event} from '@fuzdev/fuz_app/actions/action_event.js';
 
 describe('Ollama', () => {
 	const create_test_app = () => {

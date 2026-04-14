@@ -7,7 +7,7 @@ import type {
 	ActionEventLocalCallData,
 	ActionEventRemoteNotificationData,
 	ActionEventRequestResponseData,
-} from './action_event_data.js';
+} from '@fuzdev/fuz_app/actions/action_event_data.js';
 
 // TODO consistent naming, maybe `ActionMethodUnion`
 /**

@@ -17,11 +17,14 @@ import {DiskfileDirectoryPath, type SerializableDisknode} from '../diskfile_type
 import {to_serializable_disknode} from '../diskfile_helpers.js';
 import type {WorkspaceInfoJson} from '../workspace.svelte.js';
 import {ScopedFs} from './scoped_fs.js';
-import type {ActionEventEnvironment, ActionExecutor} from '../action_event_types.js';
+import type {
+	ActionEventEnvironment,
+	ActionExecutor,
+} from '@fuzdev/fuz_app/actions/action_event_types.js';
 import type {ActionMethod} from '../action_metatypes.js';
 import {create_backend_actions_api, type BackendActionsApi} from './backend_actions_api.js';
 import {PtyManager} from './backend_pty_manager.js';
-import {ActionPeer} from '../action_peer.js';
+import {ActionPeer} from '@fuzdev/fuz_app/actions/action_peer.js';
 import type {BackendProvider} from './backend_provider.js';
 
 // TODO refactor for extensibility
@@ -191,8 +194,8 @@ export class Backend implements ActionEventEnvironment {
 		return undefined;
 	}
 
-	lookup_action_spec(method: ActionMethod): ActionSpecUnion | undefined {
-		return this.action_registry.spec_by_method.get(method);
+	lookup_action_spec(method: string): ActionSpecUnion | undefined {
+		return this.action_registry.spec_by_method.get(method as ActionMethod);
 	}
 
 	lookup_provider<T extends keyof BackendProviders>(provider_name: T): BackendProviders[T] {

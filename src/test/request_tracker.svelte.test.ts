@@ -12,7 +12,7 @@ import {
 } from '@fuzdev/fuz_app/http/jsonrpc_helpers.js';
 import {ThrownJsonrpcError} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
 
-import {RequestTracker} from '$lib/request_tracker.svelte.js';
+import {RequestTracker} from '@fuzdev/fuz_app/actions/request_tracker.svelte.js';
 
 describe('RequestTracker', () => {
 	let warn_spy: ReturnType<typeof vi.spyOn>;
