@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use argon2::password_hash::{rand_core::OsRng, PasswordHasher, PasswordVerifier, SaltString};
+use argon2::password_hash::{PasswordHasher, PasswordVerifier, SaltString};
 use base64::Engine;
 use argon2::Argon2;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{self, SESSION_AGE_MAX, SESSION_COOKIE_NAME};
@@ -27,7 +27,7 @@ pub fn now_secs() -> u64 {
 /// Generate a cryptographically random session token (base64url, 32 bytes).
 pub fn generate_session_token() -> String {
     let mut bytes = [0u8; 32];
-    rand::thread_rng().fill(&mut bytes);
+    rand::rng().fill(&mut bytes);
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
 }
 
@@ -468,7 +468,12 @@ async fn password_inner(
 /// Hash a password with Argon2id on a blocking thread.
 pub async fn hash_password(password: String) -> Result<String, argon2::password_hash::Error> {
     tokio::task::spawn_blocking(move || {
-        let salt = SaltString::generate(&mut OsRng);
+        // Generate 16 random bytes for the salt (standard Argon2 salt size),
+        // then encode as base64 for SaltString.
+        let mut salt_bytes = [0u8; 16];
+        rand::rng().fill(&mut salt_bytes);
+        let salt = SaltString::encode_b64(&salt_bytes)
+            .map_err(|_| argon2::password_hash::Error::SaltInvalid(argon2::password_hash::errors::InvalidValue::Malformed))?;
         let argon2 = Argon2::default();
         let hash = argon2.hash_password(password.as_bytes(), &salt)?;
         Ok(hash.to_string())

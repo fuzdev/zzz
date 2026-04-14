@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use rand::Rng;
+use rand::RngExt;
 use tokio::sync::RwLock;
 
 // -- Daemon token state -------------------------------------------------------
@@ -35,7 +35,7 @@ pub type SharedDaemonTokenState = Arc<RwLock<DaemonTokenState>>;
 /// Matches `fuz_app`'s `generate_daemon_token` / `generate_random_base64url`.
 pub fn generate_daemon_token() -> String {
     let mut bytes = [0u8; 32];
-    rand::thread_rng().fill(&mut bytes);
+    rand::rng().fill(&mut bytes);
     URL_SAFE_NO_PAD.encode(bytes)
 }
 

@@ -100,6 +100,7 @@ async fn handle_connection(socket: WebSocket, app: Arc<App>, resolved: ResolvedA
                                 app_arc: Arc::clone(&app),
                                 request_id: &id,
                                 auth: Some(&auth_context),
+                                connection_id: Some(conn_id),
                             };
                             match handlers::dispatch(method, params, &ctx).await {
                                 Ok(result) => serde_json::to_string(&rpc::success_response(id, result)),

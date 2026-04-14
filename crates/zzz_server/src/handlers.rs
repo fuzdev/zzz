@@ -12,6 +12,7 @@ use tokio::sync::mpsc;
 use crate::auth::{Keyring, RequestContext};
 use crate::daemon_token::SharedDaemonTokenState;
 use crate::filer::{FilerConfig, FilerLifetime, FilerManager};
+use crate::provider::{self, CompletionHandlerOptions, CompletionOptions, ProviderManager, ProviderName};
 use crate::pty_manager::PtyManager;
 use crate::rpc;
 use crate::scoped_fs::ScopedFs;
@@ -60,6 +61,10 @@ pub struct App {
     pub pty_manager: PtyManager,
     /// Daemon token state for `X-Daemon-Token` auth.
     pub daemon_token_state: Option<SharedDaemonTokenState>,
+    /// AI provider manager (Anthropic, `OpenAI`, Gemini, Ollama).
+    pub provider_manager: ProviderManager,
+    /// Default completion options.
+    pub completion_options: CompletionOptions,
 }
 
 impl App {
@@ -74,6 +79,7 @@ impl App {
         zzz_dir: String,
         scoped_dirs: Vec<String>,
         daemon_token_state: Option<SharedDaemonTokenState>,
+        provider_manager: ProviderManager,
     ) -> Self {
         Self {
             workspaces: RwLock::new(HashMap::new()),
@@ -90,6 +96,8 @@ impl App {
             filer_manager: FilerManager::new(),
             pty_manager: PtyManager::new(),
             daemon_token_state,
+            provider_manager,
+            completion_options: CompletionOptions::default(),
         }
     }
 
@@ -199,6 +207,9 @@ pub struct Ctx<'a> {
     pub app_arc: Arc<App>,
     pub request_id: &'a Value,
     pub auth: Option<&'a RequestContext>,
+    /// WebSocket connection ID — `None` for HTTP requests.
+    /// Used for targeted `completion_progress` streaming notifications.
+    pub connection_id: Option<ConnectionId>,
 }
 
 // -- Domain types -------------------------------------------------------------
@@ -250,7 +261,7 @@ struct SessionLoadData {
     files: Vec<crate::filer::SerializableDisknode>,
     zzz_dir: String,
     scoped_dirs: Vec<String>,
-    provider_status: Vec<Value>, // always empty — no providers in Rust backend yet
+    provider_status: Vec<Value>,
     workspaces: Vec<WorkspaceInfo>,
 }
 
@@ -291,8 +302,9 @@ pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Val
         "diskfile_update" => handle_diskfile_update(params, ctx).await,
         "diskfile_delete" => handle_diskfile_delete(params, ctx).await,
         "directory_create" => handle_directory_create(params, ctx).await,
-        // provider_load_status — in method_auth as Authenticated, but no handler
-        // yet. Falls through to method_not_found until Rust providers land.
+        "provider_load_status" => handle_provider_load_status(params, ctx).await,
+        "provider_update_api_key" => handle_provider_update_api_key(params, ctx).await,
+        "completion_create" => handle_completion_create(params, ctx).await,
         "terminal_create" => handle_terminal_create(params, ctx).await,
         "terminal_data_send" => handle_terminal_data_send(params, ctx).await,
         "terminal_resize" => handle_terminal_resize(params, ctx).await,
@@ -324,12 +336,21 @@ async fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     // iterates backend.filers.entries() — no filesystem walk at call time)
     let files = ctx.app.filer_manager.collect_all_files().await;
 
+    // Collect provider status from all registered providers
+    let mut provider_status = Vec::new();
+    for p in ctx.app.provider_manager.all() {
+        let status = p.load_status(false).await;
+        if let Ok(v) = serde_json::to_value(&status) {
+            provider_status.push(v);
+        }
+    }
+
     let result = SessionLoadResult {
         data: SessionLoadData {
             files,
             zzz_dir: ctx.app.zzz_dir.clone(),
             scoped_dirs: ctx.app.scoped_dirs.clone(),
-            provider_status: vec![],
+            provider_status,
             workspaces,
         },
     };
@@ -506,6 +527,153 @@ async fn handle_workspace_close(params: &Value, ctx: &Ctx<'_>) -> Result<Value, 
     ctx.app.broadcast(&notification);
 
     Ok(Value::Null)
+}
+
+// -- Provider handlers --------------------------------------------------------
+
+#[derive(Serialize)]
+struct ProviderStatusResult {
+    status: provider::ProviderStatus,
+}
+
+async fn handle_provider_load_status(
+    params: &Value,
+    ctx: &Ctx<'_>,
+) -> Result<Value, JsonRpcError> {
+    let name_str = params
+        .get("provider_name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'provider_name' parameter"))?;
+
+    let provider_name: ProviderName = serde_json::from_value(Value::String(name_str.to_owned()))
+        .map_err(|_| rpc::invalid_params(&format!("unknown provider: {name_str}")))?;
+
+    let reload = params
+        .get("reload")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+
+    let provider = ctx.app.provider_manager.require(provider_name)?;
+    let status = provider.load_status(reload).await;
+
+    serde_json::to_value(ProviderStatusResult { status })
+        .map_err(|_| rpc::internal_error("serialization failed"))
+}
+
+async fn handle_provider_update_api_key(
+    params: &Value,
+    ctx: &Ctx<'_>,
+) -> Result<Value, JsonRpcError> {
+    let name_str = params
+        .get("provider_name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'provider_name' parameter"))?;
+
+    let provider_name: ProviderName = serde_json::from_value(Value::String(name_str.to_owned()))
+        .map_err(|_| rpc::invalid_params(&format!("unknown provider: {name_str}")))?;
+
+    if provider_name == ProviderName::Ollama {
+        return Err(rpc::invalid_params("Ollama does not require an API key"));
+    }
+
+    let api_key = params
+        .get("api_key")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'api_key' parameter"))?;
+
+    let provider = ctx.app.provider_manager.require(provider_name)?;
+    provider.set_api_key(Some(api_key.to_owned())).await;
+    let status = provider.load_status(true).await;
+
+    serde_json::to_value(ProviderStatusResult { status })
+        .map_err(|_| rpc::internal_error("serialization failed"))
+}
+
+async fn handle_completion_create(
+    params: &Value,
+    ctx: &Ctx<'_>,
+) -> Result<Value, JsonRpcError> {
+    let request = params
+        .get("completion_request")
+        .ok_or_else(|| rpc::invalid_params("missing 'completion_request' parameter"))?;
+
+    let provider_name_str = request
+        .get("provider_name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing 'provider_name' in completion_request"))?;
+
+    let provider_name: ProviderName =
+        serde_json::from_value(Value::String(provider_name_str.to_owned()))
+            .map_err(|_| rpc::invalid_params(&format!("unknown provider: {provider_name_str}")))?;
+
+    let model = request
+        .get("model")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing 'model' in completion_request"))?
+        .to_owned();
+
+    let prompt = request
+        .get("prompt")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing 'prompt' in completion_request"))?
+        .to_owned();
+
+    let completion_messages: Option<Vec<provider::CompletionMessage>> = request
+        .get("completion_messages")
+        .and_then(|v| serde_json::from_value(v.clone()).ok());
+
+    let progress_token = params
+        .get("_meta")
+        .and_then(|m| m.get("progressToken"))
+        .and_then(Value::as_str)
+        .map(String::from);
+
+    let completion_options = ctx.app.completion_options.clone();
+
+    let handler_options = CompletionHandlerOptions {
+        model,
+        completion_options,
+        completion_messages,
+        prompt,
+        progress_token: progress_token.clone(),
+    };
+
+    // Build progress sender for streaming (only works over WebSocket)
+    let progress_sender: Option<provider::ProgressSender> =
+        match (ctx.connection_id, &progress_token) {
+            (Some(conn_id), Some(token)) => {
+                let app = Arc::clone(&ctx.app_arc);
+                let token = token.clone();
+                Some(Box::new(move |chunk: Value| {
+                    let notification = rpc::notification(
+                        "completion_progress",
+                        serde_json::json!({
+                            "chunk": chunk,
+                            "_meta": { "progressToken": token },
+                        }),
+                    );
+                    app.send_to(conn_id, &notification);
+                }))
+            }
+            _ => None,
+        };
+
+    let provider = ctx.app.provider_manager.require(provider_name)?;
+    let mut result = provider
+        .complete(&handler_options, progress_sender.as_ref())
+        .await?;
+
+    // Add _meta.progressToken to response if streaming was requested
+    if let Some(token) = &progress_token
+        && let Some(obj) = result.as_object_mut()
+    {
+        obj.insert(
+            "_meta".to_owned(),
+            serde_json::json!({"progressToken": token}),
+        );
+    }
+
+    Ok(result)
 }
 
 // -- Filesystem handlers ------------------------------------------------------

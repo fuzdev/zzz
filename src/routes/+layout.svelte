@@ -3,7 +3,7 @@
 	import '@fuzdev/fuz_code/theme.css';
 	import '$routes/style.css';
 
-	import {onMount} from 'svelte';
+	import {untrack} from 'svelte';
 	import {contextmenu_attachment} from '@fuzdev/fuz_ui/contextmenu_state.svelte.js';
 	import {Library} from '@fuzdev/fuz_ui/library.svelte.js';
 	import {BROWSER} from 'esm-env';
@@ -36,42 +36,25 @@
 	// Create the frontend's App only after auth is verified
 	let app: App | undefined = $state.raw();
 
-	$effect(() => {
-		if (!auth_state.verified || app) return;
-
+	// TODO init properly from data
+	const init_app = (): void => {
+		const zzz_config = create_zzz_config();
 		const new_app = new App();
+		new_app.add_providers(zzz_config.providers.map((p) => ProviderJson.parse(p))); // TODO handle errors
+		new_app.models.add_many(zzz_config.models.map((m) => ModelJson.parse(m))); // TODO handle errors
+
 		app = new_app;
 
-		if (BROWSER) (window as any).app = new_app; // no types for this, just for runtime convenience
-	});
+		if (BROWSER) {
+			(window as any).app = new_app; // no types for this, just for runtime convenience
+			void new_app.api.session_load();
+			void new_app.ollama.refresh();
+		}
+	};
 
-	// TODO think through initialization
-	onMount(() => {
-		// Wait for app to be created (auth verified)
-		const unwatch = $effect.root(() => {
-			$effect(() => {
-				if (!app) return;
-
-				// TODO init properly from data
-				const zzz_config = create_zzz_config();
-
-				// TODO note the difference between these two APIs, look at both of them and see which makes more sense
-				app.add_providers(zzz_config.providers.map((p) => ProviderJson.parse(p))); // TODO handle errors
-				app.models.add_many(zzz_config.models.map((m) => ModelJson.parse(m))); // TODO handle errors
-
-				// init the session
-				if (BROWSER) {
-					void app.api.session_load();
-				}
-
-				// init Ollama
-				if (BROWSER) {
-					void app.ollama.refresh();
-				}
-
-				unwatch();
-			});
-		});
+	$effect.pre(() => {
+		if (!auth_state.verified || app) return;
+		untrack(init_app);
 	});
 
 	// TODO refactor, maybe per route?

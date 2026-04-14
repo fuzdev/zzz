@@ -26,7 +26,7 @@ For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
 ## Development Stage
 
-Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, daemon tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) still in-memory. The Hono/Deno backend is the reference implementation. A Rust backend (`crates/zzz_server`) is in development — Phase 3 (full auth stack with daemon token rotation, account management routes, event-driven socket revocation, filesystem actions with ScopedFs, terminal actions via fuz_pty, PostgreSQL, bootstrap) is complete with 74 integration tests verifying parity. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
+Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, daemon tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) still in-memory. The Hono/Deno backend is the reference implementation. A Rust backend (`crates/zzz_server`) is in development — Phase 4 (AI provider system: Anthropic fully implemented with SSE streaming, OpenAI/Gemini/Ollama stubs) in progress atop Phase 3 (full auth stack, filesystem, terminals, PostgreSQL, bootstrap) with 79 integration tests verifying parity. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
 
 See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 
@@ -256,21 +256,20 @@ Two dev server modes:
 
 Shadow implementation of the Deno server using axum. Same `/api/*` route
 paths as the Deno server — both backends are interchangeable from the
-frontend's perspective. 13 RPC methods: `ping`, `session_load`, `workspace_*`,
+frontend's perspective. 16 RPC methods: `ping`, `session_load`, `workspace_*`,
 `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`,
 `terminal_data_send`, `terminal_resize`, `terminal_close`,
-`provider_update_api_key` (keeper-only). Cookie session auth and bearer token
-auth (API tokens) on HTTP and WebSocket, `ScopedFs` path safety, PTY
-terminals via `fuz_pty` native crate, and WebSocket connection tracking
-(`broadcast`/`send_to`). PostgreSQL via `tokio-postgres`/`deadpool-postgres`,
-HMAC-SHA256 cookie signing, blake3 session/token hashing, per-action auth
-checks with credential type enforcement, bootstrap endpoint.
-The Deno server is ground truth — 79 integration tests on both backends
+`provider_load_status`, `provider_update_api_key` (keeper-only),
+`completion_create`. Cookie session auth and bearer token auth (API tokens)
+on HTTP and WebSocket, `ScopedFs` path safety, PTY terminals via `fuz_pty`
+native crate, and WebSocket connection tracking (`broadcast`/`send_to`).
+PostgreSQL via `tokio-postgres`/`deadpool-postgres`, HMAC-SHA256 cookie
+signing, blake3 session/token hashing, per-action auth checks with credential
+type enforcement, bootstrap endpoint. AI provider system with enum-dispatched
+providers — Anthropic fully implemented (non-streaming + SSE streaming with
+connection-targeted `completion_progress` notifications), OpenAI/Gemini/Ollama
+stubs. The Deno server is ground truth — 79 integration tests on both backends
 (all cross-backend, 0 skips) verify identical JSON-RPC responses.
-
-AI provider actions (`completion_create`, `ollama_*`, `provider_load_status`)
-are not yet implemented in Rust — these return `method_not_found`. Rust
-implementations will follow the Deno/JS implementations as reference.
 
 ```bash
 cargo build -p zzz_server                          # Build
@@ -521,7 +520,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in `~/dev/private_fuz/`. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Rust backend is Phase 3** — 13 RPC methods with full auth stack, same `/api/*` route paths as Deno. `deno task dev` runs the Rust backend with Vite frontend. No provider support yet (`provider_load_status` returns `method_not_found`). No batch JSON-RPC, no completion/streaming, no Ollama actions — AI provider features are Phase 4 work (Rust implementations following JS as reference). See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
+- **Rust backend is Phase 4** — 16 RPC methods with full auth stack, same `/api/*` route paths as Deno. `deno task dev` runs the Rust backend with Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable). No batch JSON-RPC, no Ollama actions (`ollama_list`, `ollama_ps`, etc.). See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
 
 ## fuz_app
 

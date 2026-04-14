@@ -324,6 +324,7 @@ pub async fn rpc_get_handler(
         app_arc: Arc::clone(&app),
         request_id: &id,
         auth: auth_context,
+        connection_id: None,
     };
     match handlers::dispatch(method, &params, &ctx).await {
         Ok(result) => Json(success_response(id, result)).into_response(),
@@ -395,6 +396,7 @@ pub async fn rpc_handler(
                 app_arc: Arc::clone(&app),
                 request_id: &id,
                 auth: auth_context,
+                connection_id: None,
             };
             match handlers::dispatch(method, params, &ctx).await {
                 Ok(result) => Json(success_response(id, result)).into_response(),

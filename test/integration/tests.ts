@@ -779,22 +779,15 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 			);
 			const rpc = res.body as Record<string, unknown>;
 			assert_equal(rpc.id, 'pls-1', 'id');
-			if (config.name === 'rust') {
-				// Rust has no provider support — returns method_not_found
-				assert_equal(res.status, 404, 'status');
-				const error = rpc.error as Record<string, unknown>;
-				assert_equal(error.code, -32601, 'error code');
-			} else {
-				// Deno returns {status: ProviderStatus} per the action spec
-				assert_equal(res.status, 200, 'status');
-				const result = rpc.result as Record<string, unknown>;
-				const status = result.status as Record<string, unknown>;
-				assert_equal(status.name, 'ollama', 'status.name');
-				assert_equal(typeof status.available, 'boolean', 'status.available is boolean');
-				assert_equal(typeof status.checked_at, 'number', 'status.checked_at is number');
-				if (status.available === false) {
-					assert_equal(typeof status.error, 'string', 'status.error is string when unavailable');
-				}
+			// Both backends return {status: ProviderStatus} per the action spec
+			assert_equal(res.status, 200, 'status');
+			const result = rpc.result as Record<string, unknown>;
+			const status = result.status as Record<string, unknown>;
+			assert_equal(status.name, 'ollama', 'status.name');
+			assert_equal(typeof status.available, 'boolean', 'status.available is boolean');
+			assert_equal(typeof status.checked_at, 'number', 'status.checked_at is number');
+			if (status.available === false) {
+				assert_equal(typeof status.error, 'string', 'status.error is string when unavailable');
 			}
 		},
 	},

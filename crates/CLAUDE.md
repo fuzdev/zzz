@@ -4,29 +4,21 @@ Shadow implementation of the Deno/Hono server using axum. Same JSON-RPC 2.0
 protocol, same wire format — the Deno server is ground truth and the
 integration tests enforce identical behaviour between both backends.
 
-Phase 3 complete: full auth stack (cookie sessions, bearer tokens, daemon
-tokens), account management routes (login, logout, password change, session
-list, session revocation), filesystem actions (`diskfile_update`,
-`diskfile_delete`, `directory_create`) with `ScopedFs` path safety, terminal
-actions (`terminal_create`, `terminal_data_send`, `terminal_resize`,
-`terminal_close`) via `fuz_pty` native crate dependency (real PTY via
-`forkpty`), per-action auth checks on all transports, a bootstrap endpoint
-for first-time account creation, `session_load` handler (returns zzz_dir,
-scoped_dirs, workspaces, and file listing from all filer indexes — zzz_dir,
-scoped_dirs, and open workspaces — with contents), `provider_load_status` stub (returns empty array),
-`workspace_changed` notifications (broadcast to all connected WebSocket
-clients on open/close), `terminal_data` and `terminal_exited` notifications
-(broadcast on PTY output and process exit), file watching via `notify` crate
-(`filer_change` notifications on file add/change/delete with 80ms debounced
-broadcasts and immediate index updates, per-watcher ignore config,
-in-memory file index — startup filers on `zzz_dir`
-and `scoped_dirs` matching Deno, plus per-workspace filers with deduplication
-and lifetime tracking), WebSocket connection tracking with `broadcast`/`send_to`
-infrastructure, and event-driven socket revocation (logout and password change
-close matching WebSocket connections). Database (PostgreSQL via
-`tokio-postgres`/`deadpool-postgres`), HMAC-SHA256 cookie signing
-(`fuz_session`), blake3 session hashing. All other methods return
-`method_not_found`.
+Phase 4 in progress: AI provider system with enum-dispatched providers
+(Anthropic fully implemented, OpenAI/Gemini/Ollama stubs). 16 RPC methods:
+`ping`, `session_load`, `workspace_*`, `diskfile_*`, `directory_create`,
+`terminal_*`, `provider_load_status`, `provider_update_api_key`,
+`completion_create`. Full auth stack (cookie sessions, bearer tokens, daemon
+tokens), account management routes, filesystem actions with `ScopedFs`,
+terminal actions via `fuz_pty`, `session_load` returns real provider status
+from all registered providers, `workspace_changed`/`filer_change`/
+`terminal_data`/`terminal_exited` notifications, file watching via `notify`
+crate with debounced broadcasts and immediate index updates, WebSocket
+connection tracking with targeted `completion_progress` streaming
+notifications, event-driven socket revocation. Database (PostgreSQL via
+`tokio-postgres`/`deadpool-postgres`), HMAC-SHA256 cookie signing, blake3
+session hashing. Anthropic provider uses `reqwest` HTTP client with manual
+SSE parsing for streaming completions.
 
 ## Prerequisites
 
@@ -175,9 +167,8 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
 
 ## Integration Tests
 
-79 tests on both backends, all cross-backend (0 skips). One test
-(`provider_load_status_empty`) branches on backend name — Rust returns
-`method_not_found`, Deno returns the spec response. Both backends bootstrap
+79 tests on both backends, all cross-backend (0 skips, 0 backend-specific
+branches). Both backends bootstrap
 auth (admin account + session cookie), create a non-keeper user (account +
 actor + session, no
 keeper permit, cookie signed via HMAC-SHA256), and insert API tokens into
@@ -307,6 +298,12 @@ crates/zzz_server/src/
 ├── bootstrap.rs     # POST /bootstrap handler (account + session creation)
 ├── db.rs            # Connection pool, migrations, auth + account management queries
 ├── filer.rs         # Filer + FilerManager (notify crate) — immediate file index updates, debounced filer_change broadcasts
+├── provider/        # AI provider system
+│   ├── mod.rs       # ProviderName, ProviderStatus, Provider enum, ProviderManager, CompletionOptions
+│   ├── anthropic.rs # AnthropicProvider — Messages API with SSE streaming
+│   ├── openai.rs    # OpenAiProvider stub (status only)
+│   ├── gemini.rs    # GeminiProvider stub (status only)
+│   └── ollama.rs    # OllamaProvider stub (status only)
 ├── pty_manager.rs   # PTY terminal manager (fuz_pty crate) → terminal_data/exited notifications
 ├── scoped_fs.rs     # Scoped filesystem — path validation, symlink rejection
 └── error.rs         # ServerError (Bind, Serve, Database, Config)
@@ -358,18 +355,18 @@ identical JSON-RPC envelopes for all auth failures.
 | Issue | Status | Detail |
 |-------|--------|--------|
 | Bearer invalid/expired token | **Resolved** | Both backends soft-fail → JSON-RPC `-32001` unauthenticated |
-| `provider_load_status` shape | **Resolved** | Rust now returns `-32601 method_not_found` instead of wrong-shape `[]` stub. Test is backend-aware. Will return spec-conformant response when Rust providers are implemented. |
+| `provider_load_status` shape | **Resolved** | Both backends return `{status: ProviderStatus}` per the action spec. Test is cross-backend (no backend branching). |
 | `session_list` response | **Resolved** | Both backends now return `{sessions: [{id, account_id, created_at, last_seen_at, expires_at}]}` matching fuz_app `AuthSessionJson`. Tests are cross-backend. |
 | `session_revoke` format | **Resolved** | Both backends now return `{ok: true, revoked: boolean}` with idempotent 200 responses. Route paths unified (`/api/account/*`). Tests are cross-backend. |
 | `error.data` (validation) | Intentional | Deno includes Zod issues in `error.data` for -32602; Rust omits. Intentional divergence — Rust's omission is the safer production default, Deno's inclusion aids DX. Handled by `normalize_error_data` in tests. Future: environment-conditional in both backends (include in dev, strip in prod). |
 
 ## Known Limitations
 
-- 13 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`, `terminal_data_send`, `terminal_resize`, `terminal_close`, `provider_update_api_key` keeper-only) + `provider_load_status` returns `method_not_found` (no provider support yet)
-- 4 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debounced broadcasts with immediate index updates, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast)
+- 16 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `provider_update_api_key` keeper-only, `completion_create`)
+- 5 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debounced broadcasts with immediate index updates, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast), `completion_progress` (streaming completion chunks to requesting WS connection)
+- AI providers: Anthropic fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable)
 - No batch request support (JSON arrays)
-- No completion/streaming or Ollama actions
-- `provider_load_status` returns `method_not_found` — no provider integration yet
+- No Ollama actions (`ollama_list`, `ollama_ps`, etc.)
 - No signup route (requires invite system)
 - No token management routes (GET /tokens, POST /tokens/create, etc.)
 - No SSE/realtime audit event broadcasting
@@ -398,16 +395,29 @@ identical JSON-RPC envelopes for all auth failures.
   `terminal_close` can stop the read loop before killing the process. Matching
   Deno behavior: 10ms poll interval, 50ms wait after kill before waitpid,
   silent returns for missing terminal IDs.
+- **Provider system**: Enum-dispatched (`Provider` enum, not trait objects) —
+  4 providers known at compile time, exhaustive matching. Provider state behind
+  `tokio::sync::RwLock` for async `set_api_key`. `complete()` clones the
+  `reqwest::Client` (internally `Arc`'d) and releases the lock before HTTP
+  calls, so `set_api_key` is never blocked by long-running streaming responses.
+  SSE parsing is manual with `\r\n` normalization per RFC 8895.
 
 ## What's Next
 
-**Phase 4** (next):
-1. Use connection tracking for `completion_progress` notifications
-2. Real `provider_load_status` implementation (check Ollama availability)
-3. Ollama integration (`ollama_list`, `ollama_ps`, completion pipeline)
-4. Codegen from Zod specs (action input/output types)
-5. Token management routes (create, list, revoke API tokens)
-6. Rate limiting on login/password endpoints
+**Phase 4** (in progress — AI providers):
+- [x] Provider system: enum-dispatched `Provider` with `ProviderManager`, `ProviderStatus`, `CompletionOptions`
+- [x] Anthropic provider: full implementation with `reqwest` HTTP client, SSE streaming, message format conversion
+- [x] `provider_load_status` handler (cross-backend, all 4 providers report status)
+- [x] `provider_update_api_key` handler (keeper-only, runtime API key updates)
+- [x] `completion_create` handler with `completion_progress` streaming notifications (targeted to requesting WS connection)
+- [x] `session_load` returns real provider status from all providers
+- [ ] OpenAI provider: full completion implementation
+- [ ] Gemini provider: full completion implementation
+- [ ] Ollama provider: HTTP client to local Ollama API, `ollama_list`, `ollama_ps`, etc.
 
-Phase 5 (full action port: completions, Ollama, streaming). Terminal actions
-are complete. See the [Rust Backends quest](../../grimoire/quests/rust-backends.md).
+**Phase 5** (remaining):
+1. Codegen from Zod specs (action input/output types)
+2. Token management routes (create, list, revoke API tokens)
+3. Rate limiting on login/password endpoints
+
+See the [Rust Backends quest](../../grimoire/quests/rust-backends.md).

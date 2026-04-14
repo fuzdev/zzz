@@ -6,6 +6,7 @@ mod db;
 mod error;
 mod filer;
 mod handlers;
+mod provider;
 mod pty_manager;
 mod rpc;
 mod scoped_fs;
@@ -101,6 +102,27 @@ async fn run() -> Result<(), ServerError> {
         }
     };
 
+    // AI providers — read API keys from env, construct ProviderManager
+    let mut provider_manager = provider::ProviderManager::new();
+    provider_manager.add(provider::Provider::Anthropic(
+        provider::anthropic::AnthropicProvider::new(
+            std::env::var("SECRET_ANTHROPIC_API_KEY").ok(),
+        ),
+    ));
+    provider_manager.add(provider::Provider::OpenAi(
+        provider::openai::OpenAiProvider::new(
+            std::env::var("SECRET_OPENAI_API_KEY").ok(),
+        ),
+    ));
+    provider_manager.add(provider::Provider::Gemini(
+        provider::gemini::GeminiProvider::new(
+            std::env::var("SECRET_GOOGLE_API_KEY").ok(),
+        ),
+    ));
+    provider_manager.add(provider::Provider::Ollama(
+        provider::ollama::OllamaProvider::new(),
+    ));
+
     let app_state = Arc::new(handlers::App::new(
         pool,
         keyring,
@@ -111,6 +133,7 @@ async fn run() -> Result<(), ServerError> {
         config.zzz_dir,
         scoped_dir_strings,
         daemon_token_state.clone(),
+        provider_manager,
     ));
 
     // Start file watchers at startup (matches Deno's Backend constructor
