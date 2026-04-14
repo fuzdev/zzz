@@ -345,62 +345,6 @@
 				]
 			},
 			{
-				"path": "action_helpers.ts",
-				"declarations": [
-					{
-						"name": "ACTION_DATE_FORMAT",
-						"kind": "variable",
-						"source_line": 1,
-						"type_signature": "\"MMM d, p\""
-					},
-					{
-						"name": "ACTION_TIME_FORMAT",
-						"kind": "variable",
-						"source_line": 2,
-						"type_signature": "\"p\""
-					},
-					{
-						"name": "to_action_spec_identifier",
-						"kind": "function",
-						"source_line": 5,
-						"type_signature": "(method: string): string",
-						"return_type": "string",
-						"parameters": [
-							{
-								"name": "method",
-								"type": "string"
-							}
-						]
-					},
-					{
-						"name": "to_action_spec_input_identifier",
-						"kind": "function",
-						"source_line": 6,
-						"type_signature": "(method: string): string",
-						"return_type": "string",
-						"parameters": [
-							{
-								"name": "method",
-								"type": "string"
-							}
-						]
-					},
-					{
-						"name": "to_action_spec_output_identifier",
-						"kind": "function",
-						"source_line": 8,
-						"type_signature": "(method: string): string",
-						"return_type": "string",
-						"parameters": [
-							{
-								"name": "method",
-								"type": "string"
-							}
-						]
-					}
-				]
-			},
-			{
 				"path": "action_metatypes.gen.ts",
 				"declarations": [],
 				"dependencies": ["action_specs.ts"]
@@ -4026,23 +3970,15 @@
 						"doc_comment": "",
 						"source_line": 114,
 						"type_signature": "string | undefined"
-					},
-					{
-						"name": "UNKNOWN_ERROR_MESSAGE",
-						"kind": "variable",
-						"source_line": 116,
-						"type_signature": "string"
 					}
 				],
 				"dependencies": ["zod_helpers.ts"],
 				"dependents": [
 					"CapabilityBackend.svelte",
 					"CapabilityWebsocket.svelte",
-					"TurnListitem.svelte",
 					"app.svelte.ts",
 					"helpers.ts",
-					"part.svelte.ts",
-					"socket.svelte.ts"
+					"part.svelte.ts"
 				]
 			},
 			{
@@ -16475,12 +16411,6 @@
 						"kind": "variable",
 						"source_line": 11,
 						"type_signature": "1000"
-					},
-					{
-						"name": "WS_CLOSE_SESSION_REVOKED",
-						"kind": "variable",
-						"source_line": 12,
-						"type_signature": "4001"
 					}
 				],
 				"dependents": ["CapabilityWebsocket.svelte", "socket.svelte.ts"]
@@ -16821,13 +16751,7 @@
 						]
 					}
 				],
-				"dependencies": [
-					"cell.svelte.ts",
-					"cell_types.ts",
-					"constants.ts",
-					"socket_helpers.ts",
-					"zod_helpers.ts"
-				],
+				"dependencies": ["cell.svelte.ts", "cell_types.ts", "socket_helpers.ts", "zod_helpers.ts"],
 				"dependents": ["cell_classes.ts", "frontend.svelte.ts"]
 			},
 			{
@@ -18836,7 +18760,7 @@
 						"source_line": 1
 					}
 				],
-				"dependencies": ["ErrorMessageInline.svelte", "TurnContextmenu.svelte", "constants.ts"],
+				"dependencies": ["ErrorMessageInline.svelte", "TurnContextmenu.svelte"],
 				"dependents": ["TurnList.svelte"]
 			},
 			{
