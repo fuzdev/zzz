@@ -2,7 +2,6 @@ import {create_context} from '@fuzdev/fuz_ui/context_helpers.js';
 
 import {Frontend, frontend_context, type FrontendOptions} from './frontend.svelte.js';
 import {cell_classes} from './cell_classes.js';
-import {frontend_action_handlers} from './frontend_action_handlers.js';
 import {WEBSOCKET_URL, API_URL_FOR_HTTP_RPC} from './constants.js';
 
 // TODO some of this is awkward -- the idea
@@ -29,7 +28,6 @@ export class App extends Frontend {
 		if (!o.http_rpc_url) o.http_rpc_url = API_URL_FOR_HTTP_RPC;
 		if (!o.socket_url) o.socket_url = WEBSOCKET_URL;
 		if (!o.cell_classes) o.cell_classes = cell_classes;
-		if (!o.action_handlers) o.action_handlers = frontend_action_handlers;
 		super(o);
 	}
 }

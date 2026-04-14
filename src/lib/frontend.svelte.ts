@@ -39,6 +39,7 @@ import type {ActionMethod, ActionsApi} from './action_metatypes.js';
 import type {FrontendActionHandlers} from './frontend_action_types.js';
 import {ActionInputs, ActionOutputs, action_specs} from './action_collections.js';
 import {create_frontend_actions_api} from './frontend_actions_api.js';
+import {create_frontend_action_handlers} from './frontend_action_handlers.js';
 import {
 	ActionExecutor,
 	ACTION_EVENT_PHASE_BY_KIND,
@@ -182,7 +183,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.cell_registry = new CellRegistry(this);
 
 		this.action_registry = new ActionRegistry(options.action_specs || action_specs);
-		this.action_handlers = options.action_handlers || {};
+		this.action_handlers = options.action_handlers || create_frontend_action_handlers(this);
 
 		// Register cell classes if provided, otherwise use the default
 		const cells_to_register = options.cell_classes || cell_classes;
@@ -209,9 +210,9 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 		this.bots = options.bots ?? BOTS_DEFAULT;
 
-		this.api = create_frontend_actions_api(this);
-
 		this.peer = new ActionPeer({environment: this});
+
+		this.api = create_frontend_actions_api(this.peer, this, this.actions);
 
 		// Set up transports, adding websocket first so it'll be the default
 		if (options.socket_url) {

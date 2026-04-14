@@ -1,5 +1,3 @@
-// @slop Claude Opus 4
-
 import type {ActionMethod, ActionsApi} from './action_metatypes.js';
 import type {ActionEventEnvironment} from './action_event_types.js';
 import {create_action_event} from './action_event.js';
@@ -14,6 +12,8 @@ import {
 	is_notification_send,
 	extract_action_result,
 } from './action_event_helpers.js';
+import type {ActionPeer} from './action_peer.js';
+import type {Actions} from './actions.svelte.js';
 
 // TODO @api @many refactor frontend_actions_api.ts with action_peer.ts
 
@@ -23,8 +23,10 @@ import {
  * Creates the actions API methods for the frontend.
  * Uses a Proxy to provide dynamic method lookup with full type safety.
  */
-export const create_frontend_actions_api = <T extends ActionEventEnvironment>(
-	environment: T,
+export const create_frontend_actions_api = (
+	peer: ActionPeer,
+	environment: ActionEventEnvironment,
+	actions?: Actions,
 ): ActionsApi => {
 	return new Proxy({} as ActionsApi, {
 		get(_target, method: string) {
@@ -33,7 +35,7 @@ export const create_frontend_actions_api = <T extends ActionEventEnvironment>(
 				return undefined;
 			}
 
-			return create_action_method(environment, spec);
+			return create_action_method(peer, environment, spec, actions);
 		},
 		has(_target, method: string) {
 			return environment.lookup_action_spec(method as ActionMethod) !== undefined;
@@ -44,16 +46,21 @@ export const create_frontend_actions_api = <T extends ActionEventEnvironment>(
 /**
  * Creates a method that executes an action through its complete lifecycle.
  */
-const create_action_method = (environment: ActionEventEnvironment, spec: ActionSpecUnion) => {
+const create_action_method = (
+	peer: ActionPeer,
+	environment: ActionEventEnvironment,
+	spec: ActionSpecUnion,
+	actions?: Actions,
+) => {
 	switch (spec.kind) {
 		case 'local_call':
 			return spec.async
-				? create_async_local_call_method(environment, spec)
-				: create_sync_local_call_method(environment, spec);
+				? create_async_local_call_method(environment, spec, actions)
+				: create_sync_local_call_method(environment, spec, actions);
 		case 'request_response':
-			return create_request_response_method(environment, spec);
+			return create_request_response_method(peer, environment, spec, actions);
 		case 'remote_notification':
-			return create_remote_notification_method(environment, spec);
+			return create_remote_notification_method(peer, environment, spec, actions);
 	}
 };
 
@@ -64,10 +71,11 @@ const create_action_method = (environment: ActionEventEnvironment, spec: ActionS
 const create_sync_local_call_method = (
 	environment: ActionEventEnvironment,
 	spec: LocalCallActionSpec,
+	actions?: Actions,
 ) => {
 	return (input?: unknown) => {
 		const event = create_action_event(environment, spec, input);
-		const action = environment.actions?.add_from_json({
+		const action = actions?.add_from_json({
 			method: spec.method as ActionMethod,
 			action_event_data: event.toJSON(),
 		});
@@ -92,10 +100,11 @@ const create_sync_local_call_method = (
 const create_async_local_call_method = (
 	environment: ActionEventEnvironment,
 	spec: LocalCallActionSpec,
+	actions?: Actions,
 ) => {
 	return async (input?: unknown) => {
 		const event = create_action_event(environment, spec, input);
-		const action = environment.actions?.add_from_json({
+		const action = actions?.add_from_json({
 			method: spec.method as ActionMethod,
 			action_event_data: event.toJSON(),
 		});
@@ -111,12 +120,14 @@ const create_async_local_call_method = (
  * Creates a request/response method that communicates over the network.
  */
 const create_request_response_method = (
+	peer: ActionPeer,
 	environment: ActionEventEnvironment,
 	spec: RequestResponseActionSpec,
+	actions?: Actions,
 ) => {
 	return async (input?: unknown) => {
 		const event = create_action_event(environment, spec, input);
-		const action = environment.actions?.add_from_json({
+		const action = actions?.add_from_json({
 			method: spec.method as ActionMethod,
 			action_event_data: event.toJSON(),
 		});
@@ -136,7 +147,7 @@ const create_request_response_method = (
 			return extract_action_result(event);
 		}
 
-		const response = await environment.peer.send(event.data.request);
+		const response = await peer.send(event.data.request);
 
 		event.transition('receive_response');
 
@@ -156,12 +167,14 @@ const create_request_response_method = (
  * Returns Result<{value: void}> for consistency.
  */
 const create_remote_notification_method = (
+	peer: ActionPeer,
 	environment: ActionEventEnvironment,
 	spec: RemoteNotificationActionSpec,
+	actions?: Actions,
 ) => {
 	return async (input?: unknown) => {
 		const event = create_action_event(environment, spec, input);
-		const action = environment.actions?.add_from_json({
+		const action = actions?.add_from_json({
 			method: spec.method as ActionMethod,
 			action_event_data: event.toJSON(),
 		});
@@ -172,7 +185,7 @@ const create_remote_notification_method = (
 		if (!is_notification_send(event.data)) throw Error(); // TODO @many maybe make this an assertion helper?
 
 		if (event.data.step === 'handled') {
-			const send_result = await environment.peer.send(event.data.notification);
+			const send_result = await peer.send(event.data.notification);
 			// Check if notification failed to send
 			if (send_result !== null) {
 				environment.log?.error('notification send failed:', send_result.error);

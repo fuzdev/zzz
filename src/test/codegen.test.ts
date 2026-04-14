@@ -591,7 +591,8 @@ describe('generate_phase_handlers', () => {
 		assert.ok(imports.has_imports());
 		const import_str = imports.build();
 		assert.include(import_str, 'ActionEvent');
-		assert.include(import_str, 'Frontend');
+		// No environment type in generated output
+		assert.notInclude(import_str, 'Frontend');
 	});
 
 	test('generates handlers for notification action', () => {
@@ -604,7 +605,8 @@ describe('generate_phase_handlers', () => {
 
 		const import_str = imports.build();
 		assert.include(import_str, 'ActionEvent');
-		assert.include(import_str, 'Backend');
+		// No environment type in generated output
+		assert.notInclude(import_str, 'Backend');
 	});
 
 	test('generates handlers for local_call action', () => {
@@ -619,7 +621,8 @@ describe('generate_phase_handlers', () => {
 		const import_str = imports.build();
 		assert.include(import_str, 'ActionEvent');
 		assert.include(import_str, 'ActionOutputs'); // Added by get_handler_return_type
-		assert.include(import_str, 'Frontend');
+		// No environment type in generated output
+		assert.notInclude(import_str, 'Frontend');
 	});
 
 	test('uses type-only imports when appropriate', () => {
@@ -650,23 +653,13 @@ describe('generate_phase_handlers', () => {
 		const imports = new ImportBuilder();
 		const result = generate_phase_handlers(ping_action_spec, 'frontend', imports);
 
-		// Should use the new type parameter syntax instead of data override
-		assert.include(
-			result,
-			`action_event: ActionEvent<'ping', Frontend, 'send_request', 'handling'>`,
-		);
-		assert.include(
-			result,
-			`action_event: ActionEvent<'ping', Frontend, 'receive_response', 'handling'>`,
-		);
-		assert.include(
-			result,
-			`action_event: ActionEvent<'ping', Frontend, 'receive_request', 'handling'>`,
-		);
-		assert.include(
-			result,
-			`action_event: ActionEvent<'ping', Frontend, 'send_response', 'handling'>`,
-		);
+		// 3-param ActionEvent: method, phase, step (no environment type)
+		assert.include(result, `action_event: ActionEvent<'ping', 'send_request', 'handling'>`);
+		assert.include(result, `action_event: ActionEvent<'ping', 'receive_response', 'handling'>`);
+		assert.include(result, `action_event: ActionEvent<'ping', 'receive_request', 'handling'>`);
+		assert.include(result, `action_event: ActionEvent<'ping', 'send_response', 'handling'>`);
+		// No environment type
+		assert.notInclude(result, 'Frontend');
 	});
 
 	test('handles ActionOutputs import for handlers that return values', () => {
@@ -705,8 +698,9 @@ describe('generate_phase_handlers', () => {
 
 		// Should have exactly one import of each type
 		assert.strictEqual(import_str.match(/ActionEvent/g)?.length, 1);
-		assert.strictEqual(import_str.match(/Frontend/g)?.length, 1);
 		assert.strictEqual(import_str.match(/ActionOutputs/g)?.length, 1);
+		// No environment type imports
+		assert.notInclude(import_str, 'Frontend');
 	});
 
 	test('frontend generates correct relative import paths', () => {
@@ -715,8 +709,9 @@ describe('generate_phase_handlers', () => {
 
 		const import_str = imports.build();
 		assert.include(import_str, "from './action_event.js'");
-		assert.include(import_str, "from './frontend.svelte.js'");
 		assert.include(import_str, "from './action_collections.js'");
+		// No environment type import paths
+		assert.notInclude(import_str, 'frontend.svelte.js');
 	});
 
 	test('backend generates correct relative import paths', () => {
@@ -725,7 +720,8 @@ describe('generate_phase_handlers', () => {
 
 		const import_str = imports.build();
 		assert.include(import_str, "from '../action_event.js'");
-		assert.include(import_str, "from './backend.js'");
 		assert.include(import_str, "from '../action_collections.js'");
+		// No environment type import paths
+		assert.notInclude(import_str, 'backend.js');
 	});
 });

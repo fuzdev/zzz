@@ -1,20 +1,21 @@
+import type {Frontend} from './frontend.svelte.js';
 import type {FrontendActionHandlers} from './frontend_action_types.js';
 import {Turn} from './turn.svelte.js';
 import {to_completion_response_text} from './response_helpers.js';
 
 // TODO stubbing out a lot of these
 
-export const frontend_action_handlers: FrontendActionHandlers = {
+export const create_frontend_action_handlers = (frontend: Frontend): FrontendActionHandlers => ({
 	ping: {
-		send_request: ({app, data: {request}}) => {
-			app.capabilities.handle_ping_sent(request.id);
+		send_request: ({data: {request}}) => {
+			frontend.capabilities.handle_ping_sent(request.id);
 		},
-		receive_response: ({app, data: {output}}) => {
-			app.capabilities.handle_ping_received(output.ping_id);
+		receive_response: ({data: {output}}) => {
+			frontend.capabilities.handle_ping_received(output.ping_id);
 		},
-		receive_error: ({app, data: {error, request}}) => {
+		receive_error: ({data: {error, request}}) => {
 			console.error('[frontend_action_handlers] ping failed:', error);
-			app.capabilities.handle_ping_error(request.id, error.message);
+			frontend.capabilities.handle_ping_error(request.id, error.message);
 		},
 	},
 
@@ -22,10 +23,10 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 		send_request: () => {
 			console.log('[frontend_action_handlers] loading session...');
 		},
-		receive_response: ({app, data: {output, response}}) => {
+		receive_response: ({data: {output, response}}) => {
 			console.log('[frontend_action_handlers] session loaded:', response);
 
-			app.receive_session(output.data);
+			frontend.receive_session(output.data);
 		},
 		receive_error: ({data: {error}}) => {
 			console.error('[frontend_action_handlers] session load failed:', error);
@@ -41,7 +42,6 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 		},
 		receive_response: (action_event) => {
 			const {
-				app,
 				data: {input, output},
 			} = action_event;
 			console.log(
@@ -53,7 +53,7 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 			// TODO hacky
 			const progress_token = input._meta?.progressToken;
 			if (progress_token) {
-				const turn = app.cell_registry.all.get(progress_token);
+				const turn = frontend.cell_registry.all.get(progress_token);
 				if (turn) {
 					if (turn instanceof Turn) {
 						// TODO hacky, shouldnt need to do this
@@ -78,11 +78,11 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 				);
 			}
 		},
-		receive_error: ({app, data: {input, error}}) => {
+		receive_error: ({data: {input, error}}) => {
 			console.error('[frontend_action_handlers] completion failed:', error);
 			const progress_token = input._meta?.progressToken;
 			if (progress_token) {
-				const turn = app.cell_registry.all.get(progress_token);
+				const turn = frontend.cell_registry.all.get(progress_token);
 				if (turn instanceof Turn) {
 					turn.content = `Error: ${error.message}`;
 					turn.error_message = error.message;
@@ -128,18 +128,18 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 	},
 
 	filer_change: {
-		receive: ({app, data: {input}}) => {
-			app.diskfiles.handle_change(input);
+		receive: ({data: {input}}) => {
+			frontend.diskfiles.handle_change(input);
 		},
 	},
 
 	completion_progress: {
-		receive: ({app, data: {input}}) => {
+		receive: ({data: {input}}) => {
 			// console.log('[frontend_action_handlers] received completion streaming progress:', input);
 			const {chunk} = input;
 			const progress_token = input._meta?.progressToken;
 
-			const turn = progress_token && app.cell_registry.all.get(progress_token);
+			const turn = progress_token && frontend.cell_registry.all.get(progress_token);
 
 			if (!turn || !(turn instanceof Turn) || !chunk || turn.role !== chunk.message?.role) {
 				console.error(
@@ -156,119 +156,119 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 	},
 
 	toggle_main_menu: {
-		execute: ({app, data: {input}}) => {
-			return {show: app.ui.toggle_main_menu(input?.show)};
+		execute: ({data: {input}}) => {
+			return {show: frontend.ui.toggle_main_menu(input?.show)};
 		},
 	},
 
 	ollama_list: {
-		send_request: ({app}) => {
+		send_request: () => {
 			console.log('[frontend_action_handlers] sending ollama_list request');
-			app.ollama.handle_ollama_list_start();
+			frontend.ollama.handle_ollama_list_start();
 		},
-		receive_response: ({app, data: {output}}) => {
+		receive_response: ({data: {output}}) => {
 			console.log('[frontend_action_handlers] received ollama_list response:', output);
-			app.ollama.handle_ollama_list_complete(output);
+			frontend.ollama.handle_ollama_list_complete(output);
 		},
-		receive_error: ({app, data: {error}}) => {
+		receive_error: ({data: {error}}) => {
 			console.error('[frontend_action_handlers] ollama_list failed:', error);
-			app.ollama.list_status = 'failure';
-			app.ollama.list_error = error.message;
-			app.ollama.list_last_updated = Date.now();
+			frontend.ollama.list_status = 'failure';
+			frontend.ollama.list_error = error.message;
+			frontend.ollama.list_last_updated = Date.now();
 		},
 	},
 	ollama_ps: {
-		send_request: ({app}) => {
+		send_request: () => {
 			console.log('[frontend_action_handlers] sending ollama_ps request');
-			app.ollama.handle_ollama_ps_start();
+			frontend.ollama.handle_ollama_ps_start();
 		},
-		receive_response: ({app, data: {output}}) => {
+		receive_response: ({data: {output}}) => {
 			console.log('[frontend_action_handlers] received ollama_ps response:', output);
-			app.ollama.handle_ollama_ps_complete(output);
+			frontend.ollama.handle_ollama_ps_complete(output);
 		},
-		receive_error: ({app, data: {error}}) => {
+		receive_error: ({data: {error}}) => {
 			console.error('[frontend_action_handlers] ollama_ps failed:', error);
-			app.ollama.ps_status = 'failure';
-			app.ollama.ps_error = error.message;
+			frontend.ollama.ps_status = 'failure';
+			frontend.ollama.ps_error = error.message;
 		},
 	},
 	ollama_show: {
 		send_request: ({data: {input}}) => {
 			console.log('[frontend_action_handlers] sending ollama_show request:', input);
 		},
-		receive_response: ({app, data: {input, output}}) => {
+		receive_response: ({data: {input, output}}) => {
 			console.log('[frontend_action_handlers] received ollama_show response:', input, output);
-			app.ollama.handle_ollama_show(input, output);
+			frontend.ollama.handle_ollama_show(input, output);
 		},
 		receive_error: ({data: {error}}) => {
 			console.error('[frontend_action_handlers] ollama_show failed:', error);
 		},
 	},
 	ollama_pull: {
-		send_request: ({app, data: {input}}) => {
+		send_request: ({data: {input}}) => {
 			console.log('[frontend_action_handlers] sending ollama_pull request:', input);
-			app.ollama.pulling_models.add(input.model);
+			frontend.ollama.pulling_models.add(input.model);
 		},
-		receive_response: ({app, data: {input}}) => {
+		receive_response: ({data: {input}}) => {
 			console.log('[frontend_action_handlers] received ollama_pull response:', input);
-			app.ollama.pulling_models.delete(input.model);
-			app.ollama.pull_model_name = '';
-			app.ollama.pull_insecure = false;
+			frontend.ollama.pulling_models.delete(input.model);
+			frontend.ollama.pull_model_name = '';
+			frontend.ollama.pull_insecure = false;
 		},
-		receive_error: ({app, data: {input, error}}) => {
+		receive_error: ({data: {input, error}}) => {
 			console.error('[frontend_action_handlers] ollama_pull failed:', error);
-			app.ollama.pulling_models.delete(input.model);
+			frontend.ollama.pulling_models.delete(input.model);
 		},
 	},
 	ollama_delete: {
 		send_request: ({data: {input}}) => {
 			console.log('[frontend_action_handlers] sending ollama_delete request:', input);
 		},
-		receive_response: async ({app, data: {input}}) => {
+		receive_response: async ({data: {input}}) => {
 			console.log('[frontend_action_handlers] received ollama_delete response:', input);
-			await app.ollama.handle_ollama_delete(input);
+			await frontend.ollama.handle_ollama_delete(input);
 		},
 		receive_error: ({data: {error}}) => {
 			console.error('[frontend_action_handlers] ollama_delete failed:', error);
 		},
 	},
 	ollama_copy: {
-		send_request: ({app}) => {
+		send_request: () => {
 			console.log('[frontend_action_handlers] sending ollama_copy request');
-			app.ollama.copy_is_copying = true;
+			frontend.ollama.copy_is_copying = true;
 		},
-		receive_response: async ({app}) => {
+		receive_response: async () => {
 			console.log('[frontend_action_handlers] received ollama_copy response');
-			app.ollama.copy_source_model = '';
-			app.ollama.copy_destination_model = '';
-			app.ollama.copy_is_copying = false;
-			await app.ollama.refresh();
+			frontend.ollama.copy_source_model = '';
+			frontend.ollama.copy_destination_model = '';
+			frontend.ollama.copy_is_copying = false;
+			await frontend.ollama.refresh();
 		},
-		receive_error: ({app, data: {error}}) => {
+		receive_error: ({data: {error}}) => {
 			console.error('[frontend_action_handlers] ollama_copy failed:', error);
-			app.ollama.copy_is_copying = false;
+			frontend.ollama.copy_is_copying = false;
 		},
 	},
 	ollama_create: {
-		send_request: ({app, data: {input}}) => {
+		send_request: ({data: {input}}) => {
 			console.log('[frontend_action_handlers] sending ollama_create request:', input);
-			app.ollama.create_is_creating = true;
-			app.ollama.pulling_models.add(input.model);
+			frontend.ollama.create_is_creating = true;
+			frontend.ollama.pulling_models.add(input.model);
 		},
-		receive_response: async ({app, data: {input}}) => {
+		receive_response: async ({data: {input}}) => {
 			console.log('[frontend_action_handlers] received ollama_create response:', input);
-			app.ollama.pulling_models.delete(input.model);
-			app.ollama.create_model_name = '';
-			app.ollama.create_from_model = '';
-			app.ollama.create_system_prompt = '';
-			app.ollama.create_template = '';
-			app.ollama.create_is_creating = false;
-			await app.ollama.refresh();
+			frontend.ollama.pulling_models.delete(input.model);
+			frontend.ollama.create_model_name = '';
+			frontend.ollama.create_from_model = '';
+			frontend.ollama.create_system_prompt = '';
+			frontend.ollama.create_template = '';
+			frontend.ollama.create_is_creating = false;
+			await frontend.ollama.refresh();
 		},
-		receive_error: ({app, data: {input, error}}) => {
+		receive_error: ({data: {input, error}}) => {
 			console.error('[frontend_action_handlers] ollama_create failed:', error);
-			app.ollama.pulling_models.delete(input.model);
-			app.ollama.create_is_creating = false;
+			frontend.ollama.pulling_models.delete(input.model);
+			frontend.ollama.create_is_creating = false;
 		},
 	},
 
@@ -285,7 +285,7 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 	},
 
 	ollama_progress: {
-		receive: ({app, data: {input}}) => {
+		receive: ({data: {input}}) => {
 			// console.log('[frontend_action_handlers] received ollama_progress notification:', input);
 
 			const {_meta, ...progress} = input;
@@ -305,7 +305,7 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 			}
 
 			// TODO refactor
-			const action = app.actions.items.values.find(
+			const action = frontend.actions.items.values.find(
 				(a) => (a.action_event_data?.input as any)?._meta?.progressToken === progress_token,
 			);
 			if (!action) {
@@ -328,14 +328,14 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 	},
 
 	provider_load_status: {
-		receive_response: ({app, data: {output}}) => {
-			app.update_provider_status(output.status);
+		receive_response: ({data: {output}}) => {
+			frontend.update_provider_status(output.status);
 		},
 	},
 
 	provider_update_api_key: {
-		receive_response: ({app, data: {output}}) => {
-			app.update_provider_status(output.status);
+		receive_response: ({data: {output}}) => {
+			frontend.update_provider_status(output.status);
 		},
 	},
 
@@ -351,8 +351,8 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 	terminal_data_send: {},
 
 	terminal_data: {
-		receive: ({app, data: {input}}) => {
-			app.terminal_writers.get(input.terminal_id)?.(input.data);
+		receive: ({data: {input}}) => {
+			frontend.terminal_writers.get(input.terminal_id)?.(input.data);
 		},
 	},
 
@@ -368,23 +368,23 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 	},
 
 	terminal_exited: {
-		receive: ({app, data: {input}}) => {
+		receive: ({data: {input}}) => {
 			console.log(
 				'[frontend_action_handlers] terminal exited:',
 				input.terminal_id,
 				'exit_code:',
 				input.exit_code,
 			);
-			app.terminal_exit_handlers.get(input.terminal_id)?.(input.exit_code);
+			frontend.terminal_exit_handlers.get(input.terminal_id)?.(input.exit_code);
 		},
 	},
 
 	workspace_open: {
-		receive_response: ({app, data: {output}}) => {
-			app.workspaces.add(output.workspace);
+		receive_response: ({data: {output}}) => {
+			frontend.workspaces.add(output.workspace);
 			// populate diskfiles from initial file tree
 			for (const disknode of output.files) {
-				app.diskfiles.handle_change({
+				frontend.diskfiles.handle_change({
 					change: {type: 'add', path: disknode.id},
 					disknode,
 				});
@@ -396,10 +396,10 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 	},
 
 	workspace_close: {
-		receive_response: ({app, data: {input}}) => {
-			const workspace = app.workspaces.get_by_path(input.path);
+		receive_response: ({data: {input}}) => {
+			const workspace = frontend.workspaces.get_by_path(input.path);
 			if (workspace) {
-				app.workspaces.remove(workspace.id);
+				frontend.workspaces.remove(workspace.id);
 			}
 		},
 		receive_error: ({data: {error}}) => {
@@ -408,9 +408,9 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 	},
 
 	workspace_list: {
-		receive_response: ({app, data: {output}}) => {
+		receive_response: ({data: {output}}) => {
 			for (const workspace_data of output.workspaces) {
-				app.workspaces.add(workspace_data);
+				frontend.workspaces.add(workspace_data);
 			}
 		},
 		receive_error: ({data: {error}}) => {
@@ -419,15 +419,15 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 	},
 
 	workspace_changed: {
-		receive: ({app, data: {input}}) => {
+		receive: ({data: {input}}) => {
 			if (input.type === 'open') {
-				app.workspaces.add(input.workspace);
+				frontend.workspaces.add(input.workspace);
 			} else {
-				const workspace = app.workspaces.get_by_path(input.workspace.path);
+				const workspace = frontend.workspaces.get_by_path(input.workspace.path);
 				if (workspace) {
-					app.workspaces.remove(workspace.id);
+					frontend.workspaces.remove(workspace.id);
 				}
 			}
 		},
 	},
-};
+});

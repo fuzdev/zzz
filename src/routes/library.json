@@ -848,12 +848,12 @@
 						"name": "extract_action_result",
 						"kind": "function",
 						"source_line": 184,
-						"type_signature": "(event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): Result<...>",
+						"type_signature": "(event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): Result<...>",
 						"return_type": "Result<{ value: unknown; }, { error: { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; }>",
 						"parameters": [
 							{
 								"name": "event",
-								"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... ..."
+								"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">"
 							}
 						]
 					}
@@ -867,37 +867,37 @@
 					{
 						"name": "ActionExecutor",
 						"kind": "type",
-						"source_line": 15,
+						"source_line": 11,
 						"type_signature": "ZodEnum<{ frontend: \"frontend\"; backend: \"backend\"; }>"
 					},
 					{
 						"name": "ActionEventStep",
 						"kind": "type",
-						"source_line": 18,
+						"source_line": 14,
 						"type_signature": "ZodEnum<{ initial: \"initial\"; parsed: \"parsed\"; handling: \"handling\"; handled: \"handled\"; failed: \"failed\"; }>"
 					},
 					{
 						"name": "ACTION_EVENT_STEP_TRANSITIONS",
 						"kind": "variable",
-						"source_line": 21,
+						"source_line": 17,
 						"type_signature": "Record<\"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\", readonly (\"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\")[]>"
 					},
 					{
 						"name": "ACTION_EVENT_PHASE_BY_KIND",
 						"kind": "variable",
-						"source_line": 29,
+						"source_line": 25,
 						"type_signature": "Record<\"request_response\" | \"remote_notification\" | \"local_call\", readonly (\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\")[]>"
 					},
 					{
 						"name": "ACTION_EVENT_PHASE_TRANSITIONS",
 						"kind": "variable",
-						"source_line": 42,
+						"source_line": 38,
 						"type_signature": "Record<\"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"send_request\" | \"execute\" | ... 7 more ... | null>"
 					},
 					{
 						"name": "ActionEventEnvironment",
 						"kind": "type",
-						"source_line": 54,
+						"source_line": 50,
 						"type_signature": "ActionEventEnvironment",
 						"properties": [
 							{
@@ -905,11 +905,6 @@
 								"kind": "variable",
 								"modifiers": ["readonly"],
 								"type_signature": "ActionExecutor"
-							},
-							{
-								"name": "peer",
-								"kind": "variable",
-								"type_signature": "ActionPeer"
 							},
 							{
 								"name": "lookup_action_handler",
@@ -926,11 +921,6 @@
 								"kind": "variable",
 								"modifiers": ["readonly"],
 								"type_signature": "Logger | null"
-							},
-							{
-								"name": "actions",
-								"kind": "variable",
-								"type_signature": "Actions"
 							}
 						]
 					}
@@ -964,11 +954,6 @@
 								"default_type": "ActionMethod"
 							},
 							{
-								"name": "TEnvironment",
-								"constraint": "ActionEventEnvironment",
-								"default_type": "ActionEventEnvironment"
-							},
-							{
 								"name": "TPhase",
 								"constraint": "ActionEventPhase",
 								"default_type": "ActionEventPhase"
@@ -984,7 +969,7 @@
 								"name": "environment",
 								"kind": "variable",
 								"modifiers": ["readonly"],
-								"type_signature": "TEnvironment"
+								"type_signature": "ActionEventEnvironment"
 							},
 							{
 								"name": "spec",
@@ -995,11 +980,11 @@
 							{
 								"name": "constructor",
 								"kind": "constructor",
-								"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", TEnvironment extends ActionEventEnvironment = ActionEventEnvironment, TPhase extends ActionEventPhase = \"send_request\" | ... 7 more ... | \"receive\", TStep extends ActionEventStep = \"initial\" | ... 3 more ... | \"failed\">(environment: TEnvironment, spec: { ...; } | ... 1 more ... | { ...; }, data: ActionEventDatas[TMethod]): ActionEvent<...>",
+								"type_signature": "<TMethod extends ActionMethod = \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", TPhase extends ActionEventPhase = \"send_request\" | ... 7 more ... | \"receive\", TStep extends ActionEventStep = \"initial\" | ... 3 more ... | \"failed\">(environment: ActionEventEnvironment, spec: { ...; } | ... 1 more ... | { ...; }, data: ActionEventDatas[TMethod]): ActionEvent<...>",
 								"parameters": [
 									{
 										"name": "environment",
-										"type": "TEnvironment"
+										"type": "ActionEventEnvironment"
 									},
 									{
 										"name": "spec",
@@ -1140,9 +1125,9 @@
 						"name": "create_action_event",
 						"kind": "function",
 						"doc_comment": "Create an action event from a spec and initial input.",
-						"source_line": 458,
+						"source_line": 445,
 						"type_signature": "<TMethod extends ActionMethod>(environment: ActionEventEnvironment, spec: { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<...>>; ... 4 more ...; async: true; } | { ...; } | { ...; }, input: unknown, initial_phase?: \"send_request\" | ... 8 more ... | undefined): ActionEvent<...>",
-						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
+						"return_type": "ActionEvent<TMethod, \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\">",
 						"parameters": [
 							{
 								"name": "environment",
@@ -1167,9 +1152,9 @@
 						"name": "create_action_event_from_json",
 						"kind": "function",
 						"doc_comment": "Reconstruct an action event from serialized JSON data.",
-						"source_line": 485,
-						"type_signature": "<TMethod extends ActionMethod>(json: ActionEventDatas[TMethod], environment: ActionEventEnvironment): ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
-						"return_type": "ActionEvent<TMethod, ActionEventEnvironment, \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
+						"source_line": 472,
+						"type_signature": "<TMethod extends ActionMethod>(json: ActionEventDatas[TMethod], environment: ActionEventEnvironment): ActionEvent<TMethod, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
+						"return_type": "ActionEvent<TMethod, \"send_request\" | \"execute\" | \"receive_request\" | \"send_response\" | \"receive_response\" | \"send_error\" | \"receive_error\" | \"send\" | \"receive\", \"initial\" | \"parsed\" | \"handling\" | \"handled\" | \"failed\">",
 						"parameters": [
 							{
 								"name": "json",
@@ -1184,9 +1169,9 @@
 					{
 						"name": "parse_action_event",
 						"kind": "function",
-						"source_line": 499,
-						"type_signature": "(raw_json: unknown, environment: ActionEventEnvironment): ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | ... 23 more ... | \"workspace_changed\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
-						"return_type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... ...",
+						"source_line": 486,
+						"type_signature": "(raw_json: unknown, environment: ActionEventEnvironment): ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | ... 23 more ... | \"workspace_changed\", \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
+						"return_type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">",
 						"parameters": [
 							{
 								"name": "raw_json",
@@ -1933,12 +1918,12 @@
 							{
 								"name": "listen_to_action_event",
 								"kind": "function",
-								"type_signature": "(action_event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): () => void",
+								"type_signature": "(action_event: ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">): () => void",
 								"return_type": "() => void",
 								"parameters": [
 									{
 										"name": "action_event",
-										"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", ActionEventEnvironment, \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... ..."
+										"type": "ActionEvent<\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 20 more ... | \"workspace_changed\", \"send_request\" | ... 7 more ... | \"receive\", \"initial\" | ... 3 more ... | \"failed\">"
 									}
 								]
 							},
@@ -2210,13 +2195,13 @@
 						"name": "app_context",
 						"kind": "variable",
 						"doc_comment": "This is an example of a user-typed alias of `frontend_context`.\nI like this pattern in my apps but there are other patterns too.",
-						"source_line": 17,
+						"source_line": 16,
 						"type_signature": "{ get: (error_message?: string | undefined) => App; get_maybe: () => App | undefined; set: (value: App) => App; }"
 					},
 					{
 						"name": "AppOptions",
 						"kind": "type",
-						"source_line": 19,
+						"source_line": 18,
 						"type_signature": "AppOptions",
 						"extends": ["FrontendOptions"],
 						"properties": []
@@ -2225,7 +2210,7 @@
 						"name": "App",
 						"kind": "class",
 						"doc_comment": "The `App` is the user's implementation of the Zzz client app.\nIt extends `Frontend` and should be able to customize as much as possible,\nincluding both behaviors and types. (both a work in progress)",
-						"source_line": 26,
+						"source_line": 25,
 						"extends": ["Frontend"],
 						"implements": [],
 						"members": [
@@ -2244,12 +2229,7 @@
 						]
 					}
 				],
-				"dependencies": [
-					"cell_classes.ts",
-					"constants.ts",
-					"frontend.svelte.ts",
-					"frontend_action_handlers.ts"
-				],
+				"dependencies": ["cell_classes.ts", "constants.ts", "frontend.svelte.ts"],
 				"dependents": [
 					"DashboardActions.svelte",
 					"TerminalRunItem.svelte",
@@ -7669,14 +7649,21 @@
 				"path": "frontend_action_handlers.ts",
 				"declarations": [
 					{
-						"name": "frontend_action_handlers",
-						"kind": "variable",
-						"source_line": 7,
-						"type_signature": "FrontendActionHandlers"
+						"name": "create_frontend_action_handlers",
+						"kind": "function",
+						"source_line": 8,
+						"type_signature": "(frontend: Frontend): FrontendActionHandlers",
+						"return_type": "FrontendActionHandlers",
+						"parameters": [
+							{
+								"name": "frontend",
+								"type": "Frontend"
+							}
+						]
 					}
 				],
 				"dependencies": ["response_helpers.ts", "turn.svelte.ts"],
-				"dependents": ["app.svelte.ts"]
+				"dependents": ["frontend.svelte.ts"]
 			},
 			{
 				"path": "frontend_action_types.gen.ts",
@@ -7690,158 +7677,158 @@
 						"name": "FrontendActionHandlers",
 						"kind": "type",
 						"doc_comment": "Frontend action handlers organized by method and phase.\nGenerated using spec.initiator to determine valid phases:\n- initiator: 'frontend' → send/execute phases\n- initiator: 'backend' → receive phases\n- initiator: 'both' → all valid phases",
-						"source_line": 14,
+						"source_line": 13,
 						"type_signature": "FrontendActionHandlers",
 						"properties": [
 							{
 								"name": "ping",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ping', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ping', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ping', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ping', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'ping', Frontend, 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['ping'] | Promise<ActionOutputs['ping']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'ping', Frontend, 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ping', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ping', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ping', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ping', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_request?: (\n\t\t\taction_event: ActionEvent<'ping', 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['ping'] | Promise<ActionOutputs['ping']>;\n\t\tsend_response?: (\n\t\t\taction_event: ActionEvent<'ping', 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "session_load",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'session_load', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'session_load', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'session_load', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'session_load', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'session_load', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'session_load', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'session_load', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'session_load', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "filer_change",
 								"kind": "variable",
-								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'filer_change', Frontend, 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'filer_change', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "diskfile_update",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'diskfile_update', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "diskfile_delete",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'diskfile_delete', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "directory_create",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'directory_create', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'directory_create', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'directory_create', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'directory_create', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'directory_create', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'directory_create', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'directory_create', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'directory_create', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "completion_create",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'completion_create', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'completion_create', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'completion_create', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'completion_create', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'completion_create', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'completion_create', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'completion_create', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'completion_create', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "completion_progress",
 								"kind": "variable",
-								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'completion_progress', Frontend, 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'completion_progress', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_progress",
 								"kind": "variable",
-								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'ollama_progress', Frontend, 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'ollama_progress', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "toggle_main_menu",
 								"kind": "variable",
-								"type_signature": "{\n\t\texecute?: (\n\t\t\taction_event: ActionEvent<'toggle_main_menu', Frontend, 'execute', 'handling'>,\n\t\t) => ActionOutputs['toggle_main_menu'];\n\t}"
+								"type_signature": "{\n\t\texecute?: (\n\t\t\taction_event: ActionEvent<'toggle_main_menu', 'execute', 'handling'>,\n\t\t) => ActionOutputs['toggle_main_menu'];\n\t}"
 							},
 							{
 								"name": "ollama_list",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_list', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_list', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_list', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_list', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_list', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_list', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_list', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_list', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_ps",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_ps', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_show",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_show', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_show', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_show', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_show', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_show', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_show', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_show', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_show', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_pull",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_pull', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_delete",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_delete', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_copy",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_copy', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_create",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_create', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_create', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_create', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_create', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_create', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_create', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_create', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_create', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "ollama_unload",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'ollama_unload', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "provider_load_status",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'provider_load_status', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "provider_update_api_key",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<\n\t\t\t\t'provider_update_api_key',\n\t\t\t\tFrontend,\n\t\t\t\t'receive_response',\n\t\t\t\t'handling'\n\t\t\t>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'provider_update_api_key', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "terminal_create",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_create', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_create', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_create', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_create', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_create', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_create', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_create', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_create', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "terminal_data_send",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_data_send', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "terminal_data",
 								"kind": "variable",
-								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'terminal_data', Frontend, 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'terminal_data', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "terminal_resize",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_resize', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "terminal_close",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_close', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_close', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_close', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_close', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'terminal_close', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'terminal_close', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'terminal_close', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'terminal_close', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "terminal_exited",
 								"kind": "variable",
-								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'terminal_exited', Frontend, 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'terminal_exited', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "workspace_open",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'workspace_open', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'workspace_open', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'workspace_open', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'workspace_open', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'workspace_open', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'workspace_open', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'workspace_open', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'workspace_open', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "workspace_close",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'workspace_close', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'workspace_close', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'workspace_close', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'workspace_close', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'workspace_close', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'workspace_close', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'workspace_close', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'workspace_close', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "workspace_list",
 								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'workspace_list', Frontend, 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'workspace_list', Frontend, 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'workspace_list', Frontend, 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'workspace_list', Frontend, 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: ActionEvent<'workspace_list', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: ActionEvent<'workspace_list', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: ActionEvent<'workspace_list', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: ActionEvent<'workspace_list', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "workspace_changed",
 								"kind": "variable",
-								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'workspace_changed', Frontend, 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: ActionEvent<'workspace_changed', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							}
 						]
 					}
@@ -7855,12 +7842,21 @@
 						"kind": "function",
 						"doc_comment": "Creates the actions API methods for the frontend.\nUses a Proxy to provide dynamic method lookup with full type safety.",
 						"source_line": 26,
-						"type_signature": "<T extends ActionEventEnvironment>(environment: T): ActionsApi",
+						"type_signature": "(peer: ActionPeer, environment: ActionEventEnvironment, actions?: Actions | undefined): ActionsApi",
 						"return_type": "ActionsApi",
 						"parameters": [
 							{
+								"name": "peer",
+								"type": "ActionPeer"
+							},
+							{
 								"name": "environment",
-								"type": "T"
+								"type": "ActionEventEnvironment"
+							},
+							{
+								"name": "actions",
+								"type": "Actions | undefined",
+								"optional": true
 							}
 						]
 					}
@@ -8085,25 +8081,25 @@
 					{
 						"name": "frontend_context",
 						"kind": "variable",
-						"source_line": 51,
+						"source_line": 52,
 						"type_signature": "{ get: (error_message?: string | undefined) => Frontend; get_maybe: () => Frontend | undefined; set: (value: Frontend) => Frontend; }"
 					},
 					{
 						"name": "FrontendJson",
 						"kind": "type",
-						"source_line": 53,
+						"source_line": 54,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; ui: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "FrontendJsonInput",
 						"kind": "type",
-						"source_line": 58,
+						"source_line": 59,
 						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; ui?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; show_main_dialog?: boolean | undefined; ... 6 more ...; desk_pinned?: boolean | undefined; } | undefined; }"
 					},
 					{
 						"name": "FrontendOptions",
 						"kind": "type",
-						"source_line": 60,
+						"source_line": 61,
 						"type_signature": "FrontendOptions",
 						"extends": ["OmitStrict<CellOptions<typeof FrontendJson>, 'app'>"],
 						"properties": [
@@ -8164,7 +8160,7 @@
 						"name": "Frontend",
 						"kind": "class",
 						"doc_comment": "The base frontend app, typically used by creating your own `App extends Frontend`.\nGettable with `frontend_context.get()` inside a `FrontendRoot`.",
-						"source_line": 80,
+						"source_line": 81,
 						"extends": ["Cell<typeof FrontendJson>"],
 						"implements": ["ActionEventEnvironment"],
 						"members": [
@@ -8521,6 +8517,7 @@
 					"diskfile_history.svelte.ts",
 					"diskfile_types.ts",
 					"diskfiles.svelte.ts",
+					"frontend_action_handlers.ts",
 					"frontend_actions_api.ts",
 					"frontend_http_transport.ts",
 					"frontend_websocket_transport.ts",

@@ -1,5 +1,3 @@
-// @slop Claude Opus 4
-
 import {z} from 'zod';
 import type {Logger} from '@fuzdev/fuz_util/log.js';
 import type {
@@ -9,8 +7,6 @@ import type {
 } from '@fuzdev/fuz_app/actions/action_spec.js';
 
 import type {ActionMethod} from './action_metatypes.js';
-import type {ActionPeer} from './action_peer.js';
-import type {Actions} from './actions.svelte.js';
 
 export const ActionExecutor = z.enum(['frontend', 'backend']);
 export type ActionExecutor = z.infer<typeof ActionExecutor>;
@@ -53,13 +49,10 @@ export const ACTION_EVENT_PHASE_TRANSITIONS = {
 
 export interface ActionEventEnvironment {
 	readonly executor: ActionExecutor;
-	peer: ActionPeer;
 	lookup_action_handler: (
 		method: ActionMethod,
 		phase: ActionEventPhase,
 	) => ((event: any) => any) | undefined;
 	lookup_action_spec: (method: ActionMethod) => ActionSpecUnion | undefined;
 	readonly log?: Logger | null;
-	// TODO feels hacky, added for optional tracking
-	actions?: Actions;
 }

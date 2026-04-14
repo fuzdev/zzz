@@ -52,37 +52,24 @@ export type ActionEventChangeObserver<TMethod extends ActionMethod> = (
  */
 export class ActionEvent<
 	TMethod extends ActionMethod = ActionMethod,
-	TEnvironment extends ActionEventEnvironment = ActionEventEnvironment,
 	TPhase extends ActionEventPhase = ActionEventPhase,
 	TStep extends ActionEventStep = ActionEventStep,
 > {
 	#data: ActionEventDatas[TMethod];
 	#listeners: Set<ActionEventChangeObserver<TMethod>> = new Set();
 
-	readonly environment: TEnvironment;
+	readonly environment: ActionEventEnvironment;
 	readonly spec: ActionSpecUnion;
 
 	get data(): ActionEventDatas[TMethod] & {phase: TPhase; step: TStep} {
 		return this.#data as ActionEventDatas[TMethod] & {phase: TPhase; step: TStep};
 	}
 
-	// TODO hacky but preserves the API
-	// TODO maybe app/server should be frontend/backend?
-	get app(): TEnvironment {
-		if (this.environment.executor !== 'frontend') {
-			throw new Error('`action_event.app` can only be accessed in frontend environments');
-		}
-		return this.environment;
-	}
-
-	get backend(): TEnvironment {
-		if (this.environment.executor !== 'backend') {
-			throw new Error('`action_event.backend` can only be accessed in backend environments');
-		}
-		return this.environment;
-	}
-
-	constructor(environment: TEnvironment, spec: ActionSpecUnion, data: ActionEventDatas[TMethod]) {
+	constructor(
+		environment: ActionEventEnvironment,
+		spec: ActionSpecUnion,
+		data: ActionEventDatas[TMethod],
+	) {
 		this.environment = environment;
 		this.spec = spec;
 		this.#data = data;

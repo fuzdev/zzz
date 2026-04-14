@@ -17,7 +17,6 @@ import {create_uuid} from '$lib/zod_helpers.js';
 // Mock environment for testing
 class TestEnvironment implements ActionEventEnvironment {
 	executor: ActionExecutor = 'frontend';
-	peer: any = {}; // Mock peer, not used in tests
 	handlers: Map<string, Map<string, (event: any) => any>> = new Map();
 	specs: Map<string, ActionSpecUnion> = new Map();
 
@@ -779,50 +778,6 @@ describe('ActionEvent', () => {
 			assert.throws(
 				() => create_action_event_from_json(json as any, env),
 				/no spec found for method 'unknown_method'/,
-			);
-		});
-	});
-
-	describe('environment helpers', () => {
-		test('app getter works for frontend environment', () => {
-			const env = new TestEnvironment([ping_action_spec]);
-			env.executor = 'frontend';
-
-			const event = create_action_event(env, ping_action_spec, undefined);
-
-			assert.strictEqual(event.app, env);
-		});
-
-		test('backend getter works for backend environment', () => {
-			const env = new TestEnvironment([ping_action_spec]);
-			env.executor = 'backend';
-
-			const event = create_action_event(env, ping_action_spec, undefined);
-
-			assert.strictEqual(event.backend, env);
-		});
-
-		test('app getter throws for backend environment', () => {
-			const env = new TestEnvironment([ping_action_spec]);
-			env.executor = 'backend';
-
-			const event = create_action_event(env, ping_action_spec, undefined);
-
-			assert.throws(
-				() => event.app,
-				/action_event\.app.*can only be accessed in frontend environments/,
-			);
-		});
-
-		test('backend getter throws for frontend environment', () => {
-			const env = new TestEnvironment([ping_action_spec]);
-			env.executor = 'frontend';
-
-			const event = create_action_event(env, ping_action_spec, undefined);
-
-			assert.throws(
-				() => event.backend,
-				/action_event\.backend.*can only be accessed in backend environments/,
 			);
 		});
 	});
