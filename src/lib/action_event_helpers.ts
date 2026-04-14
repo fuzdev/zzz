@@ -19,11 +19,11 @@ import type {
 	ActionInitiator,
 	ActionKind,
 } from '@fuzdev/fuz_app/actions/action_spec.js';
+import type {JsonrpcErrorObject} from '@fuzdev/fuz_app/http/jsonrpc.js';
 
 import type {ActionMethod} from './action_metatypes.js';
 import type {ActionInputs} from './action_collections.js';
 import type {ActionEvent} from './action_event.js';
-import type {JsonrpcErrorJson} from './jsonrpc.js';
 
 // Type guards for action kinds
 export const is_request_response = (
@@ -183,7 +183,7 @@ export const create_initial_data = (
 
 export const extract_action_result = (
 	event: ActionEvent,
-): Result<{value: ActionEventData['output']}, {error: JsonrpcErrorJson}> => {
+): Result<{value: ActionEventData['output']}, {error: JsonrpcErrorObject}> => {
 	const {data} = event;
 
 	if (data.step === 'handled') {

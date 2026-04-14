@@ -1,22 +1,22 @@
 import type {WSContext} from 'hono/ws';
-
-import {create_uuid, Uuid} from '../zod_helpers.js';
-import type {Transport} from '../transports.js';
-import {WS_CLOSE_SESSION_REVOKED} from '../socket_helpers.js';
 import type {
 	JsonrpcMessageFromClientToServer,
 	JsonrpcMessageFromServerToClient,
 	JsonrpcNotification,
 	JsonrpcRequest,
 	JsonrpcResponseOrError,
-	JsonrpcErrorMessage,
-} from '../jsonrpc.js';
-import {jsonrpc_error_messages} from '../jsonrpc_errors.js';
+	JsonrpcErrorResponse,
+} from '@fuzdev/fuz_app/http/jsonrpc.js';
+import {jsonrpc_error_messages} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
 import {
-	create_jsonrpc_error_message,
+	create_jsonrpc_error_response,
 	to_jsonrpc_message_id,
 	is_jsonrpc_request,
-} from '../jsonrpc_helpers.js';
+} from '@fuzdev/fuz_app/http/jsonrpc_helpers.js';
+
+import {create_uuid, Uuid} from '../zod_helpers.js';
+import type {Transport} from '../transports.js';
+import {WS_CLOSE_SESSION_REVOKED} from '../socket_helpers.js';
 
 // TODO support a SSE backend transport
 
@@ -119,13 +119,13 @@ export class BackendWebsocketTransport implements Transport {
 
 	// TODO needs implementation, only broadcasts notifications for now
 	async send(message: JsonrpcRequest): Promise<JsonrpcResponseOrError>;
-	async send(message: JsonrpcNotification): Promise<JsonrpcErrorMessage | null>;
+	async send(message: JsonrpcNotification): Promise<JsonrpcErrorResponse | null>;
 	async send(
 		message: JsonrpcMessageFromClientToServer,
 	): Promise<JsonrpcMessageFromServerToClient | null> {
 		// TODO currently just broadcasts all messages to all clients, the transport abstraction is still a WIP
 		if (is_jsonrpc_request(message)) {
-			return create_jsonrpc_error_message(
+			return create_jsonrpc_error_response(
 				message.id,
 				// TODO maybe use a not yet implemented error message?
 				jsonrpc_error_messages.internal_error(
@@ -138,7 +138,7 @@ export class BackendWebsocketTransport implements Transport {
 			await this.#broadcast(message);
 			return null;
 		} catch (error) {
-			return create_jsonrpc_error_message(
+			return create_jsonrpc_error_response(
 				to_jsonrpc_message_id(message),
 				jsonrpc_error_messages.internal_error(
 					error instanceof Error ? error.message : 'failed to broadcast notification',

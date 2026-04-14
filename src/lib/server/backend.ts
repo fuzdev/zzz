@@ -10,6 +10,7 @@ import type {BackendProviderChatgpt} from './backend_provider_chatgpt.js';
 import type {BackendProviderClaude} from './backend_provider_claude.js';
 import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
 import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
+import {jsonrpc_errors} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
 
 import type {ZzzOptions} from '../config_helpers.js';
 import {DiskfileDirectoryPath, type SerializableDisknode} from '../diskfile_types.js';
@@ -22,7 +23,6 @@ import {create_backend_actions_api, type BackendActionsApi} from './backend_acti
 import {PtyManager} from './backend_pty_manager.js';
 import {ActionPeer} from '../action_peer.js';
 import type {BackendProvider} from './backend_provider.js';
-import {jsonrpc_errors} from '../jsonrpc_errors.js';
 
 // TODO refactor for extensibility
 interface BackendProviders {

@@ -1,9 +1,12 @@
 import {DEV} from 'esm-env';
 import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
+import {
+	create_jsonrpc_notification,
+	to_jsonrpc_params,
+} from '@fuzdev/fuz_app/http/jsonrpc_helpers.js';
 
 import type {FilerChangeHandler, Backend} from './backend.js';
 import type {ActionInputs} from '../action_collections.js';
-import {create_jsonrpc_notification, to_jsonrpc_params} from '../jsonrpc_helpers.js';
 import {format_zod_validation_error} from '../zod_helpers.js';
 import {
 	filer_change_action_spec,

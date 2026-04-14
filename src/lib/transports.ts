@@ -1,15 +1,14 @@
 // @slop Claude Opus 4
 
 import {z} from 'zod';
-
 import type {
 	JsonrpcMessageFromClientToServer,
 	JsonrpcMessageFromServerToClient,
 	JsonrpcNotification,
 	JsonrpcRequest,
 	JsonrpcResponseOrError,
-	JsonrpcErrorMessage,
-} from './jsonrpc.js';
+	JsonrpcErrorResponse,
+} from '@fuzdev/fuz_app/http/jsonrpc.js';
 
 // TODO figure out the symmetry of frontend and backend transports (none/partial/full?) --
 // we may also need orthogonal abstractions to clarify the transport role
@@ -21,7 +20,7 @@ export interface Transport {
 	transport_name: TransportName;
 	/* eslint-disable @typescript-eslint/method-signature-style */
 	send(message: JsonrpcRequest): Promise<JsonrpcResponseOrError>;
-	send(message: JsonrpcNotification): Promise<JsonrpcErrorMessage | null>;
+	send(message: JsonrpcNotification): Promise<JsonrpcErrorResponse | null>;
 	send(message: JsonrpcMessageFromClientToServer): Promise<JsonrpcMessageFromServerToClient | null>;
 	is_ready: () => boolean;
 	dispose?: () => void;

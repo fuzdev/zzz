@@ -2,15 +2,15 @@
 
 import {create_deferred, type Deferred, type AsyncStatus} from '@fuzdev/fuz_util/async.js';
 import {SvelteMap} from 'svelte/reactivity';
-
-import {Datetime, get_datetime_now} from './zod_helpers.js';
 import {
 	JSONRPC_INTERNAL_ERROR,
-	type JsonrpcErrorMessage,
+	type JsonrpcErrorResponse,
 	type JsonrpcRequestId,
 	type JsonrpcResponseOrError,
-} from './jsonrpc.js';
-import {ThrownJsonrpcError, JSONRPC_ERROR_CODES} from './jsonrpc_errors.js';
+} from '@fuzdev/fuz_app/http/jsonrpc.js';
+import {ThrownJsonrpcError, JSONRPC_ERROR_CODES} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
+
+import {Datetime, get_datetime_now} from './zod_helpers.js';
 
 // TODO what if this uses a tracker id param that's an opaque UUID but can be used for action association?
 
@@ -112,9 +112,9 @@ export class RequestTracker {
 	/**
 	 * Rejects a pending request with the given error.
 	 * @param id - the request id
-	 * @param error_message - the complete `JsonrpcErrorMessage` object
+	 * @param error_message - the complete `JsonrpcErrorResponse` object
 	 */
-	reject_request(id: JsonrpcRequestId, error_message: JsonrpcErrorMessage): void {
+	reject_request(id: JsonrpcRequestId, error_message: JsonrpcErrorResponse): void {
 		const request = this.pending_requests.get(id);
 		if (!request) {
 			console.warn(`received error for unknown request: ${id}`);

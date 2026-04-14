@@ -1,22 +1,26 @@
 // @slop Claude Opus 4
 
 import {DEV} from 'esm-env';
-import {ThrownJsonrpcError, jsonrpc_error_messages} from './jsonrpc_errors.js';
 import {
-	create_jsonrpc_error_message,
-	to_jsonrpc_message_id,
-	is_jsonrpc_error_message,
+	ThrownJsonrpcError,
+	jsonrpc_error_messages,
 	http_status_to_jsonrpc_error_code,
-} from './jsonrpc_helpers.js';
-import type {Transport} from './transports.js';
+} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
+import {
+	create_jsonrpc_error_response,
+	to_jsonrpc_message_id,
+	is_jsonrpc_error_response,
+} from '@fuzdev/fuz_app/http/jsonrpc_helpers.js';
 import type {
 	JsonrpcMessageFromClientToServer,
 	JsonrpcMessageFromServerToClient,
 	JsonrpcNotification,
 	JsonrpcRequest,
 	JsonrpcResponseOrError,
-	JsonrpcErrorMessage,
-} from './jsonrpc.js';
+	JsonrpcErrorResponse,
+} from '@fuzdev/fuz_app/http/jsonrpc.js';
+
+import type {Transport} from './transports.js';
 import {UNKNOWN_ERROR_MESSAGE} from './constants.js';
 
 export class FrontendHttpTransport implements Transport {
@@ -37,7 +41,7 @@ export class FrontendHttpTransport implements Transport {
 	}
 
 	async send(message: JsonrpcRequest): Promise<JsonrpcResponseOrError>;
-	async send(message: JsonrpcNotification): Promise<JsonrpcErrorMessage | null>;
+	async send(message: JsonrpcNotification): Promise<JsonrpcErrorResponse | null>;
 	async send(
 		message: JsonrpcMessageFromClientToServer,
 	): Promise<JsonrpcMessageFromServerToClient | null> {
@@ -71,7 +75,7 @@ export class FrontendHttpTransport implements Transport {
 			// For JSON-RPC, we always expect a 200 OK response.
 			// The actual error will be in the JSON-RPC error field.
 			if (!response.ok) {
-				return create_jsonrpc_error_message(to_jsonrpc_message_id(message), {
+				return create_jsonrpc_error_response(to_jsonrpc_message_id(message), {
 					code: http_status_to_jsonrpc_error_code(response.status),
 					message: `HTTP error: ${response.status} ${response.statusText}`,
 				});
@@ -79,7 +83,7 @@ export class FrontendHttpTransport implements Transport {
 
 			// In development, check if we got a JSON-RPC error with HTTP 200
 			// and verify the error code matches the expected HTTP status.
-			if (DEV && is_jsonrpc_error_message(result)) {
+			if (DEV && is_jsonrpc_error_response(result)) {
 				const expected_code = http_status_to_jsonrpc_error_code(response.status);
 				const actual_code = result.error.code;
 				if (actual_code !== expected_code) {
@@ -93,13 +97,13 @@ export class FrontendHttpTransport implements Transport {
 			return result;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) {
-				return create_jsonrpc_error_message(to_jsonrpc_message_id(message), {
+				return create_jsonrpc_error_response(to_jsonrpc_message_id(message), {
 					code: error.code,
 					message: error.message,
 					data: error.data,
 				});
 			}
-			return create_jsonrpc_error_message(
+			return create_jsonrpc_error_response(
 				to_jsonrpc_message_id(message),
 				jsonrpc_error_messages.internal_error('error sending request', {
 					error: error.message || UNKNOWN_ERROR_MESSAGE,

@@ -1,24 +1,25 @@
 // @slop Claude Opus 4
 
-import {create_action_event} from './action_event.js';
 import {
 	JsonrpcMessageFromClientToServer,
 	JsonrpcMessageFromServerToClient,
 	JsonrpcNotification,
 	JsonrpcRequest,
 	JsonrpcResponseOrError,
-	JsonrpcErrorMessage,
-} from './jsonrpc.js';
-import {Transports, type TransportName} from './transports.js';
-import type {ActionEventEnvironment} from './action_event_types.js';
+	JsonrpcErrorResponse,
+} from '@fuzdev/fuz_app/http/jsonrpc.js';
 import {
-	create_jsonrpc_error_message,
-	create_jsonrpc_error_message_from_thrown,
+	create_jsonrpc_error_response,
+	create_jsonrpc_error_response_from_thrown,
 	to_jsonrpc_message_id,
 	is_jsonrpc_request,
 	is_jsonrpc_notification,
-} from './jsonrpc_helpers.js';
-import {jsonrpc_error_messages} from './jsonrpc_errors.js';
+} from '@fuzdev/fuz_app/http/jsonrpc_helpers.js';
+import {jsonrpc_error_messages} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
+
+import {create_action_event} from './action_event.js';
+import {Transports, type TransportName} from './transports.js';
+import type {ActionEventEnvironment} from './action_event_types.js';
 import type {ActionMethod} from './action_metatypes.js';
 
 // TODO @api @many refactor frontend_actions_api.ts with action_peer.ts
@@ -64,7 +65,7 @@ export class ActionPeer {
 	async send(
 		message: JsonrpcNotification,
 		options?: ActionPeerSendOptions,
-	): Promise<JsonrpcErrorMessage | null>;
+	): Promise<JsonrpcErrorResponse | null>;
 	async send(
 		message: JsonrpcMessageFromClientToServer,
 		options?: ActionPeerSendOptions,
@@ -76,7 +77,7 @@ export class ActionPeer {
 
 			if (!transport) {
 				this.environment.log?.error('[peer] send failed: no transport available');
-				return create_jsonrpc_error_message(
+				return create_jsonrpc_error_response(
 					to_jsonrpc_message_id(message),
 					jsonrpc_error_messages.service_unavailable('no transport available'),
 				);
@@ -103,7 +104,7 @@ export class ActionPeer {
 		} catch (error) {
 			// TODO add retry handling here?
 			this.environment.log?.error('[peer] send unexpected error:', error);
-			return create_jsonrpc_error_message_from_thrown(to_jsonrpc_message_id(message), error);
+			return create_jsonrpc_error_response_from_thrown(to_jsonrpc_message_id(message), error);
 		} // TODO finally?
 	}
 
@@ -114,7 +115,7 @@ export class ActionPeer {
 		} catch (error) {
 			this.environment.log?.error('[peer] receive unexpected error:', error);
 			// Return appropriate error response based on the message
-			return create_jsonrpc_error_message_from_thrown(to_jsonrpc_message_id(message), error);
+			return create_jsonrpc_error_response_from_thrown(to_jsonrpc_message_id(message), error);
 		} // TODO finally?
 	}
 
@@ -128,7 +129,7 @@ export class ActionPeer {
 			await this.#receive_notification(message);
 			return null;
 		} else {
-			return create_jsonrpc_error_message(
+			return create_jsonrpc_error_response(
 				to_jsonrpc_message_id(message),
 				jsonrpc_error_messages.invalid_request(),
 			);
@@ -142,7 +143,7 @@ export class ActionPeer {
 		const spec = this.environment.lookup_action_spec(request.method as ActionMethod); // TODO @many try not to cast, idk what the best design is here
 		if (!spec) {
 			this.environment.log?.warn(`[peer] receive request: method not found:`, request.method);
-			return create_jsonrpc_error_message(
+			return create_jsonrpc_error_response(
 				request.id,
 				jsonrpc_error_messages.method_not_found(request.method),
 			);
@@ -178,7 +179,7 @@ export class ActionPeer {
 					request.method,
 					event.data.error,
 				);
-				return create_jsonrpc_error_message(request.id, event.data.error);
+				return create_jsonrpc_error_response(request.id, event.data.error);
 			}
 
 			// Check if transitioned to error phase (send_error)
@@ -187,7 +188,7 @@ export class ActionPeer {
 				await event.handle_async();
 
 				// Return error response (handler may have modified/logged it)
-				return create_jsonrpc_error_message(request.id, event.data.error);
+				return create_jsonrpc_error_response(request.id, event.data.error);
 			}
 
 			// Fallback for unexpected states
@@ -196,13 +197,13 @@ export class ActionPeer {
 				request.method,
 				event.data,
 			);
-			return create_jsonrpc_error_message(
+			return create_jsonrpc_error_response(
 				request.id,
 				jsonrpc_error_messages.internal_error('unknown error'),
 			);
 		} catch (error) {
 			this.environment.log?.error(`[peer] receive request exception:`, request.method, error);
-			return create_jsonrpc_error_message_from_thrown(request.id, error);
+			return create_jsonrpc_error_response_from_thrown(request.id, error);
 		}
 	}
 

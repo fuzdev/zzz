@@ -15,19 +15,19 @@ import {wait} from '@fuzdev/fuz_util/async.js';
 import {get_request_context, has_role} from '@fuzdev/fuz_app/auth/request_context.js';
 import {hash_session_token} from '@fuzdev/fuz_app/auth/session_queries.js';
 import {ROLE_KEEPER} from '@fuzdev/fuz_app/auth/role_schema.js';
+import {jsonrpc_error_messages} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
+import {JSONRPC_VERSION} from '@fuzdev/fuz_app/http/jsonrpc.js';
+import {
+	create_jsonrpc_error_response,
+	create_jsonrpc_error_response_from_thrown,
+	to_jsonrpc_message_id,
+	is_jsonrpc_request,
+} from '@fuzdev/fuz_app/http/jsonrpc_helpers.js';
 
 import type {Uuid} from '../zod_helpers.js';
 import {all_action_specs} from '../action_specs.js';
 import type {Backend} from './backend.js';
 import {BackendWebsocketTransport} from './backend_websocket_transport.js';
-import {jsonrpc_error_messages} from '../jsonrpc_errors.js';
-import {JSONRPC_VERSION} from '../jsonrpc.js';
-import {
-	create_jsonrpc_error_message,
-	create_jsonrpc_error_message_from_thrown,
-	to_jsonrpc_message_id,
-	is_jsonrpc_request,
-} from '../jsonrpc_helpers.js';
 import {zzz_action_handlers, type ZzzHandledMethod} from './zzz_action_handlers.js';
 
 export interface RegisterWebsocketActionsOptions {
@@ -85,7 +85,7 @@ export const register_websocket_actions = ({
 						backend.log?.error(`[ws] JSON parse error:`, error);
 						ws.send(
 							JSON.stringify(
-								create_jsonrpc_error_message(null, jsonrpc_error_messages.parse_error()),
+								create_jsonrpc_error_response(null, jsonrpc_error_messages.parse_error()),
 							),
 						);
 						return;
@@ -95,7 +95,7 @@ export const register_websocket_actions = ({
 					if (Array.isArray(json)) {
 						ws.send(
 							JSON.stringify(
-								create_jsonrpc_error_message(
+								create_jsonrpc_error_response(
 									null,
 									jsonrpc_error_messages.invalid_request(
 										'batch JSON-RPC requests are not supported on WebSocket',
@@ -114,7 +114,7 @@ export const register_websocket_actions = ({
 						}
 						ws.send(
 							JSON.stringify(
-								create_jsonrpc_error_message(
+								create_jsonrpc_error_response(
 									to_jsonrpc_message_id(json),
 									jsonrpc_error_messages.invalid_request(),
 								),
@@ -130,7 +130,7 @@ export const register_websocket_actions = ({
 					if (!spec) {
 						ws.send(
 							JSON.stringify(
-								create_jsonrpc_error_message(id, jsonrpc_error_messages.method_not_found(method)),
+								create_jsonrpc_error_response(id, jsonrpc_error_messages.method_not_found(method)),
 							),
 						);
 						return;
@@ -141,7 +141,7 @@ export const register_websocket_actions = ({
 						if (credential_type !== 'daemon_token' || !has_role(request_context, ROLE_KEEPER)) {
 							ws.send(
 								JSON.stringify(
-									create_jsonrpc_error_message(
+									create_jsonrpc_error_response(
 										id,
 										jsonrpc_error_messages.forbidden(
 											'keeper actions require daemon_token credential with keeper role',
@@ -154,7 +154,7 @@ export const register_websocket_actions = ({
 					} else if (typeof auth === 'object' && auth !== null) {
 						ws.send(
 							JSON.stringify(
-								create_jsonrpc_error_message(
+								create_jsonrpc_error_response(
 									id,
 									jsonrpc_error_messages.internal_error(
 										'role-based action auth is not yet supported on WebSocket',
@@ -170,7 +170,7 @@ export const register_websocket_actions = ({
 					if (!handler) {
 						ws.send(
 							JSON.stringify(
-								create_jsonrpc_error_message(id, jsonrpc_error_messages.method_not_found(method)),
+								create_jsonrpc_error_response(id, jsonrpc_error_messages.method_not_found(method)),
 							),
 						);
 						return;
@@ -183,7 +183,7 @@ export const register_websocket_actions = ({
 						if (!parsed.success) {
 							ws.send(
 								JSON.stringify(
-									create_jsonrpc_error_message(
+									create_jsonrpc_error_response(
 										id,
 										jsonrpc_error_messages.invalid_params(`invalid params for ${method}`, {
 											issues: parsed.error.issues,
@@ -225,7 +225,7 @@ export const register_websocket_actions = ({
 						ws.send(JSON.stringify({jsonrpc: JSONRPC_VERSION, id, result: output}));
 					} catch (error) {
 						backend.log?.error('[ws] handler error:', method, error);
-						ws.send(JSON.stringify(create_jsonrpc_error_message_from_thrown(id, error)));
+						ws.send(JSON.stringify(create_jsonrpc_error_response_from_thrown(id, error)));
 					}
 				},
 				onClose: (event, ws) => {

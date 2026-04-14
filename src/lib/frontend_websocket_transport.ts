@@ -1,23 +1,24 @@
 // @slop Claude Opus 4
 
-import {RequestTracker} from './request_tracker.svelte.js';
-import {ThrownJsonrpcError, jsonrpc_error_messages} from './jsonrpc_errors.js';
+import {ThrownJsonrpcError, jsonrpc_error_messages} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
 import {
 	is_jsonrpc_notification,
 	is_jsonrpc_request,
 	is_jsonrpc_response,
-	is_jsonrpc_error_message,
+	is_jsonrpc_error_response,
 	to_jsonrpc_message_id,
-	create_jsonrpc_error_message,
-} from './jsonrpc_helpers.js';
+	create_jsonrpc_error_response,
+} from '@fuzdev/fuz_app/http/jsonrpc_helpers.js';
 import type {
 	JsonrpcMessageFromClientToServer,
 	JsonrpcMessageFromServerToClient,
 	JsonrpcNotification,
 	JsonrpcRequest,
 	JsonrpcResponseOrError,
-	JsonrpcErrorMessage,
-} from './jsonrpc.js';
+	JsonrpcErrorResponse,
+} from '@fuzdev/fuz_app/http/jsonrpc.js';
+
+import {RequestTracker} from './request_tracker.svelte.js';
 import type {Transport} from './transports.js';
 import {UNKNOWN_ERROR_MESSAGE} from './constants.js';
 
@@ -58,7 +59,7 @@ export class FrontendWebsocketTransport implements Transport {
 
 				// TODO the `data.id !== null` check should be refactored, maybe we want the "Error Message Response" concept for non-null ids
 				// Check if this is a response to one of our requests
-				if (is_jsonrpc_response(data) || (is_jsonrpc_error_message(data) && data.id !== null)) {
+				if (is_jsonrpc_response(data) || (is_jsonrpc_error_response(data) && data.id !== null)) {
 					// This is a response to a request we sent
 					this.#request_tracker.handle_message(data);
 				} else if (is_jsonrpc_request(data) || is_jsonrpc_notification(data)) {
@@ -80,12 +81,12 @@ export class FrontendWebsocketTransport implements Transport {
 	}
 
 	async send(message: JsonrpcRequest): Promise<JsonrpcResponseOrError>;
-	async send(message: JsonrpcNotification): Promise<JsonrpcErrorMessage | null>;
+	async send(message: JsonrpcNotification): Promise<JsonrpcErrorResponse | null>;
 	async send(
 		message: JsonrpcMessageFromClientToServer,
 	): Promise<JsonrpcMessageFromServerToClient | null> {
 		if (!this.is_ready()) {
-			return create_jsonrpc_error_message(
+			return create_jsonrpc_error_response(
 				to_jsonrpc_message_id(message),
 				jsonrpc_error_messages.service_unavailable('WebSocket not connected'),
 			);
@@ -107,19 +108,19 @@ export class FrontendWebsocketTransport implements Transport {
 				return null;
 			}
 			// Invalid message type - return error with id if available
-			return create_jsonrpc_error_message(
+			return create_jsonrpc_error_response(
 				to_jsonrpc_message_id(message),
 				jsonrpc_error_messages.invalid_request(),
 			);
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) {
-				return create_jsonrpc_error_message(to_jsonrpc_message_id(message), {
+				return create_jsonrpc_error_response(to_jsonrpc_message_id(message), {
 					code: error.code,
 					message: error.message,
 					data: error.data,
 				});
 			}
-			return create_jsonrpc_error_message(
+			return create_jsonrpc_error_response(
 				to_jsonrpc_message_id(message),
 				jsonrpc_error_messages.internal_error(error.message || UNKNOWN_ERROR_MESSAGE),
 			);

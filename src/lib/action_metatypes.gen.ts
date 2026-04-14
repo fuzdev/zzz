@@ -19,8 +19,8 @@ export const gen: Gen = ({origin_path}) => {
 
 	imports.add('zod', 'z');
 	imports.add_type('@fuzdev/fuz_util/result.js', 'Result');
+	imports.add_type('@fuzdev/fuz_app/http/jsonrpc.js', 'JsonrpcErrorObject');
 	imports.add_types('./action_collections.js', 'ActionInputs', 'ActionOutputs');
-	imports.add_type('./jsonrpc.js', 'JsonrpcErrorJson');
 
 	return `
 		// ${banner}
@@ -87,7 +87,7 @@ export const gen: Gen = ({origin_path}) => {
 					const has_input = innermost_type_name !== 'null' && innermost_type_name !== 'void';
 					const is_async = spec.kind === 'request_response' || spec.async;
 					const return_type = is_async
-						? `Promise<Result<{value: ActionOutputs['${spec.method}']}, {error: JsonrpcErrorJson}>>`
+						? `Promise<Result<{value: ActionOutputs['${spec.method}']}, {error: JsonrpcErrorObject}>>`
 						: `ActionOutputs['${spec.method}']`; // Sync method returns value directly
 					return `${spec.method}: (${
 						has_input

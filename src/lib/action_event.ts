@@ -5,6 +5,22 @@ import type {
 	ActionKind,
 	ActionSpecUnion,
 } from '@fuzdev/fuz_app/actions/action_spec.js';
+import {
+	create_jsonrpc_request,
+	create_jsonrpc_response,
+	create_jsonrpc_error_response,
+	create_jsonrpc_notification,
+	to_jsonrpc_params,
+	to_jsonrpc_result,
+	is_jsonrpc_error_response,
+} from '@fuzdev/fuz_app/http/jsonrpc_helpers.js';
+import {jsonrpc_error_messages, ThrownJsonrpcError} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
+import type {
+	JsonrpcRequest,
+	JsonrpcResponseOrError,
+	JsonrpcNotification,
+	JsonrpcErrorObject,
+} from '@fuzdev/fuz_app/http/jsonrpc.js';
 
 import type {ActionMethod} from './action_metatypes.js';
 import type {ActionEventEnvironment, ActionEventStep} from './action_event_types.js';
@@ -21,23 +37,7 @@ import {
 	is_notification_send_with_parsed_input,
 } from './action_event_helpers.js';
 import type {ActionEventDatas} from './action_collections.js';
-import {
-	create_jsonrpc_request,
-	create_jsonrpc_response,
-	create_jsonrpc_error_message,
-	create_jsonrpc_notification,
-	to_jsonrpc_params,
-	to_jsonrpc_result,
-	is_jsonrpc_error_message,
-} from './jsonrpc_helpers.js';
 import {create_uuid, format_zod_validation_error} from './zod_helpers.js';
-import {jsonrpc_error_messages, ThrownJsonrpcError} from './jsonrpc_errors.js';
-import type {
-	JsonrpcRequest,
-	JsonrpcResponseOrError,
-	JsonrpcNotification,
-	JsonrpcErrorJson,
-} from './jsonrpc.js';
 
 // TODO maybe just use runes in this module and remove `observe`
 export type ActionEventChangeObserver<TMethod extends ActionMethod> = (
@@ -104,7 +104,7 @@ export class ActionEvent<
 		}
 
 		// Check for error in response - transition to receive_error instead of failing
-		if (is_jsonrpc_error_message(this.#data.response)) {
+		if (is_jsonrpc_error_response(this.#data.response)) {
 			if (this.#data.kind === 'request_response' && this.#data.phase === 'receive_response') {
 				// Transition to receive_error instead of failing
 				this.#transition_to_error_phase('receive_error', this.#data.response.error);
@@ -289,7 +289,7 @@ export class ActionEvent<
 	}
 
 	// TODO usage of this in this module is silently swallowing errors, maybe log on the environment?
-	#fail(error: JsonrpcErrorJson): void {
+	#fail(error: JsonrpcErrorObject): void {
 		this.#transition_step('failed', {error});
 	}
 
@@ -313,7 +313,10 @@ export class ActionEvent<
 	/**
 	 * Transition to an error phase instead of failing.
 	 */
-	#transition_to_error_phase(phase: 'send_error' | 'receive_error', error: JsonrpcErrorJson): void {
+	#transition_to_error_phase(
+		phase: 'send_error' | 'receive_error',
+		error: JsonrpcErrorObject,
+	): void {
 		const new_data = {
 			...this.#data,
 			phase,
@@ -429,7 +432,7 @@ export class ActionEvent<
 		}
 
 		if (this.#data.error) {
-			return create_jsonrpc_error_message(this.#data.request.id, this.#data.error);
+			return create_jsonrpc_error_response(this.#data.request.id, this.#data.error);
 		}
 
 		const result = to_jsonrpc_result(this.#data.output);

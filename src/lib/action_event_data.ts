@@ -2,14 +2,14 @@
 
 import {z} from 'zod';
 import {ActionEventPhase, ActionKind} from '@fuzdev/fuz_app/actions/action_spec.js';
-
-import {ActionMethod} from './action_metatypes.js';
 import {
 	JsonrpcRequest,
 	JsonrpcResponseOrError,
 	JsonrpcNotification,
-	JsonrpcErrorJson,
-} from './jsonrpc.js';
+	JsonrpcErrorObject,
+} from '@fuzdev/fuz_app/http/jsonrpc.js';
+
+import {ActionMethod} from './action_metatypes.js';
 import {ActionExecutor, ActionEventStep} from './action_event_types.js';
 
 // Base schema for all action event data
@@ -21,7 +21,7 @@ export const ActionEventData = z.strictObject({
 	executor: ActionExecutor,
 	input: z.unknown().nullable(),
 	output: z.unknown().nullable(),
-	error: JsonrpcErrorJson.nullable(),
+	error: JsonrpcErrorObject.nullable(),
 	progress: z.unknown().nullable(),
 	// Fields for specific kinds - always present but may be null
 	request: JsonrpcRequest.nullable(),
@@ -100,7 +100,7 @@ export type ActionEventRequestResponseData<
 			executor: ActionExecutor;
 			input: unknown;
 			output: null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: unknown;
 			request: JsonrpcRequest | null;
 			response: null;
@@ -170,7 +170,7 @@ export type ActionEventRequestResponseData<
 			executor: ActionExecutor;
 			input: unknown;
 			output: null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: unknown;
 			request: JsonrpcRequest;
 			response: null;
@@ -240,7 +240,7 @@ export type ActionEventRequestResponseData<
 			executor: ActionExecutor;
 			input: TInput;
 			output: TOutput | null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: unknown;
 			request: JsonrpcRequest;
 			response: JsonrpcResponseOrError;
@@ -310,7 +310,7 @@ export type ActionEventRequestResponseData<
 			executor: ActionExecutor;
 			input: TInput;
 			output: TOutput | null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: unknown;
 			request: JsonrpcRequest;
 			response: JsonrpcResponseOrError;
@@ -325,7 +325,7 @@ export type ActionEventRequestResponseData<
 			executor: ActionExecutor;
 			input: unknown;
 			output: null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: null;
 			request: JsonrpcRequest | null;
 			response: null;
@@ -339,7 +339,7 @@ export type ActionEventRequestResponseData<
 			executor: ActionExecutor;
 			input: TInput;
 			output: null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: null;
 			request: JsonrpcRequest | null;
 			response: null;
@@ -353,7 +353,7 @@ export type ActionEventRequestResponseData<
 			executor: ActionExecutor;
 			input: TInput;
 			output: null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: unknown;
 			request: JsonrpcRequest | null;
 			response: null;
@@ -367,7 +367,7 @@ export type ActionEventRequestResponseData<
 			executor: ActionExecutor;
 			input: TInput;
 			output: null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: unknown;
 			request: JsonrpcRequest | null;
 			response: null;
@@ -382,7 +382,7 @@ export type ActionEventRequestResponseData<
 			executor: ActionExecutor;
 			input: TInput;
 			output: null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: null;
 			request: JsonrpcRequest;
 			response: JsonrpcResponseOrError;
@@ -396,7 +396,7 @@ export type ActionEventRequestResponseData<
 			executor: ActionExecutor;
 			input: TInput;
 			output: null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: null;
 			request: JsonrpcRequest;
 			response: JsonrpcResponseOrError;
@@ -410,7 +410,7 @@ export type ActionEventRequestResponseData<
 			executor: ActionExecutor;
 			input: TInput;
 			output: null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: unknown;
 			request: JsonrpcRequest;
 			response: JsonrpcResponseOrError;
@@ -424,7 +424,7 @@ export type ActionEventRequestResponseData<
 			executor: ActionExecutor;
 			input: TInput;
 			output: null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: unknown;
 			request: JsonrpcRequest;
 			response: JsonrpcResponseOrError;
@@ -499,7 +499,7 @@ export type ActionEventRemoteNotificationData<
 			executor: ActionExecutor;
 			input: unknown;
 			output: null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: unknown;
 			request: null;
 			response: null;
@@ -569,7 +569,7 @@ export type ActionEventRemoteNotificationData<
 			executor: ActionExecutor;
 			input: unknown;
 			output: null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: unknown;
 			request: null;
 			response: null;
@@ -645,7 +645,7 @@ export type ActionEventLocalCallData<
 			executor: ActionExecutor;
 			input: unknown;
 			output: null;
-			error: JsonrpcErrorJson;
+			error: JsonrpcErrorObject;
 			progress: unknown;
 			request: null;
 			response: null;

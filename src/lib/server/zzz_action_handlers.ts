@@ -8,6 +8,8 @@
  * @module
  */
 
+import {ThrownJsonrpcError} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
+
 import type {Backend} from './backend.js';
 import type {CompletionOptions, CompletionHandlerOptions} from './backend_provider.js';
 import {save_completion_response_to_disk} from './helpers.js';
@@ -15,7 +17,7 @@ import {update_env_variable} from './env_file_helpers.js';
 import {create_uuid} from '../zod_helpers.js';
 import {to_serializable_disknode} from '../diskfile_helpers.js';
 import {SerializableDisknode} from '../diskfile_types.js';
-import {jsonrpc_errors, ThrownJsonrpcError} from '../jsonrpc_errors.js';
+import {jsonrpc_errors} from '../zzz_jsonrpc_errors.js';
 import type {OllamaListResponse, OllamaPsResponse, OllamaShowResponse} from '../ollama_helpers.js';
 import type {ActionInputs, ActionOutputs} from '../action_collections.js';
 import type {BackendActionMethod} from '../action_metatypes.js';

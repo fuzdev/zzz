@@ -2,10 +2,10 @@
 
 import {z} from 'zod';
 import type {AsyncStatus} from '@fuzdev/fuz_util/async.js';
+import type {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.js';
 
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {CellJson} from './cell_types.js';
-import type {JsonrpcRequestId} from './jsonrpc.js';
 import type {
 	OllamaListResponse,
 	OllamaListResponseItem,

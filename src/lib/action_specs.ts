@@ -1,6 +1,8 @@
 // @slop Claude Opus 4
 
 import {z} from 'zod';
+import {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.js';
+import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 
 import {
 	DiskfileChange,
@@ -10,9 +12,7 @@ import {
 } from './diskfile_types.js';
 import {ProviderStatus, ProviderName} from './provider_types.js';
 import {CompletionMessage, CompletionRequest, CompletionResponse} from './completion_types.js';
-import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 import {WorkspaceInfoJson} from './workspace.svelte.js';
-import {JsonrpcRequestId} from './jsonrpc.js';
 import {
 	OllamaListRequest,
 	OllamaListResponse,

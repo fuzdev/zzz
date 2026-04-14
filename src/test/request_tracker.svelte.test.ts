@@ -1,11 +1,18 @@
 // @vitest-environment jsdom
 
 import {test, describe, vi, beforeEach, afterEach, assert} from 'vitest';
+import {
+	JSONRPC_INTERNAL_ERROR,
+	JSONRPC_VERSION,
+	JsonrpcErrorCode,
+} from '@fuzdev/fuz_app/http/jsonrpc.js';
+import {
+	create_jsonrpc_response,
+	is_jsonrpc_response,
+} from '@fuzdev/fuz_app/http/jsonrpc_helpers.js';
+import {ThrownJsonrpcError} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
 
 import {RequestTracker} from '$lib/request_tracker.svelte.js';
-import {JSONRPC_INTERNAL_ERROR, JSONRPC_VERSION, JsonrpcErrorCode} from '$lib/jsonrpc.js';
-import {create_jsonrpc_response, is_jsonrpc_response} from '$lib/jsonrpc_helpers.js';
-import {ThrownJsonrpcError} from '$lib/jsonrpc_errors.js';
 
 describe('RequestTracker', () => {
 	let warn_spy: ReturnType<typeof vi.spyOn>;
