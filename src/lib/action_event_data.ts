@@ -4,7 +4,6 @@ import {z} from 'zod';
 import {ActionEventPhase, ActionKind} from '@fuzdev/fuz_app/actions/action_spec.js';
 
 import {ActionMethod} from './action_metatypes.js';
-import type {ActionInputs, ActionOutputs} from './action_collections.js';
 import {
 	JsonrpcRequest,
 	JsonrpcResponseOrError,
@@ -32,7 +31,11 @@ export const ActionEventData = z.strictObject({
 export type ActionEventData = z.infer<typeof ActionEventData>;
 
 // Discriminated union types for narrowing
-export type ActionEventRequestResponseData<TMethod extends ActionMethod = ActionMethod> =
+export type ActionEventRequestResponseData<
+	TMethod extends ActionMethod = ActionMethod,
+	TInput = unknown,
+	TOutput = unknown,
+> =
 	| {
 			kind: 'request_response';
 			phase: 'send_request';
@@ -53,7 +56,7 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'parsed';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: null;
 			progress: null;
@@ -67,7 +70,7 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'handling';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: null;
 			progress: unknown;
@@ -81,7 +84,7 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'handled';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: null;
 			progress: unknown;
@@ -123,7 +126,7 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'parsed';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: null;
 			progress: null;
@@ -137,7 +140,7 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'handling';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: null;
 			progress: unknown;
@@ -151,8 +154,8 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'handled';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
-			output: ActionOutputs[TMethod];
+			input: TInput;
+			output: TOutput;
 			error: null;
 			progress: unknown;
 			request: JsonrpcRequest;
@@ -179,8 +182,8 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'initial';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
-			output: ActionOutputs[TMethod];
+			input: TInput;
+			output: TOutput;
 			error: null;
 			progress: null;
 			request: JsonrpcRequest;
@@ -193,8 +196,8 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'parsed';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
-			output: ActionOutputs[TMethod];
+			input: TInput;
+			output: TOutput;
 			error: null;
 			progress: null;
 			request: JsonrpcRequest;
@@ -207,8 +210,8 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'handling';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
-			output: ActionOutputs[TMethod];
+			input: TInput;
+			output: TOutput;
 			error: null;
 			progress: unknown;
 			request: JsonrpcRequest;
@@ -221,8 +224,8 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'handled';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
-			output: ActionOutputs[TMethod];
+			input: TInput;
+			output: TOutput;
 			error: null;
 			progress: unknown;
 			request: JsonrpcRequest;
@@ -235,8 +238,8 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'failed';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
-			output: ActionOutputs[TMethod] | null;
+			input: TInput;
+			output: TOutput | null;
 			error: JsonrpcErrorJson;
 			progress: unknown;
 			request: JsonrpcRequest;
@@ -249,7 +252,7 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'initial';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: unknown;
 			error: null;
 			progress: null;
@@ -263,8 +266,8 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'parsed';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
-			output: ActionOutputs[TMethod];
+			input: TInput;
+			output: TOutput;
 			error: null;
 			progress: null;
 			request: JsonrpcRequest;
@@ -277,8 +280,8 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'handling';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
-			output: ActionOutputs[TMethod];
+			input: TInput;
+			output: TOutput;
 			error: null;
 			progress: unknown;
 			request: JsonrpcRequest;
@@ -291,8 +294,8 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'handled';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
-			output: ActionOutputs[TMethod];
+			input: TInput;
+			output: TOutput;
 			error: null;
 			progress: unknown;
 			request: JsonrpcRequest;
@@ -305,8 +308,8 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'failed';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
-			output: ActionOutputs[TMethod] | null;
+			input: TInput;
+			output: TOutput | null;
 			error: JsonrpcErrorJson;
 			progress: unknown;
 			request: JsonrpcRequest;
@@ -334,7 +337,7 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'parsed';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: JsonrpcErrorJson;
 			progress: null;
@@ -348,7 +351,7 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'handling';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: JsonrpcErrorJson;
 			progress: unknown;
@@ -362,7 +365,7 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'handled';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: JsonrpcErrorJson;
 			progress: unknown;
@@ -377,7 +380,7 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'initial';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: JsonrpcErrorJson;
 			progress: null;
@@ -391,7 +394,7 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'parsed';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: JsonrpcErrorJson;
 			progress: null;
@@ -405,7 +408,7 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'handling';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: JsonrpcErrorJson;
 			progress: unknown;
@@ -419,7 +422,7 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			step: 'handled';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: JsonrpcErrorJson;
 			progress: unknown;
@@ -428,7 +431,10 @@ export type ActionEventRequestResponseData<TMethod extends ActionMethod = Action
 			notification: null;
 	  };
 
-export type ActionEventRemoteNotificationData<TMethod extends ActionMethod = ActionMethod> =
+export type ActionEventRemoteNotificationData<
+	TMethod extends ActionMethod = ActionMethod,
+	TInput = unknown,
+> =
 	| {
 			kind: 'remote_notification';
 			phase: 'send';
@@ -449,7 +455,7 @@ export type ActionEventRemoteNotificationData<TMethod extends ActionMethod = Act
 			step: 'parsed';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: null;
 			progress: null;
@@ -463,7 +469,7 @@ export type ActionEventRemoteNotificationData<TMethod extends ActionMethod = Act
 			step: 'handling';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: null;
 			progress: unknown;
@@ -477,7 +483,7 @@ export type ActionEventRemoteNotificationData<TMethod extends ActionMethod = Act
 			step: 'handled';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: null;
 			progress: unknown;
@@ -519,7 +525,7 @@ export type ActionEventRemoteNotificationData<TMethod extends ActionMethod = Act
 			step: 'parsed';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: null;
 			progress: null;
@@ -533,7 +539,7 @@ export type ActionEventRemoteNotificationData<TMethod extends ActionMethod = Act
 			step: 'handling';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: null;
 			progress: unknown;
@@ -547,7 +553,7 @@ export type ActionEventRemoteNotificationData<TMethod extends ActionMethod = Act
 			step: 'handled';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: null;
 			progress: unknown;
@@ -570,7 +576,11 @@ export type ActionEventRemoteNotificationData<TMethod extends ActionMethod = Act
 			notification: JsonrpcNotification;
 	  };
 
-export type ActionEventLocalCallData<TMethod extends ActionMethod = ActionMethod> =
+export type ActionEventLocalCallData<
+	TMethod extends ActionMethod = ActionMethod,
+	TInput = unknown,
+	TOutput = unknown,
+> =
 	| {
 			kind: 'local_call';
 			phase: 'execute';
@@ -591,7 +601,7 @@ export type ActionEventLocalCallData<TMethod extends ActionMethod = ActionMethod
 			step: 'parsed';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: null;
 			progress: null;
@@ -605,7 +615,7 @@ export type ActionEventLocalCallData<TMethod extends ActionMethod = ActionMethod
 			step: 'handling';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
+			input: TInput;
 			output: null;
 			error: null;
 			progress: unknown;
@@ -619,8 +629,8 @@ export type ActionEventLocalCallData<TMethod extends ActionMethod = ActionMethod
 			step: 'handled';
 			method: TMethod;
 			executor: ActionExecutor;
-			input: ActionInputs[TMethod];
-			output: ActionOutputs[TMethod];
+			input: TInput;
+			output: TOutput;
 			error: null;
 			progress: unknown;
 			request: null;
@@ -643,7 +653,11 @@ export type ActionEventLocalCallData<TMethod extends ActionMethod = ActionMethod
 	  };
 
 // Union type for all action event data
-export type ActionEventDataUnion<TMethod extends ActionMethod = ActionMethod> =
-	| ActionEventRequestResponseData<TMethod>
-	| ActionEventRemoteNotificationData<TMethod>
-	| ActionEventLocalCallData<TMethod>;
+export type ActionEventDataUnion<
+	TMethod extends ActionMethod = ActionMethod,
+	TInput = unknown,
+	TOutput = unknown,
+> =
+	| ActionEventRequestResponseData<TMethod, TInput, TOutput>
+	| ActionEventRemoteNotificationData<TMethod, TInput>
+	| ActionEventLocalCallData<TMethod, TInput, TOutput>;

@@ -185,152 +185,152 @@
 							{
 								"name": "ping",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'ping'>"
+								"type_signature": "ActionEventRequestResponseData<'ping', ActionInputs['ping'], ActionOutputs['ping']>"
 							},
 							{
 								"name": "session_load",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'session_load'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'session_load',\n\t\tActionInputs['session_load'],\n\t\tActionOutputs['session_load']\n\t>"
 							},
 							{
 								"name": "filer_change",
 								"kind": "variable",
-								"type_signature": "ActionEventRemoteNotificationData<'filer_change'>"
+								"type_signature": "ActionEventRemoteNotificationData<'filer_change', ActionInputs['filer_change']>"
 							},
 							{
 								"name": "diskfile_update",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'diskfile_update'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'diskfile_update',\n\t\tActionInputs['diskfile_update'],\n\t\tActionOutputs['diskfile_update']\n\t>"
 							},
 							{
 								"name": "diskfile_delete",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'diskfile_delete'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'diskfile_delete',\n\t\tActionInputs['diskfile_delete'],\n\t\tActionOutputs['diskfile_delete']\n\t>"
 							},
 							{
 								"name": "directory_create",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'directory_create'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'directory_create',\n\t\tActionInputs['directory_create'],\n\t\tActionOutputs['directory_create']\n\t>"
 							},
 							{
 								"name": "completion_create",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'completion_create'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'completion_create',\n\t\tActionInputs['completion_create'],\n\t\tActionOutputs['completion_create']\n\t>"
 							},
 							{
 								"name": "completion_progress",
 								"kind": "variable",
-								"type_signature": "ActionEventRemoteNotificationData<'completion_progress'>"
+								"type_signature": "ActionEventRemoteNotificationData<\n\t\t'completion_progress',\n\t\tActionInputs['completion_progress']\n\t>"
 							},
 							{
 								"name": "ollama_progress",
 								"kind": "variable",
-								"type_signature": "ActionEventRemoteNotificationData<'ollama_progress'>"
+								"type_signature": "ActionEventRemoteNotificationData<\n\t\t'ollama_progress',\n\t\tActionInputs['ollama_progress']\n\t>"
 							},
 							{
 								"name": "toggle_main_menu",
 								"kind": "variable",
-								"type_signature": "ActionEventLocalCallData<'toggle_main_menu'>"
+								"type_signature": "ActionEventLocalCallData<\n\t\t'toggle_main_menu',\n\t\tActionInputs['toggle_main_menu'],\n\t\tActionOutputs['toggle_main_menu']\n\t>"
 							},
 							{
 								"name": "ollama_list",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'ollama_list'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_list',\n\t\tActionInputs['ollama_list'],\n\t\tActionOutputs['ollama_list']\n\t>"
 							},
 							{
 								"name": "ollama_ps",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'ollama_ps'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_ps',\n\t\tActionInputs['ollama_ps'],\n\t\tActionOutputs['ollama_ps']\n\t>"
 							},
 							{
 								"name": "ollama_show",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'ollama_show'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_show',\n\t\tActionInputs['ollama_show'],\n\t\tActionOutputs['ollama_show']\n\t>"
 							},
 							{
 								"name": "ollama_pull",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'ollama_pull'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_pull',\n\t\tActionInputs['ollama_pull'],\n\t\tActionOutputs['ollama_pull']\n\t>"
 							},
 							{
 								"name": "ollama_delete",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'ollama_delete'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_delete',\n\t\tActionInputs['ollama_delete'],\n\t\tActionOutputs['ollama_delete']\n\t>"
 							},
 							{
 								"name": "ollama_copy",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'ollama_copy'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_copy',\n\t\tActionInputs['ollama_copy'],\n\t\tActionOutputs['ollama_copy']\n\t>"
 							},
 							{
 								"name": "ollama_create",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'ollama_create'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_create',\n\t\tActionInputs['ollama_create'],\n\t\tActionOutputs['ollama_create']\n\t>"
 							},
 							{
 								"name": "ollama_unload",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'ollama_unload'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_unload',\n\t\tActionInputs['ollama_unload'],\n\t\tActionOutputs['ollama_unload']\n\t>"
 							},
 							{
 								"name": "provider_load_status",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'provider_load_status'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'provider_load_status',\n\t\tActionInputs['provider_load_status'],\n\t\tActionOutputs['provider_load_status']\n\t>"
 							},
 							{
 								"name": "provider_update_api_key",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'provider_update_api_key'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'provider_update_api_key',\n\t\tActionInputs['provider_update_api_key'],\n\t\tActionOutputs['provider_update_api_key']\n\t>"
 							},
 							{
 								"name": "terminal_create",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'terminal_create'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'terminal_create',\n\t\tActionInputs['terminal_create'],\n\t\tActionOutputs['terminal_create']\n\t>"
 							},
 							{
 								"name": "terminal_data_send",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'terminal_data_send'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'terminal_data_send',\n\t\tActionInputs['terminal_data_send'],\n\t\tActionOutputs['terminal_data_send']\n\t>"
 							},
 							{
 								"name": "terminal_data",
 								"kind": "variable",
-								"type_signature": "ActionEventRemoteNotificationData<'terminal_data'>"
+								"type_signature": "ActionEventRemoteNotificationData<'terminal_data', ActionInputs['terminal_data']>"
 							},
 							{
 								"name": "terminal_resize",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'terminal_resize'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'terminal_resize',\n\t\tActionInputs['terminal_resize'],\n\t\tActionOutputs['terminal_resize']\n\t>"
 							},
 							{
 								"name": "terminal_close",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'terminal_close'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'terminal_close',\n\t\tActionInputs['terminal_close'],\n\t\tActionOutputs['terminal_close']\n\t>"
 							},
 							{
 								"name": "terminal_exited",
 								"kind": "variable",
-								"type_signature": "ActionEventRemoteNotificationData<'terminal_exited'>"
+								"type_signature": "ActionEventRemoteNotificationData<\n\t\t'terminal_exited',\n\t\tActionInputs['terminal_exited']\n\t>"
 							},
 							{
 								"name": "workspace_open",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'workspace_open'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'workspace_open',\n\t\tActionInputs['workspace_open'],\n\t\tActionOutputs['workspace_open']\n\t>"
 							},
 							{
 								"name": "workspace_close",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'workspace_close'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'workspace_close',\n\t\tActionInputs['workspace_close'],\n\t\tActionOutputs['workspace_close']\n\t>"
 							},
 							{
 								"name": "workspace_list",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'workspace_list'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'workspace_list',\n\t\tActionInputs['workspace_list'],\n\t\tActionOutputs['workspace_list']\n\t>"
 							},
 							{
 								"name": "workspace_changed",
 								"kind": "variable",
-								"type_signature": "ActionEventRemoteNotificationData<'workspace_changed'>"
+								"type_signature": "ActionEventRemoteNotificationData<\n\t\t'workspace_changed',\n\t\tActionInputs['workspace_changed']\n\t>"
 							}
 						]
 					}
@@ -350,58 +350,86 @@
 					{
 						"name": "ActionEventData",
 						"kind": "type",
-						"source_line": 17,
+						"source_line": 16,
 						"type_signature": "ZodObject<{ kind: ZodEnum<{ request_response: \"request_response\"; remote_notification: \"remote_notification\"; local_call: \"local_call\"; }>; phase: ZodEnum<{ send_request: \"send_request\"; ... 7 more ...; execute: \"execute\"; }>; ... 9 more ...; notification: ZodNullable<...>; }, $strict>"
 					},
 					{
 						"name": "ActionEventRequestResponseData",
 						"kind": "type",
-						"source_line": 35,
-						"type_signature": "ActionEventRequestResponseData<TMethod>",
+						"source_line": 34,
+						"type_signature": "ActionEventRequestResponseData<TMethod, TInput, TOutput>",
 						"generic_params": [
 							{
 								"name": "TMethod",
 								"constraint": "ActionMethod",
 								"default_type": "ActionMethod"
+							},
+							{
+								"name": "TInput",
+								"default_type": "unknown"
+							},
+							{
+								"name": "TOutput",
+								"default_type": "unknown"
 							}
 						]
 					},
 					{
 						"name": "ActionEventRemoteNotificationData",
 						"kind": "type",
-						"source_line": 431,
-						"type_signature": "ActionEventRemoteNotificationData<TMethod>",
+						"source_line": 434,
+						"type_signature": "ActionEventRemoteNotificationData<TMethod, TInput>",
 						"generic_params": [
 							{
 								"name": "TMethod",
 								"constraint": "ActionMethod",
 								"default_type": "ActionMethod"
+							},
+							{
+								"name": "TInput",
+								"default_type": "unknown"
 							}
 						]
 					},
 					{
 						"name": "ActionEventLocalCallData",
 						"kind": "type",
-						"source_line": 573,
-						"type_signature": "ActionEventLocalCallData<TMethod>",
+						"source_line": 579,
+						"type_signature": "ActionEventLocalCallData<TMethod, TInput, TOutput>",
 						"generic_params": [
 							{
 								"name": "TMethod",
 								"constraint": "ActionMethod",
 								"default_type": "ActionMethod"
+							},
+							{
+								"name": "TInput",
+								"default_type": "unknown"
+							},
+							{
+								"name": "TOutput",
+								"default_type": "unknown"
 							}
 						]
 					},
 					{
 						"name": "ActionEventDataUnion",
 						"kind": "type",
-						"source_line": 646,
-						"type_signature": "ActionEventDataUnion<TMethod>",
+						"source_line": 656,
+						"type_signature": "ActionEventDataUnion<TMethod, TInput, TOutput>",
 						"generic_params": [
 							{
 								"name": "TMethod",
 								"constraint": "ActionMethod",
 								"default_type": "ActionMethod"
+							},
+							{
+								"name": "TInput",
+								"default_type": "unknown"
+							},
+							{
+								"name": "TOutput",
+								"default_type": "unknown"
 							}
 						]
 					}

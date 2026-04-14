@@ -35,7 +35,12 @@ export const gen: Gen = ({origin_path}) => {
 
 		imports.add_types('./action_event_data.js', data_type);
 
-		return `${spec.method}: ${data_type}<'${spec.method}'>`;
+		const type_args =
+			spec.kind === 'remote_notification'
+				? `<'${spec.method}', ActionInputs['${spec.method}']>`
+				: `<'${spec.method}', ActionInputs['${spec.method}'], ActionOutputs['${spec.method}']>`;
+
+		return `${spec.method}: ${data_type}${type_args}`;
 	});
 
 	return `

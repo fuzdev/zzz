@@ -264,36 +264,140 @@ export interface ActionOutputs {
  * for each action's event data, properly typed with inputs and outputs.
  */
 export interface ActionEventDatas {
-	ping: ActionEventRequestResponseData<'ping'>;
-	session_load: ActionEventRequestResponseData<'session_load'>;
-	filer_change: ActionEventRemoteNotificationData<'filer_change'>;
-	diskfile_update: ActionEventRequestResponseData<'diskfile_update'>;
-	diskfile_delete: ActionEventRequestResponseData<'diskfile_delete'>;
-	directory_create: ActionEventRequestResponseData<'directory_create'>;
-	completion_create: ActionEventRequestResponseData<'completion_create'>;
-	completion_progress: ActionEventRemoteNotificationData<'completion_progress'>;
-	ollama_progress: ActionEventRemoteNotificationData<'ollama_progress'>;
-	toggle_main_menu: ActionEventLocalCallData<'toggle_main_menu'>;
-	ollama_list: ActionEventRequestResponseData<'ollama_list'>;
-	ollama_ps: ActionEventRequestResponseData<'ollama_ps'>;
-	ollama_show: ActionEventRequestResponseData<'ollama_show'>;
-	ollama_pull: ActionEventRequestResponseData<'ollama_pull'>;
-	ollama_delete: ActionEventRequestResponseData<'ollama_delete'>;
-	ollama_copy: ActionEventRequestResponseData<'ollama_copy'>;
-	ollama_create: ActionEventRequestResponseData<'ollama_create'>;
-	ollama_unload: ActionEventRequestResponseData<'ollama_unload'>;
-	provider_load_status: ActionEventRequestResponseData<'provider_load_status'>;
-	provider_update_api_key: ActionEventRequestResponseData<'provider_update_api_key'>;
-	terminal_create: ActionEventRequestResponseData<'terminal_create'>;
-	terminal_data_send: ActionEventRequestResponseData<'terminal_data_send'>;
-	terminal_data: ActionEventRemoteNotificationData<'terminal_data'>;
-	terminal_resize: ActionEventRequestResponseData<'terminal_resize'>;
-	terminal_close: ActionEventRequestResponseData<'terminal_close'>;
-	terminal_exited: ActionEventRemoteNotificationData<'terminal_exited'>;
-	workspace_open: ActionEventRequestResponseData<'workspace_open'>;
-	workspace_close: ActionEventRequestResponseData<'workspace_close'>;
-	workspace_list: ActionEventRequestResponseData<'workspace_list'>;
-	workspace_changed: ActionEventRemoteNotificationData<'workspace_changed'>;
+	ping: ActionEventRequestResponseData<'ping', ActionInputs['ping'], ActionOutputs['ping']>;
+	session_load: ActionEventRequestResponseData<
+		'session_load',
+		ActionInputs['session_load'],
+		ActionOutputs['session_load']
+	>;
+	filer_change: ActionEventRemoteNotificationData<'filer_change', ActionInputs['filer_change']>;
+	diskfile_update: ActionEventRequestResponseData<
+		'diskfile_update',
+		ActionInputs['diskfile_update'],
+		ActionOutputs['diskfile_update']
+	>;
+	diskfile_delete: ActionEventRequestResponseData<
+		'diskfile_delete',
+		ActionInputs['diskfile_delete'],
+		ActionOutputs['diskfile_delete']
+	>;
+	directory_create: ActionEventRequestResponseData<
+		'directory_create',
+		ActionInputs['directory_create'],
+		ActionOutputs['directory_create']
+	>;
+	completion_create: ActionEventRequestResponseData<
+		'completion_create',
+		ActionInputs['completion_create'],
+		ActionOutputs['completion_create']
+	>;
+	completion_progress: ActionEventRemoteNotificationData<
+		'completion_progress',
+		ActionInputs['completion_progress']
+	>;
+	ollama_progress: ActionEventRemoteNotificationData<
+		'ollama_progress',
+		ActionInputs['ollama_progress']
+	>;
+	toggle_main_menu: ActionEventLocalCallData<
+		'toggle_main_menu',
+		ActionInputs['toggle_main_menu'],
+		ActionOutputs['toggle_main_menu']
+	>;
+	ollama_list: ActionEventRequestResponseData<
+		'ollama_list',
+		ActionInputs['ollama_list'],
+		ActionOutputs['ollama_list']
+	>;
+	ollama_ps: ActionEventRequestResponseData<
+		'ollama_ps',
+		ActionInputs['ollama_ps'],
+		ActionOutputs['ollama_ps']
+	>;
+	ollama_show: ActionEventRequestResponseData<
+		'ollama_show',
+		ActionInputs['ollama_show'],
+		ActionOutputs['ollama_show']
+	>;
+	ollama_pull: ActionEventRequestResponseData<
+		'ollama_pull',
+		ActionInputs['ollama_pull'],
+		ActionOutputs['ollama_pull']
+	>;
+	ollama_delete: ActionEventRequestResponseData<
+		'ollama_delete',
+		ActionInputs['ollama_delete'],
+		ActionOutputs['ollama_delete']
+	>;
+	ollama_copy: ActionEventRequestResponseData<
+		'ollama_copy',
+		ActionInputs['ollama_copy'],
+		ActionOutputs['ollama_copy']
+	>;
+	ollama_create: ActionEventRequestResponseData<
+		'ollama_create',
+		ActionInputs['ollama_create'],
+		ActionOutputs['ollama_create']
+	>;
+	ollama_unload: ActionEventRequestResponseData<
+		'ollama_unload',
+		ActionInputs['ollama_unload'],
+		ActionOutputs['ollama_unload']
+	>;
+	provider_load_status: ActionEventRequestResponseData<
+		'provider_load_status',
+		ActionInputs['provider_load_status'],
+		ActionOutputs['provider_load_status']
+	>;
+	provider_update_api_key: ActionEventRequestResponseData<
+		'provider_update_api_key',
+		ActionInputs['provider_update_api_key'],
+		ActionOutputs['provider_update_api_key']
+	>;
+	terminal_create: ActionEventRequestResponseData<
+		'terminal_create',
+		ActionInputs['terminal_create'],
+		ActionOutputs['terminal_create']
+	>;
+	terminal_data_send: ActionEventRequestResponseData<
+		'terminal_data_send',
+		ActionInputs['terminal_data_send'],
+		ActionOutputs['terminal_data_send']
+	>;
+	terminal_data: ActionEventRemoteNotificationData<'terminal_data', ActionInputs['terminal_data']>;
+	terminal_resize: ActionEventRequestResponseData<
+		'terminal_resize',
+		ActionInputs['terminal_resize'],
+		ActionOutputs['terminal_resize']
+	>;
+	terminal_close: ActionEventRequestResponseData<
+		'terminal_close',
+		ActionInputs['terminal_close'],
+		ActionOutputs['terminal_close']
+	>;
+	terminal_exited: ActionEventRemoteNotificationData<
+		'terminal_exited',
+		ActionInputs['terminal_exited']
+	>;
+	workspace_open: ActionEventRequestResponseData<
+		'workspace_open',
+		ActionInputs['workspace_open'],
+		ActionOutputs['workspace_open']
+	>;
+	workspace_close: ActionEventRequestResponseData<
+		'workspace_close',
+		ActionInputs['workspace_close'],
+		ActionOutputs['workspace_close']
+	>;
+	workspace_list: ActionEventRequestResponseData<
+		'workspace_list',
+		ActionInputs['workspace_list'],
+		ActionOutputs['workspace_list']
+	>;
+	workspace_changed: ActionEventRemoteNotificationData<
+		'workspace_changed',
+		ActionInputs['workspace_changed']
+	>;
 }
 
 // generated by src/lib/action_collections.gen.ts - DO NOT EDIT OR RISK LOST DATA
