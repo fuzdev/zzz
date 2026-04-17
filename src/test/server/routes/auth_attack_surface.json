@@ -1456,7 +1456,7 @@
 				},
 				"403": {
 					"type": "object",
-					"properties": {"error": {"type": "string"}},
+					"properties": {"error": {"type": "string", "const": "role_not_web_grantable"}},
 					"required": ["error"],
 					"additionalProperties": {}
 				},
