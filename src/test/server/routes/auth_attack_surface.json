@@ -1456,7 +1456,12 @@
 				},
 				"403": {
 					"type": "object",
-					"properties": {"error": {"type": "string", "const": "role_not_web_grantable"}},
+					"properties": {
+						"error": {
+							"type": "string",
+							"enum": ["insufficient_permissions", "role_not_web_grantable"]
+						}
+					},
 					"required": ["error"],
 					"additionalProperties": {}
 				},
