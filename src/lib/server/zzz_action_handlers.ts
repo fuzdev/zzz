@@ -30,6 +30,13 @@ export interface ZzzHandlerContext {
 	backend: Backend;
 	/** From the JSON-RPC envelope. */
 	request_id: string | number | null;
+	/**
+	 * Send a request-scoped JSON-RPC notification to the originator.
+	 * WS routes to the originating socket; HTTP no-ops with a DEV warn.
+	 */
+	notify: (method: string, params: unknown) => void;
+	/** Fires on request cancellation (HTTP disconnect or WS close). */
+	signal: AbortSignal;
 }
 
 /** Methods handled by zzz_action_handlers (request_response only, excludes remote_notifications). */
@@ -157,6 +164,13 @@ export const zzz_action_handlers: ZzzActionHandlers = {
 			completion_messages,
 			prompt,
 			progress_token,
+			// Route streaming chunks to the originator (socket-scoped on WS,
+			// no-op on HTTP). The provider falls back to its constructor-level
+			// broadcast callback when `on_progress` is undefined.
+			on_progress: (progress_input) => {
+				ctx.notify('completion_progress', progress_input);
+				return Promise.resolve();
+			},
 		};
 
 		const provider = backend.lookup_provider(provider_name);
@@ -221,7 +235,8 @@ export const zzz_action_handlers: ZzzActionHandlers = {
 				.pull({...params, stream: true});
 
 			for await (const progress of response) {
-				await ctx.backend.api.ollama_progress({
+				if (ctx.signal.aborted) break;
+				ctx.notify('ollama_progress', {
 					status: progress.status,
 					digest: progress.digest,
 					total: progress.total,
@@ -266,7 +281,8 @@ export const zzz_action_handlers: ZzzActionHandlers = {
 				.create({...params, stream: true});
 
 			for await (const progress of response) {
-				await ctx.backend.api.ollama_progress({
+				if (ctx.signal.aborted) break;
+				ctx.notify('ollama_progress', {
 					status: progress.status,
 					digest: progress.digest,
 					total: progress.total,

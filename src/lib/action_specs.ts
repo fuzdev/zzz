@@ -142,6 +142,7 @@ export const completion_create_action_spec = {
 		_meta: z.looseObject({progressToken: Uuid.optional()}).optional(),
 	}),
 	async: true,
+	streams: 'completion_progress',
 	description: 'Start an AI completion request, optionally with a progress token for streaming.',
 } satisfies ActionSpecUnion;
 
@@ -264,6 +265,7 @@ export const ollama_pull_action_spec = {
 	), // TODO @many is strict right here?
 	output: z.void().optional(),
 	async: true,
+	streams: 'ollama_progress',
 	description: 'Pull an Ollama model from the registry.',
 } satisfies ActionSpecUnion;
 
@@ -304,6 +306,7 @@ export const ollama_create_action_spec = {
 	), // TODO @many is strict right here?
 	output: z.void().optional(),
 	async: true,
+	streams: 'ollama_progress',
 	description: 'Create a new Ollama model from a Modelfile.',
 } satisfies ActionSpecUnion;
 

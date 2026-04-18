@@ -15,7 +15,8 @@ export class BackendProviderClaude extends BackendProviderRemote<Anthropic> {
 	async handle_streaming_completion(
 		options: CompletionHandlerOptions,
 	): Promise<ActionOutputs['completion_create']> {
-		const {model, completion_options, completion_messages, prompt, progress_token} = options;
+		const {model, completion_options, completion_messages, prompt, progress_token, on_progress} =
+			options;
 		this.validate_streaming_requirements(progress_token);
 
 		const stream = await this.get_client().messages.create(
@@ -43,13 +44,17 @@ export class BackendProviderClaude extends BackendProviderRemote<Anthropic> {
 				accumulated_content += event.delta.text;
 
 				// Send streaming progress notification to frontend
-				void this.send_streaming_progress(progress_token, {
-					// TODO @many other chunk data
-					message: {
-						role: 'assistant',
-						content: event.delta.text,
+				void this.send_streaming_progress(
+					progress_token,
+					{
+						// TODO @many other chunk data
+						message: {
+							role: 'assistant',
+							content: event.delta.text,
+						},
 					},
-				});
+					on_progress,
+				);
 			} else if (event.type === 'message_delta') {
 				final_usage = event.usage;
 				final_event = event;

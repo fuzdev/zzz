@@ -15,7 +15,8 @@ export class BackendProviderChatgpt extends BackendProviderRemote<OpenAI> {
 	async handle_streaming_completion(
 		options: CompletionHandlerOptions,
 	): Promise<ActionOutputs['completion_create']> {
-		const {model, completion_options, completion_messages, prompt, progress_token} = options;
+		const {model, completion_options, completion_messages, prompt, progress_token, on_progress} =
+			options;
 		this.validate_streaming_requirements(progress_token);
 
 		// TODO use responses API instead
@@ -49,13 +50,17 @@ export class BackendProviderChatgpt extends BackendProviderRemote<OpenAI> {
 				accumulated_content += delta.content;
 
 				// Send streaming progress notification to frontend
-				void this.send_streaming_progress(progress_token, {
-					// TODO @many other chunk data
-					message: {
-						role: 'assistant',
-						content: delta.content,
+				void this.send_streaming_progress(
+					progress_token,
+					{
+						// TODO @many other chunk data
+						message: {
+							role: 'assistant',
+							content: delta.content,
+						},
 					},
-				});
+					on_progress,
+				);
 			}
 
 			// Capture finish reason

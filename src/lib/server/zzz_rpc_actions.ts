@@ -37,6 +37,8 @@ export const create_zzz_rpc_actions = (deps: ZzzRpcDeps): Array<RpcAction> => {
 				zzz_action_handlers[spec.method as ZzzHandledMethod](input, {
 					backend,
 					request_id: ctx.request_id,
+					notify: ctx.notify,
+					signal: ctx.signal,
 				})) satisfies ActionHandler,
 		}));
 };

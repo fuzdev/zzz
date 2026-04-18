@@ -68,7 +68,8 @@ export class BackendProviderOllama extends BackendProviderLocal<Ollama> {
 	async handle_streaming_completion(
 		options: CompletionHandlerOptions,
 	): Promise<ActionOutputs['completion_create']> {
-		const {model, completion_options, completion_messages, prompt, progress_token} = options;
+		const {model, completion_options, completion_messages, prompt, progress_token, on_progress} =
+			options;
 		this.validate_streaming_requirements(progress_token);
 
 		await this.#ensure_model(model);
@@ -92,6 +93,7 @@ export class BackendProviderOllama extends BackendProviderLocal<Ollama> {
 				progress_token,
 				// TODO see the other patterns, maybe the API should be parsing and this takes the input schema (same issue on frontend)
 				ActionInputs.completion_progress.shape.chunk.parse(chunk),
+				on_progress,
 			);
 
 			// Store the final response data

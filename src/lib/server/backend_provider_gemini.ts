@@ -16,7 +16,8 @@ export class BackendProviderGemini extends BackendProviderRemote<GoogleGenerativ
 	async handle_streaming_completion(
 		options: CompletionHandlerOptions,
 	): Promise<ActionOutputs['completion_create']> {
-		const {model, completion_options, completion_messages, prompt, progress_token} = options;
+		const {model, completion_options, completion_messages, prompt, progress_token, on_progress} =
+			options;
 		this.validate_streaming_requirements(progress_token);
 
 		// TODO cache this by model?
@@ -44,13 +45,17 @@ export class BackendProviderGemini extends BackendProviderRemote<GoogleGenerativ
 				accumulated_content += chunk_text;
 
 				// Send streaming progress notification to frontend
-				void this.send_streaming_progress(progress_token, {
-					// TODO @many other chunk data
-					message: {
-						role: 'assistant',
-						content: chunk_text,
+				void this.send_streaming_progress(
+					progress_token,
+					{
+						// TODO @many other chunk data
+						message: {
+							role: 'assistant',
+							content: chunk_text,
+						},
 					},
-				});
+					on_progress,
+				);
 			} catch (error) {
 				// Text extraction might fail if prompt was blocked or other issues
 				console.error('[create_completion] Failed to extract text from gemini chunk:', error);

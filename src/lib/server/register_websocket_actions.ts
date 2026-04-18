@@ -20,7 +20,9 @@ import {JSONRPC_VERSION} from '@fuzdev/fuz_app/http/jsonrpc.js';
 import {
 	create_jsonrpc_error_response,
 	create_jsonrpc_error_response_from_thrown,
+	create_jsonrpc_notification,
 	to_jsonrpc_message_id,
+	to_jsonrpc_params,
 	is_jsonrpc_request,
 } from '@fuzdev/fuz_app/http/jsonrpc_helpers.js';
 
@@ -72,6 +74,12 @@ export const register_websocket_actions = ({
 			const token_hash =
 				credential_type === 'session' ? hash_session_token(c.get('auth_session_id')!) : null;
 
+			// Per-socket abort controller — fires on socket close, threaded into
+			// every in-flight handler's ctx.signal on this connection. A
+			// dedicated per-request controller linked to this is future work;
+			// a single socket-scoped signal is sufficient today since cancel
+			// granularity tracks connection lifetime, not individual requests.
+			const socket_abort_controller = new AbortController();
 			return {
 				onOpen: (event, ws) => {
 					const connection_id = transport.add_connection(ws, token_hash, account_id);
@@ -203,10 +211,32 @@ export const register_websocket_actions = ({
 						await wait(artificial_delay);
 					}
 
+					// Socket-scoped notification — routes to originator only, not
+					// broadcast. Future work (websockets quest Phase 3/4): other
+					// audiences — account-scoped, ACL-filtered, broadcast —
+					// likely via a transport-level policy hook. For now, a
+					// single-line interface + socket-scoped implementation.
+					const notify = (notify_method: string, params: unknown): void => {
+						try {
+							const notification = create_jsonrpc_notification(
+								notify_method,
+								to_jsonrpc_params(params),
+							);
+							ws.send(JSON.stringify(notification));
+						} catch (error) {
+							backend.log?.error('[ws] notify send failed:', notify_method, error);
+						}
+					};
+
 					try {
 						// Input is Zod-validated above; cast needed because dynamic dispatch
 						// indexes ZzzActionHandlers with a union key.
-						const output = await (handler as any)(validated_input, {backend, request_id: id});
+						const output = await (handler as any)(validated_input, {
+							backend,
+							request_id: id,
+							notify,
+							signal: socket_abort_controller.signal,
+						});
 
 						// DEV-only output validation — catches handler bugs during development
 						if (DEV && spec.output) {
@@ -229,6 +259,7 @@ export const register_websocket_actions = ({
 					}
 				},
 				onClose: (event, ws) => {
+					socket_abort_controller.abort();
 					transport.remove_connection(ws);
 					backend.log?.debug('[ws] ws closed', event);
 				},

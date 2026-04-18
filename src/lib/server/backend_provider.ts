@@ -37,6 +37,13 @@ export interface CompletionHandlerOptions {
 	prompt: string;
 	/** Opts into streaming notifications when provided. */
 	progress_token?: Uuid;
+	/**
+	 * Per-call progress callback. When provided, overrides the provider's
+	 * constructor-level `on_completion_progress` for this request — lets
+	 * the caller route progress to the originating WS socket via ctx.notify
+	 * rather than broadcasting through `backend.api.*`.
+	 */
+	on_progress?: OnCompletionProgress;
 }
 
 export type OnCompletionProgress = (input: ActionInputs['completion_progress']) => Promise<void>;
@@ -99,8 +106,9 @@ export abstract class BackendProvider<TClient = unknown> {
 	protected async send_streaming_progress(
 		progress_token: Uuid,
 		chunk: ActionInputs['completion_progress']['chunk'],
+		on_progress?: OnCompletionProgress,
 	): Promise<void> {
-		await this.on_completion_progress({
+		await (on_progress ?? this.on_completion_progress)({
 			chunk,
 			_meta: {progressToken: progress_token},
 		});
