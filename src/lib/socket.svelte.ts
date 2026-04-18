@@ -46,8 +46,10 @@ export interface FailedMessage extends QueuedMessage {
  * {@link WebsocketConnection} so it can back `FrontendWebsocketTransport`.
  *
  * Reconnect settings (`reconnect_delay`, `reconnect_delay_max`,
- * `auto_reconnect`) are read at connect time — changing them on an open
- * client has no effect until the next `connect()`.
+ * `auto_reconnect`) propagate to the underlying client via
+ * {@link Socket.apply_reconnect_policy} — callers wire an `$effect` to
+ * invoke it when any of the three fields change. In-flight waits are
+ * monotonically shortened (never extended).
  */
 export class Socket implements WebsocketConnection {
 	readonly app: Frontend;
@@ -235,6 +237,19 @@ export class Socket implements WebsocketConnection {
 		// hand if they want to.
 		this.#teardown_client();
 		this.#stop_heartbeat();
+	}
+
+	/**
+	 * Push the current `auto_reconnect` / `reconnect_delay` /
+	 * `reconnect_delay_max` fields to the underlying client. No-op when
+	 * there is no client (next `connect()` picks them up from construction).
+	 */
+	apply_reconnect_policy(): void {
+		this.#client?.set_reconnect(
+			this.auto_reconnect
+				? {delay: this.reconnect_delay, delay_max: this.reconnect_delay_max}
+				: false,
+		);
 	}
 
 	add_message_handler(handler: SocketMessageHandler): () => void {

@@ -49,7 +49,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.3.16",
-			"@fuzdev/fuz_app": "^0.18.0",
+			"@fuzdev/fuz_app": "^0.19.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.58.0",
 			"@fuzdev/fuz_ui": "^0.191.4",
@@ -13810,6 +13810,20 @@
 				"dependents": ["TerminalRunner.svelte", "TurnList.svelte"]
 			},
 			{
+				"path": "server/api_key_env_file_path.ts",
+				"declarations": [
+					{
+						"name": "API_KEY_ENV_FILE_PATH",
+						"kind": "variable",
+						"doc_comment": "Env file path where `provider_update_api_key` writes API keys.\n\nThe write target must match a file that's reloaded on next daemon start,\nso user-entered keys survive restart:\n\n- **Dev** (`gro dev`, `deno task dev`): both Vite and `scripts/dev.ts`\n  reload `.env.development`. `.env` is shadowed by `.env.development` in\n  Vite's mode-precedence and is not loaded at all by `scripts/dev.ts`,\n  so writing to `.env` in dev would be invisible on restart.\n- **Prod** (compiled `zzz daemon start`): `server.ts` loads `.env` via\n  `load_env_file`. `.env.production` is NOT loaded by the compiled daemon\n  (only by `deno task preview`'s `--env=.env.production` flag), so writing\n  there would be invisible on restart.",
+						"source_line": 24,
+						"type_signature": "string"
+					}
+				],
+				"module_comment": "Persistence target for user-entered AI provider API keys.",
+				"dependents": ["server/zzz_action_handlers.ts"]
+			},
+			{
 				"path": "server/backend_actions_api.ts",
 				"declarations": [
 					{
@@ -15235,65 +15249,6 @@
 				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
-				"path": "server/env_file_helpers.ts",
-				"declarations": [
-					{
-						"name": "update_env_variable",
-						"kind": "function",
-						"doc_comment": "Updates or adds an environment variable in the .env file.\nPreserves existing formatting, comments, and other variables.\n\nBehavior:\n- **Duplicate keys**: Updates the LAST occurrence (matches dotenv behavior)\n- **Inline comments**: Preserved after the value (e.g., `KEY=value # comment`)\n- **Quote style**: Preserved from original (quoted/unquoted)",
-						"source_line": 38,
-						"type_signature": "(key: string, value: string, options?: UpdateEnvVariableOptions): Promise<void>",
-						"return_type": "Promise<void>",
-						"parameters": [
-							{
-								"name": "key",
-								"type": "string",
-								"description": "the environment variable name (e.g., 'SOME_CONFIGURATION_KEY')"
-							},
-							{
-								"name": "value",
-								"type": "string",
-								"description": "the new value for the environment variable"
-							},
-							{
-								"name": "options",
-								"type": "UpdateEnvVariableOptions",
-								"description": "optional configuration for file path and operations",
-								"default_value": "{}"
-							}
-						]
-					},
-					{
-						"name": "UpdateEnvVariableOptions",
-						"kind": "type",
-						"doc_comment": "Options for updating environment variables in a .env file.",
-						"source_line": 10,
-						"type_signature": "UpdateEnvVariableOptions",
-						"properties": [
-							{
-								"name": "env_file_path",
-								"kind": "variable",
-								"type_signature": "string",
-								"doc_comment": "Path to the .env file (defaults to `./.env`)"
-							},
-							{
-								"name": "read_file",
-								"kind": "variable",
-								"type_signature": "(path: string, encoding: string) => Promise<string>",
-								"doc_comment": "Function to read file contents (defaults to node:fs/promises readFile)"
-							},
-							{
-								"name": "write_file",
-								"kind": "variable",
-								"type_signature": "(path: string, content: string, encoding: string) => Promise<void>",
-								"doc_comment": "Function to write file contents (defaults to node:fs/promises writeFile)"
-							}
-						]
-					}
-				],
-				"dependents": ["server/zzz_action_handlers.ts"]
-			},
-			{
 				"path": "server/helpers.ts",
 				"declarations": [
 					{
@@ -16214,7 +16169,7 @@
 						"name": "ZzzHandlerContext",
 						"kind": "type",
 						"doc_comment": "Per-request context passed to every handler.\nMirrors Rust's `HandlerContext` — transport constructs it, handler borrows it.",
-						"source_line": 29,
+						"source_line": 30,
 						"type_signature": "ZzzHandlerContext",
 						"properties": [
 							{
@@ -16246,21 +16201,21 @@
 						"name": "ZzzHandledMethod",
 						"kind": "type",
 						"doc_comment": "Methods handled by zzz_action_handlers (request_response only, excludes remote_notifications).",
-						"source_line": 43,
+						"source_line": 44,
 						"type_signature": "ZzzHandledMethod"
 					},
 					{
 						"name": "ZzzActionHandlers",
 						"kind": "type",
 						"doc_comment": "Typed handler map — each handler has per-method input/output types.",
-						"source_line": 55,
+						"source_line": 56,
 						"type_signature": "ZzzActionHandlers"
 					},
 					{
 						"name": "zzz_action_handlers",
 						"kind": "variable",
 						"doc_comment": "All 23 request_response handlers as pure functions.\n\nLogic sourced from the RPC versions (cleaner than the old WS handlers —\nno Deno-only bug in provider_update_api_key, no console.log noise).",
-						"source_line": 68,
+						"source_line": 69,
 						"type_signature": "ZzzActionHandlers"
 					}
 				],
@@ -16268,7 +16223,7 @@
 				"dependencies": [
 					"diskfile_helpers.ts",
 					"diskfile_types.ts",
-					"server/env_file_helpers.ts",
+					"server/api_key_env_file_path.ts",
 					"server/helpers.ts",
 					"zod_helpers.ts",
 					"zzz_jsonrpc_errors.ts"
@@ -16486,8 +16441,8 @@
 					{
 						"name": "Socket",
 						"kind": "class",
-						"doc_comment": "Wraps  with zzz-specific concerns:\na retryable message queue, a heartbeat that pings the backend, URL input\ntracking, and a mapping from fuz_app's `SocketStatus` onto zzz's\n`AsyncStatus`. Plain reactive class — not a Cell. Implements\n so it can back `FrontendWebsocketTransport`.\n\nReconnect settings (`reconnect_delay`, `reconnect_delay_max`,\n`auto_reconnect`) are read at connect time — changing them on an open\nclient has no effect until the next `connect()`.",
-						"source_line": 52,
+						"doc_comment": "Wraps  with zzz-specific concerns:\na retryable message queue, a heartbeat that pings the backend, URL input\ntracking, and a mapping from fuz_app's `SocketStatus` onto zzz's\n`AsyncStatus`. Plain reactive class — not a Cell. Implements\n so it can back `FrontendWebsocketTransport`.\n\nReconnect settings (`reconnect_delay`, `reconnect_delay_max`,\n`auto_reconnect`) propagate to the underlying client via\n — callers wire an `$effect` to\ninvoke it when any of the three fields change. In-flight waits are\nmonotonically shortened (never extended).",
+						"source_line": 54,
 						"extends": [],
 						"implements": ["WebsocketConnection"],
 						"members": [
@@ -16718,6 +16673,14 @@
 							{
 								"name": "cancel_reconnect",
 								"kind": "function",
+								"type_signature": "(): void",
+								"return_type": "void",
+								"parameters": []
+							},
+							{
+								"name": "apply_reconnect_policy",
+								"kind": "function",
+								"doc_comment": "Push the current `auto_reconnect` / `reconnect_delay` /\n`reconnect_delay_max` fields to the underlying client. No-op when\nthere is no client (next `connect()` picks them up from construction).",
 								"type_signature": "(): void",
 								"return_type": "void",
 								"parameters": []
@@ -19447,20 +19410,6 @@
 							{
 								"name": "schema",
 								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>"
-							}
-						]
-					},
-					{
-						"name": "format_zod_validation_error",
-						"kind": "function",
-						"doc_comment": "Formats a Zod validation error with field paths for clearer error messages.",
-						"source_line": 117,
-						"type_signature": "(error: ZodError<unknown>): string",
-						"return_type": "string",
-						"parameters": [
-							{
-								"name": "error",
-								"type": "ZodError<unknown>"
 							}
 						]
 					}

@@ -70,6 +70,17 @@
 
 	// Check if the current URL is the default
 	const is_default_url = $derived(socket.url_input === WEBSOCKET_URL); // TODO maybe move to `socket.url_input_is_default`
+
+	// Push reconnect-policy edits into the underlying client so in-flight
+	// waits honor the new policy (monotonically shortened). Reads all three
+	// fields so Svelte tracks them; the method itself is a no-op when no
+	// client is active.
+	$effect(() => {
+		socket.auto_reconnect;
+		socket.reconnect_delay;
+		socket.reconnect_delay_max;
+		socket.apply_reconnect_policy();
+	});
 </script>
 
 <!-- Main control section with flex layout for wide screens -->
@@ -194,9 +205,7 @@
 							(v) => {
 								// Turning off during a pending reconnect: cancel it.
 								// Turning on while disconnected: try to connect immediately.
-								// Flag change takes effect on the next `connect()` since
-								// the underlying client freezes its reconnect policy at
-								// construction.
+								// Delay/factor changes propagate live via the $effect below.
 								if (!v && socket.is_reconnect_pending) {
 									socket.cancel_reconnect();
 								} else if (v && !socket.connected && socket.status !== 'pending') {
