@@ -29,6 +29,7 @@ import {create_zzz_app} from './create_zzz_app.ts';
 import {load_server_env} from './server_env.ts';
 import {is_open_host} from './security.ts';
 import {register_websocket_actions} from './register_websocket_actions.ts';
+import {ENV_FILE} from './constants.ts';
 import {BackendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws_backend.js';
 import {create_ws_auth_guard} from '@fuzdev/fuz_app/actions/transports_ws_auth_guard.js';
 
@@ -44,10 +45,10 @@ const daemon_runtime = create_deno_runtime([]);
  * endpoints via `create_zzz_app`, then serves with `Deno.serve`.
  */
 export const start_server = async (): Promise<void> => {
-	// Load .env file if present — values don't override existing env vars.
+	// Load env file if present — values don't override existing env vars.
 	// When running under `gro dev`, Vite already loads .env files into the
 	// spawned Deno process. For `zzz daemon start`, this is the only loader.
-	const dotenv = await load_env_file(daemon_runtime, '.env');
+	const dotenv = await load_env_file(daemon_runtime, ENV_FILE);
 	if (dotenv) {
 		for (const [key, value] of Object.entries(dotenv)) {
 			if (Deno.env.get(key) === undefined) {
