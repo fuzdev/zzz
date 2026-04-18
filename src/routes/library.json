@@ -49,7 +49,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.3.16",
-			"@fuzdev/fuz_app": "^0.16.0",
+			"@fuzdev/fuz_app": "^0.17.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.58.0",
 			"@fuzdev/fuz_ui": "^0.191.4",
@@ -13819,7 +13819,7 @@
 						"name": "BackendActionsApi",
 						"kind": "type",
 						"doc_comment": "Broadcast-style notifications from the backend to all connected clients.\nRequest-scoped streaming (completion_progress, ollama_progress) goes through\n`ctx.notify` instead — it's socket-scoped, not a broadcast.",
-						"source_line": 28,
+						"source_line": 23,
 						"type_signature": "BackendActionsApi",
 						"properties": [
 							{
@@ -13847,7 +13847,7 @@
 					{
 						"name": "create_backend_actions_api",
 						"kind": "function",
-						"source_line": 76,
+						"source_line": 37,
 						"type_signature": "(backend: Backend): BackendActionsApi",
 						"return_type": "BackendActionsApi",
 						"parameters": [
@@ -13861,7 +13861,7 @@
 						"name": "handle_filer_change",
 						"kind": "function",
 						"doc_comment": "Handle file system changes and notify clients.",
-						"source_line": 89,
+						"source_line": 48,
 						"type_signature": "(change: WatcherChange, disknode: Disknode, backend: Backend, dir: string, filer: Filer): void",
 						"return_type": "void",
 						"parameters": [
@@ -13888,12 +13888,7 @@
 						]
 					}
 				],
-				"dependencies": [
-					"action_specs.ts",
-					"diskfile_helpers.ts",
-					"diskfile_types.ts",
-					"zod_helpers.ts"
-				],
+				"dependencies": ["action_specs.ts", "diskfile_helpers.ts", "diskfile_types.ts"],
 				"dependents": ["server/backend.ts", "server/create_zzz_app.ts"]
 			},
 			{
@@ -19518,7 +19513,6 @@
 					"parts.svelte.ts",
 					"prompt.svelte.ts",
 					"response_helpers.ts",
-					"server/backend_actions_api.ts",
 					"server/zzz_action_handlers.ts",
 					"socket.svelte.ts",
 					"terminal.svelte.ts",

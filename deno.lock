@@ -2289,6 +2289,22 @@
     }
   },
   "workspace": {
+    "dependencies": [
+      "npm:@anthropic-ai/sdk@~0.71.2",
+      "npm:@electric-sql/pglite@0.3",
+      "npm:@fuzdev/blake3_wasm@~0.1.1",
+      "npm:@fuzdev/fuz_app@0.16",
+      "npm:@fuzdev/fuz_util@0.56",
+      "npm:@fuzdev/gro@~0.197.3",
+      "npm:@google/generative-ai@~0.24.1",
+      "npm:date-fns@4",
+      "npm:esm-env@1",
+      "npm:hono@4",
+      "npm:ollama@0.6",
+      "npm:openai@^6.10.0",
+      "npm:svelte@5",
+      "npm:zod@4"
+    ],
     "packageJson": {
       "dependencies": [
         "npm:@anthropic-ai/sdk@~0.71.2",
