@@ -14,7 +14,7 @@ import {update_env_variable} from '@fuzdev/fuz_app/env/update_env_variable.js';
 import type {Backend} from './backend.js';
 import type {CompletionOptions, CompletionHandlerOptions} from './backend_provider.js';
 import {save_completion_response_to_disk} from './helpers.js';
-import {API_KEY_ENV_FILE_PATH} from './api_key_env_file_path.js';
+import {ENV_FILE} from './constants.js';
 import {create_uuid} from '../zod_helpers.js';
 import {to_serializable_disknode} from '../diskfile_helpers.js';
 import {SerializableDisknode} from '../diskfile_types.js';
@@ -339,9 +339,7 @@ export const zzz_action_handlers: ZzzActionHandlers = {
 		}
 
 		try {
-			await update_env_variable(env_var_name, api_key, {
-				env_file_path: API_KEY_ENV_FILE_PATH,
-			});
+			await update_env_variable(env_var_name, api_key, {env_file_path: ENV_FILE});
 			// Update runtime env (handles both Deno and Node)
 			if (typeof globalThis.Deno !== 'undefined') {
 				globalThis.Deno.env.set(env_var_name, api_key);

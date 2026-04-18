@@ -1,5 +1,9 @@
 /**
- * Persistence target for user-entered AI provider API keys.
+ * Server-side constants (Deno-compile-safe).
+ *
+ * Mirror of `src/lib/constants.ts` for modules in the Deno compile chain.
+ * Must not import `$env/static/public` or any SvelteKit build-time module —
+ * those don't exist in Deno and crash `gro build` / `deno compile`.
  *
  * @module
  */
@@ -7,10 +11,11 @@
 import {DEV} from 'esm-env';
 
 /**
- * Env file path where `provider_update_api_key` writes API keys.
+ * Canonical env file path for daemon-initiated reads and writes.
  *
  * The write target must match a file that's reloaded on next daemon start,
- * so user-entered keys survive restart:
+ * so user-entered values (e.g. API keys via `provider_update_api_key`)
+ * survive restart:
  *
  * - **Dev** (`gro dev`, `deno task dev`): both Vite and `scripts/dev.ts`
  *   reload `.env.development`. `.env` is shadowed by `.env.development` in
@@ -21,4 +26,4 @@ import {DEV} from 'esm-env';
  *   (only by `deno task preview`'s `--env=.env.production` flag), so writing
  *   there would be invisible on restart.
  */
-export const API_KEY_ENV_FILE_PATH: string = DEV ? '.env.development' : '.env';
+export const ENV_FILE: string = DEV ? '.env.development' : '.env';
