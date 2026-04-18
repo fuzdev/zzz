@@ -10,6 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use fuz_common::JsonRpcError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio_util::sync::CancellationToken;
 
 use crate::rpc;
 
@@ -138,8 +139,8 @@ pub struct CompletionHandlerOptions {
 
 /// Callback for sending streaming progress notifications.
 ///
-/// Captures `app_arc`, `connection_id`, and `progress_token` to send
-/// `completion_progress` notifications to the requesting WebSocket connection.
+/// Built by the handler from `ctx.notify` + `progress_token` — providers
+/// invoke it with each chunk and never see the underlying transport.
 pub type ProgressSender = Box<dyn Fn(Value) + Send + Sync>;
 
 // -- Provider enum ------------------------------------------------------------
@@ -193,9 +194,10 @@ impl Provider {
         &self,
         options: &CompletionHandlerOptions,
         progress_sender: Option<&ProgressSender>,
+        signal: &CancellationToken,
     ) -> Result<Value, JsonRpcError> {
         match self {
-            Self::Anthropic(p) => p.complete(options, progress_sender).await,
+            Self::Anthropic(p) => p.complete(options, progress_sender, signal).await,
             Self::OpenAi(_) | Self::Gemini(_) | Self::Ollama(_) => {
                 Err(rpc::internal_error(&format!(
                     "{}: not yet implemented in Rust backend",

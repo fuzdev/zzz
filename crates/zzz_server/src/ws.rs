@@ -7,10 +7,12 @@ use axum::response::{IntoResponse, Response};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 
+use tokio_util::sync::CancellationToken;
+
 use crate::auth::{
     check_action_auth, method_auth, resolve_auth_from_headers, ResolvedAuth,
 };
-use crate::handlers::{self, App, Ctx};
+use crate::handlers::{self, App, Ctx, NotifyFn};
 use crate::rpc::{self, Classified};
 
 /// Axum handler for `GET /ws` — upgrades to WebSocket with auth.
@@ -53,6 +55,22 @@ async fn handle_connection(socket: WebSocket, app: Arc<App>, resolved: ResolvedA
     let conn_id = app.add_connection(notify_tx, resolved.token_hash, account_id);
     let auth_context = resolved.context;
     let credential_type = resolved.credential_type;
+
+    // Per-socket cancellation token — drives `ctx.signal` for every request
+    // on this socket. Cancelled when the message loop exits (socket close)
+    // so streaming handlers (e.g. completion_create SSE loop) can bail out.
+    // Mirrors TS `socket_abort_controller` in register_websocket_actions.ts.
+    let socket_signal = CancellationToken::new();
+
+    // Build the per-socket `notify` closure once — captures `app_arc` + `conn_id`
+    // so each request shares the same delivery path.
+    let notify: NotifyFn = {
+        let app_arc = Arc::clone(&app);
+        Arc::new(move |method: &str, params: Value| {
+            let notification = rpc::notification(method, params);
+            app_arc.send_to(conn_id, &notification);
+        })
+    };
 
     loop {
         tokio::select! {
@@ -100,7 +118,8 @@ async fn handle_connection(socket: WebSocket, app: Arc<App>, resolved: ResolvedA
                                 app_arc: Arc::clone(&app),
                                 request_id: &id,
                                 auth: Some(&auth_context),
-                                connection_id: Some(conn_id),
+                                notify: Arc::clone(&notify),
+                                signal: socket_signal.clone(),
                             };
                             match handlers::dispatch(method, params, &ctx).await {
                                 Ok(result) => serde_json::to_string(&rpc::success_response(id, result)),
@@ -124,7 +143,8 @@ async fn handle_connection(socket: WebSocket, app: Arc<App>, resolved: ResolvedA
         }
     }
 
-    // Disconnect: clean up connection tracking
+    // Disconnect: cancel any in-flight streaming, drop the connection.
+    socket_signal.cancel();
     app.remove_connection(conn_id);
     tracing::debug!(conn_id, "ws: connection closed");
 }

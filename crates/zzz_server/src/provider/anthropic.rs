@@ -2,6 +2,7 @@ use fuz_common::JsonRpcError;
 use futures_util::StreamExt;
 use serde_json::{json, Value};
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 
 use super::{
     ai_provider_error, CompletionHandlerOptions, CompletionMessage, ProgressSender,
@@ -72,6 +73,7 @@ impl AnthropicProvider {
         &self,
         options: &CompletionHandlerOptions,
         progress_sender: Option<&ProgressSender>,
+        signal: &CancellationToken,
     ) -> Result<Value, JsonRpcError> {
         // Clone the client (cheap — internally Arc'd) and release the lock
         // before the HTTP call. This avoids blocking set_api_key for the
@@ -104,7 +106,7 @@ impl AnthropicProvider {
         }
 
         if let (true, Some(sender)) = (streaming, progress_sender) {
-            handle_streaming_response(response, options, sender).await
+            handle_streaming_response(response, options, sender, signal).await
         } else {
             handle_non_streaming_response(response, options).await
         }
@@ -127,6 +129,7 @@ async fn handle_streaming_response(
     response: reqwest::Response,
     options: &CompletionHandlerOptions,
     progress_sender: &ProgressSender,
+    signal: &CancellationToken,
 ) -> Result<Value, JsonRpcError> {
     let mut stream = response.bytes_stream();
     let mut buffer = String::new();
@@ -136,6 +139,11 @@ async fn handle_streaming_response(
     let mut stop_reason = String::from("end_turn");
 
     while let Some(chunk) = stream.next().await {
+        // Mirrors TS `if (ctx.signal.aborted) break` in ollama_pull/create —
+        // bail out of the stream when the request is cancelled (socket close).
+        if signal.is_cancelled() {
+            break;
+        }
         let chunk = chunk.map_err(|e| {
             ai_provider_error("claude", &format!("stream read error: {e}"))
         })?;

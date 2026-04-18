@@ -11,9 +11,10 @@ use fuz_common::{
 };
 use serde::Serialize;
 use serde_json::{Map, Value};
+use tokio_util::sync::CancellationToken;
 
 use crate::auth::{check_action_auth, check_origin, method_auth, resolve_auth_from_headers};
-use crate::handlers::{self, App, Ctx};
+use crate::handlers::{self, App, Ctx, NotifyFn};
 
 // -- JSON-RPC types -----------------------------------------------------------
 
@@ -119,6 +120,22 @@ pub const fn error_response(id: Value, error: JsonRpcError) -> JsonRpcErrorRespo
         id,
         error,
     }
+}
+
+// -- HTTP notify (no-op) ------------------------------------------------------
+
+/// `ctx.notify` for HTTP requests — no-op with a debug-only warn when called.
+///
+/// HTTP has no return channel for server-pushed notifications, so streaming
+/// handlers (e.g. `completion_create` with a `progressToken`) silently lose
+/// chunks here. Mirrors the TS HTTP path's no-op `notify`.
+fn http_no_op_notify() -> NotifyFn {
+    Arc::new(|method: &str, _params: Value| {
+        tracing::debug!(
+            method,
+            "ctx.notify called over HTTP — notification dropped (no return channel)"
+        );
+    })
 }
 
 // -- HTTP status mapping ------------------------------------------------------
@@ -324,7 +341,8 @@ pub async fn rpc_get_handler(
         app_arc: Arc::clone(&app),
         request_id: &id,
         auth: auth_context,
-        connection_id: None,
+        notify: http_no_op_notify(),
+        signal: CancellationToken::new(),
     };
     match handlers::dispatch(method, &params, &ctx).await {
         Ok(result) => Json(success_response(id, result)).into_response(),
@@ -396,7 +414,8 @@ pub async fn rpc_handler(
                 app_arc: Arc::clone(&app),
                 request_id: &id,
                 auth: auth_context,
-                connection_id: None,
+                notify: http_no_op_notify(),
+                signal: CancellationToken::new(),
             };
             match handlers::dispatch(method, params, &ctx).await {
                 Ok(result) => Json(success_response(id, result)).into_response(),

@@ -8,6 +8,7 @@ use fuz_common::JsonRpcError;
 use serde::Serialize;
 use serde_json::Value;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 use crate::auth::{Keyring, RequestContext};
 use crate::daemon_token::SharedDaemonTokenState;
@@ -196,6 +197,16 @@ impl App {
 
 // -- Per-request context (constructed by transport) ---------------------------
 
+/// Send a request-scoped JSON-RPC notification to the originator.
+///
+/// On WebSocket: routes to the originating socket via `app.send_to`.
+/// On HTTP: no-ops with a DEV-only warn (HTTP has no return channel for
+/// server-pushed notifications).
+///
+/// Mirrors the TS `ZzzHandlerContext.notify` shape (see
+/// `src/lib/server/zzz_action_handlers.ts`).
+pub type NotifyFn = Arc<dyn Fn(&str, Value) + Send + Sync>;
+
 /// Per-request context passed to handler functions.
 ///
 /// Borrows `App` and the request id from the parsed envelope.
@@ -207,9 +218,13 @@ pub struct Ctx<'a> {
     pub app_arc: Arc<App>,
     pub request_id: &'a Value,
     pub auth: Option<&'a RequestContext>,
-    /// WebSocket connection ID — `None` for HTTP requests.
-    /// Used for targeted `completion_progress` streaming notifications.
-    pub connection_id: Option<ConnectionId>,
+    /// Push a JSON-RPC notification to the originator. Socket-scoped on WS,
+    /// no-op on HTTP. Mirrors TS `ctx.notify(method, params)`.
+    pub notify: NotifyFn,
+    /// Fires on request-level cancellation (WS socket close or HTTP request
+    /// drop). Mirrors TS `ctx.signal: AbortSignal`. Distinct from
+    /// resource-lifetime tokens (e.g. PTY's per-terminal token).
+    pub signal: CancellationToken,
 }
 
 // -- Domain types -------------------------------------------------------------
@@ -638,29 +653,27 @@ async fn handle_completion_create(
         progress_token: progress_token.clone(),
     };
 
-    // Build progress sender for streaming (only works over WebSocket)
-    let progress_sender: Option<provider::ProgressSender> =
-        match (ctx.connection_id, &progress_token) {
-            (Some(conn_id), Some(token)) => {
-                let app = Arc::clone(&ctx.app_arc);
-                let token = token.clone();
-                Some(Box::new(move |chunk: Value| {
-                    let notification = rpc::notification(
-                        "completion_progress",
-                        serde_json::json!({
-                            "chunk": chunk,
-                            "_meta": { "progressToken": token },
-                        }),
-                    );
-                    app.send_to(conn_id, &notification);
-                }))
-            }
-            _ => None,
-        };
+    // Build progress sender for streaming — routes through `ctx.notify` so
+    // WS and HTTP share the same delivery path (HTTP no-ops). Mirrors the TS
+    // `ollama_pull`/`ollama_create` pattern that calls `ctx.notify` in a loop.
+    let progress_sender: Option<provider::ProgressSender> = progress_token.as_ref().map(|token| {
+        let notify = Arc::clone(&ctx.notify);
+        let token = token.clone();
+        let sender: provider::ProgressSender = Box::new(move |chunk: Value| {
+            notify(
+                "completion_progress",
+                serde_json::json!({
+                    "chunk": chunk,
+                    "_meta": { "progressToken": token },
+                }),
+            );
+        });
+        sender
+    });
 
     let provider = ctx.app.provider_manager.require(provider_name)?;
     let mut result = provider
-        .complete(&handler_options, progress_sender.as_ref())
+        .complete(&handler_options, progress_sender.as_ref(), &ctx.signal)
         .await?;
 
     // Add _meta.progressToken to response if streaming was requested

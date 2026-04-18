@@ -318,8 +318,12 @@ debouncing, in-memory file index, and lifetime tracking (permanent for
 `zzz_dir`/`scoped_dirs`, workspace-scoped for `workspace_open`; deduplicates
 by path)), constructed once in `main`, wrapped in `Arc`. `Ctx` is
 per-request context (borrows `App` + holds `Arc<App>` for spawning tasks,
-`request_id`, `auth: Option<&RequestContext>`), constructed by each transport
-before calling `handlers::dispatch`.
+`request_id`, `auth: Option<&RequestContext>`, `notify: NotifyFn` for
+request-scoped JSON-RPC notifications — socket-scoped on WS via `app.send_to`,
+debug no-op on HTTP, mirrors TS `ctx.notify`; `signal: CancellationToken`
+for cancellation — per-socket on WS cancelled on disconnect, fresh per-request
+on HTTP, mirrors TS `ctx.signal`), constructed by each transport before
+calling `handlers::dispatch`.
 
 **Auth pipeline** (HTTP RPC path):
 1. Origin verification (if `Origin` header present)
