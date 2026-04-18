@@ -81,7 +81,7 @@ export interface WsConnection {
 /** Open a WebSocket connection, resolves once connected. */
 export const open_ws = (
 	config: BackendConfig,
-	options?: {cookie?: string; bearer?: string},
+	options?: {cookie?: string; bearer?: string; ignore_methods?: ReadonlyArray<string>},
 ): Promise<WsConnection> =>
 	new Promise((resolve, reject) => {
 		const ws_headers: Record<string, string> = {};
@@ -95,11 +95,31 @@ export const open_ws = (
 			timer: ReturnType<typeof setTimeout>;
 			silent: boolean;
 		}> = [];
+		// Buffer of messages received with no pending waiter. Cross-connection
+		// ordering (WS vs HTTP) means a server broadcast can arrive at the WS
+		// socket before the test code awaits `receive()` — without a buffer,
+		// those messages would be silently dropped and tests would time out.
+		const buffer: Array<unknown> = [];
+		// Methods to silently drop before they hit the buffer or any waiter.
+		// Broadcasts are shared across all WS connections on the server, so
+		// unrelated notifications (e.g. `filer_change` debounced events from
+		// prior tests' filesystem writes) can leak onto a freshly opened
+		// connection and skew assertions that expect a specific notification.
+		// `filer_change` is the primary offender because its 80ms debounce
+		// routinely outlives the test that triggered it — default-ignore it.
+		// Tests that specifically assert on filer_change override by passing
+		// an explicit `ignore_methods` list.
+		const ignore = new Set(options?.ignore_methods ?? ['filer_change']);
 
 		ws.onmessage = (event) => {
 			const data = JSON.parse(String(event.data));
+			const method = (data as {method?: unknown}).method;
+			if (typeof method === 'string' && ignore.has(method)) return;
 			const waiter = pending.shift();
-			if (!waiter) return;
+			if (!waiter) {
+				buffer.push(data);
+				return;
+			}
 			clearTimeout(waiter.timer);
 			if (waiter.silent) {
 				waiter.reject(new Error(`expected no response, got: ${JSON.stringify(data)}`));
@@ -124,6 +144,10 @@ export const open_ws = (
 				send: (message) => ws.send(message),
 				receive: (timeout_ms = 5_000) =>
 					new Promise((res, rej) => {
+						if (buffer.length > 0) {
+							res(buffer.shift());
+							return;
+						}
 						const timer = setTimeout(() => {
 							pending.shift();
 							rej(new Error('WebSocket response timeout'));
@@ -132,6 +156,10 @@ export const open_ws = (
 					}),
 				expect_silence: (timeout_ms = 1_000) =>
 					new Promise((res, rej) => {
+						if (buffer.length > 0) {
+							rej(new Error(`expected no response, got: ${JSON.stringify(buffer.shift())}`));
+							return;
+						}
 						const timer = setTimeout(() => {
 							pending.shift();
 							res();

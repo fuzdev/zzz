@@ -212,6 +212,10 @@ pub struct Filer {
     /// In-memory file index — path → disknode. Updated by watcher events
     /// and initial scan. Read by `session_load`.
     pub files: Arc<RwLock<HashMap<String, SerializableDisknode>>>,
+    /// Watched directory path — retained so `rescan` can re-walk the tree.
+    source_dir: String,
+    /// Ignored directory names — retained for `rescan`.
+    extra_ignores: Vec<String>,
 }
 
 impl Drop for Filer {
@@ -256,10 +260,11 @@ pub async fn start_filer(
     }
 
     let files_clone = Arc::clone(&files);
+    let extra_ignores = config.extra_ignores;
     let task = tokio::spawn(filer_event_loop(
         rx,
         source_dir.clone(),
-        config.extra_ignores,
+        extra_ignores.clone(),
         files_clone,
         app,
     ));
@@ -268,6 +273,8 @@ pub async fn start_filer(
         _watcher: watcher,
         task,
         files,
+        source_dir,
+        extra_ignores,
     })
 }
 
@@ -531,6 +538,41 @@ impl FilerManager {
             true
         } else {
             false
+        }
+    }
+
+    /// Rescan every active filer's watched directory and replace its index.
+    ///
+    /// Called by `session_load` before `collect_all_files` to guarantee a
+    /// consistent snapshot — notify events are eventually consistent, so a
+    /// just-written file may not yet be in the index when the event loop is
+    /// still draining. A direct filesystem walk sidesteps that race.
+    pub async fn rescan_all(&self) {
+        // Snapshot what we need under the outer lock, then rescan without
+        // holding it — the outer lock blocks start_filer/stop_filer.
+        type FilerRescanEntry = (
+            String,
+            Vec<String>,
+            Arc<RwLock<HashMap<String, SerializableDisknode>>>,
+        );
+        let entries: Vec<FilerRescanEntry> = {
+            let filers = self.filers.read().await;
+            filers
+                .values()
+                .map(|e| {
+                    (
+                        e.filer.source_dir.clone(),
+                        e.filer.extra_ignores.clone(),
+                        Arc::clone(&e.filer.files),
+                    )
+                })
+                .collect()
+        };
+        for (source_dir, extra_ignores, files) in entries {
+            let mut fresh = HashMap::new();
+            scan_directory(&source_dir, &source_dir, &extra_ignores, &mut fresh).await;
+            let mut index = files.write().await;
+            *index = fresh;
         }
     }
 

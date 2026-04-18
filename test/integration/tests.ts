@@ -1233,8 +1233,10 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 				);
 				assert_equal(open_res.status, 200, 'open status');
 
-				// Open WS and wait for connection to register
-				const conn = await open_ws(config, {cookie: session_cookie});
+				// Open WS and wait for connection to register. This test
+				// asserts on filer_change itself, so override the default
+				// ignore list with an empty one.
+				const conn = await open_ws(config, {cookie: session_cookie, ignore_methods: []});
 				try {
 					await ensure_ws_registered(conn);
 

@@ -347,8 +347,13 @@ async fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
         ws.values().cloned().collect()
     };
 
-    // Read files from all filer indexes (matches Deno's session_load which
-    // iterates backend.filers.entries() — no filesystem walk at call time)
+    // Rescan each watched directory before reading the index — notify events
+    // are eventually consistent, so a file written immediately before
+    // session_load may not yet be in the in-memory index. A fresh walk
+    // guarantees a consistent snapshot and removes a flaky race in integration
+    // tests (`session_load_returns_nested_files`) where the filer event loop
+    // hadn't yet drained the inotify event.
+    ctx.app.filer_manager.rescan_all().await;
     let files = ctx.app.filer_manager.collect_all_files().await;
 
     // Collect provider status from all registered providers
