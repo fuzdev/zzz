@@ -4,7 +4,7 @@
 
 `@fuzdev/zzz` — local-first AI forge: chat + files + prompts + terminals in one app.
 SvelteKit frontend, Hono/Deno backend, Svelte 5 runes, Zod schemas.
-v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PGlite DB. 32 cell classes, 29 action specs, 4 AI providers.
+v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PGlite DB. 31 cell classes, 29 action specs, 4 AI providers.
 
 For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
@@ -148,7 +148,9 @@ See [docs/architecture.md](docs/architecture.md) for detailed data flow, content
 
 ## Cell Classes
 
-32 registered classes in `src/lib/cell_classes.ts`:
+31 registered classes in `src/lib/cell_classes.ts` (`Socket` is no longer
+a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
+`FrontendWebsocketClient` and is not listed below):
 
 | Class            | Source file                    | Purpose                              |
 | ---------------- | ------------------------------ | ------------------------------------ |
@@ -172,7 +174,6 @@ See [docs/architecture.md](docs/architecture.md) for detailed data flow, content
 | `Prompts`        | `prompts.svelte.ts`           | Collection of prompts                |
 | `Provider`       | `provider.svelte.ts`          | AI provider config                   |
 | `Providers`      | `providers.svelte.ts`         | Collection of providers              |
-| `Socket`         | `socket.svelte.ts`            | WebSocket connection state           |
 | `Turn`           | `turn.svelte.ts`              | Single conversation message          |
 | `Thread`         | `thread.svelte.ts`            | Linear conversation with one model   |
 | `Threads`        | `threads.svelte.ts`           | Collection of threads                |
@@ -513,7 +514,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 
 ## Known Limitations
 
-- **WebSocket auth** — Auth is enforced at upgrade time via `require_auth` middleware (cookie sessions, bearer tokens — bearer silently discarded in browser context via Origin/Referer defense). Per-action auth checks enforce spec-level auth (e.g. `keeper` requires `daemon_token` + keeper role). Batch JSON-RPC and role-based auth are rejected (not yet supported). Sockets are closed on session/token revocation, logout, and password change via audit events — `token_revoke` closes only the revoked token's sockets (granular), `session_revoke_all` / `token_revoke_all` / `password_change` close all sockets on the account. No per-message session revalidation — event-driven revocation is sufficient. ActionPeer itself has no auth awareness.
+- **WebSocket auth** — Auth is enforced at upgrade time via `require_auth` middleware (cookie sessions, bearer tokens — bearer silently discarded in browser context via Origin/Referer defense). Per-action auth checks enforce spec-level auth: `keeper` requires `daemon_token` + keeper role; `{role}` requires the named role via `has_role` (matches the HTTP path). Batch JSON-RPC is rejected (not yet supported). Sockets are closed on session/token revocation, logout, and password change via audit events — `token_revoke` closes only the revoked token's sockets (granular), `session_revoke_all` / `token_revoke_all` / `password_change` close all sockets on the account. No per-message session revalidation — event-driven revocation is sufficient. ActionPeer itself has no auth awareness.
 - **Bearer auth soft-fails** — fuz_app's bearer middleware soft-fails for invalid/expired/empty tokens (calls `next()`, no error response). Auth enforcement happens downstream via `check_action_auth` (JSON-RPC) or `require_auth` (routes). Both Deno and Rust backends produce identical `{code: -32001, message: "unauthenticated"}` JSON-RPC errors. Public actions are not blocked by bad bearer credentials.
 - **Domain state is in-memory** — auth/accounts are in PGlite DB, but zzz domain state (files, terminals, workspaces) is in-memory, lost on restart. Workspaces persist to JSON file as a stopgap.
 - **No undo/history** — file edits are permanent

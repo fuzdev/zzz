@@ -49,7 +49,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.3.16",
-			"@fuzdev/fuz_app": "^0.17.1",
+			"@fuzdev/fuz_app": "^0.18.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.58.0",
 			"@fuzdev/fuz_ui": "^0.191.4",
@@ -1856,32 +1856,32 @@
 					{
 						"name": "cell_classes",
 						"kind": "variable",
-						"source_line": 34,
-						"type_signature": "{ Parts: typeof Parts; Capabilities: typeof Capabilities; Chat: typeof Chat; Chats: typeof Chats; Diskfile: typeof Diskfile; DiskfileTab: typeof DiskfileTab; DiskfileTabs: typeof DiskfileTabs; ... 24 more ...; Workspaces: typeof Workspaces; }"
+						"source_line": 33,
+						"type_signature": "{ Parts: typeof Parts; Capabilities: typeof Capabilities; Chat: typeof Chat; Chats: typeof Chats; Diskfile: typeof Diskfile; DiskfileTab: typeof DiskfileTab; DiskfileTabs: typeof DiskfileTabs; ... 23 more ...; Workspaces: typeof Workspaces; }"
 					},
 					{
 						"name": "CellClasses",
 						"kind": "type",
-						"source_line": 69,
-						"type_signature": "{ Parts: typeof Parts; Capabilities: typeof Capabilities; Chat: typeof Chat; Chats: typeof Chats; Diskfile: typeof Diskfile; DiskfileTab: typeof DiskfileTab; DiskfileTabs: typeof DiskfileTabs; ... 24 more ...; Workspaces: typeof Workspaces; }"
+						"source_line": 67,
+						"type_signature": "{ Parts: typeof Parts; Capabilities: typeof Capabilities; Chat: typeof Chat; Chats: typeof Chats; Diskfile: typeof Diskfile; DiskfileTab: typeof DiskfileTab; DiskfileTabs: typeof DiskfileTabs; ... 23 more ...; Workspaces: typeof Workspaces; }"
 					},
 					{
 						"name": "CellClassNames",
 						"kind": "type",
-						"source_line": 71,
-						"type_signature": "\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 18 more ... | \"Workspaces\""
+						"source_line": 69,
+						"type_signature": "\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 17 more ... | \"Workspaces\""
 					},
 					{
 						"name": "CellRegistryMap",
 						"kind": "type",
-						"source_line": 73,
+						"source_line": 71,
 						"type_signature": "CellRegistryMap"
 					},
 					{
 						"name": "is_cell_type",
 						"kind": "function",
 						"doc_comment": "Type guard to check if a cell is an instance of a specific cell class.",
-						"source_line": 80,
+						"source_line": 78,
 						"type_signature": "<K extends CellClassNames>(cell: Cell<any> | null | undefined, class_name: K): cell is CellRegistryMap[K]",
 						"return_type": "boolean",
 						"parameters": [
@@ -1899,9 +1899,9 @@
 						"name": "get_cell_class_names",
 						"kind": "function",
 						"doc_comment": "Get a list of all registered cell class names.",
-						"source_line": 88,
-						"type_signature": "(): (\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 18 more ... | \"Workspaces\")[]",
-						"return_type": "(\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 18 more ... | \"Workspaces\")[]",
+						"source_line": 86,
+						"type_signature": "(): (\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 17 more ... | \"Workspaces\")[]",
+						"return_type": "(\"Action\" | \"Actions\" | \"Capabilities\" | \"Parts\" | \"Chat\" | \"Chats\" | \"Diskfile\" | \"DiskfileTab\" | \"DiskfileTabs\" | \"DiskfilePart\" | \"DiskfileHistory\" | \"Diskfiles\" | \"DiskfilesEditor\" | ... 17 more ... | \"Workspaces\")[]",
 						"parameters": []
 					}
 				],
@@ -1925,7 +1925,6 @@
 					"prompts.svelte.ts",
 					"provider.svelte.ts",
 					"providers.svelte.ts",
-					"socket.svelte.ts",
 					"space.svelte.ts",
 					"spaces.svelte.ts",
 					"terminal.svelte.ts",
@@ -2315,7 +2314,6 @@
 					"prompts.svelte.ts",
 					"provider.svelte.ts",
 					"providers.svelte.ts",
-					"socket.svelte.ts",
 					"space.svelte.ts",
 					"spaces.svelte.ts",
 					"terminal.svelte.ts",
@@ -2701,7 +2699,6 @@
 					"prompts.svelte.ts",
 					"provider.svelte.ts",
 					"providers.svelte.ts",
-					"socket.svelte.ts",
 					"space.svelte.ts",
 					"spaces.svelte.ts",
 					"terminal.svelte.ts",
@@ -16422,18 +16419,6 @@
 						"kind": "variable",
 						"source_line": 5,
 						"type_signature": "true"
-					},
-					{
-						"name": "DEFAULT_RETRY_COUNT",
-						"kind": "variable",
-						"source_line": 8,
-						"type_signature": "3"
-					},
-					{
-						"name": "DEFAULT_CLOSE_CODE",
-						"kind": "variable",
-						"source_line": 11,
-						"type_signature": "1000"
 					}
 				],
 				"dependents": ["CapabilityWebsocket.svelte", "socket.svelte.ts"]
@@ -16442,42 +16427,23 @@
 				"path": "socket.svelte.ts",
 				"declarations": [
 					{
-						"name": "SocketJson",
-						"kind": "type",
-						"source_line": 23,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 6 more ...; auto_reconnect: ZodDefault<...>; }, $strict>"
-					},
-					{
-						"name": "SocketJsonInput",
-						"kind": "type",
-						"source_line": 32,
-						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; url?: string | null | undefined; url_input?: string | undefined; heartbeat_interval?: number | undefined; reconnect_delay?: number | undefined; reconnect_delay_max?: number | undefined; auto_reconnect?: boolean | undefined; }"
-					},
-					{
 						"name": "SocketOptions",
 						"kind": "type",
-						"source_line": 34,
+						"source_line": 20,
 						"type_signature": "SocketOptions",
-						"extends": ["CellOptions<typeof SocketJson>"],
-						"properties": []
-					},
-					{
-						"name": "SocketActionHandler",
-						"kind": "type",
-						"source_line": 36,
-						"type_signature": "SocketActionHandler"
-					},
-					{
-						"name": "SocketErrorHandler",
-						"kind": "type",
-						"source_line": 37,
-						"type_signature": "SocketErrorHandler"
+						"properties": [
+							{
+								"name": "app",
+								"kind": "variable",
+								"type_signature": "Frontend"
+							}
+						]
 					},
 					{
 						"name": "QueuedMessage",
 						"kind": "type",
 						"doc_comment": "Queued message that couldn't be sent immediately.",
-						"source_line": 44,
+						"source_line": 27,
 						"type_signature": "QueuedMessage",
 						"properties": [
 							{
@@ -16501,7 +16467,7 @@
 						"name": "FailedMessage",
 						"kind": "type",
 						"doc_comment": "Failed message that exceeded retry count.",
-						"source_line": 53,
+						"source_line": 36,
 						"type_signature": "FailedMessage",
 						"extends": ["QueuedMessage"],
 						"properties": [
@@ -16520,25 +16486,41 @@
 					{
 						"name": "Socket",
 						"kind": "class",
-						"doc_comment": "Socket class for WebSocket connection management with auto-reconnect and message queueing.",
-						"source_line": 61,
-						"extends": ["Cell<typeof SocketJson>"],
-						"implements": [],
+						"doc_comment": "Wraps  with zzz-specific concerns:\na retryable message queue, a heartbeat that pings the backend, URL input\ntracking, and a mapping from fuz_app's `SocketStatus` onto zzz's\n`AsyncStatus`. Plain reactive class — not a Cell. Implements\n so it can back `FrontendWebsocketTransport`.\n\nReconnect settings (`reconnect_delay`, `reconnect_delay_max`,\n`auto_reconnect`) are read at connect time — changing them on an open\nclient has no effect until the next `connect()`.",
+						"source_line": 52,
+						"extends": [],
+						"implements": ["WebsocketConnection"],
 						"members": [
 							{
-								"name": "ws",
+								"name": "app",
 								"kind": "variable",
-								"type_signature": "WebSocket | null"
+								"modifiers": ["readonly"],
+								"type_signature": "Frontend"
 							},
 							{
-								"name": "open",
+								"name": "url_input",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "heartbeat_interval",
+								"kind": "variable",
+								"type_signature": "number"
+							},
+							{
+								"name": "reconnect_delay",
+								"kind": "variable",
+								"type_signature": "number"
+							},
+							{
+								"name": "reconnect_delay_max",
+								"kind": "variable",
+								"type_signature": "number"
+							},
+							{
+								"name": "auto_reconnect",
 								"kind": "variable",
 								"type_signature": "boolean"
-							},
-							{
-								"name": "status",
-								"kind": "variable",
-								"type_signature": "AsyncStatus"
 							},
 							{
 								"name": "last_send_time",
@@ -16551,36 +16533,6 @@
 								"type_signature": "number | null"
 							},
 							{
-								"name": "last_connect_time",
-								"kind": "variable",
-								"type_signature": "number | null"
-							},
-							{
-								"name": "heartbeat_timeout",
-								"kind": "variable",
-								"type_signature": "NodeJS.Timeout | null"
-							},
-							{
-								"name": "reconnect_count",
-								"kind": "variable",
-								"type_signature": "number"
-							},
-							{
-								"name": "reconnect_attempt",
-								"kind": "variable",
-								"type_signature": "number"
-							},
-							{
-								"name": "reconnect_timeout",
-								"kind": "variable",
-								"type_signature": "NodeJS.Timeout | null"
-							},
-							{
-								"name": "current_reconnect_delay",
-								"kind": "variable",
-								"type_signature": "number"
-							},
-							{
 								"name": "message_queue",
 								"kind": "variable",
 								"type_signature": "Array<QueuedMessage>"
@@ -16591,7 +16543,62 @@
 								"type_signature": "SvelteMap<string, FailedMessage>"
 							},
 							{
+								"name": "ws",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "WebSocket | null"
+							},
+							{
+								"name": "url",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "string | null"
+							},
+							{
+								"name": "reconnect_count",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "number"
+							},
+							{
+								"name": "current_reconnect_delay",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "number"
+							},
+							{
+								"name": "last_connect_time",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "number | null"
+							},
+							{
+								"name": "reconnect_attempt",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"doc_comment": "Changes each time a close fires — used by the UI as an animation key so\neach reconnect wait restarts the progress bar. Replaces the dedicated\ncounter the old Cell kept.",
+								"type_signature": "number"
+							},
+							{
+								"name": "is_reconnect_pending",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "boolean"
+							},
+							{
+								"name": "status",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "AsyncStatus"
+							},
+							{
 								"name": "connected",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "boolean"
+							},
+							{
+								"name": "open",
 								"kind": "variable",
 								"modifiers": ["readonly"],
 								"type_signature": "boolean"
@@ -16646,14 +16653,12 @@
 							{
 								"name": "connect",
 								"kind": "function",
-								"doc_comment": "Connects to the WebSocket server.",
 								"type_signature": "(url?: string | null): void",
 								"return_type": "void",
 								"parameters": [
 									{
 										"name": "url",
 										"type": "string | null",
-										"description": "the WebSocket URL to connect to",
 										"default_value": "null"
 									}
 								]
@@ -16661,51 +16666,37 @@
 							{
 								"name": "disconnect",
 								"kind": "function",
-								"doc_comment": "Disconnects from the WebSocket server.",
-								"type_signature": "(code?: number): void",
+								"type_signature": "(): void",
 								"return_type": "void",
-								"parameters": [
-									{
-										"name": "code",
-										"type": "number",
-										"description": "the close code to use (default: 1000 - normal closure)",
-										"default_value": "DEFAULT_CLOSE_CODE"
-									}
-								]
+								"parameters": []
 							},
 							{
 								"name": "send",
 								"kind": "function",
-								"doc_comment": "Sends a message through the WebSocket.",
 								"type_signature": "(data: object): boolean",
 								"return_type": "boolean",
-								"return_description": "`true` if the message was sent immediately, `false` if queued or failed",
 								"parameters": [
 									{
 										"name": "data",
-										"type": "object",
-										"description": "the data to send"
+										"type": "object"
 									}
 								]
 							},
 							{
 								"name": "update_url",
 								"kind": "function",
-								"doc_comment": "Updates the connection URL and reconnects if currently connected.",
 								"type_signature": "(url: string): void",
 								"return_type": "void",
 								"parameters": [
 									{
 										"name": "url",
-										"type": "string",
-										"description": "the new WebSocket URL"
+										"type": "string"
 									}
 								]
 							},
 							{
 								"name": "send_heartbeat",
 								"kind": "function",
-								"doc_comment": "Sends a ping message for heartbeat purposes",
 								"type_signature": "(): Promise<void>",
 								"return_type": "Promise<void>",
 								"parameters": []
@@ -16713,21 +16704,12 @@
 							{
 								"name": "retry_queued_messages",
 								"kind": "function",
-								"doc_comment": "Retry sending all queued messages.",
 								"type_signature": "(): void",
 								"return_type": "void",
 								"parameters": []
 							},
 							{
 								"name": "clear_failed_messages",
-								"kind": "function",
-								"doc_comment": "Clear the failed messages list",
-								"type_signature": "(): void",
-								"return_type": "void",
-								"parameters": []
-							},
-							{
-								"name": "maybe_reconnect",
 								"kind": "function",
 								"type_signature": "(): void",
 								"return_type": "void",
@@ -16736,7 +16718,6 @@
 							{
 								"name": "cancel_reconnect",
 								"kind": "function",
-								"doc_comment": "Cancel any pending reconnection attempt.",
 								"type_signature": "(): void",
 								"return_type": "void",
 								"parameters": []
@@ -16744,38 +16725,32 @@
 							{
 								"name": "add_message_handler",
 								"kind": "function",
-								"doc_comment": "Add a message handler and return a function to remove it.",
-								"type_signature": "(handler: SocketActionHandler): () => void",
+								"type_signature": "(handler: SocketMessageHandler): () => void",
 								"return_type": "() => void",
-								"return_description": "a function that removes the handler when called",
 								"parameters": [
 									{
 										"name": "handler",
-										"type": "SocketActionHandler",
-										"description": "the message handler to add"
+										"type": "SocketMessageHandler"
 									}
 								]
 							},
 							{
 								"name": "add_error_handler",
 								"kind": "function",
-								"doc_comment": "Add an error handler and return a function to remove it.",
 								"type_signature": "(handler: SocketErrorHandler): () => void",
 								"return_type": "() => void",
-								"return_description": "a function that removes the handler when called",
 								"parameters": [
 									{
 										"name": "handler",
-										"type": "SocketErrorHandler",
-										"description": "the error handler to add"
+										"type": "SocketErrorHandler"
 									}
 								]
 							}
 						]
 					}
 				],
-				"dependencies": ["cell.svelte.ts", "cell_types.ts", "socket_helpers.ts", "zod_helpers.ts"],
-				"dependents": ["cell_classes.ts", "frontend.svelte.ts"]
+				"dependencies": ["socket_helpers.ts", "zod_helpers.ts"],
+				"dependents": ["frontend.svelte.ts"]
 			},
 			{
 				"path": "SocketMessageQueue.svelte",

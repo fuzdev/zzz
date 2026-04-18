@@ -20,7 +20,7 @@
 		"zod": "npm:zod@^4",
 		"@electric-sql/pglite": "npm:@electric-sql/pglite@^0.3",
 		"@fuzdev/blake3_wasm": "npm:@fuzdev/blake3_wasm@^0.1.1",
-		"@fuzdev/fuz_app/": "npm:/@fuzdev/fuz_app@^0.17.1/",
+		"@fuzdev/fuz_app/": "npm:/@fuzdev/fuz_app@^0.18.0/",
 		"@fuzdev/fuz_util/": "npm:/@fuzdev/fuz_util@^0.56.0/",
 		"@fuzdev/gro/": "npm:/@fuzdev/gro@^0.197.3/",
 		"date-fns": "npm:date-fns@^4",

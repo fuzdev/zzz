@@ -17,7 +17,6 @@ import {Prompt} from './prompt.svelte.js';
 import {Prompts} from './prompts.svelte.js';
 import {Provider} from './provider.svelte.js';
 import {Providers} from './providers.svelte.js';
-import {Socket} from './socket.svelte.js';
 import {Turn} from './turn.svelte.js';
 import {Thread} from './thread.svelte.js';
 import {Threads} from './threads.svelte.js';
@@ -53,7 +52,6 @@ export const cell_classes = {
 	Providers,
 	Space,
 	Spaces,
-	Socket,
 	Terminal,
 	TerminalPreset,
 	Turn,

@@ -1,15 +1,29 @@
 // @vitest-environment jsdom
 
 import {beforeEach, describe, test, vi, afterEach, assert} from 'vitest';
+import {DEFAULT_CLOSE_CODE} from '@fuzdev/fuz_app/actions/socket.svelte.js';
 
 import {Socket} from '$lib/socket.svelte.js';
-import {DEFAULT_CLOSE_CODE} from '$lib/socket_helpers.js';
 import {Frontend} from '$lib/frontend.svelte.js';
 
 import {monkeypatch_zzz_for_tests} from './test_helpers.js';
 
-// Mock WebSocket implementation for testing
+/**
+ * Reconnect and close-code backoff are tested in fuz_app's
+ * `FrontendWebsocketClient` suite — this file focuses on what the Socket
+ * wrapper adds on top: message queueing, heartbeat ping, and URL input
+ * tracking.
+ */
+
 class Mocket {
+	// `FrontendWebsocketClient#teardown` guards the close() call with
+	// `ws.readyState === WebSocket.OPEN`, which resolves via the global —
+	// so the mock needs matching static members.
+	static CONNECTING = 0;
+	static OPEN = 1;
+	static CLOSING = 2;
+	static CLOSED = 3;
+
 	listeners: Record<string, Array<(event: any) => void> | undefined> = {
 		open: [],
 		close: [],
@@ -17,7 +31,7 @@ class Mocket {
 		message: [],
 	};
 	url: string;
-	readyState: number = 0; // CONNECTING
+	readyState: number = Mocket.CONNECTING;
 	sent_messages: Array<string> = [];
 	close_code: number | null = null;
 
@@ -50,18 +64,17 @@ class Mocket {
 
 	close(code: number = 1000) {
 		this.close_code = code;
-		this.readyState = 3; // CLOSED
+		this.readyState = Mocket.CLOSED;
 		this.dispatchEvent('close', {code});
 	}
 
 	// Helper to simulate connection
 	connect() {
-		this.readyState = 1; // OPEN
+		this.readyState = Mocket.OPEN;
 		this.dispatchEvent('open', {});
 	}
 }
 
-// Test constants
 const TEST_URLS = {
 	BASE: 'ws://test.zzz.software',
 	ALTERNATE: 'ws://alternate.zzz.software',
@@ -69,7 +82,6 @@ const TEST_URLS = {
 
 const TEST_MESSAGE = {
 	BASIC: {method: 'test_action', params: 'test_data'},
-	PING: {method: 'ping', timestamp: 123456789},
 };
 
 describe('Socket', () => {
@@ -77,42 +89,42 @@ describe('Socket', () => {
 	let mock_socket: Mocket;
 	let app: Frontend;
 
-	// Setup for each test
 	beforeEach(() => {
-		// Save original WebSocket
 		original_web_socket = globalThis.WebSocket;
 
-		// Create mock socket
 		mock_socket = new Mocket(TEST_URLS.BASE);
 
-		// Create real Zzz instance
 		app = monkeypatch_zzz_for_tests(new Frontend());
 
-		// TODO better mocking
 		// Mock action API for testing
 		(app as any).api = {
 			ping: vi.fn(),
-		} as any;
+		};
 
-		// Set test time properties
+		// Stub time so connection_duration derivations don't depend on real clock.
 		(app as any).time = {
 			now_ms: Date.now(),
 			interval: 1000,
-		} as any;
+		};
 
-		// Mock WebSocket class - must be a real class for `new` to work
+		// `new WebSocket(url)` returns the shared mock; we then drive open/close
+		// events through `mock_socket.connect()` / `mock_socket.dispatchEvent()`.
 		// eslint-disable-next-line prefer-arrow-callback
-		const MockWebSocket = vi.fn(function (this: Mocket, url: string) {
+		const MockWebSocket: any = vi.fn(function (this: Mocket, url: string) {
 			mock_socket.url = url;
 			return mock_socket;
-		}) as unknown as typeof WebSocket;
-		globalThis.WebSocket = MockWebSocket;
+		});
+		// Static `WebSocket.OPEN` etc. are referenced by `FrontendWebsocketClient`;
+		// the vi.fn wrapper doesn't inherit the Mocket statics automatically.
+		MockWebSocket.CONNECTING = Mocket.CONNECTING;
+		MockWebSocket.OPEN = Mocket.OPEN;
+		MockWebSocket.CLOSING = Mocket.CLOSING;
+		MockWebSocket.CLOSED = Mocket.CLOSED;
+		globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket;
 
-		// Use fake timers for timing control
 		vi.useFakeTimers();
 	});
 
-	// Cleanup after each test
 	afterEach(() => {
 		globalThis.WebSocket = original_web_socket;
 		vi.restoreAllMocks();
@@ -133,16 +145,15 @@ describe('Socket', () => {
 		test('disconnect closes WebSocket with default close code', () => {
 			const socket = new Socket({app});
 			socket.connect(TEST_URLS.BASE);
-
-			// Simulate connection
 			mock_socket.connect();
 
-			// Disconnect
 			socket.disconnect();
 
 			assert.strictEqual(mock_socket.close_code, DEFAULT_CLOSE_CODE);
 			assert.isNull(socket.ws);
 			assert.ok(!socket.open);
+			// User-initiated disconnect resets the wrapper to 'initial'.
+			assert.strictEqual(socket.status, 'initial');
 		});
 
 		test('connection success updates state correctly', () => {
@@ -162,7 +173,6 @@ describe('Socket', () => {
 
 			assert.strictEqual(socket.url, TEST_URLS.BASE);
 
-			// Update URL
 			socket.update_url(TEST_URLS.ALTERNATE);
 
 			assert.strictEqual(socket.url, TEST_URLS.ALTERNATE);
@@ -175,7 +185,6 @@ describe('Socket', () => {
 		test('send queues message when socket is not connected', () => {
 			const socket = new Socket({app});
 
-			// Not connected yet
 			const sent = socket.send(TEST_MESSAGE.BASIC);
 			assert.ok(!sent);
 			assert.strictEqual(socket.queued_message_count, 1);
@@ -195,74 +204,66 @@ describe('Socket', () => {
 			assert.deepEqual(JSON.parse(first_message), TEST_MESSAGE.BASIC);
 		});
 
-		test('message queueing sends queued messages when reconnected', () => {
+		test('retry_queued_messages sends queued messages when connected', () => {
 			const socket = new Socket({app});
 
-			// Queue messages while disconnected
+			// Queue messages while disconnected (no url_input, so no auto-connect)
 			socket.send({method: 'message_a'});
 			socket.send({method: 'message_b'});
-
 			assert.strictEqual(socket.queued_message_count, 2);
 
-			// Connect
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
 
-			// Messages should be sent
+			socket.retry_queued_messages();
+
 			assert.strictEqual(mock_socket.sent_messages.length, 2);
 			assert.strictEqual(socket.queued_message_count, 0);
 		});
 	});
 
 	describe('Error handling', () => {
-		test('failed messages moves message to failed when send throws error', () => {
+		test('retry_queued_messages moves message to failed when send fails', () => {
+			// `FrontendWebsocketClient.send()` catches thrown errors and returns
+			// `false`, so the wrapper surfaces a generic reason rather than the
+			// underlying `Error.message`.
 			const socket = new Socket({app});
 
-			// Queue a message
 			socket.send(TEST_MESSAGE.BASIC);
 			assert.strictEqual(socket.queued_message_count, 1);
 
-			// Mock send failure
-			const error_message = 'Send operation failed';
 			mock_socket.send = vi.fn().mockImplementation(() => {
-				throw new Error(error_message);
+				throw new Error('Send operation failed');
 			});
 
-			// Connect and trigger send attempt
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
+			socket.retry_queued_messages();
 
-			// Message should move to failed
 			assert.strictEqual(socket.queued_message_count, 0);
 			assert.strictEqual(socket.failed_message_count, 1);
 
-			// Check error reason
 			const failed_message = Array.from(socket.failed_messages.values())[0];
 			assert.isDefined(failed_message);
-			assert.strictEqual(failed_message.reason, error_message);
+			assert.ok(failed_message.reason.length > 0);
 		});
 
 		test('clear_failed_messages removes all failed messages', () => {
 			const socket = new Socket({app});
 
-			// Queue message
 			socket.send(TEST_MESSAGE.BASIC);
 
-			// Mock send failure
 			mock_socket.send = vi.fn().mockImplementation(() => {
 				throw new Error('Send failed');
 			});
 
-			// Connect to trigger processing
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
 			socket.retry_queued_messages();
 
-			// Verify message moved to failed
 			assert.strictEqual(socket.queued_message_count, 0);
 			assert.strictEqual(socket.failed_message_count, 1);
 
-			// Clear failed messages
 			socket.clear_failed_messages();
 			assert.strictEqual(socket.failed_message_count, 0);
 		});
@@ -271,90 +272,32 @@ describe('Socket', () => {
 	describe('Automatic reconnection', () => {
 		test('auto reconnect attempts to reconnect after close', () => {
 			const socket = new Socket({app});
-			socket.reconnect_delay = 1000; // 1 second
+			socket.reconnect_delay = 1000;
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
 
-			// Simulate unexpected close
-			mock_socket.dispatchEvent('close');
+			// Simulate unexpected close; the wrapper maps fuz_app's 'reconnecting'
+			// to zzz's 'failure' AsyncStatus for UI compatibility.
+			mock_socket.dispatchEvent('close', {code: 1006});
 
 			assert.ok(!socket.open);
 			assert.strictEqual(socket.status, 'failure');
+			assert.ok(socket.is_reconnect_pending);
 
-			// Should reconnect after delay
 			vi.advanceTimersByTime(1000);
 			assert.strictEqual((globalThis.WebSocket as any).mock.calls.length, 2);
-		});
-
-		test('reconnect delay uses exponential backoff', () => {
-			const socket = new Socket({app});
-			// Set consistent values for testing
-			socket.reconnect_delay = 1000; // base delay 1 second
-			socket.reconnect_delay_max = 30000; // max 30 seconds
-
-			// Initial connect
-			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
-			assert.strictEqual(socket.status, 'success');
-
-			// First unexpected close
-			mock_socket.dispatchEvent('close', {code: 1006});
-			assert.strictEqual(socket.status, 'failure');
-			assert.strictEqual(socket.reconnect_count, 1);
-			assert.strictEqual(socket.current_reconnect_delay, 1000); // 1000 * 1.5^0
-
-			// Trigger first reconnect
-			vi.advanceTimersByTime(1000);
-			assert.strictEqual((globalThis.WebSocket as any).mock.calls.length, 2);
-
-			// Test subsequent reconnects with increasing delays
-			// Clear timers between tests to avoid interference
-			if (socket.reconnect_timeout !== null) {
-				clearTimeout(socket.reconnect_timeout);
-			}
-
-			// Test second attempt
-			socket.status = 'failure';
-			socket.reconnect_count = 1;
-			socket.maybe_reconnect();
-			assert.strictEqual(socket.reconnect_count, 2);
-			assert.strictEqual(socket.current_reconnect_delay, 1500); // 1000 * 1.5^1
-
-			// Clear timeout to avoid interference
-			if (socket.reconnect_timeout !== null) {
-				clearTimeout(socket.reconnect_timeout);
-			}
-
-			// Test third attempt
-			socket.status = 'failure';
-			socket.reconnect_count = 2;
-			socket.maybe_reconnect();
-			assert.strictEqual(socket.reconnect_count, 3);
-			assert.strictEqual(socket.current_reconnect_delay, 2250); // 1000 * 1.5^2
-
-			// Test max delay cap
-			if (socket.reconnect_timeout !== null) {
-				clearTimeout(socket.reconnect_timeout);
-			}
-			socket.status = 'failure';
-			socket.reconnect_count = 14;
-			socket.maybe_reconnect();
-			assert.strictEqual(socket.reconnect_count, 15);
-			assert.strictEqual(socket.current_reconnect_delay, 30000); // Capped at max value
 		});
 	});
 
 	describe('Heartbeat mechanism', () => {
 		test('heartbeat sends ping at interval', () => {
 			const socket = new Socket({app});
-			socket.heartbeat_interval = 1000; // 1 second for testing
+			socket.heartbeat_interval = 1000;
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
 
-			// Advance time to trigger heartbeat
 			vi.advanceTimersByTime(1000);
 
-			// Check ping was sent
 			assert.ok((app.api.ping as any).mock.calls.length > 0);
 		});
 	});
