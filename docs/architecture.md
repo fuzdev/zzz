@@ -428,10 +428,11 @@ Backend provider iterates chunks from SDK
               → UI re-renders incrementally
 ```
 
-The provider's constructor-level `on_completion_progress` callback
-(`backend.api.completion_progress`, broadcast) is the fallback when no
-per-call `on_progress` is threaded in — relevant for contexts where there is
-no originator socket (e.g. future non-WS transports).
+Streaming progress (`completion_progress`, `ollama_progress`) is
+**socket-scoped** — it routes only to the client that initiated the request,
+never broadcast. On HTTP transport `ctx.notify` is a no-op (with a DEV warn).
+`backend.api.*` is reserved for genuine broadcasts (`filer_change`,
+`terminal_data`, `terminal_exited`, `workspace_changed`).
 
 ## IndexedCollection
 

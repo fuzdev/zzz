@@ -1219,6 +1219,14 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		// simultaneously; only the originator should receive progress
 		// notifications. Relies on the test-only _test_emit_notifications action
 		// (see action_specs.ts) to drive ctx.notify without a real AI provider.
+		//
+		// This primitive covers `completion_progress` and `ollama_progress`
+		// routing too: `ctx.notify(method, params)` just `ws.send`s a JSON-RPC
+		// notification — the method name is an opaque string, so whatever
+		// `completion_create`, `ollama_pull`, and `ollama_create` emit through
+		// `ctx.notify` is delivered via the exact same socket-scoped path tested
+		// here. End-to-end coverage of the streaming handlers themselves would
+		// need mock providers (separate scope).
 		name: 'ctx_notify_socket_scoped',
 		fn: async (config, session_cookie) => {
 			const conn1 = await open_ws(config, {cookie: session_cookie});

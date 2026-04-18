@@ -10,8 +10,6 @@ import type {ActionInputs} from '../action_collections.js';
 import {format_zod_validation_error} from '../zod_helpers.js';
 import {
 	filer_change_action_spec,
-	completion_progress_action_spec,
-	ollama_progress_action_spec,
 	terminal_data_action_spec,
 	terminal_exited_action_spec,
 	workspace_changed_action_spec,
@@ -22,10 +20,13 @@ import {
 } from '../diskfile_helpers.js';
 import {DiskfilePath, SerializableDisknode} from '../diskfile_types.js';
 
+/**
+ * Broadcast-style notifications from the backend to all connected clients.
+ * Request-scoped streaming (completion_progress, ollama_progress) goes through
+ * `ctx.notify` instead — it's socket-scoped, not a broadcast.
+ */
 export interface BackendActionsApi {
 	filer_change: (input: ActionInputs['filer_change']) => Promise<void>;
-	completion_progress: (input: ActionInputs['completion_progress']) => Promise<void>;
-	ollama_progress: (input: ActionInputs['ollama_progress']) => Promise<void>;
 	terminal_data: (input: ActionInputs['terminal_data']) => Promise<void>;
 	terminal_exited: (input: ActionInputs['terminal_exited']) => Promise<void>;
 	workspace_changed: (input: ActionInputs['workspace_changed']) => Promise<void>;
@@ -75,9 +76,6 @@ const send_notification = async (
 export const create_backend_actions_api = (backend: Backend): BackendActionsApi => {
 	return {
 		filer_change: (input) => send_notification(backend, filer_change_action_spec, input),
-		completion_progress: (input) =>
-			send_notification(backend, completion_progress_action_spec, input),
-		ollama_progress: (input) => send_notification(backend, ollama_progress_action_spec, input),
 		terminal_data: (input) => send_notification(backend, terminal_data_action_spec, input),
 		terminal_exited: (input) => send_notification(backend, terminal_exited_action_spec, input),
 		workspace_changed: (input) => send_notification(backend, workspace_changed_action_spec, input),

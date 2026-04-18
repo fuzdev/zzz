@@ -49,7 +49,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.3.16",
-			"@fuzdev/fuz_app": "^0.15.0",
+			"@fuzdev/fuz_app": "^0.16.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.58.0",
 			"@fuzdev/fuz_ui": "^0.191.4",
@@ -769,7 +769,7 @@
 						"name": "_test_notification_action_spec",
 						"kind": "variable",
 						"source_line": 541,
-						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: false; input: ZodObject<{ index: ZodNumber; }, $strict>; output: ZodVoid; async: true; description: string; }"
+						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ index: ZodNumber; }, $strict>; output: ZodVoid; async: true; description: string; }"
 					},
 					{
 						"name": "all_action_specs",
@@ -13818,23 +13818,14 @@
 					{
 						"name": "BackendActionsApi",
 						"kind": "type",
-						"source_line": 25,
+						"doc_comment": "Broadcast-style notifications from the backend to all connected clients.\nRequest-scoped streaming (completion_progress, ollama_progress) goes through\n`ctx.notify` instead — it's socket-scoped, not a broadcast.",
+						"source_line": 28,
 						"type_signature": "BackendActionsApi",
 						"properties": [
 							{
 								"name": "filer_change",
 								"kind": "variable",
 								"type_signature": "(input: ActionInputs['filer_change']) => Promise<void>"
-							},
-							{
-								"name": "completion_progress",
-								"kind": "variable",
-								"type_signature": "(input: ActionInputs['completion_progress']) => Promise<void>"
-							},
-							{
-								"name": "ollama_progress",
-								"kind": "variable",
-								"type_signature": "(input: ActionInputs['ollama_progress']) => Promise<void>"
 							},
 							{
 								"name": "terminal_data",
@@ -13856,7 +13847,7 @@
 					{
 						"name": "create_backend_actions_api",
 						"kind": "function",
-						"source_line": 75,
+						"source_line": 76,
 						"type_signature": "(backend: Backend): BackendActionsApi",
 						"return_type": "BackendActionsApi",
 						"parameters": [
@@ -13870,7 +13861,7 @@
 						"name": "handle_filer_change",
 						"kind": "function",
 						"doc_comment": "Handle file system changes and notify clients.",
-						"source_line": 91,
+						"source_line": 89,
 						"type_signature": "(change: WatcherChange, disknode: Disknode, backend: Backend, dir: string, filer: Filer): void",
 						"return_type": "void",
 						"parameters": [
@@ -14233,27 +14224,22 @@
 								"name": "on_progress",
 								"kind": "variable",
 								"type_signature": "OnCompletionProgress",
-								"doc_comment": "Per-call progress callback. When provided, overrides the provider's\nconstructor-level `on_completion_progress` for this request — lets\nthe caller route progress to the originating WS socket via ctx.notify\nrather than broadcasting through `backend.api.*`."
+								"doc_comment": "Routes progress chunks to the originating WS socket via ctx.notify.\nRequired for streaming handlers; ignored by non-streaming handlers."
 							}
 						]
 					},
 					{
 						"name": "OnCompletionProgress",
 						"kind": "type",
-						"source_line": 49,
+						"source_line": 47,
 						"type_signature": "OnCompletionProgress"
 					},
 					{
-						"name": "BackendProviderOptions",
+						"name": "BackendProviderRemoteOptions",
 						"kind": "type",
-						"source_line": 51,
-						"type_signature": "BackendProviderOptions",
+						"source_line": 49,
+						"type_signature": "BackendProviderRemoteOptions",
 						"properties": [
-							{
-								"name": "on_completion_progress",
-								"kind": "variable",
-								"type_signature": "OnCompletionProgress"
-							},
 							{
 								"name": "api_key",
 								"kind": "variable",
@@ -14265,7 +14251,7 @@
 						"name": "BackendProvider",
 						"kind": "class",
 						"doc_comment": "Base class for all backend AI providers.\nProvides shared functionality for completion handlers and logging.",
-						"source_line": 60,
+						"source_line": 57,
 						"generic_params": [
 							{
 								"name": "TClient",
@@ -14290,23 +14276,6 @@
 								"kind": "variable",
 								"modifiers": ["protected"],
 								"type_signature": "ProviderStatus | null"
-							},
-							{
-								"name": "on_completion_progress",
-								"kind": "variable",
-								"modifiers": ["protected", "readonly"],
-								"type_signature": "OnCompletionProgress"
-							},
-							{
-								"name": "constructor",
-								"kind": "constructor",
-								"type_signature": "<TClient = unknown>(options: BackendProviderOptions): BackendProvider<TClient>",
-								"parameters": [
-									{
-										"name": "options",
-										"type": "BackendProviderOptions"
-									}
-								]
 							},
 							{
 								"name": "handle_streaming_completion",
@@ -14405,8 +14374,8 @@
 								"name": "send_streaming_progress",
 								"kind": "function",
 								"modifiers": ["protected"],
-								"doc_comment": "Sends streaming progress notification to frontend.",
-								"type_signature": "(progress_token: string & $brand<\"Uuid\">, chunk: { [x: string]: unknown; model?: string | undefined; created_at?: string | undefined; done?: boolean | undefined; message?: { [x: string]: unknown; role: string; content: string; } | undefined; } | undefined, on_progress?: OnCompletionProgress | undefined): Promise<...>",
+								"doc_comment": "Sends a streaming progress notification to the originating socket.",
+								"type_signature": "(progress_token: string & $brand<\"Uuid\">, chunk: { [x: string]: unknown; model?: string | undefined; created_at?: string | undefined; done?: boolean | undefined; message?: { [x: string]: unknown; role: string; content: string; } | undefined; } | undefined, on_progress: OnCompletionProgress): Promise<...>",
 								"return_type": "Promise<void>",
 								"parameters": [
 									{
@@ -14419,8 +14388,7 @@
 									},
 									{
 										"name": "on_progress",
-										"type": "OnCompletionProgress | undefined",
-										"optional": true
+										"type": "OnCompletionProgress"
 									}
 								]
 							},
@@ -14486,7 +14454,7 @@
 						"name": "BackendProviderRemote",
 						"kind": "class",
 						"doc_comment": "Base class for remote API-based providers (Claude, ChatGPT, Gemini).\nHandles API key management and provides default error handling for missing keys.",
-						"source_line": 145,
+						"source_line": 136,
 						"extends": ["BackendProvider<TClient>"],
 						"implements": [],
 						"generic_params": [
@@ -14505,11 +14473,11 @@
 							{
 								"name": "constructor",
 								"kind": "constructor",
-								"type_signature": "<TClient = unknown>(options: BackendProviderOptions): BackendProviderRemote<TClient>",
+								"type_signature": "<TClient = unknown>(options: BackendProviderRemoteOptions): BackendProviderRemote<TClient>",
 								"parameters": [
 									{
 										"name": "options",
-										"type": "BackendProviderOptions"
+										"type": "BackendProviderRemoteOptions"
 									}
 								]
 							},
@@ -14552,7 +14520,7 @@
 						"name": "BackendProviderLocal",
 						"kind": "class",
 						"doc_comment": "Base class for locally-installed providers (Ollama).\nHandles installation checking and provides default error handling for missing installations.",
-						"source_line": 191,
+						"source_line": 182,
 						"extends": ["BackendProvider<TClient>"],
 						"implements": [],
 						"generic_params": [
@@ -14565,13 +14533,8 @@
 							{
 								"name": "constructor",
 								"kind": "constructor",
-								"type_signature": "<TClient = unknown>(options: BackendProviderOptions): BackendProviderLocal<TClient>",
-								"parameters": [
-									{
-										"name": "options",
-										"type": "BackendProviderOptions"
-									}
-								]
+								"type_signature": "<TClient = unknown>(): BackendProviderLocal<TClient>",
+								"parameters": []
 							},
 							{
 								"name": "get_client",
@@ -15145,7 +15108,7 @@
 						"name": "CreateZzzAppOptions",
 						"kind": "type",
 						"doc_comment": "Options for creating a zzz app.",
-						"source_line": 45,
+						"source_line": 44,
 						"type_signature": "CreateZzzAppOptions",
 						"properties": [
 							{
@@ -15178,7 +15141,7 @@
 						"name": "ZzzApp",
 						"kind": "type",
 						"doc_comment": "The created zzz app and related instances.",
-						"source_line": 66,
+						"source_line": 65,
 						"type_signature": "ZzzApp",
 						"properties": [
 							{
@@ -15229,7 +15192,7 @@
 						"name": "create_zzz_app",
 						"kind": "function",
 						"doc_comment": "Create the zzz Hono app with auth, database, Backend, providers, and endpoints.\n\nThis is the shared factory called by the server entry point.\nUses `create_app_backend` for database + auth, `create_app_server` for\nmiddleware assembly, and wires zzz's domain Backend through route deps.",
-						"source_line": 90,
+						"source_line": 89,
 						"type_signature": "(options: CreateZzzAppOptions): Promise<ZzzApp>",
 						"return_type": "Promise<ZzzApp>",
 						"parameters": [
@@ -15587,7 +15550,7 @@
 					{
 						"name": "RegisterWebsocketActionsOptions",
 						"kind": "type",
-						"source_line": 35,
+						"source_line": 24,
 						"type_signature": "RegisterWebsocketActionsOptions",
 						"properties": [
 							{
@@ -15627,8 +15590,8 @@
 					{
 						"name": "register_websocket_actions",
 						"kind": "function",
-						"doc_comment": "Registers WebSocket endpoints for all service actions in the schema registry.",
-						"source_line": 49,
+						"doc_comment": "Registers the WebSocket endpoint for all zzz request/response actions.\n\nThe zzz `Backend` is exposed on every handler's context. Per-action auth,\nZod validation, and socket-scoped `notify` / `signal` come from fuz_app.",
+						"source_line": 41,
 						"type_signature": "({ path, app, backend, upgradeWebSocket, artificial_delay, transport, }: RegisterWebsocketActionsOptions): void",
 						"return_type": "void",
 						"parameters": [
@@ -15639,7 +15602,7 @@
 						]
 					}
 				],
-				"module_comment": "WebSocket endpoint with direct handler dispatch.\n\nReplaces the old `backend.receive(json)` → ActionPeer → ActionEvent path\nwith: spec lookup → Zod input validation → handler call → JSON-RPC response.\nKeeps existing per-action auth checking at the transport layer.",
+				"module_comment": "WebSocket endpoint wiring — thin wrapper over fuz_app's\n{@link register_action_ws}.\n\nzzz supplies the handler map, action specs, and a context-extender that\nadds the domain `Backend` onto the base per-request context. All dispatch,\nauth, validation, and transport bookkeeping live in fuz_app.",
 				"dependencies": ["action_specs.ts", "server/zzz_action_handlers.ts"],
 				"dependents": ["server/server.ts"]
 			},

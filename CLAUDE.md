@@ -83,7 +83,7 @@ src/
 │   │   ├── server.ts            # Deno server entry (dev + production)
 │   │   ├── zzz_action_handlers.ts  # Unified handlers — single source of truth
 │   │   ├── zzz_rpc_actions.ts      # Thin adapter for fuz_app RPC format
-│   │   ├── register_websocket_actions.ts # WS dispatch with direct handler calls
+│   │   ├── register_websocket_actions.ts # Thin wrapper over fuz_app's `register_action_ws`
 │   │   ├── backend_provider_*.ts # Ollama, Claude, ChatGPT, Gemini
 │   │   ├── pty_ffi.ts              # Deno FFI bindings for libfuz_pty.so
 │   │   ├── backend_pty_manager.ts  # PTY process management (FFI or fallback)
@@ -231,6 +231,8 @@ npm install
 # Without this, terminals fall back to Deno.Command pipes (no interactivity)
 cd ~/dev/private_fuz && cargo build -p fuz_pty --release
 ```
+
+Use `npm install` (not `deno install`) for packages. With `nodeModulesDir: "manual"`, `npm install` produces a layout TypeScript resolves consistently; `deno install` creates hoisted + `.deno/` copies that TS treats as distinct modules, causing `#private`-symbol "two different types" errors on `Logger`, `Snippet`, etc. Versions must be kept in sync across `package.json` (runtime + SvelteKit/Vite) and `deno.json` `imports` (needed for `deno compile` at `gro build`, which runs from `dist_cli/` without access to `package.json`).
 
 ### Daily Commands
 

@@ -38,18 +38,15 @@ export interface CompletionHandlerOptions {
 	/** Opts into streaming notifications when provided. */
 	progress_token?: Uuid;
 	/**
-	 * Per-call progress callback. When provided, overrides the provider's
-	 * constructor-level `on_completion_progress` for this request — lets
-	 * the caller route progress to the originating WS socket via ctx.notify
-	 * rather than broadcasting through `backend.api.*`.
+	 * Routes progress chunks to the originating WS socket via ctx.notify.
+	 * Required for streaming handlers; ignored by non-streaming handlers.
 	 */
-	on_progress?: OnCompletionProgress;
+	on_progress: OnCompletionProgress;
 }
 
 export type OnCompletionProgress = (input: ActionInputs['completion_progress']) => Promise<void>;
 
-export interface BackendProviderOptions {
-	on_completion_progress: OnCompletionProgress;
+export interface BackendProviderRemoteOptions {
 	api_key?: string | null;
 }
 
@@ -62,12 +59,6 @@ export abstract class BackendProvider<TClient = unknown> {
 
 	protected client: TClient | null = null;
 	protected provider_status: ProviderStatus | null = null;
-
-	protected readonly on_completion_progress: OnCompletionProgress;
-
-	constructor(options: BackendProviderOptions) {
-		this.on_completion_progress = options.on_completion_progress;
-	}
 
 	abstract handle_streaming_completion(
 		options: CompletionHandlerOptions,
@@ -102,13 +93,13 @@ export abstract class BackendProvider<TClient = unknown> {
 		}
 	}
 
-	/** Sends streaming progress notification to frontend. */
+	/** Sends a streaming progress notification to the originating socket. */
 	protected async send_streaming_progress(
 		progress_token: Uuid,
 		chunk: ActionInputs['completion_progress']['chunk'],
-		on_progress?: OnCompletionProgress,
+		on_progress: OnCompletionProgress,
 	): Promise<void> {
-		await (on_progress ?? this.on_completion_progress)({
+		await on_progress({
 			chunk,
 			_meta: {progressToken: progress_token},
 		});
@@ -145,8 +136,8 @@ export abstract class BackendProvider<TClient = unknown> {
 export abstract class BackendProviderRemote<TClient = unknown> extends BackendProvider<TClient> {
 	protected api_key: string | null = null;
 
-	constructor(options: BackendProviderOptions) {
-		super(options);
+	constructor(options: BackendProviderRemoteOptions) {
+		super();
 		this.set_api_key(options.api_key ?? null);
 	}
 
@@ -189,8 +180,8 @@ export abstract class BackendProviderRemote<TClient = unknown> extends BackendPr
  * Handles installation checking and provides default error handling for missing installations.
  */
 export abstract class BackendProviderLocal<TClient = unknown> extends BackendProvider<TClient> {
-	constructor(options: BackendProviderOptions) {
-		super(options);
+	constructor() {
+		super();
 		this.create_client();
 	}
 

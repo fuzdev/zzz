@@ -31,7 +31,6 @@ import {BackendProviderOllama} from './backend_provider_ollama.js';
 import {BackendProviderClaude} from './backend_provider_claude.js';
 import {BackendProviderChatgpt} from './backend_provider_chatgpt.js';
 import {BackendProviderGemini} from './backend_provider_gemini.js';
-import type {BackendProviderOptions} from './backend_provider.js';
 import create_config from '../config.js';
 import {zzz_session_config} from './routes/account.js';
 import {create_zzz_app_route_specs, create_zzz_rpc_endpoint_spec} from './zzz_route_specs.js';
@@ -143,29 +142,14 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 		handle_filer_change,
 	});
 
-	// Register AI providers
-	const provider_options: BackendProviderOptions = {
-		on_completion_progress: backend.api.completion_progress,
-	};
-	backend.add_provider(new BackendProviderOllama(provider_options));
+	// Register AI providers. Streaming progress is routed per-request via
+	// `ctx.notify` — providers have no broadcast callback.
+	backend.add_provider(new BackendProviderOllama());
 	backend.add_provider(
-		new BackendProviderClaude({
-			...provider_options,
-			api_key: config.secret_anthropic_api_key ?? null,
-		}),
+		new BackendProviderClaude({api_key: config.secret_anthropic_api_key ?? null}),
 	);
-	backend.add_provider(
-		new BackendProviderChatgpt({
-			...provider_options,
-			api_key: config.secret_openai_api_key ?? null,
-		}),
-	);
-	backend.add_provider(
-		new BackendProviderGemini({
-			...provider_options,
-			api_key: config.secret_google_api_key ?? null,
-		}),
-	);
+	backend.add_provider(new BackendProviderChatgpt({api_key: config.secret_openai_api_key ?? null}));
+	backend.add_provider(new BackendProviderGemini({api_key: config.secret_google_api_key ?? null}));
 
 	const started_at = Date.now();
 

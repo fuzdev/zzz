@@ -543,7 +543,7 @@ export const _test_notification_action_spec = {
 	kind: 'remote_notification',
 	initiator: 'backend',
 	auth: null,
-	side_effects: false,
+	side_effects: true,
 	input: z.strictObject({
 		index: z.number().int().min(0),
 	}),
