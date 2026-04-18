@@ -13810,20 +13810,6 @@
 				"dependents": ["TerminalRunner.svelte", "TurnList.svelte"]
 			},
 			{
-				"path": "server/api_key_env_file_path.ts",
-				"declarations": [
-					{
-						"name": "API_KEY_ENV_FILE_PATH",
-						"kind": "variable",
-						"doc_comment": "Env file path where `provider_update_api_key` writes API keys.\n\nThe write target must match a file that's reloaded on next daemon start,\nso user-entered keys survive restart:\n\n- **Dev** (`gro dev`, `deno task dev`): both Vite and `scripts/dev.ts`\n  reload `.env.development`. `.env` is shadowed by `.env.development` in\n  Vite's mode-precedence and is not loaded at all by `scripts/dev.ts`,\n  so writing to `.env` in dev would be invisible on restart.\n- **Prod** (compiled `zzz daemon start`): `server.ts` loads `.env` via\n  `load_env_file`. `.env.production` is NOT loaded by the compiled daemon\n  (only by `deno task preview`'s `--env=.env.production` flag), so writing\n  there would be invisible on restart.",
-						"source_line": 24,
-						"type_signature": "string"
-					}
-				],
-				"module_comment": "Persistence target for user-entered AI provider API keys.",
-				"dependents": ["server/zzz_action_handlers.ts"]
-			},
-			{
 				"path": "server/backend_actions_api.ts",
 				"declarations": [
 					{
@@ -15108,6 +15094,20 @@
 				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
+				"path": "server/constants.ts",
+				"declarations": [
+					{
+						"name": "ENV_FILE",
+						"kind": "variable",
+						"doc_comment": "Canonical env file path for daemon-initiated reads and writes.\n\nThe write target must match a file that's reloaded on next daemon start,\nso user-entered values (e.g. API keys via `provider_update_api_key`)\nsurvive restart:\n\n- **Dev** (`gro dev`, `deno task dev`): both Vite and `scripts/dev.ts`\n  reload `.env.development`. `.env` is shadowed by `.env.development` in\n  Vite's mode-precedence and is not loaded at all by `scripts/dev.ts`,\n  so writing to `.env` in dev would be invisible on restart.\n- **Prod** (compiled `zzz daemon start`): `server.ts` loads `.env` via\n  `load_env_file`. `.env.production` is NOT loaded by the compiled daemon\n  (only by `deno task preview`'s `--env=.env.production` flag), so writing\n  there would be invisible on restart.",
+						"source_line": 29,
+						"type_signature": "string"
+					}
+				],
+				"module_comment": "Server-side constants (Deno-compile-safe).\n\nMirror of `src/lib/constants.ts` for modules in the Deno compile chain.\nMust not import `$env/static/public` or any SvelteKit build-time module —\nthose don't exist in Deno and crash `gro build` / `deno compile`.",
+				"dependents": ["server/server.ts", "server/zzz_action_handlers.ts"]
+			},
+			{
 				"path": "server/create_zzz_app.ts",
 				"declarations": [
 					{
@@ -16146,7 +16146,7 @@
 						"name": "start_server",
 						"kind": "function",
 						"doc_comment": "Start the zzz server using Deno runtime.\n\nCreates the full backend with auth, database, providers, WebSocket, and HTTP RPC\nendpoints via `create_zzz_app`, then serves with `Deno.serve`.",
-						"source_line": 46,
+						"source_line": 47,
 						"type_signature": "(): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": []
@@ -16154,6 +16154,7 @@
 				],
 				"module_comment": "Deno server entry point for zzz.\n\nSingle entry point for both dev mode (`gro dev` via `gro_plugin_deno_server`)\nand production (`zzz daemon start`). Uses the shared `create_zzz_app` factory\nfor the Hono app with fuz_app auth stack, then binds with `Deno.serve`\nand handles daemon lifecycle.",
 				"dependencies": [
+					"server/constants.ts",
 					"server/create_zzz_app.ts",
 					"server/register_websocket_actions.ts",
 					"server/security.ts",
@@ -16223,7 +16224,7 @@
 				"dependencies": [
 					"diskfile_helpers.ts",
 					"diskfile_types.ts",
-					"server/api_key_env_file_path.ts",
+					"server/constants.ts",
 					"server/helpers.ts",
 					"zod_helpers.ts",
 					"zzz_jsonrpc_errors.ts"
