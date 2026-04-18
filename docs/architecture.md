@@ -34,8 +34,19 @@ export const completion_create_action_spec = {
 | Kind                  | Phases                                                                    | Transport         | Use                                     |
 | --------------------- | ------------------------------------------------------------------------- | ----------------- | --------------------------------------- |
 | `request_response`    | `send_request` → `receive_request` → `send_response` → `receive_response` | HTTP or WebSocket | Standard RPC                            |
-| `remote_notification` | `send` → `receive`                                                        | WebSocket only    | Streaming progress (backend → frontend) |
+| `remote_notification` | `send` → `receive`                                                        | WebSocket only    | Backend → frontend push (progress, broadcast) |
 | `local_call`          | `execute`                                                                 | None              | Frontend-only UI actions                |
+
+`remote_notification` actions have two routing paths on the backend:
+
+- **Request-scoped** (`ctx.notify(method, params)` from a handler) — delivered
+  only to the originating socket. Used for progress streams tied to an
+  in-flight request (`completion_progress`, `ollama_progress`). Specs that use
+  this pattern set `streams: '<notification_method>'` to name the companion
+  notification.
+- **Broadcast** (`backend.api.<method>(input)`) — fanned out to all connected
+  sockets. Used for server-wide events that every client needs
+  (`filer_change`, `workspace_changed`, `terminal_data`).
 
 ### Action Spec Fields
 
@@ -49,6 +60,7 @@ export const completion_create_action_spec = {
 | `input`        | `z.ZodType`          | Zod schema for request params                                     |
 | `output`       | `z.ZodType`          | Zod schema for response                                           |
 | `async`        | `boolean`            | Whether handler is async                                          |
+| `streams`      | `string` (optional)  | Name of companion `remote_notification` method this action emits via `ctx.notify` (e.g. `'completion_progress'`) |
 
 ### Core Components
 
@@ -98,8 +110,9 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 };
 
 // Backend (server/zzz_action_handlers.ts)
-// Unified handler — called by both HTTP RPC and WebSocket paths
-export const zzz_action_handlers: Record<string, ZzzHandler> = {
+// Unified handler — called by both HTTP RPC and WebSocket paths.
+// ctx: {backend, request_id, notify, signal}
+export const zzz_action_handlers: ZzzActionHandlers = {
 	completion_create: async (input, ctx) => {
 		const {prompt, provider_name, model, completion_messages} = input.completion_request;
 		const progress_token = input._meta?.progressToken;
@@ -111,6 +124,11 @@ export const zzz_action_handlers: Record<string, ZzzHandler> = {
 			completion_messages,
 			completion_options,
 			progress_token,
+			// Route streaming chunks to the originating socket (WS) or no-op (HTTP).
+			on_progress: (progress_input) => {
+				ctx.notify('completion_progress', progress_input);
+				return Promise.resolve();
+			},
 		});
 	},
 };
@@ -380,12 +398,14 @@ User types message in Chat UI
     → app.api.completion_create(request)
       → ActionEvent send_request phase
         → Transport.send(JSON-RPC request)
-          → WS dispatch: spec lookup → Zod validate → handler call
+          → WS dispatch: spec lookup → Zod validate → build ctx → handler call
             → zzz_action_handlers.completion_create(input, ctx)
               → ctx.backend.lookup_provider(provider_name)
               → provider.get_handler(!!progress_token)
-              → handler({model, prompt, ...})
-                → For each chunk: backend.api.completion_progress({token, chunk})
+              → handler({model, prompt, ..., on_progress: ctx.notify-adapter})
+                → For each chunk: on_progress({chunk, _meta})
+                  → ctx.notify('completion_progress', {chunk, _meta})
+                    → WS send to the originating socket only
               → Return {completion_response}
             → JSON-RPC response via WebSocket
               → Frontend receive_response phase
@@ -398,14 +418,20 @@ User types message in Chat UI
 
 ```
 Backend provider iterates chunks from SDK
-  → provider.send_streaming_progress(progress_token, chunk)
-    → backend.api.completion_progress({progressToken, chunk})
-      → WebSocket notification (no id, no response expected)
-        → frontend_action_handlers.completion_progress.receive()
-          → Find turn by progressToken in cell_registry
-          → Append chunk to turn content
-            → UI re-renders incrementally
+  → provider.send_streaming_progress(progress_token, chunk, on_progress)
+    → on_progress({progressToken, chunk})            (from handler's ctx.notify)
+      → ctx.notify('completion_progress', ...)
+        → WebSocket notification to the originating socket (no id, no response)
+          → frontend_action_handlers.completion_progress.receive()
+            → Find turn by progressToken in cell_registry
+            → Append chunk to turn content
+              → UI re-renders incrementally
 ```
+
+The provider's constructor-level `on_completion_progress` callback
+(`backend.api.completion_progress`, broadcast) is the fallback when no
+per-call `on_progress` is threaded in — relevant for contexts where there is
+no originator socket (e.g. future non-WS transports).
 
 ## IndexedCollection
 

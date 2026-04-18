@@ -173,6 +173,52 @@ my_action: async (input, ctx) => {
 ```
 
 Both HTTP RPC and WebSocket paths automatically pick up the new handler.
+The `ctx` arg is `{backend, request_id, notify, signal}` — see "Streaming
+handlers" below for `notify` / `signal` usage.
+
+### Streaming Handlers
+
+For actions that push progress notifications back to the requester while
+running, pair the `request_response` action with a companion
+`remote_notification` action and name the companion in the `streams` field:
+
+```typescript
+export const my_long_job_action_spec = {
+  method: 'my_long_job',
+  kind: 'request_response',
+  initiator: 'frontend',
+  auth: 'authenticated',
+  streams: 'my_long_job_progress', // name of the companion notification
+  input: z.strictObject({...}),
+  output: z.null(),
+  async: true,
+} satisfies ActionSpecUnion;
+
+export const my_long_job_progress_action_spec = {
+  method: 'my_long_job_progress',
+  kind: 'remote_notification',
+  initiator: 'backend',
+  input: z.strictObject({...}),
+  async: false,
+} satisfies ActionSpecUnion;
+```
+
+In the handler, use `ctx.notify` to send chunks to the originating socket
+(request-scoped), and `ctx.signal` to terminate early when the socket closes:
+
+```typescript
+my_long_job: async (input, ctx) => {
+  for await (const chunk of produce_chunks(input)) {
+    if (ctx.signal.aborted) break;
+    ctx.notify('my_long_job_progress', chunk);
+  }
+  return null;
+},
+```
+
+For broadcast (all connected sockets) use `ctx.backend.api.<method>(input)`
+instead — appropriate for server-wide events like `filer_change` or
+`workspace_changed`.
 
 ### Adding a New Route
 

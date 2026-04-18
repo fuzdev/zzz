@@ -96,6 +96,9 @@ abstract class BackendProvider<TClient = unknown> {
   protected client: TClient | null = null;
   protected provider_status: ProviderStatus | null = null;
 
+  /** Default broadcast callback — set at construction, used when no per-call on_progress is threaded in. */
+  protected readonly on_completion_progress: OnCompletionProgress;
+
   abstract handle_streaming_completion(options: CompletionHandlerOptions): Promise<ActionOutputs['completion_create']>;
   abstract handle_non_streaming_completion(options: CompletionHandlerOptions): Promise<ActionOutputs['completion_create']>;
 
@@ -110,7 +113,16 @@ abstract class BackendProvider<TClient = unknown> {
   abstract load_status(reload?: boolean): Promise<ProviderStatus>;
 
   protected validate_streaming_requirements(progress_token?: Uuid): asserts progress_token { ... }
-  protected async send_streaming_progress(progress_token: Uuid, chunk: ...): Promise<void> { ... }
+  /**
+   * Per-call `on_progress` (from `CompletionHandlerOptions`) wins over the
+   * constructor-level `on_completion_progress` — lets the handler route
+   * chunks to the originating socket via `ctx.notify` rather than broadcast.
+   */
+  protected async send_streaming_progress(
+    progress_token: Uuid,
+    chunk: ...,
+    on_progress?: OnCompletionProgress,
+  ): Promise<void> { ... }
 }
 ```
 
@@ -131,7 +143,16 @@ interface CompletionHandlerOptions {
   completion_messages: Array<CompletionMessage> | undefined;
   prompt: string;
   progress_token?: Uuid;  // Opts into streaming when provided
+  /**
+   * Per-call progress callback. When provided, overrides the provider's
+   * constructor-level `on_completion_progress` for this request — lets
+   * the caller route progress to the originating WS socket via `ctx.notify`
+   * rather than broadcasting through `backend.api.*`.
+   */
+  on_progress?: OnCompletionProgress;
 }
+
+type OnCompletionProgress = (input: ActionInputs['completion_progress']) => Promise<void>;
 
 interface CompletionOptions {
   frequency_penalty?: number;
@@ -184,7 +205,7 @@ export class BackendProviderClaude extends BackendProviderRemote<Anthropic> {
   }
 
   async handle_streaming_completion(options: CompletionHandlerOptions): Promise<ActionOutputs['completion_create']> {
-    const {model, completion_options, completion_messages, prompt, progress_token} = options;
+    const {model, completion_options, completion_messages, prompt, progress_token, on_progress} = options;
     this.validate_streaming_requirements(progress_token);
 
     const stream = await this.get_client().messages.create(
@@ -195,9 +216,13 @@ export class BackendProviderClaude extends BackendProviderRemote<Anthropic> {
     for await (const event of stream) {
       if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
         accumulated_content += event.delta.text;
-        void this.send_streaming_progress(progress_token, {
-          message: { role: 'assistant', content: event.delta.text },
-        });
+        // Thread the caller's on_progress through — when called from the WS
+        // handler, this routes chunks to the originating socket via ctx.notify.
+        void this.send_streaming_progress(
+          progress_token,
+          { message: { role: 'assistant', content: event.delta.text } },
+          on_progress,
+        );
       }
     }
 
@@ -213,16 +238,29 @@ User sends message
   → Thread.send_message(content)
     → Build CompletionRequest (provider_name, model, prompt, completion_messages)
     → app.api.completion_create({completion_request, _meta: {progressToken}})
-      → Backend: backend.lookup_provider(provider_name)
-        → provider.get_handler(!!progress_token)
-          → provider.handle_streaming_completion(options)
-            → Call provider SDK with stream: true
-            → For each chunk:
-              → provider.send_streaming_progress(progress_token, chunk)
-                → WebSocket notification to frontend
-                  → Turn content updated incrementally
-            → Return CompletionResult
+      → WS dispatch builds ctx {backend, request_id, notify, signal}
+      → zzz_action_handlers.completion_create(input, ctx)
+        → Backend: backend.lookup_provider(provider_name)
+          → provider.get_handler(!!progress_token)
+            → provider.handle_streaming_completion({..., on_progress: ctx.notify-adapter})
+              → Call provider SDK with stream: true
+              → For each chunk:
+                → provider.send_streaming_progress(progress_token, chunk, on_progress)
+                  → on_progress({progressToken, chunk})
+                    → ctx.notify('completion_progress', ...)
+                      → WS notification to originating socket
+                        → Turn content updated incrementally
+              → Return CompletionResult
 ```
+
+`ollama_pull` and `ollama_create` use the same pattern inline: they call
+`ctx.notify('ollama_progress', ...)` directly from the handler loop and
+check `ctx.signal.aborted` to terminate early on socket close.
+
+The request-scoped routing (`ctx.notify`) is the default for streaming
+progress. The constructor-level `on_completion_progress` (broadcast through
+`backend.api.completion_progress`) stays as the fallback — used when a
+provider is invoked outside a WS handler context.
 
 ### Provider Status
 
