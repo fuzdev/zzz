@@ -588,3 +588,64 @@ async fn session_revoke_inner(
 
     Ok(Json(RevokeResponse { ok: true, revoked: true }).into_response())
 }
+
+// -- POST /tokens/:id/revoke --------------------------------------------------
+
+/// `POST /tokens/:id/revoke` — revoke a specific API token (scoped to own account).
+///
+/// Mirrors fuz_app's `/tokens/:id/revoke` route. Deletes the token and closes
+/// the bearer-authenticated WS sockets bound to it, leaving the account's
+/// session-authenticated sockets and other tokens' sockets untouched.
+pub async fn token_revoke_handler(
+    State(app): State<Arc<App>>,
+    headers: HeaderMap,
+    Path(token_id): Path<String>,
+) -> Response {
+    match token_revoke_inner(&app, &headers, &token_id).await {
+        Ok(response) | Err(response) => response,
+    }
+}
+
+async fn token_revoke_inner(
+    app: &App,
+    headers: &HeaderMap,
+    token_id: &str,
+) -> Result<Response, Response> {
+    let resolved = auth::resolve_auth_from_headers(
+        headers,
+        &app.keyring,
+        &app.db_pool,
+        app.daemon_token_state.as_ref(),
+    )
+    .await
+    .ok_or_else(|| error_json(StatusCode::UNAUTHORIZED, "unauthenticated"))?;
+
+    let client = app.db_pool.get().await.map_err(|e| {
+        tracing::error!(error = %e, "token revoke: db pool error");
+        error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
+    })?;
+
+    let deleted = db::query_revoke_api_token_for_account(
+        &client,
+        token_id,
+        &resolved.context.account.id,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, "token revoke: delete failed");
+        error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
+    })?;
+
+    if !deleted {
+        // Idempotent — token already gone or belongs to another account
+        return Ok(Json(RevokeResponse { ok: true, revoked: false }).into_response());
+    }
+
+    // Close the bearer-authenticated WS sockets tied to this token
+    let closed = app.close_sockets_for_token(token_id);
+    if closed > 0 {
+        tracing::info!(count = closed, "token revoke: closed WebSocket connections");
+    }
+
+    Ok(Json(RevokeResponse { ok: true, revoked: true }).into_response())
+}

@@ -515,6 +515,44 @@ export const workspace_changed_action_spec = {
 	description: 'Notifies frontends when a workspace is opened or closed.',
 } satisfies ActionSpecUnion;
 
+// Test-only: exists so the integration suite can verify `ctx.notify` routing
+// (socket-scoped delivery) without depending on a real AI/Ollama provider.
+// The backend handler emits `count` `_test_notification` notifications via
+// `ctx.notify` and then returns `{count}`. Authenticated so unauth callers
+// can't spam other sockets.
+export const _test_emit_notifications_action_spec = {
+	method: '_test_emit_notifications',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: 'authenticated',
+	side_effects: false,
+	input: z.strictObject({
+		count: z.number().int().min(0).max(100),
+	}),
+	output: z.strictObject({
+		count: z.number().int(),
+	}),
+	async: true,
+	streams: '_test_notification',
+	description:
+		'Test-only. Emits `count` `_test_notification` notifications via ctx.notify, then returns {count}.',
+} satisfies ActionSpecUnion;
+
+export const _test_notification_action_spec = {
+	method: '_test_notification',
+	kind: 'remote_notification',
+	initiator: 'backend',
+	auth: null,
+	side_effects: false,
+	input: z.strictObject({
+		index: z.number().int().min(0),
+	}),
+	output: z.void(),
+	async: true,
+	description:
+		'Test-only. Progress notification emitted by _test_emit_notifications; carries the sequence index.',
+} satisfies ActionSpecUnion;
+
 export const all_action_specs: Array<ActionSpecUnion> = [
 	ping_action_spec,
 	session_load_action_spec,
@@ -546,4 +584,6 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	workspace_close_action_spec,
 	workspace_list_action_spec,
 	workspace_changed_action_spec,
+	_test_emit_notifications_action_spec,
+	_test_notification_action_spec,
 ];

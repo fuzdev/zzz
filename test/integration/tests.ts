@@ -1215,6 +1215,69 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 		},
 	},
 	{
+		// Socket-scoped ctx.notify: two WS connections on the same account open
+		// simultaneously; only the originator should receive progress
+		// notifications. Relies on the test-only _test_emit_notifications action
+		// (see action_specs.ts) to drive ctx.notify without a real AI provider.
+		name: 'ctx_notify_socket_scoped',
+		fn: async (config, session_cookie) => {
+			const conn1 = await open_ws(config, {cookie: session_cookie});
+			const conn2 = await open_ws(config, {cookie: session_cookie});
+			try {
+				await ensure_ws_registered(conn1);
+				await ensure_ws_registered(conn2);
+
+				const count = 3;
+				conn1.send(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'notify-1',
+						method: '_test_emit_notifications',
+						params: {count},
+					}),
+				);
+
+				// Collect exactly count + 1 messages on conn1 (N notifications
+				// + 1 response). Response-vs-notification ordering differs
+				// between backends: Deno's notify calls ws.send directly so
+				// notifications arrive before the response, whereas Rust
+				// queues notifications through a per-socket mpsc and the
+				// response is sent first from the same dispatch arm. Both
+				// backends deliver the same set of frames; the test is
+				// order-independent.
+				const messages: Array<Record<string, unknown>> = [];
+				for (let i = 0; i < count + 1; i++) {
+					messages.push((await conn1.receive(5_000)) as Record<string, unknown>);
+				}
+				const responses = messages.filter((m) => m.id === 'notify-1');
+				const notifications = messages.filter((m) => m.method === '_test_notification');
+				assert_equal(responses.length, 1, 'exactly one response');
+				assert_equal(notifications.length, count, 'originator notification count');
+				assert_deep_equal(
+					responses[0],
+					{jsonrpc: '2.0', id: 'notify-1', result: {count}},
+					'originator response',
+				);
+
+				// Notifications must be in emission order (0..count).
+				for (let i = 0; i < count; i++) {
+					const n = notifications[i];
+					assert_equal(n.jsonrpc, '2.0', `notification ${i} jsonrpc`);
+					assert_equal(n.method, '_test_notification', `notification ${i} method`);
+					assert_deep_equal(n.params, {index: i}, `notification ${i} params`);
+					assert_equal('id' in n, false, `notification ${i} has no id (is notification)`);
+				}
+
+				// The non-originator socket must NOT have received any
+				// _test_notification frames. expect_silence enforces this.
+				await conn2.expect_silence(300);
+			} finally {
+				conn1.close();
+				conn2.close();
+			}
+		},
+	},
+	{
 		name: 'filer_change_on_file_create',
 		fn: async (config, session_cookie) => {
 			// Open a workspace, create a file in it, verify filer_change notification

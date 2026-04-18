@@ -48,6 +48,7 @@ export type ZzzHandledMethod = Exclude<
 	| 'terminal_data'
 	| 'terminal_exited'
 	| 'workspace_changed'
+	| '_test_notification'
 >;
 
 /** Typed handler map — each handler has per-method input/output types. */
@@ -429,4 +430,11 @@ export const zzz_action_handlers: ZzzActionHandlers = {
 	workspace_list: (_input, ctx) => ({
 		workspaces: ctx.backend.workspace_list(),
 	}),
+
+	_test_emit_notifications: (input, ctx) => {
+		for (let i = 0; i < input.count; i++) {
+			ctx.notify('_test_notification', {index: i});
+		}
+		return {count: input.count};
+	},
 };

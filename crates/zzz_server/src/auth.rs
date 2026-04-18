@@ -356,7 +356,8 @@ pub fn method_auth(method: &str) -> ActionAuth {
         | "completion_create" | "ollama_list" | "ollama_ps" | "ollama_show"
         | "ollama_pull" | "ollama_delete" | "ollama_copy" | "ollama_create"
         | "ollama_unload" | "provider_load_status"
-        | "terminal_create" | "terminal_data_send" | "terminal_resize" | "terminal_close" => {
+        | "terminal_create" | "terminal_data_send" | "terminal_resize" | "terminal_close"
+        | "_test_emit_notifications" => {
             ActionAuth::Authenticated
         }
 
@@ -412,6 +413,10 @@ pub struct ResolvedAuth {
     /// blake3 hash of the session token (for targeted socket revocation).
     /// `None` for bearer token connections (revocable only via account-level revocation).
     pub token_hash: Option<String>,
+    /// `api_token.id` when authenticated via `Authorization: Bearer`.
+    /// `None` for session/daemon-token auth. Used for per-token socket
+    /// revocation on `token_revoke` audit events.
+    pub api_token_id: Option<String>,
     /// How this request was authenticated.
     pub credential_type: CredentialType,
 }
@@ -456,6 +461,7 @@ async fn resolve_cookie_from_headers(
         Ok(Some(context)) => Some(ResolvedAuth {
             context,
             token_hash: Some(token_hash),
+            api_token_id: None,
             credential_type: CredentialType::Session,
         }),
         Ok(None) => None,
@@ -564,6 +570,7 @@ async fn resolve_bearer_from_headers(
             permits,
         },
         token_hash: None, // bearer connections have no session token_hash
+        api_token_id: Some(token_row.id),
         credential_type: CredentialType::ApiToken,
     })
 }
@@ -645,6 +652,7 @@ async fn resolve_daemon_token_from_headers(
             permits,
         },
         token_hash: None, // daemon token connections have no session token_hash
+        api_token_id: None,
         credential_type: CredentialType::DaemonToken,
     })
 }

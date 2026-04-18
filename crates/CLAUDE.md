@@ -91,6 +91,7 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 | POST   | `/api/account/password`           | Change password, revoke all sessions/tokens |
 | GET    | `/api/account/sessions`           | List sessions for authenticated account  |
 | POST   | `/api/account/sessions/:id/revoke`| Revoke a specific session                |
+| POST   | `/api/account/tokens/:id/revoke`  | Revoke an API token (closes its WS sockets only) |
 | GET    | `/api/ws`                         | JSON-RPC 2.0 (WebSocket, cookie/bearer/daemon) |
 | GET    | `/health`                         | Health check (`{"status":"ok"}`)         |
 | GET    | `/*`                              | Static files (if `--static-dir`)         |
@@ -145,12 +146,16 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
    with an `Origin` header. Supports exact match, wildcard port
    (`http://localhost:*`), subdomain wildcard (`https://*.example.com`).
 
-10. **Socket revocation** — `close_sockets_for_session(token_hash)` and
+10. **Socket revocation** — `close_sockets_for_session(token_hash)`,
+    `close_sockets_for_token(api_token_id)`, and
     `close_sockets_for_account(account_id)` methods on `App` close matching
-    WebSocket connections by dropping the channel sender. Session connections
-    are revocable per-session or per-account; bearer connections are revocable
-    only per-account. Called by logout (per-session) and password change
-    (per-account).
+    WebSocket connections by dropping the channel sender; the ws loop breaks
+    on `recv()` returning `None` and sends a 4001 (`WS_CLOSE_SESSION_REVOKED`)
+    Close frame so clients can distinguish revocation from normal close.
+    Session connections are revocable per-session, per-token (for the bearer
+    on this connection — n/a for cookie sessions), or per-account. Called by
+    logout (per-session), password change (per-account), and
+    `/api/account/tokens/:id/revoke` (per-token).
 
 11. **Account status** — `GET /api/account/status` returns account info +
     permits (200) when authenticated, or 401 with optional
@@ -167,7 +172,7 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
 
 ## Integration Tests
 
-79 tests on both backends, all cross-backend (0 skips, 0 backend-specific
+81 tests on both backends, all cross-backend (0 skips, 0 backend-specific
 branches). Both backends bootstrap
 auth (admin account + session cookie), create a non-keeper user (account +
 actor + session, no
@@ -253,15 +258,16 @@ authenticated actions but are rejected from keeper actions.
 `bearer_token_auth`, `bearer_token_invalid`, `bearer_token_expired`,
 `bearer_token_public_action`, `bearer_token_ws`,
 `bearer_token_ws_rejected_invalid`, `keeper_requires_daemon_token`,
-`ws_revocation_on_session_delete`,
+`ws_revocation_on_session_delete`, `ws_revocation_only_for_revoked_token`,
 `bearer_rejects_browser_context_origin`,
 `bearer_rejects_browser_context_referer`, `bearer_empty_value`,
-`bearer_cookie_priority` — 12 tests verify API token auth via
+`bearer_cookie_priority` — 13 tests verify API token auth via
 `Authorization: Bearer` header on HTTP and WebSocket, expired/invalid token
 rejection, keeper credential enforcement (API tokens can't access keeper
-actions), session revocation via DB delete, browser context discard
-(Origin/Referer headers → bearer silently ignored), empty bearer value
-handling, and cookie-over-bearer priority.
+actions), session revocation via DB delete, per-token revocation granularity
+(revoking one bearer token closes its socket only, not other sockets on the
+same account), browser context discard (Origin/Referer headers → bearer
+silently ignored), empty bearer value handling, and cookie-over-bearer priority.
 
 **Account management tests (both backends):**
 `login_success`, `login_invalid_password`, `login_nonexistent_user`,

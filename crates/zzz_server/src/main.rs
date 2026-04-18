@@ -188,6 +188,7 @@ async fn run() -> Result<(), ServerError> {
         .route("/api/account/password", post(account::password_handler))
         .route("/api/account/sessions", get(account::sessions_list_handler))
         .route("/api/account/sessions/{id}/revoke", post(account::session_revoke_handler))
+        .route("/api/account/tokens/{id}/revoke", post(account::token_revoke_handler))
         .with_state(app_state);
 
     if let Some(ref dir) = config.static_dir {

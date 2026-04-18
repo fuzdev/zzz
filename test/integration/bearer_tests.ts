@@ -30,6 +30,19 @@ const EXPIRED_TOKEN_HASH = to_hex(
 );
 
 /**
+ * Second valid token used by the granular-revocation test. The test deletes
+ * this token, so it must be distinct from `BEARER_TOKEN_RAW` (which other
+ * tests still rely on).
+ */
+// fuz_app's `/tokens/:id/revoke` validates id against `^tok_[A-Za-z0-9_-]{12}$`
+// (12 chars after the prefix), so the id must match or the route returns 400.
+const REVOCABLE_TOKEN_ID = 'tok_revoke_test1';
+const REVOCABLE_TOKEN_RAW = 'zzz-integration-test-revocable-token';
+const REVOCABLE_TOKEN_HASH = to_hex(
+	blake3_hash(new TextEncoder().encode(REVOCABLE_TOKEN_RAW)),
+);
+
+/**
  * Insert API tokens into the test database for the bootstrapped admin account.
  *
  * Must be called after bootstrap (admin account exists). Uses the admin
@@ -55,6 +68,11 @@ export const setup_bearer_tokens = async (): Promise<void> => {
 			INSERT INTO api_token (id, account_id, name, token_hash, expires_at)
 			VALUES ('test-api-token-expired', admin_id, 'expired-token', '${sql_escape(EXPIRED_TOKEN_HASH)}', NOW() - INTERVAL '1 day')
 			ON CONFLICT DO NOTHING;
+
+			-- Revocable valid token — used by granular revocation test only
+			INSERT INTO api_token (id, account_id, name, token_hash)
+			VALUES ('${sql_escape(REVOCABLE_TOKEN_ID)}', admin_id, 'revocable-token', '${sql_escape(REVOCABLE_TOKEN_HASH)}')
+			ON CONFLICT DO NOTHING;
 		END $$;
 	`;
 
@@ -75,7 +93,12 @@ export const setup_bearer_tokens = async (): Promise<void> => {
 
 // -- Test definitions ---------------------------------------------------------
 
-type TestFn = (config: BackendConfig) => Promise<void>;
+/**
+ * Test fn — `session_cookie` is the admin cookie from bootstrap, passed for
+ * tests (like granular token revocation) that must call session-authed routes
+ * in addition to exercising bearer behavior. Most tests ignore it.
+ */
+type TestFn = (config: BackendConfig, session_cookie: string) => Promise<void>;
 
 const bearer_test_list: ReadonlyArray<{
 	name: string;
@@ -305,6 +328,59 @@ const bearer_test_list: ReadonlyArray<{
 		},
 	},
 	{
+		name: 'ws_revocation_only_for_revoked_token',
+		fn: async (config, session_cookie) => {
+			// Open two bearer-auth WS connections on the same account:
+			// one with the revocable token, one with the shared bearer token.
+			// Revoke the revocable token via POST /tokens/:id/revoke
+			// (authenticated with admin session cookie). The revocable socket
+			// must close; the other bearer socket must remain usable. Proves
+			// per-token revocation doesn't tear down the account's other sockets.
+			const revocable_ws = await open_ws(config, {bearer: REVOCABLE_TOKEN_RAW});
+			const shared_ws = await open_ws(config, {bearer: BEARER_TOKEN_RAW});
+			try {
+				// Warm up both sockets — ensures `add_connection` ran server-side.
+				revocable_ws.send(
+					JSON.stringify({jsonrpc: '2.0', id: 'warm-r', method: 'ping'}),
+				);
+				await revocable_ws.receive();
+				shared_ws.send(
+					JSON.stringify({jsonrpc: '2.0', id: 'warm-s', method: 'ping'}),
+				);
+				await shared_ws.receive();
+
+				// Revoke only the revocable token — admin cookie authenticates the call.
+				const revoke_res = await fetch(
+					`${config.base_url}/api/account/tokens/${REVOCABLE_TOKEN_ID}/revoke`,
+					{method: 'POST', headers: {Cookie: session_cookie}},
+				);
+				assert_equal(revoke_res.status, 200, 'revoke status');
+				const revoke_body = (await revoke_res.json()) as Record<string, unknown>;
+				assert_equal(revoke_body.ok, true, 'revoke ok');
+				assert_equal(revoke_body.revoked, true, 'revoked flag');
+
+				// The revocable socket must close.
+				const close_event = await revocable_ws.wait_closed(3_000);
+				if (close_event.code === 1000) {
+					throw new Error(
+						`revocable socket closed with 1000 (normal) — expected revocation code`,
+					);
+				}
+
+				// The other bearer socket on the same account must still work.
+				shared_ws.send(
+					JSON.stringify({jsonrpc: '2.0', id: 'post-revoke', method: 'ping'}),
+				);
+				const r = (await shared_ws.receive()) as Record<string, unknown>;
+				assert_equal(r.id, 'post-revoke', 'other bearer socket still responsive');
+			} finally {
+				shared_ws.close();
+				// revocable_ws already closed by server, but close() is idempotent
+				revocable_ws.close();
+			}
+		},
+	},
+	{
 		name: 'bearer_rejects_browser_context_origin',
 		// Both backends silently discard bearer in browser context (Origin present).
 		// Bearer is ignored → no auth → unauthenticated 401.
@@ -441,6 +517,7 @@ const bearer_test_list: ReadonlyArray<{
 
 export const run_bearer_tests = async (
 	config: BackendConfig,
+	session_cookie: string,
 	filter?: string,
 ): Promise<TestResult[]> => {
 	const results: TestResult[] = [];
@@ -450,7 +527,7 @@ export const run_bearer_tests = async (
 		if (test.skip?.includes(config.name)) continue;
 		const start = performance.now();
 		try {
-			await test.fn(config);
+			await test.fn(config, session_cookie);
 			results.push({name: test.name, passed: true, duration_ms: performance.now() - start});
 		} catch (e) {
 			const message = e instanceof Error ? e.message : String(e);

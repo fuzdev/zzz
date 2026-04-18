@@ -543,6 +543,25 @@ pub async fn query_delete_all_sessions_for_account(
     Ok(count)
 }
 
+/// Delete an API token by id, scoped to an account.
+///
+/// Returns `true` if a row was deleted (token existed and belonged to the
+/// given account), `false` otherwise. Scoping to `account_id` prevents one
+/// account from revoking another account's tokens.
+pub async fn query_revoke_api_token_for_account(
+    client: &deadpool_postgres::Object,
+    token_id: &str,
+    account_id: &uuid::Uuid,
+) -> Result<bool, tokio_postgres::Error> {
+    let count = client
+        .execute(
+            "DELETE FROM api_token WHERE id = $1 AND account_id = $2",
+            &[&token_id, account_id],
+        )
+        .await?;
+    Ok(count > 0)
+}
+
 /// Delete all API tokens for an account.
 pub async fn query_delete_all_tokens_for_account(
     client: &deadpool_postgres::Object,

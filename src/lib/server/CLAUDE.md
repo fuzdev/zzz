@@ -225,18 +225,25 @@ is enforced on each message:
    daemon tokens) is also resolved.
 2. **`require_auth` middleware** — rejects unauthenticated upgrades with 401.
 3. **Auth extraction** — `register_websocket_actions` extracts the account ID,
-   credential type, and (for session auth) hashed session token from the Hono
-   context. Bearer token connections pass `null` for token_hash — they're still
-   reachable via `close_sockets_for_account` but not `close_sockets_for_session`.
+   credential type, (for session auth) hashed session token, and (for bearer
+   auth) `api_token.id` from the Hono context. Bearer token connections pass
+   `null` for token_hash — they're reachable via `close_sockets_for_token`
+   (granular — only this token's sockets) and `close_sockets_for_account`
+   (all sockets on the account), but not `close_sockets_for_session`.
 4. **Per-action auth** — Each incoming WS message is checked against the action
    spec's `auth` field before dispatching to the handler. `keeper` actions
    require `daemon_token` credential type AND the keeper role (matching
    `require_keeper` parity). Role-based auth (`{role: string}`) is rejected
    as not yet supported. Batch JSON-RPC arrays are rejected. `public` and
    `authenticated` actions pass through (upgrade-time auth is sufficient).
-5. **Audit event revocation** — `server.ts` hooks `on_audit_event` to close
-   sockets on `session_revoke`, `logout`, `session_revoke_all`,
-   `password_change`, `token_revoke`, and `token_revoke_all` events.
+5. **Audit event revocation** — `server.ts` installs fuz_app's
+   `create_ws_auth_guard` on `on_audit_event`. The guard dispatches
+   `session_revoke` → `close_sockets_for_session`, `token_revoke` →
+   `close_sockets_for_token` (granular — only that token's sockets close),
+   and `session_revoke_all` / `token_revoke_all` / `password_change` →
+   `close_sockets_for_account`. `logout` is handled alongside the guard
+   (account-scoped close) since fuz_app emits `logout`, not `session_revoke`,
+   on explicit logout.
 
 No per-message session revalidation — event-driven revocation via audit events
 is sufficient. ActionPeer and Backend have no auth awareness; auth stays in the

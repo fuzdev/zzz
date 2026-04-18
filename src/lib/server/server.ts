@@ -30,6 +30,7 @@ import {load_server_env} from './server_env.ts';
 import {is_open_host} from './security.ts';
 import {register_websocket_actions} from './register_websocket_actions.ts';
 import {BackendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws_backend.js';
+import {create_ws_auth_guard} from '@fuzdev/fuz_app/actions/transports_ws_auth_guard.js';
 
 const log = new Logger('[server]');
 
@@ -122,32 +123,24 @@ export const start_server = async (): Promise<void> => {
 			transport,
 		});
 
-		// Close WebSockets when sessions are revoked via audit events.
+		// Close WebSockets when sessions/tokens are revoked via audit events.
+		// `create_ws_auth_guard` dispatches session_revoke → close_sockets_for_session,
+		// token_revoke → close_sockets_for_token, and session_revoke_all /
+		// token_revoke_all / password_change → close_sockets_for_account.
+		//
+		// fuz_app emits `logout` (not `session_revoke`) when a user logs out, and
+		// the guard intentionally ignores it. Compose a logout handler here so
+		// the logged-out account's WS connections are torn down along with the
+		// session row. The session_id isn't in the logout event metadata, so we
+		// fall back to account-scoped close — aligned with the pre-guard behavior.
 		const original_on_audit_event = app_backend.deps.on_audit_event;
+		const ws_guard = create_ws_auth_guard(transport, log);
 		app_backend.deps.on_audit_event = (event) => {
 			original_on_audit_event(event);
-			switch (event.event_type) {
-				case 'session_revoke': {
-					const token_hash = (event.metadata as {session_id?: string} | null)?.session_id;
-					if (token_hash) {
-						const count = transport.close_sockets_for_session(token_hash);
-						if (count) log.info(`Closed ${count} socket(s) for revoked session`);
-					}
-					break;
-				}
-				case 'logout':
-				case 'session_revoke_all':
-				case 'password_change':
-				case 'token_revoke':
-				case 'token_revoke_all': {
-					if (event.account_id) {
-						const count = transport.close_sockets_for_account(event.account_id as Uuid);
-						if (count) log.info(`Closed ${count} socket(s) for ${event.event_type}`);
-					}
-					break;
-				}
-				default:
-					break;
+			ws_guard(event);
+			if (event.event_type === 'logout' && event.outcome !== 'failure' && event.account_id) {
+				const count = transport.close_sockets_for_account(event.account_id as Uuid);
+				if (count) log.info(`Closed ${count} socket(s) for ${event.event_type}`);
 			}
 		};
 	}

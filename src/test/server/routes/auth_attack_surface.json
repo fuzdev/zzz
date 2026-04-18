@@ -895,7 +895,7 @@
 				"request_context",
 				"bearer_auth"
 			],
-			"description": "JSON-RPC 2.0 endpoint — 23 methods",
+			"description": "JSON-RPC 2.0 endpoint — 24 methods",
 			"is_mutation": true,
 			"transaction": false,
 			"rate_limit_key": null,
@@ -938,7 +938,7 @@
 				"request_context",
 				"bearer_auth"
 			],
-			"description": "JSON-RPC 2.0 endpoint (cacheable reads) — 23 methods",
+			"description": "JSON-RPC 2.0 endpoint (cacheable reads) — 24 methods",
 			"is_mutation": false,
 			"transaction": false,
 			"rate_limit_key": null,
@@ -2900,6 +2900,30 @@
 					},
 					"side_effects": false,
 					"description": "List all open workspaces."
+				},
+				{
+					"name": "_test_emit_notifications",
+					"auth": {"type": "authenticated"},
+					"input_schema": {
+						"type": "object",
+						"properties": {"count": {"type": "integer", "minimum": 0, "maximum": 100}},
+						"required": ["count"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"count": {
+								"type": "integer",
+								"minimum": -9007199254740991,
+								"maximum": 9007199254740991
+							}
+						},
+						"required": ["count"],
+						"additionalProperties": false
+					},
+					"side_effects": false,
+					"description": "Test-only. Emits `count` `_test_notification` notifications via ctx.notify, then returns {count}."
 				}
 			]
 		}

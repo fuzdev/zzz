@@ -76,6 +76,8 @@ export interface WsConnection {
 	receive(timeout_ms?: number): Promise<unknown>;
 	expect_silence(timeout_ms?: number): Promise<void>;
 	close(): void;
+	/** Resolve with the close event once the server tears down the socket. */
+	wait_closed(timeout_ms?: number): Promise<{code: number; reason: string}>;
 }
 
 /** Open a WebSocket connection, resolves once connected. */
@@ -110,6 +112,14 @@ export const open_ws = (
 		// Tests that specifically assert on filer_change override by passing
 		// an explicit `ignore_methods` list.
 		const ignore = new Set(options?.ignore_methods ?? ['filer_change']);
+
+		// Captured at close time — `wait_closed` reads or awaits it.
+		let close_info: {code: number; reason: string} | null = null;
+		const close_waiters: Array<{
+			resolve: (value: {code: number; reason: string}) => void;
+			reject: (error: Error) => void;
+			timer: ReturnType<typeof setTimeout>;
+		}> = [];
 
 		ws.onmessage = (event) => {
 			const data = JSON.parse(String(event.data));
@@ -167,11 +177,33 @@ export const open_ws = (
 						pending.push({resolve: res, reject: rej, timer, silent: true});
 					}),
 				close: () => ws.close(),
+				wait_closed: (timeout_ms = 5_000) =>
+					new Promise((res, rej) => {
+						if (close_info) {
+							res(close_info);
+							return;
+						}
+						const timer = setTimeout(() => {
+							const idx = close_waiters.findIndex((w) => w.timer === timer);
+							if (idx >= 0) close_waiters.splice(idx, 1);
+							rej(new Error('WebSocket did not close in time'));
+						}, timeout_ms);
+						close_waiters.push({resolve: res, reject: rej, timer});
+					}),
 			});
 
-		// Handle connection rejection (e.g. 401 at upgrade)
+		// Handle both connection-time rejection (401 at upgrade) and
+		// post-open close events that tests need to observe (e.g. revocation).
 		ws.onclose = (event) => {
-			if (event.code !== 1000) {
+			close_info = {code: event.code, reason: event.reason};
+			for (const waiter of close_waiters.splice(0)) {
+				clearTimeout(waiter.timer);
+				waiter.resolve(close_info);
+			}
+			if (event.code !== 1000 && ws.readyState === WebSocket.CLOSED) {
+				// If we never finished connecting, reject the outer promise.
+				// After onopen fired, onopen's resolve has already run — reject
+				// here is a no-op on a settled promise.
 				const err = new Error(`WebSocket closed: code=${event.code} reason=${event.reason}`);
 				reject(err);
 			}

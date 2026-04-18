@@ -73,6 +73,10 @@ export const register_websocket_actions = ({
 			// they're still reachable via close_sockets_for_account.
 			const token_hash =
 				credential_type === 'session' ? hash_session_token(c.get('auth_session_id')!) : null;
+			// `api_token.id` — set only for bearer-authenticated connections;
+			// enables `close_sockets_for_token` to tear down just this socket
+			// on `token_revoke` without affecting the account's other sockets.
+			const api_token_id = c.get('auth_api_token_id');
 
 			// Per-socket abort controller — fires on socket close, threaded into
 			// every in-flight handler's ctx.signal on this connection. A
@@ -82,7 +86,7 @@ export const register_websocket_actions = ({
 			const socket_abort_controller = new AbortController();
 			return {
 				onOpen: (event, ws) => {
-					const connection_id = transport.add_connection(ws, token_hash, account_id);
+					const connection_id = transport.add_connection(ws, token_hash, account_id, api_token_id);
 					backend.log?.debug('[ws] ws opened', connection_id, event);
 				},
 				onMessage: async (event, ws) => {

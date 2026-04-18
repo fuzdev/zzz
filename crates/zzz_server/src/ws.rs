@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -44,6 +44,11 @@ pub async fn ws_handler(
     ws.on_upgrade(move |socket| handle_connection(socket, app, resolved))
 }
 
+/// Matches `fuz_app`'s `WS_CLOSE_SESSION_REVOKED` (4001). Applied when the
+/// connection's sender is dropped by `close_sockets_for_*`, so the client
+/// can distinguish revocation from a normal (1000) close.
+const WS_CLOSE_SESSION_REVOKED: u16 = 4001;
+
 async fn handle_connection(socket: WebSocket, app: Arc<App>, resolved: ResolvedAuth) {
     let (mut tx, mut rx) = socket.split();
 
@@ -52,7 +57,12 @@ async fn handle_connection(socket: WebSocket, app: Arc<App>, resolved: ResolvedA
     // only via account-level revocation (matching Deno behavior).
     let (notify_tx, mut notify_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
     let account_id = Some(resolved.context.account.id);
-    let conn_id = app.add_connection(notify_tx, resolved.token_hash, account_id);
+    let conn_id = app.add_connection(
+        notify_tx,
+        resolved.token_hash,
+        account_id,
+        resolved.api_token_id,
+    );
     let auth_context = resolved.context;
     let credential_type = resolved.credential_type;
 
@@ -72,10 +82,21 @@ async fn handle_connection(socket: WebSocket, app: Arc<App>, resolved: ResolvedA
         })
     };
 
+    // `true` iff the inner message loop broke because the connection was
+    // revoked server-side (sender dropped by `close_sockets_for_*`). We send
+    // a 4001 Close frame on exit in that case so the client sees the right code.
+    let mut revoked = false;
+
     loop {
         tokio::select! {
-            // Server-initiated message (broadcast or send_to)
-            Some(msg) = notify_rx.recv() => {
+            // Server-initiated message (broadcast or send_to). `None` means
+            // the sender was dropped by a revocation path — break and send
+            // the 4001 close frame below.
+            notify_msg = notify_rx.recv() => {
+                let Some(msg) = notify_msg else {
+                    revoked = true;
+                    break;
+                };
                 if tx.send(Message::Text(msg.into())).await.is_err() {
                     break;
                 }
@@ -146,5 +167,13 @@ async fn handle_connection(socket: WebSocket, app: Arc<App>, resolved: ResolvedA
     // Disconnect: cancel any in-flight streaming, drop the connection.
     socket_signal.cancel();
     app.remove_connection(conn_id);
+    if revoked {
+        let close = Message::Close(Some(CloseFrame {
+            code: WS_CLOSE_SESSION_REVOKED,
+            reason: "Session revoked".into(),
+        }));
+        // Best-effort — connection may already be gone.
+        let _ = tx.send(close).await;
+    }
     tracing::debug!(conn_id, "ws: connection closed");
 }

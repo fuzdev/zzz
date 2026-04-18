@@ -31,10 +31,14 @@ pub type ConnectionSender = mpsc::UnboundedSender<String>;
 /// Tracks the channel sender plus auth context for targeted revocation:
 /// - `token_hash`: blake3 hash of the session token (for session-level revocation)
 /// - `account_id`: account UUID (for account-level revocation on logout/password change)
+/// - `api_token_id`: `api_token.id` for bearer-authenticated connections (for
+///   per-token revocation on `token_revoke` without tearing down the account's
+///   other sockets)
 pub struct ConnectionInfo {
     pub sender: ConnectionSender,
     pub token_hash: Option<String>,
     pub account_id: Option<uuid::Uuid>,
+    pub api_token_id: Option<String>,
 }
 
 // -- App state (long-lived, shared via Arc) -----------------------------------
@@ -110,6 +114,7 @@ impl App {
         sender: ConnectionSender,
         token_hash: Option<String>,
         account_id: Option<uuid::Uuid>,
+        api_token_id: Option<String>,
     ) -> ConnectionId {
         let id = self
             .next_connection_id
@@ -121,6 +126,7 @@ impl App {
                     sender,
                     token_hash,
                     account_id,
+                    api_token_id,
                 },
             );
         }
@@ -171,6 +177,29 @@ impl App {
                     count += 1;
                 }
                 !matches // retain = keep non-matching
+            });
+        }
+        count
+    }
+
+    /// Close all WebSocket connections bound to a specific `api_token.id`.
+    ///
+    /// Used on `token_revoke` so revoking one API token doesn't tear down
+    /// the account's session-authenticated sockets or other tokens' sockets.
+    ///
+    /// Returns the number of connections closed.
+    pub fn close_sockets_for_token(&self, target_id: &str) -> usize {
+        let mut count = 0;
+        if let Ok(mut conns) = self.connections.write() {
+            conns.retain(|_, info| {
+                let matches = info
+                    .api_token_id
+                    .as_deref()
+                    .is_some_and(|id| id == target_id);
+                if matches {
+                    count += 1;
+                }
+                !matches
             });
         }
         count
@@ -324,8 +353,36 @@ pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Val
         "terminal_data_send" => handle_terminal_data_send(params, ctx).await,
         "terminal_resize" => handle_terminal_resize(params, ctx).await,
         "terminal_close" => handle_terminal_close(params, ctx).await,
+        "_test_emit_notifications" => handle_test_emit_notifications(params, ctx),
         other => Err(rpc::method_not_found(other)),
     }
+}
+
+// -- Test-only handler --------------------------------------------------------
+
+#[derive(Serialize)]
+struct TestEmitNotificationsResult {
+    count: u64,
+}
+
+/// Test-only: emit `count` `_test_notification` notifications via `ctx.notify`,
+/// then return `{count}`. Lets the integration suite verify `ctx.notify`
+/// routing (socket-scoped delivery) without a real AI provider.
+fn handle_test_emit_notifications(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+    let count = params
+        .get("count")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'count' parameter"))?;
+    if count > 100 {
+        return Err(rpc::invalid_params("count must be <= 100"));
+    }
+
+    for i in 0..count {
+        (ctx.notify)("_test_notification", serde_json::json!({"index": i}));
+    }
+
+    serde_json::to_value(TestEmitNotificationsResult { count })
+        .map_err(|_| rpc::internal_error("serialization failed"))
 }
 
 // -- Handlers -----------------------------------------------------------------

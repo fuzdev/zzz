@@ -363,7 +363,7 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 		const non_keeper_cookie = await setup_non_keeper_user(config);
 		await setup_bearer_tokens();
 		const results = await run_tests(config, filter, session_cookie, non_keeper_cookie);
-		const bearer_results = await run_bearer_tests(config, filter);
+		const bearer_results = await run_bearer_tests(config, session_cookie, filter);
 		results.push(...bearer_results);
 		const account_results = await run_account_tests(config, filter);
 		results.push(...account_results);
