@@ -10,7 +10,12 @@
  */
 
 import {test, assert, describe} from 'vitest';
-import {create_ws_test_harness} from '@fuzdev/fuz_app/testing/ws_round_trip.js';
+import {
+	build_broadcast_api,
+	create_ws_test_harness,
+	is_notification,
+	type JsonrpcNotificationFrame,
+} from '@fuzdev/fuz_app/testing/ws_round_trip.js';
 
 import {
 	_test_emit_notifications_action_spec,
@@ -18,13 +23,6 @@ import {
 } from '$lib/action_specs.js';
 import {DiskfileDirectoryPath} from '$lib/diskfile_types.js';
 import type {BackendActionsApi} from '$lib/server/backend_actions_api.js';
-
-import {
-	build_broadcast_api,
-	is_notification,
-	settle_open,
-	type JsonrpcNotification,
-} from './ws_test_harness.js';
 
 // A stub dispatch handler — broadcast tests don't invoke it, but the
 // harness requires one per registered request/response spec. Kept minimal
@@ -46,9 +44,8 @@ describe('zzz WebSocket — broadcast', () => {
 			specs: [workspace_changed_action_spec],
 		});
 
-		const client_a = harness.connect();
-		const client_b = harness.connect();
-		await settle_open();
+		const client_a = await harness.connect();
+		const client_b = await harness.connect();
 
 		await broadcast.workspace_changed({
 			type: 'open',
@@ -60,8 +57,8 @@ describe('zzz WebSocket — broadcast', () => {
 		});
 
 		const match = is_notification('workspace_changed');
-		const a = await client_a.wait_for<JsonrpcNotification<{workspace: {name: string}}>>(match);
-		const b = await client_b.wait_for<JsonrpcNotification<{workspace: {name: string}}>>(match);
+		const a = await client_a.wait_for<JsonrpcNotificationFrame<{workspace: {name: string}}>>(match);
+		const b = await client_b.wait_for<JsonrpcNotificationFrame<{workspace: {name: string}}>>(match);
 		assert.strictEqual(a.params.workspace.name, 'test-workspace');
 		assert.strictEqual(b.params.workspace.name, 'test-workspace');
 	});
@@ -76,9 +73,8 @@ describe('zzz WebSocket — broadcast', () => {
 			specs: [workspace_changed_action_spec],
 		});
 
-		const staying = harness.connect();
-		const leaving = harness.connect();
-		await settle_open();
+		const staying = await harness.connect();
+		const leaving = await harness.connect();
 
 		await leaving.close();
 

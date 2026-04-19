@@ -18,23 +18,19 @@
  */
 
 import {test, assert, describe} from 'vitest';
-import {create_ws_test_harness} from '@fuzdev/fuz_app/testing/ws_round_trip.js';
+import {
+	create_ws_test_harness,
+	is_notification,
+	is_response_for,
+	type JsonrpcErrorResponseFrame,
+	type JsonrpcNotificationFrame,
+} from '@fuzdev/fuz_app/testing/ws_round_trip.js';
 
 import {
 	_test_emit_notifications_action_spec,
 	_test_notification_action_spec,
 	provider_update_api_key_action_spec,
 } from '$lib/action_specs.js';
-
-import {
-	is_notification,
-	is_response_for,
-	send_rpc,
-	settle_open,
-	wait_result,
-	type JsonrpcErrorResponse,
-	type JsonrpcNotification,
-} from './ws_test_harness.js';
 
 describe('zzz WebSocket — dispatch', () => {
 	test('ctx.notify streams notifications to the originating socket only', async () => {
@@ -51,17 +47,17 @@ describe('zzz WebSocket — dispatch', () => {
 			},
 		});
 
-		const originator = harness.connect();
-		const bystander = harness.connect();
-		await settle_open();
+		const originator = await harness.connect();
+		const bystander = await harness.connect();
 
-		await send_rpc(originator, 1, '_test_emit_notifications', {count: 3});
-		const result = await wait_result<{count: number}>(originator, 1);
+		const result = await originator.request<{count: number}>(1, '_test_emit_notifications', {
+			count: 3,
+		});
 		assert.deepStrictEqual(result, {count: 3});
 
 		const match = is_notification('_test_notification');
 		const received = originator.messages.filter(match) as Array<
-			JsonrpcNotification<{index: number}>
+			JsonrpcNotificationFrame<{index: number}>
 		>;
 		assert.strictEqual(received.length, 3);
 		for (let i = 0; i < 3; i++) {
@@ -89,13 +85,17 @@ describe('zzz WebSocket — dispatch', () => {
 
 		// Default identity is credential_type: 'session' with no roles —
 		// fails both the daemon_token check and the keeper role check.
-		const client = harness.connect();
-		await send_rpc(client, 99, 'provider_update_api_key', {
-			provider_name: 'claude',
-			api_key: 'sk-test',
+		const client = await harness.connect();
+		// Raw send + wait_for so the test can assert on the error frame;
+		// `client.request` would unwrap and throw.
+		await client.send({
+			jsonrpc: '2.0',
+			id: 99,
+			method: 'provider_update_api_key',
+			params: {provider_name: 'claude', api_key: 'sk-test'},
 		});
 
-		const response = await client.wait_for<JsonrpcErrorResponse>(is_response_for(99));
+		const response = await client.wait_for<JsonrpcErrorResponseFrame>(is_response_for(99));
 		assert.ok('error' in response, 'expected error response');
 		assert.strictEqual(response.error.code, -32002);
 	});
@@ -113,14 +113,24 @@ describe('zzz WebSocket — dispatch', () => {
 			},
 		});
 
-		const client = harness.connect();
-		await send_rpc(client, 7, '_test_emit_notifications', {count: -1});
+		const client = await harness.connect();
+		// Raw send + wait_for for error-frame assertions.
+		await client.send({
+			jsonrpc: '2.0',
+			id: 7,
+			method: '_test_emit_notifications',
+			params: {count: -1},
+		});
 
-		const response = await client.wait_for<JsonrpcErrorResponse>(is_response_for(7));
+		const response = await client.wait_for<JsonrpcErrorResponseFrame<{issues?: Array<unknown>}>>(
+			is_response_for(7),
+		);
 		assert.ok('error' in response, 'expected error response');
 		assert.strictEqual(response.error.code, -32602);
-		const data = response.error.data as {issues?: Array<unknown>} | undefined;
-		assert.ok(Array.isArray(data?.issues) && data.issues.length > 0, 'expected zod issues');
+		assert.ok(
+			Array.isArray(response.error.data?.issues) && response.error.data.issues.length > 0,
+			'expected zod issues',
+		);
 	});
 
 	test('ctx.signal aborts when the socket closes', async () => {
@@ -145,11 +155,17 @@ describe('zzz WebSocket — dispatch', () => {
 			},
 		});
 
-		const client = harness.connect();
-		await settle_open();
+		const client = await harness.connect();
 
 		// Kick off dispatch without awaiting — the handler hangs until abort.
-		const dispatch = send_rpc(client, 1, '_test_emit_notifications', {count: 0});
+		// Raw `send` instead of `request` because `request` would block waiting
+		// for a response that never arrives until the close aborts the handler.
+		const dispatch = client.send({
+			jsonrpc: '2.0',
+			id: 1,
+			method: '_test_emit_notifications',
+			params: {count: 0},
+		});
 
 		// Yield a few microtasks so the handler runs up to the await.
 		for (let i = 0; i < 5; i++) await Promise.resolve();
@@ -185,16 +201,12 @@ describe('zzz WebSocket — dispatch', () => {
 			},
 		});
 
-		const client = harness.connect();
-		await settle_open();
+		const client = await harness.connect();
 
 		// Fire both without awaiting — overlapping dispatches on one socket.
-		const p1 = send_rpc(client, 101, '_test_emit_notifications', {count: 5});
-		const p2 = send_rpc(client, 102, '_test_emit_notifications', {count: 3});
-		await Promise.all([p1, p2]);
-
-		const r1 = await wait_result<{count: number}>(client, 101);
-		const r2 = await wait_result<{count: number}>(client, 102);
+		const p1 = client.request<{count: number}>(101, '_test_emit_notifications', {count: 5});
+		const p2 = client.request<{count: number}>(102, '_test_emit_notifications', {count: 3});
+		const [r1, r2] = await Promise.all([p1, p2]);
 		assert.strictEqual(r1.count, 5);
 		assert.strictEqual(r2.count, 3);
 
