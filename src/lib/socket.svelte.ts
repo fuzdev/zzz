@@ -286,7 +286,7 @@ export class Socket implements WebsocketConnection {
 			if (sent) {
 				this.last_send_time = Date.now();
 			} else {
-				this.#fail_message(message, 'send returned false');
+				this.#fail_message(message, this.#client.last_send_error?.message ?? 'send returned false');
 			}
 		} catch (error) {
 			this.#fail_message(message, error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE);
