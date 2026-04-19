@@ -22,6 +22,7 @@ import type {
 } from '@fuzdev/fuz_app/actions/action_types.js';
 import {BackendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws_backend.js';
 import {heartbeat_action} from '@fuzdev/fuz_app/actions/heartbeat.js';
+import {cancel_action} from '@fuzdev/fuz_app/actions/cancel.js';
 
 import {all_action_specs} from '../action_specs.js';
 import type {Backend} from './backend.js';
@@ -56,11 +57,14 @@ export const register_websocket_actions = ({
 }: RegisterWebsocketActionsOptions): void => {
 	backend.peer.transports.register_transport(transport);
 
-	// Build the action array: shared heartbeat first, then every zzz spec
-	// paired with its handler (remote-notification specs have no handler).
-	const actions: Array<Action<ZzzWsContext>> = [heartbeat_action as Action<ZzzWsContext>];
+	// Build the action array: shared heartbeat + cancel first, then every zzz
+	// spec paired with its handler (remote-notification specs have no handler).
+	const actions: Array<Action<ZzzWsContext>> = [
+		heartbeat_action as Action<ZzzWsContext>,
+		cancel_action as Action<ZzzWsContext>,
+	];
 	for (const spec of all_action_specs) {
-		if (spec.method === 'heartbeat') continue;
+		if (spec.method === 'heartbeat' || spec.method === 'cancel') continue;
 		const handler = (zzz_action_handlers as Record<string, unknown>)[spec.method];
 		if (handler) {
 			actions.push({

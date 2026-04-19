@@ -4,10 +4,11 @@ import {z} from 'zod';
 import {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.js';
 import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 import {heartbeat_action_spec} from '@fuzdev/fuz_app/actions/heartbeat.js';
+import {cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.js';
 
 // Re-export so the codegen (which uses `import * as specs from './action_specs'`)
-// sees the shared spec without duplicating the heartbeat schema locally.
-export {heartbeat_action_spec};
+// sees the shared specs without duplicating the schemas locally.
+export {heartbeat_action_spec, cancel_action_spec};
 
 import {
 	DiskfileChange,
@@ -560,6 +561,7 @@ export const _test_notification_action_spec = {
 
 export const all_action_specs: Array<ActionSpecUnion> = [
 	heartbeat_action_spec,
+	cancel_action_spec,
 	ping_action_spec,
 	session_load_action_spec,
 	filer_change_action_spec,

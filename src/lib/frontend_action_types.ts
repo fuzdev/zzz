@@ -36,6 +36,9 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'heartbeat', 'receive_error', 'handling'>,
 		) => void | Promise<void>;
 	};
+	cancel?: {
+		send?: (action_event: TypedActionEvent<'cancel', 'send', 'handling'>) => void | Promise<void>;
+	};
 	ping?: {
 		send_request?: (
 			action_event: TypedActionEvent<'ping', 'send_request', 'handling'>,

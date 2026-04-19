@@ -10,6 +10,7 @@ import type {ActionInputs, ActionOutputs} from './action_collections.js';
  */
 export const ActionMethod = z.enum([
 	'heartbeat',
+	'cancel',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -81,6 +82,7 @@ export type RequestResponseActionMethod = z.infer<typeof RequestResponseActionMe
  * Names of all remote_notification actions.
  */
 export const RemoteNotificationActionMethod = z.enum([
+	'cancel',
 	'filer_change',
 	'completion_progress',
 	'ollama_progress',
@@ -102,6 +104,7 @@ export type LocalCallActionMethod = z.infer<typeof LocalCallActionMethod>;
  */
 export const FrontendActionMethod = z.enum([
 	'heartbeat',
+	'cancel',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -142,6 +145,7 @@ export type FrontendActionMethod = z.infer<typeof FrontendActionMethod>;
  */
 export const BackendActionMethod = z.enum([
 	'heartbeat',
+	'cancel',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -185,6 +189,9 @@ export interface ActionsApi {
 	heartbeat: (
 		input: ActionInputs['heartbeat'],
 	) => Promise<Result<{value: ActionOutputs['heartbeat']}, {error: JsonrpcErrorObject}>>;
+	cancel: (
+		input: ActionInputs['cancel'],
+	) => Promise<Result<{value: ActionOutputs['cancel']}, {error: JsonrpcErrorObject}>>;
 	ping: (
 		input?: void,
 	) => Promise<Result<{value: ActionOutputs['ping']}, {error: JsonrpcErrorObject}>>;

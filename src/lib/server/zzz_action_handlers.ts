@@ -51,8 +51,10 @@ export type ZzzHandledMethod = Exclude<
 	| 'terminal_exited'
 	| 'workspace_changed'
 	| '_test_notification'
-	// shared fuz_app actions — handler ships with the spec via `heartbeat_action`
+	// shared fuz_app actions — handlers ship with the specs via
+	// `heartbeat_action` / `cancel_action` (cancel is dispatcher-owned).
 	| 'heartbeat'
+	| 'cancel'
 >;
 
 /** Typed handler map — each handler has per-method input/output types. */
