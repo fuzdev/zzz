@@ -10,7 +10,7 @@ import type {DiskfileDirectoryPath} from './diskfile_types.js';
 import type {Uuid} from './zod_helpers.js';
 
 // TODO: workspace history — soft-close keeps workspace in set for later re-opening (needs DB)
-// TODO: pull-based lazy activation — only start Filers when a client connects or requests data (see grimoire lore)
+// TODO: pull-based lazy activation — only start Filers when a client connects or requests data
 // TODO: hooks/automation — respond to fs events within workspaces
 
 export const WorkspacesJson = CellJson.extend({
