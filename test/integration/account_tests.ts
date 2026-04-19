@@ -21,7 +21,7 @@ const post_account = async (
 	options?: {cookie?: string},
 ): Promise<{status: number; body: unknown; set_cookies: string[]}> => {
 	const headers: Record<string, string> = {'Content-Type': 'application/json'};
-	if (options?.cookie) headers['Cookie'] = options.cookie;
+	if (options?.cookie) headers.Cookie = options.cookie;
 	const res = await fetch(`${config.base_url}${path}`, {
 		method: 'POST',
 		headers,
@@ -39,7 +39,7 @@ const get_account = async (
 	options?: {cookie?: string},
 ): Promise<{status: number; body: unknown}> => {
 	const headers: Record<string, string> = {};
-	if (options?.cookie) headers['Cookie'] = options.cookie;
+	if (options?.cookie) headers.Cookie = options.cookie;
 	const res = await fetch(`${config.base_url}${path}`, {
 		method: 'GET',
 		headers,

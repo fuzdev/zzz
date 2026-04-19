@@ -8,7 +8,7 @@
 	// TODO maybe rewrite with contenteditable, be less opinionated
 
 	let {
-		value = $bindable(),
+		value,
 		attrs,
 		span_attrs,
 		input_attrs,

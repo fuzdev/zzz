@@ -69,7 +69,7 @@ const open_browser = async (
 	// Try xdg-open (Linux), then open (macOS), then start (Windows)
 	const openers = ['xdg-open', 'open', 'start'];
 	for (const opener of openers) {
-		const result = await runtime.run_command(opener, [url]); // eslint-disable-line no-await-in-loop
+		const result = await runtime.run_command(opener, [url]);
 		if (result.success) return;
 	}
 	// If all fail, just print the URL

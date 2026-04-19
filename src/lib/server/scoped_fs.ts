@@ -265,7 +265,7 @@ export class ScopedFs {
 			if (parent === current) break;
 
 			try {
-				const stats = await fs.lstat(parent); // eslint-disable-line no-await-in-loop
+				const stats = await fs.lstat(parent);
 				if (stats.isSymbolicLink()) {
 					throw new SymlinkNotAllowedError(parent);
 				}

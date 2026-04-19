@@ -350,7 +350,7 @@ interface BackendRun {
 const run_for_backend = async (config: BackendConfig, filter?: string): Promise<BackendRun> => {
 	console.log(`\n${'='.repeat(60)}`);
 	console.log(`  Backend: ${config.name}`);
-	console.log(`${'='.repeat(60)}`);
+	console.log('='.repeat(60));
 
 	let child: Deno.ChildProcess | null = null;
 	try {

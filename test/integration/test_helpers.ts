@@ -57,8 +57,8 @@ export const post_rpc = async (
 	options?: {cookie?: string; bearer?: string},
 ): Promise<{status: number; body: unknown}> => {
 	const headers: Record<string, string> = {'Content-Type': 'application/json'};
-	if (options?.cookie) headers['Cookie'] = options.cookie;
-	if (options?.bearer !== undefined) headers['Authorization'] = `Bearer ${options.bearer}`;
+	if (options?.cookie) headers.Cookie = options.cookie;
+	if (options?.bearer !== undefined) headers.Authorization = `Bearer ${options.bearer}`;
 	const res = await fetch(rpc_url(config), {
 		method: 'POST',
 		headers,
@@ -87,8 +87,8 @@ export const open_ws = (
 ): Promise<WsConnection> =>
 	new Promise((resolve, reject) => {
 		const ws_headers: Record<string, string> = {};
-		if (options?.cookie) ws_headers['Cookie'] = options.cookie;
-		if (options?.bearer !== undefined) ws_headers['Authorization'] = `Bearer ${options.bearer}`;
+		if (options?.cookie) ws_headers.Cookie = options.cookie;
+		if (options?.bearer !== undefined) ws_headers.Authorization = `Bearer ${options.bearer}`;
 		const ws_options = Object.keys(ws_headers).length > 0 ? {headers: ws_headers} : undefined;
 		const ws = new WebSocket(ws_url(config), ws_options as unknown as string[]);
 		const pending: Array<{

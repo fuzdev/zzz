@@ -13,7 +13,7 @@
 	const {models} = app;
 
 	let {
-		show = $bindable(false),
+		show,
 		onpick,
 		filter,
 		dialog_props,

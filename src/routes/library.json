@@ -49,7 +49,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.3.16",
-			"@fuzdev/fuz_app": "^0.26.0",
+			"@fuzdev/fuz_app": "^0.27.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.58.0",
 			"@fuzdev/fuz_ui": "^0.191.4",
@@ -185,12 +185,12 @@
 							{
 								"name": "heartbeat",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<\n\t\t'heartbeat',\n\t\tActionInputs['heartbeat'],\n\t\tActionOutputs['heartbeat']\n\t>"
+								"type_signature": "ActionEventRequestResponseData<'heartbeat'>"
 							},
 							{
 								"name": "cancel",
 								"kind": "variable",
-								"type_signature": "ActionEventRemoteNotificationData<'cancel', ActionInputs['cancel']>"
+								"type_signature": "ActionEventRemoteNotificationData<'cancel'>"
 							},
 							{
 								"name": "ping",
@@ -3644,8 +3644,7 @@
 						"props": [
 							{
 								"name": "value",
-								"type": "string",
-								"bindable": true
+								"type": "string"
 							},
 							{
 								"name": "restore_icon",
@@ -4040,8 +4039,7 @@
 						"props": [
 							{
 								"name": "content",
-								"type": "string",
-								"bindable": true
+								"type": "string"
 							},
 							{
 								"name": "token_count",
@@ -4240,8 +4238,7 @@
 						"props": [
 							{
 								"name": "enabled",
-								"type": "boolean",
-								"bindable": true
+								"type": "boolean"
 							},
 							{
 								"name": "label",
@@ -6406,8 +6403,7 @@
 						"props": [
 							{
 								"name": "value",
-								"type": "string",
-								"bindable": true
+								"type": "string"
 							},
 							{
 								"name": "attrs",
@@ -9417,8 +9413,7 @@
 						"props": [
 							{
 								"name": "show",
-								"type": "boolean",
-								"bindable": true
+								"type": "boolean"
 							},
 							{
 								"name": "onpick",
@@ -9611,8 +9606,7 @@
 						"props": [
 							{
 								"name": "selected_model",
-								"type": "Model",
-								"bindable": true
+								"type": "Model"
 							},
 							{
 								"name": "models",
@@ -18420,8 +18414,7 @@
 							{
 								"name": "active",
 								"type": "boolean",
-								"description": "Current state of the toggle",
-								"bindable": true
+								"description": "Current state of the toggle"
 							},
 							{
 								"name": "active_content",

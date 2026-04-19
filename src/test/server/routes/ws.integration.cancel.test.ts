@@ -61,7 +61,7 @@ describe('zzz WebSocket — cancel', () => {
 		// Let the dispatcher register the pending controller.
 		for (let i = 0; i < 5; i++) await Promise.resolve();
 		assert.ok(captured_signal, 'handler should have captured ctx.signal');
-		assert.strictEqual(captured_signal!.aborted, false);
+		assert.strictEqual(captured_signal.aborted, false);
 
 		// Client-initiated cancel — the primitive under test.
 		await client.send({
@@ -73,7 +73,7 @@ describe('zzz WebSocket — cancel', () => {
 		const response = await client.wait_for<JsonrpcErrorResponseFrame>(is_response_for(42));
 		assert.ok('error' in response);
 		assert.match(String(response.error.message), /aborted mid-stream/);
-		assert.strictEqual(captured_signal!.aborted, true);
+		assert.strictEqual(captured_signal.aborted, true);
 	});
 
 	test('cancel for completed id is a no-op (idempotent)', async () => {

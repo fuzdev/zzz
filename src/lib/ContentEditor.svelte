@@ -12,7 +12,7 @@
 	import Glyph from './Glyph.svelte';
 
 	let {
-		content = $bindable(),
+		content,
 		token_count: token_count_prop,
 		placeholder = GLYPH_PLACEHOLDER,
 		readonly = false,

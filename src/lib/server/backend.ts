@@ -407,7 +407,7 @@ export class Backend implements ActionEventEnvironment {
 				for (const entry of parsed) {
 					if (!entry?.path) continue;
 					try {
-						await this.workspace_open(entry.path, entry.opened_at); // eslint-disable-line no-await-in-loop
+						await this.workspace_open(entry.path, entry.opened_at);
 					} catch (error) {
 						// directory may have been removed — skip silently
 						this.log?.warn(

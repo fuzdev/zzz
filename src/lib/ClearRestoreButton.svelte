@@ -6,7 +6,7 @@
 	import ToggleButton from './ToggleButton.svelte';
 
 	let {
-		value = $bindable(),
+		value,
 		onchange,
 		restore_icon = GLYPH_RESTORE,
 		clear_icon = GLYPH_CLEAR,

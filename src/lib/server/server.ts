@@ -93,7 +93,7 @@ export const start_server = async (): Promise<void> => {
 		runtime: daemon_runtime,
 		get_connection_ip: (c) => {
 			// Deno provides connection info via c.env.remoteAddr
-			const addr = (c.env as any)?.remoteAddr;
+			const addr = c.env?.remoteAddr;
 			return addr?.hostname;
 		},
 	});

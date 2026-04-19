@@ -8,7 +8,7 @@
 	import Glyph from './Glyph.svelte';
 
 	let {
-		enabled = $bindable(),
+		enabled,
 		icon = icon_default,
 		run = () => {
 			enabled = !enabled;
