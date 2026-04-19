@@ -22,6 +22,20 @@ type TypedActionEvent<
  * - initiator: 'both' → all valid phases
  */
 export interface FrontendActionHandlers {
+	heartbeat?: {
+		send_request?: (
+			action_event: TypedActionEvent<'heartbeat', 'send_request', 'handling'>,
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: TypedActionEvent<'heartbeat', 'receive_response', 'handling'>,
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: TypedActionEvent<'heartbeat', 'send_error', 'handling'>,
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: TypedActionEvent<'heartbeat', 'receive_error', 'handling'>,
+		) => void | Promise<void>;
+	};
 	ping?: {
 		send_request?: (
 			action_event: TypedActionEvent<'ping', 'send_request', 'handling'>,

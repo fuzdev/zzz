@@ -2,20 +2,26 @@
  * WebSocket endpoint wiring — thin wrapper over fuz_app's
  * {@link register_action_ws}.
  *
- * zzz supplies the handler map, action specs, and a context-extender that
- * adds the domain `Backend` onto the base per-request context. All dispatch,
- * auth, validation, and transport bookkeeping live in fuz_app.
+ * zzz supplies the action tuples (spec + handler) and a context-extender
+ * that adds the domain `Backend` onto the base per-request context. All
+ * dispatch, auth, validation, and transport bookkeeping live in fuz_app.
+ *
+ * The shared {@link heartbeat_action} is spread first so disconnect
+ * detection is identical across every fuz_app consumer.
  *
  * @module
  */
 
 import type {Hono} from 'hono';
 import type {UpgradeWebSocket} from 'hono/ws';
-import {
-	register_action_ws,
-	type BaseHandlerContext,
-} from '@fuzdev/fuz_app/actions/register_action_ws.js';
+import {register_action_ws} from '@fuzdev/fuz_app/actions/register_action_ws.js';
+import type {
+	Action,
+	BaseHandlerContext,
+	WsActionHandler,
+} from '@fuzdev/fuz_app/actions/action_types.js';
 import {BackendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws_backend.js';
+import {heartbeat_action} from '@fuzdev/fuz_app/actions/heartbeat.js';
 
 import {all_action_specs} from '../action_specs.js';
 import type {Backend} from './backend.js';
@@ -31,6 +37,8 @@ export interface RegisterWebsocketActionsOptions {
 	artificial_delay?: number;
 	transport?: BackendWebsocketTransport;
 }
+
+type ZzzWsContext = BaseHandlerContext & {backend: Backend};
 
 /**
  * Registers the WebSocket endpoint for all zzz request/response actions.
@@ -48,17 +56,27 @@ export const register_websocket_actions = ({
 }: RegisterWebsocketActionsOptions): void => {
 	backend.peer.transports.register_transport(transport);
 
-	register_action_ws<BaseHandlerContext & {backend: Backend}>({
+	// Build the action array: shared heartbeat first, then every zzz spec
+	// paired with its handler (remote-notification specs have no handler).
+	const actions: Array<Action<ZzzWsContext>> = [heartbeat_action as Action<ZzzWsContext>];
+	for (const spec of all_action_specs) {
+		if (spec.method === 'heartbeat') continue;
+		const handler = (zzz_action_handlers as Record<string, unknown>)[spec.method];
+		if (handler) {
+			actions.push({
+				spec,
+				handler: handler as WsActionHandler<ZzzWsContext>,
+			});
+		} else {
+			actions.push({spec});
+		}
+	}
+
+	register_action_ws({
 		path,
 		app,
 		upgradeWebSocket,
-		specs: all_action_specs,
-		// Cast: the generated handler map is typed per-method; the framework
-		// indexes by string method name, so the input shape widens to `unknown`.
-		handlers: zzz_action_handlers as unknown as Record<
-			string,
-			(input: unknown, ctx: BaseHandlerContext & {backend: Backend}) => unknown
-		>,
+		actions,
 		extend_context: (base) => ({...base, backend}),
 		transport,
 		artificial_delay,

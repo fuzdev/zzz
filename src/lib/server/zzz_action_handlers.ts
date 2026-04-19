@@ -40,9 +40,10 @@ export interface ZzzHandlerContext {
 	signal: AbortSignal;
 }
 
-/** Methods handled by zzz_action_handlers (request_response only, excludes remote_notifications). */
+/** Methods handled by zzz_action_handlers (request_response only, excludes remote_notifications and shared fuz_app actions). */
 export type ZzzHandledMethod = Exclude<
 	BackendActionMethod,
+	// remote_notifications have no request handler
 	| 'filer_change'
 	| 'completion_progress'
 	| 'ollama_progress'
@@ -50,6 +51,8 @@ export type ZzzHandledMethod = Exclude<
 	| 'terminal_exited'
 	| 'workspace_changed'
 	| '_test_notification'
+	// shared fuz_app actions — handler ships with the spec via `heartbeat_action`
+	| 'heartbeat'
 >;
 
 /** Typed handler map — each handler has per-method input/output types. */

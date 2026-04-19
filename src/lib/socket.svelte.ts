@@ -21,18 +21,14 @@ export interface SocketOptions {
 	app: Frontend;
 }
 
-/**
- * Queued message that couldn't be sent immediately.
- */
+/** Queued message that couldn't be sent immediately. */
 export interface QueuedMessage {
 	id: Uuid;
 	data: any;
 	created: number;
 }
 
-/**
- * Failed message that exceeded retry count.
- */
+/** Failed message that exceeded retry count. */
 export interface FailedMessage extends QueuedMessage {
 	failed: number;
 	reason: string;
@@ -40,10 +36,18 @@ export interface FailedMessage extends QueuedMessage {
 
 /**
  * Wraps {@link FrontendWebsocketClient} with zzz-specific concerns:
- * a retryable message queue, a heartbeat that pings the backend, URL input
- * tracking, and a mapping from fuz_app's `SocketStatus` onto zzz's
- * `AsyncStatus`. Plain reactive class — not a Cell. Implements
- * {@link WebsocketConnection} so it can back `FrontendWebsocketTransport`.
+ * a retryable fire-and-forget send queue (distinct from fuz_app's
+ * request-level durable queue), URL input tracking, and a mapping from
+ * fuz_app's `SocketStatus` onto zzz's `AsyncStatus`. Plain reactive class
+ * — not a Cell. Implements {@link WebsocketConnection} so it can back
+ * `FrontendWebsocketTransport`.
+ *
+ * The bespoke heartbeat timer has been retired — fuz_app's
+ * `FrontendWebsocketClient` now ships an activity-aware heartbeat that
+ * sends the shared {@link heartbeat_action} at {@link heartbeat_interval}
+ * idle. The field is retained so the existing UI slider keeps working;
+ * the configured value is read at {@link Socket.connect} time and passed
+ * through as the underlying client's `heartbeat.interval`.
  *
  * Reconnect settings (`reconnect_delay`, `reconnect_delay_max`,
  * `auto_reconnect`) propagate to the underlying client via
@@ -62,9 +66,14 @@ export class Socket implements WebsocketConnection {
 
 	#client: FrontendWebsocketClient | null = $state.raw(null);
 
+	/**
+	 * UI timestamps for the "last send" / "last receive" diagnostics in
+	 * {@link CapabilityWebsocket}. Not used for heartbeat scheduling —
+	 * fuz_app's client owns that.
+	 */
 	last_send_time: number | null = $state.raw(null);
 	last_receive_time: number | null = $state.raw(null);
-	#heartbeat_timeout: ReturnType<typeof setTimeout> | null = null;
+
 	#client_message_unsubscribe: (() => void) | null = null;
 	#client_error_unsubscribe: (() => void) | null = null;
 
@@ -81,8 +90,7 @@ export class Socket implements WebsocketConnection {
 	readonly last_connect_time: number | null = $derived(this.#client?.last_connect_time ?? null);
 	/**
 	 * Changes each time a close fires — used by the UI as an animation key so
-	 * each reconnect wait restarts the progress bar. Replaces the dedicated
-	 * counter the old Cell kept.
+	 * each reconnect wait restarts the progress bar.
 	 */
 	readonly reconnect_attempt: number = $derived(this.#client?.last_close_time ?? 0);
 	readonly is_reconnect_pending: boolean = $derived(this.#client?.status === 'reconnecting');
@@ -147,6 +155,7 @@ export class Socket implements WebsocketConnection {
 						delay_max: this.reconnect_delay_max,
 					}
 				: false,
+			heartbeat: {interval: this.heartbeat_interval},
 		});
 
 		this.#client_message_unsubscribe = client.add_message_handler((event) => {
@@ -163,11 +172,9 @@ export class Socket implements WebsocketConnection {
 
 		this.#client = client;
 		client.connect();
-		this.#start_heartbeat();
 	}
 
 	disconnect(): void {
-		this.#stop_heartbeat();
 		this.#teardown_client();
 	}
 
@@ -211,10 +218,6 @@ export class Socket implements WebsocketConnection {
 		}
 	}
 
-	async send_heartbeat(): Promise<void> {
-		await this.app.api.ping();
-	}
-
 	retry_queued_messages(): void {
 		if (!this.can_send || this.message_queue.length === 0) return;
 
@@ -236,7 +239,6 @@ export class Socket implements WebsocketConnection {
 		// the old Cell's button behavior: after cancel, the user reconnects by
 		// hand if they want to.
 		this.#teardown_client();
-		this.#stop_heartbeat();
 	}
 
 	/**
@@ -299,41 +301,5 @@ export class Socket implements WebsocketConnection {
 			failed: Date.now(),
 			reason,
 		});
-	}
-
-	#start_heartbeat(): void {
-		this.#stop_heartbeat();
-		const now = Date.now();
-		this.last_send_time = now;
-		this.last_receive_time = now;
-		this.#schedule_next_heartbeat();
-	}
-
-	#schedule_next_heartbeat(): void {
-		this.#stop_heartbeat();
-
-		this.#heartbeat_timeout = setTimeout(
-			() => {
-				const now = Date.now();
-				const next_timeout_time = this.#get_next_heartbeat_time();
-				if (this.connected && next_timeout_time <= now) {
-					void this.send_heartbeat();
-				}
-				this.#schedule_next_heartbeat();
-			},
-			Math.max(100, this.#get_next_heartbeat_time() - Date.now()),
-		);
-	}
-
-	#get_next_heartbeat_time(): number {
-		const last_activity = Math.max(this.last_send_time ?? 0, this.last_receive_time ?? 0);
-		return last_activity + this.heartbeat_interval;
-	}
-
-	#stop_heartbeat(): void {
-		if (this.#heartbeat_timeout !== null) {
-			clearTimeout(this.#heartbeat_timeout);
-			this.#heartbeat_timeout = null;
-		}
 	}
 }

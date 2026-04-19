@@ -15,7 +15,7 @@ use crate::auth::{
 use crate::handlers::{self, App, Ctx, NotifyFn};
 use crate::rpc::{self, Classified};
 
-/// Axum handler for `GET /ws` — upgrades to WebSocket with auth.
+/// Axum handler for `GET /api/ws` — upgrades to WebSocket with auth.
 ///
 /// Authenticates at upgrade time via cookie session. Rejects with 401
 /// if unauthenticated. Mirrors `register_websocket_actions.ts`'s

@@ -18,7 +18,7 @@ import {
 
 /**
  * Create a minimal Hono app that mirrors the zzz middleware stack.
- * Uses a plain GET handler at /ws instead of a real WebSocket upgrade
+ * Uses a plain GET handler at /api/ws instead of a real WebSocket upgrade
  * (which needs Deno) — what matters is that middleware runs before it.
  */
 const create_test_app = (allowed_origins_str: string, bind_host = 'localhost'): Hono => {
@@ -29,13 +29,13 @@ const create_test_app = (allowed_origins_str: string, bind_host = 'localhost'): 
 	app.use(verify_request_source(allowed_origins));
 	// Simulates the WebSocket upgrade handler — if middleware lets the request through,
 	// this handler responds 200. In production, upgradeWebSocket would upgrade instead.
-	app.get('/ws', (c) => c.json({upgraded: true}));
+	app.get('/api/ws', (c) => c.json({upgraded: true}));
 	app.post('/api/rpc', (c) => c.json({ok: true}));
 	return app;
 };
 
 const request_ws = async (app: Hono, headers: Record<string, string> = {}): Promise<Response> =>
-	await app.request('/ws', {
+	await app.request('/api/ws', {
 		method: 'GET',
 		headers: {
 			Connection: 'Upgrade',

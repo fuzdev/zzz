@@ -9,6 +9,7 @@ import type {ActionInputs, ActionOutputs} from './action_collections.js';
  * All action method names. Request/response actions have two types per method.
  */
 export const ActionMethod = z.enum([
+	'heartbeat',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -48,6 +49,7 @@ export type ActionMethod = z.infer<typeof ActionMethod>;
  * Names of all request_response actions.
  */
 export const RequestResponseActionMethod = z.enum([
+	'heartbeat',
 	'ping',
 	'session_load',
 	'diskfile_update',
@@ -99,6 +101,7 @@ export type LocalCallActionMethod = z.infer<typeof LocalCallActionMethod>;
  * Names of all actions that may be handled on the client.
  */
 export const FrontendActionMethod = z.enum([
+	'heartbeat',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -138,6 +141,7 @@ export type FrontendActionMethod = z.infer<typeof FrontendActionMethod>;
  * Names of all actions that may be handled on the server.
  */
 export const BackendActionMethod = z.enum([
+	'heartbeat',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -178,6 +182,9 @@ export type BackendActionMethod = z.infer<typeof BackendActionMethod>;
  * Sync methods (like toggle_main_menu) return values directly.
  */
 export interface ActionsApi {
+	heartbeat: (
+		input: ActionInputs['heartbeat'],
+	) => Promise<Result<{value: ActionOutputs['heartbeat']}, {error: JsonrpcErrorObject}>>;
 	ping: (
 		input?: void,
 	) => Promise<Result<{value: ActionOutputs['ping']}, {error: JsonrpcErrorObject}>>;

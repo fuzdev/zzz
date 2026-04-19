@@ -9,9 +9,9 @@ import {Frontend} from '$lib/frontend.svelte.js';
 import {monkeypatch_zzz_for_tests} from './test_helpers.js';
 
 /**
- * Reconnect and close-code backoff are tested in fuz_app's
+ * Reconnect, close-code backoff, and heartbeat are tested in fuz_app's
  * `FrontendWebsocketClient` suite — this file focuses on what the Socket
- * wrapper adds on top: message queueing, heartbeat ping, and URL input
+ * wrapper adds on top: fire-and-forget message queueing and URL input
  * tracking.
  */
 
@@ -286,19 +286,6 @@ describe('Socket', () => {
 
 			vi.advanceTimersByTime(1000);
 			assert.strictEqual((globalThis.WebSocket as any).mock.calls.length, 2);
-		});
-	});
-
-	describe('Heartbeat mechanism', () => {
-		test('heartbeat sends ping at interval', () => {
-			const socket = new Socket({app});
-			socket.heartbeat_interval = 1000;
-			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
-
-			vi.advanceTimersByTime(1000);
-
-			assert.ok((app.api.ping as any).mock.calls.length > 0);
 		});
 	});
 });

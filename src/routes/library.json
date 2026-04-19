@@ -49,7 +49,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.3.16",
-			"@fuzdev/fuz_app": "^0.23.0",
+			"@fuzdev/fuz_app": "^0.24.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.58.0",
 			"@fuzdev/fuz_ui": "^0.191.4",
@@ -146,42 +146,47 @@
 						"kind": "type",
 						"doc_comment": "All method types combined.",
 						"source_line": 16,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 25 more ...; _test_notification: \"_test_notification\"; }>"
+						"type_signature": "ZodEnum<{ heartbeat: \"heartbeat\"; ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 25 more ...; _test_notification: \"_test_notification\"; }>"
 					},
 					{
 						"name": "ActionSpecs",
 						"kind": "type",
 						"doc_comment": "Action specifications indexed by method name.\nThese represent the complete action spec definitions.",
-						"source_line": 56,
-						"type_signature": "{ readonly ping: { method: string; kind: \"request_response\"; initiator: \"both\"; auth: \"public\"; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; async: true; description: string; }; ... 30 more ...; readonly _test_notification: { ...."
+						"source_line": 57,
+						"type_signature": "{ readonly heartbeat: { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; ... 4 more ...; streams?: string | undefined; }; ... 31 more ...; readonly _test..."
 					},
 					{
 						"name": "action_specs",
 						"kind": "variable",
-						"source_line": 125,
+						"source_line": 128,
 						"type_signature": "({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 4 more ...; streams?: string | undefined; } | { ...; } | { ...; })[]"
 					},
 					{
 						"name": "ActionInputs",
 						"kind": "type",
 						"doc_comment": "Action parameter schemas indexed by method name.\nThese represent the input data for each action,\ne.g. JSON-RPC request/notification params and local call arguments.",
-						"source_line": 132,
-						"type_signature": "{ readonly ping: ZodOptional<ZodVoid>; readonly session_load: ZodOptional<ZodVoid>; readonly filer_change: ZodObject<{ change: ZodObject<{ type: ZodEnum<{ add: \"add\"; change: \"change\"; delete: \"delete\"; }>; path: $ZodBranded<...>; }, $strict>; disknode: ZodObject<...>; }, $strict>; ... 28 more ...; readonly _test_no..."
+						"source_line": 135,
+						"type_signature": "{ readonly heartbeat: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; readonly ping: ZodOptional<ZodVoid>; readonly session_load: ZodOptional<ZodVoid>; ... 29 more ...; readonly _test_notification: ZodObject<...>; }"
 					},
 					{
 						"name": "ActionOutputs",
 						"kind": "type",
 						"doc_comment": "Action result schemas indexed by method name.\nThese represent the output data for each action,\ne.g. JSON-RPC response results and local call return values.",
-						"source_line": 206,
-						"type_signature": "{ readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; readonly session_load: ZodObject<{ data: ZodObject<{ zzz_dir: $ZodBranded<ZodPipe<ZodPipe<...>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; scoped_dirs: ZodReadonly<...>; files: ZodArray<...>; provider_status: ZodAr..."
+						"source_line": 211,
+						"type_signature": "{ readonly heartbeat: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 30 more ...; readonly _test_notification: ZodVoid; }"
 					},
 					{
 						"name": "ActionEventDatas",
 						"kind": "type",
 						"doc_comment": "Action event data types indexed by method name.\nThese represent the full discriminated union of all possible states\nfor each action's event data, properly typed with inputs and outputs.",
-						"source_line": 280,
+						"source_line": 287,
 						"type_signature": "ActionEventDatas",
 						"properties": [
+							{
+								"name": "heartbeat",
+								"kind": "variable",
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'heartbeat',\n\t\tActionInputs['heartbeat'],\n\t\tActionOutputs['heartbeat']\n\t>"
+							},
 							{
 								"name": "ping",
 								"kind": "variable",
@@ -367,50 +372,55 @@
 						"kind": "type",
 						"doc_comment": "All action method names. Request/response actions have two types per method.",
 						"source_line": 11,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 25 more ...; _test_notification: \"_test_notification\"; }>"
+						"type_signature": "ZodEnum<{ heartbeat: \"heartbeat\"; ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 25 more ...; _test_notification: \"_test_notification\"; }>"
 					},
 					{
 						"name": "RequestResponseActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all request_response actions.",
-						"source_line": 50,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; completion_create: \"completion_create\"; ... 17 more ...; _test_emit_notifications: \"_test_emit_notifications\"; }>"
+						"source_line": 51,
+						"type_signature": "ZodEnum<{ heartbeat: \"heartbeat\"; ping: \"ping\"; session_load: \"session_load\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 18 more ...; _test_emit_notifications: \"_test_emit_notifications\"; }>"
 					},
 					{
 						"name": "RemoteNotificationActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all remote_notification actions.",
-						"source_line": 81,
+						"source_line": 83,
 						"type_signature": "ZodEnum<{ filer_change: \"filer_change\"; completion_progress: \"completion_progress\"; ollama_progress: \"ollama_progress\"; terminal_data: \"terminal_data\"; terminal_exited: \"terminal_exited\"; workspace_changed: \"workspace_changed\"; _test_notification: \"_test_notification\"; }>"
 					},
 					{
 						"name": "LocalCallActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all local_call actions.",
-						"source_line": 95,
+						"source_line": 97,
 						"type_signature": "ZodEnum<{ toggle_main_menu: \"toggle_main_menu\"; }>"
 					},
 					{
 						"name": "FrontendActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all actions that may be handled on the client.",
-						"source_line": 101,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 25 more ...; _test_notification: \"_test_notification\"; }>"
+						"source_line": 103,
+						"type_signature": "ZodEnum<{ heartbeat: \"heartbeat\"; ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 25 more ...; _test_notification: \"_test_notification\"; }>"
 					},
 					{
 						"name": "BackendActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all actions that may be handled on the server.",
-						"source_line": 140,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 24 more ...; _test_notification: \"_test_notification\"; }>"
+						"source_line": 143,
+						"type_signature": "ZodEnum<{ heartbeat: \"heartbeat\"; ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 24 more ...; _test_notification: \"_test_notification\"; }>"
 					},
 					{
 						"name": "ActionsApi",
 						"kind": "type",
 						"doc_comment": "Interface for action dispatch functions.\nAll async methods return Result types for type-safe error handling.\nSync methods (like toggle_main_menu) return values directly.",
-						"source_line": 180,
+						"source_line": 184,
 						"type_signature": "ActionsApi",
 						"properties": [
+							{
+								"name": "heartbeat",
+								"kind": "variable",
+								"type_signature": "(\n\t\tinput: ActionInputs['heartbeat'],\n\t) => Promise<Result<{value: ActionOutputs['heartbeat']}, {error: JsonrpcErrorObject}>>"
+							},
 							{
 								"name": "ping",
 								"kind": "variable",
@@ -582,199 +592,199 @@
 					{
 						"name": "ping_action_spec",
 						"kind": "variable",
-						"source_line": 35,
+						"source_line": 40,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"both\"; auth: \"public\"; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; async: true; description: string; }"
 					},
 					{
 						"name": "session_load_action_spec",
 						"kind": "variable",
-						"source_line": 49,
+						"source_line": 54,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodObject<{ data: ZodObject<{ zzz_dir: $ZodBranded<...>; scoped_dirs: ZodReadonly<...>; files: ZodArray<...>; provider_status: ZodArray<...>; workspaces: ZodArray<...>; ..."
 					},
 					{
 						"name": "filer_change_action_spec",
 						"kind": "variable",
-						"source_line": 72,
+						"source_line": 77,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ change: ZodObject<{ type: ZodEnum<{ add: \"add\"; change: \"change\"; delete: \"delete\"; }>; path: $ZodBranded<...>; }, $strict>; disknode: ZodObject<...>; }, $strict>; output: ZodVoid; async: true; des..."
 					},
 					{
 						"name": "diskfile_update_action_spec",
 						"kind": "variable",
-						"source_line": 87,
+						"source_line": 92,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; content: ZodString; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "diskfile_delete_action_spec",
 						"kind": "variable",
-						"source_line": 102,
+						"source_line": 107,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "directory_create_action_spec",
 						"kind": "variable",
-						"source_line": 116,
+						"source_line": 121,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "completion_create_action_spec",
 						"kind": "variable",
-						"source_line": 130,
+						"source_line": 135,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<...>; model: ZodString; prompt: ZodString; completion_messages: ..."
 					},
 					{
 						"name": "completion_progress_action_spec",
 						"kind": "variable",
-						"source_line": 149,
+						"source_line": 154,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ chunk: ZodOptional<ZodObject<{ model: ZodOptional<ZodString>; created_at: ZodOptional<...>; done: ZodOptional<...>; message: ZodOptional<...>; }, $loose>>; _meta: ZodOptional<...>; }, $strict>; out..."
 					},
 					{
 						"name": "ollama_progress_action_spec",
 						"kind": "variable",
-						"source_line": 190,
+						"source_line": 195,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ status: ZodString; digest: ZodOptional<ZodString>; total: ZodOptional<...>; completed: ZodOptional<...>; _meta: ZodOptional<...>; }, $strict>; output: ZodVoid; async: true; description: string; }"
 					},
 					{
 						"name": "toggle_main_menu_action_spec",
 						"kind": "variable",
-						"source_line": 207,
+						"source_line": 212,
 						"type_signature": "{ method: string; kind: \"local_call\"; initiator: \"frontend\"; auth: null; side_effects: true; input: ZodOptional<ZodObject<{ show: ZodOptional<ZodBoolean>; }, $strict>>; output: ZodObject<...>; async: false; description: string; }"
 					},
 					{
 						"name": "ollama_list_action_spec",
 						"kind": "variable",
-						"source_line": 219,
+						"source_line": 224,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodUnion<readonly [ZodObject<{ models: ZodArray<...>; }, $loose>, ZodNull]>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_ps_action_spec",
 						"kind": "variable",
-						"source_line": 231,
+						"source_line": 236,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodUnion<readonly [ZodObject<{ models: ZodArray<...>; }, $loose>, ZodNull]>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_show_action_spec",
 						"kind": "variable",
-						"source_line": 243,
+						"source_line": 248,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: false; input: ZodObject<{ model: ZodString; system: ZodOptional<ZodString>; template: ZodOptional<...>; options: ZodOptional<...>; }, $loose>; output: ZodUnion<...>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_pull_action_spec",
 						"kind": "variable",
-						"source_line": 255,
+						"source_line": 260,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ model: ZodString; insecure: ZodOptional<ZodBoolean>; stream: ZodOptional<...>; _meta: ZodOptional<...>; }, $strict>; output: ZodOptional<...>; async: true; streams: string; description: st..."
 					},
 					{
 						"name": "ollama_delete_action_spec",
 						"kind": "variable",
-						"source_line": 272,
+						"source_line": 277,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ model: ZodString; }, $loose>; output: ZodOptional<...>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_copy_action_spec",
 						"kind": "variable",
-						"source_line": 284,
+						"source_line": 289,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ source: ZodString; destination: ZodString; }, $loose>; output: ZodOptional<...>; async: true; description: string; }"
 					},
 					{
 						"name": "ollama_create_action_spec",
 						"kind": "variable",
-						"source_line": 296,
+						"source_line": 301,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ model: ZodString; from: ZodOptional<ZodString>; ... 8 more ...; _meta: ZodOptional<...>; }, $strict>; output: ZodOptional<...>; async: true; streams: string; description: string; }"
 					},
 					{
 						"name": "ollama_unload_action_spec",
 						"kind": "variable",
-						"source_line": 313,
+						"source_line": 318,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ model: ZodString; }, $strict>; output: ZodOptional<...>; async: true; description: string; }"
 					},
 					{
 						"name": "provider_load_status_action_spec",
 						"kind": "variable",
-						"source_line": 327,
+						"source_line": 332,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: false; input: ZodObject<{ provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; reload: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; descript..."
 					},
 					{
 						"name": "provider_update_api_key_action_spec",
 						"kind": "variable",
-						"source_line": 344,
+						"source_line": 349,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"keeper\"; side_effects: true; input: ZodObject<{ provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; api_key: ZodString; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_create_action_spec",
 						"kind": "variable",
-						"source_line": 361,
+						"source_line": 366,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ command: ZodString; args: ZodDefault<ZodArray<ZodString>>; cwd: ZodOptional<...>; preset_id: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_data_send_action_spec",
 						"kind": "variable",
-						"source_line": 380,
+						"source_line": 385,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; data: ZodString; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_data_action_spec",
 						"kind": "variable",
-						"source_line": 395,
+						"source_line": 400,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; data: ZodString; }, $strict>; output: ZodVoid; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_resize_action_spec",
 						"kind": "variable",
-						"source_line": 410,
+						"source_line": 415,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; cols: ZodNumber; rows: ZodNumber; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_close_action_spec",
 						"kind": "variable",
-						"source_line": 426,
+						"source_line": 431,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; signal: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_exited_action_spec",
 						"kind": "variable",
-						"source_line": 443,
+						"source_line": 448,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; exit_code: ZodNullable<...>; }, $strict>; output: ZodVoid; async: true; description: string; }"
 					},
 					{
 						"name": "workspace_open_action_spec",
 						"kind": "variable",
-						"source_line": 458,
+						"source_line": 463,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; }, $strict>; output: ZodObject<...>; async: true; descriptio..."
 					},
 					{
 						"name": "workspace_close_action_spec",
 						"kind": "variable",
-						"source_line": 475,
+						"source_line": 480,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; }, $strict>; output: ZodNull; async: true; description: stri..."
 					},
 					{
 						"name": "workspace_list_action_spec",
 						"kind": "variable",
-						"source_line": 489,
+						"source_line": 494,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodObject<{ workspaces: ZodArray<...>; }, $strict>; async: true; description: string; }"
 					},
 					{
 						"name": "workspace_changed_action_spec",
 						"kind": "variable",
-						"source_line": 503,
+						"source_line": 508,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ type: ZodEnum<{ open: \"open\"; close: \"close\"; }>; workspace: ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<...>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; name: ZodString; opened_at: ZodS..."
 					},
 					{
 						"name": "_test_emit_notifications_action_spec",
 						"kind": "variable",
-						"source_line": 523,
+						"source_line": 528,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: false; input: ZodObject<{ count: ZodNumber; }, $strict>; output: ZodObject<...>; async: true; streams: string; description: string; }"
 					},
 					{
 						"name": "_test_notification_action_spec",
 						"kind": "variable",
-						"source_line": 541,
+						"source_line": 546,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ index: ZodNumber; }, $strict>; output: ZodVoid; async: true; description: string; }"
 					},
 					{
 						"name": "all_action_specs",
 						"kind": "variable",
-						"source_line": 556,
+						"source_line": 561,
 						"type_signature": "({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 4 more ...; streams?: string | undefined; } | { ...; } | { ...; })[]"
 					}
 				],
@@ -809,7 +819,7 @@
 						"name": "ActionJsonInput",
 						"kind": "type",
 						"source_line": 20,
-						"type_signature": "{ method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event..."
+						"type_signature": "{ method: \"heartbeat\" | \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | ... 23 more ... | \"_test_notification\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?..."
 					},
 					{
 						"name": "ActionOptions",
@@ -1065,7 +1075,7 @@
 						"name": "ActionsJsonInput",
 						"kind": "type",
 						"source_line": 18,
-						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 26 more ... | \"_test_notification\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; acti..."
+						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"heartbeat\" | \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | ... 27 more ... | \"_test_notification\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_eve..."
 					},
 					{
 						"name": "ActionsOptions",
@@ -1115,12 +1125,12 @@
 								"name": "set_json",
 								"kind": "function",
 								"doc_comment": "Override to populate the indexed collection after parsing JSON.",
-								"type_signature": "(value?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 26 more ... | \"_test_notification\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ...; } | undefined; }[] | undefined; } | undefined): void",
+								"type_signature": "(value?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"heartbeat\" | \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | ... 27 more ... | \"_test_notification\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ...; } | undefined; }[] | undefined; } | undefined): void",
 								"return_type": "void",
 								"parameters": [
 									{
 										"name": "value",
-										"type": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 26 more ... | \"_test_notification\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; acti...",
+										"type": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"heartbeat\" | \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | ... 27 more ... | \"_test_notification\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_eve...",
 										"optional": true
 									}
 								]
@@ -1140,12 +1150,12 @@
 							{
 								"name": "add_from_json",
 								"kind": "function",
-								"type_signature": "(action_json: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ...; } | undefined; }): Action",
+								"type_signature": "(action_json: { method: \"heartbeat\" | \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | ... 23 more ... | \"_test_notification\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ...; } | undefined; }): Action",
 								"return_type": "Action",
 								"parameters": [
 									{
 										"name": "action_json",
-										"type": "{ method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event..."
+										"type": "{ method: \"heartbeat\" | \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | ... 23 more ... | \"_test_notification\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?..."
 									}
 								]
 							}
@@ -6643,6 +6653,11 @@
 						"type_signature": "FrontendActionHandlers",
 						"properties": [
 							{
+								"name": "heartbeat",
+								"kind": "variable",
+								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'heartbeat', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'heartbeat', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'heartbeat', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'heartbeat', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
+							},
+							{
 								"name": "ping",
 								"kind": "variable",
 								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ping', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ping', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ping', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ping', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_request?: (\n\t\t\taction_event: TypedActionEvent<'ping', 'receive_request', 'handling'>,\n\t\t) => ActionOutputs['ping'] | Promise<ActionOutputs['ping']>;\n\t\tsend_response?: (\n\t\t\taction_event: TypedActionEvent<'ping', 'send_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
@@ -7192,8 +7207,8 @@
 							{
 								"name": "lookup_action_input_schema",
 								"kind": "function",
-								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly ping: ZodOptional<ZodVoid>; readonly session_load: ZodOptional<ZodVoid>; ... 29 more ...; readonly _test_notification: ZodObject<...>; }[TMethod] | undefined",
-								"return_type": "{ readonly ping: ZodOptional<ZodVoid>; readonly session_load: ZodOptional<ZodVoid>; readonly filer_change: ZodObject<{ change: ZodObject<{ type: ZodEnum<{ add: \"add\"; change: \"change\"; delete: \"delete\"; }>; path: $ZodBranded<...>; }, $strict>; disknode: ZodObject<...>; }, $strict>; ... 28 more ...; readonly _test_no...",
+								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly heartbeat: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; readonly ping: ZodOptional<ZodVoid>; ... 30 more ...; readonly _test_notification: ZodObject<...>; }[TMethod] | undefined",
+								"return_type": "{ readonly heartbeat: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; readonly ping: ZodOptional<ZodVoid>; readonly session_load: ZodOptional<ZodVoid>; ... 29 more ...; readonly _test_notification: ZodObject<...>; }[TMethod] | undefined",
 								"parameters": [
 									{
 										"name": "method",
@@ -7204,8 +7219,8 @@
 							{
 								"name": "lookup_action_output_schema",
 								"kind": "function",
-								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 30 more ...; readonly _test_notification: ZodVoid; }[TMethod] | undefined",
-								"return_type": "{ readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; readonly session_load: ZodObject<{ data: ZodObject<{ zzz_dir: $ZodBranded<ZodPipe<...>, \"DiskfileDirectoryPath\", \"out\">; scoped_dirs: ZodReadonly<...>; files: ZodArray<...>; provider_status: ZodArray<...>; workspaces: ZodAr...",
+								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly heartbeat: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 30 more ...; readonly _test_notification: ZodVoid; }[TMethod] | undefined",
+								"return_type": "{ readonly heartbeat: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 30 more ...; readonly _test_notification: ZodVoid; }[TMethod] | undefined",
 								"parameters": [
 									{
 										"name": "method",
@@ -7216,12 +7231,12 @@
 							{
 								"name": "is_valid_phase_for_method",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\", phase: \"send_request\" | ... 7 more ... | \"execute\"): boolean",
+								"type_signature": "(method: \"heartbeat\" | \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\", phase: \"send_request\" | ... 7 more ... | \"execute\"): boolean",
 								"return_type": "boolean",
 								"parameters": [
 									{
 										"name": "method",
-										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\""
+										"type": "\"heartbeat\" | \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\""
 									},
 									{
 										"name": "phase",
@@ -7883,12 +7898,12 @@
 						"name": "get_glyph_for_action_method",
 						"kind": "function",
 						"source_line": 101,
-						"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\"): string",
+						"type_signature": "(method: \"heartbeat\" | \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\"): string",
 						"return_type": "string",
 						"parameters": [
 							{
 								"name": "method",
-								"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\""
+								"type": "\"heartbeat\" | \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\""
 							}
 						]
 					},
@@ -13693,12 +13708,12 @@
 								"name": "get_action_spec",
 								"kind": "function",
 								"doc_comment": "Get an action specification by method name.",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\"): { ...; } | ... 2 more ... | undefined",
+								"type_signature": "(method: \"heartbeat\" | \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\"): { ...; } | ... 2 more ... | undefined",
 								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 4 more ...; streams?: string | undefined; } | { ...; } | { ...; } | undefined",
 								"parameters": [
 									{
 										"name": "method",
-										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\""
+										"type": "\"heartbeat\" | \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"_test_notification\""
 									}
 								]
 							},
@@ -15497,7 +15512,7 @@
 					{
 						"name": "RegisterWebsocketActionsOptions",
 						"kind": "type",
-						"source_line": 24,
+						"source_line": 30,
 						"type_signature": "RegisterWebsocketActionsOptions",
 						"properties": [
 							{
@@ -15538,7 +15553,7 @@
 						"name": "register_websocket_actions",
 						"kind": "function",
 						"doc_comment": "Registers the WebSocket endpoint for all zzz request/response actions.\n\nThe zzz `Backend` is exposed on every handler's context. Per-action auth,\nZod validation, and socket-scoped `notify` / `signal` come from fuz_app.",
-						"source_line": 41,
+						"source_line": 49,
 						"type_signature": "({ path, app, backend, upgradeWebSocket, artificial_delay, transport, }: RegisterWebsocketActionsOptions): void",
 						"return_type": "void",
 						"parameters": [
@@ -15549,7 +15564,7 @@
 						]
 					}
 				],
-				"module_comment": "WebSocket endpoint wiring — thin wrapper over fuz_app's\n{@link register_action_ws}.\n\nzzz supplies the handler map, action specs, and a context-extender that\nadds the domain `Backend` onto the base per-request context. All dispatch,\nauth, validation, and transport bookkeeping live in fuz_app.",
+				"module_comment": "WebSocket endpoint wiring — thin wrapper over fuz_app's\n{@link register_action_ws}.\n\nzzz supplies the action tuples (spec + handler) and a context-extender\nthat adds the domain `Backend` onto the base per-request context. All\ndispatch, auth, validation, and transport bookkeeping live in fuz_app.\n\nThe shared {@link heartbeat_action} is spread first so disconnect\ndetection is identical across every fuz_app consumer.",
 				"dependencies": ["action_specs.ts", "server/zzz_action_handlers.ts"],
 				"dependents": ["server/server.ts"]
 			},
@@ -16201,7 +16216,7 @@
 					{
 						"name": "ZzzHandledMethod",
 						"kind": "type",
-						"doc_comment": "Methods handled by zzz_action_handlers (request_response only, excludes remote_notifications).",
+						"doc_comment": "Methods handled by zzz_action_handlers (request_response only, excludes remote_notifications and shared fuz_app actions).",
 						"source_line": 44,
 						"type_signature": "ZzzHandledMethod"
 					},
@@ -16209,14 +16224,14 @@
 						"name": "ZzzActionHandlers",
 						"kind": "type",
 						"doc_comment": "Typed handler map — each handler has per-method input/output types.",
-						"source_line": 56,
+						"source_line": 59,
 						"type_signature": "ZzzActionHandlers"
 					},
 					{
 						"name": "zzz_action_handlers",
 						"kind": "variable",
 						"doc_comment": "All 23 request_response handlers as pure functions.\n\nLogic sourced from the RPC versions (cleaner than the old WS handlers —\nno Deno-only bug in provider_update_api_key, no console.log noise).",
-						"source_line": 69,
+						"source_line": 72,
 						"type_signature": "ZzzActionHandlers"
 					}
 				],
@@ -16399,7 +16414,7 @@
 						"name": "QueuedMessage",
 						"kind": "type",
 						"doc_comment": "Queued message that couldn't be sent immediately.",
-						"source_line": 27,
+						"source_line": 25,
 						"type_signature": "QueuedMessage",
 						"properties": [
 							{
@@ -16423,7 +16438,7 @@
 						"name": "FailedMessage",
 						"kind": "type",
 						"doc_comment": "Failed message that exceeded retry count.",
-						"source_line": 36,
+						"source_line": 32,
 						"type_signature": "FailedMessage",
 						"extends": ["QueuedMessage"],
 						"properties": [
@@ -16442,8 +16457,8 @@
 					{
 						"name": "Socket",
 						"kind": "class",
-						"doc_comment": "Wraps  with zzz-specific concerns:\na retryable message queue, a heartbeat that pings the backend, URL input\ntracking, and a mapping from fuz_app's `SocketStatus` onto zzz's\n`AsyncStatus`. Plain reactive class — not a Cell. Implements\n so it can back `FrontendWebsocketTransport`.\n\nReconnect settings (`reconnect_delay`, `reconnect_delay_max`,\n`auto_reconnect`) propagate to the underlying client via\n — callers wire an `$effect` to\ninvoke it when any of the three fields change. In-flight waits are\nmonotonically shortened (never extended).",
-						"source_line": 54,
+						"doc_comment": "Wraps  with zzz-specific concerns:\na retryable fire-and-forget send queue (distinct from fuz_app's\nrequest-level durable queue), URL input tracking, and a mapping from\nfuz_app's `SocketStatus` onto zzz's `AsyncStatus`. Plain reactive class\n— not a Cell. Implements  so it can back\n`FrontendWebsocketTransport`.\n\nThe bespoke heartbeat timer has been retired — fuz_app's\n`FrontendWebsocketClient` now ships an activity-aware heartbeat that\nsends the shared  at \nidle. The field is retained so the existing UI slider keeps working;\nthe configured value is read at  time and passed\nthrough as the underlying client's `heartbeat.interval`.\n\nReconnect settings (`reconnect_delay`, `reconnect_delay_max`,\n`auto_reconnect`) propagate to the underlying client via\n — callers wire an `$effect` to\ninvoke it when any of the three fields change. In-flight waits are\nmonotonically shortened (never extended).",
+						"source_line": 58,
 						"extends": [],
 						"implements": ["WebsocketConnection"],
 						"members": [
@@ -16481,6 +16496,7 @@
 							{
 								"name": "last_send_time",
 								"kind": "variable",
+								"doc_comment": "UI timestamps for the \"last send\" / \"last receive\" diagnostics in\n. Not used for heartbeat scheduling —\nfuz_app's client owns that.",
 								"type_signature": "number | null"
 							},
 							{
@@ -16532,7 +16548,7 @@
 								"name": "reconnect_attempt",
 								"kind": "variable",
 								"modifiers": ["readonly"],
-								"doc_comment": "Changes each time a close fires — used by the UI as an animation key so\neach reconnect wait restarts the progress bar. Replaces the dedicated\ncounter the old Cell kept.",
+								"doc_comment": "Changes each time a close fires — used by the UI as an animation key so\neach reconnect wait restarts the progress bar.",
 								"type_signature": "number"
 							},
 							{
@@ -16649,13 +16665,6 @@
 										"type": "string"
 									}
 								]
-							},
-							{
-								"name": "send_heartbeat",
-								"kind": "function",
-								"type_signature": "(): Promise<void>",
-								"return_type": "Promise<void>",
-								"parameters": []
 							},
 							{
 								"name": "retry_queued_messages",

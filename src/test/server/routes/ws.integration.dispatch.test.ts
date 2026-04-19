@@ -35,16 +35,19 @@ import {
 describe('zzz WebSocket — dispatch', () => {
 	test('ctx.notify streams notifications to the originating socket only', async () => {
 		const harness = create_ws_test_harness({
-			specs: [_test_emit_notifications_action_spec, _test_notification_action_spec],
-			handlers: {
-				_test_emit_notifications: (input: unknown, ctx) => {
-					const {count} = input as {count: number};
-					for (let i = 0; i < count; i++) {
-						ctx.notify('_test_notification', {index: i});
-					}
-					return {count};
+			actions: [
+				{spec: _test_notification_action_spec},
+				{
+					spec: _test_emit_notifications_action_spec,
+					handler: (input: unknown, ctx) => {
+						const {count} = input as {count: number};
+						for (let i = 0; i < count; i++) {
+							ctx.notify('_test_notification', {index: i});
+						}
+						return {count};
+					},
 				},
-			},
+			],
 		});
 
 		const originator = await harness.connect();
@@ -75,12 +78,14 @@ describe('zzz WebSocket — dispatch', () => {
 
 	test('keeper-auth actions reject session callers with -32002 forbidden', async () => {
 		const harness = create_ws_test_harness({
-			specs: [provider_update_api_key_action_spec],
-			handlers: {
-				provider_update_api_key: () => {
-					throw new Error('handler should not run for non-keeper caller');
+			actions: [
+				{
+					spec: provider_update_api_key_action_spec,
+					handler: () => {
+						throw new Error('handler should not run for non-keeper caller');
+					},
 				},
-			},
+			],
 		});
 
 		// Default identity is credential_type: 'session' with no roles —
@@ -105,12 +110,14 @@ describe('zzz WebSocket — dispatch', () => {
 		// type check but fails the min(0) refinement, so the dispatcher's
 		// spec-level validation rejects it before the handler runs.
 		const harness = create_ws_test_harness({
-			specs: [_test_emit_notifications_action_spec],
-			handlers: {
-				_test_emit_notifications: () => {
-					throw new Error('handler should not run for invalid input');
+			actions: [
+				{
+					spec: _test_emit_notifications_action_spec,
+					handler: () => {
+						throw new Error('handler should not run for invalid input');
+					},
 				},
-			},
+			],
 		});
 
 		const client = await harness.connect();
@@ -138,21 +145,23 @@ describe('zzz WebSocket — dispatch', () => {
 		let handler_resolved = false;
 
 		const harness = create_ws_test_harness({
-			specs: [_test_emit_notifications_action_spec],
-			handlers: {
-				_test_emit_notifications: async (_input, ctx) => {
-					captured_signal = ctx.signal;
-					await new Promise<void>((resolve) => {
-						if (ctx.signal.aborted) {
-							resolve();
-							return;
-						}
-						ctx.signal.addEventListener('abort', () => resolve());
-					});
-					handler_resolved = true;
-					return {count: 0};
+			actions: [
+				{
+					spec: _test_emit_notifications_action_spec,
+					handler: async (_input, ctx) => {
+						captured_signal = ctx.signal;
+						await new Promise<void>((resolve) => {
+							if (ctx.signal.aborted) {
+								resolve();
+								return;
+							}
+							ctx.signal.addEventListener('abort', () => resolve());
+						});
+						handler_resolved = true;
+						return {count: 0};
+					},
 				},
-			},
+			],
 		});
 
 		const client = await harness.connect();
@@ -186,19 +195,22 @@ describe('zzz WebSocket — dispatch', () => {
 
 	test('concurrent requests on one socket preserve id correlation', async () => {
 		const harness = create_ws_test_harness({
-			specs: [_test_emit_notifications_action_spec, _test_notification_action_spec],
-			handlers: {
-				_test_emit_notifications: async (input: unknown, ctx) => {
-					const {count} = input as {count: number};
-					for (let i = 0; i < count; i++) {
-						ctx.notify('_test_notification', {index: i});
-						// Yield between notifies so a second in-flight dispatch
-						// can interleave its sends between ours.
-						await Promise.resolve();
-					}
-					return {count};
+			actions: [
+				{spec: _test_notification_action_spec},
+				{
+					spec: _test_emit_notifications_action_spec,
+					handler: async (input: unknown, ctx) => {
+						const {count} = input as {count: number};
+						for (let i = 0; i < count; i++) {
+							ctx.notify('_test_notification', {index: i});
+							// Yield between notifies so a second in-flight dispatch
+							// can interleave its sends between ours.
+							await Promise.resolve();
+						}
+						return {count};
+					},
 				},
-			},
+			],
 		});
 
 		const client = await harness.connect();

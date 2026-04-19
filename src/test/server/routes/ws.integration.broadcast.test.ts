@@ -24,11 +24,12 @@ import {
 import {DiskfileDirectoryPath} from '$lib/diskfile_types.js';
 import type {BackendActionsApi} from '$lib/server/backend_actions_api.js';
 
-// A stub dispatch handler — broadcast tests don't invoke it, but the
-// harness requires one per registered request/response spec. Kept minimal
-// so the intent of each test stays visible.
-const noop_handlers = {
-	_test_emit_notifications: () => ({count: 0}),
+// A stub dispatch action — broadcast tests don't invoke it, but the
+// harness requires a handler per registered request/response spec. Kept
+// minimal so the intent of each test stays visible.
+const stub_emit_notifications = {
+	spec: _test_emit_notifications_action_spec,
+	handler: () => ({count: 0}),
 };
 
 type BroadcastApi = Pick<BackendActionsApi, 'workspace_changed'>;
@@ -36,8 +37,7 @@ type BroadcastApi = Pick<BackendActionsApi, 'workspace_changed'>;
 describe('zzz WebSocket — broadcast', () => {
 	test('workspace_changed fans out to every connected client', async () => {
 		const harness = create_ws_test_harness({
-			specs: [_test_emit_notifications_action_spec],
-			handlers: noop_handlers,
+			actions: [stub_emit_notifications],
 		});
 		const broadcast = build_broadcast_api<BroadcastApi>({
 			harness,
@@ -65,8 +65,7 @@ describe('zzz WebSocket — broadcast', () => {
 
 	test('closed clients no longer receive broadcasts', async () => {
 		const harness = create_ws_test_harness({
-			specs: [_test_emit_notifications_action_spec],
-			handlers: noop_handlers,
+			actions: [stub_emit_notifications],
 		});
 		const broadcast = build_broadcast_api<BroadcastApi>({
 			harness,
