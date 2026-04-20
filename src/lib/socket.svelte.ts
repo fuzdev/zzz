@@ -2,6 +2,7 @@ import {SvelteMap} from 'svelte/reactivity';
 import type {AsyncStatus} from '@fuzdev/fuz_util/async.js';
 import {
 	FrontendWebsocketClient,
+	socket_status_to_async_status,
 	type SocketMessageHandler,
 	type SocketErrorHandler,
 } from '@fuzdev/fuz_app/actions/socket.svelte.js';
@@ -44,14 +45,13 @@ export interface FailedMessage extends QueuedMessage {
  *
  * The bespoke heartbeat timer has been retired — fuz_app's
  * `FrontendWebsocketClient` now ships an activity-aware heartbeat that
- * sends the shared {@link heartbeat_action} at {@link heartbeat_interval}
- * idle. The field is retained so the existing UI slider keeps working;
- * the configured value is read at {@link Socket.connect} time and passed
- * through as the underlying client's `heartbeat.interval`.
+ * sends the shared `heartbeat_action` at `heartbeat_interval` idle.
+ * Assigning `heartbeat_interval` pushes the new policy into the live
+ * client immediately (the timer is restarted in place when connected).
  *
  * Reconnect settings (`reconnect_delay`, `reconnect_delay_max`,
  * `auto_reconnect`) propagate to the underlying client via
- * {@link Socket.apply_reconnect_policy} — callers wire an `$effect` to
+ * `Socket.apply_reconnect_policy` — callers wire an `$effect` to
  * invoke it when any of the three fields change. In-flight waits are
  * monotonically shortened (never extended).
  */
@@ -59,10 +59,24 @@ export class Socket implements WebsocketConnection {
 	readonly app: Frontend;
 
 	url_input: string = $state.raw('');
-	heartbeat_interval: number = $state.raw(DEFAULT_HEARTBEAT_INTERVAL);
+	#heartbeat_interval: number = $state.raw(DEFAULT_HEARTBEAT_INTERVAL);
 	reconnect_delay: number = $state.raw(DEFAULT_RECONNECT_DELAY);
 	reconnect_delay_max: number = $state.raw(DEFAULT_RECONNECT_DELAY_MAX);
 	auto_reconnect: boolean = $state.raw(DEFAULT_AUTO_RECONNECT);
+
+	/**
+	 * Heartbeat idle interval in ms. Writing pushes the new policy into the
+	 * underlying client immediately — when connected, the live timer is
+	 * restarted in place; when disconnected, the policy is stashed for the
+	 * next `connect()`.
+	 */
+	get heartbeat_interval(): number {
+		return this.#heartbeat_interval;
+	}
+	set heartbeat_interval(value: number) {
+		this.#heartbeat_interval = value;
+		this.#client?.set_heartbeat({interval: value});
+	}
 
 	#client: FrontendWebsocketClient | null = $state.raw(null);
 
@@ -95,24 +109,12 @@ export class Socket implements WebsocketConnection {
 	readonly reconnect_attempt: number = $derived(this.#client?.last_close_time ?? 0);
 	readonly is_reconnect_pending: boolean = $derived(this.#client?.status === 'reconnecting');
 
-	readonly status: AsyncStatus = $derived.by(() => {
-		const inner = this.#client?.status ?? 'initial';
-		switch (inner) {
-			case 'initial':
-				return 'initial';
-			case 'connecting':
-				return 'pending';
-			case 'connected':
-				return 'success';
-			case 'reconnecting':
-				return 'failure';
-			case 'closed':
-				// Session-revocation close is terminal; surface it as failure.
-				// User-initiated disconnect resets to initial so the UI matches
-				// the "not connected, not trying" state.
-				return this.#client?.revoked ? 'failure' : 'initial';
-		}
-	});
+	readonly status: AsyncStatus = $derived(
+		socket_status_to_async_status(
+			this.#client?.status ?? 'initial',
+			this.#client?.revoked ?? false,
+		),
+	);
 
 	readonly connected: boolean = $derived(this.#client?.connected ?? false);
 	readonly open: boolean = $derived(this.connected);
@@ -234,11 +236,7 @@ export class Socket implements WebsocketConnection {
 	}
 
 	cancel_reconnect(): void {
-		// Tear down the client entirely — the fuz_app client has no "cancel
-		// pending reconnect without closing" primitive, and UX-wise this matches
-		// the old Cell's button behavior: after cancel, the user reconnects by
-		// hand if they want to.
-		this.#teardown_client();
+		this.#client?.cancel_reconnect();
 	}
 
 	/**

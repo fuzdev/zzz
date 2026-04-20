@@ -74,7 +74,8 @@
 	// Push reconnect-policy edits into the underlying client so in-flight
 	// waits honor the new policy (monotonically shortened). Reads all three
 	// fields so Svelte tracks them; the method itself is a no-op when no
-	// client is active.
+	// client is active. Heartbeat-interval changes push through the
+	// `socket.heartbeat_interval` setter and don't need an `$effect`.
 	$effect(() => {
 		socket.auto_reconnect;
 		socket.reconnect_delay;
