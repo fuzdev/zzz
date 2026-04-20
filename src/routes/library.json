@@ -49,7 +49,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.3.16",
-			"@fuzdev/fuz_app": "^0.28.0",
+			"@fuzdev/fuz_app": "^0.29.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.58.0",
 			"@fuzdev/fuz_ui": "^0.191.4",
@@ -19459,21 +19459,21 @@
 						"kind": "variable",
 						"doc_comment": "Extended error codes with zzz-specific AI provider error.",
 						"source_line": 25,
-						"type_signature": "{ readonly ai_provider_error: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); readonly parse_error: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); ... 11 more ...; readonly timeout: -32700 | ... 4 more ... | (number & $brand<...>); }"
+						"type_signature": "{ readonly ai_provider_error: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); readonly parse_error: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<...>); ... 13 more ...; readonly request_cancelled: -32700 | ... 4 more ... | (number & $brand<...>); }"
 					},
 					{
 						"name": "jsonrpc_error_messages",
 						"kind": "variable",
 						"doc_comment": "Extended error message constructors.",
 						"source_line": 31,
-						"type_signature": "{ readonly ai_provider_error: (provider?: string | undefined, message?: string | undefined, data?: unknown) => { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; ... 12 more ...; readonly timeout: (message?: stri..."
+						"type_signature": "{ readonly ai_provider_error: (provider?: string | undefined, message?: string | undefined, data?: unknown) => { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; ... 14 more ...; readonly request_cancelled: (mess..."
 					},
 					{
 						"name": "jsonrpc_errors",
 						"kind": "variable",
 						"doc_comment": "Extended error throwers.",
 						"source_line": 55,
-						"type_signature": "{ readonly ai_provider_error: (provider?: string | undefined, message?: string | undefined, data?: unknown) => ThrownJsonrpcError; readonly parse_error: (data?: unknown) => ThrownJsonrpcError; ... 11 more ...; readonly timeout: (message?: string | undefined, data?: unknown) => ThrownJsonrpcError; }"
+						"type_signature": "{ readonly ai_provider_error: (provider?: string | undefined, message?: string | undefined, data?: unknown) => ThrownJsonrpcError; readonly parse_error: (data?: unknown) => ThrownJsonrpcError; ... 13 more ...; readonly request_cancelled: (message?: string | undefined, data?: unknown) => ThrownJsonrpcError; }"
 					}
 				],
 				"module_comment": "zzz-specific JSON-RPC error codes extending fuz_app's base set.\n\nfuz_app provides 5 standard + 8 general application error codes.\nzzz adds domain-specific codes for AI provider errors.",
