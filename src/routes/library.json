@@ -49,7 +49,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.3.16",
-			"@fuzdev/fuz_app": "^0.27.0",
+			"@fuzdev/fuz_app": "^0.28.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.58.0",
 			"@fuzdev/fuz_ui": "^0.191.4",
@@ -86,7 +86,7 @@
 		"dependencies": {
 			"@anthropic-ai/sdk": "^0.71.2",
 			"@fuzdev/blake3_wasm": "^0.1.1",
-			"@fuzdev/gro": "^0.197.3",
+			"@fuzdev/gro": "^0.198.0",
 			"@google/generative-ai": "^0.24.1",
 			"@xterm/xterm": "^6.0.0",
 			"date-fns": "^4.1.0",
@@ -16409,7 +16409,7 @@
 					{
 						"name": "SocketOptions",
 						"kind": "type",
-						"source_line": 20,
+						"source_line": 21,
 						"type_signature": "SocketOptions",
 						"properties": [
 							{
@@ -16423,7 +16423,7 @@
 						"name": "QueuedMessage",
 						"kind": "type",
 						"doc_comment": "Queued message that couldn't be sent immediately.",
-						"source_line": 25,
+						"source_line": 26,
 						"type_signature": "QueuedMessage",
 						"properties": [
 							{
@@ -16447,7 +16447,7 @@
 						"name": "FailedMessage",
 						"kind": "type",
 						"doc_comment": "Failed message that exceeded retry count.",
-						"source_line": 32,
+						"source_line": 33,
 						"type_signature": "FailedMessage",
 						"extends": ["QueuedMessage"],
 						"properties": [
@@ -16466,8 +16466,8 @@
 					{
 						"name": "Socket",
 						"kind": "class",
-						"doc_comment": "Wraps  with zzz-specific concerns:\na retryable fire-and-forget send queue (distinct from fuz_app's\nrequest-level durable queue), URL input tracking, and a mapping from\nfuz_app's `SocketStatus` onto zzz's `AsyncStatus`. Plain reactive class\n— not a Cell. Implements  so it can back\n`FrontendWebsocketTransport`.\n\nThe bespoke heartbeat timer has been retired — fuz_app's\n`FrontendWebsocketClient` now ships an activity-aware heartbeat that\nsends the shared  at \nidle. The field is retained so the existing UI slider keeps working;\nthe configured value is read at  time and passed\nthrough as the underlying client's `heartbeat.interval`.\n\nReconnect settings (`reconnect_delay`, `reconnect_delay_max`,\n`auto_reconnect`) propagate to the underlying client via\n — callers wire an `$effect` to\ninvoke it when any of the three fields change. In-flight waits are\nmonotonically shortened (never extended).",
-						"source_line": 58,
+						"doc_comment": "Wraps `FrontendWebsocketClient` with zzz-specific concerns: a\nretryable fire-and-forget send queue (distinct from fuz_app's\nrequest-level durable queue), URL input tracking, and a mapping from\nfuz_app's `SocketStatus` onto zzz's `AsyncStatus`. Plain reactive class\n— not a Cell. Implements `WebsocketConnection` so it can back\n`FrontendWebsocketTransport`.\n\nThe bespoke heartbeat timer has been retired — fuz_app's\n`FrontendWebsocketClient` now ships an activity-aware heartbeat that\nsends the shared `heartbeat_action` at `heartbeat_interval` idle.\nAssigning `heartbeat_interval` pushes the new policy into the live\nclient immediately (the timer is restarted in place when connected).\n\nReconnect settings (`reconnect_delay`, `reconnect_delay_max`,\n`auto_reconnect`) propagate to the underlying client on assignment\nvia `apply_reconnect_policy()` — in-flight waits are monotonically\nshortened (never extended).",
+						"source_line": 57,
 						"extends": [],
 						"implements": ["WebsocketConnection"],
 						"members": [
@@ -16483,29 +16483,9 @@
 								"type_signature": "string"
 							},
 							{
-								"name": "heartbeat_interval",
-								"kind": "variable",
-								"type_signature": "number"
-							},
-							{
-								"name": "reconnect_delay",
-								"kind": "variable",
-								"type_signature": "number"
-							},
-							{
-								"name": "reconnect_delay_max",
-								"kind": "variable",
-								"type_signature": "number"
-							},
-							{
-								"name": "auto_reconnect",
-								"kind": "variable",
-								"type_signature": "boolean"
-							},
-							{
 								"name": "last_send_time",
 								"kind": "variable",
-								"doc_comment": "UI timestamps for the \"last send\" / \"last receive\" diagnostics in\n. Not used for heartbeat scheduling —\nfuz_app's client owns that.",
+								"doc_comment": "UI timestamps for the \"last send\" / \"last receive\" diagnostics in\n`CapabilityWebsocket`. Not used for heartbeat scheduling —\nfuz_app's client owns that.",
 								"type_signature": "number | null"
 							},
 							{
