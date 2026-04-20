@@ -3,6 +3,7 @@
 import {z} from 'zod';
 import type {Result} from '@fuzdev/fuz_util/result.js';
 import type {JsonrpcErrorObject} from '@fuzdev/fuz_app/http/jsonrpc.js';
+import type {RpcClientCallOptions} from '@fuzdev/fuz_app/actions/rpc_client.js';
 import type {ActionInputs, ActionOutputs} from './action_collections.js';
 
 /**
@@ -182,114 +183,131 @@ export type BackendActionMethod = z.infer<typeof BackendActionMethod>;
 
 /**
  * Interface for action dispatch functions.
- * All async methods return Result types for type-safe error handling.
- * Sync methods (like toggle_main_menu) return values directly.
+ * Async methods (request_response, async local_call) return `Promise<Result<...>>`
+ * and accept an optional `RpcClientCallOptions` second arg that threads `signal`,
+ * `transport_name`, and `queue` through to the peer. Sync methods (like
+ * `toggle_main_menu`) return values directly.
  */
 export interface ActionsApi {
 	heartbeat: (
 		input: ActionInputs['heartbeat'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['heartbeat']}, {error: JsonrpcErrorObject}>>;
-	cancel: (
-		input: ActionInputs['cancel'],
-	) => Promise<Result<{value: ActionOutputs['cancel']}, {error: JsonrpcErrorObject}>>;
+	cancel: (input: ActionInputs['cancel']) => ActionOutputs['cancel'];
 	ping: (
 		input?: void,
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['ping']}, {error: JsonrpcErrorObject}>>;
 	session_load: (
 		input?: void,
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['session_load']}, {error: JsonrpcErrorObject}>>;
-	filer_change: (
-		input: ActionInputs['filer_change'],
-	) => Promise<Result<{value: ActionOutputs['filer_change']}, {error: JsonrpcErrorObject}>>;
+	filer_change: (input: ActionInputs['filer_change']) => ActionOutputs['filer_change'];
 	diskfile_update: (
 		input: ActionInputs['diskfile_update'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['diskfile_update']}, {error: JsonrpcErrorObject}>>;
 	diskfile_delete: (
 		input: ActionInputs['diskfile_delete'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['diskfile_delete']}, {error: JsonrpcErrorObject}>>;
 	directory_create: (
 		input: ActionInputs['directory_create'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['directory_create']}, {error: JsonrpcErrorObject}>>;
 	completion_create: (
 		input: ActionInputs['completion_create'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['completion_create']}, {error: JsonrpcErrorObject}>>;
 	completion_progress: (
 		input: ActionInputs['completion_progress'],
-	) => Promise<Result<{value: ActionOutputs['completion_progress']}, {error: JsonrpcErrorObject}>>;
-	ollama_progress: (
-		input: ActionInputs['ollama_progress'],
-	) => Promise<Result<{value: ActionOutputs['ollama_progress']}, {error: JsonrpcErrorObject}>>;
+	) => ActionOutputs['completion_progress'];
+	ollama_progress: (input: ActionInputs['ollama_progress']) => ActionOutputs['ollama_progress'];
 	toggle_main_menu: (input?: ActionInputs['toggle_main_menu']) => ActionOutputs['toggle_main_menu'];
 	ollama_list: (
 		input?: void,
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['ollama_list']}, {error: JsonrpcErrorObject}>>;
 	ollama_ps: (
 		input?: void,
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['ollama_ps']}, {error: JsonrpcErrorObject}>>;
 	ollama_show: (
 		input: ActionInputs['ollama_show'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['ollama_show']}, {error: JsonrpcErrorObject}>>;
 	ollama_pull: (
 		input: ActionInputs['ollama_pull'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['ollama_pull']}, {error: JsonrpcErrorObject}>>;
 	ollama_delete: (
 		input: ActionInputs['ollama_delete'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['ollama_delete']}, {error: JsonrpcErrorObject}>>;
 	ollama_copy: (
 		input: ActionInputs['ollama_copy'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['ollama_copy']}, {error: JsonrpcErrorObject}>>;
 	ollama_create: (
 		input: ActionInputs['ollama_create'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['ollama_create']}, {error: JsonrpcErrorObject}>>;
 	ollama_unload: (
 		input: ActionInputs['ollama_unload'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['ollama_unload']}, {error: JsonrpcErrorObject}>>;
 	provider_load_status: (
 		input: ActionInputs['provider_load_status'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['provider_load_status']}, {error: JsonrpcErrorObject}>>;
 	provider_update_api_key: (
 		input: ActionInputs['provider_update_api_key'],
+		options?: RpcClientCallOptions,
 	) => Promise<
 		Result<{value: ActionOutputs['provider_update_api_key']}, {error: JsonrpcErrorObject}>
 	>;
 	terminal_create: (
 		input: ActionInputs['terminal_create'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['terminal_create']}, {error: JsonrpcErrorObject}>>;
 	terminal_data_send: (
 		input: ActionInputs['terminal_data_send'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['terminal_data_send']}, {error: JsonrpcErrorObject}>>;
-	terminal_data: (
-		input: ActionInputs['terminal_data'],
-	) => Promise<Result<{value: ActionOutputs['terminal_data']}, {error: JsonrpcErrorObject}>>;
+	terminal_data: (input: ActionInputs['terminal_data']) => ActionOutputs['terminal_data'];
 	terminal_resize: (
 		input: ActionInputs['terminal_resize'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['terminal_resize']}, {error: JsonrpcErrorObject}>>;
 	terminal_close: (
 		input: ActionInputs['terminal_close'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['terminal_close']}, {error: JsonrpcErrorObject}>>;
-	terminal_exited: (
-		input: ActionInputs['terminal_exited'],
-	) => Promise<Result<{value: ActionOutputs['terminal_exited']}, {error: JsonrpcErrorObject}>>;
+	terminal_exited: (input: ActionInputs['terminal_exited']) => ActionOutputs['terminal_exited'];
 	workspace_open: (
 		input: ActionInputs['workspace_open'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['workspace_open']}, {error: JsonrpcErrorObject}>>;
 	workspace_close: (
 		input: ActionInputs['workspace_close'],
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['workspace_close']}, {error: JsonrpcErrorObject}>>;
 	workspace_list: (
 		input?: void,
+		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['workspace_list']}, {error: JsonrpcErrorObject}>>;
 	workspace_changed: (
 		input: ActionInputs['workspace_changed'],
-	) => Promise<Result<{value: ActionOutputs['workspace_changed']}, {error: JsonrpcErrorObject}>>;
+	) => ActionOutputs['workspace_changed'];
 	_test_emit_notifications: (
 		input: ActionInputs['_test_emit_notifications'],
+		options?: RpcClientCallOptions,
 	) => Promise<
 		Result<{value: ActionOutputs['_test_emit_notifications']}, {error: JsonrpcErrorObject}>
 	>;
 	_test_notification: (
 		input: ActionInputs['_test_notification'],
-	) => Promise<Result<{value: ActionOutputs['_test_notification']}, {error: JsonrpcErrorObject}>>;
+	) => ActionOutputs['_test_notification'];
 }
 
 // generated by src/lib/action_metatypes.gen.ts - DO NOT EDIT OR RISK LOST DATA

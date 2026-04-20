@@ -376,105 +376,105 @@
 						"name": "ActionMethod",
 						"kind": "type",
 						"doc_comment": "All action method names. Request/response actions have two types per method.",
-						"source_line": 11,
+						"source_line": 12,
 						"type_signature": "ZodEnum<{ heartbeat: \"heartbeat\"; cancel: \"cancel\"; ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; ... 26 more ...; _test_notification: \"_test_notification\"; }>"
 					},
 					{
 						"name": "RequestResponseActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all request_response actions.",
-						"source_line": 52,
+						"source_line": 53,
 						"type_signature": "ZodEnum<{ heartbeat: \"heartbeat\"; ping: \"ping\"; session_load: \"session_load\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 18 more ...; _test_emit_notifications: \"_test_emit_notifications\"; }>"
 					},
 					{
 						"name": "RemoteNotificationActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all remote_notification actions.",
-						"source_line": 84,
+						"source_line": 85,
 						"type_signature": "ZodEnum<{ cancel: \"cancel\"; filer_change: \"filer_change\"; completion_progress: \"completion_progress\"; ollama_progress: \"ollama_progress\"; terminal_data: \"terminal_data\"; terminal_exited: \"terminal_exited\"; workspace_changed: \"workspace_changed\"; _test_notification: \"_test_notification\"; }>"
 					},
 					{
 						"name": "LocalCallActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all local_call actions.",
-						"source_line": 99,
+						"source_line": 100,
 						"type_signature": "ZodEnum<{ toggle_main_menu: \"toggle_main_menu\"; }>"
 					},
 					{
 						"name": "FrontendActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all actions that may be handled on the client.",
-						"source_line": 105,
+						"source_line": 106,
 						"type_signature": "ZodEnum<{ heartbeat: \"heartbeat\"; cancel: \"cancel\"; ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; ... 26 more ...; _test_notification: \"_test_notification\"; }>"
 					},
 					{
 						"name": "BackendActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all actions that may be handled on the server.",
-						"source_line": 146,
+						"source_line": 147,
 						"type_signature": "ZodEnum<{ heartbeat: \"heartbeat\"; cancel: \"cancel\"; ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; ... 25 more ...; _test_notification: \"_test_notification\"; }>"
 					},
 					{
 						"name": "ActionsApi",
 						"kind": "type",
-						"doc_comment": "Interface for action dispatch functions.\nAll async methods return Result types for type-safe error handling.\nSync methods (like toggle_main_menu) return values directly.",
-						"source_line": 188,
+						"doc_comment": "Interface for action dispatch functions.\nAsync methods (request_response, async local_call) return `Promise<Result<...>>`\nand accept an optional `RpcClientCallOptions` second arg that threads `signal`,\n`transport_name`, and `queue` through to the peer. Sync methods (like\n`toggle_main_menu`) return values directly.",
+						"source_line": 191,
 						"type_signature": "ActionsApi",
 						"properties": [
 							{
 								"name": "heartbeat",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['heartbeat'],\n\t) => Promise<Result<{value: ActionOutputs['heartbeat']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['heartbeat'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['heartbeat']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "cancel",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['cancel'],\n\t) => Promise<Result<{value: ActionOutputs['cancel']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(input: ActionInputs['cancel']) => ActionOutputs['cancel']"
 							},
 							{
 								"name": "ping",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput?: void,\n\t) => Promise<Result<{value: ActionOutputs['ping']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput?: void,\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ping']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "session_load",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput?: void,\n\t) => Promise<Result<{value: ActionOutputs['session_load']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput?: void,\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['session_load']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "filer_change",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['filer_change'],\n\t) => Promise<Result<{value: ActionOutputs['filer_change']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(input: ActionInputs['filer_change']) => ActionOutputs['filer_change']"
 							},
 							{
 								"name": "diskfile_update",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['diskfile_update'],\n\t) => Promise<Result<{value: ActionOutputs['diskfile_update']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['diskfile_update'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['diskfile_update']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "diskfile_delete",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['diskfile_delete'],\n\t) => Promise<Result<{value: ActionOutputs['diskfile_delete']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['diskfile_delete'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['diskfile_delete']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "directory_create",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['directory_create'],\n\t) => Promise<Result<{value: ActionOutputs['directory_create']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['directory_create'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['directory_create']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "completion_create",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['completion_create'],\n\t) => Promise<Result<{value: ActionOutputs['completion_create']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['completion_create'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['completion_create']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "completion_progress",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['completion_progress'],\n\t) => Promise<Result<{value: ActionOutputs['completion_progress']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['completion_progress'],\n\t) => ActionOutputs['completion_progress']"
 							},
 							{
 								"name": "ollama_progress",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['ollama_progress'],\n\t) => Promise<Result<{value: ActionOutputs['ollama_progress']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(input: ActionInputs['ollama_progress']) => ActionOutputs['ollama_progress']"
 							},
 							{
 								"name": "toggle_main_menu",
@@ -484,112 +484,112 @@
 							{
 								"name": "ollama_list",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput?: void,\n\t) => Promise<Result<{value: ActionOutputs['ollama_list']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput?: void,\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_list']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "ollama_ps",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput?: void,\n\t) => Promise<Result<{value: ActionOutputs['ollama_ps']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput?: void,\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_ps']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "ollama_show",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['ollama_show'],\n\t) => Promise<Result<{value: ActionOutputs['ollama_show']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['ollama_show'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_show']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "ollama_pull",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['ollama_pull'],\n\t) => Promise<Result<{value: ActionOutputs['ollama_pull']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['ollama_pull'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_pull']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "ollama_delete",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['ollama_delete'],\n\t) => Promise<Result<{value: ActionOutputs['ollama_delete']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['ollama_delete'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_delete']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "ollama_copy",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['ollama_copy'],\n\t) => Promise<Result<{value: ActionOutputs['ollama_copy']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['ollama_copy'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_copy']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "ollama_create",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['ollama_create'],\n\t) => Promise<Result<{value: ActionOutputs['ollama_create']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['ollama_create'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_create']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "ollama_unload",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['ollama_unload'],\n\t) => Promise<Result<{value: ActionOutputs['ollama_unload']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['ollama_unload'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_unload']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "provider_load_status",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['provider_load_status'],\n\t) => Promise<Result<{value: ActionOutputs['provider_load_status']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['provider_load_status'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['provider_load_status']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "provider_update_api_key",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['provider_update_api_key'],\n\t) => Promise<\n\t\tResult<{value: ActionOutputs['provider_update_api_key']}, {error: JsonrpcErrorObject}>\n\t>"
+								"type_signature": "(\n\t\tinput: ActionInputs['provider_update_api_key'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<\n\t\tResult<{value: ActionOutputs['provider_update_api_key']}, {error: JsonrpcErrorObject}>\n\t>"
 							},
 							{
 								"name": "terminal_create",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['terminal_create'],\n\t) => Promise<Result<{value: ActionOutputs['terminal_create']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['terminal_create'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['terminal_create']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "terminal_data_send",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['terminal_data_send'],\n\t) => Promise<Result<{value: ActionOutputs['terminal_data_send']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['terminal_data_send'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['terminal_data_send']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "terminal_data",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['terminal_data'],\n\t) => Promise<Result<{value: ActionOutputs['terminal_data']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(input: ActionInputs['terminal_data']) => ActionOutputs['terminal_data']"
 							},
 							{
 								"name": "terminal_resize",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['terminal_resize'],\n\t) => Promise<Result<{value: ActionOutputs['terminal_resize']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['terminal_resize'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['terminal_resize']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "terminal_close",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['terminal_close'],\n\t) => Promise<Result<{value: ActionOutputs['terminal_close']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['terminal_close'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['terminal_close']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "terminal_exited",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['terminal_exited'],\n\t) => Promise<Result<{value: ActionOutputs['terminal_exited']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(input: ActionInputs['terminal_exited']) => ActionOutputs['terminal_exited']"
 							},
 							{
 								"name": "workspace_open",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['workspace_open'],\n\t) => Promise<Result<{value: ActionOutputs['workspace_open']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['workspace_open'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['workspace_open']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "workspace_close",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['workspace_close'],\n\t) => Promise<Result<{value: ActionOutputs['workspace_close']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['workspace_close'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['workspace_close']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "workspace_list",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput?: void,\n\t) => Promise<Result<{value: ActionOutputs['workspace_list']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput?: void,\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['workspace_list']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "workspace_changed",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['workspace_changed'],\n\t) => Promise<Result<{value: ActionOutputs['workspace_changed']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['workspace_changed'],\n\t) => ActionOutputs['workspace_changed']"
 							},
 							{
 								"name": "_test_emit_notifications",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['_test_emit_notifications'],\n\t) => Promise<\n\t\tResult<{value: ActionOutputs['_test_emit_notifications']}, {error: JsonrpcErrorObject}>\n\t>"
+								"type_signature": "(\n\t\tinput: ActionInputs['_test_emit_notifications'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<\n\t\tResult<{value: ActionOutputs['_test_emit_notifications']}, {error: JsonrpcErrorObject}>\n\t>"
 							},
 							{
 								"name": "_test_notification",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['_test_notification'],\n\t) => Promise<Result<{value: ActionOutputs['_test_notification']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput: ActionInputs['_test_notification'],\n\t) => ActionOutputs['_test_notification']"
 							}
 						]
 					}

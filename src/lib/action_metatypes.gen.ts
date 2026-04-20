@@ -3,7 +3,7 @@ import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
 import {
 	ImportBuilder,
 	create_banner,
-	get_innermost_type_name,
+	generate_actions_api_method_signature,
 } from '@fuzdev/fuz_app/actions/action_codegen.js';
 
 import {all_action_specs} from './action_specs.js';
@@ -23,6 +23,7 @@ export const gen: Gen = ({origin_path}) => {
 	imports.add('zod', 'z');
 	imports.add_type('@fuzdev/fuz_util/result.js', 'Result');
 	imports.add_type('@fuzdev/fuz_app/http/jsonrpc.js', 'JsonrpcErrorObject');
+	imports.add_type('@fuzdev/fuz_app/actions/rpc_client.js', 'RpcClientCallOptions');
 	imports.add_types('./action_collections.js', 'ActionInputs', 'ActionOutputs');
 
 	return `
@@ -80,25 +81,13 @@ export const gen: Gen = ({origin_path}) => {
 
 		/**
 		 * Interface for action dispatch functions.
-		 * All async methods return Result types for type-safe error handling.
-		 * Sync methods (like toggle_main_menu) return values directly.
+		 * Async methods (request_response, async local_call) return \`Promise<Result<...>>\`
+		 * and accept an optional \`RpcClientCallOptions\` second arg that threads \`signal\`,
+		 * \`transport_name\`, and \`queue\` through to the peer. Sync methods (like
+		 * \`toggle_main_menu\`) return values directly.
 		 */
 		export interface ActionsApi {
-			${registry.specs
-				.map((spec) => {
-					const innermost_type_name = get_innermost_type_name(spec.input);
-					const has_input = innermost_type_name !== 'null' && innermost_type_name !== 'void';
-					const is_async = spec.kind === 'request_response' || spec.async;
-					const return_type = is_async
-						? `Promise<Result<{value: ActionOutputs['${spec.method}']}, {error: JsonrpcErrorObject}>>`
-						: `ActionOutputs['${spec.method}']`; // Sync method returns value directly
-					return `${spec.method}: (${
-						has_input
-							? `input${spec.input.safeParse(undefined).success ? '?' : ''}: ActionInputs['${spec.method}']`
-							: 'input?: void'
-					}) => ${return_type};`;
-				})
-				.join('\n\t')}
+			${registry.specs.map((spec) => generate_actions_api_method_signature(spec)).join('\n\t')}
 		}
 
 		// ${banner}
