@@ -185,12 +185,12 @@
 							{
 								"name": "heartbeat",
 								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<'heartbeat'>"
+								"type_signature": "ActionEventRequestResponseData<\n\t\t'heartbeat',\n\t\tActionInputs['heartbeat'],\n\t\tActionOutputs['heartbeat']\n\t>"
 							},
 							{
 								"name": "cancel",
 								"kind": "variable",
-								"type_signature": "ActionEventRemoteNotificationData<'cancel'>"
+								"type_signature": "ActionEventRemoteNotificationData<'cancel', ActionInputs['cancel']>"
 							},
 							{
 								"name": "ping",

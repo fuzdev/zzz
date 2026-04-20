@@ -432,14 +432,20 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 	},
 
 	_test_emit_notifications: {
-		send_request: () => {},
-		receive_response: () => {},
+		send_request: () => {
+			// no-op (test-only)
+		},
+		receive_response: () => {
+			// no-op (test-only)
+		},
 		receive_error: ({data: {error}}) => {
 			console.error('[frontend_action_handlers] _test_emit_notifications failed:', error);
 		},
 	},
 
 	_test_notification: {
-		receive: () => {},
+		receive: () => {
+			// no-op (test-only)
+		},
 	},
 });

@@ -7,27 +7,27 @@
  * Separated from tests.ts to keep test modules focused.
  */
 
-import {type BackendConfig, TEST_DATABASE_URL} from './config.ts';
-import {assert_equal, hmac_sign, open_ws, post_rpc, sql_escape} from './test_helpers.ts';
+import {type BackendConfig} from './config.ts';
+import {
+	assert_equal,
+	create_testadmin_session,
+	hash_token,
+	open_ws,
+	post_rpc,
+	run_psql,
+	sql_escape,
+} from './test_helpers.ts';
 import type {TestResult} from './tests.ts';
-// @ts-ignore — npm specifier, resolved at runtime by Deno
-import {hash as blake3_hash} from 'npm:@fuzdev/blake3_wasm';
-// @ts-ignore — npm specifier, resolved at runtime by Deno
-import {to_hex} from 'npm:@fuzdev/fuz_util/hex.js';
 
 // -- Token setup helpers ------------------------------------------------------
 
 /** Raw token value used in integration tests. */
 const BEARER_TOKEN_RAW = 'zzz-integration-test-api-token-value';
-const BEARER_TOKEN_HASH = to_hex(
-	blake3_hash(new TextEncoder().encode(BEARER_TOKEN_RAW)),
-);
+const BEARER_TOKEN_HASH = hash_token(BEARER_TOKEN_RAW);
 
 /** Expired token for negative tests. */
 const EXPIRED_TOKEN_RAW = 'zzz-integration-test-expired-token';
-const EXPIRED_TOKEN_HASH = to_hex(
-	blake3_hash(new TextEncoder().encode(EXPIRED_TOKEN_RAW)),
-);
+const EXPIRED_TOKEN_HASH = hash_token(EXPIRED_TOKEN_RAW);
 
 /**
  * Second valid token used by the granular-revocation test. The test deletes
@@ -38,9 +38,7 @@ const EXPIRED_TOKEN_HASH = to_hex(
 // (12 chars after the prefix), so the id must match or the route returns 400.
 const REVOCABLE_TOKEN_ID = 'tok_revoke_test1';
 const REVOCABLE_TOKEN_RAW = 'zzz-integration-test-revocable-token';
-const REVOCABLE_TOKEN_HASH = to_hex(
-	blake3_hash(new TextEncoder().encode(REVOCABLE_TOKEN_RAW)),
-);
+const REVOCABLE_TOKEN_HASH = hash_token(REVOCABLE_TOKEN_RAW);
 
 /**
  * Insert API tokens into the test database for the bootstrapped admin account.
@@ -49,7 +47,7 @@ const REVOCABLE_TOKEN_HASH = to_hex(
  * account's UUID from the account table.
  */
 export const setup_bearer_tokens = async (): Promise<void> => {
-	const sql = `
+	const result = await run_psql(`
 		DO $$
 		DECLARE
 			admin_id UUID;
@@ -74,20 +72,8 @@ export const setup_bearer_tokens = async (): Promise<void> => {
 			VALUES ('${sql_escape(REVOCABLE_TOKEN_ID)}', admin_id, 'revocable-token', '${sql_escape(REVOCABLE_TOKEN_HASH)}')
 			ON CONFLICT DO NOTHING;
 		END $$;
-	`;
-
-	const cmd = new Deno.Command('psql', {
-		args: [TEST_DATABASE_URL, '-c', sql],
-		stdout: 'null',
-		stderr: 'piped',
-	});
-	const child = cmd.spawn();
-	const status = await child.status;
-	if (!status.success) {
-		const stderr_text = (await new Response(child.stderr).text()).trim();
-		throw new Error(`Bearer token setup failed: ${stderr_text}`);
-	}
-	await child.stderr.cancel();
+	`);
+	if (!result.ok) throw new Error(`Bearer token setup failed: ${result.stderr}`);
 	console.log('  Bearer tokens created');
 };
 
@@ -265,36 +251,10 @@ const bearer_test_list: ReadonlyArray<{
 			// open WS with it, delete the session from DB, then verify the
 			// connection still works for existing messages (no per-message
 			// revalidation) but new connections fail.
-			const dedicated_token = 'zzz-revocation-test-session-token';
-			const token_hash = to_hex(
-				blake3_hash(new TextEncoder().encode(dedicated_token)),
+			const {token_hash, cookie} = await create_testadmin_session(
+				config,
+				'zzz-revocation-test-session-token',
 			);
-
-			// Create a dedicated session in the DB
-			const create_sql = `
-				INSERT INTO auth_session (id, account_id, expires_at)
-				SELECT '${sql_escape(token_hash)}', id, NOW() + INTERVAL '30 days'
-				FROM account WHERE username = 'testadmin'
-				ON CONFLICT DO NOTHING;
-			`;
-			const create_cmd = new Deno.Command('psql', {
-				args: [TEST_DATABASE_URL, '-c', create_sql],
-				stdout: 'null',
-				stderr: 'null',
-			});
-			const create_status = await (await create_cmd.spawn()).status;
-			assert_equal(create_status.success, true, 'session created');
-
-			// Sign the cookie
-			const expires_at = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
-			const cookie_key = config.env?.SECRET_COOKIE_KEYS;
-			if (!cookie_key) throw new Error('SECRET_COOKIE_KEYS not configured');
-			const cookie_value = await hmac_sign(
-				`${dedicated_token}:${expires_at}`,
-				cookie_key,
-			);
-			// Both cookie names: Rust uses fuz_session, Deno uses zzz_session
-			const cookie = `fuz_session=${cookie_value}; zzz_session=${cookie_value}`;
 
 			// Verify the session works
 			const {status} = await post_rpc(
@@ -305,13 +265,7 @@ const bearer_test_list: ReadonlyArray<{
 			assert_equal(status, 200, 'session works before delete');
 
 			// Delete the session from DB
-			const delete_sql = `DELETE FROM auth_session WHERE id = '${sql_escape(token_hash)}';`;
-			const delete_cmd = new Deno.Command('psql', {
-				args: [TEST_DATABASE_URL, '-c', delete_sql],
-				stdout: 'null',
-				stderr: 'null',
-			});
-			await (await delete_cmd.spawn()).status;
+			await run_psql(`DELETE FROM auth_session WHERE id = '${sql_escape(token_hash)}';`);
 
 			// New request with deleted session → 401
 			const {status: post_delete_status, body: post_delete_body} = await post_rpc(
@@ -458,34 +412,10 @@ const bearer_test_list: ReadonlyArray<{
 		fn: async (config) => {
 			// When both cookie and bearer are present, cookie should win.
 			// Use a valid cookie + invalid bearer — if cookie wins, request succeeds.
-			// We need the session cookie, so create a dedicated session.
-			const dedicated_token = 'zzz-priority-test-session-token';
-			const token_hash = to_hex(
-				blake3_hash(new TextEncoder().encode(dedicated_token)),
+			const {cookie} = await create_testadmin_session(
+				config,
+				'zzz-priority-test-session-token',
 			);
-
-			const create_sql = `
-				INSERT INTO auth_session (id, account_id, expires_at)
-				SELECT '${sql_escape(token_hash)}', id, NOW() + INTERVAL '30 days'
-				FROM account WHERE username = 'testadmin'
-				ON CONFLICT DO NOTHING;
-			`;
-			const create_cmd = new Deno.Command('psql', {
-				args: [TEST_DATABASE_URL, '-c', create_sql],
-				stdout: 'null',
-				stderr: 'null',
-			});
-			await (await create_cmd.spawn()).status;
-
-			const expires_at = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
-			const cookie_key = config.env?.SECRET_COOKIE_KEYS;
-			if (!cookie_key) throw new Error('SECRET_COOKIE_KEYS not configured');
-			const cookie_value = await hmac_sign(
-				`${dedicated_token}:${expires_at}`,
-				cookie_key,
-			);
-			// Both cookie names: Rust uses fuz_session, Deno uses zzz_session
-			const cookie = `fuz_session=${cookie_value}; zzz_session=${cookie_value}`;
 
 			// Send both valid cookie AND invalid bearer
 			const headers: Record<string, string> = {

@@ -152,7 +152,7 @@
 		if (exited) return; // already exited via notification
 		const result = await app.api.terminal_close({terminal_id});
 		exited = true;
-		onclose?.(result.ok ? (result.value?.exit_code ?? null) : null);
+		onclose?.(result.ok ? result.value.exit_code : null);
 	};
 </script>
 

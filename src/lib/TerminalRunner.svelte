@@ -36,25 +36,29 @@
 		),
 	);
 
-	const create_terminal = async (
-		command: string,
-		args: Array<string>,
-		initial_input?: string,
-	): Promise<void> => {
-		error_message = null;
-		// spawn a shell session so the terminal stays alive for follow-up commands
+	const format_command = (command: string, args: Array<string>): string =>
+		args.length ? `${command} ${args.join(' ')}` : command;
+
+	// Spawn a shell session so the terminal stays alive for follow-up commands,
+	// then send `input` followed by a newline to run it.
+	const spawn_and_run = async (
+		input: string,
+	): Promise<{ok: true; terminal_id: Uuid} | {ok: false; error: string}> => {
 		const result = await app.api.terminal_create({command: 'sh', args: []});
-		if (result.ok && result.value?.terminal_id) {
-			const terminal_id = result.value.terminal_id;
-			runs.push({terminal_id, command, args});
-			// send the initial command to the shell
-			if (initial_input) {
-				void app.api.terminal_data_send({terminal_id, data: initial_input + '\n'});
-			}
+		if (!result.ok) return {ok: false, error: result.error.message};
+		const {terminal_id} = result.value;
+		void app.api.terminal_data_send({terminal_id, data: input + '\n'});
+		return {ok: true, terminal_id};
+	};
+
+	const create_terminal = async (command: string, args: Array<string>): Promise<void> => {
+		error_message = null;
+		const input = format_command(command, args);
+		const result = await spawn_and_run(input);
+		if (result.ok) {
+			runs.push({terminal_id: result.terminal_id, command, args});
 		} else {
-			const msg = result.ok ? 'unknown error' : (result.error?.message ?? 'unknown error');
-			const display = args.length ? `${command} ${args.join(' ')}` : command;
-			error_message = `failed to run "${display}": ${msg}`;
+			error_message = `failed to run "${input}": ${result.error}`;
 		}
 	};
 
@@ -63,13 +67,11 @@
 		if (!trimmed) return;
 		const [command, ...args] = trimmed.split(/\s+/);
 		if (!command) return;
-		void create_terminal(command, args, trimmed);
+		void create_terminal(command, args);
 	};
 
 	const handle_preset = (preset: TerminalPreset): void => {
-		const initial_input =
-			preset.args.length > 0 ? `${preset.command} ${preset.args.join(' ')}` : preset.command;
-		void create_terminal(preset.command, preset.args, initial_input);
+		void create_terminal(preset.command, preset.args);
 	};
 
 	const handle_preset_create = (name: string, command: string, args: Array<string>): void => {
@@ -90,20 +92,12 @@
 	const handle_restart = (run: RunEntry) => async (): Promise<void> => {
 		// close may fail if the terminal already exited — ignore
 		await app.api.terminal_close({terminal_id: run.terminal_id}).catch(() => undefined);
-		const result = await app.api.terminal_create({command: 'sh', args: []});
-		if (result.ok && result.value?.terminal_id) {
-			const terminal_id = result.value.terminal_id;
-			const initial_input =
-				run.args.length > 0 ? `${run.command} ${run.args.join(' ')}` : run.command;
+		const result = await spawn_and_run(format_command(run.command, run.args));
+		if (result.ok) {
 			const index = runs.indexOf(run);
 			if (index !== -1) {
-				runs[index] = {
-					terminal_id,
-					command: run.command,
-					args: run.args,
-				};
+				runs[index] = {terminal_id: result.terminal_id, command: run.command, args: run.args};
 			}
-			void app.api.terminal_data_send({terminal_id, data: initial_input + '\n'});
 		}
 	};
 </script>

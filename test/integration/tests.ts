@@ -1711,8 +1711,6 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 				);
 				const create_res = (await conn.receive()) as Record<string, unknown>;
 				assert_equal(create_res.id, 'tcc-1', 'create id');
-				const terminal_id = (create_res.result as Record<string, unknown>)
-					.terminal_id as string;
 
 				let got_tmp = false;
 				for (let i = 0; i < 10 && !got_tmp; i++) {

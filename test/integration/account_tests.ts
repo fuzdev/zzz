@@ -9,8 +9,8 @@
  * differ but behavior is the same.
  */
 
-import {type BackendConfig, TEST_DATABASE_URL} from './config.ts';
-import {assert_equal, post_rpc, sql_escape} from './test_helpers.ts';
+import {type BackendConfig} from './config.ts';
+import {assert_equal, post_rpc} from './test_helpers.ts';
 import type {TestResult} from './tests.ts';
 
 /** POST JSON to an account route. */
@@ -47,57 +47,6 @@ const get_account = async (
 	const json = await res.json();
 	return {status: res.status, body: json};
 };
-
-/**
- * Create a test user via psql with a known password.
- *
- * Returns the account ID. Uses argon2 hash from the Rust bootstrap
- * (the password is 'test-login-password-123').
- */
-const create_test_user = async (
-	username: string,
-	password_hash: string,
-): Promise<string> => {
-	const account_id = crypto.randomUUID();
-	const actor_id = crypto.randomUUID();
-	const sql = `
-		INSERT INTO account (id, username, password_hash)
-		VALUES ('${sql_escape(account_id)}', '${sql_escape(username)}', '${sql_escape(password_hash)}')
-		ON CONFLICT DO NOTHING;
-
-		INSERT INTO actor (id, account_id, name)
-		VALUES ('${sql_escape(actor_id)}', '${sql_escape(account_id)}', '${sql_escape(username)}')
-		ON CONFLICT DO NOTHING;
-	`;
-	const cmd = new Deno.Command('psql', {
-		args: [TEST_DATABASE_URL, '-c', sql],
-		stdout: 'null',
-		stderr: 'piped',
-	});
-	const child = cmd.spawn();
-	const status = await child.status;
-	if (!status.success) {
-		const stderr_text = (await new Response(child.stderr).text()).trim();
-		throw new Error(`create_test_user failed: ${stderr_text}`);
-	}
-	await child.stderr.cancel();
-	return account_id;
-};
-
-/**
- * Hash a password with argon2 via the `argon2` CLI tool.
- *
- * Falls back to a pre-computed hash if the CLI is not available.
- * For test determinism, we use the Rust backend's own argon2 by
- * logging in and trusting the hash from bootstrap.
- */
-
-// Pre-computed argon2id hash for 'test-login-password-123' — only used if
-// we need to create accounts directly via SQL. The hash is valid argon2id.
-// Generated offline with: echo -n 'test-login-password-123' | argon2 ...
-// Actually we can't pre-compute because salt varies. Instead, we'll use
-// the login test to verify the bootstrap admin account which already has
-// a known password.
 
 // -- Test definitions ---------------------------------------------------------
 

@@ -5,7 +5,11 @@
  * and common types used across test modules.
  */
 
-import {type BackendConfig} from './config.ts';
+import {type BackendConfig, TEST_DATABASE_URL} from './config.ts';
+// @ts-ignore — npm specifier, resolved at runtime by Deno
+import {hash as blake3_hash} from 'npm:@fuzdev/blake3_wasm';
+// @ts-ignore — npm specifier, resolved at runtime by Deno
+import {to_hex} from 'npm:@fuzdev/fuz_util/hex.js';
 
 // -- Crypto helpers -----------------------------------------------------------
 
@@ -29,6 +33,13 @@ export const hmac_sign = async (value: string, key_str: string): Promise<string>
 	return `${value}.${sig_b64}`;
 };
 
+/**
+ * Hash a raw token with blake3 and hex-encode the digest. Matches what the
+ * server stores in `auth_session.id` and `api_token.token_hash`.
+ */
+export const hash_token = (token: string): string =>
+	to_hex(blake3_hash(new TextEncoder().encode(token)));
+
 // -- SQL helpers --------------------------------------------------------------
 
 /**
@@ -38,6 +49,59 @@ export const hmac_sign = async (value: string, key_str: string): Promise<string>
  * interpolation site when building SQL for psql.
  */
 export const sql_escape = (value: string): string => value.replaceAll("'", "''");
+
+/**
+ * Run SQL via `psql` against the test database. Returns `{ok: true}` on
+ * success or `{ok: false, stderr}` on failure. Callers pick their own error
+ * policy (throw / warn / ignore specific errors / fire-and-forget).
+ */
+export const run_psql = async (
+	sql: string,
+): Promise<{ok: true} | {ok: false; stderr: string}> => {
+	const cmd = new Deno.Command('psql', {
+		args: [TEST_DATABASE_URL, '-c', sql],
+		stdout: 'null',
+		stderr: 'piped',
+	});
+	const child = cmd.spawn();
+	const status = await child.status;
+	if (status.success) {
+		await child.stderr.cancel();
+		return {ok: true};
+	}
+	const stderr = (await new Response(child.stderr).text()).trim();
+	return {ok: false, stderr};
+};
+
+/**
+ * Create a dedicated session for the bootstrapped `testadmin` account via
+ * psql, and return the token hash plus the signed session cookie. Used by
+ * tests that exercise session revocation and cookie-vs-bearer priority.
+ *
+ * Sets both `fuz_session` (Rust) and `zzz_session` (Deno) cookie names so
+ * the same cookie works against either backend.
+ */
+export const create_testadmin_session = async (
+	config: BackendConfig,
+	token: string,
+): Promise<{token_hash: string; cookie: string}> => {
+	const token_hash = hash_token(token);
+	const result = await run_psql(`
+		INSERT INTO auth_session (id, account_id, expires_at)
+		SELECT '${sql_escape(token_hash)}', id, NOW() + INTERVAL '30 days'
+		FROM account WHERE username = 'testadmin'
+		ON CONFLICT DO NOTHING;
+	`);
+	if (!result.ok) throw new Error(`create_testadmin_session: ${result.stderr}`);
+
+	const expires_at = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
+	const cookie_key = config.env?.SECRET_COOKIE_KEYS;
+	if (!cookie_key) throw new Error('SECRET_COOKIE_KEYS not configured');
+	const cookie_value = await hmac_sign(`${token}:${expires_at}`, cookie_key);
+	const cookie = `fuz_session=${cookie_value}; zzz_session=${cookie_value}`;
+
+	return {token_hash, cookie};
+};
 
 // -- URL helpers --------------------------------------------------------------
 
@@ -138,8 +202,8 @@ export const open_ws = (
 			}
 		};
 
-		ws.onerror = (event) => {
-			const err = new Error(`WebSocket error: ${event}`);
+		ws.onerror = () => {
+			const err = new Error('WebSocket error');
 			if (pending.length > 0) {
 				const waiter = pending.shift()!;
 				clearTimeout(waiter.timer);

@@ -33,11 +33,11 @@
 	// TODO link styles should have focus always be blue, and active should be thicker
 </script>
 
-<!-- 
+<!--
 	transition:slide -->
-<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 <a
 	{...rest}
+	// eslint-disable-next-line svelte/no-navigation-without-resolve
 	{href}
 	class="nav-link {rest.class}"
 	class:selected

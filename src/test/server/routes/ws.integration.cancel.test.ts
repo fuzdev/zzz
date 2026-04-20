@@ -19,8 +19,7 @@ import {
 	is_response_for,
 	type JsonrpcErrorResponseFrame,
 } from '@fuzdev/fuz_app/testing/ws_round_trip.js';
-import {CANCEL_METHOD} from '@fuzdev/fuz_app/actions/cancel.js';
-import {cancel_action} from '@fuzdev/fuz_app/actions/cancel.js';
+import {CANCEL_METHOD, cancel_action} from '@fuzdev/fuz_app/actions/cancel.js';
 
 import {_test_emit_notifications_action_spec} from '$lib/action_specs.js';
 
@@ -72,7 +71,7 @@ describe('zzz WebSocket — cancel', () => {
 
 		const response = await client.wait_for<JsonrpcErrorResponseFrame>(is_response_for(42));
 		assert.ok('error' in response);
-		assert.match(String(response.error.message), /aborted mid-stream/);
+		assert.match(response.error.message, /aborted mid-stream/);
 		assert.strictEqual(captured_signal.aborted, true);
 	});
 

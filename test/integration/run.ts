@@ -13,15 +13,11 @@
  * When running both backends, prints a comparison table at the end.
  */
 
-import {backends, type BackendConfig, INTEGRATION_SCOPED_DIR, INTEGRATION_ZZZ_DIR, TEST_DATABASE_URL} from './config.ts';
+import {backends, type BackendConfig, INTEGRATION_SCOPED_DIR, INTEGRATION_ZZZ_DIR} from './config.ts';
 import {run_tests, type TestResult} from './tests.ts';
 import {run_bearer_tests, setup_bearer_tokens} from './bearer_tests.ts';
 import {run_account_tests} from './account_tests.ts';
-import {hmac_sign, sql_escape} from './test_helpers.ts';
-// @ts-ignore — npm specifier, resolved at runtime by Deno
-import {hash as blake3_hash} from 'npm:@fuzdev/blake3_wasm';
-// @ts-ignore — npm specifier, resolved at runtime by Deno
-import {to_hex} from 'npm:@fuzdev/fuz_util/hex.js';
+import {hash_token, hmac_sign, run_psql, sql_escape} from './test_helpers.ts';
 
 // -- Child process tracking ---------------------------------------------------
 
@@ -212,13 +208,13 @@ const setup_non_keeper_user = async (config: BackendConfig): Promise<string | un
 	if (!cookie_key) return undefined;
 
 	const session_token = 'test-non-keeper-session-token';
-	const token_hash = to_hex(blake3_hash(new TextEncoder().encode(session_token)));
+	const token_hash = hash_token(session_token);
 
 	// expires_at: 30 days from now (seconds since epoch)
 	const expires_at = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
 
 	// Insert account, actor (no keeper permit), and session via psql
-	const sql = `
+	const result = await run_psql(`
 		INSERT INTO account (id, username, password_hash)
 		VALUES ('00000000-0000-0000-0000-000000000002', 'testuser', '$argon2id$v=19$m=19456,t=2,p=1$dummy$dummyhash000000000000000000000000000')
 		ON CONFLICT DO NOTHING;
@@ -230,21 +226,11 @@ const setup_non_keeper_user = async (config: BackendConfig): Promise<string | un
 		INSERT INTO auth_session (id, account_id, expires_at)
 		VALUES ('${sql_escape(token_hash)}', '00000000-0000-0000-0000-000000000002', NOW() + INTERVAL '30 days')
 		ON CONFLICT DO NOTHING;
-	`;
-
-	const cmd = new Deno.Command('psql', {
-		args: [TEST_DATABASE_URL, '-c', sql],
-		stdout: 'null',
-		stderr: 'piped',
-	});
-	const child = cmd.spawn();
-	const status = await child.status;
-	if (!status.success) {
-		const stderr_text = (await new Response(child.stderr).text()).trim();
-		console.warn(`  Non-keeper user setup warning: ${stderr_text}`);
+	`);
+	if (!result.ok) {
+		console.warn(`  Non-keeper user setup warning: ${result.stderr}`);
 		return undefined;
 	}
-	await child.stderr.cancel();
 
 	// Sign the cookie: {session_token}:{expires_at}.{signature}
 	const cookie_value = await hmac_sign(`${session_token}:${expires_at}`, cookie_key);
@@ -261,35 +247,18 @@ const setup_non_keeper_user = async (config: BackendConfig): Promise<string | un
  * `psql` since we don't want a Postgres client library in the test runner.
  */
 const clean_database = async (): Promise<void> => {
-	const cmd = new Deno.Command('psql', {
-		args: [
-			TEST_DATABASE_URL,
-			'-c',
-			`TRUNCATE api_token, auth_session, permit, actor, account, bootstrap_lock, app_settings CASCADE;
-			 INSERT INTO bootstrap_lock (id, bootstrapped) VALUES (1, false) ON CONFLICT (id) DO UPDATE SET bootstrapped = false;
-			 INSERT INTO app_settings (id) VALUES (1) ON CONFLICT DO NOTHING;`,
-		],
-		stdout: 'null',
-		stderr: 'piped',
-	});
-	const child = cmd.spawn();
-	const status = await child.status;
-	if (!status.success) {
-		// On first run, tables may not exist yet — that's fine, migrations will create them
-		const stderr_text = (await new Response(child.stderr).text()).trim();
-		if (stderr_text.includes('does not exist')) {
-			console.log('  DB cleanup skipped (tables not yet created)');
-		} else {
-			console.warn(`  DB cleanup warning: ${stderr_text}`);
-		}
-	} else {
-		// Drain stderr
-		try {
-			await child.stderr.cancel();
-		} catch {
-			// Already consumed
-		}
+	const result = await run_psql(
+		`TRUNCATE api_token, auth_session, permit, actor, account, bootstrap_lock, app_settings CASCADE;
+		 INSERT INTO bootstrap_lock (id, bootstrapped) VALUES (1, false) ON CONFLICT (id) DO UPDATE SET bootstrapped = false;
+		 INSERT INTO app_settings (id) VALUES (1) ON CONFLICT DO NOTHING;`,
+	);
+	if (result.ok) {
 		console.log('  DB cleaned');
+	} else if (result.stderr.includes('does not exist')) {
+		// On first run, tables may not exist yet — that's fine, migrations will create them
+		console.log('  DB cleanup skipped (tables not yet created)');
+	} else {
+		console.warn(`  DB cleanup warning: ${result.stderr}`);
 	}
 };
 

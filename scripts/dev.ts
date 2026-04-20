@@ -126,10 +126,10 @@ const vite_process = new Deno.Command('npx', {
 
 let shutting_down = false;
 
-const shutdown = (): void => {
+const shutdown = (reason: string): void => {
 	if (shutting_down) return;
 	shutting_down = true;
-	console.log('\n[dev] shutting down...');
+	console.log(`\n[dev] ${reason}, shutting down...`);
 	try {
 		vite_process.kill('SIGTERM');
 	} catch {
@@ -142,8 +142,8 @@ const shutdown = (): void => {
 	}
 };
 
-Deno.addSignalListener('SIGINT', shutdown);
-Deno.addSignalListener('SIGTERM', shutdown);
+Deno.addSignalListener('SIGINT', () => shutdown('received SIGINT'));
+Deno.addSignalListener('SIGTERM', () => shutdown('received SIGTERM'));
 
 // Wait for either process to exit, then tear down the other.
 const server_status = server_process.status;
@@ -154,10 +154,7 @@ const first_exit = await Promise.race([
 	vite_status.then((s) => ({who: 'vite', status: s})),
 ]);
 
-if (!shutting_down) {
-	console.log(`[dev] ${first_exit.who} exited (code ${first_exit.status.code}), shutting down...`);
-	shutdown();
-}
+shutdown(`${first_exit.who} exited (code ${first_exit.status.code})`);
 
 // Wait for remaining process.
 await Promise.allSettled([server_status, vite_status]);
