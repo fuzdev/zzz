@@ -70,18 +70,6 @@
 
 	// Check if the current URL is the default
 	const is_default_url = $derived(socket.url_input === WEBSOCKET_URL); // TODO maybe move to `socket.url_input_is_default`
-
-	// Push reconnect-policy edits into the underlying client so in-flight
-	// waits honor the new policy (monotonically shortened). Reads all three
-	// fields so Svelte tracks them; the method itself is a no-op when no
-	// client is active. Heartbeat-interval changes push through the
-	// `socket.heartbeat_interval` setter and don't need an `$effect`.
-	$effect(() => {
-		socket.auto_reconnect;
-		socket.reconnect_delay;
-		socket.reconnect_delay_max;
-		socket.apply_reconnect_policy();
-	});
 </script>
 
 <!-- Main control section with flex layout for wide screens -->

@@ -50,19 +50,18 @@ export interface FailedMessage extends QueuedMessage {
  * client immediately (the timer is restarted in place when connected).
  *
  * Reconnect settings (`reconnect_delay`, `reconnect_delay_max`,
- * `auto_reconnect`) propagate to the underlying client via
- * `Socket.apply_reconnect_policy` — callers wire an `$effect` to
- * invoke it when any of the three fields change. In-flight waits are
- * monotonically shortened (never extended).
+ * `auto_reconnect`) propagate to the underlying client on assignment
+ * via `apply_reconnect_policy()` — in-flight waits are monotonically
+ * shortened (never extended).
  */
 export class Socket implements WebsocketConnection {
 	readonly app: Frontend;
 
 	url_input: string = $state.raw('');
 	#heartbeat_interval: number = $state.raw(DEFAULT_HEARTBEAT_INTERVAL);
-	reconnect_delay: number = $state.raw(DEFAULT_RECONNECT_DELAY);
-	reconnect_delay_max: number = $state.raw(DEFAULT_RECONNECT_DELAY_MAX);
-	auto_reconnect: boolean = $state.raw(DEFAULT_AUTO_RECONNECT);
+	#reconnect_delay: number = $state.raw(DEFAULT_RECONNECT_DELAY);
+	#reconnect_delay_max: number = $state.raw(DEFAULT_RECONNECT_DELAY_MAX);
+	#auto_reconnect: boolean = $state.raw(DEFAULT_AUTO_RECONNECT);
 
 	/**
 	 * Heartbeat idle interval in ms. Writing pushes the new policy into the
@@ -76,6 +75,33 @@ export class Socket implements WebsocketConnection {
 	set heartbeat_interval(value: number) {
 		this.#heartbeat_interval = value;
 		this.#client?.set_heartbeat({interval: value});
+	}
+
+	/**
+	 * Reconnect policy fields. Assignments push into the underlying client via
+	 * `apply_reconnect_policy()` so in-flight waits honor the new policy
+	 * (monotonically shortened, never extended).
+	 */
+	get reconnect_delay(): number {
+		return this.#reconnect_delay;
+	}
+	set reconnect_delay(value: number) {
+		this.#reconnect_delay = value;
+		this.apply_reconnect_policy();
+	}
+	get reconnect_delay_max(): number {
+		return this.#reconnect_delay_max;
+	}
+	set reconnect_delay_max(value: number) {
+		this.#reconnect_delay_max = value;
+		this.apply_reconnect_policy();
+	}
+	get auto_reconnect(): boolean {
+		return this.#auto_reconnect;
+	}
+	set auto_reconnect(value: boolean) {
+		this.#auto_reconnect = value;
+		this.apply_reconnect_policy();
 	}
 
 	#client: FrontendWebsocketClient | null = $state.raw(null);
