@@ -36,11 +36,11 @@ export interface FailedMessage extends QueuedMessage {
 }
 
 /**
- * Wraps {@link FrontendWebsocketClient} with zzz-specific concerns:
- * a retryable fire-and-forget send queue (distinct from fuz_app's
+ * Wraps `FrontendWebsocketClient` with zzz-specific concerns: a
+ * retryable fire-and-forget send queue (distinct from fuz_app's
  * request-level durable queue), URL input tracking, and a mapping from
  * fuz_app's `SocketStatus` onto zzz's `AsyncStatus`. Plain reactive class
- * — not a Cell. Implements {@link WebsocketConnection} so it can back
+ * — not a Cell. Implements `WebsocketConnection` so it can back
  * `FrontendWebsocketTransport`.
  *
  * The bespoke heartbeat timer has been retired — fuz_app's
@@ -82,7 +82,7 @@ export class Socket implements WebsocketConnection {
 
 	/**
 	 * UI timestamps for the "last send" / "last receive" diagnostics in
-	 * {@link CapabilityWebsocket}. Not used for heartbeat scheduling —
+	 * `CapabilityWebsocket`. Not used for heartbeat scheduling —
 	 * fuz_app's client owns that.
 	 */
 	last_send_time: number | null = $state.raw(null);
