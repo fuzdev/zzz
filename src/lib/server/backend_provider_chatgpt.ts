@@ -15,8 +15,15 @@ export class BackendProviderChatgpt extends BackendProviderRemote<OpenAI> {
 	async handle_streaming_completion(
 		options: CompletionHandlerOptions,
 	): Promise<ActionOutputs['completion_create']> {
-		const {model, completion_options, completion_messages, prompt, progress_token, on_progress} =
-			options;
+		const {
+			model,
+			completion_options,
+			completion_messages,
+			prompt,
+			progress_token,
+			on_progress,
+			signal,
+		} = options;
 		this.validate_streaming_requirements(progress_token);
 
 		// TODO use responses API instead
@@ -28,6 +35,7 @@ export class BackendProviderChatgpt extends BackendProviderRemote<OpenAI> {
 				prompt,
 				true,
 			),
+			{signal},
 		);
 
 		let accumulated_content = '';
@@ -102,7 +110,7 @@ export class BackendProviderChatgpt extends BackendProviderRemote<OpenAI> {
 	async handle_non_streaming_completion(
 		options: CompletionHandlerOptions,
 	): Promise<ActionOutputs['completion_create']> {
-		const {model, completion_options, completion_messages, prompt} = options;
+		const {model, completion_options, completion_messages, prompt, signal} = options;
 
 		// TODO use responses API instead
 		const response = await this.get_client().chat.completions.create(
@@ -113,6 +121,7 @@ export class BackendProviderChatgpt extends BackendProviderRemote<OpenAI> {
 				prompt,
 				false,
 			),
+			{signal},
 		);
 
 		this.log_non_streaming_response(response);

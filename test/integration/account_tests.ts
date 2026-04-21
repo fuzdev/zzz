@@ -263,7 +263,7 @@ const account_test_list: ReadonlyArray<{
 			assert_equal(Array.isArray(sessions), true, 'sessions is array');
 			assert_equal(sessions.length > 0, true, 'at least one session');
 			// Check session shape (matches fuz_app AuthSessionJson)
-			const s = sessions[0];
+			const s = sessions[0]!;
 			assert_equal(typeof s.id, 'string', 'session has id');
 			assert_equal(typeof s.account_id, 'string', 'session has account_id');
 			assert_equal(typeof s.created_at, 'string', 'session has created_at');
@@ -300,7 +300,7 @@ const account_test_list: ReadonlyArray<{
 			assert_equal(sessions.length >= 2, true, 'at least 2 sessions');
 
 			// Revoke the first session in the list and verify the other still works
-			const session_to_revoke = sessions[0];
+			const session_to_revoke = sessions[0]!;
 			const revoke_path = paths.session_revoke.replace(':id', session_to_revoke.id as string);
 			const revoke_res = await post_account(config, revoke_path, {}, {cookie: cookie1});
 			assert_equal(revoke_res.status, 200, 'revoke status');

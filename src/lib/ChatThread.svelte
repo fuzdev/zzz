@@ -12,7 +12,7 @@
 	import ThreadContextmenu from './ThreadContextmenu.svelte';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 	import ContentEditor from './ContentEditor.svelte';
-	import {GLYPH_ERROR, GLYPH_PLACEHOLDER, GLYPH_SEND} from './glyphs.js';
+	import {GLYPH_ERROR, GLYPH_PLACEHOLDER, GLYPH_SEND, GLYPH_STOP} from './glyphs.js';
 	import Glyph from './Glyph.svelte';
 
 	// TODO no longer uses `Chat`, maybe rename to `ThreadView` or similar?
@@ -124,17 +124,28 @@
 					{focus_key}
 					bind:pending_element_to_focus_key
 				>
-					<PendingButton
-						{pending}
-						disabled={send_disabled}
-						onclick={send}
-						class="plain {provider_error ? ' color_c_50' : ''}"
-						title={provider?.available
-							? `send ${input_token_count} tokens to ${thread.model_name}`
-							: (provider_error ?? undefined)}
-					>
-						<Glyph glyph={GLYPH_SEND} />
-					</PendingButton>
+					{#if pending}
+						<button
+							type="button"
+							class="plain"
+							onclick={() => thread.cancel_pending()}
+							title="stop generating"
+						>
+							<Glyph glyph={GLYPH_STOP} />
+						</button>
+					{:else}
+						<PendingButton
+							{pending}
+							disabled={send_disabled}
+							onclick={send}
+							class="plain {provider_error ? ' color_c_50' : ''}"
+							title={provider?.available
+								? `send ${input_token_count} tokens to ${thread.model_name}`
+								: (provider_error ?? undefined)}
+						>
+							<Glyph glyph={GLYPH_SEND} />
+						</PendingButton>
+					{/if}
 				</ContentEditor>
 			</div>
 		</div>

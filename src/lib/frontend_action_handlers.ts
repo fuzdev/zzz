@@ -1,3 +1,5 @@
+import {JSONRPC_ERROR_CODES} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
+
 import type {Frontend} from './frontend.svelte.js';
 import type {FrontendActionHandlers} from './frontend_action_types.js';
 import {Turn} from './turn.svelte.js';
@@ -79,11 +81,18 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 			}
 		},
 		receive_error: ({data: {input, error}}) => {
-			console.error('[frontend_action_handlers] completion failed:', error);
+			const cancelled = error.code === JSONRPC_ERROR_CODES.request_cancelled;
+			// User-initiated cancels are expected and not a failure — log quietly
+			// and keep whatever content the stream already delivered (no error banner).
+			if (cancelled) {
+				console.log('[frontend_action_handlers] completion cancelled');
+			} else {
+				console.error('[frontend_action_handlers] completion failed:', error);
+			}
 			const progress_token = input._meta?.progressToken;
 			if (progress_token) {
 				const turn = frontend.cell_registry.all.get(progress_token);
-				if (turn instanceof Turn) {
+				if (turn instanceof Turn && !cancelled) {
 					turn.content = `Error: ${error.message}`;
 					turn.error_message = error.message;
 				}

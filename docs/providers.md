@@ -248,6 +248,19 @@ User sends message
 `ctx.notify('ollama_progress', ...)` directly from the handler loop and
 check `ctx.signal.aborted` to terminate early on socket close.
 
+`completion_create` cooperates with `ctx.signal` too. The handler threads
+`signal` into `CompletionHandlerOptions`; each provider forwards it to its
+SDK — Anthropic/OpenAI/Gemini accept `{signal}` as the second arg on their
+request methods, and Ollama (no native signal support) falls back to the
+`if (signal?.aborted) break;` pattern inside the streaming for-await.
+Post-abort SDK throws are translated to `request_cancelled` at the handler
+boundary — discriminated by `ctx.signal.aborted`, not error shape, since
+each SDK throws a different abort type. `Thread.cancel_pending()` fires
+the `AbortController` from the client side; the frontend WS client sends
+the `cancel` notification and rejects the pending promise with
+`request_cancelled` so the UI can distinguish user-initiated cancels from
+real provider failures.
+
 Streaming progress is always socket-scoped via `ctx.notify` — the originating
 client is the only recipient, never a broadcast. `ctx.notify` is a no-op on
 HTTP transport (with a DEV warn), so streaming effectively requires a WS

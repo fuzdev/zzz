@@ -56,7 +56,7 @@ export const INTEGRATION_ZZZ_DIR = '/tmp/zzz_integration_zzz_dir';
 export const TEST_DATABASE_URL =
 	Deno.env.get('TEST_DATABASE_URL') ?? 'postgres://localhost/zzz_test';
 
-export const backends: Record<string, BackendConfig> = {
+export const backends = {
 	deno: {
 		name: 'deno',
 		start_command: ['deno', 'task', 'dev:start'],

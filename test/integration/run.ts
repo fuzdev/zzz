@@ -82,6 +82,7 @@ const start_backend = async (config: BackendConfig): Promise<Deno.ChildProcess> 
 	console.log(`\n  Starting ${config.name} backend: ${config.start_command.join(' ')}`);
 
 	const [cmd, ...args] = config.start_command;
+	if (!cmd) throw new Error(`${config.name}: start_command is empty`);
 	const child = new Deno.Command(cmd, {
 		args,
 		stdout: 'null',
@@ -332,8 +333,10 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 		const non_keeper_cookie = await setup_non_keeper_user(config);
 		await setup_bearer_tokens();
 		const results = await run_tests(config, filter, session_cookie, non_keeper_cookie);
-		const bearer_results = await run_bearer_tests(config, session_cookie, filter);
-		results.push(...bearer_results);
+		if (session_cookie) {
+			const bearer_results = await run_bearer_tests(config, session_cookie, filter);
+			results.push(...bearer_results);
+		}
 		const account_results = await run_account_tests(config, filter);
 		results.push(...account_results);
 
@@ -409,15 +412,16 @@ const print_comparison = (runs: BackendRun[]): void => {
 		const times = names.map((n) => timings.get(n) ?? 0);
 
 		times.forEach((t, i) => {
-			totals[i] += t;
-			if (!is_silence) totals_excl[i] += t;
+			totals[i] = (totals[i] ?? 0) + t;
+			if (!is_silence) totals_excl[i] = (totals_excl[i] ?? 0) + t;
 		});
 
 		const time_cols = times.map((t) => fmt_ms(t).padStart(col_w)).join('');
 
 		let cmp_str = '';
-		if (times.length >= 2 && times[0] > 0 && times[1] > 0) {
-			cmp_str = is_silence ? '  (silence)' : `  ${fmt_comparison(times[0], times[1])}`;
+		const [t0, t1] = times;
+		if (t0 !== undefined && t1 !== undefined && t0 > 0 && t1 > 0) {
+			cmp_str = is_silence ? '  (silence)' : `  ${fmt_comparison(t0, t1)}`;
 		}
 
 		const label = is_silence ? `${test_name} *` : test_name;
@@ -430,9 +434,10 @@ const print_comparison = (runs: BackendRun[]): void => {
 	console.log(`  ${'total'.padEnd(36)}${total_cols}`);
 
 	const excl_cols = totals_excl.map((t) => fmt_ms(t).padStart(col_w)).join('');
+	const [ex0, ex1] = totals_excl;
 	const excl_cmp =
-		totals_excl[0] > 0 && totals_excl[1] > 0
-			? `  ${fmt_comparison(totals_excl[0], totals_excl[1])}`
+		ex0 !== undefined && ex1 !== undefined && ex0 > 0 && ex1 > 0
+			? `  ${fmt_comparison(ex0, ex1)}`
 			: '';
 	console.log(`  ${'total (excl silence)'.padEnd(36)}${excl_cols}${excl_cmp}`);
 
@@ -447,7 +452,7 @@ const main = async (): Promise<void> => {
 
 	if (backend_arg === 'both') {
 		targets.push(backends.deno, backends.rust);
-	} else if (backends[backend_arg]) {
+	} else if (backend_arg === 'deno' || backend_arg === 'rust') {
 		targets.push(backends[backend_arg]);
 	} else {
 		console.error(`Unknown backend: ${backend_arg}. Use: deno, rust, or both`);

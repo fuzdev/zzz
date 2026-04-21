@@ -23,7 +23,7 @@ export const GLYPH_PLACEHOLDER = '↳';
 export const GLYPH_SEND = '⮥'; // ⮥ ⭷ ↗
 export const GLYPH_PLAY = '▶︎';
 export const GLYPH_PAUSE = '❙❙'; // is 2 chars, should be supported by usage
-// export const GLYPH_STOP = '⏹'; // ⏹ ■ ▣ ▪
+export const GLYPH_STOP = '⏹'; // ⏹ ■ ▣ ▪
 // export const GLYPH_EJECT = '⏏';
 //  ⏭ ⏯ ⏮
 

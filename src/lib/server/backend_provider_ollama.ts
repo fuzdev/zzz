@@ -68,8 +68,15 @@ export class BackendProviderOllama extends BackendProviderLocal<Ollama> {
 	async handle_streaming_completion(
 		options: CompletionHandlerOptions,
 	): Promise<ActionOutputs['completion_create']> {
-		const {model, completion_options, completion_messages, prompt, progress_token, on_progress} =
-			options;
+		const {
+			model,
+			completion_options,
+			completion_messages,
+			prompt,
+			progress_token,
+			on_progress,
+			signal,
+		} = options;
 		this.validate_streaming_requirements(progress_token);
 
 		await this.#ensure_model(model);
@@ -83,6 +90,10 @@ export class BackendProviderOllama extends BackendProviderLocal<Ollama> {
 		let final_response;
 
 		for await (const chunk of response) {
+			// Ollama's client doesn't take a signal — cooperate by breaking the
+			// iterator loop; matches the pattern in zzz_action_handlers for
+			// ollama_pull / ollama_create.
+			if (signal?.aborted) break;
 			this.log_streaming_chunk(chunk);
 
 			// Accumulate the message content

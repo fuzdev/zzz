@@ -35,6 +35,11 @@ export class Thread extends Cell<typeof ThreadJson> {
 	readonly token_count: number = $derived(estimate_token_count(this.content));
 	readonly content_preview: string = $derived(to_preview(this.content));
 
+	// Imperative handle for the in-flight completion_create call. Not reactive —
+	// UI state (the send/stop button) tracks the `pending` flag on the component,
+	// which mirrors the onsend promise.
+	#pending_controller: AbortController | null = null;
+
 	constructor(options: ThreadOptions) {
 		super(ThreadJson, options);
 
@@ -146,14 +151,42 @@ export class Thread extends Cell<typeof ThreadJson> {
 		// Update the user turn with the request
 		user_turn.request = completion_request;
 
-		// Send the prompt with thread history
-		await this.app.api.completion_create({
-			completion_request,
-			_meta: {progressToken: assistant_turn.id},
-		});
+		// Send the prompt with thread history. Attach an AbortController so the
+		// user can stop long streams mid-flight — the server's completion handler
+		// cooperates via ctx.signal and the frontend WS client translates abort
+		// into a `request_cancelled` JSON-RPC error.
+		const controller = new AbortController();
+		this.#pending_controller = controller;
+		try {
+			await this.app.api.completion_create(
+				{
+					completion_request,
+					_meta: {progressToken: assistant_turn.id},
+				},
+				{signal: controller.signal},
+			);
+		} finally {
+			// Only clear if this is still the active controller — a concurrent
+			// send (shouldn't happen with current UI but cheap insurance) would
+			// have replaced it.
+			if (this.#pending_controller === controller) {
+				this.#pending_controller = null;
+			}
+		}
 		// Result not needed - handlers update turn, which contains error content if failed
 
 		return assistant_turn;
+	}
+
+	/**
+	 * Abort the in-flight `completion_create` call (if any). Safe to call when
+	 * nothing is pending — no-op. The frontend WS client rejects the pending
+	 * promise with `request_cancelled` and fires a `cancel` notification so the
+	 * server can stop its provider stream.
+	 */
+	cancel_pending(): void {
+		this.#pending_controller?.abort();
+		this.#pending_controller = null;
 	}
 
 	switch_model(model_id: Uuid): void {

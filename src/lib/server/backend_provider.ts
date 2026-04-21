@@ -42,6 +42,13 @@ export interface CompletionHandlerOptions {
 	 * Required for streaming handlers; ignored by non-streaming handlers.
 	 */
 	on_progress: OnCompletionProgress;
+	/**
+	 * Request-scoped cancel signal. Fires on WS socket close or when the client
+	 * sends a `cancel` notification for this request id. Providers must honor it
+	 * on long-running streams — forward to the SDK's native `signal` option, or
+	 * check `signal.aborted` inside async-iteration loops and break.
+	 */
+	signal?: AbortSignal;
 }
 
 export type OnCompletionProgress = (input: ActionInputs['completion_progress']) => Promise<void>;

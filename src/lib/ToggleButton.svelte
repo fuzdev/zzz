@@ -3,7 +3,7 @@
 	import type {SvelteHTMLElements} from 'svelte/elements';
 
 	let {
-		active,
+		active = $bindable(),
 		active_content,
 		inactive_content,
 		...rest

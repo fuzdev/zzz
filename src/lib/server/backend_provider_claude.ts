@@ -15,8 +15,15 @@ export class BackendProviderClaude extends BackendProviderRemote<Anthropic> {
 	async handle_streaming_completion(
 		options: CompletionHandlerOptions,
 	): Promise<ActionOutputs['completion_create']> {
-		const {model, completion_options, completion_messages, prompt, progress_token, on_progress} =
-			options;
+		const {
+			model,
+			completion_options,
+			completion_messages,
+			prompt,
+			progress_token,
+			on_progress,
+			signal,
+		} = options;
 		this.validate_streaming_requirements(progress_token);
 
 		const stream = await this.get_client().messages.create(
@@ -27,6 +34,7 @@ export class BackendProviderClaude extends BackendProviderRemote<Anthropic> {
 				prompt,
 				true,
 			),
+			{signal},
 		);
 
 		let accumulated_content = '';
@@ -82,7 +90,7 @@ export class BackendProviderClaude extends BackendProviderRemote<Anthropic> {
 	async handle_non_streaming_completion(
 		options: CompletionHandlerOptions,
 	): Promise<ActionOutputs['completion_create']> {
-		const {model, completion_options, completion_messages, prompt} = options;
+		const {model, completion_options, completion_messages, prompt, signal} = options;
 
 		const response = await this.get_client().messages.create(
 			create_claude_completion_options(
@@ -92,6 +100,7 @@ export class BackendProviderClaude extends BackendProviderRemote<Anthropic> {
 				prompt,
 				false,
 			),
+			{signal},
 		);
 
 		this.log_non_streaming_response(response);

@@ -73,7 +73,7 @@
 			"pg": "^8.20.0",
 			"prettier": "^3.7.4",
 			"prettier-plugin-svelte": "^3.4.1",
-			"svelte": "^5.55.3",
+			"svelte": "5.55.4",
 			"svelte-check": "^4.4.5",
 			"svelte2tsx": "^0.7.52",
 			"tslib": "^2.8.1",
@@ -3644,7 +3644,8 @@
 						"props": [
 							{
 								"name": "value",
-								"type": "string"
+								"type": "string",
+								"bindable": true
 							},
 							{
 								"name": "restore_icon",
@@ -4039,7 +4040,8 @@
 						"props": [
 							{
 								"name": "content",
-								"type": "string"
+								"type": "string",
+								"bindable": true
 							},
 							{
 								"name": "token_count",
@@ -4238,7 +4240,8 @@
 						"props": [
 							{
 								"name": "enabled",
-								"type": "boolean"
+								"type": "boolean",
+								"bindable": true
 							},
 							{
 								"name": "label",
@@ -6403,7 +6406,8 @@
 						"props": [
 							{
 								"name": "value",
-								"type": "string"
+								"type": "string",
+								"bindable": true
 							},
 							{
 								"name": "attrs",
@@ -6629,7 +6633,7 @@
 					{
 						"name": "create_frontend_action_handlers",
 						"kind": "function",
-						"source_line": 8,
+						"source_line": 10,
 						"type_signature": "(frontend: Frontend): FrontendActionHandlers",
 						"return_type": "FrontendActionHandlers",
 						"parameters": [
@@ -7592,6 +7596,12 @@
 						"kind": "variable",
 						"source_line": 25,
 						"type_signature": "\"❙❙\""
+					},
+					{
+						"name": "GLYPH_STOP",
+						"kind": "variable",
+						"source_line": 26,
+						"type_signature": "\"⏹\""
 					},
 					{
 						"name": "GLYPH_CHECKMARK",
@@ -9413,7 +9423,8 @@
 						"props": [
 							{
 								"name": "show",
-								"type": "boolean"
+								"type": "boolean",
+								"bindable": true
 							},
 							{
 								"name": "onpick",
@@ -14241,19 +14252,25 @@
 								"kind": "variable",
 								"type_signature": "OnCompletionProgress",
 								"doc_comment": "Routes progress chunks to the originating WS socket via ctx.notify.\nRequired for streaming handlers; ignored by non-streaming handlers."
+							},
+							{
+								"name": "signal",
+								"kind": "variable",
+								"type_signature": "AbortSignal",
+								"doc_comment": "Request-scoped cancel signal. Fires on WS socket close or when the client\nsends a `cancel` notification for this request id. Providers must honor it\non long-running streams — forward to the SDK's native `signal` option, or\ncheck `signal.aborted` inside async-iteration loops and break."
 							}
 						]
 					},
 					{
 						"name": "OnCompletionProgress",
 						"kind": "type",
-						"source_line": 47,
+						"source_line": 54,
 						"type_signature": "OnCompletionProgress"
 					},
 					{
 						"name": "BackendProviderRemoteOptions",
 						"kind": "type",
-						"source_line": 49,
+						"source_line": 56,
 						"type_signature": "BackendProviderRemoteOptions",
 						"properties": [
 							{
@@ -14267,7 +14284,7 @@
 						"name": "BackendProvider",
 						"kind": "class",
 						"doc_comment": "Base class for all backend AI providers.\nProvides shared functionality for completion handlers and logging.",
-						"source_line": 57,
+						"source_line": 64,
 						"generic_params": [
 							{
 								"name": "TClient",
@@ -14470,7 +14487,7 @@
 						"name": "BackendProviderRemote",
 						"kind": "class",
 						"doc_comment": "Base class for remote API-based providers (Claude, ChatGPT, Gemini).\nHandles API key management and provides default error handling for missing keys.",
-						"source_line": 136,
+						"source_line": 143,
 						"extends": ["BackendProvider<TClient>"],
 						"implements": [],
 						"generic_params": [
@@ -14536,7 +14553,7 @@
 						"name": "BackendProviderLocal",
 						"kind": "class",
 						"doc_comment": "Base class for locally-installed providers (Ollama).\nHandles installation checking and provides default error handling for missing installations.",
-						"source_line": 182,
+						"source_line": 189,
 						"extends": ["BackendProvider<TClient>"],
 						"implements": [],
 						"generic_params": [
@@ -16409,7 +16426,7 @@
 					{
 						"name": "SocketOptions",
 						"kind": "type",
-						"source_line": 21,
+						"source_line": 22,
 						"type_signature": "SocketOptions",
 						"properties": [
 							{
@@ -16423,7 +16440,7 @@
 						"name": "QueuedMessage",
 						"kind": "type",
 						"doc_comment": "Queued message that couldn't be sent immediately.",
-						"source_line": 26,
+						"source_line": 27,
 						"type_signature": "QueuedMessage",
 						"properties": [
 							{
@@ -16447,7 +16464,7 @@
 						"name": "FailedMessage",
 						"kind": "type",
 						"doc_comment": "Failed message that exceeded retry count.",
-						"source_line": 33,
+						"source_line": 34,
 						"type_signature": "FailedMessage",
 						"extends": ["QueuedMessage"],
 						"properties": [
@@ -16466,10 +16483,10 @@
 					{
 						"name": "Socket",
 						"kind": "class",
-						"doc_comment": "Wraps `FrontendWebsocketClient` with zzz-specific concerns: a\nretryable fire-and-forget send queue (distinct from fuz_app's\nrequest-level durable queue), URL input tracking, and a mapping from\nfuz_app's `SocketStatus` onto zzz's `AsyncStatus`. Plain reactive class\n— not a Cell. Implements `WebsocketConnection` so it can back\n`FrontendWebsocketTransport`.\n\nThe bespoke heartbeat timer has been retired — fuz_app's\n`FrontendWebsocketClient` now ships an activity-aware heartbeat that\nsends the shared `heartbeat_action` at `heartbeat_interval` idle.\nAssigning `heartbeat_interval` pushes the new policy into the live\nclient immediately (the timer is restarted in place when connected).\n\nReconnect settings (`reconnect_delay`, `reconnect_delay_max`,\n`auto_reconnect`) propagate to the underlying client on assignment\nvia `apply_reconnect_policy()` — in-flight waits are monotonically\nshortened (never extended).",
-						"source_line": 57,
+						"doc_comment": "Wraps `FrontendWebsocketClient` with zzz-specific concerns: a\nretryable fire-and-forget send queue (distinct from fuz_app's\nrequest-level durable queue), URL input tracking, and a mapping from\nfuz_app's `SocketStatus` onto zzz's `AsyncStatus`. Plain reactive class\n— not a Cell. Implements `WebsocketRpcConnection` so it can back\n`FrontendWebsocketTransport`; the `request` method is a one-line\ndelegate to the underlying `FrontendWebsocketClient`, keeping the\npending-request map in one canonical place.\n\nThe bespoke heartbeat timer has been retired — fuz_app's\n`FrontendWebsocketClient` now ships an activity-aware heartbeat that\nsends the shared `heartbeat_action` at `heartbeat_interval` idle.\nAssigning `heartbeat_interval` pushes the new policy into the live\nclient immediately (the timer is restarted in place when connected).\n\nReconnect settings (`reconnect_delay`, `reconnect_delay_max`,\n`auto_reconnect`) propagate to the underlying client on assignment\nvia `apply_reconnect_policy()` — in-flight waits are monotonically\nshortened (never extended).",
+						"source_line": 60,
 						"extends": [],
-						"implements": ["WebsocketConnection"],
+						"implements": ["WebsocketRpcConnection"],
 						"members": [
 							{
 								"name": "app",
@@ -16630,6 +16647,29 @@
 								"type_signature": "(): void",
 								"return_type": "void",
 								"parameters": []
+							},
+							{
+								"name": "request",
+								"kind": "function",
+								"doc_comment": "Delegate to the underlying `FrontendWebsocketClient.request` — keeps the\npending-request map, durable queue, and `AbortSignal` cancel in one\ncanonical place. Rejects when there is no client (call `connect()` first).",
+								"type_signature": "(method: string, params?: unknown, options?: { signal?: AbortSignal | undefined; queue?: boolean | undefined; id?: string | number | undefined; } | undefined): Promise<unknown>",
+								"return_type": "Promise<unknown>",
+								"parameters": [
+									{
+										"name": "method",
+										"type": "string"
+									},
+									{
+										"name": "params",
+										"type": "unknown",
+										"optional": true
+									},
+									{
+										"name": "options",
+										"type": "{ signal?: AbortSignal | undefined; queue?: boolean | undefined; id?: string | number | undefined; } | undefined",
+										"optional": true
+									}
+								]
 							},
 							{
 								"name": "send",
@@ -17760,6 +17800,14 @@
 								]
 							},
 							{
+								"name": "cancel_pending",
+								"kind": "function",
+								"doc_comment": "Abort the in-flight `completion_create` call (if any). Safe to call when\nnothing is pending — no-op. The frontend WS client rejects the pending\npromise with `request_cancelled` and fires a `cancel` notification so the\nserver can stop its provider stream.",
+								"type_signature": "(): void",
+								"return_type": "void",
+								"parameters": []
+							},
+							{
 								"name": "switch_model",
 								"kind": "function",
 								"type_signature": "(model_id: string & $brand<\"Uuid\">): void",
@@ -18394,7 +18442,8 @@
 							{
 								"name": "active",
 								"type": "boolean",
-								"description": "Current state of the toggle"
+								"description": "Current state of the toggle",
+								"bindable": true
 							},
 							{
 								"name": "active_content",

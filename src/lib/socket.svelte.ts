@@ -6,7 +6,8 @@ import {
 	type SocketMessageHandler,
 	type SocketErrorHandler,
 } from '@fuzdev/fuz_app/actions/socket.svelte.js';
-import type {WebsocketConnection} from '@fuzdev/fuz_app/actions/transports_ws.js';
+import type {WebsocketRpcConnection} from '@fuzdev/fuz_app/actions/transports_ws.js';
+import type {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.js';
 import {UNKNOWN_ERROR_MESSAGE} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
 
 import {create_uuid, type Uuid} from './zod_helpers.js';
@@ -40,8 +41,10 @@ export interface FailedMessage extends QueuedMessage {
  * retryable fire-and-forget send queue (distinct from fuz_app's
  * request-level durable queue), URL input tracking, and a mapping from
  * fuz_app's `SocketStatus` onto zzz's `AsyncStatus`. Plain reactive class
- * — not a Cell. Implements `WebsocketConnection` so it can back
- * `FrontendWebsocketTransport`.
+ * — not a Cell. Implements `WebsocketRpcConnection` so it can back
+ * `FrontendWebsocketTransport`; the `request` method is a one-line
+ * delegate to the underlying `FrontendWebsocketClient`, keeping the
+ * pending-request map in one canonical place.
  *
  * The bespoke heartbeat timer has been retired — fuz_app's
  * `FrontendWebsocketClient` now ships an activity-aware heartbeat that
@@ -54,7 +57,7 @@ export interface FailedMessage extends QueuedMessage {
  * via `apply_reconnect_policy()` — in-flight waits are monotonically
  * shortened (never extended).
  */
-export class Socket implements WebsocketConnection {
+export class Socket implements WebsocketRpcConnection {
 	readonly app: Frontend;
 
 	url_input: string = $state.raw('');
@@ -215,6 +218,23 @@ export class Socket implements WebsocketConnection {
 			this.#client.disconnect();
 			this.#client = null;
 		}
+	}
+
+	/**
+	 * Delegate to the underlying `FrontendWebsocketClient.request` — keeps the
+	 * pending-request map, durable queue, and `AbortSignal` cancel in one
+	 * canonical place. Rejects when there is no client (call `connect()` first).
+	 */
+	request(
+		method: string,
+		params?: unknown,
+		options?: {signal?: AbortSignal; queue?: boolean; id?: JsonrpcRequestId},
+	): Promise<unknown> {
+		const client = this.#client;
+		if (!client) {
+			return Promise.reject(new Error('[socket] cannot request: no client (call connect first)'));
+		}
+		return client.request(method, params, options);
 	}
 
 	send(data: object): boolean {

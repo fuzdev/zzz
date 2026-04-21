@@ -229,7 +229,7 @@ export const open_ws = (
 						pending.push({resolve: res, reject: rej, timer, silent: false});
 					}),
 				expect_silence: (timeout_ms = 1_000) =>
-					new Promise((res, rej) => {
+					new Promise<void>((res, rej) => {
 						if (buffer.length > 0) {
 							rej(new Error(`expected no response, got: ${JSON.stringify(buffer.shift())}`));
 							return;
@@ -238,7 +238,13 @@ export const open_ws = (
 							pending.shift();
 							res();
 						}, timeout_ms);
-						pending.push({resolve: res, reject: rej, timer, silent: true});
+						pending.push({
+							// silent waiters never receive a value — cast to satisfy the shared pending shape
+							resolve: res as (value: unknown) => void,
+							reject: rej,
+							timer,
+							silent: true,
+						});
 					}),
 				close: () => ws.close(),
 				wait_closed: (timeout_ms = 5_000) =>

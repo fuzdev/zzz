@@ -178,6 +178,7 @@ export const zzz_action_handlers: ZzzActionHandlers = {
 				ctx.notify('completion_progress', progress_input);
 				return Promise.resolve();
 			},
+			signal: ctx.signal,
 		};
 
 		const provider = backend.lookup_provider(provider_name);
@@ -188,6 +189,14 @@ export const zzz_action_handlers: ZzzActionHandlers = {
 			result = await handler(handler_options);
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
+			// Cancellation is not a provider failure — translate to the wire code
+			// so telemetry and any late-arriving response match the intent.
+			// Check `ctx.signal.aborted` rather than error shape: each SDK throws
+			// a different abort type (APIUserAbortError on Anthropic/OpenAI,
+			// DOMException on fetch), but the signal is authoritative.
+			if (ctx.signal.aborted) {
+				throw jsonrpc_errors.request_cancelled(`completion_create cancelled (${provider_name})`);
+			}
 			const error_message = error instanceof Error ? error.message : 'AI provider error';
 			throw jsonrpc_errors.ai_provider_error(provider_name, error_message);
 		}

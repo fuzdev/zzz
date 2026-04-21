@@ -624,8 +624,9 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 			// scoped_dirs contains the integration scoped dir, absolute with trailing slash
 			const scoped_dirs = data.scoped_dirs as Array<string>;
 			assert_equal(scoped_dirs.length >= 1, true, `scoped_dirs has entries (got ${scoped_dirs.length})`);
-			assert_equal(scoped_dirs[0].startsWith('/'), true, 'scoped_dirs[0] is absolute');
-			assert_equal(scoped_dirs[0].endsWith('/'), true, 'scoped_dirs[0] has trailing slash');
+			const first_scoped_dir = scoped_dirs[0]!;
+			assert_equal(first_scoped_dir.startsWith('/'), true, 'scoped_dirs[0] is absolute');
+			assert_equal(first_scoped_dir.endsWith('/'), true, 'scoped_dirs[0] has trailing slash');
 
 			assert_equal(Array.isArray(data.files), true, 'files is array');
 			assert_equal(Array.isArray(data.provider_status), true, 'provider_status is array');
@@ -1269,7 +1270,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 
 				// Notifications must be in emission order (0..count).
 				for (let i = 0; i < count; i++) {
-					const n = notifications[i];
+					const n = notifications[i]!;
 					assert_equal(n.jsonrpc, '2.0', `notification ${i} jsonrpc`);
 					assert_equal(n.method, '_test_notification', `notification ${i} method`);
 					assert_deep_equal(n.params, {index: i}, `notification ${i} params`);
