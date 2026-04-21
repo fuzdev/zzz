@@ -36,9 +36,16 @@ export class Thread extends Cell<typeof ThreadJson> {
 	readonly content_preview: string = $derived(to_preview(this.content));
 
 	// Imperative handle for the in-flight completion_create call. Not reactive —
-	// UI state (the send/stop button) tracks the `pending` flag on the component,
-	// which mirrors the onsend promise.
+	// UI state tracks `pending` below, which mirrors this controller's lifecycle.
 	#pending_controller: AbortController | null = null;
+
+	/**
+	 * Reactive flag: true while `send_message` has an in-flight `completion_create`.
+	 * Owned by the thread so multiple views of the same thread stay in sync.
+	 * Callers that bypass `send_message` and call `app.api.completion_create`
+	 * directly will not update this flag.
+	 */
+	pending: boolean = $state.raw(false);
 
 	constructor(options: ThreadOptions) {
 		super(ThreadJson, options);
@@ -157,6 +164,7 @@ export class Thread extends Cell<typeof ThreadJson> {
 		// into a `request_cancelled` JSON-RPC error.
 		const controller = new AbortController();
 		this.#pending_controller = controller;
+		this.pending = true;
 		try {
 			await this.app.api.completion_create(
 				{
@@ -171,6 +179,7 @@ export class Thread extends Cell<typeof ThreadJson> {
 			// have replaced it.
 			if (this.#pending_controller === controller) {
 				this.#pending_controller = null;
+				this.pending = false;
 			}
 		}
 		// Result not needed - handlers update turn, which contains error content if failed
@@ -187,6 +196,7 @@ export class Thread extends Cell<typeof ThreadJson> {
 	cancel_pending(): void {
 		this.#pending_controller?.abort();
 		this.#pending_controller = null;
+		this.pending = false;
 	}
 
 	switch_model(model_id: Uuid): void {

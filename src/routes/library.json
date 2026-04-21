@@ -17689,6 +17689,12 @@
 								"type_signature": "string"
 							},
 							{
+								"name": "pending",
+								"kind": "variable",
+								"doc_comment": "Reactive flag: true while `send_message` has an in-flight `completion_create`.\nOwned by the thread so multiple views of the same thread stay in sync.\nCallers that bypass `send_message` and call `app.api.completion_create`\ndirectly will not update this flag.",
+								"type_signature": "boolean"
+							},
+							{
 								"name": "constructor",
 								"kind": "constructor",
 								"type_signature": "(options: ThreadOptions): Thread",

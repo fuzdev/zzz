@@ -37,7 +37,6 @@
 	let input = $state.raw('');
 	const input_token_count = $derived(estimate_token_count(input));
 	let content_input: {focus: () => void} | undefined;
-	let pending = $state.raw(false);
 
 	const send = async () => {
 		const parsed = input.trim();
@@ -47,9 +46,7 @@
 		}
 		input = '';
 		void tick().then(() => content_input?.focus()); // timeout is maybe unnecessary, lets the input clear first to maybe avoid a frame of jank
-		pending = true;
 		await onsend(parsed);
-		pending = false;
 	};
 
 	const turn_count = $derived(thread.turns.size);
@@ -70,7 +67,7 @@
 				? provider.status.error
 				: 'provider unavailable',
 	);
-	const send_disabled = $derived(pending || !!provider_error);
+	const send_disabled = $derived(thread.pending || !!provider_error);
 </script>
 
 <ModelContextmenu model={thread.model}>
@@ -124,7 +121,7 @@
 					{focus_key}
 					bind:pending_element_to_focus_key
 				>
-					{#if pending}
+					{#if thread.pending}
 						<button
 							type="button"
 							class="plain"
@@ -135,7 +132,7 @@
 						</button>
 					{:else}
 						<PendingButton
-							{pending}
+							pending={thread.pending}
 							disabled={send_disabled}
 							onclick={send}
 							class="plain {provider_error ? ' color_c_50' : ''}"
