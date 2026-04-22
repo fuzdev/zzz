@@ -40,7 +40,7 @@
 		},
 		"type": "module",
 		"engines": {
-			"node": ">=22.15"
+			"node": ">=24.14"
 		},
 		"peerDependencies": {
 			"@sveltejs/kit": "^2",
@@ -15590,7 +15590,7 @@
 						]
 					}
 				],
-				"module_comment": "WebSocket endpoint wiring — thin wrapper over fuz_app's\n{@link register_action_ws}.\n\nzzz supplies the action tuples (spec + handler) and a context-extender\nthat adds the domain `Backend` onto the base per-request context. All\ndispatch, auth, validation, and transport bookkeeping live in fuz_app.\n\nThe shared {@link heartbeat_action} is spread first so disconnect\ndetection is identical across every fuz_app consumer.",
+				"module_comment": "WebSocket endpoint wiring — thin wrapper over fuz_app's\n`register_action_ws`.\n\nzzz supplies the action tuples (spec + handler) and a context-extender\nthat adds the domain `Backend` onto the base per-request context. All\ndispatch, auth, validation, and transport bookkeeping live in fuz_app.\n\nThe shared `heartbeat_action` is spread first so disconnect\ndetection is identical across every fuz_app consumer.",
 				"dependencies": ["action_specs.ts", "server/zzz_action_handlers.ts"],
 				"dependents": ["server/server.ts"]
 			},

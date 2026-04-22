@@ -1,12 +1,12 @@
 /**
  * WebSocket endpoint wiring — thin wrapper over fuz_app's
- * {@link register_action_ws}.
+ * `register_action_ws`.
  *
  * zzz supplies the action tuples (spec + handler) and a context-extender
  * that adds the domain `Backend` onto the base per-request context. All
  * dispatch, auth, validation, and transport bookkeeping live in fuz_app.
  *
- * The shared {@link heartbeat_action} is spread first so disconnect
+ * The shared `heartbeat_action` is spread first so disconnect
  * detection is identical across every fuz_app consumer.
  *
  * @module
