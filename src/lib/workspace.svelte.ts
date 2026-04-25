@@ -1,9 +1,9 @@
 import {z} from 'zod';
+import type {Datetime} from '@fuzdev/fuz_util/datetime.js';
 
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {CellJson} from './cell_types.js';
 import {DiskfileDirectoryPath} from './diskfile_types.js';
-import type {Datetime} from './zod_helpers.js';
 
 // TODO: per-workspace state — open tabs, active chats, terminal presets (needs DB)
 // TODO: workspace settings/config (e.g. default model, prompt templates)

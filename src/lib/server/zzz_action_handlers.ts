@@ -10,12 +10,12 @@
 
 import {ThrownJsonrpcError} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
 import {update_env_variable} from '@fuzdev/fuz_app/env/update_env_variable.js';
+import {create_uuid} from '@fuzdev/fuz_util/id.js';
 
 import type {Backend} from './backend.js';
 import type {CompletionOptions, CompletionHandlerOptions} from './backend_provider.js';
 import {save_completion_response_to_disk} from './helpers.js';
 import {ENV_FILE} from './constants.js';
-import {create_uuid} from '../zod_helpers.js';
 import {to_serializable_disknode} from '../diskfile_helpers.js';
 import {SerializableDisknode} from '../diskfile_types.js';
 import {jsonrpc_errors} from '../zzz_jsonrpc_errors.js';

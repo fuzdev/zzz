@@ -9,8 +9,8 @@ import {
 import type {WebsocketRpcConnection} from '@fuzdev/fuz_app/actions/transports_ws.js';
 import type {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.js';
 import {UNKNOWN_ERROR_MESSAGE} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
+import {create_uuid, type Uuid} from '@fuzdev/fuz_util/id.js';
 
-import {create_uuid, type Uuid} from './zod_helpers.js';
 import {
 	DEFAULT_HEARTBEAT_INTERVAL,
 	DEFAULT_RECONNECT_DELAY,

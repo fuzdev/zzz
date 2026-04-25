@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
 import {test, describe, beforeEach, assert} from 'vitest';
+import {create_uuid} from '@fuzdev/fuz_util/id.js';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
-import {create_uuid, get_datetime_now} from '$lib/zod_helpers.js';
 import {Frontend} from '$lib/frontend.svelte.js';
 import {DiskfilePath, SerializableDisknode} from '$lib/diskfile_types.js';
 import type {Diskfile} from '$lib/diskfile.svelte.js';

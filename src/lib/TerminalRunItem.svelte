@@ -1,7 +1,8 @@
 <script lang="ts">
+	import type {Uuid} from '@fuzdev/fuz_util/id.js';
+
 	import TerminalView from './TerminalView.svelte';
 	import TerminalContextmenu from './TerminalContextmenu.svelte';
-	import type {Uuid} from './zod_helpers.js';
 	import {GLYPH_RETRY} from './glyphs.js';
 	import {app_context} from './app.svelte.js';
 

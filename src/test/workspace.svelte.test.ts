@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
 import {test, beforeEach, describe, assert} from 'vitest';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
 import {Workspace} from '$lib/workspace.svelte.js';
 import {Workspaces} from '$lib/workspaces.svelte.js';
 import {Frontend} from '$lib/frontend.svelte.js';
 import {DiskfileDirectoryPath} from '$lib/diskfile_types.js';
-import type {Uuid} from '$lib/zod_helpers.js';
 
 import {monkeypatch_zzz_for_tests} from './test_helpers.js';
 

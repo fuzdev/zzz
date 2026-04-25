@@ -3,8 +3,9 @@
 import {z} from 'zod';
 import {goto} from '$app/navigation';
 import {resolve} from '$app/paths';
+import {create_uuid, type Uuid} from '@fuzdev/fuz_util/id.js';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
-import {get_datetime_now, create_uuid, type Uuid} from '$lib/zod_helpers.js';
 import {Domain} from '$routes/projects/domain.svelte.js';
 import {Page} from '$routes/projects/page.svelte.js';
 import {Projects} from '$routes/projects/projects.svelte.js';

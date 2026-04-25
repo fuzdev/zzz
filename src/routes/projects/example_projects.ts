@@ -1,4 +1,5 @@
-import {create_uuid} from '$lib/zod_helpers.js';
+import {create_uuid} from '@fuzdev/fuz_util/id.js';
+
 import type {Frontend} from '$lib/frontend.svelte.js';
 import {Project} from '$routes/projects/project.svelte.js';
 

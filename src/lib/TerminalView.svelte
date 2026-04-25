@@ -2,9 +2,9 @@
 	import '@xterm/xterm/css/xterm.css';
 	import {onMount} from 'svelte';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
+	import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
 	import {app_context} from './app.svelte.js';
-	import type {Uuid} from './zod_helpers.js';
 
 	const {
 		terminal_id,

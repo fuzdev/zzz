@@ -1,9 +1,10 @@
 <script lang="ts">
+	import type {Uuid} from '@fuzdev/fuz_util/id.js';
+
 	import {frontend_context} from './frontend.svelte.js';
 	import type {ChatTemplate} from './chat_template.js';
 	import type {Model} from './model.svelte.js';
 	import ModelPicker from './ModelPicker.svelte';
-	import type {Uuid} from './zod_helpers.js';
 	import type {Chat} from './chat.svelte.js';
 	import ProviderLogo from './ProviderLogo.svelte';
 

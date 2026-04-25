@@ -1,6 +1,6 @@
 import {Logger} from '@fuzdev/fuz_util/log.js';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
-import type {Uuid} from '../zod_helpers.js';
 import type {BackendActionsApi} from './backend_actions_api.js';
 import {
 	is_ffi_available,

@@ -2,8 +2,9 @@
 
 import {z} from 'zod';
 import {goto} from '$app/navigation';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
-import {get_datetime_now, type Uuid} from '$lib/zod_helpers.js';
 import {Page} from '$routes/projects/page.svelte.js';
 import type {Projects} from '$routes/projects/projects.svelte.js';
 import {resolve} from '$app/paths';

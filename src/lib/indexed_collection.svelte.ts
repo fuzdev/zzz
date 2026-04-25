@@ -4,8 +4,8 @@ import {SvelteMap} from 'svelte/reactivity';
 import type {z} from 'zod';
 import {DEV} from 'esm-env';
 import {EMPTY_ARRAY} from '@fuzdev/fuz_util/array.js';
+import {Uuid} from '@fuzdev/fuz_util/id.js';
 
-import {Uuid} from './zod_helpers.js';
 import type {IndexedItem} from './indexed_collection_helpers.svelte.js';
 
 // TODO @many rethink the indexed collection API -

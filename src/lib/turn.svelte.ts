@@ -1,8 +1,8 @@
 import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+import {Uuid} from '@fuzdev/fuz_util/id.js';
 
 import {estimate_token_count} from './helpers.js';
 import {Cell, type CellOptions} from './cell.svelte.js';
-import {Uuid} from './zod_helpers.js';
 import type {PartUnion} from './part.svelte.js';
 import type {Frontend} from './frontend.svelte.js';
 import {TurnJson} from './turn_types.js';

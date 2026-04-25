@@ -1,3 +1,5 @@
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
+
 import type {Model} from './model.svelte.js';
 import {Turn, create_turn_from_text, create_turn_from_part} from './turn.svelte.js';
 import {Cell, type CellOptions} from './cell.svelte.js';
@@ -8,7 +10,6 @@ import type {PartUnion} from './part.svelte.js';
 import {HANDLED} from './cell_helpers.js';
 import {to_preview, estimate_token_count} from './helpers.js';
 import {IndexedCollection} from './indexed_collection.svelte.js';
-import type {Uuid} from './zod_helpers.js';
 import type {TurnJson} from './turn_types.js';
 
 // TODO add `thread.name` and lots of other things probably

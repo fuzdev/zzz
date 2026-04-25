@@ -1,4 +1,6 @@
-import {create_uuid, get_datetime_now} from '$lib/zod_helpers.js';
+import {create_uuid} from '@fuzdev/fuz_util/id.js';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
+
 import type {BrowserTabJson} from '$routes/tabs/browser_tab.svelte.js';
 
 // Fake site content for embedded HTML tabs

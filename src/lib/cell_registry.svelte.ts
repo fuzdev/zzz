@@ -1,11 +1,11 @@
 import type {ClassConstructor} from '@fuzdev/fuz_util/types.js';
 import type {z} from 'zod';
 import {DEV} from 'esm-env';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
 import type {Cell} from './cell.svelte.js';
 import type {Frontend} from './frontend.svelte.js';
 import type {CellRegistryMap} from './cell_classes.js';
-import type {Uuid} from './zod_helpers.js';
 
 /**
  * Error thrown when attempting to instantiate an unregistered class.

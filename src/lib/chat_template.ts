@@ -1,4 +1,4 @@
-import type {Uuid} from './zod_helpers.js';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
 // TODO @many refactor with db
 

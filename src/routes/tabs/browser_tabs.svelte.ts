@@ -1,11 +1,12 @@
 // @slop Claude Opus 4
 
 import {z} from 'zod';
+import {create_uuid} from '@fuzdev/fuz_util/id.js';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
 import {Cell, type CellOptions} from '$lib/cell.svelte.js';
 import {IndexedCollection} from '$lib/indexed_collection.svelte.js';
 import {create_single_index, create_derived_index} from '$lib/indexed_collection_helpers.svelte.js';
-import {create_uuid, get_datetime_now} from '$lib/zod_helpers.js';
 import {CellJson} from '$lib/cell_types.js';
 import {BrowserTab, BrowserTabJson} from '$routes/tabs/browser_tab.svelte.js';
 import {HANDLED} from '$lib/cell_helpers.js';

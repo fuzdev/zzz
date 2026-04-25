@@ -1,8 +1,8 @@
 <script lang="ts">
 	import {slide} from 'svelte/transition';
+	import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
 	import {app_context} from './app.svelte.js';
-	import type {Uuid} from './zod_helpers.js';
 	import {TerminalPreset} from './terminal_preset.svelte.js';
 	import TerminalRunItem from './TerminalRunItem.svelte';
 	import TerminalPresetBar from './TerminalPresetBar.svelte';

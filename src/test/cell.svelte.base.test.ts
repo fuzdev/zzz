@@ -2,10 +2,11 @@
 
 import {test, vi, beforeEach, describe, assert} from 'vitest';
 import {z} from 'zod';
+import {create_uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.js';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
 import {Cell, type CellOptions} from '$lib/cell.svelte.js';
 import {CellJson} from '$lib/cell_types.js';
-import {create_uuid, get_datetime_now, UuidWithDefault} from '$lib/zod_helpers.js';
 import {Frontend} from '$lib/frontend.svelte.js';
 
 import {monkeypatch_zzz_for_tests} from './test_helpers.js';

@@ -1,9 +1,9 @@
 import {z} from 'zod';
 import {page} from '$app/state';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {Chat, ChatJson, type ChatJsonInput} from './chat.svelte.js';
-import type {Uuid} from './zod_helpers.js';
 import {HANDLED} from './cell_helpers.js';
 import {IndexedCollection} from './indexed_collection.svelte.js';
 import {create_single_index, create_derived_index} from './indexed_collection_helpers.svelte.js';

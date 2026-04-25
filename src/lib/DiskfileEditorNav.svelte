@@ -1,9 +1,10 @@
 <script lang="ts">
+	import type {Uuid} from '@fuzdev/fuz_util/id.js';
+
 	import {GLYPH_ARROW_LEFT, GLYPH_ARROW_RIGHT, GLYPH_REFRESH} from './glyphs.js';
 	import Glyph from './Glyph.svelte';
 	import {frontend_context} from './frontend.svelte.js';
 	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
-	import type {Uuid} from './zod_helpers.js';
 
 	const {
 		editor_state,

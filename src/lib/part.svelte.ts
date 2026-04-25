@@ -3,10 +3,10 @@ import {EMPTY_OBJECT} from '@fuzdev/fuz_util/object.js';
 import {DEV} from 'esm-env';
 import {UnreachableError} from '@fuzdev/fuz_util/error.js';
 import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+import {Uuid} from '@fuzdev/fuz_util/id.js';
 
 import {estimate_token_count} from './helpers.js';
 import {Cell, type CellOptions} from './cell.svelte.js';
-import {Uuid} from './zod_helpers.js';
 import {XmlAttributeWithDefaults} from './xml.js';
 import {CellJson} from './cell_types.js';
 import type {Diskfile} from './diskfile.svelte.js';

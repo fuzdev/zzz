@@ -1,6 +1,7 @@
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
+
 import type {CompletionMessage} from '../completion_types.js';
 import type {ActionInputs, ActionOutputs} from '../action_collections.js';
-import type {Uuid} from '../zod_helpers.js';
 import {jsonrpc_errors} from '../zzz_jsonrpc_errors.js';
 import {
 	type ProviderStatus,

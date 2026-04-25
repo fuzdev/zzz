@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {untrack} from 'svelte';
 	import {slide} from 'svelte/transition';
+	import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
 	import {frontend_context} from './frontend.svelte.js';
 	import DiskfileInfo from './DiskfileInfo.svelte';
@@ -12,7 +13,6 @@
 	import {GLYPH_PLACEHOLDER} from './glyphs.js';
 	import DiskfilePartView from './DiskfilePartView.svelte';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
-	import type {Uuid} from './zod_helpers.js';
 	import DiskfileEditorNav from './DiskfileEditorNav.svelte';
 	import TutorialForDiskfiles from './TutorialForDiskfiles.svelte';
 

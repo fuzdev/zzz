@@ -2,11 +2,11 @@
 
 import {z} from 'zod';
 import {EMPTY_OBJECT} from '@fuzdev/fuz_util/object.js';
+import {create_uuid, Uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.js';
 
 import {DiskfilePath} from './diskfile_types.js';
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {CellJson} from './cell_types.js';
-import {create_uuid, Uuid, UuidWithDefault} from './zod_helpers.js';
 
 /**
  * Schema for history entries.

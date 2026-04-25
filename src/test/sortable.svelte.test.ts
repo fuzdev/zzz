@@ -2,10 +2,11 @@
 
 import {test, describe, beforeEach, assert} from 'vitest';
 import {z} from 'zod';
+import {create_uuid, UuidWithDefault, type Uuid} from '@fuzdev/fuz_util/id.js';
+import {DatetimeNow} from '@fuzdev/fuz_util/datetime.js';
 
 import {Sortable, type Sorter, sort_by_text, sort_by_numeric} from '$lib/sortable.svelte.js';
 import {Cell} from '$lib/cell.svelte.js';
-import {UuidWithDefault, type Uuid, DatetimeNow, create_uuid} from '$lib/zod_helpers.js';
 import {Frontend} from '$lib/frontend.svelte.js';
 
 import {monkeypatch_zzz_for_tests} from './test_helpers.js';

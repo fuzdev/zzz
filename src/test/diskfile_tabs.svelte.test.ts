@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
 import {test, beforeEach, describe, assert} from 'vitest';
+import {create_uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.js';
 
 import {DiskfileTabs} from '$lib/diskfile_tabs.svelte.js';
 import {DiskfileTab} from '$lib/diskfile_tab.svelte.js';
-import {create_uuid, UuidWithDefault} from '$lib/zod_helpers.js';
 import {Frontend} from '$lib/frontend.svelte.js';
 
 import {monkeypatch_zzz_for_tests} from './test_helpers.js';

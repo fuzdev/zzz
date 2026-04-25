@@ -1,6 +1,6 @@
 import {z} from 'zod';
+import {Uuid} from '@fuzdev/fuz_util/id.js';
 
-import {Uuid} from './zod_helpers.js';
 import {to_preview, estimate_token_count} from './helpers.js';
 import {PartJson, type PartUnion} from './part.svelte.js';
 import {reorder_list} from './list_helpers.js';

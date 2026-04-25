@@ -1,4 +1,4 @@
-import {Uuid} from './zod_helpers.js';
+import {Uuid} from '@fuzdev/fuz_util/id.js';
 
 /**
  * Parse and validate a UUID parameter value from the URL.

@@ -1,6 +1,7 @@
 import {z} from 'zod';
+import {Uuid} from '@fuzdev/fuz_util/id.js';
+
 import {CellJson} from '$lib/cell_types.js';
-import {Uuid} from '$lib/zod_helpers.js';
 
 export const DomainJson = CellJson.extend({
 	name: z.string().default(''),

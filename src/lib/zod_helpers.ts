@@ -1,9 +1,6 @@
 import {z} from 'zod';
-import {EMPTY_ARRAY} from '@fuzdev/fuz_util/array.js';
 import {ensure_end, ensure_start, strip_end, strip_start} from '@fuzdev/fuz_util/string.js';
 import {SvelteMap} from 'svelte/reactivity';
-
-import type {SchemaKeys} from './cell_types.js';
 
 export const Any = z.any();
 export type Any = z.infer<typeof Any>;
@@ -30,83 +27,3 @@ export type PathWithoutLeadingSlash = z.infer<typeof PathWithoutLeadingSlash>;
 
 export const SvelteMapSchema = z.instanceof(SvelteMap);
 export type SvelteMapSchema = z.infer<typeof SvelteMapSchema>;
-
-/**
- * Returns an ISO datetime string that is guaranteed to be monotonically increasing.
- * If called multiple times within the same millisecond, it increments the value
- * by one millisecond to ensure uniqueness and order preservation.
- */
-export const get_datetime_now = (): Datetime => new Date().toISOString() as Datetime; // TODO maybe memoize one by `Date.now()`? or is the overhead not worth it?
-
-// TODO move these? helpers at least - maybe `types.ts`? is fuz_util going to use zod? (Update: yes)
-export const Datetime = z.iso.datetime().brand('Datetime');
-export type Datetime = z.infer<typeof Datetime>;
-export const DatetimeNow = Datetime.default(get_datetime_now);
-export type DatetimeNow = z.infer<typeof DatetimeNow>;
-
-export {create_uuid, Uuid, UuidWithDefault} from '@fuzdev/fuz_app/uuid.js';
-
-import {get_innermost_type} from '@fuzdev/fuz_app/actions/action_codegen.js';
-export {
-	get_innermost_type,
-	get_innermost_type_name,
-} from '@fuzdev/fuz_app/actions/action_codegen.js';
-
-/**
- * Gets all property keys from a Zod object schema.
- */
-export const zod_get_schema_keys = <T extends z.ZodType>(schema: T): Array<SchemaKeys<T>> => {
-	const inner = get_innermost_type(schema);
-	if (inner instanceof z.ZodObject) {
-		return Object.keys(inner.shape) as Array<SchemaKeys<T>>;
-	}
-	return EMPTY_ARRAY;
-};
-
-/**
- * Gets the Zod schema for a specific field in an object schema.
- *
- * @param schema - the object schema
- * @param key - the property name
- * @returns the field's schema, or throws if not found
- */
-export const get_field_schema = (schema: z.ZodType, key: string): z.ZodType => {
-	const field = maybe_get_field_schema(schema, key);
-	if (!field) {
-		throw new Error(`Field "${key}" not found in schema`);
-	}
-	return field;
-};
-
-/**
- * Gets the Zod schema for a specific field in an object schema, returning undefined if not found.
- *
- * @param schema - the object schema
- * @param key - the property name
- * @returns the field's schema, or undefined if not found
- */
-export const maybe_get_field_schema = (schema: z.ZodType, key: string): z.ZodType | undefined => {
-	const inner = get_innermost_type(schema);
-	// Access the schema's shape if it's an object schema
-	if (inner instanceof z.ZodObject) {
-		return inner.shape[key];
-	}
-	return undefined;
-};
-
-/**
- * Checks if a Zod schema is an array or contains an array through wrappers.
- */
-export const is_array_schema = (schema: z.ZodType): boolean => {
-	const inner = get_innermost_type(schema);
-	return inner instanceof z.ZodArray;
-};
-
-/**
- * Gets the innermost array schema from a potentially nested schema structure.
- * Returns null if no array schema is found.
- */
-export const get_inner_array_schema = (schema: z.ZodType): z.ZodArray<any> | null => {
-	const inner = get_innermost_type(schema);
-	return inner instanceof z.ZodArray ? inner : null;
-};

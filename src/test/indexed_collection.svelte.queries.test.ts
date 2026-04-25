@@ -2,6 +2,7 @@
 
 import {test, describe, beforeEach, assert} from 'vitest';
 import {z} from 'zod';
+import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.js';
 
 import {IndexedCollection} from '$lib/indexed_collection.svelte.js';
 import {
@@ -10,7 +11,6 @@ import {
 	create_derived_index,
 	type IndexedItem,
 } from '$lib/indexed_collection_helpers.svelte.js';
-import {create_uuid, Uuid} from '$lib/zod_helpers.js';
 
 // Test item representing a generic item
 interface TestItem {

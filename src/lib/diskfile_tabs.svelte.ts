@@ -2,10 +2,10 @@
 
 import {z} from 'zod';
 import {SvelteMap} from 'svelte/reactivity';
+import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.js';
 
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {IndexedCollection} from './indexed_collection.svelte.js';
-import {create_uuid, Uuid} from './zod_helpers.js';
 import {to_reordered_list} from './list_helpers.js';
 import {DiskfileTab} from './diskfile_tab.svelte.js';
 import {CellJson} from './cell_types.js';

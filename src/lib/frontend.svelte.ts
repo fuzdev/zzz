@@ -3,6 +3,7 @@ import {SvelteMap} from 'svelte/reactivity';
 import {z} from 'zod';
 import {EMPTY_OBJECT} from '@fuzdev/fuz_util/object.js';
 import type {Assignable, ClassConstructor, OmitStrict} from '@fuzdev/fuz_util/types.js';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
 import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
 import {ActionEventPhase, type ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 
@@ -25,7 +26,6 @@ import {Workspaces} from './workspaces.svelte.js';
 import type {ZzzOptions} from './config_helpers.js';
 import {BOTS_DEFAULT} from './config_defaults.js';
 import {DiskfileDirectoryPath, DiskfilePath} from './diskfile_types.js';
-import type {Uuid} from './zod_helpers.js';
 import {cell_classes} from './cell_classes.js';
 import {CellJson} from './cell_types.js';
 import {Ui, UiJson} from './ui.svelte.js';

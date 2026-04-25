@@ -1,6 +1,5 @@
 import {z} from 'zod';
-
-import {Uuid, UuidWithDefault} from './zod_helpers.js';
+import {Uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.js';
 
 export const XmlAttributeKey = z
 	.string()

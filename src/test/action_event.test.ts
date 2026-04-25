@@ -2,6 +2,7 @@
 
 import {test, describe, assert} from 'vitest';
 import {assert_rejects} from '@fuzdev/fuz_util/testing.js';
+import {create_uuid} from '@fuzdev/fuz_util/id.js';
 
 import {
 	create_action_event,
@@ -18,7 +19,6 @@ import {
 	toggle_main_menu_action_spec,
 	completion_create_action_spec,
 } from '$lib/action_specs.js';
-import {create_uuid} from '$lib/zod_helpers.js';
 
 // Mock environment for testing
 class TestEnvironment implements ActionEventEnvironment {

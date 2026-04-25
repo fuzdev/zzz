@@ -8,6 +8,7 @@ import type {
 } from '@fuzdev/fuz_app/actions/action_spec.js';
 import {heartbeat_action_spec} from '@fuzdev/fuz_app/actions/heartbeat.js';
 import {cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.js';
+import {Uuid} from '@fuzdev/fuz_util/id.js';
 
 // Re-export so the codegen (which uses `import * as specs from './action_specs'`)
 // sees the shared specs without duplicating the schemas locally.
@@ -35,7 +36,6 @@ import {
 	OllamaCreateRequest,
 	OllamaProgressResponse,
 } from './ollama_helpers.js';
-import {Uuid} from './zod_helpers.js';
 
 // -- Shared sub-schemas -----------------------------------------------------
 

@@ -1,8 +1,8 @@
 import {z} from 'zod';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {Space, SpaceJson, type SpaceJsonInput} from './space.svelte.js';
-import type {Uuid} from './zod_helpers.js';
 import {HANDLED} from './cell_helpers.js';
 import {IndexedCollection} from './indexed_collection.svelte.js';
 import {create_single_index} from './indexed_collection_helpers.svelte.js';

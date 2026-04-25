@@ -1,10 +1,10 @@
 <script lang="ts" generics="T extends {id: Uuid}">
 	import type {Snippet} from 'svelte';
 	import {EMPTY_ARRAY} from '@fuzdev/fuz_util/array.js';
+	import type {Uuid} from '@fuzdev/fuz_util/id.js';
 	import {slide} from 'svelte/transition';
 	import type {SvelteHTMLElements} from 'svelte/elements';
 
-	import type {Uuid} from './zod_helpers.js';
 	import {Sortable, type Sorter} from './sortable.svelte.js';
 
 	const {

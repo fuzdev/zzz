@@ -1,12 +1,8 @@
 import {z} from 'zod';
+import {zod_get_field_schema, zod_get_schema_keys} from '@fuzdev/fuz_util/zod.js';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
+import {get_datetime_now, type Datetime} from '@fuzdev/fuz_util/datetime.js';
 
-import {
-	get_field_schema,
-	zod_get_schema_keys,
-	type Uuid,
-	type Datetime,
-	get_datetime_now,
-} from './zod_helpers.js';
 import type {Frontend} from './frontend.svelte.js';
 import {
 	get_schema_class_info,
@@ -81,7 +77,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 
 	readonly schema_keys: Array<SchemaKeys<TSchema>> = $derived(zod_get_schema_keys(this.schema));
 	readonly field_schemas: Map<SchemaKeys<TSchema>, z.ZodType> = $derived(
-		new Map(this.schema_keys.map((key) => [key, get_field_schema(this.schema, key)])),
+		new Map(this.schema_keys.map((key) => [key, zod_get_field_schema(this.schema, key)])),
 	);
 	readonly field_schema_info: Map<SchemaKeys<TSchema>, SchemaClassInfo | null> = $derived(
 		new Map(
