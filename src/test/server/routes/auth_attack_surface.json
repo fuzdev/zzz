@@ -1810,34 +1810,9 @@
 						"type": "object",
 						"properties": {
 							"event_type": {
-								"description": "Filter by event type.",
+								"description": "Filter by event type. Accepts builtin or consumer-registered names (regex-validated).",
 								"anyOf": [
-									{
-										"type": "string",
-										"enum": [
-											"login",
-											"logout",
-											"bootstrap",
-											"signup",
-											"password_change",
-											"session_revoke",
-											"session_revoke_all",
-											"token_create",
-											"token_revoke",
-											"token_revoke_all",
-											"permit_grant",
-											"permit_revoke",
-											"permit_offer_create",
-											"permit_offer_accept",
-											"permit_offer_decline",
-											"permit_offer_retract",
-											"permit_offer_expire",
-											"permit_offer_supersede",
-											"invite_create",
-											"invite_delete",
-											"app_settings_update"
-										]
-									},
+									{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_./-]*$"},
 									{"type": "null"}
 								]
 							},
@@ -1895,32 +1870,7 @@
 											"minimum": -9007199254740991,
 											"maximum": 9007199254740991
 										},
-										"event_type": {
-											"type": "string",
-											"enum": [
-												"login",
-												"logout",
-												"bootstrap",
-												"signup",
-												"password_change",
-												"session_revoke",
-												"session_revoke_all",
-												"token_create",
-												"token_revoke",
-												"token_revoke_all",
-												"permit_grant",
-												"permit_revoke",
-												"permit_offer_create",
-												"permit_offer_accept",
-												"permit_offer_decline",
-												"permit_offer_retract",
-												"permit_offer_expire",
-												"permit_offer_supersede",
-												"invite_create",
-												"invite_delete",
-												"app_settings_update"
-											]
-										},
+										"event_type": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_./-]*$"},
 										"outcome": {"type": "string", "enum": ["success", "failure"]},
 										"actor_id": {
 											"anyOf": [
@@ -2029,32 +1979,7 @@
 											"minimum": -9007199254740991,
 											"maximum": 9007199254740991
 										},
-										"event_type": {
-											"type": "string",
-											"enum": [
-												"login",
-												"logout",
-												"bootstrap",
-												"signup",
-												"password_change",
-												"session_revoke",
-												"session_revoke_all",
-												"token_create",
-												"token_revoke",
-												"token_revoke_all",
-												"permit_grant",
-												"permit_revoke",
-												"permit_offer_create",
-												"permit_offer_accept",
-												"permit_offer_decline",
-												"permit_offer_retract",
-												"permit_offer_expire",
-												"permit_offer_supersede",
-												"invite_create",
-												"invite_delete",
-												"app_settings_update"
-											]
-										},
+										"event_type": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_./-]*$"},
 										"outcome": {"type": "string", "enum": ["success", "failure"]},
 										"actor_id": {
 											"anyOf": [

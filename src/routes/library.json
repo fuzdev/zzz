@@ -49,11 +49,11 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.3.16",
-			"@fuzdev/fuz_app": "^0.38.1",
+			"@fuzdev/fuz_app": "^0.42.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.59.0",
 			"@fuzdev/fuz_ui": "^0.191.4",
-			"@fuzdev/fuz_util": "^0.58.0",
+			"@fuzdev/fuz_util": "^0.59.0",
 			"@jridgewell/trace-mapping": "^0.3.31",
 			"@node-rs/argon2": "^2.0.2",
 			"@ryanatkn/eslint-config": "^0.11.0",
@@ -86,7 +86,7 @@
 		"dependencies": {
 			"@anthropic-ai/sdk": "^0.71.2",
 			"@fuzdev/blake3_wasm": "^0.1.1",
-			"@fuzdev/gro": "^0.198.0",
+			"@fuzdev/gro": "^0.199.0",
 			"@google/generative-ai": "^0.24.1",
 			"@xterm/xterm": "^6.0.0",
 			"date-fns": "^4.1.0",
@@ -1062,8 +1062,7 @@
 					"diskfile_types.ts",
 					"ollama_helpers.ts",
 					"provider_types.ts",
-					"workspace.svelte.ts",
-					"zod_helpers.ts"
+					"workspace.svelte.ts"
 				],
 				"dependents": [
 					"action_collections.gen.ts",
@@ -2325,7 +2324,6 @@
 						]
 					}
 				],
-				"dependencies": ["zod_helpers.ts"],
 				"dependents": [
 					"actions.svelte.ts",
 					"cell.svelte.ts",
@@ -2530,7 +2528,7 @@
 						"name": "SchemaKeys",
 						"kind": "type",
 						"doc_comment": "Get keys from a Zod schema object.",
-						"source_line": 7,
+						"source_line": 8,
 						"type_signature": "SchemaKeys<T>",
 						"generic_params": [
 							{
@@ -2543,7 +2541,7 @@
 						"name": "SchemaValue",
 						"kind": "type",
 						"doc_comment": "Get value type for a specific key in a Zod schema.",
-						"source_line": 12,
+						"source_line": 13,
 						"type_signature": "SchemaValue<T, K>",
 						"generic_params": [
 							{
@@ -2560,17 +2558,16 @@
 						"name": "CellJson",
 						"kind": "type",
 						"doc_comment": "Base schema that defines common properties for all cells.",
-						"source_line": 17,
+						"source_line": 18,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "CellJsonInput",
 						"kind": "type",
-						"source_line": 24,
+						"source_line": 25,
 						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; }"
 					}
 				],
-				"dependencies": ["zod_helpers.ts"],
 				"dependents": [
 					"action.svelte.ts",
 					"actions.svelte.ts",
@@ -2613,7 +2610,7 @@
 						"name": "CellOptions",
 						"kind": "type",
 						"doc_comment": "Any options besides these declared ones are ignored,\nso they're safe to forward when subclassing without needing to extract the rest options.",
-						"source_line": 26,
+						"source_line": 22,
 						"type_signature": "CellOptions<TSchema>",
 						"generic_params": [
 							{
@@ -2638,7 +2635,7 @@
 						"name": "get_global_cell_count",
 						"kind": "function",
 						"doc_comment": "A monotonic id for cell instances on the client.\nThis is not reactive and never changes on the instance,\nwhereas `id` can change. It's useful for ordering -\nthe motivating usecase was correctly sorting objects with the same `created` millisecond.\n\nThis may cause issues based on how data gets queried, but at least it's stable once loaded.\nHowever we may need to revisit this if it causes problems.",
-						"source_line": 40,
+						"source_line": 36,
 						"type_signature": "(): number",
 						"return_type": "number",
 						"parameters": []
@@ -2647,7 +2644,7 @@
 						"name": "Cell",
 						"kind": "class",
 						"doc_comment": "The `Cell` is the base class for schema-driven data models in Zzz.\nThe goals are still evolving, but a main idea is to have fully reactive state\nthat can be flexibly snapshotted and reinstantiated in a typesafe, extensible system\nthat uses normal Svelte patterns.\n\nThe design aims for:\n\n- Integration with Svelte's reactivity, encouraging single-depth inheritance\n\t\twith Svelte class patterns for both persistent and ephemeral state\n- Schema-driven parsing/validation and JSON serialization/deserialization\n\t\t(supporting snapshot and restore/replay patterns) via Zod\n- Custom property encoding/decoding for complex types,\n\t\tand no boilerplate for schema-inferrable properties\n- Lifecycle management with generic instantiation/registration and disposal\n\t\t(conceptually a WIP, partially implemented)\n- Runtime type metadata for reflection\n\nCells are automatically registered in the global registry by `id`,\nmaking them discoverable and referenceable throughout the system.\nEach cell has common properties including `id` and `created`/`updated` timestamps.\n\nThere are currently a lot of rough edges and missing features!\nMy hope is that this could be generic enough to extract to a library, but it's not there yet.\nI assume there's a really nice design in this space that takes full advantage of Svelte runes.\n\nMany things will be possible with this pattern, but it's still a work in progress.",
-						"source_line": 71,
+						"source_line": 67,
 						"extends": [],
 						"implements": ["CellJson"],
 						"generic_params": [
@@ -2955,7 +2952,7 @@
 						]
 					}
 				],
-				"dependencies": ["cell_helpers.ts", "time_helpers.ts", "zod_helpers.ts"],
+				"dependencies": ["cell_helpers.ts", "time_helpers.ts"],
 				"dependents": [
 					"action.svelte.ts",
 					"actions.svelte.ts",
@@ -3029,25 +3026,25 @@
 					{
 						"name": "ChatViewMode",
 						"kind": "type",
-						"source_line": 16,
+						"source_line": 17,
 						"type_signature": "\"simple\" | \"multi\""
 					},
 					{
 						"name": "ChatJson",
 						"kind": "type",
-						"source_line": 18,
+						"source_line": 19,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 5 more ...; selected_thread_id: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "ChatJsonInput",
 						"kind": "type",
-						"source_line": 26,
+						"source_line": 27,
 						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; name?: string | undefined; thread_ids?: string[] | undefined; main_input?: string | undefined; view_mode?: \"simple\" | ... 1 more ... | undefined; selected_thread_id?: string | ... 1 more ... | undefined; }"
 					},
 					{
 						"name": "ChatOptions",
 						"kind": "type",
-						"source_line": 28,
+						"source_line": 29,
 						"type_signature": "ChatOptions",
 						"extends": ["CellOptions<typeof ChatJson>"],
 						"properties": []
@@ -3055,7 +3052,7 @@
 					{
 						"name": "Chat",
 						"kind": "class",
-						"source_line": 30,
+						"source_line": 31,
 						"extends": ["Cell<typeof ChatJson>"],
 						"implements": [],
 						"members": [
@@ -3286,7 +3283,7 @@
 					{
 						"name": "ChatSchema",
 						"kind": "variable",
-						"source_line": 219,
+						"source_line": 220,
 						"type_signature": "ZodCustom<Chat, Chat>"
 					}
 				],
@@ -3298,8 +3295,7 @@
 					"list_helpers.ts",
 					"response_helpers.ts",
 					"thread.svelte.ts",
-					"thread_helpers.ts",
-					"zod_helpers.ts"
+					"thread_helpers.ts"
 				],
 				"dependents": [
 					"ChatThreadManageByTag.svelte",
@@ -3971,7 +3967,7 @@
 						"type_signature": "ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; data: ZodDiscriminatedUnion<...>; }, $strict>"
 					}
 				],
-				"dependencies": ["provider_types.ts", "zod_helpers.ts"],
+				"dependencies": ["provider_types.ts"],
 				"dependents": ["action_specs.ts", "chat.svelte.ts", "thread.svelte.ts", "turn_types.ts"]
 			},
 			{
@@ -4057,7 +4053,6 @@
 						"type_signature": "ChatTemplate[]"
 					}
 				],
-				"dependencies": ["zod_helpers.ts"],
 				"dependents": ["chats.svelte.ts", "config.ts", "frontend.svelte.ts"]
 			},
 			{
@@ -4771,7 +4766,7 @@
 						"name": "DiskfileEditorState",
 						"kind": "class",
 						"doc_comment": "Manages the editor state for a diskfile.",
-						"source_line": 14,
+						"source_line": 15,
 						"members": [
 							{
 								"name": "app",
@@ -5009,7 +5004,7 @@
 					{
 						"name": "is_path_absolute",
 						"kind": "function",
-						"source_line": 16,
+						"source_line": 17,
 						"type_signature": "(path: string): boolean",
 						"return_type": "boolean",
 						"parameters": [
@@ -5022,7 +5017,7 @@
 					{
 						"name": "to_relative_path",
 						"kind": "function",
-						"source_line": 19,
+						"source_line": 20,
 						"type_signature": "(path: string, parent: string): string",
 						"return_type": "string",
 						"parameters": [
@@ -5040,7 +5035,7 @@
 						"name": "map_watcher_change_to_diskfile_change",
 						"kind": "function",
 						"doc_comment": "Maps watcher change types to diskfile change types.",
-						"source_line": 25,
+						"source_line": 26,
 						"type_signature": "(type: WatcherChangeType): \"add\" | \"change\" | \"delete\"",
 						"return_type": "\"add\" | \"change\" | \"delete\"",
 						"parameters": [
@@ -5054,7 +5049,7 @@
 						"name": "disknode_to_diskfile_json",
 						"kind": "function",
 						"doc_comment": "Converts a `SerializableDisknode` to the `DiskfileJson` format.",
-						"source_line": 38,
+						"source_line": 39,
 						"type_signature": "(disknode: { id: string & $brand<\"DiskfilePath\">; source_dir: string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">; contents: string | null; ctime: number | null; mtime: number | null; dependents: [...][]; dependencies: [...][]; }, existing_id?: string & $brand<...>): { ...; }",
 						"return_type": "{ id: string & $brand<\"Uuid\">; created: string & $brand<\"Datetime\">; updated: string & $brand<\"Datetime\">; path: (string & $brand<\"DiskfilePath\">) | null; source_dir: string & ... 1 more ... & $brand<...>; content: string | null; dependents: [...][] | null; dependencies: [...][] | null; }",
 						"parameters": [
@@ -5074,13 +5069,13 @@
 					{
 						"name": "SUPPORTED_CODE_FILETYPE_MATCHER",
 						"kind": "variable",
-						"source_line": 59,
+						"source_line": 60,
 						"type_signature": "RegExp"
 					},
 					{
 						"name": "has_dependencies",
 						"kind": "function",
-						"source_line": 60,
+						"source_line": 61,
 						"type_signature": "(diskfile: Diskfile): boolean",
 						"return_type": "boolean",
 						"parameters": [
@@ -5093,7 +5088,7 @@
 					{
 						"name": "to_serializable_disknode",
 						"kind": "function",
-						"source_line": 66,
+						"source_line": 67,
 						"type_signature": "(disknode: Disknode, dir: string): { id: string & $brand<\"DiskfilePath\">; source_dir: string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">; ... 4 more ...; dependencies: [...][]; }",
 						"return_type": "{ id: string & $brand<\"DiskfilePath\">; source_dir: string & $brand<\"DiskfilePath\"> & $brand<\"DiskfileDirectoryPath\">; contents: string | null; ctime: number | null; mtime: number | null; dependents: [...][]; dependencies: [...][]; }",
 						"parameters": [
@@ -5108,7 +5103,7 @@
 						]
 					}
 				],
-				"dependencies": ["diskfile_types.ts", "zod_helpers.ts"],
+				"dependencies": ["diskfile_types.ts"],
 				"dependents": [
 					"DiskfileInfo.svelte",
 					"diskfile_types.ts",
@@ -5249,7 +5244,7 @@
 						]
 					}
 				],
-				"dependencies": ["cell.svelte.ts", "cell_types.ts", "diskfile_types.ts", "zod_helpers.ts"],
+				"dependencies": ["cell.svelte.ts", "cell_types.ts", "diskfile_types.ts"],
 				"dependents": ["cell_classes.ts", "frontend.svelte.ts"]
 			},
 			{
@@ -5340,7 +5335,7 @@
 						"type_signature": "ZodCustom<DiskfileTab, DiskfileTab>"
 					}
 				],
-				"dependencies": ["cell.svelte.ts", "cell_types.ts", "zod_helpers.ts"],
+				"dependencies": ["cell.svelte.ts", "cell_types.ts"],
 				"dependents": ["cell_classes.ts", "diskfile_tabs.svelte.ts"]
 			},
 			{
@@ -5617,8 +5612,7 @@
 					"diskfile_tab.svelte.ts",
 					"indexed_collection.svelte.ts",
 					"iterable_helpers.ts",
-					"list_helpers.ts",
-					"zod_helpers.ts"
+					"list_helpers.ts"
 				],
 				"dependents": ["cell_classes.ts", "diskfiles_editor.svelte.ts"]
 			},
@@ -6400,12 +6394,7 @@
 						"type_signature": "ZodCustom<DiskfilesEditor, DiskfilesEditor>"
 					}
 				],
-				"dependencies": [
-					"cell.svelte.ts",
-					"cell_types.ts",
-					"diskfile_tabs.svelte.ts",
-					"zod_helpers.ts"
-				],
+				"dependencies": ["cell.svelte.ts", "cell_types.ts", "diskfile_tabs.svelte.ts"],
 				"dependents": ["cell_classes.ts", "diskfiles.svelte.ts"]
 			},
 			{
@@ -6414,19 +6403,19 @@
 					{
 						"name": "DiskfilesJson",
 						"kind": "type",
-						"source_line": 16,
+						"source_line": 17,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; diskfiles: ZodDefault<...>; selected_file_id: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "DiskfilesJsonInput",
 						"kind": "type",
-						"source_line": 21,
+						"source_line": 22,
 						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; diskfiles?: { source_dir: string; id?: string | undefined; created?: string | undefined; updated?: string | undefined; path?: string | ... 1 more ... | undefined; content?: string | ... 1 more ... | undefined; dependents?: [...][]..."
 					},
 					{
 						"name": "DiskfilesOptions",
 						"kind": "type",
-						"source_line": 23,
+						"source_line": 24,
 						"type_signature": "DiskfilesOptions",
 						"extends": ["CellOptions<typeof DiskfilesJson>"],
 						"properties": []
@@ -6434,7 +6423,7 @@
 					{
 						"name": "Diskfiles",
 						"kind": "class",
-						"source_line": 25,
+						"source_line": 26,
 						"extends": ["Cell<typeof DiskfilesJson>"],
 						"implements": [],
 						"members": [
@@ -6621,8 +6610,7 @@
 					"diskfile_types.ts",
 					"diskfiles_editor.svelte.ts",
 					"indexed_collection.svelte.ts",
-					"indexed_collection_helpers.svelte.ts",
-					"zod_helpers.ts"
+					"indexed_collection_helpers.svelte.ts"
 				],
 				"dependents": ["cell_classes.ts", "frontend.svelte.ts"]
 			},
@@ -8635,7 +8623,6 @@
 						]
 					}
 				],
-				"dependencies": ["zod_helpers.ts"],
 				"dependents": [
 					"actions.svelte.ts",
 					"chats.svelte.ts",
@@ -9131,7 +9118,6 @@
 						]
 					}
 				],
-				"dependencies": ["zod_helpers.ts"],
 				"dependents": [
 					"actions.svelte.ts",
 					"chats.svelte.ts",
@@ -9931,7 +9917,7 @@
 					{
 						"name": "to_chats_url",
 						"kind": "function",
-						"source_line": 7,
+						"source_line": 6,
 						"type_signature": "(chat_id: (string & $brand<\"Uuid\">) | null): string",
 						"return_type": "string",
 						"parameters": [
@@ -9944,7 +9930,7 @@
 					{
 						"name": "to_prompts_url",
 						"kind": "function",
-						"source_line": 10,
+						"source_line": 9,
 						"type_signature": "(chat_id: (string & $brand<\"Uuid\">) | null): string",
 						"return_type": "string",
 						"parameters": [
@@ -10228,26 +10214,26 @@
 					{
 						"name": "OllamaJson",
 						"kind": "type",
-						"source_line": 38,
+						"source_line": 39,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; host: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "OllamaJsonInput",
 						"kind": "type",
-						"source_line": 42,
+						"source_line": 43,
 						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; host?: string | undefined; }"
 					},
 					{
 						"name": "OllamaOptions",
 						"kind": "type",
-						"source_line": 44,
+						"source_line": 45,
 						"type_signature": "OllamaOptions"
 					},
 					{
 						"name": "Ollama",
 						"kind": "class",
 						"doc_comment": "Ollama client state management with simplified API.\nModel data is stored in `app.models`, not here.\n\n## Status Display Pattern\n\nFor unified status display (available/unavailable/checking), components should use:\n- `app.capabilities.ollama.status` - unified status (prioritizes provider status)\n- `app.capabilities.ollama.error_message` - unified error message\n\nThis ensures consistency with other providers (Claude, ChatGPT, Gemini) and maintains\na single source of truth. The `Capabilities` layer prioritizes backend provider status\n(authoritative - checks if Ollama is installed) over action-level status (checks if API responds).\n\nThe lower-level properties here (`list_status`, `list_error`, `provider_error`, etc.) are\noperational state that `capabilities.ollama` derives from. Use these for:\n- Operational state (models, pulling, creating, etc.)\n- Action-specific error handling\n- Internal state management",
-						"source_line": 66,
+						"source_line": 67,
 						"extends": ["Cell<typeof OllamaJson>"],
 						"implements": [],
 						"members": [
@@ -10767,8 +10753,7 @@
 					"iterable_helpers.ts",
 					"model.svelte.ts",
 					"ollama_helpers.ts",
-					"poller.svelte.ts",
-					"zod_helpers.ts"
+					"poller.svelte.ts"
 				],
 				"dependents": ["frontend.svelte.ts"]
 			},
@@ -11528,8 +11513,7 @@
 					"constants.ts",
 					"diskfile_types.ts",
 					"helpers.ts",
-					"xml.ts",
-					"zod_helpers.ts"
+					"xml.ts"
 				],
 				"dependents": [
 					"DashboardPrompts.svelte",
@@ -11922,8 +11906,7 @@
 					"helpers.ts",
 					"indexed_collection.svelte.ts",
 					"indexed_collection_helpers.svelte.ts",
-					"part.svelte.ts",
-					"zod_helpers.ts"
+					"part.svelte.ts"
 				],
 				"dependents": ["cell_classes.ts", "frontend.svelte.ts"]
 			},
@@ -12399,8 +12382,7 @@
 					"helpers.ts",
 					"list_helpers.ts",
 					"part.svelte.ts",
-					"prompt_helpers.ts",
-					"zod_helpers.ts"
+					"prompt_helpers.ts"
 				],
 				"dependents": ["cell_classes.ts", "prompts.svelte.ts"]
 			},
@@ -13810,7 +13792,7 @@
 						"name": "to_completion_response_text",
 						"kind": "function",
 						"doc_comment": "Extracts the text content from a completion response.",
-						"source_line": 12,
+						"source_line": 14,
 						"type_signature": "(completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { type: \"claude\"; value: any; } | { ...; } | { ...; }; } | null | undefined): string | null",
 						"return_type": "string | null",
 						"parameters": [
@@ -13824,7 +13806,7 @@
 						"name": "to_completion_result",
 						"kind": "function",
 						"doc_comment": "Creates a standardized `CompletionResponse` message from provider-specific responses.",
-						"source_line": 38,
+						"source_line": 40,
 						"type_signature": "(provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\", model: string, api_response: unknown, progress_token?: (string & $brand<\"Uuid\">) | undefined): { completion_response: { ...; }; _meta?: { ...; } | undefined; }",
 						"return_type": "{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { ...; } | { ...; } | { ...; }; }; _meta?: { ...; } | undefined; }",
 						"parameters": [
@@ -13848,7 +13830,6 @@
 						]
 					}
 				],
-				"dependencies": ["zod_helpers.ts"],
 				"dependents": [
 					"chat.svelte.ts",
 					"frontend_action_handlers.ts",
@@ -14418,13 +14399,13 @@
 					{
 						"name": "CompletionHandler",
 						"kind": "type",
-						"source_line": 15,
+						"source_line": 16,
 						"type_signature": "CompletionHandler"
 					},
 					{
 						"name": "CompletionOptions",
 						"kind": "type",
-						"source_line": 20,
+						"source_line": 21,
 						"type_signature": "CompletionOptions",
 						"properties": [
 							{
@@ -14477,7 +14458,7 @@
 					{
 						"name": "CompletionHandlerOptions",
 						"kind": "type",
-						"source_line": 33,
+						"source_line": 34,
 						"type_signature": "CompletionHandlerOptions",
 						"properties": [
 							{
@@ -14523,13 +14504,13 @@
 					{
 						"name": "OnCompletionProgress",
 						"kind": "type",
-						"source_line": 54,
+						"source_line": 55,
 						"type_signature": "OnCompletionProgress"
 					},
 					{
 						"name": "BackendProviderRemoteOptions",
 						"kind": "type",
-						"source_line": 56,
+						"source_line": 57,
 						"type_signature": "BackendProviderRemoteOptions",
 						"properties": [
 							{
@@ -14543,7 +14524,7 @@
 						"name": "BackendProvider",
 						"kind": "class",
 						"doc_comment": "Base class for all backend AI providers.\nProvides shared functionality for completion handlers and logging.",
-						"source_line": 64,
+						"source_line": 65,
 						"generic_params": [
 							{
 								"name": "TClient",
@@ -14746,7 +14727,7 @@
 						"name": "BackendProviderRemote",
 						"kind": "class",
 						"doc_comment": "Base class for remote API-based providers (Claude, ChatGPT, Gemini).\nHandles API key management and provides default error handling for missing keys.",
-						"source_line": 143,
+						"source_line": 144,
 						"extends": ["BackendProvider<TClient>"],
 						"implements": [],
 						"generic_params": [
@@ -14812,7 +14793,7 @@
 						"name": "BackendProviderLocal",
 						"kind": "class",
 						"doc_comment": "Base class for locally-installed providers (Ollama).\nHandles installation checking and provides default error handling for missing installations.",
-						"source_line": 189,
+						"source_line": 190,
 						"extends": ["BackendProvider<TClient>"],
 						"implements": [],
 						"generic_params": [
@@ -16526,7 +16507,6 @@
 					"diskfile_types.ts",
 					"server/constants.ts",
 					"server/helpers.ts",
-					"zod_helpers.ts",
 					"zzz_jsonrpc_errors.ts"
 				],
 				"dependents": ["server/register_websocket_actions.ts", "server/zzz_rpc_actions.ts"]
@@ -17014,7 +16994,7 @@
 						]
 					}
 				],
-				"dependencies": ["socket_helpers.ts", "zod_helpers.ts"],
+				"dependencies": ["socket_helpers.ts"],
 				"dependents": ["frontend.svelte.ts"]
 			},
 			{
@@ -17636,7 +17616,7 @@
 						]
 					}
 				],
-				"dependencies": ["cell.svelte.ts", "cell_types.ts", "zod_helpers.ts"],
+				"dependencies": ["cell.svelte.ts", "cell_types.ts"],
 				"dependents": ["cell_classes.ts"]
 			},
 			{
@@ -17892,7 +17872,7 @@
 					{
 						"name": "ThreadOptions",
 						"kind": "type",
-						"source_line": 16,
+						"source_line": 17,
 						"type_signature": "ThreadOptions",
 						"extends": ["CellOptions<typeof ThreadJson>"],
 						"properties": []
@@ -17901,7 +17881,7 @@
 						"name": "Thread",
 						"kind": "class",
 						"doc_comment": "A thread is a linear sequence of turns that maintains a chronological\nrecord of interactions between the user and the AI.",
-						"source_line": 21,
+						"source_line": 22,
 						"extends": ["Cell<typeof ThreadJson>"],
 						"implements": [],
 						"members": [
@@ -18753,12 +18733,7 @@
 						"type_signature": "ZodCustom<Cell<ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>>, Cell<ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>>>"
 					}
 				],
-				"dependencies": [
-					"cell.svelte.ts",
-					"cell_types.ts",
-					"completion_types.ts",
-					"zod_helpers.ts"
-				],
+				"dependencies": ["cell.svelte.ts", "cell_types.ts", "completion_types.ts"],
 				"dependents": ["thread_types.ts", "turn.svelte.ts"]
 			},
 			{
@@ -18969,7 +18944,7 @@
 						]
 					}
 				],
-				"dependencies": ["cell.svelte.ts", "helpers.ts", "turn_types.ts", "zod_helpers.ts"],
+				"dependencies": ["cell.svelte.ts", "helpers.ts", "turn_types.ts"],
 				"dependents": ["cell_classes.ts", "frontend_action_handlers.ts", "thread.svelte.ts"]
 			},
 			{
@@ -19287,8 +19262,7 @@
 							}
 						]
 					}
-				],
-				"dependencies": ["zod_helpers.ts"]
+				]
 			},
 			{
 				"path": "workspace.svelte.ts",
@@ -19487,41 +19461,40 @@
 					{
 						"name": "XmlAttributeKey",
 						"kind": "type",
-						"source_line": 5,
+						"source_line": 4,
 						"type_signature": "ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, ZodString>"
 					},
 					{
 						"name": "XmlAttributeKeyWithDefault",
 						"kind": "type",
-						"source_line": 11,
+						"source_line": 10,
 						"type_signature": "ZodDefault<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, ZodString>>"
 					},
 					{
 						"name": "XmlAttributeValue",
 						"kind": "type",
-						"source_line": 14,
+						"source_line": 13,
 						"type_signature": "ZodString"
 					},
 					{
 						"name": "XmlAttributeValueWithDefault",
 						"kind": "type",
-						"source_line": 17,
+						"source_line": 16,
 						"type_signature": "ZodDefault<ZodString>"
 					},
 					{
 						"name": "XmlAttribute",
 						"kind": "type",
-						"source_line": 22,
+						"source_line": 21,
 						"type_signature": "ZodObject<{ id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; key: ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, ZodString>; value: ZodString; }, $strict>"
 					},
 					{
 						"name": "XmlAttributeWithDefaults",
 						"kind": "type",
-						"source_line": 31,
+						"source_line": 30,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; key: ZodDefault<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, ZodString>>; value: ZodDefault<...>; }, $strict>"
 					}
 				],
-				"dependencies": ["zod_helpers.ts"],
 				"dependents": ["part.svelte.ts"]
 			},
 			{
@@ -19579,188 +19552,53 @@
 					{
 						"name": "Any",
 						"kind": "type",
-						"source_line": 8,
+						"source_line": 5,
 						"type_signature": "ZodAny"
 					},
 					{
 						"name": "HttpStatus",
 						"kind": "type",
-						"source_line": 11,
+						"source_line": 8,
 						"type_signature": "ZodNumber"
 					},
 					{
 						"name": "TypeLiteral",
 						"kind": "type",
-						"source_line": 14,
+						"source_line": 11,
 						"type_signature": "$ZodBranded<ZodString, \"TypeLiteral\", \"out\">"
 					},
 					{
 						"name": "PathWithTrailingSlash",
 						"kind": "type",
-						"source_line": 19,
+						"source_line": 16,
 						"type_signature": "ZodPipe<ZodString, ZodTransform<string, string>>"
 					},
 					{
 						"name": "PathWithoutTrailingSlash",
 						"kind": "type",
-						"source_line": 22,
+						"source_line": 19,
 						"type_signature": "ZodPipe<ZodString, ZodTransform<string, string>>"
 					},
 					{
 						"name": "PathWithLeadingSlash",
 						"kind": "type",
-						"source_line": 25,
+						"source_line": 22,
 						"type_signature": "ZodPipe<ZodString, ZodTransform<string, string>>"
 					},
 					{
 						"name": "PathWithoutLeadingSlash",
 						"kind": "type",
-						"source_line": 28,
+						"source_line": 25,
 						"type_signature": "ZodPipe<ZodString, ZodTransform<string, string>>"
 					},
 					{
 						"name": "SvelteMapSchema",
 						"kind": "type",
-						"source_line": 31,
+						"source_line": 28,
 						"type_signature": "ZodCustom<SvelteMap<unknown, unknown>, SvelteMap<unknown, unknown>>"
-					},
-					{
-						"name": "get_datetime_now",
-						"kind": "function",
-						"doc_comment": "Returns an ISO datetime string that is guaranteed to be monotonically increasing.\nIf called multiple times within the same millisecond, it increments the value\nby one millisecond to ensure uniqueness and order preservation.",
-						"source_line": 39,
-						"type_signature": "(): string & $brand<\"Datetime\">",
-						"return_type": "string & $brand<\"Datetime\">",
-						"parameters": []
-					},
-					{
-						"name": "Datetime",
-						"kind": "type",
-						"source_line": 42,
-						"type_signature": "$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">"
-					},
-					{
-						"name": "DatetimeNow",
-						"kind": "type",
-						"source_line": 44,
-						"type_signature": "ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>"
-					},
-					{
-						"name": "zod_get_schema_keys",
-						"kind": "function",
-						"doc_comment": "Gets all property keys from a Zod object schema.",
-						"source_line": 58,
-						"type_signature": "<T extends z.ZodType>(schema: T): SchemaKeys<T>[]",
-						"return_type": "SchemaKeys<T>[]",
-						"parameters": [
-							{
-								"name": "schema",
-								"type": "T"
-							}
-						]
-					},
-					{
-						"name": "get_field_schema",
-						"kind": "function",
-						"doc_comment": "Gets the Zod schema for a specific field in an object schema.",
-						"source_line": 73,
-						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>, key: string): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-						"return_description": "the field's schema, or throws if not found",
-						"parameters": [
-							{
-								"name": "schema",
-								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-								"description": "the object schema"
-							},
-							{
-								"name": "key",
-								"type": "string",
-								"description": "the property name"
-							}
-						]
-					},
-					{
-						"name": "maybe_get_field_schema",
-						"kind": "function",
-						"doc_comment": "Gets the Zod schema for a specific field in an object schema, returning undefined if not found.",
-						"source_line": 88,
-						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>, key: string): ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
-						"return_type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | undefined",
-						"return_description": "the field's schema, or undefined if not found",
-						"parameters": [
-							{
-								"name": "schema",
-								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>",
-								"description": "the object schema"
-							},
-							{
-								"name": "key",
-								"type": "string",
-								"description": "the property name"
-							}
-						]
-					},
-					{
-						"name": "is_array_schema",
-						"kind": "function",
-						"doc_comment": "Checks if a Zod schema is an array or contains an array through wrappers.",
-						"source_line": 100,
-						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): boolean",
-						"return_type": "boolean",
-						"parameters": [
-							{
-								"name": "schema",
-								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>"
-							}
-						]
-					},
-					{
-						"name": "get_inner_array_schema",
-						"kind": "function",
-						"doc_comment": "Gets the innermost array schema from a potentially nested schema structure.\nReturns null if no array schema is found.",
-						"source_line": 109,
-						"type_signature": "(schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>): ZodArray<any> | null",
-						"return_type": "ZodArray<any> | null",
-						"parameters": [
-							{
-								"name": "schema",
-								"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>"
-							}
-						]
 					}
 				],
-				"dependents": [
-					"action_specs.ts",
-					"cell.svelte.ts",
-					"cell_helpers.ts",
-					"cell_types.ts",
-					"chat.svelte.ts",
-					"completion_types.ts",
-					"config_defaults.ts",
-					"constants.ts",
-					"diskfile_helpers.ts",
-					"diskfile_history.svelte.ts",
-					"diskfile_tab.svelte.ts",
-					"diskfile_tabs.svelte.ts",
-					"diskfile_types.ts",
-					"diskfiles.svelte.ts",
-					"diskfiles_editor.svelte.ts",
-					"indexed_collection.svelte.ts",
-					"indexed_collection_helpers.svelte.ts",
-					"ollama.svelte.ts",
-					"part.svelte.ts",
-					"parts.svelte.ts",
-					"prompt.svelte.ts",
-					"response_helpers.ts",
-					"server/zzz_action_handlers.ts",
-					"socket.svelte.ts",
-					"terminal.svelte.ts",
-					"turn.svelte.ts",
-					"turn_types.ts",
-					"url_params_helpers.ts",
-					"xml.ts"
-				]
+				"dependents": ["constants.ts", "diskfile_types.ts"]
 			},
 			{
 				"path": "zzz_jsonrpc_errors.ts",
@@ -19784,14 +19622,14 @@
 						"kind": "variable",
 						"doc_comment": "Extended error message constructors.",
 						"source_line": 31,
-						"type_signature": "{ readonly ai_provider_error: (provider?: string | undefined, message?: string | undefined, data?: unknown) => { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; ... 14 more ...; readonly request_cancelled: (mess..."
+						"type_signature": "{ readonly ai_provider_error: (provider?: string | undefined, message?: string | undefined, data?: unknown) => { [x: string]: unknown; code: -32700 | -32600 | -32601 | -32602 | -32603 | (number & $brand<\"JsonrpcServerErrorCode\">); message: string; data?: unknown; }; ... 14 more ...; readonly request_cancelled: (...a..."
 					},
 					{
 						"name": "jsonrpc_errors",
 						"kind": "variable",
 						"doc_comment": "Extended error throwers.",
 						"source_line": 55,
-						"type_signature": "{ readonly ai_provider_error: (provider?: string | undefined, message?: string | undefined, data?: unknown) => ThrownJsonrpcError; readonly parse_error: (data?: unknown) => ThrownJsonrpcError; ... 13 more ...; readonly request_cancelled: (message?: string | undefined, data?: unknown) => ThrownJsonrpcError; }"
+						"type_signature": "{ readonly ai_provider_error: (provider?: string | undefined, message?: string | undefined, data?: unknown) => ThrownJsonrpcError; readonly parse_error: (...args: any[]) => ThrownJsonrpcError; ... 13 more ...; readonly request_cancelled: (...args: any[]) => ThrownJsonrpcError; }"
 					}
 				],
 				"module_comment": "zzz-specific JSON-RPC error codes extending fuz_app's base set.\n\nfuz_app provides 5 standard + 8 general application error codes.\nzzz adds domain-specific codes for AI provider errors.",
