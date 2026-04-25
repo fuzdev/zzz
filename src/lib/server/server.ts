@@ -30,7 +30,10 @@ import {is_open_host} from './security.ts';
 import {register_websocket_actions} from './register_websocket_actions.ts';
 import {ENV_FILE} from './constants.ts';
 import {BackendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws_backend.js';
-import {create_ws_auth_guard} from '@fuzdev/fuz_app/actions/transports_ws_auth_guard.js';
+import {
+	create_ws_auth_guard,
+	create_ws_logout_closer,
+} from '@fuzdev/fuz_app/actions/transports_ws_auth_guard.js';
 
 const log = new Logger('[server]');
 
@@ -127,21 +130,15 @@ export const start_server = async (): Promise<void> => {
 		// `create_ws_auth_guard` dispatches session_revoke → close_sockets_for_session,
 		// token_revoke → close_sockets_for_token, and session_revoke_all /
 		// token_revoke_all / password_change → close_sockets_for_account.
-		//
-		// fuz_app emits `logout` (not `session_revoke`) when a user logs out, and
-		// the guard intentionally ignores it. Compose a logout handler here so
-		// the logged-out account's WS connections are torn down along with the
-		// session row. The session_id isn't in the logout event metadata, so we
-		// fall back to account-scoped close — aligned with the pre-guard behavior.
+		// `create_ws_logout_closer` covers user-initiated logout (which the
+		// guard intentionally ignores) by closing every socket on the account.
 		const original_on_audit_event = app_backend.deps.on_audit_event;
 		const ws_guard = create_ws_auth_guard(transport, log);
+		const ws_logout_closer = create_ws_logout_closer(transport, log);
 		app_backend.deps.on_audit_event = (event) => {
 			original_on_audit_event(event);
 			ws_guard(event);
-			if (event.event_type === 'logout' && event.outcome !== 'failure' && event.account_id) {
-				const count = transport.close_sockets_for_account(event.account_id);
-				if (count) log.info(`Closed ${count} socket(s) for ${event.event_type}`);
-			}
+			ws_logout_closer(event);
 		};
 	}
 
