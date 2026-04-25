@@ -261,7 +261,7 @@ export const zzz_action_handlers: ZzzActionHandlers = {
 				});
 			}
 
-			return undefined;
+			return null;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
 			throw jsonrpc_errors.internal_error('failed to pull model');
@@ -271,7 +271,7 @@ export const zzz_action_handlers: ZzzActionHandlers = {
 	ollama_delete: async (input, ctx) => {
 		try {
 			await ctx.backend.lookup_provider('ollama').get_client().delete(input);
-			return undefined;
+			return null;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
 			throw jsonrpc_errors.internal_error('failed to delete model');
@@ -281,7 +281,7 @@ export const zzz_action_handlers: ZzzActionHandlers = {
 	ollama_copy: async (input, ctx) => {
 		try {
 			await ctx.backend.lookup_provider('ollama').get_client().copy(input);
-			return undefined;
+			return null;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
 			throw jsonrpc_errors.internal_error('failed to copy model');
@@ -307,7 +307,7 @@ export const zzz_action_handlers: ZzzActionHandlers = {
 				});
 			}
 
-			return undefined;
+			return null;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
 			throw jsonrpc_errors.internal_error('failed to create model');
@@ -320,7 +320,7 @@ export const zzz_action_handlers: ZzzActionHandlers = {
 				.lookup_provider('ollama')
 				.get_client()
 				.generate({model: input.model, prompt: '', keep_alive: 0});
-			return undefined;
+			return null;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
 			throw jsonrpc_errors.internal_error('failed to unload model');
