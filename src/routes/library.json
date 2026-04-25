@@ -49,17 +49,17 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.3.16",
-			"@fuzdev/fuz_app": "^0.30.0",
+			"@fuzdev/fuz_app": "^0.37.0",
 			"@fuzdev/fuz_code": "^0.45.1",
-			"@fuzdev/fuz_css": "^0.58.0",
+			"@fuzdev/fuz_css": "^0.59.0",
 			"@fuzdev/fuz_ui": "^0.191.4",
-			"@fuzdev/fuz_util": "^0.57.0",
+			"@fuzdev/fuz_util": "^0.58.0",
 			"@jridgewell/trace-mapping": "^0.3.31",
 			"@node-rs/argon2": "^2.0.2",
 			"@ryanatkn/eslint-config": "^0.11.0",
 			"@sveltejs/acorn-typescript": "^1.0.9",
 			"@sveltejs/adapter-static": "^3.0.10",
-			"@sveltejs/kit": "^2.57.1",
+			"@sveltejs/kit": "^2.58.0",
 			"@sveltejs/vite-plugin-svelte": "^6.2.4",
 			"@types/deno": "^2.5.0",
 			"@types/estree": "^1.0.8",
@@ -73,8 +73,8 @@
 			"pg": "^8.20.0",
 			"prettier": "^3.7.4",
 			"prettier-plugin-svelte": "^3.4.1",
-			"svelte": "5.55.4",
-			"svelte-check": "^4.4.5",
+			"svelte": "^5.55.5",
+			"svelte-check": "^4.4.6",
 			"svelte2tsx": "^0.7.52",
 			"tslib": "^2.8.1",
 			"typescript": "^5.9.3",
@@ -153,7 +153,7 @@
 						"kind": "type",
 						"doc_comment": "Action specifications indexed by method name.\nThese represent the complete action spec definitions.",
 						"source_line": 58,
-						"type_signature": "{ readonly heartbeat: { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<...>>; ... 4 more ...; streams?: string | undefined; }; ... 32 more ...; readonly _test..."
+						"type_signature": "{ readonly heartbeat: { method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: \"authenticated\"; side_effects: false; input: ZodObject<{}, $strict>; output: ZodObject<{}, $strict>; async: true; description: string; }; ... 32 more ...; readonly _test_notification: { ...; }; }"
 					},
 					{
 						"name": "action_specs",
@@ -166,14 +166,14 @@
 						"kind": "type",
 						"doc_comment": "Action parameter schemas indexed by method name.\nThese represent the input data for each action,\ne.g. JSON-RPC request/notification params and local call arguments.",
 						"source_line": 138,
-						"type_signature": "{ readonly heartbeat: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; readonly cancel: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; readonly ping: ZodOptional<...>; ... 30 more ...; readonly _test_notification: ZodObject<...>; }"
+						"type_signature": "{ readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 31 more ...; readonly _test_notification: ZodObject<...>; }"
 					},
 					{
 						"name": "ActionOutputs",
 						"kind": "type",
 						"doc_comment": "Action result schemas indexed by method name.\nThese represent the output data for each action,\ne.g. JSON-RPC response results and local call return values.",
 						"source_line": 216,
-						"type_signature": "{ readonly heartbeat: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; readonly cancel: ZodVoid; readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 30 more ...; readonly _test_notification: ZodVoid; }"
+						"type_signature": "{ readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodVoid; readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 30 more ...; readonly _test_notification: ZodVoid; }"
 					},
 					{
 						"name": "ActionEventDatas",
@@ -429,7 +429,7 @@
 							{
 								"name": "cancel",
 								"kind": "variable",
-								"type_signature": "(input: ActionInputs['cancel']) => ActionOutputs['cancel']"
+								"type_signature": "(\n\t\tinput: ActionInputs['cancel'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['cancel']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "ping",
@@ -444,7 +444,7 @@
 							{
 								"name": "filer_change",
 								"kind": "variable",
-								"type_signature": "(input: ActionInputs['filer_change']) => ActionOutputs['filer_change']"
+								"type_signature": "(\n\t\tinput: ActionInputs['filer_change'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['filer_change']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "diskfile_update",
@@ -469,12 +469,12 @@
 							{
 								"name": "completion_progress",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['completion_progress'],\n\t) => ActionOutputs['completion_progress']"
+								"type_signature": "(\n\t\tinput: ActionInputs['completion_progress'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['completion_progress']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "ollama_progress",
 								"kind": "variable",
-								"type_signature": "(input: ActionInputs['ollama_progress']) => ActionOutputs['ollama_progress']"
+								"type_signature": "(\n\t\tinput: ActionInputs['ollama_progress'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_progress']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "toggle_main_menu",
@@ -544,7 +544,7 @@
 							{
 								"name": "terminal_data",
 								"kind": "variable",
-								"type_signature": "(input: ActionInputs['terminal_data']) => ActionOutputs['terminal_data']"
+								"type_signature": "(\n\t\tinput: ActionInputs['terminal_data'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['terminal_data']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "terminal_resize",
@@ -559,7 +559,7 @@
 							{
 								"name": "terminal_exited",
 								"kind": "variable",
-								"type_signature": "(input: ActionInputs['terminal_exited']) => ActionOutputs['terminal_exited']"
+								"type_signature": "(\n\t\tinput: ActionInputs['terminal_exited'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['terminal_exited']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "workspace_open",
@@ -579,7 +579,7 @@
 							{
 								"name": "workspace_changed",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['workspace_changed'],\n\t) => ActionOutputs['workspace_changed']"
+								"type_signature": "(\n\t\tinput: ActionInputs['workspace_changed'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['workspace_changed']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "_test_emit_notifications",
@@ -589,7 +589,7 @@
 							{
 								"name": "_test_notification",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['_test_notification'],\n\t) => ActionOutputs['_test_notification']"
+								"type_signature": "(\n\t\tinput: ActionInputs['_test_notification'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['_test_notification']}, {error: JsonrpcErrorObject}>>"
 							}
 						]
 					}
@@ -7222,8 +7222,8 @@
 							{
 								"name": "lookup_action_input_schema",
 								"kind": "function",
-								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly heartbeat: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; readonly cancel: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 31 more ...; readonly _test_notification: ZodObject<...>; }[TMethod] | undefined",
-								"return_type": "{ readonly heartbeat: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; readonly cancel: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 31 more ...; readonly _test_notification: ZodObject<...>; }[TMethod] | undefined",
+								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 31 more ...; readonly _test_notification: ZodObject<...>; }[TMethod] | undefined",
+								"return_type": "{ readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 31 more ...; readonly _test_notification: ZodObject<...>; }[TMethod] | undefined",
 								"parameters": [
 									{
 										"name": "method",
@@ -7234,8 +7234,8 @@
 							{
 								"name": "lookup_action_output_schema",
 								"kind": "function",
-								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly heartbeat: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; readonly cancel: ZodVoid; readonly ping: ZodObject<...>; ... 30 more ...; readonly _test_notification: ZodVoid; }[TMethod] | undefined",
-								"return_type": "{ readonly heartbeat: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; readonly cancel: ZodVoid; readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 30 more ...; readonly _test_notification: ZodVoid; }[TMethod] | undefined",
+								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodVoid; readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 30 more ...; readonly _test_notification: ZodVoid; }[TMethod] | undefined",
+								"return_type": "{ readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodVoid; readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 30 more ...; readonly _test_notification: ZodVoid; }[TMethod] | undefined",
 								"parameters": [
 									{
 										"name": "method",
@@ -16187,7 +16187,7 @@
 						"name": "start_server",
 						"kind": "function",
 						"doc_comment": "Start the zzz server using Deno runtime.\n\nCreates the full backend with auth, database, providers, WebSocket, and HTTP RPC\nendpoints via `create_zzz_app`, then serves with `Deno.serve`.",
-						"source_line": 47,
+						"source_line": 46,
 						"type_signature": "(): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": []
@@ -16279,7 +16279,7 @@
 						"name": "ZzzAppRouteDeps",
 						"kind": "type",
 						"doc_comment": "zzz-specific deps not available in AppServerContext.",
-						"source_line": 32,
+						"source_line": 30,
 						"type_signature": "ZzzAppRouteDeps",
 						"properties": [
 							{
@@ -16308,8 +16308,8 @@
 					{
 						"name": "create_zzz_app_route_specs",
 						"kind": "function",
-						"doc_comment": "Build all zzz route specs.\n\nUsed by production server, integration tests, and attack surface helpers.\nDoes NOT include bootstrap routes (those are factory-managed by `create_app_server`).",
-						"source_line": 46,
+						"doc_comment": "Build all zzz route specs.\n\nUsed by production server, integration tests, and attack surface helpers.\nDoes NOT include bootstrap routes (those are factory-managed by `create_app_server`).\n\nDoes NOT include the `/api/rpc` endpoint — `create_app_server` auto-mounts\nevery `RpcEndpointSpec` passed via `rpc_endpoints`. Consumers supply that\nendpoint spec through `build_rpc_endpoint_specs` below.",
+						"source_line": 48,
 						"type_signature": "(ctx: AppServerContext, zzz_deps: ZzzAppRouteDeps): RouteSpec[]",
 						"return_type": "RouteSpec[]",
 						"parameters": [
@@ -16324,13 +16324,17 @@
 						]
 					},
 					{
-						"name": "create_zzz_rpc_endpoint_spec",
+						"name": "build_rpc_endpoint_specs",
 						"kind": "function",
-						"doc_comment": "Build the RPC endpoint spec for surface generation.",
-						"source_line": 84,
-						"type_signature": "(zzz_deps: ZzzRpcDeps): RpcEndpointSpec",
-						"return_type": "RpcEndpointSpec",
+						"doc_comment": "Build the `/api/rpc` endpoint spec(s) for `create_app_server`.\n\nPass to `rpc_endpoints` as a factory — closes over `ctx.deps` +\n`ctx.app_settings` for the standard admin + permit-offer + account\naction set. `create_app_server` auto-mounts each entry via\n`create_rpc_endpoint`.",
+						"source_line": 78,
+						"type_signature": "(ctx: AppServerContext, zzz_deps: ZzzRpcDeps): RpcEndpointSpec[]",
+						"return_type": "RpcEndpointSpec[]",
 						"parameters": [
+							{
+								"name": "ctx",
+								"type": "AppServerContext"
+							},
 							{
 								"name": "zzz_deps",
 								"type": "ZzzRpcDeps"

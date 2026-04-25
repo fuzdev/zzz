@@ -10,10 +10,7 @@ import type {AppServerContext} from '@fuzdev/fuz_app/server/app_server.js';
 import {stub} from '@fuzdev/fuz_app/testing/stubs.js';
 
 import {zzz_session_config} from '$lib/server/routes/account.js';
-import {
-	create_zzz_app_route_specs,
-	create_zzz_rpc_endpoint_spec,
-} from '$lib/server/zzz_route_specs.js';
+import {create_zzz_app_route_specs, build_rpc_endpoint_specs} from '$lib/server/zzz_route_specs.js';
 
 import {db_factories} from '../../db_fixture.js';
 import {create_zzz_app_surface_spec} from './auth_attack_surface_helpers.js';
@@ -31,6 +28,10 @@ const create_zzz_test_route_specs = (ctx: AppServerContext): Array<RouteSpec> =>
 		get_uptime_ms: () => 0,
 	});
 
+/** RPC endpoint factory — closes over `ctx` for the standard admin bundle. */
+const zzz_rpc_endpoints = (ctx: AppServerContext) =>
+	build_rpc_endpoint_specs(ctx, zzz_rpc_stub_deps);
+
 /** zzz uses default admin/keeper roles — no app-specific extensions. */
 const zzz_roles = create_role_schema({});
 
@@ -39,12 +40,14 @@ const zzz_roles = create_role_schema({});
 describe_standard_integration_tests({
 	session_options: zzz_session_config,
 	create_route_specs: create_zzz_test_route_specs,
+	rpc_endpoints: zzz_rpc_endpoints,
 	db_factories,
 });
 
 describe_standard_admin_integration_tests({
 	session_options: zzz_session_config,
 	create_route_specs: create_zzz_test_route_specs,
+	rpc_endpoints: zzz_rpc_endpoints,
 	roles: zzz_roles,
 	db_factories,
 });
@@ -52,6 +55,7 @@ describe_standard_admin_integration_tests({
 describe_rate_limiting_tests({
 	session_options: zzz_session_config,
 	create_route_specs: create_zzz_test_route_specs,
+	rpc_endpoints: zzz_rpc_endpoints,
 	db_factories,
 });
 
@@ -67,7 +71,7 @@ describe_round_trip_validation({
 describe_rpc_round_trip_tests({
 	session_options: zzz_session_config,
 	create_route_specs: create_zzz_test_route_specs,
-	rpc_endpoints: [create_zzz_rpc_endpoint_spec(zzz_rpc_stub_deps)],
+	rpc_endpoints: zzz_rpc_endpoints,
 	// Domain handlers use a throwing stub Backend — the RPC dispatcher catches
 	// all throws and returns well-formed JSON-RPC error responses, which the
 	// round-trip test accepts. Only DiskfileDirectoryPath inputs need overrides

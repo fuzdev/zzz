@@ -33,7 +33,7 @@ import {BackendProviderChatgpt} from './backend_provider_chatgpt.js';
 import {BackendProviderGemini} from './backend_provider_gemini.js';
 import create_config from '../config.js';
 import {zzz_session_config} from './routes/account.js';
-import {create_zzz_app_route_specs, create_zzz_rpc_endpoint_spec} from './zzz_route_specs.js';
+import {create_zzz_app_route_specs, build_rpc_endpoint_specs} from './zzz_route_specs.js';
 import {init_zzz_schema} from './db/zzz_schema.js';
 
 const log = new Logger('[server]');
@@ -188,7 +188,7 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 				version: config.app_version,
 				get_uptime_ms: () => Date.now() - started_at,
 			}),
-		rpc_endpoints: [create_zzz_rpc_endpoint_spec({backend})],
+		rpc_endpoints: (ctx) => build_rpc_endpoint_specs(ctx, {backend}),
 		env_schema: ZzzServerEnvSchema,
 		env_values: env,
 		on_effect_error: (error, ctx) => {

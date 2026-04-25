@@ -30,7 +30,7 @@ import {
 	is_response_for,
 	type JsonrpcErrorResponseFrame,
 } from '@fuzdev/fuz_app/testing/ws_round_trip.js';
-import {CANCEL_METHOD, cancel_action} from '@fuzdev/fuz_app/actions/cancel.js';
+import {cancel_action, cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.js';
 import {JSONRPC_ERROR_CODES as BASE_JSONRPC_ERROR_CODES} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
 import type {
 	Action,
@@ -47,9 +47,7 @@ interface StubProviderHandlerOptions {
 }
 
 interface StubProvider {
-	get_handler: (
-		streaming: boolean,
-	) => (options: StubProviderHandlerOptions) => Promise<never>;
+	get_handler: (streaming: boolean) => (options: StubProviderHandlerOptions) => Promise<never>;
 }
 
 type ZzzTestCtx = BaseHandlerContext & {backend: unknown};
@@ -133,7 +131,7 @@ describe('zzz WebSocket — completion_create cancel translation', () => {
 
 		await client.send({
 			jsonrpc: '2.0',
-			method: CANCEL_METHOD,
+			method: cancel_action_spec.method,
 			params: {request_id},
 		});
 

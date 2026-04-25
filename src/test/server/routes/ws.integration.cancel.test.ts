@@ -19,7 +19,7 @@ import {
 	is_response_for,
 	type JsonrpcErrorResponseFrame,
 } from '@fuzdev/fuz_app/testing/ws_round_trip.js';
-import {CANCEL_METHOD, cancel_action} from '@fuzdev/fuz_app/actions/cancel.js';
+import {cancel_action, cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.js';
 
 import {_test_emit_notifications_action_spec} from '$lib/action_specs.js';
 
@@ -65,7 +65,7 @@ describe('zzz WebSocket — cancel', () => {
 		// Client-initiated cancel — the primitive under test.
 		await client.send({
 			jsonrpc: '2.0',
-			method: CANCEL_METHOD,
+			method: cancel_action_spec.method,
 			params: {request_id: 42},
 		});
 
@@ -97,7 +97,7 @@ describe('zzz WebSocket — cancel', () => {
 		// Late cancel for the completed id — must not produce an error frame.
 		await client.send({
 			jsonrpc: '2.0',
-			method: CANCEL_METHOD,
+			method: cancel_action_spec.method,
 			params: {request_id: 1},
 		});
 

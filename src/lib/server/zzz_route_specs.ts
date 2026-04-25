@@ -18,13 +18,11 @@ import {
 	create_account_status_route_spec,
 	create_account_route_specs,
 } from '@fuzdev/fuz_app/auth/account_routes.js';
-import {create_admin_account_route_specs} from '@fuzdev/fuz_app/auth/admin_routes.js';
-import {create_app_settings_route_specs} from '@fuzdev/fuz_app/auth/app_settings_routes.js';
 import {
 	create_audit_log_route_specs,
 	type AuditLogRouteOptions,
 } from '@fuzdev/fuz_app/auth/audit_log_routes.js';
-import {create_rpc_endpoint} from '@fuzdev/fuz_app/actions/action_rpc.js';
+import {create_standard_rpc_actions} from '@fuzdev/fuz_app/auth/standard_rpc_actions.js';
 
 import {create_zzz_rpc_actions, type ZzzRpcDeps} from './zzz_rpc_actions.js';
 
@@ -42,6 +40,10 @@ export interface ZzzAppRouteDeps {
  *
  * Used by production server, integration tests, and attack surface helpers.
  * Does NOT include bootstrap routes (those are factory-managed by `create_app_server`).
+ *
+ * Does NOT include the `/api/rpc` endpoint — `create_app_server` auto-mounts
+ * every `RpcEndpointSpec` passed via `rpc_endpoints`. Consumers supply that
+ * endpoint spec through `build_rpc_endpoint_specs` below.
  */
 export const create_zzz_app_route_specs = (
 	ctx: AppServerContext,
@@ -61,27 +63,27 @@ export const create_zzz_app_route_specs = (
 		version: zzz_deps.version,
 		get_uptime_ms: zzz_deps.get_uptime_ms,
 	}),
-	// RPC endpoint for all zzz actions
-	...prefix_route_specs(
-		'/api',
-		create_rpc_endpoint({
-			path: '/rpc',
-			actions: create_zzz_rpc_actions(zzz_deps.zzz),
-			log: ctx.deps.log,
-		}),
-	),
-	// Admin routes
-	...prefix_route_specs('/api/admin', [
-		...create_admin_account_route_specs(ctx.deps),
-		...create_audit_log_route_specs({stream: zzz_deps.audit_sse}),
-		...create_app_settings_route_specs(ctx.deps, {app_settings: ctx.app_settings}),
-	]),
+	// Audit log SSE stream (the remaining admin REST — reads + mutations moved to RPC).
+	...prefix_route_specs('/api/admin', create_audit_log_route_specs({stream: zzz_deps.audit_sse})),
 ];
 
 /**
- * Build the RPC endpoint spec for surface generation.
+ * Build the `/api/rpc` endpoint spec(s) for `create_app_server`.
+ *
+ * Pass to `rpc_endpoints` as a factory — closes over `ctx.deps` +
+ * `ctx.app_settings` for the standard admin + permit-offer + account
+ * action set. `create_app_server` auto-mounts each entry via
+ * `create_rpc_endpoint`.
  */
-export const create_zzz_rpc_endpoint_spec = (zzz_deps: ZzzRpcDeps): RpcEndpointSpec => ({
-	path: '/api/rpc',
-	actions: create_zzz_rpc_actions(zzz_deps),
-});
+export const build_rpc_endpoint_specs = (
+	ctx: AppServerContext,
+	zzz_deps: ZzzRpcDeps,
+): Array<RpcEndpointSpec> => [
+	{
+		path: '/api/rpc',
+		actions: [
+			...create_zzz_rpc_actions(zzz_deps),
+			...create_standard_rpc_actions(ctx.deps, {app_settings: ctx.app_settings}),
+		],
+	},
+];

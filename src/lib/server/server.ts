@@ -23,7 +23,6 @@ import {argon2_password_deps} from '@fuzdev/fuz_app/auth/password_argon2.js';
 import {verify_request_source} from '@fuzdev/fuz_app/http/origin.js';
 import {require_auth} from '@fuzdev/fuz_app/auth/request_context.js';
 
-import type {Uuid} from '../zod_helpers.ts';
 import {VERSION} from '../zzz/build_info.ts';
 import {create_zzz_app} from './create_zzz_app.ts';
 import {load_server_env} from './server_env.ts';
@@ -140,7 +139,7 @@ export const start_server = async (): Promise<void> => {
 			original_on_audit_event(event);
 			ws_guard(event);
 			if (event.event_type === 'logout' && event.outcome !== 'failure' && event.account_id) {
-				const count = transport.close_sockets_for_account(event.account_id as Uuid);
+				const count = transport.close_sockets_for_account(event.account_id);
 				if (count) log.info(`Closed ${count} socket(s) for ${event.event_type}`);
 			}
 		};

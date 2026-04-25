@@ -66,6 +66,49 @@
 			"error_schemas": null
 		},
 		{
+			"method": "GET",
+			"path": "/api/account/verify",
+			"auth": {"type": "authenticated"},
+			"applicable_middleware": [
+				"host_validation",
+				"origin",
+				"session",
+				"request_context",
+				"bearer_auth"
+			],
+			"description": "Session-validity probe for nginx auth_request (empty body, 200 or 401)",
+			"is_mutation": false,
+			"transaction": false,
+			"rate_limit_key": null,
+			"params_schema": null,
+			"query_schema": null,
+			"input_schema": null,
+			"output_schema": null,
+			"error_schemas": {
+				"401": {
+					"type": "object",
+					"properties": {"error": {"type": "string"}},
+					"required": ["error"],
+					"additionalProperties": {}
+				},
+				"403": {
+					"type": "object",
+					"properties": {"error": {"type": "string"}},
+					"required": ["error"],
+					"additionalProperties": {}
+				},
+				"429": {
+					"type": "object",
+					"properties": {
+						"error": {"type": "string", "const": "rate_limit_exceeded"},
+						"retry_after": {"type": "number"}
+					},
+					"required": ["error", "retry_after"],
+					"additionalProperties": {}
+				}
+			}
+		},
+		{
 			"method": "POST",
 			"path": "/api/account/login",
 			"auth": {"type": "none"},
@@ -101,25 +144,9 @@
 				"400": {
 					"type": "object",
 					"properties": {
-						"error": {"type": "string"},
-						"issues": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"properties": {
-									"code": {"type": "string"},
-									"message": {"type": "string"},
-									"path": {
-										"type": "array",
-										"items": {"anyOf": [{"type": "string"}, {"type": "number"}]}
-									}
-								},
-								"required": ["code", "message", "path"],
-								"additionalProperties": {}
-							}
-						}
+						"error": {"type": "string", "enum": ["invalid_json_body", "invalid_request_body"]}
 					},
-					"required": ["error", "issues"],
+					"required": ["error"],
 					"additionalProperties": {}
 				},
 				"401": {
@@ -194,504 +221,6 @@
 			}
 		},
 		{
-			"method": "GET",
-			"path": "/api/account/verify",
-			"auth": {"type": "authenticated"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "Check session validity",
-			"is_mutation": false,
-			"transaction": false,
-			"rate_limit_key": null,
-			"params_schema": null,
-			"query_schema": null,
-			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {
-					"ok": {"type": "boolean", "const": true},
-					"account": {
-						"type": "object",
-						"properties": {
-							"id": {"type": "string"},
-							"username": {
-								"type": "string",
-								"minLength": 3,
-								"maxLength": 39,
-								"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
-							},
-							"email": {
-								"anyOf": [
-									{
-										"type": "string",
-										"format": "email",
-										"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-									},
-									{"type": "null"}
-								]
-							},
-							"email_verified": {"type": "boolean"},
-							"created_at": {"type": "string"}
-						},
-						"required": ["id", "username", "email", "email_verified", "created_at"],
-						"additionalProperties": false
-					}
-				},
-				"required": ["ok", "account"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "GET",
-			"path": "/api/account/sessions",
-			"auth": {"type": "authenticated"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "List auth sessions for current account",
-			"is_mutation": false,
-			"transaction": false,
-			"rate_limit_key": null,
-			"params_schema": null,
-			"query_schema": null,
-			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {
-					"sessions": {
-						"type": "array",
-						"items": {
-							"type": "object",
-							"properties": {
-								"id": {"type": "string"},
-								"account_id": {"type": "string"},
-								"created_at": {"type": "string"},
-								"expires_at": {"type": "string"},
-								"last_seen_at": {"type": "string"}
-							},
-							"required": ["id", "account_id", "created_at", "expires_at", "last_seen_at"],
-							"additionalProperties": false
-						}
-					}
-				},
-				"required": ["sessions"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "POST",
-			"path": "/api/account/sessions/:id/revoke",
-			"auth": {"type": "authenticated"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "Revoke a single auth session (account-scoped)",
-			"is_mutation": true,
-			"transaction": true,
-			"rate_limit_key": null,
-			"params_schema": {
-				"type": "object",
-				"properties": {"id": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
-				"required": ["id"],
-				"additionalProperties": false
-			},
-			"query_schema": null,
-			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {"ok": {"type": "boolean", "const": true}, "revoked": {"type": "boolean"}},
-				"required": ["ok", "revoked"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"400": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string"},
-						"issues": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"properties": {
-									"code": {"type": "string"},
-									"message": {"type": "string"},
-									"path": {
-										"type": "array",
-										"items": {"anyOf": [{"type": "string"}, {"type": "number"}]}
-									}
-								},
-								"required": ["code", "message", "path"],
-								"additionalProperties": {}
-							}
-						}
-					},
-					"required": ["error", "issues"],
-					"additionalProperties": {}
-				},
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "POST",
-			"path": "/api/account/sessions/revoke-all",
-			"auth": {"type": "authenticated"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "Revoke all auth sessions for current account",
-			"is_mutation": true,
-			"transaction": true,
-			"rate_limit_key": null,
-			"params_schema": null,
-			"query_schema": null,
-			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {"ok": {"type": "boolean", "const": true}, "count": {"type": "number"}},
-				"required": ["ok", "count"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "POST",
-			"path": "/api/account/tokens/create",
-			"auth": {"type": "authenticated"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "Create API token (shown once)",
-			"is_mutation": true,
-			"transaction": true,
-			"rate_limit_key": null,
-			"params_schema": null,
-			"query_schema": null,
-			"input_schema": {
-				"type": "object",
-				"properties": {"name": {"type": "string"}},
-				"required": ["name"],
-				"additionalProperties": false
-			},
-			"output_schema": {
-				"type": "object",
-				"properties": {
-					"ok": {"type": "boolean", "const": true},
-					"token": {"type": "string"},
-					"id": {"type": "string"},
-					"name": {"type": "string"}
-				},
-				"required": ["ok", "token", "id", "name"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"400": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string"},
-						"issues": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"properties": {
-									"code": {"type": "string"},
-									"message": {"type": "string"},
-									"path": {
-										"type": "array",
-										"items": {"anyOf": [{"type": "string"}, {"type": "number"}]}
-									}
-								},
-								"required": ["code", "message", "path"],
-								"additionalProperties": {}
-							}
-						}
-					},
-					"required": ["error", "issues"],
-					"additionalProperties": {}
-				},
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "GET",
-			"path": "/api/account/tokens",
-			"auth": {"type": "authenticated"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "List API tokens for current account",
-			"is_mutation": false,
-			"transaction": false,
-			"rate_limit_key": null,
-			"params_schema": null,
-			"query_schema": null,
-			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {
-					"tokens": {
-						"type": "array",
-						"items": {
-							"type": "object",
-							"properties": {
-								"id": {"type": "string"},
-								"account_id": {"type": "string"},
-								"name": {"type": "string"},
-								"expires_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"last_used_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"last_used_ip": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"created_at": {"type": "string"}
-							},
-							"required": [
-								"id",
-								"account_id",
-								"name",
-								"expires_at",
-								"last_used_at",
-								"last_used_ip",
-								"created_at"
-							],
-							"additionalProperties": false
-						}
-					}
-				},
-				"required": ["tokens"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "POST",
-			"path": "/api/account/tokens/:id/revoke",
-			"auth": {"type": "authenticated"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "Revoke an API token (account-scoped)",
-			"is_mutation": true,
-			"transaction": true,
-			"rate_limit_key": null,
-			"params_schema": {
-				"type": "object",
-				"properties": {"id": {"type": "string", "pattern": "^tok_[A-Za-z0-9_-]{12}$"}},
-				"required": ["id"],
-				"additionalProperties": false
-			},
-			"query_schema": null,
-			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {"ok": {"type": "boolean", "const": true}, "revoked": {"type": "boolean"}},
-				"required": ["ok", "revoked"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"400": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string"},
-						"issues": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"properties": {
-									"code": {"type": "string"},
-									"message": {"type": "string"},
-									"path": {
-										"type": "array",
-										"items": {"anyOf": [{"type": "string"}, {"type": "number"}]}
-									}
-								},
-								"required": ["code", "message", "path"],
-								"additionalProperties": {}
-							}
-						}
-					},
-					"required": ["error", "issues"],
-					"additionalProperties": {}
-				},
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
 			"method": "POST",
 			"path": "/api/account/password",
 			"auth": {"type": "authenticated"},
@@ -741,25 +270,9 @@
 				"400": {
 					"type": "object",
 					"properties": {
-						"error": {"type": "string"},
-						"issues": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"properties": {
-									"code": {"type": "string"},
-									"message": {"type": "string"},
-									"path": {
-										"type": "array",
-										"items": {"anyOf": [{"type": "string"}, {"type": "number"}]}
-									}
-								},
-								"required": ["code", "message", "path"],
-								"additionalProperties": {}
-							}
-						}
+						"error": {"type": "string", "enum": ["invalid_json_body", "invalid_request_body"]}
 					},
-					"required": ["error", "issues"],
+					"required": ["error"],
 					"additionalProperties": {}
 				},
 				"401": {
@@ -805,9 +318,91 @@
 			"input_schema": null,
 			"output_schema": {
 				"type": "object",
-				"properties": {"account": {"type": "object", "properties": {}, "additionalProperties": {}}},
-				"required": ["account"],
-				"additionalProperties": {}
+				"properties": {
+					"account": {
+						"type": "object",
+						"properties": {
+							"id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							},
+							"username": {
+								"type": "string",
+								"minLength": 3,
+								"maxLength": 39,
+								"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
+							},
+							"email": {
+								"anyOf": [
+									{
+										"type": "string",
+										"format": "email",
+										"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+									},
+									{"type": "null"}
+								]
+							},
+							"email_verified": {"type": "boolean"},
+							"created_at": {"type": "string"}
+						},
+						"required": ["id", "username", "email", "email_verified", "created_at"],
+						"additionalProperties": false
+					},
+					"actor": {
+						"type": "object",
+						"properties": {
+							"id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							},
+							"name": {"type": "string"}
+						},
+						"required": ["id", "name"],
+						"additionalProperties": false
+					},
+					"permits": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "string",
+									"format": "uuid",
+									"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+								},
+								"role": {"type": "string"},
+								"scope_id": {
+									"anyOf": [
+										{
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+										},
+										{"type": "null"}
+									]
+								},
+								"created_at": {"type": "string"},
+								"expires_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+								"granted_by": {
+									"anyOf": [
+										{
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+										},
+										{"type": "null"}
+									]
+								}
+							},
+							"required": ["id", "role", "scope_id", "created_at", "expires_at", "granted_by"],
+							"additionalProperties": false
+						}
+					}
+				},
+				"required": ["account", "actor", "permits"],
+				"additionalProperties": false
 			},
 			"error_schemas": {
 				"401": {
@@ -895,7 +490,7 @@
 				"request_context",
 				"bearer_auth"
 			],
-			"description": "JSON-RPC 2.0 endpoint — 24 methods",
+			"description": "JSON-RPC 2.0 endpoint — 49 methods",
 			"is_mutation": true,
 			"transaction": false,
 			"rate_limit_key": null,
@@ -938,7 +533,7 @@
 				"request_context",
 				"bearer_auth"
 			],
-			"description": "JSON-RPC 2.0 endpoint (cacheable reads) — 24 methods",
+			"description": "JSON-RPC 2.0 endpoint (cacheable reads) — 49 methods",
 			"is_mutation": false,
 			"transaction": false,
 			"rate_limit_key": null,
@@ -947,980 +542,6 @@
 			"input_schema": null,
 			"output_schema": {},
 			"error_schemas": {
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "GET",
-			"path": "/api/admin/accounts",
-			"auth": {"type": "role", "role": "admin"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "List all accounts with their permits",
-			"is_mutation": false,
-			"transaction": false,
-			"rate_limit_key": null,
-			"params_schema": null,
-			"query_schema": null,
-			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {
-					"accounts": {
-						"type": "array",
-						"items": {
-							"type": "object",
-							"properties": {
-								"account": {
-									"type": "object",
-									"properties": {
-										"id": {"type": "string"},
-										"username": {
-											"type": "string",
-											"minLength": 3,
-											"maxLength": 39,
-											"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
-										},
-										"email": {
-											"anyOf": [
-												{
-													"type": "string",
-													"format": "email",
-													"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-												},
-												{"type": "null"}
-											]
-										},
-										"email_verified": {"type": "boolean"},
-										"created_at": {"type": "string"},
-										"updated_at": {"type": "string"},
-										"updated_by": {"anyOf": [{"type": "string"}, {"type": "null"}]}
-									},
-									"required": [
-										"id",
-										"username",
-										"email",
-										"email_verified",
-										"created_at",
-										"updated_at",
-										"updated_by"
-									],
-									"additionalProperties": false
-								},
-								"actor": {
-									"anyOf": [
-										{
-											"type": "object",
-											"properties": {"id": {"type": "string"}, "name": {"type": "string"}},
-											"required": ["id", "name"],
-											"additionalProperties": false
-										},
-										{"type": "null"}
-									]
-								},
-								"permits": {
-									"type": "array",
-									"items": {
-										"type": "object",
-										"properties": {
-											"id": {"type": "string"},
-											"role": {"type": "string"},
-											"created_at": {"type": "string"},
-											"expires_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-											"granted_by": {"anyOf": [{"type": "string"}, {"type": "null"}]}
-										},
-										"required": ["id", "role", "created_at", "expires_at", "granted_by"],
-										"additionalProperties": false
-									}
-								}
-							},
-							"required": ["account", "actor", "permits"],
-							"additionalProperties": false
-						}
-					},
-					"grantable_roles": {
-						"type": "array",
-						"items": {"type": "string", "pattern": "^[a-z][a-z_]*[a-z]$|^[a-z]$"}
-					}
-				},
-				"required": ["accounts", "grantable_roles"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "POST",
-			"path": "/api/admin/accounts/:account_id/permits/grant",
-			"auth": {"type": "role", "role": "admin"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "Grant a role permit to an account",
-			"is_mutation": true,
-			"transaction": true,
-			"rate_limit_key": null,
-			"params_schema": {
-				"type": "object",
-				"properties": {
-					"account_id": {
-						"type": "string",
-						"format": "uuid",
-						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-					}
-				},
-				"required": ["account_id"],
-				"additionalProperties": false
-			},
-			"query_schema": null,
-			"input_schema": {
-				"type": "object",
-				"properties": {"role": {"type": "string", "enum": ["keeper", "admin"]}},
-				"required": ["role"],
-				"additionalProperties": false
-			},
-			"output_schema": {
-				"type": "object",
-				"properties": {
-					"ok": {"type": "boolean", "const": true},
-					"permit": {
-						"type": "object",
-						"properties": {"id": {"type": "string"}, "role": {"type": "string"}},
-						"required": ["id", "role"],
-						"additionalProperties": false
-					}
-				},
-				"required": ["ok", "permit"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"400": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string"},
-						"issues": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"properties": {
-									"code": {"type": "string"},
-									"message": {"type": "string"},
-									"path": {
-										"type": "array",
-										"items": {"anyOf": [{"type": "string"}, {"type": "number"}]}
-									}
-								},
-								"required": ["code", "message", "path"],
-								"additionalProperties": {}
-							}
-						}
-					},
-					"required": ["error", "issues"],
-					"additionalProperties": {}
-				},
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {
-						"error": {
-							"type": "string",
-							"enum": ["insufficient_permissions", "role_not_web_grantable"]
-						}
-					},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"404": {
-					"type": "object",
-					"properties": {"error": {"type": "string", "const": "account_not_found"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "POST",
-			"path": "/api/admin/accounts/:account_id/sessions/revoke-all",
-			"auth": {"type": "role", "role": "admin"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "Revoke all sessions for an account",
-			"is_mutation": true,
-			"transaction": true,
-			"rate_limit_key": null,
-			"params_schema": {
-				"type": "object",
-				"properties": {
-					"account_id": {
-						"type": "string",
-						"format": "uuid",
-						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-					}
-				},
-				"required": ["account_id"],
-				"additionalProperties": false
-			},
-			"query_schema": null,
-			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {"ok": {"type": "boolean", "const": true}, "count": {"type": "number"}},
-				"required": ["ok", "count"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"400": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string"},
-						"issues": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"properties": {
-									"code": {"type": "string"},
-									"message": {"type": "string"},
-									"path": {
-										"type": "array",
-										"items": {"anyOf": [{"type": "string"}, {"type": "number"}]}
-									}
-								},
-								"required": ["code", "message", "path"],
-								"additionalProperties": {}
-							}
-						}
-					},
-					"required": ["error", "issues"],
-					"additionalProperties": {}
-				},
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"404": {
-					"type": "object",
-					"properties": {"error": {"type": "string", "const": "account_not_found"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "POST",
-			"path": "/api/admin/accounts/:account_id/tokens/revoke-all",
-			"auth": {"type": "role", "role": "admin"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "Revoke all API tokens for an account",
-			"is_mutation": true,
-			"transaction": true,
-			"rate_limit_key": null,
-			"params_schema": {
-				"type": "object",
-				"properties": {
-					"account_id": {
-						"type": "string",
-						"format": "uuid",
-						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-					}
-				},
-				"required": ["account_id"],
-				"additionalProperties": false
-			},
-			"query_schema": null,
-			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {"ok": {"type": "boolean", "const": true}, "count": {"type": "number"}},
-				"required": ["ok", "count"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"400": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string"},
-						"issues": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"properties": {
-									"code": {"type": "string"},
-									"message": {"type": "string"},
-									"path": {
-										"type": "array",
-										"items": {"anyOf": [{"type": "string"}, {"type": "number"}]}
-									}
-								},
-								"required": ["code", "message", "path"],
-								"additionalProperties": {}
-							}
-						}
-					},
-					"required": ["error", "issues"],
-					"additionalProperties": {}
-				},
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"404": {
-					"type": "object",
-					"properties": {"error": {"type": "string", "const": "account_not_found"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "POST",
-			"path": "/api/admin/accounts/:account_id/permits/:permit_id/revoke",
-			"auth": {"type": "role", "role": "admin"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "Revoke a permit",
-			"is_mutation": true,
-			"transaction": true,
-			"rate_limit_key": null,
-			"params_schema": {
-				"type": "object",
-				"properties": {
-					"account_id": {
-						"type": "string",
-						"format": "uuid",
-						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-					},
-					"permit_id": {
-						"type": "string",
-						"format": "uuid",
-						"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-					}
-				},
-				"required": ["account_id", "permit_id"],
-				"additionalProperties": false
-			},
-			"query_schema": null,
-			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {
-					"ok": {"type": "boolean", "const": true},
-					"revoked": {"type": "boolean", "const": true}
-				},
-				"required": ["ok", "revoked"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"400": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string"},
-						"issues": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"properties": {
-									"code": {"type": "string"},
-									"message": {"type": "string"},
-									"path": {
-										"type": "array",
-										"items": {"anyOf": [{"type": "string"}, {"type": "number"}]}
-									}
-								},
-								"required": ["code", "message", "path"],
-								"additionalProperties": {}
-							}
-						}
-					},
-					"required": ["error", "issues"],
-					"additionalProperties": {}
-				},
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {
-						"error": {
-							"type": "string",
-							"enum": ["insufficient_permissions", "role_not_web_grantable"]
-						}
-					},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"404": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "enum": ["account_not_found", "permit_not_found"]}
-					},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "GET",
-			"path": "/api/admin/audit-log",
-			"auth": {"type": "role", "role": "admin"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "List audit log events with optional filters",
-			"is_mutation": false,
-			"transaction": false,
-			"rate_limit_key": null,
-			"params_schema": null,
-			"query_schema": null,
-			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {
-					"events": {
-						"type": "array",
-						"items": {
-							"type": "object",
-							"properties": {
-								"id": {"type": "string"},
-								"seq": {
-									"type": "integer",
-									"minimum": -9007199254740991,
-									"maximum": 9007199254740991
-								},
-								"event_type": {
-									"type": "string",
-									"enum": [
-										"login",
-										"logout",
-										"bootstrap",
-										"signup",
-										"password_change",
-										"session_revoke",
-										"session_revoke_all",
-										"token_create",
-										"token_revoke",
-										"token_revoke_all",
-										"permit_grant",
-										"permit_revoke",
-										"invite_create",
-										"invite_delete",
-										"app_settings_update"
-									]
-								},
-								"outcome": {"type": "string", "enum": ["success", "failure"]},
-								"actor_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"account_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"target_account_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"ip": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"created_at": {"type": "string"},
-								"metadata": {
-									"anyOf": [
-										{
-											"type": "object",
-											"propertyNames": {"type": "string"},
-											"additionalProperties": {}
-										},
-										{"type": "null"}
-									]
-								},
-								"username": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"target_username": {"anyOf": [{"type": "string"}, {"type": "null"}]}
-							},
-							"required": [
-								"id",
-								"seq",
-								"event_type",
-								"outcome",
-								"actor_id",
-								"account_id",
-								"target_account_id",
-								"ip",
-								"created_at",
-								"metadata",
-								"username",
-								"target_username"
-							],
-							"additionalProperties": false
-						}
-					}
-				},
-				"required": ["events"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"400": {
-					"type": "object",
-					"properties": {"error": {"type": "string", "const": "invalid_event_type"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "GET",
-			"path": "/api/admin/audit-log/permit-history",
-			"auth": {"type": "role", "role": "admin"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "List permit grant and revoke events with usernames",
-			"is_mutation": false,
-			"transaction": false,
-			"rate_limit_key": null,
-			"params_schema": null,
-			"query_schema": null,
-			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {
-					"events": {
-						"type": "array",
-						"items": {
-							"type": "object",
-							"properties": {
-								"id": {"type": "string"},
-								"seq": {
-									"type": "integer",
-									"minimum": -9007199254740991,
-									"maximum": 9007199254740991
-								},
-								"event_type": {
-									"type": "string",
-									"enum": [
-										"login",
-										"logout",
-										"bootstrap",
-										"signup",
-										"password_change",
-										"session_revoke",
-										"session_revoke_all",
-										"token_create",
-										"token_revoke",
-										"token_revoke_all",
-										"permit_grant",
-										"permit_revoke",
-										"invite_create",
-										"invite_delete",
-										"app_settings_update"
-									]
-								},
-								"outcome": {"type": "string", "enum": ["success", "failure"]},
-								"actor_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"account_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"target_account_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"ip": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"created_at": {"type": "string"},
-								"metadata": {
-									"anyOf": [
-										{
-											"type": "object",
-											"propertyNames": {"type": "string"},
-											"additionalProperties": {}
-										},
-										{"type": "null"}
-									]
-								},
-								"username": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"target_username": {"anyOf": [{"type": "string"}, {"type": "null"}]}
-							},
-							"required": [
-								"id",
-								"seq",
-								"event_type",
-								"outcome",
-								"actor_id",
-								"account_id",
-								"target_account_id",
-								"ip",
-								"created_at",
-								"metadata",
-								"username",
-								"target_username"
-							],
-							"additionalProperties": false
-						}
-					}
-				},
-				"required": ["events"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "GET",
-			"path": "/api/admin/sessions",
-			"auth": {"type": "role", "role": "admin"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "List all active sessions across all accounts",
-			"is_mutation": false,
-			"transaction": false,
-			"rate_limit_key": null,
-			"params_schema": null,
-			"query_schema": null,
-			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {
-					"sessions": {
-						"type": "array",
-						"items": {
-							"type": "object",
-							"properties": {
-								"id": {"type": "string"},
-								"account_id": {"type": "string"},
-								"created_at": {"type": "string"},
-								"expires_at": {"type": "string"},
-								"last_seen_at": {"type": "string"},
-								"username": {"type": "string"}
-							},
-							"required": [
-								"id",
-								"account_id",
-								"created_at",
-								"expires_at",
-								"last_seen_at",
-								"username"
-							],
-							"additionalProperties": false
-						}
-					}
-				},
-				"required": ["sessions"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "GET",
-			"path": "/api/admin/settings",
-			"auth": {"type": "role", "role": "admin"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "Get app settings",
-			"is_mutation": false,
-			"transaction": false,
-			"rate_limit_key": null,
-			"params_schema": null,
-			"query_schema": null,
-			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {
-					"settings": {
-						"type": "object",
-						"properties": {
-							"open_signup": {"type": "boolean"},
-							"updated_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-							"updated_by": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-							"updated_by_username": {"anyOf": [{"type": "string"}, {"type": "null"}]}
-						},
-						"required": ["open_signup", "updated_at", "updated_by", "updated_by_username"],
-						"additionalProperties": false
-					}
-				},
-				"required": ["settings"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"401": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"403": {
-					"type": "object",
-					"properties": {"error": {"type": "string"}},
-					"required": ["error"],
-					"additionalProperties": {}
-				},
-				"429": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string", "const": "rate_limit_exceeded"},
-						"retry_after": {"type": "number"}
-					},
-					"required": ["error", "retry_after"],
-					"additionalProperties": {}
-				}
-			}
-		},
-		{
-			"method": "PATCH",
-			"path": "/api/admin/settings",
-			"auth": {"type": "role", "role": "admin"},
-			"applicable_middleware": [
-				"host_validation",
-				"origin",
-				"session",
-				"request_context",
-				"bearer_auth"
-			],
-			"description": "Update app settings",
-			"is_mutation": true,
-			"transaction": true,
-			"rate_limit_key": null,
-			"params_schema": null,
-			"query_schema": null,
-			"input_schema": {
-				"type": "object",
-				"properties": {"open_signup": {"type": "boolean"}},
-				"required": ["open_signup"],
-				"additionalProperties": false
-			},
-			"output_schema": {
-				"type": "object",
-				"properties": {
-					"ok": {"type": "boolean", "const": true},
-					"settings": {
-						"type": "object",
-						"properties": {
-							"open_signup": {"type": "boolean"},
-							"updated_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-							"updated_by": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-							"updated_by_username": {"anyOf": [{"type": "string"}, {"type": "null"}]}
-						},
-						"required": ["open_signup", "updated_at", "updated_by", "updated_by_username"],
-						"additionalProperties": false
-					}
-				},
-				"required": ["ok", "settings"],
-				"additionalProperties": false
-			},
-			"error_schemas": {
-				"400": {
-					"type": "object",
-					"properties": {
-						"error": {"type": "string"},
-						"issues": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"properties": {
-									"code": {"type": "string"},
-									"message": {"type": "string"},
-									"path": {
-										"type": "array",
-										"items": {"anyOf": [{"type": "string"}, {"type": "number"}]}
-									}
-								},
-								"required": ["code", "message", "path"],
-								"additionalProperties": {}
-							}
-						}
-					},
-					"required": ["error", "issues"],
-					"additionalProperties": {}
-				},
 				"401": {
 					"type": "object",
 					"properties": {"error": {"type": "string"}},
@@ -1986,25 +607,9 @@
 				"400": {
 					"type": "object",
 					"properties": {
-						"error": {"type": "string"},
-						"issues": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"properties": {
-									"code": {"type": "string"},
-									"message": {"type": "string"},
-									"path": {
-										"type": "array",
-										"items": {"anyOf": [{"type": "string"}, {"type": "number"}]}
-									}
-								},
-								"required": ["code", "message", "path"],
-								"additionalProperties": {}
-							}
-						}
+						"error": {"type": "string", "enum": ["invalid_json_body", "invalid_request_body"]}
 					},
-					"required": ["error", "issues"],
+					"required": ["error"],
 					"additionalProperties": {}
 				},
 				"401": {
@@ -2924,6 +1529,1757 @@
 					},
 					"side_effects": false,
 					"description": "Test-only. Emits `count` `_test_notification` notifications via ctx.notify, then returns {count}."
+				},
+				{
+					"name": "admin_account_list",
+					"auth": {"type": "role", "role": "admin"},
+					"input_schema": null,
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"accounts": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"account": {
+											"type": "object",
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												"username": {
+													"type": "string",
+													"minLength": 3,
+													"maxLength": 39,
+													"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
+												},
+												"email": {
+													"anyOf": [
+														{
+															"type": "string",
+															"format": "email",
+															"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+														},
+														{"type": "null"}
+													]
+												},
+												"email_verified": {"type": "boolean"},
+												"created_at": {"type": "string"},
+												"updated_at": {"type": "string"},
+												"updated_by": {
+													"anyOf": [
+														{
+															"type": "string",
+															"format": "uuid",
+															"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+														},
+														{"type": "null"}
+													]
+												}
+											},
+											"required": [
+												"id",
+												"username",
+												"email",
+												"email_verified",
+												"created_at",
+												"updated_at",
+												"updated_by"
+											],
+											"additionalProperties": false
+										},
+										"actor": {
+											"anyOf": [
+												{
+													"type": "object",
+													"properties": {
+														"id": {
+															"type": "string",
+															"format": "uuid",
+															"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+														},
+														"name": {"type": "string"}
+													},
+													"required": ["id", "name"],
+													"additionalProperties": false
+												},
+												{"type": "null"}
+											]
+										},
+										"permits": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"id": {
+														"type": "string",
+														"format": "uuid",
+														"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+													},
+													"role": {"type": "string"},
+													"scope_id": {
+														"anyOf": [
+															{
+																"type": "string",
+																"format": "uuid",
+																"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+															},
+															{"type": "null"}
+														]
+													},
+													"created_at": {"type": "string"},
+													"expires_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+													"granted_by": {
+														"anyOf": [
+															{
+																"type": "string",
+																"format": "uuid",
+																"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+															},
+															{"type": "null"}
+														]
+													}
+												},
+												"required": [
+													"id",
+													"role",
+													"scope_id",
+													"created_at",
+													"expires_at",
+													"granted_by"
+												],
+												"additionalProperties": false
+											}
+										},
+										"pending_offers": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"id": {
+														"type": "string",
+														"format": "uuid",
+														"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+													},
+													"role": {"type": "string"},
+													"scope_id": {
+														"anyOf": [
+															{
+																"type": "string",
+																"format": "uuid",
+																"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+															},
+															{"type": "null"}
+														]
+													},
+													"from_actor_id": {
+														"type": "string",
+														"format": "uuid",
+														"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+													},
+													"from_username": {"type": "string"},
+													"created_at": {"type": "string"},
+													"expires_at": {"type": "string"}
+												},
+												"required": [
+													"id",
+													"role",
+													"scope_id",
+													"from_actor_id",
+													"from_username",
+													"created_at",
+													"expires_at"
+												],
+												"additionalProperties": false
+											}
+										}
+									},
+									"required": ["account", "actor", "permits", "pending_offers"],
+									"additionalProperties": false
+								}
+							},
+							"grantable_roles": {
+								"type": "array",
+								"items": {"type": "string", "pattern": "^[a-z][a-z_]*[a-z]$|^[a-z]$"}
+							}
+						},
+						"required": ["accounts", "grantable_roles"],
+						"additionalProperties": false
+					},
+					"side_effects": false,
+					"description": "List all accounts with their actors, permits, and pending offers. Admin-only."
+				},
+				{
+					"name": "admin_session_list",
+					"auth": {"type": "role", "role": "admin"},
+					"input_schema": null,
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"sessions": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"id": {"type": "string"},
+										"account_id": {
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+										},
+										"created_at": {"type": "string"},
+										"expires_at": {"type": "string"},
+										"last_seen_at": {"type": "string"},
+										"username": {"type": "string"}
+									},
+									"required": [
+										"id",
+										"account_id",
+										"created_at",
+										"expires_at",
+										"last_seen_at",
+										"username"
+									],
+									"additionalProperties": false
+								}
+							}
+						},
+						"required": ["sessions"],
+						"additionalProperties": false
+					},
+					"side_effects": false,
+					"description": "List every active auth session across all accounts. Admin-only."
+				},
+				{
+					"name": "admin_session_revoke_all",
+					"auth": {"type": "role", "role": "admin"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"account_id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+								"description": "Account whose sessions to revoke."
+							}
+						},
+						"required": ["account_id"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {"ok": {"type": "boolean", "const": true}, "count": {"type": "number"}},
+						"required": ["ok", "count"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Revoke all sessions for an account. Admin-only."
+				},
+				{
+					"name": "admin_token_revoke_all",
+					"auth": {"type": "role", "role": "admin"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"account_id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+								"description": "Account whose API tokens to revoke."
+							}
+						},
+						"required": ["account_id"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {"ok": {"type": "boolean", "const": true}, "count": {"type": "number"}},
+						"required": ["ok", "count"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Revoke all API tokens for an account. Admin-only."
+				},
+				{
+					"name": "audit_log_list",
+					"auth": {"type": "role", "role": "admin"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"event_type": {
+								"description": "Filter by event type.",
+								"anyOf": [
+									{
+										"type": "string",
+										"enum": [
+											"login",
+											"logout",
+											"bootstrap",
+											"signup",
+											"password_change",
+											"session_revoke",
+											"session_revoke_all",
+											"token_create",
+											"token_revoke",
+											"token_revoke_all",
+											"permit_grant",
+											"permit_revoke",
+											"permit_offer_create",
+											"permit_offer_accept",
+											"permit_offer_decline",
+											"permit_offer_retract",
+											"permit_offer_expire",
+											"permit_offer_supersede",
+											"invite_create",
+											"invite_delete",
+											"app_settings_update"
+										]
+									},
+									{"type": "null"}
+								]
+							},
+							"outcome": {
+								"description": "Filter by outcome (`success` or `failure`).",
+								"anyOf": [{"type": "string", "enum": ["success", "failure"]}, {"type": "null"}]
+							},
+							"account_id": {
+								"description": "Filter by actor account id.",
+								"anyOf": [
+									{
+										"type": "string",
+										"format": "uuid",
+										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+									},
+									{"type": "null"}
+								]
+							},
+							"limit": {
+								"description": "Max rows to return (default 50, max 200).",
+								"anyOf": [{"type": "integer", "minimum": 1, "maximum": 200}, {"type": "null"}]
+							},
+							"offset": {
+								"description": "Pagination offset.",
+								"anyOf": [
+									{"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+									{"type": "null"}
+								]
+							},
+							"since_seq": {
+								"description": "Gap-fill from this seq forward. Used for SSE reconnection.",
+								"anyOf": [
+									{"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+									{"type": "null"}
+								]
+							}
+						},
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"events": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"id": {
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+										},
+										"seq": {
+											"type": "integer",
+											"minimum": -9007199254740991,
+											"maximum": 9007199254740991
+										},
+										"event_type": {
+											"type": "string",
+											"enum": [
+												"login",
+												"logout",
+												"bootstrap",
+												"signup",
+												"password_change",
+												"session_revoke",
+												"session_revoke_all",
+												"token_create",
+												"token_revoke",
+												"token_revoke_all",
+												"permit_grant",
+												"permit_revoke",
+												"permit_offer_create",
+												"permit_offer_accept",
+												"permit_offer_decline",
+												"permit_offer_retract",
+												"permit_offer_expire",
+												"permit_offer_supersede",
+												"invite_create",
+												"invite_delete",
+												"app_settings_update"
+											]
+										},
+										"outcome": {"type": "string", "enum": ["success", "failure"]},
+										"actor_id": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											]
+										},
+										"account_id": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											]
+										},
+										"target_account_id": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											]
+										},
+										"ip": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+										"created_at": {"type": "string"},
+										"metadata": {
+											"anyOf": [
+												{
+													"type": "object",
+													"propertyNames": {"type": "string"},
+													"additionalProperties": {}
+												},
+												{"type": "null"}
+											]
+										},
+										"username": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+										"target_username": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+									},
+									"required": [
+										"id",
+										"seq",
+										"event_type",
+										"outcome",
+										"actor_id",
+										"account_id",
+										"target_account_id",
+										"ip",
+										"created_at",
+										"metadata",
+										"username",
+										"target_username"
+									],
+									"additionalProperties": false
+								}
+							}
+						},
+						"required": ["events"],
+						"additionalProperties": false
+					},
+					"side_effects": false,
+					"description": "List audit log events with optional filters. Admin-only."
+				},
+				{
+					"name": "audit_log_permit_history",
+					"auth": {"type": "role", "role": "admin"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"limit": {
+								"description": "Max rows to return (default 50, max 200).",
+								"anyOf": [{"type": "integer", "minimum": 1, "maximum": 200}, {"type": "null"}]
+							},
+							"offset": {
+								"description": "Pagination offset.",
+								"anyOf": [
+									{"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+									{"type": "null"}
+								]
+							}
+						},
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"events": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"id": {
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+										},
+										"seq": {
+											"type": "integer",
+											"minimum": -9007199254740991,
+											"maximum": 9007199254740991
+										},
+										"event_type": {
+											"type": "string",
+											"enum": [
+												"login",
+												"logout",
+												"bootstrap",
+												"signup",
+												"password_change",
+												"session_revoke",
+												"session_revoke_all",
+												"token_create",
+												"token_revoke",
+												"token_revoke_all",
+												"permit_grant",
+												"permit_revoke",
+												"permit_offer_create",
+												"permit_offer_accept",
+												"permit_offer_decline",
+												"permit_offer_retract",
+												"permit_offer_expire",
+												"permit_offer_supersede",
+												"invite_create",
+												"invite_delete",
+												"app_settings_update"
+											]
+										},
+										"outcome": {"type": "string", "enum": ["success", "failure"]},
+										"actor_id": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											]
+										},
+										"account_id": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											]
+										},
+										"target_account_id": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											]
+										},
+										"ip": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+										"created_at": {"type": "string"},
+										"metadata": {
+											"anyOf": [
+												{
+													"type": "object",
+													"propertyNames": {"type": "string"},
+													"additionalProperties": {}
+												},
+												{"type": "null"}
+											]
+										},
+										"username": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+										"target_username": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+									},
+									"required": [
+										"id",
+										"seq",
+										"event_type",
+										"outcome",
+										"actor_id",
+										"account_id",
+										"target_account_id",
+										"ip",
+										"created_at",
+										"metadata",
+										"username",
+										"target_username"
+									],
+									"additionalProperties": false
+								}
+							}
+						},
+						"required": ["events"],
+						"additionalProperties": false
+					},
+					"side_effects": false,
+					"description": "List permit grant and revoke events with usernames. Admin-only."
+				},
+				{
+					"name": "invite_create",
+					"auth": {"type": "role", "role": "admin"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"email": {
+								"description": "Invitee email.",
+								"anyOf": [
+									{
+										"type": "string",
+										"format": "email",
+										"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+									},
+									{"type": "null"}
+								]
+							},
+							"username": {
+								"description": "Invitee username.",
+								"anyOf": [
+									{
+										"type": "string",
+										"minLength": 3,
+										"maxLength": 39,
+										"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
+									},
+									{"type": "null"}
+								]
+							}
+						},
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"ok": {"type": "boolean", "const": true},
+							"invite": {
+								"type": "object",
+								"properties": {
+									"id": {
+										"type": "string",
+										"format": "uuid",
+										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+									},
+									"email": {
+										"anyOf": [
+											{
+												"type": "string",
+												"format": "email",
+												"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+											},
+											{"type": "null"}
+										]
+									},
+									"username": {
+										"anyOf": [
+											{
+												"type": "string",
+												"minLength": 3,
+												"maxLength": 39,
+												"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
+											},
+											{"type": "null"}
+										]
+									},
+									"claimed_by": {
+										"anyOf": [
+											{
+												"type": "string",
+												"format": "uuid",
+												"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+											},
+											{"type": "null"}
+										]
+									},
+									"claimed_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+									"created_at": {"type": "string"},
+									"created_by": {
+										"anyOf": [
+											{
+												"type": "string",
+												"format": "uuid",
+												"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+											},
+											{"type": "null"}
+										]
+									}
+								},
+								"required": [
+									"id",
+									"email",
+									"username",
+									"claimed_by",
+									"claimed_at",
+									"created_at",
+									"created_by"
+								],
+								"additionalProperties": false
+							}
+						},
+						"required": ["ok", "invite"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Create an invite addressed to an email, username, or both. Admin-only."
+				},
+				{
+					"name": "invite_list",
+					"auth": {"type": "role", "role": "admin"},
+					"input_schema": null,
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"invites": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"id": {
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+										},
+										"email": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "email",
+													"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+												},
+												{"type": "null"}
+											]
+										},
+										"username": {
+											"anyOf": [
+												{
+													"type": "string",
+													"minLength": 3,
+													"maxLength": 39,
+													"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
+												},
+												{"type": "null"}
+											]
+										},
+										"claimed_by": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											]
+										},
+										"claimed_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+										"created_at": {"type": "string"},
+										"created_by": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											]
+										},
+										"created_by_username": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+										"claimed_by_username": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+									},
+									"required": [
+										"id",
+										"email",
+										"username",
+										"claimed_by",
+										"claimed_at",
+										"created_at",
+										"created_by",
+										"created_by_username",
+										"claimed_by_username"
+									],
+									"additionalProperties": false
+								}
+							}
+						},
+						"required": ["invites"],
+						"additionalProperties": false
+					},
+					"side_effects": false,
+					"description": "List all invites with creator and claimer usernames. Admin-only."
+				},
+				{
+					"name": "invite_delete",
+					"auth": {"type": "role", "role": "admin"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"invite_id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+								"description": "Invite to delete. Must be unclaimed."
+							}
+						},
+						"required": ["invite_id"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {"ok": {"type": "boolean", "const": true}},
+						"required": ["ok"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Delete an unclaimed invite. Admin-only."
+				},
+				{
+					"name": "app_settings_get",
+					"auth": {"type": "role", "role": "admin"},
+					"input_schema": null,
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"settings": {
+								"type": "object",
+								"properties": {
+									"open_signup": {"type": "boolean"},
+									"updated_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+									"updated_by": {
+										"anyOf": [
+											{
+												"type": "string",
+												"format": "uuid",
+												"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+											},
+											{"type": "null"}
+										]
+									},
+									"updated_by_username": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+								},
+								"required": ["open_signup", "updated_at", "updated_by", "updated_by_username"],
+								"additionalProperties": false
+							}
+						},
+						"required": ["settings"],
+						"additionalProperties": false
+					},
+					"side_effects": false,
+					"description": "Read global app settings. Admin-only."
+				},
+				{
+					"name": "app_settings_update",
+					"auth": {"type": "role", "role": "admin"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"open_signup": {
+								"type": "boolean",
+								"description": "New value for the open signup toggle."
+							}
+						},
+						"required": ["open_signup"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"ok": {"type": "boolean", "const": true},
+							"settings": {
+								"type": "object",
+								"properties": {
+									"open_signup": {"type": "boolean"},
+									"updated_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+									"updated_by": {
+										"anyOf": [
+											{
+												"type": "string",
+												"format": "uuid",
+												"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+											},
+											{"type": "null"}
+										]
+									},
+									"updated_by_username": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+								},
+								"required": ["open_signup", "updated_at", "updated_by", "updated_by_username"],
+								"additionalProperties": false
+							}
+						},
+						"required": ["ok", "settings"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Update global app settings (currently just the open signup toggle). Admin-only."
+				},
+				{
+					"name": "permit_offer_create",
+					"auth": {"type": "authenticated"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"to_account_id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+								"description": "Account id of the recipient."
+							},
+							"role": {
+								"type": "string",
+								"pattern": "^[a-z][a-z_]*[a-z]$|^[a-z]$",
+								"description": "Role being offered."
+							},
+							"scope_id": {
+								"description": "Scope id for resource-scoped grants (e.g. classroom id). `null` for global.",
+								"anyOf": [
+									{
+										"type": "string",
+										"format": "uuid",
+										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+									},
+									{"type": "null"}
+								]
+							},
+							"message": {
+								"description": "Optional free-form note from the grantor.",
+								"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}]
+							}
+						},
+						"required": ["to_account_id", "role"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"offer": {
+								"type": "object",
+								"properties": {
+									"id": {
+										"type": "string",
+										"format": "uuid",
+										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+										"description": "Offer id."
+									},
+									"from_actor_id": {
+										"type": "string",
+										"format": "uuid",
+										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+										"description": "Actor that issued the offer."
+									},
+									"to_account_id": {
+										"type": "string",
+										"format": "uuid",
+										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+										"description": "Account the offer is directed to."
+									},
+									"role": {
+										"type": "string",
+										"pattern": "^[a-z][a-z_]*[a-z]$|^[a-z]$",
+										"description": "Role being offered."
+									},
+									"scope_id": {
+										"anyOf": [
+											{
+												"type": "string",
+												"format": "uuid",
+												"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+											},
+											{"type": "null"}
+										],
+										"description": "Scope the offered permit applies to (e.g. a classroom id). `null` for global permits."
+									},
+									"message": {
+										"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}],
+										"description": "Optional free-form note from the grantor."
+									},
+									"created_at": {
+										"type": "string",
+										"description": "ISO timestamp when the offer was created."
+									},
+									"expires_at": {
+										"type": "string",
+										"description": "ISO timestamp after which the offer is no longer valid."
+									},
+									"accepted_at": {
+										"anyOf": [{"type": "string"}, {"type": "null"}],
+										"description": "ISO timestamp when the offer was accepted."
+									},
+									"declined_at": {
+										"anyOf": [{"type": "string"}, {"type": "null"}],
+										"description": "ISO timestamp when the offer was declined."
+									},
+									"decline_reason": {
+										"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}],
+										"description": "Optional reason given on decline."
+									},
+									"retracted_at": {
+										"anyOf": [{"type": "string"}, {"type": "null"}],
+										"description": "ISO timestamp when the grantor retracted the offer."
+									},
+									"superseded_at": {
+										"anyOf": [{"type": "string"}, {"type": "null"}],
+										"description": "ISO timestamp when this offer was obsoleted by a sibling accept or by revoke of the resulting permit."
+									},
+									"resulting_permit_id": {
+										"anyOf": [
+											{
+												"type": "string",
+												"format": "uuid",
+												"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+											},
+											{"type": "null"}
+										],
+										"description": "Permit produced by accepting this offer. `null` until/unless accepted."
+									}
+								},
+								"required": [
+									"id",
+									"from_actor_id",
+									"to_account_id",
+									"role",
+									"scope_id",
+									"message",
+									"created_at",
+									"expires_at",
+									"accepted_at",
+									"declined_at",
+									"decline_reason",
+									"retracted_at",
+									"superseded_at",
+									"resulting_permit_id"
+								],
+								"additionalProperties": false,
+								"description": "A permit offer — a pending grant awaiting recipient consent."
+							}
+						},
+						"required": ["offer"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Offer a permit to another account. Grantor must hold the offered role (or pass a consumer authorize callback); role must be web_grantable."
+				},
+				{
+					"name": "permit_offer_accept",
+					"auth": {"type": "authenticated"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"offer_id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+								"description": "The offer to accept."
+							}
+						},
+						"required": ["offer_id"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"permit_id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							},
+							"offer": {
+								"type": "object",
+								"properties": {
+									"id": {
+										"type": "string",
+										"format": "uuid",
+										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+										"description": "Offer id."
+									},
+									"from_actor_id": {
+										"type": "string",
+										"format": "uuid",
+										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+										"description": "Actor that issued the offer."
+									},
+									"to_account_id": {
+										"type": "string",
+										"format": "uuid",
+										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+										"description": "Account the offer is directed to."
+									},
+									"role": {
+										"type": "string",
+										"pattern": "^[a-z][a-z_]*[a-z]$|^[a-z]$",
+										"description": "Role being offered."
+									},
+									"scope_id": {
+										"anyOf": [
+											{
+												"type": "string",
+												"format": "uuid",
+												"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+											},
+											{"type": "null"}
+										],
+										"description": "Scope the offered permit applies to (e.g. a classroom id). `null` for global permits."
+									},
+									"message": {
+										"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}],
+										"description": "Optional free-form note from the grantor."
+									},
+									"created_at": {
+										"type": "string",
+										"description": "ISO timestamp when the offer was created."
+									},
+									"expires_at": {
+										"type": "string",
+										"description": "ISO timestamp after which the offer is no longer valid."
+									},
+									"accepted_at": {
+										"anyOf": [{"type": "string"}, {"type": "null"}],
+										"description": "ISO timestamp when the offer was accepted."
+									},
+									"declined_at": {
+										"anyOf": [{"type": "string"}, {"type": "null"}],
+										"description": "ISO timestamp when the offer was declined."
+									},
+									"decline_reason": {
+										"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}],
+										"description": "Optional reason given on decline."
+									},
+									"retracted_at": {
+										"anyOf": [{"type": "string"}, {"type": "null"}],
+										"description": "ISO timestamp when the grantor retracted the offer."
+									},
+									"superseded_at": {
+										"anyOf": [{"type": "string"}, {"type": "null"}],
+										"description": "ISO timestamp when this offer was obsoleted by a sibling accept or by revoke of the resulting permit."
+									},
+									"resulting_permit_id": {
+										"anyOf": [
+											{
+												"type": "string",
+												"format": "uuid",
+												"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+											},
+											{"type": "null"}
+										],
+										"description": "Permit produced by accepting this offer. `null` until/unless accepted."
+									}
+								},
+								"required": [
+									"id",
+									"from_actor_id",
+									"to_account_id",
+									"role",
+									"scope_id",
+									"message",
+									"created_at",
+									"expires_at",
+									"accepted_at",
+									"declined_at",
+									"decline_reason",
+									"retracted_at",
+									"superseded_at",
+									"resulting_permit_id"
+								],
+								"additionalProperties": false,
+								"description": "A permit offer — a pending grant awaiting recipient consent."
+							},
+							"superseded_offer_ids": {
+								"type": "array",
+								"items": {
+									"type": "string",
+									"format": "uuid",
+									"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+								}
+							}
+						},
+						"required": ["permit_id", "offer", "superseded_offer_ids"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Accept an offer. Atomically marks the offer accepted, inserts the permit, and supersedes sibling pending offers for the same (account, role, scope)."
+				},
+				{
+					"name": "permit_offer_decline",
+					"auth": {"type": "authenticated"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"offer_id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+								"description": "The offer to decline."
+							},
+							"reason": {
+								"description": "Optional free-form reason given on decline.",
+								"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}]
+							}
+						},
+						"required": ["offer_id"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {"ok": {"type": "boolean", "const": true}},
+						"required": ["ok"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Decline an offer. Recipient-only."
+				},
+				{
+					"name": "permit_offer_retract",
+					"auth": {"type": "authenticated"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"offer_id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+								"description": "The offer to retract."
+							}
+						},
+						"required": ["offer_id"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {"ok": {"type": "boolean", "const": true}},
+						"required": ["ok"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Retract an offer. Grantor-only, pre-decision."
+				},
+				{
+					"name": "permit_offer_list",
+					"auth": {"type": "authenticated"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"account_id": {
+								"description": "Admin-only — list offers for another account. Defaults to the caller.",
+								"anyOf": [
+									{
+										"type": "string",
+										"format": "uuid",
+										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+									},
+									{"type": "null"}
+								]
+							}
+						},
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"offers": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"id": {
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+											"description": "Offer id."
+										},
+										"from_actor_id": {
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+											"description": "Actor that issued the offer."
+										},
+										"to_account_id": {
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+											"description": "Account the offer is directed to."
+										},
+										"role": {
+											"type": "string",
+											"pattern": "^[a-z][a-z_]*[a-z]$|^[a-z]$",
+											"description": "Role being offered."
+										},
+										"scope_id": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											],
+											"description": "Scope the offered permit applies to (e.g. a classroom id). `null` for global permits."
+										},
+										"message": {
+											"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}],
+											"description": "Optional free-form note from the grantor."
+										},
+										"created_at": {
+											"type": "string",
+											"description": "ISO timestamp when the offer was created."
+										},
+										"expires_at": {
+											"type": "string",
+											"description": "ISO timestamp after which the offer is no longer valid."
+										},
+										"accepted_at": {
+											"anyOf": [{"type": "string"}, {"type": "null"}],
+											"description": "ISO timestamp when the offer was accepted."
+										},
+										"declined_at": {
+											"anyOf": [{"type": "string"}, {"type": "null"}],
+											"description": "ISO timestamp when the offer was declined."
+										},
+										"decline_reason": {
+											"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}],
+											"description": "Optional reason given on decline."
+										},
+										"retracted_at": {
+											"anyOf": [{"type": "string"}, {"type": "null"}],
+											"description": "ISO timestamp when the grantor retracted the offer."
+										},
+										"superseded_at": {
+											"anyOf": [{"type": "string"}, {"type": "null"}],
+											"description": "ISO timestamp when this offer was obsoleted by a sibling accept or by revoke of the resulting permit."
+										},
+										"resulting_permit_id": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											],
+											"description": "Permit produced by accepting this offer. `null` until/unless accepted."
+										}
+									},
+									"required": [
+										"id",
+										"from_actor_id",
+										"to_account_id",
+										"role",
+										"scope_id",
+										"message",
+										"created_at",
+										"expires_at",
+										"accepted_at",
+										"declined_at",
+										"decline_reason",
+										"retracted_at",
+										"superseded_at",
+										"resulting_permit_id"
+									],
+									"additionalProperties": false,
+									"description": "A permit offer — a pending grant awaiting recipient consent."
+								}
+							}
+						},
+						"required": ["offers"],
+						"additionalProperties": false
+					},
+					"side_effects": false,
+					"description": "List pending, non-expired offers for the caller. Admins may pass `account_id` to inspect another account."
+				},
+				{
+					"name": "permit_offer_history",
+					"auth": {"type": "authenticated"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"account_id": {
+								"description": "Admin-only — history for another account. Defaults to the caller.",
+								"anyOf": [
+									{
+										"type": "string",
+										"format": "uuid",
+										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+									},
+									{"type": "null"}
+								]
+							},
+							"limit": {
+								"description": "Max rows to return (default 100).",
+								"anyOf": [{"type": "integer", "minimum": 1, "maximum": 500}, {"type": "null"}]
+							},
+							"offset": {
+								"description": "Pagination offset (default 0).",
+								"anyOf": [
+									{"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+									{"type": "null"}
+								]
+							}
+						},
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"offers": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"id": {
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+											"description": "Offer id."
+										},
+										"from_actor_id": {
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+											"description": "Actor that issued the offer."
+										},
+										"to_account_id": {
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+											"description": "Account the offer is directed to."
+										},
+										"role": {
+											"type": "string",
+											"pattern": "^[a-z][a-z_]*[a-z]$|^[a-z]$",
+											"description": "Role being offered."
+										},
+										"scope_id": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											],
+											"description": "Scope the offered permit applies to (e.g. a classroom id). `null` for global permits."
+										},
+										"message": {
+											"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}],
+											"description": "Optional free-form note from the grantor."
+										},
+										"created_at": {
+											"type": "string",
+											"description": "ISO timestamp when the offer was created."
+										},
+										"expires_at": {
+											"type": "string",
+											"description": "ISO timestamp after which the offer is no longer valid."
+										},
+										"accepted_at": {
+											"anyOf": [{"type": "string"}, {"type": "null"}],
+											"description": "ISO timestamp when the offer was accepted."
+										},
+										"declined_at": {
+											"anyOf": [{"type": "string"}, {"type": "null"}],
+											"description": "ISO timestamp when the offer was declined."
+										},
+										"decline_reason": {
+											"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}],
+											"description": "Optional reason given on decline."
+										},
+										"retracted_at": {
+											"anyOf": [{"type": "string"}, {"type": "null"}],
+											"description": "ISO timestamp when the grantor retracted the offer."
+										},
+										"superseded_at": {
+											"anyOf": [{"type": "string"}, {"type": "null"}],
+											"description": "ISO timestamp when this offer was obsoleted by a sibling accept or by revoke of the resulting permit."
+										},
+										"resulting_permit_id": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											],
+											"description": "Permit produced by accepting this offer. `null` until/unless accepted."
+										}
+									},
+									"required": [
+										"id",
+										"from_actor_id",
+										"to_account_id",
+										"role",
+										"scope_id",
+										"message",
+										"created_at",
+										"expires_at",
+										"accepted_at",
+										"declined_at",
+										"decline_reason",
+										"retracted_at",
+										"superseded_at",
+										"resulting_permit_id"
+									],
+									"additionalProperties": false,
+									"description": "A permit offer — a pending grant awaiting recipient consent."
+								}
+							}
+						},
+						"required": ["offers"],
+						"additionalProperties": false
+					},
+					"side_effects": false,
+					"description": "List every offer involving the caller (either direction), including terminal rows, newest first. Admins may pass `account_id` to inspect another account."
+				},
+				{
+					"name": "permit_revoke",
+					"auth": {"type": "role", "role": "admin"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"actor_id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+								"description": "Actor whose permit to revoke."
+							},
+							"permit_id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+								"description": "The permit to revoke."
+							},
+							"reason": {
+								"description": "Optional free-form reason; stamped on `permit.revoked_reason` and surfaced on the revokee WS notification.",
+								"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}]
+							}
+						},
+						"required": ["actor_id", "permit_id"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"ok": {"type": "boolean", "const": true},
+							"revoked": {"type": "boolean", "const": true}
+						},
+						"required": ["ok", "revoked"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Revoke an active permit on a target actor. Admin-only. Supersedes any pending offers for the same (account, role, scope). Fires permit_revoke + permit_offer_supersede notifications."
+				},
+				{
+					"name": "account_verify",
+					"auth": {"type": "authenticated"},
+					"input_schema": null,
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							},
+							"username": {
+								"type": "string",
+								"minLength": 3,
+								"maxLength": 39,
+								"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
+							},
+							"email": {
+								"anyOf": [
+									{
+										"type": "string",
+										"format": "email",
+										"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+									},
+									{"type": "null"}
+								]
+							},
+							"email_verified": {"type": "boolean"},
+							"created_at": {"type": "string"}
+						},
+						"required": ["id", "username", "email", "email_verified", "created_at"],
+						"additionalProperties": false
+					},
+					"side_effects": false,
+					"description": "Verify the current session and echo the caller account."
+				},
+				{
+					"name": "account_session_list",
+					"auth": {"type": "authenticated"},
+					"input_schema": null,
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"sessions": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"id": {"type": "string"},
+										"account_id": {
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+										},
+										"created_at": {"type": "string"},
+										"expires_at": {"type": "string"},
+										"last_seen_at": {"type": "string"}
+									},
+									"required": ["id", "account_id", "created_at", "expires_at", "last_seen_at"],
+									"additionalProperties": false
+								}
+							}
+						},
+						"required": ["sessions"],
+						"additionalProperties": false
+					},
+					"side_effects": false,
+					"description": "List auth sessions for the current account."
+				},
+				{
+					"name": "account_session_revoke",
+					"auth": {"type": "authenticated"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"session_id": {
+								"type": "string",
+								"pattern": "^[0-9a-f]{64}$",
+								"description": "Session id (blake3 hash) to revoke."
+							}
+						},
+						"required": ["session_id"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"ok": {"type": "boolean", "const": true},
+							"revoked": {"type": "boolean"}
+						},
+						"required": ["ok", "revoked"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Revoke a single auth session for the current account (IDOR-guarded)."
+				},
+				{
+					"name": "account_session_revoke_all",
+					"auth": {"type": "authenticated"},
+					"input_schema": null,
+					"output_schema": {
+						"type": "object",
+						"properties": {"ok": {"type": "boolean", "const": true}, "count": {"type": "number"}},
+						"required": ["ok", "count"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Revoke every auth session for the current account."
+				},
+				{
+					"name": "account_token_create",
+					"auth": {"type": "authenticated"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"description": "Human-friendly label; shown in the token list.",
+								"type": "string"
+							}
+						},
+						"required": ["name"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"ok": {"type": "boolean", "const": true},
+							"token": {"type": "string", "description": "Raw token — shown once, store securely."},
+							"id": {"type": "string", "pattern": "^tok_[A-Za-z0-9_-]{12}$"},
+							"name": {"type": "string"}
+						},
+						"required": ["ok", "token", "id", "name"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Create an API token for the current account. Raw token is returned once."
+				},
+				{
+					"name": "account_token_list",
+					"auth": {"type": "authenticated"},
+					"input_schema": null,
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"tokens": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"id": {"type": "string"},
+										"account_id": {
+											"type": "string",
+											"format": "uuid",
+											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+										},
+										"name": {"type": "string"},
+										"expires_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+										"last_used_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+										"last_used_ip": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+										"created_at": {"type": "string"}
+									},
+									"required": [
+										"id",
+										"account_id",
+										"name",
+										"expires_at",
+										"last_used_at",
+										"last_used_ip",
+										"created_at"
+									],
+									"additionalProperties": false
+								}
+							}
+						},
+						"required": ["tokens"],
+						"additionalProperties": false
+					},
+					"side_effects": false,
+					"description": "List API tokens for the current account. Hashes are never returned."
+				},
+				{
+					"name": "account_token_revoke",
+					"auth": {"type": "authenticated"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"token_id": {
+								"type": "string",
+								"pattern": "^tok_[A-Za-z0-9_-]{12}$",
+								"description": "Public API token id (e.g. `tok_<12 chars>`)."
+							}
+						},
+						"required": ["token_id"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"ok": {"type": "boolean", "const": true},
+							"revoked": {"type": "boolean"}
+						},
+						"required": ["ok", "revoked"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Revoke an API token for the current account (IDOR-guarded)."
 				}
 			]
 		}

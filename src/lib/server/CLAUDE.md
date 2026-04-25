@@ -22,7 +22,7 @@ The server provides:
 - AI provider integration (Ollama, Claude, ChatGPT, Gemini)
 - Secure filesystem operations via `ScopedFs`
 - File watching and change notifications
-- Admin routes (accounts, permits, audit log, sessions, app settings)
+- Admin surface (RPC): accounts, permits, audit log reads, sessions, invites, app settings — bundled via `create_standard_rpc_actions` on the same `/api/rpc` endpoint as zzz domain actions
 - Origin-based request verification
 
 ## Files
@@ -122,12 +122,20 @@ Routes are defined as data via fuz_app's route spec system:
 ```
 create_zzz_app_route_specs(ctx, zzz_deps)
     ├── Health check route
-    ├── Account routes (login, logout, status, sessions, tokens)
-    ├── RPC endpoint (GET + POST /api/rpc) — 23 action methods
-    └── Admin routes (accounts, audit log, app settings)
+    ├── Account routes (login, logout, status, signup, bootstrap)
+    └── Audit log SSE stream (admin)
+
+build_rpc_endpoint_specs(ctx, zzz_deps) → /api/rpc
+    ├── zzz domain actions (zzz_action_handlers)
+    └── create_standard_rpc_actions(ctx.deps, {app_settings})
+        — admin (account list, sessions, audit log, invites, app settings)
+        — permit-offer lifecycle (create / accept / decline / retract / list / history)
+        — account self-service (verify, sessions, tokens)
 ```
 
-The RPC endpoint (`create_rpc_endpoint`) handles all zzz domain actions:
+The single RPC endpoint (auto-mounted by `create_app_server` from
+`rpc_endpoints`) handles both zzz domain actions and the standard fuz_app
+admin/permit-offer/account surface:
 
 - Envelope parsing → method lookup → per-action auth → input validation → handler
 
