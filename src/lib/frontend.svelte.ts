@@ -212,11 +212,17 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 		this.peer = new ActionPeer({environment: this});
 
-		this.api = create_rpc_client({
+		this.api = create_rpc_client<ActionsApi>({
 			peer: this.peer,
 			environment: this,
-			actions: this.actions as any, // duck-typed — Actions has the right shape
-		}) as unknown as ActionsApi;
+			on_action_event: (event) => {
+				const action = this.actions.add_from_json({
+					method: event.spec.method,
+					action_event_data: event.toJSON(),
+				});
+				action.listen_to_action_event(event);
+			},
+		});
 
 		// Set up transports, adding websocket first so it'll be the default
 		if (options.socket_url) {
@@ -230,8 +236,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 				new FrontendHttpTransport(
 					options.http_rpc_url,
 					options.http_headers,
-					(method) =>
-						this.action_registry.spec_by_method.get(method as ActionMethod)?.side_effects ?? true,
+					(method) => this.action_registry.spec_by_method.get(method)?.side_effects ?? true,
 				),
 			);
 		}
@@ -327,7 +332,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	}
 
 	lookup_action_spec(method: string): ActionSpecUnion | undefined {
-		return this.action_registry.spec_by_method.get(method as ActionMethod);
+		return this.action_registry.spec_by_method.get(method);
 	}
 
 	lookup_action_input_schema<TMethod extends ActionMethod>(
