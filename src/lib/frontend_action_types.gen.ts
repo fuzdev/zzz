@@ -12,6 +12,11 @@ import {all_action_specs} from './action_specs.js';
  * Generates frontend action handler types based on spec.initiator.
  * Uses `TypedActionEvent` to carry typed input/output from the generated `ActionEventDatas` map.
  *
+ * `include_protocol_actions: true` keeps `heartbeat` / `cancel` slots in the
+ * `FrontendActionHandlers` shape for symmetry with the open `ActionMethod`
+ * union — runtime handlers for protocol actions are dispatcher-owned and
+ * remain undefined.
+ *
  * @nodocs
  */
 export const gen: Gen = ({origin_path}) => {
@@ -21,7 +26,9 @@ export const gen: Gen = ({origin_path}) => {
 		imports,
 		blocks: [
 			generate_typed_action_event_alias(imports),
-			generate_frontend_action_handlers(all_action_specs, imports),
+			generate_frontend_action_handlers(all_action_specs, imports, {
+				include_protocol_actions: true,
+			}),
 		],
 	});
 };

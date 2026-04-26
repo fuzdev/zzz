@@ -388,10 +388,11 @@ export const my_action_spec = {
 
 Add it to the `all_action_specs` array at the bottom of the file.
 
-**2. Run `gro gen`** — regenerates 3 files:
-- `action_collections.ts` — `ActionInputs`/`ActionOutputs` type maps
-- `action_metatypes.ts` — `ActionMethod` union, `ActionsApi` interface
-- `frontend_action_types.ts` — `FrontendActionHandlers` type
+**2. Run `gro gen`** — regenerates 4 files:
+- `action_collections.ts` — `ActionInputs`/`ActionOutputs` type maps + `ActionEventDatas`
+- `action_metatypes.ts` — `ActionMethod` open union, narrow handler enums (`BackendRequestResponseMethod`, `BroadcastActionMethod`, …), `FrontendActionsApi` interface
+- `frontend_action_types.ts` — `TypedActionEvent` + `FrontendActionHandlers`
+- `server/backend_action_types.ts` — `BackendActionsApi` + `broadcast_action_specs` + `BackendActionHandlers` mapped type
 
 **3. Add handler** in `src/lib/server/zzz_action_handlers.ts`:
 
@@ -426,9 +427,13 @@ if (result.ok) {
 }
 ```
 
-For `remote_notification` actions, also add to `BackendActionsApi`
-in `src/lib/server/backend_actions_api.ts` — follow the `terminal_data`
-or `completion_progress` pattern.
+For `remote_notification` actions: `BackendActionsApi` is regenerated
+automatically — `gro gen` derives it from any backend-initiated
+`remote_notification` spec (excluding `streams` targets). To broadcast,
+call `backend.api.my_notification(input)`. The factory wiring lives in
+`src/lib/server/backend_actions_api.ts` (hand-written, thin around
+`create_broadcast_api`); the typed surface lives in
+`src/lib/server/backend_action_types.ts` (generated).
 
 ### Zod Schema Conventions
 

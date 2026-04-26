@@ -14,6 +14,8 @@ import type {
  * These represent the complete action spec definitions.
  */
 export const ActionSpecs = {
+	heartbeat: specs.heartbeat_action_spec,
+	cancel: specs.cancel_action_spec,
 	ping: specs.ping_action_spec,
 	session_load: specs.session_load_action_spec,
 	filer_change: specs.filer_change_action_spec,
@@ -48,6 +50,8 @@ export const ActionSpecs = {
 	_test_notification: specs._test_notification_action_spec,
 } as const;
 export interface ActionSpecs {
+	heartbeat: typeof specs.heartbeat_action_spec;
+	cancel: typeof specs.cancel_action_spec;
 	ping: typeof specs.ping_action_spec;
 	session_load: typeof specs.session_load_action_spec;
 	filer_change: typeof specs.filer_change_action_spec;
@@ -90,6 +94,8 @@ export const action_specs: Array<ActionSpecUnion> = Object.values(ActionSpecs);
  * e.g. JSON-RPC request/notification params and local call arguments.
  */
 export const ActionInputs = {
+	heartbeat: specs.heartbeat_action_spec.input,
+	cancel: specs.cancel_action_spec.input,
 	ping: specs.ping_action_spec.input,
 	session_load: specs.session_load_action_spec.input,
 	filer_change: specs.filer_change_action_spec.input,
@@ -124,6 +130,8 @@ export const ActionInputs = {
 	_test_notification: specs._test_notification_action_spec.input,
 } as const;
 export interface ActionInputs {
+	heartbeat: z.infer<typeof specs.heartbeat_action_spec.input>;
+	cancel: z.infer<typeof specs.cancel_action_spec.input>;
 	ping: z.infer<typeof specs.ping_action_spec.input>;
 	session_load: z.infer<typeof specs.session_load_action_spec.input>;
 	filer_change: z.infer<typeof specs.filer_change_action_spec.input>;
@@ -164,6 +172,8 @@ export interface ActionInputs {
  * e.g. JSON-RPC response results and local call return values.
  */
 export const ActionOutputs = {
+	heartbeat: specs.heartbeat_action_spec.output,
+	cancel: specs.cancel_action_spec.output,
 	ping: specs.ping_action_spec.output,
 	session_load: specs.session_load_action_spec.output,
 	filer_change: specs.filer_change_action_spec.output,
@@ -198,6 +208,8 @@ export const ActionOutputs = {
 	_test_notification: specs._test_notification_action_spec.output,
 } as const;
 export interface ActionOutputs {
+	heartbeat: z.infer<typeof specs.heartbeat_action_spec.output>;
+	cancel: z.infer<typeof specs.cancel_action_spec.output>;
 	ping: z.infer<typeof specs.ping_action_spec.output>;
 	session_load: z.infer<typeof specs.session_load_action_spec.output>;
 	filer_change: z.infer<typeof specs.filer_change_action_spec.output>;
@@ -238,6 +250,12 @@ export interface ActionOutputs {
  * for each action's event data, properly typed with inputs and outputs.
  */
 export interface ActionEventDatas {
+	heartbeat: ActionEventRequestResponseData<
+		'heartbeat',
+		ActionInputs['heartbeat'],
+		ActionOutputs['heartbeat']
+	>;
+	cancel: ActionEventRemoteNotificationData<'cancel', ActionInputs['cancel']>;
 	ping: ActionEventRequestResponseData<'ping', ActionInputs['ping'], ActionOutputs['ping']>;
 	session_load: ActionEventRequestResponseData<
 		'session_load',

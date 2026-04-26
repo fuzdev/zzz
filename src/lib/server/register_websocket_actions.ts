@@ -21,8 +21,8 @@ import type {
 	WsActionHandler,
 } from '@fuzdev/fuz_app/actions/action_types.js';
 import {BackendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws_backend.js';
-import {heartbeat_action} from '@fuzdev/fuz_app/actions/heartbeat.js';
-import {cancel_action} from '@fuzdev/fuz_app/actions/cancel.js';
+import {protocol_actions} from '@fuzdev/fuz_app/actions/protocol.js';
+import {is_protocol_action_method} from '@fuzdev/fuz_app/actions/action_codegen.js';
 
 import {all_action_specs} from '../action_specs.js';
 import type {Backend} from './backend.js';
@@ -57,13 +57,15 @@ export const register_websocket_actions = ({
 }: RegisterWebsocketActionsOptions): void => {
 	backend.peer.transports.register_transport(transport);
 
-	// Build the action array: shared heartbeat + cancel first, then every zzz
-	// spec paired with its handler (remote-notification specs have no handler).
+	// Build the action array: fuz_app's protocol_actions (heartbeat + cancel
+	// pre-paired with their handlers) first, then every zzz spec paired with
+	// its handler — protocol specs are skipped during iteration since they're
+	// already registered above.
 	const actions: Array<Action<ZzzWsContext>> = [
-		heartbeat_action as Action<ZzzWsContext>,
-		cancel_action as Action<ZzzWsContext>,
+		...(protocol_actions as ReadonlyArray<Action<ZzzWsContext>>),
 	];
 	for (const spec of all_action_specs) {
+		if (is_protocol_action_method(spec.method)) continue;
 		const handler = (zzz_action_handlers as Record<string, unknown>)[spec.method];
 		if (handler) {
 			actions.push({

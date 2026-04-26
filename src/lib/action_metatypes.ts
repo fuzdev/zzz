@@ -10,6 +10,8 @@ import type {ActionInputs, ActionOutputs} from './action_collections.js';
  * All action method names. Request/response actions have two types per method.
  */
 export const ActionMethod = z.enum([
+	'heartbeat',
+	'cancel',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -49,6 +51,7 @@ export type ActionMethod = z.infer<typeof ActionMethod>;
  * Names of all request_response actions.
  */
 export const RequestResponseActionMethod = z.enum([
+	'heartbeat',
 	'ping',
 	'session_load',
 	'diskfile_update',
@@ -80,6 +83,7 @@ export type RequestResponseActionMethod = z.infer<typeof RequestResponseActionMe
  * Names of all remote_notification actions.
  */
 export const RemoteNotificationActionMethod = z.enum([
+	'cancel',
 	'filer_change',
 	'completion_progress',
 	'ollama_progress',
@@ -100,6 +104,8 @@ export type LocalCallActionMethod = z.infer<typeof LocalCallActionMethod>;
  * Names of all actions in the typed FrontendActionsApi surface — every spec the frontend may encounter (call, receive, or execute locally).
  */
 export const FrontendActionMethod = z.enum([
+	'heartbeat',
+	'cancel',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -139,6 +145,8 @@ export type FrontendActionMethod = z.infer<typeof FrontendActionMethod>;
  * Names of all actions the backend may encounter — request_response and remote_notification (local_call is frontend-only).
  */
 export const BackendActionMethod = z.enum([
+	'heartbeat',
+	'cancel',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -230,6 +238,14 @@ export type BroadcastActionMethod = z.infer<typeof BroadcastActionMethod>;
  * directly.
  */
 export interface FrontendActionsApi {
+	heartbeat: (
+		input: ActionInputs['heartbeat'],
+		options?: RpcClientCallOptions,
+	) => Promise<Result<{value: ActionOutputs['heartbeat']}, {error: JsonrpcErrorObject}>>;
+	cancel: (
+		input: ActionInputs['cancel'],
+		options?: RpcClientCallOptions,
+	) => Promise<Result<{value: ActionOutputs['cancel']}, {error: JsonrpcErrorObject}>>;
 	ping: (
 		input?: void,
 		options?: RpcClientCallOptions,

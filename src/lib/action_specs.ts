@@ -8,10 +8,15 @@ import type {
 } from '@fuzdev/fuz_app/actions/action_spec.js';
 import {heartbeat_action_spec} from '@fuzdev/fuz_app/actions/heartbeat.js';
 import {cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.js';
+import {protocol_action_specs} from '@fuzdev/fuz_app/actions/protocol.js';
 import {Uuid} from '@fuzdev/fuz_util/id.js';
 
-// Re-export so the codegen (which uses `import * as specs from './action_specs'`)
-// sees the shared specs without duplicating the schemas locally.
+// Re-export so codegen (which builds `import * as specs from './action_specs'`)
+// resolves `specs.heartbeat_action_spec` / `specs.cancel_action_spec` via the
+// namespace lookup. The runtime array `all_action_specs` references each spec
+// once via `protocol_action_specs`; the re-exports are name aliases only —
+// nothing is duplicated at runtime. A `create_protocol_aware_qualifier`-style
+// helper in fuz_app could eliminate this enumeration; tracked as a follow-up.
 export {heartbeat_action_spec, cancel_action_spec};
 
 import {
@@ -734,14 +739,20 @@ export const _test_notification_action_spec = {
 } satisfies RemoteNotificationActionSpec;
 
 /**
- * The canonical zzz-owned action spec list. Composable specs (`heartbeat`,
- * `cancel`) are NOT included here — they ship from fuz_app and are spread
- * in at registration time (`register_websocket_actions.ts`,
- * `frontend.svelte.ts`'s `ActionRegistry` construction) and filtered out of
- * codegen by default. Keeping this list zzz-only matches the byte content
- * of the generated `action_specs` array in `action_collections.ts`.
+ * Canonical action spec list — fuz_app's protocol actions (`heartbeat`,
+ * `cancel`) plus zzz-owned specs. Single source of truth for codegen and
+ * runtime registries (`Frontend.action_registry`, `Backend.action_registry`).
+ *
+ * Codegen helpers default-filter protocol actions out of typed surfaces
+ * (`FrontendActionsApi`, `BackendActionHandlers`, `ActionMethod`, etc.) since
+ * they're dispatcher-owned. Server WS registration pairs protocol specs with
+ * fuz_app-shipped handlers via `protocol_actions`; iteration over
+ * `all_action_specs` skips them via `is_protocol_action_method` to avoid
+ * double-registration. Adding a future protocol action requires no consumer
+ * edit — fuz_app's `protocol_action_specs` is the upstream canonical bundle.
  */
 export const all_action_specs: Array<ActionSpecUnion> = [
+	...protocol_action_specs,
 	ping_action_spec,
 	session_load_action_spec,
 	filer_change_action_spec,
