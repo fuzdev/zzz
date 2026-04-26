@@ -4,27 +4,28 @@ import type {WatcherChange} from '@fuzdev/gro/watch_dir.js';
 import {basename, resolve} from 'node:path';
 import * as fs from 'node:fs/promises';
 import {Logger} from '@fuzdev/fuz_util/log.js';
+import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
+import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
+import {jsonrpc_errors} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
+import type {
+	ActionEventEnvironment,
+	ActionExecutor,
+} from '@fuzdev/fuz_app/actions/action_event_types.js';
+import {ActionPeer} from '@fuzdev/fuz_app/actions/action_peer.js';
+
 import type {BackendProviderOllama} from './backend_provider_ollama.js';
 import type {BackendProviderGemini} from './backend_provider_gemini.js';
 import type {BackendProviderChatgpt} from './backend_provider_chatgpt.js';
 import type {BackendProviderClaude} from './backend_provider_claude.js';
-import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
-import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
-import {jsonrpc_errors} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
-
 import type {ZzzOptions} from '../config_helpers.js';
 import {DiskfileDirectoryPath, type SerializableDisknode} from '../diskfile_types.js';
 import {to_serializable_disknode} from '../diskfile_helpers.js';
 import type {WorkspaceInfoJson} from '../workspace.svelte.js';
 import {ScopedFs} from './scoped_fs.js';
-import type {
-	ActionEventEnvironment,
-	ActionExecutor,
-} from '@fuzdev/fuz_app/actions/action_event_types.js';
 import type {ActionMethod} from '../action_metatypes.js';
-import {create_backend_actions_api, type BackendActionsApi} from './backend_actions_api.js';
+import {create_backend_actions_api} from './backend_actions_api.js';
+import type {BackendActionsApi} from './backend_action_types.js';
 import {PtyManager} from './backend_pty_manager.js';
-import {ActionPeer} from '@fuzdev/fuz_app/actions/action_peer.js';
 import type {BackendProvider} from './backend_provider.js';
 
 // TODO refactor for extensibility

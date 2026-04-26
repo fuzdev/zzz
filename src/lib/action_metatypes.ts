@@ -10,8 +10,6 @@ import type {ActionInputs, ActionOutputs} from './action_collections.js';
  * All action method names. Request/response actions have two types per method.
  */
 export const ActionMethod = z.enum([
-	'heartbeat',
-	'cancel',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -51,7 +49,6 @@ export type ActionMethod = z.infer<typeof ActionMethod>;
  * Names of all request_response actions.
  */
 export const RequestResponseActionMethod = z.enum([
-	'heartbeat',
 	'ping',
 	'session_load',
 	'diskfile_update',
@@ -83,7 +80,6 @@ export type RequestResponseActionMethod = z.infer<typeof RequestResponseActionMe
  * Names of all remote_notification actions.
  */
 export const RemoteNotificationActionMethod = z.enum([
-	'cancel',
 	'filer_change',
 	'completion_progress',
 	'ollama_progress',
@@ -101,11 +97,9 @@ export const LocalCallActionMethod = z.enum(['toggle_main_menu']);
 export type LocalCallActionMethod = z.infer<typeof LocalCallActionMethod>;
 
 /**
- * Names of all actions that may be handled on the client.
+ * Names of all actions in the typed FrontendActionsApi surface — every spec the frontend may encounter (call, receive, or execute locally).
  */
 export const FrontendActionMethod = z.enum([
-	'heartbeat',
-	'cancel',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -142,11 +136,9 @@ export const FrontendActionMethod = z.enum([
 export type FrontendActionMethod = z.infer<typeof FrontendActionMethod>;
 
 /**
- * Names of all actions that may be handled on the server.
+ * Names of all actions the backend may encounter — request_response and remote_notification (local_call is frontend-only).
  */
 export const BackendActionMethod = z.enum([
-	'heartbeat',
-	'cancel',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -182,21 +174,62 @@ export const BackendActionMethod = z.enum([
 export type BackendActionMethod = z.infer<typeof BackendActionMethod>;
 
 /**
- * Interface for action dispatch functions.
- * Async methods (request_response, remote_notification, async local_call)
- * return `Promise<Result<...>>` and accept an optional `RpcClientCallOptions`
- * second arg that threads `signal`, `transport_name`, and `queue` through to
- * the peer. Sync local_call methods return values directly.
+ * Names of request_response actions the frontend handles (initiator excludes frontend).
  */
-export interface ActionsApi {
-	heartbeat: (
-		input: ActionInputs['heartbeat'],
-		options?: RpcClientCallOptions,
-	) => Promise<Result<{value: ActionOutputs['heartbeat']}, {error: JsonrpcErrorObject}>>;
-	cancel: (
-		input: ActionInputs['cancel'],
-		options?: RpcClientCallOptions,
-	) => Promise<Result<{value: ActionOutputs['cancel']}, {error: JsonrpcErrorObject}>>;
+export const FrontendRequestResponseMethod = z.enum(['ping']);
+export type FrontendRequestResponseMethod = z.infer<typeof FrontendRequestResponseMethod>;
+
+/**
+ * Names of request_response actions the backend handles (initiator excludes backend).
+ */
+export const BackendRequestResponseMethod = z.enum([
+	'ping',
+	'session_load',
+	'diskfile_update',
+	'diskfile_delete',
+	'directory_create',
+	'completion_create',
+	'ollama_list',
+	'ollama_ps',
+	'ollama_show',
+	'ollama_pull',
+	'ollama_delete',
+	'ollama_copy',
+	'ollama_create',
+	'ollama_unload',
+	'provider_load_status',
+	'provider_update_api_key',
+	'terminal_create',
+	'terminal_data_send',
+	'terminal_resize',
+	'terminal_close',
+	'workspace_open',
+	'workspace_close',
+	'workspace_list',
+	'_test_emit_notifications',
+]);
+export type BackendRequestResponseMethod = z.infer<typeof BackendRequestResponseMethod>;
+
+/**
+ * Names of remote_notification actions exposed by the broadcast API (backend-initiated, excluding request-scoped progress notifications named by another action's `streams`).
+ */
+export const BroadcastActionMethod = z.enum([
+	'filer_change',
+	'terminal_data',
+	'terminal_exited',
+	'workspace_changed',
+]);
+export type BroadcastActionMethod = z.infer<typeof BroadcastActionMethod>;
+
+/**
+ * Typed dispatch surface for the frontend's RPC client. Symmetric counterpart
+ * of `BackendActionsApi`. Async methods (request_response, remote_notification,
+ * async local_call) return `Promise<Result<...>>` and accept an optional
+ * `RpcClientCallOptions` second arg that threads `signal`, `transport_name`,
+ * and `queue` through to the peer. Sync local_call methods return values
+ * directly.
+ */
+export interface FrontendActionsApi {
 	ping: (
 		input?: void,
 		options?: RpcClientCallOptions,

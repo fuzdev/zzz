@@ -64,7 +64,6 @@ export const register_websocket_actions = ({
 		cancel_action as Action<ZzzWsContext>,
 	];
 	for (const spec of all_action_specs) {
-		if (spec.method === 'heartbeat' || spec.method === 'cancel') continue;
 		const handler = (zzz_action_handlers as Record<string, unknown>)[spec.method];
 		if (handler) {
 			actions.push({

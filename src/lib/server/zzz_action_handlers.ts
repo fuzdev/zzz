@@ -20,8 +20,8 @@ import {to_serializable_disknode} from '../diskfile_helpers.js';
 import {SerializableDisknode} from '../diskfile_types.js';
 import {jsonrpc_errors} from '../zzz_jsonrpc_errors.js';
 import type {OllamaListResponse, OllamaPsResponse, OllamaShowResponse} from '../ollama_helpers.js';
-import type {ActionInputs, ActionOutputs} from '../action_collections.js';
-import type {BackendActionMethod} from '../action_metatypes.js';
+import type {ActionOutputs} from '../action_collections.js';
+import type {BackendActionHandlers} from './backend_action_types.js';
 
 /**
  * Per-request context passed to every handler.
@@ -40,38 +40,13 @@ export interface ZzzHandlerContext {
 	signal: AbortSignal;
 }
 
-/** Methods handled by zzz_action_handlers (request_response only, excludes remote_notifications and shared fuz_app actions). */
-export type ZzzHandledMethod = Exclude<
-	BackendActionMethod,
-	// remote_notifications have no request handler
-	| 'filer_change'
-	| 'completion_progress'
-	| 'ollama_progress'
-	| 'terminal_data'
-	| 'terminal_exited'
-	| 'workspace_changed'
-	| '_test_notification'
-	// shared fuz_app actions — handlers ship with the specs via
-	// `heartbeat_action` / `cancel_action` (cancel is dispatcher-owned).
-	| 'heartbeat'
-	| 'cancel'
->;
-
-/** Typed handler map — each handler has per-method input/output types. */
-export type ZzzActionHandlers = {
-	[K in ZzzHandledMethod]: (
-		input: ActionInputs[K],
-		ctx: ZzzHandlerContext,
-	) => ActionOutputs[K] | Promise<ActionOutputs[K]>;
-};
-
 /**
  * All 23 request_response handlers as pure functions.
  *
  * Logic sourced from the RPC versions (cleaner than the old WS handlers —
  * no Deno-only bug in provider_update_api_key, no console.log noise).
  */
-export const zzz_action_handlers: ZzzActionHandlers = {
+export const zzz_action_handlers: BackendActionHandlers = {
 	ping: (_input, ctx) => ({
 		ping_id: ctx.request_id!, // request_response actions always have an id
 	}),

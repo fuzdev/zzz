@@ -43,8 +43,10 @@ import {
 import {FrontendHttpTransport} from '@fuzdev/fuz_app/actions/transports_http.js';
 import {FrontendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws.js';
 import {create_rpc_client} from '@fuzdev/fuz_app/actions/rpc_client.js';
-import type {ActionMethod, ActionsApi} from './action_metatypes.js';
+import type {ActionMethod, FrontendActionsApi} from './action_metatypes.js';
 import type {FrontendActionHandlers} from './frontend_action_types.js';
+import {heartbeat_action_spec} from '@fuzdev/fuz_app/actions/heartbeat.js';
+import {cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.js';
 import {ActionInputs, ActionOutputs, action_specs} from './action_collections.js';
 import {create_frontend_action_handlers} from './frontend_action_handlers.js';
 
@@ -88,7 +90,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 	readonly action_registry: ActionRegistry;
 	readonly action_handlers: FrontendActionHandlers;
-	readonly api: ActionsApi;
+	readonly api: FrontendActionsApi;
 	readonly peer: ActionPeer;
 
 	// Cells - these are managed objects/collections that contain the app state
@@ -182,7 +184,12 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 		this.cell_registry = new CellRegistry(this);
 
-		this.action_registry = new ActionRegistry(options.action_specs || action_specs);
+		// Composable specs (`heartbeat`, `cancel`) ship from fuz_app and are filtered out
+		// of the generated `action_specs` array by default — spread them in so the registry
+		// matches the union of dispatchable methods, mirroring `register_websocket_actions.ts`.
+		this.action_registry = new ActionRegistry(
+			options.action_specs ?? [heartbeat_action_spec, cancel_action_spec, ...action_specs],
+		);
 		this.action_handlers = options.action_handlers || create_frontend_action_handlers(this);
 
 		// Register cell classes if provided, otherwise use the default
@@ -212,7 +219,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 		this.peer = new ActionPeer({environment: this});
 
-		this.api = create_rpc_client<ActionsApi>({
+		this.api = create_rpc_client<FrontendActionsApi>({
 			peer: this.peer,
 			environment: this,
 			on_action_event: (event) => {

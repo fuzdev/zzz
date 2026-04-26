@@ -733,9 +733,15 @@ export const _test_notification_action_spec = {
 		'Test-only. Progress notification emitted by _test_emit_notifications; carries the sequence index.',
 } satisfies RemoteNotificationActionSpec;
 
+/**
+ * The canonical zzz-owned action spec list. Composable specs (`heartbeat`,
+ * `cancel`) are NOT included here — they ship from fuz_app and are spread
+ * in at registration time (`register_websocket_actions.ts`,
+ * `frontend.svelte.ts`'s `ActionRegistry` construction) and filtered out of
+ * codegen by default. Keeping this list zzz-only matches the byte content
+ * of the generated `action_specs` array in `action_collections.ts`.
+ */
 export const all_action_specs: Array<ActionSpecUnion> = [
-	heartbeat_action_spec,
-	cancel_action_spec,
 	ping_action_spec,
 	session_load_action_spec,
 	filer_change_action_spec,

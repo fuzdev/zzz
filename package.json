@@ -38,7 +38,7 @@
   "devDependencies": {
     "@changesets/changelog-git": "^0.2.1",
     "@electric-sql/pglite": "^0.3.16",
-    "@fuzdev/fuz_app": "^0.48.0",
+    "@fuzdev/fuz_app": "^0.49.0",
     "@fuzdev/fuz_code": "^0.45.1",
     "@fuzdev/fuz_css": "^0.59.0",
     "@fuzdev/fuz_ui": "^0.191.4",
@@ -55,7 +55,7 @@
     "@types/node": "^24.10.1",
     "@webref/css": "^8.2.0",
     "eslint": "^9.39.1",
-    "eslint-plugin-svelte": "^3.13.1",
+    "eslint-plugin-svelte": "^3.17.1",
     "jsdom": "^27.2.0",
     "magic-string": "^0.30.21",
     "ollama": "^0.6.3",

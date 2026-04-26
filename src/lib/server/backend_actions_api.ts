@@ -2,42 +2,17 @@ import {DEV} from 'esm-env';
 import {create_broadcast_api} from '@fuzdev/fuz_app/actions/broadcast_api.js';
 
 import type {FilerChangeHandler, Backend} from './backend.js';
-import type {ActionInputs} from '../action_collections.js';
-import {
-	filer_change_action_spec,
-	terminal_data_action_spec,
-	terminal_exited_action_spec,
-	workspace_changed_action_spec,
-} from '../action_specs.js';
+import {broadcast_action_specs, type BackendActionsApi} from './backend_action_types.js';
 import {
 	map_watcher_change_to_diskfile_change,
 	to_serializable_disknode,
 } from '../diskfile_helpers.js';
 import {DiskfilePath, SerializableDisknode} from '../diskfile_types.js';
 
-/**
- * Broadcast-style notifications from the backend to all connected clients.
- * Request-scoped streaming (completion_progress, ollama_progress) goes through
- * `ctx.notify` instead — it's socket-scoped, not a broadcast.
- */
-export interface BackendActionsApi {
-	filer_change: (input: ActionInputs['filer_change']) => Promise<void>;
-	terminal_data: (input: ActionInputs['terminal_data']) => Promise<void>;
-	terminal_exited: (input: ActionInputs['terminal_exited']) => Promise<void>;
-	workspace_changed: (input: ActionInputs['workspace_changed']) => Promise<void>;
-}
-
-const BROADCAST_SPECS = [
-	filer_change_action_spec,
-	terminal_data_action_spec,
-	terminal_exited_action_spec,
-	workspace_changed_action_spec,
-];
-
 export const create_backend_actions_api = (backend: Backend): BackendActionsApi =>
 	create_broadcast_api<BackendActionsApi>({
 		peer: backend.peer,
-		specs: BROADCAST_SPECS,
+		specs: broadcast_action_specs,
 		log: backend.log,
 	});
 

@@ -11,8 +11,9 @@ import type {RpcAction, ActionHandler} from '@fuzdev/fuz_app/actions/action_rpc.
 import type {RequestResponseActionSpec} from '@fuzdev/fuz_app/actions/action_spec.js';
 
 import type {Backend} from './backend.js';
-import {zzz_action_handlers, type ZzzHandledMethod} from './zzz_action_handlers.js';
+import {zzz_action_handlers} from './zzz_action_handlers.js';
 import {all_action_specs} from '../action_specs.js';
+import type {BackendRequestResponseMethod} from '../action_metatypes.js';
 
 /** Dependencies for creating zzz RPC actions. */
 export interface ZzzRpcDeps {
@@ -34,7 +35,7 @@ export const create_zzz_rpc_actions = (deps: ZzzRpcDeps): Array<RpcAction> => {
 		.map((spec) => ({
 			spec,
 			handler: ((input, ctx) =>
-				zzz_action_handlers[spec.method as ZzzHandledMethod](input, {
+				zzz_action_handlers[spec.method as BackendRequestResponseMethod](input, {
 					backend,
 					request_id: ctx.request_id,
 					notify: ctx.notify,

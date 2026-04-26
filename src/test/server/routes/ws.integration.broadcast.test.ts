@@ -22,7 +22,7 @@ import {
 	workspace_changed_action_spec,
 } from '$lib/action_specs.js';
 import {DiskfileDirectoryPath} from '$lib/diskfile_types.js';
-import type {BackendActionsApi} from '$lib/server/backend_actions_api.js';
+import type {BackendActionsApi} from '$lib/server/backend_action_types.js';
 
 // A stub dispatch action — broadcast tests don't invoke it, but the
 // harness requires a handler per registered request/response spec. Kept
