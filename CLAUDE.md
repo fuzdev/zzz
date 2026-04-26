@@ -152,73 +152,73 @@ See [docs/architecture.md](docs/architecture.md) for detailed data flow, content
 a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 `FrontendWebsocketClient` and is not listed below):
 
-| Class            | Source file                    | Purpose                              |
-| ---------------- | ------------------------------ | ------------------------------------ |
-| `Parts`          | `parts.svelte.ts`             | Collection of all parts              |
-| `TextPart`       | `part.svelte.ts`              | Direct text content                  |
-| `DiskfilePart`   | `part.svelte.ts`              | File reference content               |
-| `Capabilities`   | `capabilities.svelte.ts`      | Feature capability tracking          |
-| `Chat`           | `chat.svelte.ts`              | Chat container with threads          |
-| `Chats`          | `chats.svelte.ts`             | Collection of chats                  |
-| `Diskfile`       | `diskfile.svelte.ts`          | Single file on disk                  |
-| `DiskfileTab`    | `diskfile_tab.svelte.ts`      | Editor tab for a file                |
-| `DiskfileTabs`   | `diskfile_tabs.svelte.ts`     | Tab manager                          |
-| `DiskfileHistory`| `diskfile_history.svelte.ts`  | File edit history                    |
-| `Diskfiles`      | `diskfiles.svelte.ts`         | Collection of disk files             |
-| `DiskfilesEditor`| `diskfiles_editor.svelte.ts`  | Multi-file editor state              |
-| `Model`          | `model.svelte.ts`             | AI model definition                  |
-| `Models`         | `models.svelte.ts`            | Model catalog with indexes           |
-| `Action`         | `action.svelte.ts`            | Single action event state            |
-| `Actions`        | `actions.svelte.ts`           | Action history                       |
-| `Prompt`         | `prompt.svelte.ts`            | Reusable prompt template             |
-| `Prompts`        | `prompts.svelte.ts`           | Collection of prompts                |
-| `Provider`       | `provider.svelte.ts`          | AI provider config                   |
-| `Providers`      | `providers.svelte.ts`         | Collection of providers              |
-| `Turn`           | `turn.svelte.ts`              | Single conversation message          |
-| `Thread`         | `thread.svelte.ts`            | Linear conversation with one model   |
-| `Threads`        | `threads.svelte.ts`           | Collection of threads                |
-| `Terminal`       | `terminal.svelte.ts`          | PTY terminal process state           |
-| `TerminalPreset` | `terminal_preset.svelte.ts`   | Saved terminal command config        |
-| `Time`           | `time.svelte.ts`              | Reactive time state                  |
-| `Ui`             | `ui.svelte.ts`                | UI state (menus, layout)             |
-| `Workspace`      | `workspace.svelte.ts`         | Open workspace directory             |
-| `Workspaces`     | `workspaces.svelte.ts`        | Collection of workspaces             |
+| Class             | Source file                  | Purpose                            |
+| ----------------- | ---------------------------- | ---------------------------------- |
+| `Parts`           | `parts.svelte.ts`            | Collection of all parts            |
+| `TextPart`        | `part.svelte.ts`             | Direct text content                |
+| `DiskfilePart`    | `part.svelte.ts`             | File reference content             |
+| `Capabilities`    | `capabilities.svelte.ts`     | Feature capability tracking        |
+| `Chat`            | `chat.svelte.ts`             | Chat container with threads        |
+| `Chats`           | `chats.svelte.ts`            | Collection of chats                |
+| `Diskfile`        | `diskfile.svelte.ts`         | Single file on disk                |
+| `DiskfileTab`     | `diskfile_tab.svelte.ts`     | Editor tab for a file              |
+| `DiskfileTabs`    | `diskfile_tabs.svelte.ts`    | Tab manager                        |
+| `DiskfileHistory` | `diskfile_history.svelte.ts` | File edit history                  |
+| `Diskfiles`       | `diskfiles.svelte.ts`        | Collection of disk files           |
+| `DiskfilesEditor` | `diskfiles_editor.svelte.ts` | Multi-file editor state            |
+| `Model`           | `model.svelte.ts`            | AI model definition                |
+| `Models`          | `models.svelte.ts`           | Model catalog with indexes         |
+| `Action`          | `action.svelte.ts`           | Single action event state          |
+| `Actions`         | `actions.svelte.ts`          | Action history                     |
+| `Prompt`          | `prompt.svelte.ts`           | Reusable prompt template           |
+| `Prompts`         | `prompts.svelte.ts`          | Collection of prompts              |
+| `Provider`        | `provider.svelte.ts`         | AI provider config                 |
+| `Providers`       | `providers.svelte.ts`        | Collection of providers            |
+| `Turn`            | `turn.svelte.ts`             | Single conversation message        |
+| `Thread`          | `thread.svelte.ts`           | Linear conversation with one model |
+| `Threads`         | `threads.svelte.ts`          | Collection of threads              |
+| `Terminal`        | `terminal.svelte.ts`         | PTY terminal process state         |
+| `TerminalPreset`  | `terminal_preset.svelte.ts`  | Saved terminal command config      |
+| `Time`            | `time.svelte.ts`             | Reactive time state                |
+| `Ui`              | `ui.svelte.ts`               | UI state (menus, layout)           |
+| `Workspace`       | `workspace.svelte.ts`        | Open workspace directory           |
+| `Workspaces`      | `workspaces.svelte.ts`       | Collection of workspaces           |
 
 ## Action Specs
 
 29 specs in `src/lib/action_specs.ts`:
 
-| Method                   | Kind                  | Initiator  | Purpose                          |
-| ------------------------ | --------------------- | ---------- | -------------------------------- |
-| `ping`                   | `request_response`    | `both`     | Health check                     |
-| `session_load`           | `request_response`    | `frontend` | Load initial session data        |
-| `filer_change`           | `remote_notification` | `backend`  | File system change notification  |
-| `diskfile_update`        | `request_response`    | `frontend` | Write file content               |
-| `diskfile_delete`        | `request_response`    | `frontend` | Delete a file                    |
-| `directory_create`       | `request_response`    | `frontend` | Create a directory               |
-| `completion_create`      | `request_response`    | `frontend` | Start AI completion              |
-| `completion_progress`    | `remote_notification` | `backend`  | Stream completion chunks         |
-| `ollama_progress`        | `remote_notification` | `backend`  | Ollama model operation progress  |
-| `toggle_main_menu`       | `local_call`          | `frontend` | Toggle main menu UI              |
-| `ollama_list`            | `request_response`    | `frontend` | List local Ollama models         |
-| `ollama_ps`              | `request_response`    | `frontend` | List running Ollama models       |
-| `ollama_show`            | `request_response`    | `frontend` | Show Ollama model details        |
-| `ollama_pull`            | `request_response`    | `frontend` | Pull Ollama model                |
-| `ollama_delete`          | `request_response`    | `frontend` | Delete Ollama model              |
-| `ollama_copy`            | `request_response`    | `frontend` | Copy Ollama model                |
-| `ollama_create`          | `request_response`    | `frontend` | Create Ollama model              |
-| `ollama_unload`          | `request_response`    | `frontend` | Unload Ollama model from memory  |
-| `provider_load_status`   | `request_response`    | `frontend` | Check provider availability      |
-| `provider_update_api_key`| `request_response`    | `frontend` | Update provider API key          |
-| `terminal_create`        | `request_response`    | `frontend` | Spawn PTY terminal process       |
-| `terminal_data_send`     | `request_response`    | `frontend` | Send stdin to terminal           |
-| `terminal_data`          | `remote_notification` | `backend`  | Stream stdout/stderr to frontend |
-| `terminal_resize`        | `request_response`    | `frontend` | Update PTY dimensions            |
-| `terminal_close`         | `request_response`    | `frontend` | Kill terminal process            |
-| `workspace_open`         | `request_response`    | `frontend` | Open workspace directory         |
-| `workspace_close`        | `request_response`    | `frontend` | Close workspace directory        |
-| `workspace_list`         | `request_response`    | `frontend` | List open workspaces             |
-| `workspace_changed`      | `remote_notification` | `backend`  | Workspace open/close notification|
+| Method                    | Kind                  | Initiator  | Purpose                           |
+| ------------------------- | --------------------- | ---------- | --------------------------------- |
+| `ping`                    | `request_response`    | `both`     | Health check                      |
+| `session_load`            | `request_response`    | `frontend` | Load initial session data         |
+| `filer_change`            | `remote_notification` | `backend`  | File system change notification   |
+| `diskfile_update`         | `request_response`    | `frontend` | Write file content                |
+| `diskfile_delete`         | `request_response`    | `frontend` | Delete a file                     |
+| `directory_create`        | `request_response`    | `frontend` | Create a directory                |
+| `completion_create`       | `request_response`    | `frontend` | Start AI completion               |
+| `completion_progress`     | `remote_notification` | `backend`  | Stream completion chunks          |
+| `ollama_progress`         | `remote_notification` | `backend`  | Ollama model operation progress   |
+| `toggle_main_menu`        | `local_call`          | `frontend` | Toggle main menu UI               |
+| `ollama_list`             | `request_response`    | `frontend` | List local Ollama models          |
+| `ollama_ps`               | `request_response`    | `frontend` | List running Ollama models        |
+| `ollama_show`             | `request_response`    | `frontend` | Show Ollama model details         |
+| `ollama_pull`             | `request_response`    | `frontend` | Pull Ollama model                 |
+| `ollama_delete`           | `request_response`    | `frontend` | Delete Ollama model               |
+| `ollama_copy`             | `request_response`    | `frontend` | Copy Ollama model                 |
+| `ollama_create`           | `request_response`    | `frontend` | Create Ollama model               |
+| `ollama_unload`           | `request_response`    | `frontend` | Unload Ollama model from memory   |
+| `provider_load_status`    | `request_response`    | `frontend` | Check provider availability       |
+| `provider_update_api_key` | `request_response`    | `frontend` | Update provider API key           |
+| `terminal_create`         | `request_response`    | `frontend` | Spawn PTY terminal process        |
+| `terminal_data_send`      | `request_response`    | `frontend` | Send stdin to terminal            |
+| `terminal_data`           | `remote_notification` | `backend`  | Stream stdout/stderr to frontend  |
+| `terminal_resize`         | `request_response`    | `frontend` | Update PTY dimensions             |
+| `terminal_close`          | `request_response`    | `frontend` | Kill terminal process             |
+| `workspace_open`          | `request_response`    | `frontend` | Open workspace directory          |
+| `workspace_close`         | `request_response`    | `frontend` | Close workspace directory         |
+| `workspace_list`          | `request_response`    | `frontend` | List open workspaces              |
+| `workspace_changed`       | `remote_notification` | `backend`  | Workspace open/close notification |
 
 ## Development Workflow
 
@@ -237,19 +237,20 @@ Use `npm install` (not `deno install`) for packages. With `nodeModulesDir: "manu
 
 ### Daily Commands
 
-| Command         | Purpose                                    |
-| --------------- | ------------------------------------------ |
-| `deno task dev`  | Dev server: Rust backend + Vite frontend   |
-| `gro check`     | All checks (typecheck, test, gen, format, lint) |
-| `gro typecheck` | Type checking only (faster iteration)      |
-| `gro test`      | Run Vitest unit tests                      |
-| `deno task test` | All tests (Vitest + integration)            |
-| `deno task test:integration` | Cross-backend parity tests (Rust + Deno) |
-| `gro gen`       | Regenerate `*.gen.ts` files                |
-| `gro format`    | Format with Prettier                       |
-| `gro build`     | Production build                           |
+| Command                      | Purpose                                         |
+| ---------------------------- | ----------------------------------------------- |
+| `deno task dev`              | Dev server: Rust backend + Vite frontend        |
+| `gro check`                  | All checks (typecheck, test, gen, format, lint) |
+| `gro typecheck`              | Type checking only (faster iteration)           |
+| `gro test`                   | Run Vitest unit tests                           |
+| `deno task test`             | All tests (Vitest + integration)                |
+| `deno task test:integration` | Cross-backend parity tests (Rust + Deno)        |
+| `gro gen`                    | Regenerate `*.gen.ts` files                     |
+| `gro format`                 | Format with Prettier                            |
+| `gro build`                  | Production build                                |
 
 Two dev server modes:
+
 - **`deno task dev`** — Rust `zzz_server` backend + Vite frontend (preferred)
 - **`gro dev`** — Deno/Hono backend + Vite frontend (legacy, still works)
 
@@ -292,11 +293,11 @@ prerequisites, and what the integration tests check.
 
 ### Naming Conventions
 
-| Thing            | Convention             | Example                |
-| ---------------- | ---------------------- | ---------------------- |
-| TypeScript files | `snake_case.ts`        | `action_peer.ts`       |
-| Svelte 5 state   | `snake_case.svelte.ts` | `chat.svelte.ts`       |
-| Components       | `PascalCase.svelte`    | `ChatView.svelte`      |
+| Thing            | Convention                 | Example                    |
+| ---------------- | -------------------------- | -------------------------- |
+| TypeScript files | `snake_case.ts`            | `action_peer.ts`           |
+| Svelte 5 state   | `snake_case.svelte.ts`     | `chat.svelte.ts`           |
+| Components       | `PascalCase.svelte`        | `ChatView.svelte`          |
 | Tests            | `*.test.ts` in `src/test/` | `cell.svelte.base.test.ts` |
 
 ## Code Patterns
@@ -308,32 +309,32 @@ Every piece of state is a Cell subclass: Zod schema defines shape, `$state` rune
 ```typescript
 // 1. Schema with CellJson base
 export const ChatJson = CellJson.extend({
-  name: z.string().default(''),
-  thread_ids: z.array(Uuid).default(() => []),
-  view_mode: z.enum(['simple', 'multi']).default('simple'),
-  selected_thread_id: Uuid.nullable().default(null),
+	name: z.string().default(''),
+	thread_ids: z.array(Uuid).default(() => []),
+	view_mode: z.enum(['simple', 'multi']).default('simple'),
+	selected_thread_id: Uuid.nullable().default(null),
 }).meta({cell_class_name: 'Chat'});
 
 // 2. Class with $state.raw for most fields, $state for in-place-mutated arrays
 export class Chat extends Cell<typeof ChatJson> {
-  name: string = $state.raw()!;
-  thread_ids: Array<Uuid> = $state()!; // $state because push/splice used
-  view_mode: ChatViewMode = $state.raw()!;
-  selected_thread_id: Uuid | null = $state.raw()!;
+	name: string = $state.raw()!;
+	thread_ids: Array<Uuid> = $state()!; // $state because push/splice used
+	view_mode: ChatViewMode = $state.raw()!;
+	selected_thread_id: Uuid | null = $state.raw()!;
 
-  readonly threads: Array<Thread> = $derived.by(() => {
-    const result: Array<Thread> = [];
-    for (const id of this.thread_ids) {
-      const thread = this.app.threads.items.by_id.get(id);
-      if (thread) result.push(thread);
-    }
-    return result;
-  });
+	readonly threads: Array<Thread> = $derived.by(() => {
+		const result: Array<Thread> = [];
+		for (const id of this.thread_ids) {
+			const thread = this.app.threads.items.by_id.get(id);
+			if (thread) result.push(thread);
+		}
+		return result;
+	});
 
-  constructor(options: ChatOptions) {
-    super(ChatJson, options);
-    this.init(); // Must call at end of constructor
-  }
+	constructor(options: ChatOptions) {
+		super(ChatJson, options);
+		this.init(); // Must call at end of constructor
+	}
 }
 ```
 
@@ -343,25 +344,25 @@ Each action is a plain object with Zod schemas for input/output:
 
 ```typescript
 export const diskfile_update_action_spec = {
-  method: 'diskfile_update',
-  description: 'Write content to a file on disk',
-  kind: 'request_response',
-  initiator: 'frontend',
-  auth: 'authenticated',
-  side_effects: true,
-  input: z.strictObject({
-    path: DiskfilePath,
-    content: z.string(),
-  }),
-  output: z.null(),
-  async: true,
+	method: 'diskfile_update',
+	description: 'Write content to a file on disk',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: 'authenticated',
+	side_effects: true,
+	input: z.strictObject({
+		path: DiskfilePath,
+		content: z.string(),
+	}),
+	output: z.null(),
+	async: true,
 } satisfies ActionSpecUnion;
 ```
 
 Action kinds:
 
-| Kind                  | Transport        | Pattern                         |
-| --------------------- | ---------------- | ------------------------------- |
+| Kind                  | Transport         | Pattern                         |
+| --------------------- | ----------------- | ------------------------------- |
 | `request_response`    | HTTP or WebSocket | Frontend sends, backend replies |
 | `remote_notification` | WebSocket only    | Backend pushes to frontend      |
 | `local_call`          | None (in-process) | Frontend-only                   |
@@ -374,21 +375,22 @@ Adding a new action touches up to 5 files. Here's the full workflow:
 
 ```typescript
 export const my_action_spec = {
-  method: 'my_action',
-  kind: 'request_response',       // or 'remote_notification', 'local_call'
-  initiator: 'frontend',          // or 'backend', 'both'
-  auth: 'public',
-  side_effects: true,             // or null for read-only
-  input: z.strictObject({ foo: z.string() }),
-  output: z.strictObject({ bar: z.number() }),
-  async: true,
-  description: 'What this action does.',
+	method: 'my_action',
+	kind: 'request_response', // or 'remote_notification', 'local_call'
+	initiator: 'frontend', // or 'backend', 'both'
+	auth: 'public',
+	side_effects: true, // or null for read-only
+	input: z.strictObject({foo: z.string()}),
+	output: z.strictObject({bar: z.number()}),
+	async: true,
+	description: 'What this action does.',
 } satisfies ActionSpecUnion;
 ```
 
 Add it to the `all_action_specs` array at the bottom of the file.
 
 **2. Run `gro gen`** — regenerates 4 files:
+
 - `action_collections.ts` — `ActionInputs`/`ActionOutputs` type maps + `ActionEventDatas`
 - `action_metatypes.ts` — `ActionMethod` open union, narrow handler enums (`BackendRequestResponseMethod`, `BroadcastActionMethod`, …), `FrontendActionsApi` interface
 - `frontend_action_types.ts` — `TypedActionEvent` + `FrontendActionHandlers`
@@ -423,7 +425,7 @@ my_action: {
 // Returns Result<{value: OutputType}, {error: JsonrpcError}>
 const result = await app.api.my_action({foo: 'hello'});
 if (result.ok) {
-  console.log(result.value.bar); // 42
+	console.log(result.value.bar); // 42
 }
 ```
 
@@ -463,11 +465,11 @@ call `backend.api.my_notification(input)`. The factory wiring lives in
 
 The `.zzz/` directory stores app data. Configured via `PUBLIC_ZZZ_DIR`.
 
-| Subdirectory | Purpose                                |
-| ------------ | -------------------------------------- |
+| Subdirectory | Purpose                                        |
+| ------------ | ---------------------------------------------- |
 | `state/`     | Persistent data (completions, workspaces.json) |
-| `cache/`     | Regenerable data, safe to delete       |
-| `run/`       | Runtime ephemeral (daemon.json: PID, port) |
+| `cache/`     | Regenerable data, safe to delete               |
+| `run/`       | Runtime ephemeral (daemon.json: PID, port)     |
 
 All filesystem access goes through `ScopedFs` — path validation, no symlinks, absolute paths only.
 
@@ -496,16 +498,16 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 | `SECRET_OPENAI_API_KEY`                    | OpenAI API key                     |
 | `SECRET_GOOGLE_API_KEY`                    | Google Gemini API key              |
 
-### SvelteKit frontend vars (PUBLIC_*)
+### SvelteKit frontend vars (PUBLIC\_\*)
 
-| Variable                              | Purpose                                    |
-| ------------------------------------- | ------------------------------------------ |
-| `PUBLIC_SERVER_PROTOCOL`              | `http` or `https`                          |
-| `PUBLIC_SERVER_HOST`                  | Server hostname (frontend)                 |
-| `PUBLIC_SERVER_PORT`                  | SvelteKit dev server port                  |
-| `PUBLIC_SERVER_API_PATH`              | API endpoint path                          |
-| `PUBLIC_WEBSOCKET_URL`               | WebSocket URL                              |
-| `PUBLIC_SERVER_PROXIED_PORT`          | Hono backend port (frontend)               |
+| Variable                     | Purpose                      |
+| ---------------------------- | ---------------------------- |
+| `PUBLIC_SERVER_PROTOCOL`     | `http` or `https`            |
+| `PUBLIC_SERVER_HOST`         | Server hostname (frontend)   |
+| `PUBLIC_SERVER_PORT`         | SvelteKit dev server port    |
+| `PUBLIC_SERVER_API_PATH`     | API endpoint path            |
+| `PUBLIC_WEBSOCKET_URL`       | WebSocket URL                |
+| `PUBLIC_SERVER_PROXIED_PORT` | Hono backend port (frontend) |
 
 ## Avoid
 
@@ -542,5 +544,3 @@ from `@fuzdev/fuz_app/uuid.js` via `zod_helpers.ts`.
 The CLI and daemon lifecycle use `@fuzdev/fuz_app/cli/*` helpers: `DaemonInfo`
 schema, `write_daemon_info`, `read_daemon_info`, `is_daemon_running`,
 `stop_daemon`. The server writes `~/.zzz/run/daemon.json` (not `server.json`).
-
-Last updated: 2026-04-14
