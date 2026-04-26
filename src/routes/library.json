@@ -49,7 +49,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.3.16",
-			"@fuzdev/fuz_app": "^0.50.0",
+			"@fuzdev/fuz_app": "^0.51.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.59.0",
 			"@fuzdev/fuz_ui": "^0.191.4",
@@ -15433,7 +15433,7 @@
 					{
 						"name": "ENV_FILE",
 						"kind": "variable",
-						"doc_comment": "Canonical env file path for daemon-initiated reads and writes.\n\nThe write target must match a file that's reloaded on next daemon start,\nso user-entered values (e.g. API keys via `provider_update_api_key`)\nsurvive restart:\n\n- **Dev** (`gro dev`, `deno task dev`): both Vite and `scripts/dev.ts`\n  reload `.env.development`. `.env` is shadowed by `.env.development` in\n  Vite's mode-precedence and is not loaded at all by `scripts/dev.ts`,\n  so writing to `.env` in dev would be invisible on restart.\n- **Prod** (compiled `zzz daemon start`): `server.ts` loads `.env` via\n  `load_env_file`. `.env.production` is NOT loaded by the compiled daemon\n  (only by `deno task preview`'s `--env=.env.production` flag), so writing\n  there would be invisible on restart.",
+						"doc_comment": "Canonical env file path for daemon-initiated reads and writes.\n\nThe write target must match a file that's reloaded on next daemon start,\nso user-entered values (e.g. API keys via `provider_update_api_key`)\nsurvive restart:\n\n- **Dev** (`gro dev`, `deno task dev`): both Vite and `scripts/dev.ts`\n  reload `.env.development`. `.env` is shadowed by `.env.development` in\n  Vite's mode-precedence and is not loaded at all by `scripts/dev.ts`,\n  so writing to `.env` in dev would be invisible on restart.\n- **Prod** (compiled `zzz daemon start`): `server/server.ts` loads `.env` via\n  `load_env_file`. `.env.production` is NOT loaded by the compiled daemon\n  (only by `deno task preview`'s `--env=.env.production` flag), so writing\n  there would be invisible on restart.",
 						"source_line": 29,
 						"type_signature": "string"
 					}
@@ -15543,7 +15543,7 @@
 						]
 					}
 				],
-				"module_comment": "Runtime-agnostic zzz app factory.\n\nCreates the full application by combining fuz_app's `create_app_backend`\nand `create_app_server` with zzz's domain Backend, AI providers, and\nWebSocket endpoint. Called by the server entry point (`server.ts`).",
+				"module_comment": "Runtime-agnostic zzz app factory.\n\nCreates the full application by combining fuz_app's `create_app_backend`\nand `create_app_server` with zzz's domain Backend, AI providers, and\nWebSocket endpoint. Called by the server entry point (`server/server.ts`).",
 				"dependencies": [
 					"action_specs.ts",
 					"config.ts",
@@ -16656,7 +16656,7 @@
 						]
 					}
 				],
-				"module_comment": "RPC actions for zzz — thin adapter from unified handlers to fuz_app's `RpcAction` format.\n\nMaps `(input, ActionContext) -> handler(input, {backend, request_id})`.\nAll business logic lives in `zzz_action_handlers.ts`.",
+				"module_comment": "RPC actions for zzz — thin adapter from unified handlers to fuz_app's `RpcAction` format.\n\nMaps `(input, ActionContext) -> handler(input, {backend, request_id})`.\nAll business logic lives in `server/zzz_action_handlers.ts`.",
 				"dependencies": ["action_specs.ts", "server/zzz_action_handlers.ts"],
 				"dependents": ["server/zzz_route_specs.ts"]
 			},

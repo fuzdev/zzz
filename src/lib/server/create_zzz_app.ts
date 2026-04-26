@@ -3,7 +3,7 @@
  *
  * Creates the full application by combining fuz_app's `create_app_backend`
  * and `create_app_server` with zzz's domain Backend, AI providers, and
- * WebSocket endpoint. Called by the server entry point (`server.ts`).
+ * WebSocket endpoint. Called by the server entry point (`server/server.ts`).
  *
  * @module
  */

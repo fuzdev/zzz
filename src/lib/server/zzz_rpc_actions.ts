@@ -2,7 +2,7 @@
  * RPC actions for zzz — thin adapter from unified handlers to fuz_app's `RpcAction` format.
  *
  * Maps `(input, ActionContext) -> handler(input, {backend, request_id})`.
- * All business logic lives in `zzz_action_handlers.ts`.
+ * All business logic lives in `server/zzz_action_handlers.ts`.
  *
  * @module
  */

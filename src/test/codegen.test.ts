@@ -564,12 +564,15 @@ describe('get_handler_return_type', () => {
 });
 
 describe('generate_phase_handlers', () => {
-	test('generates never for actions with no valid phases', () => {
-		// toggle_main_menu on backend should have no valid phases
+	test('generates empty string for actions with no valid phases', () => {
+		// toggle_main_menu on backend should have no valid phases. The helper
+		// returns '' so wrappers' `.filter(Boolean)` drops the row from the
+		// typed handler map rather than emitting a useless `?: never` for a
+		// method that doesn't belong on this side.
 		const imports = new ImportBuilder();
 		const result = generate_phase_handlers(toggle_main_menu_action_spec, 'backend', imports);
 
-		assert.strictEqual(result, 'toggle_main_menu?: never');
+		assert.strictEqual(result, '');
 		assert.ok(!imports.has_imports());
 	});
 

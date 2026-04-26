@@ -21,7 +21,7 @@ import {DEV} from 'esm-env';
  *   reload `.env.development`. `.env` is shadowed by `.env.development` in
  *   Vite's mode-precedence and is not loaded at all by `scripts/dev.ts`,
  *   so writing to `.env` in dev would be invisible on restart.
- * - **Prod** (compiled `zzz daemon start`): `server.ts` loads `.env` via
+ * - **Prod** (compiled `zzz daemon start`): `server/server.ts` loads `.env` via
  *   `load_env_file`. `.env.production` is NOT loaded by the compiled daemon
  *   (only by `deno task preview`'s `--env=.env.production` flag), so writing
  *   there would be invisible on restart.
