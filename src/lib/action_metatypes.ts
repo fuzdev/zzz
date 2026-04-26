@@ -183,10 +183,10 @@ export type BackendActionMethod = z.infer<typeof BackendActionMethod>;
 
 /**
  * Interface for action dispatch functions.
- * Async methods (request_response, async local_call) return `Promise<Result<...>>`
- * and accept an optional `RpcClientCallOptions` second arg that threads `signal`,
- * `transport_name`, and `queue` through to the peer. Sync methods (like
- * `toggle_main_menu`) return values directly.
+ * Async methods (request_response, remote_notification, async local_call)
+ * return `Promise<Result<...>>` and accept an optional `RpcClientCallOptions`
+ * second arg that threads `signal`, `transport_name`, and `queue` through to
+ * the peer. Sync local_call methods return values directly.
  */
 export interface ActionsApi {
 	heartbeat: (

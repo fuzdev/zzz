@@ -1,9 +1,9 @@
 import type {Gen} from '@fuzdev/gro/gen.js';
-import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
 import {
 	ImportBuilder,
-	generate_phase_handlers,
 	create_banner,
+	generate_frontend_action_handlers,
+	generate_typed_action_event_alias,
 } from '@fuzdev/fuz_app/actions/action_codegen.js';
 
 import {all_action_specs} from './action_specs.js';
@@ -15,47 +15,24 @@ import {all_action_specs} from './action_specs.js';
  * @nodocs
  */
 export const gen: Gen = ({origin_path}) => {
-	const registry = new ActionRegistry(all_action_specs);
-	const banner = create_banner(origin_path);
 	const imports = new ImportBuilder();
+	const banner = create_banner(origin_path);
 
-	// Add imports for the typed event alias
-	imports.add_type('@fuzdev/fuz_app/actions/action_event.js', 'ActionEvent');
-	imports.add_type('@fuzdev/fuz_app/actions/action_spec.js', 'ActionEventPhase');
-	imports.add_type('@fuzdev/fuz_app/actions/action_event_types.js', 'ActionEventStep');
-	imports.add_type('./action_collections.js', 'ActionEventDatas');
+	// `include_composables: true` keeps `heartbeat` / `cancel` on the typed
+	// surface — see the matching note in `action_collections.gen.ts`.
+	const options = {include_composables: true};
 
-	// Generate handlers using custom TypedActionEvent that narrows data via ActionEventDatas
-	const frontend_action_handlers = registry.specs
-		.map((spec) =>
-			generate_phase_handlers(spec, 'frontend', imports, {
-				action_event_type: 'TypedActionEvent',
-			}),
-		)
-		.filter(Boolean)
-		.join(';\n\t');
+	const blocks = [
+		generate_typed_action_event_alias(imports),
+		generate_frontend_action_handlers(all_action_specs, imports, options),
+	].join('\n\n');
 
 	return `
 		// ${banner}
 
 		${imports.build()}
 
-		import type {ActionMethod} from './action_metatypes.js';
-
-		/** ActionEvent narrowed with zzz's generated ActionEventDatas for typed input/output. */
-		type TypedActionEvent<TMethod extends ActionMethod, TPhase extends ActionEventPhase, TStep extends ActionEventStep> =
-			ActionEvent<TMethod, TPhase, TStep> & {readonly data: ActionEventDatas[TMethod]};
-
-		/**
-		 * Frontend action handlers organized by method and phase.
-		 * Generated using spec.initiator to determine valid phases:
-		 * - initiator: 'frontend' → send/execute phases
-		 * - initiator: 'backend' → receive phases
-		 * - initiator: 'both' → all valid phases
-		 */
-		export interface FrontendActionHandlers {
-			${frontend_action_handlers}
-		}
+		${blocks}
 
 		// ${banner}
 	`;

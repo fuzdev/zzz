@@ -354,6 +354,6 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		const spec = this.action_registry.spec_by_method.get(method);
 		if (!spec) return false;
 		const valid_phases = ACTION_EVENT_PHASE_BY_KIND[spec.kind];
-		return valid_phases.includes(phase as never);
+		return valid_phases.includes(phase);
 	}
 }

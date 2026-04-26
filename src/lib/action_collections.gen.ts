@@ -1,10 +1,10 @@
 import type {Gen} from '@fuzdev/gro/gen.js';
-import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
 import {
 	ImportBuilder,
 	create_banner,
-	to_action_spec_input_identifier,
-	to_action_spec_output_identifier,
+	generate_action_event_datas,
+	generate_action_inputs_outputs,
+	generate_action_specs_record,
 } from '@fuzdev/fuz_app/actions/action_codegen.js';
 
 import {all_action_specs} from './action_specs.js';
@@ -16,111 +16,30 @@ import {all_action_specs} from './action_specs.js';
  * @nodocs
  */
 export const gen: Gen = ({origin_path}) => {
-	const registry = new ActionRegistry(all_action_specs);
 	const imports = new ImportBuilder();
 	const banner = create_banner(origin_path);
 
-	// Add base imports
-	imports.add('zod', 'z');
-	imports.add_type('@fuzdev/fuz_app/actions/action_spec.js', 'ActionSpecUnion');
-	imports.add_many('./action_specs.js', '* as specs');
+	// `include_composables: true` keeps `heartbeat` / `cancel` on zzz's typed
+	// surface — the consumer-owned action registry currently treats them as
+	// first-class methods. Flip to default-exclude when zzz is ready to drop
+	// them from `ActionInputs` / `ActionOutputs` / `ActionSpecs`.
+	const options = {include_composables: true};
 
-	// Determine which data type to use for each method based on its spec
-	const action_event_data_mappings = registry.specs.map((spec) => {
-		const data_type =
-			spec.kind === 'request_response'
-				? 'ActionEventRequestResponseData'
-				: spec.kind === 'remote_notification'
-					? 'ActionEventRemoteNotificationData'
-					: 'ActionEventLocalCallData';
-
-		imports.add_types('@fuzdev/fuz_app/actions/action_event_data.js', data_type);
-
-		const type_args =
-			spec.kind === 'remote_notification'
-				? `<'${spec.method}', ActionInputs['${spec.method}']>`
-				: `<'${spec.method}', ActionInputs['${spec.method}'], ActionOutputs['${spec.method}']>`;
-
-		return `${spec.method}: ${data_type}${type_args}`;
-	});
+	const blocks = [
+		generate_action_specs_record(all_action_specs, imports, options),
+		generate_action_inputs_outputs(all_action_specs, imports, options),
+		// `collections_path` left unset — same-file scope: this gen feeds the
+		// same `action_collections.ts` output as `generate_action_inputs_outputs`,
+		// so `ActionInputs` / `ActionOutputs` resolve locally without imports.
+		generate_action_event_datas(all_action_specs, imports, options),
+	].join('\n\n');
 
 	return `
 		// ${banner}
 
 		${imports.build()}
 
-		// TODO consistent naming, maybe \`ActionMethodUnion\`
-		/**
-		 * All method types combined.
-		 */
-		export const ActionMethods = z.enum([
-			${registry.methods.map((method) => `'${method}'`).join(',\n\t\t\t')}
-		]);
-		export type ActionMethods = z.infer<typeof ActionMethods>;
-		
-		/**
-		 * Action specifications indexed by method name.
-		 * These represent the complete action spec definitions.
-		 */
-		export const ActionSpecs = {
-			${registry.specs
-				.map((spec) => `${spec.method}: specs.${spec.method}_action_spec`)
-				.join(',\n\t\t\t')}
-		} as const;
-		export interface ActionSpecs {
-			${registry.specs
-				.map((spec) => `${spec.method}: typeof specs.${spec.method}_action_spec`)
-				.join(';\n\t\t\t')}
-		}
-
-		export const action_specs: Array<ActionSpecUnion> = Object.values(ActionSpecs);
-
-		/**
-		 * Action parameter schemas indexed by method name.
-		 * These represent the input data for each action,
-		 * e.g. JSON-RPC request/notification params and local call arguments.
-		 */
-		export const ActionInputs = {
-			${registry.specs
-				.map((spec) => `${spec.method}: specs.${to_action_spec_input_identifier(spec.method)}`)
-				.join(',\n\t\t\t')}
-		} as const;
-		export interface ActionInputs {
-			${registry.specs
-				.map(
-					(spec) =>
-						`${spec.method}: z.infer<typeof specs.${to_action_spec_input_identifier(spec.method)}>`,
-				)
-				.join(';\n\t\t\t')}
-		}
-
-		/**
-		 * Action result schemas indexed by method name.
-		 * These represent the output data for each action,
-		 * e.g. JSON-RPC response results and local call return values.
-		 */
-		export const ActionOutputs = {
-			${registry.specs
-				.map((spec) => `${spec.method}: specs.${to_action_spec_output_identifier(spec.method)}`)
-				.join(',\n\t\t\t')}
-		} as const;
-		export interface ActionOutputs {
-			${registry.specs
-				.map(
-					(spec) =>
-						`${spec.method}: z.infer<typeof specs.${to_action_spec_output_identifier(spec.method)}>`,
-				)
-				.join(';\n\t\t\t')}
-		}
-
-		/**
-		 * Action event data types indexed by method name.
-		 * These represent the full discriminated union of all possible states
-		 * for each action's event data, properly typed with inputs and outputs.
-		 */
-		export interface ActionEventDatas {
-			${action_event_data_mappings.join(';\n\t\t\t')}
-		}
+		${blocks}
 
 		// ${banner}
 	`;

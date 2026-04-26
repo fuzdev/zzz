@@ -467,7 +467,7 @@ describe('get_handler_return_type', () => {
 			const imports = new ImportBuilder();
 
 			// ping_action_spec is a request/response action
-			const result = get_handler_return_type(ping_action_spec, 'receive_request', imports, './');
+			const result = get_handler_return_type(ping_action_spec, 'receive_request', imports);
 			assert.strictEqual(result, `ActionOutputs['ping'] | Promise<ActionOutputs['ping']>`);
 
 			// Check that ActionOutputs was added to imports
@@ -480,15 +480,15 @@ describe('get_handler_return_type', () => {
 			const imports = new ImportBuilder();
 
 			assert.strictEqual(
-				get_handler_return_type(session_load_action_spec, 'send_request', imports, './'),
+				get_handler_return_type(session_load_action_spec, 'send_request', imports),
 				'void | Promise<void>',
 			);
 			assert.strictEqual(
-				get_handler_return_type(session_load_action_spec, 'send_response', imports, './'),
+				get_handler_return_type(session_load_action_spec, 'send_response', imports),
 				'void | Promise<void>',
 			);
 			assert.strictEqual(
-				get_handler_return_type(session_load_action_spec, 'receive_response', imports, './'),
+				get_handler_return_type(session_load_action_spec, 'receive_response', imports),
 				'void | Promise<void>',
 			);
 
@@ -502,12 +502,7 @@ describe('get_handler_return_type', () => {
 			const imports = new ImportBuilder();
 
 			// toggle_main_menu is a sync local_call (async: false)
-			const result = get_handler_return_type(
-				toggle_main_menu_action_spec,
-				'execute',
-				imports,
-				'./',
-			);
+			const result = get_handler_return_type(toggle_main_menu_action_spec, 'execute', imports);
 			assert.strictEqual(result, `ActionOutputs['toggle_main_menu']`);
 
 			// Should add ActionOutputs import
@@ -523,7 +518,7 @@ describe('get_handler_return_type', () => {
 				async: true,
 			};
 
-			const result = get_handler_return_type(async_local_spec, 'execute', imports, './');
+			const result = get_handler_return_type(async_local_spec, 'execute', imports);
 			assert.strictEqual(
 				result,
 				`ActionOutputs['toggle_main_menu'] | Promise<ActionOutputs['toggle_main_menu']>`,
@@ -536,11 +531,11 @@ describe('get_handler_return_type', () => {
 			const imports = new ImportBuilder();
 
 			assert.strictEqual(
-				get_handler_return_type(filer_change_action_spec, 'send', imports, './'),
+				get_handler_return_type(filer_change_action_spec, 'send', imports),
 				'void | Promise<void>',
 			);
 			assert.strictEqual(
-				get_handler_return_type(filer_change_action_spec, 'receive', imports, './'),
+				get_handler_return_type(filer_change_action_spec, 'receive', imports),
 				'void | Promise<void>',
 			);
 
@@ -554,15 +549,15 @@ describe('get_handler_return_type', () => {
 			const imports = new ImportBuilder();
 
 			// First call adds import
-			get_handler_return_type(ping_action_spec, 'receive_request', imports, './');
+			get_handler_return_type(ping_action_spec, 'receive_request', imports);
 			assert.strictEqual(imports.import_count, 1);
 
 			// Second call doesn't add duplicate
-			get_handler_return_type(session_load_action_spec, 'receive_request', imports, './');
+			get_handler_return_type(session_load_action_spec, 'receive_request', imports);
 			assert.strictEqual(imports.import_count, 1);
 
 			// Void return doesn't add import
-			get_handler_return_type(ping_action_spec, 'send_request', imports, './');
+			get_handler_return_type(ping_action_spec, 'send_request', imports);
 			assert.strictEqual(imports.import_count, 1);
 		});
 	});
@@ -720,7 +715,7 @@ describe('generate_phase_handlers', () => {
 
 		const import_str = imports.build();
 		assert.include(import_str, "from '@fuzdev/fuz_app/actions/action_event.js'");
-		assert.include(import_str, "from '../action_collections.js'");
+		assert.include(import_str, "from './action_collections.js'");
 		// No environment type import paths
 		assert.notInclude(import_str, 'backend.js');
 	});

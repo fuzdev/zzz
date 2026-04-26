@@ -4,10 +4,9 @@ import type {ActionEvent} from '@fuzdev/fuz_app/actions/action_event.js';
 import type {ActionEventPhase} from '@fuzdev/fuz_app/actions/action_spec.js';
 import type {ActionEventStep} from '@fuzdev/fuz_app/actions/action_event_types.js';
 import type {ActionEventDatas, ActionOutputs} from './action_collections.js';
-
 import type {ActionMethod} from './action_metatypes.js';
 
-/** ActionEvent narrowed with zzz's generated ActionEventDatas for typed input/output. */
+/** ActionEvent narrowed with the generated ActionEventDatas for typed input/output. */
 type TypedActionEvent<
 	TMethod extends ActionMethod,
 	TPhase extends ActionEventPhase,
