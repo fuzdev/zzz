@@ -4,7 +4,7 @@
 
 `@fuzdev/zzz` — local-first AI forge: chat + files + prompts + terminals in one app.
 SvelteKit frontend, Hono/Deno backend, Svelte 5 runes, Zod schemas.
-v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PGlite DB.
+v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PGlite DB. 31 cell classes, 32 action specs, 4 AI providers.
 
 For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
