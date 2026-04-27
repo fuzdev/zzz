@@ -4,7 +4,7 @@
 
 `@fuzdev/zzz` — local-first AI forge: chat + files + prompts + terminals in one app.
 SvelteKit frontend, Hono/Deno backend, Svelte 5 runes, Zod schemas.
-v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PGlite DB. 31 cell classes, 29 action specs, 4 AI providers.
+v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PGlite DB.
 
 For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
@@ -177,6 +177,8 @@ a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 | `Turn`            | `turn.svelte.ts`             | Single conversation message        |
 | `Thread`          | `thread.svelte.ts`           | Linear conversation with one model |
 | `Threads`         | `threads.svelte.ts`          | Collection of threads              |
+| `Space`           | `space.svelte.ts`            | Named grouping of workspace dirs   |
+| `Spaces`          | `spaces.svelte.ts`           | Collection of spaces               |
 | `Terminal`        | `terminal.svelte.ts`         | PTY terminal process state         |
 | `TerminalPreset`  | `terminal_preset.svelte.ts`  | Saved terminal command config      |
 | `Time`            | `time.svelte.ts`             | Reactive time state                |
@@ -186,39 +188,42 @@ a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 
 ## Action Specs
 
-29 specs in `src/lib/action_specs.ts`:
+32 specs in `src/lib/action_specs.ts`:
 
-| Method                    | Kind                  | Initiator  | Purpose                           |
-| ------------------------- | --------------------- | ---------- | --------------------------------- |
-| `ping`                    | `request_response`    | `both`     | Health check                      |
-| `session_load`            | `request_response`    | `frontend` | Load initial session data         |
-| `filer_change`            | `remote_notification` | `backend`  | File system change notification   |
-| `diskfile_update`         | `request_response`    | `frontend` | Write file content                |
-| `diskfile_delete`         | `request_response`    | `frontend` | Delete a file                     |
-| `directory_create`        | `request_response`    | `frontend` | Create a directory                |
-| `completion_create`       | `request_response`    | `frontend` | Start AI completion               |
-| `completion_progress`     | `remote_notification` | `backend`  | Stream completion chunks          |
-| `ollama_progress`         | `remote_notification` | `backend`  | Ollama model operation progress   |
-| `toggle_main_menu`        | `local_call`          | `frontend` | Toggle main menu UI               |
-| `ollama_list`             | `request_response`    | `frontend` | List local Ollama models          |
-| `ollama_ps`               | `request_response`    | `frontend` | List running Ollama models        |
-| `ollama_show`             | `request_response`    | `frontend` | Show Ollama model details         |
-| `ollama_pull`             | `request_response`    | `frontend` | Pull Ollama model                 |
-| `ollama_delete`           | `request_response`    | `frontend` | Delete Ollama model               |
-| `ollama_copy`             | `request_response`    | `frontend` | Copy Ollama model                 |
-| `ollama_create`           | `request_response`    | `frontend` | Create Ollama model               |
-| `ollama_unload`           | `request_response`    | `frontend` | Unload Ollama model from memory   |
-| `provider_load_status`    | `request_response`    | `frontend` | Check provider availability       |
-| `provider_update_api_key` | `request_response`    | `frontend` | Update provider API key           |
-| `terminal_create`         | `request_response`    | `frontend` | Spawn PTY terminal process        |
-| `terminal_data_send`      | `request_response`    | `frontend` | Send stdin to terminal            |
-| `terminal_data`           | `remote_notification` | `backend`  | Stream stdout/stderr to frontend  |
-| `terminal_resize`         | `request_response`    | `frontend` | Update PTY dimensions             |
-| `terminal_close`          | `request_response`    | `frontend` | Kill terminal process             |
-| `workspace_open`          | `request_response`    | `frontend` | Open workspace directory          |
-| `workspace_close`         | `request_response`    | `frontend` | Close workspace directory         |
-| `workspace_list`          | `request_response`    | `frontend` | List open workspaces              |
-| `workspace_changed`       | `remote_notification` | `backend`  | Workspace open/close notification |
+| Method                     | Kind                  | Initiator  | Purpose                                                 |
+| -------------------------- | --------------------- | ---------- | ------------------------------------------------------- |
+| `ping`                     | `request_response`    | `both`     | Health check                                            |
+| `session_load`             | `request_response`    | `frontend` | Load initial session data                               |
+| `filer_change`             | `remote_notification` | `backend`  | File system change notification                         |
+| `diskfile_update`          | `request_response`    | `frontend` | Write file content                                      |
+| `diskfile_delete`          | `request_response`    | `frontend` | Delete a file                                           |
+| `directory_create`         | `request_response`    | `frontend` | Create a directory                                      |
+| `completion_create`        | `request_response`    | `frontend` | Start AI completion                                     |
+| `completion_progress`      | `remote_notification` | `backend`  | Stream completion chunks                                |
+| `ollama_progress`          | `remote_notification` | `backend`  | Ollama model operation progress                         |
+| `toggle_main_menu`         | `local_call`          | `frontend` | Toggle main menu UI                                     |
+| `ollama_list`              | `request_response`    | `frontend` | List local Ollama models                                |
+| `ollama_ps`                | `request_response`    | `frontend` | List running Ollama models                              |
+| `ollama_show`              | `request_response`    | `frontend` | Show Ollama model details                               |
+| `ollama_pull`              | `request_response`    | `frontend` | Pull Ollama model                                       |
+| `ollama_delete`            | `request_response`    | `frontend` | Delete Ollama model                                     |
+| `ollama_copy`              | `request_response`    | `frontend` | Copy Ollama model                                       |
+| `ollama_create`            | `request_response`    | `frontend` | Create Ollama model                                     |
+| `ollama_unload`            | `request_response`    | `frontend` | Unload Ollama model from memory                         |
+| `provider_load_status`     | `request_response`    | `frontend` | Check provider availability                             |
+| `provider_update_api_key`  | `request_response`    | `frontend` | Update provider API key                                 |
+| `terminal_create`          | `request_response`    | `frontend` | Spawn PTY terminal process                              |
+| `terminal_data_send`       | `request_response`    | `frontend` | Send stdin to terminal                                  |
+| `terminal_data`            | `remote_notification` | `backend`  | Stream stdout/stderr to frontend                        |
+| `terminal_resize`          | `request_response`    | `frontend` | Update PTY dimensions                                   |
+| `terminal_close`           | `request_response`    | `frontend` | Kill terminal process                                   |
+| `terminal_exited`          | `remote_notification` | `backend`  | Terminal process exited naturally                       |
+| `workspace_open`           | `request_response`    | `frontend` | Open workspace directory                                |
+| `workspace_close`          | `request_response`    | `frontend` | Close workspace directory                               |
+| `workspace_list`           | `request_response`    | `frontend` | List open workspaces                                    |
+| `workspace_changed`        | `remote_notification` | `backend`  | Workspace open/close notification                       |
+| `_test_emit_notifications` | `request_response`    | `frontend` | Test-only — emit N stream notifications                 |
+| `_test_notification`       | `remote_notification` | `backend`  | Test-only — stream tick from `_test_emit_notifications` |
 
 ## Development Workflow
 
