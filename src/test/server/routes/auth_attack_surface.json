@@ -659,7 +659,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "Health check — echoes the request ID back to the caller."
+					"description": "Health check — echoes the request ID back to the caller.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "session_load",
@@ -754,7 +755,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "Load initial session data including filesystem state and provider status."
+					"description": "Load initial session data including filesystem state and provider status.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "diskfile_update",
@@ -767,7 +769,8 @@
 					},
 					"output_schema": null,
 					"side_effects": true,
-					"description": "Write new content to a file on disk."
+					"description": "Write new content to a file on disk.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "diskfile_delete",
@@ -780,7 +783,8 @@
 					},
 					"output_schema": null,
 					"side_effects": true,
-					"description": "Delete a file from disk."
+					"description": "Delete a file from disk.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "directory_create",
@@ -793,7 +797,8 @@
 					},
 					"output_schema": null,
 					"side_effects": true,
-					"description": "Create a new directory on disk."
+					"description": "Create a new directory on disk.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "completion_create",
@@ -925,7 +930,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Start an AI completion request, optionally with a progress token for streaming."
+					"description": "Start an AI completion request, optionally with a progress token for streaming.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "ollama_list",
@@ -979,7 +985,8 @@
 						]
 					},
 					"side_effects": false,
-					"description": "List all locally available Ollama models."
+					"description": "List all locally available Ollama models.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "ollama_ps",
@@ -1034,7 +1041,8 @@
 						]
 					},
 					"side_effects": false,
-					"description": "List currently running Ollama models."
+					"description": "List currently running Ollama models.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "ollama_show",
@@ -1089,7 +1097,8 @@
 						]
 					},
 					"side_effects": false,
-					"description": "Show detailed information about an Ollama model."
+					"description": "Show detailed information about an Ollama model.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "ollama_pull",
@@ -1117,7 +1126,8 @@
 					},
 					"output_schema": null,
 					"side_effects": true,
-					"description": "Pull an Ollama model from the registry."
+					"description": "Pull an Ollama model from the registry.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "ollama_delete",
@@ -1130,7 +1140,8 @@
 					},
 					"output_schema": null,
 					"side_effects": true,
-					"description": "Delete an Ollama model from local storage."
+					"description": "Delete an Ollama model from local storage.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "ollama_copy",
@@ -1143,7 +1154,8 @@
 					},
 					"output_schema": null,
 					"side_effects": true,
-					"description": "Copy an Ollama model under a new name."
+					"description": "Copy an Ollama model under a new name.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "ollama_create",
@@ -1188,7 +1200,8 @@
 					},
 					"output_schema": null,
 					"side_effects": true,
-					"description": "Create a new Ollama model from a Modelfile."
+					"description": "Create a new Ollama model from a Modelfile.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "ollama_unload",
@@ -1201,7 +1214,8 @@
 					},
 					"output_schema": null,
 					"side_effects": true,
-					"description": "Unload an Ollama model from memory."
+					"description": "Unload an Ollama model from memory.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "provider_load_status",
@@ -1251,7 +1265,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "Check the availability and status of an AI provider."
+					"description": "Check the availability and status of an AI provider.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "provider_update_api_key",
@@ -1301,7 +1316,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Update the API key for an AI provider."
+					"description": "Update the API key for an AI provider.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "terminal_create",
@@ -1334,7 +1350,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Spawn a PTY process and return the terminal ID."
+					"description": "Spawn a PTY process and return the terminal ID.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "terminal_data_send",
@@ -1354,7 +1371,8 @@
 					},
 					"output_schema": null,
 					"side_effects": true,
-					"description": "Send stdin bytes to a terminal."
+					"description": "Send stdin bytes to a terminal.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "terminal_resize",
@@ -1379,7 +1397,8 @@
 					},
 					"output_schema": null,
 					"side_effects": true,
-					"description": "Update PTY dimensions for a terminal."
+					"description": "Update PTY dimensions for a terminal.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "terminal_close",
@@ -1404,7 +1423,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Kill a terminal process and return the exit code."
+					"description": "Kill a terminal process and return the exit code.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "workspace_open",
@@ -1464,7 +1484,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Open a workspace directory — registers with ScopedFs and starts file watching."
+					"description": "Open a workspace directory — registers with ScopedFs and starts file watching.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "workspace_close",
@@ -1477,7 +1498,8 @@
 					},
 					"output_schema": null,
 					"side_effects": true,
-					"description": "Close a workspace directory — stops file watching and removes from ScopedFs."
+					"description": "Close a workspace directory — stops file watching and removes from ScopedFs.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "workspace_list",
@@ -1504,7 +1526,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "List all open workspaces."
+					"description": "List all open workspaces.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "_test_emit_notifications",
@@ -1528,7 +1551,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "Test-only. Emits `count` `_test_notification` notifications via ctx.notify, then returns {count}."
+					"description": "Test-only. Emits `count` `_test_notification` notifications via ctx.notify, then returns {count}.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "admin_account_list",
@@ -1710,7 +1734,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "List all accounts with their actors, permits, and pending offers. Admin-only."
+					"description": "List all accounts with their actors, permits, and pending offers. Admin-only.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "admin_session_list",
@@ -1751,7 +1776,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "List every active auth session across all accounts. Admin-only."
+					"description": "List every active auth session across all accounts. Admin-only.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "admin_session_revoke_all",
@@ -1776,7 +1802,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Revoke all sessions for an account. Admin-only."
+					"description": "Revoke all sessions for an account. Admin-only.",
+					"rate_limit_key": "account"
 				},
 				{
 					"name": "admin_token_revoke_all",
@@ -1801,7 +1828,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Revoke all API tokens for an account. Admin-only."
+					"description": "Revoke all API tokens for an account. Admin-only.",
+					"rate_limit_key": "account"
 				},
 				{
 					"name": "audit_log_list",
@@ -1939,7 +1967,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "List audit log events with optional filters. Admin-only."
+					"description": "List audit log events with optional filters. Admin-only.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "audit_log_permit_history",
@@ -2048,7 +2077,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "List permit grant and revoke events with usernames. Admin-only."
+					"description": "List permit grant and revoke events with usernames. Admin-only.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "invite_create",
@@ -2154,7 +2184,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Create an invite addressed to an email, username, or both. Admin-only."
+					"description": "Create an invite addressed to an email, username, or both. Admin-only.",
+					"rate_limit_key": "account"
 				},
 				{
 					"name": "invite_list",
@@ -2238,7 +2269,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "List all invites with creator and claimer usernames. Admin-only."
+					"description": "List all invites with creator and claimer usernames. Admin-only.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "invite_delete",
@@ -2263,7 +2295,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Delete an unclaimed invite. Admin-only."
+					"description": "Delete an unclaimed invite. Admin-only.",
+					"rate_limit_key": "account"
 				},
 				{
 					"name": "app_settings_get",
@@ -2297,7 +2330,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "Read global app settings. Admin-only."
+					"description": "Read global app settings. Admin-only.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "app_settings_update",
@@ -2342,7 +2376,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Update global app settings (currently just the open signup toggle). Admin-only."
+					"description": "Update global app settings (currently just the open signup toggle). Admin-only.",
+					"rate_limit_key": "account"
 				},
 				{
 					"name": "permit_offer_create",
@@ -2488,7 +2523,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Offer a permit to another account. Grantor must hold the offered role (or pass a consumer authorize callback); role must be web_grantable."
+					"description": "Offer a permit to another account. Grantor must hold the offered role (or pass a consumer authorize callback); role must be web_grantable.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "permit_offer_accept",
@@ -2627,7 +2663,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Accept an offer. Atomically marks the offer accepted, inserts the permit, and supersedes sibling pending offers for the same (account, role, scope)."
+					"description": "Accept an offer. Atomically marks the offer accepted, inserts the permit, and supersedes sibling pending offers for the same (account, role, scope).",
+					"rate_limit_key": null
 				},
 				{
 					"name": "permit_offer_decline",
@@ -2656,7 +2693,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Decline an offer. Recipient-only."
+					"description": "Decline an offer. Recipient-only.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "permit_offer_retract",
@@ -2681,7 +2719,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Retract an offer. Grantor-only, pre-decision."
+					"description": "Retract an offer. Grantor-only, pre-decision.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "permit_offer_list",
@@ -2814,7 +2853,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "List pending, non-expired offers for the caller. Admins may pass `account_id` to inspect another account."
+					"description": "List pending, non-expired offers for the caller. Admins may pass `account_id` to inspect another account.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "permit_offer_history",
@@ -2958,7 +2998,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "List every offer involving the caller (either direction), including terminal rows, newest first. Admins may pass `account_id` to inspect another account."
+					"description": "List every offer involving the caller (either direction), including terminal rows, newest first. Admins may pass `account_id` to inspect another account.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "permit_revoke",
@@ -2996,7 +3037,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Revoke an active permit on a target actor. Admin-only. Supersedes any pending offers for the same (account, role, scope). Fires permit_revoke + permit_offer_supersede notifications."
+					"description": "Revoke an active permit on a target actor. Admin-only. Supersedes any pending offers for the same (account, role, scope). Fires permit_revoke + permit_offer_supersede notifications.",
+					"rate_limit_key": "account"
 				},
 				{
 					"name": "account_verify",
@@ -3033,7 +3075,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "Verify the current session and echo the caller account."
+					"description": "Verify the current session and echo the caller account.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "account_session_list",
@@ -3066,7 +3109,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "List auth sessions for the current account."
+					"description": "List auth sessions for the current account.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "account_session_revoke",
@@ -3093,7 +3137,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Revoke a single auth session for the current account (IDOR-guarded)."
+					"description": "Revoke a single auth session for the current account (IDOR-guarded).",
+					"rate_limit_key": null
 				},
 				{
 					"name": "account_session_revoke_all",
@@ -3106,7 +3151,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Revoke every auth session for the current account."
+					"description": "Revoke every auth session for the current account.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "account_token_create",
@@ -3134,7 +3180,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Create an API token for the current account. Raw token is returned once."
+					"description": "Create an API token for the current account. Raw token is returned once.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "account_token_list",
@@ -3177,7 +3224,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "List API tokens for the current account. Hashes are never returned."
+					"description": "List API tokens for the current account. Hashes are never returned.",
+					"rate_limit_key": null
 				},
 				{
 					"name": "account_token_revoke",
@@ -3204,7 +3252,8 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Revoke an API token for the current account (IDOR-guarded)."
+					"description": "Revoke an API token for the current account (IDOR-guarded).",
+					"rate_limit_key": null
 				}
 			]
 		}

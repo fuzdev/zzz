@@ -49,7 +49,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.3.16",
-			"@fuzdev/fuz_app": "^0.51.0",
+			"@fuzdev/fuz_app": "^0.54.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.59.0",
 			"@fuzdev/fuz_ui": "^0.192.0",
@@ -152,7 +152,7 @@
 						"name": "action_specs",
 						"kind": "variable",
 						"source_line": 89,
-						"type_signature": "({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 4 more ...; streams?: string | undefined; } | { ...; } | { ...; })[]"
+						"type_signature": "({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 6 more ...; rate_limit?: \"both\" | ... 2 more ... | undefined; } | { ...; } | { ...; ..."
 					},
 					{
 						"name": "ActionInputs",
@@ -1074,7 +1074,7 @@
 						"kind": "variable",
 						"doc_comment": "Canonical action spec list — fuz_app's protocol actions (`heartbeat`,\n`cancel`) plus zzz-owned specs. Single source of truth for codegen and\nruntime registries (`Frontend.action_registry`, `Backend.action_registry`).\n\nCodegen helpers default-filter protocol actions out of typed surfaces\n(`FrontendActionsApi`, `BackendActionHandlers`, `ActionMethod`, etc.) since\nthey're dispatcher-owned. Server WS registration pairs protocol specs with\nfuz_app-shipped handlers via `protocol_actions`; iteration over\n`all_action_specs` skips them via `is_protocol_action_method` to avoid\ndouble-registration. Adding a future protocol action requires no consumer\nedit — fuz_app's `protocol_action_specs` is the upstream canonical bundle.",
 						"source_line": 754,
-						"type_signature": "({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 4 more ...; streams?: string | undefined; } | { ...; } | { ...; })[]"
+						"type_signature": "({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 6 more ...; rate_limit?: \"both\" | ... 2 more ... | undefined; } | { ...; } | { ...; ..."
 					}
 				],
 				"dependencies": [
@@ -7480,8 +7480,8 @@
 							{
 								"name": "lookup_action_spec",
 								"kind": "function",
-								"type_signature": "(method: string): { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 5 more ...; streams?: string | undefined; } | { ...; } | { ...; } | undefined",
-								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 4 more ...; streams?: string | undefined; } | { ...; } | { ...; } | undefined",
+								"type_signature": "(method: string): { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 7 more ...; rate_limit?: \"both\" | ... 2 more ... | undefined; } | { ...; } | { ...; } | undefined",
+								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 6 more ...; rate_limit?: \"both\" | ... 2 more ... | undefined; } | { ...; } | { ...; }...",
 								"parameters": [
 									{
 										"name": "method",
@@ -13949,7 +13949,7 @@
 								"name": "add_schema",
 								"kind": "function",
 								"doc_comment": "Add a schema to the appropriate registries.",
-								"type_signature": "(name: VocabName, schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; ... 6 more ...; streams?: string | undefined; } | { ...; } | { ...; }): void",
+								"type_signature": "(name: VocabName, schema: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; ... 8 more ...; rate_limit?: \"both\" | ... 2 more ... | undefined; } | { ...; } | { ...; }): void",
 								"return_type": "void",
 								"parameters": [
 									{
@@ -13958,7 +13958,7 @@
 									},
 									{
 										"name": "schema",
-										"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 5 more ...; streams?: string | undefined; } | { ...; } | { ...; }"
+										"type": "ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>> | { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 7 more ...; rate_limit?: \"both\" | ... 2 more ... | undefined; } | { ...; } | { ...; }"
 									}
 								]
 							},
@@ -13993,7 +13993,7 @@
 								"kind": "function",
 								"doc_comment": "Get an action specification by method name.",
 								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 24 more ... | \"cancel\"): { ...; } | ... 2 more ... | undefined",
-								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 4 more ...; streams?: string | undefined; } | { ...; } | { ...; } | undefined",
+								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 6 more ...; rate_limit?: \"both\" | ... 2 more ... | undefined; } | { ...; } | { ...; }...",
 								"parameters": [
 									{
 										"name": "method",
@@ -14149,7 +14149,7 @@
 						"name": "broadcast_action_specs",
 						"kind": "variable",
 						"source_line": 24,
-						"type_signature": "readonly ({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 4 more ...; streams?: string | undefined; } | { ...; } | { ...; })[]"
+						"type_signature": "readonly ({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 6 more ...; rate_limit?: \"both\" | ... 2 more ... | undefined; } | { ...; } ..."
 					},
 					{
 						"name": "BackendActionHandlers",
@@ -15317,8 +15317,8 @@
 							{
 								"name": "lookup_action_spec",
 								"kind": "function",
-								"type_signature": "(method: string): { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 5 more ...; streams?: string | undefined; } | { ...; } | { ...; } | undefined",
-								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 4 more ...; streams?: string | undefined; } | { ...; } | { ...; } | undefined",
+								"type_signature": "(method: string): { method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 7 more ...; rate_limit?: \"both\" | ... 2 more ... | undefined; } | { ...; } | { ...; } | undefined",
+								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 6 more ...; rate_limit?: \"both\" | ... 2 more ... | undefined; } | { ...; } | { ...; }...",
 								"parameters": [
 									{
 										"name": "method",
@@ -15920,11 +15920,11 @@
 								"name": "constructor",
 								"kind": "constructor",
 								"doc_comment": "Create a new ScopedFs instance with the specified allowed paths.",
-								"type_signature": "(allowed_paths: readonly string[] | string[]): ScopedFs",
+								"type_signature": "(allowed_paths: string[] | readonly string[]): ScopedFs",
 								"parameters": [
 									{
 										"name": "allowed_paths",
-										"type": "readonly string[] | string[]",
+										"type": "string[] | readonly string[]",
 										"description": "array of absolute paths that operations will be restricted to"
 									}
 								]
