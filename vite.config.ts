@@ -33,6 +33,7 @@ export default defineConfig(({mode}) => ({
 	},
 	// In test mode, use browser conditions so Svelte's mount() resolves to the client version
 	resolve: mode === 'test' ? {conditions: ['browser']} : undefined,
+	optimizeDeps: {exclude: ['@fuzdev/blake3_wasm']},
 	server: {
 		proxy: {
 			'/api': `http://localhost:${process.env.PUBLIC_SERVER_PROXIED_PORT || '8999'}`,
