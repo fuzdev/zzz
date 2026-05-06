@@ -1,8 +1,8 @@
 <script lang="ts" generics="T extends {id: Uuid}">
 	import {EMPTY_ARRAY} from '@fuzdev/fuz_util/array.js';
+	import type {Uuid} from '@fuzdev/fuz_util/id.js';
 	import type {Snippet} from 'svelte';
 
-	import type {Uuid} from './zod_helpers.js';
 	import type {Sorter} from './sortable.svelte.js';
 	import SortableList from './SortableList.svelte';
 

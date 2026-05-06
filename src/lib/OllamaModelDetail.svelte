@@ -4,6 +4,7 @@
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import Details from '@fuzdev/fuz_ui/Details.svelte';
 	import type {Snippet} from 'svelte';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
 	import Glyph from './Glyph.svelte';
 	import {
@@ -15,7 +16,6 @@
 		GLYPH_DISCONNECT,
 	} from './glyphs.js';
 	import type {Model} from './model.svelte.js';
-	import ConfirmButton from './ConfirmButton.svelte';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 	import ModelLink from './ModelLink.svelte';
 	import {format_short_date} from './time_helpers.js';
@@ -52,7 +52,7 @@
 			{#if onclose}
 				<button
 					type="button"
-					class="icon_button plain"
+					class="icon-button plain"
 					onclick={() => onclose(model)}
 					title="close"
 				>
@@ -107,7 +107,7 @@
 					{#snippet popover_content(popover)}
 						<button
 							type="button"
-							class="color_c icon_button"
+							class="color_c icon-button"
 							title="confirm delete"
 							onclick={() => {
 								// TODO async confirmation
@@ -148,7 +148,7 @@
 			</div>
 			<button
 				type="button"
-				class="color_c icon_button plain"
+				class="color_c icon-button plain"
 				onclick={() => onshow(model)}
 				title="retry loading details"
 			>

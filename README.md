@@ -40,11 +40,10 @@ and it will have a production build with the Node adapter and Hono server soon.
 
 To run Zzz, we need an `.env.development` file in your project root.
 
-In your terminal, copy over
-[src/lib/server/.env.development.example](/src/lib/server/.env.development.example):
+In your terminal, run the setup script (idempotent — safe to re-run):
 
 ```bash
-cp src/lib/server/.env.development.example .env.development --update=none
+deno task dev:setup
 ```
 
 You can edit `.env.development` with your API keys,
@@ -73,7 +72,7 @@ Zzz builds on a great deal of software.
 - I started using [Claude](https://claude.ai/) in late 2024 after making the initial prototype,
   and in late 2025 I started doing much of the coding with Claude Code, Opus 4.5
   being the first over some threshold for me for this project
-  - see `⚠️ AI generated` and similar disclaimers
+  - see `NOTE: AI-generated` and similar disclaimers
 
 ## License 🐦
 

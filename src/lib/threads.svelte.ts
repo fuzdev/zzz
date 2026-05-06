@@ -1,9 +1,9 @@
 import {z} from 'zod';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {Thread} from './thread.svelte.js';
 import {ThreadJson, type ThreadJsonInput} from './thread_types.js';
-import type {Uuid} from './zod_helpers.js';
 import {HANDLED} from './cell_helpers.js';
 import {IndexedCollection} from './indexed_collection.svelte.js';
 import {create_multi_index, create_derived_index} from './indexed_collection_helpers.svelte.js';
@@ -35,7 +35,7 @@ export class Threads extends Cell<typeof ThreadsJson> {
 		],
 	});
 
-	selected_id: Uuid | null = $state(null);
+	selected_id: Uuid | null = $state.raw(null);
 	readonly selected: Thread | undefined = $derived(
 		this.selected_id ? this.items.by_id.get(this.selected_id) : undefined,
 	);

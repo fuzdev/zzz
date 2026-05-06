@@ -16,27 +16,27 @@
 			<p>no projects yet</p>
 		</div>
 	{:else}
-		<div class="projects_grid">
+		<div class="projects-grid">
 			{#each projects.projects as project (project.id)}
 				<a
 					href={resolve(`/projects/${project.id}`)}
-					class="project_card panel p_md font-weight:400"
+					class="project-card panel p_md font-weight:400"
 				>
 					<h3 class="mt_0 mb_sm">{project.name}</h3>
 					<p class="mb_md">{project.description}</p>
-					<div class="domains_list mb_md">
+					<div class="domains-list mb_md">
 						{#each project.domains as domain (domain.id)}
-							<div class="domain_chip">
+							<div class="domain-chip">
 								<span
-									class="status_dot {domain.status === 'active'
-										? 'status_active'
+									class="status-dot {domain.status === 'active'
+										? 'status-active'
 										: domain.status === 'pending'
-											? 'status_pending'
-											: 'status_inactive'}"
+											? 'status-pending'
+											: 'status-inactive'}"
 								></span>
 								{domain.name}
 								{#if !domain.ssl}
-									<span class="no_ssl_badge">no SSL</span>
+									<span class="no-ssl-badge">no SSL</span>
 								{/if}
 							</div>
 						{/each}
@@ -60,56 +60,56 @@
 </section>
 
 <style>
-	.projects_grid {
+	.projects-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 		gap: var(--font_size_md);
 	}
 
-	.project_card {
+	.project-card {
 		display: block;
 		text-decoration: none;
 		color: inherit;
 		border: 1px solid var(--border_color_10);
 	}
 
-	.project_card:hover {
+	.project-card:hover {
 		border-color: var(--border_color_20);
 	}
 
-	.domains_list {
+	.domains-list {
 		display: flex;
 		flex-direction: column;
 		gap: var(--font_size_xs);
 	}
 
-	.domain_chip {
+	.domain-chip {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--font_size_xs);
 		font-family: var(--font_family_mono);
 	}
 
-	.status_dot {
+	.status-dot {
 		display: inline-block;
 		width: 8px;
 		height: 8px;
 		border-radius: 50%;
 	}
 
-	.status_active {
+	.status-active {
 		background-color: var(--color_b_50);
 	}
 
-	.status_pending {
+	.status-pending {
 		background-color: var(--color_e_50);
 	}
 
-	.status_inactive {
+	.status-inactive {
 		background-color: var(--text_50);
 	}
 
-	.no_ssl_badge {
+	.no-ssl-badge {
 		font-size: 0.8em;
 		background-color: var(--shade_20);
 		padding: 1px 4px;

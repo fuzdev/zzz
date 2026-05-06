@@ -14,6 +14,7 @@ import {z} from 'zod';
 export const ScopedFsPath = z
 	.string()
 	.refine((p) => p.startsWith('/'), {message: 'Path must be absolute'})
+	.refine((p) => !p.includes('\0'), {message: 'Path must not contain null bytes'})
 	.transform((p) => normalize(p.trim()))
 	.brand('ScopedFsPath');
 export type ScopedFsPath = z.infer<typeof ScopedFsPath>;
@@ -33,22 +34,66 @@ export type ScopedFsPath = z.infer<typeof ScopedFsPath>;
  * user-provided or untrusted input paths to ensure proper access boundaries.
  */
 export class ScopedFs {
-	readonly allowed_paths: ReadonlyArray<ScopedFsPath>;
+	#allowed_paths: Array<ScopedFsPath> = [];
+
+	/** The current set of allowed paths. */
+	get allowed_paths(): ReadonlyArray<ScopedFsPath> {
+		return this.#allowed_paths;
+	}
 
 	/**
 	 * Create a new ScopedFs instance with the specified allowed paths.
-	 * @param allowed_paths Array of absolute paths that operations will be restricted to
+	 * @param allowed_paths - array of absolute paths that operations will be restricted to
 	 */
 	constructor(allowed_paths: Array<string> | ReadonlyArray<string>) {
+		for (const p of allowed_paths) {
+			if (p) this.add_path(p);
+		}
+	}
+
+	/**
+	 * Add a path to the allowed set. No-op if already present.
+	 *
+	 * @param path - absolute directory path to allow
+	 * @returns true if the path was added, false if already allowed
+	 */
+	add_path(path: string): boolean {
+		const normalized = ScopedFsPath.parse(ensure_end(path, '/'));
+		if (this.#allowed_paths.some((p) => p === normalized)) {
+			return false;
+		}
+		this.#allowed_paths.push(normalized);
+		return true;
+	}
+
+	/**
+	 * Remove a path from the allowed set.
+	 *
+	 * @param path - absolute directory path to remove
+	 * @returns true if the path was removed, false if not found
+	 */
+	remove_path(path: string): boolean {
+		const normalized = ScopedFsPath.parse(ensure_end(path, '/'));
+		const index = this.#allowed_paths.findIndex((p) => p === normalized);
+		if (index === -1) {
+			return false;
+		}
+		this.#allowed_paths.splice(index, 1);
+		return true;
+	}
+
+	/**
+	 * Check if a directory path is in the allowed set.
+	 *
+	 * @param path - absolute directory path to check
+	 * @returns true if the path is an allowed root
+	 */
+	has_path(path: string): boolean {
 		try {
-			this.allowed_paths = Object.freeze(
-				allowed_paths.filter(Boolean).map((p) => ScopedFsPath.parse(ensure_end(p, '/'))),
-			);
-		} catch (error) {
-			if (error instanceof z.ZodError) {
-				throw new Error(`Invalid path in allowed_paths: ${error.message}`);
-			}
-			throw error;
+			const normalized = ScopedFsPath.parse(ensure_end(path, '/'));
+			return this.#allowed_paths.some((p) => p === normalized);
+		} catch {
+			return false;
 		}
 	}
 
@@ -63,16 +108,10 @@ export class ScopedFs {
 			// and normalizes all path traversal attempts
 			const normalized_path = ScopedFsPath.parse(path_to_check);
 
-			// Check if within allowed paths
-			for (const allowed_path of this.allowed_paths) {
-				if (!allowed_path) continue;
-
+			// Check if within allowed paths (allowed_path always has trailing slash from add_path)
+			for (const allowed_path of this.#allowed_paths) {
 				if (
-					// Root directory is special
-					(allowed_path === '/' && normalized_path.startsWith('/')) ||
-					// Direct path match
-					normalized_path === allowed_path ||
-					// Path is inside directory (allowed_path already has trailing slash)
+					// Path is inside directory or exact match with trailing slash
 					normalized_path.startsWith(allowed_path) ||
 					// Handle case where path equals directory but without trailing slash
 					// e.g., '/dir' matches '/dir/'
@@ -130,7 +169,7 @@ export class ScopedFs {
 	}
 
 	async readdir(
-		path: fs_types.PathLike,
+		path: string,
 		options?:
 			| (fs_types.ObjectEncodingOptions & {
 					withFileTypes?: false | undefined;
@@ -140,7 +179,7 @@ export class ScopedFs {
 			| null,
 	): Promise<Array<string>>;
 	async readdir(
-		path: fs_types.PathLike,
+		path: string,
 		options: fs_types.ObjectEncodingOptions & {
 			withFileTypes: true;
 			recursive?: boolean | undefined;
@@ -176,8 +215,8 @@ export class ScopedFs {
 			return false;
 		}
 		try {
-			await this.#ensure_safe_path(path_to_check);
-			await fs.access(ScopedFsPath.parse(path_to_check));
+			const safe_path = await this.#ensure_safe_path(path_to_check);
+			await fs.access(safe_path);
 			return true;
 		} catch {
 			return false;
@@ -187,6 +226,12 @@ export class ScopedFs {
 	/**
 	 * Ensures a path is safe by validating it.
 	 * Throws an error if the path is not allowed or contains symlinks.
+	 *
+	 * NOTE: There is an inherent TOCTOU gap between the symlink check (`lstat`) and the
+	 * caller's subsequent filesystem operation. A symlink could be created after validation.
+	 * This is not fixable in userspace Node.js — `O_NOFOLLOW` only covers the final path
+	 * component and `openat2(RESOLVE_NO_SYMLINKS)` is not exposed. Kernel-level sandboxing
+	 * (namespaces, seccomp, landlock) is needed for airtight enforcement.
 	 */
 	async #ensure_safe_path(path_to_check: string): Promise<string> {
 		let normalized_path: ScopedFsPath;
@@ -208,7 +253,7 @@ export class ScopedFs {
 			}
 		} catch (error) {
 			// If error is due to non-existence, ignore
-			if (!((error as NodeJS.ErrnoException).code === 'ENOENT')) {
+			if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
 				throw error;
 			}
 		}
@@ -220,12 +265,12 @@ export class ScopedFs {
 			if (parent === current) break;
 
 			try {
-				const stats = await fs.lstat(parent); // eslint-disable-line no-await-in-loop
+				const stats = await fs.lstat(parent);
 				if (stats.isSymbolicLink()) {
 					throw new SymlinkNotAllowedError(parent);
 				}
 			} catch (error) {
-				if (!((error as NodeJS.ErrnoException).code === 'ENOENT')) {
+				if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
 					throw error;
 				}
 			}

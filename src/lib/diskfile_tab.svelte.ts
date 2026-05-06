@@ -1,7 +1,7 @@
 import {z} from 'zod';
+import {Uuid} from '@fuzdev/fuz_util/id.js';
 
 import {Cell, type CellOptions} from './cell.svelte.js';
-import {Uuid} from './zod_helpers.js';
 import {CellJson} from './cell_types.js';
 import type {Diskfile} from './diskfile.svelte.js';
 import type {DiskfileTabs} from './diskfile_tabs.svelte.js';
@@ -17,7 +17,7 @@ export interface DiskfileTabOptions extends CellOptions<typeof DiskfileTabJson> 
 }
 
 export class DiskfileTab extends Cell<typeof DiskfileTabJson> {
-	diskfile_id: Uuid = $state()!;
+	diskfile_id: Uuid = $state.raw()!;
 
 	/**
 	 * Reference to the parent tabs collection,

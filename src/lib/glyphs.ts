@@ -1,5 +1,5 @@
 import type {ActionMethod} from './action_metatypes.js';
-import type {ActionKind} from './action_types.js';
+import type {ActionKind} from '@fuzdev/fuz_app/actions/action_spec.js';
 
 export const GLYPH_UNKNOWN = '⁇'; // ⍰
 export const GLYPH_IMPORTANT = '⁈';
@@ -23,7 +23,7 @@ export const GLYPH_PLACEHOLDER = '↳';
 export const GLYPH_SEND = '⮥'; // ⮥ ⭷ ↗
 export const GLYPH_PLAY = '▶︎';
 export const GLYPH_PAUSE = '❙❙'; // is 2 chars, should be supported by usage
-// export const GLYPH_STOP = '⏹'; // ⏹ ■ ▣ ▪
+export const GLYPH_STOP = '⏹'; // ⏹ ■ ▣ ▪
 // export const GLYPH_EJECT = '⏏';
 //  ⏭ ⏯ ⏮
 
@@ -76,6 +76,12 @@ export const GLYPH_SETTINGS = '⛮'; // ⛭  ⚙  ⛮  ⛯ ⛣
 export const GLYPH_DOMAIN = '⟡'; // ⟡ ⏥
 export const GLYPH_PAGE = '⌺'; // ⌺ ⎚
 
+export const GLYPH_SPACE = '⌂'; // space/container
+export const GLYPH_DESK = '⍟'; // desk/system menu
+export const GLYPH_PIN = '⏍'; // pin/tack
+
+export const GLYPH_TERMINAL = '⌨'; // ⌨ ⍄ ⎙
+export const GLYPH_WORKSPACE = '⊞'; // ⌗ ⊟ ⊞
 export const GLYPH_IDEA = '⌆'; // TODO use
 
 export const GLYPH_PING = '⥀';

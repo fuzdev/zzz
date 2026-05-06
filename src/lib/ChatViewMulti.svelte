@@ -1,8 +1,8 @@
 <script lang="ts">
 	import PendingButton from '@fuzdev/fuz_ui/PendingButton.svelte';
 	import {slide} from 'svelte/transition';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import ConfirmButton from './ConfirmButton.svelte';
 	import {Chat} from './chat.svelte.js';
 	import ChatThread from './ChatThread.svelte';
 	import {GLYPH_ADD, GLYPH_PLACEHOLDER, GLYPH_REMOVE, GLYPH_SEND} from './glyphs.js';
@@ -17,7 +17,7 @@
 	} = $props();
 
 	let content_input: {focus: () => void} | undefined;
-	let pending = $state(false); // TODO refactor request state
+	let pending = $state.raw(false); // TODO refactor request state
 
 	const send_to_all = async () => {
 		if (!count) return;
@@ -34,11 +34,11 @@
 
 	const count = $derived(chat.enabled_threads.length);
 
-	let show_model_picker = $state(false);
+	let show_model_picker = $state.raw(false);
 </script>
 
-<div class="column_fluid">
-	<div class="column_bg_1 p_sm">
+<div class="column-fluid">
+	<div class="column-bg-1 p_sm">
 		<ContentEditor
 			bind:this={content_input}
 			bind:content={chat.main_input}
@@ -81,7 +81,7 @@
 					<ChatThread
 						{thread}
 						onsend={(input) => chat.send_to_thread(thread.id, input)}
-						turns_attrs={{class: 'max_height_sm'}}
+						turns_attrs={{class: 'max-height-sm'}}
 						attrs={{class: 'p_md'}}
 					/>
 				</li>

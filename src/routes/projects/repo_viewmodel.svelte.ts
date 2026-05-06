@@ -3,8 +3,9 @@
 import {z} from 'zod';
 import {goto} from '$app/navigation';
 import {resolve} from '$app/paths';
+import {create_uuid, type Uuid} from '@fuzdev/fuz_util/id.js';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
-import {create_uuid, get_datetime_now, type Uuid} from '$lib/zod_helpers.js';
 import {Repo} from '$routes/projects/repo.svelte.js';
 import type {RepoCheckout} from '$routes/projects/projects_schema.js';
 import type {Projects} from '$routes/projects/projects.svelte.js';
@@ -21,10 +22,10 @@ export interface RepoViewmodelOptions {
 export class RepoViewmodel {
 	readonly projects: Projects;
 
-	project_id: Uuid = $state()!;
-	repo_id: Uuid | null = $state()!;
+	project_id: Uuid = $state.raw()!;
+	repo_id: Uuid | null = $state.raw()!;
 
-	git_url: string = $state()!;
+	git_url: string = $state.raw()!;
 	checkouts: Array<RepoCheckout> = $state([]);
 
 	/** Whether the form has unsaved changes. */

@@ -1,21 +1,12 @@
 import OpenAI from 'openai';
-import {SECRET_OPENAI_API_KEY} from '$env/static/private';
 
-import {
-	BackendProviderRemote,
-	type BackendProviderOptions,
-	type CompletionHandlerOptions,
-} from './backend_provider.js';
+import {BackendProviderRemote, type CompletionHandlerOptions} from './backend_provider.js';
 import {to_completion_result} from '../response_helpers.js';
 import type {ActionOutputs} from '../action_collections.js';
 import type {CompletionMessage} from '../completion_types.js';
 
 export class BackendProviderChatgpt extends BackendProviderRemote<OpenAI> {
 	readonly name = 'chatgpt';
-
-	constructor(options: BackendProviderOptions) {
-		super({...options, api_key: options.api_key ?? (SECRET_OPENAI_API_KEY || null)});
-	}
 
 	protected override create_client(): void {
 		this.client = this.api_key ? new OpenAI({apiKey: this.api_key}) : null;
@@ -24,7 +15,15 @@ export class BackendProviderChatgpt extends BackendProviderRemote<OpenAI> {
 	async handle_streaming_completion(
 		options: CompletionHandlerOptions,
 	): Promise<ActionOutputs['completion_create']> {
-		const {model, completion_options, completion_messages, prompt, progress_token} = options;
+		const {
+			model,
+			completion_options,
+			completion_messages,
+			prompt,
+			progress_token,
+			on_progress,
+			signal,
+		} = options;
 		this.validate_streaming_requirements(progress_token);
 
 		// TODO use responses API instead
@@ -36,6 +35,7 @@ export class BackendProviderChatgpt extends BackendProviderRemote<OpenAI> {
 				prompt,
 				true,
 			),
+			{signal},
 		);
 
 		let accumulated_content = '';
@@ -58,13 +58,17 @@ export class BackendProviderChatgpt extends BackendProviderRemote<OpenAI> {
 				accumulated_content += delta.content;
 
 				// Send streaming progress notification to frontend
-				void this.send_streaming_progress(progress_token, {
-					// TODO @many other chunk data
-					message: {
-						role: 'assistant',
-						content: delta.content,
+				void this.send_streaming_progress(
+					progress_token,
+					{
+						// TODO @many other chunk data
+						message: {
+							role: 'assistant',
+							content: delta.content,
+						},
 					},
-				});
+					on_progress,
+				);
 			}
 
 			// Capture finish reason
@@ -106,7 +110,7 @@ export class BackendProviderChatgpt extends BackendProviderRemote<OpenAI> {
 	async handle_non_streaming_completion(
 		options: CompletionHandlerOptions,
 	): Promise<ActionOutputs['completion_create']> {
-		const {model, completion_options, completion_messages, prompt} = options;
+		const {model, completion_options, completion_messages, prompt, signal} = options;
 
 		// TODO use responses API instead
 		const response = await this.get_client().chat.completions.create(
@@ -117,6 +121,7 @@ export class BackendProviderChatgpt extends BackendProviderRemote<OpenAI> {
 				prompt,
 				false,
 			),
+			{signal},
 		);
 
 		this.log_non_streaming_response(response);

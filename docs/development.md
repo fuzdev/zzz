@@ -6,11 +6,29 @@ Development workflow, extension points, and common patterns.
 
 ```bash
 git clone https://github.com/fuzdev/zzz.git && cd zzz
-cp src/lib/server/.env.development.example .env.development
+deno task dev:setup
 npm install
 ```
 
 Optionally add API keys to `.env.development` for remote providers (Anthropic, OpenAI, Google). Ollama requires no key.
+
+### PTY support (optional)
+
+Terminal integration uses a Rust shared library (`fuz_pty`) for real PTY
+support via Deno FFI. Without it, terminals fall back to `Deno.Command` pipes
+(commands run but no echo, no prompt, no interactivity).
+
+```bash
+cd ~/dev/private_fuz && cargo build -p fuz_pty --release
+```
+
+This produces `target/release/libfuz_pty.so`, which zzz loads at runtime via
+`Deno.dlopen()`. The dev server needs `--allow-ffi` (already set in
+`gro.config.ts`). The compiled binary also has `--allow-ffi`.
+
+For bundled/compiled binaries, place `libfuz_pty.so` next to the `zzz`
+executable. The library lookup checks exe-relative path first, then falls back
+to the dev path (~/dev/private_fuz/target/release/).
 
 ## Commands
 
@@ -37,7 +55,6 @@ Never run `gro dev` — the user manages the dev server.
 | `src/lib/action_metatypes.gen.ts` | Action method types |
 | `src/lib/action_collections.gen.ts` | Action spec collections |
 | `src/lib/frontend_action_types.gen.ts` | Frontend handler types |
-| `src/lib/server/backend_action_types.gen.ts` | Backend handler types |
 | `src/routes/library.gen.ts` | Route metadata |
 
 Run `gro gen` after changing `action_specs.ts`.
@@ -65,6 +82,7 @@ Components use `PascalCase` with domain prefixes:
 | `Ollama` | Ollama-specific | `OllamaManager`, `OllamaPullModel` |
 | `Part` | Content parts | `PartView`, `PartEditorForText` |
 | `Prompt` | Prompts | `PromptList`, `PromptPickerDialog` |
+| `Terminal` | Terminals | `TerminalRunner`, `TerminalView`, `TerminalContextmenu` |
 | `Thread` | Threads | `ThreadList`, `ThreadContextmenu` |
 | `Turn` | Turns | `TurnView`, `TurnListitem` |
 
@@ -85,8 +103,8 @@ export const MyThingJson = CellJson.extend({
 
 ```typescript
 export class MyThing extends Cell<typeof MyThingJson> {
-  name: string = $state()!;
-  value: number = $state()!;
+  name: string = $state.raw()!;
+  value: number = $state.raw()!;
 
   readonly doubled = $derived(this.value * 2);
 
@@ -145,16 +163,62 @@ my_action: {
 },
 ```
 
-4. Add backend handler (`src/lib/server/backend_action_handlers.ts`):
+4. Add handler (`src/lib/server/zzz_action_handlers.ts`):
 
 ```typescript
-my_action: {
-  receive_request: async ({backend, data: {input}}) => {
-    const {message} = input;
-    return {result: `Processed: ${message}`};
-  },
+my_action: async (input, ctx) => {
+  const {message} = input;
+  return {result: `Processed: ${message}`};
 },
 ```
+
+Both HTTP RPC and WebSocket paths automatically pick up the new handler.
+The `ctx` arg is `{backend, request_id, notify, signal}` — see "Streaming
+handlers" below for `notify` / `signal` usage.
+
+### Streaming Handlers
+
+For actions that push progress notifications back to the requester while
+running, pair the `request_response` action with a companion
+`remote_notification` action and name the companion in the `streams` field:
+
+```typescript
+export const my_long_job_action_spec = {
+  method: 'my_long_job',
+  kind: 'request_response',
+  initiator: 'frontend',
+  auth: 'authenticated',
+  streams: 'my_long_job_progress', // name of the companion notification
+  input: z.strictObject({...}),
+  output: z.null(),
+  async: true,
+} satisfies ActionSpecUnion;
+
+export const my_long_job_progress_action_spec = {
+  method: 'my_long_job_progress',
+  kind: 'remote_notification',
+  initiator: 'backend',
+  input: z.strictObject({...}),
+  async: false,
+} satisfies ActionSpecUnion;
+```
+
+In the handler, use `ctx.notify` to send chunks to the originating socket
+(request-scoped), and `ctx.signal` to terminate early when the socket closes:
+
+```typescript
+my_long_job: async (input, ctx) => {
+  for await (const chunk of produce_chunks(input)) {
+    if (ctx.signal.aborted) break;
+    ctx.notify('my_long_job_progress', chunk);
+  }
+  return null;
+},
+```
+
+For broadcast (all connected sockets) use `ctx.backend.api.<method>(input)`
+instead — appropriate for server-wide events like `filer_change` or
+`workspace_changed`.
 
 ### Adding a New Route
 
@@ -339,15 +403,15 @@ All imports use `.js` extensions (ESM convention).
 ### Svelte 5 Runes in State Classes
 
 ```typescript
-// Schema fields — $state()! initialized by Cell.init()
-name: string = $state()!;
+// Schema fields — $state.raw()! by default, initialized by Cell.init()
+name: string = $state.raw()!;
+
+// $state()! only for arrays/objects mutated in place (push, splice, etc.)
+thread_ids: Array<Uuid> = $state()!;
 
 // Derived values
 readonly doubled = $derived(this.count * 2);
 readonly complex = $derived.by(() => expensiveCalculation(this.count));
-
-// Raw state (no deep reactivity) — for large objects
-response: CompletionResponse = $state.raw();
 ```
 
 No `$effect` in Cell classes — effects belong in Svelte components only.

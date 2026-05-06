@@ -1,9 +1,9 @@
 import {z} from 'zod';
 import {page} from '$app/state';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {Prompt, PromptJson, type PromptJsonInput} from './prompt.svelte.js';
-import type {Uuid} from './zod_helpers.js';
 import {HANDLED} from './cell_helpers.js';
 import {IndexedCollection} from './indexed_collection.svelte.js';
 import {create_single_index, create_derived_index} from './indexed_collection_helpers.svelte.js';
@@ -61,8 +61,8 @@ export class Prompts extends Cell<typeof PromptsJson> {
 		],
 	});
 
-	#selected_id: Uuid | null = $state()!;
-	selected_id_last_non_null: Uuid | null = $state()!;
+	#selected_id: Uuid | null = $state.raw()!;
+	selected_id_last_non_null: Uuid | null = $state.raw()!;
 	get selected_id(): Uuid | null {
 		return this.#selected_id;
 	}
@@ -76,7 +76,7 @@ export class Prompts extends Cell<typeof PromptsJson> {
 	);
 
 	/** Controls visibility of sort controls in the prompts list. */
-	show_sort_controls: boolean = $state()!;
+	show_sort_controls: boolean = $state.raw()!;
 
 	/** Ordered array of prompts derived from the `manual_order` index. */
 	readonly ordered_items: Array<Prompt> = $derived(this.items.derived_index('manual_order'));

@@ -17,7 +17,7 @@
 	const project = $derived(projects.current_project);
 </script>
 
-<div class="domain_layout">
+<div class="domain-layout">
 	<!-- TODO @many refactor for better component instance stability for e.g. transitions -->
 	<ProjectSidebar />
 	{#if project}
@@ -25,7 +25,7 @@
 		<DomainsSidebar />
 	{/if}
 
-	<div class="domain_content">
+	<div class="domain-content">
 		{#if project && domains_viewmodel}
 			<div class="p_lg">
 				<h1 class="mb_lg">edit domain</h1>
@@ -148,13 +148,13 @@
 </div>
 
 <style>
-	.domain_layout {
+	.domain-layout {
 		display: flex;
 		height: 100%;
 		overflow: hidden;
 	}
 
-	.domain_content {
+	.domain-content {
 		flex: 1;
 		overflow: auto;
 	}

@@ -1,15 +1,15 @@
-// @slop Claude Sonnet 3.7
-
 // @vitest-environment jsdom
 
-import {test, expect, vi, beforeEach, describe} from 'vitest';
+import {test, vi, beforeEach, describe, assert} from 'vitest';
 import {z} from 'zod';
+import {create_uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.js';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
 import {Cell, type CellOptions} from '$lib/cell.svelte.js';
 import {CellJson} from '$lib/cell_types.js';
-import {create_uuid, get_datetime_now, UuidWithDefault} from '$lib/zod_helpers.js';
 import {Frontend} from '$lib/frontend.svelte.js';
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+
+import {monkeypatch_zzz_for_tests} from './test_helpers.js';
 
 // Constants for testing
 const TEST_ID = create_uuid();
@@ -59,16 +59,16 @@ describe('Cell initialization', () => {
 		});
 
 		// Verify basic properties
-		expect(test_cell.id).toBe(TEST_ID);
-		expect(test_cell.created).toBe(TEST_DATETIME);
-		expect(test_cell.updated).toBe(test_cell.created);
-		expect(test_cell.text).toBe('Sample');
-		expect(test_cell.number).toBe(42);
-		expect(test_cell.items).toEqual(['item1', 'item2']);
+		assert.strictEqual(test_cell.id, TEST_ID);
+		assert.strictEqual(test_cell.created, TEST_DATETIME);
+		assert.strictEqual(test_cell.updated, test_cell.created);
+		assert.strictEqual(test_cell.text, 'Sample');
+		assert.strictEqual(test_cell.number, 42);
+		assert.deepEqual(test_cell.items, ['item1', 'item2']);
 
 		// Verify cell was registered
-		expect(app.cell_registry.all.has(TEST_ID)).toBe(true);
-		expect(app.cell_registry.all.get(TEST_ID)).toBe(test_cell);
+		assert.ok(app.cell_registry.all.has(TEST_ID));
+		assert.ok(app.cell_registry.all.get(TEST_ID) === (test_cell as any));
 	});
 
 	test('uses default values when json is empty', () => {
@@ -77,13 +77,13 @@ describe('Cell initialization', () => {
 		});
 
 		// Should use schema defaults
-		expect(test_cell.id).toBeDefined();
-		expect(test_cell.created).toBeDefined();
-		expect(test_cell.updated).toBe(test_cell.created);
-		expect(test_cell.text).toBe('');
-		expect(test_cell.number).toBe(0);
-		expect(test_cell.items).toEqual([]);
-		expect(test_cell.flag).toBe(true);
+		assert.isDefined(test_cell.id);
+		assert.isDefined(test_cell.created);
+		assert.strictEqual(test_cell.updated, test_cell.created);
+		assert.strictEqual(test_cell.text, '');
+		assert.strictEqual(test_cell.number, 0);
+		assert.deepEqual(test_cell.items, []);
+		assert.ok(test_cell.flag);
 	});
 
 	test('derived schema properties are correctly calculated', () => {
@@ -95,25 +95,25 @@ describe('Cell initialization', () => {
 		});
 
 		// Check if schema keys contain expected fields
-		expect(test_cell.schema_keys).toContain('id');
-		expect(test_cell.schema_keys).toContain('text');
-		expect(test_cell.schema_keys).toContain('number');
-		expect(test_cell.schema_keys).toContain('items');
+		assert.include(test_cell.schema_keys, 'id');
+		assert.include(test_cell.schema_keys, 'text');
+		assert.include(test_cell.schema_keys, 'number');
+		assert.include(test_cell.schema_keys, 'items');
 
 		// Check if field schemas are correctly mapped
-		expect(test_cell.field_schemas.size).toBeGreaterThan(0);
-		expect(test_cell.field_schemas.has('text')).toBe(true);
-		expect(test_cell.field_schemas.has('number')).toBe(true);
+		assert.ok(test_cell.field_schemas.size > 0);
+		assert.ok(test_cell.field_schemas.has('text'));
+		assert.ok(test_cell.field_schemas.has('number'));
 
 		// Test schema info for an array type
 		const items_info = test_cell.field_schema_info.get('items');
-		expect(items_info?.is_array).toBe(true);
-		expect(items_info?.type).toBe('ZodArray');
+		assert.ok(items_info?.is_array);
+		assert.strictEqual(items_info.type, 'ZodArray');
 
 		// Test schema info for a scalar type
 		const text_info = test_cell.field_schema_info.get('text');
-		expect(text_info?.is_array).toBe(false);
-		expect(text_info?.type).toBe('ZodString');
+		assert.ok(!text_info?.is_array);
+		assert.strictEqual(text_info?.type, 'ZodString');
 	});
 });
 
@@ -130,8 +130,8 @@ describe('Cell registry lifecycle', () => {
 		});
 
 		// Cell should be registered automatically in init()
-		expect(app.cell_registry.all.has(cell_id)).toBe(true);
-		expect(app.cell_registry.all.get(cell_id)).toBe(test_cell);
+		assert.ok(app.cell_registry.all.has(cell_id));
+		assert.ok(app.cell_registry.all.get(cell_id) === (test_cell as any));
 	});
 
 	test('dispose removes from registry', () => {
@@ -146,13 +146,13 @@ describe('Cell registry lifecycle', () => {
 		});
 
 		// Verify initial registration
-		expect(app.cell_registry.all.has(cell_id)).toBe(true);
+		assert.ok(app.cell_registry.all.has(cell_id));
 
 		// Dispose cell
 		test_cell.dispose();
 
 		// Should be removed from registry
-		expect(app.cell_registry.all.has(cell_id)).toBe(false);
+		assert.ok(!app.cell_registry.all.has(cell_id));
 	});
 
 	test('dispose is safe to call multiple times', () => {
@@ -167,10 +167,10 @@ describe('Cell registry lifecycle', () => {
 
 		// First dispose
 		test_cell.dispose();
-		expect(app.cell_registry.all.has(cell_id)).toBe(false);
+		assert.ok(!app.cell_registry.all.has(cell_id));
 
 		// Second dispose should not throw
-		expect(() => test_cell.dispose()).not.toThrow();
+		assert.doesNotThrow(() => test_cell.dispose());
 	});
 });
 
@@ -201,11 +201,11 @@ describe('Cell id handling', () => {
 		const initial_id = cell.id;
 
 		// Verify initial state
-		expect(cell.id).toBe(initial_id);
+		assert.strictEqual(cell.id, initial_id);
 
 		// Create a new id to set
 		const new_id = create_uuid();
-		expect(new_id).not.toBe(initial_id);
+		assert.notStrictEqual(new_id, initial_id);
 
 		// Set new id through set_json
 		cell.set_json({
@@ -216,8 +216,8 @@ describe('Cell id handling', () => {
 		});
 
 		// Verify id was changed to the new value
-		expect(cell.id).toBe(new_id);
-		expect(cell.id).not.toBe(initial_id);
+		assert.strictEqual(cell.id, new_id);
+		assert.notStrictEqual(cell.id, initial_id);
 	});
 
 	test('set_json_partial updates id when included in partial update', () => {
@@ -235,11 +235,11 @@ describe('Cell id handling', () => {
 		});
 
 		// Verify id was updated and other properties preserved
-		expect(cell.id).toBe(new_id);
-		expect(cell.id).not.toBe(initial_id);
-		expect(cell.type).toBe('test');
-		expect(cell.content).toBe('');
-		expect(cell.version).toBe(3);
+		assert.strictEqual(cell.id, new_id);
+		assert.notStrictEqual(cell.id, initial_id);
+		assert.strictEqual(cell.type, 'test');
+		assert.strictEqual(cell.content, '');
+		assert.strictEqual(cell.version, 3);
 	});
 
 	test('set_json_partial preserves id when not included in partial update', () => {
@@ -254,9 +254,9 @@ describe('Cell id handling', () => {
 		});
 
 		// Verify id preserved and content updated
-		expect(cell.id).toBe(initial_id);
-		expect(cell.content).toBe('Partial update content');
-		expect(cell.content).not.toBe(initial_content);
+		assert.strictEqual(cell.id, initial_id);
+		assert.strictEqual(cell.content, 'Partial update content');
+		assert.notStrictEqual(cell.content, initial_content);
 	});
 
 	test('schema validation rejects invalid id formats', () => {
@@ -264,11 +264,11 @@ describe('Cell id handling', () => {
 		const cell = new IdTestCell({app});
 
 		// Attempt to set invalid id
-		expect(() => {
+		assert.throws(() => {
 			cell.set_json_partial({
 				id: 'not-a-valid-uuid' as any,
 			});
-		}).toThrow();
+		});
 	});
 
 	test('clone creates a new id instead of copying the original', () => {
@@ -287,13 +287,13 @@ describe('Cell id handling', () => {
 		const cloned_cell = cell.clone();
 
 		// Verify clone has new id but same content
-		expect(cloned_cell.id).not.toBe(original_id);
-		expect(cloned_cell.content).toBe('Original content');
-		expect(cloned_cell.version).toBe(1);
+		assert.notStrictEqual(cloned_cell.id, original_id);
+		assert.strictEqual(cloned_cell.content, 'Original content');
+		assert.strictEqual(cloned_cell.version, 1);
 
 		// Verify changing clone doesn't affect original
 		cloned_cell.content = 'Changed in clone';
-		expect(cell.content).toBe('Original content');
+		assert.strictEqual(cell.content, 'Original content');
 	});
 });
 
@@ -312,11 +312,11 @@ describe('Cell serialization', () => {
 
 		const json = test_cell.to_json();
 
-		expect(json.id).toBe(TEST_ID);
-		expect(json.created).toBe(TEST_DATETIME);
-		expect(json.text).toBe('JSON Test');
-		expect(json.number).toBe(100);
-		expect(json.items).toEqual(['value1', 'value2']);
+		assert.strictEqual(json.id, TEST_ID);
+		assert.strictEqual(json.created, TEST_DATETIME);
+		assert.strictEqual(json.text, 'JSON Test');
+		assert.strictEqual(json.number, 100);
+		assert.deepEqual(json.items, ['value1', 'value2']);
 	});
 
 	test('toJSON method works with JSON.stringify', () => {
@@ -331,8 +331,8 @@ describe('Cell serialization', () => {
 		const stringified = JSON.stringify(test_cell);
 		const parsed = JSON.parse(stringified);
 
-		expect(parsed.id).toBe(TEST_ID);
-		expect(parsed.text).toBe('Stringify Test');
+		assert.strictEqual(parsed.id, TEST_ID);
+		assert.strictEqual(parsed.text, 'Stringify Test');
 	});
 
 	test('derived json properties update when cell changes', () => {
@@ -346,21 +346,21 @@ describe('Cell serialization', () => {
 		});
 
 		// Check initial values
-		expect(test_cell.json.text).toBe('Initial');
-		expect(test_cell.json.number).toBe(10);
+		assert.strictEqual(test_cell.json.text, 'Initial');
+		assert.strictEqual(test_cell.json.number, 10);
 
 		// Update values
 		test_cell.text = 'Updated';
 		test_cell.number = 20;
 
 		// Check derived properties updated
-		expect(test_cell.json.text).toBe('Updated');
-		expect(test_cell.json.number).toBe(20);
+		assert.strictEqual(test_cell.json.text, 'Updated');
+		assert.strictEqual(test_cell.json.number, 20);
 
 		// Check derived serialized JSON
 		const parsed = JSON.parse(test_cell.json_serialized);
-		expect(parsed.text).toBe('Updated');
-		expect(parsed.number).toBe(20);
+		assert.strictEqual(parsed.text, 'Updated');
+		assert.strictEqual(parsed.number, 20);
 	});
 });
 
@@ -381,17 +381,17 @@ describe('Cell modification methods', () => {
 			items: ['new1', 'new2'],
 		});
 
-		expect(test_cell.text).toBe('Updated via set_json');
-		expect(test_cell.number).toBe(50);
-		expect(test_cell.items).toEqual(['new1', 'new2']);
-		expect(test_cell.id).not.toBe(TEST_ID); // id should be new
+		assert.strictEqual(test_cell.text, 'Updated via set_json');
+		assert.strictEqual(test_cell.number, 50);
+		assert.deepEqual(test_cell.items, ['new1', 'new2']);
+		assert.notStrictEqual(test_cell.id, TEST_ID); // id should be new
 	});
 
 	test('set_json rejects invalid data', () => {
 		const test_cell = new BasicTestCell({app});
 
 		// Should reject invalid data with a schema error
-		expect(() => test_cell.set_json({number: 'not a number' as any})).toThrow();
+		assert.throws(() => test_cell.set_json({number: 'not a number' as any}));
 	});
 
 	test('set_json_partial updates only specified properties', () => {
@@ -413,13 +413,13 @@ describe('Cell modification methods', () => {
 		});
 
 		// Verify updated properties
-		expect(test_cell.text).toBe('Updated text');
-		expect(test_cell.number).toBe(20);
+		assert.strictEqual(test_cell.text, 'Updated text');
+		assert.strictEqual(test_cell.number, 20);
 
 		// Verify untouched properties
-		expect(test_cell.items).toEqual(['item1', 'item2']);
-		expect(test_cell.flag).toBe(true);
-		expect(test_cell.id).toBe(TEST_ID);
+		assert.deepEqual(test_cell.items, ['item1', 'item2']);
+		assert.ok(test_cell.flag);
+		assert.strictEqual(test_cell.id, TEST_ID);
 	});
 
 	test('set_json_partial handles null or undefined input', () => {
@@ -432,12 +432,12 @@ describe('Cell modification methods', () => {
 		});
 
 		// These should not throw errors
-		expect(() => test_cell.set_json_partial(null!)).not.toThrow();
-		expect(() => test_cell.set_json_partial(undefined!)).not.toThrow();
+		assert.doesNotThrow(() => test_cell.set_json_partial(null!));
+		assert.doesNotThrow(() => test_cell.set_json_partial(undefined!));
 
 		// Properties should remain unchanged
-		expect(test_cell.id).toBe(TEST_ID);
-		expect(test_cell.text).toBe('Initial');
+		assert.strictEqual(test_cell.id, TEST_ID);
+		assert.strictEqual(test_cell.text, 'Initial');
 	});
 
 	test('set_json_partial validates merged data against schema', () => {
@@ -450,10 +450,10 @@ describe('Cell modification methods', () => {
 		});
 
 		// Should reject invalid data with a schema error
-		expect(() => test_cell.set_json_partial({number: 'not a number' as any})).toThrow();
+		assert.throws(() => test_cell.set_json_partial({number: 'not a number' as any}));
 
 		// Original values should remain unchanged after failed update
-		expect(test_cell.text).toBe('Initial');
+		assert.strictEqual(test_cell.text, 'Initial');
 	});
 });
 
@@ -473,17 +473,17 @@ describe('Cell date formatting', () => {
 		});
 
 		// Verify date objects
-		expect(test_cell.created_date).toBeInstanceOf(Date);
-		expect(test_cell.updated_date).toBeInstanceOf(Date);
+		assert.instanceOf(test_cell.created_date, Date);
+		assert.instanceOf(test_cell.updated_date, Date);
 
 		// Verify formatted strings exist
-		expect(test_cell.created_formatted_short_date).not.toBeNull();
-		expect(test_cell.created_formatted_datetime).not.toBeNull();
-		expect(test_cell.created_formatted_time).not.toBeNull();
+		assert.ok(test_cell.created_formatted_short_date);
+		assert.ok(test_cell.created_formatted_datetime);
+		assert.ok(test_cell.created_formatted_time);
 
-		expect(test_cell.updated_formatted_short_date).not.toBeNull();
-		expect(test_cell.updated_formatted_datetime).not.toBeNull();
-		expect(test_cell.updated_formatted_time).not.toBeNull();
+		assert.ok(test_cell.updated_formatted_short_date);
+		assert.ok(test_cell.updated_formatted_datetime);
+		assert.ok(test_cell.updated_formatted_time);
 	});
 
 	test('handles null updated date', () => {
@@ -496,10 +496,10 @@ describe('Cell date formatting', () => {
 			},
 		});
 
-		expect(test_cell.updated_date).not.toBeNull();
-		expect(test_cell.updated_formatted_short_date).not.toBeNull();
-		expect(test_cell.updated_formatted_datetime).not.toBeNull();
-		expect(test_cell.updated_formatted_time).not.toBeNull();
+		assert.ok(test_cell.updated_date);
+		assert.ok(test_cell.updated_formatted_short_date);
+		assert.ok(test_cell.updated_formatted_datetime);
+		assert.ok(test_cell.updated_formatted_time);
 	});
 });
 
@@ -518,22 +518,22 @@ describe('Cell cloning', () => {
 		const clone = original.clone();
 
 		// Should have same values
-		expect(clone.text).toBe('Original');
-		expect(clone.number).toBe(42);
-		expect(clone.items).toEqual(['value1']);
+		assert.strictEqual(clone.text, 'Original');
+		assert.strictEqual(clone.number, 42);
+		assert.deepEqual(clone.items, ['value1']);
 
 		// But be a different instance
-		expect(clone).not.toBe(original);
-		expect(clone.id).not.toBe(original.id); // Should have new id
+		assert.notStrictEqual(clone, original);
+		assert.notStrictEqual(clone.id, original.id); // Should have new id
 
 		// Changes to one shouldn't affect the other
 		clone.text = 'Changed';
 		clone.number = 100;
 		clone.items.push('value2');
 
-		expect(original.text).toBe('Original');
-		expect(original.number).toBe(42);
-		expect(original.items).toEqual(['value1']);
+		assert.strictEqual(original.text, 'Original');
+		assert.strictEqual(original.number, 42);
+		assert.deepEqual(original.items, ['value1']);
 	});
 
 	test('clone registers new instance in registry', () => {
@@ -547,9 +547,9 @@ describe('Cell cloning', () => {
 		const clone = original.clone();
 
 		// Both instances should be registered
-		expect(app.cell_registry.all.has(original.id)).toBe(true);
-		expect(app.cell_registry.all.has(clone.id)).toBe(true);
-		expect(app.cell_registry.all.get(clone.id)).toBe(clone);
+		assert.ok(app.cell_registry.all.has(original.id));
+		assert.ok(app.cell_registry.all.has(clone.id));
+		assert.ok(app.cell_registry.all.get(clone.id) === (clone as any));
 	});
 });
 
@@ -564,10 +564,10 @@ describe('Schema validation', () => {
 		});
 
 		// Initial state should be valid
-		expect(test_cell.json_parsed.success).toBe(true);
+		assert.ok(test_cell.json_parsed.success);
 
 		// Invalid initialization should throw
-		expect(
+		assert.throws(
 			() =>
 				new BasicTestCell({
 					app,
@@ -576,6 +576,6 @@ describe('Schema validation', () => {
 						text: 123 as any,
 					},
 				}),
-		).toThrow();
+		);
 	});
 });

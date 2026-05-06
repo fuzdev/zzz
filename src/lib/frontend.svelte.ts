@@ -3,6 +3,9 @@ import {SvelteMap} from 'svelte/reactivity';
 import {z} from 'zod';
 import {EMPTY_OBJECT} from '@fuzdev/fuz_util/object.js';
 import type {Assignable, ClassConstructor, OmitStrict} from '@fuzdev/fuz_util/types.js';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
+import {ActionRegistry} from '@fuzdev/fuz_app/actions/action_registry.js';
+import {ActionEventPhase, type ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 
 import {Provider, type ProviderJsonInput} from './provider.svelte.js';
 import type {ProviderStatus} from './provider_types.js';
@@ -18,7 +21,9 @@ import {Prompts} from './prompts.svelte.js';
 import {Parts} from './parts.svelte.js';
 import {Time} from './time.svelte.js';
 import {Ollama} from './ollama.svelte.js';
-import type {ZzzConfig} from './config_helpers.js';
+import {Spaces} from './spaces.svelte.js';
+import {Workspaces} from './workspaces.svelte.js';
+import type {ZzzOptions} from './config_helpers.js';
 import {BOTS_DEFAULT} from './config_defaults.js';
 import {DiskfileDirectoryPath, DiskfilePath} from './diskfile_types.js';
 import {cell_classes} from './cell_classes.js';
@@ -29,21 +34,20 @@ import {Socket} from './socket.svelte.js';
 import {Capabilities} from './capabilities.svelte.js';
 import {DiskfileHistory} from './diskfile_history.svelte.js';
 import {HANDLED} from './cell_helpers.js';
-import {ActionRegistry} from './action_registry.js';
-import {ActionPeer} from './action_peer.js';
-import type {ActionMethod, ActionsApi} from './action_metatypes.js';
-import type {FrontendActionHandlers} from './frontend_action_types.js';
-import type {ActionSpecUnion} from './action_spec.js';
-import {ActionInputs, ActionOutputs, action_specs} from './action_collections.js';
-import {create_frontend_actions_api} from './frontend_actions_api.js';
-import {ActionExecutor} from './action_types.js';
+import {ActionPeer} from '@fuzdev/fuz_app/actions/action_peer.js';
 import {
-	ActionEventPhase,
+	ActionExecutor,
 	ACTION_EVENT_PHASE_BY_KIND,
 	type ActionEventEnvironment,
-} from './action_event_types.js';
-import {FrontendHttpTransport} from './frontend_http_transport.js';
-import {FrontendWebsocketTransport} from './frontend_websocket_transport.js';
+} from '@fuzdev/fuz_app/actions/action_event_types.js';
+import {FrontendHttpTransport} from '@fuzdev/fuz_app/actions/transports_http.js';
+import {FrontendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws.js';
+import {create_rpc_client} from '@fuzdev/fuz_app/actions/rpc_client.js';
+import type {ActionMethod, FrontendActionsApi} from './action_metatypes.js';
+import type {FrontendActionHandlers} from './frontend_action_types.js';
+import {ActionInputs, ActionOutputs} from './action_collections.js';
+import {all_action_specs} from './action_specs.js';
+import {create_frontend_action_handlers} from './frontend_action_handlers.js';
 
 // TODO this is over-used, see also `app_context` for the user pattern
 export const frontend_context = create_context<Frontend>();
@@ -59,7 +63,7 @@ export interface FrontendOptions extends OmitStrict<CellOptions<typeof FrontendJ
 	/** Do not use - optional to avoid circular reference problem. */
 	app?: never;
 	models?: Array<ModelJsonInput>;
-	bots?: ZzzConfig['bots'];
+	bots?: ZzzOptions['bots'];
 	providers?: Array<ProviderJsonInput>;
 	cell_classes?: Record<string, ClassConstructor<Cell<any>>>;
 	action_specs?: Array<ActionSpecUnion>;
@@ -85,7 +89,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 	readonly action_registry: ActionRegistry;
 	readonly action_handlers: FrontendActionHandlers;
-	readonly api: ActionsApi;
+	readonly api: FrontendActionsApi;
 	readonly peer: ActionPeer;
 
 	// Cells - these are managed objects/collections that contain the app state
@@ -102,11 +106,25 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly socket: Socket;
 	readonly capabilities: Capabilities;
 	readonly ollama: Ollama;
+	readonly spaces: Spaces;
+	readonly workspaces: Workspaces;
 
-	readonly bots: ZzzConfig['bots'];
+	readonly bots: ZzzOptions['bots'];
+
+	/**
+	 * Callback registry for terminal data routing.
+	 * TerminalView components register their write callback on mount.
+	 */
+	readonly terminal_writers: Map<Uuid, (data: string) => void> = new Map();
+
+	/**
+	 * Callback registry for terminal exit notifications.
+	 * TerminalView components register their exit callback on mount.
+	 */
+	readonly terminal_exit_handlers: Map<Uuid, (exit_code: number | null) => void> = new Map();
 
 	// TODO maybe instead of this pattern with getters/setters, using an encoder?
-	#zzz_dir: DiskfileDirectoryPath | null | undefined = $state(null); // TODO should this be undefined?
+	#zzz_dir: DiskfileDirectoryPath | null | undefined = $state.raw(null); // TODO should this be undefined?
 
 	/**
 	 * The `zzz_dir` is the path to Zzz's primary directory on the server's filesystem.
@@ -122,7 +140,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.#zzz_dir = parsed == null ? parsed : parsed.data;
 	}
 
-	#scoped_dirs: ReadonlyArray<DiskfileDirectoryPath> = $state([]);
+	#scoped_dirs: ReadonlyArray<DiskfileDirectoryPath> = $state.raw([]);
 
 	/**
 	 * Additional filesystem paths the server can access for user files.
@@ -154,7 +172,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly diskfile_histories: SvelteMap<DiskfilePath, DiskfileHistory> = new SvelteMap();
 
 	/** See into Zzz's future. */
-	futuremode = $state(false);
+	futuremode = $state.raw(false);
 
 	constructor(options: FrontendOptions = EMPTY_OBJECT) {
 		// Pass this instance as its own zzz reference - casting hacks around the circular reference
@@ -165,8 +183,8 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 		this.cell_registry = new CellRegistry(this);
 
-		this.action_registry = new ActionRegistry(options.action_specs || action_specs);
-		this.action_handlers = options.action_handlers || {};
+		this.action_registry = new ActionRegistry(options.action_specs ?? all_action_specs);
+		this.action_handlers = options.action_handlers || create_frontend_action_handlers(this);
 
 		// Register cell classes if provided, otherwise use the default
 		const cells_to_register = options.cell_classes || cell_classes;
@@ -188,21 +206,39 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.socket = new Socket({app: this});
 		this.capabilities = new Capabilities({app: this});
 		this.ollama = new Ollama({app: this});
+		this.spaces = new Spaces({app: this});
+		this.workspaces = new Workspaces({app: this});
 
 		this.bots = options.bots ?? BOTS_DEFAULT;
 
-		this.api = create_frontend_actions_api(this);
-
 		this.peer = new ActionPeer({environment: this});
+
+		this.api = create_rpc_client<FrontendActionsApi>({
+			peer: this.peer,
+			environment: this,
+			on_action_event: (event) => {
+				const action = this.actions.add_from_json({
+					method: event.spec.method,
+					action_event_data: event.toJSON(),
+				});
+				action.listen_to_action_event(event);
+			},
+		});
 
 		// Set up transports, adding websocket first so it'll be the default
 		if (options.socket_url) {
 			this.socket.connect(options.socket_url);
-			this.peer.transports.register_transport(new FrontendWebsocketTransport(this.socket));
+			this.peer.transports.register_transport(
+				new FrontendWebsocketTransport(this.socket, (data) => this.peer.receive(data)),
+			);
 		}
 		if (options.http_rpc_url) {
 			this.peer.transports.register_transport(
-				new FrontendHttpTransport(options.http_rpc_url, options.http_headers),
+				new FrontendHttpTransport(
+					options.http_rpc_url,
+					options.http_headers,
+					(method) => this.action_registry.spec_by_method.get(method)?.side_effects ?? true,
+				),
 			);
 		}
 
@@ -241,6 +277,12 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 					change: {type: 'add', path: disknode.id},
 					disknode,
 				});
+			}
+		}
+
+		if (Array.isArray(data.workspaces)) {
+			for (const workspace_data of data.workspaces) {
+				this.workspaces.add(workspace_data);
 			}
 		}
 	}
@@ -282,7 +324,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	}
 
 	lookup_action_handler(
-		method: ActionMethod,
+		method: string,
 		phase: ActionEventPhase,
 	): ((event: any) => any) | undefined {
 		const method_handlers = (this.action_handlers as any)[method];
@@ -290,7 +332,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		return method_handlers[phase];
 	}
 
-	lookup_action_spec(method: ActionMethod): ActionSpecUnion | undefined {
+	lookup_action_spec(method: string): ActionSpecUnion | undefined {
 		return this.action_registry.spec_by_method.get(method);
 	}
 
@@ -313,6 +355,6 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		const spec = this.action_registry.spec_by_method.get(method);
 		if (!spec) return false;
 		const valid_phases = ACTION_EVENT_PHASE_BY_KIND[spec.kind];
-		return valid_phases.includes(phase as never);
+		return valid_phases.includes(phase);
 	}
 }

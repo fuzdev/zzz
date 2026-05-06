@@ -19,8 +19,8 @@
 		on_remove_tag: (index: number, tag_index: number) => void;
 	} = $props();
 
-	let tag_input = $state('');
-	let tag_el: HTMLInputElement | undefined = $state();
+	let tag_input = $state.raw('');
+	let tag_el: HTMLInputElement | undefined = $state.raw();
 </script>
 
 <div class="panel p_sm mb_md">
@@ -56,7 +56,7 @@
 					{tag}
 					<button
 						type="button"
-						class="icon_button plain font_size_xs ml_xs"
+						class="icon-button plain font_size_xs ml_xs"
 						title="Remove tag"
 						onclick={() => on_remove_tag(index, tag_index)}><Glyph glyph={GLYPH_DELETE} /></button
 					>

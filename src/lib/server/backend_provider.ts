@@ -1,7 +1,8 @@
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
+
 import type {CompletionMessage} from '../completion_types.js';
 import type {ActionInputs, ActionOutputs} from '../action_collections.js';
-import type {Uuid} from '../zod_helpers.js';
-import {jsonrpc_errors} from '../jsonrpc_errors.js';
+import {jsonrpc_errors} from '../zzz_jsonrpc_errors.js';
 import {
 	type ProviderStatus,
 	PROVIDER_ERROR_NEEDS_API_KEY,
@@ -37,12 +38,23 @@ export interface CompletionHandlerOptions {
 	prompt: string;
 	/** Opts into streaming notifications when provided. */
 	progress_token?: Uuid;
+	/**
+	 * Routes progress chunks to the originating WS socket via ctx.notify.
+	 * Required for streaming handlers; ignored by non-streaming handlers.
+	 */
+	on_progress: OnCompletionProgress;
+	/**
+	 * Request-scoped cancel signal. Fires on WS socket close or when the client
+	 * sends a `cancel` notification for this request id. Providers must honor it
+	 * on long-running streams — forward to the SDK's native `signal` option, or
+	 * check `signal.aborted` inside async-iteration loops and break.
+	 */
+	signal?: AbortSignal;
 }
 
 export type OnCompletionProgress = (input: ActionInputs['completion_progress']) => Promise<void>;
 
-export interface BackendProviderOptions {
-	on_completion_progress: OnCompletionProgress;
+export interface BackendProviderRemoteOptions {
 	api_key?: string | null;
 }
 
@@ -55,12 +67,6 @@ export abstract class BackendProvider<TClient = unknown> {
 
 	protected client: TClient | null = null;
 	protected provider_status: ProviderStatus | null = null;
-
-	protected readonly on_completion_progress: OnCompletionProgress;
-
-	constructor(options: BackendProviderOptions) {
-		this.on_completion_progress = options.on_completion_progress;
-	}
 
 	abstract handle_streaming_completion(
 		options: CompletionHandlerOptions,
@@ -95,12 +101,13 @@ export abstract class BackendProvider<TClient = unknown> {
 		}
 	}
 
-	/** Sends streaming progress notification to frontend. */
+	/** Sends a streaming progress notification to the originating socket. */
 	protected async send_streaming_progress(
 		progress_token: Uuid,
 		chunk: ActionInputs['completion_progress']['chunk'],
+		on_progress: OnCompletionProgress,
 	): Promise<void> {
-		await this.on_completion_progress({
+		await on_progress({
 			chunk,
 			_meta: {progressToken: progress_token},
 		});
@@ -137,8 +144,8 @@ export abstract class BackendProvider<TClient = unknown> {
 export abstract class BackendProviderRemote<TClient = unknown> extends BackendProvider<TClient> {
 	protected api_key: string | null = null;
 
-	constructor(options: BackendProviderOptions) {
-		super(options);
+	constructor(options: BackendProviderRemoteOptions) {
+		super();
 		this.set_api_key(options.api_key ?? null);
 	}
 
@@ -181,8 +188,8 @@ export abstract class BackendProviderRemote<TClient = unknown> extends BackendPr
  * Handles installation checking and provides default error handling for missing installations.
  */
 export abstract class BackendProviderLocal<TClient = unknown> extends BackendProvider<TClient> {
-	constructor(options: BackendProviderOptions) {
-		super(options);
+	constructor() {
+		super();
 		this.create_client();
 	}
 

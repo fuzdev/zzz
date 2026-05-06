@@ -69,9 +69,9 @@
 	{#if zzz_dir === undefined}
 		<div>&nbsp;</div>
 	{:else if zzz_dir === null}
-		<div class="row height_input_height"><PendingAnimation /></div>
+		<div class="row height-input-height"><PendingAnimation /></div>
 	{:else}
-		<div class="row height_input_height justify-content:space-between px_xs">
+		<div class="row height-input-height justify-content:space-between px_xs">
 			<small class="ellipsis"><Glyph glyph={GLYPH_DIRECTORY} /> {zzz_dir}</small>
 			<div class="display:flex gap_xs2">
 				<PendingButton
@@ -124,7 +124,7 @@
 			<!-- TODO bug with `selected` -->
 			{#snippet children(diskfile)}
 				{@const selected = diskfiles.selected_file_id === diskfile.id}
-				<div class="diskfile_listitem_wrapper" class:selected transition:slide>
+				<div class="diskfile-listitem-wrapper" class:selected transition:slide>
 					<DiskfileListitem
 						{diskfile}
 						{selected}
@@ -144,7 +144,7 @@
 </div>
 
 <style>
-	.diskfile_listitem_wrapper {
+	.diskfile-listitem-wrapper {
 		position: sticky;
 		top: 0;
 		bottom: 0;

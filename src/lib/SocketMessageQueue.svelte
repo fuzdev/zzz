@@ -3,12 +3,12 @@
 	import {format} from 'date-fns';
 	import {SvelteMap} from 'svelte/reactivity';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
+	import PopoverButton from '@fuzdev/fuz_app/ui/PopoverButton.svelte';
 
 	import type {Socket, QueuedMessage, FailedMessage} from './socket.svelte.js';
 	import Glyph from './Glyph.svelte';
 	import {GLYPH_RETRY, GLYPH_REMOVE, GLYPH_INFO} from './glyphs.js';
-	import ConfirmButton from './ConfirmButton.svelte';
-	import PopoverButton from './PopoverButton.svelte';
 	import {format_timestamp} from './time_helpers.js';
 	import {DURATION_SM} from './helpers.js';
 
@@ -120,7 +120,7 @@
 	};
 </script>
 
-<div class="message_queue_container">
+<div class="message-queue-container">
 	<!-- Header with message count and action buttons -->
 	<div class="display:flex justify-content:space-between align-items:center mb_sm">
 		<span class="chip {type === 'queued' ? 'color_e' : 'color_c'}">
@@ -135,7 +135,7 @@
 					{#if socket.connected}
 						<button
 							type="button"
-							class="icon_button plain font_size_sm"
+							class="icon-button plain font_size_sm"
 							title="retry selected messages"
 							onclick={retry_selected}
 							transition:slide
@@ -146,8 +146,8 @@
 
 					<ConfirmButton
 						onconfirm={remove_selected}
-						popover_button_attrs={{class: 'icon_button color_c font_size_sm'}}
-						class="icon_button plain"
+						popover_button_attrs={{class: 'icon-button color_c font_size_sm'}}
+						class="icon-button plain"
 						title="remove selected messages"
 					>
 						<Glyph glyph={GLYPH_REMOVE} />
@@ -169,13 +169,13 @@
 
 	<!-- Message list -->
 	{#if queued_messages_count > 0}
-		<div class="message_list shadow_inset_top_sm">
+		<div class="message-list shadow_inset_top_sm">
 			{#each queued_messages as message (message.id)}
 				{@const selected = selected_queued_messages.has(message.id)}
 				{@const message_type = message.data?.type || 'unknown'}
 				{@const message_data_serialized = JSON.stringify(message.data, null, 2)}
 				<div
-					class="message_item p_sm {selected ? 'selected shade_20' : ''} {queued_messages.indexOf(
+					class="message-item p_sm {selected ? 'selected shade_20' : ''} {queued_messages.indexOf(
 						message,
 					) > 0
 						? 'border_top border-style:solid border_color_30'
@@ -239,7 +239,7 @@
 							<!-- Message details in popover -->
 							<PopoverButton
 								position="left"
-								class="icon_button plain font_size_sm"
+								class="icon-button plain font_size_sm"
 								title="view message details"
 							>
 								<Glyph glyph={GLYPH_INFO} size="var(--font_size_lg)" />
@@ -257,7 +257,7 @@
 											<h3 class="mt_xs">message details</h3>
 											<button
 												type="button"
-												class="icon_button plain font_size_xs"
+												class="icon-button plain font_size_xs"
 												onclick={() => popover.hide()}
 											>
 												✕
@@ -274,7 +274,7 @@
 							{#if type === 'queued' || (type === 'failed' && socket.connected)}
 								<button
 									type="button"
-									class="icon_button plain font_size_sm"
+									class="icon-button plain font_size_sm"
 									title="retry message"
 									onclick={() => retry_queued_message(message)}
 								>
@@ -285,8 +285,8 @@
 							<ConfirmButton
 								onconfirm={() => remove_message(message.id)}
 								position="center"
-								popover_button_attrs={{class: 'icon_button color_c font_size_sm'}}
-								class="icon_button plain font_size_sm"
+								popover_button_attrs={{class: 'icon-button color_c font_size_sm'}}
+								class="icon-button plain font_size_sm"
 								title="remove message"
 							>
 								<Glyph glyph={GLYPH_REMOVE} />
@@ -321,21 +321,21 @@
 </div>
 
 <style>
-	.message_queue_container {
+	.message-queue-container {
 		margin-bottom: var(--font_size_md);
 	}
 
-	.message_list {
+	.message-list {
 		max-height: 250px;
 		overflow: auto;
 		scrollbar-width: thin;
 	}
 
-	.message_item:hover {
+	.message-item:hover {
 		background-color: var(--shade_10);
 	}
 
-	.message_item.selected {
+	.message-item.selected {
 		border-left: 2px solid var(--color_a);
 	}
 </style>

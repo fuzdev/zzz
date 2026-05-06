@@ -21,12 +21,12 @@ export type ProviderJsonInput = z.input<typeof ProviderJson>;
 export interface ProviderOptions extends CellOptions<typeof ProviderJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
 
 export class Provider extends Cell<typeof ProviderJson> {
-	name: ProviderName = $state()!;
-	title: string = $state()!;
-	url: string = $state()!; // TODO @many should these be optional? or just default to `''`? need init patterns
-	homepage: string = $state()!; // TODO @many should these be optional? or just default to `''`? need init patterns
-	company: string = $state()!;
-	api_key_url: string | null = $state()!;
+	name: ProviderName = $state.raw()!;
+	title: string = $state.raw()!;
+	url: string = $state.raw()!; // TODO @many should these be optional? or just default to `''`? need init patterns
+	homepage: string = $state.raw()!; // TODO @many should these be optional? or just default to `''`? need init patterns
+	company: string = $state.raw()!;
+	api_key_url: string | null = $state.raw()!;
 
 	readonly models: Array<Model> = $derived(this.app.models.items.where('provider_name', this.name));
 

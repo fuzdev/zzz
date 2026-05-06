@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {get_innermost_type} from './zod_helpers.js';
+import {zod_get_innermost_type} from '@fuzdev/fuz_util/zod.js';
 
 /** Sentinel value to indicate a parser has completely handled a property. */
 export const HANDLED = Symbol('HANDLED_BY_PARSER');
@@ -49,7 +49,7 @@ export const get_schema_class_info = (
 	if (!schema) return null;
 
 	// Unwrap to get the core schema
-	const unwrapped = get_innermost_type(schema);
+	const unwrapped = zod_get_innermost_type(schema);
 
 	// Handle ZodArray
 	if (unwrapped instanceof z.ZodArray) {

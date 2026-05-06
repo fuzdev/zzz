@@ -6,6 +6,7 @@
 	import {Frontend, frontend_context} from './frontend.svelte.js';
 	import Dashboard from './Dashboard.svelte';
 	import MainDialog from './MainDialog.svelte';
+	import DeskMenu from './DeskMenu.svelte';
 
 	// TODO maybe just make this `Zzz`?
 
@@ -23,12 +24,14 @@
 		children: Snippet<[zzz: Frontend]>;
 	} = $props();
 
+	// svelte-ignore state_referenced_locally
 	frontend_context.set(app);
 </script>
 
 <ThemeRoot>
 	<ContextmenuRoot>
 		<MainDialog />
+		<DeskMenu />
 		<!-- TODO user-defined pages should be able to control the full page at runtime -->
 		<Dashboard>
 			<div class="height:100% overflow:auto">

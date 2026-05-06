@@ -5,10 +5,10 @@
 	import {formatDuration, intervalToDuration} from 'date-fns';
 	import {BROWSER} from 'esm-env';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
 	import {frontend_context} from './frontend.svelte.js';
 	import type {Socket} from './socket.svelte.js';
-	import ConfirmButton from './ConfirmButton.svelte';
 	import Glyph from './Glyph.svelte';
 	import {
 		GLYPH_CONNECT,
@@ -40,8 +40,8 @@
 	const {capabilities} = app;
 
 	// Track URL state for reset/undo functionality
-	let previous_url = $state('');
-	let has_undo_state = $state(false);
+	let previous_url = $state.raw('');
+	let has_undo_state = $state.raw(false);
 
 	// Reset the socket configuration to defaults
 	const reset_to_defaults = () => {
@@ -116,7 +116,7 @@
 					/>
 					<button
 						type="button"
-						class="icon_button plain"
+						class="icon-button plain"
 						title={has_undo_state ? `undo to ${previous_url}` : 'reset url to default'}
 						disabled={is_default_url && !has_undo_state}
 						onclick={() => {
@@ -192,11 +192,12 @@
 						bind:checked={
 							() => socket.auto_reconnect,
 							(v) => {
-								// If turning off auto-reconnect, cancel any pending reconnects
-								if (!v && socket.reconnect_timeout !== null) {
+								// Turning off during a pending reconnect: cancel it.
+								// Turning on while disconnected: try to connect immediately.
+								// Delay/factor changes propagate live via the $effect below.
+								if (!v && socket.is_reconnect_pending) {
 									socket.cancel_reconnect();
 								} else if (v && !socket.connected && socket.status !== 'pending') {
-									// If turning on auto-reconnect and we're disconnected, try to connect immediately
 									socket.connect();
 								}
 								socket.auto_reconnect = v;
@@ -205,11 +206,11 @@
 					/>
 					<small>auto-reconnect</small>
 				</label>
-				{#if socket.status === 'failure' && socket.reconnect_timeout !== null}
+				{#if socket.is_reconnect_pending}
 					<div class="row flex:1 gap_xs" transition:slide>
 						<button
 							type="button"
-							class="color_d font_size_xl icon_button plain"
+							class="color_d font_size_xl icon-button plain"
 							title="cancel reconnection attempt"
 							onclick={() => {
 								socket.cancel_reconnect();
@@ -229,7 +230,7 @@
 							</div>
 							{#key socket.reconnect_attempt}
 								<div
-									class="progress_fill bg_d_6"
+									class="progress-fill bg_d_6"
 									style:animation-duration="{socket.current_reconnect_delay}ms"
 								></div>
 							{/key}
@@ -265,7 +266,7 @@
 					<input
 						id="heartbeat_interval_{pid}"
 						type="text"
-						class="input_xs sm plain"
+						class="input-xs sm plain"
 						bind:value={socket.heartbeat_interval}
 					/>
 				</div>
@@ -293,7 +294,7 @@
 					<input
 						id="reconnect_delay_{pid}"
 						type="text"
-						class="input_xs sm plain"
+						class="input-xs sm plain"
 						bind:value={socket.reconnect_delay}
 					/>
 				</div>
@@ -321,7 +322,7 @@
 					<input
 						id="reconnect_delay_max_{pid}"
 						type="text"
-						class="input_xs sm plain"
+						class="input-xs sm plain"
 						bind:value={socket.reconnect_delay_max}
 					/>
 				</div>
@@ -334,7 +335,7 @@
 					{#snippet popover_content(popover)}
 						<button
 							type="button"
-							class="color_c icon_button"
+							class="color_c icon-button"
 							title="confirm reset settings"
 							onclick={() => {
 								reset_to_defaults();
@@ -418,7 +419,7 @@
 		}
 	}
 
-	.progress_fill {
+	.progress-fill {
 		position: absolute;
 		width: 100%;
 		height: 100%;

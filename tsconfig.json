@@ -1,7 +1,7 @@
 {
 	"extends": "./.svelte-kit/tsconfig.json",
 	"compilerOptions": {
-		"types": ["@sveltejs/kit"],
+		"types": ["@sveltejs/kit", "deno"],
 		"module": "nodenext",
 		"moduleResolution": "nodenext",
 		"strict": true,
@@ -34,6 +34,8 @@
 		".svelte-kit/types/**/$types.d.ts",
 		"src/**/*.js",
 		"src/**/*.ts",
-		"src/**/*.svelte"
+		"src/**/*.svelte",
+		"scripts/**/*.ts",
+		"test/**/*.ts"
 	]
 }

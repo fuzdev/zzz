@@ -3,6 +3,8 @@
 import {z} from 'zod';
 import {create_context} from '@fuzdev/fuz_ui/context_helpers.js';
 import {page} from '$app/state';
+import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.js';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
 import {Cell, type CellOptions} from '$lib/cell.svelte.js';
 import {ProjectsJson} from '$routes/projects/projects_schema.js';
@@ -14,7 +16,6 @@ import {ProjectViewmodel} from '$routes/projects/project_viewmodel.svelte.js';
 import {PageViewmodel} from '$routes/projects/page_viewmodel.svelte.js';
 import {DomainViewmodel} from '$routes/projects/domain_viewmodel.svelte.js';
 import {RepoViewmodel} from '$routes/projects/repo_viewmodel.svelte.js';
-import {get_datetime_now, create_uuid, Uuid} from '$lib/zod_helpers.js';
 import {HANDLED} from '$lib/cell_helpers.js';
 import {get_unique_name} from '$lib/helpers.js';
 import {create_sample_projects as create_example_projects} from '$routes/projects/example_projects.js';
@@ -28,11 +29,11 @@ export type ProjectsOptions = CellOptions<typeof ProjectsJson>;
  */
 export class Projects extends Cell<typeof ProjectsJson> {
 	projects: Array<Project> = $state([]);
-	current_project_id: Uuid | null = $state(null);
-	current_page_id: Uuid | null = $state(null);
-	current_domain_id: Uuid | null = $state(null);
+	current_project_id: Uuid | null = $state.raw(null);
+	current_page_id: Uuid | null = $state.raw(null);
+	current_domain_id: Uuid | null = $state.raw(null);
 	expanded_projects: Record<string, boolean> = $state({});
-	previewing: boolean = $state(false);
+	previewing: boolean = $state.raw(false);
 
 	/** Map of project name to project for checking uniqueness */
 	readonly items_by_name = $derived.by(() => {

@@ -1,15 +1,15 @@
-// @slop Claude Sonnet 3.7
-
 // @vitest-environment jsdom
 
-import {test, expect, describe, beforeEach} from 'vitest';
+import {test, assert, describe, beforeEach} from 'vitest';
+import {create_uuid} from '@fuzdev/fuz_util/id.js';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
 import {Part, TextPart, DiskfilePart} from '$lib/part.svelte.js';
-import {create_uuid, get_datetime_now} from '$lib/zod_helpers.js';
 import {DiskfileDirectoryPath, DiskfilePath} from '$lib/diskfile_types.js';
 import {Frontend} from '$lib/frontend.svelte.js';
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
 import {estimate_token_count} from '$lib/helpers.js';
+
+import {monkeypatch_zzz_for_tests} from './test_helpers.js';
 
 // Test suite variables
 let app: Frontend;
@@ -43,34 +43,34 @@ describe('Part base class functionality', () => {
 
 		for (const part of [text_part, diskfile_part]) {
 			part.add_attribute({key: 'test-attr', value: 'test-value'});
-			expect(part.attributes).toHaveLength(1);
+			assert.strictEqual(part.attributes.length, 1);
 			let first_attr = part.attributes[0];
 			if (!first_attr) throw new Error('Expected first attribute');
-			expect(first_attr.key).toBe('test-attr');
-			expect(first_attr.value).toBe('test-value');
+			assert.strictEqual(first_attr.key, 'test-attr');
+			assert.strictEqual(first_attr.value, 'test-value');
 
 			const attr_id = first_attr.id;
 
 			const updated = part.update_attribute(attr_id, {value: 'updated-value'});
-			expect(updated).toBe(true);
+			assert.ok(updated);
 			first_attr = part.attributes[0];
 			if (!first_attr) throw new Error('Expected attribute after update');
-			expect(first_attr.key).toBe('test-attr');
-			expect(first_attr.value).toBe('updated-value');
+			assert.strictEqual(first_attr.key, 'test-attr');
+			assert.strictEqual(first_attr.value, 'updated-value');
 
 			part.update_attribute(attr_id, {key: 'updated-key', value: 'updated-value-2'});
 			first_attr = part.attributes[0];
 			if (!first_attr) throw new Error('Expected attribute after second update');
-			expect(first_attr.key).toBe('updated-key');
-			expect(first_attr.value).toBe('updated-value-2');
+			assert.strictEqual(first_attr.key, 'updated-key');
+			assert.strictEqual(first_attr.value, 'updated-value-2');
 
 			part.remove_attribute(attr_id);
-			expect(part.attributes).toHaveLength(0);
+			assert.strictEqual(part.attributes.length, 0);
 
 			const non_existent_update = part.update_attribute(create_uuid(), {
 				value: 'test',
 			});
-			expect(non_existent_update).toBe(false);
+			assert.ok(!non_existent_update);
 		}
 	});
 
@@ -82,14 +82,14 @@ describe('Part base class functionality', () => {
 		});
 
 		// Test initial derivations
-		expect(text_part.length).toBe(TEST_CONTENT.BASIC.length);
-		expect(text_part.token_count).toBe(estimate_token_count(TEST_CONTENT.BASIC));
+		assert.strictEqual(text_part.length, TEST_CONTENT.BASIC.length);
+		assert.strictEqual(text_part.token_count, estimate_token_count(TEST_CONTENT.BASIC));
 
 		// Test derivations after content change
 		text_part.content = TEST_CONTENT.SECONDARY;
 
-		expect(text_part.length).toBe(TEST_CONTENT.SECONDARY.length);
-		expect(text_part.token_count).toBe(estimate_token_count(TEST_CONTENT.SECONDARY));
+		assert.strictEqual(text_part.length, TEST_CONTENT.SECONDARY.length);
+		assert.strictEqual(text_part.token_count, estimate_token_count(TEST_CONTENT.SECONDARY));
 	});
 });
 
@@ -107,15 +107,15 @@ describe('Part factory method', () => {
 			name: 'Diskfile Part',
 		});
 
-		expect(text_part).toBeInstanceOf(TextPart);
-		expect(text_part.type).toBe('text');
-		expect(text_part.name).toBe('Text Part');
-		expect(text_part.content).toBe(TEST_CONTENT.BASIC);
+		assert.instanceOf(text_part, TextPart);
+		assert.strictEqual(text_part.type, 'text');
+		assert.strictEqual(text_part.name, 'Text Part');
+		assert.strictEqual(text_part.content, TEST_CONTENT.BASIC);
 
-		expect(diskfile_part).toBeInstanceOf(DiskfilePart);
-		expect(diskfile_part.type).toBe('diskfile');
-		expect(diskfile_part.name).toBe('Diskfile Part');
-		expect(diskfile_part.path).toBe(TEST_PATH);
+		assert.instanceOf(diskfile_part, DiskfilePart);
+		assert.strictEqual(diskfile_part.type, 'diskfile');
+		assert.strictEqual(diskfile_part.name, 'Diskfile Part');
+		assert.strictEqual(diskfile_part.path, TEST_PATH);
 	});
 
 	test('Part.create throws error for unknown part type', () => {
@@ -123,7 +123,7 @@ describe('Part factory method', () => {
 			type: 'unknown' as const,
 		};
 
-		expect(() => Part.create(app, invalid_json as any)).toThrow('Unreachable case: unknown');
+		assert.throws(() => Part.create(app, invalid_json as any), /Unreachable case: unknown/);
 	});
 
 	test('Part.create throws error for missing type field', () => {
@@ -131,8 +131,9 @@ describe('Part factory method', () => {
 			name: 'Test',
 		};
 
-		expect(() => Part.create(app, invalid_json as any)).toThrow(
-			'Missing required "type" field in part JSON',
+		assert.throws(
+			() => Part.create(app, invalid_json as any),
+			/Missing required "type" field in part JSON/,
 		);
 	});
 });
@@ -145,16 +146,16 @@ describe('TextPart specific behavior', () => {
 			content: TEST_CONTENT.BASIC,
 		});
 
-		expect(part.type).toBe('text');
-		expect(part.content).toBe(TEST_CONTENT.BASIC);
+		assert.strictEqual(part.type, 'text');
+		assert.strictEqual(part.content, TEST_CONTENT.BASIC);
 
 		// Test update method
 		part.content = TEST_CONTENT.SECONDARY;
-		expect(part.content).toBe(TEST_CONTENT.SECONDARY);
+		assert.strictEqual(part.content, TEST_CONTENT.SECONDARY);
 
 		// Test direct property assignment
 		part.content = TEST_CONTENT.EMPTY;
-		expect(part.content).toBe(TEST_CONTENT.EMPTY);
+		assert.strictEqual(part.content, TEST_CONTENT.EMPTY);
 	});
 
 	test('TextPart serialization and deserialization', () => {
@@ -187,22 +188,22 @@ describe('TextPart specific behavior', () => {
 		const restored = app.cell_registry.instantiate('TextPart', json);
 
 		// Verify all properties were preserved
-		expect(restored.id).toBe(test_id);
-		expect(restored.created).toBe(test_date);
-		expect(restored.content).toBe(TEST_CONTENT.BASIC);
-		expect(restored.name).toBe('Test part');
-		expect(restored.has_xml_tag).toBe(true);
-		expect(restored.xml_tag_name).toBe('test');
-		expect(restored.start).toBe(5);
-		expect(restored.end).toBe(15);
-		expect(restored.enabled).toBe(false);
-		expect(restored.title).toBe('Test Title');
-		expect(restored.summary).toBe('Test Summary');
-		expect(restored.attributes).toHaveLength(1);
+		assert.strictEqual(restored.id, test_id);
+		assert.strictEqual(restored.created, test_date);
+		assert.strictEqual(restored.content, TEST_CONTENT.BASIC);
+		assert.strictEqual(restored.name, 'Test part');
+		assert.ok(restored.has_xml_tag);
+		assert.strictEqual(restored.xml_tag_name, 'test');
+		assert.strictEqual(restored.start, 5);
+		assert.strictEqual(restored.end, 15);
+		assert.ok(!restored.enabled);
+		assert.strictEqual(restored.title, 'Test Title');
+		assert.strictEqual(restored.summary, 'Test Summary');
+		assert.strictEqual(restored.attributes.length, 1);
 		const restored_attr = restored.attributes[0];
 		if (!restored_attr) throw new Error('Expected restored attribute');
-		expect(restored_attr.key).toBe('class');
-		expect(restored_attr.value).toBe('highlight');
+		assert.strictEqual(restored_attr.key, 'class');
+		assert.strictEqual(restored_attr.value, 'highlight');
 	});
 
 	test('TextPart cloning creates independent copy', () => {
@@ -217,21 +218,21 @@ describe('TextPart specific behavior', () => {
 		const clone = original.clone();
 
 		// Verify initial state is the same except id
-		expect(clone.id).not.toBe(original.id);
-		expect(clone.content).toBe(original.content);
-		expect(clone.name).toBe(original.name);
+		assert.ok(clone.id !== original.id);
+		assert.strictEqual(clone.content, original.content);
+		assert.strictEqual(clone.name, original.name);
 
 		// Modify clone
 		clone.content = TEST_CONTENT.SECONDARY;
 		clone.name = 'Modified';
 
 		// Verify original remains unchanged
-		expect(original.content).toBe(TEST_CONTENT.BASIC);
-		expect(original.name).toBe('Original');
+		assert.strictEqual(original.content, TEST_CONTENT.BASIC);
+		assert.strictEqual(original.name, 'Original');
 
 		// Verify clone has new values
-		expect(clone.content).toBe(TEST_CONTENT.SECONDARY);
-		expect(clone.name).toBe('Modified');
+		assert.strictEqual(clone.content, TEST_CONTENT.SECONDARY);
+		assert.strictEqual(clone.name, 'Modified');
 	});
 });
 
@@ -251,17 +252,17 @@ describe('DiskfilePart specific behavior', () => {
 		});
 
 		// Test basic properties
-		expect(part.type).toBe('diskfile');
-		expect(part.path).toBe(TEST_PATH);
-		expect(part.diskfile).toEqual(diskfile);
-		expect(part.content).toBe(TEST_CONTENT.BASIC);
+		assert.strictEqual(part.type, 'diskfile');
+		assert.strictEqual(part.path, TEST_PATH);
+		assert.deepEqual(part.diskfile, diskfile);
+		assert.strictEqual(part.content, TEST_CONTENT.BASIC);
 
 		// Update content through part
 		part.content = TEST_CONTENT.SECONDARY;
 
 		// Verify both part and diskfile were updated
-		expect(part.content).toBe(TEST_CONTENT.SECONDARY);
-		expect(part.diskfile?.content).toBe(TEST_CONTENT.SECONDARY);
+		assert.strictEqual(part.content, TEST_CONTENT.SECONDARY);
+		assert.strictEqual(part.diskfile?.content, TEST_CONTENT.SECONDARY);
 	});
 
 	test('DiskfilePart handles null path properly', () => {
@@ -270,9 +271,9 @@ describe('DiskfilePart specific behavior', () => {
 			path: null,
 		});
 
-		expect(part.path).toBeNull();
-		expect(part.diskfile).toBeNull();
-		expect(part.content).toBeUndefined();
+		assert.isNull(part.path);
+		assert.isNull(part.diskfile);
+		assert.isUndefined(part.content);
 	});
 
 	test('DiskfilePart handles changing path', () => {
@@ -298,14 +299,14 @@ describe('DiskfilePart specific behavior', () => {
 			path: path1,
 		});
 
-		expect(part.path).toBe(path1);
-		expect(part.content).toBe('File 1 content');
+		assert.strictEqual(part.path, path1);
+		assert.strictEqual(part.content, 'File 1 content');
 
 		// Change path to reference second file
 		part.path = path2;
 
-		expect(part.path).toBe(path2);
-		expect(part.content).toBe('File 2 content');
+		assert.strictEqual(part.path, path2);
+		assert.strictEqual(part.content, 'File 2 content');
 	});
 });
 
@@ -325,11 +326,11 @@ describe('Common part behavior across types', () => {
 			end: 20,
 		});
 
-		expect(text_part.start).toBe(5);
-		expect(text_part.end).toBe(10);
+		assert.strictEqual(text_part.start, 5);
+		assert.strictEqual(text_part.end, 10);
 
-		expect(diskfile_part.start).toBe(15);
-		expect(diskfile_part.end).toBe(20);
+		assert.strictEqual(diskfile_part.start, 15);
+		assert.strictEqual(diskfile_part.end, 20);
 
 		text_part.start = 6;
 		text_part.end = 11;
@@ -337,11 +338,11 @@ describe('Common part behavior across types', () => {
 		diskfile_part.start = 16;
 		diskfile_part.end = 21;
 
-		expect(text_part.start).toBe(6);
-		expect(text_part.end).toBe(11);
+		assert.strictEqual(text_part.start, 6);
+		assert.strictEqual(text_part.end, 11);
 
-		expect(diskfile_part.start).toBe(16);
-		expect(diskfile_part.end).toBe(21);
+		assert.strictEqual(diskfile_part.start, 16);
+		assert.strictEqual(diskfile_part.end, 21);
 	});
 
 	test('XML tag properties work across part types', () => {
@@ -357,30 +358,30 @@ describe('Common part behavior across types', () => {
 			xml_tag_name: 'file-tag',
 		});
 
-		expect(text_part.has_xml_tag).toBe(true);
-		expect(text_part.xml_tag_name).toBe('text-tag');
+		assert.ok(text_part.has_xml_tag);
+		assert.strictEqual(text_part.xml_tag_name, 'text-tag');
 
-		expect(diskfile_part.has_xml_tag).toBe(true);
-		expect(diskfile_part.xml_tag_name).toBe('file-tag');
+		assert.ok(diskfile_part.has_xml_tag);
+		assert.strictEqual(diskfile_part.xml_tag_name, 'file-tag');
 
 		text_part.has_xml_tag = false;
 		text_part.xml_tag_name = '';
 
 		diskfile_part.xml_tag_name = 'updated-file-tag';
 
-		expect(text_part.has_xml_tag).toBe(false);
-		expect(text_part.xml_tag_name).toBe('');
+		assert.ok(!text_part.has_xml_tag);
+		assert.strictEqual(text_part.xml_tag_name, '');
 
-		expect(diskfile_part.has_xml_tag).toBe(true);
-		expect(diskfile_part.xml_tag_name).toBe('updated-file-tag');
+		assert.ok(diskfile_part.has_xml_tag);
+		assert.strictEqual(diskfile_part.xml_tag_name, 'updated-file-tag');
 	});
 
 	test('has_xml_tag defaults correctly for each part type', () => {
 		const text_part = app.cell_registry.instantiate('TextPart');
 		const diskfile_part = app.cell_registry.instantiate('DiskfilePart');
 
-		expect(text_part.has_xml_tag).toBe(false);
-		expect(diskfile_part.has_xml_tag).toBe(true);
+		assert.ok(!text_part.has_xml_tag);
+		assert.ok(diskfile_part.has_xml_tag);
 
 		const custom_text_part = app.cell_registry.instantiate('TextPart', {
 			has_xml_tag: true,
@@ -389,7 +390,7 @@ describe('Common part behavior across types', () => {
 			has_xml_tag: false,
 		});
 
-		expect(custom_text_part.has_xml_tag).toBe(true);
-		expect(custom_diskfile_part.has_xml_tag).toBe(false);
+		assert.ok(custom_text_part.has_xml_tag);
+		assert.ok(!custom_diskfile_part.has_xml_tag);
 	});
 });

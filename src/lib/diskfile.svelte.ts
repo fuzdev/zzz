@@ -16,18 +16,18 @@ import type {PartUnion} from './part.svelte.js';
 export interface DiskfileOptions extends CellOptions<typeof DiskfileJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
 
 export class Diskfile extends Cell<typeof DiskfileJson> {
-	path: DiskfilePath = $state()!;
-	source_dir: DiskfileDirectoryPath = $state()!;
+	path: DiskfilePath = $state.raw()!;
+	source_dir: DiskfileDirectoryPath = $state.raw()!;
 
-	content: string | null = $state()!;
+	content: string | null = $state.raw()!;
 
 	readonly part: PartUnion | undefined = $derived(
 		this.app.parts.find_part_by_diskfile_path(this.path),
 	);
 
 	// TODO @many add UI support for deps for module diskfiles (TS, Svelte, etc)
-	dependents: Array<[DiskfilePath, SerializableDisknode]> = $state()!; // TODO @many these need to be null for unknown file types (support JS modules, etc)
-	dependencies: Array<[DiskfilePath, SerializableDisknode]> = $state()!; // TODO @many these need to be null for unknown file types (support JS modules, etc)
+	dependents: Array<[DiskfilePath, SerializableDisknode]> = $state.raw()!; // TODO @many these need to be null for unknown file types (support JS modules, etc)
+	dependencies: Array<[DiskfilePath, SerializableDisknode]> = $state.raw()!; // TODO @many these need to be null for unknown file types (support JS modules, etc)
 
 	readonly dependencies_by_id: Map<DiskfilePath, SerializableDisknode> = $derived(
 		new Map(this.dependencies),

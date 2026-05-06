@@ -2,8 +2,8 @@
 	import {fade} from 'svelte/transition';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 	import {random_item} from '@fuzdev/fuz_util/random.js';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import ConfirmButton from './ConfirmButton.svelte';
 	import Glyph from './Glyph.svelte';
 	import PartView from './PartView.svelte';
 	import {
@@ -36,7 +36,7 @@
 
 	// TODO history of prompt states (opt in snapshots? also autosave?) using cell builtins/helpers, like file state but generalized for all cells? the json-based, set_json stuff
 
-	let show_diskfile_picker = $state(false);
+	let show_diskfile_picker = $state.raw(false);
 
 	// Create and add a Text part
 	const add_text_part = () => {
@@ -66,7 +66,7 @@
 </script>
 
 <div class="display:flex width:100% height:100%">
-	<div class="column_fixed">
+	<div class="column-fixed">
 		<div class="p_sm pl_0">
 			<div class="row gap_xs2 mb_xs pl_xs2">
 				<button
@@ -96,8 +96,8 @@
 
 	{#if app.prompts.selected}
 		<PromptContextmenu prompt={app.prompts.selected}>
-			<div class="column_fixed pr_sm">
-				<section class="column_section">
+			<div class="column-fixed pr_sm">
+				<section class="column-section">
 					<div class="font_size_lg display:flex align-items:center">
 						<Glyph glyph={GLYPH_PROMPT} />
 						<EditableText bind:value={app.prompts.selected.name} />
@@ -117,7 +117,7 @@
 						<ConfirmButton
 							onconfirm={() => app.prompts.selected && app.prompts.remove(app.prompts.selected)}
 							title="delete prompt {'"' + app.prompts.selected.name + '"'}"
-							class="plain icon_button"
+							class="plain icon-button"
 						>
 							<Glyph glyph={GLYPH_DELETE} />
 							{#snippet popover_button_content()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
@@ -125,7 +125,7 @@
 					</div>
 					<ContentPreview content={app.prompts.selected.content} />
 				</section>
-				<section class="column_section">
+				<section class="column-section">
 					<header class="font_size_lg mb_lg"><Glyph glyph={GLYPH_PART} /> parts</header>
 					<PartList
 						parts={app.prompts.selected.parts}
@@ -137,8 +137,8 @@
 				</section>
 			</div>
 
-			<div class="column_fluid">
-				<div class="column_bg_1 column gap_md p_sm">
+			<div class="column-fluid">
+				<div class="column-bg-1 column gap_md p_sm">
 					<div class="display:flex justify-content:space-between">
 						<div class="display:flex flex-wrap:wrap gap_xs">
 							<button type="button" class="plain font_size_sm" onclick={add_text_part}>

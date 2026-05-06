@@ -1,9 +1,10 @@
 <script lang="ts">
+	import type {Uuid} from '@fuzdev/fuz_util/id.js';
+
 	import Picker from './Picker.svelte';
 	import PartListitem from './PartListitem.svelte';
 	import {frontend_context} from './frontend.svelte.js';
 	import type {PartUnion} from './part.svelte.js';
-	import type {Uuid} from './zod_helpers.js';
 	import {sort_by_text, sort_by_numeric} from './sortable.svelte.js';
 
 	const app = frontend_context.get();

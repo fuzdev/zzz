@@ -23,7 +23,7 @@
 
 	const app = frontend_context.get();
 
-	let show_model_picker = $state(false);
+	let show_model_picker = $state.raw(false);
 </script>
 
 <Contextmenu {...rest} {entries} />

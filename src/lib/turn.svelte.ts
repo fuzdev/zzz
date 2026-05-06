@@ -1,8 +1,8 @@
 import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+import {Uuid} from '@fuzdev/fuz_util/id.js';
 
 import {estimate_token_count} from './helpers.js';
 import {Cell, type CellOptions} from './cell.svelte.js';
-import {Uuid} from './zod_helpers.js';
 import type {PartUnion} from './part.svelte.js';
 import type {Frontend} from './frontend.svelte.js';
 import {TurnJson} from './turn_types.js';
@@ -16,11 +16,11 @@ export interface TurnOptions extends CellOptions<typeof TurnJson> {} // eslint-d
  */
 export class Turn extends Cell<typeof TurnJson> {
 	part_ids: Array<Uuid> = $state()!;
-	thread_id: Uuid | null | undefined = $state();
-	role: CompletionRole = $state()!;
+	thread_id: Uuid | null | undefined = $state.raw();
+	role: CompletionRole = $state.raw()!;
 	request: CompletionRequest | undefined = $state.raw();
 	response: CompletionResponse | undefined = $state.raw();
-	error_message: string | undefined = $state();
+	error_message: string | undefined = $state.raw();
 
 	readonly parts: Array<PartUnion> = $derived(
 		this.part_ids

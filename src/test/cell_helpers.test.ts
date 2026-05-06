@@ -1,14 +1,12 @@
-// @slop Claude Sonnet 3.7
-
-import {describe, test, expect} from 'vitest';
+import {describe, test, assert} from 'vitest';
 import {z} from 'zod';
 
 import {get_schema_class_info} from '$lib/cell_helpers.js';
 
 describe('get_schema_class_info', () => {
 	test('handles null or undefined schemas', () => {
-		expect(get_schema_class_info(null)).toBeNull();
-		expect(get_schema_class_info(undefined)).toBeNull();
+		assert.isNull(get_schema_class_info(null));
+		assert.isNull(get_schema_class_info(undefined));
 	});
 
 	test('identifies basic schema types correctly', () => {
@@ -20,14 +18,14 @@ describe('get_schema_class_info', () => {
 		const number_info = get_schema_class_info(number_schema);
 		const boolean_info = get_schema_class_info(boolean_schema);
 
-		expect(string_info?.type).toBe('ZodString');
-		expect(string_info?.is_array).toBe(false);
+		assert.strictEqual(string_info?.type, 'ZodString');
+		assert.ok(!string_info?.is_array);
 
-		expect(number_info?.type).toBe('ZodNumber');
-		expect(number_info?.is_array).toBe(false);
+		assert.strictEqual(number_info?.type, 'ZodNumber');
+		assert.ok(!number_info?.is_array);
 
-		expect(boolean_info?.type).toBe('ZodBoolean');
-		expect(boolean_info?.is_array).toBe(false);
+		assert.strictEqual(boolean_info?.type, 'ZodBoolean');
+		assert.ok(!boolean_info?.is_array);
 	});
 
 	test('identifies array schemas correctly', () => {
@@ -40,14 +38,14 @@ describe('get_schema_class_info', () => {
 		const object_array_info = get_schema_class_info(object_array);
 
 		// Test array identification
-		expect(string_array_info?.type).toBe('ZodArray');
-		expect(string_array_info?.is_array).toBe(true);
+		assert.strictEqual(string_array_info?.type, 'ZodArray');
+		assert.ok(string_array_info?.is_array);
 
-		expect(number_array_info?.type).toBe('ZodArray');
-		expect(number_array_info?.is_array).toBe(true);
+		assert.strictEqual(number_array_info?.type, 'ZodArray');
+		assert.ok(number_array_info?.is_array);
 
-		expect(object_array_info?.type).toBe('ZodArray');
-		expect(object_array_info?.is_array).toBe(true);
+		assert.strictEqual(object_array_info?.type, 'ZodArray');
+		assert.ok(object_array_info?.is_array);
 	});
 
 	test('handles default wrapped schemas', () => {
@@ -58,12 +56,12 @@ describe('get_schema_class_info', () => {
 		const array_default_info = get_schema_class_info(array_with_default);
 
 		// Default shouldn't change the core type
-		expect(string_default_info?.type).toBe('ZodString');
-		expect(string_default_info?.is_array).toBe(false);
+		assert.strictEqual(string_default_info?.type, 'ZodString');
+		assert.ok(!string_default_info?.is_array);
 
 		// This is what's failing in the test - default-wrapped arrays should still be identified as arrays
-		expect(array_default_info?.type).toBe('ZodArray');
-		expect(array_default_info?.is_array).toBe(true);
+		assert.strictEqual(array_default_info?.type, 'ZodArray');
+		assert.ok(array_default_info?.is_array);
 	});
 
 	test('handles object schemas', () => {
@@ -73,8 +71,8 @@ describe('get_schema_class_info', () => {
 		});
 
 		const object_info = get_schema_class_info(object_schema);
-		expect(object_info?.type).toBe('ZodObject');
-		expect(object_info?.is_array).toBe(false);
+		assert.strictEqual(object_info?.type, 'ZodObject');
+		assert.ok(!object_info?.is_array);
 	});
 
 	test('detects class names set with cell_class', () => {
@@ -82,7 +80,7 @@ describe('get_schema_class_info', () => {
 		const schema_with_class = schema.meta({cell_class_name: 'TestClass'});
 
 		const info = get_schema_class_info(schema_with_class);
-		expect(info?.class_name).toBe('TestClass');
+		assert.strictEqual(info?.class_name, 'TestClass');
 	});
 
 	test('detects element classes from element metadata', () => {
@@ -90,8 +88,8 @@ describe('get_schema_class_info', () => {
 		const array_schema = z.array(element_schema);
 
 		const info = get_schema_class_info(array_schema);
-		expect(info?.is_array).toBe(true);
-		expect(info?.element_class).toBe('ElementClass');
+		assert.ok(info?.is_array);
+		assert.strictEqual(info.element_class, 'ElementClass');
 	});
 
 	test('handles default-wrapped array with element metadata', () => {
@@ -99,8 +97,8 @@ describe('get_schema_class_info', () => {
 		const array_schema = z.array(element_schema).default([]);
 
 		const info = get_schema_class_info(array_schema);
-		expect(info?.is_array).toBe(true);
-		expect(info?.element_class).toBe('ElementClass');
+		assert.ok(info?.is_array);
+		assert.strictEqual(info.element_class, 'ElementClass');
 	});
 
 	test('reads element class from nested element schema', () => {
@@ -112,8 +110,8 @@ describe('get_schema_class_info', () => {
 
 		// Verify that get_schema_class_info can read element metadata
 		const info = get_schema_class_info(array_schema);
-		expect(info?.is_array).toBe(true);
-		expect(info?.element_class).toBe('DirectElementClass');
+		assert.ok(info?.is_array);
+		assert.strictEqual(info.element_class, 'DirectElementClass');
 	});
 
 	test('handles ZodDefault containing a ZodArray', () => {
@@ -122,17 +120,17 @@ describe('get_schema_class_info', () => {
 		const array_schema_default = array_schema.default([]);
 
 		// We can see what the internal structure of ZodDefault looks like
-		expect(array_schema_default._zod.def).toBeDefined();
-		expect(array_schema_default._zod.def.type).toBe('default');
-		expect(array_schema_default._zod.def.innerType).toBeDefined();
-		expect(array_schema_default._zod.def.innerType.def.type).toBe('array');
+		assert.isDefined(array_schema_default._zod.def);
+		assert.strictEqual(array_schema_default._zod.def.type, 'default');
+		assert.isDefined(array_schema_default._zod.def.innerType);
+		assert.strictEqual(array_schema_default._zod.def.innerType.def.type, 'array');
 
 		// Now test the function with our default-wrapped array
 		const info = get_schema_class_info(array_schema_default);
 
 		// The function should see through the ZodDefault to the ZodArray inside
-		expect(info?.type).toBe('ZodArray');
-		expect(info?.is_array).toBe(true);
+		assert.strictEqual(info?.type, 'ZodArray');
+		assert.ok(info?.is_array);
 	});
 
 	test('handles complex nested schema wrapping', () => {
@@ -140,15 +138,15 @@ describe('get_schema_class_info', () => {
 		const nested_array_schema = z.array(z.string()).optional().default([]);
 
 		const nested_info = get_schema_class_info(nested_array_schema);
-		expect(nested_info?.type).toBe('ZodArray');
-		expect(nested_info?.is_array).toBe(true);
+		assert.strictEqual(nested_info?.type, 'ZodArray');
+		assert.ok(nested_info?.is_array);
 
 		// More extreme nesting: ZodDefault -> ZodOptional -> ZodDefault -> ZodArray
 		const extreme_nesting = z.array(z.number()).default([]).optional().default([]);
 
 		const extreme_info = get_schema_class_info(extreme_nesting);
-		expect(extreme_info?.type).toBe('ZodArray');
-		expect(extreme_info?.is_array).toBe(true);
+		assert.strictEqual(extreme_info?.type, 'ZodArray');
+		assert.ok(extreme_info?.is_array);
 	});
 
 	test('handles ZodEffects wrapping arrays', () => {
@@ -158,8 +156,8 @@ describe('get_schema_class_info', () => {
 			.refine((arr) => arr.length > 0, {message: 'Array must not be empty'});
 
 		const refined_info = get_schema_class_info(refined_array);
-		expect(refined_info?.type).toBe('ZodArray');
-		expect(refined_info?.is_array).toBe(true);
+		assert.strictEqual(refined_info?.type, 'ZodArray');
+		assert.ok(refined_info?.is_array);
 
 		// ZodEffects (transform) wrapping an array with default
 		const transformed_array = z
@@ -168,8 +166,8 @@ describe('get_schema_class_info', () => {
 			.transform((arr) => arr.map((n) => n * 2));
 
 		const transformed_info = get_schema_class_info(transformed_array);
-		expect(transformed_info?.type).toBe('ZodArray');
-		expect(transformed_info?.is_array).toBe(true);
+		assert.strictEqual(transformed_info?.type, 'ZodArray');
+		assert.ok(transformed_info?.is_array);
 	});
 
 	test('handles combinations of optional, default, and refinement', () => {
@@ -182,8 +180,8 @@ describe('get_schema_class_info', () => {
 			.optional();
 
 		const chain_info = get_schema_class_info(complex_chain);
-		expect(chain_info?.type).toBe('ZodArray');
-		expect(chain_info?.is_array).toBe(true);
+		assert.strictEqual(chain_info?.type, 'ZodArray');
+		assert.ok(chain_info?.is_array);
 	});
 
 	test('recursive unwrapping preserves metadata through wrappers', () => {
@@ -196,8 +194,8 @@ describe('get_schema_class_info', () => {
 
 		// Check that metadata is preserved
 		const info = get_schema_class_info(wrapped_array);
-		expect(info?.element_class).toBe('TestElement');
-		expect(info?.is_array).toBe(true);
+		assert.strictEqual(info?.element_class, 'TestElement');
+		assert.ok(info?.is_array);
 	});
 
 	test('handles deeply nested schemas with element metadata', () => {
@@ -207,8 +205,8 @@ describe('get_schema_class_info', () => {
 
 		// Verify metadata is found correctly through the wrappers
 		const info = get_schema_class_info(nested_schema);
-		expect(info?.is_array).toBe(true);
-		expect(info?.element_class).toBe('NestedElement');
+		assert.ok(info?.is_array);
+		assert.strictEqual(info.element_class, 'NestedElement');
 	});
 });
 
@@ -218,13 +216,13 @@ describe('cell_class', () => {
 		const result = schema.meta({cell_class_name: 'TestCellClass'});
 
 		// Should add the metadata via .meta()
-		expect(result.meta()?.cell_class_name).toBe('TestCellClass');
+		assert.strictEqual(result.meta()?.cell_class_name, 'TestCellClass');
 
 		// Should return a new schema instance (due to .meta() creating a new instance)
-		expect(result).not.toBe(schema);
+		assert.notStrictEqual(result, schema);
 
 		// Get schema info should report it correctly
 		const info = get_schema_class_info(result);
-		expect(info?.class_name).toBe('TestCellClass');
+		assert.strictEqual(info?.class_name, 'TestCellClass');
 	});
 });

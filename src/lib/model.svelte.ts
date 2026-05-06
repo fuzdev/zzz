@@ -47,27 +47,27 @@ export type ModelJsonInput = z.input<typeof ModelJson>;
 export interface ModelOptions extends CellOptions<typeof ModelJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
 
 export class Model extends Cell<typeof ModelJson> {
-	name: ModelName = $state()!;
-	provider_name: ProviderName = $state()!;
+	name: ModelName = $state.raw()!;
+	provider_name: ProviderName = $state.raw()!;
 	tags: Array<string> = $state()!;
-	architecture: string | undefined = $state();
-	parameter_count: number | undefined = $state();
-	context_window: number | undefined = $state();
-	output_token_limit: number | undefined = $state();
-	embedding_length: number | undefined = $state();
+	architecture: string | undefined = $state.raw();
+	parameter_count: number | undefined = $state.raw();
+	context_window: number | undefined = $state.raw();
+	output_token_limit: number | undefined = $state.raw();
+	embedding_length: number | undefined = $state.raw();
 	/** Size in gigabytes. */
-	filesize: number | undefined = $state();
-	cost_input: number | undefined = $state();
-	cost_output: number | undefined = $state();
-	training_cutoff: string | undefined = $state();
+	filesize: number | undefined = $state.raw();
+	cost_input: number | undefined = $state.raw();
+	cost_output: number | undefined = $state.raw();
+	training_cutoff: string | undefined = $state.raw();
 
 	// TODO @many maybe have a single `ollama` object?
 	// in Ollamaland, list is the metadata and show is the full details
 	ollama_list_response_item: OllamaListResponseItem | undefined = $state.raw();
 	ollama_show_response: OllamaShowResponse | undefined = $state.raw();
-	ollama_show_response_loaded: boolean = $state(false);
-	ollama_show_response_loading: boolean = $state(false);
-	ollama_show_response_error: string | undefined = $state();
+	ollama_show_response_loaded: boolean = $state.raw(false);
+	ollama_show_response_loading: boolean = $state.raw(false);
+	ollama_show_response_error: string | undefined = $state.raw();
 
 	/**
 	 * For models that run locally, this is a boolean indicating if the model is downloaded.

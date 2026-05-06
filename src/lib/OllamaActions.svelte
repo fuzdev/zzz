@@ -28,7 +28,7 @@
 			</label>
 			<button
 				type="button"
-				class="icon_button plain"
+				class="icon-button plain"
 				title="clear completed actions"
 				onclick={clear_completed_actions}
 				disabled={ollama.completed_actions.length === 0}

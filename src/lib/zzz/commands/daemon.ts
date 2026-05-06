@@ -1,0 +1,120 @@
+/**
+ * zzz daemon commands (start, stop, status).
+ *
+ * The zzz CLI runs in Deno, so daemon start uses the Deno server entry point.
+ *
+ * Routing (`zzz daemon start|stop|status`) is handled by
+ * create_subcommand_router in main.ts.
+ *
+ * @module
+ */
+
+import {colors} from '@fuzdev/fuz_app/cli/util.js';
+import {
+	get_daemon_info_path,
+	read_daemon_info,
+	is_daemon_running,
+	check_daemon_health,
+	stop_daemon,
+} from '@fuzdev/fuz_app/cli/daemon.js';
+
+import {log} from '../log.js';
+import type {ZzzRuntime} from '../runtime/types.ts';
+import type {DaemonStartArgs, DaemonStopArgs, DaemonStatusArgs} from '../cli/schemas.ts';
+import type {ZzzGlobalArgs} from '../cli/cli_args.ts';
+import {start_server} from '../../server/server.ts';
+import {ZZZ_DEFAULT_PORT} from '../cli_config.ts';
+
+/**
+ * Start the daemon in foreground mode.
+ *
+ * CLI flags --port and --host override config values.
+ */
+export const daemon_start = async (
+	runtime: ZzzRuntime,
+	args: DaemonStartArgs,
+	_flags: ZzzGlobalArgs,
+): Promise<void> => {
+	// Set daemon port — CLI flag > env > daemon default (4460).
+	// PORT/HOST are the server bind vars (BaseServerEnv); PUBLIC_SERVER_PROXIED_PORT/HOST
+	// are the SvelteKit frontend vars (tell the frontend where the backend is).
+	// Without this, BaseServerEnv defaults PORT to 4040 which doesn't match the
+	// daemon's advertised default of 4460.
+	const port = args.port ?? (runtime.env_get('PORT') ? undefined : ZZZ_DEFAULT_PORT);
+	if (port !== undefined) {
+		runtime.env_set('PORT', String(port));
+		runtime.env_set('PUBLIC_SERVER_PROXIED_PORT', String(port));
+	}
+	if (args.host) {
+		runtime.env_set('HOST', args.host);
+		runtime.env_set('PUBLIC_SERVER_HOST', args.host);
+	}
+	// Start Deno server (zzz CLI always runs in Deno)
+	await start_server();
+};
+
+/**
+ * Stop the running daemon.
+ */
+export const daemon_stop = async (
+	runtime: ZzzRuntime,
+	_args: DaemonStopArgs,
+	_flags: ZzzGlobalArgs,
+): Promise<void> => {
+	const result = await stop_daemon(runtime, 'zzz');
+	if (result.stopped) {
+		log.success(result.message);
+	} else if (result.pid) {
+		log.warn(result.message);
+	} else {
+		log.info(result.message);
+	}
+};
+
+/**
+ * Show daemon status.
+ */
+export const daemon_status = async (
+	runtime: ZzzRuntime,
+	args: DaemonStatusArgs,
+	_flags: ZzzGlobalArgs,
+): Promise<void> => {
+	const info = await read_daemon_info(runtime, 'zzz');
+	if (!info) {
+		if (args.json) {
+			console.log(JSON.stringify({running: false}));
+		} else {
+			log.info('No daemon running');
+		}
+		return;
+	}
+
+	// Check if process is actually running, then probe health
+	const pid_alive = await is_daemon_running(runtime, info.pid);
+	const healthy = pid_alive ? await check_daemon_health(runtime, info.port) : false;
+
+	if (args.json) {
+		console.log(JSON.stringify({running: pid_alive, healthy, ...info}));
+	} else if (pid_alive && healthy) {
+		console.log(`${colors.green}Daemon running${colors.reset}`);
+		console.log(`  PID:     ${info.pid}`);
+		console.log(`  Port:    ${info.port}`);
+		console.log(`  Version: ${info.app_version}`);
+		console.log(`  Started: ${info.started}`);
+		console.log(`  URL:     ${colors.cyan}http://localhost:${info.port}${colors.reset}`);
+	} else if (pid_alive) {
+		console.log(`${colors.yellow}Daemon process alive but not responding${colors.reset}`);
+		console.log(`  PID:     ${info.pid}`);
+		console.log(`  Port:    ${info.port} (not listening)`);
+		console.log(`  Version: ${info.app_version}`);
+		console.log(`  Started: ${info.started}`);
+		log.warn(
+			'The process exists but is not serving on the expected port. It may be a different process.',
+		);
+	} else {
+		log.warn('Stale daemon.json found (process not running)');
+		const daemon_path = get_daemon_info_path(runtime, 'zzz');
+		if (daemon_path) await runtime.remove(daemon_path);
+		log.info('Cleaned up stale daemon.json');
+	}
+};

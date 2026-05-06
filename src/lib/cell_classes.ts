@@ -17,12 +17,17 @@ import {Prompt} from './prompt.svelte.js';
 import {Prompts} from './prompts.svelte.js';
 import {Provider} from './provider.svelte.js';
 import {Providers} from './providers.svelte.js';
-import {Socket} from './socket.svelte.js';
 import {Turn} from './turn.svelte.js';
 import {Thread} from './thread.svelte.js';
 import {Threads} from './threads.svelte.js';
 import {Time} from './time.svelte.js';
+import {Space} from './space.svelte.js';
+import {Spaces} from './spaces.svelte.js';
+import {Terminal} from './terminal.svelte.js';
+import {TerminalPreset} from './terminal_preset.svelte.js';
 import {Ui} from './ui.svelte.js';
+import {Workspace} from './workspace.svelte.js';
+import {Workspaces} from './workspaces.svelte.js';
 import type {Cell} from './cell.svelte.js';
 
 export const cell_classes = {
@@ -45,13 +50,18 @@ export const cell_classes = {
 	Prompts,
 	Provider,
 	Providers,
-	Socket,
+	Space,
+	Spaces,
+	Terminal,
+	TerminalPreset,
 	Turn,
 	Thread,
 	Threads,
 	Time,
 	TextPart,
 	Ui,
+	Workspace,
+	Workspaces,
 } satisfies Record<string, typeof Cell<any>>;
 
 export type CellClasses = typeof cell_classes;

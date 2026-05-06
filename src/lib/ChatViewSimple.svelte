@@ -21,7 +21,7 @@
 <!-- TODO the overflow change is hacky, allows the shadow to overlap the sidebar -->
 {#if thread}
 	<div
-		class="column_fluid column flex:1"
+		class="column-fluid column flex:1"
 		class:pr_xl={empty}
 		style:overflow={empty ? 'visible' : undefined}
 		style:justify-content={empty ? 'center' : undefined}
@@ -47,10 +47,10 @@
 		</div>
 	</div>
 {:else}
-	<section class="column_section">
+	<section class="column-section">
 		<ChatThreadAddByModel {chat} />
 	</section>
-	<section class="column_section">
+	<section class="column-section">
 		<ChatThreadManageByTag {chat} />
 	</section>
 {/if}

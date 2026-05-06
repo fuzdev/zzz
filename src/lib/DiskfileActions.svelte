@@ -2,8 +2,8 @@
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 	import PasteFromClipboard from '@fuzdev/fuz_ui/PasteFromClipboard.svelte';
 	import {slide} from 'svelte/transition';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import ConfirmButton from './ConfirmButton.svelte';
 	import {frontend_context} from './frontend.svelte.js';
 	import type {Diskfile} from './diskfile.svelte.js';
 	import ClearRestoreButton from './ClearRestoreButton.svelte';
@@ -35,7 +35,7 @@
 			onclipboardtext={(text) => {
 				editor_state.current_content += text;
 			}}
-			class="plain icon_button font_size_lg"
+			class="plain icon-button font_size_lg"
 		>
 			<Glyph glyph={GLYPH_PASTE} />
 		</PasteFromClipboard>
@@ -46,7 +46,7 @@
 	<!-- Delete button is always available -->
 	<ConfirmButton
 		onconfirm={() => app.diskfiles.delete(diskfile.path)}
-		class="plain icon_button"
+		class="plain icon-button"
 		title="delete file"
 	>
 		<Glyph glyph={GLYPH_DELETE} />

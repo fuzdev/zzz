@@ -1,11 +1,12 @@
 // @slop Claude Sonnet 3.7
 
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
+
 import {estimate_token_count} from './helpers.js';
 import type {Diskfile} from './diskfile.svelte.js';
 import type {DiskfilePath} from './diskfile_types.js';
 import type {Frontend} from './frontend.svelte.js';
 import type {DiskfileHistory, HistoryEntry} from './diskfile_history.svelte.js';
-import type {Uuid} from './zod_helpers.js';
 
 // TODO maybe should be a cell?
 /**
@@ -13,19 +14,19 @@ import type {Uuid} from './zod_helpers.js';
  */
 export class DiskfileEditorState {
 	app: Frontend;
-	diskfile: Diskfile = $state()!; // TODO maybe should be nullable to make initialization easier?
+	diskfile: Diskfile = $state.raw()!; // TODO maybe should be nullable to make initialization easier?
 
 	// Store the id of the unsaved edit entry
-	unsaved_edit_entry_id: Uuid | null = $state(null);
+	unsaved_edit_entry_id: Uuid | null = $state.raw(null);
 
 	// Track which history entry is currently selected in the UI
-	selected_history_entry_id: Uuid | null = $state(null);
+	selected_history_entry_id: Uuid | null = $state.raw(null);
 
 	// Used to track if the user has edited the content
-	content_was_modified_by_user: boolean = $state(false);
+	content_was_modified_by_user: boolean = $state.raw(false);
 
 	// Track last seen disk content to detect changes
-	last_seen_disk_content: string | null = $state(null);
+	last_seen_disk_content: string | null = $state.raw(null);
 
 	// Basic derived states
 	readonly original_content: string | null = $derived(this.diskfile.content);

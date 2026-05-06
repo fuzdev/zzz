@@ -1,3 +1,5 @@
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
+
 import type {Model} from './model.svelte.js';
 import {Turn, create_turn_from_text, create_turn_from_part} from './turn.svelte.js';
 import {Cell, type CellOptions} from './cell.svelte.js';
@@ -8,7 +10,6 @@ import type {PartUnion} from './part.svelte.js';
 import {HANDLED} from './cell_helpers.js';
 import {to_preview, estimate_token_count} from './helpers.js';
 import {IndexedCollection} from './indexed_collection.svelte.js';
-import type {Uuid} from './zod_helpers.js';
 import type {TurnJson} from './turn_types.js';
 
 // TODO add `thread.name` and lots of other things probably
@@ -19,7 +20,7 @@ export interface ThreadOptions extends CellOptions<typeof ThreadJson> {} // esli
  * record of interactions between the user and the AI.
  */
 export class Thread extends Cell<typeof ThreadJson> {
-	model_name: string = $state()!;
+	model_name: string = $state.raw()!;
 	readonly model: Model = $derived.by(() => {
 		const model = this.app.models.find_by_name(this.model_name);
 		if (!model) throw new Error(`Model "${this.model_name}" not found`); // TODO do this differently?
@@ -28,12 +29,24 @@ export class Thread extends Cell<typeof ThreadJson> {
 
 	readonly turns: IndexedCollection<Turn> = new IndexedCollection();
 
-	enabled: boolean = $state()!;
+	enabled: boolean = $state.raw()!;
 
 	readonly content: string = $derived(render_messages_to_string(this.turns.by_id.values()));
 	readonly length: number = $derived(this.content.length);
 	readonly token_count: number = $derived(estimate_token_count(this.content));
 	readonly content_preview: string = $derived(to_preview(this.content));
+
+	// Imperative handle for the in-flight completion_create call. Not reactive —
+	// UI state tracks `pending` below, which mirrors this controller's lifecycle.
+	#pending_controller: AbortController | null = null;
+
+	/**
+	 * Reactive flag: true while `send_message` has an in-flight `completion_create`.
+	 * Owned by the thread so multiple views of the same thread stay in sync.
+	 * Callers that bypass `send_message` and call `app.api.completion_create`
+	 * directly will not update this flag.
+	 */
+	pending: boolean = $state.raw(false);
 
 	constructor(options: ThreadOptions) {
 		super(ThreadJson, options);
@@ -146,14 +159,45 @@ export class Thread extends Cell<typeof ThreadJson> {
 		// Update the user turn with the request
 		user_turn.request = completion_request;
 
-		// Send the prompt with thread history
-		await this.app.api.completion_create({
-			completion_request,
-			_meta: {progressToken: assistant_turn.id},
-		});
+		// Send the prompt with thread history. Attach an AbortController so the
+		// user can stop long streams mid-flight — the server's completion handler
+		// cooperates via ctx.signal and the frontend WS client translates abort
+		// into a `request_cancelled` JSON-RPC error.
+		const controller = new AbortController();
+		this.#pending_controller = controller;
+		this.pending = true;
+		try {
+			await this.app.api.completion_create(
+				{
+					completion_request,
+					_meta: {progressToken: assistant_turn.id},
+				},
+				{signal: controller.signal},
+			);
+		} finally {
+			// Only clear if this is still the active controller — a concurrent
+			// send (shouldn't happen with current UI but cheap insurance) would
+			// have replaced it.
+			if (this.#pending_controller === controller) {
+				this.#pending_controller = null;
+				this.pending = false;
+			}
+		}
 		// Result not needed - handlers update turn, which contains error content if failed
 
 		return assistant_turn;
+	}
+
+	/**
+	 * Abort the in-flight `completion_create` call (if any). Safe to call when
+	 * nothing is pending — no-op. The frontend WS client rejects the pending
+	 * promise with `request_cancelled` and fires a `cancel` notification so the
+	 * server can stop its provider stream.
+	 */
+	cancel_pending(): void {
+		this.#pending_controller?.abort();
+		this.#pending_controller = null;
+		this.pending = false;
 	}
 
 	switch_model(model_id: Uuid): void {

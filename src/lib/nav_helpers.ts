@@ -1,6 +1,5 @@
 import {resolve} from '$app/paths';
-
-import type {Uuid} from './zod_helpers.js';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
 // TODO think about refactoring with related code
 

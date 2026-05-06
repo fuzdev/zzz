@@ -17,7 +17,7 @@ export class Poller {
 	// I dont normally use this pattern but trying it out
 	static DEFAULT_INTERVAL = 15_000;
 
-	#active: boolean = $state(false);
+	#active: boolean = $state.raw(false);
 
 	/**
 	 * Check if the poller is currently active.

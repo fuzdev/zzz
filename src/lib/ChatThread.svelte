@@ -12,7 +12,7 @@
 	import ThreadContextmenu from './ThreadContextmenu.svelte';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 	import ContentEditor from './ContentEditor.svelte';
-	import {GLYPH_ERROR, GLYPH_PLACEHOLDER, GLYPH_SEND} from './glyphs.js';
+	import {GLYPH_ERROR, GLYPH_PLACEHOLDER, GLYPH_SEND, GLYPH_STOP} from './glyphs.js';
 	import Glyph from './Glyph.svelte';
 
 	// TODO no longer uses `Chat`, maybe rename to `ThreadView` or similar?
@@ -34,10 +34,9 @@
 		attrs?: SvelteHTMLElements['div'] | undefined;
 	} = $props();
 
-	let input = $state('');
+	let input = $state.raw('');
 	const input_token_count = $derived(estimate_token_count(input));
 	let content_input: {focus: () => void} | undefined;
-	let pending = $state(false);
 
 	const send = async () => {
 		const parsed = input.trim();
@@ -47,16 +46,14 @@
 		}
 		input = '';
 		void tick().then(() => content_input?.focus()); // timeout is maybe unnecessary, lets the input clear first to maybe avoid a frame of jank
-		pending = true;
 		await onsend(parsed);
-		pending = false;
 	};
 
 	const turn_count = $derived(thread.turns.size);
 
 	const empty = $derived(!turn_count);
 
-	let show_model_picker = $state(false);
+	let show_model_picker = $state.raw(false);
 
 	// Show loading indicator for local models (Ollama) when they're not loaded
 	const is_local_model = $derived(thread.model.provider_name === 'ollama');
@@ -70,12 +67,17 @@
 				? provider.status.error
 				: 'provider unavailable',
 	);
-	const send_disabled = $derived(pending || !!provider_error);
+	const send_disabled = $derived(thread.pending || !!provider_error);
 </script>
 
 <ModelContextmenu model={thread.model}>
 	<ThreadContextmenu {thread}>
-		<div {...attrs} class="chat_thread {attrs?.class}" class:empty class:dormant={!thread.enabled}>
+		<div
+			{...attrs}
+			class="chat-thread column gap_md shade_00 border_radius_xs {attrs?.class}"
+			class:empty
+			class:dormant={!thread.enabled}
+		>
 			<div class="display:flex justify-content:space-between align-items:start">
 				<header>
 					<button
@@ -119,17 +121,28 @@
 					{focus_key}
 					bind:pending_element_to_focus_key
 				>
-					<PendingButton
-						{pending}
-						disabled={send_disabled}
-						onclick={send}
-						class="plain {provider_error ? ' color_c_50' : ''}"
-						title={provider?.available
-							? `send ${input_token_count} tokens to ${thread.model_name}`
-							: (provider_error ?? undefined)}
-					>
-						<Glyph glyph={GLYPH_SEND} />
-					</PendingButton>
+					{#if thread.pending}
+						<button
+							type="button"
+							class="plain"
+							onclick={() => thread.cancel_pending()}
+							title="stop generating"
+						>
+							<Glyph glyph={GLYPH_STOP} />
+						</button>
+					{:else}
+						<PendingButton
+							pending={thread.pending}
+							disabled={send_disabled}
+							onclick={send}
+							class="plain {provider_error ? ' color_c_50' : ''}"
+							title={provider?.available
+								? `send ${input_token_count} tokens to ${thread.model_name}`
+								: (provider_error ?? undefined)}
+						>
+							<Glyph glyph={GLYPH_SEND} />
+						</PendingButton>
+					{/if}
 				</ContentEditor>
 			</div>
 		</div>
@@ -146,15 +159,7 @@
 </ModelContextmenu>
 
 <style>
-	.chat_thread {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space_md);
-		background-color: var(--shade_00);
-		border-radius: var(--border_radius_xs);
-	}
-
-	.chat_thread.empty {
+	.chat-thread.empty {
 		justify-content: center;
 	}
 </style>

@@ -1,54 +1,34 @@
-// @slop Claude Opus 4
-
 import type {Gen} from '@fuzdev/gro/gen.js';
+import {
+	ImportBuilder,
+	compose_gen_file,
+	generate_frontend_action_handlers,
+	generate_typed_action_event_alias,
+} from '@fuzdev/fuz_app/actions/action_codegen.js';
 
-import * as action_specs from './action_specs.js';
-import {is_action_spec} from './action_spec.js';
-import {ActionRegistry} from './action_registry.js';
-import {ImportBuilder, generate_phase_handlers, create_banner} from './codegen.js';
+import {all_action_specs} from './action_specs.js';
 
 /**
  * Generates frontend action handler types based on spec.initiator.
- * Frontend can handle:
- * - send/execute phases when initiator is 'frontend' or 'both'
- * - receive phases when initiator is 'backend' or 'both'
+ * Uses `TypedActionEvent` to carry typed input/output from the generated `ActionEventDatas` map.
  *
- * Example generated imports:
- * ```typescript
- * import type {ActionEvent} from './action_event.js';
- * import type {ActionInputs, ActionOutputs} from './action_collections.js';
- * import type {Frontend} from './frontend.svelte.js';
- * ```
+ * `include_protocol_actions: true` keeps `heartbeat` / `cancel` slots in the
+ * `FrontendActionHandlers` shape for symmetry with the open `ActionMethod`
+ * union — runtime handlers for protocol actions are dispatcher-owned and
+ * remain undefined.
  *
  * @nodocs
  */
 export const gen: Gen = ({origin_path}) => {
-	const registry = new ActionRegistry(Object.values(action_specs).filter((s) => is_action_spec(s)));
-	const banner = create_banner(origin_path);
 	const imports = new ImportBuilder();
-
-	// Generate handlers for each spec, building imports on demand
-	const frontend_action_handlers = registry.specs
-		.map((spec) => generate_phase_handlers(spec, 'frontend', imports))
-		.filter(Boolean) // Remove empty strings
-		.join(';\n\t');
-
-	return `
-		// ${banner}
-
-		${imports.build()}
-
-		/**
-		 * Frontend action handlers organized by method and phase.
-		 * Generated using spec.initiator to determine valid phases:
-		 * - initiator: 'frontend' → send/execute phases
-		 * - initiator: 'backend' → receive phases
-		 * - initiator: 'both' → all valid phases
-		 */
-		export interface FrontendActionHandlers {
-			${frontend_action_handlers}
-		}
-
-		// ${banner}
-	`;
+	return compose_gen_file({
+		origin_path,
+		imports,
+		blocks: [
+			generate_typed_action_event_alias(imports),
+			generate_frontend_action_handlers(all_action_specs, imports, {
+				include_protocol_actions: true,
+			}),
+		],
+	});
 };

@@ -1,22 +1,13 @@
 import {GoogleGenerativeAI} from '@google/generative-ai';
 import type * as google from '@google/generative-ai';
-import {SECRET_GOOGLE_API_KEY} from '$env/static/private';
 
-import {
-	BackendProviderRemote,
-	type BackendProviderOptions,
-	type CompletionHandlerOptions,
-} from './backend_provider.js';
+import {BackendProviderRemote, type CompletionHandlerOptions} from './backend_provider.js';
 import {to_completion_result} from '../response_helpers.js';
 import type {ActionOutputs} from '../action_collections.js';
 import type {CompletionMessage} from '../completion_types.js';
 
 export class BackendProviderGemini extends BackendProviderRemote<GoogleGenerativeAI> {
 	readonly name = 'gemini';
-
-	constructor(options: BackendProviderOptions) {
-		super({...options, api_key: options.api_key ?? (SECRET_GOOGLE_API_KEY || null)});
-	}
 
 	protected override create_client(): void {
 		this.client = this.api_key ? new GoogleGenerativeAI(this.api_key) : null;
@@ -25,7 +16,15 @@ export class BackendProviderGemini extends BackendProviderRemote<GoogleGenerativ
 	async handle_streaming_completion(
 		options: CompletionHandlerOptions,
 	): Promise<ActionOutputs['completion_create']> {
-		const {model, completion_options, completion_messages, prompt, progress_token} = options;
+		const {
+			model,
+			completion_options,
+			completion_messages,
+			prompt,
+			progress_token,
+			on_progress,
+			signal,
+		} = options;
 		this.validate_streaming_requirements(progress_token);
 
 		// TODO cache this by model?
@@ -37,7 +36,7 @@ export class BackendProviderGemini extends BackendProviderRemote<GoogleGenerativ
 
 		// TODO is there a different way to use this API with the messages?
 		// google_model.generateContentStream
-		const stream_result = await google_model.generateContentStream({contents});
+		const stream_result = await google_model.generateContentStream({contents}, {signal});
 
 		let accumulated_content = '';
 		let final_response: any = null;
@@ -53,13 +52,17 @@ export class BackendProviderGemini extends BackendProviderRemote<GoogleGenerativ
 				accumulated_content += chunk_text;
 
 				// Send streaming progress notification to frontend
-				void this.send_streaming_progress(progress_token, {
-					// TODO @many other chunk data
-					message: {
-						role: 'assistant',
-						content: chunk_text,
+				void this.send_streaming_progress(
+					progress_token,
+					{
+						// TODO @many other chunk data
+						message: {
+							role: 'assistant',
+							content: chunk_text,
+						},
 					},
-				});
+					on_progress,
+				);
 			} catch (error) {
 				// Text extraction might fail if prompt was blocked or other issues
 				console.error('[create_completion] Failed to extract text from gemini chunk:', error);
@@ -90,7 +93,7 @@ export class BackendProviderGemini extends BackendProviderRemote<GoogleGenerativ
 	async handle_non_streaming_completion(
 		options: CompletionHandlerOptions,
 	): Promise<ActionOutputs['completion_create']> {
-		const {model, completion_options, completion_messages, prompt} = options;
+		const {model, completion_options, completion_messages, prompt, signal} = options;
 
 		// TODO cache this by model?
 		const google_model = this.get_client().getGenerativeModel(
@@ -100,7 +103,7 @@ export class BackendProviderGemini extends BackendProviderRemote<GoogleGenerativ
 		const contents = to_contents(completion_messages, prompt);
 
 		// TODO systemInstruction and others could also be included here, fully extend the options
-		const result = await google_model.generateContent({contents});
+		const result = await google_model.generateContent({contents}, {signal});
 		const response = result.response;
 
 		this.log_non_streaming_response(response);

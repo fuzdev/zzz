@@ -28,12 +28,12 @@
 	// Create editor state reference - will be initialized in the effect
 	// TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
 	// maybe this instance is created once, and it gets a thunk for the diskfile? `DikfileEditorState.of(() => diskfile)`
-	let editor_state: DiskfileEditorState | undefined = $state();
+	let editor_state: DiskfileEditorState | undefined = $state.raw();
 
 	// Keep track of the content editor for focusing
-	let content_editor: {focus: () => void} | undefined = $state();
+	let content_editor: {focus: () => void} | undefined = $state.raw();
 
-	let show_file_picker = $state(false);
+	let show_file_picker = $state.raw(false);
 
 	// TODO probably refactor to avoid the effect, look also at `TODO @many refactor, maybe move a collection on `app.diskfiles`?`
 	// Effect for managing editor state lifecycle

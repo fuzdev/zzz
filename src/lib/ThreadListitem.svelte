@@ -1,8 +1,9 @@
 <script lang="ts">
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
+
 	import type {Chat} from './chat.svelte.js';
 	import type {Thread} from './thread.svelte.js';
 	import {GLYPH_REMOVE} from './glyphs.js';
-	import ConfirmButton from './ConfirmButton.svelte';
 	import ThreadContextmenu from './ThreadContextmenu.svelte';
 	import ProviderLogo from './ProviderLogo.svelte';
 	import ThreadToggleButton from './ThreadToggleButton.svelte';
@@ -26,7 +27,7 @@
 <ThreadContextmenu {thread}>
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<div
-		class="thread_listitem p_xs2"
+		class="thread-listitem p_xs2"
 		class:dormant={!thread.enabled}
 		class:selected
 		onclick={selectable ? () => chat.select_thread(thread.id) : undefined}
@@ -55,7 +56,7 @@
 				<ThreadToggleButton {thread} />
 				<ConfirmButton
 					onconfirm={() => chat.remove_thread(thread.id)}
-					class="icon_button plain"
+					class="icon-button plain"
 					title="delete thread"
 				>
 					<Glyph glyph={GLYPH_REMOVE} />
@@ -67,14 +68,14 @@
 
 <style>
 	/* TODO hacky styles, see usage, extract reusable parts (classes/components and border variables) */
-	.thread_listitem {
+	.thread-listitem {
 		border-radius: var(--border_radius_xs);
 		border: var(--border_width_2) var(--border_style) transparent;
 	}
-	.thread_listitem.selected {
+	.thread-listitem.selected {
 		border-color: var(--color_a_50);
 	}
-	.thread_listitem:hover {
+	.thread-listitem:hover {
 		background-color: var(--shade_10);
 	}
 </style>

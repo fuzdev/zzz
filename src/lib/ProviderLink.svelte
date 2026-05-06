@@ -3,6 +3,7 @@
 	import {resolve} from '$app/paths';
 	import type {SvelteHTMLElements} from 'svelte/elements';
 	import {page} from '$app/state';
+	import {DEV} from 'esm-env';
 
 	import type {Provider} from './provider.svelte.js';
 	import {GLYPH_PROVIDER} from './glyphs.js';
@@ -27,11 +28,15 @@
 		fallback?: Snippet | undefined;
 	} = $props();
 
-	if (icon && children) {
-		console.error('icon and children are mutually exclusive');
-	}
-	if (fallback && fallback_attrs) {
-		console.error('fallback and fallback_attrs are mutually exclusive');
+	if (DEV) {
+		$effect.pre(() => {
+			if (icon && children) {
+				console.error('icon and children are mutually exclusive');
+			}
+			if (fallback && fallback_attrs) {
+				console.error('fallback and fallback_attrs are mutually exclusive');
+			}
+		});
 	}
 
 	const selected = $derived(
@@ -41,7 +46,7 @@
 
 <!-- whitespace is a part tricky here, we want none with glyphs -->
 {#if provider}
-	<a {...rest} href={resolve(`/providers/${provider.name}`)} class:selected
+	<a {...rest} href={resolve(`/providers/${provider.name}`)} class="selected-plain" class:selected
 		>{#if children}
 			{@render children()}
 		{:else}
@@ -65,14 +70,3 @@
 		><Glyph glyph={GLYPH_PROVIDER} /> missing provider</small
 	>
 {/if}
-
-<style>
-	a {
-		font-weight: 600;
-	}
-	/* TODO breaks convention, but I think it looks better in a lot of cases, maybe extract a class? `plain_selected_link` or `plain`? */
-	.selected {
-		font-weight: 400;
-		text-decoration: none;
-	}
-</style>

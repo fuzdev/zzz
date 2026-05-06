@@ -16,7 +16,7 @@
 	const project_viewmodel = $derived(projects.current_project_viewmodel);
 </script>
 
-<div class="project_layout">
+<div class="project-layout">
 	<!-- TODO @many refactor for better component instance stability for e.g. transitions -->
 	<ProjectSidebar />
 	{#if projects.current_project}
@@ -24,7 +24,7 @@
 		<DomainsSidebar />
 	{/if}
 
-	<div class="project_content">
+	<div class="project-content">
 		{#if project_viewmodel?.project}
 			<div class="p_lg">
 				<h1 class="mb_lg">domains</h1>
@@ -67,11 +67,11 @@
 									</td>
 									<td>
 										<span
-											class="status_badge {domain.status === 'active'
-												? 'status_active'
+											class="status-badge {domain.status === 'active'
+												? 'status-active'
 												: domain.status === 'pending'
-													? 'status_pending'
-													: 'status_inactive'}"
+													? 'status-pending'
+													: 'status-inactive'}"
 										>
 											{domain.status}
 										</span>
@@ -102,35 +102,35 @@
 </div>
 
 <style>
-	.project_layout {
+	.project-layout {
 		display: flex;
 		height: 100%;
 		overflow: hidden;
 	}
 
-	.project_content {
+	.project-content {
 		flex: 1;
 		overflow: auto;
 	}
 
-	.status_badge {
+	.status-badge {
 		display: inline-block;
 		padding: 2px 6px;
 		border-radius: 10px;
 		font-size: 0.75em;
 	}
 
-	.status_active {
+	.status-active {
 		background-color: var(--color_b_20);
 		color: var(--color_b_90);
 	}
 
-	.status_pending {
+	.status-pending {
 		background-color: var(--color_e_20);
 		color: var(--color_e_90);
 	}
 
-	.status_inactive {
+	.status-inactive {
 		background-color: var(--shade_20);
 		color: var(--text_50);
 	}

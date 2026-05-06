@@ -1,9 +1,10 @@
 <script lang="ts">
+	import type {Uuid} from '@fuzdev/fuz_util/id.js';
+
 	import Picker from './Picker.svelte';
 	import {frontend_context} from './frontend.svelte.js';
 	import type {Prompt} from './prompt.svelte.js';
 	import PromptSummary from './PromptSummary.svelte';
-	import type {Uuid} from './zod_helpers.js';
 	import {sort_by_text, sort_by_numeric} from './sortable.svelte.js';
 
 	const {

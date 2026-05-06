@@ -19,13 +19,13 @@ export interface ScrollableParameters {
  */
 export class Scrollable {
 	/** CSS class name to apply when scrolled. */
-	target_class: string = $state()!;
+	target_class: string = $state.raw()!;
 
 	/** Threshold in pixels before considering the element scrolled. */
-	threshold: number = $state()!;
+	threshold: number = $state.raw()!;
 
 	/** The current scroll Y position. */
-	scroll_y: number = $state(0);
+	scroll_y: number = $state.raw(0);
 
 	/** Whether element is scrolled past threshold. */
 	readonly scrolled: boolean = $derived(this.scroll_y > this.threshold);

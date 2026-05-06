@@ -1,8 +1,6 @@
-// @slop claude_sonnet_4
-
 // @vitest-environment jsdom
 
-import {test, expect, describe, vi, beforeEach, afterEach} from 'vitest';
+import {test, describe, vi, beforeEach, afterEach, assert} from 'vitest';
 
 import {Poller} from '$lib/poller.svelte.js';
 
@@ -20,7 +18,7 @@ describe('Poller', () => {
 		const poll_fn = vi.fn();
 		const poller = new Poller({poll_fn});
 
-		expect(poller.active).toBe(false);
+		assert.ok(!poller.active);
 	});
 
 	test('should start polling with immediate execution by default', () => {
@@ -29,12 +27,12 @@ describe('Poller', () => {
 
 		poller.start();
 
-		expect(poller.active).toBe(true);
-		expect(poll_fn).toHaveBeenCalledTimes(1);
+		assert.ok(poller.active);
+		assert.strictEqual(poll_fn.mock.calls.length, 1);
 
 		// Advance time to trigger interval
 		vi.advanceTimersByTime(Poller.DEFAULT_INTERVAL);
-		expect(poll_fn).toHaveBeenCalledTimes(2);
+		assert.strictEqual(poll_fn.mock.calls.length, 2);
 	});
 
 	test('should start polling without immediate execution when configured', () => {
@@ -43,12 +41,12 @@ describe('Poller', () => {
 
 		poller.start();
 
-		expect(poller.active).toBe(true);
-		expect(poll_fn).not.toHaveBeenCalled();
+		assert.ok(poller.active);
+		assert.strictEqual(poll_fn.mock.calls.length, 0);
 
 		// Advance time to trigger interval
 		vi.advanceTimersByTime(Poller.DEFAULT_INTERVAL);
-		expect(poll_fn).toHaveBeenCalledTimes(1);
+		assert.strictEqual(poll_fn.mock.calls.length, 1);
 	});
 
 	test('should use custom interval', () => {
@@ -59,15 +57,15 @@ describe('Poller', () => {
 
 		// Advance by less than interval
 		vi.advanceTimersByTime(4_000);
-		expect(poll_fn).not.toHaveBeenCalled();
+		assert.strictEqual(poll_fn.mock.calls.length, 0);
 
 		// Advance to interval
 		vi.advanceTimersByTime(1_000);
-		expect(poll_fn).toHaveBeenCalledTimes(1);
+		assert.strictEqual(poll_fn.mock.calls.length, 1);
 
 		// Advance by another interval
 		vi.advanceTimersByTime(5_000);
-		expect(poll_fn).toHaveBeenCalledTimes(2);
+		assert.strictEqual(poll_fn.mock.calls.length, 2);
 	});
 
 	test('should stop polling', () => {
@@ -75,15 +73,15 @@ describe('Poller', () => {
 		const poller = new Poller({poll_fn});
 
 		poller.start();
-		expect(poller.active).toBe(true);
-		expect(poll_fn).toHaveBeenCalledTimes(1);
+		assert.ok(poller.active);
+		assert.strictEqual(poll_fn.mock.calls.length, 1);
 
 		poller.stop();
-		expect(poller.active).toBe(false);
+		assert.ok(!poller.active);
 
 		// Should not poll after stopping
 		vi.advanceTimersByTime(Poller.DEFAULT_INTERVAL);
-		expect(poll_fn).toHaveBeenCalledTimes(1);
+		assert.strictEqual(poll_fn.mock.calls.length, 1);
 	});
 
 	test('should handle multiple starts safely', () => {
@@ -94,12 +92,12 @@ describe('Poller', () => {
 		poller.start();
 		poller.start();
 
-		expect(poller.active).toBe(true);
-		expect(poll_fn).toHaveBeenCalledTimes(1);
+		assert.ok(poller.active);
+		assert.strictEqual(poll_fn.mock.calls.length, 1);
 
 		// Should only have one interval running
 		vi.advanceTimersByTime(Poller.DEFAULT_INTERVAL);
-		expect(poll_fn).toHaveBeenCalledTimes(2);
+		assert.strictEqual(poll_fn.mock.calls.length, 2);
 	});
 
 	test('should handle multiple stops safely', () => {
@@ -111,7 +109,7 @@ describe('Poller', () => {
 		poller.stop();
 		poller.stop();
 
-		expect(poller.active).toBe(false);
+		assert.ok(!poller.active);
 	});
 
 	test('should handle async poll functions', () => {
@@ -120,11 +118,11 @@ describe('Poller', () => {
 
 		poller.start();
 
-		expect(poll_fn).toHaveBeenCalledTimes(1);
-		expect(poller.active).toBe(true);
+		assert.strictEqual(poll_fn.mock.calls.length, 1);
+		assert.ok(poller.active);
 
 		vi.advanceTimersByTime(Poller.DEFAULT_INTERVAL);
-		expect(poll_fn).toHaveBeenCalledTimes(2);
+		assert.strictEqual(poll_fn.mock.calls.length, 2);
 	});
 
 	test('should handle poll function errors gracefully', () => {
@@ -138,16 +136,13 @@ describe('Poller', () => {
 
 		poller.start();
 
-		expect(poll_fn).toHaveBeenCalledTimes(1);
-		expect(console_error_spy).toHaveBeenCalledWith(
-			'[poller] poll function error:',
-			expect.any(Error),
-		);
-		expect(poller.active).toBe(true);
+		assert.strictEqual(poll_fn.mock.calls.length, 1);
+		assert.ok(console_error_spy.mock.calls.length > 0);
+		assert.ok(poller.active);
 
 		// Should continue polling despite error
 		vi.advanceTimersByTime(Poller.DEFAULT_INTERVAL);
-		expect(poll_fn).toHaveBeenCalledTimes(2);
+		assert.strictEqual(poll_fn.mock.calls.length, 2);
 	});
 
 	test('should handle async poll function errors gracefully', () => {
@@ -156,12 +151,12 @@ describe('Poller', () => {
 
 		poller.start();
 
-		expect(poll_fn).toHaveBeenCalledTimes(1);
-		expect(poller.active).toBe(true);
+		assert.strictEqual(poll_fn.mock.calls.length, 1);
+		assert.ok(poller.active);
 
 		// Should continue polling despite async error (error handling is async)
 		vi.advanceTimersByTime(Poller.DEFAULT_INTERVAL);
-		expect(poll_fn).toHaveBeenCalledTimes(2);
+		assert.strictEqual(poll_fn.mock.calls.length, 2);
 	});
 
 	test('should set interval and restart if active', () => {
@@ -169,18 +164,18 @@ describe('Poller', () => {
 		const poller = new Poller({poll_fn, interval: Poller.DEFAULT_INTERVAL, immediate: false});
 
 		poller.start();
-		expect(poller.active).toBe(true);
+		assert.ok(poller.active);
 
 		// Change interval while active
 		poller.set_interval(5_000);
-		expect(poller.active).toBe(true);
+		assert.ok(poller.active);
 
 		// Should use new interval
 		vi.advanceTimersByTime(5_000);
-		expect(poll_fn).toHaveBeenCalledTimes(1);
+		assert.strictEqual(poll_fn.mock.calls.length, 1);
 
 		vi.advanceTimersByTime(5_000);
-		expect(poll_fn).toHaveBeenCalledTimes(2);
+		assert.strictEqual(poll_fn.mock.calls.length, 2);
 	});
 
 	test('should set interval without restarting if inactive', () => {
@@ -189,12 +184,12 @@ describe('Poller', () => {
 
 		// Set interval while inactive
 		poller.set_interval(5_000);
-		expect(poller.active).toBe(false);
+		assert.ok(!poller.active);
 
 		// Start and verify new interval is used
 		poller.start();
 		vi.advanceTimersByTime(5_000);
-		expect(poll_fn).toHaveBeenCalledTimes(2); // immediate + first interval
+		assert.strictEqual(poll_fn.mock.calls.length, 2); // immediate + first interval
 	});
 
 	test('should be no-op when setting same interval', () => {
@@ -208,8 +203,8 @@ describe('Poller', () => {
 		poller.set_interval(Poller.DEFAULT_INTERVAL);
 
 		// Should not have restarted
-		expect(poll_fn.mock.calls.length).toBe(initial_call_count);
-		expect(poller.active).toBe(true);
+		assert.strictEqual(poll_fn.mock.calls.length, initial_call_count);
+		assert.ok(poller.active);
 	});
 
 	test('should dispose and stop polling', () => {
@@ -217,14 +212,14 @@ describe('Poller', () => {
 		const poller = new Poller({poll_fn});
 
 		poller.start();
-		expect(poller.active).toBe(true);
+		assert.ok(poller.active);
 
 		poller.dispose();
-		expect(poller.active).toBe(false);
+		assert.ok(!poller.active);
 
 		// Should not poll after disposal
 		vi.advanceTimersByTime(Poller.DEFAULT_INTERVAL);
-		expect(poll_fn).toHaveBeenCalledTimes(1);
+		assert.strictEqual(poll_fn.mock.calls.length, 1);
 	});
 
 	test('should handle restart scenario', () => {
@@ -233,16 +228,16 @@ describe('Poller', () => {
 
 		// Start, stop, start cycle
 		poller.start();
-		expect(poller.active).toBe(true);
+		assert.ok(poller.active);
 
 		poller.stop();
-		expect(poller.active).toBe(false);
+		assert.ok(!poller.active);
 
 		poller.start();
-		expect(poller.active).toBe(true);
+		assert.ok(poller.active);
 
 		// Verify polling works after restart
 		vi.advanceTimersByTime(Poller.DEFAULT_INTERVAL);
-		expect(poll_fn).toHaveBeenCalledTimes(1);
+		assert.strictEqual(poll_fn.mock.calls.length, 1);
 	});
 });

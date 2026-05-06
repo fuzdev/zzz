@@ -1,15 +1,15 @@
-// @slop Claude Sonnet 3.7
-
 // @vitest-environment jsdom
 
-import {test, expect, vi, beforeEach} from 'vitest';
+import {test, vi, beforeEach, assert} from 'vitest';
 import {z} from 'zod';
+import {create_uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.js';
+import {DatetimeNow, get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
 import {Cell, type CellOptions} from '$lib/cell.svelte.js';
 import {CellJson, type SchemaKeys} from '$lib/cell_types.js';
-import {DatetimeNow, get_datetime_now, create_uuid, UuidWithDefault} from '$lib/zod_helpers.js';
 import {Frontend} from '$lib/frontend.svelte.js';
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+
+import {monkeypatch_zzz_for_tests} from './test_helpers.js';
 
 // Constants for testing
 const TEST_ID = create_uuid();
@@ -64,8 +64,9 @@ test('Cell uses registry for instantiating class relationships', () => {
 	const test_object = {key: 'value'};
 	const result = cell.test_instantiate(test_object, 'TestType');
 
-	expect(mock_instantiate).toHaveBeenCalledWith('TestType', test_object);
-	expect(result).toEqual({type: 'TestType', key: 'value'});
+	assert.ok(mock_instantiate.mock.calls.length > 0);
+	assert.deepEqual(mock_instantiate.mock.calls[0], ['TestType', test_object] as any);
+	assert.deepEqual(result, {type: 'TestType', key: 'value'});
 
 	// Clean up
 	mock_instantiate.mockRestore();
@@ -100,13 +101,13 @@ test('Cell.encode_property uses $state.snapshot for values', () => {
 	// Test with Date object
 	const test_date = new Date(`${TEST_YEAR}-01-15`);
 	const encoded_date = cell.test_encode(test_date, 'date_field');
-	expect(encoded_date instanceof Date).toBe(true);
-	expect((encoded_date as Date).getFullYear()).toBe(TEST_YEAR);
+	assert.ok(encoded_date instanceof Date);
+	assert.strictEqual(encoded_date.getFullYear(), TEST_YEAR);
 
 	// Test with nested object
 	const test_object = {outer: {inner: 42}};
 	const encoded_object = cell.test_encode(test_object, 'object_field');
-	expect(encoded_object).toEqual(test_object);
+	assert.deepEqual(encoded_object, test_object);
 });
 
 test('Cell handles special types like Map and Set', () => {
@@ -160,25 +161,25 @@ test('Cell handles special types like Map and Set', () => {
 	});
 
 	// Verify Map handling
-	expect(cell.map_field).toBeInstanceOf(Map);
-	expect(cell.map_field.get('key1')).toBe(1);
-	expect(cell.map_field.get('key2')).toBe(2);
+	assert.instanceOf(cell.map_field, Map);
+	assert.strictEqual(cell.map_field.get('key1'), 1);
+	assert.strictEqual(cell.map_field.get('key2'), 2);
 
 	// Verify Set handling
-	expect(cell.set_field).toBeInstanceOf(Set);
-	expect(cell.set_field.has('item1')).toBe(true);
-	expect(cell.set_field.has('item2')).toBe(true);
-	expect(cell.set_field.has('item3')).toBe(true);
+	assert.instanceOf(cell.set_field, Set);
+	assert.ok(cell.set_field.has('item1'));
+	assert.ok(cell.set_field.has('item2'));
+	assert.ok(cell.set_field.has('item3'));
 
 	// Test manual decoding
 	const map_result = cell.test_decode([['key3', 3]], 'map_field');
-	expect(map_result).toBeInstanceOf(Map);
-	expect(map_result.get('key3')).toBe(3);
+	assert.instanceOf(map_result, Map);
+	assert.strictEqual(map_result.get('key3'), 3);
 
 	const set_result = cell.test_decode(['item4', 'item5'], 'set_field');
-	expect(set_result).toBeInstanceOf(Set);
-	expect(set_result.has('item4')).toBe(true);
-	expect(set_result.has('item5')).toBe(true);
+	assert.instanceOf(set_result, Set);
+	assert.ok(set_result.has('item4'));
+	assert.ok(set_result.has('item5'));
 });
 
 test('Cell - JSON serialization excludes undefined values correctly', () => {
@@ -233,32 +234,32 @@ test('Cell - JSON serialization excludes undefined values correctly', () => {
 
 	// Test minimal cell serialization
 	const minimal_json = minimal_cell.to_json();
-	expect(minimal_json.type).toBe('type1');
-	expect(minimal_json.name).toBeUndefined();
-	expect(minimal_json.data).toBeUndefined();
-	expect(minimal_json.items).toBeUndefined();
-	expect(minimal_json.state).toBeUndefined();
+	assert.strictEqual(minimal_json.type, 'type1');
+	assert.ok(minimal_json.name === undefined);
+	assert.ok(minimal_json.data === undefined);
+	assert.ok(minimal_json.items === undefined);
+	assert.ok(minimal_json.state === undefined);
 
 	// Test complete cell serialization
 	const complete_json = complete_cell.to_json();
-	expect(complete_json.type).toBe('type2');
-	expect(complete_json.name).toBe('test_name');
-	expect(complete_json.data).toEqual({code: 'test_code'});
-	expect(complete_json.data?.value).toBeUndefined();
-	expect(complete_json.items).toEqual(['item1', 'item2']);
-	expect(complete_json.state).toBeUndefined();
+	assert.strictEqual(complete_json.type, 'type2');
+	assert.strictEqual(complete_json.name, 'test_name');
+	assert.deepEqual(complete_json.data, {code: 'test_code'});
+	assert.ok(complete_json.data?.value === undefined);
+	assert.deepEqual(complete_json.items, ['item1', 'item2']);
+	assert.ok(complete_json.state === undefined);
 
 	// Test JSON stringification
 	const minimal_string = JSON.stringify(minimal_cell);
 	const parsed_minimal = JSON.parse(minimal_string);
-	expect(parsed_minimal.name).toBeUndefined();
-	expect(parsed_minimal.data).toBeUndefined();
-	expect(parsed_minimal.items).toBeUndefined();
-	expect(parsed_minimal.state).toBeUndefined();
+	assert.ok(parsed_minimal.name === undefined);
+	assert.ok(parsed_minimal.data === undefined);
+	assert.ok(parsed_minimal.items === undefined);
+	assert.ok(parsed_minimal.state === undefined);
 
 	// Test nested property handling
 	const complete_string = JSON.stringify(complete_cell);
 	const parsed_complete = JSON.parse(complete_string);
-	expect(parsed_complete.data.code).toBe('test_code');
-	expect('value' in parsed_complete.data).toBe(false);
+	assert.strictEqual(parsed_complete.data.code, 'test_code');
+	assert.ok(!('value' in parsed_complete.data));
 });

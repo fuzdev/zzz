@@ -1,16 +1,16 @@
-// @slop Claude Sonnet 3.7
-
 // @vitest-environment jsdom
 
-import {test, expect, vi, beforeEach} from 'vitest';
+import {test, vi, beforeEach, assert} from 'vitest';
 import {z} from 'zod';
+import {create_uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.js';
+import {DatetimeNow, get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
 import {Cell, type CellOptions} from '$lib/cell.svelte.js';
 import {CellJson} from '$lib/cell_types.js';
-import {DatetimeNow, get_datetime_now, create_uuid, UuidWithDefault} from '$lib/zod_helpers.js';
 import {HANDLED} from '$lib/cell_helpers.js';
 import {Frontend} from '$lib/frontend.svelte.js';
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+
+import {monkeypatch_zzz_for_tests} from './test_helpers.js';
 
 // Constants for testing
 const TEST_ID = create_uuid();
@@ -60,7 +60,7 @@ test('Cell allows schema keys with no properties if a decoder is provided', () =
 		},
 	});
 
-	expect(cell.captured_value).toBe(99);
+	assert.strictEqual(cell.captured_value, 99);
 });
 
 test('Cell supports virtual properties with custom handling', () => {
@@ -104,9 +104,9 @@ test('Cell supports virtual properties with custom handling', () => {
 		},
 	});
 
-	expect(cell.visible_prop).toBe('visible');
-	expect('hidden_prop' in cell).toBe(false);
-	expect(cell.processed_value).toBe(84); // 42 * 2
+	assert.strictEqual(cell.visible_prop, 'visible');
+	assert.ok(!('hidden_prop' in cell));
+	assert.strictEqual(cell.processed_value, 84); // 42 * 2
 });
 
 test('Cell handles sentinel values with proper precedence', () => {
@@ -159,13 +159,13 @@ test('Cell handles sentinel values with proper precedence', () => {
 		},
 	});
 
-	expect(cell.decoder_calls).toContain('handled_field_called');
-	expect(cell.decoder_calls).toContain('default_field_called');
-	expect(cell.decoder_calls).toContain('normal_field_called');
+	assert.include(cell.decoder_calls, 'handled_field_called');
+	assert.include(cell.decoder_calls, 'default_field_called');
+	assert.include(cell.decoder_calls, 'normal_field_called');
 
-	expect(cell.handled_field).toBe('initial_value');
-	expect(cell.default_field).toBe(42);
-	expect(cell.normal_field).toBe(true);
+	assert.strictEqual(cell.handled_field, 'initial_value');
+	assert.strictEqual(cell.default_field, 42);
+	assert.ok(cell.normal_field);
 });
 
 test('Cell parser defaults take precedence over schema defaults', () => {
@@ -201,6 +201,6 @@ test('Cell parser defaults take precedence over schema defaults', () => {
 		json: {},
 	});
 
-	expect(cell.id).toBe('parser_default_id');
-	expect(cell.text).toBe('schema_default_text');
+	assert.strictEqual(cell.id, 'parser_default_id');
+	assert.strictEqual(cell.text, 'schema_default_text');
 });

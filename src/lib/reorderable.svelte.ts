@@ -27,7 +27,7 @@ export type ReorderableValidDropPosition = Exclude<ReorderableDropPosition, 'non
 /**
  * Styling configuration for reorderable components.
  */
-export interface ReorderableStyleConfig {
+export interface ReorderableStyleOptions {
 	list_class: string | null;
 	item_class: string | null;
 	dragging_class: string | null;
@@ -40,14 +40,14 @@ export interface ReorderableStyleConfig {
 }
 
 // Default CSS class names for styling
-export const LIST_CLASS_DEFAULT = 'reorderable_list';
-export const ITEM_CLASS_DEFAULT = 'reorderable_item';
+export const LIST_CLASS_DEFAULT = 'reorderable-list';
+export const ITEM_CLASS_DEFAULT = 'reorderable-item';
 export const DRAGGING_CLASS_DEFAULT = 'dragging';
-export const DRAG_OVER_CLASS_DEFAULT = 'drag_over';
-export const DRAG_OVER_TOP_CLASS_DEFAULT = 'drag_over_top';
-export const DRAG_OVER_BOTTOM_CLASS_DEFAULT = 'drag_over_bottom';
-export const DRAG_OVER_LEFT_CLASS_DEFAULT = 'drag_over_left';
-export const DRAG_OVER_RIGHT_CLASS_DEFAULT = 'drag_over_right';
+export const DRAG_OVER_CLASS_DEFAULT = 'drag-over';
+export const DRAG_OVER_TOP_CLASS_DEFAULT = 'drag-over-top';
+export const DRAG_OVER_BOTTOM_CLASS_DEFAULT = 'drag-over-bottom';
+export const DRAG_OVER_LEFT_CLASS_DEFAULT = 'drag-over-left';
+export const DRAG_OVER_RIGHT_CLASS_DEFAULT = 'drag-over-right';
 export const INVALID_DROP_CLASS_DEFAULT = 'invalid_drop';
 
 /**
@@ -86,7 +86,7 @@ export interface ReorderableOptions {
 	invalid_drop_class?: string | null;
 }
 
-export class Reorderable implements ReorderableStyleConfig {
+export class Reorderable implements ReorderableStyleOptions {
 	initialized = false;
 
 	source_index = -1;

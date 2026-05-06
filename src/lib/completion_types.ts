@@ -1,6 +1,6 @@
 import {z} from 'zod';
+import {DatetimeNow} from '@fuzdev/fuz_util/datetime.js';
 
-import {DatetimeNow} from './zod_helpers.js';
 import {ProviderName, ProviderDataSchema} from './provider_types.js';
 
 // TODO any restrictions?

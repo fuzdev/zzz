@@ -54,7 +54,7 @@ ${tab.content}
 
 {#key tab.refresh_counter}
 	{#if tab.type === 'embedded_html'}
-		<div class="iframe_container">
+		<div class="iframe-container">
 			<!-- Using srcdoc to render the HTML content -->
 			<iframe
 				title={tab.title}
@@ -64,7 +64,7 @@ ${tab.content}
 			></iframe>
 		</div>
 	{:else if tab.type === 'external_url'}
-		<div class="iframe_container">
+		<div class="iframe-container">
 			<iframe
 				title={tab.title}
 				src={tab.url}
@@ -81,7 +81,7 @@ ${tab.content}
 {/key}
 
 <style>
-	.iframe_container {
+	.iframe-container {
 		display: flex; /* fixes a height bug */
 		width: 100%;
 		height: 100%;

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {untrack} from 'svelte';
 	import {slide} from 'svelte/transition';
+	import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
 	import {frontend_context} from './frontend.svelte.js';
 	import DiskfileInfo from './DiskfileInfo.svelte';
@@ -12,7 +13,6 @@
 	import {GLYPH_PLACEHOLDER} from './glyphs.js';
 	import DiskfilePartView from './DiskfilePartView.svelte';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
-	import type {Uuid} from './zod_helpers.js';
 	import DiskfileEditorNav from './DiskfileEditorNav.svelte';
 	import TutorialForDiskfiles from './TutorialForDiskfiles.svelte';
 
@@ -27,10 +27,10 @@
 	const app = frontend_context.get();
 
 	// TODO @many refactor, maybe move a collection on `app.diskfiles`? one problem is the contextmenu can't access it without hacking something with context
-	const editor_state = new DiskfileEditorState({app, diskfile});
+	const editor_state = new DiskfileEditorState({app, diskfile}); // TODO make diskfile a getter
 
 	// Reference to the content editor component
-	let content_editor: {focus: () => void} | undefined = $state();
+	let content_editor: {focus: () => void} | undefined = $state.raw();
 
 	// TODO refactor, try to remove
 	$effect(() => {
@@ -68,9 +68,9 @@
 				token_count={editor_state.current_token_count}
 				placeholder={GLYPH_PLACEHOLDER + ' ' + diskfile.path_relative}
 				readonly={false}
-				attrs={{class: 'height:100% border_radius_0'}}
-				onsave={async (value) => {
-					await app.diskfiles.update(diskfile.path, value);
+				attrs={{class: 'height:100% border-radius:0'}}
+				onsave={async () => {
+					await editor_state.save_changes();
 				}}
 			/>
 		</div>

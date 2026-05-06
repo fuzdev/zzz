@@ -2,11 +2,11 @@
 
 import {z} from 'zod';
 import {EMPTY_OBJECT} from '@fuzdev/fuz_util/object.js';
+import {create_uuid, Uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.js';
 
 import {DiskfilePath} from './diskfile_types.js';
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {CellJson} from './cell_types.js';
-import {create_uuid, Uuid, UuidWithDefault} from './zod_helpers.js';
 
 /**
  * Schema for history entries.
@@ -39,9 +39,9 @@ export type DiskfileHistoryOptions = CellOptions<typeof DiskfileHistoryJson>;
  * Stores edit history for a single diskfile.
  */
 export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
-	path: DiskfilePath = $state()!;
+	path: DiskfilePath = $state.raw()!;
 	entries: Array<HistoryEntry> = $state()!;
-	max_entries: number = $state()!;
+	max_entries: number = $state.raw()!;
 
 	/**
 	 * The most recent history entry (by creation timestamp)

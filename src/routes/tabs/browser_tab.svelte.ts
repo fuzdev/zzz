@@ -26,12 +26,12 @@ export type BrowserTabOptions = CellOptions<typeof BrowserTabJson>;
  * - "external_url": Loads content from an external URL
  */
 export class BrowserTab extends Cell<typeof BrowserTabJson> {
-	title: string = $state()!;
-	url: string = $state()!;
-	selected: boolean = $state()!;
-	refresh_counter: number = $state()!;
-	type: 'raw' | 'embedded_html' | 'external_url' = $state()!;
-	content?: string = $state();
+	title: string = $state.raw()!;
+	url: string = $state.raw()!;
+	selected: boolean = $state.raw()!;
+	refresh_counter: number = $state.raw()!;
+	type: 'raw' | 'embedded_html' | 'external_url' = $state.raw()!;
+	content?: string = $state.raw();
 
 	constructor(options: BrowserTabOptions) {
 		super(BrowserTabJson, options);

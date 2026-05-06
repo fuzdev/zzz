@@ -1,81 +1,90 @@
-import type {Hono} from 'hono';
-import type {createNodeWebSocket} from '@hono/node-ws';
-import {wait} from '@fuzdev/fuz_util/async.js';
+/**
+ * WebSocket endpoint wiring — thin wrapper over fuz_app's
+ * `register_action_ws`.
+ *
+ * zzz supplies the action tuples (spec + handler) and a context-extender
+ * that adds the domain `Backend` onto the base per-request context. All
+ * dispatch, auth, validation, and transport bookkeeping live in fuz_app.
+ *
+ * The shared `heartbeat_action` is spread first so disconnect
+ * detection is identical across every fuz_app consumer.
+ *
+ * @module
+ */
 
+import type {Hono} from 'hono';
+import type {UpgradeWebSocket} from 'hono/ws';
+import {register_action_ws} from '@fuzdev/fuz_app/actions/register_action_ws.js';
+import type {
+	Action,
+	BaseHandlerContext,
+	WsActionHandler,
+} from '@fuzdev/fuz_app/actions/action_types.js';
+import {BackendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws_backend.js';
+import {protocol_actions} from '@fuzdev/fuz_app/actions/protocol.js';
+import {is_protocol_action_method} from '@fuzdev/fuz_app/actions/action_codegen.js';
+
+import {all_action_specs} from '../action_specs.js';
 import type {Backend} from './backend.js';
-import {BACKEND_ARTIFICIAL_RESPONSE_DELAY} from '../constants.js';
-import {BackendWebsocketTransport} from './backend_websocket_transport.js';
-import {jsonrpc_error_messages} from '../jsonrpc_errors.js';
-import {
-	create_jsonrpc_error_message_from_thrown,
-	to_jsonrpc_message_id,
-} from '../jsonrpc_helpers.js';
+import {zzz_action_handlers} from './zzz_action_handlers.js';
 
 export interface RegisterWebsocketActionsOptions {
 	path: string;
 	app: Hono;
 	backend: Backend;
-	/**
-	 * @see https://hono.dev/helpers/websocket
-	 */
-	upgradeWebSocket: ReturnType<typeof createNodeWebSocket>['upgradeWebSocket'];
+	/** @see https://hono.dev/helpers/websocket */
+	upgradeWebSocket: UpgradeWebSocket;
+	/** Artificial response delay in ms (testing). */
+	artificial_delay?: number;
 	transport?: BackendWebsocketTransport;
 }
 
+type ZzzWsContext = BaseHandlerContext & {backend: Backend};
+
 /**
- * Registers WebSocket endpoints for all service actions in the schema registry.
+ * Registers the WebSocket endpoint for all zzz request/response actions.
+ *
+ * The zzz `Backend` is exposed on every handler's context. Per-action auth,
+ * Zod validation, and socket-scoped `notify` / `signal` come from fuz_app.
  */
 export const register_websocket_actions = ({
 	path,
 	app,
 	backend,
 	upgradeWebSocket,
+	artificial_delay = 0,
 	transport = new BackendWebsocketTransport(),
 }: RegisterWebsocketActionsOptions): void => {
 	backend.peer.transports.register_transport(transport);
 
-	app.get(
+	// Build the action array: fuz_app's protocol_actions (heartbeat + cancel
+	// pre-paired with their handlers) first, then every zzz spec paired with
+	// its handler — protocol specs are skipped during iteration since they're
+	// already registered above.
+	const actions: Array<Action<ZzzWsContext>> = [
+		...(protocol_actions as ReadonlyArray<Action<ZzzWsContext>>),
+	];
+	for (const spec of all_action_specs) {
+		if (is_protocol_action_method(spec.method)) continue;
+		const handler = (zzz_action_handlers as Record<string, unknown>)[spec.method];
+		if (handler) {
+			actions.push({
+				spec,
+				handler: handler as WsActionHandler<ZzzWsContext>,
+			});
+		} else {
+			actions.push({spec});
+		}
+	}
+
+	register_action_ws({
 		path,
-		upgradeWebSocket(() => ({
-			onOpen: (event, ws) => {
-				const connection_id = transport.add_connection(ws);
-				backend.log?.debug('[ws] ws opened', connection_id, event);
-			},
-			onMessage: async (event, ws) => {
-				let json;
-				try {
-					json = JSON.parse(String(event.data)); // eslint-disable-line @typescript-eslint/no-base-to-string
-				} catch (error) {
-					backend.log?.error(`[ws] JSON parse error:`, error);
-					ws.send(JSON.stringify(jsonrpc_error_messages.parse_error()));
-					return;
-				}
-
-				if (BACKEND_ARTIFICIAL_RESPONSE_DELAY > 0) {
-					backend.log?.debug(`[ws] throttling ${BACKEND_ARTIFICIAL_RESPONSE_DELAY}ms`);
-					await wait(BACKEND_ARTIFICIAL_RESPONSE_DELAY);
-				}
-
-				try {
-					const response = await backend.receive(json);
-					// No responses for notifications
-					if (response != null) {
-						ws.send(JSON.stringify(response));
-					}
-				} catch (error) {
-					// TODO maybe only return messages if it's req/res? breaks from http version tho
-					backend.log?.error('[ws] error processing JSON-RPC request:', error);
-					const error_response = create_jsonrpc_error_message_from_thrown(
-						to_jsonrpc_message_id(json),
-						error,
-					);
-					ws.send(JSON.stringify(error_response));
-				}
-			},
-			onClose: (event, ws) => {
-				transport.remove_connection(ws);
-				backend.log?.debug('[ws] ws closed', event);
-			},
-		})),
-	);
+		app,
+		upgradeWebSocket,
+		actions,
+		extend_context: (base) => ({...base, backend}),
+		transport,
+		artificial_delay,
+		log: backend.log ?? undefined,
+	});
 };

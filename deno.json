@@ -1,0 +1,38 @@
+{
+	"nodeModulesDir": "manual",
+	"unstable": ["sloppy-imports"],
+	"exclude": ["**/*.test.ts", "**/*.svelte.ts", "**/*.gen.ts", "src/test/"],
+	"tasks": {
+		"dev": "deno run --allow-all scripts/dev.ts",
+		"dev:setup": "deno run --allow-read --allow-write --allow-env --allow-run=openssl scripts/dev_setup.ts",
+		"prod:setup": "deno run --allow-read --allow-write --allow-env --allow-run=openssl scripts/prod_setup.ts",
+		"dev:start": "NODE_ENV=development deno run --allow-all --env=.env.development src/lib/zzz/main.ts daemon start",
+		"install": "gro build && mkdir -p ~/.zzz/bin && cp dist_cli/zzz ~/.zzz/bin/zzz",
+		"check": "deno check src/lib/zzz/**/*.ts",
+		"test": "gro test && deno task test:integration",
+		"test:integration": "deno run --allow-net --allow-run --allow-read --allow-write --allow-env test/integration/run.ts"
+	},
+	"imports": {
+		"@std/": "jsr:@std/",
+		"esm-env": "npm:esm-env@^1",
+		"hono": "npm:hono@^4",
+		"svelte": "npm:svelte@5.55.4",
+		"zod": "npm:zod@^4",
+		"@electric-sql/pglite": "npm:@electric-sql/pglite@^0.3",
+		"@fuzdev/blake3_wasm": "npm:@fuzdev/blake3_wasm@^0.1.1",
+		"@fuzdev/fuz_app/": "npm:/@fuzdev/fuz_app@^0.54.0/",
+		"@fuzdev/fuz_util/": "npm:/@fuzdev/fuz_util@^0.59.0/",
+		"@fuzdev/gro/": "npm:/@fuzdev/gro@^0.199.0/",
+		"date-fns": "npm:date-fns@^4",
+		"ollama": "npm:ollama@^0.6",
+		"@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@^0.71.2",
+		"openai": "npm:openai@^6.10.0",
+		"@google/generative-ai": "npm:@google/generative-ai@^0.24.1"
+	},
+	"fmt": {
+		"useTabs": true,
+		"lineWidth": 100,
+		"indentWidth": 2,
+		"singleQuote": true
+	}
+}

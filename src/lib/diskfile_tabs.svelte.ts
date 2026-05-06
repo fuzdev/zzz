@@ -2,10 +2,10 @@
 
 import {z} from 'zod';
 import {SvelteMap} from 'svelte/reactivity';
+import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.js';
 
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {IndexedCollection} from './indexed_collection.svelte.js';
-import {create_uuid, Uuid} from './zod_helpers.js';
 import {to_reordered_list} from './list_helpers.js';
 import {DiskfileTab} from './diskfile_tab.svelte.js';
 import {CellJson} from './cell_types.js';
@@ -29,11 +29,11 @@ export type DiskfileTabsOptions = CellOptions<typeof DiskfileTabsJson>;
  * Manages tabs for diskfiles in the editor with preview behavior.
  */
 export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
-	selected_tab_id: Uuid | null = $state()!;
-	preview_tab_id: Uuid | null = $state()!;
+	selected_tab_id: Uuid | null = $state.raw()!;
+	preview_tab_id: Uuid | null = $state.raw()!;
 	tab_order: Array<Uuid> = $state()!;
-	recent_tab_ids: Array<Uuid> = $state()!;
-	max_tab_history: number = $state()!;
+	recent_tab_ids: Array<Uuid> = $state.raw()!;
+	max_tab_history: number = $state.raw()!;
 
 	items: IndexedCollection<DiskfileTab> = new IndexedCollection();
 
@@ -360,8 +360,8 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * Navigates to a tab by id. If the tab doesn't exist but was previously closed,
 	 * creates a preview tab for that diskfile.
 	 *
-	 * @param tab_id The tab id to navigate to
-	 * @returns Object containing the resulting tab id and a boolean indicating if a new tab was created
+	 * @param tab_id - the tab id to navigate to
+	 * @returns object containing the resulting tab id and a boolean indicating if a new tab was created
 	 */
 	navigate_to_tab(tab_id: Uuid): {resulting_tab_id: Uuid | null; created_preview: boolean} {
 		console.log('DiskfileTabs.navigate_to_tab', {tab_id});

@@ -1,54 +1,42 @@
-// @slop Claude Opus 4
-
 import type {Gen} from '@fuzdev/gro/gen.js';
+import {
+	ImportBuilder,
+	compose_gen_file,
+	generate_backend_action_handlers_map,
+	generate_backend_actions_api,
+} from '@fuzdev/fuz_app/actions/action_codegen.js';
 
-import * as action_specs from '../action_specs.js';
-import {is_action_spec} from '../action_spec.js';
-import {ActionRegistry} from '../action_registry.js';
-import {ImportBuilder, generate_phase_handlers, create_banner} from '../codegen.js';
+import {all_action_specs} from '../action_specs.js';
 
 /**
- * Generates backend action handler types based on spec.initiator.
- * Backend can handle:
- * - send/execute phases when initiator is 'backend' or 'both'
- * - receive phases when initiator is 'frontend' or 'both'
+ * Generates the backend's typed dispatch + handler surfaces:
+ * - `BackendActionsApi` — typed broadcast surface used by `create_broadcast_api`.
+ * - `broadcast_action_specs` — the matching `ReadonlyArray<ActionSpecUnion>` bundle.
+ * - `BackendActionHandlers` — the typed handler map (`{[K in BackendRequestResponseMethod]: ...}`)
+ *   that pins per-method input / output for `zzz_action_handlers`.
  *
- * Example generated imports:
- * ```typescript
- * import type {ActionEvent} from './action_event.js';
- * import type {ActionOutputs} from './action_collections.js';
- * import type {Backend} from './backend.js';
- * ```
+ * `ZzzHandlerContext` is imported manually so the helper-emitted
+ * `BackendActionHandlers` type closes over zzz's per-request context
+ * shape without renaming.
  *
  * @nodocs
  */
 export const gen: Gen = ({origin_path}) => {
-	const registry = new ActionRegistry(Object.values(action_specs).filter((s) => is_action_spec(s)));
-	const banner = create_banner(origin_path);
 	const imports = new ImportBuilder();
-
-	// Generate handlers for each spec, building imports on demand.
-	// Note this must be done before generating the imports.
-	const backend_action_handlers = registry.specs
-		.map((spec) => generate_phase_handlers(spec, 'backend', imports))
-		.join(';\n\t');
-
-	return `
-		// ${banner}
-
-		${imports.build()}
-
-		/**
-		 * Backend action handlers organized by method and phase.
-		 * Generated using spec.initiator to determine valid phases:
-		 * - initiator: 'backend' → send/execute phases
-		 * - initiator: 'frontend' → receive phases
-		 * - initiator: 'both' → all valid phases
-		 */
-		export interface BackendActionHandlers {
-			${backend_action_handlers}
-		}
-
-		// ${banner}
-	`;
+	imports.add_type('./zzz_action_handlers.js', 'ZzzHandlerContext');
+	return compose_gen_file({
+		origin_path,
+		imports,
+		blocks: [
+			generate_backend_actions_api(all_action_specs, imports, {
+				specs_module: '../action_specs.js',
+				collections_path: '../action_collections.js',
+			}),
+			generate_backend_action_handlers_map(imports, {
+				context_type: 'ZzzHandlerContext',
+				collections_path: '../action_collections.js',
+				metatypes_path: '../action_metatypes.js',
+			}),
+		],
+	});
 };

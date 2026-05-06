@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
-import {test, expect, beforeEach, describe} from 'vitest';
+import {test, beforeEach, describe, assert} from 'vitest';
+import {create_uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.js';
 
 import {DiskfileTabs} from '$lib/diskfile_tabs.svelte.js';
 import {DiskfileTab} from '$lib/diskfile_tab.svelte.js';
-import {create_uuid, UuidWithDefault} from '$lib/zod_helpers.js';
 import {Frontend} from '$lib/frontend.svelte.js';
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+
+import {monkeypatch_zzz_for_tests} from './test_helpers.js';
 
 // Test data
 const TEST_DISKFILE_ID_1 = UuidWithDefault.parse(undefined);
@@ -35,15 +36,15 @@ describe('DiskfileTabs', () => {
 
 	describe('initialization', () => {
 		test('creates empty tabs state', () => {
-			expect(tabs.selected_tab_id).toBe(null);
-			expect(tabs.preview_tab_id).toBe(null);
-			expect(tabs.tab_order).toEqual([]);
-			expect(tabs.items.size).toBe(0);
-			expect(tabs.ordered_tabs).toEqual([]);
-			expect(tabs.selected_tab).toBeUndefined();
-			expect(tabs.preview_tab).toBeUndefined();
-			expect(tabs.selected_diskfile_id).toBe(null);
-			expect(tabs.recently_closed_tabs).toEqual([]);
+			assert.isNull(tabs.selected_tab_id);
+			assert.isNull(tabs.preview_tab_id);
+			assert.deepEqual(tabs.tab_order, []);
+			assert.strictEqual(tabs.items.size, 0);
+			assert.deepEqual(tabs.ordered_tabs, []);
+			assert.ok(tabs.selected_tab === undefined);
+			assert.ok(tabs.preview_tab === undefined);
+			assert.isNull(tabs.selected_diskfile_id);
+			assert.deepEqual(tabs.recently_closed_tabs, []);
 		});
 	});
 
@@ -51,12 +52,12 @@ describe('DiskfileTabs', () => {
 		test('preview_diskfile creates a new preview tab', () => {
 			const tab = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
 
-			expect(tab).toBeInstanceOf(DiskfileTab);
-			expect(tab.diskfile_id).toBe(TEST_DISKFILE_ID_1);
-			expect(tabs.preview_tab_id).toBe(tab.id);
-			expect(tabs.selected_tab_id).toBe(tab.id);
-			expect(tabs.tab_order).toContain(tab.id);
-			expect(tabs.items.size).toBe(1);
+			assert.instanceOf(tab, DiskfileTab);
+			assert.strictEqual(tab.diskfile_id, TEST_DISKFILE_ID_1);
+			assert.strictEqual(tabs.preview_tab_id, tab.id);
+			assert.strictEqual(tabs.selected_tab_id, tab.id);
+			assert.include(tabs.tab_order, tab.id);
+			assert.strictEqual(tabs.items.size, 1);
 		});
 
 		test('preview_diskfile reuses existing tab', () => {
@@ -67,8 +68,8 @@ describe('DiskfileTabs', () => {
 			const tab2 = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
 
 			// Should return the existing tab, not create a new one
-			expect(tab2).toBe(tab1);
-			expect(tabs.items.size).toBe(1);
+			assert.strictEqual(tab2, tab1);
+			assert.strictEqual(tabs.items.size, 1);
 		});
 
 		test('preview_diskfile reuses existing preview tab for new file', () => {
@@ -79,21 +80,21 @@ describe('DiskfileTabs', () => {
 			const result = tabs.preview_diskfile(TEST_DISKFILE_ID_2);
 
 			// Should reuse the same preview tab but update its content
-			expect(result).toBe(preview_tab);
-			expect(tabs.preview_tab_id).toBe(preview_tab.id);
-			expect(preview_tab.diskfile_id).toBe(TEST_DISKFILE_ID_2);
-			expect(tabs.items.size).toBe(1);
+			assert.strictEqual(result, preview_tab);
+			assert.strictEqual(tabs.preview_tab_id, preview_tab.id);
+			assert.strictEqual(preview_tab.diskfile_id, TEST_DISKFILE_ID_2);
+			assert.strictEqual(tabs.items.size, 1);
 		});
 
 		test('open_diskfile creates a permanent tab', () => {
 			const tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);
 
-			expect(tab).toBeInstanceOf(DiskfileTab);
-			expect(tab.diskfile_id).toBe(TEST_DISKFILE_ID_1);
-			expect(tab.is_preview).toBe(false);
-			expect(tabs.preview_tab_id).toBe(null);
-			expect(tabs.selected_tab_id).toBe(tab.id);
-			expect(tabs.tab_order).toContain(tab.id);
+			assert.instanceOf(tab, DiskfileTab);
+			assert.strictEqual(tab.diskfile_id, TEST_DISKFILE_ID_1);
+			assert.ok(!tab.is_preview);
+			assert.isNull(tabs.preview_tab_id);
+			assert.strictEqual(tabs.selected_tab_id, tab.id);
+			assert.include(tabs.tab_order, tab.id);
 		});
 
 		test('open_diskfile reuses existing tab', () => {
@@ -104,8 +105,8 @@ describe('DiskfileTabs', () => {
 			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
 
 			// Should return the existing tab, not create a new one
-			expect(tab2).toBe(tab1);
-			expect(tabs.items.size).toBe(1);
+			assert.strictEqual(tab2, tab1);
+			assert.strictEqual(tabs.items.size, 1);
 		});
 
 		test('open_diskfile promotes preview tab to permanent', () => {
@@ -116,9 +117,9 @@ describe('DiskfileTabs', () => {
 			const permanent_tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);
 
 			// Should use the same tab but make it permanent
-			expect(permanent_tab).toBe(preview_tab);
-			expect(tabs.preview_tab_id).toBe(null);
-			expect(tabs.items.size).toBe(1);
+			assert.strictEqual(permanent_tab, preview_tab);
+			assert.isNull(tabs.preview_tab_id);
+			assert.strictEqual(tabs.items.size, 1);
 		});
 
 		test('open_diskfile repurposes existing preview tab', () => {
@@ -129,39 +130,39 @@ describe('DiskfileTabs', () => {
 			const permanent_tab = tabs.open_diskfile(TEST_DISKFILE_ID_2);
 
 			// Should repurpose the preview tab
-			expect(permanent_tab).toBe(preview_tab);
-			expect(permanent_tab.diskfile_id).toBe(TEST_DISKFILE_ID_2);
-			expect(tabs.preview_tab_id).toBe(null);
-			expect(tabs.items.size).toBe(1);
+			assert.strictEqual(permanent_tab, preview_tab);
+			assert.strictEqual(permanent_tab.diskfile_id, TEST_DISKFILE_ID_2);
+			assert.isNull(tabs.preview_tab_id);
+			assert.strictEqual(tabs.items.size, 1);
 		});
 
 		test('open_diskfile replaces preview tab resulting in 2 tabs total', () => {
 			// Create a permanent tab first
 			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			expect(tabs.items.size).toBe(1);
-			expect(tabs.preview_tab_id).toBe(null);
+			assert.strictEqual(tabs.items.size, 1);
+			assert.isNull(tabs.preview_tab_id);
 
 			// Create a preview tab for a different file
 			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_2);
-			expect(tabs.items.size).toBe(2);
-			expect(tabs.preview_tab_id).toBe(preview_tab.id);
-			expect(preview_tab.is_preview).toBe(true);
+			assert.strictEqual(tabs.items.size, 2);
+			assert.strictEqual(tabs.preview_tab_id, preview_tab.id);
+			assert.ok(preview_tab.is_preview);
 
 			// Open a third file, which should repurpose the preview tab
 			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
 
 			// Verify the preview tab was repurposed, not creating a third tab
-			expect(tabs.items.size).toBe(2);
-			expect(tab3).toBe(preview_tab); // Should be the same tab object
-			expect(tab3.diskfile_id).toBe(TEST_DISKFILE_ID_3); // But with the new diskfile id
-			expect(tabs.preview_tab_id).toBe(null); // No preview tab now
+			assert.strictEqual(tabs.items.size, 2);
+			assert.strictEqual(tab3, preview_tab); // Should be the same tab object
+			assert.strictEqual(tab3.diskfile_id, TEST_DISKFILE_ID_3); // But with the new diskfile id
+			assert.isNull(tabs.preview_tab_id); // No preview tab now
 
 			// Verify tab ids are different
-			expect(tab1.id).not.toBe(tab3.id);
+			assert.notStrictEqual(tab1.id, tab3.id);
 
 			// Verify tabs have the right content
-			expect(tab1.diskfile_id).toBe(TEST_DISKFILE_ID_1);
-			expect(tab3.diskfile_id).toBe(TEST_DISKFILE_ID_3);
+			assert.strictEqual(tab1.diskfile_id, TEST_DISKFILE_ID_1);
+			assert.strictEqual(tab3.diskfile_id, TEST_DISKFILE_ID_3);
 		});
 	});
 
@@ -178,9 +179,9 @@ describe('DiskfileTabs', () => {
 			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_3);
 
 			// Verify the order: tab1, preview_tab, tab2
-			expect(tabs.tab_order[0]!).toBe(tab1.id);
-			expect(tabs.tab_order[1]!).toBe(preview_tab.id);
-			expect(tabs.tab_order[2]!).toBe(tab2.id);
+			assert.strictEqual(tabs.tab_order[0]!, tab1.id);
+			assert.strictEqual(tabs.tab_order[1]!, preview_tab.id);
+			assert.strictEqual(tabs.tab_order[2]!, tab2.id);
 		});
 
 		test('positioning with additional preview tabs', () => {
@@ -195,20 +196,20 @@ describe('DiskfileTabs', () => {
 			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_3);
 
 			// Expected order: tab1, preview, tab2
-			expect(tabs.tab_order[0]!).toBe(tab1.id);
-			expect(tabs.tab_order[1]!).toBe(preview.id);
-			expect(tabs.tab_order[2]!).toBe(tab2.id);
+			assert.strictEqual(tabs.tab_order[0]!, tab1.id);
+			assert.strictEqual(tabs.tab_order[1]!, preview.id);
+			assert.strictEqual(tabs.tab_order[2]!, tab2.id);
 
 			// Select tab2 and create another preview (reusing the existing one)
 			tabs.select_tab(tab2.id);
 			const preview2 = tabs.preview_diskfile(TEST_DISKFILE_ID_4);
 
 			// The preview tab should move after tab2
-			expect(tabs.tab_order[0]!).toBe(tab1.id);
-			expect(tabs.tab_order[1]!).toBe(tab2.id);
-			expect(tabs.tab_order[2]!).toBe(preview.id);
-			expect(preview2).toBe(preview); // Same tab instance
-			expect(preview2.diskfile_id).toBe(TEST_DISKFILE_ID_4);
+			assert.strictEqual(tabs.tab_order[0]!, tab1.id);
+			assert.strictEqual(tabs.tab_order[1]!, tab2.id);
+			assert.strictEqual(tabs.tab_order[2]!, preview.id);
+			assert.strictEqual(preview2, preview); // Same tab instance
+			assert.strictEqual(preview2.diskfile_id, TEST_DISKFILE_ID_4);
 		});
 
 		test('preview tab positioning bug fix - selecting existing preview should not reorder', () => {
@@ -228,7 +229,7 @@ describe('DiskfileTabs', () => {
 			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_3);
 
 			// Order should be: tab1, preview_tab, tab2
-			expect(tabs.tab_order).toEqual([tab1.id, preview_tab.id, tab2.id]);
+			assert.deepEqual(tabs.tab_order, [tab1.id, preview_tab.id, tab2.id]);
 
 			// Select tab2
 			tabs.select_tab(tab2.id);
@@ -237,7 +238,7 @@ describe('DiskfileTabs', () => {
 			tabs.select_tab(preview_tab.id);
 
 			// Order should NOT change - the preview tab should stay in its position
-			expect(tabs.tab_order).toEqual([tab1.id, preview_tab.id, tab2.id]);
+			assert.deepEqual(tabs.tab_order, [tab1.id, preview_tab.id, tab2.id]);
 
 			// Select tab1 again
 			tabs.select_tab(tab1.id);
@@ -246,7 +247,7 @@ describe('DiskfileTabs', () => {
 			tabs.select_tab(preview_tab.id);
 
 			// Order should still not change
-			expect(tabs.tab_order).toEqual([tab1.id, preview_tab.id, tab2.id]);
+			assert.deepEqual(tabs.tab_order, [tab1.id, preview_tab.id, tab2.id]);
 		});
 
 		test('preview tab repositioning only happens when content changes', () => {
@@ -260,17 +261,17 @@ describe('DiskfileTabs', () => {
 			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_4);
 
 			// Order: tab1, preview, tab2, tab3
-			expect(tabs.tab_order).toEqual([tab1.id, preview.id, tab2.id, tab3.id]);
+			assert.deepEqual(tabs.tab_order, [tab1.id, preview.id, tab2.id, tab3.id]);
 
 			// Select tab3
 			tabs.select_tab(tab3.id);
 
 			// Preview the same file - should NOT reposition
 			tabs.preview_diskfile(TEST_DISKFILE_ID_4);
-			expect(tabs.tab_order).toEqual([tab1.id, preview.id, tab2.id, tab3.id]);
+			assert.deepEqual(tabs.tab_order, [tab1.id, preview.id, tab2.id, tab3.id]);
 
 			tabs.preview_diskfile(TEST_DISKFILE_ID_5);
-			expect(tabs.tab_order).toEqual([tab1.id, preview.id, tab2.id, tab3.id]);
+			assert.deepEqual(tabs.tab_order, [tab1.id, preview.id, tab2.id, tab3.id]);
 		});
 
 		test('reorder_tabs changes tab order', () => {
@@ -280,18 +281,18 @@ describe('DiskfileTabs', () => {
 			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
 
 			// Initial order
-			expect(tabs.tab_order).toEqual([tab1.id, tab2.id, tab3.id]);
+			assert.deepEqual(tabs.tab_order, [tab1.id, tab2.id, tab3.id]);
 
 			// Reorder: move tab1 to position 2
 			tabs.reorder_tabs(0, 2);
 
 			// New order should be: tab2, tab3, tab1
-			expect(tabs.tab_order).toEqual([tab2.id, tab3.id, tab1.id]);
+			assert.deepEqual(tabs.tab_order, [tab2.id, tab3.id, tab1.id]);
 
 			// ordered_tabs should reflect the new order
-			expect(tabs.ordered_tabs[0]!.id).toBe(tab2.id);
-			expect(tabs.ordered_tabs[1]!.id).toBe(tab3.id);
-			expect(tabs.ordered_tabs[2]!.id).toBe(tab1.id);
+			assert.strictEqual(tabs.ordered_tabs[0]!.id, tab2.id);
+			assert.strictEqual(tabs.ordered_tabs[1]!.id, tab3.id);
+			assert.strictEqual(tabs.ordered_tabs[2]!.id, tab1.id);
 		});
 	});
 
@@ -304,10 +305,10 @@ describe('DiskfileTabs', () => {
 			// Select the second tab
 			tabs.select_tab(tab2.id);
 
-			expect(tabs.selected_tab_id).toBe(tab2.id);
-			expect(tabs.selected_tab).toBe(tab2);
-			expect(tabs.selected_tab?.is_selected).toBe(true);
-			expect(tabs.selected_diskfile_id).toBe(tab2.diskfile_id);
+			assert.strictEqual(tabs.selected_tab_id, tab2.id);
+			assert.strictEqual(tabs.selected_tab, tab2);
+			assert.ok(tabs.selected_tab?.is_selected);
+			assert.strictEqual(tabs.selected_diskfile_id, tab2.diskfile_id);
 		});
 	});
 
@@ -319,11 +320,11 @@ describe('DiskfileTabs', () => {
 			// Close it
 			tabs.close_tab(tab.id);
 
-			expect(tabs.items.size).toBe(0);
-			expect(tabs.tab_order).not.toContain(tab.id);
-			expect(tabs.selected_tab_id).toBe(null);
-			expect(tabs.recently_closed_tabs).toHaveLength(1);
-			expect(tabs.recently_closed_tabs[0]!.id).toBe(tab.id);
+			assert.strictEqual(tabs.items.size, 0);
+			assert.notInclude(tabs.tab_order, tab.id);
+			assert.isNull(tabs.selected_tab_id);
+			assert.strictEqual(tabs.recently_closed_tabs.length, 1);
+			assert.strictEqual(tabs.recently_closed_tabs[0]!.id, tab.id);
 		});
 
 		test('close_tab with multiple tabs selects the most recently opened tab', () => {
@@ -332,16 +333,16 @@ describe('DiskfileTabs', () => {
 			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
 			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
 
-			expect(tabs.items.size).toBe(3);
+			assert.strictEqual(tabs.items.size, 3);
 
 			// Select and close the middle tab
 			tabs.select_tab(tab2.id);
 			tabs.close_tab(tab2.id);
 
-			expect(tabs.items.size).toBe(2);
-			expect(tabs.selected_tab_id).toBe(tab3.id); // Should select the most recently opened (tab3)
-			expect(tabs.recently_closed_tabs).toHaveLength(1);
-			expect(tabs.recently_closed_tabs[0]!.id).toBe(tab2.id);
+			assert.strictEqual(tabs.items.size, 2);
+			assert.strictEqual(tabs.selected_tab_id, tab3.id); // Should select the most recently opened (tab3)
+			assert.strictEqual(tabs.recently_closed_tabs.length, 1);
+			assert.strictEqual(tabs.recently_closed_tabs[0]!.id, tab2.id);
 		});
 
 		test('close_tab does nothing for non-existent tab', () => {
@@ -356,9 +357,9 @@ describe('DiskfileTabs', () => {
 			tabs.close_tab(create_uuid());
 
 			// State should be unchanged
-			expect(tabs.items.size).toBe(initial_size);
-			expect(tabs.selected_tab_id).toBe(initial_selected);
-			expect(tabs.recently_closed_tabs).toHaveLength(0);
+			assert.strictEqual(tabs.items.size, initial_size);
+			assert.strictEqual(tabs.selected_tab_id, initial_selected);
+			assert.strictEqual(tabs.recently_closed_tabs.length, 0);
 		});
 
 		test('close_tab clears preview_tab_id if closing preview tab', () => {
@@ -368,7 +369,7 @@ describe('DiskfileTabs', () => {
 			// Close it
 			tabs.close_tab(preview_tab.id);
 
-			expect(tabs.preview_tab_id).toBe(null);
+			assert.isNull(tabs.preview_tab_id);
 		});
 
 		test('close_tab selects next tab when available', () => {
@@ -384,7 +385,7 @@ describe('DiskfileTabs', () => {
 			tabs.close_tab(tab2.id);
 
 			// Should select the tab that was after it (tab3)
-			expect(tabs.selected_tab_id).toBe(tab3.id);
+			assert.strictEqual(tabs.selected_tab_id, tab3.id);
 		});
 
 		test('close_tab selects previous tab when closing last tab', () => {
@@ -399,7 +400,7 @@ describe('DiskfileTabs', () => {
 			tabs.close_tab(tab2.id);
 
 			// Should select the previous tab
-			expect(tabs.selected_tab_id).toBe(tab1.id);
+			assert.strictEqual(tabs.selected_tab_id, tab1.id);
 		});
 
 		test('close_all_tabs clears all tabs and state', () => {
@@ -416,20 +417,20 @@ describe('DiskfileTabs', () => {
 			const permanent = tabs.open_diskfile(TEST_DISKFILE_ID_3);
 
 			// Initial state - verify we have 3 tabs before closing
-			expect(tabs.items.size).toBe(3);
-			expect(tabs.tab_order).toHaveLength(3);
-			expect(tabs.preview_tab_id).toBe(null); // No preview tab now since last one is permanent
-			expect(tabs.selected_tab_id).toBe(permanent.id);
+			assert.strictEqual(tabs.items.size, 3);
+			assert.strictEqual(tabs.tab_order.length, 3);
+			assert.isNull(tabs.preview_tab_id); // No preview tab now since last one is permanent
+			assert.strictEqual(tabs.selected_tab_id, permanent.id);
 
 			// Close all
 			tabs.close_all_tabs();
 
 			// All state should be cleared
-			expect(tabs.items.size).toBe(0);
-			expect(tabs.tab_order).toHaveLength(0);
-			expect(tabs.preview_tab_id).toBe(null);
-			expect(tabs.selected_tab_id).toBe(null);
-			expect(tabs.recently_closed_tabs).toHaveLength(3);
+			assert.strictEqual(tabs.items.size, 0);
+			assert.strictEqual(tabs.tab_order.length, 0);
+			assert.isNull(tabs.preview_tab_id);
+			assert.isNull(tabs.selected_tab_id);
+			assert.strictEqual(tabs.recently_closed_tabs.length, 3);
 		});
 	});
 
@@ -438,15 +439,15 @@ describe('DiskfileTabs', () => {
 			// Create a preview tab
 			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
 
-			expect(tabs.preview_tab_id).toBe(preview_tab.id);
-			expect(preview_tab.is_preview).toBe(true);
+			assert.strictEqual(tabs.preview_tab_id, preview_tab.id);
+			assert.ok(preview_tab.is_preview);
 
 			// Promote it
 			const result = tabs.promote_preview_to_permanent();
 
-			expect(result).toBe(true);
-			expect(tabs.preview_tab_id).toBe(null);
-			expect(preview_tab.is_preview).toBe(false);
+			assert.ok(result);
+			assert.isNull(tabs.preview_tab_id);
+			assert.ok(!preview_tab.is_preview);
 		});
 
 		test('promote_preview_to_permanent returns false if no preview tab', () => {
@@ -456,19 +457,19 @@ describe('DiskfileTabs', () => {
 			// Try to promote
 			const result = tabs.promote_preview_to_permanent();
 
-			expect(result).toBe(false);
+			assert.ok(!result);
 		});
 
 		test('open_tab makes a preview tab permanent', () => {
 			// Create a preview tab
 			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
 
-			expect(tabs.preview_tab_id).toBe(preview_tab.id);
+			assert.strictEqual(tabs.preview_tab_id, preview_tab.id);
 
 			// Make it permanent
 			tabs.open_tab(preview_tab.id);
 
-			expect(tabs.preview_tab_id).toBe(null);
+			assert.isNull(tabs.preview_tab_id);
 		});
 
 		test('open_tab does nothing for permanent tab', () => {
@@ -476,13 +477,13 @@ describe('DiskfileTabs', () => {
 			const tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);
 
 			// Initial state
-			expect(tabs.preview_tab_id).toBe(null);
+			assert.isNull(tabs.preview_tab_id);
 
 			// Try to make it permanent again
 			tabs.open_tab(tab.id);
 
 			// State should be unchanged
-			expect(tabs.preview_tab_id).toBe(null);
+			assert.isNull(tabs.preview_tab_id);
 		});
 	});
 
@@ -498,22 +499,22 @@ describe('DiskfileTabs', () => {
 			// Reopen the last closed (tab2)
 			tabs.reopen_last_closed_tab();
 
-			expect(tabs.items.size).toBe(1);
-			expect(tabs.items.by_id.values().next().value?.diskfile_id).toBe(TEST_DISKFILE_ID_2);
-			expect(tabs.recently_closed_tabs).toHaveLength(1);
+			assert.strictEqual(tabs.items.size, 1);
+			assert.strictEqual(tabs.items.by_id.values().next().value?.diskfile_id, TEST_DISKFILE_ID_2);
+			assert.strictEqual(tabs.recently_closed_tabs.length, 1);
 		});
 
 		test('reopen_last_closed_tab does nothing if no closed tabs', () => {
 			// Initial state
-			expect(tabs.recently_closed_tabs).toHaveLength(0);
-			expect(tabs.items.size).toBe(0);
+			assert.strictEqual(tabs.recently_closed_tabs.length, 0);
+			assert.strictEqual(tabs.items.size, 0);
 
 			// Try to reopen
 			tabs.reopen_last_closed_tab();
 
 			// State should be unchanged
-			expect(tabs.recently_closed_tabs).toHaveLength(0);
-			expect(tabs.items.size).toBe(0);
+			assert.strictEqual(tabs.recently_closed_tabs.length, 0);
+			assert.strictEqual(tabs.items.size, 0);
 		});
 
 		test('reopen_last_closed_tab restores selection state', () => {
@@ -525,14 +526,14 @@ describe('DiskfileTabs', () => {
 			tabs.close_tab(tab.id);
 
 			// Initial state after closing
-			expect(tabs.selected_tab_id).toBe(null);
+			assert.isNull(tabs.selected_tab_id);
 
 			// Reopen it
 			tabs.reopen_last_closed_tab();
 
 			// Tab should be reopened and selected
-			expect(tabs.selected_tab_id).not.toBe(null);
-			expect(tabs.items.size).toBe(1);
+			assert.notStrictEqual(tabs.selected_tab_id, null);
+			assert.strictEqual(tabs.items.size, 1);
 		});
 
 		test('reopen_last_closed_tab maintains proper tab order', () => {
@@ -543,25 +544,25 @@ describe('DiskfileTabs', () => {
 
 			// Remember the original order
 			const original_order = [...tabs.tab_order];
-			expect(original_order).toEqual([tab1.id, tab2.id, tab3.id]);
+			assert.deepEqual(original_order, [tab1.id, tab2.id, tab3.id]);
 
 			// Close the middle tab
 			tabs.close_tab(tab2.id);
 
 			// Make sure it's gone
-			expect(tabs.items.by_id.has(tab2.id)).toBe(false);
-			expect(tabs.tab_order).not.toContain(tab2.id);
+			assert.ok(!tabs.items.by_id.has(tab2.id));
+			assert.notInclude(tabs.tab_order, tab2.id);
 
 			// Verify the new order is tab1, tab3
-			expect(tabs.tab_order).toEqual([tab1.id, tab3.id]);
+			assert.deepEqual(tabs.tab_order, [tab1.id, tab3.id]);
 
 			// Reopen the tab
 			tabs.reopen_last_closed_tab();
 
 			// Verify it was added at the end of the tab order
 			const reopened_tab_id = tabs.selected_tab_id;
-			expect(tabs.tab_order).toContain(reopened_tab_id);
-			expect(tabs.tab_order[tabs.tab_order.length - 1]).toBe(reopened_tab_id);
+			assert.include(tabs.tab_order, reopened_tab_id);
+			assert.strictEqual(tabs.tab_order[tabs.tab_order.length - 1], reopened_tab_id);
 		});
 	});
 
@@ -573,17 +574,17 @@ describe('DiskfileTabs', () => {
 			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
 
 			// Initial history should have tab3 (most recently opened)
-			expect(tabs.recent_tabs[0]!.id).toBe(tab3.id);
+			assert.strictEqual(tabs.recent_tabs[0]!.id, tab3.id);
 
 			// Select tab1, should move to front of history
 			tabs.select_tab(tab1.id);
-			expect(tabs.recent_tabs[0]!.id).toBe(tab1.id);
+			assert.strictEqual(tabs.recent_tabs[0]!.id, tab1.id);
 
 			// Select tab2, should move to front of history
 			tabs.select_tab(tab2.id);
-			expect(tabs.recent_tabs[0]!.id).toBe(tab2.id);
-			expect(tabs.recent_tabs[1]!.id).toBe(tab1.id);
-			expect(tabs.recent_tabs[2]!.id).toBe(tab3.id);
+			assert.strictEqual(tabs.recent_tabs[0]!.id, tab2.id);
+			assert.strictEqual(tabs.recent_tabs[1]!.id, tab1.id);
+			assert.strictEqual(tabs.recent_tabs[2]!.id, tab3.id);
 		});
 
 		test('maintains history when reopening tabs', () => {
@@ -595,8 +596,8 @@ describe('DiskfileTabs', () => {
 			tabs.reopen_last_closed_tab();
 
 			// Verify the reopened tab is in history
-			expect(tabs.recent_tabs).toHaveLength(1);
-			expect(tabs.recent_tabs[0]!.id).toBe(tabs.selected_tab_id);
+			assert.strictEqual(tabs.recent_tabs.length, 1);
+			assert.strictEqual(tabs.recent_tabs[0]!.id, tabs.selected_tab_id);
 		});
 
 		test('limits history to max size', () => {
@@ -609,7 +610,7 @@ describe('DiskfileTabs', () => {
 			}
 
 			// Verify history is limited to max size
-			expect(tabs.recent_tabs).toHaveLength(3);
+			assert.strictEqual(tabs.recent_tabs.length, 3);
 		});
 
 		test('removes closed tabs from history', () => {
@@ -618,15 +619,15 @@ describe('DiskfileTabs', () => {
 			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
 
 			// Verify both tabs are in history through their ids
-			expect(tabs.recent_tab_ids).toContain(tab1.id);
-			expect(tabs.recent_tab_ids).toContain(tab2.id);
+			assert.include(tabs.recent_tab_ids, tab1.id);
+			assert.include(tabs.recent_tab_ids, tab2.id);
 
 			// Close tab1
 			tabs.close_tab(tab1.id);
 
 			// Verify tab1 is removed from history
-			expect(tabs.recent_tab_ids).not.toContain(tab1.id);
-			expect(tabs.recent_tab_ids).toContain(tab2.id);
+			assert.notInclude(tabs.recent_tab_ids, tab1.id);
+			assert.include(tabs.recent_tab_ids, tab2.id);
 		});
 
 		test('clears history when closing all tabs', () => {
@@ -635,13 +636,13 @@ describe('DiskfileTabs', () => {
 			tabs.open_diskfile(TEST_DISKFILE_ID_2);
 
 			// Verify history is not empty
-			expect(tabs.recent_tabs.length).toBeGreaterThan(0);
+			assert.ok(tabs.recent_tabs.length > 0);
 
 			// Close all tabs
 			tabs.close_all_tabs();
 
 			// Verify history is cleared
-			expect(tabs.recent_tabs).toEqual([]);
+			assert.deepEqual(tabs.recent_tabs, []);
 		});
 	});
 
@@ -662,7 +663,7 @@ describe('DiskfileTabs', () => {
 			tabs.close_tab(tab1.id);
 
 			// The most recently used tab (tab3) should be selected
-			expect(tabs.selected_tab_id).toBe(tab3.id);
+			assert.strictEqual(tabs.selected_tab_id, tab3.id);
 		});
 
 		test('falls back to next tab when no history available', () => {
@@ -684,7 +685,7 @@ describe('DiskfileTabs', () => {
 			tabs.close_tab(tab2.id);
 
 			// Should fall back to the next tab (tab3)
-			expect(tabs.selected_tab_id).toBe(tab3.id);
+			assert.strictEqual(tabs.selected_tab_id, tab3.id);
 		});
 
 		test('selecting a non-existent tab in history is handled gracefully', () => {
@@ -698,7 +699,7 @@ describe('DiskfileTabs', () => {
 			tabs.close_tab(tab2.id);
 
 			// Should select tab1 since it's the only one left
-			expect(tabs.selected_tab_id).toBe(tab1.id);
+			assert.strictEqual(tabs.selected_tab_id, tab1.id);
 		});
 
 		test('find_most_recent_tab correctly finds valid tabs', () => {
@@ -714,7 +715,7 @@ describe('DiskfileTabs', () => {
 			const result = tabs.find_most_recent_tab(tab2.id);
 
 			// Should return tab1
-			expect(result).toBe(tab1.id);
+			assert.strictEqual(result, tab1.id);
 		});
 
 		test('tab history preserves references after tab modifications', () => {
@@ -727,8 +728,8 @@ describe('DiskfileTabs', () => {
 			tabs.select_tab(tab2.id);
 
 			// Verify initial history state
-			expect(tabs.recent_tabs[0]!.id).toBe(tab2.id);
-			expect(tabs.recent_tabs[1]!.id).toBe(tab1.id);
+			assert.strictEqual(tabs.recent_tabs[0]!.id, tab2.id);
+			assert.strictEqual(tabs.recent_tabs[1]!.id, tab1.id);
 
 			// Store tabs for reference before closing
 			const tab1_diskfile_id = tab1.diskfile_id;
@@ -737,8 +738,8 @@ describe('DiskfileTabs', () => {
 			tabs.close_tab(tab2.id);
 
 			// Check history - tab1 should still be accessible
-			expect(tabs.recent_tabs[0]!.id).toBe(tab1.id);
-			expect(tabs.recent_tabs[0]!.diskfile_id).toBe(tab1_diskfile_id);
+			assert.strictEqual(tabs.recent_tabs[0]!.id, tab1.id);
+			assert.strictEqual(tabs.recent_tabs[0]!.diskfile_id, tab1_diskfile_id);
 		});
 	});
 
@@ -752,9 +753,9 @@ describe('DiskfileTabs', () => {
 			const result = tabs.navigate_to_tab(tab2.id);
 
 			// Should select tab2 directly
-			expect(result.resulting_tab_id).toBe(tab2.id);
-			expect(result.created_preview).toBe(false);
-			expect(tabs.selected_tab_id).toBe(tab2.id);
+			assert.strictEqual(result.resulting_tab_id, tab2.id);
+			assert.ok(!result.created_preview);
+			assert.strictEqual(tabs.selected_tab_id, tab2.id);
 		});
 
 		test('navigate_to_tab creates preview tab for closed tab', () => {
@@ -767,14 +768,14 @@ describe('DiskfileTabs', () => {
 			const result = tabs.navigate_to_tab(tab_id);
 
 			// Should create a preview tab for the same diskfile
-			expect(result.created_preview).toBe(true);
-			expect(result.resulting_tab_id).not.toBe(tab_id); // Should be a different tab id
-			expect(tabs.selected_tab_id).toBe(result.resulting_tab_id);
-			expect(tabs.preview_tab_id).toBe(result.resulting_tab_id);
+			assert.ok(result.created_preview);
+			assert.notStrictEqual(result.resulting_tab_id, tab_id); // Should be a different tab id
+			assert.strictEqual(tabs.selected_tab_id, result.resulting_tab_id);
+			assert.strictEqual(tabs.preview_tab_id, result.resulting_tab_id);
 
 			// Should have the same diskfile
 			const new_tab = tabs.items.by_id.get(result.resulting_tab_id!);
-			expect(new_tab?.diskfile_id).toBe(TEST_DISKFILE_ID_1);
+			assert.strictEqual(new_tab?.diskfile_id, TEST_DISKFILE_ID_1);
 		});
 
 		test('navigate_to_tab creates a new preview tab for closed tab', () => {
@@ -792,16 +793,19 @@ describe('DiskfileTabs', () => {
 			const result = tabs.navigate_to_tab(closed_tab_id);
 
 			// A new preview tab should be created for the closed tab's file
-			expect(result.created_preview).toBe(true);
-			expect(result.resulting_tab_id).not.toBeNull();
-			expect(tabs.preview_tab_id).not.toBeNull();
+			assert.ok(result.created_preview);
+			assert.ok(result.resulting_tab_id !== null);
+			assert.ok(tabs.preview_tab_id !== null);
 
 			// The new preview tab should be different from the original one
-			expect(tabs.preview_tab_id).not.toBe(preview_tab_id);
+			assert.notStrictEqual(tabs.preview_tab_id, preview_tab_id);
 
 			// But it should have the closed tab's diskfile
 			if (tabs.preview_tab_id && tabs.items.by_id.get(tabs.preview_tab_id)) {
-				expect(tabs.items.by_id.get(tabs.preview_tab_id)?.diskfile_id).toBe(TEST_DISKFILE_ID_3);
+				assert.strictEqual(
+					tabs.items.by_id.get(tabs.preview_tab_id)?.diskfile_id,
+					TEST_DISKFILE_ID_3,
+				);
 			}
 		});
 
@@ -813,8 +817,8 @@ describe('DiskfileTabs', () => {
 			const result = tabs.navigate_to_tab(UuidWithDefault.parse(undefined));
 
 			// Should return null without changing selection
-			expect(result.resulting_tab_id).toBe(null);
-			expect(result.created_preview).toBe(false);
+			assert.isNull(result.resulting_tab_id);
+			assert.ok(!result.created_preview);
 		});
 
 		test('closed tabs are remembered even after closing all tabs', () => {
@@ -830,9 +834,9 @@ describe('DiskfileTabs', () => {
 			const result = tabs.navigate_to_tab(tab1_id);
 
 			// Should create a preview tab for the correct diskfile
-			expect(result.created_preview).toBe(true);
+			assert.ok(result.created_preview);
 			const new_tab = tabs.items.by_id.get(result.resulting_tab_id!);
-			expect(new_tab?.diskfile_id).toBe(TEST_DISKFILE_ID_1);
+			assert.strictEqual(new_tab?.diskfile_id, TEST_DISKFILE_ID_1);
 		});
 	});
 
@@ -846,44 +850,44 @@ describe('DiskfileTabs', () => {
 			tabs.tab_order = [tab1.id];
 
 			// ordered_tabs should include both tabs
-			expect(tabs.ordered_tabs).toHaveLength(2);
-			expect(tabs.ordered_tabs[0]!.id).toBe(tab1.id);
-			expect(tabs.ordered_tabs[1]!.id).toBe(tab2.id);
+			assert.strictEqual(tabs.ordered_tabs.length, 2);
+			assert.strictEqual(tabs.ordered_tabs[0]!.id, tab1.id);
+			assert.strictEqual(tabs.ordered_tabs[1]!.id, tab2.id);
 		});
 
 		test('complex tab workflow', () => {
 			// Create a preview tab
 			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
-			expect(tabs.preview_tab_id).toBe(preview.id);
-			expect(tabs.selected_tab_id).toBe(preview.id);
+			assert.strictEqual(tabs.preview_tab_id, preview.id);
+			assert.strictEqual(tabs.selected_tab_id, preview.id);
 
 			// Create a permanent tab
 			const permanent = tabs.open_diskfile(TEST_DISKFILE_ID_2);
-			expect(tabs.preview_tab_id).toBe(null); // Preview was repurposed
-			expect(tabs.selected_tab_id).toBe(permanent.id);
+			assert.isNull(tabs.preview_tab_id); // Preview was repurposed
+			assert.strictEqual(tabs.selected_tab_id, permanent.id);
 
 			// Create another preview tab
 			const preview2 = tabs.preview_diskfile(TEST_DISKFILE_ID_3);
-			expect(tabs.preview_tab_id).toBe(preview2.id);
-			expect(tabs.selected_tab_id).toBe(preview2.id);
+			assert.strictEqual(tabs.preview_tab_id, preview2.id);
+			assert.strictEqual(tabs.selected_tab_id, preview2.id);
 
 			// Select the permanent tab
 			tabs.select_tab(permanent.id);
-			expect(tabs.selected_tab_id).toBe(permanent.id);
-			expect(tabs.preview_tab_id).toBe(preview2.id); // Preview status unchanged
+			assert.strictEqual(tabs.selected_tab_id, permanent.id);
+			assert.strictEqual(tabs.preview_tab_id, preview2.id); // Preview status unchanged
 
 			// Close the permanent tab
 			tabs.close_tab(permanent.id);
-			expect(tabs.selected_tab_id).toBe(preview2.id); // First remaining tab selected
+			assert.strictEqual(tabs.selected_tab_id, preview2.id); // First remaining tab selected
 
 			// Promote the preview tab
 			tabs.promote_preview_to_permanent();
-			expect(tabs.preview_tab_id).toBe(null);
-			expect(tabs.selected_tab_id).toBe(preview2.id);
+			assert.isNull(tabs.preview_tab_id);
+			assert.strictEqual(tabs.selected_tab_id, preview2.id);
 
 			// Reopen the closed tab
 			tabs.reopen_last_closed_tab();
-			expect(tabs.items.size).toBe(2);
+			assert.strictEqual(tabs.items.size, 2);
 		});
 
 		test('can handle many tabs efficiently', () => {
@@ -901,7 +905,7 @@ describe('DiskfileTabs', () => {
 			}
 
 			// Verify all tabs were created
-			expect(tabs.items.size).toBe(tab_count);
+			assert.strictEqual(tabs.items.size, tab_count);
 
 			// Time some operations to ensure they're reasonably fast
 			const start_reorder = performance.now();
@@ -925,8 +929,8 @@ describe('DiskfileTabs', () => {
 
 			// These aren't strict assertions since timing depends on the environment
 			// Just ensure operations complete in a reasonable time
-			expect(tabs.items.size).toBe(0);
-			expect(tabs.recently_closed_tabs.length).toBe(tab_count);
+			assert.strictEqual(tabs.items.size, 0);
+			assert.strictEqual(tabs.recently_closed_tabs.length, tab_count);
 		});
 
 		test('preview tab lifecycle with multiple operations', () => {
@@ -936,27 +940,27 @@ describe('DiskfileTabs', () => {
 
 			// Preview a file
 			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_3);
-			expect(preview.is_preview).toBe(true);
+			assert.ok(preview.is_preview);
 
 			// Double-click simulation - promote to permanent
 			tabs.open_tab(preview.id);
-			expect(preview.is_preview).toBe(false);
-			expect(tabs.preview_tab_id).toBe(null);
+			assert.ok(!preview.is_preview);
+			assert.isNull(tabs.preview_tab_id);
 
 			// Create a new preview
 			const preview2 = tabs.preview_diskfile(TEST_DISKFILE_ID_4);
-			expect(preview2.is_preview).toBe(true);
-			expect(preview2.id).not.toBe(preview.id);
+			assert.ok(preview2.is_preview);
+			assert.notStrictEqual(preview2.id, preview.id);
 
 			// Close the preview
 			tabs.close_tab(preview2.id);
-			expect(tabs.preview_tab_id).toBe(null);
+			assert.isNull(tabs.preview_tab_id);
 
 			// All permanent tabs should remain
-			expect(tabs.items.size).toBe(3);
-			expect(tabs.items.by_id.has(tab1.id)).toBe(true);
-			expect(tabs.items.by_id.has(tab2.id)).toBe(true);
-			expect(tabs.items.by_id.has(preview.id)).toBe(true);
+			assert.strictEqual(tabs.items.size, 3);
+			assert.ok(tabs.items.by_id.has(tab1.id));
+			assert.ok(tabs.items.by_id.has(tab2.id));
+			assert.ok(tabs.items.by_id.has(preview.id));
 		});
 
 		test('by_diskfile_id map updates correctly', () => {
@@ -965,25 +969,25 @@ describe('DiskfileTabs', () => {
 			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
 
 			// Verify map contents
-			expect(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_1)).toBe(tab1);
-			expect(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_2)).toBe(tab2);
-			expect(tabs.by_diskfile_id.size).toBe(2);
+			assert.strictEqual(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_1), tab1);
+			assert.strictEqual(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_2), tab2);
+			assert.strictEqual(tabs.by_diskfile_id.size, 2);
 
 			// Create preview that reuses a tab
 			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_3);
-			expect(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_3)).toBe(preview);
-			expect(tabs.by_diskfile_id.size).toBe(3);
+			assert.strictEqual(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_3), preview);
+			assert.strictEqual(tabs.by_diskfile_id.size, 3);
 
 			// Reuse preview for different file
 			tabs.preview_diskfile(TEST_DISKFILE_ID_4);
-			expect(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_3)).toBeUndefined();
-			expect(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_4)).toBe(preview);
-			expect(tabs.by_diskfile_id.size).toBe(3);
+			assert.ok(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_3) === undefined);
+			assert.strictEqual(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_4), preview);
+			assert.strictEqual(tabs.by_diskfile_id.size, 3);
 
 			// Close a tab
 			tabs.close_tab(tab1.id);
-			expect(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_1)).toBeUndefined();
-			expect(tabs.by_diskfile_id.size).toBe(2);
+			assert.ok(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_1) === undefined);
+			assert.strictEqual(tabs.by_diskfile_id.size, 2);
 		});
 	});
 
@@ -995,14 +999,14 @@ describe('DiskfileTabs', () => {
 			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
 
 			// Initial order
-			expect(tabs.tab_order).toEqual([tab1.id, tab2.id, tab3.id]);
+			assert.deepEqual(tabs.tab_order, [tab1.id, tab2.id, tab3.id]);
 
 			// Use private method through public API - reorder simulates position_tab behavior
 			tabs.reorder_tabs(2, 0); // Move tab3 to position after tab1 (index 1)
 
-			expect(tabs.tab_order[0]).toBe(tab3.id);
-			expect(tabs.tab_order[1]).toBe(tab1.id);
-			expect(tabs.tab_order[2]).toBe(tab2.id);
+			assert.strictEqual(tabs.tab_order[0], tab3.id);
+			assert.strictEqual(tabs.tab_order[1], tab1.id);
+			assert.strictEqual(tabs.tab_order[2], tab2.id);
 		});
 
 		test('#update_tab_history maintains correct order and size', () => {
@@ -1022,19 +1026,19 @@ describe('DiskfileTabs', () => {
 			tabs.select_tab(tab4.id);
 
 			// History should only contain last 3
-			expect(tabs.recent_tab_ids).toHaveLength(3);
-			expect(tabs.recent_tab_ids[0]!).toBe(tab4.id);
-			expect(tabs.recent_tab_ids[1]!).toBe(tab3.id);
-			expect(tabs.recent_tab_ids[2]!).toBe(tab2.id);
-			expect(tabs.recent_tab_ids).not.toContain(tab1.id);
+			assert.strictEqual(tabs.recent_tab_ids.length, 3);
+			assert.strictEqual(tabs.recent_tab_ids[0]!, tab4.id);
+			assert.strictEqual(tabs.recent_tab_ids[1]!, tab3.id);
+			assert.strictEqual(tabs.recent_tab_ids[2]!, tab2.id);
+			assert.notInclude(tabs.recent_tab_ids, tab1.id);
 
 			// Select an existing tab in history
 			tabs.select_tab(tab2.id);
 
 			// Should move to front
-			expect(tabs.recent_tab_ids[0]!).toBe(tab2.id);
-			expect(tabs.recent_tab_ids[1]!).toBe(tab4.id);
-			expect(tabs.recent_tab_ids[2]!).toBe(tab3.id);
+			assert.strictEqual(tabs.recent_tab_ids[0]!, tab2.id);
+			assert.strictEqual(tabs.recent_tab_ids[1]!, tab4.id);
+			assert.strictEqual(tabs.recent_tab_ids[2]!, tab3.id);
 		});
 	});
 
@@ -1047,22 +1051,22 @@ describe('DiskfileTabs', () => {
 
 			// Every tab in tab_order should exist in items
 			for (const tab_id of tabs.tab_order) {
-				expect(tabs.items.by_id.has(tab_id)).toBe(true);
+				assert.ok(tabs.items.by_id.has(tab_id));
 			}
 
 			// Close a tab
 			tabs.close_tab(tab2.id);
 
 			// Check consistency again
-			expect(tabs.tab_order).not.toContain(tab2.id);
-			expect(tabs.items.by_id.has(tab2.id)).toBe(false);
+			assert.notInclude(tabs.tab_order, tab2.id);
+			assert.ok(!tabs.items.by_id.has(tab2.id));
 
 			// Reopen a tab
 			tabs.reopen_last_closed_tab();
 
 			// Check consistency once more
 			for (const tab_id of tabs.tab_order) {
-				expect(tabs.items.by_id.has(tab_id)).toBe(true);
+				assert.ok(tabs.items.by_id.has(tab_id));
 			}
 		});
 
@@ -1072,21 +1076,21 @@ describe('DiskfileTabs', () => {
 			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_2);
 
 			// Check derived properties
-			expect(tabs.selected_tab).toBe(preview);
-			expect(tabs.preview_tab).toBe(preview);
-			expect(tabs.selected_diskfile_id).toBe(TEST_DISKFILE_ID_2);
+			assert.strictEqual(tabs.selected_tab, preview);
+			assert.strictEqual(tabs.preview_tab, preview);
+			assert.strictEqual(tabs.selected_diskfile_id, TEST_DISKFILE_ID_2);
 
 			// Select different tab
 			tabs.select_tab(tab1.id);
 
 			// Check updated derived properties
-			expect(tabs.selected_tab).toBe(tab1);
-			expect(tabs.selected_diskfile_id).toBe(TEST_DISKFILE_ID_1);
-			expect(tabs.preview_tab).toBe(preview); // Preview unchanged
+			assert.strictEqual(tabs.selected_tab, tab1);
+			assert.strictEqual(tabs.selected_diskfile_id, TEST_DISKFILE_ID_1);
+			assert.strictEqual(tabs.preview_tab, preview); // Preview unchanged
 
 			// Promote preview
 			tabs.promote_preview_to_permanent();
-			expect(tabs.preview_tab).toBeUndefined();
+			assert.ok(tabs.preview_tab === undefined);
 		});
 	});
 });

@@ -9,7 +9,7 @@ import type {
 	RequestResponseActionSpec,
 	RemoteNotificationActionSpec,
 	LocalCallActionSpec,
-} from './action_spec.js';
+} from '@fuzdev/fuz_app/actions/action_spec.js';
 import type {ActionMethod} from './action_metatypes.js';
 
 // TODO currently unused
@@ -99,7 +99,7 @@ export class SchemaRegistry {
 		} else if ('type' in schema) {
 			// It's an action spec
 			this.action_specs.push(schema);
-			this.action_spec_by_name_map.set(schema.method, schema);
+			this.action_spec_by_name_map.set(schema.method as ActionMethod, schema);
 
 			switch (schema.kind) {
 				case 'request_response':

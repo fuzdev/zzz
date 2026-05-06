@@ -1,9 +1,8 @@
-// @slop Claude Sonnet 3.7
-
 // @vitest-environment jsdom
 
-import {test, expect, describe, vi} from 'vitest';
+import {test, assert, describe, vi} from 'vitest';
 import {z} from 'zod';
+import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.js';
 
 import {IndexedCollection} from '$lib/indexed_collection.svelte.js';
 import {
@@ -12,9 +11,6 @@ import {
 	create_derived_index,
 	create_dynamic_index,
 } from '$lib/indexed_collection_helpers.svelte.js';
-import {create_uuid, Uuid} from '$lib/zod_helpers.js';
-
-/* eslint-disable @typescript-eslint/no-empty-function */
 
 // Mock item type that implements IndexedItem
 interface TestItem {
@@ -84,11 +80,11 @@ describe('IndexedCollection - Schema Validation', () => {
 
 		// Test query with valid email
 		const query_result = collection.query<TestItem, string>('by_string_b', 'a1@zzz.software');
-		expect(query_result.string_a).toBe('a1');
+		assert.strictEqual(query_result.string_a, 'a1');
 
 		// Get single index and check schema validation passed
 		const email_index = collection.single_index('by_string_b');
-		expect(email_index.size).toBe(2);
+		assert.strictEqual(email_index.size, 2);
 	});
 
 	test('multi index properly validates input and output', () => {
@@ -123,19 +119,19 @@ describe('IndexedCollection - Schema Validation', () => {
 
 		// Test range query validation
 		const mid_items = collection.query<Array<TestItem>, string>('by_number_range', 'mid');
-		expect(mid_items.length).toBe(1);
-		expect(mid_items[0]!.string_a).toBe('a2');
+		assert.strictEqual(mid_items.length, 1);
+		assert.strictEqual(mid_items[0]!.string_a, 'a2');
 
 		// Test array index
 		const item2_matches = collection.query<Array<TestItem>, string>('by_array', 'item2');
-		expect(item2_matches.length).toBe(2);
-		expect(item2_matches.some((item) => item.string_a === 'a1')).toBe(true);
-		expect(item2_matches.some((item) => item.string_a === 'a3')).toBe(true);
+		assert.strictEqual(item2_matches.length, 2);
+		assert.ok(item2_matches.some((item) => item.string_a === 'a1'));
+		assert.ok(item2_matches.some((item) => item.string_a === 'a3'));
 
 		const item3_matches = collection.query<Array<TestItem>, string>('by_array', 'item3');
-		expect(item3_matches.length).toBe(2);
-		expect(item3_matches.some((item) => item.string_a === 'a2')).toBe(true);
-		expect(item3_matches.some((item) => item.string_a === 'a4')).toBe(true);
+		assert.strictEqual(item3_matches.length, 2);
+		assert.ok(item3_matches.some((item) => item.string_a === 'a2'));
+		assert.ok(item3_matches.some((item) => item.string_a === 'a4'));
 
 		// Restore console.error
 		console_error_spy.mockRestore();
@@ -171,12 +167,12 @@ describe('IndexedCollection - Schema Validation', () => {
 
 		// Check derived index correctness
 		const flagged_adults = collection.derived_index('flagged_adults');
-		expect(flagged_adults.length).toBe(1);
-		expect(flagged_adults[0]!.string_a).toBe('a1');
+		assert.strictEqual(flagged_adults.length, 1);
+		assert.strictEqual(flagged_adults[0]!.string_a, 'a1');
 
 		// Add another qualifying item and verify index updates
 		collection.add(create_item('a5', 'b5@test.com', 40, true));
-		expect(collection.derived_index('flagged_adults').length).toBe(2);
+		assert.strictEqual(collection.derived_index('flagged_adults').length, 2);
 	});
 
 	test('dynamic index validates complex query parameters', () => {
@@ -235,13 +231,13 @@ describe('IndexedCollection - Schema Validation', () => {
 
 		// Test number range query
 		const young_range = search_fn({min_number: 18, max_number: 30});
-		expect(young_range.length).toBe(2);
-		expect(young_range.map((item) => item.string_a).sort()).toEqual(['a1', 'a3']);
+		assert.strictEqual(young_range.length, 2);
+		assert.deepEqual(young_range.map((item) => item.string_a).sort(), ['a1', 'a3']);
 
 		// Test flag with specific array values
 		const flagged_with_item1 = search_fn({only_flagged: true, array_values: ['item1']});
-		expect(flagged_with_item1.length).toBe(2);
-		expect(flagged_with_item1.map((item) => item.string_a).sort()).toEqual(['a1', 'a4']);
+		assert.strictEqual(flagged_with_item1.length, 2);
+		assert.deepEqual(flagged_with_item1.map((item) => item.string_a).sort(), ['a1', 'a4']);
 
 		// Test items over 30 that are flagged with specific array values
 		const high_number_with_item3 = search_fn({
@@ -249,15 +245,15 @@ describe('IndexedCollection - Schema Validation', () => {
 			only_flagged: true,
 			array_values: ['item3'],
 		});
-		expect(high_number_with_item3.length).toBe(2);
-		expect(high_number_with_item3.map((item) => item.string_a).sort()).toEqual(['a2', 'a4']);
+		assert.strictEqual(high_number_with_item3.length, 2);
+		assert.deepEqual(high_number_with_item3.map((item) => item.string_a).sort(), ['a2', 'a4']);
 
 		// Test using query method
 		const with_item5 = collection.query<Array<TestItem>, ItemQuery>('item_search', {
 			array_values: ['item5'],
 		});
-		expect(with_item5.length).toBe(1);
-		expect(with_item5[0]!.string_a).toBe('a4');
+		assert.strictEqual(with_item5.length, 1);
+		assert.strictEqual(with_item5[0]!.string_a, 'a4');
 	});
 
 	test('schema validation errors are properly handled', () => {
@@ -286,16 +282,20 @@ describe('IndexedCollection - Schema Validation', () => {
 
 		// Try querying with invalid email format
 		collection.query('by_string_b', 'not-an-email');
-		expect(console_error_spy).toHaveBeenCalledWith(
-			expect.stringContaining('Query validation failed for index by_string_b'),
-			expect.anything(),
+		assert.ok(
+			console_error_spy.mock.calls.some(
+				([msg]) =>
+					typeof msg === 'string' && msg.includes('Query validation failed for index by_string_b'),
+			),
 		);
 
 		// Try querying with out-of-range number
 		collection.query('by_number', 5);
-		expect(console_error_spy).toHaveBeenCalledWith(
-			expect.stringContaining('Query validation failed for index by_number'),
-			expect.anything(),
+		assert.ok(
+			console_error_spy.mock.calls.some(
+				([msg]) =>
+					typeof msg === 'string' && msg.includes('Query validation failed for index by_number'),
+			),
 		);
 
 		console_error_spy.mockRestore();
@@ -330,7 +330,7 @@ describe('IndexedCollection - Schema Validation', () => {
 		collection.query('by_number', 5);
 
 		// Verify no validation errors were logged
-		expect(console_error_spy).not.toHaveBeenCalled();
+		assert.strictEqual(console_error_spy.mock.calls.length, 0);
 
 		console_error_spy.mockRestore();
 	});
@@ -367,11 +367,11 @@ describe('IndexedCollection - Schema Validation', () => {
 		collection.add(item2);
 
 		// Test lookup by nested property - use by_optional instead of where for single index
-		expect(collection.by_optional('by_nested_option', 'x')?.string_a).toBe('a1');
-		expect(collection.by_optional('by_nested_option', 'y')?.string_a).toBe('a2');
+		assert.strictEqual(collection.by_optional('by_nested_option', 'x')?.string_a, 'a1');
+		assert.strictEqual(collection.by_optional('by_nested_option', 'y')?.string_a, 'a2');
 
 		// Test compound key lookup
-		expect(collection.where('by_compound', 'a1-x').length).toBe(1);
-		expect(collection.where('by_compound', 'a2-y').length).toBe(1);
+		assert.strictEqual(collection.where('by_compound', 'a1-x').length, 1);
+		assert.strictEqual(collection.where('by_compound', 'a2-y').length, 1);
 	});
 });

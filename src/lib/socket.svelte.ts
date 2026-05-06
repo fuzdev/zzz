@@ -1,294 +1,274 @@
-// @slop Claude Sonnet 3.7
-
-import {z} from 'zod';
 import {SvelteMap} from 'svelte/reactivity';
 import type {AsyncStatus} from '@fuzdev/fuz_util/async.js';
-import {BROWSER} from 'esm-env';
+import {
+	FrontendWebsocketClient,
+	socket_status_to_async_status,
+	type SocketMessageHandler,
+	type SocketErrorHandler,
+} from '@fuzdev/fuz_app/actions/socket.svelte.js';
+import type {WebsocketRpcConnection} from '@fuzdev/fuz_app/actions/transports_ws.js';
+import type {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.js';
+import {UNKNOWN_ERROR_MESSAGE} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
+import {create_uuid, type Uuid} from '@fuzdev/fuz_util/id.js';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {CellJson} from './cell_types.js';
-import {create_uuid, Uuid} from './zod_helpers.js';
 import {
 	DEFAULT_HEARTBEAT_INTERVAL,
 	DEFAULT_RECONNECT_DELAY,
 	DEFAULT_RECONNECT_DELAY_MAX,
 	DEFAULT_AUTO_RECONNECT,
-	DEFAULT_CLOSE_CODE,
 } from './socket_helpers.js';
-import {UNKNOWN_ERROR_MESSAGE} from './constants.js';
+import type {Frontend} from './frontend.svelte.js';
 
-// TODO the plan here is to make websockets one of multiple transports, this just gets the proof of concept working
+export interface SocketOptions {
+	app: Frontend;
+}
 
-export const SocketJson = CellJson.extend({
-	url: z.string().nullable().default(null),
-	url_input: z.string().default(''),
-	heartbeat_interval: z.number().int().positive().default(DEFAULT_HEARTBEAT_INTERVAL),
-	reconnect_delay: z.number().int().positive().default(DEFAULT_RECONNECT_DELAY),
-	reconnect_delay_max: z.number().int().positive().default(DEFAULT_RECONNECT_DELAY_MAX),
-	auto_reconnect: z.boolean().default(DEFAULT_AUTO_RECONNECT),
-}).meta({cell_class_name: 'Socket'});
-export type SocketJson = z.infer<typeof SocketJson>;
-export type SocketJsonInput = z.input<typeof SocketJson>;
-
-export interface SocketOptions extends CellOptions<typeof SocketJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
-
-export type SocketActionHandler = (event: MessageEvent) => void;
-export type SocketErrorHandler = (event: Event) => void;
-
-// TODO add schemas following the other cell patterns so it can be serialized (so the full state can be snapshotted, and all queued/failed messages restored)
-
-/**
- * Queued message that couldn't be sent immediately.
- */
+/** Queued message that couldn't be sent immediately. */
 export interface QueuedMessage {
 	id: Uuid;
 	data: any;
 	created: number;
 }
 
-/**
- * Failed message that exceeded retry count.
- */
+/** Failed message that exceeded retry count. */
 export interface FailedMessage extends QueuedMessage {
 	failed: number;
 	reason: string;
 }
 
 /**
- * Socket class for WebSocket connection management with auto-reconnect and message queueing.
+ * Wraps `FrontendWebsocketClient` with zzz-specific concerns: a
+ * retryable fire-and-forget send queue (distinct from fuz_app's
+ * request-level durable queue), URL input tracking, and a mapping from
+ * fuz_app's `SocketStatus` onto zzz's `AsyncStatus`. Plain reactive class
+ * — not a Cell. Implements `WebsocketRpcConnection` so it can back
+ * `FrontendWebsocketTransport`; the `request` method is a one-line
+ * delegate to the underlying `FrontendWebsocketClient`, keeping the
+ * pending-request map in one canonical place.
+ *
+ * The bespoke heartbeat timer has been retired — fuz_app's
+ * `FrontendWebsocketClient` now ships an activity-aware heartbeat that
+ * sends the shared `heartbeat_action` at `heartbeat_interval` idle.
+ * Assigning `heartbeat_interval` pushes the new policy into the live
+ * client immediately (the timer is restarted in place when connected).
+ *
+ * Reconnect settings (`reconnect_delay`, `reconnect_delay_max`,
+ * `auto_reconnect`) propagate to the underlying client on assignment
+ * via `apply_reconnect_policy()` — in-flight waits are monotonically
+ * shortened (never extended).
  */
-export class Socket extends Cell<typeof SocketJson> {
-	// Private serializable state with getters/setters
-	#url: string | null = $state()!;
-	#url_input: string = $state()!; // TODO better name? is ambiguous, it's un-applied (not quite unsaved/temporary)
-	#heartbeat_interval: number = $state()!;
-	#reconnect_delay: number = $state()!;
-	#reconnect_delay_max: number = $state()!;
-	#auto_reconnect: boolean = $state()!;
+export class Socket implements WebsocketRpcConnection {
+	readonly app: Frontend;
 
-	// Runtime-only state (not serialized)
-	ws: WebSocket | null = $state(null);
-	open: boolean = $state(false);
-	status: AsyncStatus = $state('initial'); // 'initial' | 'pending' | 'success' | 'failure'
-	last_send_time: number | null = $state(null);
-	last_receive_time: number | null = $state(null);
-	last_connect_time: number | null = $state(null);
-	heartbeat_timeout: NodeJS.Timeout | null = $state(null);
+	url_input: string = $state.raw('');
+	#heartbeat_interval: number = $state.raw(DEFAULT_HEARTBEAT_INTERVAL);
+	#reconnect_delay: number = $state.raw(DEFAULT_RECONNECT_DELAY);
+	#reconnect_delay_max: number = $state.raw(DEFAULT_RECONNECT_DELAY_MAX);
+	#auto_reconnect: boolean = $state.raw(DEFAULT_AUTO_RECONNECT);
 
-	// Keep track of connection attempts
-	reconnect_count: number = $state(0);
-	reconnect_attempt: number = $state(0); // increments on each reconnect attempt for animation triggering
-	reconnect_timeout: NodeJS.Timeout | null = $state(null);
-	current_reconnect_delay: number = $state(0);
+	/**
+	 * Heartbeat idle interval in ms. Writing pushes the new policy into the
+	 * underlying client immediately — when connected, the live timer is
+	 * restarted in place; when disconnected, the policy is stashed for the
+	 * next `connect()`.
+	 */
+	get heartbeat_interval(): number {
+		return this.#heartbeat_interval;
+	}
+	set heartbeat_interval(value: number) {
+		this.#heartbeat_interval = value;
+		this.#client?.set_heartbeat({interval: value});
+	}
 
-	// TODO need to think about garbage cleanup
-	// Message handling
+	/**
+	 * Reconnect policy fields. Assignments push into the underlying client via
+	 * `apply_reconnect_policy()` so in-flight waits honor the new policy
+	 * (monotonically shortened, never extended).
+	 */
+	get reconnect_delay(): number {
+		return this.#reconnect_delay;
+	}
+	set reconnect_delay(value: number) {
+		this.#reconnect_delay = value;
+		this.apply_reconnect_policy();
+	}
+	get reconnect_delay_max(): number {
+		return this.#reconnect_delay_max;
+	}
+	set reconnect_delay_max(value: number) {
+		this.#reconnect_delay_max = value;
+		this.apply_reconnect_policy();
+	}
+	get auto_reconnect(): boolean {
+		return this.#auto_reconnect;
+	}
+	set auto_reconnect(value: boolean) {
+		this.#auto_reconnect = value;
+		this.apply_reconnect_policy();
+	}
+
+	#client: FrontendWebsocketClient | null = $state.raw(null);
+
+	/**
+	 * UI timestamps for the "last send" / "last receive" diagnostics in
+	 * `CapabilityWebsocket`. Not used for heartbeat scheduling —
+	 * fuz_app's client owns that.
+	 */
+	last_send_time: number | null = $state.raw(null);
+	last_receive_time: number | null = $state.raw(null);
+
+	#client_message_unsubscribe: (() => void) | null = null;
+	#client_error_unsubscribe: (() => void) | null = null;
+
 	message_queue: Array<QueuedMessage> = $state([]);
 	failed_messages: SvelteMap<string, FailedMessage> = new SvelteMap();
 
-	// Event handlers
-	#message_handlers: Set<SocketActionHandler> = new Set();
+	#message_handlers: Set<SocketMessageHandler> = new Set();
 	#error_handlers: Set<SocketErrorHandler> = new Set();
 
-	// Derived properties
-	readonly connected: boolean = $derived(this.open && this.status === 'success');
-	readonly can_send: boolean = $derived(this.connected && this.ws !== null);
+	readonly ws: WebSocket | null = $derived(this.#client?.ws ?? null);
+	readonly url: string | null = $derived(this.#client?.url ?? null);
+	readonly reconnect_count: number = $derived(this.#client?.reconnect_count ?? 0);
+	readonly current_reconnect_delay: number = $derived(this.#client?.current_reconnect_delay ?? 0);
+	readonly last_connect_time: number | null = $derived(this.#client?.last_connect_time ?? null);
+	/**
+	 * Changes each time a close fires — used by the UI as an animation key so
+	 * each reconnect wait restarts the progress bar.
+	 */
+	readonly reconnect_attempt: number = $derived(this.#client?.last_close_time ?? 0);
+	readonly is_reconnect_pending: boolean = $derived(this.#client?.status === 'reconnecting');
+
+	readonly status: AsyncStatus = $derived(
+		socket_status_to_async_status(
+			this.#client?.status ?? 'initial',
+			this.#client?.revoked ?? false,
+		),
+	);
+
+	readonly connected: boolean = $derived(this.#client?.connected ?? false);
+	readonly open: boolean = $derived(this.connected);
+	readonly can_send: boolean = $derived(this.connected);
 	readonly has_queued_messages: boolean = $derived(this.message_queue.length > 0);
 	readonly queued_message_count: number = $derived(this.message_queue.length);
 	readonly failed_message_count: number = $derived(this.failed_messages.size);
 
-	// Time tracking and formatting
-	readonly connection_duration: number | null = $derived(
+	readonly connection_duration: number | null = $derived.by(() =>
 		this.connected && this.last_connect_time
-			? Math.max(0, this.app.time.now_ms - this.last_connect_time) // `Math.max` is needed to avoid negative values with the coarse value of `now_ms`
+			? Math.max(0, this.app.time.now_ms - this.last_connect_time)
 			: null,
 	);
-	readonly connection_duration_rounded: number | null = $derived(
+	readonly connection_duration_rounded: number | null = $derived.by(() =>
 		this.connection_duration !== null
 			? Math.round(this.connection_duration / this.app.time.interval) * this.app.time.interval
 			: null,
 	);
 
-	// Getters and setters for serializable state
-	get url(): string | null {
-		return this.#url;
-	}
-	set url(value: string | null) {
-		this.#url = SocketJson.shape.url.parse(value);
-	}
-
-	get url_input(): string {
-		return this.#url_input;
-	}
-	set url_input(value: string) {
-		this.#url_input = SocketJson.shape.url_input.parse(value);
-	}
-
-	get heartbeat_interval(): number {
-		return this.#heartbeat_interval;
-	}
-	set heartbeat_interval(value: number) {
-		this.#heartbeat_interval = SocketJson.shape.heartbeat_interval.parse(value);
-	}
-
-	get reconnect_delay(): number {
-		return this.#reconnect_delay;
-	}
-	set reconnect_delay(value: number) {
-		this.#reconnect_delay = SocketJson.shape.reconnect_delay.parse(value);
-	}
-
-	get reconnect_delay_max(): number {
-		return this.#reconnect_delay_max;
-	}
-	set reconnect_delay_max(value: number) {
-		this.#reconnect_delay_max = SocketJson.shape.reconnect_delay_max.parse(value);
-	}
-
-	get auto_reconnect(): boolean {
-		return this.#auto_reconnect;
-	}
-	set auto_reconnect(value: boolean) {
-		this.#auto_reconnect = SocketJson.shape.auto_reconnect.parse(value);
-	}
-
 	constructor(options: SocketOptions) {
-		super(SocketJson, options);
-		this.init();
-
-		// Initialize url_input if url exists
-		if (this.url) {
-			this.url_input = this.url;
-		}
+		this.app = options.app;
 	}
 
-	/**
-	 * Connects to the WebSocket server.
-	 * @param url The WebSocket URL to connect to
-	 */
 	connect(url: string | null = null): void {
-		// Skip connection attempt on the server side
-		if (!BROWSER) return;
-
-		// Disconnect existing connection if any
-		this.disconnect();
-
-		// If URL is provided, update both url and url_input
 		if (url !== null) {
-			this.url = url;
 			this.url_input = url;
-		} else if (this.url_input) {
-			// If no URL provided but url_input has value, use that
-			this.url = this.url_input;
 		}
-
-		if (!this.url) {
+		const target_url = this.url_input;
+		if (!target_url) {
 			console.error('[socket] cannot connect: no URL provided');
 			return;
 		}
 
-		try {
-			this.status = 'pending';
-			const ws = new WebSocket(this.url);
-			this.ws = ws;
+		this.#teardown_client();
 
-			ws.addEventListener('open', this.#handle_open);
-			ws.addEventListener('close', this.#handle_close);
-			ws.addEventListener('error', this.#handle_error);
-			ws.addEventListener('message', this.#handle_message);
-		} catch (error) {
-			console.error('[socket] failed to create WebSocket:', error);
-			this.ws = null;
-			this.open = false;
-			this.status = 'failure';
-			this.#maybe_reconnect(); // Trigger reconnect for synchronous errors
-		}
-	}
+		const client = new FrontendWebsocketClient(target_url, {
+			reconnect: this.auto_reconnect
+				? {
+						delay: this.reconnect_delay,
+						delay_max: this.reconnect_delay_max,
+					}
+				: false,
+			heartbeat: {interval: this.heartbeat_interval},
+		});
 
-	/**
-	 * Disconnects from the WebSocket server.
-	 * @param code The close code to use (default: 1000 - normal closure)
-	 */
-	disconnect(code: number = DEFAULT_CLOSE_CODE): void {
-		this.#cancel_reconnect();
-		this.#stop_heartbeat();
-
-		if (this.ws) {
-			this.ws.removeEventListener('open', this.#handle_open);
-			this.ws.removeEventListener('close', this.#handle_close);
-			this.ws.removeEventListener('error', this.#handle_error);
-			this.ws.removeEventListener('message', this.#handle_message);
-
-			// Only call close() if the connection is open
-			if (this.open) {
-				try {
-					this.ws.close(code);
-				} catch (error) {
-					console.error('[socket] error closing WebSocket:', error);
-				}
+		this.#client_message_unsubscribe = client.add_message_handler((event) => {
+			this.last_receive_time = Date.now();
+			for (const handler of this.#message_handlers) {
+				handler(event);
 			}
+		});
+		this.#client_error_unsubscribe = client.add_error_handler((event) => {
+			for (const handler of this.#error_handlers) {
+				handler(event);
+			}
+		});
 
-			this.ws = null;
-			this.open = false;
+		this.#client = client;
+		client.connect();
+	}
+
+	disconnect(): void {
+		this.#teardown_client();
+	}
+
+	#teardown_client(): void {
+		this.#client_message_unsubscribe?.();
+		this.#client_message_unsubscribe = null;
+		this.#client_error_unsubscribe?.();
+		this.#client_error_unsubscribe = null;
+		if (this.#client) {
+			this.#client.disconnect();
+			this.#client = null;
 		}
-
-		this.status = 'initial';
 	}
 
 	/**
-	 * Sends a message through the WebSocket.
-	 * @param data The data to send
-	 * @returns True if the message was sent immediately, false if queued or failed
+	 * Delegate to the underlying `FrontendWebsocketClient.request` — keeps the
+	 * pending-request map, durable queue, and `AbortSignal` cancel in one
+	 * canonical place. Rejects when there is no client (call `connect()` first).
 	 */
+	request(
+		method: string,
+		params?: unknown,
+		options?: {signal?: AbortSignal; queue?: boolean; id?: JsonrpcRequestId},
+	): Promise<unknown> {
+		const client = this.#client;
+		if (!client) {
+			return Promise.reject(new Error('[socket] cannot request: no client (call connect first)'));
+		}
+		return client.request(method, params, options);
+	}
+
 	send(data: object): boolean {
-		if (this.can_send) {
+		if (this.can_send && this.#client) {
 			try {
-				this.ws!.send(JSON.stringify(data));
-				this.last_send_time = Date.now();
-				return true;
+				const sent = this.#client.send(data);
+				if (sent) {
+					this.last_send_time = Date.now();
+					return true;
+				}
+				this.#queue_message(data);
+				return false;
 			} catch (error) {
 				console.error('[socket] error sending message:', error);
 				this.#queue_message(data);
 				return false;
 			}
-		} else {
-			this.#queue_message(data);
-			return false;
 		}
+		this.#queue_message(data);
+		return false;
 	}
 
-	/**
-	 * Updates the connection URL and reconnects if currently connected.
-	 * @param url The new WebSocket URL
-	 */
 	update_url(url: string): void {
 		if (this.url === url) return;
-
 		const was_connected = this.connected;
-
-		this.url = url;
 		this.url_input = url;
-
 		if (was_connected) {
 			this.connect();
 		}
 	}
 
-	/**
-	 * Sends a ping message for heartbeat purposes
-	 */
-	async send_heartbeat(): Promise<void> {
-		// Heartbeat ping - handlers update connection state, result not needed here
-		await this.app.api.ping(); // TODO @api need to force websocket transport, second arg?
-	}
-
-	/**
-	 * Retry sending all queued messages.
-	 */
 	retry_queued_messages(): void {
 		if (!this.can_send || this.message_queue.length === 0) return;
 
-		// Create a copy to avoid mutation issues during iteration
 		const queue_copy = [...this.message_queue];
 		this.message_queue = [];
 
@@ -297,14 +277,36 @@ export class Socket extends Cell<typeof SocketJson> {
 		}
 	}
 
-	/**
-	 * Clear the failed messages list
-	 */
 	clear_failed_messages(): void {
 		this.failed_messages.clear();
 	}
 
-	// Private methods
+	cancel_reconnect(): void {
+		this.#client?.cancel_reconnect();
+	}
+
+	/**
+	 * Push the current `auto_reconnect` / `reconnect_delay` /
+	 * `reconnect_delay_max` fields to the underlying client. No-op when
+	 * there is no client (next `connect()` picks them up from construction).
+	 */
+	apply_reconnect_policy(): void {
+		this.#client?.set_reconnect(
+			this.auto_reconnect
+				? {delay: this.reconnect_delay, delay_max: this.reconnect_delay_max}
+				: false,
+		);
+	}
+
+	add_message_handler(handler: SocketMessageHandler): () => void {
+		this.#message_handlers.add(handler);
+		return () => this.#message_handlers.delete(handler);
+	}
+
+	add_error_handler(handler: SocketErrorHandler): () => void {
+		this.#error_handlers.add(handler);
+		return () => this.#error_handlers.delete(handler);
+	}
 
 	#queue_message(data: object): void {
 		const message: QueuedMessage = {
@@ -314,176 +316,34 @@ export class Socket extends Cell<typeof SocketJson> {
 		};
 		this.message_queue.push(message);
 
-		// Try to connect if not already connecting/connected
-		if (this.status === 'initial' && this.auto_reconnect) {
+		if (this.status === 'initial' && this.auto_reconnect && this.url_input) {
 			this.connect();
 		}
 	}
 
 	#process_queued_message(message: QueuedMessage): void {
-		if (!this.can_send) {
-			// Put back in queue if we can't send now
+		if (!this.can_send || !this.#client) {
 			this.message_queue.push(message);
 			return;
 		}
 
 		try {
-			// TODO need the round-trip protocol, this is a hack
-			this.ws!.send(JSON.stringify(message.data));
-			this.last_send_time = Date.now();
+			const sent = this.#client.send(message.data);
+			if (sent) {
+				this.last_send_time = Date.now();
+			} else {
+				this.#fail_message(message, this.#client.last_send_error?.message ?? 'send returned false');
+			}
 		} catch (error) {
-			// Mark as failed immediately since we don't have retry count anymore
-			const failed_message: FailedMessage = {
-				...message,
-				failed: Date.now(),
-				reason: error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE,
-			};
-			this.failed_messages.set(message.id, failed_message);
+			this.#fail_message(message, error instanceof Error ? error.message : UNKNOWN_ERROR_MESSAGE);
 		}
 	}
 
-	#start_heartbeat(): void {
-		this.#stop_heartbeat();
-
-		const now = Date.now();
-		this.last_send_time = now;
-		this.last_receive_time = now;
-
-		this.#schedule_next_heartbeat();
+	#fail_message(message: QueuedMessage, reason: string): void {
+		this.failed_messages.set(message.id, {
+			...message,
+			failed: Date.now(),
+			reason,
+		});
 	}
-
-	#schedule_next_heartbeat(): void {
-		this.#stop_heartbeat();
-
-		this.heartbeat_timeout = setTimeout(
-			() => {
-				// Only send heartbeat if we need to based on last activity
-				const now = Date.now();
-				const next_timeout_time = this.#get_next_heartbeat_time();
-
-				if (next_timeout_time <= now) {
-					void this.send_heartbeat();
-				}
-
-				this.#schedule_next_heartbeat();
-			},
-			Math.max(100, this.#get_next_heartbeat_time() - Date.now()),
-		);
-	}
-
-	#get_next_heartbeat_time(): number {
-		const last_activity = Math.max(this.last_send_time ?? 0, this.last_receive_time ?? 0);
-		return last_activity + this.heartbeat_interval;
-	}
-
-	#stop_heartbeat(): void {
-		if (this.heartbeat_timeout !== null) {
-			clearTimeout(this.heartbeat_timeout);
-			this.heartbeat_timeout = null;
-		}
-	}
-
-	#maybe_reconnect(): void {
-		if (!this.auto_reconnect) return;
-
-		this.#cancel_reconnect();
-
-		this.reconnect_count++;
-		this.reconnect_attempt++; // increment for animation triggering
-		this.current_reconnect_delay = Math.round(
-			Math.min(this.reconnect_delay_max, this.reconnect_delay * 1.5 ** (this.reconnect_count - 1)),
-		);
-
-		this.reconnect_timeout = setTimeout(() => {
-			this.reconnect_timeout = null;
-			this.connect();
-		}, this.current_reconnect_delay);
-	}
-
-	maybe_reconnect(): void {
-		this.#maybe_reconnect();
-	}
-
-	/**
-	 * Cancel any pending reconnection attempt.
-	 */
-	cancel_reconnect(): void {
-		this.#cancel_reconnect();
-	}
-
-	/**
-	 * Add a message handler and return a function to remove it.
-	 * @param handler The message handler to add
-	 * @returns A function that removes the handler when called
-	 */
-	add_message_handler(handler: SocketActionHandler): () => void {
-		this.#message_handlers.add(handler);
-		return () => this.#message_handlers.delete(handler);
-	}
-
-	/**
-	 * Add an error handler and return a function to remove it.
-	 * @param handler The error handler to add
-	 * @returns A function that removes the handler when called
-	 */
-	add_error_handler(handler: SocketErrorHandler): () => void {
-		this.#error_handlers.add(handler);
-		return () => this.#error_handlers.delete(handler);
-	}
-
-	#cancel_reconnect(): void {
-		if (this.reconnect_timeout !== null) {
-			clearTimeout(this.reconnect_timeout);
-			this.reconnect_timeout = null;
-		}
-	}
-
-	// Event handlers
-
-	#handle_open = (_: Event): void => {
-		this.open = true;
-		this.status = 'success';
-		this.reconnect_count = 0;
-		this.#cancel_reconnect();
-		this.#start_heartbeat();
-		this.last_connect_time = Date.now();
-
-		if (this.has_queued_messages) {
-			this.retry_queued_messages();
-		}
-	};
-
-	#handle_close = (_: CloseEvent): void => {
-		this.open = false;
-
-		if (this.status === 'success' || this.status === 'pending') {
-			this.status = 'failure';
-			this.#maybe_reconnect();
-		}
-	};
-
-	#handle_error = (event: Event): void => {
-		for (const handler of this.#error_handlers) {
-			handler(event);
-		}
-
-		console.error('[socket] websocket error occurred:', event);
-		this.status = 'failure';
-
-		// The WebSocket will close after an error, but we need to make sure
-		// the socket state is updated now in case close doesn't fire for some reason.
-		this.open = false;
-
-		// Some errors might not trigger the close event, so we force a reconnection attempt.
-		// This ensures we don't get stuck when errors occur.
-		this.#maybe_reconnect();
-	};
-
-	#handle_message = (event: MessageEvent): void => {
-		this.last_receive_time = Date.now();
-
-		for (const handler of this.#message_handlers) {
-			handler(event);
-		}
-	};
 }

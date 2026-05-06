@@ -3,8 +3,9 @@
 import {z} from 'zod';
 import {goto} from '$app/navigation';
 import {resolve} from '$app/paths';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
-import {get_datetime_now, type Uuid} from '$lib/zod_helpers.js';
 import {Domain} from '$routes/projects/domain.svelte.js';
 import type {Projects} from '$routes/projects/projects.svelte.js';
 
@@ -20,12 +21,12 @@ export interface DomainViewmodelOptions {
 export class DomainViewmodel {
 	readonly projects: Projects;
 
-	project_id: Uuid = $state()!;
-	domain_id: Uuid | null = $state()!;
+	project_id: Uuid = $state.raw()!;
+	domain_id: Uuid | null = $state.raw()!;
 
-	domain_name: string = $state()!;
-	domain_status: 'active' | 'pending' | 'inactive' = $state()!;
-	ssl_enabled: boolean = $state()!;
+	domain_name: string = $state.raw()!;
+	domain_status: 'active' | 'pending' | 'inactive' = $state.raw()!;
+	ssl_enabled: boolean = $state.raw()!;
 
 	/** Whether the form has unsaved changes. */
 	readonly has_changes = $derived.by(

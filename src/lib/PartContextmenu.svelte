@@ -25,7 +25,7 @@
 
 	const app = frontend_context.get();
 
-	let show_editor = $state(false);
+	let show_editor = $state.raw(false);
 </script>
 
 <Contextmenu {...rest} {entries} />

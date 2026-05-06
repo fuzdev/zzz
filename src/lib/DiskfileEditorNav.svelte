@@ -1,9 +1,10 @@
 <script lang="ts">
+	import type {Uuid} from '@fuzdev/fuz_util/id.js';
+
 	import {GLYPH_ARROW_LEFT, GLYPH_ARROW_RIGHT, GLYPH_REFRESH} from './glyphs.js';
 	import Glyph from './Glyph.svelte';
 	import {frontend_context} from './frontend.svelte.js';
 	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
-	import type {Uuid} from './zod_helpers.js';
 
 	const {
 		editor_state,
@@ -120,10 +121,10 @@
 	};
 </script>
 
-<div class="browser_nav display:flex gap_xs">
+<div class="display:flex gap_xs align-items:center">
 	<button
 		type="button"
-		class="icon_button plain p_xs border_radius_lg"
+		class="icon-button plain p_xs border_radius_lg"
 		title="previous diskfile"
 		onclick={go_back}
 		disabled={!can_go_back}
@@ -132,7 +133,7 @@
 	</button>
 	<button
 		type="button"
-		class="icon_button plain p_xs border_radius_lg"
+		class="icon-button plain p_xs border_radius_lg"
 		title="next diskfile"
 		onclick={go_forward}
 		disabled={!can_go_forward}
@@ -141,7 +142,7 @@
 	</button>
 	<button
 		type="button"
-		class="icon_button plain p_xs border_radius_lg"
+		class="icon-button plain p_xs border_radius_lg"
 		title="refresh from disk"
 		onclick={() => {
 			// TODO need to implement the server action to refresh the content from disk
@@ -152,10 +153,3 @@
 		<Glyph glyph={GLYPH_REFRESH} />
 	</button>
 </div>
-
-<style>
-	.browser_nav {
-		display: flex;
-		align-items: center;
-	}
-</style>

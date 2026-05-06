@@ -110,7 +110,12 @@ abstract class BackendProvider<TClient = unknown> {
   abstract load_status(reload?: boolean): Promise<ProviderStatus>;
 
   protected validate_streaming_requirements(progress_token?: Uuid): asserts progress_token { ... }
-  protected async send_streaming_progress(progress_token: Uuid, chunk: ...): Promise<void> { ... }
+  /** Wraps `on_progress` with the `_meta.progressToken` envelope. */
+  protected async send_streaming_progress(
+    progress_token: Uuid,
+    chunk: ...,
+    on_progress: OnCompletionProgress,
+  ): Promise<void> { ... }
 }
 ```
 
@@ -131,7 +136,14 @@ interface CompletionHandlerOptions {
   completion_messages: Array<CompletionMessage> | undefined;
   prompt: string;
   progress_token?: Uuid;  // Opts into streaming when provided
+  /**
+   * Routes progress chunks to the originating WS socket via `ctx.notify`.
+   * Required for streaming handlers; ignored by non-streaming handlers.
+   */
+  on_progress: OnCompletionProgress;
 }
+
+type OnCompletionProgress = (input: ActionInputs['completion_progress']) => Promise<void>;
 
 interface CompletionOptions {
   frequency_penalty?: number;
@@ -175,8 +187,8 @@ From `server/backend_provider_claude.ts`:
 export class BackendProviderClaude extends BackendProviderRemote<Anthropic> {
   readonly name = 'claude';
 
-  constructor(options: BackendProviderOptions) {
-    super({...options, api_key: options.api_key ?? (SECRET_ANTHROPIC_API_KEY || null)});
+  constructor(options: BackendProviderRemoteOptions) {
+    super({api_key: options.api_key ?? (SECRET_ANTHROPIC_API_KEY || null)});
   }
 
   protected override create_client(): void {
@@ -184,7 +196,7 @@ export class BackendProviderClaude extends BackendProviderRemote<Anthropic> {
   }
 
   async handle_streaming_completion(options: CompletionHandlerOptions): Promise<ActionOutputs['completion_create']> {
-    const {model, completion_options, completion_messages, prompt, progress_token} = options;
+    const {model, completion_options, completion_messages, prompt, progress_token, on_progress} = options;
     this.validate_streaming_requirements(progress_token);
 
     const stream = await this.get_client().messages.create(
@@ -195,9 +207,13 @@ export class BackendProviderClaude extends BackendProviderRemote<Anthropic> {
     for await (const event of stream) {
       if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
         accumulated_content += event.delta.text;
-        void this.send_streaming_progress(progress_token, {
-          message: { role: 'assistant', content: event.delta.text },
-        });
+        // Thread the caller's on_progress through — when called from the WS
+        // handler, this routes chunks to the originating socket via ctx.notify.
+        void this.send_streaming_progress(
+          progress_token,
+          { message: { role: 'assistant', content: event.delta.text } },
+          on_progress,
+        );
       }
     }
 
@@ -213,16 +229,42 @@ User sends message
   → Thread.send_message(content)
     → Build CompletionRequest (provider_name, model, prompt, completion_messages)
     → app.api.completion_create({completion_request, _meta: {progressToken}})
-      → Backend: backend.lookup_provider(provider_name)
-        → provider.get_handler(!!progress_token)
-          → provider.handle_streaming_completion(options)
-            → Call provider SDK with stream: true
-            → For each chunk:
-              → provider.send_streaming_progress(progress_token, chunk)
-                → WebSocket notification to frontend
-                  → Turn content updated incrementally
-            → Return CompletionResult
+      → WS dispatch builds ctx {backend, request_id, notify, signal}
+      → zzz_action_handlers.completion_create(input, ctx)
+        → Backend: backend.lookup_provider(provider_name)
+          → provider.get_handler(!!progress_token)
+            → provider.handle_streaming_completion({..., on_progress: ctx.notify-adapter})
+              → Call provider SDK with stream: true
+              → For each chunk:
+                → provider.send_streaming_progress(progress_token, chunk, on_progress)
+                  → on_progress({progressToken, chunk})
+                    → ctx.notify('completion_progress', ...)
+                      → WS notification to originating socket
+                        → Turn content updated incrementally
+              → Return CompletionResult
 ```
+
+`ollama_pull` and `ollama_create` use the same pattern inline: they call
+`ctx.notify('ollama_progress', ...)` directly from the handler loop and
+check `ctx.signal.aborted` to terminate early on socket close.
+
+`completion_create` cooperates with `ctx.signal` too. The handler threads
+`signal` into `CompletionHandlerOptions`; each provider forwards it to its
+SDK — Anthropic/OpenAI/Gemini accept `{signal}` as the second arg on their
+request methods, and Ollama (no native signal support) falls back to the
+`if (signal?.aborted) break;` pattern inside the streaming for-await.
+Post-abort SDK throws are translated to `request_cancelled` at the handler
+boundary — discriminated by `ctx.signal.aborted`, not error shape, since
+each SDK throws a different abort type. `Thread.cancel_pending()` fires
+the `AbortController` from the client side; the frontend WS client sends
+the `cancel` notification and rejects the pending promise with
+`request_cancelled` so the UI can distinguish user-initiated cancels from
+real provider failures.
+
+Streaming progress is always socket-scoped via `ctx.notify` — the originating
+client is the only recipient, never a broadcast. `ctx.notify` is a no-op on
+HTTP transport (with a DEV warn), so streaming effectively requires a WS
+handler context.
 
 ### Provider Status
 
@@ -241,7 +283,7 @@ Local providers (Ollama): `available` = `true` when service responds.
 2. Implement `create_client()`, `handle_streaming_completion()`, `handle_non_streaming_completion()`
 3. Register in `src/lib/server/server.ts`: `backend.add_provider(new BackendProviderNewProvider(provider_options))`
 4. Add response helper in `src/lib/response_helpers.ts`
-5. Add env var to `.env.development.example`: `SECRET_NEWPROVIDER_API_KEY=`
+5. Add env var to `.env.development.example` and `.env.production.example`: `SECRET_NEWPROVIDER_API_KEY=`
 6. Add default models to `src/lib/config_defaults.ts` (`models_default`)
 
 See [src/lib/server/CLAUDE.md](../src/lib/server/CLAUDE.md) for detailed backend architecture.

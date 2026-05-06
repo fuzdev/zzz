@@ -35,7 +35,7 @@ export class Actions extends Cell<typeof ActionsJson> {
 	});
 
 	// TODO @many refactor this into the IndexedCollection -- if this state remains we can have a setter that forwards the value
-	history_limit: number = $state(HISTORY_LIMIT_DEFAULT);
+	history_limit: number = $state.raw(HISTORY_LIMIT_DEFAULT);
 
 	// TODO think about these - filter/sort by method/kind?
 	// readonly pings: Array<Action> = $derived(this.items.where('by_method', 'ping'));

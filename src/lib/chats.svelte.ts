@@ -1,9 +1,9 @@
 import {z} from 'zod';
 import {page} from '$app/state';
+import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {Chat, ChatJson, type ChatJsonInput} from './chat.svelte.js';
-import type {Uuid} from './zod_helpers.js';
 import {HANDLED} from './cell_helpers.js';
 import {IndexedCollection} from './indexed_collection.svelte.js';
 import {create_single_index, create_derived_index} from './indexed_collection_helpers.svelte.js';
@@ -44,8 +44,8 @@ export class Chats extends Cell<typeof ChatsJson> {
 
 	// TODO would be nice to story a history of selected ids so
 	// e.g. when deleting a chat we can navigate back to where we were
-	#selected_id: Uuid | null = $state()!;
-	selected_id_last_non_null: Uuid | null = $state()!;
+	#selected_id: Uuid | null = $state.raw()!;
+	selected_id_last_non_null: Uuid | null = $state.raw()!;
 	get selected_id(): Uuid | null {
 		return this.#selected_id;
 	}
@@ -62,7 +62,7 @@ export class Chats extends Cell<typeof ChatsJson> {
 	);
 
 	/** Controls visibility of sort controls in the chats list. */
-	show_sort_controls: boolean = $state()!;
+	show_sort_controls: boolean = $state.raw()!;
 
 	/** Ordered array of chats derived from the `manual_order` index. */
 	readonly ordered_items: Array<Chat> = $derived(this.items.derived_index('manual_order'));

@@ -1,14 +1,10 @@
-// @slop Claude Sonnet 3.7
-
-import {test, expect, vi, beforeEach, afterEach, describe} from 'vitest';
+import {test, vi, beforeEach, describe, assert} from 'vitest';
+import {assert_rejects} from '@fuzdev/fuz_util/testing.js';
 import * as fs from 'node:fs/promises';
-import * as fs_sync from 'node:fs';
 
 import {ScopedFs, PathNotAllowedError, SymlinkNotAllowedError} from '$lib/server/scoped_fs.js';
 
-/* eslint-disable no-await-in-loop, @typescript-eslint/no-empty-function, @typescript-eslint/require-await */
-
-// Mock fs/promises and fs modules
+// Mock fs/promises
 vi.mock('node:fs/promises', () => ({
 	readFile: vi.fn(),
 	writeFile: vi.fn(),
@@ -21,10 +17,6 @@ vi.mock('node:fs/promises', () => ({
 	access: vi.fn(),
 }));
 
-vi.mock('node:fs', () => ({
-	existsSync: vi.fn(),
-}));
-
 // Test constants
 const TEST_ALLOWED_PATHS = ['/allowed/path', '/allowed/other/path/', '/another/allowed/directory'];
 const FILE_PATHS = {
@@ -35,8 +27,6 @@ const FILE_PATHS = {
 	TRAVERSAL_SIMPLE: '/allowed/path/../../../etc/passwd',
 	TRAVERSAL_COMPLEX: '/allowed/path/subdir/.././../../etc/passwd',
 	TRAVERSAL_MIXED: '/allowed/path/./foo/../../etc/passwd',
-	TRAVERSAL_WINDOWS: '/allowed/path\\..\\..\\Windows\\System32\\config\\sam',
-	UNICODE_TRAVERSAL: '/allowed/path/ＮＮ/．．/．．/etc/passwd', // Unicode lookalikes
 };
 const DIR_PATHS = {
 	ALLOWED: '/allowed/path/dir',
@@ -48,15 +38,8 @@ const DIR_PATHS = {
 
 const create_test_instance = () => new ScopedFs(TEST_ALLOWED_PATHS);
 
-// Setup/cleanup for each test
-let console_spy: any;
-
 beforeEach(() => {
 	vi.clearAllMocks();
-	console_spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-	// Default mock implementations
-	vi.mocked(fs_sync.existsSync).mockReturnValue(true);
 
 	// Default lstat mock returning a non-symlink file
 	vi.mocked(fs.lstat).mockImplementation(() =>
@@ -66,10 +49,6 @@ beforeEach(() => {
 			isFile: () => true,
 		} as any),
 	);
-});
-
-afterEach(() => {
-	console_spy.mockRestore();
 });
 
 describe('ScopedFs - symlink security', () => {
@@ -105,7 +84,8 @@ describe('ScopedFs - symlink security', () => {
 				} as any),
 			);
 
-			await expect(operation()).rejects.toThrow(SymlinkNotAllowedError);
+			const e = await assert_rejects(() => operation());
+			assert.instanceOf(e, SymlinkNotAllowedError);
 		}
 
 		// Test exists() separately
@@ -119,17 +99,11 @@ describe('ScopedFs - symlink security', () => {
 		);
 
 		const exists = await scoped_fs.exists(FILE_PATHS.SYMLINK);
-		expect(exists).toBe(false);
+		assert.ok(!exists);
 	});
 
 	test('should reject symlinks in parent directories', async () => {
 		const scoped_fs = create_test_instance();
-
-		// First make sure we have existsSync return true for relevant paths
-		vi.mocked(fs_sync.existsSync).mockImplementation((path) => {
-			// Return true for our test directory path and all parent directories
-			return String(path).includes('symlink-dir') || String(path).includes('/allowed/path');
-		});
 
 		// Setup mocks to simulate a parent directory that is a symlink
 		vi.mocked(fs.lstat).mockImplementation(async (path) => {
@@ -160,14 +134,12 @@ describe('ScopedFs - symlink security', () => {
 		});
 
 		// Should throw for any operation on a file in a symlinked parent directory
-		await expect(scoped_fs.read_file(FILE_PATHS.PARENT_SYMLINK)).rejects.toThrow(
-			SymlinkNotAllowedError,
-		);
+		const error = await assert_rejects(() => scoped_fs.read_file(FILE_PATHS.PARENT_SYMLINK));
+		assert.instanceOf(error, SymlinkNotAllowedError);
 
 		// Should also throw for mkdir in a symlinked directory
-		await expect(scoped_fs.mkdir('/allowed/path/symlink-dir/subdir')).rejects.toThrow(
-			SymlinkNotAllowedError,
-		);
+		const error2 = await assert_rejects(() => scoped_fs.mkdir('/allowed/path/symlink-dir/subdir'));
+		assert.instanceOf(error2, SymlinkNotAllowedError);
 	});
 
 	test('should reject symlinks in grandparent directories', async () => {
@@ -204,9 +176,10 @@ describe('ScopedFs - symlink security', () => {
 		});
 
 		// Should detect the symlink even when it's not the immediate parent
-		await expect(
+		const error = await assert_rejects(() =>
 			scoped_fs.read_file(`${DIR_PATHS.GRANDPARENT_SYMLINK_DIR}/file.txt`),
-		).rejects.toThrow(SymlinkNotAllowedError);
+		);
+		assert.instanceOf(error, SymlinkNotAllowedError);
 	});
 
 	test('should detect symlinks consistently across all operations', async () => {
@@ -244,7 +217,8 @@ describe('ScopedFs - symlink security', () => {
 
 		// All operations should detect the symlink
 		for (const operation of operations) {
-			await expect(operation()).rejects.toThrow(SymlinkNotAllowedError);
+			const e = await assert_rejects(() => operation());
+			assert.instanceOf(e, SymlinkNotAllowedError);
 		}
 	});
 
@@ -262,10 +236,10 @@ describe('ScopedFs - symlink security', () => {
 
 		// Should return false rather than throwing for exists()
 		const result = await scoped_fs.exists(FILE_PATHS.SYMLINK);
-		expect(result).toBe(false);
+		assert.ok(!result);
 
 		// access should not be called since the symlink is detected first
-		expect(fs.access).not.toHaveBeenCalled();
+		assert.strictEqual(vi.mocked(fs.access).mock.calls.length, 0);
 	});
 
 	test('is_path_safe should return false for symlinks', async () => {
@@ -298,8 +272,33 @@ describe('ScopedFs - symlink security', () => {
 
 			// Should safely return false without throwing
 			const is_safe = await scoped_fs.is_path_safe(path);
-			expect(is_safe).toBe(false);
+			assert.ok(!is_safe);
 		}
+	});
+});
+
+describe('ScopedFs - null byte rejection', () => {
+	test('should reject paths containing null bytes', () => {
+		const scoped_fs = create_test_instance();
+
+		const null_byte_paths = [
+			'/allowed/path/\0file.txt',
+			'/allowed/path/file\0.txt',
+			'/allowed/path/\0../../etc/passwd',
+		];
+
+		for (const path of null_byte_paths) {
+			assert.ok(!scoped_fs.is_path_allowed(path));
+		}
+	});
+
+	test('should throw PathNotAllowedError for null byte paths in operations', async () => {
+		const scoped_fs = create_test_instance();
+
+		const error = await assert_rejects(() => scoped_fs.read_file('/allowed/path/\0file.txt'));
+		assert.instanceOf(error, PathNotAllowedError);
+
+		assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 0);
 	});
 });
 
@@ -318,14 +317,33 @@ describe('ScopedFs - path traversal security', () => {
 		// Check both synchronous and asynchronous validation
 		for (const path of traversal_paths) {
 			// Synchronous check should fail
-			expect(scoped_fs.is_path_allowed(path)).toBe(false);
+			assert.ok(!scoped_fs.is_path_allowed(path));
 
 			// Async checks should also fail
-			expect(await scoped_fs.is_path_safe(path)).toBe(false);
+			assert.ok(!(await scoped_fs.is_path_safe(path)));
 
 			// Operations should throw
-			await expect(scoped_fs.read_file(path)).rejects.toThrow(PathNotAllowedError);
+			const error = await assert_rejects(() => scoped_fs.read_file(path));
+			assert.instanceOf(error, PathNotAllowedError);
 		}
+	});
+
+	test('backslashes are literal on POSIX and do not enable traversal', () => {
+		const scoped_fs = create_test_instance();
+
+		// On POSIX, backslash is a valid filename character, not a separator.
+		// normalize leaves it as-is, so this is a literal path segment, not traversal.
+		const backslash_path = '/allowed/path\\..\\..\\Windows\\System32\\config\\sam';
+		assert.ok(!scoped_fs.is_path_allowed(backslash_path));
+	});
+
+	test('fullwidth Unicode lookalikes are literal characters, not traversal', () => {
+		const scoped_fs = create_test_instance();
+
+		// Fullwidth ．．is NOT .. — normalize treats it as a regular directory name
+		const unicode_path = '/allowed/path/ＮＮ/．．/．．/etc/passwd';
+		// This stays inside /allowed/path/ after normalization, so it IS allowed
+		assert.ok(scoped_fs.is_path_allowed(unicode_path));
 	});
 
 	test('should safely normalize legitimate paths', async () => {
@@ -340,8 +358,8 @@ describe('ScopedFs - path traversal security', () => {
 		];
 
 		for (const path of legitimate_paths) {
-			expect(scoped_fs.is_path_allowed(path)).toBe(true);
-			expect(await scoped_fs.is_path_safe(path)).toBe(true);
+			assert.ok(scoped_fs.is_path_allowed(path));
+			assert.ok(await scoped_fs.is_path_safe(path));
 
 			// Mock successful read
 			vi.mocked(fs.readFile).mockReset();
@@ -349,7 +367,7 @@ describe('ScopedFs - path traversal security', () => {
 
 			// Should allow operations on these paths
 			const content = await scoped_fs.read_file(path);
-			expect(content).toBe('content');
+			assert.strictEqual(content, 'content');
 		}
 	});
 });
@@ -376,16 +394,17 @@ describe('ScopedFs - access control security', () => {
 		];
 
 		for (const {path, allowed} of boundary_test_cases) {
-			expect(scoped_fs.is_path_allowed(path)).toBe(allowed);
+			assert.strictEqual(scoped_fs.is_path_allowed(path), allowed);
 
 			// For valid paths, mock a successful read
 			if (allowed) {
 				vi.mocked(fs.readFile).mockReset();
 				vi.mocked(fs.readFile).mockResolvedValueOnce('content' as any);
 				const content = await scoped_fs.read_file(path);
-				expect(content).toBe('content');
+				assert.strictEqual(content, 'content');
 			} else {
-				await expect(scoped_fs.read_file(path)).rejects.toThrow(PathNotAllowedError);
+				const e = await assert_rejects(() => scoped_fs.read_file(path));
+				assert.instanceOf(e, PathNotAllowedError);
 			}
 		}
 	});
@@ -405,7 +424,7 @@ describe('ScopedFs - access control security', () => {
 		];
 
 		for (const path of root_test_paths) {
-			expect(root_scoped_fs.is_path_allowed(path)).toBe(true);
+			assert.ok(root_scoped_fs.is_path_allowed(path));
 
 			// Mock successful read
 			vi.mocked(fs.readFile).mockReset();
@@ -413,12 +432,13 @@ describe('ScopedFs - access control security', () => {
 
 			// Should allow operations
 			const content = await root_scoped_fs.read_file(path);
-			expect(content).toBe('content');
+			assert.strictEqual(content, 'content');
 		}
 
 		// Non-absolute paths should still be rejected
-		expect(root_scoped_fs.is_path_allowed('relative/path')).toBe(false);
-		await expect(root_scoped_fs.read_file('relative/path')).rejects.toThrow(PathNotAllowedError);
+		assert.ok(!root_scoped_fs.is_path_allowed('relative/path'));
+		const error = await assert_rejects(() => root_scoped_fs.read_file('relative/path'));
+		assert.instanceOf(error, PathNotAllowedError);
 	});
 
 	test('should properly isolate between allowed paths', async () => {
@@ -445,13 +465,14 @@ describe('ScopedFs - access control security', () => {
 
 		// Check allowed paths
 		for (const path of allowed_paths) {
-			expect(complex_scoped_fs.is_path_allowed(path)).toBe(true);
+			assert.ok(complex_scoped_fs.is_path_allowed(path));
 		}
 
 		// Check disallowed paths
 		for (const path of disallowed_paths) {
-			expect(complex_scoped_fs.is_path_allowed(path)).toBe(false);
-			await expect(complex_scoped_fs.read_file(path)).rejects.toThrow(PathNotAllowedError);
+			assert.ok(!complex_scoped_fs.is_path_allowed(path));
+			const error = await assert_rejects(() => complex_scoped_fs.read_file(path));
+			assert.instanceOf(error, PathNotAllowedError);
 		}
 	});
 
@@ -459,14 +480,19 @@ describe('ScopedFs - access control security', () => {
 		const scoped_fs = create_test_instance();
 
 		// Empty path should be rejected by all operations
-		await expect(scoped_fs.read_file('')).rejects.toThrow(PathNotAllowedError);
-		await expect(scoped_fs.write_file('', 'content')).rejects.toThrow(PathNotAllowedError);
-		await expect(scoped_fs.stat('')).rejects.toThrow(PathNotAllowedError);
-		await expect(scoped_fs.mkdir('')).rejects.toThrow(PathNotAllowedError);
-		await expect(scoped_fs.readdir('')).rejects.toThrow(PathNotAllowedError);
+		for (const operation of [
+			() => scoped_fs.read_file(''),
+			() => scoped_fs.write_file('', 'content'),
+			() => scoped_fs.stat(''),
+			() => scoped_fs.mkdir(''),
+			() => scoped_fs.readdir(''),
+		]) {
+			const e = await assert_rejects(() => operation());
+			assert.instanceOf(e, PathNotAllowedError);
+		}
 
 		// exists() should return false for empty path
-		expect(await scoped_fs.exists('')).toBe(false);
+		assert.ok(!(await scoped_fs.exists('')));
 	});
 
 	test('copy_file should validate both source and destination paths', async () => {
@@ -477,29 +503,34 @@ describe('ScopedFs - access control security', () => {
 		await scoped_fs.copy_file('/allowed/path/source.txt', '/allowed/other/path/dest.txt');
 
 		// Invalid source
-		await expect(
+		const error_src = await assert_rejects(() =>
 			scoped_fs.copy_file('/not/allowed/source.txt', '/allowed/path/dest.txt'),
-		).rejects.toThrow(PathNotAllowedError);
+		);
+		assert.instanceOf(error_src, PathNotAllowedError);
 
 		// Invalid destination
-		await expect(
+		const error_dest = await assert_rejects(() =>
 			scoped_fs.copy_file('/allowed/path/source.txt', '/not/allowed/dest.txt'),
-		).rejects.toThrow(PathNotAllowedError);
+		);
+		assert.instanceOf(error_dest, PathNotAllowedError);
 
 		// Both invalid
-		await expect(
+		const error_both = await assert_rejects(() =>
 			scoped_fs.copy_file('/not/allowed/source.txt', '/not/allowed/dest.txt'),
-		).rejects.toThrow(PathNotAllowedError);
+		);
+		assert.instanceOf(error_both, PathNotAllowedError);
 
 		// Path traversal in source
-		await expect(
+		const error_traversal_src = await assert_rejects(() =>
 			scoped_fs.copy_file('/allowed/path/../../../etc/passwd', '/allowed/path/dest.txt'),
-		).rejects.toThrow(PathNotAllowedError);
+		);
+		assert.instanceOf(error_traversal_src, PathNotAllowedError);
 
 		// Path traversal in destination
-		await expect(
+		const error_traversal_dest = await assert_rejects(() =>
 			scoped_fs.copy_file('/allowed/path/source.txt', '/allowed/path/../../../etc/passwd'),
-		).rejects.toThrow(PathNotAllowedError);
+		);
+		assert.instanceOf(error_traversal_dest, PathNotAllowedError);
 	});
 });
 
@@ -516,8 +547,8 @@ describe('ScopedFs - security error handling', () => {
 
 		for (const path of test_paths) {
 			const error = new PathNotAllowedError(path);
-			expect(error.message).toBe(`Path is not allowed: ${path}`);
-			expect(error.name).toBe('PathNotAllowedError');
+			assert.strictEqual(error.message, `Path is not allowed: ${path}`);
+			assert.strictEqual(error.name, 'PathNotAllowedError');
 		}
 	});
 
@@ -526,8 +557,8 @@ describe('ScopedFs - security error handling', () => {
 
 		for (const path of test_paths) {
 			const error = new SymlinkNotAllowedError(path);
-			expect(error.message).toBe(`Path is a symlink which is not allowed: ${path}`);
-			expect(error.name).toBe('SymlinkNotAllowedError');
+			assert.strictEqual(error.message, `Path is a symlink which is not allowed: ${path}`);
+			assert.strictEqual(error.name, 'SymlinkNotAllowedError');
 		}
 	});
 
@@ -538,7 +569,8 @@ describe('ScopedFs - security error handling', () => {
 		vi.mocked(fs.lstat).mockRejectedValueOnce(new Error('Permission denied'));
 
 		// Should throw the filesystem error, not a security error
-		await expect(scoped_fs.read_file(FILE_PATHS.ALLOWED)).rejects.toThrow('Permission denied');
-		expect(fs.readFile).not.toHaveBeenCalled();
+		const error = await assert_rejects(() => scoped_fs.read_file(FILE_PATHS.ALLOWED));
+		assert.include(error.message, 'Permission denied');
+		assert.strictEqual(vi.mocked(fs.readFile).mock.calls.length, 0);
 	});
 });

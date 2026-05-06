@@ -18,6 +18,11 @@ import {
 
 // This module re-exports public environment variables with parsed values.
 // It should generally be preferred to using the variables directly.
+//
+// WARNING: This module imports $env/static/public (SvelteKit build-time) and
+// MUST NOT be imported by any module in the Deno compile chain (server/,
+// action_peer.ts, action_event.ts, etc.) — $env doesn't exist in Deno and
+// will crash the compile. The shared server factory uses server_env.ts instead.
 
 // TODO a lot of these need to be moved to env or config etc
 // and maybe some need to be derived (in some/all cases)
@@ -98,7 +103,7 @@ export const API_URL_FOR_HTTP_RPC: string = SERVER_URL + API_PATH_FOR_HTTP_RPC;
  * */
 export const WEBSOCKET_URL: string = PUBLIC_WEBSOCKET_URL
 	? PathWithoutTrailingSlash.parse(PUBLIC_WEBSOCKET_URL)
-	: 'ws://localhost:8999/ws';
+	: 'ws://localhost:8999/api/ws';
 
 export const WEBSOCKET_URL_OBJECT: URL | null = WEBSOCKET_URL ? new URL(WEBSOCKET_URL) : null;
 
@@ -107,5 +112,3 @@ export const WEBSOCKET_URL_OBJECT: URL | null = WEBSOCKET_URL ? new URL(WEBSOCKE
  * @no_trailing_slash
  */
 export const WEBSOCKET_PATH: string | undefined = WEBSOCKET_URL_OBJECT?.pathname;
-
-export const UNKNOWN_ERROR_MESSAGE: string = 'unknown error'; // TODO move/configure

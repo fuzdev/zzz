@@ -1,16 +1,16 @@
-// @slop Claude Sonnet 3.7
-
 // @vitest-environment jsdom
 
-import {test, expect, vi, beforeEach} from 'vitest';
+import {test, vi, beforeEach, assert} from 'vitest';
 import {z} from 'zod';
+import {create_uuid} from '@fuzdev/fuz_util/id.js';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
 import {Cell, type CellOptions} from '$lib/cell.svelte.js';
 import {CellJson, type SchemaKeys} from '$lib/cell_types.js';
-import {create_uuid, get_datetime_now} from '$lib/zod_helpers.js';
 import {HANDLED} from '$lib/cell_helpers.js';
 import {Frontend} from '$lib/frontend.svelte.js';
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+
+import {monkeypatch_zzz_for_tests} from './test_helpers.js';
 
 // Constants for testing
 const TEST_ID = create_uuid();
@@ -75,10 +75,10 @@ test('Cell supports overriding assign_property', () => {
 		},
 	});
 
-	expect(cell.text).toBe('modified_original');
-	expect(cell.assignment_log).toContain(`Assigned id: ${TEST_ID}`);
-	expect(cell.assignment_log).toContain('Assigned text: original');
-	expect(cell.assignment_log).toContain('Assigned list: item');
+	assert.strictEqual(cell.text, 'modified_original');
+	assert.include(cell.assignment_log, `Assigned id: ${TEST_ID}`);
+	assert.include(cell.assignment_log, 'Assigned text: original');
+	assert.include(cell.assignment_log, 'Assigned list: item');
 });
 
 test('Cell assign_property returns after handling property correctly', () => {
@@ -122,15 +122,15 @@ test('Cell assign_property returns after handling property correctly', () => {
 		},
 	});
 
-	expect(cell.text).toBe('sample');
-	expect(cell.number).toBe(42);
+	assert.strictEqual(cell.text, 'sample');
+	assert.strictEqual(cell.number, 42);
 
-	expect(cell.execution_path).toContain('begin-text');
-	expect(cell.execution_path).toContain('complete-text');
-	expect(cell.execution_path).not.toContain('continue-text');
+	assert.include(cell.execution_path, 'begin-text');
+	assert.include(cell.execution_path, 'complete-text');
+	assert.notInclude(cell.execution_path, 'continue-text');
 
-	expect(cell.execution_path).toContain('begin-number');
-	expect(cell.execution_path).toContain('continue-number');
+	assert.include(cell.execution_path, 'begin-number');
+	assert.include(cell.execution_path, 'continue-number');
 });
 
 test('Cell handles inherited properties correctly', () => {
@@ -178,19 +178,19 @@ test('Cell handles inherited properties correctly', () => {
 		},
 	});
 
-	expect(cell.id).toBe(TEST_ID);
-	expect(cell.text).toBe('base_property');
-	expect(cell.number).toBe(30);
+	assert.strictEqual(cell.id, TEST_ID);
+	assert.strictEqual(cell.text, 'base_property');
+	assert.strictEqual(cell.number, 30);
 
-	expect(cell.derived_method()).toBe('derived_result');
-	expect(cell.base_method()).toBe('overridden_result');
+	assert.strictEqual(cell.derived_method(), 'derived_result');
+	assert.strictEqual(cell.base_method(), 'overridden_result');
 
-	expect('id' in cell).toBe(true);
+	assert.ok('id' in cell);
 
 	const json = cell.json;
-	expect(json.id).toBe(TEST_ID);
-	expect(json.text).toBe('base_property');
-	expect(json.number).toBe(30);
+	assert.strictEqual(json.id, TEST_ID);
+	assert.strictEqual(json.text, 'base_property');
+	assert.strictEqual(json.number, 30);
 });
 
 test('Cell properly handles collections with HANDLED sentinel', () => {
@@ -242,8 +242,8 @@ test('Cell properly handles collections with HANDLED sentinel', () => {
 		},
 	});
 
-	expect(cell.stored_items).toEqual(['ONE', 'TWO', 'THREE']);
-	expect(cell.json.collection).toEqual(['ONE', 'TWO', 'THREE']);
+	assert.deepEqual(cell.stored_items, ['ONE', 'TWO', 'THREE']);
+	assert.deepEqual(cell.json.collection, ['ONE', 'TWO', 'THREE']);
 });
 
 test('Cell registration and unregistration works correctly', () => {
@@ -270,13 +270,13 @@ test('Cell registration and unregistration works correctly', () => {
 	});
 
 	// Cell should be automatically registered
-	expect(app.cell_registry.all.has(cell_id)).toBe(true);
-	expect(app.cell_registry.all.get(cell_id)).toBe(cell);
+	assert.ok(app.cell_registry.all.has(cell_id));
+	assert.ok(app.cell_registry.all.get(cell_id) === (cell as any));
 
 	// Test disposal
 	cell.dispose();
-	expect(app.cell_registry.all.has(cell_id)).toBe(false);
+	assert.ok(!app.cell_registry.all.has(cell_id));
 
 	// Test that disposing again is safe
-	expect(() => cell.dispose()).not.toThrow();
+	assert.doesNotThrow(() => cell.dispose());
 });

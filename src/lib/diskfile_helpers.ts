@@ -1,8 +1,9 @@
 import type {WatcherChangeType} from '@fuzdev/gro/watch_dir.js';
 import type {Disknode} from '@fuzdev/gro/disknode.js';
 import {strip_start} from '@fuzdev/fuz_util/string.js';
+import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.js';
+import {Datetime, DatetimeNow} from '@fuzdev/fuz_util/datetime.js';
 
-import {Uuid, Datetime, DatetimeNow, create_uuid} from './zod_helpers.js';
 import {
 	DiskfileChangeType,
 	DiskfileDirectoryPath,
@@ -32,8 +33,8 @@ export const map_watcher_change_to_diskfile_change = (
 // TODO @many refactor source/disk files with Gro Disknode too
 /**
  * Converts a `SerializableDisknode` to the `DiskfileJson` format.
- * @param disknode - The source file to convert
- * @param existing_id - Optional existing `Uuid` to preserve id stability across updates
+ * @param disknode - the source file to convert
+ * @param existing_id - optional existing `Uuid` to preserve id stability across updates
  */
 export const disknode_to_diskfile_json = (
 	disknode: SerializableDisknode,

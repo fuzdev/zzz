@@ -1,6 +1,8 @@
 import {z} from 'zod';
+import {strip_start} from '@fuzdev/fuz_util/string.js';
+import {Uuid} from '@fuzdev/fuz_util/id.js';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
-import {get_datetime_now, PathWithLeadingSlash, Uuid} from './zod_helpers.js';
 import {Diskfile} from './diskfile.svelte.js';
 import {DiskfileJson, DiskfilePath, type DiskfileJsonInput} from './diskfile_types.js';
 import {disknode_to_diskfile_json, to_relative_path} from './diskfile_helpers.js';
@@ -41,7 +43,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		],
 	});
 
-	selected_file_id: Uuid | null = $state(null);
+	selected_file_id: Uuid | null = $state.raw(null);
 
 	readonly selected_file: Diskfile | null = $derived(
 		this.selected_file_id ? (this.items.by_id.get(this.selected_file_id) ?? null) : null,
@@ -134,8 +136,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			throw new Error('cannot create file: zzz_dir is not set');
 		}
 
-		// TODO @many how to handle paths? need some more structure to the way they're normalized and joined
-		const path = DiskfilePath.parse(`${this.app.zzz_dir}${PathWithLeadingSlash.parse(filename)}`);
+		// zzz_dir already has trailing slash (DiskfileDirectoryPath), strip any leading slash from filename
+		const path = DiskfilePath.parse(`${this.app.zzz_dir}${strip_start(filename, '/')}`);
 
 		// Reuse `update` which creates or updates files
 		await this.update(path, content);

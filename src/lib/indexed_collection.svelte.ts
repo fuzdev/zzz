@@ -4,8 +4,8 @@ import {SvelteMap} from 'svelte/reactivity';
 import type {z} from 'zod';
 import {DEV} from 'esm-env';
 import {EMPTY_ARRAY} from '@fuzdev/fuz_util/array.js';
+import {Uuid} from '@fuzdev/fuz_util/id.js';
 
-import {Uuid} from './zod_helpers.js';
 import type {IndexedItem} from './indexed_collection_helpers.svelte.js';
 
 // TODO @many rethink the indexed collection API -
@@ -70,11 +70,11 @@ export interface IndexedCollectionOptions<
  * A helper class for managing collections with incremental updates,
  * efficient querying, and automatic index maintenance.
  *
- * @param T - The type of items stored in the collection
- * @param TKeySingle - Type-safe keys for single value indexes
- * @param TKeyMulti - Type-safe keys for multi value indexes
- * @param TKeyDerived - Type-safe keys for derived indexes
- * @param TKeyDynamic - Type-safe keys for dynamic function indexes
+ * @param T - the type of items stored in the collection
+ * @param TKeySingle - type-safe keys for single value indexes
+ * @param TKeyMulti - type-safe keys for multi value indexes
+ * @param TKeyDerived - type-safe keys for derived indexes
+ * @param TKeyDynamic - type-safe keys for dynamic function indexes
  */
 export class IndexedCollection<
 	T extends IndexedItem,
@@ -97,7 +97,7 @@ export class IndexedCollection<
 	// need to ensure we have the right lazy perf characteristics
 	// and currently we eagerly compute indexes
 	/** Stores all index values in a reactive object. */
-	readonly indexes: Record<string, any> = $state({}); // TODO should this be `$state.raw`? I dont think we want to apply deep reactivity to the index values
+	readonly indexes: Record<string, any> = $state({}); // $state() because index properties are written in place
 
 	// Map of index types for type safety and runtime checks
 	readonly #index_types: Map<string, IndexType> = new Map();
@@ -220,8 +220,8 @@ export class IndexedCollection<
 
 	/**
 	 * Ensures that the index exists and is of the expected type.
-	 * @param key The index key to check
-	 * @param expected_type The expected `IndexType` of the index
+	 * @param key - the index key to check
+	 * @param expected_type - the expected `IndexType` of the index
 	 * @throws Error if index doesn't exist or has wrong type
 	 */
 	#ensure_index(key: string, expected_type: IndexType): void {

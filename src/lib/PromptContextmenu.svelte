@@ -23,7 +23,7 @@
 
 	const app = frontend_context.get();
 
-	let show_diskfile_picker = $state(false);
+	let show_diskfile_picker = $state.raw(false);
 </script>
 
 <Contextmenu {...rest} {entries} />

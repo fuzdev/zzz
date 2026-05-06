@@ -3,6 +3,7 @@
 /* Theme Variables */
 
 :root {
+	--bg_100: var(--lighten_100);
 	--bg_80: var(--lighten_80);
 	--border_color: var(--shade_30);
 	--border_color_10: hsl(var(--tint_hue) 60% 20% / 7%);
@@ -170,7 +171,6 @@
 	--shade_30: hsl(var(--tint_hue) var(--tint_saturation) 76%);
 	--shade_40: hsl(var(--tint_hue) var(--tint_saturation) 65%);
 	--shade_50: hsl(var(--tint_hue) var(--tint_saturation) 53%);
-	--shade_60: hsl(var(--tint_hue) var(--tint_saturation) 34%);
 	--shade_max: #000;
 	--shade_min: #fff;
 	--shadow_alpha_30: 25%;
@@ -224,6 +224,7 @@
 }
 
 :root.dark {
+	--bg_100: var(--darken_100);
 	--bg_80: var(--darken_80);
 	--border_color_10: hsl(var(--tint_hue) 60% 80% / 14%);
 	--border_color_20: hsl(var(--tint_hue) 60% 80% / 22%);
@@ -301,7 +302,6 @@
 	--shade_30: hsl(var(--tint_hue) var(--tint_saturation) 26%);
 	--shade_40: hsl(var(--tint_hue) var(--tint_saturation) 36%);
 	--shade_50: hsl(var(--tint_hue) var(--tint_saturation) 48%);
-	--shade_60: hsl(var(--tint_hue) var(--tint_saturation) 67%);
 	--shade_max: #fff;
 	--shade_min: #000;
 	--shadow_alpha_30: 37%;
@@ -754,6 +754,7 @@ body {
 }
 
 :where(label:not(.unstyled)) {
+	display: block;
 	color: var(--text_color);
 	cursor: pointer;
 }
@@ -1353,6 +1354,13 @@ a.chip {
 	color: var(--color_i_50);
 	--text_color: var(--color_i_50);
 }
+.color_j_50 {
+	color: var(--color_j_50);
+	--text_color: var(--color_j_50);
+}
+.bg_100 {
+	background-color: var(--bg_100);
+}
 .border_color_20 {
 	border-color: var(--border_color_20);
 	--border_color: var(--border_color_20);
@@ -1375,6 +1383,15 @@ a.chip {
 }
 .border_radius_lg {
 	border-radius: var(--border_radius_lg);
+}
+.border-radius\:0 {
+	border-radius: 0;
+}
+.border_top_right_radius_md {
+	border-top-right-radius: var(--border_radius_md);
+}
+.border_bottom_left_radius_md {
+	border-bottom-left-radius: var(--border_radius_md);
 }
 .shadow_bottom_md {
 	box-shadow: var(--shadow_bottom_md)

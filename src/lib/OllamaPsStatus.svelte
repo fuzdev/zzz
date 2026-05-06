@@ -69,7 +69,7 @@
 								<!-- TODO handle this API without the `!`, maybe change to only require the name, and derive the model -->
 								<button
 									type="button"
-									class="icon_button plain"
+									class="icon-button plain"
 									title="view model details"
 									onclick={() => ollama.select(ollama.model_by_name.get(item.name)!)}
 								>
@@ -99,7 +99,7 @@
 								{/if}
 								<button
 									type="button"
-									class="icon_button plain"
+									class="icon-button plain"
 									title="unload model from memory"
 									onclick={() => ollama.unload(item.name)}
 								>

@@ -1,25 +1,28 @@
-// @slop Claude Opus 4
-
 // @vitest-environment jsdom
 
-import {test, expect, describe} from 'vitest';
+import {test, describe, assert} from 'vitest';
+import {assert_rejects} from '@fuzdev/fuz_util/testing.js';
+import {create_uuid} from '@fuzdev/fuz_util/id.js';
 
-import {create_action_event, create_action_event_from_json} from '$lib/action_event.js';
-import type {ActionEventEnvironment} from '$lib/action_event_types.js';
-import type {ActionSpecUnion} from '$lib/action_spec.js';
+import {
+	create_action_event,
+	create_action_event_from_json,
+} from '@fuzdev/fuz_app/actions/action_event.js';
+import type {
+	ActionEventEnvironment,
+	ActionExecutor,
+} from '@fuzdev/fuz_app/actions/action_event_types.js';
+import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 import {
 	ping_action_spec,
 	filer_change_action_spec,
 	toggle_main_menu_action_spec,
 	completion_create_action_spec,
 } from '$lib/action_specs.js';
-import {create_uuid} from '$lib/zod_helpers.js';
-import type {ActionExecutor} from '$lib/action_types.js';
 
 // Mock environment for testing
 class TestEnvironment implements ActionEventEnvironment {
 	executor: ActionExecutor = 'frontend';
-	peer: any = {}; // Mock peer, not used in tests
 	handlers: Map<string, Map<string, (event: any) => any>> = new Map();
 	specs: Map<string, ActionSpecUnion> = new Map();
 
@@ -51,17 +54,17 @@ describe('ActionEvent', () => {
 			const env = new TestEnvironment([ping_action_spec]);
 			const event = create_action_event(env, ping_action_spec, undefined);
 
-			expect(event.data.kind).toBe('request_response');
-			expect(event.data.phase).toBe('send_request');
-			expect(event.data.step).toBe('initial');
-			expect(event.data.method).toBe('ping');
-			expect(event.data.executor).toBe('frontend');
-			expect(event.data.input).toBeUndefined();
-			expect(event.data.output).toBe(null);
-			expect(event.data.error).toBe(null);
-			expect(event.data.request).toBe(null);
-			expect(event.data.response).toBe(null);
-			expect(event.data.notification).toBe(null);
+			assert.strictEqual(event.data.kind, 'request_response');
+			assert.strictEqual(event.data.phase, 'send_request');
+			assert.strictEqual(event.data.step, 'initial');
+			assert.strictEqual(event.data.method, 'ping');
+			assert.strictEqual(event.data.executor, 'frontend');
+			assert.ok(event.data.input === undefined);
+			assert.isNull(event.data.output);
+			assert.isNull(event.data.error);
+			assert.isNull(event.data.request);
+			assert.isNull(event.data.response);
+			assert.isNull(event.data.notification);
 		});
 
 		test('creates event with input data', () => {
@@ -78,14 +81,14 @@ describe('ActionEvent', () => {
 
 			const event = create_action_event(env, completion_create_action_spec, input);
 
-			expect(event.data.input).toEqual(input);
+			assert.deepEqual(event.data.input, input);
 		});
 
 		test('creates event with specified initial phase', () => {
 			const env = new TestEnvironment([ping_action_spec]);
 			const event = create_action_event(env, ping_action_spec, undefined, 'receive_request');
 
-			expect(event.data.phase).toBe('receive_request');
+			assert.strictEqual(event.data.phase, 'receive_request');
 		});
 
 		test('throws for invalid executor/initiator combination', () => {
@@ -93,8 +96,9 @@ describe('ActionEvent', () => {
 			env.executor = 'frontend';
 
 			// filer_change has initiator: 'backend', so frontend can't initiate send
-			expect(() => create_action_event(env, filer_change_action_spec, {})).toThrow(
-				"executor 'frontend' cannot initiate action 'filer_change'",
+			assert.throws(
+				() => create_action_event(env, filer_change_action_spec, {}),
+				/executor 'frontend' cannot initiate action 'filer_change'/,
 			);
 		});
 	});
@@ -106,9 +110,9 @@ describe('ActionEvent', () => {
 
 			event.parse();
 
-			expect(event.data.step).toBe('parsed');
+			assert.strictEqual(event.data.step, 'parsed');
 			// ping has void input, so it should remain undefined
-			expect(event.data.input).toBeUndefined();
+			assert.ok(event.data.input === undefined);
 		});
 
 		test('parses complex input with validation', () => {
@@ -126,8 +130,8 @@ describe('ActionEvent', () => {
 			const event = create_action_event(env, completion_create_action_spec, input);
 			event.parse();
 
-			expect(event.data.step).toBe('parsed');
-			expect(event.data.input).toEqual(input);
+			assert.strictEqual(event.data.step, 'parsed');
+			assert.deepEqual(event.data.input, input);
 		});
 
 		test('fails on invalid input', () => {
@@ -142,10 +146,10 @@ describe('ActionEvent', () => {
 			const event = create_action_event(env, completion_create_action_spec, invalid_input);
 			event.parse();
 
-			expect(event.data.step).toBe('failed');
-			expect(event.data.error).toBeDefined();
-			expect(event.data.error?.code).toBe(-32602);
-			expect(event.data.error?.message).toContain('failed to parse input');
+			assert.strictEqual(event.data.step, 'failed');
+			assert.isDefined(event.data.error);
+			assert.strictEqual(event.data.error?.code, -32602);
+			assert.include(event.data.error?.message, 'failed to parse input');
 		});
 
 		test('throws when not in initial step', () => {
@@ -155,7 +159,7 @@ describe('ActionEvent', () => {
 			event.parse(); // First parse succeeds
 
 			// Second parse should throw
-			expect(() => event.parse()).toThrow("cannot parse from step 'parsed' - must be 'initial'");
+			assert.throws(() => event.parse(), /cannot parse from step 'parsed' - must be 'initial'/);
 		});
 	});
 
@@ -172,12 +176,12 @@ describe('ActionEvent', () => {
 
 			await event.handle_async();
 
-			expect(event.data.step).toBe('handled');
+			assert.strictEqual(event.data.step, 'handled');
 			// send_request doesn't produce output
-			expect(event.data.output).toBe(null);
+			assert.isNull(event.data.output);
 			// But it should have created a request
-			expect(event.data.request).toBeDefined();
-			expect(event.data.request?.method).toBe('ping');
+			assert.isDefined(event.data.request);
+			assert.strictEqual(event.data.request?.method, 'ping');
 		});
 
 		test('handles missing handler gracefully', async () => {
@@ -189,7 +193,7 @@ describe('ActionEvent', () => {
 
 			await event.handle_async();
 
-			expect(event.data.step).toBe('handled');
+			assert.strictEqual(event.data.step, 'handled');
 		});
 
 		test('captures handler errors', async () => {
@@ -205,11 +209,11 @@ describe('ActionEvent', () => {
 			await event.handle_async();
 
 			// Handler errors transition to error phase, not directly to failed
-			expect(event.data.step).toBe('parsed');
-			expect(event.data.phase).toBe('send_error');
-			expect(event.data.error).toBeDefined();
-			expect(event.data.error?.code).toBe(-32603);
-			expect(event.data.error?.message).toContain('unknown error');
+			assert.strictEqual(event.data.step, 'parsed');
+			assert.strictEqual(event.data.phase, 'send_error');
+			assert.isDefined(event.data.error);
+			assert.strictEqual(event.data.error?.code, -32603);
+			assert.include(event.data.error?.message, 'unknown error');
 		});
 
 		test('send_error handler can handle errors gracefully', async () => {
@@ -224,8 +228,8 @@ describe('ActionEvent', () => {
 			// Error handler logs and completes successfully
 			env.add_handler('ping', 'send_error', (event) => {
 				error_logged = true;
-				expect(event.data.error).toBeDefined();
-				expect(event.data.error?.message).toContain('primary handler error');
+				assert.isDefined(event.data.error);
+				assert.include(event.data.error?.message, 'primary handler error');
 				// Error handler completes without throwing
 			});
 
@@ -234,17 +238,17 @@ describe('ActionEvent', () => {
 			await event.handle_async();
 
 			// First error transitions to send_error
-			expect(event.data.phase).toBe('send_error');
-			expect(event.data.step).toBe('parsed');
+			assert.strictEqual(event.data.phase, 'send_error');
+			assert.strictEqual(event.data.step, 'parsed');
 
 			// Handle error phase
 			await event.handle_async();
 
 			// Error handler completed successfully
-			expect(error_logged).toBe(true);
-			expect(event.data.step).toBe('failed');
-			expect(event.data.phase).toBe('send_error');
-			expect(event.is_complete()).toBe(true);
+			assert.ok(error_logged);
+			assert.strictEqual(event.data.step, 'failed');
+			assert.strictEqual(event.data.phase, 'send_error');
+			assert.ok(event.is_complete());
 		});
 
 		test('receive_error handler can handle errors gracefully', async () => {
@@ -254,8 +258,8 @@ describe('ActionEvent', () => {
 			// Error handler can inspect and handle the error
 			env.add_handler('ping', 'receive_error', (event) => {
 				error_handled = true;
-				expect(event.data.error).toBeDefined();
-				expect(event.data.error?.code).toBe(-32603);
+				assert.isDefined(event.data.error);
+				assert.strictEqual(event.data.error?.code, -32603);
 				// Could implement retry logic, fallback, logging, etc.
 			});
 
@@ -285,16 +289,16 @@ describe('ActionEvent', () => {
 			event.parse();
 
 			// Should be in receive_error phase
-			expect(event.data.phase).toBe('receive_error');
-			expect(event.data.step).toBe('parsed');
+			assert.strictEqual(event.data.phase, 'receive_error');
+			assert.strictEqual(event.data.step, 'parsed');
 
 			// Handle error phase
 			await event.handle_async();
 
 			// Error handler completed successfully
-			expect(error_handled).toBe(true);
-			expect(event.data.step).toBe('handled');
-			expect(event.is_complete()).toBe(true);
+			assert.ok(error_handled);
+			assert.strictEqual(event.data.step, 'handled');
+			assert.ok(event.is_complete());
 		});
 
 		test('validates output for phases that expect it', async () => {
@@ -310,9 +314,9 @@ describe('ActionEvent', () => {
 
 			await event.handle_async();
 
-			expect(event.data.step).toBe('handled');
-			expect(event.data.output).toBeDefined();
-			expect(event.data.output).toHaveProperty('ping_id');
+			assert.strictEqual(event.data.step, 'handled');
+			assert.isDefined(event.data.output);
+			assert.ok(Object.hasOwn(event.data.output as any, 'ping_id'));
 		});
 
 		test('throws when not in parsed step', async () => {
@@ -320,9 +324,8 @@ describe('ActionEvent', () => {
 			const event = create_action_event(env, ping_action_spec, undefined);
 
 			// Not parsed yet
-			await expect(event.handle_async()).rejects.toThrow(
-				"cannot handle from step 'initial' - must be 'parsed'",
-			);
+			const error = await assert_rejects(() => event.handle_async());
+			assert.include(error.message, "cannot handle from step 'initial' - must be 'parsed'");
 		});
 
 		test('is no-op when already failed', async () => {
@@ -338,15 +341,15 @@ describe('ActionEvent', () => {
 			event.parse();
 
 			// Should be failed after parsing invalid input
-			expect(event.data.step).toBe('failed');
+			assert.strictEqual(event.data.step, 'failed');
 			const original_error = event.data.error;
 
 			// handle_async should be no-op
 			await event.handle_async();
 
 			// State should remain unchanged
-			expect(event.data.step).toBe('failed');
-			expect(event.data.error).toBe(original_error);
+			assert.strictEqual(event.data.step, 'failed');
+			assert.strictEqual(event.data.error, original_error);
 		});
 	});
 
@@ -362,8 +365,8 @@ describe('ActionEvent', () => {
 
 			event.handle_sync();
 
-			expect(event.data.step).toBe('handled');
-			expect(event.data.output).toEqual(output);
+			assert.strictEqual(event.data.step, 'handled');
+			assert.deepEqual(event.data.output, output);
 		});
 
 		test('throws for async actions', () => {
@@ -371,8 +374,9 @@ describe('ActionEvent', () => {
 			const event = create_action_event(env, ping_action_spec, undefined);
 			event.parse();
 
-			expect(() => event.handle_sync()).toThrow(
-				'handle_sync can only be used with synchronous local_call actions',
+			assert.throws(
+				() => event.handle_sync(),
+				/handle_sync can only be used with synchronous local_call actions/,
 			);
 		});
 
@@ -384,15 +388,15 @@ describe('ActionEvent', () => {
 			event.parse();
 
 			// Should be failed after parsing invalid input
-			expect(event.data.step).toBe('failed');
+			assert.strictEqual(event.data.step, 'failed');
 			const original_error = event.data.error;
 
 			// handle_sync should be no-op
 			event.handle_sync();
 
 			// State should remain unchanged
-			expect(event.data.step).toBe('failed');
-			expect(event.data.error).toBe(original_error);
+			assert.strictEqual(event.data.step, 'failed');
+			assert.strictEqual(event.data.error, original_error);
 		});
 	});
 
@@ -405,16 +409,16 @@ describe('ActionEvent', () => {
 			event.parse();
 			await event.handle_async();
 
-			expect(event.data.phase).toBe('send_request');
-			expect(event.data.step).toBe('handled');
+			assert.strictEqual(event.data.phase, 'send_request');
+			assert.strictEqual(event.data.step, 'handled');
 
 			// Transition to receive_response
 			event.transition('receive_response');
 
-			expect(event.data.phase).toBe('receive_response');
-			expect(event.data.step).toBe('initial');
+			assert.strictEqual(event.data.phase, 'receive_response');
+			assert.strictEqual(event.data.step, 'initial');
 			// Request should be preserved
-			expect(event.data.request).toBeDefined();
+			assert.isDefined(event.data.request);
 		});
 
 		test('throws for invalid phase transition', async () => {
@@ -425,8 +429,9 @@ describe('ActionEvent', () => {
 			await event.handle_async();
 
 			// Can't go from send_request to send_response
-			expect(() => event.transition('send_response')).toThrow(
-				"Invalid phase transition from 'send_request' to 'send_response'",
+			assert.throws(
+				() => event.transition('send_response'),
+				/Invalid phase transition from 'send_request' to 'send_response'/,
 			);
 		});
 
@@ -435,8 +440,9 @@ describe('ActionEvent', () => {
 			const event = create_action_event(env, ping_action_spec, undefined);
 
 			// Still in initial step
-			expect(() => event.transition('receive_response')).toThrow(
-				"cannot transition from step 'initial' - must be 'handled'",
+			assert.throws(
+				() => event.transition('receive_response'),
+				/cannot transition from step 'initial' - must be 'handled'/,
 			);
 		});
 
@@ -460,11 +466,11 @@ describe('ActionEvent', () => {
 			// Transition to send_response
 			event.transition('send_response');
 
-			expect(event.data.phase).toBe('send_response');
-			expect(event.data.request).toEqual(request);
-			expect(event.data.output).toEqual({ping_id: request.id});
-			expect(event.data.response).toBeDefined();
-			expect(event.data.response).toHaveProperty('result');
+			assert.strictEqual(event.data.phase, 'send_response');
+			assert.deepEqual(event.data.request, request);
+			assert.deepEqual(event.data.output, {ping_id: request.id});
+			assert.isDefined(event.data.response);
+			assert.ok(Object.hasOwn(event.data.response as any, 'result'));
 		});
 
 		test('is no-op when already failed', async () => {
@@ -485,14 +491,14 @@ describe('ActionEvent', () => {
 			await event.handle_async();
 
 			// First error transitions to send_error
-			expect(event.data.step).toBe('parsed');
-			expect(event.data.phase).toBe('send_error');
+			assert.strictEqual(event.data.step, 'parsed');
+			assert.strictEqual(event.data.phase, 'send_error');
 
 			// Handle error phase - this will throw and transition to failed
 			await event.handle_async();
 
 			// Now should be failed after error handler error
-			expect(event.data.step).toBe('failed');
+			assert.strictEqual(event.data.step, 'failed');
 			const original_error = event.data.error;
 			const original_phase = event.data.phase;
 
@@ -500,9 +506,9 @@ describe('ActionEvent', () => {
 			event.transition('receive_response');
 
 			// State should remain unchanged
-			expect(event.data.step).toBe('failed');
-			expect(event.data.phase).toBe(original_phase);
-			expect(event.data.error).toBe(original_error);
+			assert.strictEqual(event.data.step, 'failed');
+			assert.strictEqual(event.data.phase, original_phase);
+			assert.strictEqual(event.data.error, original_error);
 		});
 	});
 
@@ -520,7 +526,7 @@ describe('ActionEvent', () => {
 
 			event.set_request(request);
 
-			expect(event.data.request).toEqual(request);
+			assert.deepEqual(event.data.request, request);
 		});
 
 		test('set_response() sets response and extracts output', () => {
@@ -549,8 +555,8 @@ describe('ActionEvent', () => {
 
 			event.set_response(response);
 
-			expect(event.data.response).toEqual(response);
-			expect(event.data.output).toEqual(response.result);
+			assert.deepEqual(event.data.response, response);
+			assert.deepEqual(event.data.output, response.result);
 		});
 
 		test('error response transitions to receive_error phase on parse', () => {
@@ -586,11 +592,11 @@ describe('ActionEvent', () => {
 			// Parse should detect the error and transition to receive_error phase
 			event.parse();
 
-			expect(event.data.step).toBe('parsed');
-			expect(event.data.phase).toBe('receive_error');
-			expect(event.data.error).toEqual(errorResponse.error);
-			expect(event.data.response).toEqual(errorResponse);
-			expect(event.data.output).toBe(null);
+			assert.strictEqual(event.data.step, 'parsed');
+			assert.strictEqual(event.data.phase, 'receive_error');
+			assert.deepEqual(event.data.error, errorResponse.error);
+			assert.deepEqual(event.data.response, errorResponse);
+			assert.isNull(event.data.output);
 		});
 
 		test('set_notification() sets notification data', () => {
@@ -609,19 +615,21 @@ describe('ActionEvent', () => {
 
 			event.set_notification(notification);
 
-			expect(event.data.notification).toEqual(notification);
+			assert.deepEqual(event.data.notification, notification);
 		});
 
 		test('setters throw for wrong phase/kind', () => {
 			const env = new TestEnvironment([ping_action_spec]);
 			const event = create_action_event(env, ping_action_spec, undefined);
 
-			expect(() => event.set_request({} as any)).toThrow(
-				'can only set request in receive_request phase',
+			assert.throws(
+				() => event.set_request({} as any),
+				/can only set request in receive_request phase/,
 			);
 
-			expect(() => event.set_notification({} as any)).toThrow(
-				'can only set notification in receive phase',
+			assert.throws(
+				() => event.set_notification({} as any),
+				/can only set notification in receive phase/,
 			);
 		});
 	});
@@ -633,7 +641,7 @@ describe('ActionEvent', () => {
 			const event = create_action_event(env, ping_action_spec, undefined);
 
 			// Not complete in initial state
-			expect(event.is_complete()).toBe(false);
+			assert.ok(!event.is_complete());
 
 			// Handle through to receive_response
 			event.parse();
@@ -648,7 +656,7 @@ describe('ActionEvent', () => {
 			await event.handle_async();
 
 			// receive_response is terminal for request_response
-			expect(event.is_complete()).toBe(true);
+			assert.ok(event.is_complete());
 		});
 
 		test('returns true for failed state', () => {
@@ -657,8 +665,8 @@ describe('ActionEvent', () => {
 
 			event.parse(); // Will fail due to invalid input
 
-			expect(event.data.step).toBe('failed');
-			expect(event.is_complete()).toBe(true);
+			assert.strictEqual(event.data.step, 'failed');
+			assert.ok(event.is_complete());
 		});
 
 		test('returns false for non-terminal phases', () => {
@@ -668,7 +676,7 @@ describe('ActionEvent', () => {
 			event.parse();
 
 			// Parsed but not handled
-			expect(event.is_complete()).toBe(false);
+			assert.ok(!event.is_complete());
 		});
 	});
 
@@ -688,8 +696,8 @@ describe('ActionEvent', () => {
 
 			event.parse();
 
-			expect(changes).toHaveLength(1);
-			expect(changes[0]).toEqual({
+			assert.strictEqual(changes.length, 1);
+			assert.deepEqual(changes[0], {
 				old_step: 'initial',
 				new_step: 'parsed',
 			});
@@ -705,12 +713,12 @@ describe('ActionEvent', () => {
 			});
 
 			event.parse();
-			expect(call_count).toBe(1);
+			assert.strictEqual(call_count, 1);
 
 			cleanup();
 
 			await event.handle_async();
-			expect(call_count).toBe(1); // No additional calls
+			assert.strictEqual(call_count, 1); // No additional calls
 		});
 
 		test('multiple listeners work independently', () => {
@@ -730,8 +738,8 @@ describe('ActionEvent', () => {
 
 			event.parse();
 
-			expect(listener1_calls).toEqual(['parsed']);
-			expect(listener2_calls).toEqual(['parsed']);
+			assert.deepEqual(listener1_calls, ['parsed']);
+			assert.deepEqual(listener2_calls, ['parsed']);
 		});
 	});
 
@@ -745,15 +753,15 @@ describe('ActionEvent', () => {
 
 			const json = event.toJSON();
 
-			expect(json.kind).toBe('request_response');
-			expect(json.phase).toBe('send_request');
-			expect(json.step).toBe('handled');
-			expect(json.request).toBeDefined();
+			assert.strictEqual(json.kind, 'request_response');
+			assert.strictEqual(json.phase, 'send_request');
+			assert.strictEqual(json.step, 'handled');
+			assert.isDefined(json.request);
 
 			// Reconstruct from JSON
 			const restored = create_action_event_from_json(json, env);
 
-			expect(restored.data).toEqual(event.data);
+			assert.deepEqual(restored.data, event.data);
 		});
 
 		test('throws when spec not found for deserialization', () => {
@@ -773,50 +781,9 @@ describe('ActionEvent', () => {
 				notification: null,
 			};
 
-			expect(() => create_action_event_from_json(json as any, env)).toThrow(
-				"no spec found for method 'unknown_method'",
-			);
-		});
-	});
-
-	describe('environment helpers', () => {
-		test('app getter works for frontend environment', () => {
-			const env = new TestEnvironment([ping_action_spec]);
-			env.executor = 'frontend';
-
-			const event = create_action_event(env, ping_action_spec, undefined);
-
-			expect(event.app).toBe(env);
-		});
-
-		test('backend getter works for backend environment', () => {
-			const env = new TestEnvironment([ping_action_spec]);
-			env.executor = 'backend';
-
-			const event = create_action_event(env, ping_action_spec, undefined);
-
-			expect(event.backend).toBe(env);
-		});
-
-		test('app getter throws for backend environment', () => {
-			const env = new TestEnvironment([ping_action_spec]);
-			env.executor = 'backend';
-
-			const event = create_action_event(env, ping_action_spec, undefined);
-
-			expect(() => event.app).toThrow(
-				'`action_event.app` can only be accessed in frontend environments',
-			);
-		});
-
-		test('backend getter throws for frontend environment', () => {
-			const env = new TestEnvironment([ping_action_spec]);
-			env.executor = 'frontend';
-
-			const event = create_action_event(env, ping_action_spec, undefined);
-
-			expect(() => event.backend).toThrow(
-				'`action_event.backend` can only be accessed in backend environments',
+			assert.throws(
+				() => create_action_event_from_json(json as any, env),
+				/no spec found for method 'unknown_method'/,
 			);
 		});
 	});
@@ -835,14 +802,14 @@ describe('ActionEvent', () => {
 			event.parse();
 
 			// Should fail during parsing
-			expect(event.data.step).toBe('failed');
-			expect(event.data.error).toBeDefined();
-			expect(event.data.error?.code).toBe(-32602);
-			expect(event.data.error?.message).toContain('failed to parse input');
+			assert.strictEqual(event.data.step, 'failed');
+			assert.isDefined(event.data.error);
+			assert.strictEqual(event.data.error?.code, -32602);
+			assert.include(event.data.error?.message, 'failed to parse input');
 
 			// Should be a no-op when handling after parse failure
 			await event.handle_async();
-			expect(event.data.step).toBe('failed'); // Still failed, no change
+			assert.strictEqual(event.data.step, 'failed'); // Still failed, no change
 		});
 
 		test('remote_notification creates notification in send phase', async () => {
@@ -866,9 +833,9 @@ describe('ActionEvent', () => {
 			event.parse();
 			await event.handle_async();
 
-			expect(event.data.notification).toBeDefined();
-			expect(event.data.notification?.method).toBe('filer_change');
-			expect(event.data.notification?.params).toEqual(input);
+			assert.isDefined(event.data.notification);
+			assert.strictEqual(event.data.notification?.method, 'filer_change');
+			assert.deepEqual(event.data.notification?.params, input);
 		});
 
 		test('local_call completes in single phase', () => {
@@ -880,10 +847,10 @@ describe('ActionEvent', () => {
 			event.parse();
 			event.handle_sync();
 
-			expect(event.data.phase).toBe('execute');
-			expect(event.data.step).toBe('handled');
-			expect(event.data.output).toEqual({show: false});
-			expect(event.is_complete()).toBe(true);
+			assert.strictEqual(event.data.phase, 'execute');
+			assert.strictEqual(event.data.step, 'handled');
+			assert.deepEqual(event.data.output, {show: false});
+			assert.ok(event.is_complete());
 		});
 	});
 });

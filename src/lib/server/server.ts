@@ -1,175 +1,192 @@
-import {Hono} from 'hono';
-import {serve, type HttpBindings} from '@hono/node-server';
-import {createNodeWebSocket} from '@hono/node-ws';
-import {Logger} from '@fuzdev/fuz_util/log.js';
-import {ALLOWED_ORIGINS} from '$env/static/private';
-import {DEV} from 'esm-env';
+/**
+ * Deno server entry point for zzz.
+ *
+ * Single entry point for both dev mode (`gro dev` via `gro_plugin_deno_server`)
+ * and production (`zzz daemon start`). Uses the shared `create_zzz_app` factory
+ * for the Hono app with fuz_app auth stack, then binds with `Deno.serve`
+ * and handles daemon lifecycle.
+ *
+ * @module
+ */
 
-import pkg from '../../../package.json' with {type: 'json'};
-import {Backend} from './backend.js';
-import {server_info_write, server_info_remove, server_info_check_stale} from './server_info.js';
-import {backend_action_handlers} from './backend_action_handlers.js';
-import {register_http_actions} from './register_http_actions.js';
-import {register_websocket_actions} from './register_websocket_actions.js';
-import create_config from '../config.js';
-import {action_specs} from '../action_collections.js';
+import {upgradeWebSocket} from 'hono/deno';
+import {Logger} from '@fuzdev/fuz_util/log.js';
 import {
-	API_PATH_FOR_HTTP_RPC,
-	SERVER_HOST,
-	SERVER_PROXIED_PORT,
-	WEBSOCKET_PATH,
-	ZZZ_DIR,
-	ZZZ_SCOPED_DIRS,
-} from '../constants.js';
-import {parse_allowed_origins, verify_request_source} from './security.js';
-import {handle_filer_change} from './backend_actions_api.js';
-import {BackendProviderOllama} from './backend_provider_ollama.js';
-import {BackendProviderClaude} from './backend_provider_claude.js';
-import {BackendProviderChatgpt} from './backend_provider_chatgpt.js';
-import {BackendProviderGemini} from './backend_provider_gemini.js';
-import type {BackendProviderOptions} from './backend_provider.js';
+	write_daemon_info,
+	read_daemon_info,
+	is_daemon_running,
+	get_daemon_info_path,
+} from '@fuzdev/fuz_app/cli/daemon.js';
+import {create_deno_runtime} from '@fuzdev/fuz_app/runtime/deno.js';
+import {load_env_file} from '@fuzdev/fuz_app/env/dotenv.js';
+import {argon2_password_deps} from '@fuzdev/fuz_app/auth/password_argon2.js';
+import {verify_request_source} from '@fuzdev/fuz_app/http/origin.js';
+import {require_auth} from '@fuzdev/fuz_app/auth/request_context.js';
+
+import {VERSION} from '../zzz/build_info.ts';
+import {create_zzz_app} from './create_zzz_app.ts';
+import {load_server_env} from './server_env.ts';
+import {is_open_host} from './security.ts';
+import {register_websocket_actions} from './register_websocket_actions.ts';
+import {ENV_FILE} from './constants.ts';
+import {BackendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws_backend.js';
+import {
+	create_ws_auth_guard,
+	create_ws_logout_closer,
+} from '@fuzdev/fuz_app/actions/transports_ws_auth_guard.js';
 
 const log = new Logger('[server]');
 
-const create_server = async (): Promise<void> => {
-	// TODO better config
-	const config = create_config();
+/** Shared runtime for daemon lifecycle and server operations. */
+const daemon_runtime = create_deno_runtime([]);
 
-	// Security: allow only the configured server URL, extend with care
-	const allowed_origins = parse_allowed_origins(ALLOWED_ORIGINS);
-
-	// TODO better logging
-	log.info('creating server', {
-		config,
-		ZZZ_DIR,
-		ZZZ_SCOPED_DIRS,
-		allowed_origins,
-	});
-
-	// Check for stale server info from a previous crash
-	// TODO do anything differently?
-	const stale_info = await server_info_check_stale(ZZZ_DIR);
-	if (stale_info) {
-		log.warn('found running server', stale_info);
-	}
-
-	const app = new Hono();
-
-	app.use(async (c, next) => {
-		// TODO improve this logging
-		log.info(
-			`[request_begin] ${c.req.method} ${c.req.url} origin(${c.req.header('origin')}) referer(${c.req.header('referer')})`,
-		);
-		await next();
-		log.info(`[request_end] ${c.req.method} ${c.req.url}`);
-	});
-
-	// Security: first verify the origin of incoming requests
-	app.use(verify_request_source(allowed_origins));
-
-	const {injectWebSocket, upgradeWebSocket} = createNodeWebSocket({app});
-
-	const backend = new Backend({
-		zzz_dir: ZZZ_DIR, // is the default
-		config,
-		action_specs,
-		action_handlers: backend_action_handlers,
-		handle_filer_change,
-	});
-
-	// TODO manage these dynamically, init from config/state
-	const provider_options: BackendProviderOptions = {
-		on_completion_progress: backend.api.completion_progress,
-	};
-	backend.add_provider(new BackendProviderOllama(provider_options));
-	backend.add_provider(new BackendProviderClaude(provider_options));
-	backend.add_provider(new BackendProviderChatgpt(provider_options));
-	backend.add_provider(new BackendProviderGemini(provider_options));
-
-	// TODO options for everything, maybe a nullable array and an enable/disable flag
-
-	if (WEBSOCKET_PATH) {
-		register_websocket_actions({
-			path: WEBSOCKET_PATH,
-			app,
-			backend,
-			upgradeWebSocket,
-		});
-	}
-
-	if (API_PATH_FOR_HTTP_RPC) {
-		register_http_actions({
-			path: API_PATH_FOR_HTTP_RPC,
-			app,
-			backend,
-			// TODO allowed_origins ?
-		});
-	}
-
-	// In production with the Node adapter, mount the SvelteKit handler to serve the frontend.
-	if (!DEV) {
-		try {
-			// Dynamically import the handler from the SvelteKit build output.
-
-			// TODO we don't want the path statically analyzed and bundled so the path is constructed --
-			// instead this should probably be configured as an external in the Gro server plugin
-			const handler_path = '../../' + 'build/handler.js'; // eslint-disable-line no-useless-concat
-
-			const {handler} = await import(handler_path);
-
-			// Let SvelteKit handle everything else, including serving prerendered pages and static assets.
-			// Pass Node.js native request/response objects to the SvelteKit handler.
-
-			// TODO this casting is hacky, declaring the `hono` instance above like this causes
-			// the HttpBindings type to propagate to other interfaces, which I don't want right now
-			(app as unknown as Hono<{Bindings: HttpBindings}>).use('*', async (c) => {
-				await handler(c.env.incoming, c.env.outgoing);
-				// The handler writes directly to c.env.outgoing, so return a Response with
-				// the x-hono-already-sent header to tell Hono not to process the response.
-				return new Response(null, {headers: {'x-hono-already-sent': 'true'}});
-			});
-		} catch (error) {
-			log.error(
-				'failed to load SvelteKit handler -- was the Node adapter correctly used with `ZZZ_BUILD=node gro build`?',
-				error,
-			);
-			throw error;
+/**
+ * Start the zzz server using Deno runtime.
+ *
+ * Creates the full backend with auth, database, providers, WebSocket, and HTTP RPC
+ * endpoints via `create_zzz_app`, then serves with `Deno.serve`.
+ */
+export const start_server = async (): Promise<void> => {
+	// Load env file if present — values don't override existing env vars.
+	// When running under `gro dev`, Vite already loads .env files into the
+	// spawned Deno process. For `zzz daemon start`, this is the only loader.
+	const dotenv = await load_env_file(daemon_runtime, ENV_FILE);
+	if (dotenv) {
+		for (const [key, value] of Object.entries(dotenv)) {
+			if (Deno.env.get(key) === undefined) {
+				Deno.env.set(key, value);
+			}
 		}
 	}
 
-	const hono = serve(
-		{
-			hostname: SERVER_HOST,
-			port: SERVER_PROXIED_PORT,
-			fetch: app.fetch,
+	// Set runtime defaults for env vars that need dynamic values.
+	if (Deno.env.get('PUBLIC_ZZZ_DIR') === undefined) {
+		Deno.env.set('PUBLIC_ZZZ_DIR', `${Deno.env.get('HOME') ?? '.'}/.zzz`);
+	}
+
+	const config = load_server_env((key) => Deno.env.get(key), {
+		app_version: VERSION,
+	});
+
+	// Validate binding address — refuse to expose to network without authentication
+	// TODO allow 0.0.0.0 binding once daemon token auth is wired
+	if (is_open_host(config.host)) {
+		console.error(
+			`[server] FATAL: binding to '${config.host}' exposes zzz to your entire network.\n` +
+				`  Use --host localhost (default) or --host 127.0.0.1 instead.\n` +
+				`  Network binding will be supported once daemon token auth is wired.`,
+		);
+		Deno.exit(1);
+	}
+
+	// Check for stale daemon info from a previous crash
+	const stale = await read_daemon_info(daemon_runtime, 'zzz');
+	if (stale) {
+		if (await is_daemon_running(daemon_runtime, stale.pid)) {
+			console.warn('[server] found running server', stale);
+		} else {
+			console.warn(`[server] stale daemon.json (pid ${stale.pid} not running), replacing`);
+		}
+	}
+
+	const {app, backend, app_backend, close, allowed_origins} = await create_zzz_app({
+		config,
+		password: argon2_password_deps,
+		runtime: daemon_runtime,
+		get_connection_ip: (c) => {
+			// Deno provides connection info via c.env.remoteAddr
+			const addr = c.env?.remoteAddr;
+			return addr?.hostname;
 		},
-		async (info) => {
-			log.info(`listening on http://${info.address}:${info.port}`);
+	});
 
-			// Write server info after successfully binding
-			await server_info_write({
-				zzz_dir: ZZZ_DIR,
-				port: info.port,
-				zzz_version: pkg.version,
-			});
-		},
-	);
+	// Register WebSocket endpoint on the assembled app.
+	// WS dispatches directly to unified handlers (zzz_action_handlers),
+	// bypassing ActionPeer for request handling. ActionPeer is still used
+	// for backend-initiated notifications (streaming, file changes).
+	// The WS path is under /api/* so fuz_app's session + request_context
+	// middleware runs automatically. We add origin verification and require_auth
+	// to reject unauthenticated upgrades.
+	if (config.websocket_path) {
+		// Origin check for WebSocket connections (browsers always send Origin on WS upgrades)
+		app.use(config.websocket_path, verify_request_source(allowed_origins));
 
-	injectWebSocket(hono);
+		// Reject unauthenticated WebSocket upgrades — session middleware has
+		// already resolved the cookie by this point (path is under /api/*).
+		app.use(config.websocket_path, require_auth);
 
-	// Shutdown handlers to clean up server info
-	const shutdown = async (signal: string): Promise<void> => {
-		log.info(`received ${signal}, shutting down...`);
-		await server_info_remove(ZZZ_DIR);
+		const transport = new BackendWebsocketTransport();
+
+		register_websocket_actions({
+			path: config.websocket_path,
+			app,
+			backend,
+			upgradeWebSocket,
+			artificial_delay: config.artificial_delay,
+			transport,
+		});
+
+		// Close WebSockets when sessions/tokens are revoked via audit events.
+		// `create_ws_auth_guard` dispatches session_revoke → close_sockets_for_session,
+		// token_revoke → close_sockets_for_token, and session_revoke_all /
+		// token_revoke_all / password_change → close_sockets_for_account.
+		// `create_ws_logout_closer` covers user-initiated logout (which the
+		// guard intentionally ignores) by closing every socket on the account.
+		const original_on_audit_event = app_backend.deps.on_audit_event;
+		const ws_guard = create_ws_auth_guard(transport, log);
+		const ws_logout_closer = create_ws_logout_closer(transport, log);
+		app_backend.deps.on_audit_event = (event) => {
+			original_on_audit_event(event);
+			ws_guard(event);
+			ws_logout_closer(event);
+		};
+	}
+
+	// Write daemon info for CLI discovery
+	await write_daemon_info(daemon_runtime, 'zzz', {
+		version: 1,
+		pid: Deno.pid,
+		port: config.port,
+		started: new Date().toISOString(),
+		app_version: config.app_version,
+	});
+
+	console.log(`[server] Listening on http://${config.host}:${config.port} (Deno)`);
+	const server = Deno.serve({port: config.port, hostname: config.host}, app.fetch);
+
+	// Cleanup on shutdown
+	let shutting_down = false;
+	const shutdown = async (): Promise<void> => {
+		if (shutting_down) {
+			Deno.exit(1);
+		}
+		shutting_down = true;
+		console.log('[server] shutting down...');
+		const daemon_path = get_daemon_info_path(daemon_runtime, 'zzz');
+		if (daemon_path) {
+			try {
+				await daemon_runtime.remove(daemon_path);
+			} catch {
+				// already removed
+			}
+		}
 		await backend.destroy();
-		process.exit(0);
+		await close();
+		await server.shutdown();
+		Deno.exit(0);
 	};
 
-	process.on('SIGINT', () => void shutdown('SIGINT'));
-	process.on('SIGTERM', () => void shutdown('SIGTERM'));
+	Deno.addSignalListener('SIGINT', () => void shutdown());
+	Deno.addSignalListener('SIGTERM', () => void shutdown());
+
+	// Wait for server to close
+	await server.finished;
 };
 
-void create_server().catch((error) => {
-	log.error('error starting server:', error);
-	throw error;
-});
+// Auto-start when run directly
+if (import.meta.url === Deno.mainModule) {
+	start_server().catch((error) => {
+		console.error('[server] Failed to start:', error);
+		Deno.exit(1);
+	});
+}

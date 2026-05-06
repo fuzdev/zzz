@@ -6,7 +6,7 @@
 
 	let {
 		models = app.models.ordered_by_name,
-		selected_model = $bindable(),
+		selected_model,
 	}: {
 		selected_model: Model; // TODO get from context?
 		models?: Array<Model> | undefined;

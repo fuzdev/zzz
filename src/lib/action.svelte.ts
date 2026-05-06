@@ -1,16 +1,15 @@
 // @slop Claude Opus 4
 
 import {z} from 'zod';
+import {ActionKind, type ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
 
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {ActionMethod} from './action_metatypes.js';
-import {ActionKind} from './action_types.js';
 import {ActionSpecs} from './action_collections.js';
-import type {ActionSpecUnion} from './action_spec.js';
 import {CellJson} from './cell_types.js';
-import {ActionEventData} from './action_event_data.js';
-import type {ActionEvent} from './action_event.js';
-import {is_action_complete} from './action_event_helpers.js';
+import {ActionEventData} from '@fuzdev/fuz_app/actions/action_event_data.js';
+import type {ActionEvent} from '@fuzdev/fuz_app/actions/action_event.js';
+import {is_action_complete} from '@fuzdev/fuz_app/actions/action_event_helpers.js';
 
 // TODO this isnt in action_types.ts because of circular dependencies, idk what pattern is best yet
 export const ActionJson = CellJson.extend({
@@ -26,7 +25,7 @@ export interface ActionOptions extends CellOptions<typeof ActionJson> {} // esli
  * Represents a single action in the system, tracking its full lifecycle through action events.
  */
 export class Action extends Cell<typeof ActionJson> {
-	method: ActionMethod = $state()!;
+	method: ActionMethod = $state.raw()!;
 
 	// TODO maybe use a decoder to make this an `ActionEvent`
 	action_event_data: ActionEventData | undefined = $state.raw();
