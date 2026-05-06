@@ -310,7 +310,7 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 	/**
 	 * Store pings - both pending and completed.
 	 */
-	pings: Array<PingData> = $state.raw([]);
+	pings: Array<PingData> = $state([]);
 
 	/**
 	 * Most recent completed ping round trip time in milliseconds.

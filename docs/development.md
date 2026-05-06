@@ -28,7 +28,7 @@ This produces `target/release/libfuz_pty.so`, which zzz loads at runtime via
 
 For bundled/compiled binaries, place `libfuz_pty.so` next to the `zzz`
 executable. The library lookup checks exe-relative path first, then falls back
-to the dev path (`~/dev/private_fuz/target/release/`).
+to the dev path (~/dev/private_fuz/target/release/).
 
 ## Commands
 
