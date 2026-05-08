@@ -350,17 +350,22 @@
 						"additionalProperties": false
 					},
 					"actor": {
-						"type": "object",
-						"properties": {
-							"id": {
-								"type": "string",
-								"format": "uuid",
-								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+						"anyOf": [
+							{
+								"type": "object",
+								"properties": {
+									"id": {
+										"type": "string",
+										"format": "uuid",
+										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+									},
+									"name": {"type": "string"}
+								},
+								"required": ["id", "name"],
+								"additionalProperties": false
 							},
-							"name": {"type": "string"}
-						},
-						"required": ["id", "name"],
-						"additionalProperties": false
+							{"type": "null"}
+						]
 					},
 					"permits": {
 						"type": "array",
@@ -1557,7 +1562,18 @@
 				{
 					"name": "admin_account_list",
 					"auth": {"type": "role", "role": "admin"},
-					"input_schema": null,
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							}
+						},
+						"additionalProperties": false
+					},
 					"output_schema": {
 						"type": "object",
 						"properties": {
@@ -1740,7 +1756,18 @@
 				{
 					"name": "admin_session_list",
 					"auth": {"type": "role", "role": "admin"},
-					"input_schema": null,
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							}
+						},
+						"additionalProperties": false
+					},
 					"output_schema": {
 						"type": "object",
 						"properties": {
@@ -1790,6 +1817,12 @@
 								"format": "uuid",
 								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
 								"description": "Account whose sessions to revoke."
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
 						"required": ["account_id"],
@@ -1816,6 +1849,12 @@
 								"format": "uuid",
 								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
 								"description": "Account whose API tokens to revoke."
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
 						"required": ["account_id"],
@@ -1876,6 +1915,12 @@
 									{"type": "integer", "minimum": 0, "maximum": 9007199254740991},
 									{"type": "null"}
 								]
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
 						"additionalProperties": false
@@ -1930,6 +1975,16 @@
 												{"type": "null"}
 											]
 										},
+										"target_actor_id": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											]
+										},
 										"ip": {"anyOf": [{"type": "string"}, {"type": "null"}]},
 										"created_at": {"type": "string"},
 										"metadata": {
@@ -1953,6 +2008,7 @@
 										"actor_id",
 										"account_id",
 										"target_account_id",
+										"target_actor_id",
 										"ip",
 										"created_at",
 										"metadata",
@@ -1986,6 +2042,12 @@
 									{"type": "integer", "minimum": 0, "maximum": 9007199254740991},
 									{"type": "null"}
 								]
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
 						"additionalProperties": false
@@ -2040,6 +2102,16 @@
 												{"type": "null"}
 											]
 										},
+										"target_actor_id": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											]
+										},
 										"ip": {"anyOf": [{"type": "string"}, {"type": "null"}]},
 										"created_at": {"type": "string"},
 										"metadata": {
@@ -2063,6 +2135,7 @@
 										"actor_id",
 										"account_id",
 										"target_account_id",
+										"target_actor_id",
 										"ip",
 										"created_at",
 										"metadata",
@@ -2108,6 +2181,12 @@
 									},
 									{"type": "null"}
 								]
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
 						"additionalProperties": false
@@ -2190,7 +2269,18 @@
 				{
 					"name": "invite_list",
 					"auth": {"type": "role", "role": "admin"},
-					"input_schema": null,
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							}
+						},
+						"additionalProperties": false
+					},
 					"output_schema": {
 						"type": "object",
 						"properties": {
@@ -2283,6 +2373,12 @@
 								"format": "uuid",
 								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
 								"description": "Invite to delete. Must be unclaimed."
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
 						"required": ["invite_id"],
@@ -2301,7 +2397,18 @@
 				{
 					"name": "app_settings_get",
 					"auth": {"type": "role", "role": "admin"},
-					"input_schema": null,
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							}
+						},
+						"additionalProperties": false
+					},
 					"output_schema": {
 						"type": "object",
 						"properties": {
@@ -2342,6 +2449,12 @@
 							"open_signup": {
 								"type": "boolean",
 								"description": "New value for the open signup toggle."
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
 						"required": ["open_signup"],
@@ -2391,6 +2504,17 @@
 								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
 								"description": "Account id of the recipient."
 							},
+							"to_actor_id": {
+								"description": "Optional actor-grain target on the recipient account. When set, only this actor may accept and the audit envelope carries it on offer-shape events. Must belong to `to_account_id`.",
+								"anyOf": [
+									{
+										"type": "string",
+										"format": "uuid",
+										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+									},
+									{"type": "null"}
+								]
+							},
 							"role": {
 								"type": "string",
 								"pattern": "^[a-z][a-z_]*[a-z]$|^[a-z]$",
@@ -2410,6 +2534,12 @@
 							"message": {
 								"description": "Optional free-form note from the grantor.",
 								"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}]
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
 						"required": ["to_account_id", "role"],
@@ -2438,6 +2568,17 @@
 										"format": "uuid",
 										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
 										"description": "Account the offer is directed to."
+									},
+									"to_actor_id": {
+										"anyOf": [
+											{
+												"type": "string",
+												"format": "uuid",
+												"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+											},
+											{"type": "null"}
+										],
+										"description": "Optional actor-grain target on the recipient account. When set, only this actor may accept; when null any actor on `to_account_id` may accept."
 									},
 									"role": {
 										"type": "string",
@@ -2503,6 +2644,7 @@
 									"id",
 									"from_actor_id",
 									"to_account_id",
+									"to_actor_id",
 									"role",
 									"scope_id",
 									"message",
@@ -2537,6 +2679,12 @@
 								"format": "uuid",
 								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
 								"description": "The offer to accept."
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
 						"required": ["offer_id"],
@@ -2570,6 +2718,17 @@
 										"format": "uuid",
 										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
 										"description": "Account the offer is directed to."
+									},
+									"to_actor_id": {
+										"anyOf": [
+											{
+												"type": "string",
+												"format": "uuid",
+												"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+											},
+											{"type": "null"}
+										],
+										"description": "Optional actor-grain target on the recipient account. When set, only this actor may accept; when null any actor on `to_account_id` may accept."
 									},
 									"role": {
 										"type": "string",
@@ -2635,6 +2794,7 @@
 									"id",
 									"from_actor_id",
 									"to_account_id",
+									"to_actor_id",
 									"role",
 									"scope_id",
 									"message",
@@ -2681,6 +2841,12 @@
 							"reason": {
 								"description": "Optional free-form reason given on decline.",
 								"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}]
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
 						"required": ["offer_id"],
@@ -2707,6 +2873,12 @@
 								"format": "uuid",
 								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
 								"description": "The offer to retract."
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
 						"required": ["offer_id"],
@@ -2738,6 +2910,12 @@
 									},
 									{"type": "null"}
 								]
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
 						"additionalProperties": false
@@ -2767,6 +2945,17 @@
 											"format": "uuid",
 											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
 											"description": "Account the offer is directed to."
+										},
+										"to_actor_id": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											],
+											"description": "Optional actor-grain target on the recipient account. When set, only this actor may accept; when null any actor on `to_account_id` may accept."
 										},
 										"role": {
 											"type": "string",
@@ -2832,6 +3021,7 @@
 										"id",
 										"from_actor_id",
 										"to_account_id",
+										"to_actor_id",
 										"role",
 										"scope_id",
 										"message",
@@ -2883,6 +3073,12 @@
 									{"type": "integer", "minimum": 0, "maximum": 9007199254740991},
 									{"type": "null"}
 								]
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
 						"additionalProperties": false
@@ -2912,6 +3108,17 @@
 											"format": "uuid",
 											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
 											"description": "Account the offer is directed to."
+										},
+										"to_actor_id": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uuid",
+													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+												},
+												{"type": "null"}
+											],
+											"description": "Optional actor-grain target on the recipient account. When set, only this actor may accept; when null any actor on `to_account_id` may accept."
 										},
 										"role": {
 											"type": "string",
@@ -2977,6 +3184,7 @@
 										"id",
 										"from_actor_id",
 										"to_account_id",
+										"to_actor_id",
 										"role",
 										"scope_id",
 										"message",
@@ -3022,6 +3230,12 @@
 							"reason": {
 								"description": "Optional free-form reason; stamped on `permit.revoked_reason` and surfaced on the revokee WS notification.",
 								"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}]
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
 						"required": ["actor_id", "permit_id"],

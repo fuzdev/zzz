@@ -443,7 +443,7 @@
 							{
 								"name": "heartbeat",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['heartbeat'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['heartbeat']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput?: ActionInputs['heartbeat'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['heartbeat']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "cancel",
@@ -488,7 +488,7 @@
 							{
 								"name": "completion_progress",
 								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['completion_progress'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['completion_progress']}, {error: JsonrpcErrorObject}>>"
+								"type_signature": "(\n\t\tinput?: ActionInputs['completion_progress'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['completion_progress']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "ollama_progress",

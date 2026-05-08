@@ -239,7 +239,7 @@ export type BroadcastActionMethod = z.infer<typeof BroadcastActionMethod>;
  */
 export interface FrontendActionsApi {
 	heartbeat: (
-		input: ActionInputs['heartbeat'],
+		input?: ActionInputs['heartbeat'],
 		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['heartbeat']}, {error: JsonrpcErrorObject}>>;
 	cancel: (
@@ -275,7 +275,7 @@ export interface FrontendActionsApi {
 		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['completion_create']}, {error: JsonrpcErrorObject}>>;
 	completion_progress: (
-		input: ActionInputs['completion_progress'],
+		input?: ActionInputs['completion_progress'],
 		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['completion_progress']}, {error: JsonrpcErrorObject}>>;
 	ollama_progress: (
