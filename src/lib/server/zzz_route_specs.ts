@@ -71,7 +71,7 @@ export const create_zzz_app_route_specs = (
  * Build the `/api/rpc` endpoint spec(s) for `create_app_server`.
  *
  * Pass to `rpc_endpoints` as a factory — closes over `ctx.deps` +
- * `ctx.app_settings` for the standard admin + permit-offer + account
+ * `ctx.app_settings` for the standard admin + role-grant-offer + account
  * action set. `create_app_server` auto-mounts each entry via
  * `create_rpc_endpoint`.
  */
