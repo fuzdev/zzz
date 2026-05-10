@@ -191,7 +191,10 @@ export const create_zzz_action_handlers = (backend: Backend): BackendActionHandl
 				.list()) as unknown as OllamaListResponse;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.internal_error('failed to list models');
+			throw jsonrpc_errors.ai_provider_error(
+				'ollama',
+				error instanceof Error ? error.message : 'unknown error',
+			);
 		}
 	},
 
@@ -203,7 +206,10 @@ export const create_zzz_action_handlers = (backend: Backend): BackendActionHandl
 				.ps()) as unknown as OllamaPsResponse;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.internal_error('failed to get running models');
+			throw jsonrpc_errors.ai_provider_error(
+				'ollama',
+				error instanceof Error ? error.message : 'unknown error',
+			);
 		}
 	},
 
@@ -215,7 +221,10 @@ export const create_zzz_action_handlers = (backend: Backend): BackendActionHandl
 				.show(input)) as unknown as OllamaShowResponse;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.internal_error('failed to show model');
+			throw jsonrpc_errors.ai_provider_error(
+				'ollama',
+				error instanceof Error ? error.message : 'unknown error',
+			);
 		}
 	},
 
@@ -241,7 +250,10 @@ export const create_zzz_action_handlers = (backend: Backend): BackendActionHandl
 			return null;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.internal_error('failed to pull model');
+			throw jsonrpc_errors.ai_provider_error(
+				'ollama',
+				error instanceof Error ? error.message : 'unknown error',
+			);
 		}
 	},
 
@@ -251,7 +263,10 @@ export const create_zzz_action_handlers = (backend: Backend): BackendActionHandl
 			return null;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.internal_error('failed to delete model');
+			throw jsonrpc_errors.ai_provider_error(
+				'ollama',
+				error instanceof Error ? error.message : 'unknown error',
+			);
 		}
 	},
 
@@ -261,7 +276,10 @@ export const create_zzz_action_handlers = (backend: Backend): BackendActionHandl
 			return null;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.internal_error('failed to copy model');
+			throw jsonrpc_errors.ai_provider_error(
+				'ollama',
+				error instanceof Error ? error.message : 'unknown error',
+			);
 		}
 	},
 
@@ -287,7 +305,10 @@ export const create_zzz_action_handlers = (backend: Backend): BackendActionHandl
 			return null;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.internal_error('failed to create model');
+			throw jsonrpc_errors.ai_provider_error(
+				'ollama',
+				error instanceof Error ? error.message : 'unknown error',
+			);
 		}
 	},
 
@@ -300,7 +321,10 @@ export const create_zzz_action_handlers = (backend: Backend): BackendActionHandl
 			return null;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.internal_error('failed to unload model');
+			throw jsonrpc_errors.ai_provider_error(
+				'ollama',
+				error instanceof Error ? error.message : 'unknown error',
+			);
 		}
 	},
 
@@ -333,12 +357,6 @@ export const create_zzz_action_handlers = (backend: Backend): BackendActionHandl
 
 		try {
 			await update_env_variable(env_var_name, api_key, {env_file_path: ENV_FILE});
-			// Update runtime env (handles both Deno and Node)
-			if (typeof globalThis.Deno !== 'undefined') {
-				globalThis.Deno.env.set(env_var_name, api_key);
-			} else if (typeof process !== 'undefined') {
-				process.env[env_var_name] = api_key;
-			}
 
 			const provider = backend.lookup_provider(provider_name);
 			provider.set_api_key(api_key);
