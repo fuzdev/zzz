@@ -70,6 +70,9 @@ pub struct App {
     pub provider_manager: ProviderManager,
     /// Default completion options.
     pub completion_options: CompletionOptions,
+    /// Register `_test_*` actions on live dispatchers. Set by integration
+    /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave false.
+    pub enable_test_actions: bool,
 }
 
 impl App {
@@ -85,6 +88,7 @@ impl App {
         scoped_dirs: Vec<String>,
         daemon_token_state: Option<SharedDaemonTokenState>,
         provider_manager: ProviderManager,
+        enable_test_actions: bool,
     ) -> Self {
         Self {
             workspaces: RwLock::new(HashMap::new()),
@@ -103,6 +107,7 @@ impl App {
             daemon_token_state,
             provider_manager,
             completion_options: CompletionOptions::default(),
+            enable_test_actions,
         }
     }
 
@@ -353,7 +358,9 @@ pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Val
         "terminal_data_send" => handle_terminal_data_send(params, ctx).await,
         "terminal_resize" => handle_terminal_resize(params, ctx).await,
         "terminal_close" => handle_terminal_close(params, ctx).await,
-        "_test_emit_notifications" => handle_test_emit_notifications(params, ctx),
+        "_test_emit_notifications" if ctx.app.enable_test_actions => {
+            handle_test_emit_notifications(params, ctx)
+        }
         other => Err(rpc::method_not_found(other)),
     }
 }

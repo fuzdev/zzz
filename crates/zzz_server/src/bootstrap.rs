@@ -43,7 +43,7 @@ fn error_json(status: StatusCode, error: &str) -> Response {
 /// Mirrors `fuz_app`'s `bootstrap_routes.ts` / `bootstrap_account.ts`:
 /// 1. Read and timing-safe-compare bootstrap token
 /// 2. Hash password with Argon2
-/// 3. In a transaction: acquire bootstrap lock, create account + actor + permits
+/// 3. In a transaction: acquire bootstrap lock, create account + actor + role grants
 /// 4. Create session + set cookie
 /// 5. Delete token file
 pub async fn bootstrap_handler(
@@ -92,7 +92,7 @@ async fn bootstrap_inner(app: &App, input: BootstrapInput) -> Result<Response, R
         error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
     })?;
 
-    // 4. Transaction: lock + create account + actor + permits + session
+    // 4. Transaction: lock + create account + actor + role grants + session
     let client = app.db_pool.get().await.map_err(|e| {
         tracing::error!(error = %e, "db pool error during bootstrap");
         error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
@@ -126,7 +126,7 @@ async fn bootstrap_inner(app: &App, input: BootstrapInput) -> Result<Response, R
         return Err(error_json(StatusCode::FORBIDDEN, "already_bootstrapped"));
     }
 
-    // Create account + actor + permits + session (all in one helper)
+    // Create account + actor + role grants + session (all in one helper)
     let (account, session_token) =
         match do_bootstrap_creates(&client, &input, &password_hash).await {
             Ok(result) => result,
@@ -179,7 +179,7 @@ async fn bootstrap_inner(app: &App, input: BootstrapInput) -> Result<Response, R
         .into_response())
 }
 
-/// Execute account/actor/permits/session creation within an open transaction.
+/// Execute account/actor/role-grant/session creation within an open transaction.
 async fn do_bootstrap_creates(
     client: &deadpool_postgres::Object,
     input: &BootstrapInput,
@@ -187,8 +187,8 @@ async fn do_bootstrap_creates(
 ) -> Result<(db::AccountRow, String), tokio_postgres::Error> {
     let account = db::query_create_account(client, &input.username, password_hash).await?;
     let actor = db::query_create_actor(client, &account.id, &input.username).await?;
-    db::query_grant_permit(client, &actor.id, "keeper").await?;
-    db::query_grant_permit(client, &actor.id, "admin").await?;
+    db::query_create_role_grant(client, &actor.id, "keeper").await?;
+    db::query_create_role_grant(client, &actor.id, "admin").await?;
 
     let session_token = generate_session_token();
     let token_hash = auth::hash_session_token(&session_token);

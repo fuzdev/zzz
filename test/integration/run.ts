@@ -199,7 +199,7 @@ const cleanup_auth = async (config: BackendConfig): Promise<void> => {
 /**
  * Create a non-keeper authenticated user directly in the test database.
  *
- * Inserts account + actor (no keeper permit) + session via psql,
+ * Inserts account + actor (no keeper role grant) + session via psql,
  * then signs a session cookie using HMAC-SHA256.
  */
 const setup_non_keeper_user = async (config: BackendConfig): Promise<string | undefined> => {
@@ -214,7 +214,7 @@ const setup_non_keeper_user = async (config: BackendConfig): Promise<string | un
 	// expires_at: 30 days from now (seconds since epoch)
 	const expires_at = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
 
-	// Insert account, actor (no keeper permit), and session via psql
+	// Insert account, actor (no keeper role grant), and session via psql
 	const result = await run_psql(`
 		INSERT INTO account (id, username, password_hash)
 		VALUES ('00000000-0000-0000-0000-000000000002', 'testuser', '$argon2id$v=19$m=19456,t=2,p=1$dummy$dummyhash000000000000000000000000000')
@@ -249,7 +249,7 @@ const setup_non_keeper_user = async (config: BackendConfig): Promise<string | un
  */
 const clean_database = async (): Promise<void> => {
 	const result = await run_psql(
-		`TRUNCATE api_token, auth_session, permit, actor, account, bootstrap_lock, app_settings CASCADE;
+		`TRUNCATE api_token, auth_session, role_grant, actor, account, bootstrap_lock, app_settings CASCADE;
 		 INSERT INTO bootstrap_lock (id, bootstrapped) VALUES (1, false) ON CONFLICT (id) DO UPDATE SET bootstrapped = false;
 		 INSERT INTO app_settings (id) VALUES (1) ON CONFLICT DO NOTHING;`,
 	);

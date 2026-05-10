@@ -77,6 +77,9 @@ export const backends = {
 			ALLOWED_ORIGINS: 'http://localhost:*',
 			PUBLIC_ZZZ_SCOPED_DIRS: INTEGRATION_SCOPED_DIR,
 			PUBLIC_ZZZ_DIR: INTEGRATION_ZZZ_DIR,
+			// Opt the `_test_*` specs into the live dispatchers so
+			// `ctx_notify_socket_scoped` and friends can drive them.
+			ZZZ_ENABLE_TEST_ACTIONS: '1',
 		},
 		auth: {
 			bootstrap_path: '/api/account/bootstrap',
@@ -108,6 +111,9 @@ export const backends = {
 			ALLOWED_ORIGINS: 'http://localhost:*',
 			PUBLIC_ZZZ_SCOPED_DIRS: INTEGRATION_SCOPED_DIR,
 			PUBLIC_ZZZ_DIR: INTEGRATION_ZZZ_DIR,
+			// Opt the `_test_*` specs into the live dispatchers so
+			// `ctx_notify_socket_scoped` and friends can drive them.
+			ZZZ_ENABLE_TEST_ACTIONS: '1',
 		},
 		auth: {
 			bootstrap_path: '/api/account/bootstrap',

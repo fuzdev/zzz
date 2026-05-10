@@ -26,11 +26,11 @@ import {
 	type JsonrpcNotificationFrame,
 } from '@fuzdev/fuz_app/testing/ws_round_trip.js';
 
+import {provider_update_api_key_action_spec} from '$lib/action_specs.js';
 import {
 	_test_emit_notifications_action_spec,
 	_test_notification_action_spec,
-	provider_update_api_key_action_spec,
-} from '$lib/action_specs.js';
+} from '$lib/test_action_specs.js';
 
 describe('zzz WebSocket — dispatch', () => {
 	test('ctx.notify streams notifications to the originating socket only', async () => {

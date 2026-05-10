@@ -4,7 +4,7 @@
 
 `@fuzdev/zzz` — local-first AI forge: chat + files + prompts + terminals in one app.
 SvelteKit frontend, Hono/Deno backend, Svelte 5 runes, Zod schemas.
-v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PGlite DB. 31 cell classes, 32 action specs, 4 AI providers.
+v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PGlite DB. 31 cell classes, 30 action specs, 4 AI providers.
 
 For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
@@ -188,7 +188,9 @@ a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 
 ## Action Specs
 
-32 specs in `src/lib/action_specs.ts`:
+30 specs in `src/lib/action_specs.ts` (test-only `_test_emit_notifications`
++ `_test_notification` live in `src/lib/test_action_specs.ts` and only
+register on the live dispatchers when `ZZZ_ENABLE_TEST_ACTIONS=1`):
 
 | Method                     | Kind                  | Initiator  | Purpose                                                 |
 | -------------------------- | --------------------- | ---------- | ------------------------------------------------------- |
@@ -222,8 +224,6 @@ a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 | `workspace_close`          | `request_response`    | `frontend` | Close workspace directory                               |
 | `workspace_list`           | `request_response`    | `frontend` | List open workspaces                                    |
 | `workspace_changed`        | `remote_notification` | `backend`  | Workspace open/close notification                       |
-| `_test_emit_notifications` | `request_response`    | `frontend` | Test-only — emit N stream notifications                 |
-| `_test_notification`       | `remote_notification` | `backend`  | Test-only — stream tick from `_test_emit_notifications` |
 
 ## Development Workflow
 
@@ -499,6 +499,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 | `PUBLIC_ZZZ_DIR`                           | Zzz app directory (default `.zzz`) |
 | `PUBLIC_ZZZ_SCOPED_DIRS`                   | Comma-separated filesystem paths   |
 | `PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY` | Testing delay (ms)                 |
+| `ZZZ_ENABLE_TEST_ACTIONS`                  | Register `_test_*` actions on live dispatchers (integration tests only — must stay unset in prod) |
 | `SECRET_ANTHROPIC_API_KEY`                 | Claude API key                     |
 | `SECRET_OPENAI_API_KEY`                    | OpenAI API key                     |
 | `SECRET_GOOGLE_API_KEY`                    | Google Gemini API key              |

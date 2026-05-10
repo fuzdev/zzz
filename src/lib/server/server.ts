@@ -89,16 +89,17 @@ export const start_server = async (): Promise<void> => {
 		}
 	}
 
-	const {app, backend, app_backend, close, allowed_origins} = await create_zzz_app({
-		config,
-		password: argon2_password_deps,
-		runtime: daemon_runtime,
-		get_connection_ip: (c) => {
-			// Deno provides connection info via c.env.remoteAddr
-			const addr = c.env?.remoteAddr;
-			return addr?.hostname;
-		},
-	});
+	const {app, backend, app_backend, close, allowed_origins, extra_ws_actions} =
+		await create_zzz_app({
+			config,
+			password: argon2_password_deps,
+			runtime: daemon_runtime,
+			get_connection_ip: (c) => {
+				// Deno provides connection info via c.env.remoteAddr
+				const addr = c.env?.remoteAddr;
+				return addr?.hostname;
+			},
+		});
 
 	// Register WebSocket endpoint on the assembled app.
 	// WS dispatches directly to unified handlers (zzz_action_handlers),
@@ -125,6 +126,7 @@ export const start_server = async (): Promise<void> => {
 			upgradeWebSocket,
 			artificial_delay: config.artificial_delay,
 			transport,
+			extra_actions: extra_ws_actions,
 		});
 
 		// Close WebSockets when sessions/tokens are revoked via audit events.

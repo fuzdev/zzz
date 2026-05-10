@@ -33,7 +33,7 @@ The server provides:
 | `server_env.ts`                 | Env schema (extends `BaseServerEnv`) + loader                                                                |
 | `server.ts`                     | Deno entry — calls factory, binds `Deno.serve`, daemon lifecycle                                             |
 | `zzz_route_specs.ts`            | Route spec factory (auth, admin, RPC endpoint)                                                               |
-| `zzz_action_handlers.ts`        | Handler factory `create_zzz_action_handlers(backend)` — single source of truth for all 24 actions            |
+| `zzz_action_handlers.ts`        | Handler factory `create_zzz_action_handlers(backend)` — single source of truth for all 23 actions            |
 | `zzz_rpc_actions.ts`            | Thin adapter pairing factory-bound handlers with specs for fuz_app's `RpcAction` format                      |
 | `routes/account.ts`             | Session config (`zzz_session_config`)                                                                        |
 | `db/zzz_schema.ts`              | Database schema init (auth migrations, zzz-specific DDL)                                                     |
@@ -52,7 +52,7 @@ The server provides:
 
 ### Handler Dispatch
 
-All 24 request_response handlers are built by
+All 23 request_response handlers are built by
 `create_zzz_action_handlers(backend)` in `zzz_action_handlers.ts`. The
 factory closes over the zzz `Backend` once at server boot; handlers
 themselves receive fuz_app's unified `ActionContext` (auth, db,
@@ -232,14 +232,15 @@ JSON-RPC response via WebSocket
 
 ### zzz-specific
 
-| Variable                                   | Purpose                            |
-| ------------------------------------------ | ---------------------------------- |
-| `PUBLIC_ZZZ_DIR`                           | Zzz app directory (default `.zzz`) |
-| `PUBLIC_ZZZ_SCOPED_DIRS`                   | Comma-separated filesystem paths   |
-| `PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY` | Testing delay (ms)                 |
-| `SECRET_ANTHROPIC_API_KEY`                 | Claude API key                     |
-| `SECRET_OPENAI_API_KEY`                    | OpenAI API key                     |
-| `SECRET_GOOGLE_API_KEY`                    | Google Gemini API key              |
+| Variable                                   | Purpose                                                                 |
+| ------------------------------------------ | ----------------------------------------------------------------------- |
+| `PUBLIC_ZZZ_DIR`                           | Zzz app directory (default `.zzz`)                                      |
+| `PUBLIC_ZZZ_SCOPED_DIRS`                   | Comma-separated filesystem paths                                        |
+| `PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY` | Testing delay (ms)                                                      |
+| `ZZZ_ENABLE_TEST_ACTIONS`                  | Register `_test_*` actions on live dispatchers (integration tests only) |
+| `SECRET_ANTHROPIC_API_KEY`                 | Claude API key                                                          |
+| `SECRET_OPENAI_API_KEY`                    | OpenAI API key                                                          |
+| `SECRET_GOOGLE_API_KEY`                    | Google Gemini API key                                                   |
 
 ## Security
 

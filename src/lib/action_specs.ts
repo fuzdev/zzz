@@ -323,24 +323,6 @@ export const WorkspaceChangedInput = z.strictObject({
 });
 export type WorkspaceChangedInput = z.infer<typeof WorkspaceChangedInput>;
 
-/** Input for `_test_emit_notifications`. */
-export const TestEmitNotificationsInput = z.strictObject({
-	count: z.number().int().min(0).max(100),
-});
-export type TestEmitNotificationsInput = z.infer<typeof TestEmitNotificationsInput>;
-
-/** Output for `_test_emit_notifications`. */
-export const TestEmitNotificationsOutput = z.strictObject({
-	count: z.number().int(),
-});
-export type TestEmitNotificationsOutput = z.infer<typeof TestEmitNotificationsOutput>;
-
-/** Input for `_test_notification`. */
-export const TestNotificationInput = z.strictObject({
-	index: z.number().int().min(0),
-});
-export type TestNotificationInput = z.infer<typeof TestNotificationInput>;
-
 // -- Action specs -----------------------------------------------------------
 
 export const ping_action_spec = {
@@ -713,38 +695,6 @@ export const workspace_changed_action_spec = {
 	description: 'Notifies frontends when a workspace is opened or closed.',
 } satisfies RemoteNotificationActionSpec;
 
-// Test-only: exists so the integration suite can verify `ctx.notify` routing
-// (socket-scoped delivery) without depending on a real AI/Ollama provider.
-// The backend handler emits `count` `_test_notification` notifications via
-// `ctx.notify` and then returns `{count}`. Authenticated so unauth callers
-// can't spam other sockets.
-export const _test_emit_notifications_action_spec = {
-	method: '_test_emit_notifications',
-	kind: 'request_response',
-	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
-	side_effects: false,
-	input: TestEmitNotificationsInput,
-	output: TestEmitNotificationsOutput,
-	async: true,
-	streams: '_test_notification',
-	description:
-		'Test-only. Emits `count` `_test_notification` notifications via ctx.notify, then returns {count}.',
-} satisfies RequestResponseActionSpec;
-
-export const _test_notification_action_spec = {
-	method: '_test_notification',
-	kind: 'remote_notification',
-	initiator: 'backend',
-	auth: null,
-	side_effects: true,
-	input: TestNotificationInput,
-	output: z.void(),
-	async: true,
-	description:
-		'Test-only. Progress notification emitted by _test_emit_notifications; carries the sequence index.',
-} satisfies RemoteNotificationActionSpec;
-
 /**
  * Canonical action spec list — fuz_app's protocol actions (`heartbeat`,
  * `cancel`) plus zzz-owned specs. Single source of truth for codegen and
@@ -790,6 +740,4 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	workspace_close_action_spec,
 	workspace_list_action_spec,
 	workspace_changed_action_spec,
-	_test_emit_notifications_action_spec,
-	_test_notification_action_spec,
 ];

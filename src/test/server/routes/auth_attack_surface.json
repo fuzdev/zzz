@@ -504,7 +504,7 @@
 				"request_context",
 				"bearer_auth"
 			],
-			"description": "JSON-RPC 2.0 endpoint — 49 methods",
+			"description": "JSON-RPC 2.0 endpoint — 48 methods",
 			"is_mutation": true,
 			"transaction": false,
 			"rate_limit_key": null,
@@ -547,7 +547,7 @@
 				"request_context",
 				"bearer_auth"
 			],
-			"description": "JSON-RPC 2.0 endpoint (cacheable reads) — 49 methods",
+			"description": "JSON-RPC 2.0 endpoint (cacheable reads) — 48 methods",
 			"is_mutation": false,
 			"transaction": false,
 			"rate_limit_key": null,
@@ -1552,31 +1552,6 @@
 					},
 					"side_effects": false,
 					"description": "List all open workspaces.",
-					"rate_limit_key": null
-				},
-				{
-					"name": "_test_emit_notifications",
-					"auth": {"account": "required", "actor": "none"},
-					"input_schema": {
-						"type": "object",
-						"properties": {"count": {"type": "integer", "minimum": 0, "maximum": 100}},
-						"required": ["count"],
-						"additionalProperties": false
-					},
-					"output_schema": {
-						"type": "object",
-						"properties": {
-							"count": {
-								"type": "integer",
-								"minimum": -9007199254740991,
-								"maximum": 9007199254740991
-							}
-						},
-						"required": ["count"],
-						"additionalProperties": false
-					},
-					"side_effects": false,
-					"description": "Test-only. Emits `count` `_test_notification` notifications via ctx.notify, then returns {count}.",
 					"rate_limit_key": null
 				},
 				{
@@ -3629,6 +3604,13 @@
 		{
 			"name": "PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY",
 			"description": "Artificial response delay in ms (testing)",
+			"sensitivity": null,
+			"has_default": true,
+			"optional": true
+		},
+		{
+			"name": "ZZZ_ENABLE_TEST_ACTIONS",
+			"description": "Register test-only `_test_*` actions on live dispatchers. Set to `1` only by integration tests; production must leave unset.",
 			"sensitivity": null,
 			"has_default": true,
 			"optional": true

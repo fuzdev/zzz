@@ -27,6 +27,10 @@ export const ZzzServerEnv = BaseServerEnv.extend({
 		.number()
 		.default(0)
 		.meta({description: 'Artificial response delay in ms (testing)'}),
+	ZZZ_ENABLE_TEST_ACTIONS: z.stringbool().default(false).meta({
+		description:
+			'Register test-only `_test_*` actions on live dispatchers. Set to `1` only by integration tests; production must leave unset.',
+	}),
 	SECRET_ANTHROPIC_API_KEY: z
 		.string()
 		.optional()
@@ -67,6 +71,8 @@ export interface ZzzServerConfig {
 	artificial_delay: number;
 	/** Package version string. */
 	app_version: string;
+	/** Register test-only `_test_*` actions on live dispatchers. Must stay false in production. */
+	enable_test_actions: boolean;
 	/** Anthropic API key for Claude provider. */
 	secret_anthropic_api_key: string | undefined;
 	/** OpenAI API key for ChatGPT provider. */
@@ -122,6 +128,7 @@ export const load_server_env = (
 		websocket_path: overrides?.websocket_path ?? '/api/ws',
 		api_path: overrides?.api_path ?? '/api/rpc',
 		artificial_delay: overrides?.artificial_delay ?? raw.PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY,
+		enable_test_actions: overrides?.enable_test_actions ?? raw.ZZZ_ENABLE_TEST_ACTIONS,
 		app_version: overrides?.app_version ?? '0.0.1',
 		secret_anthropic_api_key: overrides?.secret_anthropic_api_key ?? raw.SECRET_ANTHROPIC_API_KEY,
 		secret_openai_api_key: overrides?.secret_openai_api_key ?? raw.SECRET_OPENAI_API_KEY,

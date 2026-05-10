@@ -55,7 +55,7 @@ export const completion_create_action_spec = {
 | `method`       | `string`             | Action name (e.g. `'completion_create'`)                          |
 | `kind`         | `ActionKind`         | `'request_response'` \| `'remote_notification'` \| `'local_call'` |
 | `initiator`    | `ActionInitiator`    | `'frontend'` \| `'backend'` \| `'both'`                           |
-| `auth`         | `ActionAuth \| null` | `'public'` \| `'authenticate'` \| `null`                          |
+| `auth`         | `RouteAuth \| null` | `{account, actor, roles?, credential_types?}` \| `null` (four-axis flat record) |
 | `side_effects` | `boolean \| null`    | Whether action mutates state                                      |
 | `input`        | `z.ZodType`          | Zod schema for request params                                     |
 | `output`       | `z.ZodType`          | Zod schema for response                                           |

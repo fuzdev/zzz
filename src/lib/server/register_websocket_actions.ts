@@ -39,6 +39,12 @@ export interface RegisterWebsocketActionsOptions {
 	/** Artificial response delay in ms (testing). */
 	artificial_delay?: number;
 	transport?: BackendWebsocketTransport;
+	/**
+	 * Extra actions to register alongside zzz's production actions — used by
+	 * integration tests to opt in `_test_*` specs via `ZZZ_ENABLE_TEST_ACTIONS`.
+	 * Production callers leave this empty.
+	 */
+	extra_actions?: ReadonlyArray<Action>;
 }
 
 /**
@@ -56,6 +62,7 @@ export const register_websocket_actions = ({
 	upgradeWebSocket,
 	artificial_delay = 0,
 	transport = new BackendWebsocketTransport(),
+	extra_actions,
 }: RegisterWebsocketActionsOptions): void => {
 	backend.peer.transports.register_transport(transport);
 
@@ -76,6 +83,7 @@ export const register_websocket_actions = ({
 			actions.push({spec});
 		}
 	}
+	if (extra_actions) actions.push(...extra_actions);
 
 	register_action_ws({
 		path,

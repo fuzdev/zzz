@@ -8,7 +8,9 @@ Phase 4 in progress: AI provider system with enum-dispatched providers
 (Anthropic fully implemented, OpenAI/Gemini/Ollama stubs). 16 RPC methods:
 `ping`, `session_load`, `workspace_*`, `diskfile_*`, `directory_create`,
 `terminal_*`, `provider_load_status`, `provider_update_api_key`,
-`completion_create`. Full auth stack (cookie sessions, bearer tokens, daemon
+`completion_create`. `_test_emit_notifications` is gated behind
+`ZZZ_ENABLE_TEST_ACTIONS=1` (set by the integration runner; production
+leaves it unset, dispatch returns `method_not_found`). Full auth stack (cookie sessions, bearer tokens, daemon
 tokens), account management routes, filesystem actions with `ScopedFs`,
 terminal actions via `fuz_pty`, `session_load` returns real provider status
 from all registered providers, `workspace_changed`/`filer_change`/
@@ -77,6 +79,7 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 | `PUBLIC_ZZZ_SCOPED_DIRS` | Comma-separated filesystem paths           |
 | `ZZZ_PORT`               | Server port (default 1174, CLI overrides)  |
 | `ZZZ_STATIC_DIR`         | Static file directory                      |
+| `ZZZ_ENABLE_TEST_ACTIONS`| Register `_test_*` actions on live dispatchers (mirrors Zod `z.stringbool()`: `true`/`1`/`yes`/`on`/`y`/`enabled` opt in; `false`/`0`/`no`/`off`/`n`/`disabled` or unset opt out; case-insensitive; anything else errors at startup. Integration tests only — production must leave unset) |
 
 ## Endpoints
 
@@ -113,7 +116,7 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
 
 3. **Session validation** — Cookie → HMAC verify → blake3 hash token →
    `auth_session` table lookup → build `RequestContext` (account, actor,
-   permits). Sessions touched (last_seen_at updated) fire-and-forget.
+   role grants). Sessions touched (last_seen_at updated) fire-and-forget.
 
 4. **Bearer token auth** — `Authorization: Bearer <token>` header. Token
    hashed with blake3, looked up in `api_token` table. Browser context
@@ -136,10 +139,10 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
 7. **Per-action auth** — Each RPC method has an auth level:
    - `public` — no auth required (`ping`)
    - `authenticated` — valid session or bearer token required (workspace_*, session_load, etc.)
-   - `keeper` — requires `DaemonToken` credential type AND keeper role permit (`provider_update_api_key`). API tokens and session cookies cannot access keeper actions even if the account has the keeper permit.
+   - `keeper` — requires `DaemonToken` credential type AND keeper role grant (`provider_update_api_key`). API tokens and session cookies cannot access keeper actions even if the account has the keeper role grant.
 
 8. **Bootstrap** — `POST /bootstrap` creates first admin account with keeper
-   + admin permits. Reads token from `BOOTSTRAP_TOKEN_PATH`, timing-safe
+   + admin role grants. Reads token from `BOOTSTRAP_TOKEN_PATH`, timing-safe
    compare, Argon2 password hashing, all in a transaction with bootstrap_lock.
 
 9. **Origin verification** — `ALLOWED_ORIGINS` patterns checked on requests
@@ -158,7 +161,7 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
     `/api/account/tokens/:id/revoke` (per-token).
 
 11. **Account status** — `GET /api/account/status` returns account info +
-    permits (200) when authenticated, or 401 with optional
+    role grants (200) when authenticated, or 401 with optional
     `bootstrap_available` flag when not. Consumed by fuz_app's `AuthState`
     for the frontend auth gate (bootstrap → login → verified flow).
 
@@ -176,7 +179,7 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
 branches). Both backends bootstrap
 auth (admin account + session cookie), create a non-keeper user (account +
 actor + session, no
-keeper permit, cookie signed via HMAC-SHA256), and insert API tokens into
+keeper role grant, cookie signed via HMAC-SHA256), and insert API tokens into
 the `api_token` table before tests. The test database (`zzz_test` by default,
 configurable via `TEST_DATABASE_URL`) is cleaned (TRUNCATE CASCADE) before
 each backend run. A scoped directory (`/tmp/zzz_integration_scoped`) is
@@ -336,7 +339,7 @@ calling `handlers::dispatch`.
 2. Try daemon token auth: `X-Daemon-Token` → timing-safe validate → resolve keeper account
 3. If no daemon token: try cookie auth: `fuz_session` cookie → HMAC verify → blake3 hash → `auth_session` lookup
 4. If no cookie: try bearer auth: `Authorization: Bearer` → reject browser context → blake3 hash → `api_token` lookup
-5. Build `RequestContext` (account → actor → permits) with `CredentialType`
+5. Build `RequestContext` (account → actor → role grants) with `CredentialType`
 6. Check per-action auth level (keeper actions require `DaemonToken` credential type)
 
 **Message classification** (`rpc::classify`) is transport-agnostic:

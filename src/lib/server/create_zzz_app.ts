@@ -18,6 +18,9 @@ import type {PasswordHashDeps} from '@fuzdev/fuz_app/auth/password.js';
 import type {StatResult} from '@fuzdev/fuz_app/runtime/deps.js';
 import type {MiddlewareSpec} from '@fuzdev/fuz_app/http/middleware_spec.js';
 
+import type {Action} from '@fuzdev/fuz_app/actions/action_types.js';
+import type {RpcAction} from '@fuzdev/fuz_app/actions/action_rpc.js';
+
 import {build_allowed_hostnames, create_host_validation_middleware} from './security.js';
 import {Backend} from './backend.js';
 import {
@@ -26,6 +29,11 @@ import {
 	type ZzzServerEnv,
 } from './server_env.js';
 import {all_action_specs} from '../action_specs.js';
+import {
+	_test_emit_notifications_action_spec,
+	handle_test_emit_notifications,
+	test_action_specs,
+} from '../test_action_specs.js';
 import {handle_filer_change} from './backend_actions_api.js';
 import {BackendProviderOllama} from './backend_provider_ollama.js';
 import {BackendProviderClaude} from './backend_provider_claude.js';
@@ -75,6 +83,12 @@ export interface ZzzApp {
 	env: ZzzServerEnv;
 	/** Parsed allowed origin patterns (from `validate_server_env`). */
 	allowed_origins: Array<RegExp>;
+	/**
+	 * WebSocket-side test actions to register when `ZZZ_ENABLE_TEST_ACTIONS=1`.
+	 * Empty in production. Callers that mount the WS endpoint pass these
+	 * through to `register_websocket_actions`.
+	 */
+	extra_ws_actions: ReadonlyArray<Action>;
 	/** Close database connection. */
 	close: () => Promise<void>;
 }
@@ -133,12 +147,32 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 		`Database initialized (${app_backend.db_type}${app_backend.db_type !== 'pglite-memory' ? ': ' + app_backend.db_name : ''})`,
 	);
 
+	// In integration-test runs (`ZZZ_ENABLE_TEST_ACTIONS=1`), splice the
+	// `_test_*` specs and handler into the live dispatchers. Production
+	// leaves the env var unset so the action surface stays clean.
+	const action_specs = config.enable_test_actions
+		? [...all_action_specs, ...test_action_specs]
+		: all_action_specs;
+	const test_rpc_actions: ReadonlyArray<RpcAction> = config.enable_test_actions
+		? [
+				{
+					spec: _test_emit_notifications_action_spec,
+					handler: handle_test_emit_notifications,
+				},
+			]
+		: [];
+	const test_ws_actions: ReadonlyArray<Action> = test_rpc_actions;
+
+	if (config.enable_test_actions) {
+		log.info('Test actions enabled — `_test_*` methods registered on live dispatchers');
+	}
+
 	// Create zzz domain Backend (files, terminals, providers, actions)
 	const backend = new Backend({
 		zzz_dir: config.zzz_dir,
 		scoped_dirs: config.scoped_dirs.length > 0 ? config.scoped_dirs : undefined,
 		config: zzz_config,
-		action_specs: all_action_specs,
+		action_specs,
 		handle_filer_change,
 	});
 
@@ -188,7 +222,8 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 				version: config.app_version,
 				get_uptime_ms: () => Date.now() - started_at,
 			}),
-		rpc_endpoints: (ctx) => build_rpc_endpoint_specs(ctx, {backend}),
+		rpc_endpoints: (ctx) =>
+			build_rpc_endpoint_specs(ctx, {backend, extra_actions: test_rpc_actions}),
 		env_schema: ZzzServerEnvSchema,
 		env_values: env,
 		on_effect_error: (error, ctx) => {
@@ -203,6 +238,7 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 		surface: app_server.surface_spec.surface,
 		env,
 		allowed_origins,
+		extra_ws_actions: test_ws_actions,
 		close: app_server.close,
 	};
 };

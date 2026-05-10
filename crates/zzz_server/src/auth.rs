@@ -5,8 +5,8 @@ use sha2::Sha256;
 
 use crate::daemon_token::SharedDaemonTokenState;
 use crate::db::{
-    AccountRow, ActorRow, PermitRow,
-    query_account_by_id, query_actor_by_account, query_permits_for_actor,
+    AccountRow, ActorRow, RoleGrantRow,
+    query_account_by_id, query_actor_by_account, query_role_grants_for_actor,
     query_session_get_valid, query_session_touch,
     query_validate_api_token, query_api_token_touch,
 };
@@ -200,27 +200,27 @@ pub enum CredentialType {
 
 // -- Request context ----------------------------------------------------------
 
-/// Authenticated request context — account + actor + active permits.
+/// Authenticated request context — account + actor + active role grants.
 ///
 /// Built from a valid session cookie. Passed to handlers via `Ctx`.
 #[derive(Debug, Clone)]
 pub struct RequestContext {
     pub account: AccountRow,
     pub actor: ActorRow,
-    pub permits: Vec<PermitRow>,
+    pub role_grants: Vec<RoleGrantRow>,
 }
 
 impl RequestContext {
-    /// Check if this context has an active permit for the given role.
+    /// Check if this context has an active role grant for the given role.
     pub fn has_role(&self, role: &str) -> bool {
-        self.permits.iter().any(|p| p.role == role)
+        self.role_grants.iter().any(|p| p.role == role)
     }
 }
 
 /// Build a `RequestContext` from a session token.
 ///
 /// Pipeline: cookie → verify signature → hash token → session lookup →
-/// account → actor → permits.
+/// account → actor → role grants.
 pub async fn build_request_context(
     pool: &deadpool_postgres::Pool,
     session_token: &str,
@@ -235,7 +235,7 @@ pub async fn build_request_context(
         return Ok(None);
     };
 
-    // Build context: account → actor → permits
+    // Build context: account → actor → role grants
     let account = query_account_by_id(&client, &session.account_id).await?;
 
     let Some(account) = account else {
@@ -248,7 +248,7 @@ pub async fn build_request_context(
         return Ok(None);
     };
 
-    let permits = query_permits_for_actor(&client, &actor.id).await?;
+    let role_grants = query_role_grants_for_actor(&client, &actor.id).await?;
 
     // Touch session (fire-and-forget — don't block the request)
     let touch_pool = pool.clone();
@@ -263,7 +263,7 @@ pub async fn build_request_context(
     Ok(Some(RequestContext {
         account,
         actor,
-        permits,
+        role_grants,
     }))
 }
 
@@ -279,7 +279,7 @@ pub enum ActionAuth {
     /// Must have a valid session.
     Authenticated,
     /// Must have keeper role. In `fuz_app` this requires `daemon_token`
-    /// credential type; the Rust backend checks keeper permit on cookie sessions.
+    /// credential type; the Rust backend checks keeper role grant on cookie sessions.
     Keeper,
 }
 
@@ -298,7 +298,7 @@ const JSONRPC_FORBIDDEN: i32 = -32002;
 /// the keeper check from `register_websocket_actions.ts`.
 ///
 /// Keeper actions require both `daemon_token` credential type AND the
-/// keeper role permit — API tokens with keeper permit are rejected.
+/// keeper role grant — API tokens with the keeper role grant are rejected.
 pub fn check_action_auth(
     auth: ActionAuth,
     context: Option<&RequestContext>,
@@ -327,7 +327,7 @@ pub fn check_action_auth(
             };
             // Keeper actions require daemon_token credential type AND keeper role.
             // API tokens and session cookies cannot access keeper actions even if
-            // the account has the keeper permit.
+            // the account has the keeper role grant.
             if credential_type != Some(CredentialType::DaemonToken)
                 || !ctx.has_role("keeper")
             {
@@ -356,15 +356,15 @@ pub fn method_auth(method: &str) -> ActionAuth {
         | "completion_create" | "ollama_list" | "ollama_ps" | "ollama_show"
         | "ollama_pull" | "ollama_delete" | "ollama_copy" | "ollama_create"
         | "ollama_unload" | "provider_load_status"
-        | "terminal_create" | "terminal_data_send" | "terminal_resize" | "terminal_close"
-        | "_test_emit_notifications" => {
+        | "terminal_create" | "terminal_data_send" | "terminal_resize" | "terminal_close" => {
             ActionAuth::Authenticated
         }
 
         "provider_update_api_key" => ActionAuth::Keeper,
 
-        // Unknown methods — will hit method_not_found in dispatch anyway,
-        // but require auth so we don't leak method existence to unauthenticated callers
+        // Unknown methods (including `_test_*` when `ZZZ_ENABLE_TEST_ACTIONS`
+        // is unset) — will hit method_not_found in dispatch anyway, but require
+        // auth so we don't leak method existence to unauthenticated callers.
         _ => ActionAuth::Authenticated,
     }
 }
@@ -544,10 +544,10 @@ async fn resolve_bearer_from_headers(
         }
     };
 
-    let permits = match query_permits_for_actor(&client, &actor.id).await {
+    let role_grants = match query_role_grants_for_actor(&client, &actor.id).await {
         Ok(p) => p,
         Err(e) => {
-            tracing::warn!(error = %e, "bearer auth permits query failed");
+            tracing::warn!(error = %e, "bearer auth role grants query failed");
             return None;
         }
     };
@@ -567,7 +567,7 @@ async fn resolve_bearer_from_headers(
         context: RequestContext {
             account,
             actor,
-            permits,
+            role_grants,
         },
         token_hash: None, // bearer connections have no session token_hash
         api_token_id: Some(token_row.id),
@@ -637,10 +637,10 @@ async fn resolve_daemon_token_from_headers(
         }
     };
 
-    let permits = match query_permits_for_actor(&client, &actor.id).await {
+    let role_grants = match query_role_grants_for_actor(&client, &actor.id).await {
         Ok(p) => p,
         Err(e) => {
-            tracing::warn!(error = %e, "daemon token permits query failed");
+            tracing::warn!(error = %e, "daemon token role grants query failed");
             return None;
         }
     };
@@ -649,7 +649,7 @@ async fn resolve_daemon_token_from_headers(
         context: RequestContext {
             account,
             actor,
-            permits,
+            role_grants,
         },
         token_hash: None, // daemon token connections have no session token_hash
         api_token_id: None,

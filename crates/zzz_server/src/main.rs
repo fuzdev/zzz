@@ -123,6 +123,10 @@ async fn run() -> Result<(), ServerError> {
         provider::ollama::OllamaProvider::new(),
     ));
 
+    if config.enable_test_actions {
+        tracing::info!("test actions enabled — `_test_*` methods registered on live dispatchers");
+    }
+
     let app_state = Arc::new(handlers::App::new(
         pool,
         keyring,
@@ -134,6 +138,7 @@ async fn run() -> Result<(), ServerError> {
         scoped_dir_strings,
         daemon_token_state.clone(),
         provider_manager,
+        config.enable_test_actions,
     ));
 
     // Start file watchers at startup (matches Deno's Backend constructor
@@ -248,6 +253,9 @@ struct Config {
     allowed_origins: Option<String>,
     scoped_dirs: Vec<PathBuf>,
     zzz_dir: String,
+    /// Register `_test_*` actions on live dispatchers. Set by integration
+    /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave unset.
+    enable_test_actions: bool,
 }
 
 /// Resolve a path to an absolute, canonical, normalized directory string
@@ -332,6 +340,20 @@ fn parse_config() -> Result<Config, ServerError> {
         resolve_dir(Path::new(&raw))
     };
 
+    // Mirrors TS `z.stringbool()` defaults (case-insensitive). Unknown values
+    // are rejected — matching Zod's strict parse — so a typo doesn't silently
+    // disable the integration test surface.
+    let enable_test_actions = match std::env::var("ZZZ_ENABLE_TEST_ACTIONS").ok() {
+        None => false,
+        Some(v) => match v.to_ascii_lowercase().as_str() {
+            "true" | "1" | "yes" | "on" | "y" | "enabled" => true,
+            "false" | "0" | "no" | "off" | "n" | "disabled" => false,
+            other => return Err(ServerError::Config(format!(
+                "ZZZ_ENABLE_TEST_ACTIONS: expected one of true/1/yes/on/y/enabled/false/0/no/off/n/disabled (case-insensitive), got {other:?}"
+            ))),
+        },
+    };
+
     Ok(Config {
         port: port.unwrap_or(DEFAULT_PORT),
         static_dir,
@@ -341,6 +363,7 @@ fn parse_config() -> Result<Config, ServerError> {
         allowed_origins,
         scoped_dirs,
         zzz_dir,
+        enable_test_actions,
     })
 }
 

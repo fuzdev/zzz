@@ -2,7 +2,7 @@
  * Unified action handler factory for zzz.
  *
  * `create_zzz_action_handlers(backend)` is the single source of truth for
- * all 24 request_response handlers. Both HTTP RPC and WebSocket dispatch
+ * all 23 request_response handlers. Both HTTP RPC and WebSocket dispatch
  * call into the same map. The `Backend` is closed over at construction
  * time — handlers receive fuz_app's unified `ActionContext` (auth, db,
  * request_id, notify, signal) without any context extension.
@@ -45,7 +45,7 @@ export const get_action_handler = (
 		: undefined;
 
 /**
- * Build the 24 request_response handlers bound to a zzz `Backend`.
+ * Build the 23 request_response handlers bound to a zzz `Backend`.
  *
  * Logic sourced from the RPC versions (cleaner than the old WS handlers —
  * no Deno-only bug in provider_update_api_key, no console.log noise).
@@ -442,11 +442,4 @@ export const create_zzz_action_handlers = (backend: Backend): BackendActionHandl
 	workspace_list: () => ({
 		workspaces: backend.workspace_list(),
 	}),
-
-	_test_emit_notifications: (input, ctx) => {
-		for (let i = 0; i < input.count; i++) {
-			ctx.notify('_test_notification', {index: i});
-		}
-		return {count: input.count};
-	},
 });

@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS actor (
 
 CREATE INDEX IF NOT EXISTS idx_actor_account ON actor(account_id);
 
-CREATE TABLE IF NOT EXISTS permit (
+CREATE TABLE IF NOT EXISTS role_grant (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   actor_id UUID NOT NULL REFERENCES actor(id) ON DELETE CASCADE,
   role TEXT NOT NULL,
@@ -105,9 +105,9 @@ CREATE TABLE IF NOT EXISTS permit (
   granted_by UUID REFERENCES actor(id) ON DELETE SET NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_permit_actor ON permit(actor_id);
-CREATE UNIQUE INDEX IF NOT EXISTS permit_actor_role_active_unique
-  ON permit (actor_id, role) WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_role_grant_actor ON role_grant(actor_id);
+CREATE UNIQUE INDEX IF NOT EXISTS role_grant_actor_role_active_unique
+  ON role_grant (actor_id, role) WHERE revoked_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS auth_session (
   id TEXT PRIMARY KEY,
@@ -176,9 +176,9 @@ pub struct ActorRow {
     pub name: String,
 }
 
-/// Row from the `permit` table (active permits only).
+/// Row from the `role_grant` table (active role grants only).
 #[derive(Debug, Clone)]
-pub struct PermitRow {
+pub struct RoleGrantRow {
     pub id: uuid::Uuid,
     pub actor_id: uuid::Uuid,
     pub role: String,
@@ -239,14 +239,14 @@ pub async fn query_actor_by_account(
     }))
 }
 
-/// Look up active (non-revoked, non-expired) permits for an actor.
-pub async fn query_permits_for_actor(
+/// Look up active (non-revoked, non-expired) role grants for an actor.
+pub async fn query_role_grants_for_actor(
     client: &deadpool_postgres::Object,
     actor_id: &uuid::Uuid,
-) -> Result<Vec<PermitRow>, tokio_postgres::Error> {
+) -> Result<Vec<RoleGrantRow>, tokio_postgres::Error> {
     let rows = client
         .query(
-            "SELECT id, actor_id, role FROM permit
+            "SELECT id, actor_id, role FROM role_grant
              WHERE actor_id = $1
                AND revoked_at IS NULL
                AND (expires_at IS NULL OR expires_at > NOW())
@@ -257,7 +257,7 @@ pub async fn query_permits_for_actor(
 
     Ok(rows
         .into_iter()
-        .map(|r| PermitRow {
+        .map(|r| RoleGrantRow {
             id: r.get(0),
             actor_id: r.get(1),
             role: r.get(2),
@@ -308,10 +308,10 @@ pub async fn query_api_token_touch(
     Ok(())
 }
 
-/// Find the account ID for the keeper role (first active keeper permit).
+/// Find the account ID for the keeper role (first active keeper role grant).
 ///
 /// Used at startup to resolve the daemon token's keeper account.
-/// Mirrors `fuz_app`'s `query_permit_find_account_id_for_role`.
+/// Mirrors `fuz_app`'s `query_role_grant_find_account_id_for_role`.
 pub async fn query_keeper_account_id(
     client: &deadpool_postgres::Object,
 ) -> Result<Option<uuid::Uuid>, tokio_postgres::Error> {
@@ -319,7 +319,7 @@ pub async fn query_keeper_account_id(
         .query_opt(
             "SELECT a.id FROM account a
              JOIN actor ac ON ac.account_id = a.id
-             JOIN permit p ON p.actor_id = ac.id
+             JOIN role_grant p ON p.actor_id = ac.id
              WHERE p.role = 'keeper'
                AND p.revoked_at IS NULL
                AND (p.expires_at IS NULL OR p.expires_at > NOW())
@@ -411,16 +411,16 @@ pub async fn query_create_actor(
     })
 }
 
-/// Grant a permit to an actor (idempotent — ON CONFLICT DO NOTHING).
-pub async fn query_grant_permit(
+/// Create a role grant for an actor (idempotent — ON CONFLICT DO NOTHING).
+pub async fn query_create_role_grant(
     client: &deadpool_postgres::Object,
     actor_id: &uuid::Uuid,
     role: &str,
-) -> Result<PermitRow, tokio_postgres::Error> {
-    // Try insert; if already exists (active permit for same role), fetch it
+) -> Result<RoleGrantRow, tokio_postgres::Error> {
+    // Try insert; if already exists (active role grant for same role), fetch it
     let inserted = client
         .query_opt(
-            "INSERT INTO permit (actor_id, role)
+            "INSERT INTO role_grant (actor_id, role)
              VALUES ($1, $2)
              ON CONFLICT (actor_id, role) WHERE revoked_at IS NULL
              DO NOTHING
@@ -430,7 +430,7 @@ pub async fn query_grant_permit(
         .await?;
 
     if let Some(row) = inserted {
-        return Ok(PermitRow {
+        return Ok(RoleGrantRow {
             id: row.get(0),
             actor_id: row.get(1),
             role: row.get(2),
@@ -440,13 +440,13 @@ pub async fn query_grant_permit(
     // Already existed — fetch it
     let row = client
         .query_one(
-            "SELECT id, actor_id, role FROM permit
+            "SELECT id, actor_id, role FROM role_grant
              WHERE actor_id = $1 AND role = $2 AND revoked_at IS NULL",
             &[actor_id, &role],
         )
         .await?;
 
-    Ok(PermitRow {
+    Ok(RoleGrantRow {
         id: row.get(0),
         actor_id: row.get(1),
         role: row.get(2),

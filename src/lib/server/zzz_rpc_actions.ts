@@ -20,6 +20,12 @@ import type {BackendRequestResponseMethod} from '../action_metatypes.js';
 /** Dependencies for creating zzz RPC actions. */
 export interface ZzzRpcDeps {
 	backend: Backend;
+	/**
+	 * Extra `(spec, handler)` pairs to register alongside zzz's production
+	 * actions — used by integration tests to opt in `_test_*` specs via
+	 * `ZZZ_ENABLE_TEST_ACTIONS`. Production callers leave this empty.
+	 */
+	extra_actions?: ReadonlyArray<RpcAction>;
 }
 
 /**
@@ -43,11 +49,13 @@ export interface ZzzRpcDeps {
 export const create_zzz_rpc_actions = (deps: ZzzRpcDeps): Array<RpcAction> => {
 	const handlers = create_zzz_action_handlers(deps.backend);
 
-	return all_action_specs
+	const production_actions: Array<RpcAction> = all_action_specs
 		.filter((spec): spec is RequestResponseActionSpec => spec.kind === 'request_response')
 		.filter((spec) => !is_protocol_action_method(spec.method))
 		.map((spec) => ({
 			spec,
 			handler: handlers[spec.method as BackendRequestResponseMethod] as ActionHandler,
 		}));
+
+	return deps.extra_actions ? [...production_actions, ...deps.extra_actions] : production_actions;
 };

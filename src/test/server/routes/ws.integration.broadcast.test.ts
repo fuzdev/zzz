@@ -17,10 +17,8 @@ import {
 	type JsonrpcNotificationFrame,
 } from '@fuzdev/fuz_app/testing/ws_round_trip.js';
 
-import {
-	_test_emit_notifications_action_spec,
-	workspace_changed_action_spec,
-} from '$lib/action_specs.js';
+import {workspace_changed_action_spec} from '$lib/action_specs.js';
+import {_test_emit_notifications_action_spec} from '$lib/test_action_specs.js';
 import {DiskfileDirectoryPath} from '$lib/diskfile_types.js';
 import type {BackendActionsApi} from '$lib/server/backend_action_types.js';
 

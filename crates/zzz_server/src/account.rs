@@ -121,7 +121,7 @@ struct RevokeResponse {
 #[derive(Serialize)]
 struct StatusSuccess {
     account: StatusAccount,
-    permits: Vec<StatusPermit>,
+    role_grants: Vec<StatusRoleGrant>,
 }
 
 #[derive(Serialize)]
@@ -131,7 +131,7 @@ struct StatusAccount {
 }
 
 #[derive(Serialize)]
-struct StatusPermit {
+struct StatusRoleGrant {
     role: String,
 }
 
@@ -146,7 +146,7 @@ struct StatusUnauthenticated {
 /// `GET /status` — current account info or 401 with bootstrap status.
 ///
 /// Mirrors `fuz_app`'s `create_account_status_route_spec`:
-/// - 200 with account + permits if authenticated
+/// - 200 with account + role grants if authenticated
 /// - 401 with optional `bootstrap_available` if not
 pub async fn status_handler(
     State(app): State<Arc<App>>,
@@ -167,15 +167,15 @@ pub async fn status_handler(
                 id: r.context.account.id.to_string(),
                 username: r.context.account.username.clone(),
             };
-            let permits: Vec<StatusPermit> = r
+            let role_grants: Vec<StatusRoleGrant> = r
                 .context
-                .permits
+                .role_grants
                 .iter()
-                .map(|p| StatusPermit {
+                .map(|p| StatusRoleGrant {
                     role: p.role.clone(),
                 })
                 .collect();
-            Json(StatusSuccess { account, permits }).into_response()
+            Json(StatusSuccess { account, role_grants }).into_response()
         }
         None => {
             let bootstrap = if app

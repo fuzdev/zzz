@@ -21,7 +21,7 @@ import {
 } from '@fuzdev/fuz_app/testing/ws_round_trip.js';
 import {cancel_action, cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.js';
 
-import {_test_emit_notifications_action_spec} from '$lib/action_specs.js';
+import {_test_emit_notifications_action_spec} from '$lib/test_action_specs.js';
 
 describe('zzz WebSocket — cancel', () => {
 	test('client cancel notification aborts matching in-flight handler', async () => {

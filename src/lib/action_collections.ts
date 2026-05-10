@@ -46,8 +46,6 @@ export const ActionSpecs = {
 	workspace_close: specs.workspace_close_action_spec,
 	workspace_list: specs.workspace_list_action_spec,
 	workspace_changed: specs.workspace_changed_action_spec,
-	_test_emit_notifications: specs._test_emit_notifications_action_spec,
-	_test_notification: specs._test_notification_action_spec,
 } as const;
 export interface ActionSpecs {
 	heartbeat: typeof specs.heartbeat_action_spec;
@@ -82,8 +80,6 @@ export interface ActionSpecs {
 	workspace_close: typeof specs.workspace_close_action_spec;
 	workspace_list: typeof specs.workspace_list_action_spec;
 	workspace_changed: typeof specs.workspace_changed_action_spec;
-	_test_emit_notifications: typeof specs._test_emit_notifications_action_spec;
-	_test_notification: typeof specs._test_notification_action_spec;
 }
 
 export const action_specs: Array<ActionSpecUnion> = Object.values(ActionSpecs);
@@ -126,8 +122,6 @@ export const ActionInputs = {
 	workspace_close: specs.workspace_close_action_spec.input,
 	workspace_list: specs.workspace_list_action_spec.input,
 	workspace_changed: specs.workspace_changed_action_spec.input,
-	_test_emit_notifications: specs._test_emit_notifications_action_spec.input,
-	_test_notification: specs._test_notification_action_spec.input,
 } as const;
 export interface ActionInputs {
 	heartbeat: z.infer<typeof specs.heartbeat_action_spec.input>;
@@ -162,8 +156,6 @@ export interface ActionInputs {
 	workspace_close: z.infer<typeof specs.workspace_close_action_spec.input>;
 	workspace_list: z.infer<typeof specs.workspace_list_action_spec.input>;
 	workspace_changed: z.infer<typeof specs.workspace_changed_action_spec.input>;
-	_test_emit_notifications: z.infer<typeof specs._test_emit_notifications_action_spec.input>;
-	_test_notification: z.infer<typeof specs._test_notification_action_spec.input>;
 }
 
 /**
@@ -204,8 +196,6 @@ export const ActionOutputs = {
 	workspace_close: specs.workspace_close_action_spec.output,
 	workspace_list: specs.workspace_list_action_spec.output,
 	workspace_changed: specs.workspace_changed_action_spec.output,
-	_test_emit_notifications: specs._test_emit_notifications_action_spec.output,
-	_test_notification: specs._test_notification_action_spec.output,
 } as const;
 export interface ActionOutputs {
 	heartbeat: z.infer<typeof specs.heartbeat_action_spec.output>;
@@ -240,8 +230,6 @@ export interface ActionOutputs {
 	workspace_close: z.infer<typeof specs.workspace_close_action_spec.output>;
 	workspace_list: z.infer<typeof specs.workspace_list_action_spec.output>;
 	workspace_changed: z.infer<typeof specs.workspace_changed_action_spec.output>;
-	_test_emit_notifications: z.infer<typeof specs._test_emit_notifications_action_spec.output>;
-	_test_notification: z.infer<typeof specs._test_notification_action_spec.output>;
 }
 
 /**
@@ -389,15 +377,6 @@ export interface ActionEventDatas {
 	workspace_changed: ActionEventRemoteNotificationData<
 		'workspace_changed',
 		ActionInputs['workspace_changed']
-	>;
-	_test_emit_notifications: ActionEventRequestResponseData<
-		'_test_emit_notifications',
-		ActionInputs['_test_emit_notifications'],
-		ActionOutputs['_test_emit_notifications']
-	>;
-	_test_notification: ActionEventRemoteNotificationData<
-		'_test_notification',
-		ActionInputs['_test_notification']
 	>;
 }
 

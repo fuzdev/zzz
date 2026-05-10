@@ -215,7 +215,7 @@ const bearer_test_list: ReadonlyArray<{
 		// Both backends enforce daemon_token credential type for keeper actions.
 		fn: async (config) => {
 			// API token (bearer) with keeper role account calling keeper action → 403
-			// The admin account has keeper permit, but bearer credential type is
+			// The admin account has the keeper role grant, but bearer credential type is
 			// api_token, not daemon_token — keeper actions must be rejected.
 			const {status, body} = await post_rpc(
 				config,
