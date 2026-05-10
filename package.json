@@ -37,7 +37,7 @@
   },
   "devDependencies": {
     "@changesets/changelog-git": "^0.2.1",
-    "@electric-sql/pglite": "^0.3.16",
+    "@electric-sql/pglite": "^0.4.5",
     "@fuzdev/fuz_app": "^0.55.0",
     "@fuzdev/fuz_code": "^0.45.1",
     "@fuzdev/fuz_css": "^0.59.0",
