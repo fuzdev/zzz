@@ -5,7 +5,7 @@
  * `request_cancelled` (-32010), not `ai_provider_error` (-32020), even when
  * the underlying provider throws a plain Error. The shared cancel primitive
  * is exercised in `ws.integration.cancel.test.ts`; this file covers the
- * zzz-specific discriminator at `zzz_action_handlers.ts:197` — the handler
+ * zzz-specific discriminator inside `completion_create` — the handler
  * checks `ctx.signal.aborted` (authoritative), not the error shape (each
  * SDK throws a different abort type).
  *
@@ -32,14 +32,10 @@ import {
 } from '@fuzdev/fuz_app/testing/ws_round_trip.js';
 import {cancel_action, cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.js';
 import {JSONRPC_ERROR_CODES as BASE_JSONRPC_ERROR_CODES} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
-import type {
-	Action,
-	BaseHandlerContext,
-	WsActionHandler,
-} from '@fuzdev/fuz_app/actions/action_types.js';
 
 import {completion_create_action_spec} from '$lib/action_specs.js';
-import {zzz_action_handlers} from '$lib/server/zzz_action_handlers.js';
+import {create_zzz_action_handlers} from '$lib/server/zzz_action_handlers.js';
+import type {Backend} from '$lib/server/backend.js';
 import {JSONRPC_ERROR_CODES as ZZZ_JSONRPC_ERROR_CODES} from '$lib/zzz_jsonrpc_errors.js';
 
 interface StubProviderHandlerOptions {
@@ -49,8 +45,6 @@ interface StubProviderHandlerOptions {
 interface StubProvider {
 	get_handler: (streaming: boolean) => (options: StubProviderHandlerOptions) => Promise<never>;
 }
-
-type ZzzTestCtx = BaseHandlerContext & {backend: unknown};
 
 const STUB_CONFIG = {
 	frequency_penalty: undefined,
@@ -64,11 +58,22 @@ const STUB_CONFIG = {
 	top_p: undefined,
 };
 
-const create_stub_backend = (provider: StubProvider): unknown => ({
-	config: STUB_CONFIG,
-	lookup_provider: () => provider,
-	zzz_dir: '/tmp/zzz-test',
-	scoped_fs: {},
+/**
+ * Slice of `Backend` actually touched by the `completion_create` handler.
+ * Other handlers' fields (`pty_manager`, `workspace_*`, `filers`, …) aren't
+ * needed here; per-field casts below acknowledge each shortcut.
+ */
+type CompletionStubBackend = Pick<Backend, 'config' | 'lookup_provider' | 'zzz_dir' | 'scoped_fs'>;
+
+const create_stub_backend = (provider: StubProvider): CompletionStubBackend => ({
+	// Partial ZzzOptions — completion_create only reads completion-tuning fields.
+	config: STUB_CONFIG as Backend['config'],
+	// `lookup_provider` is generic across provider names; the stub is enough for the cancel path.
+	lookup_provider: (() => provider) as Backend['lookup_provider'],
+	// Branded DiskfileDirectoryPath — never written to in this test.
+	zzz_dir: '/tmp/zzz-test' as Backend['zzz_dir'],
+	// `save_completion_response_to_disk` is never reached (both paths throw before it).
+	scoped_fs: {} as Backend['scoped_fs'],
 });
 
 const create_test_completion_request = () => ({
@@ -77,9 +82,6 @@ const create_test_completion_request = () => ({
 	model: 'claude-sonnet-4-5',
 	prompt: 'test prompt',
 });
-
-const completion_create_handler =
-	zzz_action_handlers.completion_create as unknown as WsActionHandler<ZzzTestCtx>;
 
 describe('zzz WebSocket — completion_create cancel translation', () => {
 	test('client cancel translates to request_cancelled (-32010), not ai_provider_error', async () => {
@@ -101,15 +103,16 @@ describe('zzz WebSocket — completion_create cancel translation', () => {
 			},
 		};
 
-		const harness = create_ws_test_harness<ZzzTestCtx>({
+		const handlers = create_zzz_action_handlers(create_stub_backend(stub_provider) as Backend);
+
+		const harness = create_ws_test_harness({
 			actions: [
-				cancel_action as Action<ZzzTestCtx>,
+				cancel_action,
 				{
 					spec: completion_create_action_spec,
-					handler: completion_create_handler,
+					handler: handlers.completion_create,
 				},
 			],
-			extend_context: (base) => ({...base, backend: create_stub_backend(stub_provider)}),
 		});
 
 		const client = await harness.connect();
@@ -157,15 +160,16 @@ describe('zzz WebSocket — completion_create cancel translation', () => {
 			},
 		};
 
-		const harness = create_ws_test_harness<ZzzTestCtx>({
+		const handlers = create_zzz_action_handlers(create_stub_backend(stub_provider) as Backend);
+
+		const harness = create_ws_test_harness({
 			actions: [
-				cancel_action as Action<ZzzTestCtx>,
+				cancel_action,
 				{
 					spec: completion_create_action_spec,
-					handler: completion_create_handler,
+					handler: handlers.completion_create,
 				},
 			],
-			extend_context: (base) => ({...base, backend: create_stub_backend(stub_provider)}),
 		});
 
 		const client = await harness.connect();

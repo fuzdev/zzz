@@ -27,49 +27,58 @@ The server provides:
 
 ## Files
 
-| File                            | Purpose                                                                                            |
-| ------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `create_zzz_app.ts`             | Shared app factory — `create_app_backend` + `create_app_server`                                    |
-| `server_env.ts`                 | Env schema (extends `BaseServerEnv`) + loader                                                      |
-| `server.ts`                     | Deno entry — calls factory, binds `Deno.serve`, daemon lifecycle                                   |
-| `zzz_route_specs.ts`            | Route spec factory (auth, admin, RPC endpoint)                                                     |
-| `zzz_action_handlers.ts`        | Unified handler implementations — single source of truth for all 23 actions                        |
-| `zzz_rpc_actions.ts`            | Thin adapter wrapping unified handlers for fuz_app `RpcAction` format                              |
-| `routes/account.ts`             | Session config (`zzz_session_config`)                                                              |
-| `db/zzz_schema.ts`              | Database schema init (auth migrations, zzz-specific DDL)                                           |
-| `backend.ts`                    | `Backend` class - core domain state, file watchers, workspaces                                     |
-| `backend_actions_api.ts`        | Backend-initiated notifications (streaming, file changes)                                          |
-| `backend_provider.ts`           | Base classes for AI providers                                                                      |
-| `backend_provider_ollama.ts`    | Ollama provider (local)                                                                            |
-| `backend_provider_claude.ts`    | Claude/Anthropic provider (remote)                                                                 |
-| `backend_provider_chatgpt.ts`   | OpenAI provider (remote)                                                                           |
-| `backend_provider_gemini.ts`    | Google Gemini provider (remote)                                                                    |
-| `scoped_fs.ts`                  | Secure filesystem wrapper                                                                          |
-| `security.ts`                   | Host header validation middleware (DNS rebinding defense)                                          |
-| `register_websocket_actions.ts` | Thin wrapper over fuz_app's `register_action_ws` — supplies specs, handlers, and context extension |
+| File                            | Purpose                                                                                                      |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `create_zzz_app.ts`             | Shared app factory — `create_app_backend` + `create_app_server`                                              |
+| `server_env.ts`                 | Env schema (extends `BaseServerEnv`) + loader                                                                |
+| `server.ts`                     | Deno entry — calls factory, binds `Deno.serve`, daemon lifecycle                                             |
+| `zzz_route_specs.ts`            | Route spec factory (auth, admin, RPC endpoint)                                                               |
+| `zzz_action_handlers.ts`        | Handler factory `create_zzz_action_handlers(backend)` — single source of truth for all 24 actions            |
+| `zzz_rpc_actions.ts`            | Thin adapter pairing factory-bound handlers with specs for fuz_app's `RpcAction` format                      |
+| `routes/account.ts`             | Session config (`zzz_session_config`)                                                                        |
+| `db/zzz_schema.ts`              | Database schema init (auth migrations, zzz-specific DDL)                                                     |
+| `backend.ts`                    | `Backend` class - core domain state, file watchers, workspaces                                               |
+| `backend_actions_api.ts`        | Backend-initiated notifications (streaming, file changes)                                                    |
+| `backend_provider.ts`           | Base classes for AI providers                                                                                |
+| `backend_provider_ollama.ts`    | Ollama provider (local)                                                                                      |
+| `backend_provider_claude.ts`    | Claude/Anthropic provider (remote)                                                                           |
+| `backend_provider_chatgpt.ts`   | OpenAI provider (remote)                                                                                     |
+| `backend_provider_gemini.ts`    | Google Gemini provider (remote)                                                                              |
+| `scoped_fs.ts`                  | Secure filesystem wrapper                                                                                    |
+| `security.ts`                   | Host header validation middleware (DNS rebinding defense)                                                    |
+| `register_websocket_actions.ts` | Thin wrapper over fuz_app's `register_action_ws` — supplies specs, factory-bound handlers, and the pool `Db` |
 
 ## Architecture
 
 ### Handler Dispatch
 
-All 23 request_response handlers live in `zzz_action_handlers.ts` as pure
-functions with signature `(input, ctx) → output`, mirroring the Rust backend's
-`fn(params, ctx) → Result<Value>`. Both HTTP RPC and WebSocket transports
-call the same handlers:
+All 24 request_response handlers are built by
+`create_zzz_action_handlers(backend)` in `zzz_action_handlers.ts`. The
+factory closes over the zzz `Backend` once at server boot; handlers
+themselves receive fuz_app's unified `ActionContext` (auth, db,
+request_id, notify, signal, …) — no zzz-specific context wrapper.
+Both HTTP RPC and WebSocket transports dispatch into the same handler
+map:
 
-- **HTTP RPC** — `zzz_rpc_actions.ts` wraps handlers for fuz_app's `RpcAction`
-  format. fuz_app handles envelope parsing, auth, and input validation.
-- **WebSocket** — `register_websocket_actions.ts` is a thin wrapper over
-  fuz_app's `register_action_ws<TCtx>`: zzz supplies `all_action_specs`, the
-  handler map, and `extend_context: (base) => ({...base, backend})`. fuz_app
-  owns envelope parsing, batch rejection, per-action auth, Zod validation,
-  socket-scoped `notify`, and per-socket `signal`.
+- **HTTP RPC** — `zzz_rpc_actions.ts` pairs each spec with the
+  factory-bound handler and hands the array to fuz_app's
+  `create_rpc_endpoint`. fuz_app owns envelope parsing, the
+  authorization phase, per-action auth, and input validation.
+- **WebSocket** — `register_websocket_actions.ts` is a thin wrapper
+  over fuz_app's `register_action_ws`: zzz supplies `all_action_specs`,
+  the handler map, and the pool-level `Db`. fuz_app owns envelope
+  parsing, batch rejection, per-action auth, Zod validation,
+  transaction scope, socket-scoped `notify`, and per-socket `signal`.
 
 ```
-Handler context (per-request):
-  ZzzHandlerContext extends BaseHandlerContext {
-    backend: Backend;
+Per-request ctx (built by fuz_app's perform_action — see
+`@fuzdev/fuz_app/actions/action_rpc.js`):
+  ActionContext {
+    auth: RequestContext | null;
     request_id: JsonrpcRequestId;
+    connection_id?: Uuid;        // WS only
+    db: Db;                      // transactional for side_effects: true
+    pending_effects, post_commit_effects, client_ip, log;
     notify: (method, params) => void;
     signal: AbortSignal;
   }
@@ -126,7 +135,7 @@ create_zzz_app_route_specs(ctx, zzz_deps)
     └── Audit log SSE stream (admin)
 
 build_rpc_endpoint_specs(ctx, zzz_deps) → /api/rpc
-    ├── zzz domain actions (zzz_action_handlers)
+    ├── zzz domain actions (create_zzz_action_handlers(backend))
     └── create_standard_rpc_actions(ctx.deps, {app_settings})
         — admin (account list, sessions, audit log, invites, app settings)
         — role-grant-offer lifecycle (create / accept / decline / retract / list / history)
@@ -141,17 +150,22 @@ admin/role-grant-offer/account surface:
 
 ### Auth Levels
 
-| Auth            | Actions                                                         | Credential Requirement                 |
-| --------------- | --------------------------------------------------------------- | -------------------------------------- |
-| `public`        | `ping`                                                          | None                                   |
-| `authenticated` | All file, terminal, workspace, completion, ollama, provider ops | Any (session, API token, daemon token) |
-| `keeper`        | `provider_update_api_key`                                       | `daemon_token` only                    |
+zzz specs use fuz_app's four-axis `RouteAuth` shape (`{account, actor,
+roles?, credential_types?}`). The three buckets in zzz today:
 
-`keeper` actions require the `daemon_token` credential type (via `X-Daemon-Token`
-header) AND the keeper role. Session cookies and API tokens cannot access keeper
-actions even if the account has the keeper role_grant. Enforced on both HTTP RPC
-(via `check_action_auth` in fuz_app) and WebSocket (via fuz_app's
-`register_action_ws` per-action auth).
+| Bucket        | Shape                                                                                             | Actions                                                         |
+| ------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Public        | `{account: 'none', actor: 'none'}`                                                                | `ping`                                                          |
+| Authenticated | `{account: 'required', actor: 'none'}`                                                            | All file, terminal, workspace, completion, ollama, provider ops |
+| Keeper        | `{account: 'required', actor: 'required', roles: ['keeper'], credential_types: ['daemon_token']}` | `provider_update_api_key`                                       |
+
+Keeper actions require both the `daemon_token` credential type (via
+`X-Daemon-Token` header) AND the keeper role; the input schema must
+declare `acting: ActingActor` (registry-time invariant 2 in fuz_app's
+`auth/auth_shape.ts`). Session cookies and API tokens cannot access
+keeper actions even if the account has the keeper role_grant. Enforced
+on both HTTP RPC and WebSocket via the shared `perform_action` core in
+fuz_app.
 
 ### Request Flow (RPC)
 
@@ -160,13 +174,16 @@ HTTP POST /api/rpc
     ↓
 fuz_app middleware (pending effects, logging, body limit, proxy, origin, session, request context, bearer auth)
     ↓
-create_rpc_endpoint dispatcher:
+create_rpc_endpoint dispatcher → perform_action:
     ├── Parse JSON-RPC envelope
     ├── Lookup RpcAction by method
-    ├── Check auth (per-action)
+    ├── Pre-validation auth (401 if account required but missing)
+    ├── Authorization phase (resolve acting actor when actor !== 'none')
+    ├── Post-authorization auth (roles / credential_types)
     ├── Validate params (Zod)
+    ├── Rate limit (if spec.rate_limit set)
     ├── Transaction scope (mutations vs reads)
-    └── Call unified handler (zzz_action_handlers)
+    └── Call factory-bound handler with ActionContext
     ↓
 JSON-RPC response
 ```
@@ -186,12 +203,13 @@ fuz_app `register_action_ws` upgrade handler (extract account_id, credential_typ
     ↓
 transport.add_connection(ws, token_hash, account_id)
     ↓
-fuz_app dispatch loop (per message):
-    ├── Reject batch, drop notifications
-    ├── Per-action auth check (keeper/role)
+fuz_app dispatch loop (per message → perform_action):
+    ├── Reject batch, intercept cancel notifications, drop others
+    ├── Pre-validation auth → authorization phase → post-auth gates
     ├── Spec lookup + Zod input validation
-    ├── Build per-request ctx — `extend_context({request_id, notify, signal}, c)`
-    ├── Call zzz handler (zzz_action_handlers)
+    ├── Transaction scope (mutations vs reads)
+    ├── Build ActionContext (auth, db, request_id, connection_id, notify, signal, …)
+    ├── Call factory-bound handler
     ├── DEV-only output validation
     └── JSON-RPC response
     ↓
@@ -247,21 +265,22 @@ is enforced on each message:
    `null` for token_hash — they're reachable via `close_sockets_for_token`
    (granular — only this token's sockets) and `close_sockets_for_account`
    (all sockets on the account), but not `close_sockets_for_session`.
-4. **Per-action auth** — Each incoming WS message is checked against the action
-   spec's `auth` field by `register_action_ws` before dispatching to the
-   handler. `keeper` actions require `daemon_token` credential type AND the
-   keeper role (matching `require_keeper` parity). Role-based auth
-   (`{role: string}`) is rejected as not yet supported. Batch JSON-RPC
-   arrays are rejected. `public` and `authenticated` actions pass through
-   (upgrade-time auth is sufficient).
-5. **Audit event revocation** — `server.ts` installs fuz_app's
-   `create_ws_auth_guard` on `on_audit_event`. The guard dispatches
+4. **Per-action auth** — Each incoming WS message runs through the shared
+   `perform_action` core: pre-validation auth (401 when account is required
+   but missing), authorization phase (resolves the acting actor when
+   `auth.actor !== 'none'`), and post-authorization gates (`roles`,
+   `credential_types`). Keeper actions require the keeper role AND
+   `daemon_token` credential type. Batch JSON-RPC arrays are rejected.
+   Public and account-only actions skip the authorization phase.
+5. **Audit event revocation** — `server.ts` appends fuz_app's
+   `create_ws_auth_guard` and `create_ws_logout_closer` to
+   `app_backend.deps.audit.on_event_chain`. The guard dispatches
    `session_revoke` → `close_sockets_for_session`, `token_revoke` →
    `close_sockets_for_token` (granular — only that token's sockets close),
    and `session_revoke_all` / `token_revoke_all` / `password_change` →
-   `close_sockets_for_account`. `logout` is handled alongside the guard
+   `close_sockets_for_account`. The logout closer covers explicit logouts
    (account-scoped close) since fuz_app emits `logout`, not `session_revoke`,
-   on explicit logout.
+   on user-initiated logout.
 
 No per-message session revalidation — event-driven revocation via audit events
 is sufficient. ActionPeer and Backend have no auth awareness; auth stays in the
@@ -273,9 +292,14 @@ transport and middleware layers.
 
 Adding a `request_response` action touches these files:
 
-1. **Define spec** in `../action_specs.ts` — set appropriate `auth` level
+1. **Define spec** in `../action_specs.ts` — pick the four-axis auth shape
+   (see the Auth Levels table). Actor-implying specs (`actor !== 'none'`)
+   must declare `acting: ActingActor` on their input schema (registry-time
+   invariant 2 in fuz_app's `auth/auth_shape.ts`).
 2. **Run `gro gen`** — regenerates collection types
-3. **Add handler** in `zzz_action_handlers.ts` — pure function `(input, ctx) → output`
+3. **Add handler** inside `create_zzz_action_handlers` in
+   `zzz_action_handlers.ts` — pure function `(input, ctx) → output`. The
+   factory closes over `backend`; handlers receive `ActionContext` directly.
 4. **Add frontend handler** in `../frontend_action_handlers.ts`
 
 Both HTTP RPC and WebSocket paths automatically pick up the new handler — no

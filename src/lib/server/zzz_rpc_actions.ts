@@ -1,17 +1,19 @@
 /**
  * RPC actions for zzz — thin adapter from unified handlers to fuz_app's `RpcAction` format.
  *
- * Maps `(input, ActionContext) -> handler(input, {backend, request_id})`.
- * All business logic lives in `server/zzz_action_handlers.ts`.
+ * Binds `create_zzz_action_handlers(backend)` once and pairs each handler
+ * with its spec for `create_rpc_endpoint`. All business logic lives in
+ * `server/zzz_action_handlers.ts`.
  *
  * @module
  */
 
 import type {RpcAction, ActionHandler} from '@fuzdev/fuz_app/actions/action_rpc.js';
 import type {RequestResponseActionSpec} from '@fuzdev/fuz_app/actions/action_spec.js';
+import {is_protocol_action_method} from '@fuzdev/fuz_app/actions/action_codegen.js';
 
 import type {Backend} from './backend.js';
-import {zzz_action_handlers} from './zzz_action_handlers.js';
+import {create_zzz_action_handlers} from './zzz_action_handlers.js';
 import {all_action_specs} from '../action_specs.js';
 import type {BackendRequestResponseMethod} from '../action_metatypes.js';
 
@@ -23,23 +25,29 @@ export interface ZzzRpcDeps {
 /**
  * Create all zzz RPC actions.
  *
- * Returns `RpcAction[]` for `create_rpc_endpoint`.
- * Each handler wraps the unified handler with the fuz_app ActionContext adapter.
+ * Returns `RpcAction[]` for `create_rpc_endpoint`. Each handler is built
+ * once at boot from `create_zzz_action_handlers(backend)`; the handlers
+ * close over `backend` and receive fuz_app's unified `ActionContext`
+ * directly — no per-call adapter shim.
+ *
+ * fuz_app's protocol actions (heartbeat, cancel) are excluded — `cancel`
+ * is `remote_notification` (filtered by `kind`), and `heartbeat`'s handler
+ * lives in fuz_app's `protocol_actions` bundle (WS liveness only), so
+ * HTTP RPC doesn't expose it.
+ *
+ * `BackendActionHandlers` is keyed by `BackendRequestResponseMethod`,
+ * which is generated from `all_action_specs` — so every non-protocol
+ * request_response spec is guaranteed at compile time to have a handler.
+ * The cast below is the unavoidable bridge from `string` to that union.
  */
 export const create_zzz_rpc_actions = (deps: ZzzRpcDeps): Array<RpcAction> => {
-	const {backend} = deps;
+	const handlers = create_zzz_action_handlers(deps.backend);
 
 	return all_action_specs
 		.filter((spec): spec is RequestResponseActionSpec => spec.kind === 'request_response')
-		.filter((spec) => spec.method in zzz_action_handlers)
+		.filter((spec) => !is_protocol_action_method(spec.method))
 		.map((spec) => ({
 			spec,
-			handler: ((input, ctx) =>
-				zzz_action_handlers[spec.method as BackendRequestResponseMethod](input, {
-					backend,
-					request_id: ctx.request_id,
-					notify: ctx.notify,
-					signal: ctx.signal,
-				})) satisfies ActionHandler,
+			handler: handlers[spec.method as BackendRequestResponseMethod] as ActionHandler,
 		}));
 };

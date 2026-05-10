@@ -48,7 +48,7 @@
 		{
 			"method": "GET",
 			"path": "/health",
-			"auth": {"type": "none"},
+			"auth": {"account": "none", "actor": "none"},
 			"applicable_middleware": ["host_validation"],
 			"description": "Health check",
 			"is_mutation": false,
@@ -68,7 +68,7 @@
 		{
 			"method": "GET",
 			"path": "/api/account/verify",
-			"auth": {"type": "authenticated"},
+			"auth": {"account": "required", "actor": "none"},
 			"applicable_middleware": [
 				"host_validation",
 				"origin",
@@ -111,7 +111,7 @@
 		{
 			"method": "POST",
 			"path": "/api/account/login",
-			"auth": {"type": "none"},
+			"auth": {"account": "none", "actor": "none"},
 			"applicable_middleware": [
 				"host_validation",
 				"origin",
@@ -175,7 +175,7 @@
 		{
 			"method": "POST",
 			"path": "/api/account/logout",
-			"auth": {"type": "authenticated"},
+			"auth": {"account": "required", "actor": "none"},
 			"applicable_middleware": [
 				"host_validation",
 				"origin",
@@ -223,7 +223,7 @@
 		{
 			"method": "POST",
 			"path": "/api/account/password",
-			"auth": {"type": "authenticated"},
+			"auth": {"account": "required", "actor": "none"},
 			"applicable_middleware": [
 				"host_validation",
 				"origin",
@@ -301,7 +301,7 @@
 		{
 			"method": "GET",
 			"path": "/api/account/status",
-			"auth": {"type": "none"},
+			"auth": {"account": "none", "actor": "none"},
 			"applicable_middleware": [
 				"host_validation",
 				"origin",
@@ -367,7 +367,7 @@
 							{"type": "null"}
 						]
 					},
-					"permits": {
+					"role_grants": {
 						"type": "array",
 						"items": {
 							"type": "object",
@@ -378,6 +378,7 @@
 									"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 								},
 								"role": {"type": "string"},
+								"scope_kind": {"anyOf": [{"type": "string"}, {"type": "null"}]},
 								"scope_id": {
 									"anyOf": [
 										{
@@ -401,12 +402,20 @@
 									]
 								}
 							},
-							"required": ["id", "role", "scope_id", "created_at", "expires_at", "granted_by"],
+							"required": [
+								"id",
+								"role",
+								"scope_kind",
+								"scope_id",
+								"created_at",
+								"expires_at",
+								"granted_by"
+							],
 							"additionalProperties": false
 						}
 					}
 				},
-				"required": ["account", "actor", "permits"],
+				"required": ["account", "actor", "role_grants"],
 				"additionalProperties": false
 			},
 			"error_schemas": {
@@ -439,7 +448,7 @@
 		{
 			"method": "GET",
 			"path": "/api/server/status",
-			"auth": {"type": "authenticated"},
+			"auth": {"account": "required", "actor": "none"},
 			"applicable_middleware": [
 				"host_validation",
 				"origin",
@@ -487,7 +496,7 @@
 		{
 			"method": "POST",
 			"path": "/api/rpc",
-			"auth": {"type": "none"},
+			"auth": {"account": "none", "actor": "none"},
 			"applicable_middleware": [
 				"host_validation",
 				"origin",
@@ -530,7 +539,7 @@
 		{
 			"method": "GET",
 			"path": "/api/rpc",
-			"auth": {"type": "none"},
+			"auth": {"account": "none", "actor": "none"},
 			"applicable_middleware": [
 				"host_validation",
 				"origin",
@@ -573,7 +582,7 @@
 		{
 			"method": "POST",
 			"path": "/api/account/bootstrap",
-			"auth": {"type": "none"},
+			"auth": {"account": "none", "actor": "none"},
 			"applicable_middleware": [
 				"host_validation",
 				"origin",
@@ -655,7 +664,7 @@
 			"methods": [
 				{
 					"name": "ping",
-					"auth": {"type": "none"},
+					"auth": {"account": "none", "actor": "none"},
 					"input_schema": null,
 					"output_schema": {
 						"type": "object",
@@ -669,7 +678,7 @@
 				},
 				{
 					"name": "session_load",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": null,
 					"output_schema": {
 						"type": "object",
@@ -765,7 +774,7 @@
 				},
 				{
 					"name": "diskfile_update",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {"path": {"type": "string"}, "content": {"type": "string"}},
@@ -779,7 +788,7 @@
 				},
 				{
 					"name": "diskfile_delete",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {"path": {"type": "string"}},
@@ -793,7 +802,7 @@
 				},
 				{
 					"name": "directory_create",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {"path": {"type": "string"}},
@@ -807,7 +816,7 @@
 				},
 				{
 					"name": "completion_create",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -940,7 +949,7 @@
 				},
 				{
 					"name": "ollama_list",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": null,
 					"output_schema": {
 						"anyOf": [
@@ -995,7 +1004,7 @@
 				},
 				{
 					"name": "ollama_ps",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": null,
 					"output_schema": {
 						"anyOf": [
@@ -1051,7 +1060,7 @@
 				},
 				{
 					"name": "ollama_show",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -1107,7 +1116,7 @@
 				},
 				{
 					"name": "ollama_pull",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -1136,7 +1145,7 @@
 				},
 				{
 					"name": "ollama_delete",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {"model": {"type": "string"}},
@@ -1150,7 +1159,7 @@
 				},
 				{
 					"name": "ollama_copy",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {"source": {"type": "string"}, "destination": {"type": "string"}},
@@ -1164,7 +1173,7 @@
 				},
 				{
 					"name": "ollama_create",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -1210,7 +1219,7 @@
 				},
 				{
 					"name": "ollama_unload",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {"model": {"type": "string"}},
@@ -1224,7 +1233,7 @@
 				},
 				{
 					"name": "provider_load_status",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -1275,7 +1284,12 @@
 				},
 				{
 					"name": "provider_update_api_key",
-					"auth": {"type": "keeper"},
+					"auth": {
+						"account": "required",
+						"actor": "required",
+						"roles": ["keeper"],
+						"credential_types": ["daemon_token"]
+					},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -1283,7 +1297,13 @@
 								"type": "string",
 								"enum": ["ollama", "claude", "chatgpt", "gemini"]
 							},
-							"api_key": {"type": "string"}
+							"api_key": {"type": "string"},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							}
 						},
 						"required": ["provider_name", "api_key"],
 						"additionalProperties": false
@@ -1326,7 +1346,7 @@
 				},
 				{
 					"name": "terminal_create",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -1360,7 +1380,7 @@
 				},
 				{
 					"name": "terminal_data_send",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -1381,7 +1401,7 @@
 				},
 				{
 					"name": "terminal_resize",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -1407,7 +1427,7 @@
 				},
 				{
 					"name": "terminal_close",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -1433,7 +1453,7 @@
 				},
 				{
 					"name": "workspace_open",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {"path": {"type": "string"}},
@@ -1494,7 +1514,7 @@
 				},
 				{
 					"name": "workspace_close",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {"path": {"type": "string"}},
@@ -1508,7 +1528,7 @@
 				},
 				{
 					"name": "workspace_list",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": null,
 					"output_schema": {
 						"type": "object",
@@ -1536,7 +1556,7 @@
 				},
 				{
 					"name": "_test_emit_notifications",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {"count": {"type": "integer", "minimum": 0, "maximum": 100}},
@@ -1561,7 +1581,7 @@
 				},
 				{
 					"name": "admin_account_list",
-					"auth": {"type": "role", "role": "admin"},
+					"auth": {"account": "required", "actor": "required", "roles": ["admin"]},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -1649,7 +1669,7 @@
 												{"type": "null"}
 											]
 										},
-										"permits": {
+										"role_grants": {
 											"type": "array",
 											"items": {
 												"type": "object",
@@ -1660,6 +1680,7 @@
 														"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 													},
 													"role": {"type": "string"},
+													"scope_kind": {"anyOf": [{"type": "string"}, {"type": "null"}]},
 													"scope_id": {
 														"anyOf": [
 															{
@@ -1686,6 +1707,7 @@
 												"required": [
 													"id",
 													"role",
+													"scope_kind",
 													"scope_id",
 													"created_at",
 													"expires_at",
@@ -1705,6 +1727,7 @@
 														"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 													},
 													"role": {"type": "string"},
+													"scope_kind": {"anyOf": [{"type": "string"}, {"type": "null"}]},
 													"scope_id": {
 														"anyOf": [
 															{
@@ -1727,6 +1750,7 @@
 												"required": [
 													"id",
 													"role",
+													"scope_kind",
 													"scope_id",
 													"from_actor_id",
 													"from_username",
@@ -1737,7 +1761,7 @@
 											}
 										}
 									},
-									"required": ["account", "actor", "permits", "pending_offers"],
+									"required": ["account", "actor", "role_grants", "pending_offers"],
 									"additionalProperties": false
 								}
 							},
@@ -1750,12 +1774,12 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "List all accounts with their actors, permits, and pending offers. Admin-only.",
+					"description": "List all accounts with their actors, role_grants, and pending offers. Admin-only.",
 					"rate_limit_key": null
 				},
 				{
 					"name": "admin_session_list",
-					"auth": {"type": "role", "role": "admin"},
+					"auth": {"account": "required", "actor": "required", "roles": ["admin"]},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -1808,7 +1832,7 @@
 				},
 				{
 					"name": "admin_session_revoke_all",
-					"auth": {"type": "role", "role": "admin"},
+					"auth": {"account": "required", "actor": "required", "roles": ["admin"]},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -1840,7 +1864,7 @@
 				},
 				{
 					"name": "admin_token_revoke_all",
-					"auth": {"type": "role", "role": "admin"},
+					"auth": {"account": "required", "actor": "required", "roles": ["admin"]},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -1872,7 +1896,7 @@
 				},
 				{
 					"name": "audit_log_list",
-					"auth": {"type": "role", "role": "admin"},
+					"auth": {"account": "required", "actor": "required", "roles": ["admin"]},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -2027,8 +2051,8 @@
 					"rate_limit_key": null
 				},
 				{
-					"name": "audit_log_permit_history",
-					"auth": {"type": "role", "role": "admin"},
+					"name": "audit_log_role_grant_history",
+					"auth": {"account": "required", "actor": "required", "roles": ["admin"]},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -2150,12 +2174,12 @@
 						"additionalProperties": false
 					},
 					"side_effects": false,
-					"description": "List permit grant and revoke events with usernames. Admin-only.",
+					"description": "List role_grant grant and revoke events with usernames. Admin-only.",
 					"rate_limit_key": null
 				},
 				{
 					"name": "invite_create",
-					"auth": {"type": "role", "role": "admin"},
+					"auth": {"account": "required", "actor": "required", "roles": ["admin"]},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -2268,7 +2292,7 @@
 				},
 				{
 					"name": "invite_list",
-					"auth": {"type": "role", "role": "admin"},
+					"auth": {"account": "required", "actor": "required", "roles": ["admin"]},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -2364,7 +2388,7 @@
 				},
 				{
 					"name": "invite_delete",
-					"auth": {"type": "role", "role": "admin"},
+					"auth": {"account": "required", "actor": "required", "roles": ["admin"]},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -2396,7 +2420,7 @@
 				},
 				{
 					"name": "app_settings_get",
-					"auth": {"type": "role", "role": "admin"},
+					"auth": {"account": "required", "actor": "required", "roles": ["admin"]},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -2442,7 +2466,7 @@
 				},
 				{
 					"name": "app_settings_update",
-					"auth": {"type": "role", "role": "admin"},
+					"auth": {"account": "required", "actor": "required", "roles": ["admin"]},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -2493,8 +2517,8 @@
 					"rate_limit_key": "account"
 				},
 				{
-					"name": "permit_offer_create",
-					"auth": {"type": "authenticated"},
+					"name": "role_grant_offer_create",
+					"auth": {"account": "required", "actor": "required"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -2519,6 +2543,10 @@
 								"type": "string",
 								"pattern": "^[a-z][a-z_]*[a-z]$|^[a-z]$",
 								"description": "Role being offered."
+							},
+							"scope_kind": {
+								"description": "Machine-readable kind tag for `scope_id` — paired-null with `scope_id` (both null for global, both non-null for scoped). Required iff `scope_id` is set.",
+								"anyOf": [{"type": "string"}, {"type": "null"}]
 							},
 							"scope_id": {
 								"description": "Scope id for resource-scoped grants (e.g. classroom id). `null` for global.",
@@ -2585,6 +2613,10 @@
 										"pattern": "^[a-z][a-z_]*[a-z]$|^[a-z]$",
 										"description": "Role being offered."
 									},
+									"scope_kind": {
+										"anyOf": [{"type": "string"}, {"type": "null"}],
+										"description": "Machine-readable kind tag for `scope_id` — paired-null with `scope_id` (both null for global, both non-null for scoped)."
+									},
 									"scope_id": {
 										"anyOf": [
 											{
@@ -2594,7 +2626,7 @@
 											},
 											{"type": "null"}
 										],
-										"description": "Scope the offered permit applies to (e.g. a classroom id). `null` for global permits."
+										"description": "Scope the offered role_grant applies to (e.g. a classroom id). `null` for global role_grants."
 									},
 									"message": {
 										"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}],
@@ -2626,9 +2658,9 @@
 									},
 									"superseded_at": {
 										"anyOf": [{"type": "string"}, {"type": "null"}],
-										"description": "ISO timestamp when this offer was obsoleted by a sibling accept or by revoke of the resulting permit."
+										"description": "ISO timestamp when this offer was obsoleted by a sibling accept or by revoke of the resulting role_grant."
 									},
-									"resulting_permit_id": {
+									"resulting_role_grant_id": {
 										"anyOf": [
 											{
 												"type": "string",
@@ -2637,7 +2669,7 @@
 											},
 											{"type": "null"}
 										],
-										"description": "Permit produced by accepting this offer. `null` until/unless accepted."
+										"description": "Role grant produced by accepting this offer. `null` until/unless accepted."
 									}
 								},
 								"required": [
@@ -2646,6 +2678,7 @@
 									"to_account_id",
 									"to_actor_id",
 									"role",
+									"scope_kind",
 									"scope_id",
 									"message",
 									"created_at",
@@ -2655,22 +2688,22 @@
 									"decline_reason",
 									"retracted_at",
 									"superseded_at",
-									"resulting_permit_id"
+									"resulting_role_grant_id"
 								],
 								"additionalProperties": false,
-								"description": "A permit offer — a pending grant awaiting recipient consent."
+								"description": "A role_grant offer — a pending grant awaiting recipient consent."
 							}
 						},
 						"required": ["offer"],
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Offer a permit to another account. Grantor must hold the offered role (or pass a consumer authorize callback); role must be web_grantable.",
+					"description": "Offer a role_grant to another account. Grantor must hold the offered role (or pass a consumer authorize callback); role's `grant_paths` must include `'admin'`.",
 					"rate_limit_key": null
 				},
 				{
-					"name": "permit_offer_accept",
-					"auth": {"type": "authenticated"},
+					"name": "role_grant_offer_accept",
+					"auth": {"account": "required", "actor": "required"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -2693,7 +2726,7 @@
 					"output_schema": {
 						"type": "object",
 						"properties": {
-							"permit_id": {
+							"role_grant_id": {
 								"type": "string",
 								"format": "uuid",
 								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
@@ -2735,6 +2768,10 @@
 										"pattern": "^[a-z][a-z_]*[a-z]$|^[a-z]$",
 										"description": "Role being offered."
 									},
+									"scope_kind": {
+										"anyOf": [{"type": "string"}, {"type": "null"}],
+										"description": "Machine-readable kind tag for `scope_id` — paired-null with `scope_id` (both null for global, both non-null for scoped)."
+									},
 									"scope_id": {
 										"anyOf": [
 											{
@@ -2744,7 +2781,7 @@
 											},
 											{"type": "null"}
 										],
-										"description": "Scope the offered permit applies to (e.g. a classroom id). `null` for global permits."
+										"description": "Scope the offered role_grant applies to (e.g. a classroom id). `null` for global role_grants."
 									},
 									"message": {
 										"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}],
@@ -2776,9 +2813,9 @@
 									},
 									"superseded_at": {
 										"anyOf": [{"type": "string"}, {"type": "null"}],
-										"description": "ISO timestamp when this offer was obsoleted by a sibling accept or by revoke of the resulting permit."
+										"description": "ISO timestamp when this offer was obsoleted by a sibling accept or by revoke of the resulting role_grant."
 									},
-									"resulting_permit_id": {
+									"resulting_role_grant_id": {
 										"anyOf": [
 											{
 												"type": "string",
@@ -2787,7 +2824,7 @@
 											},
 											{"type": "null"}
 										],
-										"description": "Permit produced by accepting this offer. `null` until/unless accepted."
+										"description": "Role grant produced by accepting this offer. `null` until/unless accepted."
 									}
 								},
 								"required": [
@@ -2796,6 +2833,7 @@
 									"to_account_id",
 									"to_actor_id",
 									"role",
+									"scope_kind",
 									"scope_id",
 									"message",
 									"created_at",
@@ -2805,10 +2843,10 @@
 									"decline_reason",
 									"retracted_at",
 									"superseded_at",
-									"resulting_permit_id"
+									"resulting_role_grant_id"
 								],
 								"additionalProperties": false,
-								"description": "A permit offer — a pending grant awaiting recipient consent."
+								"description": "A role_grant offer — a pending grant awaiting recipient consent."
 							},
 							"superseded_offer_ids": {
 								"type": "array",
@@ -2819,16 +2857,16 @@
 								}
 							}
 						},
-						"required": ["permit_id", "offer", "superseded_offer_ids"],
+						"required": ["role_grant_id", "offer", "superseded_offer_ids"],
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Accept an offer. Atomically marks the offer accepted, inserts the permit, and supersedes sibling pending offers for the same (account, role, scope).",
+					"description": "Accept an offer. Atomically marks the offer accepted, inserts the role_grant, and supersedes sibling pending offers for the same (account, role, scope).",
 					"rate_limit_key": null
 				},
 				{
-					"name": "permit_offer_decline",
-					"auth": {"type": "authenticated"},
+					"name": "role_grant_offer_decline",
+					"auth": {"account": "required", "actor": "required"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -2863,8 +2901,8 @@
 					"rate_limit_key": null
 				},
 				{
-					"name": "permit_offer_retract",
-					"auth": {"type": "authenticated"},
+					"name": "role_grant_offer_retract",
+					"auth": {"account": "required", "actor": "required"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -2895,8 +2933,8 @@
 					"rate_limit_key": null
 				},
 				{
-					"name": "permit_offer_list",
-					"auth": {"type": "authenticated"},
+					"name": "role_grant_offer_list",
+					"auth": {"account": "required", "actor": "required"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -2962,6 +3000,10 @@
 											"pattern": "^[a-z][a-z_]*[a-z]$|^[a-z]$",
 											"description": "Role being offered."
 										},
+										"scope_kind": {
+											"anyOf": [{"type": "string"}, {"type": "null"}],
+											"description": "Machine-readable kind tag for `scope_id` — paired-null with `scope_id` (both null for global, both non-null for scoped)."
+										},
 										"scope_id": {
 											"anyOf": [
 												{
@@ -2971,7 +3013,7 @@
 												},
 												{"type": "null"}
 											],
-											"description": "Scope the offered permit applies to (e.g. a classroom id). `null` for global permits."
+											"description": "Scope the offered role_grant applies to (e.g. a classroom id). `null` for global role_grants."
 										},
 										"message": {
 											"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}],
@@ -3003,9 +3045,9 @@
 										},
 										"superseded_at": {
 											"anyOf": [{"type": "string"}, {"type": "null"}],
-											"description": "ISO timestamp when this offer was obsoleted by a sibling accept or by revoke of the resulting permit."
+											"description": "ISO timestamp when this offer was obsoleted by a sibling accept or by revoke of the resulting role_grant."
 										},
-										"resulting_permit_id": {
+										"resulting_role_grant_id": {
 											"anyOf": [
 												{
 													"type": "string",
@@ -3014,7 +3056,7 @@
 												},
 												{"type": "null"}
 											],
-											"description": "Permit produced by accepting this offer. `null` until/unless accepted."
+											"description": "Role grant produced by accepting this offer. `null` until/unless accepted."
 										}
 									},
 									"required": [
@@ -3023,6 +3065,7 @@
 										"to_account_id",
 										"to_actor_id",
 										"role",
+										"scope_kind",
 										"scope_id",
 										"message",
 										"created_at",
@@ -3032,10 +3075,10 @@
 										"decline_reason",
 										"retracted_at",
 										"superseded_at",
-										"resulting_permit_id"
+										"resulting_role_grant_id"
 									],
 									"additionalProperties": false,
-									"description": "A permit offer — a pending grant awaiting recipient consent."
+									"description": "A role_grant offer — a pending grant awaiting recipient consent."
 								}
 							}
 						},
@@ -3047,8 +3090,8 @@
 					"rate_limit_key": null
 				},
 				{
-					"name": "permit_offer_history",
-					"auth": {"type": "authenticated"},
+					"name": "role_grant_offer_history",
+					"auth": {"account": "required", "actor": "required"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -3125,6 +3168,10 @@
 											"pattern": "^[a-z][a-z_]*[a-z]$|^[a-z]$",
 											"description": "Role being offered."
 										},
+										"scope_kind": {
+											"anyOf": [{"type": "string"}, {"type": "null"}],
+											"description": "Machine-readable kind tag for `scope_id` — paired-null with `scope_id` (both null for global, both non-null for scoped)."
+										},
 										"scope_id": {
 											"anyOf": [
 												{
@@ -3134,7 +3181,7 @@
 												},
 												{"type": "null"}
 											],
-											"description": "Scope the offered permit applies to (e.g. a classroom id). `null` for global permits."
+											"description": "Scope the offered role_grant applies to (e.g. a classroom id). `null` for global role_grants."
 										},
 										"message": {
 											"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}],
@@ -3166,9 +3213,9 @@
 										},
 										"superseded_at": {
 											"anyOf": [{"type": "string"}, {"type": "null"}],
-											"description": "ISO timestamp when this offer was obsoleted by a sibling accept or by revoke of the resulting permit."
+											"description": "ISO timestamp when this offer was obsoleted by a sibling accept or by revoke of the resulting role_grant."
 										},
-										"resulting_permit_id": {
+										"resulting_role_grant_id": {
 											"anyOf": [
 												{
 													"type": "string",
@@ -3177,7 +3224,7 @@
 												},
 												{"type": "null"}
 											],
-											"description": "Permit produced by accepting this offer. `null` until/unless accepted."
+											"description": "Role grant produced by accepting this offer. `null` until/unless accepted."
 										}
 									},
 									"required": [
@@ -3186,6 +3233,7 @@
 										"to_account_id",
 										"to_actor_id",
 										"role",
+										"scope_kind",
 										"scope_id",
 										"message",
 										"created_at",
@@ -3195,10 +3243,10 @@
 										"decline_reason",
 										"retracted_at",
 										"superseded_at",
-										"resulting_permit_id"
+										"resulting_role_grant_id"
 									],
 									"additionalProperties": false,
-									"description": "A permit offer — a pending grant awaiting recipient consent."
+									"description": "A role_grant offer — a pending grant awaiting recipient consent."
 								}
 							}
 						},
@@ -3210,8 +3258,8 @@
 					"rate_limit_key": null
 				},
 				{
-					"name": "permit_revoke",
-					"auth": {"type": "role", "role": "admin"},
+					"name": "role_grant_revoke",
+					"auth": {"account": "required", "actor": "required", "roles": ["admin"]},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -3219,16 +3267,16 @@
 								"type": "string",
 								"format": "uuid",
 								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-								"description": "Actor whose permit to revoke."
+								"description": "Actor whose role_grant to revoke."
 							},
-							"permit_id": {
+							"role_grant_id": {
 								"type": "string",
 								"format": "uuid",
 								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-								"description": "The permit to revoke."
+								"description": "The role_grant to revoke."
 							},
 							"reason": {
-								"description": "Optional free-form reason; stamped on `permit.revoked_reason` and surfaced on the revokee WS notification.",
+								"description": "Optional free-form reason; stamped on `role_grant.revoked_reason` and surfaced on the revokee WS notification.",
 								"anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}]
 							},
 							"acting": {
@@ -3238,7 +3286,7 @@
 								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
 							}
 						},
-						"required": ["actor_id", "permit_id"],
+						"required": ["actor_id", "role_grant_id"],
 						"additionalProperties": false
 					},
 					"output_schema": {
@@ -3251,12 +3299,12 @@
 						"additionalProperties": false
 					},
 					"side_effects": true,
-					"description": "Revoke an active permit on a target actor. Admin-only. Supersedes any pending offers for the same (account, role, scope). Fires permit_revoke + permit_offer_supersede notifications.",
+					"description": "Revoke an active role_grant on a target actor. Admin-only. Supersedes any pending offers for the same (account, role, scope). Fires role_grant_revoke + role_grant_offer_supersede notifications.",
 					"rate_limit_key": "account"
 				},
 				{
 					"name": "account_verify",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": null,
 					"output_schema": {
 						"type": "object",
@@ -3294,7 +3342,7 @@
 				},
 				{
 					"name": "account_session_list",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": null,
 					"output_schema": {
 						"type": "object",
@@ -3328,7 +3376,7 @@
 				},
 				{
 					"name": "account_session_revoke",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -3356,7 +3404,7 @@
 				},
 				{
 					"name": "account_session_revoke_all",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": null,
 					"output_schema": {
 						"type": "object",
@@ -3370,7 +3418,7 @@
 				},
 				{
 					"name": "account_token_create",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
@@ -3399,7 +3447,7 @@
 				},
 				{
 					"name": "account_token_list",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": null,
 					"output_schema": {
 						"type": "object",
@@ -3443,7 +3491,7 @@
 				},
 				{
 					"name": "account_token_revoke",
-					"auth": {"type": "authenticated"},
+					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {

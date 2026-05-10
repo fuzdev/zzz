@@ -121,6 +121,7 @@ export const start_server = async (): Promise<void> => {
 			path: config.websocket_path,
 			app,
 			backend,
+			db: app_backend.deps.db,
 			upgradeWebSocket,
 			artificial_delay: config.artificial_delay,
 			transport,
@@ -132,14 +133,12 @@ export const start_server = async (): Promise<void> => {
 		// token_revoke_all / password_change → close_sockets_for_account.
 		// `create_ws_logout_closer` covers user-initiated logout (which the
 		// guard intentionally ignores) by closing every socket on the account.
-		const original_on_audit_event = app_backend.deps.on_audit_event;
-		const ws_guard = create_ws_auth_guard(transport, log);
-		const ws_logout_closer = create_ws_logout_closer(transport, log);
-		app_backend.deps.on_audit_event = (event) => {
-			original_on_audit_event(event);
-			ws_guard(event);
-			ws_logout_closer(event);
-		};
+		// Post-rework: appended to the mutable `audit.on_event_chain` rather than
+		// monkey-patching `app_backend.deps.on_audit_event`.
+		app_backend.deps.audit.on_event_chain.push(
+			create_ws_auth_guard(transport, log),
+			create_ws_logout_closer(transport, log),
+		);
 	}
 
 	// Write daemon info for CLI discovery

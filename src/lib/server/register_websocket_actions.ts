@@ -2,12 +2,15 @@
  * WebSocket endpoint wiring — thin wrapper over fuz_app's
  * `register_action_ws`.
  *
- * zzz supplies the action tuples (spec + handler) and a context-extender
- * that adds the domain `Backend` onto the base per-request context. All
- * dispatch, auth, validation, and transport bookkeeping live in fuz_app.
+ * zzz supplies the action tuples (spec + handler) and the per-request DB
+ * handle; fuz_app owns dispatch, auth, validation, and transport
+ * bookkeeping. Domain deps flow through `create_zzz_action_handlers(backend)`
+ * — the factory closes over the `Backend`, so handlers receive the
+ * unified `ActionContext` directly.
  *
- * The shared `heartbeat_action` is spread first so disconnect
- * detection is identical across every fuz_app consumer.
+ * The shared `protocol_actions` bundle (heartbeat + cancel pre-paired with
+ * their handlers) is spread first so disconnect detection and per-request
+ * cancellation are identical across every fuz_app consumer.
  *
  * @module
  */
@@ -15,23 +18,22 @@
 import type {Hono} from 'hono';
 import type {UpgradeWebSocket} from 'hono/ws';
 import {register_action_ws} from '@fuzdev/fuz_app/actions/register_action_ws.js';
-import type {
-	Action,
-	BaseHandlerContext,
-	WsActionHandler,
-} from '@fuzdev/fuz_app/actions/action_types.js';
+import type {Action} from '@fuzdev/fuz_app/actions/action_types.js';
 import {BackendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws_backend.js';
 import {protocol_actions} from '@fuzdev/fuz_app/actions/protocol.js';
 import {is_protocol_action_method} from '@fuzdev/fuz_app/actions/action_codegen.js';
+import type {Db} from '@fuzdev/fuz_app/db/db.js';
 
 import {all_action_specs} from '../action_specs.js';
 import type {Backend} from './backend.js';
-import {zzz_action_handlers} from './zzz_action_handlers.js';
+import {create_zzz_action_handlers, get_action_handler} from './zzz_action_handlers.js';
 
 export interface RegisterWebsocketActionsOptions {
 	path: string;
 	app: Hono;
 	backend: Backend;
+	/** Pool-level DB — the dispatcher wraps in `db.transaction` for `side_effects: true` actions. */
+	db: Db;
 	/** @see https://hono.dev/helpers/websocket */
 	upgradeWebSocket: UpgradeWebSocket;
 	/** Artificial response delay in ms (testing). */
@@ -39,39 +41,37 @@ export interface RegisterWebsocketActionsOptions {
 	transport?: BackendWebsocketTransport;
 }
 
-type ZzzWsContext = BaseHandlerContext & {backend: Backend};
-
 /**
  * Registers the WebSocket endpoint for all zzz request/response actions.
  *
- * The zzz `Backend` is exposed on every handler's context. Per-action auth,
- * Zod validation, and socket-scoped `notify` / `signal` come from fuz_app.
+ * Per-action auth, Zod validation, transaction scope, and socket-scoped
+ * `notify` / `signal` come from fuz_app. zzz domain state reaches handlers
+ * through the `Backend` closure baked into the handler map at boot.
  */
 export const register_websocket_actions = ({
 	path,
 	app,
 	backend,
+	db,
 	upgradeWebSocket,
 	artificial_delay = 0,
 	transport = new BackendWebsocketTransport(),
 }: RegisterWebsocketActionsOptions): void => {
 	backend.peer.transports.register_transport(transport);
 
+	const handlers = create_zzz_action_handlers(backend);
+
 	// Build the action array: fuz_app's protocol_actions (heartbeat + cancel
 	// pre-paired with their handlers) first, then every zzz spec paired with
 	// its handler — protocol specs are skipped during iteration since they're
-	// already registered above.
-	const actions: Array<Action<ZzzWsContext>> = [
-		...(protocol_actions as ReadonlyArray<Action<ZzzWsContext>>),
-	];
+	// already registered above. Specs without a handler (backend-initiated
+	// notifications, client-only) are registered spec-only.
+	const actions: Array<Action> = [...protocol_actions];
 	for (const spec of all_action_specs) {
 		if (is_protocol_action_method(spec.method)) continue;
-		const handler = (zzz_action_handlers as Record<string, unknown>)[spec.method];
+		const handler = get_action_handler(handlers, spec.method);
 		if (handler) {
-			actions.push({
-				spec,
-				handler: handler as WsActionHandler<ZzzWsContext>,
-			});
+			actions.push({spec, handler});
 		} else {
 			actions.push({spec});
 		}
@@ -82,7 +82,7 @@ export const register_websocket_actions = ({
 		app,
 		upgradeWebSocket,
 		actions,
-		extend_context: (base) => ({...base, backend}),
+		db,
 		transport,
 		artificial_delay,
 		log: backend.log ?? undefined,

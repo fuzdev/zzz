@@ -1,15 +1,18 @@
 /**
- * Unified action handlers for zzz.
+ * Unified action handler factory for zzz.
  *
- * Single source of truth for all 23 request_response handlers.
- * Both HTTP RPC and WebSocket dispatch call these same functions.
- * Handler signature mirrors Rust's `fn(params, ctx) -> Result<Value>`.
+ * `create_zzz_action_handlers(backend)` is the single source of truth for
+ * all 24 request_response handlers. Both HTTP RPC and WebSocket dispatch
+ * call into the same map. The `Backend` is closed over at construction
+ * time — handlers receive fuz_app's unified `ActionContext` (auth, db,
+ * request_id, notify, signal) without any context extension.
  *
  * @module
  */
 
 import {ThrownJsonrpcError} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
 import {update_env_variable} from '@fuzdev/fuz_app/env/update_env_variable.js';
+import type {ActionHandler} from '@fuzdev/fuz_app/actions/action_rpc.js';
 import {create_uuid} from '@fuzdev/fuz_util/id.js';
 
 import type {Backend} from './backend.js';
@@ -21,38 +24,38 @@ import {SerializableDisknode} from '../diskfile_types.js';
 import {jsonrpc_errors} from '../zzz_jsonrpc_errors.js';
 import type {OllamaListResponse, OllamaPsResponse, OllamaShowResponse} from '../ollama_helpers.js';
 import type {ActionOutputs} from '../action_collections.js';
+import type {BackendRequestResponseMethod} from '../action_metatypes.js';
 import type {BackendActionHandlers} from './backend_action_types.js';
 
 /**
- * Per-request context passed to every handler.
- * Mirrors Rust's `HandlerContext` — transport constructs it, handler borrows it.
+ * Look up a handler in the typed map by method name.
+ *
+ * Centralizes the unavoidable string-key → typed-handler cast that both
+ * transports (`zzz_rpc_actions.ts`, `register_websocket_actions.ts`) need.
+ * Returns `undefined` for methods the factory doesn't produce — e.g.,
+ * fuz_app's `cancel` (handler lives in `protocol_actions`) or
+ * notification specs (no request_response handler).
  */
-export interface ZzzHandlerContext {
-	backend: Backend;
-	/** From the JSON-RPC envelope. */
-	request_id: string | number | null;
-	/**
-	 * Send a request-scoped JSON-RPC notification to the originator.
-	 * WS routes to the originating socket; HTTP no-ops with a DEV warn.
-	 */
-	notify: (method: string, params: unknown) => void;
-	/** Fires on request cancellation (HTTP disconnect or WS close). */
-	signal: AbortSignal;
-}
+export const get_action_handler = (
+	handlers: BackendActionHandlers,
+	method: string,
+): ActionHandler | undefined =>
+	method in handlers
+		? (handlers[method as BackendRequestResponseMethod] as ActionHandler)
+		: undefined;
 
 /**
- * All 23 request_response handlers as pure functions.
+ * Build the 24 request_response handlers bound to a zzz `Backend`.
  *
  * Logic sourced from the RPC versions (cleaner than the old WS handlers —
  * no Deno-only bug in provider_update_api_key, no console.log noise).
  */
-export const zzz_action_handlers: BackendActionHandlers = {
+export const create_zzz_action_handlers = (backend: Backend): BackendActionHandlers => ({
 	ping: (_input, ctx) => ({
-		ping_id: ctx.request_id!, // request_response actions always have an id
+		ping_id: ctx.request_id,
 	}),
 
-	session_load: async (_input, ctx) => {
-		const {backend} = ctx;
+	session_load: async () => {
 		await backend.workspaces_ready();
 
 		const files_array: Array<SerializableDisknode> = [];
@@ -75,10 +78,10 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		};
 	},
 
-	diskfile_update: async (input, ctx) => {
+	diskfile_update: async (input) => {
 		const {path, content} = input;
 		try {
-			await ctx.backend.scoped_fs.write_file(path, content);
+			await backend.scoped_fs.write_file(path, content);
 			return null;
 		} catch (error) {
 			throw jsonrpc_errors.internal_error(
@@ -87,10 +90,10 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 	},
 
-	diskfile_delete: async (input, ctx) => {
+	diskfile_delete: async (input) => {
 		const {path} = input;
 		try {
-			await ctx.backend.scoped_fs.rm(path);
+			await backend.scoped_fs.rm(path);
 			return null;
 		} catch (error) {
 			throw jsonrpc_errors.internal_error(
@@ -99,10 +102,10 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 	},
 
-	directory_create: async (input, ctx) => {
+	directory_create: async (input) => {
 		const {path} = input;
 		try {
-			await ctx.backend.scoped_fs.mkdir(path, {recursive: true});
+			await backend.scoped_fs.mkdir(path, {recursive: true});
 			return null;
 		} catch (error) {
 			throw jsonrpc_errors.internal_error(
@@ -112,7 +115,6 @@ export const zzz_action_handlers: BackendActionHandlers = {
 	},
 
 	completion_create: async (input, ctx) => {
-		const {backend} = ctx;
 		const {prompt, provider_name, model, completion_messages} = input.completion_request;
 		const progress_token = input._meta?.progressToken;
 
@@ -181,9 +183,9 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		return result;
 	},
 
-	ollama_list: async (_input, ctx) => {
+	ollama_list: async () => {
 		try {
-			return (await ctx.backend
+			return (await backend
 				.lookup_provider('ollama')
 				.get_client()
 				.list()) as unknown as OllamaListResponse;
@@ -193,9 +195,9 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 	},
 
-	ollama_ps: async (_input, ctx) => {
+	ollama_ps: async () => {
 		try {
-			return (await ctx.backend
+			return (await backend
 				.lookup_provider('ollama')
 				.get_client()
 				.ps()) as unknown as OllamaPsResponse;
@@ -205,9 +207,9 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 	},
 
-	ollama_show: async (input, ctx) => {
+	ollama_show: async (input) => {
 		try {
-			return (await ctx.backend
+			return (await backend
 				.lookup_provider('ollama')
 				.get_client()
 				.show(input)) as unknown as OllamaShowResponse;
@@ -220,7 +222,7 @@ export const zzz_action_handlers: BackendActionHandlers = {
 	ollama_pull: async (input, ctx) => {
 		const {_meta, ...params} = input;
 		try {
-			const response = await ctx.backend
+			const response = await backend
 				.lookup_provider('ollama')
 				.get_client()
 				.pull({...params, stream: true});
@@ -243,9 +245,9 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 	},
 
-	ollama_delete: async (input, ctx) => {
+	ollama_delete: async (input) => {
 		try {
-			await ctx.backend.lookup_provider('ollama').get_client().delete(input);
+			await backend.lookup_provider('ollama').get_client().delete(input);
 			return null;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
@@ -253,9 +255,9 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 	},
 
-	ollama_copy: async (input, ctx) => {
+	ollama_copy: async (input) => {
 		try {
-			await ctx.backend.lookup_provider('ollama').get_client().copy(input);
+			await backend.lookup_provider('ollama').get_client().copy(input);
 			return null;
 		} catch (error) {
 			if (error instanceof ThrownJsonrpcError) throw error;
@@ -266,7 +268,7 @@ export const zzz_action_handlers: BackendActionHandlers = {
 	ollama_create: async (input, ctx) => {
 		const {_meta, ...params} = input;
 		try {
-			const response = await ctx.backend
+			const response = await backend
 				.lookup_provider('ollama')
 				.get_client()
 				.create({...params, stream: true});
@@ -289,9 +291,9 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 	},
 
-	ollama_unload: async (input, ctx) => {
+	ollama_unload: async (input) => {
 		try {
-			await ctx.backend
+			await backend
 				.lookup_provider('ollama')
 				.get_client()
 				.generate({model: input.model, prompt: '', keep_alive: 0});
@@ -302,14 +304,16 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 	},
 
-	provider_load_status: async (input, ctx) => {
+	provider_load_status: async (input) => {
 		const {provider_name, reload} = input;
-		const provider = ctx.backend.lookup_provider(provider_name);
+		const provider = backend.lookup_provider(provider_name);
 		const status = await provider.load_status(reload);
 		return {status};
 	},
 
-	provider_update_api_key: async (input, ctx) => {
+	provider_update_api_key: async (input) => {
+		// `acting` is required on the input schema (keeper bucket invariant) but is
+		// resolved by fuz_app's authorization phase before this handler runs.
 		const {provider_name, api_key} = input;
 
 		if (provider_name === 'ollama') {
@@ -336,7 +340,7 @@ export const zzz_action_handlers: BackendActionHandlers = {
 				process.env[env_var_name] = api_key;
 			}
 
-			const provider = ctx.backend.lookup_provider(provider_name);
+			const provider = backend.lookup_provider(provider_name);
 			provider.set_api_key(api_key);
 			const status = await provider.load_status(true);
 			return {status};
@@ -348,10 +352,10 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 	},
 
-	terminal_create: (input, ctx) => {
+	terminal_create: (input) => {
 		const terminal_id = create_uuid();
 		try {
-			ctx.backend.pty_manager.spawn(terminal_id, input.command, input.args, input.cwd);
+			backend.pty_manager.spawn(terminal_id, input.command, input.args, input.cwd);
 			return {terminal_id};
 		} catch (error) {
 			throw jsonrpc_errors.internal_error(
@@ -360,10 +364,10 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 	},
 
-	terminal_data_send: async (input, ctx) => {
-		if (!ctx.backend.pty_manager.has(input.terminal_id)) return null;
+	terminal_data_send: async (input) => {
+		if (!backend.pty_manager.has(input.terminal_id)) return null;
 		try {
-			await ctx.backend.pty_manager.write(input.terminal_id, input.data);
+			await backend.pty_manager.write(input.terminal_id, input.data);
 			return null;
 		} catch (error) {
 			throw jsonrpc_errors.internal_error(
@@ -372,20 +376,20 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 	},
 
-	terminal_resize: (input, ctx) => {
-		if (!ctx.backend.pty_manager.has(input.terminal_id)) return null;
+	terminal_resize: (input) => {
+		if (!backend.pty_manager.has(input.terminal_id)) return null;
 		try {
-			ctx.backend.pty_manager.resize(input.terminal_id, input.cols, input.rows);
+			backend.pty_manager.resize(input.terminal_id, input.cols, input.rows);
 		} catch {
 			// resize failures are non-fatal
 		}
 		return null;
 	},
 
-	terminal_close: async (input, ctx) => {
-		if (!ctx.backend.pty_manager.has(input.terminal_id)) return {exit_code: null};
+	terminal_close: async (input) => {
+		if (!backend.pty_manager.has(input.terminal_id)) return {exit_code: null};
 		try {
-			const exit_code = await ctx.backend.pty_manager.kill(input.terminal_id, input.signal);
+			const exit_code = await backend.pty_manager.kill(input.terminal_id, input.signal);
 			return {exit_code};
 		} catch (error) {
 			throw jsonrpc_errors.internal_error(
@@ -394,9 +398,9 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 	},
 
-	workspace_open: async (input, ctx) => {
+	workspace_open: async (input) => {
 		try {
-			return await ctx.backend.workspace_open(input.path);
+			return await backend.workspace_open(input.path);
 		} catch (error) {
 			throw jsonrpc_errors.internal_error(
 				`failed to open workspace: ${error instanceof Error ? error.message : 'unknown error'}`,
@@ -404,9 +408,9 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 	},
 
-	workspace_close: async (input, ctx) => {
+	workspace_close: async (input) => {
 		try {
-			const closed = await ctx.backend.workspace_close(input.path);
+			const closed = await backend.workspace_close(input.path);
 			if (!closed) throw jsonrpc_errors.invalid_params(`workspace not open: ${input.path}`);
 			return null;
 		} catch (error) {
@@ -417,8 +421,8 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 	},
 
-	workspace_list: (_input, ctx) => ({
-		workspaces: ctx.backend.workspace_list(),
+	workspace_list: () => ({
+		workspaces: backend.workspace_list(),
 	}),
 
 	_test_emit_notifications: (input, ctx) => {
@@ -427,4 +431,4 @@ export const zzz_action_handlers: BackendActionHandlers = {
 		}
 		return {count: input.count};
 	},
-};
+});

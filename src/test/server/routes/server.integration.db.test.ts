@@ -33,7 +33,7 @@ const zzz_rpc_endpoints = (ctx: AppServerContext) =>
 	build_rpc_endpoint_specs(ctx, zzz_rpc_stub_deps);
 
 /** zzz uses default admin/keeper roles — no app-specific extensions. */
-const zzz_roles = create_role_schema({});
+const zzz_roles = create_role_schema([]);
 
 // -- Composable suites --
 

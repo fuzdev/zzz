@@ -13,17 +13,17 @@ import {all_action_specs} from '../action_specs.js';
  * - `BackendActionsApi` — typed broadcast surface used by `create_broadcast_api`.
  * - `broadcast_action_specs` — the matching `ReadonlyArray<ActionSpecUnion>` bundle.
  * - `BackendActionHandlers` — the typed handler map (`{[K in BackendRequestResponseMethod]: ...}`)
- *   that pins per-method input / output for `zzz_action_handlers`.
+ *   that pins per-method input / output for `create_zzz_action_handlers`.
  *
- * `ZzzHandlerContext` is imported manually so the helper-emitted
- * `BackendActionHandlers` type closes over zzz's per-request context
- * shape without renaming.
+ * Post auth-rework: all handlers receive fuz_app's unified `ActionContext`
+ * (auth, db, request_id, notify, signal, …); zzz domain deps flow through
+ * factory closures rather than a context extension.
  *
  * @nodocs
  */
 export const gen: Gen = ({origin_path}) => {
 	const imports = new ImportBuilder();
-	imports.add_type('./zzz_action_handlers.js', 'ZzzHandlerContext');
+	imports.add_type('@fuzdev/fuz_app/actions/action_rpc.js', 'ActionContext');
 	return compose_gen_file({
 		origin_path,
 		imports,
@@ -33,7 +33,7 @@ export const gen: Gen = ({origin_path}) => {
 				collections_path: '../action_collections.js',
 			}),
 			generate_backend_action_handlers_map(imports, {
-				context_type: 'ZzzHandlerContext',
+				context_type: 'ActionContext',
 				collections_path: '../action_collections.js',
 				metatypes_path: '../action_metatypes.js',
 			}),
