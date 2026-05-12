@@ -49,7 +49,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.4.5",
-			"@fuzdev/fuz_app": "^0.57.0",
+			"@fuzdev/fuz_app": "^0.57.1",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.59.0",
 			"@fuzdev/fuz_ui": "^0.192.0",
@@ -146,7 +146,7 @@
 						"kind": "type",
 						"doc_comment": "Action specifications indexed by method name.\nThese represent the complete action spec definitions.",
 						"source_line": 16,
-						"type_signature": "{ readonly heartbeat: { method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: false; input: ZodObject<{}, $strict>; output: ZodObject<...>; async: true; description: string; }; ... 30 more ...; readonly workspace_changed: { ...; }; }"
+						"type_signature": "{ readonly heartbeat: { method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: false; input: ZodDefault<ZodObject<{}, $strict>>; output: ZodObject<...>; async: true; description: string; }; ... 30 more ...; readonly workspace_changed: { ...; }; }"
 					},
 					{
 						"name": "action_specs",
@@ -159,7 +159,7 @@
 						"kind": "type",
 						"doc_comment": "Action parameter schemas indexed by method name.\nThese represent the input data for each action,\ne.g. JSON-RPC request/notification params and local call arguments.",
 						"source_line": 92,
-						"type_signature": "{ readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 29 more ...; readonly workspace_changed: ZodObject<...>; }"
+						"type_signature": "{ readonly heartbeat: ZodDefault<ZodObject<{}, $strict>>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 29 more ...; readonly workspace_changed: ZodObject<...>; }"
 					},
 					{
 						"name": "ActionOutputs",
@@ -7429,8 +7429,8 @@
 							{
 								"name": "lookup_action_input_schema",
 								"kind": "function",
-								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 29 more ...; readonly workspace_changed: ZodObject<...>; }[TMethod] | undefined",
-								"return_type": "{ readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 29 more ...; readonly workspace_changed: ZodObject<...>; }[TMethod] | undefined",
+								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly heartbeat: ZodDefault<ZodObject<{}, $strict>>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 29 more ...; readonly workspace_changed: ZodObject<...>; }[TMethod] | undefined",
+								"return_type": "{ readonly heartbeat: ZodDefault<ZodObject<{}, $strict>>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 29 more ...; readonly workspace_changed: ZodObject<...>; }[TMethod] | undefined",
 								"parameters": [
 									{
 										"name": "method",
