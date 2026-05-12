@@ -8,6 +8,11 @@ v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PGlite DB. 31 c
 
 For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
+## Committing
+
+`git add` and `git commit` are denied by `.claude/settings.local.json` in
+this repo — make the edits and stop, the user commits.
+
 ## What zzz Does
 
 1. **Chat** with AI models — multi-thread, multi-model comparison, streaming responses
