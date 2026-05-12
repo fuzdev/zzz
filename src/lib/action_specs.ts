@@ -10,7 +10,7 @@ import {heartbeat_action_spec} from '@fuzdev/fuz_app/actions/heartbeat.js';
 import {cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.js';
 import {protocol_action_specs} from '@fuzdev/fuz_app/actions/protocol.js';
 import {Uuid} from '@fuzdev/fuz_util/id.js';
-import {ActingActor} from '@fuzdev/fuz_app/auth/account_schema.js';
+import {ActingActor} from '@fuzdev/fuz_app/http/auth_shape.js';
 
 // Re-export so codegen (which builds `import * as specs from './action_specs'`)
 // resolves `specs.heartbeat_action_spec` / `specs.cancel_action_spec` via the
