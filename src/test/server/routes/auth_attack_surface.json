@@ -1761,7 +1761,7 @@
 					},
 					"side_effects": false,
 					"description": "List all accounts with their actors, role_grants, and pending offers. Admin-only.",
-					"rate_limit_key": null
+					"rate_limit_key": "account"
 				},
 				{
 					"name": "admin_session_list",
@@ -1814,7 +1814,7 @@
 					},
 					"side_effects": false,
 					"description": "List every active auth session across all accounts. Admin-only.",
-					"rate_limit_key": null
+					"rate_limit_key": "account"
 				},
 				{
 					"name": "admin_session_revoke_all",
@@ -2034,7 +2034,7 @@
 					},
 					"side_effects": false,
 					"description": "List audit log events with optional filters. Admin-only.",
-					"rate_limit_key": null
+					"rate_limit_key": "account"
 				},
 				{
 					"name": "audit_log_role_grant_history",
@@ -2161,7 +2161,7 @@
 					},
 					"side_effects": false,
 					"description": "List role_grant grant and revoke events with usernames. Admin-only.",
-					"rate_limit_key": null
+					"rate_limit_key": "account"
 				},
 				{
 					"name": "invite_create",
@@ -2370,7 +2370,7 @@
 					},
 					"side_effects": false,
 					"description": "List all invites with creator and claimer usernames. Admin-only.",
-					"rate_limit_key": null
+					"rate_limit_key": "account"
 				},
 				{
 					"name": "invite_delete",
@@ -2685,7 +2685,7 @@
 					},
 					"side_effects": true,
 					"description": "Offer a role_grant to another account. Grantor must hold the offered role (or pass a consumer authorize callback); role's `grant_paths` must include `'admin'`.",
-					"rate_limit_key": null
+					"rate_limit_key": "account"
 				},
 				{
 					"name": "role_grant_offer_accept",
@@ -3429,7 +3429,7 @@
 					},
 					"side_effects": true,
 					"description": "Create an API token for the current account. Raw token is returned once.",
-					"rate_limit_key": null
+					"rate_limit_key": "account"
 				},
 				{
 					"name": "account_token_list",
