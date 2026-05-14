@@ -12,7 +12,7 @@ import type {Context, Hono} from 'hono';
 import {Logger} from '@fuzdev/fuz_util/log.js';
 import {validate_server_env} from '@fuzdev/fuz_app/server/env.js';
 import {create_app_backend, type AppBackend} from '@fuzdev/fuz_app/server/app_backend.js';
-import {create_app_server, type AppServer} from '@fuzdev/fuz_app/server/app_server.js';
+import {create_app_server, require_audit_sse, type AppServer} from '@fuzdev/fuz_app/server/app_server.js';
 import type {AppSurface} from '@fuzdev/fuz_app/http/surface.js';
 import type {PasswordHashDeps} from '@fuzdev/fuz_app/auth/password.js';
 import type {StatResult} from '@fuzdev/fuz_app/runtime/deps.js';
@@ -217,7 +217,7 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 		},
 		create_route_specs: (ctx) =>
 			create_zzz_app_route_specs(ctx, {
-				audit_sse: ctx.audit_sse ?? undefined,
+				audit_sse: require_audit_sse(ctx),
 				zzz: {backend},
 				version: config.app_version,
 				get_uptime_ms: () => Date.now() - started_at,
