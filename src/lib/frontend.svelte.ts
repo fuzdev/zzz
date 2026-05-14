@@ -37,7 +37,7 @@ import {HANDLED} from './cell_helpers.js';
 import {ActionPeer} from '@fuzdev/fuz_app/actions/action_peer.js';
 import {
 	ActionExecutor,
-	ACTION_EVENT_PHASE_BY_KIND,
+	action_event_phase_by_kind,
 	type ActionEventEnvironment,
 } from '@fuzdev/fuz_app/actions/action_event_types.js';
 import {FrontendHttpTransport} from '@fuzdev/fuz_app/actions/transports_http.js';
@@ -354,7 +354,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	is_valid_phase_for_method(method: ActionMethod, phase: ActionEventPhase): boolean {
 		const spec = this.action_registry.spec_by_method.get(method);
 		if (!spec) return false;
-		const valid_phases = ACTION_EVENT_PHASE_BY_KIND[spec.kind];
+		const valid_phases = action_event_phase_by_kind[spec.kind];
 		return valid_phases.includes(phase);
 	}
 }
