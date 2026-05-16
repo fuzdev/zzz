@@ -13,7 +13,6 @@
 		"test:integration": "deno run --allow-net --allow-run --allow-read --allow-write --allow-env test/integration/run.ts"
 	},
 	"imports": {
-		"@std/": "jsr:@std/",
 		"esm-env": "npm:esm-env@^1",
 		"hono": "npm:hono@^4",
 		"svelte": "npm:svelte@5.55.5",

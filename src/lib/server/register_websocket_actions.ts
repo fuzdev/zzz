@@ -1,12 +1,13 @@
 /**
  * WebSocket endpoint wiring — thin wrapper over fuz_app's
- * `register_action_ws`.
+ * `register_ws_endpoint`.
  *
  * zzz supplies the action tuples (spec + handler) and the per-request DB
- * handle; fuz_app owns dispatch, auth, validation, and transport
- * bookkeeping. Domain deps flow through `create_zzz_action_handlers(backend)`
- * — the factory closes over the `Backend`, so handlers receive the
- * unified `ActionContext` directly.
+ * handle; fuz_app owns the upgrade middleware stack (origin check, auth,
+ * authorization phase that builds `RequestContext`), dispatch, validation,
+ * and transport bookkeeping. Domain deps flow through
+ * `create_zzz_action_handlers(backend)` — the factory closes over the
+ * `Backend`, so handlers receive the unified `ActionContext` directly.
  *
  * The shared `protocol_actions` bundle (heartbeat + cancel pre-paired with
  * their handlers) is spread first so disconnect detection and per-request
@@ -17,7 +18,7 @@
 
 import type {Hono} from 'hono';
 import type {UpgradeWebSocket} from 'hono/ws';
-import {register_action_ws} from '@fuzdev/fuz_app/actions/register_action_ws.js';
+import {register_ws_endpoint} from '@fuzdev/fuz_app/actions/register_ws_endpoint.js';
 import type {Action} from '@fuzdev/fuz_app/actions/action_types.js';
 import {BackendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws_backend.js';
 import {protocol_actions} from '@fuzdev/fuz_app/actions/protocol.js';
@@ -36,6 +37,8 @@ export interface RegisterWebsocketActionsOptions {
 	db: Db;
 	/** @see https://hono.dev/helpers/websocket */
 	upgradeWebSocket: UpgradeWebSocket;
+	/** Origin allowlist regexes — applied to the upgrade by `register_ws_endpoint`. */
+	allowed_origins: Array<RegExp>;
 	/** Artificial response delay in ms (testing). */
 	artificial_delay?: number;
 	transport?: BackendWebsocketTransport;
@@ -60,6 +63,7 @@ export const register_websocket_actions = ({
 	backend,
 	db,
 	upgradeWebSocket,
+	allowed_origins,
 	artificial_delay = 0,
 	transport = new BackendWebsocketTransport(),
 	extra_actions,
@@ -85,7 +89,7 @@ export const register_websocket_actions = ({
 	}
 	if (extra_actions) actions.push(...extra_actions);
 
-	register_action_ws({
+	register_ws_endpoint({
 		path,
 		app,
 		upgradeWebSocket,
@@ -93,6 +97,7 @@ export const register_websocket_actions = ({
 		db,
 		transport,
 		artificial_delay,
+		allowed_origins,
 		log: backend.log ?? undefined,
 	});
 };

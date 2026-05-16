@@ -283,10 +283,14 @@ const bearer_test_list: ReadonlyArray<{
 	},
 	{
 		name: 'ws_revocation_only_for_revoked_token',
+		// Rust still serves `POST /api/account/tokens/:id/revoke`; Deno goes
+		// through fuz_app which moved revocation to the `account_token_revoke`
+		// RPC action. Skip until Rust implements the matching RPC method.
+		skip: ['rust'],
 		fn: async (config, session_cookie) => {
 			// Open two bearer-auth WS connections on the same account:
 			// one with the revocable token, one with the shared bearer token.
-			// Revoke the revocable token via POST /tokens/:id/revoke
+			// Revoke the revocable token via the `account_token_revoke` RPC
 			// (authenticated with admin session cookie). The revocable socket
 			// must close; the other bearer socket must remain usable. Proves
 			// per-token revocation doesn't tear down the account's other sockets.
@@ -304,12 +308,19 @@ const bearer_test_list: ReadonlyArray<{
 				await shared_ws.receive();
 
 				// Revoke only the revocable token — admin cookie authenticates the call.
-				const revoke_res = await fetch(
-					`${config.base_url}/api/account/tokens/${REVOCABLE_TOKEN_ID}/revoke`,
-					{method: 'POST', headers: {Cookie: session_cookie}},
+				const revoke_res = await post_rpc(
+					config,
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'tr-1',
+						method: 'account_token_revoke',
+						params: {token_id: REVOCABLE_TOKEN_ID},
+					}),
+					{cookie: session_cookie},
 				);
 				assert_equal(revoke_res.status, 200, 'revoke status');
-				const revoke_body = (await revoke_res.json()) as Record<string, unknown>;
+				const rpc = revoke_res.body as Record<string, unknown>;
+				const revoke_body = rpc.result as Record<string, unknown>;
 				assert_equal(revoke_body.ok, true, 'revoke ok');
 				assert_equal(revoke_body.revoked, true, 'revoked flag');
 

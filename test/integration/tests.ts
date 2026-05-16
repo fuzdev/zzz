@@ -1474,44 +1474,52 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						params: {command: 'echo', args: ['hello']},
 					}),
 				);
-				const create_res = (await conn.receive()) as Record<string, unknown>;
-				assert_equal(create_res.id, 'tc-1', 'create id');
-				const create_result = create_res.result as Record<string, unknown>;
-				assert_equal(typeof create_result.terminal_id, 'string', 'terminal_id is string');
-				assert_equal(
-					(create_result.terminal_id as string).length > 0,
-					true,
-					'terminal_id not empty',
-				);
 
-				// Collect notifications — expect terminal_data with "hello" and
-				// terminal_exited with exit_code 0. Order may vary, collect up to 10.
+				// Collect frames until we see the response, the data, and the
+				// exit notification. The Deno fallback path races the response
+				// against `terminal_data` for fast commands, so frames can
+				// arrive in either order.
 				let got_data = false;
 				let got_exited = false;
 				let exit_code: number | null = null;
-				for (let i = 0; i < 10 && !(got_data && got_exited); i++) {
+				let terminal_id: string | undefined;
+				for (let i = 0; i < 12 && !(terminal_id && got_data && got_exited); i++) {
 					const msg = (await conn.receive(5_000)) as Record<string, unknown>;
-					if (msg.method === 'terminal_data') {
-						const params = msg.params as Record<string, unknown>;
+					if (msg.id === 'tc-1') {
+						const create_result = msg.result as Record<string, unknown>;
 						assert_equal(
-							params.terminal_id,
-							create_result.terminal_id,
-							'data terminal_id matches',
+							typeof create_result.terminal_id,
+							'string',
+							'terminal_id is string',
 						);
+						terminal_id = create_result.terminal_id as string;
+						assert_equal(terminal_id.length > 0, true, 'terminal_id not empty');
+					} else if (msg.method === 'terminal_data') {
+						const params = msg.params as Record<string, unknown>;
+						if (terminal_id !== undefined) {
+							assert_equal(
+								params.terminal_id,
+								terminal_id,
+								'data terminal_id matches',
+							);
+						}
 						if ((params.data as string).includes('hello')) {
 							got_data = true;
 						}
 					} else if (msg.method === 'terminal_exited') {
 						const params = msg.params as Record<string, unknown>;
-						assert_equal(
-							params.terminal_id,
-							create_result.terminal_id,
-							'exited terminal_id matches',
-						);
+						if (terminal_id !== undefined) {
+							assert_equal(
+								params.terminal_id,
+								terminal_id,
+								'exited terminal_id matches',
+							);
+						}
 						exit_code = params.exit_code as number | null;
 						got_exited = true;
 					}
 				}
+				assert_equal(typeof terminal_id, 'string', 'received create response');
 				assert_equal(got_data, true, 'received terminal_data with hello');
 				assert_equal(got_exited, true, 'received terminal_exited');
 				assert_equal(exit_code, 0, 'exit_code is 0');
@@ -1583,7 +1591,11 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 			try {
 				await ensure_ws_registered(conn);
 
-				// Create terminal running cat (echoes stdin to stdout)
+				// Create terminal running cat (echoes stdin to stdout). Collect
+				// frames until we see the response — the Deno fallback path can
+				// emit `terminal_data` before the dispatcher's response for fast
+				// commands; here just for symmetry, since cat doesn't emit
+				// before stdin arrives.
 				conn.send(
 					JSON.stringify({
 						jsonrpc: '2.0',
@@ -1592,12 +1604,18 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						params: {command: 'cat', args: []},
 					}),
 				);
-				const create_res = (await conn.receive()) as Record<string, unknown>;
-				assert_equal(create_res.id, 'twr-1', 'create id');
-				const terminal_id = (create_res.result as Record<string, unknown>)
-					.terminal_id as string;
+				let terminal_id: string | undefined;
+				for (let i = 0; i < 5 && terminal_id === undefined; i++) {
+					const msg = (await conn.receive(5_000)) as Record<string, unknown>;
+					if (msg.id === 'twr-1') {
+						terminal_id = (msg.result as Record<string, unknown>).terminal_id as string;
+					}
+				}
+				assert_equal(typeof terminal_id, 'string', 'received create response');
 
-				// Write data to the terminal
+				// Write data to the terminal. The echoed `terminal_data` can race
+				// with the write response on Deno's fallback path — drain frames
+				// until we see the response, collecting echoed data along the way.
 				conn.send(
 					JSON.stringify({
 						jsonrpc: '2.0',
@@ -1606,21 +1624,21 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 						params: {terminal_id, data: 'integration test\n'},
 					}),
 				);
-				const write_res = (await conn.receive()) as Record<string, unknown>;
-				assert_equal(write_res.id, 'twr-2', 'write id');
-				assert_equal(write_res.result, null, 'write result is null');
-
-				// Collect terminal_data notifications until we see our echoed text
+				let got_write_response = false;
 				let got_echo = false;
-				for (let i = 0; i < 20 && !got_echo; i++) {
+				for (let i = 0; i < 20 && !(got_write_response && got_echo); i++) {
 					const msg = (await conn.receive(5_000)) as Record<string, unknown>;
-					if (msg.method === 'terminal_data') {
+					if (msg.id === 'twr-2') {
+						assert_equal(msg.result, null, 'write result is null');
+						got_write_response = true;
+					} else if (msg.method === 'terminal_data') {
 						const params = msg.params as Record<string, unknown>;
 						if ((params.data as string).includes('integration test')) {
 							got_echo = true;
 						}
 					}
 				}
+				assert_equal(got_write_response, true, 'received write response');
 				assert_equal(got_echo, true, 'received echoed data');
 
 				// Clean up

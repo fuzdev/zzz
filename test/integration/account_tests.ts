@@ -32,22 +32,6 @@ const post_account = async (
 	return {status: res.status, body: json, set_cookies};
 };
 
-/** GET an account route. */
-const get_account = async (
-	config: BackendConfig,
-	path: string,
-	options?: {cookie?: string},
-): Promise<{status: number; body: unknown}> => {
-	const headers: Record<string, string> = {};
-	if (options?.cookie) headers.Cookie = options.cookie;
-	const res = await fetch(`${config.base_url}${path}`, {
-		method: 'GET',
-		headers,
-	});
-	const json = await res.json();
-	return {status: res.status, body: json};
-};
-
 // -- Test definitions ---------------------------------------------------------
 
 type TestFn = (config: BackendConfig) => Promise<void>;
@@ -243,6 +227,10 @@ const account_test_list: ReadonlyArray<{
 	},
 	{
 		name: 'session_list',
+		// Rust still serves the legacy REST routes; Deno goes through fuz_app
+		// which moved session list to the `account_session_list` RPC action.
+		// Skip until Rust implements the matching RPC method.
+		skip: ['rust'],
 		fn: async (config) => {
 			const paths = config.account_paths;
 			if (!paths) throw new Error('account_paths not configured');
@@ -255,11 +243,16 @@ const account_test_list: ReadonlyArray<{
 			assert_equal(login_res.status, 200, 'login status');
 			const cookie = login_res.set_cookies.map((c) => c.split(';')[0]).join('; ');
 
-			// List sessions
-			const {status, body} = await get_account(config, paths.sessions, {cookie});
+			// List sessions via fuz_app's account_session_list RPC action
+			const {status, body} = await post_rpc(
+				config,
+				JSON.stringify({jsonrpc: '2.0', id: 'sl-1', method: 'account_session_list'}),
+				{cookie},
+			);
 			assert_equal(status, 200, 'status');
-			const r = body as Record<string, unknown>;
-			const sessions = r.sessions as Array<Record<string, unknown>>;
+			const rpc = body as Record<string, unknown>;
+			const result = rpc.result as Record<string, unknown>;
+			const sessions = result.sessions as Array<Record<string, unknown>>;
 			assert_equal(Array.isArray(sessions), true, 'sessions is array');
 			assert_equal(sessions.length > 0, true, 'at least one session');
 			// Check session shape (matches fuz_app AuthSessionJson)
@@ -273,6 +266,8 @@ const account_test_list: ReadonlyArray<{
 	},
 	{
 		name: 'session_revoke',
+		// See `session_list` — same REST → RPC migration.
+		skip: ['rust'],
 		fn: async (config) => {
 			const paths = config.account_paths;
 			if (!paths) throw new Error('account_paths not configured');
@@ -292,19 +287,33 @@ const account_test_list: ReadonlyArray<{
 			assert_equal(login2.status, 200, 'login 2 status');
 			const cookie2 = login2.set_cookies.map((c) => c.split(';')[0]).join('; ');
 
-			// List sessions from cookie1
-			const {body: list_body} = await get_account(config, paths.sessions, {cookie: cookie1});
-			const sessions = (list_body as Record<string, unknown>).sessions as Array<
-				Record<string, unknown>
+			// List sessions from cookie1 via RPC
+			const list_res = await post_rpc(
+				config,
+				JSON.stringify({jsonrpc: '2.0', id: 'sr-list', method: 'account_session_list'}),
+				{cookie: cookie1},
+			);
+			const list_result = (list_res.body as Record<string, unknown>).result as Record<
+				string,
+				unknown
 			>;
+			const sessions = list_result.sessions as Array<Record<string, unknown>>;
 			assert_equal(sessions.length >= 2, true, 'at least 2 sessions');
 
 			// Revoke the first session in the list and verify the other still works
 			const session_to_revoke = sessions[0]!;
-			const revoke_path = paths.session_revoke.replace(':id', session_to_revoke.id as string);
-			const revoke_res = await post_account(config, revoke_path, {}, {cookie: cookie1});
+			const revoke_res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'sr-revoke',
+					method: 'account_session_revoke',
+					params: {session_id: session_to_revoke.id as string},
+				}),
+				{cookie: cookie1},
+			);
 			assert_equal(revoke_res.status, 200, 'revoke status');
-			const rr = revoke_res.body as Record<string, unknown>;
+			const rr = (revoke_res.body as Record<string, unknown>).result as Record<string, unknown>;
 			assert_equal(rr.ok, true, 'revoke ok');
 			assert_equal(rr.revoked, true, 'revoke revoked');
 

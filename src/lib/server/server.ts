@@ -20,8 +20,6 @@ import {
 import {create_deno_runtime} from '@fuzdev/fuz_app/runtime/deno.js';
 import {load_env_file} from '@fuzdev/fuz_app/env/dotenv.js';
 import {argon2_password_deps} from '@fuzdev/fuz_app/auth/password_argon2.js';
-import {verify_request_source} from '@fuzdev/fuz_app/http/origin.js';
-import {require_auth} from '@fuzdev/fuz_app/auth/request_context.js';
 
 import {VERSION} from '../zzz/build_info.ts';
 import {create_zzz_app} from './create_zzz_app.ts';
@@ -105,17 +103,11 @@ export const start_server = async (): Promise<void> => {
 	// WS dispatches directly to unified handlers (zzz_action_handlers),
 	// bypassing ActionPeer for request handling. ActionPeer is still used
 	// for backend-initiated notifications (streaming, file changes).
-	// The WS path is under /api/* so fuz_app's session + request_context
-	// middleware runs automatically. We add origin verification and require_auth
-	// to reject unauthenticated upgrades.
+	// `register_ws_endpoint` (called via the zzz wrapper) applies the
+	// standard upgrade stack: origin check, `require_auth`, and the
+	// authorization phase that seeds `REQUEST_CONTEXT_KEY` for the inner
+	// `register_action_ws` handler.
 	if (config.websocket_path) {
-		// Origin check for WebSocket connections (browsers always send Origin on WS upgrades)
-		app.use(config.websocket_path, verify_request_source(allowed_origins));
-
-		// Reject unauthenticated WebSocket upgrades — session middleware has
-		// already resolved the cookie by this point (path is under /api/*).
-		app.use(config.websocket_path, require_auth);
-
 		const transport = new BackendWebsocketTransport();
 
 		register_websocket_actions({
@@ -124,6 +116,7 @@ export const start_server = async (): Promise<void> => {
 			backend,
 			db: app_backend.deps.db,
 			upgradeWebSocket,
+			allowed_origins,
 			artificial_delay: config.artificial_delay,
 			transport,
 			extra_actions: extra_ws_actions,

@@ -13,11 +13,21 @@
  * When running both backends, prints a comparison table at the end.
  */
 
+import process from 'node:process';
+
+import {args_parse, argv_parse} from '@fuzdev/fuz_util/args.js';
+import {z} from 'zod';
+
 import {backends, type BackendConfig, INTEGRATION_SCOPED_DIR, INTEGRATION_ZZZ_DIR} from './config.ts';
 import {run_tests, type TestResult} from './tests.ts';
 import {run_bearer_tests, setup_bearer_tokens} from './bearer_tests.ts';
 import {run_account_tests} from './account_tests.ts';
 import {hash_token, hmac_sign, run_psql, sql_escape} from './test_helpers.ts';
+
+const RunArgs = z.object({
+	backend: z.string().default('both'),
+	filter: z.string().optional(),
+});
 
 // -- Child process tracking ---------------------------------------------------
 
@@ -43,18 +53,12 @@ const fmt_ms = (ms: number): string => (ms < 10 ? `${ms.toFixed(1)}ms` : `${Math
 // -- Backend lifecycle --------------------------------------------------------
 
 const parse_args = (): {backend: string; filter: string | undefined} => {
-	let backend = 'both';
-	let filter: string | undefined;
-
-	for (const arg of Deno.args) {
-		if (arg.startsWith('--backend=')) {
-			backend = arg.slice('--backend='.length);
-		} else if (arg.startsWith('--filter=')) {
-			filter = arg.slice('--filter='.length);
-		}
+	const parsed = args_parse(argv_parse(process.argv.slice(2)), RunArgs);
+	if (!parsed.success) {
+		console.error(z.prettifyError(parsed.error));
+		Deno.exit(1);
 	}
-
-	return {backend, filter};
+	return {backend: parsed.data.backend, filter: parsed.data.filter};
 };
 
 const wait_for_health = async (config: BackendConfig): Promise<boolean> => {
