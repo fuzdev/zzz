@@ -15385,7 +15385,7 @@
 						"name": "CreateZzzAppOptions",
 						"kind": "type",
 						"doc_comment": "Options for creating a zzz app.",
-						"source_line": 52,
+						"source_line": 56,
 						"type_signature": "CreateZzzAppOptions",
 						"properties": [
 							{
@@ -15418,7 +15418,7 @@
 						"name": "ZzzApp",
 						"kind": "type",
 						"doc_comment": "The created zzz app and related instances.",
-						"source_line": 73,
+						"source_line": 77,
 						"type_signature": "ZzzApp",
 						"properties": [
 							{
@@ -15475,7 +15475,7 @@
 						"name": "create_zzz_app",
 						"kind": "function",
 						"doc_comment": "Create the zzz Hono app with auth, database, Backend, providers, and endpoints.\n\nThis is the shared factory called by the server entry point.\nUses `create_app_backend` for database + auth, `create_app_server` for\nmiddleware assembly, and wires zzz's domain Backend through route deps.",
-						"source_line": 103,
+						"source_line": 107,
 						"type_signature": "(options: CreateZzzAppOptions): Promise<ZzzApp>",
 						"return_type": "Promise<ZzzApp>",
 						"parameters": [
@@ -15775,7 +15775,7 @@
 					{
 						"name": "RegisterWebsocketActionsOptions",
 						"kind": "type",
-						"source_line": 31,
+						"source_line": 32,
 						"type_signature": "RegisterWebsocketActionsOptions",
 						"properties": [
 							{
@@ -15806,6 +15806,12 @@
 								"doc_comment": ""
 							},
 							{
+								"name": "allowed_origins",
+								"kind": "variable",
+								"type_signature": "Array<RegExp>",
+								"doc_comment": "Origin allowlist regexes — applied to the upgrade by `register_ws_endpoint`."
+							},
+							{
 								"name": "artificial_delay",
 								"kind": "variable",
 								"type_signature": "number",
@@ -15828,8 +15834,8 @@
 						"name": "register_websocket_actions",
 						"kind": "function",
 						"doc_comment": "Registers the WebSocket endpoint for all zzz request/response actions.\n\nPer-action auth, Zod validation, transaction scope, and socket-scoped\n`notify` / `signal` come from fuz_app. zzz domain state reaches handlers\nthrough the `Backend` closure baked into the handler map at boot.",
-						"source_line": 57,
-						"type_signature": "({ path, app, backend, db, upgradeWebSocket, artificial_delay, transport, extra_actions, }: RegisterWebsocketActionsOptions): void",
+						"source_line": 60,
+						"type_signature": "({ path, app, backend, db, upgradeWebSocket, allowed_origins, artificial_delay, transport, extra_actions, }: RegisterWebsocketActionsOptions): void",
 						"return_type": "void",
 						"parameters": [
 							{
@@ -15839,7 +15845,7 @@
 						]
 					}
 				],
-				"module_comment": "WebSocket endpoint wiring — thin wrapper over fuz_app's\n`register_action_ws`.\n\nzzz supplies the action tuples (spec + handler) and the per-request DB\nhandle; fuz_app owns dispatch, auth, validation, and transport\nbookkeeping. Domain deps flow through `create_zzz_action_handlers(backend)`\n— the factory closes over the `Backend`, so handlers receive the\nunified `ActionContext` directly.\n\nThe shared `protocol_actions` bundle (heartbeat + cancel pre-paired with\ntheir handlers) is spread first so disconnect detection and per-request\ncancellation are identical across every fuz_app consumer.",
+				"module_comment": "WebSocket endpoint wiring — thin wrapper over fuz_app's\n`register_ws_endpoint`.\n\nzzz supplies the action tuples (spec + handler) and the per-request DB\nhandle; fuz_app owns the upgrade middleware stack (origin check, auth,\nauthorization phase that builds `RequestContext`), dispatch, validation,\nand transport bookkeeping. Domain deps flow through\n`create_zzz_action_handlers(backend)` — the factory closes over the\n`Backend`, so handlers receive the unified `ActionContext` directly.\n\nThe shared `protocol_actions` bundle (heartbeat + cancel pre-paired with\ntheir handlers) is spread first so disconnect detection and per-request\ncancellation are identical across every fuz_app consumer.",
 				"dependencies": ["action_specs.ts", "server/zzz_action_handlers.ts"],
 				"dependents": ["server/server.ts"]
 			},
@@ -16442,7 +16448,7 @@
 						"name": "start_server",
 						"kind": "function",
 						"doc_comment": "Start the zzz server using Deno runtime.\n\nCreates the full backend with auth, database, providers, WebSocket, and HTTP RPC\nendpoints via `create_zzz_app`, then serves with `Deno.serve`.",
-						"source_line": 49,
+						"source_line": 47,
 						"type_signature": "(): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": []

@@ -5,10 +5,11 @@ protocol, same wire format — the Deno server is ground truth and the
 integration tests enforce identical behaviour between both backends.
 
 Phase 4 in progress: AI provider system with enum-dispatched providers
-(Anthropic fully implemented, OpenAI/Gemini/Ollama stubs). 16 RPC methods:
+(Anthropic fully implemented, OpenAI/Gemini/Ollama stubs). 19 RPC methods:
 `ping`, `session_load`, `workspace_*`, `diskfile_*`, `directory_create`,
 `terminal_*`, `provider_load_status`, `provider_update_api_key`,
-`completion_create`. `_test_emit_notifications` is gated behind
+`completion_create`, `account_session_list`, `account_session_revoke`,
+`account_token_revoke`. `_test_emit_notifications` is gated behind
 `ZZZ_ENABLE_TEST_ACTIONS=1` (set by the integration runner; production
 leaves it unset, dispatch returns `method_not_found`). Full auth stack (cookie sessions, bearer tokens, daemon
 tokens), account management routes, filesystem actions with `ScopedFs`,
@@ -92,9 +93,6 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 | POST   | `/api/account/login`              | Username/password login → session cookie |
 | POST   | `/api/account/logout`             | Invalidate session, close WS connections |
 | POST   | `/api/account/password`           | Change password, revoke all sessions/tokens |
-| GET    | `/api/account/sessions`           | List sessions for authenticated account  |
-| POST   | `/api/account/sessions/:id/revoke`| Revoke a specific session                |
-| POST   | `/api/account/tokens/:id/revoke`  | Revoke an API token (closes its WS sockets only) |
 | GET    | `/api/ws`                         | JSON-RPC 2.0 (WebSocket, cookie/bearer/daemon) |
 | GET    | `/health`                         | Health check (`{"status":"ok"}`)         |
 | GET    | `/*`                              | Static files (if `--static-dir`)         |
@@ -158,7 +156,7 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
     Session connections are revocable per-session, per-token (for the bearer
     on this connection — n/a for cookie sessions), or per-account. Called by
     logout (per-session), password change (per-account), and
-    `/api/account/tokens/:id/revoke` (per-token).
+    `account_token_revoke` (per-token).
 
 11. **Account status** — `GET /api/account/status` returns account info +
     role grants (200) when authenticated, or 401 with optional
@@ -169,9 +167,9 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
     session cookie with enumeration prevention via dummy hash),
     `POST /api/account/logout` (invalidate session + close WS connections),
     `POST /api/account/password` (change password, revoke all sessions + API
-    tokens, close all WS connections), `GET /api/account/sessions` (list
-    sessions for account), `POST /api/account/sessions/:id/revoke` (revoke
-    specific session, scoped to own account).
+    tokens, close all WS connections). Session listing and revocation moved
+    to JSON-RPC: `account_session_list`, `account_session_revoke`,
+    `account_token_revoke` (all scoped to the authenticated account).
 
 ## Integration Tests
 
@@ -370,12 +368,12 @@ identical JSON-RPC envelopes for all auth failures.
 | Bearer invalid/expired token | **Resolved** | Both backends soft-fail → JSON-RPC `-32001` unauthenticated |
 | `provider_load_status` shape | **Resolved** | Both backends return `{status: ProviderStatus}` per the action spec. Test is cross-backend (no backend branching). |
 | `session_list` response | **Resolved** | Both backends now return `{sessions: [{id, account_id, created_at, last_seen_at, expires_at}]}` matching fuz_app `AuthSessionJson`. Tests are cross-backend. |
-| `session_revoke` format | **Resolved** | Both backends now return `{ok: true, revoked: boolean}` with idempotent 200 responses. Route paths unified (`/api/account/*`). Tests are cross-backend. |
+| `session_revoke` format | **Resolved** | Both backends now return `{ok: true, revoked: boolean}` with idempotent 200 responses via the `account_session_revoke` JSON-RPC method. Tests are cross-backend. |
 | `error.data` (validation) | Intentional | Deno includes Zod issues in `error.data` for -32602; Rust omits. Intentional divergence — Rust's omission is the safer production default, Deno's inclusion aids DX. Handled by `normalize_error_data` in tests. Future: environment-conditional in both backends (include in dev, strip in prod). |
 
 ## Known Limitations
 
-- 16 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `provider_update_api_key` keeper-only, `completion_create`)
+- 19 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `provider_update_api_key` keeper-only, `completion_create`, `account_session_list`, `account_session_revoke`, `account_token_revoke`)
 - 5 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debounced broadcasts with immediate index updates, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast), `completion_progress` (streaming completion chunks to requesting WS connection)
 - AI providers: Anthropic fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable)
 - No batch request support (JSON arrays)

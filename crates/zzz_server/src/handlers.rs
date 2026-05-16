@@ -11,6 +11,7 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use crate::auth::{Keyring, RequestContext};
+use crate::db;
 use crate::daemon_token::SharedDaemonTokenState;
 use crate::filer::{FilerConfig, FilerLifetime, FilerManager};
 use crate::provider::{self, CompletionHandlerOptions, CompletionOptions, ProviderManager, ProviderName};
@@ -358,6 +359,9 @@ pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Val
         "terminal_data_send" => handle_terminal_data_send(params, ctx).await,
         "terminal_resize" => handle_terminal_resize(params, ctx).await,
         "terminal_close" => handle_terminal_close(params, ctx).await,
+        "account_session_list" => handle_account_session_list(ctx).await,
+        "account_session_revoke" => handle_account_session_revoke(params, ctx).await,
+        "account_token_revoke" => handle_account_token_revoke(params, ctx).await,
         "_test_emit_notifications" if ctx.app.enable_test_actions => {
             handle_test_emit_notifications(params, ctx)
         }
@@ -933,5 +937,136 @@ async fn handle_terminal_close(params: &Value, ctx: &Ctx<'_>) -> Result<Value, J
         .flatten();
 
     serde_json::to_value(TerminalCloseResult { exit_code })
+        .map_err(|_| rpc::internal_error("serialization failed"))
+}
+
+// -- Account handlers ---------------------------------------------------------
+
+/// Single session entry in the `account_session_list` response.
+///
+/// Matches `fuz_app`'s `AuthSessionJson`: id is the blake3 hash of the session
+/// token; timestamps are RFC3339 UTC strings.
+#[derive(Serialize)]
+struct AccountSessionInfo {
+    id: String,
+    account_id: String,
+    created_at: String,
+    last_seen_at: String,
+    expires_at: String,
+}
+
+#[derive(Serialize)]
+struct AccountSessionListResult {
+    sessions: Vec<AccountSessionInfo>,
+}
+
+#[derive(Serialize)]
+struct AccountRevokeResult {
+    ok: bool,
+    revoked: bool,
+}
+
+/// Resolve the authenticated account id, or return an internal error.
+///
+/// `method_auth` already enforces `Authenticated`, so `ctx.auth` is `Some`
+/// by the time we get here — this is belt-and-suspenders against a future
+/// auth wiring regression.
+fn require_account_id(ctx: &Ctx<'_>) -> Result<uuid::Uuid, JsonRpcError> {
+    ctx.auth
+        .map(|c| c.account.id)
+        .ok_or_else(|| rpc::internal_error("missing auth context"))
+}
+
+async fn handle_account_session_list(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+    let account_id = require_account_id(ctx)?;
+
+    let client = ctx
+        .app
+        .db_pool
+        .get()
+        .await
+        .map_err(|_| rpc::internal_error("db pool error"))?;
+
+    let rows = db::query_sessions_for_account(&client, &account_id)
+        .await
+        .map_err(|_| rpc::internal_error("session list query failed"))?;
+
+    let account_id_str = account_id.to_string();
+    let sessions: Vec<AccountSessionInfo> = rows
+        .into_iter()
+        .map(|r| AccountSessionInfo {
+            id: r.id,
+            account_id: account_id_str.clone(),
+            created_at: r.created_at,
+            last_seen_at: r.last_seen_at,
+            expires_at: r.expires_at,
+        })
+        .collect();
+
+    serde_json::to_value(AccountSessionListResult { sessions })
+        .map_err(|_| rpc::internal_error("serialization failed"))
+}
+
+async fn handle_account_session_revoke(
+    params: &Value,
+    ctx: &Ctx<'_>,
+) -> Result<Value, JsonRpcError> {
+    let account_id = require_account_id(ctx)?;
+    let session_id = params
+        .get("session_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'session_id' parameter"))?;
+
+    let client = ctx
+        .app
+        .db_pool
+        .get()
+        .await
+        .map_err(|_| rpc::internal_error("db pool error"))?;
+
+    let deleted = db::query_delete_session_for_account(&client, session_id, &account_id)
+        .await
+        .map_err(|_| rpc::internal_error("session revoke query failed"))?;
+
+    if deleted {
+        let closed = ctx.app.close_sockets_for_session(session_id);
+        if closed > 0 {
+            tracing::info!(count = closed, "session revoke: closed WebSocket connections");
+        }
+    }
+
+    serde_json::to_value(AccountRevokeResult { ok: true, revoked: deleted })
+        .map_err(|_| rpc::internal_error("serialization failed"))
+}
+
+async fn handle_account_token_revoke(
+    params: &Value,
+    ctx: &Ctx<'_>,
+) -> Result<Value, JsonRpcError> {
+    let account_id = require_account_id(ctx)?;
+    let token_id = params
+        .get("token_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| rpc::invalid_params("missing or invalid 'token_id' parameter"))?;
+
+    let client = ctx
+        .app
+        .db_pool
+        .get()
+        .await
+        .map_err(|_| rpc::internal_error("db pool error"))?;
+
+    let deleted = db::query_revoke_api_token_for_account(&client, token_id, &account_id)
+        .await
+        .map_err(|_| rpc::internal_error("token revoke query failed"))?;
+
+    if deleted {
+        let closed = ctx.app.close_sockets_for_token(token_id);
+        if closed > 0 {
+            tracing::info!(count = closed, "token revoke: closed WebSocket connections");
+        }
+    }
+
+    serde_json::to_value(AccountRevokeResult { ok: true, revoked: deleted })
         .map_err(|_| rpc::internal_error("serialization failed"))
 }

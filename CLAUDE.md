@@ -268,11 +268,12 @@ Two dev server modes:
 
 Shadow implementation of the Deno server using axum. Same `/api/*` route
 paths as the Deno server — both backends are interchangeable from the
-frontend's perspective. 16 RPC methods: `ping`, `session_load`, `workspace_*`,
+frontend's perspective. 19 RPC methods: `ping`, `session_load`, `workspace_*`,
 `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`,
 `terminal_data_send`, `terminal_resize`, `terminal_close`,
 `provider_load_status`, `provider_update_api_key` (keeper-only),
-`completion_create`. Cookie session auth and bearer token auth (API tokens)
+`completion_create`, `account_session_list`, `account_session_revoke`,
+`account_token_revoke`. Cookie session auth and bearer token auth (API tokens)
 on HTTP and WebSocket, `ScopedFs` path safety, PTY terminals via `fuz_pty`
 native crate, and WebSocket connection tracking (`broadcast`/`send_to`).
 PostgreSQL via `tokio-postgres`/`deadpool-postgres`, HMAC-SHA256 cookie
@@ -539,7 +540,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in ~/dev/private_fuz/. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Rust backend is Phase 4** — 16 RPC methods with full auth stack, same `/api/*` route paths as Deno. `deno task dev` runs the Rust backend with Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable). No batch JSON-RPC, no Ollama actions (`ollama_list`, `ollama_ps`, etc.). See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
+- **Rust backend is Phase 4** — 19 RPC methods with full auth stack, same `/api/*` route paths as Deno. `deno task dev` runs the Rust backend with Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable). No batch JSON-RPC, no Ollama actions (`ollama_list`, `ollama_ps`, etc.). See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
 
 ## fuz_app
 

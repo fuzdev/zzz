@@ -227,10 +227,6 @@ const account_test_list: ReadonlyArray<{
 	},
 	{
 		name: 'session_list',
-		// Rust still serves the legacy REST routes; Deno goes through fuz_app
-		// which moved session list to the `account_session_list` RPC action.
-		// Skip until Rust implements the matching RPC method.
-		skip: ['rust'],
 		fn: async (config) => {
 			const paths = config.account_paths;
 			if (!paths) throw new Error('account_paths not configured');
@@ -266,8 +262,6 @@ const account_test_list: ReadonlyArray<{
 	},
 	{
 		name: 'session_revoke',
-		// See `session_list` — same REST → RPC migration.
-		skip: ['rust'],
 		fn: async (config) => {
 			const paths = config.account_paths;
 			if (!paths) throw new Error('account_paths not configured');

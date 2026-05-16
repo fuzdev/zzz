@@ -22,9 +22,6 @@ export interface AccountPaths {
 	readonly login: string;
 	readonly logout: string;
 	readonly password: string;
-	readonly sessions: string;
-	/** Template with `:id` placeholder for session revocation. */
-	readonly session_revoke: string;
 }
 
 export interface BackendConfig {
@@ -92,8 +89,6 @@ export const backends = {
 			login: '/api/account/login',
 			logout: '/api/account/logout',
 			password: '/api/account/password',
-			sessions: '/api/account/sessions',
-			session_revoke: '/api/account/sessions/:id/revoke',
 		},
 	},
 	rust: {
@@ -126,8 +121,6 @@ export const backends = {
 			login: '/api/account/login',
 			logout: '/api/account/logout',
 			password: '/api/account/password',
-			sessions: '/api/account/sessions',
-			session_revoke: '/api/account/sessions/:id/revoke',
 		},
 	},
 };

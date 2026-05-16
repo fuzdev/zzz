@@ -356,7 +356,8 @@ pub fn method_auth(method: &str) -> ActionAuth {
         | "completion_create" | "ollama_list" | "ollama_ps" | "ollama_show"
         | "ollama_pull" | "ollama_delete" | "ollama_copy" | "ollama_create"
         | "ollama_unload" | "provider_load_status"
-        | "terminal_create" | "terminal_data_send" | "terminal_resize" | "terminal_close" => {
+        | "terminal_create" | "terminal_data_send" | "terminal_resize" | "terminal_close"
+        | "account_session_list" | "account_session_revoke" | "account_token_revoke" => {
             ActionAuth::Authenticated
         }
 

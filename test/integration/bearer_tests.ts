@@ -283,10 +283,6 @@ const bearer_test_list: ReadonlyArray<{
 	},
 	{
 		name: 'ws_revocation_only_for_revoked_token',
-		// Rust still serves `POST /api/account/tokens/:id/revoke`; Deno goes
-		// through fuz_app which moved revocation to the `account_token_revoke`
-		// RPC action. Skip until Rust implements the matching RPC method.
-		skip: ['rust'],
 		fn: async (config, session_cookie) => {
 			// Open two bearer-auth WS connections on the same account:
 			// one with the revocable token, one with the shared bearer token.

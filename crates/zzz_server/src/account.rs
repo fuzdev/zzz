@@ -3,7 +3,7 @@ use std::sync::Arc;
 use argon2::password_hash::{PasswordHasher, PasswordVerifier, SaltString};
 use base64::Engine;
 use argon2::Argon2;
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -91,28 +91,8 @@ struct ErrorBody {
 }
 
 #[derive(Serialize)]
-struct SessionInfo {
-    id: String,
-    account_id: String,
-    created_at: String,
-    last_seen_at: String,
-    expires_at: String,
-}
-
-#[derive(Serialize)]
-struct SessionsListResponse {
-    sessions: Vec<SessionInfo>,
-}
-
-#[derive(Serialize)]
 struct OkResponse {
     ok: bool,
-}
-
-#[derive(Serialize)]
-struct RevokeResponse {
-    ok: bool,
-    revoked: bool,
 }
 
 // -- GET /status --------------------------------------------------------------
@@ -482,170 +462,3 @@ pub async fn hash_password(password: String) -> Result<String, argon2::password_
     .unwrap_or(Err(argon2::password_hash::Error::Algorithm))
 }
 
-// -- GET /sessions ------------------------------------------------------------
-
-/// `GET /sessions` — list all sessions for the authenticated account.
-pub async fn sessions_list_handler(
-    State(app): State<Arc<App>>,
-    headers: HeaderMap,
-) -> Response {
-    match sessions_list_inner(&app, &headers).await {
-        Ok(response) | Err(response) => response,
-    }
-}
-
-async fn sessions_list_inner(app: &App, headers: &HeaderMap) -> Result<Response, Response> {
-    let resolved = auth::resolve_auth_from_headers(
-        headers,
-        &app.keyring,
-        &app.db_pool,
-        app.daemon_token_state.as_ref(),
-    )
-    .await
-    .ok_or_else(|| error_json(StatusCode::UNAUTHORIZED, "unauthenticated"))?;
-
-    let client = app.db_pool.get().await.map_err(|e| {
-        tracing::error!(error = %e, "sessions list: db pool error");
-        error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
-    })?;
-
-    let rows = db::query_sessions_for_account(&client, &resolved.context.account.id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "sessions list: query failed");
-            error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
-        })?;
-
-    let account_id_str = resolved.context.account.id.to_string();
-    let sessions: Vec<SessionInfo> = rows
-        .into_iter()
-        .map(|r| SessionInfo {
-            id: r.id,
-            account_id: account_id_str.clone(),
-            created_at: r.created_at,
-            last_seen_at: r.last_seen_at,
-            expires_at: r.expires_at,
-        })
-        .collect();
-
-    Ok(Json(SessionsListResponse { sessions }).into_response())
-}
-
-// -- POST /sessions/:id/revoke ------------------------------------------------
-
-/// `POST /sessions/:id/revoke` — revoke a specific session (scoped to own account).
-pub async fn session_revoke_handler(
-    State(app): State<Arc<App>>,
-    headers: HeaderMap,
-    Path(session_id): Path<String>,
-) -> Response {
-    match session_revoke_inner(&app, &headers, &session_id).await {
-        Ok(response) | Err(response) => response,
-    }
-}
-
-async fn session_revoke_inner(
-    app: &App,
-    headers: &HeaderMap,
-    session_id: &str,
-) -> Result<Response, Response> {
-    let resolved = auth::resolve_auth_from_headers(
-        headers,
-        &app.keyring,
-        &app.db_pool,
-        app.daemon_token_state.as_ref(),
-    )
-    .await
-    .ok_or_else(|| error_json(StatusCode::UNAUTHORIZED, "unauthenticated"))?;
-
-    let client = app.db_pool.get().await.map_err(|e| {
-        tracing::error!(error = %e, "session revoke: db pool error");
-        error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
-    })?;
-
-    // Delete session — scoped to the authenticated account
-    let deleted = db::query_delete_session_for_account(
-        &client,
-        session_id,
-        &resolved.context.account.id,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(error = %e, "session revoke: delete failed");
-        error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
-    })?;
-
-    if !deleted {
-        // Idempotent — session already gone or belongs to another account
-        return Ok(Json(RevokeResponse { ok: true, revoked: false }).into_response());
-    }
-
-    // Close WebSocket connections for this session
-    let closed = app.close_sockets_for_session(session_id);
-    if closed > 0 {
-        tracing::info!(count = closed, "session revoke: closed WebSocket connections");
-    }
-
-    Ok(Json(RevokeResponse { ok: true, revoked: true }).into_response())
-}
-
-// -- POST /tokens/:id/revoke --------------------------------------------------
-
-/// `POST /tokens/:id/revoke` — revoke a specific API token (scoped to own account).
-///
-/// Mirrors fuz_app's `/tokens/:id/revoke` route. Deletes the token and closes
-/// the bearer-authenticated WS sockets bound to it, leaving the account's
-/// session-authenticated sockets and other tokens' sockets untouched.
-pub async fn token_revoke_handler(
-    State(app): State<Arc<App>>,
-    headers: HeaderMap,
-    Path(token_id): Path<String>,
-) -> Response {
-    match token_revoke_inner(&app, &headers, &token_id).await {
-        Ok(response) | Err(response) => response,
-    }
-}
-
-async fn token_revoke_inner(
-    app: &App,
-    headers: &HeaderMap,
-    token_id: &str,
-) -> Result<Response, Response> {
-    let resolved = auth::resolve_auth_from_headers(
-        headers,
-        &app.keyring,
-        &app.db_pool,
-        app.daemon_token_state.as_ref(),
-    )
-    .await
-    .ok_or_else(|| error_json(StatusCode::UNAUTHORIZED, "unauthenticated"))?;
-
-    let client = app.db_pool.get().await.map_err(|e| {
-        tracing::error!(error = %e, "token revoke: db pool error");
-        error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
-    })?;
-
-    let deleted = db::query_revoke_api_token_for_account(
-        &client,
-        token_id,
-        &resolved.context.account.id,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(error = %e, "token revoke: delete failed");
-        error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
-    })?;
-
-    if !deleted {
-        // Idempotent — token already gone or belongs to another account
-        return Ok(Json(RevokeResponse { ok: true, revoked: false }).into_response());
-    }
-
-    // Close the bearer-authenticated WS sockets tied to this token
-    let closed = app.close_sockets_for_token(token_id);
-    if closed > 0 {
-        tracing::info!(count = closed, "token revoke: closed WebSocket connections");
-    }
-
-    Ok(Json(RevokeResponse { ok: true, revoked: true }).into_response())
-}
