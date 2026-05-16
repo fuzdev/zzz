@@ -9,8 +9,9 @@ use serde_json::Value;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::auth::{ResolvedAuth, check_action_auth, method_auth, resolve_auth_from_headers};
-use crate::handlers::{self, App, Ctx, NotifyFn};
+use crate::auth::{ResolvedAuth, resolve_auth_from_headers};
+use crate::handlers::{App, NotifyFn};
+use crate::perform_action::{PerformActionInput, PerformActionResult, perform_action};
 use crate::rpc::{self, Classified};
 
 /// Axum handler for `GET /api/ws` — upgrades to WebSocket with auth.
@@ -125,24 +126,24 @@ async fn handle_connection(socket: WebSocket, app: Arc<App>, resolved: ResolvedA
                     "ws message"
                 );
 
-                // 2. Classify, check per-action auth, then dispatch
+                // 2. Classify, then route Requests through the shared dispatch core
                 let json = match rpc::classify(&value) {
                     Classified::Request { method, id, params } => {
-                        let spec_auth = method_auth(method);
-                        if let Some(auth_error) = check_action_auth(spec_auth, Some(&auth_context), Some(credential_type)) {
-                            serde_json::to_string(&rpc::error_response(id, auth_error))
-                        } else {
-                            let ctx = Ctx {
-                                app: &app,
-                                app_arc: Arc::clone(&app),
-                                request_id: &id,
-                                auth: Some(&auth_context),
-                                notify: Arc::clone(&notify),
-                                signal: socket_signal.clone(),
-                            };
-                            match handlers::dispatch(method, params, &ctx).await {
-                                Ok(result) => serde_json::to_string(&rpc::success_response(id, result)),
-                                Err(error) => serde_json::to_string(&rpc::error_response(id, error)),
+                        let input = PerformActionInput {
+                            method,
+                            params,
+                            request_id: &id,
+                            auth: Some(&auth_context),
+                            credential_type: Some(credential_type),
+                            notify: Arc::clone(&notify),
+                            signal: socket_signal.clone(),
+                        };
+                        match perform_action(input, &app).await {
+                            PerformActionResult::Ok(result) => {
+                                serde_json::to_string(&rpc::success_response(id, result))
+                            }
+                            PerformActionResult::Err { error, .. } => {
+                                serde_json::to_string(&rpc::error_response(id, error))
                             }
                         }
                     }

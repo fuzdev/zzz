@@ -13,8 +13,9 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 use tokio_util::sync::CancellationToken;
 
-use crate::auth::{check_action_auth, check_origin, method_auth, resolve_auth_from_headers};
-use crate::handlers::{self, App, Ctx, NotifyFn};
+use crate::auth::{check_origin, resolve_auth_from_headers};
+use crate::handlers::{App, NotifyFn};
+use crate::perform_action::{PerformActionInput, PerformActionResult, perform_action};
 
 // -- JSON-RPC types -----------------------------------------------------------
 
@@ -145,7 +146,7 @@ fn http_no_op_notify() -> NotifyFn {
 /// Matches `fuz_app`'s `jsonrpc_error_code_to_http_status` from
 /// `fuz_app/src/lib/http/jsonrpc_errors.ts:230-244`.
 /// Returns 500 for unrecognized codes.
-const fn error_code_to_http_status(code: i32) -> StatusCode {
+pub const fn error_code_to_http_status(code: i32) -> StatusCode {
     match code {
         // -32700, -32600, -32602 → 400
         JSONRPC_PARSE_ERROR | JSONRPC_INVALID_REQUEST | JSONRPC_INVALID_PARAMS => {
@@ -301,7 +302,9 @@ pub async fn rpc_get_handler(
 
     // Parse params from query string (optional)
     let params: Value = if let Some(params_raw) = query.get("params") {
-        if let Ok(v) = serde_json::from_str(params_raw) { v } else {
+        if let Ok(v) = serde_json::from_str(params_raw) {
+            v
+        } else {
             let error = invalid_params("params query parameter is not valid JSON");
             return (StatusCode::BAD_REQUEST, Json(error_response(id, error))).into_response();
         }
@@ -320,25 +323,18 @@ pub async fn rpc_get_handler(
     let auth_context = resolved.as_ref().map(|r| &r.context);
     let credential_type = resolved.as_ref().map(|r| r.credential_type);
 
-    // Per-action auth check
-    let spec_auth = method_auth(method);
-    if let Some(auth_error) = check_action_auth(spec_auth, auth_context, credential_type) {
-        let status = error_code_to_http_status(auth_error.code);
-        return (status, Json(error_response(id, auth_error))).into_response();
-    }
-
-    let ctx = Ctx {
-        app: &app,
-        app_arc: Arc::clone(&app),
+    let input = PerformActionInput {
+        method,
+        params: &params,
         request_id: &id,
         auth: auth_context,
+        credential_type,
         notify: http_no_op_notify(),
         signal: CancellationToken::new(),
     };
-    match handlers::dispatch(method, &params, &ctx).await {
-        Ok(result) => Json(success_response(id, result)).into_response(),
-        Err(error) => {
-            let status = error_code_to_http_status(error.code);
+    match perform_action(input, &app).await {
+        PerformActionResult::Ok(result) => Json(success_response(id, result)).into_response(),
+        PerformActionResult::Err { error, status } => {
             (status, Json(error_response(id, error))).into_response()
         }
     }
@@ -390,28 +386,23 @@ pub async fn rpc_handler(State(app): State<Arc<App>>, headers: HeaderMap, body: 
     let auth_context = resolved.as_ref().map(|r| &r.context);
     let credential_type = resolved.as_ref().map(|r| r.credential_type);
 
-    // 3. Classify, check auth, then dispatch
+    // 3. Classify, then route Requests through the shared dispatch core
     match classify(&value) {
         Classified::Request { method, id, params } => {
-            // Per-action auth check
-            let spec_auth = method_auth(method);
-            if let Some(auth_error) = check_action_auth(spec_auth, auth_context, credential_type) {
-                let status = error_code_to_http_status(auth_error.code);
-                return (status, Json(error_response(id, auth_error))).into_response();
-            }
-
-            let ctx = Ctx {
-                app: &app,
-                app_arc: Arc::clone(&app),
+            let input = PerformActionInput {
+                method,
+                params,
                 request_id: &id,
                 auth: auth_context,
+                credential_type,
                 notify: http_no_op_notify(),
                 signal: CancellationToken::new(),
             };
-            match handlers::dispatch(method, params, &ctx).await {
-                Ok(result) => Json(success_response(id, result)).into_response(),
-                Err(error) => {
-                    let status = error_code_to_http_status(error.code);
+            match perform_action(input, &app).await {
+                PerformActionResult::Ok(result) => {
+                    Json(success_response(id, result)).into_response()
+                }
+                PerformActionResult::Err { error, status } => {
                     (status, Json(error_response(id, error))).into_response()
                 }
             }

@@ -331,12 +331,12 @@ struct TestEmitNotificationsResult {
 ///
 /// Auth is checked by the transport BEFORE calling dispatch.
 ///
-/// Side-effect actions (`auth::method_side_effects`) run inside a DB
+/// Side-effect actions (`MethodSpec.side_effects`) run inside a DB
 /// transaction so paired writes commit or roll back atomically — mirroring
 /// `fuz_app`'s `perform_action` `db.transaction` wrap. Read-only actions
 /// run on a pooled connection (acquired lazily by handlers that need one).
 pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
-    if auth::method_side_effects(method) {
+    if auth::method_spec(method).side_effects {
         dispatch_with_tx(method, params, ctx).await
     } else {
         dispatch_no_tx(method, params, ctx).await
@@ -378,12 +378,8 @@ async fn dispatch_with_tx(
         "terminal_data_send" => terminal::handle_terminal_data_send(params, ctx).await,
         "terminal_resize" => terminal::handle_terminal_resize(params, ctx).await,
         "terminal_close" => terminal::handle_terminal_close(params, ctx).await,
-        "account_session_revoke" => {
-            account::handle_account_session_revoke(params, ctx, &tx).await
-        }
-        "account_session_revoke_all" => {
-            account::handle_account_session_revoke_all(ctx, &tx).await
-        }
+        "account_session_revoke" => account::handle_account_session_revoke(params, ctx, &tx).await,
+        "account_session_revoke_all" => account::handle_account_session_revoke_all(ctx, &tx).await,
         "account_token_create" => account::handle_account_token_create(params, ctx, &tx).await,
         "account_token_revoke" => account::handle_account_token_revoke(params, ctx, &tx).await,
         other => Err(rpc::method_not_found(other)),

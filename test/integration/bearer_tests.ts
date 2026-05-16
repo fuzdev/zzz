@@ -213,6 +213,10 @@ const bearer_test_list: ReadonlyArray<{
 	{
 		name: 'keeper_requires_daemon_token',
 		// Both backends enforce daemon_token credential type for keeper actions.
+		// The keeper auth shape composes credential_types: ['daemon_token'] +
+		// roles: ['keeper'] — the credential gate fires first, so bearer callers
+		// see `credential_type_required` + `required_credential_types: ['daemon_token']`
+		// (matches fuz_app's `require_credential_types` shape).
 		fn: async (config) => {
 			// API token (bearer) with keeper role account calling keeper action → 403
 			// The admin account has the keeper role grant, but bearer credential type is
@@ -233,6 +237,136 @@ const bearer_test_list: ReadonlyArray<{
 			const error = r.error as Record<string, unknown>;
 			assert_equal(error.code, -32002, 'error code');
 			assert_equal(error.message, 'forbidden', 'error message');
+			const data = error.data as Record<string, unknown>;
+			assert_equal(data.reason, 'credential_type_required', 'data.reason');
+			const required = data.required_credential_types as readonly string[];
+			assert_equal(Array.isArray(required), true, 'required_credential_types is array');
+			assert_equal(required.length, 1, 'required_credential_types length');
+			assert_equal(required[0], 'daemon_token', "required_credential_types[0]");
+		},
+	},
+	{
+		name: 'bearer_rejects_account_token_create',
+		// fuz_app v0.63.0 spec-level credential-channel gate. Bearer-authenticated
+		// `account_token_create` must be rejected with 403 + `credential_type_required`
+		// + `required_credential_types: ['session']` — closes the bearer-spawns-bearer
+		// path that would let a leaked api_token mint sibling tokens to outlive
+		// revocation. Asserts cross-backend parity on the JSON-RPC error data shape.
+		fn: async (config) => {
+			const {status, body} = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'bt-gate-create-1',
+					method: 'account_token_create',
+					params: {name: 'gated'},
+				}),
+				{bearer: BEARER_TOKEN_RAW},
+			);
+			assert_equal(status, 403, 'status');
+			const r = body as Record<string, unknown>;
+			assert_equal(r.id, 'bt-gate-create-1', 'id');
+			const error = r.error as Record<string, unknown>;
+			assert_equal(error.code, -32002, 'error code');
+			assert_equal(error.message, 'forbidden', 'error message');
+			const data = error.data as Record<string, unknown>;
+			assert_equal(data.reason, 'credential_type_required', 'data.reason');
+			const required = data.required_credential_types as readonly string[];
+			assert_equal(Array.isArray(required), true, 'required_credential_types is array');
+			assert_equal(required.length, 1, 'required_credential_types length');
+			assert_equal(required[0], 'session', "required_credential_types[0]");
+		},
+	},
+	{
+		name: 'bearer_rejects_account_session_revoke_all',
+		// Same gate, covering the session-side of the bearer-self-service threat.
+		// A leaked bearer must not be able to lock the user out by nuking sessions.
+		fn: async (config) => {
+			const {status, body} = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'bt-gate-srv-1',
+					method: 'account_session_revoke_all',
+				}),
+				{bearer: BEARER_TOKEN_RAW},
+			);
+			assert_equal(status, 403, 'status');
+			const r = body as Record<string, unknown>;
+			const error = r.error as Record<string, unknown>;
+			assert_equal(error.code, -32002, 'error code');
+			const data = error.data as Record<string, unknown>;
+			assert_equal(data.reason, 'credential_type_required', 'data.reason');
+			const required = data.required_credential_types as readonly string[];
+			assert_equal(required[0], 'session', "required_credential_types[0]");
+		},
+	},
+	{
+		name: 'bearer_rejects_account_token_create_ws',
+		// WS dispatch has its own check_action_auth call site (separate from HTTP
+		// RPC). This locks in that the credential-channel gate fires identically
+		// over the WebSocket dispatcher on the Rust backend — same 403 envelope,
+		// same data shape. Skipped on Deno: fuz_app's account_* RPC actions
+		// are wired onto the HTTP RPC endpoint only, not the WebSocket
+		// dispatcher (`register_websocket_actions` consumes zzz's local
+		// `all_action_specs`, not `all_standard_action_specs`), so calling
+		// `account_token_create` over the WS surface returns method_not_found
+		// before reaching auth. The Rust port has no HTTP/WS surface split
+		// for account actions — the dispatcher matches by method regardless
+		// of transport — so the gate is reachable there.
+		skip: ['deno'],
+		fn: async (config) => {
+			const conn = await open_ws(config, {bearer: BEARER_TOKEN_RAW});
+			try {
+				conn.send(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'bt-gate-ws-1',
+						method: 'account_token_create',
+						params: {name: 'gated-ws'},
+					}),
+				);
+				const r = (await conn.receive()) as Record<string, unknown>;
+				assert_equal(r.id, 'bt-gate-ws-1', 'id');
+				const error = r.error as Record<string, unknown>;
+				assert_equal(error.code, -32002, 'error code');
+				assert_equal(error.message, 'forbidden', 'error message');
+				const data = error.data as Record<string, unknown>;
+				assert_equal(data.reason, 'credential_type_required', 'data.reason');
+				const required = data.required_credential_types as readonly string[];
+				assert_equal(required[0], 'session', "required_credential_types[0]");
+			} finally {
+				conn.close();
+			}
+		},
+	},
+	{
+		name: 'bearer_rejects_password_change',
+		// REST sibling of the RPC gates — `POST /api/account/password` rejects
+		// bearer with 403 + `{error: 'credential_type_required', required_credential_types: ['session']}`
+		// (top-level body shape matching fuz_app's `require_credential_types` middleware,
+		// not the JSON-RPC envelope shape).
+		fn: async (config) => {
+			const paths = config.account_paths;
+			if (!paths) throw new Error('account_paths not configured');
+			const res = await fetch(`${config.base_url}${paths.password}`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${BEARER_TOKEN_RAW}`,
+				},
+				body: JSON.stringify({
+					current_password: 'irrelevant-never-checked',
+					new_password: 'irrelevant-never-checked',
+				}),
+			});
+			assert_equal(res.status, 403, 'status');
+			const body = (await res.json()) as Record<string, unknown>;
+			assert_equal(body.error, 'credential_type_required', 'body.error');
+			const required = body.required_credential_types as readonly string[];
+			assert_equal(Array.isArray(required), true, 'required_credential_types is array');
+			assert_equal(required.length, 1, 'required_credential_types length');
+			assert_equal(required[0], 'session', "required_credential_types[0]");
 		},
 	},
 	{

@@ -361,9 +361,13 @@ async fn password_inner(
     .await
     .ok_or_else(|| error_json(StatusCode::UNAUTHORIZED, "unauthenticated"))?;
 
-    if resolved.credential_type != auth::CredentialType::Session {
-        return Err(error_json(StatusCode::BAD_REQUEST, "session_required"));
-    }
+    // Spec-level credential-channel gate — only session cookies may
+    // change passwords. Bearer/api_token and daemon_token callers get
+    // 403 with `credential_type_required` + `required_credential_types`
+    // matching fuz_app's `require_credential_types` shape. Shared with
+    // the RPC dispatcher's `MethodSpec.credential_types = ['session']`
+    // path via `auth::check_action_auth`.
+    auth::enforce_session_only(&resolved)?;
 
     // Validate new password
     if input.new_password.len() < 12 {

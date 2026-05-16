@@ -1,6 +1,10 @@
+use axum::Json;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use hmac::{Hmac, Mac};
+use serde::Serialize;
 use sha2::Sha256;
 
 use crate::daemon_token::SharedDaemonTokenState;
@@ -197,6 +201,17 @@ pub enum CredentialType {
     DaemonToken,
 }
 
+impl CredentialType {
+    /// Wire-format name matching `fuz_app`'s `CREDENTIAL_TYPE_*` literals.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Session => "session",
+            Self::ApiToken => "api_token",
+            Self::DaemonToken => "daemon_token",
+        }
+    }
+}
+
 // -- Request context ----------------------------------------------------------
 
 /// Authenticated request context — account + actor + active role grants.
@@ -269,18 +284,40 @@ pub async fn build_request_context(
 
 // -- Per-action auth check ----------------------------------------------------
 
-/// Auth level for an action spec.
+/// Authentication tier for an action spec — the 401 axis.
 ///
-/// Mirrors the `auth` field from zzz's `action_specs.ts`.
+/// Mirrors `fuz_app`'s `RouteAuth.account` axis collapsed to the two
+/// shapes zzz uses today: anonymous (`Public`) or any valid credential
+/// (`Authenticated`). Role and credential-type gates are separate axes
+/// on [`MethodSpec`], not packed into this enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActionAuth {
     /// No auth required.
     Public,
-    /// Must have a valid session.
+    /// Must have a valid credential of some kind. Refine further with
+    /// `MethodSpec.credential_types` / `MethodSpec.roles`.
     Authenticated,
-    /// Must have keeper role. In `fuz_app` this requires `daemon_token`
-    /// credential type; the Rust backend checks keeper role grant on cookie sessions.
-    Keeper,
+}
+
+/// Spec-derived facts about a method — auth tier, credential-type
+/// allowlist, role requirements, and DB-transaction need. Mirrors the
+/// `{auth, credential_types, roles, side_effects}` axes of `fuz_app`'s
+/// `ActionSpec`. Looked up via [`method_spec`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MethodSpec {
+    pub auth: ActionAuth,
+    /// `Some(types)` → credential gate restricts to those types
+    /// (`credential_type_required` + `required_credential_types` on
+    /// failure). `None` → any credential type permitted.
+    pub credential_types: Option<&'static [CredentialType]>,
+    /// `Some(roles)` → caller must hold one of these roles (any-of)
+    /// (`insufficient_permissions` + `required_roles` on failure).
+    /// `None` → no role check.
+    pub roles: Option<&'static [&'static str]>,
+    /// `true` → dispatcher wraps the handler in a DB transaction. Mirrors
+    /// `fuz_app`'s `ActionSpec.side_effects` and its `perform_action`
+    /// `db.transaction` wrap.
+    pub side_effects: bool,
 }
 
 /// JSON-RPC error codes for auth failures.
@@ -291,144 +328,159 @@ pub enum ActionAuth {
 const JSONRPC_UNAUTHENTICATED: i32 = -32001;
 const JSONRPC_FORBIDDEN: i32 = -32002;
 
-/// Check per-action auth.
+/// Check per-action auth against a method's [`MethodSpec`].
 ///
-/// Returns `None` if authorized, `Some(error)` if not.
-/// Mirrors `fuz_app`'s `check_action_auth` from `action_rpc.ts` and
-/// the keeper check from `register_websocket_actions.ts`.
+/// Returns `None` if authorized, `Some(error)` if not. Mirrors `fuz_app`'s
+/// `check_action_auth_post_authorization` in `perform_action.ts`:
 ///
-/// Keeper actions require both `daemon_token` credential type AND the
-/// keeper role grant — API tokens with the keeper role grant are rejected.
+/// 1. **401 — authentication**. `Authenticated` requires a context.
+/// 2. **403 — credential-type gate**. When `spec.credential_types` is
+///    set, the request's credential type must be in the allowlist;
+///    failure emits `credential_type_required` + `required_credential_types`.
+/// 3. **403 — role gate**. When `spec.roles` is set, the request context
+///    must hold one of the named roles; failure emits
+///    `insufficient_permissions` + `required_roles`.
+///
+/// Keeper composes both gates declaratively as
+/// `credential_types: ['daemon_token']` + `roles: ['keeper']` —
+/// no special-case arm.
 pub fn check_action_auth(
-    auth: ActionAuth,
+    spec: &MethodSpec,
     context: Option<&RequestContext>,
     credential_type: Option<CredentialType>,
 ) -> Option<JsonRpcError> {
-    match auth {
-        ActionAuth::Public => None,
+    match spec.auth {
+        ActionAuth::Public => {}
         ActionAuth::Authenticated => {
-            if context.is_some() {
-                None
-            } else {
-                Some(JsonRpcError {
-                    code: JSONRPC_UNAUTHENTICATED,
-                    message: "unauthenticated".to_owned(),
-                    data: None,
-                })
-            }
-        }
-        ActionAuth::Keeper => {
-            let Some(ctx) = context else {
+            if context.is_none() {
                 return Some(JsonRpcError {
                     code: JSONRPC_UNAUTHENTICATED,
                     message: "unauthenticated".to_owned(),
                     data: None,
                 });
-            };
-            // Keeper actions require daemon_token credential type AND keeper role.
-            // API tokens and session cookies cannot access keeper actions even if
-            // the account has the keeper role grant.
-            if credential_type != Some(CredentialType::DaemonToken) || !ctx.has_role("keeper") {
-                Some(JsonRpcError {
-                    code: JSONRPC_FORBIDDEN,
-                    message: "forbidden".to_owned(),
-                    data: None,
-                })
-            } else {
-                None
             }
         }
     }
-}
 
-/// Get the auth level for a method name.
-///
-/// Mirrors the `auth` field from each action spec in `action_specs.ts`.
-pub fn method_auth(method: &str) -> ActionAuth {
-    match method {
-        "ping" => ActionAuth::Public,
-
-        // All other implemented methods require authentication
-        "workspace_list"
-        | "workspace_open"
-        | "workspace_close"
-        | "session_load"
-        | "diskfile_update"
-        | "diskfile_delete"
-        | "directory_create"
-        | "completion_create"
-        | "ollama_list"
-        | "ollama_ps"
-        | "ollama_show"
-        | "ollama_pull"
-        | "ollama_delete"
-        | "ollama_copy"
-        | "ollama_create"
-        | "ollama_unload"
-        | "provider_load_status"
-        | "terminal_create"
-        | "terminal_data_send"
-        | "terminal_resize"
-        | "terminal_close"
-        | "account_verify"
-        | "account_session_list"
-        | "account_session_revoke"
-        | "account_session_revoke_all"
-        | "account_token_create"
-        | "account_token_list"
-        | "account_token_revoke" => ActionAuth::Authenticated,
-
-        "provider_update_api_key" => ActionAuth::Keeper,
-
-        // Unknown methods (including `_test_*` when `ZZZ_ENABLE_TEST_ACTIONS`
-        // is unset) — will hit method_not_found in dispatch anyway, but require
-        // auth so we don't leak method existence to unauthenticated callers.
-        _ => ActionAuth::Authenticated,
+    if let Some(required) = spec.credential_types {
+        let satisfied = credential_type.is_some_and(|ct| required.contains(&ct));
+        if !satisfied {
+            let names: Vec<&'static str> = required.iter().map(|c| c.name()).collect();
+            return Some(JsonRpcError {
+                code: JSONRPC_FORBIDDEN,
+                message: "forbidden".to_owned(),
+                data: Some(serde_json::json!({
+                    "reason": "credential_type_required",
+                    "required_credential_types": names,
+                })),
+            });
+        }
     }
+
+    if let Some(required_roles) = spec.roles {
+        let has_required =
+            context.is_some_and(|ctx| required_roles.iter().any(|r| ctx.has_role(r)));
+        if !has_required {
+            return Some(JsonRpcError {
+                code: JSONRPC_FORBIDDEN,
+                message: "forbidden".to_owned(),
+                data: Some(serde_json::json!({
+                    "reason": "insufficient_permissions",
+                    "required_roles": required_roles,
+                })),
+            });
+        }
+    }
+
+    None
 }
 
-/// Whether a method mutates state.
+/// Per-method spec lookup — single source of truth for the four
+/// dispatch-relevant axes (`auth`, `credential_types`, `roles`,
+/// `side_effects`). Mirrors `fuz_app`'s `ActionSpec` shape; one match
+/// keeps the row for a method readable end-to-end instead of fanning
+/// across parallel functions.
 ///
-/// Mirrors the `side_effects` field from each action spec in `action_specs.ts`
-/// (and `fuz_app`'s `account_action_specs.ts` for `account_*`). The dispatcher
-/// wraps `side_effects: true` actions in a database transaction so paired
-/// writes commit or roll back atomically — matching `fuz_app`'s `perform_action`
-/// `db.transaction` wrap.
+/// **Gate rationale**:
 ///
-/// Kept next to `method_auth` so both spec-derived facts about a method
-/// live in one place.
-pub fn method_side_effects(method: &str) -> bool {
-    match method {
-        // Read-only — no transaction wrap.
-        "ping"
-        | "session_load"
+/// - **`credential_types: ['session']`** on the four account-mutation
+///   methods (`account_token_create`, `account_token_revoke`,
+///   `account_session_revoke`, `account_session_revoke_all`) closes
+///   the bearer-self-service threat: a leaked `api_token` can't mint
+///   sibling tokens, revoke its siblings, or lock the user out by
+///   revoking sessions. Admin equivalents (`admin_*_revoke_all`) are
+///   deliberately ungated — admin CLI scripting via bearer is a
+///   legitimate operator workflow. The REST `POST /api/account/password`
+///   route enforces the same gate at its own handler
+///   (see `account::password_inner`).
+///
+/// - **`credential_types: ['daemon_token']` + `roles: ['keeper']`** on
+///   `provider_update_api_key` composes the keeper requirement: the
+///   credential must come over the filesystem-readable daemon-token
+///   channel AND the account must hold the keeper role grant. Matches
+///   `fuz_app`'s keeper shape (`{roles: ['keeper'], credential_types: ['daemon_token']}`).
+#[allow(clippy::match_same_arms)] // Read-only auth'd reads and the unknown-method catch-all
+// share the same MethodSpec shape but are conceptually distinct;
+// keeping the unknown-method arm explicit makes the
+// "fail-closed: unknown methods still require auth"
+// invariant visible at the call site.
+pub fn method_spec(method: &str) -> MethodSpec {
+    const SESSION_ONLY: &[CredentialType] = &[CredentialType::Session];
+    const DAEMON_TOKEN_ONLY: &[CredentialType] = &[CredentialType::DaemonToken];
+    const KEEPER_ROLE: &[&str] = &["keeper"];
+
+    let (auth, credential_types, roles, side_effects) = match method {
+        // Public — no auth required, no side effects.
+        "ping" => (ActionAuth::Public, None, None, false),
+
+        // Authenticated reads — no transaction wrap.
+        "session_load"
         | "workspace_list"
         | "provider_load_status"
         | "account_verify"
         | "account_session_list"
-        | "account_token_list" => false,
+        | "account_token_list" => (ActionAuth::Authenticated, None, None, false),
 
-        // Write actions — dispatcher wraps in `db.transaction`.
-        "workspace_open"
-        | "workspace_close"
-        | "diskfile_update"
-        | "diskfile_delete"
-        | "directory_create"
-        | "completion_create"
-        | "provider_update_api_key"
-        | "terminal_create"
-        | "terminal_data_send"
-        | "terminal_resize"
-        | "terminal_close"
+        // Authenticated writes — wrap in db.transaction.
+        "workspace_open" | "workspace_close" | "diskfile_update" | "diskfile_delete"
+        | "directory_create" | "completion_create" | "terminal_create" | "terminal_data_send"
+        | "terminal_resize" | "terminal_close" => (ActionAuth::Authenticated, None, None, true),
+
+        // Authenticated ollama actions — read-only (no DB side effects on the
+        // zzz_server side; the Ollama daemon is a separate process).
+        "ollama_list" | "ollama_ps" | "ollama_show" | "ollama_pull" | "ollama_delete"
+        | "ollama_copy" | "ollama_create" | "ollama_unload" => {
+            (ActionAuth::Authenticated, None, None, false)
+        }
+
+        // Credential-channel gated account mutations (see fn-level docs).
+        "account_token_create"
+        | "account_token_revoke"
         | "account_session_revoke"
-        | "account_session_revoke_all"
-        | "account_token_create"
-        | "account_token_revoke" => true,
+        | "account_session_revoke_all" => {
+            (ActionAuth::Authenticated, Some(SESSION_ONLY), None, true)
+        }
 
-        // `_test_emit_notifications` (when enabled) and unknown methods —
-        // default to no transaction so `method_not_found` doesn't pay the
-        // cost of acquiring a transaction.
-        _ => false,
+        // Keeper — composed credential gate + role gate (see fn-level docs).
+        "provider_update_api_key" => (
+            ActionAuth::Authenticated,
+            Some(DAEMON_TOKEN_ONLY),
+            Some(KEEPER_ROLE),
+            true,
+        ),
+
+        // Unknown methods (including `_test_*` when `ZZZ_ENABLE_TEST_ACTIONS`
+        // is unset) — will hit method_not_found in dispatch, but require auth
+        // so we don't leak method existence to unauthenticated callers. No
+        // transaction so method_not_found doesn't pay the cost of one.
+        _ => (ActionAuth::Authenticated, None, None, false),
+    };
+
+    MethodSpec {
+        auth,
+        credential_types,
+        roles,
+        side_effects,
     }
 }
 
@@ -717,6 +769,54 @@ async fn resolve_daemon_token_from_headers(
         api_token_id: None,
         credential_type: CredentialType::DaemonToken,
     })
+}
+
+// -- REST credential-channel gate ---------------------------------------------
+
+/// 403 body shape for REST routes that enforce a credential-type allowlist.
+///
+/// Mirrors `fuz_app`'s `require_credential_types` middleware: `{error,
+/// required_credential_types}`. The RPC sibling lives in
+/// [`check_action_auth`] above — same enum, same wire literal
+/// ([`CredentialType::name`]), different envelope (REST is a flat 403 body,
+/// RPC is a JSON-RPC `forbidden` error with `data.required_credential_types`).
+#[derive(Serialize)]
+struct CredentialTypeRequiredBody {
+    error: &'static str,
+    required_credential_types: &'static [&'static str],
+}
+
+/// Build a 403 `credential_type_required` response with the supplied allowlist.
+///
+/// Co-located with [`check_action_auth`] so the REST and RPC credential
+/// gates anchor to the same module.
+pub fn credential_type_required_response(required: &'static [&'static str]) -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        Json(CredentialTypeRequiredBody {
+            error: "credential_type_required",
+            required_credential_types: required,
+        }),
+    )
+        .into_response()
+}
+
+/// Enforce the session-only credential-channel gate on a REST route.
+///
+/// Returns `Ok(())` when the request authenticated via cookie session;
+/// `Err(response)` with the 403 [`credential_type_required_response`] for
+/// bearer / daemon-token callers. Used by `POST /api/account/password`
+/// today; mirrors the RPC-side gate produced by `MethodSpec.credential_types
+/// = ['session']` running through [`check_action_auth`].
+// `Err` carries an `axum::Response` (~128 bytes) so `?` composes with the
+// REST handler's existing `Result<Response, Response>` flow without boxing.
+#[allow(clippy::result_large_err)]
+pub fn enforce_session_only(resolved: &ResolvedAuth) -> Result<(), Response> {
+    if resolved.credential_type == CredentialType::Session {
+        Ok(())
+    } else {
+        Err(credential_type_required_response(&["session"]))
+    }
 }
 
 /// Parse `ALLOWED_ORIGINS` env value into a list of patterns.

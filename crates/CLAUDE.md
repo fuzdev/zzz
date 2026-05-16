@@ -316,7 +316,8 @@ crates/zzz_server/src/
 │   └── workspace.rs # workspace_list, workspace_open, workspace_close (+ workspace_changed broadcast)
 ├── rpc.rs           # JSON-RPC classify + notification builder, HTTP handler with auth pipeline
 ├── ws.rs            # WebSocket upgrade with auth, connection tracking, select! message loop
-├── auth.rs          # Keyring, cookie/bearer/daemon-token resolution, per-action auth
+├── perform_action.rs # Transport-agnostic dispatch core shared by HTTP RPC + WS (mirrors fuz_app/src/lib/actions/perform_action.ts)
+├── auth.rs          # Keyring, cookie/bearer/daemon-token resolution, per-action auth, REST credential gate (`enforce_session_only`)
 ├── api_token.rs     # generate_api_token (raw token + tok_<12> public id + blake3 hash)
 ├── daemon_token.rs  # Daemon token state, generation, timing-safe validation, rotation task
 ├── account.rs       # Account routes: login, logout, password change, session management
@@ -365,8 +366,25 @@ calling `handlers::dispatch`.
 6. Check per-action auth level (keeper actions require `DaemonToken` credential type)
 
 **Message classification** (`rpc::classify`) is transport-agnostic:
-- HTTP: origin check → auth → classify → auth check → dispatch
-- WS: upgrade auth (reject 401) → classify → per-action auth check → dispatch
+- HTTP: origin check → auth → classify → `perform_action`
+- WS: upgrade auth (reject 401) → classify → `perform_action`
+
+**Shared dispatch core** (`perform_action::perform_action`): each
+transport assembles a `PerformActionInput` (method, params, request_id,
+optional auth context, credential type, notify closure, signal) and
+calls `perform_action(input, &app)`. The function runs the spec lookup
+(`auth::method_spec`), per-action auth (`auth::check_action_auth` —
+credential + role gates), and `handlers::dispatch` (which routes
+`side_effects: true` through its internal `dispatch_with_tx`). Returns
+a discriminated `PerformActionResult` (`Ok(Value) | Err {error,
+status}`); HTTP binds the status directly, WS ignores it. Mirrors
+fuz_app's `actions/perform_action.ts` shape — the TS port additionally
+owns input validation, the authorization phase, rate limiting, and
+DEV-only output validation inside `perform_action`; those land on Rust
+as later phases. The REST sibling `auth::enforce_session_only` enforces
+the session-only credential channel for `POST /api/account/password`
+out of the same module that holds `check_action_auth` so the two
+gates can't drift silently.
 
 ## Known Issues
 

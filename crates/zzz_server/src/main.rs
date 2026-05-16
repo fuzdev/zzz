@@ -7,6 +7,7 @@ mod db;
 mod error;
 mod filer;
 mod handlers;
+mod perform_action;
 mod provider;
 mod pty_manager;
 mod rpc;
