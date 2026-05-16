@@ -370,8 +370,12 @@ pub fn method_auth(method: &str) -> ActionAuth {
         | "terminal_data_send"
         | "terminal_resize"
         | "terminal_close"
+        | "account_verify"
         | "account_session_list"
         | "account_session_revoke"
+        | "account_session_revoke_all"
+        | "account_token_create"
+        | "account_token_list"
         | "account_token_revoke" => ActionAuth::Authenticated,
 
         "provider_update_api_key" => ActionAuth::Keeper,
@@ -380,6 +384,51 @@ pub fn method_auth(method: &str) -> ActionAuth {
         // is unset) — will hit method_not_found in dispatch anyway, but require
         // auth so we don't leak method existence to unauthenticated callers.
         _ => ActionAuth::Authenticated,
+    }
+}
+
+/// Whether a method mutates state.
+///
+/// Mirrors the `side_effects` field from each action spec in `action_specs.ts`
+/// (and `fuz_app`'s `account_action_specs.ts` for `account_*`). The dispatcher
+/// wraps `side_effects: true` actions in a database transaction so paired
+/// writes commit or roll back atomically — matching `fuz_app`'s `perform_action`
+/// `db.transaction` wrap.
+///
+/// Kept next to `method_auth` so both spec-derived facts about a method
+/// live in one place.
+pub fn method_side_effects(method: &str) -> bool {
+    match method {
+        // Read-only — no transaction wrap.
+        "ping"
+        | "session_load"
+        | "workspace_list"
+        | "provider_load_status"
+        | "account_verify"
+        | "account_session_list"
+        | "account_token_list" => false,
+
+        // Write actions — dispatcher wraps in `db.transaction`.
+        "workspace_open"
+        | "workspace_close"
+        | "diskfile_update"
+        | "diskfile_delete"
+        | "directory_create"
+        | "completion_create"
+        | "provider_update_api_key"
+        | "terminal_create"
+        | "terminal_data_send"
+        | "terminal_resize"
+        | "terminal_close"
+        | "account_session_revoke"
+        | "account_session_revoke_all"
+        | "account_token_create"
+        | "account_token_revoke" => true,
+
+        // `_test_emit_notifications` (when enabled) and unknown methods —
+        // default to no transaction so `method_not_found` doesn't pay the
+        // cost of acquiring a transaction.
+        _ => false,
     }
 }
 

@@ -259,7 +259,7 @@ fn extract_id(obj: &Map<String, Value>) -> Value {
 /// Axum handler for `GET /api/rpc`.
 ///
 /// Extracts `method`, `id`, and optional `params` from query parameters.
-/// Matches fuz_app's `create_rpc_endpoint` GET handler.
+/// Matches `fuz_app`'s `create_rpc_endpoint` GET handler.
 pub async fn rpc_get_handler(
     State(app): State<Arc<App>>,
     headers: HeaderMap,
@@ -301,12 +301,9 @@ pub async fn rpc_get_handler(
 
     // Parse params from query string (optional)
     let params: Value = if let Some(params_raw) = query.get("params") {
-        match serde_json::from_str(params_raw) {
-            Ok(v) => v,
-            Err(_) => {
-                let error = invalid_params("params query parameter is not valid JSON");
-                return (StatusCode::BAD_REQUEST, Json(error_response(id, error))).into_response();
-            }
+        if let Ok(v) = serde_json::from_str(params_raw) { v } else {
+            let error = invalid_params("params query parameter is not valid JSON");
+            return (StatusCode::BAD_REQUEST, Json(error_response(id, error))).into_response();
         }
     } else {
         Value::Null

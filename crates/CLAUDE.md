@@ -5,11 +5,13 @@ protocol, same wire format — the Deno server is ground truth and the
 integration tests enforce identical behaviour between both backends.
 
 Phase 4 in progress: AI provider system with enum-dispatched providers
-(Anthropic fully implemented, OpenAI/Gemini/Ollama stubs). 19 RPC methods:
+(Anthropic fully implemented, OpenAI/Gemini/Ollama stubs). 23 RPC methods:
 `ping`, `session_load`, `workspace_*`, `diskfile_*`, `directory_create`,
 `terminal_*`, `provider_load_status`, `provider_update_api_key`,
-`completion_create`, `account_session_list`, `account_session_revoke`,
-`account_token_revoke`. `_test_emit_notifications` is gated behind
+`completion_create`, `account_verify`, `account_session_list`,
+`account_session_revoke`, `account_session_revoke_all`,
+`account_token_create`, `account_token_list`, `account_token_revoke`.
+`_test_emit_notifications` is gated behind
 `ZZZ_ENABLE_TEST_ACTIONS=1` (set by the integration runner; production
 leaves it unset, dispatch returns `method_not_found`). Full auth stack (cookie sessions, bearer tokens, daemon
 tokens), account management routes, filesystem actions with `ScopedFs`,
@@ -168,12 +170,14 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
     `POST /api/account/logout` (invalidate session + close WS connections),
     `POST /api/account/password` (change password, revoke all sessions + API
     tokens, close all WS connections). Session listing and revocation moved
-    to JSON-RPC: `account_session_list`, `account_session_revoke`,
-    `account_token_revoke` (all scoped to the authenticated account).
+    to JSON-RPC: `account_verify`, `account_session_list`,
+    `account_session_revoke`, `account_session_revoke_all`,
+    `account_token_create`, `account_token_list`, `account_token_revoke`
+    (all scoped to the authenticated account).
 
 ## Integration Tests
 
-81 tests on both backends, all cross-backend (0 skips, 0 backend-specific
+85 tests on both backends, all cross-backend (0 skips, 0 backend-specific
 branches). Both backends bootstrap
 auth (admin account + session cookie), create a non-keeper user (account +
 actor + session, no
@@ -274,11 +278,18 @@ silently ignored), empty bearer value handling, and cookie-over-bearer priority.
 `login_success`, `login_invalid_password`, `login_nonexistent_user`,
 `logout_clears_session`, `logout_unauthenticated`,
 `password_change_revokes_all`, `password_wrong_current`,
-`session_list`, `session_revoke` — 9 tests verify login with
+`session_list`, `session_revoke`, `account_verify`, `session_revoke_all`,
+`token_create`, `token_list` — 13 tests verify login with
 valid/invalid/nonexistent credentials, logout with session invalidation and
 cookie clearing, password change with full session + token revocation and
-re-login verification, session listing (with `account_id` field), and single
-session revocation (idempotent with `revoked` field).
+re-login verification, session listing (with `account_id` field), single
+session revocation (idempotent with `revoked` field), self-account verify
+echoing `SessionAccountJson` (no `password_hash` leak), bulk session
+revocation closing every socket on the account (cookie, bearer, and
+daemon-token — matches fuz_app `transports_ws_auth_guard`), token creation with
+bearer round-trip (raw `secret_fuz_token_…` validates against the same
+backend's `Authorization: Bearer` path), and token listing in
+`ClientApiTokenJson` shape (no `token_hash` field anywhere).
 
 ```bash
 deno task test:integration --backend=rust   # Rust only
@@ -296,14 +307,27 @@ cookie, then stops the backend and cleans up.
 ```
 crates/zzz_server/src/
 ├── main.rs          # Entry, config, DB/keyring/daemon-token init, route setup, graceful shutdown
-├── handlers.rs      # App (server state + connection tracking + watchers), Ctx, dispatch
+├── handlers/        # Per-domain RPC handlers + App state + dispatch
+│   ├── mod.rs       # App (state + connection tracking + watchers), Ctx, dispatch, ping, session_load, _test_emit_notifications
+│   ├── account.rs   # account_verify, account_session_*, account_token_*
+│   ├── filesystem.rs # diskfile_update, diskfile_delete, directory_create
+│   ├── provider.rs  # provider_load_status, provider_update_api_key, completion_create
+│   ├── terminal.rs  # terminal_create, terminal_data_send, terminal_resize, terminal_close
+│   └── workspace.rs # workspace_list, workspace_open, workspace_close (+ workspace_changed broadcast)
 ├── rpc.rs           # JSON-RPC classify + notification builder, HTTP handler with auth pipeline
 ├── ws.rs            # WebSocket upgrade with auth, connection tracking, select! message loop
 ├── auth.rs          # Keyring, cookie/bearer/daemon-token resolution, per-action auth
+├── api_token.rs     # generate_api_token (raw token + tok_<12> public id + blake3 hash)
 ├── daemon_token.rs  # Daemon token state, generation, timing-safe validation, rotation task
 ├── account.rs       # Account routes: login, logout, password change, session management
 ├── bootstrap.rs     # POST /bootstrap handler (account + session creation)
-├── db.rs            # Connection pool, migrations, auth + account management queries
+├── db/              # Per-domain query modules
+│   ├── mod.rs       # Pool creation + re-exports
+│   ├── migrations.rs # AUTH_DDL constant + run_migrations
+│   ├── account.rs   # AccountRow, AccountSummaryRow, password_hash queries
+│   ├── actor.rs     # ActorRow, RoleGrantRow, role_grant queries, keeper_account_id
+│   ├── api_token.rs # api_token CRUD (create, list, validate, revoke, enforce_limit)
+│   └── auth.rs      # auth_session queries (validate, touch, create, delete)
 ├── filer.rs         # Filer + FilerManager (notify crate) — immediate file index updates, debounced filer_change broadcasts
 ├── provider/        # AI provider system
 │   ├── mod.rs       # ProviderName, ProviderStatus, Provider enum, ProviderManager, CompletionOptions
@@ -373,7 +397,7 @@ identical JSON-RPC envelopes for all auth failures.
 
 ## Known Limitations
 
-- 19 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `provider_update_api_key` keeper-only, `completion_create`, `account_session_list`, `account_session_revoke`, `account_token_revoke`)
+- 23 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `provider_update_api_key` keeper-only, `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`)
 - 5 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debounced broadcasts with immediate index updates, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast), `completion_progress` (streaming completion chunks to requesting WS connection)
 - AI providers: Anthropic fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable)
 - No batch request support (JSON arrays)
@@ -412,6 +436,22 @@ identical JSON-RPC envelopes for all auth failures.
   `reqwest::Client` (internally `Arc`'d) and releases the lock before HTTP
   calls, so `set_api_key` is never blocked by long-running streaming responses.
   SSE parsing is manual with `\r\n` normalization per RFC 8895.
+- **Dispatcher transaction wrap**: `auth::method_side_effects` mirrors the
+  `side_effects` field on each action spec. `dispatch` routes
+  `side_effects: true` actions through `dispatch_with_tx`, which begins a
+  `tokio_postgres` transaction, hands `&tx` to handlers that touch the DB
+  (the four `account_session_revoke*` / `account_token_*` mutators today),
+  and commits on `Ok` or rolls back on `Err`. Mirrors `fuz_app`'s
+  `perform_action` `db.transaction` wrap so paired writes (e.g.
+  `account_token_create`'s `INSERT api_token` + `query_api_token_enforce_limit`)
+  commit atomically — two concurrent token creates can no longer both bypass
+  the per-account cap. Query helpers in `db/*.rs` take
+  `&(impl deadpool_postgres::GenericClient + ?Sized)` so the same function
+  works against a pooled `Object` (read-only path) or a `Transaction`
+  (side-effects path) without per-handler match wiring. Read-only actions
+  acquire a pooled client only when the matched handler needs one (`ping`,
+  `session_load`, `workspace_list`, `provider_load_status` don't touch the
+  pool at all).
 
 ## What's Next
 

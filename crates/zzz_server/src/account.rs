@@ -133,44 +133,41 @@ pub async fn status_handler(State(app): State<Arc<App>>, headers: HeaderMap) -> 
     )
     .await;
 
-    match resolved {
-        Some(r) => {
-            let account = StatusAccount {
-                id: r.context.account.id.to_string(),
-                username: r.context.account.username.clone(),
-            };
-            let role_grants: Vec<StatusRoleGrant> = r
-                .context
-                .role_grants
-                .iter()
-                .map(|p| StatusRoleGrant {
-                    role: p.role.clone(),
-                })
-                .collect();
-            Json(StatusSuccess {
-                account,
-                role_grants,
+    if let Some(r) = resolved {
+        let account = StatusAccount {
+            id: r.context.account.id.to_string(),
+            username: r.context.account.username.clone(),
+        };
+        let role_grants: Vec<StatusRoleGrant> = r
+            .context
+            .role_grants
+            .iter()
+            .map(|p| StatusRoleGrant {
+                role: p.role.clone(),
             })
+            .collect();
+        Json(StatusSuccess {
+            account,
+            role_grants,
+        })
+        .into_response()
+    } else {
+        let bootstrap = if app
+            .bootstrap_available
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            Some(true)
+        } else {
+            None
+        };
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(StatusUnauthenticated {
+                error: "authentication_required",
+                bootstrap_available: bootstrap,
+            }),
+        )
             .into_response()
-        }
-        None => {
-            let bootstrap = if app
-                .bootstrap_available
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
-                Some(true)
-            } else {
-                None
-            };
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(StatusUnauthenticated {
-                    error: "authentication_required",
-                    bootstrap_available: bootstrap,
-                }),
-            )
-                .into_response()
-        }
     }
 }
 

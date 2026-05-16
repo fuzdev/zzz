@@ -331,6 +331,246 @@ const account_test_list: ReadonlyArray<{
 			);
 		},
 	},
+	{
+		name: 'account_verify',
+		fn: async (config) => {
+			const paths = config.account_paths;
+			if (!paths) throw new Error('account_paths not configured');
+
+			const login_res = await post_account(config, paths.login, {
+				username: config.auth!.username,
+				password: config.auth!.password,
+			});
+			assert_equal(login_res.status, 200, 'login status');
+			const cookie = login_res.set_cookies.map((c) => c.split(';')[0]).join('; ');
+
+			const {status, body} = await post_rpc(
+				config,
+				JSON.stringify({jsonrpc: '2.0', id: 'av-1', method: 'account_verify'}),
+				{cookie},
+			);
+			assert_equal(status, 200, 'status');
+			const rpc = body as Record<string, unknown>;
+			const result = rpc.result as Record<string, unknown>;
+			assert_equal(typeof result.id, 'string', 'id is string');
+			assert_equal(result.username, config.auth!.username, 'username matches');
+			assert_equal('email' in result, true, 'email field present');
+			assert_equal(typeof result.email_verified, 'boolean', 'email_verified is boolean');
+			assert_equal(typeof result.created_at, 'string', 'created_at is string');
+			// Sensitive fields must NOT be in the response
+			assert_equal(
+				'password_hash' in result,
+				false,
+				'password_hash MUST NOT be in verify response',
+			);
+		},
+	},
+	{
+		name: 'session_revoke_all',
+		fn: async (config) => {
+			const paths = config.account_paths;
+			if (!paths) throw new Error('account_paths not configured');
+
+			// Login twice — two distinct sessions
+			const login1 = await post_account(config, paths.login, {
+				username: config.auth!.username,
+				password: config.auth!.password,
+			});
+			assert_equal(login1.status, 200, 'login 1 status');
+			const cookie1 = login1.set_cookies.map((c) => c.split(';')[0]).join('; ');
+
+			const login2 = await post_account(config, paths.login, {
+				username: config.auth!.username,
+				password: config.auth!.password,
+			});
+			assert_equal(login2.status, 200, 'login 2 status');
+			const cookie2 = login2.set_cookies.map((c) => c.split(';')[0]).join('; ');
+
+			// Both cookies should ping successfully before revoke_all
+			const pre1 = await post_rpc(
+				config,
+				JSON.stringify({jsonrpc: '2.0', id: 'sra-pre1', method: 'ping'}),
+				{cookie: cookie1},
+			);
+			assert_equal(pre1.status, 200, 'cookie1 works pre-revoke');
+			const pre2 = await post_rpc(
+				config,
+				JSON.stringify({jsonrpc: '2.0', id: 'sra-pre2', method: 'ping'}),
+				{cookie: cookie2},
+			);
+			assert_equal(pre2.status, 200, 'cookie2 works pre-revoke');
+
+			// revoke_all from cookie1
+			const revoke_res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'sra-revoke',
+					method: 'account_session_revoke_all',
+				}),
+				{cookie: cookie1},
+			);
+			assert_equal(revoke_res.status, 200, 'revoke_all status');
+			const rr = (revoke_res.body as Record<string, unknown>).result as Record<
+				string,
+				unknown
+			>;
+			assert_equal(rr.ok, true, 'revoke_all ok');
+			assert_equal(typeof rr.count, 'number', 'count is number');
+			assert_equal((rr.count as number) >= 2, true, 'count >= 2');
+
+			// Both cookies should now fail authenticated requests
+			const post1 = await post_rpc(
+				config,
+				JSON.stringify({jsonrpc: '2.0', id: 'sra-post1', method: 'workspace_list'}),
+				{cookie: cookie1},
+			);
+			assert_equal(post1.status, 401, 'cookie1 fails after revoke_all');
+			const post2 = await post_rpc(
+				config,
+				JSON.stringify({jsonrpc: '2.0', id: 'sra-post2', method: 'workspace_list'}),
+				{cookie: cookie2},
+			);
+			assert_equal(post2.status, 401, 'cookie2 fails after revoke_all');
+		},
+	},
+	{
+		name: 'token_create',
+		fn: async (config) => {
+			const paths = config.account_paths;
+			if (!paths) throw new Error('account_paths not configured');
+
+			const login_res = await post_account(config, paths.login, {
+				username: config.auth!.username,
+				password: config.auth!.password,
+			});
+			assert_equal(login_res.status, 200, 'login status');
+			const cookie = login_res.set_cookies.map((c) => c.split(';')[0]).join('; ');
+
+			const create_res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'tc-1',
+					method: 'account_token_create',
+					params: {name: 'integration-test-token'},
+				}),
+				{cookie},
+			);
+			assert_equal(create_res.status, 200, 'create status');
+			const cr = (create_res.body as Record<string, unknown>).result as Record<
+				string,
+				unknown
+			>;
+			assert_equal(cr.ok, true, 'create ok');
+			const raw_token = cr.token as string;
+			const id = cr.id as string;
+			assert_equal(typeof raw_token, 'string', 'token is string');
+			assert_equal(raw_token.startsWith('secret_fuz_token_'), true, 'token prefix');
+			assert_equal(typeof id, 'string', 'id is string');
+			assert_equal(/^tok_[A-Za-z0-9_-]{12}$/.test(id), true, `id format: ${id}`);
+			assert_equal(cr.name, 'integration-test-token', 'name echoed');
+
+			// Round-trip: the raw token must validate as a bearer credential
+			const ping = await post_rpc(
+				config,
+				JSON.stringify({jsonrpc: '2.0', id: 'tc-bearer', method: 'ping'}),
+				{bearer: raw_token},
+			);
+			assert_equal(ping.status, 200, 'bearer round-trip ping');
+			const pr = ping.body as Record<string, unknown>;
+			assert_equal(pr.jsonrpc, '2.0', 'bearer ping jsonrpc');
+			const ping_result = pr.result as Record<string, unknown>;
+			assert_equal(ping_result.ping_id, 'tc-bearer', 'bearer ping_id');
+
+			// Cleanup — revoke the token so list_tokens doesn't accumulate across runs
+			await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'tc-cleanup',
+					method: 'account_token_revoke',
+					params: {token_id: id},
+				}),
+				{cookie},
+			);
+		},
+	},
+	{
+		name: 'token_list',
+		fn: async (config) => {
+			const paths = config.account_paths;
+			if (!paths) throw new Error('account_paths not configured');
+
+			const login_res = await post_account(config, paths.login, {
+				username: config.auth!.username,
+				password: config.auth!.password,
+			});
+			assert_equal(login_res.status, 200, 'login status');
+			const cookie = login_res.set_cookies.map((c) => c.split(';')[0]).join('; ');
+
+			// Create a token to ensure the list is non-empty
+			const create_res = await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'tl-create',
+					method: 'account_token_create',
+					params: {name: 'integration-test-list-token'},
+				}),
+				{cookie},
+			);
+			assert_equal(create_res.status, 200, 'pre-create status');
+			const created_id = (
+				(create_res.body as Record<string, unknown>).result as Record<string, unknown>
+			).id as string;
+
+			const list_res = await post_rpc(
+				config,
+				JSON.stringify({jsonrpc: '2.0', id: 'tl-1', method: 'account_token_list'}),
+				{cookie},
+			);
+			assert_equal(list_res.status, 200, 'list status');
+			const lr = (list_res.body as Record<string, unknown>).result as Record<
+				string,
+				unknown
+			>;
+			const tokens = lr.tokens as Array<Record<string, unknown>>;
+			assert_equal(Array.isArray(tokens), true, 'tokens is array');
+			assert_equal(tokens.length > 0, true, 'at least one token');
+
+			const created = tokens.find((t) => t.id === created_id);
+			assert_equal(created !== undefined, true, 'created token in list');
+			assert_equal(typeof created!.id, 'string', 'token id is string');
+			assert_equal(typeof created!.account_id, 'string', 'account_id is string');
+			assert_equal(created!.name, 'integration-test-list-token', 'name matches');
+			assert_equal('expires_at' in created!, true, 'expires_at present');
+			assert_equal('last_used_at' in created!, true, 'last_used_at present');
+			assert_equal('last_used_ip' in created!, true, 'last_used_ip present');
+			assert_equal(typeof created!.created_at, 'string', 'created_at is string');
+
+			// CRITICAL: no token_hash field anywhere in the list
+			for (const t of tokens) {
+				assert_equal(
+					'token_hash' in t,
+					false,
+					`token_hash MUST NOT be in list response (token ${t.id})`,
+				);
+			}
+
+			// Cleanup
+			await post_rpc(
+				config,
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'tl-cleanup',
+					method: 'account_token_revoke',
+					params: {token_id: created_id},
+				}),
+				{cookie},
+			);
+		},
+	},
 ];
 
 // -- Test runner --------------------------------------------------------------

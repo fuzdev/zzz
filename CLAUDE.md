@@ -31,7 +31,7 @@ this repo — make the edits and stop, the user commits.
 
 ## Development Stage
 
-Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, daemon tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) still in-memory. The Hono/Deno backend is the reference implementation. A Rust backend (`crates/zzz_server`) is in development — Phase 4 (AI provider system: Anthropic fully implemented with SSE streaming, OpenAI/Gemini/Ollama stubs) in progress atop Phase 3 (full auth stack, filesystem, terminals, PostgreSQL, bootstrap) with 79 integration tests verifying parity. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
+Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, daemon tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) still in-memory. The Hono/Deno backend is the reference implementation. A Rust backend (`crates/zzz_server`) is in development — Phase 4 (AI provider system: Anthropic fully implemented with SSE streaming, OpenAI/Gemini/Ollama stubs) in progress atop Phase 3 (full auth stack, filesystem, terminals, PostgreSQL, bootstrap) with 85 integration tests verifying parity. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
 
 See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 
@@ -68,12 +68,15 @@ crates/                               # Rust workspace
 │   └── zzz_server/                   # Axum JSON-RPC server (Phase 2b: auth + fs)
 │       └── src/
 │           ├── main.rs               # Entry point, config, DB/keyring init, shutdown
-│           ├── handlers.rs           # App state, Ctx (per-request + auth), dispatch
+│           ├── handlers/             # Per-domain RPC handlers (workspace, filesystem, terminal, provider, account)
+│           │   └── mod.rs            # App state, Ctx, dispatch (ping, session_load, _test_*)
 │           ├── rpc.rs                # JSON-RPC classify, HTTP handler with auth pipeline
-│           ├── ws.rs                 # WebSocket handler (no auth yet)
-│           ├── auth.rs               # Keyring, cookie parsing, session validation, auth checks
+│           ├── ws.rs                 # WebSocket handler with auth + connection tracking
+│           ├── auth.rs               # Keyring, cookie/bearer/daemon-token resolution, per-action auth
+│           ├── api_token.rs          # generate_api_token (raw + tok_<12> id + blake3 hash)
 │           ├── bootstrap.rs          # POST /bootstrap (first admin account creation)
-│           ├── db.rs                 # Connection pool, migrations, auth queries
+│           ├── db/                   # Per-domain query modules (account, actor, api_token, auth, migrations)
+│           │   └── mod.rs            # Pool creation + re-exports
 │           ├── scoped_fs.rs          # Scoped filesystem (path validation, symlink rejection)
 │           └── error.rs              # Error types
 test/
@@ -268,12 +271,14 @@ Two dev server modes:
 
 Shadow implementation of the Deno server using axum. Same `/api/*` route
 paths as the Deno server — both backends are interchangeable from the
-frontend's perspective. 19 RPC methods: `ping`, `session_load`, `workspace_*`,
+frontend's perspective. 23 RPC methods: `ping`, `session_load`, `workspace_*`,
 `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`,
 `terminal_data_send`, `terminal_resize`, `terminal_close`,
 `provider_load_status`, `provider_update_api_key` (keeper-only),
-`completion_create`, `account_session_list`, `account_session_revoke`,
-`account_token_revoke`. Cookie session auth and bearer token auth (API tokens)
+`completion_create`, `account_verify`, `account_session_list`,
+`account_session_revoke`, `account_session_revoke_all`,
+`account_token_create`, `account_token_list`, `account_token_revoke`.
+Cookie session auth and bearer token auth (API tokens)
 on HTTP and WebSocket, `ScopedFs` path safety, PTY terminals via `fuz_pty`
 native crate, and WebSocket connection tracking (`broadcast`/`send_to`).
 PostgreSQL via `tokio-postgres`/`deadpool-postgres`, HMAC-SHA256 cookie
@@ -281,7 +286,7 @@ signing, blake3 session/token hashing, per-action auth checks with credential
 type enforcement, bootstrap endpoint. AI provider system with enum-dispatched
 providers — Anthropic fully implemented (non-streaming + SSE streaming with
 connection-targeted `completion_progress` notifications), OpenAI/Gemini/Ollama
-stubs. The Deno server is ground truth — 79 integration tests on both backends
+stubs. The Deno server is ground truth — 85 integration tests on both backends
 (all cross-backend, 0 skips) verify identical JSON-RPC responses.
 
 ```bash
@@ -540,7 +545,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in ~/dev/private_fuz/. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Rust backend is Phase 4** — 19 RPC methods with full auth stack, same `/api/*` route paths as Deno. `deno task dev` runs the Rust backend with Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable). No batch JSON-RPC, no Ollama actions (`ollama_list`, `ollama_ps`, etc.). See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
+- **Rust backend is Phase 4** — 23 RPC methods with full auth stack, same `/api/*` route paths as Deno. `deno task dev` runs the Rust backend with Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable). No batch JSON-RPC, no Ollama actions (`ollama_list`, `ollama_ps`, etc.). See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
 
 ## fuz_app
 

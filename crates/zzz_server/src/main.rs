@@ -1,4 +1,5 @@
 mod account;
+mod api_token;
 mod auth;
 mod bootstrap;
 mod daemon_token;
@@ -147,7 +148,7 @@ async fn run() -> Result<(), ServerError> {
     {
         Ok(_) => tracing::info!(path = %app_state.zzz_dir, "started zzz_dir filer"),
         Err(e) => {
-            tracing::warn!(path = %app_state.zzz_dir, error = %e, "failed to start zzz_dir filer")
+            tracing::warn!(path = %app_state.zzz_dir, error = %e, "failed to start zzz_dir filer");
         }
     }
 

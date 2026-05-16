@@ -202,7 +202,7 @@ async fn bootstrap_inner(app: &App, input: BootstrapInput) -> Result<Response, R
 
 /// Execute account/actor/role-grant/session creation within an open transaction.
 async fn do_bootstrap_creates(
-    client: &deadpool_postgres::Object,
+    client: &(impl deadpool_postgres::GenericClient + ?Sized),
     input: &BootstrapInput,
     password_hash: &str,
 ) -> Result<(db::AccountRow, String), tokio_postgres::Error> {
