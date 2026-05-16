@@ -1,6 +1,6 @@
 use tokio::sync::RwLock;
 
-use super::{ProviderStatus, PROVIDER_ERROR_NEEDS_API_KEY};
+use super::{PROVIDER_ERROR_NEEDS_API_KEY, ProviderStatus};
 
 struct GeminiState {
     api_key: Option<String>,

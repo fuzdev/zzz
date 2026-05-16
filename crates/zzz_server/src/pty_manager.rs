@@ -61,8 +61,7 @@ impl PtyManager {
         app: Arc<App>,
     ) -> Result<(), String> {
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-        let pty = Pty::spawn(command, &arg_refs, cwd, 80, 24)
-            .map_err(|e| e.to_string())?;
+        let pty = Pty::spawn(command, &arg_refs, cwd, 80, 24).map_err(|e| e.to_string())?;
 
         let cancel = CancellationToken::new();
         let cancel_clone = cancel.clone();
@@ -75,10 +74,7 @@ impl PtyManager {
 
         {
             let mut terminals = self.terminals.write().await;
-            terminals.insert(
-                terminal_id.to_owned(),
-                TerminalEntry { pty, cancel },
-            );
+            terminals.insert(terminal_id.to_owned(), TerminalEntry { pty, cancel });
         }
 
         tokio::spawn(async move {

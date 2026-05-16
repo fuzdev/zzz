@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use crate::account::{generate_session_token, hash_password, sign_session_cookie};
@@ -33,7 +33,13 @@ struct BootstrapErrorBody {
 
 /// Short error response constructor.
 fn error_json(status: StatusCode, error: &str) -> Response {
-    (status, Json(BootstrapErrorBody { error: error.to_owned() })).into_response()
+    (
+        status,
+        Json(BootstrapErrorBody {
+            error: error.to_owned(),
+        }),
+    )
+        .into_response()
 }
 
 // -- Handler ------------------------------------------------------------------
@@ -60,11 +66,17 @@ pub async fn bootstrap_handler(
 async fn bootstrap_inner(app: &App, input: BootstrapInput) -> Result<Response, Response> {
     // Short-circuit if no bootstrap configured
     let Some(ref token_path) = app.bootstrap_token_path else {
-        return Err(error_json(StatusCode::NOT_FOUND, "bootstrap_not_configured"));
+        return Err(error_json(
+            StatusCode::NOT_FOUND,
+            "bootstrap_not_configured",
+        ));
     };
 
     // Check bootstrap lock (quick check before token comparison)
-    if !app.bootstrap_available.load(std::sync::atomic::Ordering::Relaxed) {
+    if !app
+        .bootstrap_available
+        .load(std::sync::atomic::Ordering::Relaxed)
+    {
         return Err(error_json(StatusCode::FORBIDDEN, "already_bootstrapped"));
     }
 
@@ -116,7 +128,10 @@ async fn bootstrap_inner(app: &App, input: BootstrapInput) -> Result<Response, R
         Err(e) => {
             let _ = client.execute("ROLLBACK", &[]).await;
             tracing::error!(error = %e, "bootstrap lock query failed");
-            return Err(error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error"));
+            return Err(error_json(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal error",
+            ));
         }
     };
     if lock_row.is_none() {
@@ -127,20 +142,26 @@ async fn bootstrap_inner(app: &App, input: BootstrapInput) -> Result<Response, R
     }
 
     // Create account + actor + role grants + session (all in one helper)
-    let (account, session_token) =
-        match do_bootstrap_creates(&client, &input, &password_hash).await {
-            Ok(result) => result,
-            Err(e) => {
-                let _ = client.execute("ROLLBACK", &[]).await;
-                tracing::error!(error = %e, "bootstrap transaction failed");
-                return Err(error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error"));
-            }
-        };
+    let (account, session_token) = match do_bootstrap_creates(&client, &input, &password_hash).await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            let _ = client.execute("ROLLBACK", &[]).await;
+            tracing::error!(error = %e, "bootstrap transaction failed");
+            return Err(error_json(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal error",
+            ));
+        }
+    };
 
     // Commit
     if let Err(e) = client.execute("COMMIT", &[]).await {
         tracing::error!(error = %e, "transaction commit failed");
-        return Err(error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error"));
+        return Err(error_json(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "internal error",
+        ));
     }
 
     // Mark bootstrap as no longer available

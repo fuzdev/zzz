@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use argon2::password_hash::{PasswordHasher, PasswordVerifier, SaltString};
-use base64::Engine;
 use argon2::Argon2;
+use argon2::password_hash::{PasswordHasher, PasswordVerifier, SaltString};
+use axum::Json;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::Json;
+use base64::Engine;
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
 
@@ -33,10 +33,7 @@ pub fn generate_session_token() -> String {
 
 /// Build a signed `Set-Cookie` header value for a session.
 pub fn sign_session_cookie(keyring: &auth::Keyring, session_token: &str) -> String {
-    let cookie_value = keyring.sign(&format!(
-        "{session_token}:{}",
-        now_secs() + SESSION_AGE_MAX
-    ));
+    let cookie_value = keyring.sign(&format!("{session_token}:{}", now_secs() + SESSION_AGE_MAX));
     format!(
         "{SESSION_COOKIE_NAME}={cookie_value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age={SESSION_AGE_MAX}"
     )
@@ -44,9 +41,7 @@ pub fn sign_session_cookie(keyring: &auth::Keyring, session_token: &str) -> Stri
 
 /// Build a `Set-Cookie` header that clears the session cookie.
 fn clear_session_cookie() -> String {
-    format!(
-        "{SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0"
-    )
+    format!("{SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0")
 }
 
 /// Short error response constructor.
@@ -128,10 +123,7 @@ struct StatusUnauthenticated {
 /// Mirrors `fuz_app`'s `create_account_status_route_spec`:
 /// - 200 with account + role grants if authenticated
 /// - 401 with optional `bootstrap_available` if not
-pub async fn status_handler(
-    State(app): State<Arc<App>>,
-    headers: HeaderMap,
-) -> Response {
+pub async fn status_handler(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
     // Try to resolve auth
     let resolved = auth::resolve_auth_from_headers(
         &headers,
@@ -155,7 +147,11 @@ pub async fn status_handler(
                     role: p.role.clone(),
                 })
                 .collect();
-            Json(StatusSuccess { account, role_grants }).into_response()
+            Json(StatusSuccess {
+                account,
+                role_grants,
+            })
+            .into_response()
         }
         None => {
             let bootstrap = if app
@@ -187,10 +183,7 @@ pub async fn status_handler(
 /// - Argon2 password verification
 /// - Enumeration prevention (dummy hash on missing account)
 /// - Session creation + signed cookie
-pub async fn login_handler(
-    State(app): State<Arc<App>>,
-    Json(input): Json<LoginInput>,
-) -> Response {
+pub async fn login_handler(State(app): State<Arc<App>>, Json(input): Json<LoginInput>) -> Response {
     match login_inner(&app, input).await {
         Ok(response) | Err(response) => response,
     }
@@ -279,10 +272,7 @@ async fn verify_password(password: String, hash: String) -> bool {
 ///
 /// Requires authenticated session (cookie). First real caller for
 /// `close_sockets_for_session`.
-pub async fn logout_handler(
-    State(app): State<Arc<App>>,
-    headers: HeaderMap,
-) -> Response {
+pub async fn logout_handler(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
     match logout_inner(&app, &headers).await {
         Ok(response) | Err(response) => response,
     }
@@ -304,9 +294,10 @@ async fn logout_inner(app: &App, headers: &HeaderMap) -> Result<Response, Respon
         return Err(error_json(StatusCode::BAD_REQUEST, "session_required"));
     }
 
-    let token_hash = resolved.token_hash.as_deref().ok_or_else(|| {
-        error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
-    })?;
+    let token_hash = resolved
+        .token_hash
+        .as_deref()
+        .ok_or_else(|| error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error"))?;
 
     let client = app.db_pool.get().await.map_err(|e| {
         tracing::error!(error = %e, "logout: db pool error");
@@ -335,7 +326,12 @@ async fn logout_inner(app: &App, headers: &HeaderMap) -> Result<Response, Respon
 
     tracing::info!(username = %resolved.context.account.username, "logout successful");
 
-    Ok((StatusCode::OK, response_headers, Json(OkResponse { ok: true })).into_response())
+    Ok((
+        StatusCode::OK,
+        response_headers,
+        Json(OkResponse { ok: true }),
+    )
+        .into_response())
 }
 
 // -- POST /password -----------------------------------------------------------
@@ -396,15 +392,22 @@ async fn password_inner(
         })?
         .ok_or_else(|| error_json(StatusCode::UNAUTHORIZED, "invalid_credentials"))?;
 
-    if !verify_password(input.current_password.clone(), account_with_hash.password_hash).await {
+    if !verify_password(
+        input.current_password.clone(),
+        account_with_hash.password_hash,
+    )
+    .await
+    {
         return Err(error_json(StatusCode::UNAUTHORIZED, "invalid_credentials"));
     }
 
     // Hash new password
-    let new_hash = hash_password(input.new_password.clone()).await.map_err(|e| {
-        tracing::error!(error = %e, "password: hashing failed");
-        error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
-    })?;
+    let new_hash = hash_password(input.new_password.clone())
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "password: hashing failed");
+            error_json(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
+        })?;
 
     // Update password, revoke all sessions + API tokens for this account
     db::query_update_password(&client, &account_id, &new_hash)
@@ -431,7 +434,10 @@ async fn password_inner(
     // Close all WebSocket connections for this account
     let closed = app.close_sockets_for_account(account_id);
     if closed > 0 {
-        tracing::info!(count = closed, "password change: closed WebSocket connections");
+        tracing::info!(
+            count = closed,
+            "password change: closed WebSocket connections"
+        );
     }
 
     // Clear cookie
@@ -442,7 +448,12 @@ async fn password_inner(
 
     tracing::info!(username = %resolved.context.account.username, "password changed");
 
-    Ok((StatusCode::OK, response_headers, Json(OkResponse { ok: true })).into_response())
+    Ok((
+        StatusCode::OK,
+        response_headers,
+        Json(OkResponse { ok: true }),
+    )
+        .into_response())
 }
 
 /// Hash a password with Argon2id on a blocking thread.
@@ -452,8 +463,11 @@ pub async fn hash_password(password: String) -> Result<String, argon2::password_
         // then encode as base64 for SaltString.
         let mut salt_bytes = [0u8; 16];
         rand::rng().fill(&mut salt_bytes);
-        let salt = SaltString::encode_b64(&salt_bytes)
-            .map_err(|_| argon2::password_hash::Error::SaltInvalid(argon2::password_hash::errors::InvalidValue::Malformed))?;
+        let salt = SaltString::encode_b64(&salt_bytes).map_err(|_| {
+            argon2::password_hash::Error::SaltInvalid(
+                argon2::password_hash::errors::InvalidValue::Malformed,
+            )
+        })?;
         let argon2 = Argon2::default();
         let hash = argon2.hash_password(password.as_bytes(), &salt)?;
         Ok(hash.to_string())
@@ -461,4 +475,3 @@ pub async fn hash_password(password: String) -> Result<String, argon2::password_
     .await
     .unwrap_or(Err(argon2::password_hash::Error::Algorithm))
 }
-

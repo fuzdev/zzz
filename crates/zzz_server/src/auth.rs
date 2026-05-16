@@ -5,10 +5,9 @@ use sha2::Sha256;
 
 use crate::daemon_token::SharedDaemonTokenState;
 use crate::db::{
-    AccountRow, ActorRow, RoleGrantRow,
-    query_account_by_id, query_actor_by_account, query_role_grants_for_actor,
-    query_session_get_valid, query_session_touch,
-    query_validate_api_token, query_api_token_touch,
+    AccountRow, ActorRow, RoleGrantRow, query_account_by_id, query_actor_by_account,
+    query_api_token_touch, query_role_grants_for_actor, query_session_get_valid,
+    query_session_touch, query_validate_api_token,
 };
 use fuz_common::JsonRpcError;
 
@@ -94,8 +93,7 @@ impl Keyring {
         let signature = BASE64.decode(sig_b64).ok()?;
 
         for (i, key) in self.keys.iter().enumerate() {
-            let mut mac =
-                HmacSha256::new_from_slice(key).expect("HMAC key length is always valid");
+            let mut mac = HmacSha256::new_from_slice(key).expect("HMAC key length is always valid");
             mac.update(value.as_bytes());
             if mac.verify_slice(&signature).is_ok() {
                 return Some((value.to_owned(), i));
@@ -158,9 +156,10 @@ fn extract_cookie_value<'a>(cookie_header: &'a str, name: &str) -> Option<&'a st
     for part in cookie_header.split(';') {
         let trimmed = part.trim();
         if let Some(rest) = trimmed.strip_prefix(name)
-            && let Some(value) = rest.strip_prefix('=') {
-                return Some(value);
-            }
+            && let Some(value) = rest.strip_prefix('=')
+        {
+            return Some(value);
+        }
     }
     None
 }
@@ -255,9 +254,10 @@ pub async fn build_request_context(
     let touch_hash = token_hash.clone();
     tokio::spawn(async move {
         if let Ok(client) = touch_pool.get().await
-            && let Err(e) = query_session_touch(&client, &touch_hash).await {
-                tracing::warn!(error = %e, "session touch failed");
-            }
+            && let Err(e) = query_session_touch(&client, &touch_hash).await
+        {
+            tracing::warn!(error = %e, "session touch failed");
+        }
     });
 
     Ok(Some(RequestContext {
@@ -328,9 +328,7 @@ pub fn check_action_auth(
             // Keeper actions require daemon_token credential type AND keeper role.
             // API tokens and session cookies cannot access keeper actions even if
             // the account has the keeper role grant.
-            if credential_type != Some(CredentialType::DaemonToken)
-                || !ctx.has_role("keeper")
-            {
+            if credential_type != Some(CredentialType::DaemonToken) || !ctx.has_role("keeper") {
                 Some(JsonRpcError {
                     code: JSONRPC_FORBIDDEN,
                     message: "forbidden".to_owned(),
@@ -351,15 +349,30 @@ pub fn method_auth(method: &str) -> ActionAuth {
         "ping" => ActionAuth::Public,
 
         // All other implemented methods require authentication
-        "workspace_list" | "workspace_open" | "workspace_close" | "session_load"
-        | "diskfile_update" | "diskfile_delete" | "directory_create"
-        | "completion_create" | "ollama_list" | "ollama_ps" | "ollama_show"
-        | "ollama_pull" | "ollama_delete" | "ollama_copy" | "ollama_create"
-        | "ollama_unload" | "provider_load_status"
-        | "terminal_create" | "terminal_data_send" | "terminal_resize" | "terminal_close"
-        | "account_session_list" | "account_session_revoke" | "account_token_revoke" => {
-            ActionAuth::Authenticated
-        }
+        "workspace_list"
+        | "workspace_open"
+        | "workspace_close"
+        | "session_load"
+        | "diskfile_update"
+        | "diskfile_delete"
+        | "directory_create"
+        | "completion_create"
+        | "ollama_list"
+        | "ollama_ps"
+        | "ollama_show"
+        | "ollama_pull"
+        | "ollama_delete"
+        | "ollama_copy"
+        | "ollama_create"
+        | "ollama_unload"
+        | "provider_load_status"
+        | "terminal_create"
+        | "terminal_data_send"
+        | "terminal_resize"
+        | "terminal_close"
+        | "account_session_list"
+        | "account_session_revoke"
+        | "account_token_revoke" => ActionAuth::Authenticated,
 
         "provider_update_api_key" => ActionAuth::Keeper,
 
@@ -388,18 +401,20 @@ pub fn check_origin(origin: &str, allowed_patterns: &[String]) -> bool {
         // Wildcard port: http://localhost:*
         if let Some(prefix) = pattern.strip_suffix(":*")
             && let Some(rest) = origin.strip_prefix(prefix)
-                && rest.starts_with(':') && rest[1..].chars().all(|c| c.is_ascii_digit()) {
-                    return true;
-                }
+            && rest.starts_with(':')
+            && rest[1..].chars().all(|c| c.is_ascii_digit())
+        {
+            return true;
+        }
         // Subdomain wildcard: https://*.example.com
         if let Some(suffix) = pattern.strip_prefix("https://*.")
             && let Some(host) = origin.strip_prefix("https://")
-                && host.ends_with(suffix)
-                    && host.len() > suffix.len()
-                    && host.as_bytes()[host.len() - suffix.len() - 1] == b'.'
-                {
-                    return true;
-                }
+            && host.ends_with(suffix)
+            && host.len() > suffix.len()
+            && host.as_bytes()[host.len() - suffix.len() - 1] == b'.'
+        {
+            return true;
+        }
     }
     false
 }
@@ -450,10 +465,7 @@ async fn resolve_cookie_from_headers(
     keyring: &Keyring,
     pool: &deadpool_postgres::Pool,
 ) -> Option<ResolvedAuth> {
-    let cookie_header = headers
-        .get(axum::http::header::COOKIE)?
-        .to_str()
-        .ok()?;
+    let cookie_header = headers.get(axum::http::header::COOKIE)?.to_str().ok()?;
 
     let session_token = parse_session_from_cookies(cookie_header, keyring)?;
     let token_hash = hash_session_token(&session_token);

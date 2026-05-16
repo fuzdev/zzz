@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
+use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use futures_util::{SinkExt, StreamExt};
@@ -9,9 +9,7 @@ use serde_json::Value;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::auth::{
-    check_action_auth, method_auth, resolve_auth_from_headers, ResolvedAuth,
-};
+use crate::auth::{ResolvedAuth, check_action_auth, method_auth, resolve_auth_from_headers};
 use crate::handlers::{self, App, Ctx, NotifyFn};
 use crate::rpc::{self, Classified};
 

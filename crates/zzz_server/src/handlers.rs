@@ -11,10 +11,12 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use crate::auth::{Keyring, RequestContext};
-use crate::db;
 use crate::daemon_token::SharedDaemonTokenState;
+use crate::db;
 use crate::filer::{FilerConfig, FilerLifetime, FilerManager};
-use crate::provider::{self, CompletionHandlerOptions, CompletionOptions, ProviderManager, ProviderName};
+use crate::provider::{
+    self, CompletionHandlerOptions, CompletionOptions, ProviderManager, ProviderName,
+};
 use crate::pty_manager::PtyManager;
 use crate::rpc;
 use crate::scoped_fs::ScopedFs;
@@ -175,10 +177,7 @@ impl App {
         let mut count = 0;
         if let Ok(mut conns) = self.connections.write() {
             conns.retain(|_, info| {
-                let matches = info
-                    .token_hash
-                    .as_deref()
-                    .is_some_and(|h| h == target_hash);
+                let matches = info.token_hash.as_deref().is_some_and(|h| h == target_hash);
                 if matches {
                     count += 1;
                 }
@@ -589,9 +588,7 @@ async fn handle_workspace_close(params: &Value, ctx: &Ctx<'_>) -> Result<Value, 
     };
 
     let Some(workspace) = removed else {
-        return Err(rpc::invalid_params(&format!(
-            "workspace not open: {path}"
-        )));
+        return Err(rpc::invalid_params(&format!("workspace not open: {path}")));
     };
 
     // Only stop the filer and remove ScopedFs entry if this wasn't an initial
@@ -624,10 +621,7 @@ struct ProviderStatusResult {
     status: provider::ProviderStatus,
 }
 
-async fn handle_provider_load_status(
-    params: &Value,
-    ctx: &Ctx<'_>,
-) -> Result<Value, JsonRpcError> {
+async fn handle_provider_load_status(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     let name_str = params
         .get("provider_name")
         .and_then(Value::as_str)
@@ -677,10 +671,7 @@ async fn handle_provider_update_api_key(
         .map_err(|_| rpc::internal_error("serialization failed"))
 }
 
-async fn handle_completion_create(
-    params: &Value,
-    ctx: &Ctx<'_>,
-) -> Result<Value, JsonRpcError> {
+async fn handle_completion_create(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     let request = params
         .get("completion_request")
         .ok_or_else(|| rpc::invalid_params("missing 'completion_request' parameter"))?;
@@ -901,7 +892,10 @@ async fn handle_terminal_resize(params: &Value, ctx: &Ctx<'_>) -> Result<Value, 
         .ok_or_else(|| rpc::invalid_params("missing or invalid 'rows' parameter"))?;
 
     // No-ops silently if terminal doesn't exist; resize failures are non-fatal
-    #[expect(clippy::cast_possible_truncation, reason = "terminal dimensions fit u16")]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "terminal dimensions fit u16"
+    )]
     {
         ctx.app
             .pty_manager
@@ -1031,18 +1025,21 @@ async fn handle_account_session_revoke(
     if deleted {
         let closed = ctx.app.close_sockets_for_session(session_id);
         if closed > 0 {
-            tracing::info!(count = closed, "session revoke: closed WebSocket connections");
+            tracing::info!(
+                count = closed,
+                "session revoke: closed WebSocket connections"
+            );
         }
     }
 
-    serde_json::to_value(AccountRevokeResult { ok: true, revoked: deleted })
-        .map_err(|_| rpc::internal_error("serialization failed"))
+    serde_json::to_value(AccountRevokeResult {
+        ok: true,
+        revoked: deleted,
+    })
+    .map_err(|_| rpc::internal_error("serialization failed"))
 }
 
-async fn handle_account_token_revoke(
-    params: &Value,
-    ctx: &Ctx<'_>,
-) -> Result<Value, JsonRpcError> {
+async fn handle_account_token_revoke(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     let account_id = require_account_id(ctx)?;
     let token_id = params
         .get("token_id")
@@ -1067,6 +1064,9 @@ async fn handle_account_token_revoke(
         }
     }
 
-    serde_json::to_value(AccountRevokeResult { ok: true, revoked: deleted })
-        .map_err(|_| rpc::internal_error("serialization failed"))
+    serde_json::to_value(AccountRevokeResult {
+        ok: true,
+        revoked: deleted,
+    })
+    .map_err(|_| rpc::internal_error("serialization failed"))
 }

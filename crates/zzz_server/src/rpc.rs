@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
+use axum::Json;
 use axum::body::Bytes;
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use fuz_common::{
-    JsonRpcError, JSONRPC_INTERNAL_ERROR, JSONRPC_INVALID_PARAMS, JSONRPC_INVALID_REQUEST,
-    JSONRPC_METHOD_NOT_FOUND, JSONRPC_PARSE_ERROR, JSONRPC_VERSION,
+    JSONRPC_INTERNAL_ERROR, JSONRPC_INVALID_PARAMS, JSONRPC_INVALID_REQUEST,
+    JSONRPC_METHOD_NOT_FOUND, JSONRPC_PARSE_ERROR, JSONRPC_VERSION, JsonRpcError,
 };
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -176,10 +176,7 @@ pub enum Classified<'a> {
         params: &'a Value,
     },
     /// Error — id and error object for the error response envelope.
-    Invalid {
-        id: Value,
-        error: JsonRpcError,
-    },
+    Invalid { id: Value, error: JsonRpcError },
     /// Notification (has method, no id) — caller decides behavior.
     Notification,
 }
@@ -270,9 +267,10 @@ pub async fn rpc_get_handler(
 ) -> Response {
     // Origin verification
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok())
-        && !check_origin(origin, &app.allowed_origins) {
-            return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
-        }
+        && !check_origin(origin, &app.allowed_origins)
+    {
+        return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
+    }
 
     // Extract method
     let Some(method) = query.get("method") else {
@@ -307,11 +305,7 @@ pub async fn rpc_get_handler(
             Ok(v) => v,
             Err(_) => {
                 let error = invalid_params("params query parameter is not valid JSON");
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(error_response(id, error)),
-                )
-                    .into_response();
+                return (StatusCode::BAD_REQUEST, Json(error_response(id, error))).into_response();
             }
         }
     } else {
@@ -362,16 +356,13 @@ pub async fn rpc_get_handler(
 /// - Parse errors → full JSON-RPC envelope, HTTP 400
 /// - Notifications → rejected as `invalid_request`, HTTP 400
 /// - Error responses → HTTP status mapped from JSON-RPC error code
-pub async fn rpc_handler(
-    State(app): State<Arc<App>>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Response {
+pub async fn rpc_handler(State(app): State<Arc<App>>, headers: HeaderMap, body: Bytes) -> Response {
     // Origin verification
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok())
-        && !check_origin(origin, &app.allowed_origins) {
-            return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
-        }
+        && !check_origin(origin, &app.allowed_origins)
+    {
+        return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
+    }
 
     // 1. Parse body as generic JSON value
     let Ok(value) = serde_json::from_slice::<Value>(&body) else {
@@ -384,7 +375,10 @@ pub async fn rpc_handler(
     };
 
     tracing::debug!(
-        method = value.get("method").and_then(|v| v.as_str()).unwrap_or("<none>"),
+        method = value
+            .get("method")
+            .and_then(|v| v.as_str())
+            .unwrap_or("<none>"),
         "rpc request"
     );
 

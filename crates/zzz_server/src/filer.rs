@@ -6,7 +6,7 @@ use std::time::Duration;
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use serde_json::Value;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tokio::time::Instant;
 
 use crate::handlers::App;
@@ -51,13 +51,7 @@ pub struct SerializableDisknode {
 
 /// Directories always ignored by all watchers. Individual filers
 /// can add extra ignores on top of these via `FilerConfig`.
-const DEFAULT_IGNORED_DIRS: &[&str] = &[
-    ".git",
-    "node_modules",
-    ".svelte-kit",
-    "target",
-    "dist",
-];
+const DEFAULT_IGNORED_DIRS: &[&str] = &[".git", "node_modules", ".svelte-kit", "target", "dist"];
 
 /// Check if a single directory name is in the ignore lists.
 fn is_ignored_name(name: &str, extra_ignores: &[String]) -> bool {
@@ -106,7 +100,11 @@ fn make_disknode(
 
 /// Build a `SerializableDisknode` for a watcher event, reading metadata and
 /// contents on blocking threads (never blocks the tokio runtime).
-async fn build_disknode(file_path: &Path, source_dir: &str, is_delete: bool) -> SerializableDisknode {
+async fn build_disknode(
+    file_path: &Path,
+    source_dir: &str,
+    is_delete: bool,
+) -> SerializableDisknode {
     let path_str = file_path.to_string_lossy().to_string();
 
     if is_delete {
@@ -128,8 +126,14 @@ async fn build_disknode(file_path: &Path, source_dir: &str, is_delete: bool) -> 
     );
 
     let meta = meta_result.ok().flatten();
-    let ctime = meta.as_ref().and_then(|m| m.created().ok()).and_then(system_time_to_ms);
-    let mtime = meta.as_ref().and_then(|m| m.modified().ok()).and_then(system_time_to_ms);
+    let ctime = meta
+        .as_ref()
+        .and_then(|m| m.created().ok())
+        .and_then(system_time_to_ms);
+    let mtime = meta
+        .as_ref()
+        .and_then(|m| m.modified().ok())
+        .and_then(system_time_to_ms);
 
     make_disknode(path_str, source_dir, contents.unwrap_or(None), ctime, mtime)
 }
@@ -253,7 +257,13 @@ pub async fn start_filer(
 
     // Initial scan — populate the file index
     let mut initial_files = HashMap::new();
-    scan_directory(&source_dir, &source_dir, &config.extra_ignores, &mut initial_files).await;
+    scan_directory(
+        &source_dir,
+        &source_dir,
+        &config.extra_ignores,
+        &mut initial_files,
+    )
+    .await;
     {
         let mut index = files.write().await;
         *index = initial_files;
@@ -417,9 +427,8 @@ async fn filer_event_loop(
 
         // Flush notifications whose deadline has passed
         let now = Instant::now();
-        let ready: Vec<(PathBuf, PendingNotification)> = pending
-            .extract_if(|_, p| p.deadline <= now)
-            .collect();
+        let ready: Vec<(PathBuf, PendingNotification)> =
+            pending.extract_if(|_, p| p.deadline <= now).collect();
 
         for (_, event) in ready {
             let params = FilerChangeParams {
@@ -584,7 +593,10 @@ impl FilerManager {
         // lock across await points (which would block start_filer/stop_filer).
         let file_maps: Vec<Arc<RwLock<HashMap<String, SerializableDisknode>>>> = {
             let filers = self.filers.read().await;
-            filers.values().map(|e| Arc::clone(&e.filer.files)).collect()
+            filers
+                .values()
+                .map(|e| Arc::clone(&e.filer.files))
+                .collect()
         };
 
         let mut all_files = Vec::new();

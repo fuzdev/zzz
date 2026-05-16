@@ -1,6 +1,6 @@
 use tokio::sync::RwLock;
 
-use super::{ProviderStatus, PROVIDER_ERROR_NOT_INSTALLED};
+use super::{PROVIDER_ERROR_NOT_INSTALLED, ProviderStatus};
 
 struct OllamaState {
     cached_status: Option<ProviderStatus>,

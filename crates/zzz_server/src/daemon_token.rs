@@ -83,7 +83,10 @@ fn timing_safe_eq(a: &[u8], b: &[u8]) -> bool {
 /// File contains the token followed by a newline.
 pub async fn write_token_file(path: &std::path::Path, token: &str) -> std::io::Result<()> {
     let parent = path.parent().ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, "token path has no parent dir")
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "token path has no parent dir",
+        )
     })?;
 
     // Ensure parent directory exists
@@ -115,9 +118,7 @@ const ROTATION_INTERVAL_MS: u64 = 30_000;
 /// then write to disk atomically.
 ///
 /// Returns a `tokio::task::JoinHandle` — caller should abort on shutdown.
-pub fn spawn_rotation_task(
-    state: SharedDaemonTokenState,
-) -> tokio::task::JoinHandle<()> {
+pub fn spawn_rotation_task(state: SharedDaemonTokenState) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut interval =
             tokio::time::interval(std::time::Duration::from_millis(ROTATION_INTERVAL_MS));
@@ -149,9 +150,7 @@ pub fn spawn_rotation_task(
 /// Initialize daemon token state: generate token, write to disk, return state.
 ///
 /// Called from `main.rs` during server startup.
-pub async fn init_daemon_token(
-    zzz_dir: &str,
-) -> Result<SharedDaemonTokenState, std::io::Error> {
+pub async fn init_daemon_token(zzz_dir: &str) -> Result<SharedDaemonTokenState, std::io::Error> {
     let token_path = PathBuf::from(zzz_dir).join("run").join("daemon_token");
     let token = generate_daemon_token();
 

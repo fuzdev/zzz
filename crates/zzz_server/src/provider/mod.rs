@@ -198,12 +198,9 @@ impl Provider {
     ) -> Result<Value, JsonRpcError> {
         match self {
             Self::Anthropic(p) => p.complete(options, progress_sender, signal).await,
-            Self::OpenAi(_) | Self::Gemini(_) | Self::Ollama(_) => {
-                Err(rpc::internal_error(&format!(
-                    "{}: not yet implemented in Rust backend",
-                    self.name()
-                )))
-            }
+            Self::OpenAi(_) | Self::Gemini(_) | Self::Ollama(_) => Err(rpc::internal_error(
+                &format!("{}: not yet implemented in Rust backend", self.name()),
+            )),
         }
     }
 }
@@ -263,7 +260,10 @@ pub fn ai_provider_error(provider_name: &str, message: &str) -> JsonRpcError {
 
 // -- Helpers ------------------------------------------------------------------
 
-#[expect(clippy::cast_possible_truncation, reason = "millis won't exceed u64 for centuries")]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "millis won't exceed u64 for centuries"
+)]
 fn now_millis() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

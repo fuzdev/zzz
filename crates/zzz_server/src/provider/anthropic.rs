@@ -1,12 +1,12 @@
-use fuz_common::JsonRpcError;
 use futures_util::StreamExt;
-use serde_json::{json, Value};
+use fuz_common::JsonRpcError;
+use serde_json::{Value, json};
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
 use super::{
-    ai_provider_error, CompletionHandlerOptions, CompletionMessage, ProgressSender,
-    ProviderStatus, PROVIDER_ERROR_NEEDS_API_KEY,
+    CompletionHandlerOptions, CompletionMessage, PROVIDER_ERROR_NEEDS_API_KEY, ProgressSender,
+    ProviderStatus, ai_provider_error,
 };
 
 const API_URL: &str = "https://api.anthropic.com/v1/messages";
@@ -120,7 +120,9 @@ async fn handle_non_streaming_response(
     let api_response: Value = response
         .json::<Value>()
         .await
-        .map_err(|e: reqwest::Error| ai_provider_error("claude", &format!("failed to parse response: {e}")))?;
+        .map_err(|e: reqwest::Error| {
+            ai_provider_error("claude", &format!("failed to parse response: {e}"))
+        })?;
 
     Ok(build_completion_response(&options.model, &api_response))
 }
@@ -144,9 +146,8 @@ async fn handle_streaming_response(
         if signal.is_cancelled() {
             break;
         }
-        let chunk = chunk.map_err(|e| {
-            ai_provider_error("claude", &format!("stream read error: {e}"))
-        })?;
+        let chunk =
+            chunk.map_err(|e| ai_provider_error("claude", &format!("stream read error: {e}")))?;
         let text = String::from_utf8_lossy(&chunk);
         // Normalize line endings per SSE spec (RFC 8895 §9.2):
         // \r\n → \n, then lone \r → \n
@@ -259,10 +260,7 @@ fn build_request_body(options: &CompletionHandlerOptions, stream: bool) -> Value
 ///
 /// Filters out system role messages (system is passed as a separate field).
 /// Appends the prompt as a final user message.
-fn build_messages(
-    completion_messages: Option<&[CompletionMessage]>,
-    prompt: &str,
-) -> Vec<Value> {
+fn build_messages(completion_messages: Option<&[CompletionMessage]>, prompt: &str) -> Vec<Value> {
     let capacity = completion_messages.map_or(0, <[_]>::len) + 1; // +1 for prompt
     let mut messages: Vec<Value> = Vec::with_capacity(capacity);
 
@@ -363,4 +361,3 @@ fn parse_api_error(body: &str) -> Option<String> {
         .and_then(Value::as_str)
         .map(String::from)
 }
-

@@ -568,10 +568,7 @@ pub async fn query_delete_all_tokens_for_account(
     account_id: &uuid::Uuid,
 ) -> Result<u64, tokio_postgres::Error> {
     let count = client
-        .execute(
-            "DELETE FROM api_token WHERE account_id = $1",
-            &[account_id],
-        )
+        .execute("DELETE FROM api_token WHERE account_id = $1", &[account_id])
         .await?;
     Ok(count)
 }

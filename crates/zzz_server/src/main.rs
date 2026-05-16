@@ -62,7 +62,8 @@ async fn run() -> Result<(), ServerError> {
     }
 
     // Bootstrap availability check
-    let bootstrap_available = check_bootstrap_available(&pool, config.bootstrap_token_path.as_ref()).await;
+    let bootstrap_available =
+        check_bootstrap_available(&pool, config.bootstrap_token_path.as_ref()).await;
 
     let allowed_origins = config
         .allowed_origins
@@ -70,11 +71,8 @@ async fn run() -> Result<(), ServerError> {
         .map(auth::parse_allowed_origins)
         .unwrap_or_default();
 
-    let scoped_dir_strings: Vec<String> = config
-        .scoped_dirs
-        .iter()
-        .map(|p| resolve_dir(p))
-        .collect();
+    let scoped_dir_strings: Vec<String> =
+        config.scoped_dirs.iter().map(|p| resolve_dir(p)).collect();
 
     // Include zzz_dir first (like Deno: `new ScopedFs([this.zzz_dir, ...this.scoped_dirs])`)
     // Use canonicalized paths, not raw config paths
@@ -88,8 +86,7 @@ async fn run() -> Result<(), ServerError> {
         Ok(state) => {
             // Resolve keeper_account_id if an account with keeper role already exists
             if let Ok(client) = pool.get().await
-                && let Ok(Some(account_id)) =
-                    db::query_keeper_account_id(&client).await
+                && let Ok(Some(account_id)) = db::query_keeper_account_id(&client).await
             {
                 state.write().await.keeper_account_id = Some(account_id);
                 tracing::info!(%account_id, "daemon token: keeper account resolved");
@@ -105,19 +102,13 @@ async fn run() -> Result<(), ServerError> {
     // AI providers — read API keys from env, construct ProviderManager
     let mut provider_manager = provider::ProviderManager::new();
     provider_manager.add(provider::Provider::Anthropic(
-        provider::anthropic::AnthropicProvider::new(
-            std::env::var("SECRET_ANTHROPIC_API_KEY").ok(),
-        ),
+        provider::anthropic::AnthropicProvider::new(std::env::var("SECRET_ANTHROPIC_API_KEY").ok()),
     ));
     provider_manager.add(provider::Provider::OpenAi(
-        provider::openai::OpenAiProvider::new(
-            std::env::var("SECRET_OPENAI_API_KEY").ok(),
-        ),
+        provider::openai::OpenAiProvider::new(std::env::var("SECRET_OPENAI_API_KEY").ok()),
     ));
     provider_manager.add(provider::Provider::Gemini(
-        provider::gemini::GeminiProvider::new(
-            std::env::var("SECRET_GOOGLE_API_KEY").ok(),
-        ),
+        provider::gemini::GeminiProvider::new(std::env::var("SECRET_GOOGLE_API_KEY").ok()),
     ));
     provider_manager.add(provider::Provider::Ollama(
         provider::ollama::OllamaProvider::new(),
@@ -155,7 +146,9 @@ async fn run() -> Result<(), ServerError> {
         .await
     {
         Ok(_) => tracing::info!(path = %app_state.zzz_dir, "started zzz_dir filer"),
-        Err(e) => tracing::warn!(path = %app_state.zzz_dir, error = %e, "failed to start zzz_dir filer"),
+        Err(e) => {
+            tracing::warn!(path = %app_state.zzz_dir, error = %e, "failed to start zzz_dir filer")
+        }
     }
 
     for dir in &app_state.scoped_dirs {
@@ -300,26 +293,26 @@ fn parse_config() -> Result<Config, ServerError> {
 
     // Fall back to env vars for port/static_dir
     if port.is_none()
-        && let Ok(val) = std::env::var("ZZZ_PORT") {
-            if let Ok(p) = val.parse() {
-                port = Some(p);
-            } else {
-                tracing::warn!(value = val.as_str(), "invalid ZZZ_PORT value, ignoring");
-            }
+        && let Ok(val) = std::env::var("ZZZ_PORT")
+    {
+        if let Ok(p) = val.parse() {
+            port = Some(p);
+        } else {
+            tracing::warn!(value = val.as_str(), "invalid ZZZ_PORT value, ignoring");
         }
+    }
     if static_dir.is_none()
-        && let Ok(val) = std::env::var("ZZZ_STATIC_DIR") {
-            static_dir = Some(PathBuf::from(val));
-        }
+        && let Ok(val) = std::env::var("ZZZ_STATIC_DIR")
+    {
+        static_dir = Some(PathBuf::from(val));
+    }
 
     // Required env vars
-    let database_url = std::env::var("DATABASE_URL").map_err(|_| {
-        ServerError::Config("DATABASE_URL is required".to_owned())
-    })?;
+    let database_url = std::env::var("DATABASE_URL")
+        .map_err(|_| ServerError::Config("DATABASE_URL is required".to_owned()))?;
 
-    let secret_cookie_keys = std::env::var("SECRET_COOKIE_KEYS").map_err(|_| {
-        ServerError::Config("SECRET_COOKIE_KEYS is required".to_owned())
-    })?;
+    let secret_cookie_keys = std::env::var("SECRET_COOKIE_KEYS")
+        .map_err(|_| ServerError::Config("SECRET_COOKIE_KEYS is required".to_owned()))?;
 
     let bootstrap_token_path = std::env::var("BOOTSTRAP_TOKEN_PATH").ok();
     let allowed_origins = std::env::var("ALLOWED_ORIGINS").ok();
@@ -345,9 +338,11 @@ fn parse_config() -> Result<Config, ServerError> {
         Some(v) => match v.to_ascii_lowercase().as_str() {
             "true" | "1" | "yes" | "on" | "y" | "enabled" => true,
             "false" | "0" | "no" | "off" | "n" | "disabled" => false,
-            other => return Err(ServerError::Config(format!(
-                "ZZZ_ENABLE_TEST_ACTIONS: expected one of true/1/yes/on/y/enabled/false/0/no/off/n/disabled (case-insensitive), got {other:?}"
-            ))),
+            other => {
+                return Err(ServerError::Config(format!(
+                    "ZZZ_ENABLE_TEST_ACTIONS: expected one of true/1/yes/on/y/enabled/false/0/no/off/n/disabled (case-insensitive), got {other:?}"
+                )));
+            }
         },
     };
 
@@ -385,10 +380,7 @@ async fn check_bootstrap_available(
     };
 
     let Ok(row) = client
-        .query_opt(
-            "SELECT bootstrapped FROM bootstrap_lock WHERE id = 1",
-            &[],
-        )
+        .query_opt("SELECT bootstrapped FROM bootstrap_lock WHERE id = 1", &[])
         .await
     else {
         return false;
