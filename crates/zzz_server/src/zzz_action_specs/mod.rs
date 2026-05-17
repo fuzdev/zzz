@@ -12,11 +12,13 @@
 //! `crate::handlers::dispatch` continues to serve the live `/api/rpc`
 //! and `/api/ws` routes.
 
+pub mod core;
 pub mod filesystem;
 pub mod provider;
 pub mod terminal;
 pub mod workspace;
 
+pub use core::build_core_specs;
 pub use filesystem::build_filesystem_specs;
 pub use provider::build_provider_specs;
 pub use terminal::build_terminal_specs;

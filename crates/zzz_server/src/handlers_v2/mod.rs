@@ -19,6 +19,7 @@
 //! and clones it into each per-spec handler closure, which then drops
 //! into the new signature.
 
+pub mod core;
 pub mod filesystem;
 pub mod provider;
 pub mod terminal;

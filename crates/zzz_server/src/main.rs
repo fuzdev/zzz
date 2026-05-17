@@ -1,12 +1,7 @@
-mod account;
-mod api_token;
-mod bootstrap;
-mod db;
 mod error;
 mod filer;
 mod handlers;
 mod handlers_v2;
-mod perform_action;
 mod provider;
 mod pty_manager;
 mod rpc;
@@ -17,7 +12,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use axum::routing::{get, post};
+use axum::routing::get;
 use axum::{Json, Router};
 use error::ServerError;
 use serde::Serialize;
@@ -45,9 +40,16 @@ async fn main() {
 async fn run() -> Result<(), ServerError> {
     let config = parse_config()?;
 
-    // Database — required
-    let pool = db::create_pool(&config.database_url)?;
-    db::run_migrations(&pool).await?;
+    // Database — required. Spine `fuz_db::create_pool` builds the
+    // deadpool-postgres pool; `fuz_db::run_migrations` runs the auth DDL
+    // tracked under the reserved `fuz_auth` namespace. Phase 7 Batch 4
+    // retired the legacy `crate::db` module (`db::create_pool` /
+    // `db::run_migrations` / `db::query_*`) wholesale.
+    let pool = fuz_db::create_pool(&config.database_url)
+        .map_err(|e| ServerError::Database(format!("failed to create pool: {e}")))?;
+    fuz_db::run_migrations(&pool, &[fuz_auth::AUTH_MIGRATIONS])
+        .await
+        .map_err(|e| ServerError::Database(format!("migration failed: {e}")))?;
 
     // Validate the cookie keys env early; the spine `fuz_auth::Keyring`
     // (constructed below as `spine_keyring`) is the sole keyring on `App`
@@ -60,15 +62,11 @@ async fn run() -> Result<(), ServerError> {
         )));
     }
 
-    // Bootstrap availability check
+    // Bootstrap availability check — drives the `bootstrap_available_atomic`
+    // shared by the spine account router (returned on `/status` 401) and
+    // the bootstrap router (gate on `/bootstrap`).
     let bootstrap_available =
         check_bootstrap_available(&pool, config.bootstrap_token_path.as_ref()).await;
-
-    let allowed_origins = config
-        .allowed_origins
-        .as_deref()
-        .map(fuz_http::parse_allowed_origins)
-        .unwrap_or_default();
 
     let scoped_dir_strings: Vec<String> =
         config.scoped_dirs.iter().map(|p| resolve_dir(p)).collect();
@@ -174,7 +172,8 @@ async fn run() -> Result<(), ServerError> {
         match fuz_auth::init_daemon_token(Path::new(&config.zzz_dir)).await {
             Ok(state) => {
                 if let Ok(client) = pool.get().await
-                    && let Ok(Some(account_id)) = db::query_keeper_account_id(&client).await
+                    && let Ok(Some(account_id)) =
+                        fuz_auth::actor_queries::query_keeper_account_id(&client).await
                 {
                     state.write().keeper_account_id = Some(account_id);
                     tracing::info!(%account_id, "daemon token: keeper account resolved");
@@ -186,7 +185,7 @@ async fn run() -> Result<(), ServerError> {
                 None
             }
         };
-    let account_route_state = Arc::new(fuz_auth::AccountRouteState {
+    let account_route_state = fuz_auth::AccountRouteState {
         pool: pool.clone(),
         keyring: Arc::clone(&spine_keyring),
         password_hasher: Arc::clone(&spine_password_hasher),
@@ -194,11 +193,11 @@ async fn run() -> Result<(), ServerError> {
         socket_revoker: Arc::clone(&socket_revoker),
         allowed_origins: Arc::clone(&spine_allowed_origins),
         bootstrap_available: Arc::clone(&bootstrap_available_atomic),
-        login_ip_rate_limiter: login_ip_rate_limiter.as_ref().map(Arc::clone),
-        login_account_rate_limiter: login_account_rate_limiter.as_ref().map(Arc::clone),
+        login_ip_rate_limiter,
+        login_account_rate_limiter,
         daemon_token_state: spine_daemon_token.clone(),
-    });
-    let bootstrap_route_state = Arc::new(fuz_auth::BootstrapRouteState {
+    };
+    let bootstrap_route_state = fuz_auth::BootstrapRouteState {
         deps: Arc::new(fuz_auth::BootstrapDeps {
             pool: pool.clone(),
             password_hasher: Arc::clone(&spine_password_hasher),
@@ -212,31 +211,19 @@ async fn run() -> Result<(), ServerError> {
         }),
         keyring: Arc::clone(&spine_keyring),
         allowed_origins: Arc::clone(&spine_allowed_origins),
-    });
+    };
 
     let spine_state = handlers::SpineState {
         realtime: Arc::clone(&realtime),
-        audit_emitter: Arc::clone(&spine_audit_emitter),
-        account_route_state: Arc::clone(&account_route_state),
-        bootstrap_route_state: Arc::clone(&bootstrap_route_state),
-        spine_keyring: Arc::clone(&spine_keyring),
-        spine_daemon_token: spine_daemon_token.clone(),
-        spine_allowed_origins: Arc::clone(&spine_allowed_origins),
-        spine_trusted_proxies: Arc::clone(&spine_trusted_proxies),
     };
 
     let app_state = Arc::new(handlers::App::new(
         pool,
-        allowed_origins,
-        config.bootstrap_token_path,
-        bootstrap_available,
         scoped_fs,
         config.zzz_dir,
         scoped_dir_strings,
         provider_manager,
         config.enable_test_actions,
-        login_ip_rate_limiter,
-        login_account_rate_limiter,
         spine_state,
     ));
 
@@ -282,6 +269,7 @@ async fn run() -> Result<(), ServerError> {
         Arc::clone(&spine_audit_emitter),
         Arc::clone(&socket_revoker),
     ));
+    all_specs.extend(zzz_action_specs::build_core_specs(Arc::clone(&app_state)));
     all_specs.extend(zzz_action_specs::build_workspace_specs(Arc::clone(
         &app_state,
     )));
@@ -438,30 +426,43 @@ async fn run() -> Result<(), ServerError> {
         ),
     );
 
-    let mut app = Router::new()
-        .route("/health", get(health_handler))
-        .route("/api/account/bootstrap", post(bootstrap::bootstrap_handler))
-        .route("/api/account/status", get(account::status_handler))
-        .route("/api/account/login", post(account::login_handler))
-        .route("/api/account/logout", post(account::logout_handler))
-        .route("/api/account/password", post(account::password_handler))
-        // `fuz_http::client_ip_middleware` over `spine_trusted_proxies`
-        // — populates `Extension<fuz_http::ClientIp>` for the REST
-        // `/api/account/*` handlers + `/api/account/bootstrap`. Retires
-        // when later batches migrate these routes to the spine
-        // `fuz_auth::AccountRouteState` / `BootstrapRouteState` shape.
-        .layer(axum::middleware::from_fn_with_state(
+    // Spine account REST router: mounts `/status`, `/login`, `/logout`,
+    // `/password` under `/api/account`. Replaces the legacy
+    // `crate::account::*` handlers retired in Phase 7 Batch 4.
+    // `fuz_http::client_ip_middleware` is wrapped on the router so
+    // `Extension<fuz_http::ClientIp>` is populated for every account
+    // route (rate-limit keys + audit_log.ip).
+    let spine_account_router = fuz_auth::account_router(account_route_state).layer(
+        axum::middleware::from_fn_with_state(
             Arc::clone(&spine_trusted_proxies),
             fuz_http::client_ip_middleware,
-        ))
-        .with_state(Arc::clone(&app_state))
+        ),
+    );
+
+    // Spine bootstrap router: mounts `/bootstrap` at the router root, so
+    // nesting under `/api/account` produces `/api/account/bootstrap`.
+    // Replaces the legacy `crate::bootstrap::bootstrap_handler`.
+    let spine_bootstrap_router = fuz_auth::bootstrap_routes::bootstrap_router(
+        bootstrap_route_state,
+    )
+    .layer(axum::middleware::from_fn_with_state(
+        Arc::clone(&spine_trusted_proxies),
+        fuz_http::client_ip_middleware,
+    ));
+
+    let mut app = Router::new()
+        .route("/health", get(health_handler))
+        // Spine REST routers — account REST + bootstrap. The order of
+        // `.nest("/api/account", ...)` calls doesn't matter because the
+        // bootstrap router only exposes `/bootstrap` and account exposes
+        // the four other paths. axum merges nests at the same prefix.
+        .nest("/api/account", spine_account_router)
+        .nest("/api/account", spine_bootstrap_router)
         // Spine RPC + WS — single canonical mount. `create_rpc_router`
         // exposes `/rpc` and `register_action_ws` exposes `/ws`, so
         // nesting at `/api` produces `/api/rpc` and `/api/ws`. Both
         // nested routers carry their own state (`RpcRouteState` /
-        // `WsRouteState`) + middleware stack; axum erases the outer
-        // state to `Router<()>` via `with_state` above so the types
-        // compose.
+        // `WsRouteState`) + middleware stack.
         .nest("/api", spine_rpc_router)
         .nest("/api", spine_ws_router);
 

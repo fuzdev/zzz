@@ -1,19 +1,16 @@
-//! JSON-RPC helpers — error constructors, notification builder, error-code →
-//! HTTP-status mapping.
+//! JSON-RPC helpers — error constructors + notification builder.
 //!
 //! Phase 7 Batch 1 retired the framework half of this module (the envelope
 //! dispatch + classification + HTTP handlers `rpc_handler` / `rpc_get_handler`).
 //! The spine `fuz_actions::create_rpc_router` mounted at `/api/rpc` now owns
-//! the dispatch path. The helpers below survive because they're still
-//! consumed by `crate::filer`, `crate::pty_manager`, `crate::handlers/*`,
-//! `crate::handlers_v2/*`, and `crate::perform_action` for notification
-//! building and error construction.
+//! the dispatch path.
+//!
+//! Phase 7 Batch 4 trimmed the surviving surface further — only the helpers
+//! consumed by `crate::filer`, `crate::pty_manager`, `crate::handlers_v2/*`,
+//! and `crate::provider::*` remain (error constructors used by handlers +
+//! the `notification` builder used by broadcast / send_to sites).
 
-use fuz_http::{
-    JSONRPC_INTERNAL_ERROR, JSONRPC_INVALID_PARAMS, JSONRPC_INVALID_REQUEST,
-    JSONRPC_METHOD_NOT_FOUND, JSONRPC_PARSE_ERROR, JSONRPC_VERSION, JsonrpcError,
-};
-use axum::http::StatusCode;
+use fuz_http::{JSONRPC_INTERNAL_ERROR, JSONRPC_INVALID_PARAMS, JSONRPC_VERSION, JsonrpcError};
 use serde::Serialize;
 
 // -- Error constructors -------------------------------------------------------
@@ -22,30 +19,6 @@ use serde::Serialize;
 // callers on public actions. Deno includes them for DX. Future: environment-conditional
 // in both backends (include in dev, strip in prod). See `normalize_error_data`
 // in integration tests for cross-backend handling.
-
-pub fn parse_error() -> JsonrpcError {
-    JsonrpcError {
-        code: JSONRPC_PARSE_ERROR,
-        message: "parse error".to_string(),
-        data: None,
-    }
-}
-
-pub fn invalid_request() -> JsonrpcError {
-    JsonrpcError {
-        code: JSONRPC_INVALID_REQUEST,
-        message: "invalid request".to_string(),
-        data: None,
-    }
-}
-
-pub fn method_not_found(method: &str) -> JsonrpcError {
-    JsonrpcError {
-        code: JSONRPC_METHOD_NOT_FOUND,
-        message: format!("method not found: {method}"),
-        data: None,
-    }
-}
 
 pub fn invalid_params(detail: &str) -> JsonrpcError {
     JsonrpcError {
@@ -85,30 +58,6 @@ pub fn internal_error_with_source(detail: &str, error: &dyn std::fmt::Display) -
     }
 }
 
-/// JSON-RPC `not_found` error code. Mirrors `fuz_app`'s
-/// `JSONRPC_ERROR_CODES.not_found` and `auth.rs`'s `JSONRPC_UNAUTHENTICATED`
-/// / `JSONRPC_FORBIDDEN` private constants for the same two-axis (401/403)
-/// neighbors. Not exported from `fuz_common` because the wider error-code
-/// set there is still JSON-RPC 2.0 core only.
-const JSONRPC_NOT_FOUND: i32 = -32003;
-
-/// Build a `not_found` JSON-RPC error.
-///
-/// Wire shape matches `fuz_app`'s `jsonrpc_errors.not_found(resource, {reason})`:
-/// - `message = "{resource} not found"`
-/// - `data = {reason}` when `reason` is `Some`; omitted otherwise
-///
-/// Used by handlers that 404 on an input id (admin revoke-all on an unknown
-/// account, future invite lookups, etc.). Centralized so the next consumer
-/// doesn't redefine the code or drift the message shape.
-pub fn not_found(resource: &str, reason: Option<&str>) -> JsonrpcError {
-    JsonrpcError {
-        code: JSONRPC_NOT_FOUND,
-        message: format!("{resource} not found"),
-        data: reason.map(|r| serde_json::json!({"reason": r})),
-    }
-}
-
 // -- Notification builder -----------------------------------------------------
 
 /// JSON-RPC 2.0 notification (no `id` field — server-initiated push).
@@ -143,25 +92,5 @@ pub fn notification<T: ?Sized + Serialize>(method: &str, params: &T) -> String {
             tracing::warn!(error = %e, method, "failed to serialize JSON-RPC notification");
             String::new()
         }
-    }
-}
-
-// -- HTTP status mapping ------------------------------------------------------
-
-/// Map a JSON-RPC error code to an HTTP status code.
-///
-/// Matches `fuz_app`'s `jsonrpc_error_code_to_http_status` from
-/// `fuz_app/src/lib/http/jsonrpc_errors.ts:230-244`.
-/// Returns 500 for unrecognized codes.
-pub const fn error_code_to_http_status(code: i32) -> StatusCode {
-    match code {
-        // -32700, -32600, -32602 → 400
-        JSONRPC_PARSE_ERROR | JSONRPC_INVALID_REQUEST | JSONRPC_INVALID_PARAMS => {
-            StatusCode::BAD_REQUEST
-        }
-        JSONRPC_METHOD_NOT_FOUND => StatusCode::NOT_FOUND, // -32601 → 404
-        -32001 => StatusCode::UNAUTHORIZED,                // unauthenticated → 401
-        -32002 => StatusCode::FORBIDDEN,                   // forbidden → 403
-        _ => StatusCode::INTERNAL_SERVER_ERROR,            // -32603 and others → 500
     }
 }
