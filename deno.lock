@@ -2284,7 +2284,7 @@
       "npm:@anthropic-ai/sdk@~0.71.2",
       "npm:@electric-sql/pglite@~0.4.5",
       "npm:@fuzdev/blake3_wasm@~0.1.1",
-      "npm:@fuzdev/fuz_app@0.63",
+      "npm:@fuzdev/fuz_app@0.64",
       "npm:@fuzdev/fuz_util@0.59",
       "npm:@fuzdev/gro@0.199",
       "npm:@google/generative-ai@~0.24.1",
