@@ -125,15 +125,7 @@
 			"rate_limit_key": "both",
 			"params_schema": null,
 			"query_schema": null,
-			"input_schema": {
-				"type": "object",
-				"properties": {
-					"username": {"type": "string", "minLength": 1, "maxLength": 255},
-					"password": {"type": "string", "minLength": 1, "maxLength": 300, "sensitivity": "secret"}
-				},
-				"required": ["username", "password"],
-				"additionalProperties": false
-			},
+			"input_schema": null,
 			"output_schema": {
 				"type": "object",
 				"properties": {"ok": {"type": "boolean", "const": true}},
@@ -316,108 +308,7 @@
 			"params_schema": null,
 			"query_schema": null,
 			"input_schema": null,
-			"output_schema": {
-				"type": "object",
-				"properties": {
-					"account": {
-						"type": "object",
-						"properties": {
-							"id": {
-								"type": "string",
-								"format": "uuid",
-								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-							},
-							"username": {
-								"type": "string",
-								"minLength": 3,
-								"maxLength": 39,
-								"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
-							},
-							"email": {
-								"anyOf": [
-									{
-										"type": "string",
-										"format": "email",
-										"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-									},
-									{"type": "null"}
-								]
-							},
-							"email_verified": {"type": "boolean"},
-							"created_at": {"type": "string"}
-						},
-						"required": ["id", "username", "email", "email_verified", "created_at"],
-						"additionalProperties": false
-					},
-					"actor": {
-						"anyOf": [
-							{
-								"type": "object",
-								"properties": {
-									"id": {
-										"type": "string",
-										"format": "uuid",
-										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-									},
-									"name": {"type": "string"}
-								},
-								"required": ["id", "name"],
-								"additionalProperties": false
-							},
-							{"type": "null"}
-						]
-					},
-					"role_grants": {
-						"type": "array",
-						"items": {
-							"type": "object",
-							"properties": {
-								"id": {
-									"type": "string",
-									"format": "uuid",
-									"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-								},
-								"role": {"type": "string"},
-								"scope_kind": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"scope_id": {
-									"anyOf": [
-										{
-											"type": "string",
-											"format": "uuid",
-											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-										},
-										{"type": "null"}
-									]
-								},
-								"created_at": {"type": "string"},
-								"expires_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-								"granted_by": {
-									"anyOf": [
-										{
-											"type": "string",
-											"format": "uuid",
-											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-										},
-										{"type": "null"}
-									]
-								}
-							},
-							"required": [
-								"id",
-								"role",
-								"scope_kind",
-								"scope_id",
-								"created_at",
-								"expires_at",
-								"granted_by"
-							],
-							"additionalProperties": false
-						}
-					}
-				},
-				"required": ["account", "actor", "role_grants"],
-				"additionalProperties": false
-			},
+			"output_schema": null,
 			"error_schemas": {
 				"401": {
 					"type": "object",
@@ -596,21 +487,7 @@
 			"rate_limit_key": "ip",
 			"params_schema": null,
 			"query_schema": null,
-			"input_schema": {
-				"type": "object",
-				"properties": {
-					"token": {"type": "string", "minLength": 1, "sensitivity": "secret"},
-					"username": {
-						"type": "string",
-						"minLength": 3,
-						"maxLength": 39,
-						"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
-					},
-					"password": {"type": "string", "minLength": 12, "maxLength": 300, "sensitivity": "secret"}
-				},
-				"required": ["token", "username", "password"],
-				"additionalProperties": false
-			},
+			"input_schema": null,
 			"output_schema": {
 				"type": "object",
 				"properties": {"ok": {"type": "boolean", "const": true}, "username": {"type": "string"}},
@@ -1580,185 +1457,7 @@
 						},
 						"additionalProperties": false
 					},
-					"output_schema": {
-						"type": "object",
-						"properties": {
-							"accounts": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"account": {
-											"type": "object",
-											"properties": {
-												"id": {
-													"type": "string",
-													"format": "uuid",
-													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-												},
-												"username": {
-													"type": "string",
-													"minLength": 3,
-													"maxLength": 39,
-													"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
-												},
-												"email": {
-													"anyOf": [
-														{
-															"type": "string",
-															"format": "email",
-															"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-														},
-														{"type": "null"}
-													]
-												},
-												"email_verified": {"type": "boolean"},
-												"created_at": {"type": "string"},
-												"updated_at": {"type": "string"},
-												"updated_by": {
-													"anyOf": [
-														{
-															"type": "string",
-															"format": "uuid",
-															"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-														},
-														{"type": "null"}
-													]
-												}
-											},
-											"required": [
-												"id",
-												"username",
-												"email",
-												"email_verified",
-												"created_at",
-												"updated_at",
-												"updated_by"
-											],
-											"additionalProperties": false
-										},
-										"actor": {
-											"anyOf": [
-												{
-													"type": "object",
-													"properties": {
-														"id": {
-															"type": "string",
-															"format": "uuid",
-															"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-														},
-														"name": {"type": "string"}
-													},
-													"required": ["id", "name"],
-													"additionalProperties": false
-												},
-												{"type": "null"}
-											]
-										},
-										"role_grants": {
-											"type": "array",
-											"items": {
-												"type": "object",
-												"properties": {
-													"id": {
-														"type": "string",
-														"format": "uuid",
-														"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-													},
-													"role": {"type": "string"},
-													"scope_kind": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-													"scope_id": {
-														"anyOf": [
-															{
-																"type": "string",
-																"format": "uuid",
-																"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-															},
-															{"type": "null"}
-														]
-													},
-													"created_at": {"type": "string"},
-													"expires_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-													"granted_by": {
-														"anyOf": [
-															{
-																"type": "string",
-																"format": "uuid",
-																"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-															},
-															{"type": "null"}
-														]
-													}
-												},
-												"required": [
-													"id",
-													"role",
-													"scope_kind",
-													"scope_id",
-													"created_at",
-													"expires_at",
-													"granted_by"
-												],
-												"additionalProperties": false
-											}
-										},
-										"pending_offers": {
-											"type": "array",
-											"items": {
-												"type": "object",
-												"properties": {
-													"id": {
-														"type": "string",
-														"format": "uuid",
-														"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-													},
-													"role": {"type": "string"},
-													"scope_kind": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-													"scope_id": {
-														"anyOf": [
-															{
-																"type": "string",
-																"format": "uuid",
-																"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-															},
-															{"type": "null"}
-														]
-													},
-													"from_actor_id": {
-														"type": "string",
-														"format": "uuid",
-														"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-													},
-													"from_username": {"type": "string"},
-													"created_at": {"type": "string"},
-													"expires_at": {"type": "string"}
-												},
-												"required": [
-													"id",
-													"role",
-													"scope_kind",
-													"scope_id",
-													"from_actor_id",
-													"from_username",
-													"created_at",
-													"expires_at"
-												],
-												"additionalProperties": false
-											}
-										}
-									},
-									"required": ["account", "actor", "role_grants", "pending_offers"],
-									"additionalProperties": false
-								}
-							},
-							"grantable_roles": {
-								"type": "array",
-								"items": {"type": "string", "pattern": "^[a-z][a-z_]*[a-z]$|^[a-z]$"}
-							}
-						},
-						"required": ["accounts", "grantable_roles"],
-						"additionalProperties": false
-					},
+					"output_schema": null,
 					"side_effects": false,
 					"description": "List all accounts with their actors, role_grants, and pending offers. Admin-only.",
 					"rate_limit_key": "account"
@@ -2166,112 +1865,8 @@
 				{
 					"name": "invite_create",
 					"auth": {"account": "required", "actor": "required", "roles": ["admin"]},
-					"input_schema": {
-						"type": "object",
-						"properties": {
-							"email": {
-								"description": "Invitee email.",
-								"anyOf": [
-									{
-										"type": "string",
-										"format": "email",
-										"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-									},
-									{"type": "null"}
-								]
-							},
-							"username": {
-								"description": "Invitee username.",
-								"anyOf": [
-									{
-										"type": "string",
-										"minLength": 3,
-										"maxLength": 39,
-										"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
-									},
-									{"type": "null"}
-								]
-							},
-							"acting": {
-								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
-								"type": "string",
-								"format": "uuid",
-								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-							}
-						},
-						"additionalProperties": false
-					},
-					"output_schema": {
-						"type": "object",
-						"properties": {
-							"ok": {"type": "boolean", "const": true},
-							"invite": {
-								"type": "object",
-								"properties": {
-									"id": {
-										"type": "string",
-										"format": "uuid",
-										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-									},
-									"email": {
-										"anyOf": [
-											{
-												"type": "string",
-												"format": "email",
-												"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-											},
-											{"type": "null"}
-										]
-									},
-									"username": {
-										"anyOf": [
-											{
-												"type": "string",
-												"minLength": 3,
-												"maxLength": 39,
-												"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
-											},
-											{"type": "null"}
-										]
-									},
-									"claimed_by": {
-										"anyOf": [
-											{
-												"type": "string",
-												"format": "uuid",
-												"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-											},
-											{"type": "null"}
-										]
-									},
-									"claimed_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-									"created_at": {"type": "string"},
-									"created_by": {
-										"anyOf": [
-											{
-												"type": "string",
-												"format": "uuid",
-												"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-											},
-											{"type": "null"}
-										]
-									}
-								},
-								"required": [
-									"id",
-									"email",
-									"username",
-									"claimed_by",
-									"claimed_at",
-									"created_at",
-									"created_by"
-								],
-								"additionalProperties": false
-							}
-						},
-						"required": ["ok", "invite"],
-						"additionalProperties": false
-					},
+					"input_schema": null,
+					"output_schema": null,
 					"side_effects": true,
 					"description": "Create an invite addressed to an email, username, or both. Admin-only.",
 					"rate_limit_key": "account"
@@ -2291,83 +1886,7 @@
 						},
 						"additionalProperties": false
 					},
-					"output_schema": {
-						"type": "object",
-						"properties": {
-							"invites": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"id": {
-											"type": "string",
-											"format": "uuid",
-											"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-										},
-										"email": {
-											"anyOf": [
-												{
-													"type": "string",
-													"format": "email",
-													"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-												},
-												{"type": "null"}
-											]
-										},
-										"username": {
-											"anyOf": [
-												{
-													"type": "string",
-													"minLength": 3,
-													"maxLength": 39,
-													"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
-												},
-												{"type": "null"}
-											]
-										},
-										"claimed_by": {
-											"anyOf": [
-												{
-													"type": "string",
-													"format": "uuid",
-													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-												},
-												{"type": "null"}
-											]
-										},
-										"claimed_at": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-										"created_at": {"type": "string"},
-										"created_by": {
-											"anyOf": [
-												{
-													"type": "string",
-													"format": "uuid",
-													"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-												},
-												{"type": "null"}
-											]
-										},
-										"created_by_username": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-										"claimed_by_username": {"anyOf": [{"type": "string"}, {"type": "null"}]}
-									},
-									"required": [
-										"id",
-										"email",
-										"username",
-										"claimed_by",
-										"claimed_at",
-										"created_at",
-										"created_by",
-										"created_by_username",
-										"claimed_by_username"
-									],
-									"additionalProperties": false
-								}
-							}
-						},
-						"required": ["invites"],
-						"additionalProperties": false
-					},
+					"output_schema": null,
 					"side_effects": false,
 					"description": "List all invites with creator and claimer usernames. Admin-only.",
 					"rate_limit_key": "account"
@@ -3292,36 +2811,7 @@
 					"name": "account_verify",
 					"auth": {"account": "required", "actor": "none"},
 					"input_schema": null,
-					"output_schema": {
-						"type": "object",
-						"properties": {
-							"id": {
-								"type": "string",
-								"format": "uuid",
-								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-							},
-							"username": {
-								"type": "string",
-								"minLength": 3,
-								"maxLength": 39,
-								"pattern": "^[a-zA-Z][0-9a-zA-Z_-]*[0-9a-zA-Z]$"
-							},
-							"email": {
-								"anyOf": [
-									{
-										"type": "string",
-										"format": "email",
-										"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-									},
-									{"type": "null"}
-								]
-							},
-							"email_verified": {"type": "boolean"},
-							"created_at": {"type": "string"}
-						},
-						"required": ["id", "username", "email", "email_verified", "created_at"],
-						"additionalProperties": false
-					},
+					"output_schema": null,
 					"side_effects": false,
 					"description": "Verify the current session and echo the caller account.",
 					"rate_limit_key": null
@@ -3506,6 +2996,7 @@
 			]
 		}
 	],
+	"ws_endpoints": [],
 	"env": [
 		{
 			"name": "NODE_ENV",

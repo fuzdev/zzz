@@ -477,13 +477,22 @@ fire-and-forget pool-write (via `tokio::spawn`) that returns a
 `JoinHandle<()>`. RPC handlers (account session/token mutations) push the
 handle onto `Ctx.pending_effects`; `perform_action` drains that queue
 before returning to the transport so audit rows are persistent by
-response time. REST handlers (`login`, `logout`, `password`) await the
-handle directly. The emit task INSERTs into `audit_log` via the captured
-pool (rollback-resilient — survives a tx rollback) and then fans the
-materialized `AuditLogEvent` out to every listener on
-`AuditEmitter.on_event_chain` (registered in `audit::listeners::register`
-after `App` is constructed). Pool failures and INSERT failures are
-logged at `warn` and swallowed — same fail-open posture as fuz_app.
+response time. REST handlers (`login`, `logout`, `password`, `bootstrap`)
+await the handle directly via `let _ = app.audit.emit(input).await` —
+the spawn-then-await shape (rather than inlining the write into the
+REST future) is **load-bearing for cancel-safety**: if the REST future
+is dropped mid-`.await` (client disconnect), the spawned task continues
+independently on the runtime and the audit row still lands. The
+discriminant is "where does the write run?" — detached task = survives
+cancellation; inline = dies with the dropped future. Don't refactor the
+sites back to a single inline `write_and_notify` future without a
+plan to preserve cancel-safety. The emit task INSERTs into `audit_log`
+via the captured pool (rollback-resilient — survives a tx rollback)
+and then fans the materialized `AuditLogEvent` out to every listener
+on `AuditEmitter.on_event_chain` (registered in
+`audit::listeners::register` after `App` is constructed). Pool failures
+and INSERT failures are logged at `warn` and swallowed — same fail-open
+posture as fuz_app.
 
 The listener chain currently translates audit events into WebSocket
 socket revocation. Mirrors fuz_app's `create_ws_auth_guard` +

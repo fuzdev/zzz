@@ -11,7 +11,11 @@
 import type {Context, Hono} from 'hono';
 import {Logger} from '@fuzdev/fuz_util/log.js';
 import {validate_server_env} from '@fuzdev/fuz_app/server/env.js';
-import {create_app_backend, type AppBackend} from '@fuzdev/fuz_app/server/app_backend.js';
+import {
+	create_app_backend,
+	default_audit_factory,
+	type AppBackend,
+} from '@fuzdev/fuz_app/server/app_backend.js';
 import {
 	create_app_server,
 	require_audit_sse,
@@ -142,6 +146,7 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 		stat: runtime.stat,
 		read_text_file: runtime.read_text_file,
 		delete_file: runtime.remove,
+		audit_factory: default_audit_factory,
 	});
 
 	// Run zzz-specific schema (placeholder — zzz-specific DDL will be added here)

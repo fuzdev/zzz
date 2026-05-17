@@ -678,58 +678,16 @@ describe('verify_request_source middleware', () => {
 			);
 		});
 
-		test('prioritizes origin over referer', async () => {
+		test('ignores referer when origin is present', async () => {
 			await test_middleware_allows(middleware, {
 				origin: 'http://localhost:3000',
 				referer: 'http://evil.com/page',
 			});
 		});
-	});
 
-	describe('referer header', () => {
-		test('allows matching referers when no origin', async () => {
-			await test_middleware_allows(middleware, {
-				referer: 'http://localhost:3000/some/page',
-			});
-		});
-
-		test('allows case-insensitive referer matching', async () => {
-			await test_middleware_allows(middleware, {
-				referer: 'http://LOCALHOST:3000/some/page',
-			});
-			await test_middleware_allows(middleware, {
-				referer: 'https://API.Example.com/endpoint?query=value',
-			});
-		});
-
-		test('blocks non-matching referers', async () => {
-			await test_middleware_blocks(
-				middleware,
-				{
-					referer: 'http://evil.com/page',
-				},
-				'forbidden_referer',
-			);
-		});
-
-		test('extracts origin from referer URL', async () => {
-			await test_middleware_allows(middleware, {
-				referer: 'https://api.example.com/deep/path?query=value#hash',
-			});
-		});
-
-		test('handles referer with trailing dot', async () => {
+		test('handles origin with trailing dot', async () => {
 			// URL constructor behavior with trailing dots can vary
 			// Since we don't normalize, trailing dots won't match patterns without them
-			await test_middleware_blocks(
-				middleware,
-				{
-					referer: 'http://localhost.:3000/page',
-				},
-				'forbidden_referer',
-			);
-
-			// Origin header with trailing dot also won't match
 			await test_middleware_blocks(
 				middleware,
 				{
@@ -743,54 +701,26 @@ describe('verify_request_source middleware', () => {
 			const middlewareWithDot = verify_request_source(patternsWithDot);
 
 			await test_middleware_allows(middlewareWithDot, {
-				referer: 'http://localhost.:3000/page',
-			});
-
-			await test_middleware_allows(middlewareWithDot, {
 				origin: 'http://localhost.:3000',
 			});
 		});
+	});
 
-		test('allows IPv6 referers', async () => {
+	describe('referer header (no longer consulted)', () => {
+		// fuz_app 0.64+ is Origin-only by design — Referer is ignored.
+		// Requests without Origin fall through to direct-access (allowed)
+		// regardless of any Referer value; CSRF protection comes from
+		// SameSite cookies + auth tokens, not Referer matching.
+		test('allows non-matching referer when origin absent', async () => {
 			await test_middleware_allows(middleware, {
-				referer: 'http://[::1]:3000/some/page',
+				referer: 'http://evil.com/page',
 			});
+		});
+
+		test('allows invalid referer URLs when origin absent', async () => {
 			await test_middleware_allows(middleware, {
-				referer: 'https://[2001:db8::1]:8443/api/endpoint',
+				referer: 'not-a-valid-url',
 			});
-		});
-
-		test('blocks non-matching IPv6 referers', async () => {
-			await test_middleware_blocks(
-				middleware,
-				{
-					referer: 'http://[::2]:3000/page',
-				},
-				'forbidden_referer',
-			);
-		});
-
-		test('blocks invalid referer URLs', async () => {
-			await test_middleware_blocks(
-				middleware,
-				{
-					referer: 'not-a-valid-url',
-				},
-				'forbidden_referer',
-			);
-		});
-
-		test('blocks referers with null origin (opaque origins)', async () => {
-			// data: URLs and sandboxed iframes have origin 'null'
-			// new URL('data:text/html,...').origin returns 'null'
-			// This should be blocked since 'null' won't match any valid pattern
-			await test_middleware_blocks(
-				middleware,
-				{
-					referer: 'data:text/html,<h1>test</h1>',
-				},
-				'forbidden_referer',
-			);
 		});
 	});
 
@@ -834,14 +764,10 @@ describe('verify_request_source middleware', () => {
 			);
 		});
 
-		test('blocks all referer requests', async () => {
-			await test_middleware_blocks(
-				strict_middleware,
-				{
-					referer: 'http://localhost:3000/page',
-				},
-				'forbidden_referer',
-			);
+		test('allows referer-only requests (referer is no longer consulted)', async () => {
+			await test_middleware_allows(strict_middleware, {
+				referer: 'http://localhost:3000/page',
+			});
 		});
 
 		test('still allows direct access (no headers)', async () => {
@@ -850,18 +776,12 @@ describe('verify_request_source middleware', () => {
 	});
 
 	describe('header case sensitivity', () => {
-		test('headers are case-insensitive', async () => {
+		test('origin header is case-insensitive', async () => {
 			await test_middleware_allows(middleware, {
 				Origin: 'http://localhost:3000',
 			});
 			await test_middleware_allows(middleware, {
 				ORIGIN: 'http://localhost:3000',
-			});
-			await test_middleware_allows(middleware, {
-				Referer: 'http://localhost:3000/page',
-			});
-			await test_middleware_allows(middleware, {
-				REFERER: 'http://localhost:3000/page',
 			});
 		});
 	});

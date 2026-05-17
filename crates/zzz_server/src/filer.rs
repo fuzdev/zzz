@@ -3,8 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures_util::StreamExt;
-use futures_util::stream;
+use futures_util::{Stream, StreamExt, stream};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use serde_json::Value;
@@ -326,76 +325,127 @@ struct FileJob {
     size: u64,
 }
 
+/// In-progress directory walk state for [`walk_files`].
+///
+/// `current` holds the open readdir handle for the directory currently
+/// being drained; `dir_stack` holds the not-yet-visited directories.
+/// Subdirectories discovered while draining `current` are pushed onto
+/// the stack so traversal stays depth-first (matches the previous
+/// `Box::pin` recursion order — important for deterministic file
+/// ordering on the cold-start path).
+struct WalkState {
+    dir_stack: Vec<String>,
+    current: Option<tokio::fs::ReadDir>,
+    extra_ignores: Vec<String>,
+}
+
+/// Stream of file jobs discovered by walking `root` recursively.
+///
+/// Streaming (vs. pre-collecting into `Vec<FileJob>`) keeps peak memory
+/// flat in tree size: only the active readdir handle + dir-stack +
+/// in-flight `buffer_unordered` futures are resident at any moment.
+/// For a 100k-file tree the pre-collected list was ~10 MB of `FileJob`s
+/// resident before any read fired; this version caps at
+/// `MAX_CONCURRENT_FILE_READS` (32) in-flight jobs.
+///
+/// Implementation uses `stream::unfold` rather than spawning a producer
+/// task — no `mpsc` channel, no extra `tokio::spawn`, and the walker
+/// runs on the same task as the consumer so cancellation propagates
+/// naturally when the consumer drops the stream.
+fn walk_files(root: String, extra_ignores: Vec<String>) -> impl Stream<Item = FileJob> {
+    let state = WalkState {
+        dir_stack: vec![root],
+        current: None,
+        extra_ignores,
+    };
+    stream::unfold(state, |mut state| async move {
+        loop {
+            // Ensure a current readdir handle. Pop dirs off the stack
+            // until one opens successfully or the stack is empty.
+            while state.current.is_none() {
+                let Some(dir) = state.dir_stack.pop() else {
+                    return None;
+                };
+                state.current = tokio::fs::read_dir(&dir).await.ok();
+            }
+
+            // Pull the next entry. Scope the &mut borrow so we can
+            // mutate `state.dir_stack` on the dir-discovery branch.
+            let entry_result = match state.current.as_mut() {
+                Some(entries) => entries.next_entry().await,
+                None => continue,
+            };
+
+            match entry_result {
+                Ok(Some(entry)) => {
+                    let path = entry.path();
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                        && is_ignored_name(name, &state.extra_ignores)
+                    {
+                        continue;
+                    }
+                    let Ok(meta) = tokio::fs::metadata(&path).await else {
+                        continue;
+                    };
+                    if meta.is_dir() {
+                        let mut dir_path = path.to_string_lossy().into_owned();
+                        if !dir_path.ends_with('/') {
+                            dir_path.push('/');
+                        }
+                        state.dir_stack.push(dir_path);
+                        continue;
+                    }
+                    let path_str = path.to_string_lossy().into_owned();
+                    let ctime = meta.created().ok().and_then(system_time_to_ms);
+                    let mtime = meta.modified().ok().and_then(system_time_to_ms);
+                    let job = FileJob {
+                        path,
+                        path_str,
+                        ctime,
+                        mtime,
+                        size: meta.len(),
+                    };
+                    return Some((job, state));
+                }
+                Ok(None) => {
+                    // Directory exhausted — drop handle, pop next on
+                    // the outer loop iteration.
+                    state.current = None;
+                }
+                Err(_) => {
+                    // Per-entry read failure (e.g. permission denied on
+                    // a single dirent); skip and keep draining.
+                }
+            }
+        }
+    })
+}
+
 /// Recursively scan a directory and populate the file map.
 ///
-/// Two phases:
-/// 1. **Walk** (iterative) — pop a directory off the stack, read its
-///    entries, push subdirs back on the stack, collect file metadata into
-///    a `FileJob` list. No `Box::pin` recursion, no allocation per dir
-///    beyond the path string.
-/// 2. **Read** (concurrent, bounded) — fan out `read_to_string` across
-///    [`MAX_CONCURRENT_FILE_READS`] at a time via `buffer_unordered`.
-///    Files over [`MAX_INDEXED_FILE_SIZE`] skip the read and store
-///    `contents: None`.
+/// Walks the tree and reads files concurrently in a single pipeline:
+/// [`walk_files`] streams `FileJob`s as directories are discovered, and
+/// `buffer_unordered` fans out up to [`MAX_CONCURRENT_FILE_READS`]
+/// `read_to_string` calls at a time. Files over
+/// [`MAX_INDEXED_FILE_SIZE`] skip the read and store `contents: None`.
+///
+/// Streaming the walker (vs. pre-collecting into a `Vec<FileJob>`)
+/// keeps peak memory flat in tree size — the reader starts firing
+/// while the walker is still discovering files, instead of waiting
+/// for the entire tree to be enumerated. Matters on the hot path:
+/// `FilerManager::rescan_all` runs on every `session_load`.
 ///
 /// Called by `start_filer` (cold path) and `FilerManager::rescan_all`
-/// (fires on every `session_load`) — the concurrency win matters most on
-/// the hot path, but iterativity also makes the cold-start cost
-/// predictable on deep trees.
+/// (hot path).
 async fn scan_directory(
     dir: &str,
     source_dir: &str,
     extra_ignores: &[String],
     files: &mut HashMap<String, SerializableDisknode>,
 ) {
-    // Phase 1: collect file jobs via iterative directory walk.
-    let mut dir_stack: Vec<String> = vec![dir.to_owned()];
-    let mut file_jobs: Vec<FileJob> = Vec::new();
-    while let Some(dir) = dir_stack.pop() {
-        let Ok(mut entries) = tokio::fs::read_dir(&dir).await else {
-            continue;
-        };
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            let path = entry.path();
-
-            // Skip ignored directories (and matching file names)
-            if let Some(name) = path.file_name().and_then(|n| n.to_str())
-                && is_ignored_name(name, extra_ignores)
-            {
-                continue;
-            }
-
-            let Ok(meta) = tokio::fs::metadata(&path).await else {
-                continue;
-            };
-
-            if meta.is_dir() {
-                let mut dir_path = path.to_string_lossy().into_owned();
-                if !dir_path.ends_with('/') {
-                    dir_path.push('/');
-                }
-                dir_stack.push(dir_path);
-            } else {
-                let path_str = path.to_string_lossy().into_owned();
-                let ctime = meta.created().ok().and_then(system_time_to_ms);
-                let mtime = meta.modified().ok().and_then(system_time_to_ms);
-                file_jobs.push(FileJob {
-                    path,
-                    path_str,
-                    ctime,
-                    mtime,
-                    size: meta.len(),
-                });
-            }
-        }
-    }
-
-    // Phase 2: bounded concurrent file reads via `buffer_unordered`.
-    // Each future owns its own source_dir clone so the stream isn't
-    // bound by the outer borrow. The clone is one short String per
-    // file — pales next to a `read_to_string`.
     let source_dir_owned = source_dir.to_owned();
-    let mut stream = stream::iter(file_jobs)
+    let walker = walk_files(dir.to_owned(), extra_ignores.to_owned());
+    let stream = walker
         .map(|job| {
             let source_dir = source_dir_owned.clone();
             async move {
@@ -415,6 +465,10 @@ async fn scan_directory(
             }
         })
         .buffer_unordered(MAX_CONCURRENT_FILE_READS);
+    // `stream::unfold`'s state future is `!Unpin`, so the composed
+    // stream needs pinning before `.next()`. `std::pin::pin!` puts it
+    // on the local stack — no heap allocation.
+    let mut stream = std::pin::pin!(stream);
 
     while let Some((path_str, disknode)) = stream.next().await {
         files.insert(path_str, disknode);
