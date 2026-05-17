@@ -1,9 +1,6 @@
 mod account;
 mod api_token;
-mod audit;
-mod auth;
 mod bootstrap;
-mod daemon_token;
 mod db;
 mod error;
 mod filer;
@@ -11,12 +8,9 @@ mod handlers;
 mod handlers_v2;
 mod perform_action;
 mod provider;
-mod proxy;
 mod pty_manager;
-mod rate_limiter;
 mod rpc;
 mod scoped_fs;
-mod ws;
 mod zzz_action_specs;
 
 use std::net::SocketAddr;
@@ -55,12 +49,10 @@ async fn run() -> Result<(), ServerError> {
     let pool = db::create_pool(&config.database_url)?;
     db::run_migrations(&pool).await?;
 
-    // Keyring — required
-    let keyring = auth::Keyring::new(&config.secret_cookie_keys).ok_or_else(|| {
-        ServerError::Config("SECRET_COOKIE_KEYS is required (no valid keys found)".to_owned())
-    })?;
-
-    let errors = auth::Keyring::validate(&config.secret_cookie_keys);
+    // Validate the cookie keys env early; the spine `fuz_auth::Keyring`
+    // (constructed below as `spine_keyring`) is the sole keyring on `App`
+    // since Phase 7 Batch 3 retired `crate::auth`.
+    let errors = fuz_auth::Keyring::validate(&config.secret_cookie_keys);
     if !errors.is_empty() {
         return Err(ServerError::Config(format!(
             "SECRET_COOKIE_KEYS validation failed: {}",
@@ -75,25 +67,8 @@ async fn run() -> Result<(), ServerError> {
     let allowed_origins = config
         .allowed_origins
         .as_deref()
-        .map(auth::parse_allowed_origins)
+        .map(fuz_http::parse_allowed_origins)
         .unwrap_or_default();
-
-    // Parse `ZZZ_TRUSTED_PROXIES` once at startup. Empty/unset → empty
-    // vec → middleware treats every connection as untrusted (XFF
-    // ignored, `client_ip` = TCP peer). Misconfiguration fails fast so
-    // the operator sees the error instead of silently leaving a hole.
-    let trusted_proxies = match config.trusted_proxies.as_deref() {
-        None => Vec::new(),
-        Some(raw) => proxy::parse_proxy_list(raw).map_err(|e| {
-            ServerError::Config(format!("ZZZ_TRUSTED_PROXIES: {e}"))
-        })?,
-    };
-    if !trusted_proxies.is_empty() {
-        tracing::info!(
-            count = trusted_proxies.len(),
-            "trusted proxies configured — XFF resolution enabled"
-        );
-    }
 
     let scoped_dir_strings: Vec<String> =
         config.scoped_dirs.iter().map(|p| resolve_dir(p)).collect();
@@ -104,24 +79,6 @@ async fn run() -> Result<(), ServerError> {
     scoped_fs_paths.push(PathBuf::from(&config.zzz_dir));
     scoped_fs_paths.extend(scoped_dir_strings.iter().map(PathBuf::from));
     let scoped_fs = scoped_fs::ScopedFs::new(scoped_fs_paths);
-
-    // Daemon token — initialize state, write token to disk
-    let daemon_token_state = match daemon_token::init_daemon_token(&config.zzz_dir).await {
-        Ok(state) => {
-            // Resolve keeper_account_id if an account with keeper role already exists
-            if let Ok(client) = pool.get().await
-                && let Ok(Some(account_id)) = db::query_keeper_account_id(&client).await
-            {
-                state.write().await.keeper_account_id = Some(account_id);
-                tracing::info!(%account_id, "daemon token: keeper account resolved");
-            }
-            Some(state)
-        }
-        Err(e) => {
-            tracing::warn!(error = %e, "daemon token init failed — running without daemon token auth");
-            None
-        }
-    };
 
     // AI providers — read API keys from env, construct ProviderManager
     let mut provider_manager = provider::ProviderManager::new();
@@ -146,34 +103,27 @@ async fn run() -> Result<(), ServerError> {
     // Opt-in via `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1`. Mirrors fuz_app's
     // `default_login_ip_rate_limit` (5 / 15min) and
     // `default_login_account_rate_limit` (10 / 30min). `None` when the
-    // env var is unset so the handlers skip the check entirely.
+    // env var is unset so the handlers skip the check entirely. Spine
+    // `fuz_auth::RateLimiter` (parking_lot, sync) since Phase 7 Batch 3.
     let (login_ip_rate_limiter, login_account_rate_limiter) = if config.enable_login_rate_limit {
         tracing::info!("login rate limiting enabled (5/15min per-IP, 10/30min per-account)");
         (
-            Some(Arc::new(rate_limiter::RateLimiter::new(
-                rate_limiter::DEFAULT_LOGIN_IP_RATE_LIMIT,
+            Some(Arc::new(fuz_auth::RateLimiter::new(
+                fuz_auth::DEFAULT_LOGIN_IP_RATE_LIMIT,
             ))),
-            Some(Arc::new(rate_limiter::RateLimiter::new(
-                rate_limiter::DEFAULT_LOGIN_ACCOUNT_RATE_LIMIT,
+            Some(Arc::new(fuz_auth::RateLimiter::new(
+                fuz_auth::DEFAULT_LOGIN_ACCOUNT_RATE_LIMIT,
             ))),
         )
     } else {
         (None, None)
     };
 
-    // Build the bound audit emitter before App — App owns the Arc.
-    // Listener registration happens after App construction so listeners
-    // can capture the Arc<App> (see `audit::listeners::register` below).
-    let audit_emitter = Arc::new(audit::AuditEmitter::new(pool.clone()));
-
-    // -- Spine-backed state (Phase 7 Batch 5 — additive) -----------
-    //
-    // These pieces are constructed alongside the legacy state and
-    // moved into the new `App` fields. They are wired into the new
-    // spine RPC dispatch path (via `App.action_registry`); the legacy
-    // `/api/rpc` and `/api/ws` routes continue to dispatch through
-    // `crate::handlers::dispatch` as today. Later batches retire the
-    // legacy duplicates.
+    // Spine connection registry + audit emitter — wired into `App` and
+    // mounted into the spine RPC + WS dispatchers below. Listener
+    // registration (audit-event → socket revocation) happens after
+    // `Arc<App>` is constructed so the socket-revoker capability is
+    // available.
     let realtime = Arc::new(fuz_realtime::ConnectionRegistry::new());
     let spine_audit_emitter = Arc::new(fuz_auth::AuditEmitter::new(pool.clone()));
     let spine_keyring = Arc::new(
@@ -185,19 +135,26 @@ async fn run() -> Result<(), ServerError> {
     );
     let spine_password_hasher: Arc<dyn fuz_auth::PasswordHasher> =
         Arc::new(fuz_auth::Argon2idHasher::new());
-    // Re-parse trusted proxies into the spine `fuz_http::ParsedProxy`
-    // type. Wire-identical to the legacy `crate::proxy::ParsedProxy`
-    // per fuz_http's Phase 4 extraction note; the two types are
-    // distinct identities only because zzz hasn't yet collapsed its
-    // local proxy module.
+    // Parse `ZZZ_TRUSTED_PROXIES` into the spine `fuz_http::ParsedProxy`
+    // type. Empty/unset → empty vec → middleware treats every connection
+    // as untrusted (XFF ignored, `client_ip` = TCP peer). Misconfiguration
+    // fails fast so the operator sees the error instead of silently
+    // leaving a hole. Sole trusted-proxy state on `App` since Phase 7
+    // Batch 2 retired the legacy `crate::proxy` module.
     let spine_trusted_proxies: Arc<Vec<fuz_http::ParsedProxy>> = Arc::new(
         match config.trusted_proxies.as_deref() {
             None => Vec::new(),
             Some(raw) => fuz_http::parse_proxy_list(raw).map_err(|e| {
-                ServerError::Config(format!("ZZZ_TRUSTED_PROXIES (spine reparse): {e}"))
+                ServerError::Config(format!("ZZZ_TRUSTED_PROXIES: {e}"))
             })?,
         },
     );
+    if !spine_trusted_proxies.is_empty() {
+        tracing::info!(
+            count = spine_trusted_proxies.len(),
+            "trusted proxies configured — XFF resolution enabled"
+        );
+    }
     let spine_allowed_origins: Arc<Vec<String>> = Arc::new(
         config
             .allowed_origins
@@ -210,28 +167,24 @@ async fn run() -> Result<(), ServerError> {
     ));
     let socket_revoker: Arc<dyn fuz_auth::SocketRevoker> =
         Arc::clone(&realtime).into_socket_revoker();
-    // Build a spine daemon-token state parallel to the legacy one when
-    // the legacy init succeeded. The two carry independent rotated
-    // tokens; the spine path will eventually subsume the legacy one
-    // (Batch 3). For Batch 5 they coexist.
+    // Spine daemon-token state — sole daemon-token state on `App` since
+    // Phase 7 Batch 3 retired `crate::daemon_token`. Init failure
+    // degrades to `None` so the server still serves cookie + bearer auth.
     let spine_daemon_token: Option<fuz_auth::SharedDaemonTokenState> =
-        if daemon_token_state.is_some() {
-            match fuz_auth::init_daemon_token(Path::new(&config.zzz_dir)).await {
-                Ok(state) => {
-                    if let Ok(client) = pool.get().await
-                        && let Ok(Some(account_id)) = db::query_keeper_account_id(&client).await
-                    {
-                        state.write().keeper_account_id = Some(account_id);
-                    }
-                    Some(state)
+        match fuz_auth::init_daemon_token(Path::new(&config.zzz_dir)).await {
+            Ok(state) => {
+                if let Ok(client) = pool.get().await
+                    && let Ok(Some(account_id)) = db::query_keeper_account_id(&client).await
+                {
+                    state.write().keeper_account_id = Some(account_id);
+                    tracing::info!(%account_id, "daemon token: keeper account resolved");
                 }
-                Err(e) => {
-                    tracing::warn!(error = %e, "spine daemon token init failed");
-                    None
-                }
+                Some(state)
             }
-        } else {
-            None
+            Err(e) => {
+                tracing::warn!(error = %e, "daemon token init failed — running without daemon token auth");
+                None
+            }
         };
     let account_route_state = Arc::new(fuz_auth::AccountRouteState {
         pool: pool.clone(),
@@ -241,8 +194,8 @@ async fn run() -> Result<(), ServerError> {
         socket_revoker: Arc::clone(&socket_revoker),
         allowed_origins: Arc::clone(&spine_allowed_origins),
         bootstrap_available: Arc::clone(&bootstrap_available_atomic),
-        login_ip_rate_limiter: None,
-        login_account_rate_limiter: None,
+        login_ip_rate_limiter: login_ip_rate_limiter.as_ref().map(Arc::clone),
+        login_account_rate_limiter: login_account_rate_limiter.as_ref().map(Arc::clone),
         daemon_token_state: spine_daemon_token.clone(),
     });
     let bootstrap_route_state = Arc::new(fuz_auth::BootstrapRouteState {
@@ -274,24 +227,42 @@ async fn run() -> Result<(), ServerError> {
 
     let app_state = Arc::new(handlers::App::new(
         pool,
-        keyring,
         allowed_origins,
         config.bootstrap_token_path,
         bootstrap_available,
         scoped_fs,
         config.zzz_dir,
         scoped_dir_strings,
-        daemon_token_state.clone(),
         provider_manager,
         config.enable_test_actions,
-        Arc::clone(&audit_emitter),
         login_ip_rate_limiter,
         login_account_rate_limiter,
-        trusted_proxies,
         spine_state,
     ));
 
-    audit::listeners::register(&audit_emitter, &app_state);
+    // Register audit-event → WebSocket socket-revocation listeners on
+    // the spine `AuditEmitter`. Mirrors `fuz_app`'s
+    // `create_ws_auth_guard` + `create_ws_logout_closer` composition.
+    //
+    // One listener per event type — keeps matching logic explicit and
+    // avoids a per-event match cascade in a single closure. Failure
+    // outcomes never trigger socket close: a failed `session_revoke` row
+    // carries the caller-submitted `session_id` (attacker-controlled
+    // metadata), so reacting to it would let an authenticated user
+    // disconnect another user by guessing a session hash.
+    //
+    // ## Layering with eager handler-side close
+    //
+    // Revocation-emitting RPC handlers (`account_session_revoke`,
+    // `account_session_revoke_all`, `account_token_revoke`) and REST
+    // handlers (`/api/account/logout`, `/api/account/password`) call
+    // `close_sockets_for_*` synchronously before emitting the audit row.
+    // That eager call is the actual revocation guarantee — it lands on
+    // the live WS even if the audit INSERT later fails. The listeners
+    // run on the materialized row and call the same idempotent
+    // `close_sockets_for_*` a second time; the duplication is
+    // intentional defense-in-depth.
+    register_audit_listeners(&spine_audit_emitter, Arc::clone(&socket_revoker));
 
     // Compile the spine action registry — must run after `Arc<App>` is
     // constructed because the zzz-specific spec builders capture
@@ -382,41 +353,38 @@ async fn run() -> Result<(), ServerError> {
         }
     }
 
-    // Spawn daemon token rotation task
-    let rotation_handle = daemon_token_state.map(daemon_token::spawn_rotation_task);
+    // Spawn daemon-token rotation task on the spine state (matches
+    // `fuz_app`'s rotation cadence; the spine `spawn_rotation_task` uses
+    // `parking_lot::RwLock` so no async runtime hop per rotation).
+    let rotation_handle = spine_daemon_token
+        .as_ref()
+        .map(|state| fuz_auth::spawn_rotation_task(Arc::clone(state)));
 
     let app_state_for_shutdown = Arc::clone(&app_state);
 
-    // -- Spine RPC + WS routes (Phase 7 sub-batch D — cutover) --------
+    // -- Spine RPC + WS routes -------------------------------------
     //
-    // Mount the spine `ActionRegistry` dispatcher at `/api/rpc` and
-    // the spine WS handler at `/api/ws` — the single namespace per
-    // the ecosystem's pre-stable posture (no `/v2` suffix, no compat
-    // shim, no deprecation period). Sub-batches A and C mounted both
-    // routes at `/api/rpc/v2` + `/api/ws/v2` as construction-time
-    // checkpoints; sub-batch D atomically swaps them onto the
-    // canonical paths.
+    // The spine `ActionRegistry` dispatcher is mounted at `/api/rpc`
+    // and the spine WS handler at `/api/ws` — the single namespace
+    // per the ecosystem's pre-stable posture (no `/v2` suffix, no
+    // compat shim, no deprecation period). The 24-spec
+    // `ActionRegistry` (2 protocol + 9 auth_adapter + 13
+    // zzz-specific) is the sole dispatcher for `/api/rpc` and
+    // `/api/ws` traffic; legacy `crate::ws` was retired in Phase 7
+    // Batch 1 and the framework half of `rpc.rs` (`rpc_handler` /
+    // `rpc_get_handler` / classify) alongside it.
     //
-    // After this swap:
-    // - `crate::rpc::{rpc_handler, rpc_get_handler}` is unreachable
-    //   (the envelope-dispatch half of `rpc.rs`).
-    // - `crate::ws::ws_handler` is unreachable.
-    // - `App.connections` is never populated again — every new WS
-    //   connection registers in `App.realtime`. Existing call sites
-    //   (`app.broadcast` / `app.close_sockets_for_*`) are shimmed
-    //   onto `App.realtime` via Strategy α (see `handlers/mod.rs`).
-    // - The 24-spec `ActionRegistry` (2 protocol + 9 auth_adapter + 13
-    //   zzz-specific) is the sole dispatcher for `/api/rpc` and
-    //   `/api/ws` traffic.
+    // Existing call sites (`app.broadcast` /
+    // `app.close_sockets_for_*`) are shimmed onto `App.realtime`
+    // via Strategy α (see `handlers/mod.rs`).
     //
     // Middleware: each spine router carries its own
     // `fuz_http::client_ip_middleware` layer over
-    // `spine_trusted_proxies`. The outer router's
-    // `proxy::client_ip_middleware` (legacy `crate::proxy::ClientIp`
-    // extension) is retained for the legacy `/api/account/*` REST
-    // handlers + `/api/account/bootstrap` which still read
-    // `Extension<crate::proxy::ClientIp>` — those modules retire
-    // wholesale in original Batches 1-4 along with `crate::proxy`.
+    // `spine_trusted_proxies`. The outer router (`/api/account/*` REST
+    // + `/api/account/bootstrap`) also reads `Extension<fuz_http::ClientIp>`
+    // since Phase 7 Batch 2 migrated those handlers off the legacy
+    // `crate::proxy::ClientIp`; a separate `fuz_http::client_ip_middleware`
+    // layer below covers the outer scope.
     let registry_for_rpc = Arc::clone(
         app_state
             .action_registry
@@ -477,15 +445,14 @@ async fn run() -> Result<(), ServerError> {
         .route("/api/account/login", post(account::login_handler))
         .route("/api/account/logout", post(account::logout_handler))
         .route("/api/account/password", post(account::password_handler))
-        // Legacy `client_ip` middleware for the REST `/api/account/*` +
-        // `/api/account/bootstrap` handlers (read `Extension<crate::
-        // proxy::ClientIp>`). Retires when original Batches 1-4 delete
-        // the legacy `crate::proxy` module and migrate the REST routes
-        // to the spine `fuz_auth::AccountRouteState` / `BootstrapRouteState`
-        // shape.
+        // `fuz_http::client_ip_middleware` over `spine_trusted_proxies`
+        // — populates `Extension<fuz_http::ClientIp>` for the REST
+        // `/api/account/*` handlers + `/api/account/bootstrap`. Retires
+        // when later batches migrate these routes to the spine
+        // `fuz_auth::AccountRouteState` / `BootstrapRouteState` shape.
         .layer(axum::middleware::from_fn_with_state(
-            Arc::clone(&app_state),
-            proxy::client_ip_middleware,
+            Arc::clone(&spine_trusted_proxies),
+            fuz_http::client_ip_middleware,
         ))
         .with_state(Arc::clone(&app_state))
         // Spine RPC + WS — single canonical mount. `create_rpc_router`
@@ -691,6 +658,105 @@ fn parse_config() -> Result<Config, ServerError> {
         enable_login_rate_limit,
         trusted_proxies,
     })
+}
+
+/// Register audit-event → WebSocket socket-revocation listeners on the
+/// spine [`fuz_auth::AuditEmitter`]. Listener bodies are sync (no
+/// `.await` inside) wrapped in `Box::pin(async { ... })` to match the
+/// spine's boxed-future listener signature.
+fn register_audit_listeners(
+    emitter: &Arc<fuz_auth::AuditEmitter>,
+    revoker: Arc<dyn fuz_auth::SocketRevoker>,
+) {
+    // session_revoke → close_sockets_for_session(metadata.session_id)
+    {
+        let revoker = Arc::clone(&revoker);
+        emitter.add_listener(Arc::new(move |event| {
+            let revoker = Arc::clone(&revoker);
+            Box::pin(async move {
+                if event.event_type != "session_revoke" || event.outcome != "success" {
+                    return;
+                }
+                let Some(meta) = event.metadata.as_ref().and_then(serde_json::Value::as_object)
+                else {
+                    return;
+                };
+                let Some(session_id) = meta.get("session_id").and_then(serde_json::Value::as_str)
+                else {
+                    return;
+                };
+                let closed = revoker.close_sockets_for_session(session_id);
+                if closed > 0 {
+                    tracing::info!(
+                        count = closed,
+                        session_id,
+                        "audit listener: closed WebSocket connections (session_revoke)"
+                    );
+                }
+            })
+        }));
+    }
+
+    // token_revoke → close_sockets_for_token(metadata.token_id)
+    {
+        let revoker = Arc::clone(&revoker);
+        emitter.add_listener(Arc::new(move |event| {
+            let revoker = Arc::clone(&revoker);
+            Box::pin(async move {
+                if event.event_type != "token_revoke" || event.outcome != "success" {
+                    return;
+                }
+                let Some(meta) = event.metadata.as_ref().and_then(serde_json::Value::as_object)
+                else {
+                    return;
+                };
+                let Some(token_id) = meta.get("token_id").and_then(serde_json::Value::as_str)
+                else {
+                    return;
+                };
+                let closed = revoker.close_sockets_for_token(token_id);
+                if closed > 0 {
+                    tracing::info!(
+                        count = closed,
+                        token_id,
+                        "audit listener: closed WebSocket connections (token_revoke)"
+                    );
+                }
+            })
+        }));
+    }
+
+    // session_revoke_all / token_revoke_all / password_change / logout →
+    // close_sockets_for_account(target_account_id ?? account_id).
+    // Mirrors `fuz_app`'s `ws_disconnect_event_types` collapsed
+    // account-wide case.
+    {
+        let revoker = Arc::clone(&revoker);
+        emitter.add_listener(Arc::new(move |event| {
+            let revoker = Arc::clone(&revoker);
+            Box::pin(async move {
+                let account_wide = matches!(
+                    event.event_type.as_str(),
+                    "session_revoke_all" | "token_revoke_all" | "password_change" | "logout"
+                );
+                if !account_wide || event.outcome != "success" {
+                    return;
+                }
+                let Some(target) = event.target_account_id.or(event.account_id) else {
+                    return;
+                };
+                let closed = revoker.close_sockets_for_account(target);
+                if closed > 0 {
+                    tracing::info!(
+                        count = closed,
+                        account_id = %target,
+                        event_type = %event.event_type,
+                        "audit listener: closed WebSocket connections"
+                    );
+                }
+            })
+        }));
+    }
 }
 
 /// Check if bootstrap is available (token file exists and not yet bootstrapped).

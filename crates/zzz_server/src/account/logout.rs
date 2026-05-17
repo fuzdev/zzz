@@ -7,11 +7,11 @@ use axum::extract::{Extension, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 
-use crate::audit::{AuditLogInput, AuditOutcome};
-use crate::auth;
+use fuz_auth::{AuditLogInput, AuditOutcome, CredentialType, resolve_auth_from_headers};
+use fuz_http::{ClientIp, is_request_origin_allowed};
+
 use crate::db;
 use crate::handlers::App;
-use crate::proxy::ClientIp;
 
 use super::{OkResponse, clear_session_cookie, error_json};
 
@@ -24,7 +24,7 @@ pub async fn logout_handler(
     Extension(client_ip): Extension<ClientIp>,
     headers: HeaderMap,
 ) -> Response {
-    if !auth::is_request_origin_allowed(&headers, &app.allowed_origins) {
+    if !is_request_origin_allowed(&headers, &app.allowed_origins) {
         return error_json(StatusCode::FORBIDDEN, "forbidden_origin");
     }
     match logout_inner(&app, client_ip.0, &headers).await {
@@ -38,9 +38,9 @@ async fn logout_inner(
     headers: &HeaderMap,
 ) -> Result<Response, Response> {
     // Resolve session from cookie
-    let resolved = auth::resolve_auth_from_headers(
+    let resolved = resolve_auth_from_headers(
         headers,
-        &app.keyring,
+        app.keyring.as_ref(),
         &app.db_pool,
         app.daemon_token_state.as_ref(),
     )
@@ -48,7 +48,7 @@ async fn logout_inner(
     .ok_or_else(|| error_json(StatusCode::UNAUTHORIZED, "unauthenticated"))?;
 
     // Only cookie sessions can be logged out
-    if resolved.credential_type != auth::CredentialType::Session {
+    if resolved.credential_type != CredentialType::Session {
         return Err(error_json(StatusCode::BAD_REQUEST, "session_required"));
     }
 
@@ -74,9 +74,9 @@ async fn logout_inner(
     // `create_ws_logout_closer` widening logout from per-session to
     // per-account (cookie, bearer, and daemon-token sockets all
     // invalidated). Done synchronously here so revocation lands on the
-    // live WS even if the audit INSERT below fails. The listener in
-    // `audit::listeners::register` also fires the same call on
-    // the materialized row (idempotent).
+    // live WS even if the audit INSERT below fails. The audit listener
+    // registered in `main::register_audit_listeners` also fires the
+    // same call on the materialized row (idempotent).
     app.close_sockets_for_account(resolved.context.account.id);
 
     // `emit(input).await` — spawned task survives client disconnect,

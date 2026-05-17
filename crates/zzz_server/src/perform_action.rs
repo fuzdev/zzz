@@ -29,8 +29,9 @@ use fuz_http::JsonrpcError;
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
-use crate::auth::{CredentialType, RequestContext, check_action_auth, method_spec};
-use crate::handlers::{self, App, Ctx, NotifyFn};
+use fuz_auth::{CredentialType, RequestActorContext as RequestContext};
+
+use crate::handlers::{self, App, Ctx, NotifyFn, check_action_auth, method_spec};
 use crate::rpc::error_code_to_http_status;
 
 /// Per-call inputs assembled by each transport before calling [`perform_action`].
@@ -45,7 +46,7 @@ pub struct PerformActionInput<'a> {
     pub auth: Option<&'a RequestContext>,
     /// Credential type the request arrived on; `None` for anonymous callers.
     pub credential_type: Option<CredentialType>,
-    /// Resolved client IP from `proxy::client_ip_middleware`, captured
+    /// Resolved client IP from `fuz_http::client_ip_middleware`, captured
     /// per-request on HTTP and once-at-upgrade on WS (per-message XFF
     /// resolution doesn't apply to WS — the header is read at the
     /// upgrade request, not on each frame). Plumbed into `Ctx` so RPC

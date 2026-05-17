@@ -14,65 +14,31 @@ mod workspace;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::atomic::AtomicBool;
 
-use axum::extract::ws::Utf8Bytes;
 use deadpool_postgres::Pool;
 use fuz_http::JsonrpcError;
 use parking_lot::RwLock;
 use serde::Serialize;
 use serde_json::Value;
-use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::audit::AuditEmitter;
-use crate::auth::{self, CredentialType, Keyring, RequestContext};
-use crate::daemon_token::SharedDaemonTokenState;
 use crate::filer::FilerManager;
 use crate::provider::{CompletionOptions, ProviderManager};
-use crate::proxy::ParsedProxy;
 use crate::pty_manager::PtyManager;
-use crate::rate_limiter::RateLimiter;
 use crate::rpc;
 use crate::scoped_fs::ScopedFs;
 
-// Spine-side type aliases — Phase 7 Batch 5 additive wiring. These pull
-// the new spine-backed types into the handler module's namespace without
-// touching the legacy `App` field names; both shapes coexist until the
-// later batches retire the zzz-local impls.
+// Spine surfaces. `crate::auth` / `crate::audit` / `crate::daemon_token`
+// / `crate::rate_limiter` were retired in Phase 7 Batch 3; the spine
+// types below are the sole auth/audit/rate-limit surface on `App`.
 use fuz_actions::ActionRegistry;
-use fuz_auth::{AccountRouteState, AuditEmitter as SpineAuditEmitter, BootstrapRouteState, SocketRevoker};
-use fuz_http::ParsedProxy as SpineParsedProxy;
+use fuz_auth::{
+    AccountRouteState, AuditEmitter, BootstrapRouteState, CredentialType, Keyring, RateLimiter,
+    RequestActorContext as RequestContext, SharedDaemonTokenState, SocketRevoker,
+};
+use fuz_http::ParsedProxy;
 use fuz_realtime::ConnectionRegistry;
-
-// -- Connection tracking types ------------------------------------------------
-
-/// Unique ID for a WebSocket connection, allocated via `App::next_connection_id`.
-pub type ConnectionId = u64;
-
-/// Handle to a connected WebSocket client — messages sent here are forwarded to the WS sink.
-///
-/// `Utf8Bytes` wraps `bytes::Bytes`, so per-recipient sends share a single
-/// underlying buffer (refcount bump on `Clone`) instead of allocating a
-/// fresh `String` per recipient. This is the win on broadcast — a
-/// `filer_change` event with K subscribers used to do K `String::clone`s
-/// of the same JSON; now it does one alloc + K refcount bumps.
-pub type ConnectionSender = mpsc::UnboundedSender<Utf8Bytes>;
-
-/// Metadata for an active WebSocket connection.
-///
-/// Tracks the channel sender plus auth context for targeted revocation:
-/// - `token_hash`: blake3 hash of the session token (for session-level revocation)
-/// - `account_id`: account UUID (for account-level revocation on logout/password change)
-/// - `api_token_id`: `api_token.id` for bearer-authenticated connections (for
-///   per-token revocation on `token_revoke` without tearing down the account's
-///   other sockets)
-pub struct ConnectionInfo {
-    pub sender: ConnectionSender,
-    pub token_hash: Option<String>,
-    pub account_id: Option<uuid::Uuid>,
-    pub api_token_id: Option<String>,
-}
 
 // -- App state (long-lived, shared via Arc) -----------------------------------
 
@@ -82,23 +48,16 @@ pub struct ConnectionInfo {
 pub struct App {
     pub workspaces: RwLock<HashMap<String, WorkspaceInfo>>,
     pub db_pool: Pool,
-    pub keyring: Keyring,
     pub allowed_origins: Vec<String>,
     pub bootstrap_token_path: Option<String>,
     pub bootstrap_available: AtomicBool,
     pub scoped_fs: ScopedFs,
     pub zzz_dir: String,
     pub scoped_dirs: Vec<String>,
-    /// Monotonic counter for assigning unique connection IDs.
-    next_connection_id: AtomicU64,
-    /// Active WebSocket connections — keyed by `ConnectionId`.
-    pub connections: RwLock<HashMap<ConnectionId, ConnectionInfo>>,
     /// Active file watchers — one per unique directory path, with lifetime tracking.
     pub filer_manager: FilerManager,
     /// PTY terminal manager.
     pub pty_manager: PtyManager,
-    /// Daemon token state for `X-Daemon-Token` auth.
-    pub daemon_token_state: Option<SharedDaemonTokenState>,
     /// AI provider manager (Anthropic, `OpenAI`, Gemini, Ollama).
     pub provider_manager: ProviderManager,
     /// Default completion options.
@@ -106,122 +65,71 @@ pub struct App {
     /// Register `_test_*` actions on live dispatchers. Set by integration
     /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave false.
     pub enable_test_actions: bool,
-    /// Audit emission + listener fan-out. Captured pool-write writes audit
-    /// rows out of band; the listener chain routes socket revocation
-    /// (`session_revoke`, `password_change`, `logout`, …) — mirrors
-    /// `fuz_app`'s `create_ws_auth_guard` + `create_ws_logout_closer`
-    /// pattern. Wired in `main.rs` after `App` is constructed so listeners
-    /// can capture `Arc<App>`.
-    pub audit: Arc<AuditEmitter>,
     /// Per-IP rate limiter on `/login` / `/password`. `Some` iff
     /// `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1` was set at startup; default off
-    /// so existing integration tests don't trip the bucket. Mirrors
-    /// `fuz_app`'s `ip_rate_limiter` plumbing — handlers check before
-    /// argon2 work and on failure record / on success reset.
+    /// so existing integration tests don't trip the bucket. Spine
+    /// `fuz_auth::RateLimiter` (parking_lot, sync) since Phase 7 Batch 3.
     pub login_ip_rate_limiter: Option<Arc<RateLimiter>>,
     /// Per-account-id rate limiter on `/login` / `/password`. Keyed on
     /// canonical `account.id` (post-DB-lookup), not the submitted
     /// identifier — otherwise an attacker could alternate between
-    /// username and email to double the bucket. Mirrors `fuz_app`'s
-    /// `login_account_rate_limiter`.
+    /// username and email to double the bucket.
     pub login_account_rate_limiter: Option<Arc<RateLimiter>>,
-    /// Parsed trusted-proxy entries from `ZZZ_TRUSTED_PROXIES`. Read
-    /// by `proxy::client_ip_middleware` on every request to decide
-    /// whether to trust `X-Forwarded-For`. Empty when the env var is
-    /// unset; the middleware then collapses every connection to the
-    /// TCP peer IP (Phase 4 direct-bind behavior).
-    pub trusted_proxies: Vec<ParsedProxy>,
 
-    // -- Spine-backed fields (Phase 7 Batch 5 — additive) -----------
+    // -- Spine-backed fields ----------------------------------------
     //
-    // The fields below are populated at startup but most are not yet
-    // consumed — Batches 1-4 will retire the legacy duplicates above
-    // and rewire the live transports to read these instead. The
-    // `#[allow]` on each field documents the staged-migration intent.
-    //
-    //
-    // These fields live alongside the legacy fields above for the
-    // duration of the staged Batch 1-5 migration. The new spine-backed
-    // pattern dispatches through `action_registry` + `ActionContext`;
-    // the legacy `App` reach-through (handler `&App` access via
-    // `handlers/{workspace,filesystem,...}::handle_*`) continues to
-    // serve the existing live `/api/rpc` and `/api/ws` paths until
-    // the later batches retire it.
-    //
+    // Sole connection-tracking + auth/audit/daemon-token surface on
+    // `App` since Phase 7 sub-batch D + Batch 3 retired the legacy
+    // duplicates.
+
     /// `Arc<ConnectionRegistry>` — the spine's connection-tracking
-    /// registry. Identical posture to the legacy `App.connections` map
-    /// + `App.broadcast` / `send_to` methods, but with the cancellation
-    /// token plumbed onto each connection (so `SocketRevoker` can cancel
-    /// the signal token belt-and-suspenders with the dropped sender).
-    /// Constructed at startup; shared across the live transports and
-    /// the new spine-backed dispatch path.
-    #[allow(dead_code, reason = "Batch 5 additive — consumed when later batches retire the legacy connections map")]
+    /// registry. Sole connection store on `App` since Phase 7 sub-batch D
+    /// retired the legacy `App.connections` map.
     pub realtime: Arc<ConnectionRegistry>,
-    /// Spine `AuditEmitter` — handler-facing audit emit shape that
-    /// writes synchronously inside the active transaction (via
-    /// `ActionContext::audit_emit`). Distinct from the legacy
-    /// `audit: Arc<crate::audit::AuditEmitter>` which is spawn-then-await
-    /// (fire-and-forget pool-write). Listener-fan-out is queued on the
-    /// `PendingEffects` queue and drained post-commit. Constructed at
-    /// startup; threaded through the spine `auth_adapter::build_account_specs`
-    /// / `build_admin_specs` paths and via `ActionContext` to per-domain
-    /// handlers.
-    #[allow(dead_code, reason = "Batch 5 additive — consumed by spine RPC dispatch when later batches mount the spine router")]
-    pub audit_emitter: Arc<SpineAuditEmitter>,
+    /// Spine `AuditEmitter` — captured-pool write + listener fan-out.
+    /// `emit(input) -> JoinHandle<()>` spawns a detached task; REST
+    /// sites `let _ = app.audit.emit(...).await` to keep the row
+    /// observable by response time while surviving client disconnects.
+    /// RPC handlers push the `JoinHandle` onto `Ctx.pending_effects`
+    /// instead so the dispatcher drains the queue before responding.
+    pub audit: Arc<AuditEmitter>,
     /// Compiled spine action registry. Holds `PROTOCOL_ACTION_SPECS` +
     /// `auth_adapter::build_account_specs` + `auth_adapter::build_admin_specs`
     /// + zzz-specific specs from `zzz_action_specs::build_*_specs`. Looked
     /// up by `fuz_actions::perform_action` keyed on method name.
     ///
     /// **Wrapped in `OnceLock`** so it can be set after `Arc<App>` is
-    /// constructed — the spec builders (e.g.
-    /// `zzz_action_specs::build_workspace_specs`) close over
-    /// `Arc<App>`, so the registry can't be built until the App `Arc`
-    /// exists. Mirrors the audit listener registration pattern in
-    /// `audit::listeners::register`.
+    /// constructed — the spec builders close over `Arc<App>`, so the
+    /// registry can't be built until the App `Arc` exists.
     pub action_registry: std::sync::OnceLock<Arc<ActionRegistry>>,
-    /// State for the spine account REST router. Constructed once at
-    /// startup, shared with the eventual `fuz_auth::account_router`
-    /// mount in main.rs. Currently introduced for the additive Phase 7
-    /// migration; the legacy zzz `account/*` handlers continue to serve
-    /// the live `/api/account/*` paths until Batch 1 mounts the spine
-    /// router.
-    #[allow(dead_code, reason = "Batch 5 additive — consumed when Batch 1 mounts the spine account router")]
+    /// State for the spine account REST router. Currently held for the
+    /// in-progress spine REST mount (Batch 4); the legacy zzz
+    /// `account/*` handlers continue to serve the live `/api/account/*`
+    /// paths in Batch 3.
+    #[allow(dead_code, reason = "Batch 3 — consumed when Batch 4 mounts the spine account router")]
     pub account_route_state: Arc<AccountRouteState>,
-    /// State for the spine bootstrap router. Constructed once at
-    /// startup, shared with the eventual `fuz_auth::bootstrap_routes::bootstrap_router`
-    /// mount. See `account_route_state` for the staged-migration rationale.
-    #[allow(dead_code, reason = "Batch 5 additive — consumed when Batch 1 mounts the spine bootstrap router")]
+    /// State for the spine bootstrap router. See `account_route_state`
+    /// for the staged-migration rationale.
+    #[allow(dead_code, reason = "Batch 3 — consumed when Batch 4 mounts the spine bootstrap router")]
     pub bootstrap_route_state: Arc<BootstrapRouteState>,
-    /// Spine `Keyring` (HMAC-SHA256 cookie signing). Constructed from the
-    /// same `SECRET_COOKIE_KEYS` env value as the legacy `keyring` field
-    /// above. Two instances coexist for the duration of the migration
-    /// (legacy: owned `auth::Keyring` on `App.keyring`; spine: `Arc<fuz_auth::Keyring>`
-    /// here) because the legacy account/cookie path reaches through
-    /// `app.keyring` while the new spine surface needs an `Arc<fuz_auth::Keyring>`
-    /// — different ownership shapes. Underlying keys are identical.
-    #[allow(dead_code, reason = "Batch 5 additive — consumed when Batch 3 retires the legacy auth module")]
-    pub spine_keyring: Arc<fuz_auth::Keyring>,
-    /// Spine daemon token state — different lock kind from the legacy
-    /// `daemon_token_state` (parking_lot::RwLock vs tokio::sync::RwLock).
-    /// Two instances coexist during the migration; the spine
-    /// `AccountRouteState` consumes the spine variant, the legacy auth
-    /// pipeline continues to read the tokio variant.
-    #[allow(dead_code, reason = "Batch 5 additive — consumed when Batch 3 unifies daemon-token state")]
-    pub spine_daemon_token: Option<fuz_auth::SharedDaemonTokenState>,
-    /// Spine allowed-origins list. Same patterns as the legacy
-    /// `App.allowed_origins`, behind `Arc<Vec<String>>` for the spine
-    /// route-state consumers.
-    #[allow(dead_code, reason = "Batch 5 additive — consumed when later batches mount spine routers")]
+    /// Cookie signing keyring (HMAC-SHA256). Sole keyring on `App`
+    /// since Phase 7 Batch 3 retired `crate::auth::Keyring`.
+    pub keyring: Arc<Keyring>,
+    /// Daemon-token state (`X-Daemon-Token` auth). Sole daemon-token
+    /// state on `App` since Phase 7 Batch 3 retired
+    /// `crate::daemon_token`. Spine `fuz_auth::SharedDaemonTokenState`
+    /// uses `parking_lot::RwLock` — no `.await` inside critical sections.
+    pub daemon_token_state: Option<SharedDaemonTokenState>,
+    /// Spine allowed-origins list (`Arc<Vec<String>>`). Held alongside
+    /// `App.allowed_origins: Vec<String>` because spine route-state
+    /// consumers (`AccountRouteState`, `RpcRouteState`, `WsRouteState`)
+    /// take `Arc<Vec<String>>` while the legacy REST + RPC origin gate
+    /// reads the borrowed `Vec`. Same patterns, different ownership.
+    #[allow(dead_code, reason = "Batch 3 — consumed by spine route-state consumers")]
     pub spine_allowed_origins: Arc<Vec<String>>,
-    /// Spine trusted-proxy list (`fuz_http::ParsedProxy`). Wire-identical
-    /// to the legacy `App.trusted_proxies` (`crate::proxy::ParsedProxy`)
-    /// per `fuz_http`'s Phase 4 extraction note; re-parsed at startup so
-    /// the spine layer doesn't depend on the legacy `proxy` module's
-    /// private type. Behind `Arc<Vec<…>>` for the spine middleware
-    /// state shape.
-    #[allow(dead_code, reason = "Batch 5 additive — consumed when Batch 2 retires the local proxy module")]
-    pub spine_trusted_proxies: Arc<Vec<SpineParsedProxy>>,
+    /// Trusted-proxy list (`fuz_http::ParsedProxy`). Behind
+    /// `Arc<Vec<…>>` for the spine middleware state shape.
+    pub spine_trusted_proxies: Arc<Vec<ParsedProxy>>,
 }
 
 /// Spine-side fields packaged together so `App::new`'s argument list
@@ -229,131 +137,71 @@ pub struct App {
 /// at the composition root (main.rs) and moved into `App`.
 pub struct SpineState {
     pub realtime: Arc<ConnectionRegistry>,
-    pub audit_emitter: Arc<SpineAuditEmitter>,
+    pub audit_emitter: Arc<AuditEmitter>,
     pub account_route_state: Arc<AccountRouteState>,
     pub bootstrap_route_state: Arc<BootstrapRouteState>,
-    pub spine_keyring: Arc<fuz_auth::Keyring>,
-    pub spine_daemon_token: Option<fuz_auth::SharedDaemonTokenState>,
+    pub spine_keyring: Arc<Keyring>,
+    pub spine_daemon_token: Option<SharedDaemonTokenState>,
     pub spine_allowed_origins: Arc<Vec<String>>,
-    pub spine_trusted_proxies: Arc<Vec<SpineParsedProxy>>,
+    pub spine_trusted_proxies: Arc<Vec<ParsedProxy>>,
 }
 
 impl App {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         db_pool: Pool,
-        keyring: Keyring,
         allowed_origins: Vec<String>,
         bootstrap_token_path: Option<String>,
         bootstrap_available: bool,
         scoped_fs: ScopedFs,
         zzz_dir: String,
         scoped_dirs: Vec<String>,
-        daemon_token_state: Option<SharedDaemonTokenState>,
         provider_manager: ProviderManager,
         enable_test_actions: bool,
-        audit: Arc<AuditEmitter>,
         login_ip_rate_limiter: Option<Arc<RateLimiter>>,
         login_account_rate_limiter: Option<Arc<RateLimiter>>,
-        trusted_proxies: Vec<ParsedProxy>,
         spine: SpineState,
     ) -> Self {
         Self {
             workspaces: RwLock::new(HashMap::new()),
             db_pool,
-            keyring,
             allowed_origins,
             bootstrap_token_path,
             bootstrap_available: AtomicBool::new(bootstrap_available),
             scoped_fs,
             zzz_dir,
             scoped_dirs,
-            next_connection_id: AtomicU64::new(1),
-            connections: RwLock::new(HashMap::new()),
             filer_manager: FilerManager::new(),
             pty_manager: PtyManager::new(),
-            daemon_token_state,
             provider_manager,
             completion_options: CompletionOptions::default(),
             enable_test_actions,
-            audit,
             login_ip_rate_limiter,
             login_account_rate_limiter,
-            trusted_proxies,
             realtime: spine.realtime,
-            audit_emitter: spine.audit_emitter,
+            audit: spine.audit_emitter,
             action_registry: std::sync::OnceLock::new(),
             account_route_state: spine.account_route_state,
             bootstrap_route_state: spine.bootstrap_route_state,
-            spine_keyring: spine.spine_keyring,
-            spine_daemon_token: spine.spine_daemon_token,
+            keyring: spine.spine_keyring,
+            daemon_token_state: spine.spine_daemon_token,
             spine_allowed_origins: spine.spine_allowed_origins,
             spine_trusted_proxies: spine.spine_trusted_proxies,
         }
     }
 
-    /// Allocate a new connection ID and register the sender with auth metadata.
-    ///
-    /// Returns the ID — caller must call `remove_connection` on disconnect.
-    pub fn add_connection(
-        &self,
-        sender: ConnectionSender,
-        token_hash: Option<String>,
-        account_id: Option<uuid::Uuid>,
-        api_token_id: Option<String>,
-    ) -> ConnectionId {
-        let id = self
-            .next_connection_id
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        self.connections.write().insert(
-            id,
-            ConnectionInfo {
-                sender,
-                token_hash,
-                account_id,
-                api_token_id,
-            },
-        );
-        id
-    }
-
-    /// Remove a connection by ID (called on WS disconnect).
-    pub fn remove_connection(&self, id: ConnectionId) {
-        self.connections.write().remove(&id);
-    }
-
     /// Broadcast a message to all connected clients.
     ///
-    /// Phase 7 sub-batch D: shim over `App.realtime` (Strategy α). The
-    /// legacy `App.connections` map is no longer populated — `/api/ws`
-    /// now mounts the spine WS handler which registers connections in
-    /// `App.realtime` (`Arc<fuz_realtime::ConnectionRegistry>`). Existing
-    /// call sites (`filer::broadcast_filer_change`,
-    /// `pty_manager` terminal data / exited,
-    /// `handlers::workspace::workspace_changed`,
-    /// `handlers_v2::workspace::workspace_*`) stay verbatim; this shim
-    /// retires when original Batches 1-4 delete `App.connections` and
-    /// rewrite call sites to call `App.realtime.broadcast(...)` directly.
+    /// Strategy α shim over `App.realtime`. The spine WS handler
+    /// registers connections in `App.realtime`
+    /// (`Arc<fuz_realtime::ConnectionRegistry>`); existing call sites
+    /// (`filer::broadcast_filer_change`, `pty_manager` terminal data /
+    /// exited, `handlers::workspace::workspace_changed`,
+    /// `handlers_v2::workspace::workspace_*`) stay verbatim through
+    /// this shim. Retires when later batches rewrite call sites to
+    /// call `App.realtime.broadcast(...)` directly.
     pub fn broadcast(&self, message: &str) {
         let _ = self.realtime.broadcast(message);
-    }
-
-    /// Send a message to a specific connection.
-    ///
-    /// Operates on the legacy `App.connections` map. Post sub-batch D
-    /// the map is no longer populated (the spine WS handler registers
-    /// into `App.realtime` only), so this is effectively a no-op. The
-    /// only caller is legacy `crate::ws::handle_connection` which is no
-    /// longer wired to a route — kept for compilation until original
-    /// Batches 1-4 delete `crate::ws` and the `connections` field.
-    /// Streaming WS notifications now flow through
-    /// `App.realtime.send_to(...)` via `ctx.connection_id` (see
-    /// `handlers_v2::provider::completion_create`).
-    pub fn send_to(&self, id: ConnectionId, message: &str) {
-        let conns = self.connections.read();
-        if let Some(info) = conns.get(&id) {
-            let _ = info.sender.send(Utf8Bytes::from(message.to_owned()));
-        }
     }
 
     /// Close all WebSocket connections for a given session token hash.
@@ -395,7 +243,9 @@ impl App {
 
 /// Send a request-scoped JSON-RPC notification to the originator.
 ///
-/// On WebSocket: routes to the originating socket via `app.send_to`.
+/// On WebSocket: routes to the originating socket via the spine
+/// `App.realtime.send_to(...)` path (see
+/// `handlers_v2::provider::completion_create`).
 /// On HTTP: no-ops with a DEV-only warn (HTTP has no return channel for
 /// server-pushed notifications).
 ///
@@ -420,7 +270,7 @@ pub struct Ctx<'a> {
     /// from a gated method so forensics survive a future loosening of
     /// the spec gate (see `audit.rs` doc-comment).
     pub credential_type: Option<CredentialType>,
-    /// Resolved client IP from `proxy::client_ip_middleware`. Plumbed
+    /// Resolved client IP from `fuz_http::client_ip_middleware`. Plumbed
     /// onto every `AuditLogInput.ip` emit site in `account.rs` /
     /// `bootstrap.rs` / `handlers/account.rs`, matching `fuz_app`'s
     /// `get_client_ip(c)` posture. `None` on transports that bypass
@@ -538,7 +388,7 @@ struct TestEmitNotificationsResult {
 /// `fuz_app`'s `perform_action` `db.transaction` wrap. Read-only actions
 /// run on a pooled connection (acquired lazily by handlers that need one).
 pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonrpcError> {
-    if auth::method_spec(method).side_effects {
+    if method_spec(method).side_effects {
         dispatch_with_tx(method, params, ctx).await
     } else {
         dispatch_no_tx(method, params, ctx).await
@@ -712,4 +562,194 @@ fn handle_test_emit_notifications(params: &Value, ctx: &Ctx<'_>) -> Result<Value
 
     serde_json::to_value(TestEmitNotificationsResult { count })
         .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
+}
+
+// -- Per-action auth spec -----------------------------------------------------
+//
+// Moved out of `crate::auth::spec` in Phase 7 Batch 3 — these
+// definitions are zzz-specific (the `method_spec` table enumerates the
+// zzz method namespace) and have no other consumer beyond
+// `dispatch` + `perform_action`. The shared cross-consumer surface
+// (origin allowlist, `CredentialType`, REST `credential_type_required`
+// envelope) lives in `fuz_http` / `fuz_auth`.
+
+/// Authentication tier for an action spec — the 401 axis.
+///
+/// Mirrors `fuz_app`'s `RouteAuth.account` axis collapsed to the two
+/// shapes zzz uses today: anonymous (`Public`) or any valid credential
+/// (`Authenticated`). Role and credential-type gates are separate axes
+/// on [`MethodSpec`], not packed into this enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActionAuth {
+    /// No auth required.
+    Public,
+    /// Must have a valid credential of some kind. Refine further with
+    /// `MethodSpec.credential_types` / `MethodSpec.roles`.
+    Authenticated,
+}
+
+/// Spec-derived facts about a method — auth tier, credential-type
+/// allowlist, role requirements, and DB-transaction need. Mirrors the
+/// `{auth, credential_types, roles, side_effects}` axes of `fuz_app`'s
+/// `ActionSpec`. Looked up via [`method_spec`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MethodSpec {
+    pub auth: ActionAuth,
+    /// `Some(types)` → credential gate restricts to those types.
+    /// `None` → any credential type permitted.
+    pub credential_types: Option<&'static [CredentialType]>,
+    /// `Some(roles)` → caller must hold one of these roles (any-of).
+    /// `None` → no role check.
+    pub roles: Option<&'static [&'static str]>,
+    /// `true` → dispatcher wraps the handler in a DB transaction.
+    pub side_effects: bool,
+}
+
+/// JSON-RPC error codes for auth failures.
+const JSONRPC_UNAUTHENTICATED: i32 = -32001;
+const JSONRPC_FORBIDDEN: i32 = -32002;
+
+/// Check per-action auth against a method's [`MethodSpec`].
+///
+/// Returns `None` if authorized, `Some(error)` if not. Mirrors `fuz_app`'s
+/// `check_action_auth_post_authorization` in `perform_action.ts`.
+pub fn check_action_auth(
+    spec: &MethodSpec,
+    context: Option<&RequestContext>,
+    credential_type: Option<CredentialType>,
+) -> Option<JsonrpcError> {
+    match spec.auth {
+        ActionAuth::Public => {}
+        ActionAuth::Authenticated => {
+            if context.is_none() {
+                return Some(JsonrpcError {
+                    code: JSONRPC_UNAUTHENTICATED,
+                    message: "unauthenticated".to_owned(),
+                    data: None,
+                });
+            }
+        }
+    }
+
+    if let Some(required) = spec.credential_types {
+        let satisfied = credential_type.is_some_and(|ct| required.contains(&ct));
+        if !satisfied {
+            let names: Vec<&'static str> = required.iter().map(|c| c.name()).collect();
+            return Some(JsonrpcError {
+                code: JSONRPC_FORBIDDEN,
+                message: "forbidden".to_owned(),
+                data: Some(serde_json::json!({
+                    "reason": "credential_type_required",
+                    "required_credential_types": names,
+                })),
+            });
+        }
+    }
+
+    if let Some(required_roles) = spec.roles {
+        let has_required =
+            context.is_some_and(|ctx| required_roles.iter().any(|r| ctx.has_role(r)));
+        if !has_required {
+            return Some(JsonrpcError {
+                code: JSONRPC_FORBIDDEN,
+                message: "forbidden".to_owned(),
+                data: Some(serde_json::json!({
+                    "reason": "insufficient_permissions",
+                    "required_roles": required_roles,
+                })),
+            });
+        }
+    }
+
+    None
+}
+
+/// Per-method spec lookup — single source of truth for the four
+/// dispatch-relevant axes (`auth`, `credential_types`, `roles`,
+/// `side_effects`). Mirrors `fuz_app`'s `ActionSpec` shape.
+///
+/// **Gate rationale**:
+///
+/// - **`credential_types: ['session']`** on the four account-mutation
+///   methods (`account_token_create`, `account_token_revoke`,
+///   `account_session_revoke`, `account_session_revoke_all`) closes the
+///   bearer-self-service threat. Admin equivalents are deliberately
+///   *not* credential-gated — admin CLI scripting via bearer is a
+///   legitimate operator workflow. The REST `POST /api/account/password`
+///   route enforces the same session-only gate at its own handler.
+///
+/// - **`credential_types: ['daemon_token']` + `roles: ['keeper']`** on
+///   `provider_update_api_key` composes the keeper requirement.
+#[allow(clippy::match_same_arms)] // Read-only auth'd reads and the unknown-method catch-all
+// share the same MethodSpec shape but are conceptually distinct;
+// keeping the unknown-method arm explicit makes the
+// "fail-closed: unknown methods still require auth" invariant visible.
+pub fn method_spec(method: &str) -> MethodSpec {
+    const SESSION_ONLY: &[CredentialType] = &[CredentialType::Session];
+    const DAEMON_TOKEN_ONLY: &[CredentialType] = &[CredentialType::DaemonToken];
+    const KEEPER_ROLE: &[&str] = &["keeper"];
+    const ADMIN_ROLE: &[&str] = &["admin"];
+
+    let (auth, credential_types, roles, side_effects) = match method {
+        // Public — no auth required, no side effects.
+        "ping" => (ActionAuth::Public, None, None, false),
+
+        // Authenticated reads — no transaction wrap.
+        "session_load"
+        | "workspace_list"
+        | "provider_load_status"
+        | "account_verify"
+        | "account_session_list"
+        | "account_token_list" => (ActionAuth::Authenticated, None, None, false),
+
+        // Authenticated writes — wrap in db.transaction.
+        "workspace_open" | "workspace_close" | "diskfile_update" | "diskfile_delete"
+        | "directory_create" | "completion_create" | "terminal_create" | "terminal_data_send"
+        | "terminal_resize" | "terminal_close" => (ActionAuth::Authenticated, None, None, true),
+
+        // Authenticated ollama actions — read-only (no DB side effects on the
+        // zzz_server side; the Ollama daemon is a separate process).
+        "ollama_list" | "ollama_ps" | "ollama_show" | "ollama_pull" | "ollama_delete"
+        | "ollama_copy" | "ollama_create" | "ollama_unload" => {
+            (ActionAuth::Authenticated, None, None, false)
+        }
+
+        // Credential-channel gated account mutations.
+        "account_token_create"
+        | "account_token_revoke"
+        | "account_session_revoke"
+        | "account_session_revoke_all" => {
+            (ActionAuth::Authenticated, Some(SESSION_ONLY), None, true)
+        }
+
+        // Keeper — composed credential gate + role gate.
+        "provider_update_api_key" => (
+            ActionAuth::Authenticated,
+            Some(DAEMON_TOKEN_ONLY),
+            Some(KEEPER_ROLE),
+            true,
+        ),
+
+        // Admin role-gated mutations — bearer is permitted (no
+        // `credential_types` restriction); only `roles: ['admin']` plus
+        // `Authenticated` gate access.
+        "admin_session_revoke_all" | "admin_token_revoke_all" => (
+            ActionAuth::Authenticated,
+            None,
+            Some(ADMIN_ROLE),
+            true,
+        ),
+
+        // Unknown methods (including `_test_*` when `ZZZ_ENABLE_TEST_ACTIONS`
+        // is unset) — will hit method_not_found in dispatch, but require auth
+        // so we don't leak method existence to unauthenticated callers.
+        _ => (ActionAuth::Authenticated, None, None, false),
+    };
+
+    MethodSpec {
+        auth,
+        credential_types,
+        roles,
+        side_effects,
+    }
 }

@@ -8,15 +8,15 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde_json::json;
 
-use crate::audit::{AuditLogInput, AuditOutcome, credential_type_value};
-use crate::auth;
+use fuz_auth::{AuditLogInput, AuditOutcome, credential_type_value, resolve_auth_from_headers};
+use fuz_http::{ClientIp, is_request_origin_allowed};
+
 use crate::db;
 use crate::handlers::App;
-use crate::proxy::ClientIp;
 
 use super::{
-    OkResponse, PasswordInput, clear_session_cookie, error_json, hash_password,
-    rate_limit_exceeded, verify_password,
+    OkResponse, PasswordInput, clear_session_cookie, enforce_session_only, error_json,
+    hash_password, rate_limit_exceeded, verify_password,
 };
 
 /// `POST /password` — change password, revoke all sessions + tokens, close sockets.
@@ -28,7 +28,7 @@ pub async fn password_handler(
     headers: HeaderMap,
     Json(input): Json<PasswordInput>,
 ) -> Response {
-    if !auth::is_request_origin_allowed(&headers, &app.allowed_origins) {
+    if !is_request_origin_allowed(&headers, &app.allowed_origins) {
         return error_json(StatusCode::FORBIDDEN, "forbidden_origin");
     }
     match password_inner(&app, client_ip.0, &headers, input).await {
@@ -47,16 +47,16 @@ async fn password_inner(
     // from the trusted-proxy middleware — same plumbing as `/login`.
     let ip_key = client_ip.clone();
     if let Some(ref limiter) = app.login_ip_rate_limiter {
-        let result = limiter.check(&ip_key).await;
+        let result = limiter.check(&ip_key);
         if !result.allowed {
             return Err(rate_limit_exceeded(result.retry_after));
         }
     }
 
     // Resolve auth
-    let resolved = auth::resolve_auth_from_headers(
+    let resolved = resolve_auth_from_headers(
         headers,
-        &app.keyring,
+        app.keyring.as_ref(),
         &app.db_pool,
         app.daemon_token_state.as_ref(),
     )
@@ -68,8 +68,8 @@ async fn password_inner(
     // 403 with `credential_type_required` + `required_credential_types`
     // matching fuz_app's `require_credential_types` shape. Shared with
     // the RPC dispatcher's `MethodSpec.credential_types = ['session']`
-    // path via `auth::check_action_auth`.
-    auth::enforce_session_only(&resolved)?;
+    // path via `handlers::check_action_auth`.
+    enforce_session_only(&resolved)?;
 
     // Validate new password
     if input.new_password.len() < 12 {
@@ -85,7 +85,7 @@ async fn password_inner(
     // Per-account rate-limit check (after auth resolves to canonical
     // account.id, before argon2 verify).
     if let Some(ref limiter) = app.login_account_rate_limiter {
-        let result = limiter.check(&account_rate_key).await;
+        let result = limiter.check(&account_rate_key);
         if !result.allowed {
             return Err(rate_limit_exceeded(result.retry_after));
         }
@@ -112,10 +112,10 @@ async fn password_inner(
     if !verify_password(input.current_password.clone(), verified_hash.clone()).await {
         // Rate-limit record — both buckets — before the audit emit.
         if let Some(ref limiter) = app.login_ip_rate_limiter {
-            limiter.record(&ip_key).await;
+            limiter.record(&ip_key);
         }
         if let Some(ref limiter) = app.login_account_rate_limiter {
-            limiter.record(&account_rate_key).await;
+            limiter.record(&account_rate_key);
         }
         // Wrong-password audit row — mirrors fuz_app's metadata shape: just
         // `credential_type` (no `reason` — `reason` is reserved for the
@@ -141,10 +141,10 @@ async fn password_inner(
     // Successful verify — reset both rate limiters (well-behaved
     // callers don't carry burn from previous failed attempts).
     if let Some(ref limiter) = app.login_ip_rate_limiter {
-        limiter.reset(&ip_key).await;
+        limiter.reset(&ip_key);
     }
     if let Some(ref limiter) = app.login_account_rate_limiter {
-        limiter.reset(&account_rate_key).await;
+        limiter.reset(&account_rate_key);
     }
 
     // Hash new password
@@ -170,10 +170,10 @@ async fn password_inner(
         // fuz_app's loser-side behavior. The verify itself succeeded, so
         // bucket the failure cost to discourage tight retry loops.
         if let Some(ref limiter) = app.login_ip_rate_limiter {
-            limiter.record(&ip_key).await;
+            limiter.record(&ip_key);
         }
         if let Some(ref limiter) = app.login_account_rate_limiter {
-            limiter.record(&account_rate_key).await;
+            limiter.record(&account_rate_key);
         }
         // A concurrent password change committed first — our
         // `current_password` was correct at read-time but the row's

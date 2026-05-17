@@ -1,40 +1,20 @@
-use std::sync::Arc;
+//! JSON-RPC helpers — error constructors, notification builder, error-code →
+//! HTTP-status mapping.
+//!
+//! Phase 7 Batch 1 retired the framework half of this module (the envelope
+//! dispatch + classification + HTTP handlers `rpc_handler` / `rpc_get_handler`).
+//! The spine `fuz_actions::create_rpc_router` mounted at `/api/rpc` now owns
+//! the dispatch path. The helpers below survive because they're still
+//! consumed by `crate::filer`, `crate::pty_manager`, `crate::handlers/*`,
+//! `crate::handlers_v2/*`, and `crate::perform_action` for notification
+//! building and error construction.
 
-use axum::Json;
-use axum::body::Bytes;
-use axum::extract::{Extension, Query, State};
-use axum::http::{HeaderMap, StatusCode};
-use axum::response::{IntoResponse, Response};
 use fuz_http::{
     JSONRPC_INTERNAL_ERROR, JSONRPC_INVALID_PARAMS, JSONRPC_INVALID_REQUEST,
     JSONRPC_METHOD_NOT_FOUND, JSONRPC_PARSE_ERROR, JSONRPC_VERSION, JsonrpcError,
 };
+use axum::http::StatusCode;
 use serde::Serialize;
-use serde_json::{Map, Value};
-use tokio_util::sync::CancellationToken;
-
-use crate::auth::{self, resolve_auth_from_headers};
-use crate::handlers::{App, NotifyFn};
-use crate::perform_action::{PerformActionInput, PerformActionResult, perform_action};
-use crate::proxy::ClientIp;
-
-// -- JSON-RPC types -----------------------------------------------------------
-
-/// Successful JSON-RPC 2.0 response.
-#[derive(Debug, Serialize)]
-pub struct JsonRpcResponse {
-    pub jsonrpc: &'static str,
-    pub id: Value,
-    pub result: Value,
-}
-
-/// JSON-RPC 2.0 error response (full envelope).
-#[derive(Debug, Serialize)]
-pub struct JsonRpcErrorResponse {
-    pub jsonrpc: &'static str,
-    pub id: Value,
-    pub error: JsonrpcError,
-}
 
 // -- Error constructors -------------------------------------------------------
 // Intentional divergence: Rust omits `error.data` for security — Zod validation
@@ -134,9 +114,7 @@ pub fn not_found(resource: &str, reason: Option<&str>) -> JsonrpcError {
 /// JSON-RPC 2.0 notification (no `id` field — server-initiated push).
 ///
 /// Generic over the params type — most callers pass a `&SomeStruct`
-/// holding the notification-specific shape; the WS notify closure
-/// passes `&Value` because the params come from a dynamic dispatch
-/// callback. Both go through one serialization path.
+/// holding the notification-specific shape.
 #[derive(Debug, Serialize)]
 struct JsonRpcNotification<'a, T: ?Sized> {
     jsonrpc: &'static str,
@@ -168,40 +146,6 @@ pub fn notification<T: ?Sized + Serialize>(method: &str, params: &T) -> String {
     }
 }
 
-// -- Response builders --------------------------------------------------------
-
-pub const fn success_response(id: Value, result: Value) -> JsonRpcResponse {
-    JsonRpcResponse {
-        jsonrpc: JSONRPC_VERSION,
-        id,
-        result,
-    }
-}
-
-pub const fn error_response(id: Value, error: JsonrpcError) -> JsonRpcErrorResponse {
-    JsonRpcErrorResponse {
-        jsonrpc: JSONRPC_VERSION,
-        id,
-        error,
-    }
-}
-
-// -- HTTP notify (no-op) ------------------------------------------------------
-
-/// `ctx.notify` for HTTP requests — no-op with a debug-only warn when called.
-///
-/// HTTP has no return channel for server-pushed notifications, so streaming
-/// handlers (e.g. `completion_create` with a `progressToken`) silently lose
-/// chunks here. Mirrors the TS HTTP path's no-op `notify`.
-fn http_no_op_notify() -> NotifyFn {
-    Arc::new(|method: &str, _params: Value| {
-        tracing::debug!(
-            method,
-            "ctx.notify called over HTTP — notification dropped (no return channel)"
-        );
-    })
-}
-
 // -- HTTP status mapping ------------------------------------------------------
 
 /// Map a JSON-RPC error code to an HTTP status code.
@@ -219,272 +163,5 @@ pub const fn error_code_to_http_status(code: i32) -> StatusCode {
         -32001 => StatusCode::UNAUTHORIZED,                // unauthenticated → 401
         -32002 => StatusCode::FORBIDDEN,                   // forbidden → 403
         _ => StatusCode::INTERNAL_SERVER_ERROR,            // -32603 and others → 500
-    }
-}
-
-// -- Message classification ---------------------------------------------------
-
-/// Default params when the JSON-RPC envelope omits the `params` field.
-static NULL_PARAMS: Value = Value::Null;
-
-/// Classification result from `classify`.
-///
-/// Transport-agnostic — callers apply transport-specific semantics:
-/// - HTTP: `Notification` → reject as `invalid_request`; error → mapped HTTP status
-/// - WS: `Notification` → silence (no response sent); error → send envelope
-pub enum Classified<'a> {
-    /// Valid request — method, validated id, and params ready for dispatch.
-    Request {
-        method: &'a str,
-        id: Value,
-        params: &'a Value,
-    },
-    /// Error — id and error object for the error response envelope.
-    Invalid { id: Value, error: JsonrpcError },
-    /// Notification (has method, no id) — caller decides behavior.
-    Notification,
-}
-
-/// Classify a parsed JSON value as a JSON-RPC message.
-///
-/// Distinguishes between:
-/// - Request (has `method` + valid `id`) → `Classified::Request`
-/// - Notification (has `method`, no `id`) → `Classified::Notification`
-/// - Invalid (missing `method`, bad `jsonrpc`, non-object, null id) → `Classified::Invalid`
-///
-/// Id validation matches `fuz_app`: id must be string or number (excludes null,
-/// following MCP). Non-object values always get `id: null` (matching
-/// `create_rpc_endpoint`'s safeParse failure path, not `ActionPeer`'s
-/// `to_jsonrpc_message_id`).
-// TODO Phase 2: Support batch requests (JSON arrays)
-pub fn classify(value: &Value) -> Classified<'_> {
-    let Some(obj) = value.as_object() else {
-        // Non-object body: fuz_app returns id: null (safeParse fails, no object to extract from)
-        return Classified::Invalid {
-            id: Value::Null,
-            error: invalid_request(),
-        };
-    };
-
-    // Validate jsonrpc version
-    let jsonrpc = obj.get("jsonrpc").and_then(Value::as_str);
-    if jsonrpc != Some(JSONRPC_VERSION) {
-        let id = extract_id(obj);
-        return Classified::Invalid {
-            id,
-            error: invalid_request(),
-        };
-    }
-
-    // Must have method
-    let Some(method) = obj.get("method").and_then(Value::as_str) else {
-        let id = extract_id(obj);
-        return Classified::Invalid {
-            id,
-            error: invalid_request(),
-        };
-    };
-
-    // No `id` field → notification (caller decides behavior)
-    let Some(id_val) = obj.get("id") else {
-        return Classified::Notification;
-    };
-
-    // Validate id is string or number (fuz_app's JsonrpcRequestId excludes null, per MCP)
-    let id = if id_val.is_string() || id_val.is_number() {
-        id_val.clone()
-    } else {
-        // null, bool, array, object ids → invalid request (safeParse would fail)
-        return Classified::Invalid {
-            id: Value::Null,
-            error: invalid_request(),
-        };
-    };
-
-    // Extract params (default to Null if absent — handlers validate)
-    let params = obj.get("params").unwrap_or(&NULL_PARAMS);
-
-    Classified::Request { method, id, params }
-}
-
-/// Extract `id` from a JSON-RPC message object for error responses.
-///
-/// Matches `fuz_app`'s safeParse failure path: extracts id only if it's
-/// a string or number, otherwise returns null.
-fn extract_id(obj: &Map<String, Value>) -> Value {
-    match obj.get("id") {
-        Some(id) if id.is_string() || id.is_number() => id.clone(),
-        _ => Value::Null,
-    }
-}
-
-// -- HTTP handler -------------------------------------------------------------
-
-/// Axum handler for `GET /api/rpc`.
-///
-/// Extracts `method`, `id`, and optional `params` from query parameters.
-/// Matches `fuz_app`'s `create_rpc_endpoint` GET handler.
-pub async fn rpc_get_handler(
-    State(app): State<Arc<App>>,
-    Extension(client_ip): Extension<ClientIp>,
-    headers: HeaderMap,
-    Query(query): Query<std::collections::HashMap<String, String>>,
-) -> Response {
-    // Origin verification — shared helper with the REST account/bootstrap
-    // routes so origin policy can't drift between transports.
-    if !auth::is_request_origin_allowed(&headers, &app.allowed_origins) {
-        return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
-    }
-
-    // Extract method
-    let Some(method) = query.get("method") else {
-        let error = invalid_request();
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(error_response(Value::Null, error)),
-        )
-            .into_response();
-    };
-
-    // Extract id (required)
-    let Some(id_raw) = query.get("id") else {
-        let error = invalid_request();
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(error_response(Value::Null, error)),
-        )
-            .into_response();
-    };
-
-    // Parse id — try as number first, fall back to string
-    let id: Value = if let Ok(n) = id_raw.parse::<u64>() {
-        Value::Number(n.into())
-    } else {
-        Value::String(id_raw.clone())
-    };
-
-    // Parse params from query string (optional)
-    let params: Value = if let Some(params_raw) = query.get("params") {
-        if let Ok(v) = serde_json::from_str(params_raw) {
-            v
-        } else {
-            let error = invalid_params("params query parameter is not valid JSON");
-            return (StatusCode::BAD_REQUEST, Json(error_response(id, error))).into_response();
-        }
-    } else {
-        Value::Null
-    };
-
-    // Resolve auth context
-    let resolved = resolve_auth_from_headers(
-        &headers,
-        &app.keyring,
-        &app.db_pool,
-        app.daemon_token_state.as_ref(),
-    )
-    .await;
-    let auth_context = resolved.as_ref().map(|r| &r.context);
-    let credential_type = resolved.as_ref().map(|r| r.credential_type);
-
-    let input = PerformActionInput {
-        method,
-        params: &params,
-        request_id: &id,
-        auth: auth_context,
-        credential_type,
-        client_ip: Some(client_ip.0),
-        notify: http_no_op_notify(),
-        signal: CancellationToken::new(),
-    };
-    match perform_action(input, &app).await {
-        PerformActionResult::Ok(result) => Json(success_response(id, result)).into_response(),
-        PerformActionResult::Err { error, status } => {
-            (status, Json(error_response(id, error))).into_response()
-        }
-    }
-}
-
-/// Axum handler for `POST /api/rpc`.
-///
-/// Applies HTTP-specific transport semantics:
-/// - Origin verification before processing
-/// - Auth context resolution from Cookie header
-/// - Per-action auth check before dispatch
-/// - Parse errors → full JSON-RPC envelope, HTTP 400
-/// - Notifications → rejected as `invalid_request`, HTTP 400
-/// - Error responses → HTTP status mapped from JSON-RPC error code
-pub async fn rpc_handler(
-    State(app): State<Arc<App>>,
-    Extension(client_ip): Extension<ClientIp>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Response {
-    // Origin verification — shared helper with the REST account/bootstrap
-    // routes so origin policy can't drift between transports.
-    if !auth::is_request_origin_allowed(&headers, &app.allowed_origins) {
-        return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
-    }
-
-    // 1. Parse body as generic JSON value
-    let Ok(value) = serde_json::from_slice::<Value>(&body) else {
-        tracing::debug!("JSON parse error");
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(error_response(Value::Null, parse_error())),
-        )
-            .into_response();
-    };
-
-    tracing::debug!(
-        method = value
-            .get("method")
-            .and_then(|v| v.as_str())
-            .unwrap_or("<none>"),
-        "rpc request"
-    );
-
-    // 2. Resolve auth context (daemon token → cookie → bearer → None)
-    let resolved = resolve_auth_from_headers(
-        &headers,
-        &app.keyring,
-        &app.db_pool,
-        app.daemon_token_state.as_ref(),
-    )
-    .await;
-    let auth_context = resolved.as_ref().map(|r| &r.context);
-    let credential_type = resolved.as_ref().map(|r| r.credential_type);
-
-    // 3. Classify, then route Requests through the shared dispatch core
-    match classify(&value) {
-        Classified::Request { method, id, params } => {
-            let input = PerformActionInput {
-                method,
-                params,
-                request_id: &id,
-                auth: auth_context,
-                credential_type,
-                client_ip: Some(client_ip.0),
-                notify: http_no_op_notify(),
-                signal: CancellationToken::new(),
-            };
-            match perform_action(input, &app).await {
-                PerformActionResult::Ok(result) => {
-                    Json(success_response(id, result)).into_response()
-                }
-                PerformActionResult::Err { error, status } => {
-                    (status, Json(error_response(id, error))).into_response()
-                }
-            }
-        }
-        Classified::Invalid { id, error } => {
-            let status = error_code_to_http_status(error.code);
-            (status, Json(error_response(id, error))).into_response()
-        }
-        Classified::Notification => {
-            // HTTP requires id — reject notifications (fuz_app's safeParse enforces this)
-            let error = invalid_request();
-            let status = error_code_to_http_status(error.code);
-            (status, Json(error_response(Value::Null, error))).into_response()
-        }
     }
 }

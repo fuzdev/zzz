@@ -5,12 +5,12 @@
 //! is account-scoped — passing another account's session or token id
 //! returns `revoked: false` rather than revealing existence.
 
+use fuz_auth::{AuditLogInput, AuditOutcome, credential_type_value};
 use fuz_http::JsonrpcError;
 use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::api_token::generate_api_token;
-use crate::audit::{AuditLogInput, AuditOutcome, credential_type_value};
 use crate::db;
 use crate::rpc;
 

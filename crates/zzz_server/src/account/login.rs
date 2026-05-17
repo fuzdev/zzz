@@ -9,11 +9,11 @@ use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use serde_json::json;
 
-use crate::audit::{AuditLogInput, AuditOutcome};
-use crate::auth;
+use fuz_auth::{AuditLogInput, AuditOutcome, hash_session_token};
+use fuz_http::{ClientIp, is_request_origin_allowed};
+
 use crate::db;
 use crate::handlers::App;
-use crate::proxy::ClientIp;
 
 use super::{
     DUMMY_HASH, LoginInput, error_json, generate_session_token, rate_limit_exceeded,
@@ -40,7 +40,7 @@ pub async fn login_handler(
     headers: HeaderMap,
     Json(input): Json<LoginInput>,
 ) -> Response {
-    if !auth::is_request_origin_allowed(&headers, &app.allowed_origins) {
+    if !is_request_origin_allowed(&headers, &app.allowed_origins) {
         return error_json(StatusCode::FORBIDDEN, "forbidden_origin");
     }
     match login_inner(&app, client_ip.0, input).await {
@@ -85,10 +85,11 @@ async fn login_inner(
     // bind deployments, or the originator behind a configured trusted
     // proxy. Phase 4 keyed on `addr.ip().to_string()` directly which
     // broke under reverse proxies (every client shared the proxy's
-    // bucket).
+    // bucket). Spine `fuz_http::client_ip_middleware` since Phase 7
+    // Batch 2 (legacy `proxy::client_ip_middleware` retired).
     let ip_key = client_ip.clone();
     if let Some(ref limiter) = app.login_ip_rate_limiter {
-        let result = limiter.check(&ip_key).await;
+        let result = limiter.check(&ip_key);
         if !result.allowed {
             return Err(rate_limit_exceeded(result.retry_after));
         }
@@ -131,7 +132,7 @@ async fn login_inner(
         .as_ref()
         .map_or_else(|| canonical_username.clone(), |row| row.id.to_string());
     if let Some(ref limiter) = app.login_account_rate_limiter {
-        let result = limiter.check(&account_rate_key).await;
+        let result = limiter.check(&account_rate_key);
         if !result.allowed {
             return Err(rate_limit_exceeded(result.retry_after));
         }
@@ -148,10 +149,10 @@ async fn login_inner(
     let Some(account) = account.filter(|_| password_valid) else {
         // Failed login — record on both rate limiters, then audit-emit.
         if let Some(ref limiter) = app.login_ip_rate_limiter {
-            limiter.record(&ip_key).await;
+            limiter.record(&ip_key);
         }
         if let Some(ref limiter) = app.login_account_rate_limiter {
-            limiter.record(&account_rate_key).await;
+            limiter.record(&account_rate_key);
         }
         // `account_id` is set only when the account existed (FK
         // constraint forces null on unknown-account misses).
@@ -183,16 +184,16 @@ async fn login_inner(
     // Successful login — reset both rate limiters so well-behaved
     // callers don't carry burn from previous failed attempts.
     if let Some(ref limiter) = app.login_ip_rate_limiter {
-        limiter.reset(&ip_key).await;
+        limiter.reset(&ip_key);
     }
     if let Some(ref limiter) = app.login_account_rate_limiter {
-        limiter.reset(&account_rate_key).await;
+        limiter.reset(&account_rate_key);
     }
 
     // Create session
     let session_token = generate_session_token();
-    let token_hash = auth::hash_session_token(&session_token);
-    db::query_create_session(&client, &token_hash, &account.id)
+    let token_hash = hash_session_token(&session_token);
+    db::query_create_session(&client, token_hash.as_str(), &account.id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "login: session creation failed");
@@ -200,7 +201,7 @@ async fn login_inner(
         })?;
 
     // Build response with session cookie
-    let cookie = sign_session_cookie(&app.keyring, &session_token);
+    let cookie = sign_session_cookie(app.keyring.as_ref(), &session_token);
     let mut headers = HeaderMap::new();
     if let Ok(val) = cookie.parse() {
         headers.insert(axum::http::header::SET_COOKIE, val);

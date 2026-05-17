@@ -38,7 +38,7 @@ See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 ## CLI
 
 zzz has a Deno-compiled CLI binary for daemon management and browser launching.
-See [src/lib/zzz/CLAUDE.md](src/lib/zzz/CLAUDE.md) for full CLI architecture.
+See ./src/lib/zzz/CLAUDE.md for full CLI architecture.
 
 ```bash
 zzz                          # start daemon if needed, open browser
@@ -53,12 +53,12 @@ The global daemon runs on port 4460 with state at `~/.zzz/`. Built via
 
 ## Docs
 
-- [docs/architecture.md](docs/architecture.md) — Action system, Cell system, content model, data flow
-- [docs/development.md](docs/development.md) — Development workflow, extension points, patterns
-- [docs/providers.md](docs/providers.md) — AI provider integration, adding new providers
-- [src/lib/server/CLAUDE.md](src/lib/server/CLAUDE.md) — Backend server architecture, providers, security
-- [src/lib/zzz/CLAUDE.md](src/lib/zzz/CLAUDE.md) — CLI architecture, commands, runtime abstraction
-- [crates/CLAUDE.md](crates/CLAUDE.md) — Rust backend (zzz_server)
+- ./docs/architecture.md — Action system, Cell system, content model, data flow
+- ./docs/development.md — Development workflow, extension points, patterns
+- ./docs/providers.md — AI provider integration, adding new providers
+- ./src/lib/server/CLAUDE.md — Backend server architecture, providers, security
+- ./src/lib/zzz/CLAUDE.md — CLI architecture, commands, runtime abstraction
+- ./crates/CLAUDE.md — Rust backend (zzz_server)
 
 ## Repository Structure
 
@@ -167,7 +167,7 @@ The two core abstractions are **Cells** (reactive state) and **Actions** (RPC). 
 
 Content model: `Chat → Thread[] → Turn[] → Part[]` (TextPart or DiskfilePart). Prompts also hold Parts.
 
-See [docs/architecture.md](docs/architecture.md) for detailed data flow, content model, and IndexedCollection docs.
+See ./docs/architecture.md for detailed data flow, content model, and IndexedCollection docs.
 
 ## Cell Classes
 
@@ -331,7 +331,7 @@ Requires ~/dev/private_fuz as a sibling directory (path deps) and PostgreSQL
 (`createdb zzz_test` for integration tests). Both backends share the same test
 database (`TEST_DATABASE_URL`, defaults to `postgres://localhost/zzz_test`),
 cleaned between runs.
-See [crates/CLAUDE.md](crates/CLAUDE.md) for architecture, endpoints,
+See ./crates/CLAUDE.md for architecture, endpoints,
 prerequisites, and what the integration tests check.
 
 ### Naming Conventions

@@ -35,11 +35,11 @@
 
 use std::future::Future;
 
+use fuz_auth::{AuditLogInput, AuditOutcome};
 use fuz_http::JsonrpcError;
 use serde::Serialize;
 use serde_json::{Value, json};
 
-use crate::audit::{AuditLogInput, AuditOutcome};
 use crate::db;
 use crate::rpc;
 

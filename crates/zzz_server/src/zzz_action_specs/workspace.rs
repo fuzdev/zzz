@@ -8,7 +8,7 @@
 //! ## Side-effects flag
 //!
 //! `workspace_open` / `workspace_close` carry `side_effects: true`
-//! matching `crate::auth::method_spec`. They don't touch the DB today
+//! matching `crate::handlers::method_spec`. They don't touch the DB today
 //! (workspace state is in-memory) — the flag is preserved for parity
 //! with the Deno reference and to keep the eventual transactional-audit
 //! boundary intact when audit emission lands on workspace mutations.

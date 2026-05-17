@@ -29,7 +29,7 @@ use base64::Engine;
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{self, SESSION_AGE_MAX, SESSION_COOKIE_NAME};
+use fuz_auth::{CredentialType, Keyring, ResolvedAuth, SESSION_AGE_MAX, SESSION_COOKIE_NAME};
 
 // -- Shared helpers -----------------------------------------------------------
 
@@ -49,7 +49,7 @@ pub fn generate_session_token() -> String {
 }
 
 /// Build a signed `Set-Cookie` header value for a session.
-pub fn sign_session_cookie(keyring: &auth::Keyring, session_token: &str) -> String {
+pub fn sign_session_cookie(keyring: &Keyring, session_token: &str) -> String {
     let cookie_value = keyring.sign(&format!("{session_token}:{}", now_secs() + SESSION_AGE_MAX));
     format!(
         "{SESSION_COOKIE_NAME}={cookie_value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age={SESSION_AGE_MAX}"
@@ -59,6 +59,48 @@ pub fn sign_session_cookie(keyring: &auth::Keyring, session_token: &str) -> Stri
 /// Build a `Set-Cookie` header that clears the session cookie.
 pub fn clear_session_cookie() -> String {
     format!("{SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0")
+}
+
+// -- REST credential-channel gate ---------------------------------------------
+
+/// 403 body shape for REST routes that enforce a credential-type allowlist.
+///
+/// Mirrors `fuz_app`'s `require_credential_types` middleware: `{error,
+/// required_credential_types}`. RPC dispatch enforces the same gate via
+/// `handlers::MethodSpec.credential_types`; this helper is the REST
+/// envelope for `POST /api/account/password`.
+#[derive(Serialize)]
+struct CredentialTypeRequiredBody {
+    error: &'static str,
+    required_credential_types: &'static [&'static str],
+}
+
+/// Build a 403 `credential_type_required` response with the supplied allowlist.
+pub fn credential_type_required_response(required: &'static [&'static str]) -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        Json(CredentialTypeRequiredBody {
+            error: "credential_type_required",
+            required_credential_types: required,
+        }),
+    )
+        .into_response()
+}
+
+/// Enforce the session-only credential-channel gate on a REST route.
+///
+/// Returns `Ok(())` when the request authenticated via cookie session;
+/// `Err(response)` with the 403 [`credential_type_required_response`] for
+/// bearer / daemon-token callers. Used by `POST /api/account/password`.
+// `Err` carries an `axum::Response` (~128 bytes) so `?` composes with the
+// REST handler's existing `Result<Response, Response>` flow without boxing.
+#[allow(clippy::result_large_err)]
+pub fn enforce_session_only(resolved: &ResolvedAuth) -> Result<(), Response> {
+    if resolved.credential_type == CredentialType::Session {
+        Ok(())
+    } else {
+        Err(credential_type_required_response(&["session"]))
+    }
 }
 
 /// Short error response constructor.

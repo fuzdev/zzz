@@ -8,7 +8,8 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 
-use crate::auth;
+use fuz_auth::resolve_auth_from_headers;
+
 use crate::handlers::App;
 
 /// Response for authenticated status check.
@@ -44,9 +45,9 @@ struct StatusUnauthenticated {
 /// - 401 with optional `bootstrap_available` if not
 pub async fn status_handler(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
     // Try to resolve auth
-    let resolved = auth::resolve_auth_from_headers(
+    let resolved = resolve_auth_from_headers(
         &headers,
-        &app.keyring,
+        app.keyring.as_ref(),
         &app.db_pool,
         app.daemon_token_state.as_ref(),
     )

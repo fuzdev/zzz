@@ -16,18 +16,15 @@ pub use account::{
     query_account_with_password_hash_by_id, query_create_account, query_update_password,
 };
 pub use actor::{
-    ActorRow, RoleGrantRow, query_actor_by_account, query_create_actor, query_create_role_grant,
-    query_keeper_account_id, query_role_grants_for_actor,
+    ActorRow, query_create_actor, query_create_role_grant, query_keeper_account_id,
 };
 pub use api_token::{
-    query_api_token_enforce_limit, query_api_token_list_for_account, query_api_token_touch,
-    query_create_api_token, query_delete_all_tokens_for_account,
-    query_revoke_api_token_for_account, query_validate_api_token,
+    query_api_token_enforce_limit, query_api_token_list_for_account, query_create_api_token,
+    query_delete_all_tokens_for_account, query_revoke_api_token_for_account,
 };
 pub use auth::{
     query_create_session, query_delete_all_sessions_for_account, query_delete_session,
-    query_delete_session_for_account, query_session_get_valid, query_session_touch,
-    query_sessions_for_account,
+    query_delete_session_for_account, query_sessions_for_account,
 };
 pub use migrations::run_migrations;
 

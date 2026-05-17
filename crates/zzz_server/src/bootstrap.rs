@@ -7,12 +7,12 @@ use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use fuz_auth::{AuditLogInput, AuditOutcome, hash_session_token};
+use fuz_http::{ClientIp, is_request_origin_allowed};
+
 use crate::account::{generate_session_token, hash_password, sign_session_cookie};
-use crate::audit::{AuditLogInput, AuditOutcome};
-use crate::auth;
 use crate::db;
 use crate::handlers::App;
-use crate::proxy::ClientIp;
 
 // -- Types --------------------------------------------------------------------
 
@@ -61,7 +61,7 @@ pub async fn bootstrap_handler(
     headers: HeaderMap,
     Json(input): Json<BootstrapInput>,
 ) -> Response {
-    if !auth::is_request_origin_allowed(&headers, &app.allowed_origins) {
+    if !is_request_origin_allowed(&headers, &app.allowed_origins) {
         return error_json(StatusCode::FORBIDDEN, "forbidden_origin");
     }
     match bootstrap_inner(&app, client_ip.0, input).await {
@@ -224,9 +224,11 @@ async fn bootstrap_inner(
     app.bootstrap_available
         .store(false, std::sync::atomic::Ordering::Relaxed);
 
-    // Set keeper_account_id on daemon token state (if enabled)
+    // Set keeper_account_id on daemon token state (if enabled). Spine
+    // `fuz_auth::SharedDaemonTokenState` uses `parking_lot::RwLock` —
+    // sync `.write()` (no `.await`).
     if let Some(ref daemon_state) = app.daemon_token_state {
-        let mut state = daemon_state.write().await;
+        let mut state = daemon_state.write();
         state.keeper_account_id = Some(account.id);
         tracing::info!("daemon token keeper_account_id set to {}", account.id);
     }
@@ -237,7 +239,7 @@ async fn bootstrap_inner(
     }
 
     // 6. Build session cookie
-    let cookie = sign_session_cookie(&app.keyring, &session_token);
+    let cookie = sign_session_cookie(app.keyring.as_ref(), &session_token);
     let mut headers = HeaderMap::new();
     if let Ok(val) = cookie.parse() {
         headers.insert(axum::http::header::SET_COOKIE, val);
@@ -289,8 +291,8 @@ async fn do_bootstrap_creates(
     db::query_create_role_grant(client, &actor.id, "admin").await?;
 
     let session_token = generate_session_token();
-    let token_hash = auth::hash_session_token(&session_token);
-    db::query_create_session(client, &token_hash, &account.id).await?;
+    let token_hash = hash_session_token(&session_token);
+    db::query_create_session(client, token_hash.as_str(), &account.id).await?;
 
     Ok((account, actor, session_token))
 }
