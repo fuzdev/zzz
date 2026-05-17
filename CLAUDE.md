@@ -93,7 +93,7 @@ crates/                               # Rust workspace
 │           ├── scoped_fs.rs          # Scoped filesystem (path validation, symlink rejection)
 │           └── error.rs              # Error types
 test/
-│   └── integration/                  # Cross-backend integration tests (Deno)
+│   └── integration/                  # Cross-backend integration tests (Deno; upstreaming to fuz_app — see ~/dev/grimoire/quests/cross-backend-integration.md)
 │       ├── run.ts                    # Test runner (--backend=deno|rust|both)
 │       ├── config.ts                 # Backend configurations
 │       └── tests.ts                  # Test cases
