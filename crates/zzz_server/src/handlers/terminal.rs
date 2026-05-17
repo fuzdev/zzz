@@ -53,7 +53,7 @@ pub(super) async fn handle_terminal_create(
         .map_err(|e| rpc::internal_error(&format!("failed to create terminal: {e}")))?;
 
     serde_json::to_value(TerminalCreateResult { terminal_id })
-        .map_err(|_| rpc::internal_error("serialization failed"))
+        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
 pub(super) async fn handle_terminal_data_send(
@@ -136,5 +136,5 @@ pub(super) async fn handle_terminal_close(
         .flatten();
 
     serde_json::to_value(TerminalCloseResult { exit_code })
-        .map_err(|_| rpc::internal_error("serialization failed"))
+        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }

@@ -163,8 +163,15 @@ pub fn normalize_ip(ip: &str) -> String {
     // canonicalize to `::ffff:0.0.0.0` before stripping — without that
     // ordering, the dot-bearing input strips and the no-dot input
     // doesn't, diverging the two on the same address.
-    let canonical = IpAddr::from_str(&lowered)
-        .map_or_else(|_| lowered.clone(), |addr| addr.to_string());
+    //
+    // Use a `match` (not `map_or_else`) so the Err arm can MOVE
+    // `lowered` into the result — `map_or_else` borrows the closure
+    // captures and would force a `.clone()` for every non-parseable
+    // input (e.g. `"unknown"` from upstream).
+    let canonical = match IpAddr::from_str(&lowered) {
+        Ok(addr) => addr.to_string(),
+        Err(_) => lowered,
+    };
     if let Some(rest) = canonical.strip_prefix("::ffff:")
         && rest.contains('.')
     {
@@ -544,6 +551,12 @@ pub async fn client_ip_middleware(
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "tests panic on assertion failure by design"
+)]
 mod tests {
     use super::*;
 

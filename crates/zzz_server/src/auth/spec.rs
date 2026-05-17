@@ -383,6 +383,12 @@ pub fn enforce_session_only(resolved: &ResolvedAuth) -> Result<(), Response> {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "tests panic on assertion failure by design"
+)]
 mod origin_tests {
     use super::*;
     use axum::http::HeaderMap;

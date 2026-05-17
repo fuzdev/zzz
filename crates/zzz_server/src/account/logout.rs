@@ -79,6 +79,8 @@ async fn logout_inner(
     // the materialized row (idempotent).
     app.close_sockets_for_account(resolved.context.account.id);
 
+    // `emit(input).await` — spawned task survives client disconnect,
+    // .await keeps the row observable by response time.
     let _ = app
         .audit
         .emit(AuditLogInput {

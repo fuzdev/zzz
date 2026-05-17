@@ -1,6 +1,15 @@
 //! Queries against the `actor` and `role_grant` tables.
 
 /// Row from the `actor` table.
+///
+/// `#[allow(dead_code)]` on `account_id`/`name`: today only `id` is read
+/// (bootstrap captures it for role grants + `role_grant` queries). The
+/// other fields are public API surface that future audit-emit sites
+/// will reach for — `ctx.auth.actor.id`/`name` plumbed into
+/// `AuditLogInput.actor_id` and metadata mirrors `fuz_app`'s emit shape
+/// (all 11 `actor_id: None` sites in `zzz_server` today are placeholders).
+/// Same posture as `audit::AuditLogEvent` (`audit/mod.rs:71`).
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ActorRow {
     pub id: uuid::Uuid,
@@ -9,6 +18,13 @@ pub struct ActorRow {
 }
 
 /// Row from the `role_grant` table (active role grants only).
+///
+/// `#[allow(dead_code)]` on `id`/`actor_id`: today only `role` is read
+/// (`RequestContext::has_role` matches on the role string). The `id` and
+/// `actor_id` fields are loaded for future role-grant management
+/// surfaces (admin revoke, audit emission) — same posture as
+/// `ActorRow`/`audit::AuditLogEvent`.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct RoleGrantRow {
     pub id: uuid::Uuid,

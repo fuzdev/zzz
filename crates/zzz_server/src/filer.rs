@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures_util::StreamExt;
+use futures_util::stream;
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use serde_json::Value;
@@ -11,6 +13,22 @@ use tokio::time::Instant;
 
 use crate::handlers::App;
 use crate::rpc;
+
+// -- Indexing limits ----------------------------------------------------------
+
+/// Max bytes of file content held in the in-memory index. Anything above
+/// this skips `read_to_string` and stores `contents: None`. Protects RSS
+/// against lockfiles, generated artifacts, or large binaries that the
+/// watcher otherwise would happily pull into memory.
+///
+/// TODO @parity: align with `fuz_app`'s equivalent cap when it lands.
+const MAX_INDEXED_FILE_SIZE: u64 = 4 * 1024 * 1024;
+
+/// Cap on concurrent `read_to_string` calls during a directory scan.
+/// File reads block on disk + utf-8 validation; without a cap a large
+/// tree would unbound the in-flight set and exhaust fd budgets on small
+/// workstations.
+const MAX_CONCURRENT_FILE_READS: usize = 32;
 
 // -- Notification params ------------------------------------------------------
 
@@ -100,6 +118,10 @@ fn make_disknode(
 
 /// Build a `SerializableDisknode` for a watcher event, reading metadata and
 /// contents on blocking threads (never blocks the tokio runtime).
+///
+/// Honours [`MAX_INDEXED_FILE_SIZE`]: oversized files keep their metadata
+/// but store `contents: None`, matching the size-cap behavior of the
+/// initial scan path.
 async fn build_disknode(
     file_path: &Path,
     source_dir: &str,
@@ -112,20 +134,16 @@ async fn build_disknode(
     }
 
     let path_owned = file_path.to_path_buf();
-    let (meta_result, contents) = tokio::join!(
-        tokio::task::spawn_blocking({
-            let p = path_owned.clone();
-            move || std::fs::metadata(&p).ok()
-        }),
-        tokio::task::spawn_blocking(move || {
-            if path_owned.is_dir() {
-                return None;
-            }
-            std::fs::read_to_string(&path_owned).ok()
-        }),
-    );
+    // Read metadata first so we can short-circuit oversized files instead
+    // of pulling them through `read_to_string`.
+    let meta = tokio::task::spawn_blocking({
+        let p = path_owned.clone();
+        move || std::fs::metadata(&p).ok()
+    })
+    .await
+    .ok()
+    .flatten();
 
-    let meta = meta_result.ok().flatten();
     let ctime = meta
         .as_ref()
         .and_then(|m| m.created().ok())
@@ -134,8 +152,19 @@ async fn build_disknode(
         .as_ref()
         .and_then(|m| m.modified().ok())
         .and_then(system_time_to_ms);
+    let is_dir = meta.as_ref().is_some_and(std::fs::Metadata::is_dir);
+    let size = meta.as_ref().map_or(0, std::fs::Metadata::len);
 
-    make_disknode(path_str, source_dir, contents.unwrap_or(None), ctime, mtime)
+    let contents = if is_dir || size > MAX_INDEXED_FILE_SIZE {
+        None
+    } else {
+        tokio::task::spawn_blocking(move || std::fs::read_to_string(&path_owned).ok())
+            .await
+            .ok()
+            .flatten()
+    };
+
+    make_disknode(path_str, source_dir, contents, ctime, mtime)
 }
 
 // -- Event → notification mapping ---------------------------------------------
@@ -288,44 +317,107 @@ pub async fn start_filer(
     })
 }
 
+/// One file discovered by the walk phase — input to the read phase.
+struct FileJob {
+    path: PathBuf,
+    path_str: String,
+    ctime: Option<f64>,
+    mtime: Option<f64>,
+    size: u64,
+}
+
 /// Recursively scan a directory and populate the file map.
+///
+/// Two phases:
+/// 1. **Walk** (iterative) — pop a directory off the stack, read its
+///    entries, push subdirs back on the stack, collect file metadata into
+///    a `FileJob` list. No `Box::pin` recursion, no allocation per dir
+///    beyond the path string.
+/// 2. **Read** (concurrent, bounded) — fan out `read_to_string` across
+///    [`MAX_CONCURRENT_FILE_READS`] at a time via `buffer_unordered`.
+///    Files over [`MAX_INDEXED_FILE_SIZE`] skip the read and store
+///    `contents: None`.
+///
+/// Called by `start_filer` (cold path) and `FilerManager::rescan_all`
+/// (fires on every `session_load`) — the concurrency win matters most on
+/// the hot path, but iterativity also makes the cold-start cost
+/// predictable on deep trees.
 async fn scan_directory(
     dir: &str,
     source_dir: &str,
     extra_ignores: &[String],
     files: &mut HashMap<String, SerializableDisknode>,
 ) {
-    let Ok(mut entries) = tokio::fs::read_dir(dir).await else {
-        return;
-    };
-    while let Ok(Some(entry)) = entries.next_entry().await {
-        let path = entry.path();
-
-        // Skip ignored directories
-        if let Some(name) = path.file_name().and_then(|n| n.to_str())
-            && is_ignored_name(name, extra_ignores)
-        {
-            continue;
-        }
-
-        let Ok(meta) = tokio::fs::metadata(&path).await else {
+    // Phase 1: collect file jobs via iterative directory walk.
+    let mut dir_stack: Vec<String> = vec![dir.to_owned()];
+    let mut file_jobs: Vec<FileJob> = Vec::new();
+    while let Some(dir) = dir_stack.pop() {
+        let Ok(mut entries) = tokio::fs::read_dir(&dir).await else {
             continue;
         };
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let path = entry.path();
 
-        if meta.is_dir() {
-            let mut dir_path = path.to_string_lossy().into_owned();
-            if !dir_path.ends_with('/') {
-                dir_path.push('/');
+            // Skip ignored directories (and matching file names)
+            if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                && is_ignored_name(name, extra_ignores)
+            {
+                continue;
             }
-            Box::pin(scan_directory(&dir_path, source_dir, extra_ignores, files)).await;
-        } else {
-            let path_str = path.to_string_lossy().into_owned();
-            let ctime = meta.created().ok().and_then(system_time_to_ms);
-            let mtime = meta.modified().ok().and_then(system_time_to_ms);
-            let contents = tokio::fs::read_to_string(&path).await.ok();
-            let disknode = make_disknode(path_str.clone(), source_dir, contents, ctime, mtime);
-            files.insert(path_str, disknode);
+
+            let Ok(meta) = tokio::fs::metadata(&path).await else {
+                continue;
+            };
+
+            if meta.is_dir() {
+                let mut dir_path = path.to_string_lossy().into_owned();
+                if !dir_path.ends_with('/') {
+                    dir_path.push('/');
+                }
+                dir_stack.push(dir_path);
+            } else {
+                let path_str = path.to_string_lossy().into_owned();
+                let ctime = meta.created().ok().and_then(system_time_to_ms);
+                let mtime = meta.modified().ok().and_then(system_time_to_ms);
+                file_jobs.push(FileJob {
+                    path,
+                    path_str,
+                    ctime,
+                    mtime,
+                    size: meta.len(),
+                });
+            }
         }
+    }
+
+    // Phase 2: bounded concurrent file reads via `buffer_unordered`.
+    // Each future owns its own source_dir clone so the stream isn't
+    // bound by the outer borrow. The clone is one short String per
+    // file — pales next to a `read_to_string`.
+    let source_dir_owned = source_dir.to_owned();
+    let mut stream = stream::iter(file_jobs)
+        .map(|job| {
+            let source_dir = source_dir_owned.clone();
+            async move {
+                let contents = if job.size > MAX_INDEXED_FILE_SIZE {
+                    None
+                } else {
+                    tokio::fs::read_to_string(&job.path).await.ok()
+                };
+                let disknode = make_disknode(
+                    job.path_str.clone(),
+                    &source_dir,
+                    contents,
+                    job.ctime,
+                    job.mtime,
+                );
+                (job.path_str, disknode)
+            }
+        })
+        .buffer_unordered(MAX_CONCURRENT_FILE_READS);
+
+    while let Some((path_str, disknode)) = stream.next().await {
+        files.insert(path_str, disknode);
     }
 }
 
@@ -438,11 +530,7 @@ async fn filer_event_loop(
                 },
                 disknode: event.disknode,
             };
-
-            let notification = rpc::notification(
-                "filer_change",
-                serde_json::to_value(&params).unwrap_or_default(),
-            );
+            let notification = rpc::notification("filer_change", &params);
             app.broadcast(&notification);
         }
     }

@@ -16,6 +16,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 
+use axum::extract::ws::Utf8Bytes;
 use deadpool_postgres::Pool;
 use fuz_common::JsonRpcError;
 use parking_lot::RwLock;
@@ -41,7 +42,13 @@ use crate::scoped_fs::ScopedFs;
 pub type ConnectionId = u64;
 
 /// Handle to a connected WebSocket client — messages sent here are forwarded to the WS sink.
-pub type ConnectionSender = mpsc::UnboundedSender<String>;
+///
+/// `Utf8Bytes` wraps `bytes::Bytes`, so per-recipient sends share a single
+/// underlying buffer (refcount bump on `Clone`) instead of allocating a
+/// fresh `String` per recipient. This is the win on broadcast — a
+/// `filer_change` event with K subscribers used to do K `String::clone`s
+/// of the same JSON; now it does one alloc + K refcount bumps.
+pub type ConnectionSender = mpsc::UnboundedSender<Utf8Bytes>;
 
 /// Metadata for an active WebSocket connection.
 ///
@@ -192,10 +199,14 @@ impl App {
     }
 
     /// Broadcast a message to all connected clients.
+    ///
+    /// Builds one `Utf8Bytes` and clones it (refcount bump) per recipient
+    /// — N receivers cost one allocation, not N.
     pub fn broadcast(&self, message: &str) {
+        let bytes: Utf8Bytes = message.to_owned().into();
         let conns = self.connections.read();
         for info in conns.values() {
-            let _ = info.sender.send(message.to_owned());
+            let _ = info.sender.send(bytes.clone());
         }
     }
 
@@ -203,7 +214,7 @@ impl App {
     pub fn send_to(&self, id: ConnectionId, message: &str) {
         let conns = self.connections.read();
         if let Some(info) = conns.get(&id) {
-            let _ = info.sender.send(message.to_owned());
+            let _ = info.sender.send(Utf8Bytes::from(message.to_owned()));
         }
     }
 
@@ -435,11 +446,11 @@ async fn dispatch_with_tx(
         .db_pool
         .get()
         .await
-        .map_err(|_| rpc::internal_error("db pool error"))?;
+        .map_err(|e| rpc::internal_error_with_source("db pool error", &e))?;
     let tx = client
         .transaction()
         .await
-        .map_err(|_| rpc::internal_error("db tx begin failed"))?;
+        .map_err(|e| rpc::internal_error_with_source("db tx begin failed", &e))?;
 
     let result = match method {
         "workspace_open" => workspace::handle_workspace_open(params, ctx).await,
@@ -468,7 +479,7 @@ async fn dispatch_with_tx(
         Ok(value) => {
             tx.commit()
                 .await
-                .map_err(|_| rpc::internal_error("db tx commit failed"))?;
+                .map_err(|e| rpc::internal_error_with_source("db tx commit failed", &e))?;
             Ok(value)
         }
         Err(e) => {
@@ -510,7 +521,7 @@ async fn dispatch_no_tx(
         .db_pool
         .get()
         .await
-        .map_err(|_| rpc::internal_error("db pool error"))?;
+        .map_err(|e| rpc::internal_error_with_source("db pool error", &e))?;
 
     match method {
         "account_verify" => account::handle_account_verify(ctx, &client).await,
@@ -526,7 +537,8 @@ fn handle_ping(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     let result = PingResult {
         ping_id: ctx.request_id,
     };
-    serde_json::to_value(result).map_err(|_| rpc::internal_error("serialization failed"))
+    serde_json::to_value(result)
+        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
 async fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
@@ -562,7 +574,8 @@ async fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
             workspaces,
         },
     };
-    serde_json::to_value(result).map_err(|_| rpc::internal_error("serialization failed"))
+    serde_json::to_value(result)
+        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
 /// Test-only: emit `count` `_test_notification` notifications via `ctx.notify`,
@@ -582,5 +595,5 @@ fn handle_test_emit_notifications(params: &Value, ctx: &Ctx<'_>) -> Result<Value
     }
 
     serde_json::to_value(TestEmitNotificationsResult { count })
-        .map_err(|_| rpc::internal_error("serialization failed"))
+        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }

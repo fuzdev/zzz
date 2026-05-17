@@ -104,7 +104,7 @@ where
 
     let target = db::query_account_by_id(db, &target_account_id)
         .await
-        .map_err(|_| rpc::internal_error("account lookup failed"))?;
+        .map_err(|e| rpc::internal_error_with_source("account lookup failed", &e))?;
 
     if target.is_none() {
         // Failure-shape audit: `target_account_id` stays NULL (the FK to
@@ -130,7 +130,7 @@ where
 
     let count = delete(target_account_id)
         .await
-        .map_err(|_| rpc::internal_error(delete_err_msg))?;
+        .map_err(|e| rpc::internal_error_with_source(delete_err_msg, &e))?;
 
     // Eager handler-side close — see module doc-comment. Lands on the live
     // WS even if the audit INSERT later fails. The audit listener fires the
@@ -155,7 +155,7 @@ where
     ctx.push_pending_effect(handle);
 
     serde_json::to_value(AdminRevokeAllResult { ok: true, count })
-        .map_err(|_| rpc::internal_error("serialization failed"))
+        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
 pub(super) async fn handle_admin_session_revoke_all(

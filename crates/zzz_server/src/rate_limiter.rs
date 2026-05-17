@@ -82,7 +82,9 @@ impl RateLimiter {
         let max_attempts = self.options.max_attempts as usize;
 
         let mut attempts = self.attempts.write().await;
-        let active = match attempts.get_mut(key) {
+        // Capture just len + oldest under the lock — cloning the whole
+        // timestamp Vec was wasted work on the request-rate critical path.
+        let (len, oldest) = match attempts.get_mut(key) {
             Some(timestamps) => {
                 timestamps.retain(|t| *t > cutoff);
                 if timestamps.is_empty() {
@@ -92,7 +94,7 @@ impl RateLimiter {
                         retry_after: 0,
                     };
                 }
-                timestamps.clone()
+                (timestamps.len(), timestamps[0])
             }
             None => {
                 return RateLimitResult {
@@ -103,14 +105,13 @@ impl RateLimiter {
         };
         drop(attempts);
 
-        if active.len() < max_attempts {
+        if len < max_attempts {
             RateLimitResult {
                 allowed: true,
                 retry_after: 0,
             }
         } else {
             // Oldest timestamp + window − now, rounded up to seconds.
-            let oldest = active[0];
             let retry_after_ms = oldest
                 .saturating_add(self.options.window_ms)
                 .saturating_sub(now);

@@ -140,15 +140,28 @@ impl AuditEmitter {
 
     /// Spawn a fire-and-forget audit write via the captured pool.
     ///
-    /// Returns a `JoinHandle<()>` the caller can push onto a pending-effects
-    /// queue (RPC dispatch via `perform_action`) or `.await` directly (REST
-    /// handlers that want the row visible by response time). Errors are
-    /// logged and swallowed inside the spawned task; awaiting the handle
-    /// never sees a write failure.
+    /// Returns a `JoinHandle<()>` the caller awaits to keep the row
+    /// observable by response time (integration tests rely on this for
+    /// post-response DB queries). The write runs on a detached tokio
+    /// task — if the awaiting future is dropped (e.g. REST client
+    /// aborts mid-request), the spawned task continues independently
+    /// and the audit row still lands. That cancel-safety is the reason
+    /// every call site uses `let _ = app.audit.emit(input).await`
+    /// rather than inlining the write into the handler future.
+    ///
+    /// RPC handlers push the `JoinHandle` onto `Ctx.pending_effects`
+    /// instead of awaiting inline, and `perform_action` drains the
+    /// queue before returning. Same shape — spawn + await — different
+    /// awaiting site.
     ///
     /// Listeners run inside the spawned task after the INSERT succeeds.
-    /// Listener throws are caught by the wrapper closure (panics propagate;
-    /// listener bodies should be infallible).
+    /// Listener bodies should be infallible — panics in a listener
+    /// surface to the JoinHandle as a `JoinError`, which awaiting
+    /// callers log via `tracing::warn` when draining
+    /// `pending_effects`. REST sites that `let _ = ...await` discard
+    /// the JoinError silently; that's deliberate (listeners are
+    /// belt-and-suspenders for the eager handler-side
+    /// `close_sockets_for_*`, so a listener panic isn't load-bearing).
     pub fn emit(self: &Arc<Self>, input: AuditLogInput) -> JoinHandle<()> {
         let emitter = Arc::clone(self);
         tokio::spawn(async move {

@@ -112,7 +112,7 @@ pub(super) async fn handle_account_verify(
 
     let summary = db::query_account_summary(db, &account_id)
         .await
-        .map_err(|_| rpc::internal_error("verify query failed"))?
+        .map_err(|e| rpc::internal_error_with_source("verify query failed", &e))?
         .ok_or_else(|| rpc::internal_error("account not found"))?;
 
     let result = AccountVerifyResult {
@@ -122,7 +122,8 @@ pub(super) async fn handle_account_verify(
         email_verified: summary.email_verified,
         created_at: summary.created_at,
     };
-    serde_json::to_value(result).map_err(|_| rpc::internal_error("serialization failed"))
+    serde_json::to_value(result)
+        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
 pub(super) async fn handle_account_session_list(
@@ -133,7 +134,7 @@ pub(super) async fn handle_account_session_list(
 
     let rows = db::query_sessions_for_account(db, &account_id)
         .await
-        .map_err(|_| rpc::internal_error("session list query failed"))?;
+        .map_err(|e| rpc::internal_error_with_source("session list query failed", &e))?;
 
     let account_id_str = account_id.to_string();
     let sessions: Vec<AccountSessionInfo> = rows
@@ -148,7 +149,7 @@ pub(super) async fn handle_account_session_list(
         .collect();
 
     serde_json::to_value(AccountSessionListResult { sessions })
-        .map_err(|_| rpc::internal_error("serialization failed"))
+        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
 pub(super) async fn handle_account_session_revoke(
@@ -164,7 +165,7 @@ pub(super) async fn handle_account_session_revoke(
 
     let deleted = db::query_delete_session_for_account(db, session_id, &account_id)
         .await
-        .map_err(|_| rpc::internal_error("session revoke query failed"))?;
+        .map_err(|e| rpc::internal_error_with_source("session revoke query failed", &e))?;
 
     // Eagerly close matching WS sockets here in the handler so revocation
     // lands on the live connection even if the downstream audit INSERT
@@ -202,7 +203,7 @@ pub(super) async fn handle_account_session_revoke(
         ok: true,
         revoked: deleted,
     })
-    .map_err(|_| rpc::internal_error("serialization failed"))
+    .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
 pub(super) async fn handle_account_session_revoke_all(
@@ -213,7 +214,7 @@ pub(super) async fn handle_account_session_revoke_all(
 
     let deleted_count = db::query_delete_all_sessions_for_account(db, &account_id)
         .await
-        .map_err(|_| rpc::internal_error("session revoke_all query failed"))?;
+        .map_err(|e| rpc::internal_error_with_source("session revoke_all query failed", &e))?;
 
     // Eager account-wide socket close — closes every socket on the account
     // (cookie, bearer, and daemon-token) so revocation reaches the live
@@ -241,7 +242,7 @@ pub(super) async fn handle_account_session_revoke_all(
         ok: true,
         count: deleted_count,
     })
-    .map_err(|_| rpc::internal_error("serialization failed"))
+    .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
 pub(super) async fn handle_account_token_create(
@@ -267,14 +268,14 @@ pub(super) async fn handle_account_token_create(
 
     db::query_create_api_token(db, &generated.id, &account_id, &name, &generated.token_hash)
         .await
-        .map_err(|_| rpc::internal_error("token create query failed"))?;
+        .map_err(|e| rpc::internal_error_with_source("token create query failed", &e))?;
 
     // Enforce per-account cap inside the same dispatcher-managed transaction
     // as the INSERT above. A failure rolls the whole `account_token_create`
     // back so we never expose a token row that violates the cap.
     db::query_api_token_enforce_limit(db, &account_id, DEFAULT_MAX_TOKENS)
         .await
-        .map_err(|_| rpc::internal_error("token enforce_limit query failed"))?;
+        .map_err(|e| rpc::internal_error_with_source("token enforce_limit query failed", &e))?;
 
     let handle = ctx.app.audit.emit(AuditLogInput {
         event_type: "token_create",
@@ -298,7 +299,7 @@ pub(super) async fn handle_account_token_create(
         id: generated.id,
         name,
     })
-    .map_err(|_| rpc::internal_error("serialization failed"))
+    .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
 pub(super) async fn handle_account_token_list(
@@ -309,7 +310,7 @@ pub(super) async fn handle_account_token_list(
 
     let rows = db::query_api_token_list_for_account(db, &account_id)
         .await
-        .map_err(|_| rpc::internal_error("token list query failed"))?;
+        .map_err(|e| rpc::internal_error_with_source("token list query failed", &e))?;
 
     let tokens: Vec<ApiTokenInfo> = rows
         .into_iter()
@@ -325,7 +326,7 @@ pub(super) async fn handle_account_token_list(
         .collect();
 
     serde_json::to_value(AccountTokenListResult { tokens })
-        .map_err(|_| rpc::internal_error("serialization failed"))
+        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
 pub(super) async fn handle_account_token_revoke(
@@ -341,7 +342,7 @@ pub(super) async fn handle_account_token_revoke(
 
     let deleted = db::query_revoke_api_token_for_account(db, token_id, &account_id)
         .await
-        .map_err(|_| rpc::internal_error("token revoke query failed"))?;
+        .map_err(|e| rpc::internal_error_with_source("token revoke query failed", &e))?;
 
     // Eager per-token socket close — only the revoked token's sockets,
     // not the account's other tokens or session connections. The audit
@@ -373,5 +374,5 @@ pub(super) async fn handle_account_token_revoke(
         ok: true,
         revoked: deleted,
     })
-    .map_err(|_| rpc::internal_error("serialization failed"))
+    .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }

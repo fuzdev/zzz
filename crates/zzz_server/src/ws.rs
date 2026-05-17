@@ -77,7 +77,8 @@ async fn handle_connection(
     // Register connection with auth metadata for targeted revocation.
     // Bearer token connections pass None for token_hash — they're revocable
     // only via account-level revocation (matching Deno behavior).
-    let (notify_tx, mut notify_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let (notify_tx, mut notify_rx) =
+        tokio::sync::mpsc::unbounded_channel::<axum::extract::ws::Utf8Bytes>();
     let account_id = Some(resolved.context.account.id);
     let conn_id = app.add_connection(
         notify_tx,
@@ -99,7 +100,7 @@ async fn handle_connection(
     let notify: NotifyFn = {
         let app_arc = Arc::clone(&app);
         Arc::new(move |method: &str, params: Value| {
-            let notification = rpc::notification(method, params);
+            let notification = rpc::notification(method, &params);
             app_arc.send_to(conn_id, &notification);
         })
     };
@@ -119,7 +120,7 @@ async fn handle_connection(
                     revoked = true;
                     break;
                 };
-                if tx.send(Message::Text(msg.into())).await.is_err() {
+                if tx.send(Message::Text(msg)).await.is_err() {
                     break;
                 }
             }

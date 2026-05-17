@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use fuz_pty::{Pty, ReadResult, WaitResult};
 use serde::Serialize;
-use serde_json::Value;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
@@ -182,11 +181,10 @@ async fn read_loop(
                 if !data.is_empty() {
                     let notification = rpc::notification(
                         "terminal_data",
-                        serde_json::to_value(&TerminalDataParams {
+                        &TerminalDataParams {
                             terminal_id,
                             data: &data,
-                        })
-                        .unwrap_or(Value::Null),
+                        },
                     );
                     app.broadcast(&notification);
                 }
@@ -207,11 +205,10 @@ async fn read_loop(
 
                 let notification = rpc::notification(
                     "terminal_exited",
-                    serde_json::to_value(&TerminalExitedParams {
+                    &TerminalExitedParams {
                         terminal_id,
                         exit_code,
-                    })
-                    .unwrap_or(Value::Null),
+                    },
                 );
                 app.broadcast(&notification);
 

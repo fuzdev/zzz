@@ -55,10 +55,15 @@ where
         }
 
         while let Some(boundary) = buffer.find("\n\n") {
-            let event_text = buffer[..boundary].to_owned();
-            buffer = buffer[boundary + 2..].to_owned();
+            // Parse from a borrow of the buffer head; SseEvent owns its
+            // String fields so the borrow is dropped before drain.
+            let parsed = parse_sse_event(&buffer[..boundary]);
+            // Drop event + delimiter without copying the buffer tail —
+            // a stream with N events would otherwise be O(N^2) in the
+            // remaining buffered bytes per event.
+            let _ = buffer.drain(..boundary + 2);
 
-            if let Some(event) = parse_sse_event(&event_text)
+            if let Some(event) = parsed
                 && on_event(event) == ControlFlow::Break(())
             {
                 return Ok(());
@@ -102,6 +107,12 @@ fn strip_field_prefix<'a>(line: &'a str, field: &str) -> Option<&'a str> {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "tests panic on assertion failure by design"
+)]
 mod tests {
     use super::*;
 

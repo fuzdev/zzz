@@ -46,7 +46,7 @@ pub(super) fn handle_workspace_list(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError
         workspaces.values().cloned().collect()
     };
     let result = WorkspaceListResult { workspaces: list };
-    serde_json::to_value(result).map_err(|_| rpc::internal_error("serialization failed"))
+    serde_json::to_value(result).map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
 pub(super) async fn handle_workspace_open(
@@ -85,7 +85,7 @@ pub(super) async fn handle_workspace_open(
             files: vec![],
         };
         return serde_json::to_value(result)
-            .map_err(|_| rpc::internal_error("serialization failed"));
+            .map_err(|e| rpc::internal_error_with_source("serialization failed", &e));
     }
 
     let name = canonical
@@ -123,11 +123,10 @@ pub(super) async fn handle_workspace_open(
 
     let notification = rpc::notification(
         "workspace_changed",
-        serde_json::to_value(WorkspaceChangedParams {
+        &WorkspaceChangedParams {
             change_type: "open",
             workspace: &workspace,
-        })
-        .unwrap_or_default(),
+        },
     );
     ctx.app.broadcast(&notification);
 
@@ -135,7 +134,7 @@ pub(super) async fn handle_workspace_open(
         workspace,
         files: vec![],
     };
-    serde_json::to_value(result).map_err(|_| rpc::internal_error("serialization failed"))
+    serde_json::to_value(result).map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
 pub(super) async fn handle_workspace_close(
@@ -169,11 +168,10 @@ pub(super) async fn handle_workspace_close(
 
     let notification = rpc::notification(
         "workspace_changed",
-        serde_json::to_value(WorkspaceChangedParams {
+        &WorkspaceChangedParams {
             change_type: "close",
             workspace: &workspace,
-        })
-        .unwrap_or_default(),
+        },
     );
     ctx.app.broadcast(&notification);
 

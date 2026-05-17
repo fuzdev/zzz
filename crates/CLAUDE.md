@@ -546,6 +546,17 @@ failures carry `metadata: {credential_type}` only (no `reason`).
   unauthenticated callers). The integration test `normalize_error_data` function
   handles this. Future: environment-conditional in both (include in dev, strip
   in prod).
+- **filer file-size cap intentional divergence** — `filer::MAX_INDEXED_FILE_SIZE`
+  (4 MiB, `crates/zzz_server/src/filer.rs:22`) caps the in-memory index: files
+  over 4 MiB carry their metadata but store `contents: None`. The Deno
+  reference (`gro/src/lib/filer.ts`) and `fuz_app` have no cap today —
+  `readTextFile` runs unconditionally, so multi-MB lockfiles / generated
+  artifacts get pulled into RSS. The Rust port is deliberately stricter to
+  bound memory under workspaces containing large lockfiles or build outputs.
+  Tracked for upstream convergence in `grimoire/lore/fuz_app/TODO.md` so
+  fuz_app converges DOWN to the bounded posture rather than Rust loosening.
+  Cross-backend integration tests don't exercise files >4 MiB so parity is
+  maintained on the existing fixture set.
 
 ### Cross-Backend Response Divergences
 

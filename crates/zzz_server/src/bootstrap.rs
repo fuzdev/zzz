@@ -76,6 +76,8 @@ pub async fn bootstrap_handler(
 /// `account_id` is always `None` on failure — bootstrap creates the
 /// account, so a failed bootstrap has no account to reference.
 async fn emit_bootstrap_failure(app: &App, client_ip: &str, error: &str) {
+    // `emit(input).await` — detached spawn survives client disconnect,
+    // .await keeps the row observable for the post-response test query.
     let _ = app
         .audit
         .emit(AuditLogInput {
@@ -243,6 +245,7 @@ async fn bootstrap_inner(
 
     // 7. Success audit — mirrors fuz_app's emit shape: actor + account ids,
     // metadata null. No credential_type (bootstrap is pre-auth).
+    // `emit(input).await` — cancel-safe detached spawn.
     let _ = app
         .audit
         .emit(AuditLogInput {

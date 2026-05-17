@@ -120,6 +120,8 @@ async fn password_inner(
         // Wrong-password audit row — mirrors fuz_app's metadata shape: just
         // `credential_type` (no `reason` — `reason` is reserved for the
         // `concurrent_change` verify-write race detected below).
+        // `emit(input).await` — detached spawn so a client disconnect
+        // mid-write doesn't lose the row.
         let _ = app
             .audit
             .emit(AuditLogInput {
@@ -178,6 +180,7 @@ async fn password_inner(
         // `password_hash` no longer matches. Mirrors fuz_app's
         // `concurrent_change` failure shape; sessions/tokens were already
         // revoked by the winner, so no cookie clear here either.
+        // `emit(input).await` — cancel-safe detached spawn.
         let _ = app
             .audit
             .emit(AuditLogInput {
@@ -220,6 +223,7 @@ async fn password_inner(
     // `password_change`.
     app.close_sockets_for_account(account_id);
 
+    // `emit(input).await` — cancel-safe detached spawn.
     let _ = app
         .audit
         .emit(AuditLogInput {

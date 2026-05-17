@@ -35,6 +35,16 @@ pub enum AuthError {
 /// Authenticated request context — account + actor + active role grants.
 ///
 /// Built from a valid session cookie. Passed to handlers via `Ctx`.
+///
+/// `#[allow(dead_code)]` on `actor`: loaded during
+/// `build_request_context` (it's the bridge to role grants), but no
+/// downstream handler reads `ctx.auth.actor.{id,name}` yet — the 11
+/// audit-emit sites in `handlers/account.rs` + `account/*.rs` all pass
+/// `actor_id: None`. Future plumbing will fill that field from
+/// `ctx.auth.actor.id` to match `fuz_app`'s emit shape; keeping the data
+/// loaded means handler refactors don't need to re-thread the query.
+/// Same precedent as `audit::AuditLogEvent` (`audit/mod.rs:71`).
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct RequestContext {
     pub account: AccountRow,

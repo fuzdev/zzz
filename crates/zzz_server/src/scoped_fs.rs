@@ -2,6 +2,19 @@ use std::path::{Component, Path, PathBuf};
 
 use parking_lot::RwLock;
 
+/// Normalize a path to a UTF-8 string with a single trailing slash.
+///
+/// Centralized so [`ScopedFs::new`], [`ScopedFs::add_path`], and
+/// [`ScopedFs::remove_path`] all share the same shape — every entry in
+/// `allowed_paths` is `<utf8>/`.
+fn to_normalized_string(path: &Path) -> String {
+    let mut s = path.to_string_lossy().into_owned();
+    if !s.ends_with('/') {
+        s.push('/');
+    }
+    s
+}
+
 // -- Errors -------------------------------------------------------------------
 
 /// Errors from scoped filesystem operations.
@@ -27,7 +40,12 @@ pub enum ScopedFsError {
 /// and the caller's subsequent filesystem operation. A symlink could be
 /// created after validation. This is the same caveat as the Deno implementation.
 pub struct ScopedFs {
-    allowed_paths: RwLock<Vec<PathBuf>>,
+    /// Allowed directory roots, each normalized with a trailing `/`.
+    ///
+    /// Stored as `String` (not `PathBuf`) so `is_path_allowed` doesn't
+    /// re-run `to_string_lossy()` on every allowed entry on every fs
+    /// operation — the lossy conversion happens once at insert time.
+    allowed_paths: RwLock<Vec<String>>,
 }
 
 impl ScopedFs {
@@ -35,15 +53,12 @@ impl ScopedFs {
     ///
     /// Each path is normalized with a trailing `/` and must be absolute.
     pub fn new(paths: Vec<PathBuf>) -> Self {
+        // `into_iter` keeps ownership consumption parity with the previous
+        // shape so the public `Vec<PathBuf>` API stays the same and
+        // `clippy::needless_pass_by_value` is satisfied.
         let allowed_paths = paths
             .into_iter()
-            .map(|p| {
-                let mut s = p.to_string_lossy().into_owned();
-                if !s.ends_with('/') {
-                    s.push('/');
-                }
-                PathBuf::from(s)
-            })
+            .map(|p| to_normalized_string(&p))
             .collect();
         Self {
             allowed_paths: RwLock::new(allowed_paths),
@@ -54,7 +69,7 @@ impl ScopedFs {
     ///
     /// Mirrors `ScopedFs.add_path` in `src/lib/server/scoped_fs.ts`.
     pub fn add_path(&self, path: &Path) -> bool {
-        let normalized = normalize_trailing_slash(path);
+        let normalized = to_normalized_string(path);
         let mut paths = self.allowed_paths.write();
         if paths.iter().any(|p| p == &normalized) {
             return false;
@@ -67,7 +82,7 @@ impl ScopedFs {
     ///
     /// Mirrors `ScopedFs.remove_path` in `src/lib/server/scoped_fs.ts`.
     pub fn remove_path(&self, path: &Path) -> bool {
-        let normalized = normalize_trailing_slash(path);
+        let normalized = to_normalized_string(path);
         let mut paths = self.allowed_paths.write();
         if let Some(index) = paths.iter().position(|p| p == &normalized) {
             paths.remove(index);
@@ -82,9 +97,14 @@ impl ScopedFs {
         let path_str = path.to_string_lossy();
         let paths = self.allowed_paths.read();
         for allowed in paths.iter() {
-            let allowed_str = allowed.to_string_lossy();
-            if path_str.starts_with(allowed_str.as_ref())
-                || path_str == allowed_str.trim_end_matches('/')
+            // `allowed` always ends in `/` (normalized at insert).
+            // `starts_with` covers files/subdirs; the bare-dir case
+            // matches when the request path equals `allowed` minus its
+            // trailing slash.
+            if path_str.starts_with(allowed.as_str())
+                || allowed
+                    .strip_suffix('/')
+                    .is_some_and(|trimmed| path_str == trimmed)
             {
                 return true;
             }
@@ -183,15 +203,6 @@ impl ScopedFs {
         tokio::fs::create_dir_all(&safe_path).await?;
         Ok(())
     }
-}
-
-/// Ensure a path has a trailing `/` for consistent allowed-path comparison.
-fn normalize_trailing_slash(path: &Path) -> PathBuf {
-    let mut s = path.to_string_lossy().into_owned();
-    if !s.ends_with('/') {
-        s.push('/');
-    }
-    PathBuf::from(s)
 }
 
 /// Normalize a path by resolving `.` and `..` components without filesystem access.

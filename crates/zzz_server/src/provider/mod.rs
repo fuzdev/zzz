@@ -35,6 +35,18 @@ pub enum ProviderName {
 impl ProviderName {
     #[allow(dead_code)]
     pub const ALL: [Self; 4] = [Self::Ollama, Self::Claude, Self::Chatgpt, Self::Gemini];
+
+    /// Parse a wire-format provider name (lowercase) without going through
+    /// `serde_json` — avoids allocating a `Value::String` per request.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "ollama" => Some(Self::Ollama),
+            "claude" => Some(Self::Claude),
+            "chatgpt" => Some(Self::Chatgpt),
+            "gemini" => Some(Self::Gemini),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for ProviderName {

@@ -83,6 +83,28 @@ pub fn internal_error(detail: &str) -> JsonRpcError {
     }
 }
 
+/// Build an `internal_error` AND log the source error at `warn` level.
+///
+/// Used at handler boundaries that map a `tokio_postgres::Error` /
+/// `deadpool_postgres::PoolError` / `serde_json::Error` into the
+/// client-facing `-32603` envelope. Logging the underlying cause keeps
+/// operators able to debug "X failed" from logs while clients see only
+/// the opaque message. Mirrors `tracing::warn!(error = %e, "X failed")`
+/// + `internal_error("X failed")` so the two pieces can't drift.
+///
+/// Use `dyn Display` not generics to keep monomorphization off the 30+
+/// call sites — every caller passes the same handful of error types and
+/// the boxed-trait dispatch is one indirect call vs. dozens of inlined
+/// formatter bodies.
+pub fn internal_error_with_source(detail: &str, error: &dyn std::fmt::Display) -> JsonRpcError {
+    tracing::warn!(error = %error, "{detail}");
+    JsonRpcError {
+        code: JSONRPC_INTERNAL_ERROR,
+        message: detail.to_string(),
+        data: None,
+    }
+}
+
 /// JSON-RPC `not_found` error code. Mirrors `fuz_app`'s
 /// `JSONRPC_ERROR_CODES.not_found` and `auth.rs`'s `JSONRPC_UNAUTHENTICATED`
 /// / `JSONRPC_FORBIDDEN` private constants for the same two-axis (401/403)
@@ -110,24 +132,40 @@ pub fn not_found(resource: &str, reason: Option<&str>) -> JsonRpcError {
 // -- Notification builder -----------------------------------------------------
 
 /// JSON-RPC 2.0 notification (no `id` field — server-initiated push).
+///
+/// Generic over the params type — most callers pass a `&SomeStruct`
+/// holding the notification-specific shape; the WS notify closure
+/// passes `&Value` because the params come from a dynamic dispatch
+/// callback. Both go through one serialization path.
 #[derive(Debug, Serialize)]
-pub struct JsonRpcNotification {
-    pub jsonrpc: &'static str,
-    pub method: String,
-    pub params: Value,
+struct JsonRpcNotification<'a, T: ?Sized> {
+    jsonrpc: &'static str,
+    method: &'a str,
+    params: &'a T,
 }
 
 /// Build a JSON-RPC notification string for broadcasting to WebSocket clients.
 ///
-/// Returns the serialized JSON string. On serialization failure (shouldn't
-/// happen with valid `Value` inputs), returns an empty string.
-pub fn notification(method: &str, params: Value) -> String {
+/// Generic over the params type so callers don't have to round-trip
+/// through `serde_json::to_value` first — one serialization, one site of
+/// failure handling. Serialization failure is essentially impossible for
+/// the in-shape inputs (`serde_json::Value` rejects NaN/Inf, struct
+/// derives can't fail), but the warn-and-empty path keeps that contract
+/// honest: a future shape slip surfaces in logs instead of silently
+/// emitting an empty WS frame.
+pub fn notification<T: ?Sized + Serialize>(method: &str, params: &T) -> String {
     let n = JsonRpcNotification {
         jsonrpc: JSONRPC_VERSION,
-        method: method.to_owned(),
+        method,
         params,
     };
-    serde_json::to_string(&n).unwrap_or_default()
+    match serde_json::to_string(&n) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(error = %e, method, "failed to serialize JSON-RPC notification");
+            String::new()
+        }
+    }
 }
 
 // -- Response builders --------------------------------------------------------

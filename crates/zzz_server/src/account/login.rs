@@ -156,6 +156,12 @@ async fn login_inner(
         // `account_id` is set only when the account existed (FK
         // constraint forces null on unknown-account misses).
         let failure_account_id = resolved_account_id;
+        // `emit(input).await` — spawn first, await the JoinHandle. The
+        // spawned write task is detached on the tokio runtime, so a
+        // mid-flight client disconnect (REST future drop) cancels our
+        // .await but leaves the audit INSERT running. The row survives.
+        // Awaiting here keeps the row observable by response time so
+        // the post-response integration test query sees it.
         let _ = app
             .audit
             .emit(AuditLogInput {
@@ -202,9 +208,11 @@ async fn login_inner(
 
     tracing::info!(username = %input.username, "login successful");
 
-    // Successful login — fire-and-forget audit row, awaited so the
-    // response is consistent with observable DB state (integration tests
-    // can query the row after the response settles).
+    // Successful login — fire-and-forget audit row. `emit` spawns the
+    // write on a detached task; awaiting the JoinHandle keeps the row
+    // observable by response time (integration tests query the row
+    // after the response settles) while the cancel-safe spawn means a
+    // client disconnect mid-write doesn't lose the row.
     let _ = app
         .audit
         .emit(AuditLogInput {
