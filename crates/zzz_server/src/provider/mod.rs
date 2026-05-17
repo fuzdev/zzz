@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use fuz_common::JsonRpcError;
+use fuz_http::JsonrpcError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
@@ -215,7 +215,7 @@ impl Provider {
         options: &CompletionHandlerOptions,
         progress_sender: Option<&ProgressSender>,
         signal: &CancellationToken,
-    ) -> Result<Value, JsonRpcError> {
+    ) -> Result<Value, JsonrpcError> {
         match self {
             Self::Anthropic(p) => p.complete(options, progress_sender, signal).await,
             Self::OpenAi(p) => p.complete(options, progress_sender, signal).await,
@@ -258,7 +258,7 @@ impl ProviderManager {
     }
 
     /// Get a provider or return a `method_not_found`-style error.
-    pub fn require(&self, name: ProviderName) -> Result<&Provider, JsonRpcError> {
+    pub fn require(&self, name: ProviderName) -> Result<&Provider, JsonrpcError> {
         self.get(name)
             .ok_or_else(|| rpc::internal_error(&format!("provider not found: {name}")))
     }
@@ -274,7 +274,7 @@ impl ProviderManager {
 pub const PROVIDER_ERROR_NEEDS_API_KEY: &str = "needs API key";
 pub const PROVIDER_ERROR_NOT_INSTALLED: &str = "not installed";
 
-pub fn ai_provider_error(provider_name: &str, message: &str) -> JsonRpcError {
+pub fn ai_provider_error(provider_name: &str, message: &str) -> JsonrpcError {
     rpc::internal_error(&format!("{provider_name}: {message}"))
 }
 

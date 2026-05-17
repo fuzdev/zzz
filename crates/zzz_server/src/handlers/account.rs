@@ -5,7 +5,7 @@
 //! is account-scoped — passing another account's session or token id
 //! returns `revoked: false` rather than revealing existence.
 
-use fuz_common::JsonRpcError;
+use fuz_http::JsonrpcError;
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -96,7 +96,7 @@ struct AccountTokenListResult {
 /// `method_auth` already enforces `Authenticated`, so `ctx.auth` is `Some`
 /// by the time we get here — this is belt-and-suspenders against a future
 /// auth wiring regression.
-fn require_account_id(ctx: &Ctx<'_>) -> Result<uuid::Uuid, JsonRpcError> {
+fn require_account_id(ctx: &Ctx<'_>) -> Result<uuid::Uuid, JsonrpcError> {
     ctx.auth
         .map(|c| c.account.id)
         .ok_or_else(|| rpc::internal_error("missing auth context"))
@@ -107,7 +107,7 @@ fn require_account_id(ctx: &Ctx<'_>) -> Result<uuid::Uuid, JsonRpcError> {
 pub(super) async fn handle_account_verify(
     ctx: &Ctx<'_>,
     db: &(impl deadpool_postgres::GenericClient + ?Sized),
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let account_id = require_account_id(ctx)?;
 
     let summary = db::query_account_summary(db, &account_id)
@@ -129,7 +129,7 @@ pub(super) async fn handle_account_verify(
 pub(super) async fn handle_account_session_list(
     ctx: &Ctx<'_>,
     db: &(impl deadpool_postgres::GenericClient + ?Sized),
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let account_id = require_account_id(ctx)?;
 
     let rows = db::query_sessions_for_account(db, &account_id)
@@ -156,7 +156,7 @@ pub(super) async fn handle_account_session_revoke(
     params: &Value,
     ctx: &Ctx<'_>,
     db: &(impl deadpool_postgres::GenericClient + ?Sized),
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let account_id = require_account_id(ctx)?;
     let session_id = params
         .get("session_id")
@@ -209,7 +209,7 @@ pub(super) async fn handle_account_session_revoke(
 pub(super) async fn handle_account_session_revoke_all(
     ctx: &Ctx<'_>,
     db: &(impl deadpool_postgres::GenericClient + ?Sized),
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let account_id = require_account_id(ctx)?;
 
     let deleted_count = db::query_delete_all_sessions_for_account(db, &account_id)
@@ -249,7 +249,7 @@ pub(super) async fn handle_account_token_create(
     params: &Value,
     ctx: &Ctx<'_>,
     db: &(impl deadpool_postgres::GenericClient + ?Sized),
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let account_id = require_account_id(ctx)?;
 
     // `name` is optional with a default of "CLI token" (matches fuz_app's
@@ -305,7 +305,7 @@ pub(super) async fn handle_account_token_create(
 pub(super) async fn handle_account_token_list(
     ctx: &Ctx<'_>,
     db: &(impl deadpool_postgres::GenericClient + ?Sized),
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let account_id = require_account_id(ctx)?;
 
     let rows = db::query_api_token_list_for_account(db, &account_id)
@@ -333,7 +333,7 @@ pub(super) async fn handle_account_token_revoke(
     params: &Value,
     ctx: &Ctx<'_>,
     db: &(impl deadpool_postgres::GenericClient + ?Sized),
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let account_id = require_account_id(ctx)?;
     let token_id = params
         .get("token_id")

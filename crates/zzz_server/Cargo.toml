@@ -11,6 +11,11 @@ path = "src/main.rs"
 
 [dependencies]
 fuz_common.workspace = true
+fuz_db.workspace = true
+fuz_auth.workspace = true
+fuz_http.workspace = true
+fuz_realtime.workspace = true
+fuz_actions.workspace = true
 tokio.workspace = true
 axum.workspace = true
 axum-extra.workspace = true

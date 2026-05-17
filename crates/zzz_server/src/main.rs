@@ -8,6 +8,7 @@ mod db;
 mod error;
 mod filer;
 mod handlers;
+mod handlers_v2;
 mod perform_action;
 mod provider;
 mod proxy;
@@ -16,6 +17,7 @@ mod rate_limiter;
 mod rpc;
 mod scoped_fs;
 mod ws;
+mod zzz_action_specs;
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -164,6 +166,112 @@ async fn run() -> Result<(), ServerError> {
     // can capture the Arc<App> (see `audit::listeners::register` below).
     let audit_emitter = Arc::new(audit::AuditEmitter::new(pool.clone()));
 
+    // -- Spine-backed state (Phase 7 Batch 5 — additive) -----------
+    //
+    // These pieces are constructed alongside the legacy state and
+    // moved into the new `App` fields. They are wired into the new
+    // spine RPC dispatch path (via `App.action_registry`); the legacy
+    // `/api/rpc` and `/api/ws` routes continue to dispatch through
+    // `crate::handlers::dispatch` as today. Later batches retire the
+    // legacy duplicates.
+    let realtime = Arc::new(fuz_realtime::ConnectionRegistry::new());
+    let spine_audit_emitter = Arc::new(fuz_auth::AuditEmitter::new(pool.clone()));
+    let spine_keyring = Arc::new(
+        fuz_auth::Keyring::new(&config.secret_cookie_keys).ok_or_else(|| {
+            ServerError::Config(
+                "SECRET_COOKIE_KEYS is required for spine keyring (no valid keys found)".to_owned(),
+            )
+        })?,
+    );
+    let spine_password_hasher: Arc<dyn fuz_auth::PasswordHasher> =
+        Arc::new(fuz_auth::Argon2idHasher::new());
+    // Re-parse trusted proxies into the spine `fuz_http::ParsedProxy`
+    // type. Wire-identical to the legacy `crate::proxy::ParsedProxy`
+    // per fuz_http's Phase 4 extraction note; the two types are
+    // distinct identities only because zzz hasn't yet collapsed its
+    // local proxy module.
+    let spine_trusted_proxies: Arc<Vec<fuz_http::ParsedProxy>> = Arc::new(
+        match config.trusted_proxies.as_deref() {
+            None => Vec::new(),
+            Some(raw) => fuz_http::parse_proxy_list(raw).map_err(|e| {
+                ServerError::Config(format!("ZZZ_TRUSTED_PROXIES (spine reparse): {e}"))
+            })?,
+        },
+    );
+    let spine_allowed_origins: Arc<Vec<String>> = Arc::new(
+        config
+            .allowed_origins
+            .as_deref()
+            .map(fuz_http::parse_allowed_origins)
+            .unwrap_or_default(),
+    );
+    let bootstrap_available_atomic = Arc::new(std::sync::atomic::AtomicBool::new(
+        bootstrap_available,
+    ));
+    let socket_revoker: Arc<dyn fuz_auth::SocketRevoker> =
+        Arc::clone(&realtime).into_socket_revoker();
+    // Build a spine daemon-token state parallel to the legacy one when
+    // the legacy init succeeded. The two carry independent rotated
+    // tokens; the spine path will eventually subsume the legacy one
+    // (Batch 3). For Batch 5 they coexist.
+    let spine_daemon_token: Option<fuz_auth::SharedDaemonTokenState> =
+        if daemon_token_state.is_some() {
+            match fuz_auth::init_daemon_token(Path::new(&config.zzz_dir)).await {
+                Ok(state) => {
+                    if let Ok(client) = pool.get().await
+                        && let Ok(Some(account_id)) = db::query_keeper_account_id(&client).await
+                    {
+                        state.write().keeper_account_id = Some(account_id);
+                    }
+                    Some(state)
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "spine daemon token init failed");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+    let account_route_state = Arc::new(fuz_auth::AccountRouteState {
+        pool: pool.clone(),
+        keyring: Arc::clone(&spine_keyring),
+        password_hasher: Arc::clone(&spine_password_hasher),
+        audit: Arc::clone(&spine_audit_emitter),
+        socket_revoker: Arc::clone(&socket_revoker),
+        allowed_origins: Arc::clone(&spine_allowed_origins),
+        bootstrap_available: Arc::clone(&bootstrap_available_atomic),
+        login_ip_rate_limiter: None,
+        login_account_rate_limiter: None,
+        daemon_token_state: spine_daemon_token.clone(),
+    });
+    let bootstrap_route_state = Arc::new(fuz_auth::BootstrapRouteState {
+        deps: Arc::new(fuz_auth::BootstrapDeps {
+            pool: pool.clone(),
+            password_hasher: Arc::clone(&spine_password_hasher),
+            audit: Arc::clone(&spine_audit_emitter),
+            bootstrap_available: Arc::clone(&bootstrap_available_atomic),
+            bootstrap_token_path: config
+                .bootstrap_token_path
+                .as_ref()
+                .map(PathBuf::from),
+            on_keeper_resolved: None,
+        }),
+        keyring: Arc::clone(&spine_keyring),
+        allowed_origins: Arc::clone(&spine_allowed_origins),
+    });
+
+    let spine_state = handlers::SpineState {
+        realtime: Arc::clone(&realtime),
+        audit_emitter: Arc::clone(&spine_audit_emitter),
+        account_route_state: Arc::clone(&account_route_state),
+        bootstrap_route_state: Arc::clone(&bootstrap_route_state),
+        spine_keyring: Arc::clone(&spine_keyring),
+        spine_daemon_token: spine_daemon_token.clone(),
+        spine_allowed_origins: Arc::clone(&spine_allowed_origins),
+        spine_trusted_proxies: Arc::clone(&spine_trusted_proxies),
+    };
+
     let app_state = Arc::new(handlers::App::new(
         pool,
         keyring,
@@ -180,9 +288,61 @@ async fn run() -> Result<(), ServerError> {
         login_ip_rate_limiter,
         login_account_rate_limiter,
         trusted_proxies,
+        spine_state,
     ));
 
     audit::listeners::register(&audit_emitter, &app_state);
+
+    // Compile the spine action registry — must run after `Arc<App>` is
+    // constructed because the zzz-specific spec builders capture
+    // `Arc::clone(&app_state)` into per-spec handler closures.
+    //
+    // Composition order: protocol (heartbeat + cancel), then
+    // `fuz_auth` placeholder adapters (account + admin self-service),
+    // then zzz-specific specs (workspace today; filesystem / terminal /
+    // provider / etc. land as their `handlers_v2` modules ship).
+    let mut all_specs: Vec<fuz_actions::ActionSpec> =
+        fuz_actions::PROTOCOL_ACTION_SPECS();
+    all_specs.extend(fuz_actions::auth_adapter::build_account_specs(
+        Arc::clone(&spine_audit_emitter),
+        Arc::clone(&socket_revoker),
+    ));
+    all_specs.extend(fuz_actions::auth_adapter::build_admin_specs(
+        Arc::clone(&spine_audit_emitter),
+        Arc::clone(&socket_revoker),
+    ));
+    all_specs.extend(zzz_action_specs::build_workspace_specs(Arc::clone(
+        &app_state,
+    )));
+    all_specs.extend(zzz_action_specs::build_filesystem_specs(Arc::clone(
+        &app_state,
+    )));
+    all_specs.extend(zzz_action_specs::build_terminal_specs(Arc::clone(
+        &app_state,
+    )));
+    all_specs.extend(zzz_action_specs::build_provider_specs(Arc::clone(
+        &app_state,
+    )));
+    let action_registry = Arc::new(
+        fuz_actions::ActionRegistry::compile(all_specs).map_err(|e| {
+            ServerError::Config(format!("ActionRegistry::compile failed: {e}"))
+        })?,
+    );
+    // Set the action_registry on App via OnceLock. The set call returns
+    // Err only if the cell is already populated, which is impossible
+    // here because we just constructed the Arc<App>.
+    if app_state.action_registry.set(action_registry).is_err() {
+        return Err(ServerError::Config(
+            "action_registry was already set — unexpected double init".to_owned(),
+        ));
+    }
+    tracing::info!(
+        spec_count = app_state
+            .action_registry
+            .get()
+            .map_or(0, |r| r.len()),
+        "spine action registry compiled"
+    );
 
     // Start file watchers at startup (matches Deno's Backend constructor
     // which calls `this.#start_filer(this.zzz_dir)` then iterates scoped_dirs).

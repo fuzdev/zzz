@@ -4,7 +4,7 @@
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use fuz_common::JsonRpcError;
+use fuz_http::JsonrpcError;
 use serde::Serialize;
 
 use super::RequestContext;
@@ -102,12 +102,12 @@ pub fn check_action_auth(
     spec: &MethodSpec,
     context: Option<&RequestContext>,
     credential_type: Option<CredentialType>,
-) -> Option<JsonRpcError> {
+) -> Option<JsonrpcError> {
     match spec.auth {
         ActionAuth::Public => {}
         ActionAuth::Authenticated => {
             if context.is_none() {
-                return Some(JsonRpcError {
+                return Some(JsonrpcError {
                     code: JSONRPC_UNAUTHENTICATED,
                     message: "unauthenticated".to_owned(),
                     data: None,
@@ -120,7 +120,7 @@ pub fn check_action_auth(
         let satisfied = credential_type.is_some_and(|ct| required.contains(&ct));
         if !satisfied {
             let names: Vec<&'static str> = required.iter().map(|c| c.name()).collect();
-            return Some(JsonRpcError {
+            return Some(JsonrpcError {
                 code: JSONRPC_FORBIDDEN,
                 message: "forbidden".to_owned(),
                 data: Some(serde_json::json!({
@@ -135,7 +135,7 @@ pub fn check_action_auth(
         let has_required =
             context.is_some_and(|ctx| required_roles.iter().any(|r| ctx.has_role(r)));
         if !has_required {
-            return Some(JsonRpcError {
+            return Some(JsonrpcError {
                 code: JSONRPC_FORBIDDEN,
                 message: "forbidden".to_owned(),
                 data: Some(serde_json::json!({

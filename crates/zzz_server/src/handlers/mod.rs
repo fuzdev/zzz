@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64};
 
 use axum::extract::ws::Utf8Bytes;
 use deadpool_postgres::Pool;
-use fuz_common::JsonRpcError;
+use fuz_http::JsonrpcError;
 use parking_lot::RwLock;
 use serde::Serialize;
 use serde_json::Value;
@@ -35,6 +35,15 @@ use crate::pty_manager::PtyManager;
 use crate::rate_limiter::RateLimiter;
 use crate::rpc;
 use crate::scoped_fs::ScopedFs;
+
+// Spine-side type aliases — Phase 7 Batch 5 additive wiring. These pull
+// the new spine-backed types into the handler module's namespace without
+// touching the legacy `App` field names; both shapes coexist until the
+// later batches retire the zzz-local impls.
+use fuz_actions::ActionRegistry;
+use fuz_auth::{AccountRouteState, AuditEmitter as SpineAuditEmitter, BootstrapRouteState};
+use fuz_http::ParsedProxy as SpineParsedProxy;
+use fuz_realtime::ConnectionRegistry;
 
 // -- Connection tracking types ------------------------------------------------
 
@@ -122,6 +131,111 @@ pub struct App {
     /// unset; the middleware then collapses every connection to the
     /// TCP peer IP (Phase 4 direct-bind behavior).
     pub trusted_proxies: Vec<ParsedProxy>,
+
+    // -- Spine-backed fields (Phase 7 Batch 5 — additive) -----------
+    //
+    // The fields below are populated at startup but most are not yet
+    // consumed — Batches 1-4 will retire the legacy duplicates above
+    // and rewire the live transports to read these instead. The
+    // `#[allow]` on each field documents the staged-migration intent.
+    //
+    //
+    // These fields live alongside the legacy fields above for the
+    // duration of the staged Batch 1-5 migration. The new spine-backed
+    // pattern dispatches through `action_registry` + `ActionContext`;
+    // the legacy `App` reach-through (handler `&App` access via
+    // `handlers/{workspace,filesystem,...}::handle_*`) continues to
+    // serve the existing live `/api/rpc` and `/api/ws` paths until
+    // the later batches retire it.
+    //
+    /// `Arc<ConnectionRegistry>` — the spine's connection-tracking
+    /// registry. Identical posture to the legacy `App.connections` map
+    /// + `App.broadcast` / `send_to` methods, but with the cancellation
+    /// token plumbed onto each connection (so `SocketRevoker` can cancel
+    /// the signal token belt-and-suspenders with the dropped sender).
+    /// Constructed at startup; shared across the live transports and
+    /// the new spine-backed dispatch path.
+    #[allow(dead_code, reason = "Batch 5 additive — consumed when later batches retire the legacy connections map")]
+    pub realtime: Arc<ConnectionRegistry>,
+    /// Spine `AuditEmitter` — handler-facing audit emit shape that
+    /// writes synchronously inside the active transaction (via
+    /// `ActionContext::audit_emit`). Distinct from the legacy
+    /// `audit: Arc<crate::audit::AuditEmitter>` which is spawn-then-await
+    /// (fire-and-forget pool-write). Listener-fan-out is queued on the
+    /// `PendingEffects` queue and drained post-commit. Constructed at
+    /// startup; threaded through the spine `auth_adapter::build_account_specs`
+    /// / `build_admin_specs` paths and via `ActionContext` to per-domain
+    /// handlers.
+    #[allow(dead_code, reason = "Batch 5 additive — consumed by spine RPC dispatch when later batches mount the spine router")]
+    pub audit_emitter: Arc<SpineAuditEmitter>,
+    /// Compiled spine action registry. Holds `PROTOCOL_ACTION_SPECS` +
+    /// `auth_adapter::build_account_specs` + `auth_adapter::build_admin_specs`
+    /// + zzz-specific specs from `zzz_action_specs::build_*_specs`. Looked
+    /// up by `fuz_actions::perform_action` keyed on method name.
+    ///
+    /// **Wrapped in `OnceLock`** so it can be set after `Arc<App>` is
+    /// constructed — the spec builders (e.g.
+    /// `zzz_action_specs::build_workspace_specs`) close over
+    /// `Arc<App>`, so the registry can't be built until the App `Arc`
+    /// exists. Mirrors the audit listener registration pattern in
+    /// `audit::listeners::register`.
+    pub action_registry: std::sync::OnceLock<Arc<ActionRegistry>>,
+    /// State for the spine account REST router. Constructed once at
+    /// startup, shared with the eventual `fuz_auth::account_router`
+    /// mount in main.rs. Currently introduced for the additive Phase 7
+    /// migration; the legacy zzz `account/*` handlers continue to serve
+    /// the live `/api/account/*` paths until Batch 1 mounts the spine
+    /// router.
+    #[allow(dead_code, reason = "Batch 5 additive — consumed when Batch 1 mounts the spine account router")]
+    pub account_route_state: Arc<AccountRouteState>,
+    /// State for the spine bootstrap router. Constructed once at
+    /// startup, shared with the eventual `fuz_auth::bootstrap_routes::bootstrap_router`
+    /// mount. See `account_route_state` for the staged-migration rationale.
+    #[allow(dead_code, reason = "Batch 5 additive — consumed when Batch 1 mounts the spine bootstrap router")]
+    pub bootstrap_route_state: Arc<BootstrapRouteState>,
+    /// Spine `Keyring` (HMAC-SHA256 cookie signing). Constructed from the
+    /// same `SECRET_COOKIE_KEYS` env value as the legacy `keyring` field
+    /// above. Two instances coexist for the duration of the migration
+    /// (legacy: owned `auth::Keyring` on `App.keyring`; spine: `Arc<fuz_auth::Keyring>`
+    /// here) because the legacy account/cookie path reaches through
+    /// `app.keyring` while the new spine surface needs an `Arc<fuz_auth::Keyring>`
+    /// — different ownership shapes. Underlying keys are identical.
+    #[allow(dead_code, reason = "Batch 5 additive — consumed when Batch 3 retires the legacy auth module")]
+    pub spine_keyring: Arc<fuz_auth::Keyring>,
+    /// Spine daemon token state — different lock kind from the legacy
+    /// `daemon_token_state` (parking_lot::RwLock vs tokio::sync::RwLock).
+    /// Two instances coexist during the migration; the spine
+    /// `AccountRouteState` consumes the spine variant, the legacy auth
+    /// pipeline continues to read the tokio variant.
+    #[allow(dead_code, reason = "Batch 5 additive — consumed when Batch 3 unifies daemon-token state")]
+    pub spine_daemon_token: Option<fuz_auth::SharedDaemonTokenState>,
+    /// Spine allowed-origins list. Same patterns as the legacy
+    /// `App.allowed_origins`, behind `Arc<Vec<String>>` for the spine
+    /// route-state consumers.
+    #[allow(dead_code, reason = "Batch 5 additive — consumed when later batches mount spine routers")]
+    pub spine_allowed_origins: Arc<Vec<String>>,
+    /// Spine trusted-proxy list (`fuz_http::ParsedProxy`). Wire-identical
+    /// to the legacy `App.trusted_proxies` (`crate::proxy::ParsedProxy`)
+    /// per `fuz_http`'s Phase 4 extraction note; re-parsed at startup so
+    /// the spine layer doesn't depend on the legacy `proxy` module's
+    /// private type. Behind `Arc<Vec<…>>` for the spine middleware
+    /// state shape.
+    #[allow(dead_code, reason = "Batch 5 additive — consumed when Batch 2 retires the local proxy module")]
+    pub spine_trusted_proxies: Arc<Vec<SpineParsedProxy>>,
+}
+
+/// Spine-side fields packaged together so `App::new`'s argument list
+/// doesn't keep growing past the existing clippy threshold. Constructed
+/// at the composition root (main.rs) and moved into `App`.
+pub struct SpineState {
+    pub realtime: Arc<ConnectionRegistry>,
+    pub audit_emitter: Arc<SpineAuditEmitter>,
+    pub account_route_state: Arc<AccountRouteState>,
+    pub bootstrap_route_state: Arc<BootstrapRouteState>,
+    pub spine_keyring: Arc<fuz_auth::Keyring>,
+    pub spine_daemon_token: Option<fuz_auth::SharedDaemonTokenState>,
+    pub spine_allowed_origins: Arc<Vec<String>>,
+    pub spine_trusted_proxies: Arc<Vec<SpineParsedProxy>>,
 }
 
 impl App {
@@ -142,6 +256,7 @@ impl App {
         login_ip_rate_limiter: Option<Arc<RateLimiter>>,
         login_account_rate_limiter: Option<Arc<RateLimiter>>,
         trusted_proxies: Vec<ParsedProxy>,
+        spine: SpineState,
     ) -> Self {
         Self {
             workspaces: RwLock::new(HashMap::new()),
@@ -165,6 +280,15 @@ impl App {
             login_ip_rate_limiter,
             login_account_rate_limiter,
             trusted_proxies,
+            realtime: spine.realtime,
+            audit_emitter: spine.audit_emitter,
+            action_registry: std::sync::OnceLock::new(),
+            account_route_state: spine.account_route_state,
+            bootstrap_route_state: spine.bootstrap_route_state,
+            spine_keyring: spine.spine_keyring,
+            spine_daemon_token: spine.spine_daemon_token,
+            spine_allowed_origins: spine.spine_allowed_origins,
+            spine_trusted_proxies: spine.spine_trusted_proxies,
         }
     }
 
@@ -374,7 +498,7 @@ pub struct WorkspaceInfo {
 /// Convert a resolved path to a normalized directory string with trailing `/`.
 ///
 /// Rejects non-UTF-8 paths explicitly — no lossy replacement with U+FFFD.
-pub(in crate::handlers) fn to_normalized_dir(path: &Path) -> Result<String, JsonRpcError> {
+pub(in crate::handlers) fn to_normalized_dir(path: &Path) -> Result<String, JsonrpcError> {
     let mut s = path
         .to_str()
         .ok_or_else(|| rpc::internal_error("path is not valid UTF-8"))?
@@ -421,7 +545,7 @@ struct TestEmitNotificationsResult {
 /// transaction so paired writes commit or roll back atomically — mirroring
 /// `fuz_app`'s `perform_action` `db.transaction` wrap. Read-only actions
 /// run on a pooled connection (acquired lazily by handlers that need one).
-pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+pub async fn dispatch(method: &str, params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonrpcError> {
     if auth::method_spec(method).side_effects {
         dispatch_with_tx(method, params, ctx).await
     } else {
@@ -440,7 +564,7 @@ async fn dispatch_with_tx(
     method: &str,
     params: &Value,
     ctx: &Ctx<'_>,
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let mut client = ctx
         .app
         .db_pool
@@ -502,7 +626,7 @@ async fn dispatch_no_tx(
     method: &str,
     params: &Value,
     ctx: &Ctx<'_>,
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     match method {
         "ping" => return handle_ping(ctx),
         "session_load" => return handle_session_load(ctx).await,
@@ -533,7 +657,7 @@ async fn dispatch_no_tx(
 
 // -- Generic handlers ---------------------------------------------------------
 
-fn handle_ping(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+fn handle_ping(ctx: &Ctx<'_>) -> Result<Value, JsonrpcError> {
     let result = PingResult {
         ping_id: ctx.request_id,
     };
@@ -541,7 +665,7 @@ fn handle_ping(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
         .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
-async fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+async fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonrpcError> {
     let workspaces: Vec<WorkspaceInfo> = {
         let ws = ctx.app.workspaces.read();
         ws.values().cloned().collect()
@@ -581,7 +705,7 @@ async fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
 /// Test-only: emit `count` `_test_notification` notifications via `ctx.notify`,
 /// then return `{count}`. Lets the integration suite verify `ctx.notify`
 /// routing (socket-scoped delivery) without a real AI provider.
-fn handle_test_emit_notifications(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+fn handle_test_emit_notifications(params: &Value, ctx: &Ctx<'_>) -> Result<Value, JsonrpcError> {
     let count = params
         .get("count")
         .and_then(Value::as_u64)

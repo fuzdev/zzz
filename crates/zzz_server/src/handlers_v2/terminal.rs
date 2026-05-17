@@ -1,14 +1,17 @@
-//! Terminal handlers — PTY spawn, write, resize, close.
+//! Terminal handlers — spine-backed signature.
+//!
+//! Mirrors `crate::handlers::terminal` with `(Value, ActionContext<'_>)`
+//! and closure-captured `Arc<App>` for the `PtyManager` reach-through.
 
 use std::sync::Arc;
 
+use fuz_actions::ActionContext;
 use fuz_http::JsonrpcError;
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::handlers::App;
 use crate::rpc;
-
-use super::Ctx;
 
 #[derive(Serialize)]
 struct TerminalCreateResult {
@@ -20,9 +23,10 @@ struct TerminalCloseResult {
     exit_code: Option<i32>,
 }
 
-pub(super) async fn handle_terminal_create(
-    params: &Value,
-    ctx: &Ctx<'_>,
+pub async fn terminal_create(
+    params: Value,
+    _ctx: ActionContext<'_>,
+    app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
     let command = params
         .get("command")
@@ -46,9 +50,8 @@ pub(super) async fn handle_terminal_create(
 
     let terminal_id = uuid::Uuid::new_v4().to_string();
 
-    ctx.app
-        .pty_manager
-        .spawn(&terminal_id, command, &args, cwd, Arc::clone(&ctx.app_arc))
+    app.pty_manager
+        .spawn(&terminal_id, command, &args, cwd, Arc::clone(&app))
         .await
         .map_err(|e| rpc::internal_error(&format!("failed to create terminal: {e}")))?;
 
@@ -56,9 +59,10 @@ pub(super) async fn handle_terminal_create(
         .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
-pub(super) async fn handle_terminal_data_send(
-    params: &Value,
-    ctx: &Ctx<'_>,
+pub async fn terminal_data_send(
+    params: Value,
+    _ctx: ActionContext<'_>,
+    app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
     let terminal_id = params
         .get("terminal_id")
@@ -70,15 +74,15 @@ pub(super) async fn handle_terminal_data_send(
         .and_then(Value::as_str)
         .ok_or_else(|| rpc::invalid_params("missing or invalid 'data' parameter"))?;
 
-    // No-ops silently if terminal doesn't exist (matching Deno behavior)
-    ctx.app.pty_manager.write(terminal_id, data).await;
+    app.pty_manager.write(terminal_id, data).await;
 
     Ok(Value::Null)
 }
 
-pub(super) async fn handle_terminal_resize(
-    params: &Value,
-    ctx: &Ctx<'_>,
+pub async fn terminal_resize(
+    params: Value,
+    _ctx: ActionContext<'_>,
+    app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
     let terminal_id = params
         .get("terminal_id")
@@ -100,8 +104,7 @@ pub(super) async fn handle_terminal_resize(
         reason = "terminal dimensions fit u16"
     )]
     {
-        ctx.app
-            .pty_manager
+        app.pty_manager
             .resize(terminal_id, cols as u16, rows as u16)
             .await;
     }
@@ -109,9 +112,10 @@ pub(super) async fn handle_terminal_resize(
     Ok(Value::Null)
 }
 
-pub(super) async fn handle_terminal_close(
-    params: &Value,
-    ctx: &Ctx<'_>,
+pub async fn terminal_close(
+    params: Value,
+    _ctx: ActionContext<'_>,
+    app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
     let terminal_id = params
         .get("terminal_id")
@@ -128,8 +132,7 @@ pub(super) async fn handle_terminal_close(
         _ => libc::SIGTERM,
     };
 
-    let exit_code = ctx
-        .app
+    let exit_code = app
         .pty_manager
         .kill(terminal_id, signal)
         .await

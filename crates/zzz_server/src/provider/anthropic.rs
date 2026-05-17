@@ -1,6 +1,6 @@
 use std::ops::ControlFlow;
 
-use fuz_common::JsonRpcError;
+use fuz_http::JsonrpcError;
 use serde_json::{Value, json};
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
@@ -73,7 +73,7 @@ impl AnthropicProvider {
         options: &CompletionHandlerOptions,
         progress_sender: Option<&ProgressSender>,
         signal: &CancellationToken,
-    ) -> Result<Value, JsonRpcError> {
+    ) -> Result<Value, JsonrpcError> {
         // Clone the client (cheap — internally Arc'd) and release the lock
         // before the HTTP call. This avoids blocking set_api_key for the
         // duration of a potentially long-running streaming response.
@@ -109,7 +109,7 @@ impl AnthropicProvider {
 async fn handle_non_streaming_response(
     response: reqwest::Response,
     options: &CompletionHandlerOptions,
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let api_response: Value = response
         .json::<Value>()
         .await
@@ -129,7 +129,7 @@ async fn handle_streaming_response(
     options: &CompletionHandlerOptions,
     progress_sender: &ProgressSender,
     signal: &CancellationToken,
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let mut accumulated_content = String::new();
     let mut message_id = String::new();
     let mut final_usage: Option<Value> = None;

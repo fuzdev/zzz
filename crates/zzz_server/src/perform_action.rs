@@ -25,7 +25,7 @@
 use std::sync::Arc;
 
 use axum::http::StatusCode;
-use fuz_common::JsonRpcError;
+use fuz_http::JsonrpcError;
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
@@ -67,7 +67,7 @@ pub struct PerformActionInput<'a> {
 pub enum PerformActionResult {
     Ok(Value),
     Err {
-        error: JsonRpcError,
+        error: JsonrpcError,
         status: StatusCode,
     },
 }

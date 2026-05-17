@@ -5,9 +5,9 @@ use axum::body::Bytes;
 use axum::extract::{Extension, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use fuz_common::{
+use fuz_http::{
     JSONRPC_INTERNAL_ERROR, JSONRPC_INVALID_PARAMS, JSONRPC_INVALID_REQUEST,
-    JSONRPC_METHOD_NOT_FOUND, JSONRPC_PARSE_ERROR, JSONRPC_VERSION, JsonRpcError,
+    JSONRPC_METHOD_NOT_FOUND, JSONRPC_PARSE_ERROR, JSONRPC_VERSION, JsonrpcError,
 };
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -33,7 +33,7 @@ pub struct JsonRpcResponse {
 pub struct JsonRpcErrorResponse {
     pub jsonrpc: &'static str,
     pub id: Value,
-    pub error: JsonRpcError,
+    pub error: JsonrpcError,
 }
 
 // -- Error constructors -------------------------------------------------------
@@ -43,40 +43,40 @@ pub struct JsonRpcErrorResponse {
 // in both backends (include in dev, strip in prod). See `normalize_error_data`
 // in integration tests for cross-backend handling.
 
-pub fn parse_error() -> JsonRpcError {
-    JsonRpcError {
+pub fn parse_error() -> JsonrpcError {
+    JsonrpcError {
         code: JSONRPC_PARSE_ERROR,
         message: "parse error".to_string(),
         data: None,
     }
 }
 
-pub fn invalid_request() -> JsonRpcError {
-    JsonRpcError {
+pub fn invalid_request() -> JsonrpcError {
+    JsonrpcError {
         code: JSONRPC_INVALID_REQUEST,
         message: "invalid request".to_string(),
         data: None,
     }
 }
 
-pub fn method_not_found(method: &str) -> JsonRpcError {
-    JsonRpcError {
+pub fn method_not_found(method: &str) -> JsonrpcError {
+    JsonrpcError {
         code: JSONRPC_METHOD_NOT_FOUND,
         message: format!("method not found: {method}"),
         data: None,
     }
 }
 
-pub fn invalid_params(detail: &str) -> JsonRpcError {
-    JsonRpcError {
+pub fn invalid_params(detail: &str) -> JsonrpcError {
+    JsonrpcError {
         code: JSONRPC_INVALID_PARAMS,
         message: detail.to_string(),
         data: None,
     }
 }
 
-pub fn internal_error(detail: &str) -> JsonRpcError {
-    JsonRpcError {
+pub fn internal_error(detail: &str) -> JsonrpcError {
+    JsonrpcError {
         code: JSONRPC_INTERNAL_ERROR,
         message: detail.to_string(),
         data: None,
@@ -96,9 +96,9 @@ pub fn internal_error(detail: &str) -> JsonRpcError {
 /// call sites — every caller passes the same handful of error types and
 /// the boxed-trait dispatch is one indirect call vs. dozens of inlined
 /// formatter bodies.
-pub fn internal_error_with_source(detail: &str, error: &dyn std::fmt::Display) -> JsonRpcError {
+pub fn internal_error_with_source(detail: &str, error: &dyn std::fmt::Display) -> JsonrpcError {
     tracing::warn!(error = %error, "{detail}");
-    JsonRpcError {
+    JsonrpcError {
         code: JSONRPC_INTERNAL_ERROR,
         message: detail.to_string(),
         data: None,
@@ -121,8 +121,8 @@ const JSONRPC_NOT_FOUND: i32 = -32003;
 /// Used by handlers that 404 on an input id (admin revoke-all on an unknown
 /// account, future invite lookups, etc.). Centralized so the next consumer
 /// doesn't redefine the code or drift the message shape.
-pub fn not_found(resource: &str, reason: Option<&str>) -> JsonRpcError {
-    JsonRpcError {
+pub fn not_found(resource: &str, reason: Option<&str>) -> JsonrpcError {
+    JsonrpcError {
         code: JSONRPC_NOT_FOUND,
         message: format!("{resource} not found"),
         data: reason.map(|r| serde_json::json!({"reason": r})),
@@ -178,7 +178,7 @@ pub const fn success_response(id: Value, result: Value) -> JsonRpcResponse {
     }
 }
 
-pub const fn error_response(id: Value, error: JsonRpcError) -> JsonRpcErrorResponse {
+pub const fn error_response(id: Value, error: JsonrpcError) -> JsonRpcErrorResponse {
     JsonRpcErrorResponse {
         jsonrpc: JSONRPC_VERSION,
         id,
@@ -240,7 +240,7 @@ pub enum Classified<'a> {
         params: &'a Value,
     },
     /// Error — id and error object for the error response envelope.
-    Invalid { id: Value, error: JsonRpcError },
+    Invalid { id: Value, error: JsonrpcError },
     /// Notification (has method, no id) — caller decides behavior.
     Notification,
 }

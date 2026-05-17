@@ -8,7 +8,7 @@
 use std::ops::ControlFlow;
 
 use futures_util::StreamExt;
-use fuz_common::JsonRpcError;
+use fuz_http::JsonrpcError;
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
@@ -22,7 +22,7 @@ pub async fn consume_ndjson_stream<F>(
     provider_name: &str,
     signal: &CancellationToken,
     mut on_line: F,
-) -> Result<(), JsonRpcError>
+) -> Result<(), JsonrpcError>
 where
     F: FnMut(Value) -> ControlFlow<()>,
 {

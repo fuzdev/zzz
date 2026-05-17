@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use fuz_common::JsonRpcError;
+use fuz_http::JsonrpcError;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -40,7 +40,7 @@ struct WorkspaceOpenResult {
 
 // -- Handlers -----------------------------------------------------------------
 
-pub(super) fn handle_workspace_list(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
+pub(super) fn handle_workspace_list(ctx: &Ctx<'_>) -> Result<Value, JsonrpcError> {
     let list: Vec<WorkspaceInfo> = {
         let workspaces = ctx.app.workspaces.read();
         workspaces.values().cloned().collect()
@@ -52,7 +52,7 @@ pub(super) fn handle_workspace_list(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError
 pub(super) async fn handle_workspace_open(
     params: &Value,
     ctx: &Ctx<'_>,
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let path = params
         .get("path")
         .and_then(Value::as_str)
@@ -140,7 +140,7 @@ pub(super) async fn handle_workspace_open(
 pub(super) async fn handle_workspace_close(
     params: &Value,
     ctx: &Ctx<'_>,
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let path = params
         .get("path")
         .and_then(Value::as_str)

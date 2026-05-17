@@ -1,6 +1,6 @@
 use std::ops::ControlFlow;
 
-use fuz_common::JsonRpcError;
+use fuz_http::JsonrpcError;
 use serde_json::{Value, json};
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
@@ -71,7 +71,7 @@ impl GeminiProvider {
         options: &CompletionHandlerOptions,
         progress_sender: Option<&ProgressSender>,
         signal: &CancellationToken,
-    ) -> Result<Value, JsonRpcError> {
+    ) -> Result<Value, JsonrpcError> {
         let api_key = {
             let state = self.state.read().await;
             state
@@ -106,7 +106,7 @@ impl GeminiProvider {
 async fn handle_non_streaming_response(
     response: reqwest::Response,
     options: &CompletionHandlerOptions,
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let api_response: Value = response.json::<Value>().await.map_err(|e| {
         ai_provider_error(PROVIDER_NAME, &format!("failed to parse response: {e}"))
     })?;
@@ -123,7 +123,7 @@ async fn handle_streaming_response(
     options: &CompletionHandlerOptions,
     progress_sender: &ProgressSender,
     signal: &CancellationToken,
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let mut accumulated_content = String::new();
     let mut last_response: Option<Value> = None;
     let mut usage_metadata: Option<Value> = None;

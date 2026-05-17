@@ -9,7 +9,7 @@
 use std::ops::ControlFlow;
 
 use futures_util::StreamExt;
-use fuz_common::JsonRpcError;
+use fuz_http::JsonrpcError;
 use tokio_util::sync::CancellationToken;
 
 use super::ai_provider_error;
@@ -32,7 +32,7 @@ pub async fn consume_sse_stream<F>(
     provider_name: &str,
     signal: &CancellationToken,
     mut on_event: F,
-) -> Result<(), JsonRpcError>
+) -> Result<(), JsonrpcError>
 where
     F: FnMut(SseEvent) -> ControlFlow<()>,
 {

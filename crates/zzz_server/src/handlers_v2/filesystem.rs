@@ -1,15 +1,22 @@
-//! Filesystem handlers — diskfile and directory mutations through `ScopedFs`.
+//! Filesystem handlers — spine-backed signature.
+//!
+//! Mirrors `crate::handlers::filesystem` (~75 LOC) but with
+//! `(Value, ActionContext<'_>)` and closure-captured `Arc<App>` for the
+//! `ScopedFs` reach-through.
 
+use std::sync::Arc;
+
+use fuz_actions::ActionContext;
 use fuz_http::JsonrpcError;
 use serde_json::Value;
 
+use crate::handlers::App;
 use crate::rpc;
 
-use super::Ctx;
-
-pub(super) async fn handle_diskfile_update(
-    params: &Value,
-    ctx: &Ctx<'_>,
+pub async fn diskfile_update(
+    params: Value,
+    _ctx: ActionContext<'_>,
+    app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
     let path = params
         .get("path")
@@ -23,8 +30,7 @@ pub(super) async fn handle_diskfile_update(
         .and_then(Value::as_str)
         .ok_or_else(|| rpc::invalid_params("missing or invalid 'content' parameter"))?;
 
-    ctx.app
-        .scoped_fs
+    app.scoped_fs
         .write_file(path, content)
         .await
         .map_err(|e| rpc::internal_error(&format!("failed to write file: {e}")))?;
@@ -32,9 +38,10 @@ pub(super) async fn handle_diskfile_update(
     Ok(Value::Null)
 }
 
-pub(super) async fn handle_diskfile_delete(
-    params: &Value,
-    ctx: &Ctx<'_>,
+pub async fn diskfile_delete(
+    params: Value,
+    _ctx: ActionContext<'_>,
+    app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
     let path = params
         .get("path")
@@ -44,8 +51,7 @@ pub(super) async fn handle_diskfile_delete(
         return Err(rpc::invalid_params("path must be absolute"));
     }
 
-    ctx.app
-        .scoped_fs
+    app.scoped_fs
         .rm(path)
         .await
         .map_err(|e| rpc::internal_error(&format!("failed to delete file: {e}")))?;
@@ -53,9 +59,10 @@ pub(super) async fn handle_diskfile_delete(
     Ok(Value::Null)
 }
 
-pub(super) async fn handle_directory_create(
-    params: &Value,
-    ctx: &Ctx<'_>,
+pub async fn directory_create(
+    params: Value,
+    _ctx: ActionContext<'_>,
+    app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
     let path = params
         .get("path")
@@ -65,8 +72,7 @@ pub(super) async fn handle_directory_create(
         return Err(rpc::invalid_params("path must be absolute"));
     }
 
-    ctx.app
-        .scoped_fs
+    app.scoped_fs
         .mkdir(path)
         .await
         .map_err(|e| rpc::internal_error(&format!("failed to create directory: {e}")))?;

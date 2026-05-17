@@ -35,7 +35,7 @@
 
 use std::future::Future;
 
-use fuz_common::JsonRpcError;
+use fuz_http::JsonrpcError;
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -61,14 +61,14 @@ struct AdminRevokeAllResult {
 /// `ctx.auth` is `Some` and the actor has the admin grant by the time we
 /// get here — this is belt-and-suspenders against a future auth wiring
 /// regression.
-fn require_admin_account_id(ctx: &Ctx<'_>) -> Result<uuid::Uuid, JsonRpcError> {
+fn require_admin_account_id(ctx: &Ctx<'_>) -> Result<uuid::Uuid, JsonrpcError> {
     ctx.auth
         .map(|c| c.account.id)
         .ok_or_else(|| rpc::internal_error("missing auth context"))
 }
 
 /// Parse `input.account_id` (UUID string) into a `uuid::Uuid`.
-fn parse_target_account_id(params: &Value) -> Result<uuid::Uuid, JsonRpcError> {
+fn parse_target_account_id(params: &Value) -> Result<uuid::Uuid, JsonrpcError> {
     let raw = params
         .get("account_id")
         .and_then(Value::as_str)
@@ -94,7 +94,7 @@ async fn revoke_all_for_target<F, Fut>(
     ctx: &Ctx<'_>,
     db: &(impl deadpool_postgres::GenericClient + ?Sized),
     delete: F,
-) -> Result<Value, JsonRpcError>
+) -> Result<Value, JsonrpcError>
 where
     F: FnOnce(uuid::Uuid) -> Fut,
     Fut: Future<Output = Result<u64, tokio_postgres::Error>>,
@@ -162,7 +162,7 @@ pub(super) async fn handle_admin_session_revoke_all(
     params: &Value,
     ctx: &Ctx<'_>,
     db: &(impl deadpool_postgres::GenericClient + ?Sized),
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     revoke_all_for_target(
         "session_revoke_all",
         "session revoke_all query failed",
@@ -181,7 +181,7 @@ pub(super) async fn handle_admin_token_revoke_all(
     params: &Value,
     ctx: &Ctx<'_>,
     db: &(impl deadpool_postgres::GenericClient + ?Sized),
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     revoke_all_for_target(
         "token_revoke_all",
         "token revoke_all query failed",

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use fuz_common::JsonRpcError;
+use fuz_http::JsonrpcError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -33,7 +33,7 @@ struct ProviderStatusResult {
 pub(super) async fn handle_provider_load_status(
     params: &Value,
     ctx: &Ctx<'_>,
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let name_str = params
         .get("provider_name")
         .and_then(Value::as_str)
@@ -57,7 +57,7 @@ pub(super) async fn handle_provider_load_status(
 pub(super) async fn handle_provider_update_api_key(
     params: &Value,
     ctx: &Ctx<'_>,
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let name_str = params
         .get("provider_name")
         .and_then(Value::as_str)
@@ -86,7 +86,7 @@ pub(super) async fn handle_provider_update_api_key(
 pub(super) async fn handle_completion_create(
     params: &Value,
     ctx: &Ctx<'_>,
-) -> Result<Value, JsonRpcError> {
+) -> Result<Value, JsonrpcError> {
     let request_value = params
         .get("completion_request")
         .ok_or_else(|| rpc::invalid_params("missing 'completion_request' parameter"))?;

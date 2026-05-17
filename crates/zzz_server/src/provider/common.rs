@@ -8,7 +8,7 @@
 //! directly (they already match the wire schema), so the helper isn't
 //! used there.
 
-use fuz_common::JsonRpcError;
+use fuz_http::JsonrpcError;
 use reqwest::header::HeaderMap;
 use serde_json::{Value, json};
 
@@ -64,7 +64,7 @@ pub async fn check_response_status<F>(
     response: reqwest::Response,
     provider_name: &str,
     parse_api_error: F,
-) -> Result<reqwest::Response, JsonRpcError>
+) -> Result<reqwest::Response, JsonrpcError>
 where
     F: FnOnce(&str) -> Option<String>,
 {
