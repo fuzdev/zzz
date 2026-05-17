@@ -387,27 +387,116 @@ async fn run() -> Result<(), ServerError> {
 
     let app_state_for_shutdown = Arc::clone(&app_state);
 
+    // -- Spine RPC + WS routes (Phase 7 sub-batch D — cutover) --------
+    //
+    // Mount the spine `ActionRegistry` dispatcher at `/api/rpc` and
+    // the spine WS handler at `/api/ws` — the single namespace per
+    // the ecosystem's pre-stable posture (no `/v2` suffix, no compat
+    // shim, no deprecation period). Sub-batches A and C mounted both
+    // routes at `/api/rpc/v2` + `/api/ws/v2` as construction-time
+    // checkpoints; sub-batch D atomically swaps them onto the
+    // canonical paths.
+    //
+    // After this swap:
+    // - `crate::rpc::{rpc_handler, rpc_get_handler}` is unreachable
+    //   (the envelope-dispatch half of `rpc.rs`).
+    // - `crate::ws::ws_handler` is unreachable.
+    // - `App.connections` is never populated again — every new WS
+    //   connection registers in `App.realtime`. Existing call sites
+    //   (`app.broadcast` / `app.close_sockets_for_*`) are shimmed
+    //   onto `App.realtime` via Strategy α (see `handlers/mod.rs`).
+    // - The 24-spec `ActionRegistry` (2 protocol + 9 auth_adapter + 13
+    //   zzz-specific) is the sole dispatcher for `/api/rpc` and
+    //   `/api/ws` traffic.
+    //
+    // Middleware: each spine router carries its own
+    // `fuz_http::client_ip_middleware` layer over
+    // `spine_trusted_proxies`. The outer router's
+    // `proxy::client_ip_middleware` (legacy `crate::proxy::ClientIp`
+    // extension) is retained for the legacy `/api/account/*` REST
+    // handlers + `/api/account/bootstrap` which still read
+    // `Extension<crate::proxy::ClientIp>` — those modules retire
+    // wholesale in original Batches 1-4 along with `crate::proxy`.
+    let registry_for_rpc = Arc::clone(
+        app_state
+            .action_registry
+            .get()
+            .ok_or_else(|| {
+                ServerError::Config(
+                    "action_registry must be set before mounting /api/rpc".to_owned(),
+                )
+            })?,
+    );
+    let spine_rpc_state = fuz_actions::RpcRouteState {
+        pool: app_state.db_pool.clone(),
+        keyring: Arc::clone(&spine_keyring),
+        daemon_token_state: spine_daemon_token.clone(),
+        allowed_origins: Arc::clone(&spine_allowed_origins),
+        registry: registry_for_rpc,
+        audit: Arc::clone(&spine_audit_emitter),
+        socket_revoker: Arc::clone(&socket_revoker),
+    };
+    let spine_rpc_router = fuz_actions::create_rpc_router(spine_rpc_state).layer(
+        axum::middleware::from_fn_with_state(
+            Arc::clone(&spine_trusted_proxies),
+            fuz_http::client_ip_middleware,
+        ),
+    );
+
+    let registry_for_ws = Arc::clone(
+        app_state
+            .action_registry
+            .get()
+            .ok_or_else(|| {
+                ServerError::Config(
+                    "action_registry must be set before mounting /api/ws".to_owned(),
+                )
+            })?,
+    );
+    let spine_ws_state = fuz_actions::WsRouteState {
+        pool: app_state.db_pool.clone(),
+        keyring: Arc::clone(&spine_keyring),
+        daemon_token_state: spine_daemon_token.clone(),
+        allowed_origins: Arc::clone(&spine_allowed_origins),
+        registry: registry_for_ws,
+        audit: Arc::clone(&spine_audit_emitter),
+        socket_revoker: Arc::clone(&socket_revoker),
+        connection_registry: Arc::clone(&realtime),
+    };
+    let spine_ws_router = fuz_actions::register_action_ws(spine_ws_state).layer(
+        axum::middleware::from_fn_with_state(
+            Arc::clone(&spine_trusted_proxies),
+            fuz_http::client_ip_middleware,
+        ),
+    );
+
     let mut app = Router::new()
-        .route("/api/rpc", get(rpc::rpc_get_handler).post(rpc::rpc_handler))
-        .route("/api/ws", get(ws::ws_handler))
         .route("/health", get(health_handler))
         .route("/api/account/bootstrap", post(bootstrap::bootstrap_handler))
         .route("/api/account/status", get(account::status_handler))
         .route("/api/account/login", post(account::login_handler))
         .route("/api/account/logout", post(account::logout_handler))
         .route("/api/account/password", post(account::password_handler))
-        // Resolves `client_ip` and stores it on the request before any
-        // route handler runs. `from_fn_with_state` carries its own
-        // captured `Arc<App>` for the trusted-proxy list, so the layer
-        // is independent of the router's `.with_state(...)` below. The
-        // `ConnectInfo<SocketAddr>` extractor inside the middleware
-        // reads what `into_make_service_with_connect_info` sets at
-        // `axum::serve` time.
+        // Legacy `client_ip` middleware for the REST `/api/account/*` +
+        // `/api/account/bootstrap` handlers (read `Extension<crate::
+        // proxy::ClientIp>`). Retires when original Batches 1-4 delete
+        // the legacy `crate::proxy` module and migrate the REST routes
+        // to the spine `fuz_auth::AccountRouteState` / `BootstrapRouteState`
+        // shape.
         .layer(axum::middleware::from_fn_with_state(
             Arc::clone(&app_state),
             proxy::client_ip_middleware,
         ))
-        .with_state(app_state);
+        .with_state(Arc::clone(&app_state))
+        // Spine RPC + WS — single canonical mount. `create_rpc_router`
+        // exposes `/rpc` and `register_action_ws` exposes `/ws`, so
+        // nesting at `/api` produces `/api/rpc` and `/api/ws`. Both
+        // nested routers carry their own state (`RpcRouteState` /
+        // `WsRouteState`) + middleware stack; axum erases the outer
+        // state to `Router<()>` via `with_state` above so the types
+        // compose.
+        .nest("/api", spine_rpc_router)
+        .nest("/api", spine_ws_router);
 
     if let Some(ref dir) = config.static_dir {
         tracing::info!(dir = %dir.display(), "serving static files");

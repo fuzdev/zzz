@@ -41,7 +41,7 @@ use crate::scoped_fs::ScopedFs;
 // touching the legacy `App` field names; both shapes coexist until the
 // later batches retire the zzz-local impls.
 use fuz_actions::ActionRegistry;
-use fuz_auth::{AccountRouteState, AuditEmitter as SpineAuditEmitter, BootstrapRouteState};
+use fuz_auth::{AccountRouteState, AuditEmitter as SpineAuditEmitter, BootstrapRouteState, SocketRevoker};
 use fuz_http::ParsedProxy as SpineParsedProxy;
 use fuz_realtime::ConnectionRegistry;
 
@@ -324,17 +324,31 @@ impl App {
 
     /// Broadcast a message to all connected clients.
     ///
-    /// Builds one `Utf8Bytes` and clones it (refcount bump) per recipient
-    /// — N receivers cost one allocation, not N.
+    /// Phase 7 sub-batch D: shim over `App.realtime` (Strategy α). The
+    /// legacy `App.connections` map is no longer populated — `/api/ws`
+    /// now mounts the spine WS handler which registers connections in
+    /// `App.realtime` (`Arc<fuz_realtime::ConnectionRegistry>`). Existing
+    /// call sites (`filer::broadcast_filer_change`,
+    /// `pty_manager` terminal data / exited,
+    /// `handlers::workspace::workspace_changed`,
+    /// `handlers_v2::workspace::workspace_*`) stay verbatim; this shim
+    /// retires when original Batches 1-4 delete `App.connections` and
+    /// rewrite call sites to call `App.realtime.broadcast(...)` directly.
     pub fn broadcast(&self, message: &str) {
-        let bytes: Utf8Bytes = message.to_owned().into();
-        let conns = self.connections.read();
-        for info in conns.values() {
-            let _ = info.sender.send(bytes.clone());
-        }
+        let _ = self.realtime.broadcast(message);
     }
 
     /// Send a message to a specific connection.
+    ///
+    /// Operates on the legacy `App.connections` map. Post sub-batch D
+    /// the map is no longer populated (the spine WS handler registers
+    /// into `App.realtime` only), so this is effectively a no-op. The
+    /// only caller is legacy `crate::ws::handle_connection` which is no
+    /// longer wired to a route — kept for compilation until original
+    /// Batches 1-4 delete `crate::ws` and the `connections` field.
+    /// Streaming WS notifications now flow through
+    /// `App.realtime.send_to(...)` via `ctx.connection_id` (see
+    /// `handlers_v2::provider::completion_create`).
     pub fn send_to(&self, id: ConnectionId, message: &str) {
         let conns = self.connections.read();
         if let Some(info) = conns.get(&id) {
@@ -344,58 +358,36 @@ impl App {
 
     /// Close all WebSocket connections for a given session token hash.
     ///
-    /// Used for session revocation — the sender is dropped, which causes
-    /// the WS handler's `notify_rx.recv()` to return `None` and break
-    /// the connection loop.
+    /// Phase 7 sub-batch D: shim over `App.realtime`'s `SocketRevoker`
+    /// impl (Strategy α). Used for session revocation — the spine
+    /// `ConnectionRegistry` drops the matched sender AND cancels the
+    /// per-connection signal token, which causes the spine WS loop's
+    /// message select to exit and send the 4001 close frame.
     ///
     /// Returns the number of connections closed.
     pub fn close_sockets_for_session(&self, target_hash: &str) -> usize {
-        let mut count = 0;
-        self.connections.write().retain(|_, info| {
-            let matches = info.token_hash.as_deref().is_some_and(|h| h == target_hash);
-            if matches {
-                count += 1;
-            }
-            !matches
-        });
-        count
+        self.realtime.close_sockets_for_session(target_hash)
     }
 
     /// Close all WebSocket connections bound to a specific `api_token.id`.
     ///
-    /// Used on `token_revoke` so revoking one API token doesn't tear down
-    /// the account's session-authenticated sockets or other tokens' sockets.
+    /// Phase 7 sub-batch D: shim over `App.realtime`'s `SocketRevoker`
+    /// impl. Used on `token_revoke` so revoking one API token doesn't
+    /// tear down the account's session-authenticated sockets or other
+    /// tokens' sockets.
     ///
     /// Returns the number of connections closed.
     pub fn close_sockets_for_token(&self, target_id: &str) -> usize {
-        let mut count = 0;
-        self.connections.write().retain(|_, info| {
-            let matches = info
-                .api_token_id
-                .as_deref()
-                .is_some_and(|id| id == target_id);
-            if matches {
-                count += 1;
-            }
-            !matches
-        });
-        count
+        self.realtime.close_sockets_for_token(target_id)
     }
 
     /// Close all WebSocket connections for a given account.
     ///
-    /// Used on logout, password change, and token revocation.
-    /// Returns the number of connections closed.
+    /// Phase 7 sub-batch D: shim over `App.realtime`'s `SocketRevoker`
+    /// impl. Used on logout, password change, and bulk token/session
+    /// revocation. Returns the number of connections closed.
     pub fn close_sockets_for_account(&self, target_id: uuid::Uuid) -> usize {
-        let mut count = 0;
-        self.connections.write().retain(|_, info| {
-            let matches = info.account_id.is_some_and(|id| id == target_id);
-            if matches {
-                count += 1;
-            }
-            !matches
-        });
-        count
+        self.realtime.close_sockets_for_account(target_id)
     }
 }
 

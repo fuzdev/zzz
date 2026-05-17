@@ -1,12 +1,13 @@
 //! `ActionSpec` builders for AI provider methods.
 //!
-//! Migrates `provider_load_status` (authenticated read) and
-//! `provider_update_api_key` (keeper: `daemon_token` + keeper role,
-//! side-effects). `completion_create` is deferred — it builds a
-//! per-request `ProgressSender: 'static` over the legacy `Arc<NotifyFn>`
-//! shape, which the spine's new borrowed `&dyn Fn(&str, &Value)` notify
-//! can't satisfy without a separate plumbing change (route via
-//! `ctx.connection_id` + `Arc<ConnectionRegistry>`).
+//! - `provider_load_status` — authenticated read.
+//! - `provider_update_api_key` — keeper (`daemon_token` + keeper role),
+//!   side-effects.
+//! - `completion_create` — authenticated write (Phase 7 sub-batch C).
+//!   The notify reshape lives in `handlers_v2::provider::completion_create`:
+//!   `Arc<ConnectionRegistry>::send_to(conn_id, …)` routes streaming
+//!   `completion_progress` notifications to the originating WS socket via
+//!   `ctx.connection_id`, replacing the legacy `Arc<NotifyFn>` capture.
 
 use std::sync::Arc;
 
@@ -24,7 +25,8 @@ const KEEPER_ROLE: &[&str] = &["keeper"];
 pub fn build_provider_specs(app: Arc<App>) -> Vec<ActionSpec> {
     vec![
         provider_load_status_spec(Arc::clone(&app)),
-        provider_update_api_key_spec(app),
+        provider_update_api_key_spec(Arc::clone(&app)),
+        completion_create_spec(app),
     ]
 }
 
@@ -51,4 +53,12 @@ fn provider_update_api_key_spec(app: Arc<App>) -> ActionSpec {
         roles: Some(KEEPER_ROLE),
     };
     ActionSpec::with_side_effects("provider_update_api_key", keeper_auth, handler)
+}
+
+fn completion_create_spec(app: Arc<App>) -> ActionSpec {
+    let handler: ActionHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
+        let app = Arc::clone(&app);
+        Box::pin(async move { provider_v2::completion_create(params, ctx, app).await })
+    });
+    ActionSpec::with_side_effects("completion_create", AuthSpec::authenticated(), handler)
 }
