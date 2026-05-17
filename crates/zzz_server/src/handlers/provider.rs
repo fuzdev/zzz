@@ -115,7 +115,6 @@ pub(super) async fn handle_completion_create(
         completion_options,
         completion_messages,
         prompt,
-        progress_token: progress_token.clone(),
     };
 
     let progress_sender: Option<provider::ProgressSender> = progress_token.as_ref().map(|token| {

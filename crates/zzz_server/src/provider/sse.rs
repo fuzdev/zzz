@@ -100,3 +100,62 @@ fn strip_field_prefix<'a>(line: &'a str, field: &str) -> Option<&'a str> {
     let rest = line.strip_prefix(field)?.strip_prefix(':')?;
     Some(rest.strip_prefix(' ').unwrap_or(rest))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_event_and_data() {
+        let event = parse_sse_event("event: message_start\ndata: {\"id\":\"1\"}").unwrap();
+        assert_eq!(event.event_type.as_deref(), Some("message_start"));
+        assert_eq!(event.data, "{\"id\":\"1\"}");
+    }
+
+    #[test]
+    fn parses_data_without_event_type() {
+        let event = parse_sse_event("data: {\"x\":1}").unwrap();
+        assert!(event.event_type.is_none());
+        assert_eq!(event.data, "{\"x\":1}");
+    }
+
+    #[test]
+    fn rejects_event_without_data() {
+        assert!(parse_sse_event("event: ping").is_none());
+    }
+
+    #[test]
+    fn rejects_empty_input() {
+        assert!(parse_sse_event("").is_none());
+    }
+
+    #[test]
+    fn joins_multi_line_data_with_newlines() {
+        let event = parse_sse_event("data: line one\ndata: line two\ndata: line three").unwrap();
+        assert_eq!(event.data, "line one\nline two\nline three");
+    }
+
+    #[test]
+    fn tolerates_no_space_after_colon() {
+        let event = parse_sse_event("event:foo\ndata:{\"x\":1}").unwrap();
+        assert_eq!(event.event_type.as_deref(), Some("foo"));
+        assert_eq!(event.data, "{\"x\":1}");
+    }
+
+    #[test]
+    fn passes_through_non_json_data() {
+        // OpenAI's `[DONE]` terminator — callers detect this; the parser
+        // doesn't try to JSON-decode.
+        let event = parse_sse_event("data: [DONE]").unwrap();
+        assert_eq!(event.data, "[DONE]");
+    }
+
+    #[test]
+    fn ignores_unrecognized_fields() {
+        // SSE allows `id:`, `retry:`, and bare comments — we drop them
+        // and key only on event + data.
+        let event = parse_sse_event("id: 42\nevent: foo\ndata: bar\nretry: 100").unwrap();
+        assert_eq!(event.event_type.as_deref(), Some("foo"));
+        assert_eq!(event.data, "bar");
+    }
+}

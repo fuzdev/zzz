@@ -78,3 +78,41 @@ where
     let error_msg = parse_api_error(&error_body).unwrap_or(error_body);
     Err(ai_provider_error(provider_name, &error_msg))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn completion_response_envelope() {
+        let value = build_completion_response("claude", "claude-3", &json!({"x": 1}));
+        let resp = &value["completion_response"];
+        assert_eq!(resp["provider_name"], "claude");
+        assert_eq!(resp["model"], "claude-3");
+        assert_eq!(resp["data"]["type"], "claude");
+        assert_eq!(resp["data"]["value"], json!({"x": 1}));
+        assert!(resp["created"].is_string(), "created should be RFC3339 string");
+    }
+
+    #[test]
+    fn completion_response_data_type_matches_provider_name() {
+        for name in ["claude", "chatgpt", "gemini", "ollama"] {
+            let value = build_completion_response(name, "m", &Value::Null);
+            assert_eq!(value["completion_response"]["provider_name"], name);
+            assert_eq!(value["completion_response"]["data"]["type"], name);
+        }
+    }
+
+    #[test]
+    fn text_progress_chunk_shape() {
+        let chunk = build_text_progress_chunk("hello");
+        assert_eq!(chunk["message"]["role"], "assistant");
+        assert_eq!(chunk["message"]["content"], "hello");
+    }
+
+    #[test]
+    fn text_progress_chunk_empty_content_preserved() {
+        let chunk = build_text_progress_chunk("");
+        assert_eq!(chunk["message"]["content"], "");
+    }
+}

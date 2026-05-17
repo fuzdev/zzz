@@ -17,7 +17,6 @@ const PROVIDER_NAME: &str = "claude";
 // -- Provider state -----------------------------------------------------------
 
 struct AnthropicState {
-    api_key: Option<String>,
     client: Option<reqwest::Client>,
     cached_status: Option<ProviderStatus>,
 }
@@ -34,10 +33,9 @@ pub struct AnthropicProvider {
 
 impl AnthropicProvider {
     pub fn new(api_key: Option<String>) -> Self {
-        let client = api_key.as_ref().map(|key| build_client(key));
+        let client = api_key.map(|key| build_client(&key));
         Self {
             state: RwLock::new(AnthropicState {
-                api_key,
                 client,
                 cached_status: None,
             }),
@@ -66,8 +64,7 @@ impl AnthropicProvider {
 
     pub async fn set_api_key(&self, key: Option<String>) {
         let mut state = self.state.write().await;
-        state.client = key.as_ref().map(|k| build_client(k));
-        state.api_key = key;
+        state.client = key.as_deref().map(build_client);
         state.cached_status = None;
     }
 
@@ -88,7 +85,7 @@ impl AnthropicProvider {
                 .ok_or_else(|| ai_provider_error(PROVIDER_NAME, PROVIDER_ERROR_NEEDS_API_KEY))?
         };
 
-        let streaming = options.progress_token.is_some() && progress_sender.is_some();
+        let streaming = progress_sender.is_some();
         let body = build_request_body(options, streaming);
 
         let response: reqwest::Response = client
@@ -290,4 +287,105 @@ fn parse_api_error(body: &str) -> Option<String> {
         .and_then(|e| e.get("message"))
         .and_then(Value::as_str)
         .map(String::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::provider::CompletionOptions;
+
+    fn opts() -> CompletionHandlerOptions {
+        CompletionHandlerOptions {
+            model: "claude-3-haiku".to_owned(),
+            completion_options: CompletionOptions::default(),
+            completion_messages: None,
+            prompt: "hi".to_owned(),
+        }
+    }
+
+    #[test]
+    fn request_body_includes_stream_flag() {
+        let body = build_request_body(&opts(), true);
+        assert_eq!(body["stream"], true);
+        let body = build_request_body(&opts(), false);
+        assert_eq!(body["stream"], false);
+    }
+
+    #[test]
+    fn request_body_omits_optional_fields_when_none() {
+        let body = build_request_body(&opts(), false);
+        assert!(body.get("temperature").is_none());
+        assert!(body.get("top_k").is_none());
+        assert!(body.get("top_p").is_none());
+        assert!(body.get("stop_sequences").is_none());
+        // system_message defaults to "" — skipped
+        assert!(body.get("system").is_none());
+    }
+
+    #[test]
+    fn request_body_includes_optional_fields_when_set() {
+        let mut o = opts();
+        o.completion_options.temperature = Some(0.5);
+        o.completion_options.top_p = Some(0.9);
+        o.completion_options.top_k = Some(40);
+        o.completion_options.system_message = "be concise".to_owned();
+        o.completion_options.stop_sequences = Some(vec!["END".to_owned()]);
+        let body = build_request_body(&o, false);
+        assert_eq!(body["temperature"], 0.5);
+        assert_eq!(body["top_p"], 0.9);
+        assert_eq!(body["top_k"], 40);
+        assert_eq!(body["system"], "be concise");
+        assert_eq!(body["stop_sequences"], json!(["END"]));
+    }
+
+    #[test]
+    fn request_body_omits_empty_stop_sequences() {
+        let mut o = opts();
+        o.completion_options.stop_sequences = Some(vec![]);
+        let body = build_request_body(&o, false);
+        assert!(body.get("stop_sequences").is_none());
+    }
+
+    #[test]
+    fn messages_appends_prompt_as_user() {
+        let m = build_messages(None, "hello");
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0]["role"], "user");
+        assert_eq!(m[0]["content"][0]["text"], "hello");
+        assert_eq!(m[0]["content"][0]["type"], "text");
+    }
+
+    #[test]
+    fn messages_filters_system_role() {
+        let history = vec![
+            CompletionMessage {
+                role: "system".to_owned(),
+                content: "ignored".to_owned(),
+            },
+            CompletionMessage {
+                role: "assistant".to_owned(),
+                content: "prior".to_owned(),
+            },
+        ];
+        let m = build_messages(Some(&history), "now");
+        // assistant kept + prompt appended; system dropped
+        assert_eq!(m.len(), 2);
+        assert_eq!(m[0]["role"], "assistant");
+        assert_eq!(m[0]["content"][0]["text"], "prior");
+        assert_eq!(m[1]["role"], "user");
+        assert_eq!(m[1]["content"][0]["text"], "now");
+    }
+
+    #[test]
+    fn parse_api_error_extracts_message() {
+        let body = r#"{"type":"error","error":{"type":"x","message":"key invalid"}}"#;
+        assert_eq!(parse_api_error(body).as_deref(), Some("key invalid"));
+    }
+
+    #[test]
+    fn parse_api_error_returns_none_on_malformed_input() {
+        assert!(parse_api_error("not json").is_none());
+        assert!(parse_api_error(r#"{"no":"error"}"#).is_none());
+        assert!(parse_api_error(r#"{"error":{"type":"x"}}"#).is_none());
+    }
 }

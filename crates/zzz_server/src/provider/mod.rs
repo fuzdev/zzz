@@ -133,12 +133,16 @@ pub struct CompletionMessage {
 }
 
 /// Options passed to a provider's complete method.
+///
+/// Streaming is keyed off the presence of a `ProgressSender` argument
+/// to `complete`, not a field here — the handler builds the sender from
+/// the request's `progressToken` and only constructs one when streaming
+/// is requested.
 pub struct CompletionHandlerOptions {
     pub model: String,
     pub completion_options: CompletionOptions,
     pub completion_messages: Option<Vec<CompletionMessage>>,
     pub prompt: String,
-    pub progress_token: Option<String>,
 }
 
 /// Callback for sending streaming progress notifications.

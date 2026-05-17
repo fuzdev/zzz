@@ -77,7 +77,7 @@ impl OllamaProvider {
             state.client.clone()
         };
 
-        let streaming = options.progress_token.is_some() && progress_sender.is_some();
+        let streaming = progress_sender.is_some();
         let body = build_request_body(options, streaming);
 
         let response = client
@@ -242,4 +242,96 @@ fn build_messages(
 fn parse_api_error(body: &str) -> Option<String> {
     let v: Value = serde_json::from_str(body).ok()?;
     v.get("error").and_then(Value::as_str).map(String::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::provider::CompletionOptions;
+
+    fn opts() -> CompletionHandlerOptions {
+        CompletionHandlerOptions {
+            model: "llama3".to_owned(),
+            completion_options: CompletionOptions::default(),
+            completion_messages: None,
+            prompt: "hi".to_owned(),
+        }
+    }
+
+    #[test]
+    fn request_body_includes_stream_flag() {
+        let body = build_request_body(&opts(), true);
+        assert_eq!(body["stream"], true);
+        let body = build_request_body(&opts(), false);
+        assert_eq!(body["stream"], false);
+    }
+
+    #[test]
+    fn request_body_uses_options_object_with_snake_case() {
+        let mut o = opts();
+        o.completion_options.temperature = Some(0.4);
+        o.completion_options.seed = Some(123);
+        o.completion_options.top_k = Some(40);
+        o.completion_options.top_p = Some(0.9);
+        o.completion_options.frequency_penalty = Some(0.1);
+        o.completion_options.presence_penalty = Some(0.2);
+        o.completion_options.stop_sequences = Some(vec!["END".to_owned()]);
+        let body = build_request_body(&o, true);
+        let oo = &body["options"];
+        assert!(oo["num_predict"].is_number());
+        assert_eq!(oo["temperature"], 0.4);
+        assert_eq!(oo["seed"], 123);
+        assert_eq!(oo["top_k"], 40);
+        assert_eq!(oo["top_p"], 0.9);
+        assert_eq!(oo["frequency_penalty"], 0.1);
+        assert_eq!(oo["presence_penalty"], 0.2);
+        assert_eq!(oo["stop"], json!(["END"]));
+    }
+
+    #[test]
+    fn messages_always_open_with_system_close_with_prompt() {
+        let history = vec![
+            CompletionMessage {
+                role: "user".to_owned(),
+                content: "earlier".to_owned(),
+            },
+            CompletionMessage {
+                role: "assistant".to_owned(),
+                content: "reply".to_owned(),
+            },
+        ];
+        let m = build_messages("sys", Some(&history), "now");
+        assert_eq!(m.len(), 4);
+        assert_eq!(m[0]["role"], "system");
+        assert_eq!(m[0]["content"], "sys");
+        assert_eq!(m[1]["role"], "user");
+        assert_eq!(m[1]["content"], "earlier");
+        assert_eq!(m[2]["role"], "assistant");
+        assert_eq!(m[3]["role"], "user");
+        assert_eq!(m[3]["content"], "now");
+    }
+
+    #[test]
+    fn messages_with_empty_system_still_emits_system_slot() {
+        // Parity with TS: system message always present (even empty),
+        // matches `[{role:'system', content: system_message}, ...]`.
+        let m = build_messages("", None, "hi");
+        assert_eq!(m[0]["role"], "system");
+        assert_eq!(m[0]["content"], "");
+    }
+
+    #[test]
+    fn parse_api_error_extracts_string_error() {
+        let body = r#"{"error":"model not found"}"#;
+        assert_eq!(parse_api_error(body).as_deref(), Some("model not found"));
+    }
+
+    #[test]
+    fn parse_api_error_returns_none_when_error_missing_or_wrong_shape() {
+        assert!(parse_api_error("xxx").is_none());
+        assert!(parse_api_error(r#"{"other":"x"}"#).is_none());
+        // Object-shaped errors (not the Ollama shape) return None — let
+        // the caller fall back to the raw body.
+        assert!(parse_api_error(r#"{"error":{"message":"x"}}"#).is_none());
+    }
 }

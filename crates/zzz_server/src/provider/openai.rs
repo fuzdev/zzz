@@ -15,7 +15,6 @@ const PROVIDER_NAME: &str = "chatgpt";
 const SSE_DONE_MARKER: &str = "[DONE]";
 
 struct OpenAiState {
-    api_key: Option<String>,
     client: Option<reqwest::Client>,
     cached_status: Option<ProviderStatus>,
 }
@@ -29,10 +28,9 @@ pub struct OpenAiProvider {
 
 impl OpenAiProvider {
     pub fn new(api_key: Option<String>) -> Self {
-        let client = api_key.as_ref().map(|key| build_client(key));
+        let client = api_key.map(|key| build_client(&key));
         Self {
             state: RwLock::new(OpenAiState {
-                api_key,
                 client,
                 cached_status: None,
             }),
@@ -44,10 +42,10 @@ impl OpenAiProvider {
         if !reload && let Some(ref status) = state.cached_status {
             return status.clone();
         }
-        let has_key = state.api_key.is_some();
+        let has_client = state.client.is_some();
         drop(state);
 
-        let status = if has_key {
+        let status = if has_client {
             ProviderStatus::available(PROVIDER_NAME)
         } else {
             ProviderStatus::unavailable(PROVIDER_NAME, PROVIDER_ERROR_NEEDS_API_KEY)
@@ -60,8 +58,7 @@ impl OpenAiProvider {
 
     pub async fn set_api_key(&self, key: Option<String>) {
         let mut state = self.state.write().await;
-        state.client = key.as_ref().map(|k| build_client(k));
-        state.api_key = key;
+        state.client = key.as_deref().map(build_client);
         state.cached_status = None;
     }
 
@@ -79,7 +76,7 @@ impl OpenAiProvider {
                 .ok_or_else(|| ai_provider_error(PROVIDER_NAME, PROVIDER_ERROR_NEEDS_API_KEY))?
         };
 
-        let streaming = options.progress_token.is_some() && progress_sender.is_some();
+        let streaming = progress_sender.is_some();
         let body = build_request_body(options, streaming);
 
         let response = client
@@ -293,4 +290,107 @@ fn parse_api_error(body: &str) -> Option<String> {
         .and_then(|e| e.get("message"))
         .and_then(Value::as_str)
         .map(String::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::provider::CompletionOptions;
+
+    fn opts() -> CompletionHandlerOptions {
+        CompletionHandlerOptions {
+            model: "gpt-4o-mini".to_owned(),
+            completion_options: CompletionOptions::default(),
+            completion_messages: None,
+            prompt: "hi".to_owned(),
+        }
+    }
+
+    #[test]
+    fn request_body_includes_stream_flag() {
+        let body = build_request_body(&opts(), true);
+        assert_eq!(body["stream"], true);
+        let body = build_request_body(&opts(), false);
+        assert_eq!(body["stream"], false);
+    }
+
+    #[test]
+    fn request_body_omits_optional_fields_when_none() {
+        let body = build_request_body(&opts(), false);
+        assert!(body.get("temperature").is_none());
+        assert!(body.get("top_p").is_none());
+        assert!(body.get("seed").is_none());
+        assert!(body.get("frequency_penalty").is_none());
+        assert!(body.get("presence_penalty").is_none());
+        assert!(body.get("stop").is_none());
+    }
+
+    #[test]
+    fn request_body_includes_optional_fields_when_set() {
+        let mut o = opts();
+        o.completion_options.temperature = Some(0.7);
+        o.completion_options.top_p = Some(0.95);
+        o.completion_options.seed = Some(42);
+        o.completion_options.frequency_penalty = Some(0.1);
+        o.completion_options.presence_penalty = Some(-0.2);
+        o.completion_options.stop_sequences = Some(vec!["STOP".to_owned()]);
+        let body = build_request_body(&o, false);
+        assert_eq!(body["temperature"], 0.7);
+        assert_eq!(body["top_p"], 0.95);
+        assert_eq!(body["seed"], 42);
+        assert_eq!(body["frequency_penalty"], 0.1);
+        assert_eq!(body["presence_penalty"], -0.2);
+        assert_eq!(body["stop"], json!(["STOP"]));
+    }
+
+    #[test]
+    fn messages_default_includes_system_then_prompt() {
+        let m = build_messages("be brief", None, "hi", "gpt-4o");
+        assert_eq!(m.len(), 2);
+        assert_eq!(m[0]["role"], "system");
+        assert_eq!(m[0]["content"], "be brief");
+        assert_eq!(m[1]["role"], "user");
+        assert_eq!(m[1]["content"], "hi");
+    }
+
+    #[test]
+    fn messages_omits_system_for_o1_mini() {
+        let m = build_messages("ignored", None, "hi", "o1-mini");
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0]["role"], "user");
+    }
+
+    #[test]
+    fn messages_passes_history_through() {
+        let history = vec![
+            CompletionMessage {
+                role: "user".to_owned(),
+                content: "prior q".to_owned(),
+            },
+            CompletionMessage {
+                role: "assistant".to_owned(),
+                content: "prior a".to_owned(),
+            },
+        ];
+        let m = build_messages("sys", Some(&history), "now", "gpt-4o");
+        assert_eq!(m.len(), 4);
+        assert_eq!(m[0]["role"], "system");
+        assert_eq!(m[1]["role"], "user");
+        assert_eq!(m[1]["content"], "prior q");
+        assert_eq!(m[2]["role"], "assistant");
+        assert_eq!(m[2]["content"], "prior a");
+        assert_eq!(m[3]["content"], "now");
+    }
+
+    #[test]
+    fn parse_api_error_extracts_message() {
+        let body = r#"{"error":{"message":"bad key","type":"invalid_request_error"}}"#;
+        assert_eq!(parse_api_error(body).as_deref(), Some("bad key"));
+    }
+
+    #[test]
+    fn parse_api_error_returns_none_on_malformed_input() {
+        assert!(parse_api_error("garbage").is_none());
+        assert!(parse_api_error(r#"{"error":"string-not-object"}"#).is_none());
+    }
 }
