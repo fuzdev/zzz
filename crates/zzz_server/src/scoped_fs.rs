@@ -1,5 +1,6 @@
 use std::path::{Component, Path, PathBuf};
-use std::sync::RwLock;
+
+use parking_lot::RwLock;
 
 // -- Errors -------------------------------------------------------------------
 
@@ -54,7 +55,7 @@ impl ScopedFs {
     /// Mirrors `ScopedFs.add_path` in `src/lib/server/scoped_fs.ts`.
     pub fn add_path(&self, path: &Path) -> bool {
         let normalized = normalize_trailing_slash(path);
-        let mut paths = self.allowed_paths.write().expect("ScopedFs lock poisoned");
+        let mut paths = self.allowed_paths.write();
         if paths.iter().any(|p| p == &normalized) {
             return false;
         }
@@ -67,7 +68,7 @@ impl ScopedFs {
     /// Mirrors `ScopedFs.remove_path` in `src/lib/server/scoped_fs.ts`.
     pub fn remove_path(&self, path: &Path) -> bool {
         let normalized = normalize_trailing_slash(path);
-        let mut paths = self.allowed_paths.write().expect("ScopedFs lock poisoned");
+        let mut paths = self.allowed_paths.write();
         if let Some(index) = paths.iter().position(|p| p == &normalized) {
             paths.remove(index);
             true
@@ -79,7 +80,7 @@ impl ScopedFs {
     /// Check if a path falls under one of the allowed directories.
     fn is_path_allowed(&self, path: &Path) -> bool {
         let path_str = path.to_string_lossy();
-        let paths = self.allowed_paths.read().expect("ScopedFs lock poisoned");
+        let paths = self.allowed_paths.read();
         for allowed in paths.iter() {
             let allowed_str = allowed.to_string_lossy();
             if path_str.starts_with(allowed_str.as_ref())

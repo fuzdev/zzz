@@ -1,7 +1,10 @@
 pub mod anthropic;
+pub mod common;
 pub mod gemini;
+pub mod ndjson;
 pub mod ollama;
 pub mod openai;
+pub mod sse;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -13,6 +16,7 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
 use crate::rpc;
+
 
 // -- Provider name enum -------------------------------------------------------
 
@@ -198,9 +202,9 @@ impl Provider {
     ) -> Result<Value, JsonRpcError> {
         match self {
             Self::Anthropic(p) => p.complete(options, progress_sender, signal).await,
-            Self::OpenAi(_) | Self::Gemini(_) | Self::Ollama(_) => Err(rpc::internal_error(
-                &format!("{}: not yet implemented in Rust backend", self.name()),
-            )),
+            Self::OpenAi(p) => p.complete(options, progress_sender, signal).await,
+            Self::Gemini(p) => p.complete(options, progress_sender, signal).await,
+            Self::Ollama(p) => p.complete(options, progress_sender, signal).await,
         }
     }
 }

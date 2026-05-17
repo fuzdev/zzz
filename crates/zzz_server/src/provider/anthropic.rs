@@ -1,4 +1,5 @@
-use futures_util::StreamExt;
+use std::ops::ControlFlow;
+
 use fuz_common::JsonRpcError;
 use serde_json::{Value, json};
 use tokio::sync::RwLock;
@@ -6,11 +7,12 @@ use tokio_util::sync::CancellationToken;
 
 use super::{
     CompletionHandlerOptions, CompletionMessage, PROVIDER_ERROR_NEEDS_API_KEY, ProgressSender,
-    ProviderStatus, ai_provider_error,
+    ProviderStatus, ai_provider_error, common, sse,
 };
 
 const API_URL: &str = "https://api.anthropic.com/v1/messages";
 const API_VERSION: &str = "2023-06-01";
+const PROVIDER_NAME: &str = "claude";
 
 // -- Provider state -----------------------------------------------------------
 
@@ -52,9 +54,9 @@ impl AnthropicProvider {
         drop(state);
 
         let status = if has_client {
-            ProviderStatus::available("claude")
+            ProviderStatus::available(PROVIDER_NAME)
         } else {
-            ProviderStatus::unavailable("claude", PROVIDER_ERROR_NEEDS_API_KEY)
+            ProviderStatus::unavailable(PROVIDER_NAME, PROVIDER_ERROR_NEEDS_API_KEY)
         };
 
         let mut state = self.state.write().await;
@@ -83,7 +85,7 @@ impl AnthropicProvider {
             state
                 .client
                 .clone()
-                .ok_or_else(|| ai_provider_error("claude", PROVIDER_ERROR_NEEDS_API_KEY))?
+                .ok_or_else(|| ai_provider_error(PROVIDER_NAME, PROVIDER_ERROR_NEEDS_API_KEY))?
         };
 
         let streaming = options.progress_token.is_some() && progress_sender.is_some();
@@ -94,16 +96,10 @@ impl AnthropicProvider {
             .json(&body)
             .send()
             .await
-            .map_err(|e: reqwest::Error| ai_provider_error("claude", &e.to_string()))?;
+            .map_err(|e: reqwest::Error| ai_provider_error(PROVIDER_NAME, &e.to_string()))?;
 
-        if !response.status().is_success() {
-            let error_body: String = response
-                .text()
-                .await
-                .unwrap_or_else(|_: reqwest::Error| String::from("unknown error"));
-            let error_msg = parse_api_error(&error_body).unwrap_or(error_body);
-            return Err(ai_provider_error("claude", &error_msg));
-        }
+        let response =
+            common::check_response_status(response, PROVIDER_NAME, parse_api_error).await?;
 
         if let (true, Some(sender)) = (streaming, progress_sender) {
             handle_streaming_response(response, options, sender, signal).await
@@ -121,10 +117,14 @@ async fn handle_non_streaming_response(
         .json::<Value>()
         .await
         .map_err(|e: reqwest::Error| {
-            ai_provider_error("claude", &format!("failed to parse response: {e}"))
+            ai_provider_error(PROVIDER_NAME, &format!("failed to parse response: {e}"))
         })?;
 
-    Ok(build_completion_response(&options.model, &api_response))
+    Ok(common::build_completion_response(
+        PROVIDER_NAME,
+        &options.model,
+        &api_response,
+    ))
 }
 
 async fn handle_streaming_response(
@@ -133,78 +133,55 @@ async fn handle_streaming_response(
     progress_sender: &ProgressSender,
     signal: &CancellationToken,
 ) -> Result<Value, JsonRpcError> {
-    let mut stream = response.bytes_stream();
-    let mut buffer = String::new();
     let mut accumulated_content = String::new();
     let mut message_id = String::new();
     let mut final_usage: Option<Value> = None;
     let mut stop_reason = String::from("end_turn");
 
-    while let Some(chunk) = stream.next().await {
-        // Mirrors TS `if (ctx.signal.aborted) break` in ollama_pull/create —
-        // bail out of the stream when the request is cancelled (socket close).
-        if signal.is_cancelled() {
-            break;
-        }
-        let chunk =
-            chunk.map_err(|e| ai_provider_error("claude", &format!("stream read error: {e}")))?;
-        let text = String::from_utf8_lossy(&chunk);
-        // Normalize line endings per SSE spec (RFC 8895 §9.2):
-        // \r\n → \n, then lone \r → \n
-        if text.contains('\r') {
-            buffer.push_str(&text.replace("\r\n", "\n").replace('\r', "\n"));
-        } else {
-            buffer.push_str(&text);
-        }
-
-        // Process complete SSE events (separated by \n\n)
-        while let Some(boundary) = buffer.find("\n\n") {
-            let event_text = buffer[..boundary].to_owned();
-            buffer = buffer[boundary + 2..].to_owned();
-
-            if let Some((event_type, data)) = parse_sse_event(&event_text) {
-                match event_type {
-                    "message_start" => {
-                        if let Some(id) = data
-                            .get("message")
-                            .and_then(|m| m.get("id"))
-                            .and_then(Value::as_str)
-                        {
-                            id.clone_into(&mut message_id);
-                        }
-                    }
-                    "content_block_delta" => {
-                        if let Some(text) = data
-                            .get("delta")
-                            .and_then(|d| d.get("text"))
-                            .and_then(Value::as_str)
-                        {
-                            accumulated_content.push_str(text);
-                            progress_sender(json!({
-                                "message": {
-                                    "role": "assistant",
-                                    "content": text,
-                                }
-                            }));
-                        }
-                    }
-                    "message_delta" => {
-                        if let Some(sr) = data
-                            .get("delta")
-                            .and_then(|d| d.get("stop_reason"))
-                            .and_then(Value::as_str)
-                        {
-                            sr.clone_into(&mut stop_reason);
-                        }
-                        if let Some(usage) = data.get("usage") {
-                            final_usage = Some(usage.clone());
-                        }
-                    }
-                    _ => {}
+    sse::consume_sse_stream(response, PROVIDER_NAME, signal, |event| {
+        let Some(event_type) = event.event_type.as_deref() else {
+            return ControlFlow::Continue(());
+        };
+        let Ok(data) = serde_json::from_str::<Value>(&event.data) else {
+            return ControlFlow::Continue(());
+        };
+        match event_type {
+            "message_start" => {
+                if let Some(id) = data
+                    .get("message")
+                    .and_then(|m| m.get("id"))
+                    .and_then(Value::as_str)
+                {
+                    id.clone_into(&mut message_id);
                 }
             }
+            "content_block_delta" => {
+                if let Some(text) = data
+                    .get("delta")
+                    .and_then(|d| d.get("text"))
+                    .and_then(Value::as_str)
+                {
+                    accumulated_content.push_str(text);
+                    progress_sender(common::build_text_progress_chunk(text));
+                }
+            }
+            "message_delta" => {
+                if let Some(sr) = data
+                    .get("delta")
+                    .and_then(|d| d.get("stop_reason"))
+                    .and_then(Value::as_str)
+                {
+                    sr.clone_into(&mut stop_reason);
+                }
+                if let Some(usage) = data.get("usage") {
+                    final_usage = Some(usage.clone());
+                }
+            }
+            _ => {}
         }
-    }
+        ControlFlow::Continue(())
+    })
+    .await?;
 
     let api_response = json!({
         "id": message_id,
@@ -217,7 +194,11 @@ async fn handle_streaming_response(
         "usage": final_usage,
     });
 
-    Ok(build_completion_response(&options.model, &api_response))
+    Ok(common::build_completion_response(
+        PROVIDER_NAME,
+        &options.model,
+        &api_response,
+    ))
 }
 
 // -- Request building ---------------------------------------------------------
@@ -284,23 +265,6 @@ fn build_messages(completion_messages: Option<&[CompletionMessage]>, prompt: &st
     messages
 }
 
-// -- Response building --------------------------------------------------------
-
-fn build_completion_response(model: &str, api_response: &Value) -> Value {
-    let created = fuz_common::rfc3339_now();
-    json!({
-        "completion_response": {
-            "created": created,
-            "provider_name": "claude",
-            "model": model,
-            "data": {
-                "type": "claude",
-                "value": api_response,
-            },
-        },
-    })
-}
-
 // -- HTTP client --------------------------------------------------------------
 
 fn build_client(api_key: &str) -> reqwest::Client {
@@ -312,41 +276,7 @@ fn build_client(api_key: &str) -> reqwest::Client {
         "anthropic-version",
         reqwest::header::HeaderValue::from_static(API_VERSION),
     );
-    reqwest::Client::builder()
-        .default_headers(headers)
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
-}
-
-// -- SSE parsing --------------------------------------------------------------
-
-/// Parse a single SSE event block into (`event_type`, `parsed_data`).
-///
-/// An SSE event looks like:
-/// ```text
-/// event: message_start
-/// data: {"type":"message_start","message":{...}}
-/// ```
-fn parse_sse_event(event_text: &str) -> Option<(&str, Value)> {
-    let mut event_type: Option<&str> = None;
-    let mut data_lines: Vec<&str> = Vec::new();
-
-    for line in event_text.lines() {
-        if let Some(rest) = line.strip_prefix("event: ") {
-            event_type = Some(rest.trim());
-        } else if let Some(rest) = line.strip_prefix("data: ") {
-            data_lines.push(rest);
-        }
-    }
-
-    let event_type = event_type?;
-    if data_lines.is_empty() {
-        return None;
-    }
-
-    let data_str = data_lines.join("\n");
-    let data: Value = serde_json::from_str(&data_str).ok()?;
-    Some((event_type, data))
+    common::build_client_with_headers(headers)
 }
 
 // -- Error parsing ------------------------------------------------------------

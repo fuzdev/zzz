@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use axum::extract::State;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
+use axum::extract::{Extension, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use futures_util::{SinkExt, StreamExt};
@@ -9,9 +9,10 @@ use serde_json::Value;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::auth::{ResolvedAuth, resolve_auth_from_headers};
+use crate::auth::{self, ResolvedAuth, resolve_auth_from_headers};
 use crate::handlers::{App, NotifyFn};
 use crate::perform_action::{PerformActionInput, PerformActionResult, perform_action};
+use crate::proxy::ClientIp;
 use crate::rpc::{self, Classified};
 
 /// Axum handler for `GET /api/ws` — upgrades to WebSocket with auth.
@@ -24,9 +25,20 @@ use crate::rpc::{self, Classified};
 /// socket revocation.
 pub async fn ws_handler(
     State(app): State<Arc<App>>,
+    Extension(client_ip): Extension<ClientIp>,
     headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Response {
+    // Origin verification before any auth work — matches the HTTP RPC
+    // and REST account routes, mirrors fuz_app's `/api/*` origin
+    // middleware which also covers the WS upgrade. Browsers send the
+    // session cookie on a same-origin WS upgrade even from a hostile
+    // page in `iframe`d / postMessage-style attacks, so origin pinning
+    // is meaningful here beyond SameSite=Strict.
+    if !auth::is_request_origin_allowed(&headers, &app.allowed_origins) {
+        return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
+    }
+
     // Resolve auth from headers (daemon token → cookie → bearer)
     let resolved = resolve_auth_from_headers(
         &headers,
@@ -40,7 +52,13 @@ pub async fn ws_handler(
         return (StatusCode::UNAUTHORIZED, "unauthenticated").into_response();
     };
 
-    ws.on_upgrade(move |socket| handle_connection(socket, app, resolved))
+    // Capture client_ip at upgrade — per-message XFF resolution doesn't
+    // apply (WS doesn't reissue HTTP headers per frame), so the IP from
+    // the upgrade request is the right wire-key for every audit row on
+    // this connection. Mirrors fuz_app's WS auth pattern where
+    // `get_client_ip(c)` resolves at upgrade time.
+    let connection_client_ip = client_ip.0;
+    ws.on_upgrade(move |socket| handle_connection(socket, app, resolved, connection_client_ip))
 }
 
 /// Matches `fuz_app`'s `WS_CLOSE_SESSION_REVOKED` (4001). Applied when the
@@ -48,7 +66,12 @@ pub async fn ws_handler(
 /// can distinguish revocation from a normal (1000) close.
 const WS_CLOSE_SESSION_REVOKED: u16 = 4001;
 
-async fn handle_connection(socket: WebSocket, app: Arc<App>, resolved: ResolvedAuth) {
+async fn handle_connection(
+    socket: WebSocket,
+    app: Arc<App>,
+    resolved: ResolvedAuth,
+    client_ip: String,
+) {
     let (mut tx, mut rx) = socket.split();
 
     // Register connection with auth metadata for targeted revocation.
@@ -135,6 +158,7 @@ async fn handle_connection(socket: WebSocket, app: Arc<App>, resolved: ResolvedA
                             request_id: &id,
                             auth: Some(&auth_context),
                             credential_type: Some(credential_type),
+                            client_ip: Some(client_ip.clone()),
                             notify: Arc::clone(&notify),
                             signal: socket_signal.clone(),
                         };

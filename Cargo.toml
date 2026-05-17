@@ -23,6 +23,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures-util = { version = "0.3", features = ["sink"] }
 tokio-util = { version = "0.7", features = ["rt"] }
+parking_lot = "0.12"
 tokio-postgres = { version = "0.7", features = ["with-uuid-1"] }
 deadpool-postgres = "0.14"
 hmac = "0.12"

@@ -1,24 +1,39 @@
-use tokio::sync::RwLock;
+use std::ops::ControlFlow;
 
-use super::{PROVIDER_ERROR_NEEDS_API_KEY, ProviderStatus};
+use fuz_common::JsonRpcError;
+use serde_json::{Value, json};
+use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
+
+use super::{
+    CompletionHandlerOptions, CompletionMessage, PROVIDER_ERROR_NEEDS_API_KEY, ProgressSender,
+    ProviderStatus, ai_provider_error, common, sse,
+};
+
+const API_BASE: &str = "https://generativelanguage.googleapis.com/v1beta/models";
+const PROVIDER_NAME: &str = "gemini";
 
 struct GeminiState {
     api_key: Option<String>,
+    client: Option<reqwest::Client>,
     cached_status: Option<ProviderStatus>,
 }
 
-/// Google Gemini provider stub.
+/// Google Gemini AI provider.
 ///
-/// Full implementation will follow the Anthropic provider pattern.
+/// Uses the Generative Language REST API directly. SDK is not used to
+/// avoid the dependency; the REST surface mirrors the SDK closely.
 pub struct GeminiProvider {
     state: RwLock<GeminiState>,
 }
 
 impl GeminiProvider {
     pub fn new(api_key: Option<String>) -> Self {
+        let client = api_key.as_ref().map(|_| build_client());
         Self {
             state: RwLock::new(GeminiState {
                 api_key,
+                client,
                 cached_status: None,
             }),
         }
@@ -33,9 +48,9 @@ impl GeminiProvider {
         drop(state);
 
         let status = if has_key {
-            ProviderStatus::available("gemini")
+            ProviderStatus::available(PROVIDER_NAME)
         } else {
-            ProviderStatus::unavailable("gemini", PROVIDER_ERROR_NEEDS_API_KEY)
+            ProviderStatus::unavailable(PROVIDER_NAME, PROVIDER_ERROR_NEEDS_API_KEY)
         };
 
         let mut state = self.state.write().await;
@@ -45,7 +60,297 @@ impl GeminiProvider {
 
     pub async fn set_api_key(&self, key: Option<String>) {
         let mut state = self.state.write().await;
+        state.client = key.as_ref().map(|_| build_client());
         state.api_key = key;
         state.cached_status = None;
     }
+
+    pub async fn complete(
+        &self,
+        options: &CompletionHandlerOptions,
+        progress_sender: Option<&ProgressSender>,
+        signal: &CancellationToken,
+    ) -> Result<Value, JsonRpcError> {
+        let (client, api_key) = {
+            let state = self.state.read().await;
+            let client = state
+                .client
+                .clone()
+                .ok_or_else(|| ai_provider_error(PROVIDER_NAME, PROVIDER_ERROR_NEEDS_API_KEY))?;
+            let api_key = state
+                .api_key
+                .clone()
+                .ok_or_else(|| ai_provider_error(PROVIDER_NAME, PROVIDER_ERROR_NEEDS_API_KEY))?;
+            (client, api_key)
+        };
+
+        let streaming = options.progress_token.is_some() && progress_sender.is_some();
+        let url = build_url(&options.model, &api_key, streaming);
+        let body = build_request_body(options);
+
+        let response = client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ai_provider_error(PROVIDER_NAME, &e.to_string()))?;
+
+        let response =
+            common::check_response_status(response, PROVIDER_NAME, parse_api_error).await?;
+
+        if let (true, Some(sender)) = (streaming, progress_sender) {
+            handle_streaming_response(response, options, sender, signal).await
+        } else {
+            handle_non_streaming_response(response, options).await
+        }
+    }
+}
+
+async fn handle_non_streaming_response(
+    response: reqwest::Response,
+    options: &CompletionHandlerOptions,
+) -> Result<Value, JsonRpcError> {
+    let api_response: Value = response.json::<Value>().await.map_err(|e| {
+        ai_provider_error(PROVIDER_NAME, &format!("failed to parse response: {e}"))
+    })?;
+    let value = build_gemini_value(&api_response);
+    Ok(common::build_completion_response(
+        PROVIDER_NAME,
+        &options.model,
+        &value,
+    ))
+}
+
+async fn handle_streaming_response(
+    response: reqwest::Response,
+    options: &CompletionHandlerOptions,
+    progress_sender: &ProgressSender,
+    signal: &CancellationToken,
+) -> Result<Value, JsonRpcError> {
+    let mut accumulated_content = String::new();
+    let mut last_response: Option<Value> = None;
+    let mut usage_metadata: Option<Value> = None;
+
+    sse::consume_sse_stream(response, PROVIDER_NAME, signal, |event| {
+        let Ok(data) = serde_json::from_str::<Value>(&event.data) else {
+            return ControlFlow::Continue(());
+        };
+
+        let chunk_text = extract_text(&data);
+        if !chunk_text.is_empty() {
+            accumulated_content.push_str(&chunk_text);
+            progress_sender(common::build_text_progress_chunk(&chunk_text));
+        }
+
+        if let Some(usage) = data.get("usageMetadata") {
+            usage_metadata = Some(usage.clone());
+        }
+        last_response = Some(data);
+
+        ControlFlow::Continue(())
+    })
+    .await?;
+
+    let candidates = last_response
+        .as_ref()
+        .and_then(|r| r.get("candidates"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    let function_calls = last_response
+        .as_ref()
+        .and_then(extract_function_calls)
+        .unwrap_or(Value::Null);
+    let prompt_feedback = last_response
+        .as_ref()
+        .and_then(|r| r.get("promptFeedback"))
+        .cloned()
+        .unwrap_or(Value::Null);
+
+    let value = json!({
+        "text": accumulated_content,
+        "candidates": candidates,
+        "function_calls": function_calls,
+        "prompt_feedback": prompt_feedback,
+        "usage_metadata": usage_metadata.unwrap_or(Value::Null),
+    });
+
+    Ok(common::build_completion_response(
+        PROVIDER_NAME,
+        &options.model,
+        &value,
+    ))
+}
+
+// -- Response extraction ------------------------------------------------------
+
+/// Build the `value` payload for the discriminated union — Gemini is the
+/// only provider with strictly-typed `value` fields (`text`,
+/// `candidates`, `function_calls`, `prompt_feedback`, `usage_metadata`).
+fn build_gemini_value(api_response: &Value) -> Value {
+    let text = extract_text(api_response);
+    let candidates = api_response.get("candidates").cloned().unwrap_or(Value::Null);
+    let function_calls = extract_function_calls(api_response).unwrap_or(Value::Null);
+    let prompt_feedback = api_response
+        .get("promptFeedback")
+        .cloned()
+        .unwrap_or(Value::Null);
+    let usage_metadata = api_response
+        .get("usageMetadata")
+        .cloned()
+        .unwrap_or(Value::Null);
+
+    json!({
+        "text": text,
+        "candidates": candidates,
+        "function_calls": function_calls,
+        "prompt_feedback": prompt_feedback,
+        "usage_metadata": usage_metadata,
+    })
+}
+
+/// Concatenate text across all parts of the first candidate.
+fn extract_text(response: &Value) -> String {
+    let Some(parts) = response
+        .get("candidates")
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("content"))
+        .and_then(|c| c.get("parts"))
+        .and_then(Value::as_array)
+    else {
+        return String::new();
+    };
+    let mut out = String::new();
+    for part in parts {
+        if let Some(text) = part.get("text").and_then(Value::as_str) {
+            out.push_str(text);
+        }
+    }
+    out
+}
+
+/// Extract function-call parts across all candidates. Returns `None` if
+/// no `functionCall` parts are present (lets caller substitute `Null`).
+fn extract_function_calls(response: &Value) -> Option<Value> {
+    let candidates = response.get("candidates").and_then(Value::as_array)?;
+    let mut calls: Vec<Value> = Vec::new();
+    for candidate in candidates {
+        let Some(parts) = candidate
+            .get("content")
+            .and_then(|c| c.get("parts"))
+            .and_then(Value::as_array)
+        else {
+            continue;
+        };
+        for part in parts {
+            if let Some(fc) = part.get("functionCall") {
+                calls.push(fc.clone());
+            }
+        }
+    }
+    if calls.is_empty() {
+        None
+    } else {
+        Some(Value::Array(calls))
+    }
+}
+
+// -- Request building ---------------------------------------------------------
+
+fn build_url(model: &str, api_key: &str, streaming: bool) -> String {
+    let method = if streaming {
+        "streamGenerateContent"
+    } else {
+        "generateContent"
+    };
+    if streaming {
+        format!("{API_BASE}/{model}:{method}?alt=sse&key={api_key}")
+    } else {
+        format!("{API_BASE}/{model}:{method}?key={api_key}")
+    }
+}
+
+fn build_request_body(options: &CompletionHandlerOptions) -> Value {
+    let contents = build_contents(options.completion_messages.as_deref(), &options.prompt);
+    let opts = &options.completion_options;
+
+    let mut generation_config = serde_json::Map::new();
+    generation_config.insert("maxOutputTokens".to_owned(), json!(opts.output_token_max));
+    if let Some(t) = opts.temperature {
+        generation_config.insert("temperature".to_owned(), json!(t));
+    }
+    if let Some(k) = opts.top_k {
+        generation_config.insert("topK".to_owned(), json!(k));
+    }
+    if let Some(p) = opts.top_p {
+        generation_config.insert("topP".to_owned(), json!(p));
+    }
+    if let Some(f) = opts.frequency_penalty {
+        generation_config.insert("frequencyPenalty".to_owned(), json!(f));
+    }
+    if let Some(p) = opts.presence_penalty {
+        generation_config.insert("presencePenalty".to_owned(), json!(p));
+    }
+    if let Some(ref seqs) = opts.stop_sequences
+        && !seqs.is_empty()
+    {
+        generation_config.insert("stopSequences".to_owned(), json!(seqs));
+    }
+
+    let mut body = json!({
+        "contents": contents,
+        "generationConfig": Value::Object(generation_config),
+    });
+
+    if !opts.system_message.is_empty() {
+        let obj = body.as_object_mut().unwrap_or_else(|| unreachable!());
+        obj.insert(
+            "systemInstruction".to_owned(),
+            json!({
+                "parts": [{"text": opts.system_message}],
+            }),
+        );
+    }
+
+    body
+}
+
+fn build_contents(completion_messages: Option<&[CompletionMessage]>, prompt: &str) -> Vec<Value> {
+    let capacity = completion_messages.map_or(0, <[_]>::len) + 1;
+    let mut contents = Vec::with_capacity(capacity);
+
+    if let Some(msgs) = completion_messages {
+        for msg in msgs {
+            let role = if msg.role == "user" { "user" } else { "model" };
+            contents.push(json!({
+                "role": role,
+                "parts": [{"text": msg.content}],
+            }));
+        }
+    }
+
+    contents.push(json!({
+        "role": "user",
+        "parts": [{"text": prompt}],
+    }));
+
+    contents
+}
+
+// -- HTTP client --------------------------------------------------------------
+
+fn build_client() -> reqwest::Client {
+    common::build_client_with_headers(reqwest::header::HeaderMap::new())
+}
+
+// -- Error parsing ------------------------------------------------------------
+
+/// Parse a Gemini API error response body.
+///
+/// Gemini errors look like: `{"error":{"code":...,"message":"...","status":"..."}}`
+fn parse_api_error(body: &str) -> Option<String> {
+    let v: Value = serde_json::from_str(body).ok()?;
+    v.get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(Value::as_str)
+        .map(String::from)
 }

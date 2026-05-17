@@ -1,5 +1,6 @@
 mod account;
 mod api_token;
+mod audit;
 mod auth;
 mod bootstrap;
 mod daemon_token;
@@ -9,7 +10,9 @@ mod filer;
 mod handlers;
 mod perform_action;
 mod provider;
+mod proxy;
 mod pty_manager;
+mod rate_limiter;
 mod rpc;
 mod scoped_fs;
 mod ws;
@@ -73,6 +76,23 @@ async fn run() -> Result<(), ServerError> {
         .map(auth::parse_allowed_origins)
         .unwrap_or_default();
 
+    // Parse `ZZZ_TRUSTED_PROXIES` once at startup. Empty/unset → empty
+    // vec → middleware treats every connection as untrusted (XFF
+    // ignored, `client_ip` = TCP peer). Misconfiguration fails fast so
+    // the operator sees the error instead of silently leaving a hole.
+    let trusted_proxies = match config.trusted_proxies.as_deref() {
+        None => Vec::new(),
+        Some(raw) => proxy::parse_proxy_list(raw).map_err(|e| {
+            ServerError::Config(format!("ZZZ_TRUSTED_PROXIES: {e}"))
+        })?,
+    };
+    if !trusted_proxies.is_empty() {
+        tracing::info!(
+            count = trusted_proxies.len(),
+            "trusted proxies configured — XFF resolution enabled"
+        );
+    }
+
     let scoped_dir_strings: Vec<String> =
         config.scoped_dirs.iter().map(|p| resolve_dir(p)).collect();
 
@@ -120,6 +140,30 @@ async fn run() -> Result<(), ServerError> {
         tracing::info!("test actions enabled — `_test_*` methods registered on live dispatchers");
     }
 
+    // Per-IP + per-account rate limiters on `/login` and `/password`.
+    // Opt-in via `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1`. Mirrors fuz_app's
+    // `default_login_ip_rate_limit` (5 / 15min) and
+    // `default_login_account_rate_limit` (10 / 30min). `None` when the
+    // env var is unset so the handlers skip the check entirely.
+    let (login_ip_rate_limiter, login_account_rate_limiter) = if config.enable_login_rate_limit {
+        tracing::info!("login rate limiting enabled (5/15min per-IP, 10/30min per-account)");
+        (
+            Some(Arc::new(rate_limiter::RateLimiter::new(
+                rate_limiter::DEFAULT_LOGIN_IP_RATE_LIMIT,
+            ))),
+            Some(Arc::new(rate_limiter::RateLimiter::new(
+                rate_limiter::DEFAULT_LOGIN_ACCOUNT_RATE_LIMIT,
+            ))),
+        )
+    } else {
+        (None, None)
+    };
+
+    // Build the bound audit emitter before App — App owns the Arc.
+    // Listener registration happens after App construction so listeners
+    // can capture the Arc<App> (see `audit::listeners::register` below).
+    let audit_emitter = Arc::new(audit::AuditEmitter::new(pool.clone()));
+
     let app_state = Arc::new(handlers::App::new(
         pool,
         keyring,
@@ -132,7 +176,13 @@ async fn run() -> Result<(), ServerError> {
         daemon_token_state.clone(),
         provider_manager,
         config.enable_test_actions,
+        Arc::clone(&audit_emitter),
+        login_ip_rate_limiter,
+        login_account_rate_limiter,
+        trusted_proxies,
     ));
+
+    audit::listeners::register(&audit_emitter, &app_state);
 
     // Start file watchers at startup (matches Deno's Backend constructor
     // which calls `this.#start_filer(this.zzz_dir)` then iterates scoped_dirs).
@@ -186,6 +236,17 @@ async fn run() -> Result<(), ServerError> {
         .route("/api/account/login", post(account::login_handler))
         .route("/api/account/logout", post(account::logout_handler))
         .route("/api/account/password", post(account::password_handler))
+        // Resolves `client_ip` and stores it on the request before any
+        // route handler runs. `from_fn_with_state` carries its own
+        // captured `Arc<App>` for the trusted-proxy list, so the layer
+        // is independent of the router's `.with_state(...)` below. The
+        // `ConnectInfo<SocketAddr>` extractor inside the middleware
+        // reads what `into_make_service_with_connect_info` sets at
+        // `axum::serve` time.
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&app_state),
+            proxy::client_ip_middleware,
+        ))
         .with_state(app_state);
 
     if let Some(ref dir) = config.static_dir {
@@ -208,10 +269,13 @@ async fn run() -> Result<(), ServerError> {
         shutdown_signal.cancel();
     });
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown.cancelled_owned())
-        .await
-        .map_err(ServerError::Serve)?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown.cancelled_owned())
+    .await
+    .map_err(ServerError::Serve)?;
 
     // Stop daemon token rotation
     if let Some(handle) = rotation_handle {
@@ -248,6 +312,35 @@ struct Config {
     /// Register `_test_*` actions on live dispatchers. Set by integration
     /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave unset.
     enable_test_actions: bool,
+    /// Enable per-IP + per-account rate limiting on `/login` and
+    /// `/password`. Set in production via `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1`;
+    /// default off so integration tests don't trip the bucket. The
+    /// dedicated rate-limit integration test sets it explicitly.
+    enable_login_rate_limit: bool,
+    /// Comma-separated trusted-proxy entries (IPs and CIDR ranges).
+    /// Unset/empty → no XFF trust → `client_ip` falls back to the TCP
+    /// peer IP on every request. Set when running behind a reverse
+    /// proxy so login rate-limit keys and `audit_log.ip` reflect the
+    /// originating client. Parsed eagerly in `run()`; invalid entries
+    /// fail startup.
+    trusted_proxies: Option<String>,
+}
+
+/// Parse a Zod-`stringbool()`-shaped env var: case-insensitive truthy
+/// (`true`/`1`/`yes`/`on`/`y`/`enabled`) / falsy
+/// (`false`/`0`/`no`/`off`/`n`/`disabled`). Unknown values error so a typo
+/// doesn't silently disable the feature.
+fn parse_stringbool_env(name: &str) -> Result<bool, ServerError> {
+    match std::env::var(name).ok() {
+        None => Ok(false),
+        Some(v) => match v.to_ascii_lowercase().as_str() {
+            "true" | "1" | "yes" | "on" | "y" | "enabled" => Ok(true),
+            "false" | "0" | "no" | "off" | "n" | "disabled" => Ok(false),
+            other => Err(ServerError::Config(format!(
+                "{name}: expected one of true/1/yes/on/y/enabled/false/0/no/off/n/disabled (case-insensitive), got {other:?}"
+            ))),
+        },
+    }
 }
 
 /// Resolve a path to an absolute, canonical, normalized directory string
@@ -332,21 +425,9 @@ fn parse_config() -> Result<Config, ServerError> {
         resolve_dir(Path::new(&raw))
     };
 
-    // Mirrors TS `z.stringbool()` defaults (case-insensitive). Unknown values
-    // are rejected — matching Zod's strict parse — so a typo doesn't silently
-    // disable the integration test surface.
-    let enable_test_actions = match std::env::var("ZZZ_ENABLE_TEST_ACTIONS").ok() {
-        None => false,
-        Some(v) => match v.to_ascii_lowercase().as_str() {
-            "true" | "1" | "yes" | "on" | "y" | "enabled" => true,
-            "false" | "0" | "no" | "off" | "n" | "disabled" => false,
-            other => {
-                return Err(ServerError::Config(format!(
-                    "ZZZ_ENABLE_TEST_ACTIONS: expected one of true/1/yes/on/y/enabled/false/0/no/off/n/disabled (case-insensitive), got {other:?}"
-                )));
-            }
-        },
-    };
+    let enable_test_actions = parse_stringbool_env("ZZZ_ENABLE_TEST_ACTIONS")?;
+    let enable_login_rate_limit = parse_stringbool_env("ZZZ_LOGIN_RATE_LIMIT_ENABLED")?;
+    let trusted_proxies = std::env::var("ZZZ_TRUSTED_PROXIES").ok();
 
     Ok(Config {
         port: port.unwrap_or(DEFAULT_PORT),
@@ -358,6 +439,8 @@ fn parse_config() -> Result<Config, ServerError> {
         scoped_dirs,
         zzz_dir,
         enable_test_actions,
+        enable_login_rate_limit,
+        trusted_proxies,
     })
 }
 

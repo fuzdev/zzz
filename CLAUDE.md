@@ -31,7 +31,7 @@ this repo — make the edits and stop, the user commits.
 
 ## Development Stage
 
-Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, daemon tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) still in-memory. The Hono/Deno backend is the reference implementation. A Rust backend (`crates/zzz_server`) is in development — Phase 4 (AI provider system: Anthropic fully implemented with SSE streaming, OpenAI/Gemini/Ollama stubs) in progress atop Phase 3 (full auth stack, filesystem, terminals, PostgreSQL, bootstrap) with 85 integration tests verifying parity. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
+Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, daemon tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) still in-memory. The Hono/Deno backend is the reference implementation. A Rust backend (`crates/zzz_server`) is in development — Phase 4 (AI provider system: Anthropic fully implemented with SSE streaming, OpenAI/Gemini/Ollama stubs; audit emission landed 2026-05-16; auth surface hardening — bootstrap audit, `password_change` concurrent-change detection, opt-in login/password rate limiting — landed 2026-05-16; trusted-proxy `client_ip` resolution + `audit.ip` plumbing landed 2026-05-16; same-day post-review hardening — belt-and-suspenders WS revocation, IPv6 canonicalization in `normalize_ip`, login + bootstrap username canonicalization, Origin allowlist on every REST + RPC + WS handler — landed 2026-05-16) in progress atop Phase 3 (full auth stack, filesystem, terminals, PostgreSQL, bootstrap) with 95 cross-backend + 17 Rust-only integration tests verifying parity. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
 
 See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 
@@ -72,7 +72,20 @@ crates/                               # Rust workspace
 │           │   └── mod.rs            # App state, Ctx, dispatch (ping, session_load, _test_*)
 │           ├── rpc.rs                # JSON-RPC classify, HTTP handler with auth pipeline
 │           ├── ws.rs                 # WebSocket handler with auth + connection tracking
-│           ├── auth.rs               # Keyring, cookie/bearer/daemon-token resolution, per-action auth
+│           ├── auth/                 # Auth surface
+│           │   ├── mod.rs            # RequestContext, build_request_context, AuthError (+ pub use submodules)
+│           │   ├── keyring.rs        # Keyring, session-cookie parsing, hash_session_token
+│           │   ├── resolve.rs        # ResolvedAuth + daemon-token/cookie/bearer pipeline
+│           │   └── spec.rs           # ActionAuth/CredentialType/MethodSpec, origin allowlist, REST credential gate
+│           ├── account/              # Account REST routes
+│           │   ├── mod.rs            # Shared helpers (cookies, hashing, rate-limit responses) + pub use handlers
+│           │   ├── status.rs         # GET /api/account/status
+│           │   ├── login.rs          # POST /api/account/login
+│           │   ├── logout.rs         # POST /api/account/logout
+│           │   └── password.rs       # POST /api/account/password
+│           ├── audit/                # Audit emission
+│           │   ├── mod.rs            # AuditEmitter, AuditLogEvent / AuditLogInput
+│           │   └── listeners.rs      # register() — audit-event → WS socket revocation
 │           ├── api_token.rs          # generate_api_token (raw + tok_<12> id + blake3 hash)
 │           ├── bootstrap.rs          # POST /bootstrap (first admin account creation)
 │           ├── db/                   # Per-domain query modules (account, actor, api_token, auth, migrations)
@@ -271,13 +284,14 @@ Two dev server modes:
 
 Shadow implementation of the Deno server using axum. Same `/api/*` route
 paths as the Deno server — both backends are interchangeable from the
-frontend's perspective. 23 RPC methods: `ping`, `session_load`, `workspace_*`,
+frontend's perspective. 25 RPC methods: `ping`, `session_load`, `workspace_*`,
 `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`,
 `terminal_data_send`, `terminal_resize`, `terminal_close`,
 `provider_load_status`, `provider_update_api_key` (keeper-only),
 `completion_create`, `account_verify`, `account_session_list`,
 `account_session_revoke`, `account_session_revoke_all`,
-`account_token_create`, `account_token_list`, `account_token_revoke`.
+`account_token_create`, `account_token_list`, `account_token_revoke`,
+`admin_session_revoke_all`, `admin_token_revoke_all`.
 Cookie session auth and bearer token auth (API tokens)
 on HTTP and WebSocket, `ScopedFs` path safety, PTY terminals via `fuz_pty`
 native crate, and WebSocket connection tracking (`broadcast`/`send_to`).
@@ -286,8 +300,19 @@ signing, blake3 session/token hashing, per-action auth checks with credential
 type enforcement, bootstrap endpoint. AI provider system with enum-dispatched
 providers — Anthropic fully implemented (non-streaming + SSE streaming with
 connection-targeted `completion_progress` notifications), OpenAI/Gemini/Ollama
-stubs. The Deno server is ground truth — 85 integration tests on both backends
-(all cross-backend, 0 skips) verify identical JSON-RPC responses.
+stubs. The Deno server is ground truth — 95 cross-backend integration tests
+verify identical JSON-RPC responses (including `login_forbidden_origin`),
+plus 17 Rust-only tests (`bearer_rejects_account_token_create_ws` for the
+deferred fuz_app WS surface upstream,
+`rate_limit_login_blocks_after_threshold` for the Rust-only login
+rate-limit env-var gate, ten `proxy_*` tests for the trusted-proxy
+`client_ip` resolution, and five `admin_*` tests for the admin role-gated
+`admin_session_revoke_all` / `admin_token_revoke_all` handlers which the
+Deno reference backend doesn't expose — fuz_app covers the TS port at the
+unit-test layer in `http/proxy.test.ts`, and `crates/zzz_server/src/proxy.rs`
+ships 86 `#[cfg(test)]` unit tests covering the pure functions Rust-side;
+the shared `auth::is_request_origin_allowed` helper picks up another 7
+unit tests in `auth/spec.rs::origin_tests`).
 
 ```bash
 cargo build -p zzz_server                          # Build
@@ -545,7 +570,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in ~/dev/private_fuz/. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Rust backend is Phase 4** — 23 RPC methods with full auth stack, same `/api/*` route paths as Deno. `deno task dev` runs the Rust backend with Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable). No batch JSON-RPC, no Ollama actions (`ollama_list`, `ollama_ps`, etc.). See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
+- **Rust backend is Phase 4** — 25 RPC methods with full auth stack, same `/api/*` route paths as Deno. `deno task dev` runs the Rust backend with Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable). No batch JSON-RPC, no Ollama actions (`ollama_list`, `ollama_ps`, etc.). See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap
 
 ## fuz_app
 

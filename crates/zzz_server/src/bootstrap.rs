@@ -1,15 +1,18 @@
 use std::sync::Arc;
 
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Extension, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 use crate::account::{generate_session_token, hash_password, sign_session_cookie};
+use crate::audit::{AuditLogInput, AuditOutcome};
 use crate::auth;
 use crate::db;
 use crate::handlers::App;
+use crate::proxy::ClientIp;
 
 // -- Types --------------------------------------------------------------------
 
@@ -54,18 +57,50 @@ fn error_json(status: StatusCode, error: &str) -> Response {
 /// 5. Delete token file
 pub async fn bootstrap_handler(
     State(app): State<Arc<App>>,
+    Extension(client_ip): Extension<ClientIp>,
+    headers: HeaderMap,
     Json(input): Json<BootstrapInput>,
 ) -> Response {
-    match bootstrap_inner(&app, input).await {
+    if !auth::is_request_origin_allowed(&headers, &app.allowed_origins) {
+        return error_json(StatusCode::FORBIDDEN, "forbidden_origin");
+    }
+    match bootstrap_inner(&app, client_ip.0, input).await {
         Ok(response) | Err(response) => response,
     }
 }
 
+/// Emit a `bootstrap` failure audit row with `metadata: {error: <reason>}`.
+///
+/// Mirrors `fuz_app`'s `bootstrap_routes.ts` failure emit shape. Awaited so
+/// the row is observable by integration tests after the response settles.
+/// `account_id` is always `None` on failure — bootstrap creates the
+/// account, so a failed bootstrap has no account to reference.
+async fn emit_bootstrap_failure(app: &App, client_ip: &str, error: &str) {
+    let _ = app
+        .audit
+        .emit(AuditLogInput {
+            event_type: "bootstrap",
+            outcome: Some(AuditOutcome::Failure),
+            actor_id: None,
+            account_id: None,
+            target_account_id: None,
+            target_actor_id: None,
+            ip: Some(client_ip.to_owned()),
+            metadata: Some(json!({"error": error})),
+        })
+        .await;
+}
+
 /// Inner bootstrap logic — uses `Result<Response, Response>` so early returns
 /// via `?` produce error responses without repeating the pattern at every step.
-async fn bootstrap_inner(app: &App, input: BootstrapInput) -> Result<Response, Response> {
+async fn bootstrap_inner(
+    app: &App,
+    client_ip: String,
+    input: BootstrapInput,
+) -> Result<Response, Response> {
     // Short-circuit if no bootstrap configured
     let Some(ref token_path) = app.bootstrap_token_path else {
+        emit_bootstrap_failure(app, &client_ip, "bootstrap_not_configured").await;
         return Err(error_json(
             StatusCode::NOT_FOUND,
             "bootstrap_not_configured",
@@ -77,21 +112,33 @@ async fn bootstrap_inner(app: &App, input: BootstrapInput) -> Result<Response, R
         .bootstrap_available
         .load(std::sync::atomic::Ordering::Relaxed)
     {
+        emit_bootstrap_failure(app, &client_ip, "already_bootstrapped").await;
         return Err(error_json(StatusCode::FORBIDDEN, "already_bootstrapped"));
     }
 
     // 1. Read and verify bootstrap token
-    let expected_token = tokio::fs::read_to_string(token_path)
+    let Ok(expected_token) = tokio::fs::read_to_string(token_path)
         .await
         .map(|t| t.trim().to_owned())
-        .map_err(|_| error_json(StatusCode::NOT_FOUND, "token_file_missing"))?;
+    else {
+        emit_bootstrap_failure(app, &client_ip, "token_file_missing").await;
+        return Err(error_json(StatusCode::NOT_FOUND, "token_file_missing"));
+    };
 
     if !timing_safe_eq(input.token.as_bytes(), expected_token.as_bytes()) {
+        emit_bootstrap_failure(app, &client_ip, "invalid_token").await;
         return Err(error_json(StatusCode::UNAUTHORIZED, "invalid_token"));
     }
 
-    // 2. Validate input
-    if input.username.is_empty() || input.password.len() < 12 {
+    // 2. Validate + canonicalize input. Username gets `trim() + to_lowercase()`
+    // here so the stored account row has the canonical form login looks up
+    // against (`db::query_account_with_password_hash` uses
+    // `LOWER(username) = LOWER($1)` — case-tolerant but NOT whitespace-
+    // tolerant). Without this canonicalization, an operator bootstrapping
+    // with `" Admin"` would create an account that no subsequent login can
+    // find. Matches the boundary canonicalization in `login_inner`.
+    let canonical_username = input.username.trim().to_lowercase();
+    if canonical_username.is_empty() || input.password.len() < 12 {
         return Err(error_json(
             StatusCode::BAD_REQUEST,
             "invalid input: username required, password min 12 chars",
@@ -138,22 +185,29 @@ async fn bootstrap_inner(app: &App, input: BootstrapInput) -> Result<Response, R
         let _ = client.execute("ROLLBACK", &[]).await;
         app.bootstrap_available
             .store(false, std::sync::atomic::Ordering::Relaxed);
+        // Verify-write race loser: another bootstrap committed first.
+        // Pre-check at the head of this function already emits when
+        // `bootstrap_available` is false on entry; this site emits for
+        // the racy case where two requests both passed the pre-check
+        // but only one's UPDATE matched. Matches fuz_app's
+        // `bootstrap_routes.ts` which emits at both sites.
+        emit_bootstrap_failure(app, &client_ip, "already_bootstrapped").await;
         return Err(error_json(StatusCode::FORBIDDEN, "already_bootstrapped"));
     }
 
     // Create account + actor + role grants + session (all in one helper)
-    let (account, session_token) = match do_bootstrap_creates(&client, &input, &password_hash).await
-    {
-        Ok(result) => result,
-        Err(e) => {
-            let _ = client.execute("ROLLBACK", &[]).await;
-            tracing::error!(error = %e, "bootstrap transaction failed");
-            return Err(error_json(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "internal error",
-            ));
-        }
-    };
+    let (account, actor, session_token) =
+        match do_bootstrap_creates(&client, &canonical_username, &password_hash).await {
+            Ok(result) => result,
+            Err(e) => {
+                let _ = client.execute("ROLLBACK", &[]).await;
+                tracing::error!(error = %e, "bootstrap transaction failed");
+                return Err(error_json(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal error",
+                ));
+            }
+        };
 
     // Commit
     if let Err(e) = client.execute("COMMIT", &[]).await {
@@ -180,12 +234,28 @@ async fn bootstrap_inner(app: &App, input: BootstrapInput) -> Result<Response, R
         tracing::error!(error = %e, path = %token_path, "CRITICAL: failed to delete bootstrap token file");
     }
 
-    // 6. Build session cookie and return
+    // 6. Build session cookie
     let cookie = sign_session_cookie(&app.keyring, &session_token);
     let mut headers = HeaderMap::new();
     if let Ok(val) = cookie.parse() {
         headers.insert(axum::http::header::SET_COOKIE, val);
     }
+
+    // 7. Success audit — mirrors fuz_app's emit shape: actor + account ids,
+    // metadata null. No credential_type (bootstrap is pre-auth).
+    let _ = app
+        .audit
+        .emit(AuditLogInput {
+            event_type: "bootstrap",
+            outcome: Some(AuditOutcome::Success),
+            actor_id: Some(actor.id),
+            account_id: Some(account.id),
+            target_account_id: None,
+            target_actor_id: None,
+            ip: Some(client_ip),
+            metadata: None,
+        })
+        .await;
 
     tracing::info!(username = %input.username, "bootstrap complete");
 
@@ -201,13 +271,17 @@ async fn bootstrap_inner(app: &App, input: BootstrapInput) -> Result<Response, R
 }
 
 /// Execute account/actor/role-grant/session creation within an open transaction.
+///
+/// `username` is expected canonical (`trim + lowercase`) — see
+/// `bootstrap_inner` for the boundary canonicalization. Stored verbatim
+/// in both `account.username` and `actor.name`.
 async fn do_bootstrap_creates(
     client: &(impl deadpool_postgres::GenericClient + ?Sized),
-    input: &BootstrapInput,
+    username: &str,
     password_hash: &str,
-) -> Result<(db::AccountRow, String), tokio_postgres::Error> {
-    let account = db::query_create_account(client, &input.username, password_hash).await?;
-    let actor = db::query_create_actor(client, &account.id, &input.username).await?;
+) -> Result<(db::AccountRow, db::ActorRow, String), tokio_postgres::Error> {
+    let account = db::query_create_account(client, username, password_hash).await?;
+    let actor = db::query_create_actor(client, &account.id, username).await?;
     db::query_create_role_grant(client, &actor.id, "keeper").await?;
     db::query_create_role_grant(client, &actor.id, "admin").await?;
 
@@ -215,7 +289,7 @@ async fn do_bootstrap_creates(
     let token_hash = auth::hash_session_token(&session_token);
     db::query_create_session(client, &token_hash, &account.id).await?;
 
-    Ok((account, session_token))
+    Ok((account, actor, session_token))
 }
 
 // -- Helpers ------------------------------------------------------------------

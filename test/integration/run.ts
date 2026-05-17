@@ -22,6 +22,10 @@ import {backends, type BackendConfig, INTEGRATION_SCOPED_DIR, INTEGRATION_ZZZ_DI
 import {run_tests, type TestResult} from './tests.ts';
 import {run_bearer_tests, setup_bearer_tokens} from './bearer_tests.ts';
 import {run_account_tests} from './account_tests.ts';
+import {run_admin_tests} from './admin_tests.ts';
+import {run_audit_tests} from './audit_tests.ts';
+import {run_proxy_tests} from './proxy_tests.ts';
+import {run_rate_limit_tests} from './rate_limit_tests.ts';
 import {hash_token, hmac_sign, run_psql, sql_escape} from './test_helpers.ts';
 
 const RunArgs = z.object({
@@ -253,7 +257,10 @@ const setup_non_keeper_user = async (config: BackendConfig): Promise<string | un
  */
 const clean_database = async (): Promise<void> => {
 	const result = await run_psql(
-		`TRUNCATE api_token, auth_session, role_grant, actor, account, bootstrap_lock, app_settings CASCADE;
+		// audit_log has `ON DELETE SET NULL` on its account / actor FKs, so
+		// account CASCADE would only null out the audit rows rather than
+		// delete them — list it explicitly so prior-run rows don't leak.
+		`TRUNCATE audit_log, api_token, auth_session, role_grant, actor, account, bootstrap_lock, app_settings CASCADE;
 		 INSERT INTO bootstrap_lock (id, bootstrapped) VALUES (1, false) ON CONFLICT (id) DO UPDATE SET bootstrapped = false;
 		 INSERT INTO app_settings (id) VALUES (1) ON CONFLICT DO NOTHING;`,
 	);
@@ -343,6 +350,54 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 		}
 		const account_results = await run_account_tests(config, filter);
 		results.push(...account_results);
+		const audit_results = await run_audit_tests(config, filter);
+		results.push(...audit_results);
+		// Admin tests come after audit/account because the
+		// session_revoke_all-with-WS test destroys the non-keeper
+		// user's session in the DB. Keeping this last avoids
+		// reseeding non_keeper_cookie state between earlier suites.
+		const admin_results = await run_admin_tests(
+			config,
+			session_cookie,
+			non_keeper_cookie,
+			filter,
+		);
+		results.push(...admin_results);
+
+		// Rust-only proxy phase. Trusted-proxy resolution is a
+		// startup-time config (the parsed list lives on `App`), so
+		// flipping it requires a backend restart. Isolated to its
+		// own process so the rest of the suite — which assumes the
+		// connection IP IS the client IP — stays unaffected.
+		if (config.name === 'rust') {
+			await stop_backend(config.name, child);
+			child = null;
+			const proxy_config: BackendConfig = {
+				...config,
+				env: {...config.env, ZZZ_TRUSTED_PROXIES: '127.0.0.1'},
+			};
+			child = await start_backend(proxy_config);
+			const proxy_results = await run_proxy_tests(proxy_config, filter);
+			results.push(...proxy_results);
+			await stop_backend(config.name, child);
+			child = null;
+		}
+
+		// Rust-only rate-limit phase. The limiter is shared between
+		// `/login` and `/password`, so leaving it on for the whole suite
+		// would burn the bucket on the existing failed-login /
+		// password tests. Restart the Rust backend with
+		// `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1` for this slice and stop it
+		// after, isolating the env var to a dedicated process.
+		if (config.name === 'rust') {
+			const rl_config: BackendConfig = {
+				...config,
+				env: {...config.env, ZZZ_LOGIN_RATE_LIMIT_ENABLED: '1'},
+			};
+			child = await start_backend(rl_config);
+			const rate_results = await run_rate_limit_tests(rl_config, filter);
+			results.push(...rate_results);
+		}
 
 		let passed = 0;
 		let failed = 0;

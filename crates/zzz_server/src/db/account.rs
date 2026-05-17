@@ -140,17 +140,30 @@ pub async fn query_create_account(
     })
 }
 
-/// Update an account's password hash.
+/// Update an account's password hash, conditional on the current stored
+/// hash matching `expected_hash` — the verify-write atomic guard.
+///
+/// Mirrors `fuz_app`'s `query_update_account_password`. Closes the race
+/// where two concurrent password changes both verify against the
+/// pre-update hash and would otherwise both UPDATE, silently clobbering
+/// whichever lands second. The conditional WHERE makes the loser's
+/// UPDATE match zero rows; the handler reads the boolean and surfaces
+/// 401 instead of pretending success.
+///
+/// Returns `true` if the row was updated, `false` if `expected_hash`
+/// no longer matched (concurrent change won).
 pub async fn query_update_password(
     client: &(impl deadpool_postgres::GenericClient + ?Sized),
     account_id: &uuid::Uuid,
     new_password_hash: &str,
-) -> Result<(), tokio_postgres::Error> {
-    client
-        .execute(
-            "UPDATE account SET password_hash = $1, updated_at = NOW() WHERE id = $2",
-            &[&new_password_hash, account_id],
+    expected_hash: &str,
+) -> Result<bool, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            "UPDATE account SET password_hash = $1, updated_at = NOW()
+             WHERE id = $2 AND password_hash = $3 RETURNING id",
+            &[&new_password_hash, account_id, &expected_hash],
         )
         .await?;
-    Ok(())
+    Ok(row.is_some())
 }

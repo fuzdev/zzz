@@ -5,12 +5,13 @@ protocol, same wire format — the Deno server is ground truth and the
 integration tests enforce identical behaviour between both backends.
 
 Phase 4 in progress: AI provider system with enum-dispatched providers
-(Anthropic fully implemented, OpenAI/Gemini/Ollama stubs). 23 RPC methods:
+(Anthropic fully implemented, OpenAI/Gemini/Ollama stubs). 25 RPC methods:
 `ping`, `session_load`, `workspace_*`, `diskfile_*`, `directory_create`,
 `terminal_*`, `provider_load_status`, `provider_update_api_key`,
 `completion_create`, `account_verify`, `account_session_list`,
 `account_session_revoke`, `account_session_revoke_all`,
-`account_token_create`, `account_token_list`, `account_token_revoke`.
+`account_token_create`, `account_token_list`, `account_token_revoke`,
+`admin_session_revoke_all`, `admin_token_revoke_all`.
 `_test_emit_notifications` is gated behind
 `ZZZ_ENABLE_TEST_ACTIONS=1` (set by the integration runner; production
 leaves it unset, dispatch returns `method_not_found`). Full auth stack (cookie sessions, bearer tokens, daemon
@@ -83,6 +84,8 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 | `ZZZ_PORT`               | Server port (default 1174, CLI overrides)  |
 | `ZZZ_STATIC_DIR`         | Static file directory                      |
 | `ZZZ_ENABLE_TEST_ACTIONS`| Register `_test_*` actions on live dispatchers (mirrors Zod `z.stringbool()`: `true`/`1`/`yes`/`on`/`y`/`enabled` opt in; `false`/`0`/`no`/`off`/`n`/`disabled` or unset opt out; case-insensitive; anything else errors at startup. Integration tests only — production must leave unset) |
+| `ZZZ_LOGIN_RATE_LIMIT_ENABLED`| Turn on per-IP + per-account rate limiting on `/login` and `/password` (same `z.stringbool()` shape as `ZZZ_ENABLE_TEST_ACTIONS`). Default off so existing integration tests don't trip the bucket. Defaults match fuz_app (5 attempts / 15 min IP, 10 / 30 min account). Per-IP key is the resolved client IP from `proxy::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when deploying behind a reverse proxy so the bucket keys on the originator, not the proxy. |
+| `ZZZ_TRUSTED_PROXIES`        | Comma-separated trusted-proxy entries (IPs and CIDR ranges, e.g. `127.0.0.1,10.0.0.0/8,fe80::/10`). Unset/empty → no XFF trust → `client_ip` falls back to the TCP peer IP on every request (Phase 4 direct-bind behavior). Set when deploying behind nginx / a cloud LB so the trusted-proxy middleware walks `X-Forwarded-For` right-to-left and resolves the real client IP for rate limiting + `audit_log.ip`. Parsed eagerly at startup — invalid entries (malformed IPs, non-aligned CIDRs, out-of-range prefixes) fail server boot. Mirrors fuz_app's `http/proxy.ts`. |
 
 ## Endpoints
 
@@ -173,12 +176,25 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
     to JSON-RPC: `account_verify`, `account_session_list`,
     `account_session_revoke`, `account_session_revoke_all`,
     `account_token_create`, `account_token_list`, `account_token_revoke`
-    (all scoped to the authenticated account).
+    (all scoped to the authenticated account), plus the admin role-gated
+    `admin_session_revoke_all` / `admin_token_revoke_all` which target a
+    caller-supplied `account_id`.
 
 ## Integration Tests
 
-85 tests on both backends, all cross-backend (0 skips, 0 backend-specific
-branches). Both backends bootstrap
+94 cross-backend tests (95 with the new `login_forbidden_origin` shared
+test) + 17 Rust-only (`bearer_rejects_account_token_create_ws` skipped on
+Deno per the deferred fuz_app upstream; `rate_limit_login_blocks_after_threshold`
+skipped on Deno because the rate-limit env-var gate is Rust-only — Deno's
+limiter is fuz_app's concern; ten `proxy_*` tests skipped on Deno because
+fuz_app already covers the TS port of the proxy module at the unit-test
+layer in `http/proxy.test.ts` (87 cases) and `crates/zzz_server/src/proxy.rs`
+carries 86 `#[cfg(test)]` unit tests Rust-side, plus 7 `origin_tests` in
+`auth/spec.rs` covering the shared `is_request_origin_allowed` helper; five
+`admin_*` tests skipped on Deno because the Deno reference backend does
+not expose admin RPC methods today). All
+cross-backend tests pass on both
+backends (0 skips on the shared set). Both backends bootstrap
 auth (admin account + session cookie), create a non-keeper user (account +
 actor + session, no
 keeper role grant, cookie signed via HMAC-SHA256), and insert API tokens into
@@ -274,22 +290,77 @@ actions), session revocation via DB delete, per-token revocation granularity
 same account), browser context discard (Origin/Referer headers → bearer
 silently ignored), empty bearer value handling, and cookie-over-bearer priority.
 
+**Audit emission tests (both backends):** `audit_bootstrap_success`,
+`audit_token_create_records_credential_type`,
+`audit_session_revoke_all_records_credential_type`,
+`audit_password_change_records_credential_type`,
+`audit_password_change_failure_records_credential_type` — 5 tests
+verify the bootstrap success row (carries `account_id` + `actor_id`,
+`metadata: null`) plus the four credential-gated paths (RPC
+`account_token_create` / `account_session_revoke_all` + REST
+`POST /password` on success and wrong-password failure) writing
+`audit_log` rows with `metadata.credential_type === 'session'` (the
+v0.63.0 wire-shape contract). The `password_change_concurrent_change`
+test under §Account management additionally verifies
+`metadata.reason === 'concurrent_change'` on the verify-write race
+loser. Direct `psql` query against the `audit_log` table — no
+admin RPC route required.
+
 **Account management tests (both backends):**
 `login_success`, `login_invalid_password`, `login_nonexistent_user`,
 `logout_clears_session`, `logout_unauthenticated`,
 `password_change_revokes_all`, `password_wrong_current`,
+`password_change_concurrent_change`,
 `session_list`, `session_revoke`, `account_verify`, `session_revoke_all`,
-`token_create`, `token_list` — 13 tests verify login with
+`token_create`, `token_list` — 14 tests verify login with
 valid/invalid/nonexistent credentials, logout with session invalidation and
 cookie clearing, password change with full session + token revocation and
-re-login verification, session listing (with `account_id` field), single
-session revocation (idempotent with `revoked` field), self-account verify
-echoing `SessionAccountJson` (no `password_hash` leak), bulk session
-revocation closing every socket on the account (cookie, bearer, and
-daemon-token — matches fuz_app `transports_ws_auth_guard`), token creation with
-bearer round-trip (raw `secret_fuz_token_…` validates against the same
-backend's `Authorization: Bearer` path), and token listing in
-`ClientApiTokenJson` shape (no `token_hash` field anywhere).
+re-login verification, the verify-write race detection (two concurrent
+password changes against the same starting hash: one wins, one returns
+401 with `metadata.reason === 'concurrent_change'`), session listing
+(with `account_id` field), single session revocation (idempotent with
+`revoked` field), self-account verify echoing `SessionAccountJson`
+(no `password_hash` leak), bulk session revocation closing every socket
+on the account (cookie, bearer, and daemon-token — matches fuz_app
+`transports_ws_auth_guard`), token creation with bearer round-trip
+(raw `secret_fuz_token_…` validates against the same backend's
+`Authorization: Bearer` path), and token listing in `ClientApiTokenJson`
+shape (no `token_hash` field anywhere).
+
+**Rate limit tests (Rust-only):** `rate_limit_login_blocks_after_threshold`
+— runs in a dedicated post-suite phase that restarts the Rust backend
+with `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1`. Fires 5 failed logins, asserts
+the 6th returns 429 with `{error: 'rate_limit_exceeded', retry_after}`
+plus a `Retry-After` header, and asserts correct credentials are also
+blocked while the bucket is full (the limiter check runs before
+argon2 verify). Skipped on Deno via `skip: ['deno']` — Deno's rate
+limiter is fuz_app's concern.
+
+**Trusted-proxy tests (Rust-only):** `proxy_no_xff_uses_connection_ip`,
+`proxy_trusted_xff_resolves_to_originator`,
+`proxy_multi_hop_stops_at_first_untrusted`,
+`proxy_malformed_xff_entry_skipped`,
+`proxy_all_trusted_xff_falls_back_to_leftmost`,
+`proxy_empty_xff_uses_connection_ip`,
+`proxy_ipv6_originator_in_xff`,
+`proxy_ipv4_mapped_xff_normalizes`,
+`proxy_multi_hop_with_malformed_then_untrusted`,
+`proxy_all_malformed_xff_falls_back_to_connection_ip` — runs in a
+dedicated post-suite phase that restarts the Rust backend with
+`ZZZ_TRUSTED_PROXIES=127.0.0.1`. Each test triggers a failed login
+under a unique `proxy-test-<label>-<uuid>` username and asserts the
+resulting `audit_log.ip` row matches the expected resolved client IP
+for that XFF + connection-IP combination. Skipped on Deno via
+`skip: ['deno']` — fuz_app covers the TS port at the unit-test layer
+in `http/proxy.test.ts` (87 cases); `crates/zzz_server/src/proxy.rs`
+ships 86 Rust unit tests covering the pure functions
+(`normalize_ip` including the IPv6 canonicalization and the
+ipv4-mapped collapse ordering, `validate_ip_strict`,
+`parse_proxy_entry` + all `ProxyParseError` variants including the
+non-aligned `/0` regressions, `parse_proxy_list`, `is_trusted_ip`
+including the cross-family CIDR guard, `resolve_client_ip` including
+malformed-skip and leftmost-fallback, `cidr_contains` shift-edge
+cases).
 
 ```bash
 deno task test:integration --backend=rust   # Rust only
@@ -317,10 +388,24 @@ crates/zzz_server/src/
 ├── rpc.rs           # JSON-RPC classify + notification builder, HTTP handler with auth pipeline
 ├── ws.rs            # WebSocket upgrade with auth, connection tracking, select! message loop
 ├── perform_action.rs # Transport-agnostic dispatch core shared by HTTP RPC + WS (mirrors fuz_app/src/lib/actions/perform_action.ts)
-├── auth.rs          # Keyring, cookie/bearer/daemon-token resolution, per-action auth, REST credential gate (`enforce_session_only`)
+├── audit/           # Audit emission + listeners
+│   ├── mod.rs       # AuditEmitter (pool-write + listener chain), AuditLogEvent / AuditLogInput
+│   └── listeners.rs # register() — translates audit events into WS socket revocation
+├── auth/            # Auth surface
+│   ├── mod.rs       # AuthError, RequestContext, build_request_context (+ pub use submodules)
+│   ├── keyring.rs   # Keyring (HMAC sign/verify), session-cookie parsing, hash_session_token
+│   ├── resolve.rs   # ResolvedAuth, cookie/bearer/daemon-token resolution pipeline
+│   └── spec.rs      # ActionAuth / CredentialType / MethodSpec, check_action_auth, method_spec, origin allowlist, REST credential gate (`enforce_session_only`)
+├── rate_limiter.rs  # Sliding-window RateLimiter (per-IP + per-account on /login + /password); opt-in via ZZZ_LOGIN_RATE_LIMIT_ENABLED
+├── proxy.rs         # Trusted-proxy parsing (IPv4/IPv6/CIDR), strict-IP validation, right-to-left XFF resolution, `client_ip_middleware` (sets `ClientIp` on request extensions). Gated by ZZZ_TRUSTED_PROXIES (empty → TCP peer fallback).
 ├── api_token.rs     # generate_api_token (raw token + tok_<12> public id + blake3 hash)
 ├── daemon_token.rs  # Daemon token state, generation, timing-safe validation, rotation task
-├── account.rs       # Account routes: login, logout, password change, session management
+├── account/         # Account REST routes
+│   ├── mod.rs       # Shared helpers (cookies, hashing, rate-limit responses), LoginInput / PasswordInput (+ pub use handlers)
+│   ├── status.rs    # GET /api/account/status
+│   ├── login.rs     # POST /api/account/login
+│   ├── logout.rs    # POST /api/account/logout
+│   └── password.rs  # POST /api/account/password
 ├── bootstrap.rs     # POST /bootstrap handler (account + session creation)
 ├── db/              # Per-domain query modules
 │   ├── mod.rs       # Pool creation + re-exports
@@ -386,6 +471,69 @@ the session-only credential channel for `POST /api/account/password`
 out of the same module that holds `check_action_auth` so the two
 gates can't drift silently.
 
+**Audit emission**: `audit/mod.rs` houses `AuditEmitter`, the bound capability
+threaded onto `App.audit`. Every `audit.emit(input)` site spawns a
+fire-and-forget pool-write (via `tokio::spawn`) that returns a
+`JoinHandle<()>`. RPC handlers (account session/token mutations) push the
+handle onto `Ctx.pending_effects`; `perform_action` drains that queue
+before returning to the transport so audit rows are persistent by
+response time. REST handlers (`login`, `logout`, `password`) await the
+handle directly. The emit task INSERTs into `audit_log` via the captured
+pool (rollback-resilient — survives a tx rollback) and then fans the
+materialized `AuditLogEvent` out to every listener on
+`AuditEmitter.on_event_chain` (registered in `audit::listeners::register`
+after `App` is constructed). Pool failures and INSERT failures are
+logged at `warn` and swallowed — same fail-open posture as fuz_app.
+
+The listener chain currently translates audit events into WebSocket
+socket revocation. Mirrors fuz_app's `create_ws_auth_guard` +
+`create_ws_logout_closer`:
+
+- `session_revoke` (success) → `close_sockets_for_session(metadata.session_id)`
+- `token_revoke` (success) → `close_sockets_for_token(metadata.token_id)`
+- `session_revoke_all` / `token_revoke_all` / `password_change` / `logout`
+  (success) → `close_sockets_for_account(target_account_id ?? account_id)`
+
+Failure-outcome rows never trigger socket close — they carry
+attacker-controlled metadata (e.g. a `session_revoke` row records the
+caller-submitted `session_id` even if the DB rejected it), so reacting
+to them would let an authenticated user disconnect another user by
+guessing a session hash.
+
+**Credential-channel metadata contract**: every audit row emitted by
+the four credential-gated RPC methods (`account_session_revoke`,
+`account_session_revoke_all`, `account_token_create`,
+`account_token_revoke`) plus the REST `POST /api/account/password`
+handler records `metadata.credential_type` (`'session' | 'api_token' |
+'daemon_token'`). Mirrors fuz_app v0.63.0's defense-in-depth contract —
+the spec gate already restricts these to `Session` credentials, but
+forensics survive a future loosening or bypass because the row records
+what actually authenticated the request. See
+`fuz_app/docs/security.md` §Credential-channel gating.
+
+**Bootstrap audit emission**. `POST /api/account/bootstrap` writes an
+audit row on both legs (matches fuz_app's `bootstrap_routes.ts`).
+Success rows carry both `account_id` (new keeper account) and
+`actor_id` (new keeper actor), `metadata: null`. Failure rows carry
+`metadata: {error: <reason>}` matching
+`audit_metadata_schemas.bootstrap` (a `looseObject` with
+`error: string`); four failure shapes are emitted —
+`bootstrap_not_configured`, `already_bootstrapped` (fired at both the
+pre-check and post-lock double-check sites), `token_file_missing`,
+`invalid_token`. Bootstrap is pre-auth so no `credential_type` in
+metadata.
+
+**`password_change` `concurrent_change` row**. `db/account.rs`'s
+`query_update_password` is a conditional UPDATE keyed on
+`WHERE id = $2 AND password_hash = $3` returning `bool`. When the
+loser's UPDATE matches zero rows (a concurrent password change
+committed first against the same starting hash), the REST handler
+emits `password_change` failure with
+`metadata: {reason: 'concurrent_change', credential_type}` and
+returns 401 — same shape as fuz_app's
+`query_update_account_password` + loser-path emit. Wrong-password
+failures carry `metadata: {credential_type}` only (no `reason`).
+
 ## Known Issues
 
 - **No per-message WS session revalidation** — upgrade-time auth only. Event-
@@ -415,15 +563,15 @@ identical JSON-RPC envelopes for all auth failures.
 
 ## Known Limitations
 
-- 23 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `provider_update_api_key` keeper-only, `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`)
+- 25 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `provider_update_api_key` keeper-only, `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`, `admin_session_revoke_all` admin-only, `admin_token_revoke_all` admin-only)
 - 5 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debounced broadcasts with immediate index updates, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast), `completion_progress` (streaming completion chunks to requesting WS connection)
 - AI providers: Anthropic fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable)
 - No batch request support (JSON arrays)
 - No Ollama actions (`ollama_list`, `ollama_ps`, etc.)
 - No signup route (requires invite system)
 - No token management routes (GET /tokens, POST /tokens/create, etc.)
-- No SSE/realtime audit event broadcasting
-- No rate limiting on login/password endpoints
+- No SSE broadcast of audit events to admins — the in-process listener chain (`audit/`) only drives WebSocket socket revocation today; an SSE adapter mirroring fuz_app's `audit_log_sse` is future work
+- Login/password rate limiting is **opt-in via `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1`** (default off so existing integration tests don't trip the bucket). When enabled, per-IP (5 attempts / 15 min) + per-account (10 / 30 min) sliding windows fire on `/login` and `/password`; 429 carries `{error: 'rate_limit_exceeded', retry_after}` plus a `Retry-After` header. Per-IP key is the resolved client IP from `proxy::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when running behind a reverse proxy so the bucket keys on the originating client rather than the proxy
 
 ## Design Decisions
 
@@ -487,6 +635,34 @@ identical JSON-RPC envelopes for all auth failures.
 **Phase 5** (remaining):
 1. Codegen from Zod specs (action input/output types)
 2. Token management routes (create, list, revoke API tokens)
-3. Rate limiting on login/password endpoints
+- [x] Trusted-proxy `get_client_ip` port (XFF + CIDR + strict-IP
+  validation) — landed 2026-05-16. `proxy.rs` ports fuz_app's
+  `http/proxy.ts`; `client_ip_middleware` sets `ClientIp` on every
+  request via `from_fn_with_state`; consumer sites in `account/`,
+  `bootstrap.rs`, `handlers/account.rs` plumb `audit.ip` on all 11
+  emit sites and the rate-limit keys read the resolved value. Ten
+  integration tests in `proxy_tests.ts` (Rust-only) + 86 Rust unit
+  tests in `proxy.rs`. Same-day review pass fixed three correctness
+  issues (IPv6 /0 host_mask overflow in `parse_proxy_entry`
+  (`1u128 << 128` UB — release would silently accept `fe80::/0`);
+  empty-XFF parity drift; missed audit emit on the bootstrap
+  post-lock verify-write race loser) and landed three security
+  hardenings: belt-and-suspenders WS revocation in
+  logout / password / session_revoke / token_revoke handlers (sync
+  `close_sockets_for_*` before audit emit so revocation lands on the
+  live WS even if the audit INSERT fails); IPv6 string
+  canonicalization in `normalize_ip` (round-trip through
+  `IpAddr::from_str` → `to_string()` so `::01` / `::1` / fully-
+  expanded forms collapse to one rate-limit / `audit_log.ip` key);
+  and login-username canonicalization at the boundary
+  (`trim().to_lowercase()` on `LoginInput.username` before DB lookup
+  + rate-limit key + audit metadata, mirroring fuz_app's
+  `login_routes.ts:369`; same canonicalization applied to
+  `bootstrap_inner` so stored `account.username` is the canonical
+  form a later login can find). Plus `is_request_origin_allowed`
+  centralized in `auth/spec.rs` and called from every REST + RPC + WS
+  handler (parity inversion: Rust drops the Referer fallback,
+  fuz_app tracks the convergence). See
+  `grimoire/lore/zzz/TODO.md` for the full review record.
 
 See the [Rust Backends quest](../../grimoire/quests/rust-backends.md).

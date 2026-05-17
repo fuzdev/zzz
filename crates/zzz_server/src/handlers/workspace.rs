@@ -42,11 +42,7 @@ struct WorkspaceOpenResult {
 
 pub(super) fn handle_workspace_list(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     let list: Vec<WorkspaceInfo> = {
-        let workspaces = ctx
-            .app
-            .workspaces
-            .read()
-            .map_err(|_| rpc::internal_error("lock poisoned"))?;
+        let workspaces = ctx.app.workspaces.read();
         workspaces.values().cloned().collect()
     };
     let result = WorkspaceListResult { workspaces: list };
@@ -79,11 +75,7 @@ pub(super) async fn handle_workspace_open(
     let normalized = to_normalized_dir(&canonical)?;
 
     let existing = {
-        let workspaces = ctx
-            .app
-            .workspaces
-            .read()
-            .map_err(|_| rpc::internal_error("lock poisoned"))?;
+        let workspaces = ctx.app.workspaces.read();
         workspaces.get(&normalized).cloned()
     };
 
@@ -109,11 +101,7 @@ pub(super) async fn handle_workspace_open(
     };
 
     let workspace = {
-        let mut workspaces = ctx
-            .app
-            .workspaces
-            .write()
-            .map_err(|_| rpc::internal_error("lock poisoned"))?;
+        let mut workspaces = ctx.app.workspaces.write();
         workspaces.entry(normalized).or_insert(info).clone()
     };
 
@@ -165,11 +153,7 @@ pub(super) async fn handle_workspace_close(
     }
 
     let removed = {
-        let mut workspaces = ctx
-            .app
-            .workspaces
-            .write()
-            .map_err(|_| rpc::internal_error("lock poisoned"))?;
+        let mut workspaces = ctx.app.workspaces.write();
         workspaces.remove(&key)
     };
 

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::body::Bytes;
-use axum::extract::{Query, State};
+use axum::extract::{Extension, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use fuz_common::{
@@ -13,9 +13,10 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 use tokio_util::sync::CancellationToken;
 
-use crate::auth::{check_origin, resolve_auth_from_headers};
+use crate::auth::{self, resolve_auth_from_headers};
 use crate::handlers::{App, NotifyFn};
 use crate::perform_action::{PerformActionInput, PerformActionResult, perform_action};
+use crate::proxy::ClientIp;
 
 // -- JSON-RPC types -----------------------------------------------------------
 
@@ -79,6 +80,30 @@ pub fn internal_error(detail: &str) -> JsonRpcError {
         code: JSONRPC_INTERNAL_ERROR,
         message: detail.to_string(),
         data: None,
+    }
+}
+
+/// JSON-RPC `not_found` error code. Mirrors `fuz_app`'s
+/// `JSONRPC_ERROR_CODES.not_found` and `auth.rs`'s `JSONRPC_UNAUTHENTICATED`
+/// / `JSONRPC_FORBIDDEN` private constants for the same two-axis (401/403)
+/// neighbors. Not exported from `fuz_common` because the wider error-code
+/// set there is still JSON-RPC 2.0 core only.
+const JSONRPC_NOT_FOUND: i32 = -32003;
+
+/// Build a `not_found` JSON-RPC error.
+///
+/// Wire shape matches `fuz_app`'s `jsonrpc_errors.not_found(resource, {reason})`:
+/// - `message = "{resource} not found"`
+/// - `data = {reason}` when `reason` is `Some`; omitted otherwise
+///
+/// Used by handlers that 404 on an input id (admin revoke-all on an unknown
+/// account, future invite lookups, etc.). Centralized so the next consumer
+/// doesn't redefine the code or drift the message shape.
+pub fn not_found(resource: &str, reason: Option<&str>) -> JsonRpcError {
+    JsonRpcError {
+        code: JSONRPC_NOT_FOUND,
+        message: format!("{resource} not found"),
+        data: reason.map(|r| serde_json::json!({"reason": r})),
     }
 }
 
@@ -263,13 +288,13 @@ fn extract_id(obj: &Map<String, Value>) -> Value {
 /// Matches `fuz_app`'s `create_rpc_endpoint` GET handler.
 pub async fn rpc_get_handler(
     State(app): State<Arc<App>>,
+    Extension(client_ip): Extension<ClientIp>,
     headers: HeaderMap,
     Query(query): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
-    // Origin verification
-    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok())
-        && !check_origin(origin, &app.allowed_origins)
-    {
+    // Origin verification — shared helper with the REST account/bootstrap
+    // routes so origin policy can't drift between transports.
+    if !auth::is_request_origin_allowed(&headers, &app.allowed_origins) {
         return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
     }
 
@@ -329,6 +354,7 @@ pub async fn rpc_get_handler(
         request_id: &id,
         auth: auth_context,
         credential_type,
+        client_ip: Some(client_ip.0),
         notify: http_no_op_notify(),
         signal: CancellationToken::new(),
     };
@@ -349,11 +375,15 @@ pub async fn rpc_get_handler(
 /// - Parse errors → full JSON-RPC envelope, HTTP 400
 /// - Notifications → rejected as `invalid_request`, HTTP 400
 /// - Error responses → HTTP status mapped from JSON-RPC error code
-pub async fn rpc_handler(State(app): State<Arc<App>>, headers: HeaderMap, body: Bytes) -> Response {
-    // Origin verification
-    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok())
-        && !check_origin(origin, &app.allowed_origins)
-    {
+pub async fn rpc_handler(
+    State(app): State<Arc<App>>,
+    Extension(client_ip): Extension<ClientIp>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    // Origin verification — shared helper with the REST account/bootstrap
+    // routes so origin policy can't drift between transports.
+    if !auth::is_request_origin_allowed(&headers, &app.allowed_origins) {
         return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
     }
 
@@ -395,6 +425,7 @@ pub async fn rpc_handler(State(app): State<Arc<App>>, headers: HeaderMap, body: 
                 request_id: &id,
                 auth: auth_context,
                 credential_type,
+                client_ip: Some(client_ip.0),
                 notify: http_no_op_notify(),
                 signal: CancellationToken::new(),
             };

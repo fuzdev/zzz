@@ -7,9 +7,10 @@
 
 use fuz_common::JsonRpcError;
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::api_token::generate_api_token;
+use crate::audit::{AuditLogInput, AuditOutcome, credential_type_value};
 use crate::db;
 use crate::rpc;
 
@@ -165,18 +166,37 @@ pub(super) async fn handle_account_session_revoke(
         .await
         .map_err(|_| rpc::internal_error("session revoke query failed"))?;
 
+    // Eagerly close matching WS sockets here in the handler so revocation
+    // lands on the live connection even if the downstream audit INSERT
+    // fails (no per-message WS revalidation, so a stale `RequestContext`
+    // would otherwise keep working until disconnect). The audit listener
+    // chain in `audit::listeners::register` ALSO closes sockets on
+    // the materialized row — kept as a fail-safe for any future
+    // out-of-band audit emit sites (admin revoke, scheduled jobs).
+    // `close_sockets_for_*` is idempotent: the second pass finds zero
+    // matches and is a no-op.
     if deleted {
-        let closed = ctx.app.close_sockets_for_session(session_id);
-        if closed > 0 {
-            tracing::info!(
-                count = closed,
-                "session revoke: closed WebSocket connections"
-            );
-        }
+        ctx.app.close_sockets_for_session(session_id);
     }
 
-    // TODO: audit emit `session_revoke` (outcome: deleted ? success : failure).
-    // Audit subsystem is a separate Phase 5 quest.
+    let handle = ctx.app.audit.emit(AuditLogInput {
+        event_type: "session_revoke",
+        outcome: Some(if deleted {
+            AuditOutcome::Success
+        } else {
+            AuditOutcome::Failure
+        }),
+        actor_id: None,
+        account_id: Some(account_id),
+        target_account_id: None,
+        target_actor_id: None,
+        ip: ctx.client_ip.clone(),
+        metadata: Some(json!({
+            "session_id": session_id,
+            "credential_type": credential_type_value(ctx.credential_type),
+        })),
+    });
+    ctx.push_pending_effect(handle);
 
     serde_json::to_value(AccountRevokeResult {
         ok: true,
@@ -195,20 +215,27 @@ pub(super) async fn handle_account_session_revoke_all(
         .await
         .map_err(|_| rpc::internal_error("session revoke_all query failed"))?;
 
-    // Close every socket on the account — cookie, bearer, and daemon-token —
-    // matching fuz_app's `transports_ws_auth_guard` which treats
-    // `session_revoke_all` / `token_revoke_all` / `password_change` as
-    // account-wide credential invalidation.
-    let closed = ctx.app.close_sockets_for_account(account_id);
-    if closed > 0 {
-        tracing::info!(
-            count = closed,
-            "session revoke_all: closed WebSocket connections"
-        );
-    }
+    // Eager account-wide socket close — closes every socket on the account
+    // (cookie, bearer, and daemon-token) so revocation reaches the live
+    // connections even if the audit INSERT fails. The audit listener also
+    // fires on the materialized row (idempotent). Matches fuz_app's
+    // `transports_ws_auth_guard` account-wide invalidation pattern.
+    ctx.app.close_sockets_for_account(account_id);
 
-    // TODO: audit emit `session_revoke_all` with metadata.count.
-    // Audit subsystem is a separate Phase 5 quest.
+    let handle = ctx.app.audit.emit(AuditLogInput {
+        event_type: "session_revoke_all",
+        outcome: Some(AuditOutcome::Success),
+        actor_id: None,
+        account_id: Some(account_id),
+        target_account_id: None,
+        target_actor_id: None,
+        ip: ctx.client_ip.clone(),
+        metadata: Some(json!({
+            "count": deleted_count,
+            "credential_type": credential_type_value(ctx.credential_type),
+        })),
+    });
+    ctx.push_pending_effect(handle);
 
     serde_json::to_value(AccountSessionRevokeAllResult {
         ok: true,
@@ -249,8 +276,21 @@ pub(super) async fn handle_account_token_create(
         .await
         .map_err(|_| rpc::internal_error("token enforce_limit query failed"))?;
 
-    // TODO: audit emit `token_create` with metadata { token_id, name }.
-    // Audit subsystem is a separate Phase 5 quest.
+    let handle = ctx.app.audit.emit(AuditLogInput {
+        event_type: "token_create",
+        outcome: Some(AuditOutcome::Success),
+        actor_id: None,
+        account_id: Some(account_id),
+        target_account_id: None,
+        target_actor_id: None,
+        ip: ctx.client_ip.clone(),
+        metadata: Some(json!({
+            "token_id": generated.id,
+            "name": name,
+            "credential_type": credential_type_value(ctx.credential_type),
+        })),
+    });
+    ctx.push_pending_effect(handle);
 
     serde_json::to_value(AccountTokenCreateResult {
         ok: true,
@@ -303,15 +343,31 @@ pub(super) async fn handle_account_token_revoke(
         .await
         .map_err(|_| rpc::internal_error("token revoke query failed"))?;
 
+    // Eager per-token socket close — only the revoked token's sockets,
+    // not the account's other tokens or session connections. The audit
+    // listener fires the same call on the materialized row (idempotent).
     if deleted {
-        let closed = ctx.app.close_sockets_for_token(token_id);
-        if closed > 0 {
-            tracing::info!(count = closed, "token revoke: closed WebSocket connections");
-        }
+        ctx.app.close_sockets_for_token(token_id);
     }
 
-    // TODO: audit emit `token_revoke` (outcome: deleted ? success : failure).
-    // Audit subsystem is a separate Phase 5 quest.
+    let handle = ctx.app.audit.emit(AuditLogInput {
+        event_type: "token_revoke",
+        outcome: Some(if deleted {
+            AuditOutcome::Success
+        } else {
+            AuditOutcome::Failure
+        }),
+        actor_id: None,
+        account_id: Some(account_id),
+        target_account_id: None,
+        target_actor_id: None,
+        ip: ctx.client_ip.clone(),
+        metadata: Some(json!({
+            "token_id": token_id,
+            "credential_type": credential_type_value(ctx.credential_type),
+        })),
+    });
+    ctx.push_pending_effect(handle);
 
     serde_json::to_value(AccountRevokeResult {
         ok: true,

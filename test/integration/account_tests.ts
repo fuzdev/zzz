@@ -10,7 +10,7 @@
  */
 
 import {type BackendConfig} from './config.ts';
-import {assert_equal, post_rpc} from './test_helpers.ts';
+import {assert_equal, post_rpc, wait_for_audit_row} from './test_helpers.ts';
 import type {TestResult} from './tests.ts';
 
 /** POST JSON to an account route. */
@@ -18,10 +18,11 @@ const post_account = async (
 	config: BackendConfig,
 	path: string,
 	body: unknown,
-	options?: {cookie?: string},
+	options?: {cookie?: string; origin?: string},
 ): Promise<{status: number; body: unknown; set_cookies: string[]}> => {
 	const headers: Record<string, string> = {'Content-Type': 'application/json'};
 	if (options?.cookie) headers.Cookie = options.cookie;
+	if (options?.origin !== undefined) headers.Origin = options.origin;
 	const res = await fetch(`${config.base_url}${path}`, {
 		method: 'POST',
 		headers,
@@ -91,6 +92,31 @@ const account_test_list: ReadonlyArray<{
 			assert_equal(status, 401, 'status');
 			const r = body as Record<string, unknown>;
 			assert_equal(r.error, 'invalid_credentials', 'error');
+		},
+	},
+	{
+		// Origin-allowlist enforcement on the REST account routes. Both
+		// backends configure `ALLOWED_ORIGINS=http://localhost:*` in the
+		// integration runner; a request with an Origin header outside
+		// that allowlist must 403 before any auth / argon2 work. No
+		// Origin header (the default for Deno's `fetch` on server-side
+		// calls) stays accepted — that's the curl / CLI path.
+		name: 'login_forbidden_origin',
+		fn: async (config) => {
+			const paths = config.account_paths;
+			if (!paths) throw new Error('account_paths not configured');
+			const {status, body} = await post_account(
+				config,
+				paths.login,
+				{
+					username: config.auth!.username,
+					password: config.auth!.password,
+				},
+				{origin: 'https://evil.example.com'},
+			);
+			assert_equal(status, 403, 'status');
+			const r = body as Record<string, unknown>;
+			assert_equal(r.error, 'forbidden_origin', 'error');
 		},
 	},
 	{
@@ -223,6 +249,101 @@ const account_test_list: ReadonlyArray<{
 				{cookie},
 			);
 			assert_equal(pw_res.status, 401, 'wrong current password → 401');
+		},
+	},
+	{
+		// Verify-write race: two concurrent password changes against the same
+		// starting hash. fuz_app's `query_update_account_password` and (now)
+		// Rust's `query_update_password` key the UPDATE on the verified hash,
+		// so the loser's UPDATE matches zero rows. Loser returns 401 + emits
+		// a `password_change` failure audit row with
+		// `metadata.reason === 'concurrent_change'`.
+		name: 'password_change_concurrent_change',
+		fn: async (config) => {
+			const paths = config.account_paths;
+			if (!paths) throw new Error('account_paths not configured');
+
+			// Two distinct sessions on the same account — concurrent requests
+			// from a single cookie would serialize on the connection's request
+			// queue, hiding the race we want to test.
+			const login_a = await post_account(config, paths.login, {
+				username: config.auth!.username,
+				password: config.auth!.password,
+			});
+			assert_equal(login_a.status, 200, 'login A status');
+			const cookie_a = login_a.set_cookies.map((c) => c.split(';')[0]).join('; ');
+
+			const login_b = await post_account(config, paths.login, {
+				username: config.auth!.username,
+				password: config.auth!.password,
+			});
+			assert_equal(login_b.status, 200, 'login B status');
+			const cookie_b = login_b.set_cookies.map((c) => c.split(';')[0]).join('; ');
+
+			// Fire both password changes in parallel against the same
+			// `current_password`. Argon2id verify is ~100ms — easily wide
+			// enough for both to verify before either commits the UPDATE.
+			const new_a = 'concurrent-change-A-new-pw-123';
+			const new_b = 'concurrent-change-B-new-pw-456';
+			const [res_a, res_b] = await Promise.all([
+				post_account(
+					config,
+					paths.password,
+					{current_password: config.auth!.password, new_password: new_a},
+					{cookie: cookie_a},
+				),
+				post_account(
+					config,
+					paths.password,
+					{current_password: config.auth!.password, new_password: new_b},
+					{cookie: cookie_b},
+				),
+			]);
+
+			// Exactly one 200, exactly one 401.
+			const statuses = [res_a.status, res_b.status].sort();
+			assert_equal(statuses[0], 200, 'one request succeeds');
+			assert_equal(statuses[1], 401, 'other request fails with 401');
+
+			// Failure row carries metadata.reason === 'concurrent_change'.
+			const sql = `
+				SELECT row_to_json(t) FROM (
+					SELECT metadata
+					FROM audit_log
+					WHERE event_type = 'password_change'
+					  AND outcome = 'failure'
+					  AND metadata->>'reason' = 'concurrent_change'
+					ORDER BY seq DESC
+					LIMIT 1
+				) t;
+			`;
+			const row = await wait_for_audit_row<{
+				metadata: {reason: string; credential_type: string};
+			}>(sql);
+			assert_equal(row.metadata.reason, 'concurrent_change', 'metadata.reason');
+			assert_equal(row.metadata.credential_type, 'session', 'metadata.credential_type');
+
+			// Restore the canonical password. Whichever password won, log
+			// in with it and rotate back to the bootstrap value.
+			const winning_password = res_a.status === 200 ? new_a : new_b;
+			const restore_login = await post_account(config, paths.login, {
+				username: config.auth!.username,
+				password: winning_password,
+			});
+			assert_equal(restore_login.status, 200, 'restore login status');
+			const restore_cookie = restore_login.set_cookies
+				.map((c) => c.split(';')[0])
+				.join('; ');
+			const restore_res = await post_account(
+				config,
+				paths.password,
+				{
+					current_password: winning_password,
+					new_password: config.auth!.password,
+				},
+				{cookie: restore_cookie},
+			);
+			assert_equal(restore_res.status, 200, 'password restore status');
 		},
 	},
 	{

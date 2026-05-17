@@ -5,6 +5,7 @@
 //! source of truth for which methods exist.
 
 mod account;
+mod admin;
 mod filesystem;
 mod provider;
 mod terminal;
@@ -12,21 +13,25 @@ mod workspace;
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
-use std::sync::{Arc, RwLock};
 
 use deadpool_postgres::Pool;
 use fuz_common::JsonRpcError;
+use parking_lot::RwLock;
 use serde::Serialize;
 use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::auth::{self, Keyring, RequestContext};
+use crate::audit::AuditEmitter;
+use crate::auth::{self, CredentialType, Keyring, RequestContext};
 use crate::daemon_token::SharedDaemonTokenState;
 use crate::filer::FilerManager;
 use crate::provider::{CompletionOptions, ProviderManager};
+use crate::proxy::ParsedProxy;
 use crate::pty_manager::PtyManager;
+use crate::rate_limiter::RateLimiter;
 use crate::rpc;
 use crate::scoped_fs::ScopedFs;
 
@@ -85,6 +90,31 @@ pub struct App {
     /// Register `_test_*` actions on live dispatchers. Set by integration
     /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave false.
     pub enable_test_actions: bool,
+    /// Audit emission + listener fan-out. Captured pool-write writes audit
+    /// rows out of band; the listener chain routes socket revocation
+    /// (`session_revoke`, `password_change`, `logout`, …) — mirrors
+    /// `fuz_app`'s `create_ws_auth_guard` + `create_ws_logout_closer`
+    /// pattern. Wired in `main.rs` after `App` is constructed so listeners
+    /// can capture `Arc<App>`.
+    pub audit: Arc<AuditEmitter>,
+    /// Per-IP rate limiter on `/login` / `/password`. `Some` iff
+    /// `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1` was set at startup; default off
+    /// so existing integration tests don't trip the bucket. Mirrors
+    /// `fuz_app`'s `ip_rate_limiter` plumbing — handlers check before
+    /// argon2 work and on failure record / on success reset.
+    pub login_ip_rate_limiter: Option<Arc<RateLimiter>>,
+    /// Per-account-id rate limiter on `/login` / `/password`. Keyed on
+    /// canonical `account.id` (post-DB-lookup), not the submitted
+    /// identifier — otherwise an attacker could alternate between
+    /// username and email to double the bucket. Mirrors `fuz_app`'s
+    /// `login_account_rate_limiter`.
+    pub login_account_rate_limiter: Option<Arc<RateLimiter>>,
+    /// Parsed trusted-proxy entries from `ZZZ_TRUSTED_PROXIES`. Read
+    /// by `proxy::client_ip_middleware` on every request to decide
+    /// whether to trust `X-Forwarded-For`. Empty when the env var is
+    /// unset; the middleware then collapses every connection to the
+    /// TCP peer IP (Phase 4 direct-bind behavior).
+    pub trusted_proxies: Vec<ParsedProxy>,
 }
 
 impl App {
@@ -101,6 +131,10 @@ impl App {
         daemon_token_state: Option<SharedDaemonTokenState>,
         provider_manager: ProviderManager,
         enable_test_actions: bool,
+        audit: Arc<AuditEmitter>,
+        login_ip_rate_limiter: Option<Arc<RateLimiter>>,
+        login_account_rate_limiter: Option<Arc<RateLimiter>>,
+        trusted_proxies: Vec<ParsedProxy>,
     ) -> Self {
         Self {
             workspaces: RwLock::new(HashMap::new()),
@@ -120,6 +154,10 @@ impl App {
             provider_manager,
             completion_options: CompletionOptions::default(),
             enable_test_actions,
+            audit,
+            login_ip_rate_limiter,
+            login_account_rate_limiter,
+            trusted_proxies,
         }
     }
 
@@ -136,41 +174,35 @@ impl App {
         let id = self
             .next_connection_id
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if let Ok(mut conns) = self.connections.write() {
-            conns.insert(
-                id,
-                ConnectionInfo {
-                    sender,
-                    token_hash,
-                    account_id,
-                    api_token_id,
-                },
-            );
-        }
+        self.connections.write().insert(
+            id,
+            ConnectionInfo {
+                sender,
+                token_hash,
+                account_id,
+                api_token_id,
+            },
+        );
         id
     }
 
     /// Remove a connection by ID (called on WS disconnect).
     pub fn remove_connection(&self, id: ConnectionId) {
-        if let Ok(mut conns) = self.connections.write() {
-            conns.remove(&id);
-        }
+        self.connections.write().remove(&id);
     }
 
     /// Broadcast a message to all connected clients.
     pub fn broadcast(&self, message: &str) {
-        if let Ok(conns) = self.connections.read() {
-            for info in conns.values() {
-                let _ = info.sender.send(message.to_owned());
-            }
+        let conns = self.connections.read();
+        for info in conns.values() {
+            let _ = info.sender.send(message.to_owned());
         }
     }
 
     /// Send a message to a specific connection.
     pub fn send_to(&self, id: ConnectionId, message: &str) {
-        if let Ok(conns) = self.connections.read()
-            && let Some(info) = conns.get(&id)
-        {
+        let conns = self.connections.read();
+        if let Some(info) = conns.get(&id) {
             let _ = info.sender.send(message.to_owned());
         }
     }
@@ -184,15 +216,13 @@ impl App {
     /// Returns the number of connections closed.
     pub fn close_sockets_for_session(&self, target_hash: &str) -> usize {
         let mut count = 0;
-        if let Ok(mut conns) = self.connections.write() {
-            conns.retain(|_, info| {
-                let matches = info.token_hash.as_deref().is_some_and(|h| h == target_hash);
-                if matches {
-                    count += 1;
-                }
-                !matches
-            });
-        }
+        self.connections.write().retain(|_, info| {
+            let matches = info.token_hash.as_deref().is_some_and(|h| h == target_hash);
+            if matches {
+                count += 1;
+            }
+            !matches
+        });
         count
     }
 
@@ -204,18 +234,16 @@ impl App {
     /// Returns the number of connections closed.
     pub fn close_sockets_for_token(&self, target_id: &str) -> usize {
         let mut count = 0;
-        if let Ok(mut conns) = self.connections.write() {
-            conns.retain(|_, info| {
-                let matches = info
-                    .api_token_id
-                    .as_deref()
-                    .is_some_and(|id| id == target_id);
-                if matches {
-                    count += 1;
-                }
-                !matches
-            });
-        }
+        self.connections.write().retain(|_, info| {
+            let matches = info
+                .api_token_id
+                .as_deref()
+                .is_some_and(|id| id == target_id);
+            if matches {
+                count += 1;
+            }
+            !matches
+        });
         count
     }
 
@@ -225,15 +253,13 @@ impl App {
     /// Returns the number of connections closed.
     pub fn close_sockets_for_account(&self, target_id: uuid::Uuid) -> usize {
         let mut count = 0;
-        if let Ok(mut conns) = self.connections.write() {
-            conns.retain(|_, info| {
-                let matches = info.account_id.is_some_and(|id| id == target_id);
-                if matches {
-                    count += 1;
-                }
-                !matches
-            });
-        }
+        self.connections.write().retain(|_, info| {
+            let matches = info.account_id.is_some_and(|id| id == target_id);
+            if matches {
+                count += 1;
+            }
+            !matches
+        });
         count
     }
 }
@@ -261,6 +287,19 @@ pub struct Ctx<'a> {
     pub app_arc: Arc<App>,
     pub request_id: &'a Value,
     pub auth: Option<&'a RequestContext>,
+    /// Credential type the request arrived on (Session / `ApiToken` /
+    /// `DaemonToken`). `None` for anonymous callers. Mirrors `fuz_app`'s
+    /// `ActionContext.credential_type`; populated on every audit emit
+    /// from a gated method so forensics survive a future loosening of
+    /// the spec gate (see `audit.rs` doc-comment).
+    pub credential_type: Option<CredentialType>,
+    /// Resolved client IP from `proxy::client_ip_middleware`. Plumbed
+    /// onto every `AuditLogInput.ip` emit site in `account.rs` /
+    /// `bootstrap.rs` / `handlers/account.rs`, matching `fuz_app`'s
+    /// `get_client_ip(c)` posture. `None` on transports that bypass
+    /// the middleware (none today — kept optional so a future internal
+    /// dispatcher without a request envelope can still build a `Ctx`).
+    pub client_ip: Option<String>,
     /// Push a JSON-RPC notification to the originator. Socket-scoped on WS,
     /// no-op on HTTP. Mirrors TS `ctx.notify(method, params)`.
     pub notify: NotifyFn,
@@ -268,6 +307,42 @@ pub struct Ctx<'a> {
     /// drop). Mirrors TS `ctx.signal: AbortSignal`. Distinct from
     /// resource-lifetime tokens (e.g. PTY's per-terminal token).
     pub signal: CancellationToken,
+    /// In-flight fire-and-forget tasks (audit emits, session touch, …) the
+    /// dispatcher drains before returning a response. Mirrors `fuz_app`'s
+    /// `ActionContext.pending_effects`. Stored under `std::sync::Mutex`
+    /// so handlers can push without `&mut Ctx` propagating through every
+    /// signature.
+    pub pending_effects: std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>,
+}
+
+impl Ctx<'_> {
+    /// Push a fire-and-forget task onto the pending-effects queue. The
+    /// dispatcher drains the queue before returning to the transport.
+    pub fn push_pending_effect(&self, handle: tokio::task::JoinHandle<()>) {
+        if let Ok(mut q) = self.pending_effects.lock() {
+            q.push(handle);
+        }
+    }
+
+    /// Drain and await every pending effect. Called from `perform_action`
+    /// after the handler completes — guarantees audit rows + listener
+    /// fan-out are observable by the time the response is sent.
+    ///
+    /// Errors from individual tasks (panics, cancellations) are logged
+    /// and swallowed so one bad effect can't starve the response.
+    pub async fn drain_pending_effects(&self) {
+        let drained = {
+            let Ok(mut q) = self.pending_effects.lock() else {
+                return;
+            };
+            std::mem::take(&mut *q)
+        };
+        for h in drained {
+            if let Err(e) = h.await {
+                tracing::warn!(error = %e, "pending effect task failed");
+            }
+        }
+    }
 }
 
 // -- Domain types -------------------------------------------------------------
@@ -382,6 +457,10 @@ async fn dispatch_with_tx(
         "account_session_revoke_all" => account::handle_account_session_revoke_all(ctx, &tx).await,
         "account_token_create" => account::handle_account_token_create(params, ctx, &tx).await,
         "account_token_revoke" => account::handle_account_token_revoke(params, ctx, &tx).await,
+        "admin_session_revoke_all" => {
+            admin::handle_admin_session_revoke_all(params, ctx, &tx).await
+        }
+        "admin_token_revoke_all" => admin::handle_admin_token_revoke_all(params, ctx, &tx).await,
         other => Err(rpc::method_not_found(other)),
     };
 
@@ -452,11 +531,7 @@ fn handle_ping(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
 
 async fn handle_session_load(ctx: &Ctx<'_>) -> Result<Value, JsonRpcError> {
     let workspaces: Vec<WorkspaceInfo> = {
-        let ws = ctx
-            .app
-            .workspaces
-            .read()
-            .map_err(|_| rpc::internal_error("lock poisoned"))?;
+        let ws = ctx.app.workspaces.read();
         ws.values().cloned().collect()
     };
 

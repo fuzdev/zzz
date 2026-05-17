@@ -109,4 +109,30 @@ CREATE TABLE IF NOT EXISTS api_token (
 );
 
 CREATE INDEX IF NOT EXISTS idx_api_token_account ON api_token(account_id);
+
+-- audit_log: mirrors fuz_app's AUDIT_LOG_SCHEMA from auth/audit_log_ddl.ts.
+-- target_actor_id is parallel to target_account_id for actor-grain events
+-- (role_grant_*, role_grant_offer_*); both are nullable. account_id /
+-- target_account_id use ON DELETE SET NULL so deleting an account preserves
+-- the audit row with the referenced id nulled out — forensic value over a
+-- cascade-delete tradeoff.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  seq SERIAL NOT NULL,
+  event_type TEXT NOT NULL,
+  outcome TEXT NOT NULL DEFAULT 'success',
+  actor_id UUID REFERENCES actor(id) ON DELETE SET NULL,
+  account_id UUID REFERENCES account(id) ON DELETE SET NULL,
+  target_account_id UUID REFERENCES account(id) ON DELETE SET NULL,
+  target_actor_id UUID REFERENCES actor(id) ON DELETE SET NULL,
+  ip TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  metadata JSONB
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_seq ON audit_log(seq DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_account ON audit_log(account_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_event_type ON audit_log(event_type);
+CREATE INDEX IF NOT EXISTS idx_audit_log_target_account ON audit_log(target_account_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_target_actor ON audit_log(target_actor_id);
 ";

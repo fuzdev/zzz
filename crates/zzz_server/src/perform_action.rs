@@ -45,6 +45,14 @@ pub struct PerformActionInput<'a> {
     pub auth: Option<&'a RequestContext>,
     /// Credential type the request arrived on; `None` for anonymous callers.
     pub credential_type: Option<CredentialType>,
+    /// Resolved client IP from `proxy::client_ip_middleware`, captured
+    /// per-request on HTTP and once-at-upgrade on WS (per-message XFF
+    /// resolution doesn't apply to WS — the header is read at the
+    /// upgrade request, not on each frame). Plumbed into `Ctx` so RPC
+    /// account handlers can populate `AuditLogInput.ip` matching
+    /// `fuz_app`'s `get_client_ip(c)` posture. `None` only on
+    /// transports that bypass the middleware (none today).
+    pub client_ip: Option<String>,
     /// Send a request-scoped JSON-RPC notification. Socket-scoped on WS,
     /// no-op on HTTP. Mirrors TS `ctx.notify`.
     pub notify: NotifyFn,
@@ -77,6 +85,7 @@ pub async fn perform_action(input: PerformActionInput<'_>, app: &Arc<App>) -> Pe
         request_id,
         auth,
         credential_type,
+        client_ip,
         notify,
         signal,
     } = input;
@@ -92,11 +101,21 @@ pub async fn perform_action(input: PerformActionInput<'_>, app: &Arc<App>) -> Pe
         app_arc: Arc::clone(app),
         request_id,
         auth,
+        credential_type,
+        client_ip,
         notify,
         signal,
+        pending_effects: std::sync::Mutex::new(Vec::new()),
     };
 
-    match handlers::dispatch(method, params, &ctx).await {
+    let outcome = handlers::dispatch(method, params, &ctx).await;
+
+    // Drain audit emits + other fire-and-forget effects so the response
+    // is consistent with observable DB state (mirrors fuz_app's
+    // `pending_effects` flush before the transport sends the response).
+    ctx.drain_pending_effects().await;
+
+    match outcome {
         Ok(value) => PerformActionResult::Ok(value),
         Err(error) => {
             let status = error_code_to_http_status(error.code);

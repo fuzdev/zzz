@@ -74,6 +74,71 @@ export const run_psql = async (
 };
 
 /**
+ * Run a single-result SQL query via `psql` and return the parsed JSON value.
+ *
+ * Wrap the query in `SELECT json_agg(...)` (or any `SELECT ... -> json/jsonb`)
+ * so psql emits a single value the caller can `JSON.parse`. Used by the
+ * audit-log integration tests, where assertions read newly inserted rows
+ * without pulling in a Postgres client library.
+ *
+ * Returns `null` when the query yields the SQL literal `null` (empty
+ * `json_agg`); throws otherwise on parse failure or psql failure.
+ */
+export const query_psql_json = async <T = unknown>(sql: string): Promise<T | null> => {
+	const cmd = new Deno.Command('psql', {
+		args: [TEST_DATABASE_URL, '-A', '-t', '-c', sql],
+		stdout: 'piped',
+		stderr: 'piped',
+	});
+	const child = cmd.spawn();
+	const status = await child.status;
+	if (!status.success) {
+		const stderr = (await new Response(child.stderr).text()).trim();
+		throw new Error(`query_psql_json: psql failed: ${stderr}`);
+	}
+	await child.stderr.cancel();
+	const raw = (await new Response(child.stdout).text()).trim();
+	if (raw === '' || raw === 'null') return null;
+	try {
+		return JSON.parse(raw) as T;
+	} catch (e) {
+		throw new Error(`query_psql_json: JSON.parse failed for ${raw}: ${e}`);
+	}
+};
+
+/**
+ * Poll `query_psql_json` until it returns a non-null value or the timeout
+ * elapses. Audit emits are fire-and-forget via tokio::spawn on Rust; the
+ * dispatcher drains its pending-effects queue before responding for RPC
+ * actions, and REST handlers await the JoinHandle directly. This poll is
+ * defensive belt-and-suspenders for the race-prone Deno path where the
+ * post-response audit write hasn't landed by the time we query.
+ */
+export const wait_for_audit_row = async <T = unknown>(
+	sql: string,
+	{
+		timeout_ms = 2_000,
+		interval_ms = 50,
+	}: {timeout_ms?: number; interval_ms?: number} = {},
+): Promise<T> => {
+	const deadline = performance.now() + timeout_ms;
+	let last_error: unknown;
+	while (performance.now() < deadline) {
+		try {
+			const result = await query_psql_json<T>(sql);
+			if (result != null) return result;
+		} catch (e) {
+			last_error = e;
+		}
+		await new Promise((resolve) => setTimeout(resolve, interval_ms));
+	}
+	throw new Error(
+		`wait_for_audit_row: no row matched within ${timeout_ms}ms` +
+			(last_error ? ` (last error: ${last_error})` : ''),
+	);
+};
+
+/**
  * Create a dedicated session for the bootstrapped `testadmin` account via
  * psql, and return the token hash plus the signed session cookie. Used by
  * tests that exercise session revocation and cookie-vs-bearer priority.
