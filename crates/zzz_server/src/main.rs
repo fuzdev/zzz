@@ -282,6 +282,9 @@ async fn run() -> Result<(), ServerError> {
     all_specs.extend(zzz_action_specs::build_provider_specs(Arc::clone(
         &app_state,
     )));
+    if app_state.enable_test_actions {
+        all_specs.extend(zzz_action_specs::build_test_specs(Arc::clone(&app_state)));
+    }
     let action_registry = Arc::new(
         fuz_actions::ActionRegistry::compile(all_specs).map_err(|e| {
             ServerError::Config(format!("ActionRegistry::compile failed: {e}"))

@@ -63,12 +63,8 @@ pub struct App {
     pub completion_options: CompletionOptions,
     /// Register `_test_*` actions on live dispatchers. Set by integration
     /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave false.
-    ///
-    /// Phase 7 Batch 4: the `_test_emit_notifications` handler retired
-    /// alongside the legacy `handlers::dispatch`. A follow-up batch re-
-    /// registers it as a spine `ActionSpec` (zzz_action_specs) gated on
-    /// this flag.
-    #[allow(dead_code, reason = "Re-wired into a spine spec by a Batch4 follow-up")]
+    /// Read in `main.rs` at registry-compile time to conditionally
+    /// extend the spec set via `zzz_action_specs::build_test_specs`.
     pub enable_test_actions: bool,
     /// `Arc<ConnectionRegistry>` — the spine's connection-tracking
     /// registry. Sole connection store on `App`; drives the
