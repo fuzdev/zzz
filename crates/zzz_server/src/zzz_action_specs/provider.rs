@@ -35,11 +35,7 @@ fn provider_load_status_spec(app: Arc<App>) -> ActionSpec {
         let app = Arc::clone(&app);
         Box::pin(async move { provider_v2::provider_load_status(params, ctx, app).await })
     });
-    ActionSpec::read_only(
-        "provider_load_status",
-        AuthSpec::authenticated(),
-        handler,
-    )
+    ActionSpec::read_only("provider_load_status", AuthSpec::authenticated(), handler)
 }
 
 fn provider_update_api_key_spec(app: Arc<App>) -> ActionSpec {

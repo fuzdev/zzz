@@ -139,14 +139,12 @@ async fn run() -> Result<(), ServerError> {
     // fails fast so the operator sees the error instead of silently
     // leaving a hole. Sole trusted-proxy state on `App` since Phase 7
     // Batch 2 retired the legacy `crate::proxy` module.
-    let spine_trusted_proxies: Arc<Vec<fuz_http::ParsedProxy>> = Arc::new(
-        match config.trusted_proxies.as_deref() {
+    let spine_trusted_proxies: Arc<Vec<fuz_http::ParsedProxy>> =
+        Arc::new(match config.trusted_proxies.as_deref() {
             None => Vec::new(),
-            Some(raw) => fuz_http::parse_proxy_list(raw).map_err(|e| {
-                ServerError::Config(format!("ZZZ_TRUSTED_PROXIES: {e}"))
-            })?,
-        },
-    );
+            Some(raw) => fuz_http::parse_proxy_list(raw)
+                .map_err(|e| ServerError::Config(format!("ZZZ_TRUSTED_PROXIES: {e}")))?,
+        });
     if !spine_trusted_proxies.is_empty() {
         tracing::info!(
             count = spine_trusted_proxies.len(),
@@ -160,9 +158,8 @@ async fn run() -> Result<(), ServerError> {
             .map(fuz_http::parse_allowed_origins)
             .unwrap_or_default(),
     );
-    let bootstrap_available_atomic = Arc::new(std::sync::atomic::AtomicBool::new(
-        bootstrap_available,
-    ));
+    let bootstrap_available_atomic =
+        Arc::new(std::sync::atomic::AtomicBool::new(bootstrap_available));
     let socket_revoker: Arc<dyn fuz_auth::SocketRevoker> =
         Arc::clone(&realtime).into_socket_revoker();
     // Spine daemon-token state — sole daemon-token state on `App` since
@@ -203,10 +200,7 @@ async fn run() -> Result<(), ServerError> {
             password_hasher: Arc::clone(&spine_password_hasher),
             audit: Arc::clone(&spine_audit_emitter),
             bootstrap_available: Arc::clone(&bootstrap_available_atomic),
-            bootstrap_token_path: config
-                .bootstrap_token_path
-                .as_ref()
-                .map(PathBuf::from),
+            bootstrap_token_path: config.bootstrap_token_path.as_ref().map(PathBuf::from),
             on_keeper_resolved: None,
         }),
         keyring: Arc::clone(&spine_keyring),
@@ -259,8 +253,7 @@ async fn run() -> Result<(), ServerError> {
     // `fuz_auth` placeholder adapters (account + admin self-service),
     // then zzz-specific specs (workspace today; filesystem / terminal /
     // provider / etc. land as their `handlers_v2` modules ship).
-    let mut all_specs: Vec<fuz_actions::ActionSpec> =
-        fuz_actions::PROTOCOL_ACTION_SPECS();
+    let mut all_specs: Vec<fuz_actions::ActionSpec> = fuz_actions::PROTOCOL_ACTION_SPECS();
     all_specs.extend(fuz_actions::auth_adapter::build_account_specs(
         Arc::clone(&spine_audit_emitter),
         Arc::clone(&socket_revoker),
@@ -286,9 +279,8 @@ async fn run() -> Result<(), ServerError> {
         all_specs.extend(zzz_action_specs::build_test_specs(Arc::clone(&app_state)));
     }
     let action_registry = Arc::new(
-        fuz_actions::ActionRegistry::compile(all_specs).map_err(|e| {
-            ServerError::Config(format!("ActionRegistry::compile failed: {e}"))
-        })?,
+        fuz_actions::ActionRegistry::compile(all_specs)
+            .map_err(|e| ServerError::Config(format!("ActionRegistry::compile failed: {e}")))?,
     );
     // Set the action_registry on App via OnceLock. The set call returns
     // Err only if the cell is already populated, which is impossible
@@ -299,10 +291,7 @@ async fn run() -> Result<(), ServerError> {
         ));
     }
     tracing::info!(
-        spec_count = app_state
-            .action_registry
-            .get()
-            .map_or(0, |r| r.len()),
+        spec_count = app_state.action_registry.get().map_or(0, |r| r.len()),
         "spine action registry compiled"
     );
 
@@ -376,16 +365,9 @@ async fn run() -> Result<(), ServerError> {
     // since Phase 7 Batch 2 migrated those handlers off the legacy
     // `crate::proxy::ClientIp`; a separate `fuz_http::client_ip_middleware`
     // layer below covers the outer scope.
-    let registry_for_rpc = Arc::clone(
-        app_state
-            .action_registry
-            .get()
-            .ok_or_else(|| {
-                ServerError::Config(
-                    "action_registry must be set before mounting /api/rpc".to_owned(),
-                )
-            })?,
-    );
+    let registry_for_rpc = Arc::clone(app_state.action_registry.get().ok_or_else(|| {
+        ServerError::Config("action_registry must be set before mounting /api/rpc".to_owned())
+    })?);
     let spine_rpc_state = fuz_actions::RpcRouteState {
         pool: app_state.db_pool.clone(),
         keyring: Arc::clone(&spine_keyring),
@@ -402,16 +384,9 @@ async fn run() -> Result<(), ServerError> {
         ),
     );
 
-    let registry_for_ws = Arc::clone(
-        app_state
-            .action_registry
-            .get()
-            .ok_or_else(|| {
-                ServerError::Config(
-                    "action_registry must be set before mounting /api/ws".to_owned(),
-                )
-            })?,
-    );
+    let registry_for_ws = Arc::clone(app_state.action_registry.get().ok_or_else(|| {
+        ServerError::Config("action_registry must be set before mounting /api/ws".to_owned())
+    })?);
     let spine_ws_state = fuz_actions::WsRouteState {
         pool: app_state.db_pool.clone(),
         keyring: Arc::clone(&spine_keyring),
@@ -435,12 +410,11 @@ async fn run() -> Result<(), ServerError> {
     // `fuz_http::client_ip_middleware` is wrapped on the router so
     // `Extension<fuz_http::ClientIp>` is populated for every account
     // route (rate-limit keys + audit_log.ip).
-    let spine_account_router = fuz_auth::account_router(account_route_state).layer(
-        axum::middleware::from_fn_with_state(
+    let spine_account_router =
+        fuz_auth::account_router(account_route_state).layer(axum::middleware::from_fn_with_state(
             Arc::clone(&spine_trusted_proxies),
             fuz_http::client_ip_middleware,
-        ),
-    );
+        ));
 
     // Spine bootstrap router: mounts `/bootstrap` at the router root, so
     // nesting under `/api/account` produces `/api/account/bootstrap`.
@@ -681,7 +655,10 @@ fn register_audit_listeners(
                 if event.event_type != "session_revoke" || event.outcome != "success" {
                     return;
                 }
-                let Some(meta) = event.metadata.as_ref().and_then(serde_json::Value::as_object)
+                let Some(meta) = event
+                    .metadata
+                    .as_ref()
+                    .and_then(serde_json::Value::as_object)
                 else {
                     return;
                 };
@@ -710,7 +687,10 @@ fn register_audit_listeners(
                 if event.event_type != "token_revoke" || event.outcome != "success" {
                     return;
                 }
-                let Some(meta) = event.metadata.as_ref().and_then(serde_json::Value::as_object)
+                let Some(meta) = event
+                    .metadata
+                    .as_ref()
+                    .and_then(serde_json::Value::as_object)
                 else {
                     return;
                 };

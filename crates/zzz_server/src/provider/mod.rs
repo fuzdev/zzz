@@ -17,7 +17,6 @@ use tokio_util::sync::CancellationToken;
 
 use crate::rpc;
 
-
 // -- Provider name enum -------------------------------------------------------
 
 /// Known AI provider names.

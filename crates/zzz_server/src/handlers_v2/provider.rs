@@ -145,25 +145,23 @@ pub async fn completion_create(
     // token and a WS connection are available. On HTTP (`connection_id =
     // None`) or when the caller omitted `_meta.progressToken`, the
     // sender is `None` and the provider runs in non-streaming mode.
-    let progress_sender: Option<provider::ProgressSender> = match (
-        progress_token.as_ref(),
-        ctx.connection_id,
-    ) {
-        (Some(token), Some(conn_id)) => {
-            let realtime = Arc::clone(&app.realtime);
-            let token = token.clone();
-            let sender: provider::ProgressSender = Box::new(move |chunk: Value| {
-                let payload = serde_json::json!({
-                    "chunk": chunk,
-                    "_meta": { "progressToken": token },
+    let progress_sender: Option<provider::ProgressSender> =
+        match (progress_token.as_ref(), ctx.connection_id) {
+            (Some(token), Some(conn_id)) => {
+                let realtime = Arc::clone(&app.realtime);
+                let token = token.clone();
+                let sender: provider::ProgressSender = Box::new(move |chunk: Value| {
+                    let payload = serde_json::json!({
+                        "chunk": chunk,
+                        "_meta": { "progressToken": token },
+                    });
+                    let wire = rpc::notification("completion_progress", &payload);
+                    realtime.send_to(conn_id, &wire);
                 });
-                let wire = rpc::notification("completion_progress", &payload);
-                realtime.send_to(conn_id, &wire);
-            });
-            Some(sender)
-        }
-        _ => None,
-    };
+                Some(sender)
+            }
+            _ => None,
+        };
 
     let provider = app.provider_manager.require(provider_name)?;
     let mut result = provider

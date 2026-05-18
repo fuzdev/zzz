@@ -63,7 +63,10 @@ fn to_normalized_dir(path: &Path) -> Result<String, JsonrpcError> {
 /// `ActionHandler` shape uniformity. `async` is required by the
 /// `ActionHandler` future-returning shape even though the body has
 /// no `.await` points.
-#[allow(clippy::unused_async, reason = "ActionHandler signature requires async")]
+#[allow(
+    clippy::unused_async,
+    reason = "ActionHandler signature requires async"
+)]
 pub async fn workspace_list(
     _params: Value,
     _ctx: ActionContext<'_>,

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/zzz_server"]
+members = ["crates/zzz", "crates/zzz_server"]
 
 [workspace.package]
 version = "0.1.0"
@@ -9,6 +9,7 @@ license = "AGPL-3.0-only"
 publish = false
 
 [workspace.dependencies]
+argh = "0.1"
 fuz_common = { path = "../private_fuz/crates/fuz_common" }
 fuz_pty = { path = "../private_fuz/crates/fuz_pty" }
 fuz_db = { path = "../private_fuz/crates/fuz_db" }

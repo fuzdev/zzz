@@ -1,0 +1,18 @@
+[package]
+name = "zzz"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "zzz CLI — daemon manager and workspace launcher"
+
+[[bin]]
+name = "zzz"
+path = "src/main.rs"
+
+[dependencies]
+argh.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

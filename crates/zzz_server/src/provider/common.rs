@@ -91,7 +91,10 @@ mod tests {
         assert_eq!(resp["model"], "claude-3");
         assert_eq!(resp["data"]["type"], "claude");
         assert_eq!(resp["data"]["value"], json!({"x": 1}));
-        assert!(resp["created"].is_string(), "created should be RFC3339 string");
+        assert!(
+            resp["created"].is_string(),
+            "created should be RFC3339 string"
+        );
     }
 
     #[test]

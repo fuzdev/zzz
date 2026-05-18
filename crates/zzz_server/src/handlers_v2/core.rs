@@ -45,7 +45,10 @@ struct SessionLoadResult {
 ///
 /// `ActionContext.request_id` carries the parsed envelope's id; mirrors
 /// the legacy `handle_ping` shape.
-#[allow(clippy::unused_async, reason = "ActionHandler signature requires async")]
+#[allow(
+    clippy::unused_async,
+    reason = "ActionHandler signature requires async"
+)]
 pub async fn ping(
     _params: Value,
     ctx: ActionContext<'_>,
@@ -109,7 +112,10 @@ pub async fn session_load(
 /// provider. Emits `count` `_test_notification` frames through
 /// `ctx.notify`, then returns `{count}`. Gated at registry-compile time
 /// by `App.enable_test_actions` (`ZZZ_ENABLE_TEST_ACTIONS=1`).
-#[allow(clippy::unused_async, reason = "ActionHandler signature requires async")]
+#[allow(
+    clippy::unused_async,
+    reason = "ActionHandler signature requires async"
+)]
 pub async fn test_emit_notifications(
     params: Value,
     ctx: ActionContext<'_>,

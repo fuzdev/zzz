@@ -53,7 +53,9 @@ impl OllamaProvider {
             .send()
             .await
         {
-            Ok(response) if response.status().is_success() => ProviderStatus::available(PROVIDER_NAME),
+            Ok(response) if response.status().is_success() => {
+                ProviderStatus::available(PROVIDER_NAME)
+            }
             Ok(response) => ProviderStatus::unavailable(
                 PROVIDER_NAME,
                 &format!("ollama responded with {}", response.status()),
@@ -102,9 +104,10 @@ async fn handle_non_streaming_response(
     response: reqwest::Response,
     options: &CompletionHandlerOptions,
 ) -> Result<Value, JsonrpcError> {
-    let api_response: Value = response.json::<Value>().await.map_err(|e| {
-        ai_provider_error(PROVIDER_NAME, &format!("failed to parse response: {e}"))
-    })?;
+    let api_response: Value = response
+        .json::<Value>()
+        .await
+        .map_err(|e| ai_provider_error(PROVIDER_NAME, &format!("failed to parse response: {e}")))?;
     Ok(common::build_completion_response(
         PROVIDER_NAME,
         &options.model,

@@ -132,11 +132,7 @@ pub async fn terminal_close(
         _ => libc::SIGTERM,
     };
 
-    let exit_code = app
-        .pty_manager
-        .kill(terminal_id, signal)
-        .await
-        .flatten();
+    let exit_code = app.pty_manager.kill(terminal_id, signal).await.flatten();
 
     serde_json::to_value(TerminalCloseResult { exit_code })
         .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))

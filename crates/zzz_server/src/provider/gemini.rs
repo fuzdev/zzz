@@ -107,9 +107,10 @@ async fn handle_non_streaming_response(
     response: reqwest::Response,
     options: &CompletionHandlerOptions,
 ) -> Result<Value, JsonrpcError> {
-    let api_response: Value = response.json::<Value>().await.map_err(|e| {
-        ai_provider_error(PROVIDER_NAME, &format!("failed to parse response: {e}"))
-    })?;
+    let api_response: Value = response
+        .json::<Value>()
+        .await
+        .map_err(|e| ai_provider_error(PROVIDER_NAME, &format!("failed to parse response: {e}")))?;
     let value = build_gemini_value(&api_response);
     Ok(common::build_completion_response(
         PROVIDER_NAME,
@@ -185,7 +186,10 @@ async fn handle_streaming_response(
 /// `candidates`, `function_calls`, `prompt_feedback`, `usage_metadata`).
 fn build_gemini_value(api_response: &Value) -> Value {
     let text = extract_text(api_response);
-    let candidates = api_response.get("candidates").cloned().unwrap_or(Value::Null);
+    let candidates = api_response
+        .get("candidates")
+        .cloned()
+        .unwrap_or(Value::Null);
     let function_calls = extract_function_calls(api_response).unwrap_or(Value::Null);
     let prompt_feedback = api_response
         .get("promptFeedback")
