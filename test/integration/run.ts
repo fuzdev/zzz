@@ -16,9 +16,25 @@
 import process from 'node:process';
 
 import {args_parse, argv_parse} from '@fuzdev/fuz_util/args.js';
+import {create_db} from '@fuzdev/fuz_app/db/create_db.js';
+import {
+	query_schema_snapshot,
+	type SchemaSnapshot,
+} from '@fuzdev/fuz_app/testing/schema_introspect.js';
+import {
+	assert_schema_snapshots_equal,
+	diff_schema_snapshots,
+	format_schema_diffs,
+} from '@fuzdev/fuz_app/testing/schema_parity.js';
 import {z} from 'zod';
 
-import {backends, type BackendConfig, INTEGRATION_SCOPED_DIR, INTEGRATION_ZZZ_DIR} from './config.ts';
+import {
+	backends,
+	type BackendConfig,
+	INTEGRATION_SCOPED_DIR,
+	INTEGRATION_ZZZ_DIR,
+	TEST_DATABASE_URL,
+} from './config.ts';
 import {run_tests, type TestResult} from './tests.ts';
 import {run_bearer_tests, setup_bearer_tokens} from './bearer_tests.ts';
 import {run_account_tests} from './account_tests.ts';
@@ -249,28 +265,74 @@ const setup_non_keeper_user = async (config: BackendConfig): Promise<string | un
 	return cookie;
 };
 
+/** Database name parsed from `TEST_DATABASE_URL` (e.g. `zzz_test`). */
+const test_db_name = (() => {
+	try {
+		return new URL(TEST_DATABASE_URL).pathname.slice(1) || 'zzz_test';
+	} catch {
+		return 'zzz_test';
+	}
+})();
+
+/** Connection URL for the maintenance `postgres` DB, used for DROP / CREATE. */
+const maintenance_db_url = (() => {
+	try {
+		const u = new URL(TEST_DATABASE_URL);
+		u.pathname = '/postgres';
+		return u.toString();
+	} catch {
+		return 'postgres:///postgres';
+	}
+})();
+
 /**
- * Clean auth tables in the test database before a backend run.
+ * Drop and recreate the test database between backend runs.
  *
- * Uses TRUNCATE CASCADE to reset all auth state. Runs directly via
- * `psql` since we don't want a Postgres client library in the test runner.
+ * The cross-impl schema parity check (in `main`) needs each backend to
+ * bootstrap against an empty DB so the resulting snapshot reflects only
+ * what that impl produced. Tearing the DB down completely is stricter
+ * than TRUNCATE — schema_version, indexes, constraints, sequences all
+ * regenerate freshly on each backend start. `WITH (FORCE)` (Postgres 13+)
+ * terminates any leftover connections from a still-shutting-down backend.
  */
-const clean_database = async (): Promise<void> => {
-	const result = await run_psql(
-		// audit_log has `ON DELETE SET NULL` on its account / actor FKs, so
-		// account CASCADE would only null out the audit rows rather than
-		// delete them — list it explicitly so prior-run rows don't leak.
-		`TRUNCATE audit_log, api_token, auth_session, role_grant, actor, account, bootstrap_lock, app_settings CASCADE;
-		 INSERT INTO bootstrap_lock (id, bootstrapped) VALUES (1, false) ON CONFLICT (id) DO UPDATE SET bootstrapped = false;
-		 INSERT INTO app_settings (id) VALUES (1) ON CONFLICT DO NOTHING;`,
-	);
-	if (result.ok) {
-		console.log('  DB cleaned');
-	} else if (result.stderr.includes('does not exist')) {
-		// On first run, tables may not exist yet — that's fine, migrations will create them
-		console.log('  DB cleanup skipped (tables not yet created)');
-	} else {
-		console.warn(`  DB cleanup warning: ${result.stderr}`);
+const reset_database = async (): Promise<void> => {
+	const cmd = new Deno.Command('psql', {
+		args: [
+			maintenance_db_url,
+			'-v',
+			'ON_ERROR_STOP=1',
+			'-c',
+			`DROP DATABASE IF EXISTS ${test_db_name} WITH (FORCE);`,
+			'-c',
+			`CREATE DATABASE ${test_db_name};`,
+		],
+		stdout: 'null',
+		stderr: 'piped',
+	});
+	const child = cmd.spawn();
+	const status = await child.status;
+	if (!status.success) {
+		const stderr = (await new Response(child.stderr).text()).trim();
+		throw new Error(`DB reset failed:\n${stderr}`);
+	}
+	await child.stderr.cancel();
+	console.log(`  DB reset (${test_db_name} dropped + recreated)`);
+};
+
+/**
+ * Capture a schema snapshot via fuz_app's `query_schema_snapshot`.
+ *
+ * Opens a short-lived pg connection, introspects, closes. Called after
+ * `setup_auth` so the snapshot reflects post-migration + post-bootstrap
+ * state. Bootstrap rows (account, actor, role_grant) don't affect the
+ * snapshot — it captures structure only.
+ */
+const capture_schema_snapshot = async (): Promise<SchemaSnapshot> => {
+	const {db, close} = await create_db(TEST_DATABASE_URL);
+	try {
+		return await query_schema_snapshot(db);
+	} finally {
+		await close();
 	}
 };
 
@@ -326,6 +388,12 @@ interface BackendRun {
 	passed: number;
 	failed: number;
 	total_ms: number;
+	/**
+	 * Schema introspection captured after `setup_auth` succeeded. Used by
+	 * the cross-impl parity gate in `main`. Undefined when bootstrap
+	 * didn't run or snapshot capture failed.
+	 */
+	schema_snapshot?: SchemaSnapshot;
 }
 
 const run_for_backend = async (config: BackendConfig, filter?: string): Promise<BackendRun> => {
@@ -334,13 +402,19 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 	console.log('='.repeat(60));
 
 	let child: Deno.ChildProcess | null = null;
+	let schema_snapshot: SchemaSnapshot | undefined;
 	try {
-		await clean_database();
+		await reset_database();
 		await setup_scoped_dir();
 		await setup_zzz_dir();
 		await write_bootstrap_token(config);
 		child = await start_backend(config);
 		const session_cookie = await setup_auth(config);
+		// Snapshot immediately after bootstrap so the captured shape reflects
+		// only what this impl produced (migrations + bootstrap), before any
+		// test mutates rows. Schema-only — bootstrap account UUIDs don't
+		// affect the snapshot.
+		schema_snapshot = await capture_schema_snapshot();
 		const non_keeper_cookie = await setup_non_keeper_user(config);
 		await setup_bearer_tokens();
 		const results = await run_tests(config, filter, session_cookie, non_keeper_cookie);
@@ -416,7 +490,7 @@ const run_for_backend = async (config: BackendConfig, filter?: string): Promise<
 
 		const total_ms = results.reduce((sum, r) => sum + r.duration_ms, 0);
 		console.log(`\n  ${passed} passed, ${failed} failed in ${fmt_ms(total_ms)}`);
-		return {name: config.name, results, passed, failed, total_ms};
+		return {name: config.name, results, passed, failed, total_ms, schema_snapshot};
 	} finally {
 		await cleanup_auth(config);
 		await cleanup_scoped_dir();
@@ -528,11 +602,67 @@ const main = async (): Promise<void> => {
 
 	print_comparison(runs);
 
+	// Cross-impl schema parity gate. Only meaningful when two or more
+	// backends bootstrapped against the (drop+recreate'd) test DB —
+	// single-backend runs degrade silently. Fails the suite on any
+	// structural drift between impls (column type, missing migration,
+	// index/constraint divergence).
+	let parity_failed = false;
+	if (runs.length >= 2) {
+		const labelled = runs.filter(
+			(r): r is BackendRun & {schema_snapshot: SchemaSnapshot} => !!r.schema_snapshot,
+		);
+		if (labelled.length >= 2) {
+			console.log(`\n${'='.repeat(60)}`);
+			console.log(`  Schema parity`);
+			console.log(`${'='.repeat(60)}\n`);
+			const base = labelled[0]!;
+			let any_diff = false;
+			for (let i = 1; i < labelled.length; i++) {
+				const peer = labelled[i]!;
+				const diffs = diff_schema_snapshots(
+					base.schema_snapshot,
+					peer.schema_snapshot,
+				);
+				if (diffs.length === 0) {
+					console.log(`  ${peer.name} matches ${base.name} (${diffs.length} diff(s))`);
+				} else {
+					any_diff = true;
+					console.log(
+						`  PARITY FAILED: ${peer.name} vs ${base.name} — ${diffs.length} diff(s):`,
+					);
+					console.log(format_schema_diffs(diffs, {a: base.name, b: peer.name}));
+				}
+			}
+			if (any_diff) {
+				parity_failed = true;
+			} else {
+				try {
+					// Re-run via the assertion for the canonical error message
+					// shape; should be a no-op here.
+					for (let i = 1; i < labelled.length; i++) {
+						assert_schema_snapshots_equal(
+							base.schema_snapshot,
+							labelled[i]!.schema_snapshot,
+							{a: base.name, b: labelled[i]!.name},
+						);
+					}
+				} catch (err) {
+					// Defensive — diff_schema_snapshots returned no diffs but
+					// assert disagreed. Surface as a parity failure.
+					console.error(`  Unexpected parity assertion failure: ${err}`);
+					parity_failed = true;
+				}
+			}
+		}
+	}
+
 	console.log(`\n${'='.repeat(60)}`);
-	if (all_passed) {
+	if (all_passed && !parity_failed) {
 		console.log('  All backends passed');
 	} else {
-		console.log('  Some tests failed');
+		if (!all_passed) console.log('  Some tests failed');
+		if (parity_failed) console.log('  Schema parity failed');
 		Deno.exit(1);
 	}
 };
