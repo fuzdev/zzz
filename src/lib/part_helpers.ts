@@ -7,4 +7,4 @@ export const PART_GLYPHS = {
 } satisfies Record<PartUnion['type'], string>;
 
 export const get_part_type_glyph = (part: PartUnion): string =>
-	PART_GLYPHS[part.type] ?? GLYPH_PART; // eslint-disable-line @typescript-eslint/no-unnecessary-condition
+	PART_GLYPHS[part.type] ?? GLYPH_PART;  

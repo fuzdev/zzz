@@ -12,7 +12,7 @@ Deno is a shortcut — long-term, the CLI and daemon migrate to Rust fuz/fuzd.
 ```
 zzz CLI (compiled Deno binary, thin client)
     │
-    ├── Auto-starts daemon if not running (Phase 2)
+    ├── Auto-starts daemon if not running
     ├── Sends RPC to daemon
     └── Opens browser tab
     │

@@ -24,7 +24,7 @@ export const format_prompt_content = (parts: Array<PartUnion>): string => {
 		let attrs = '';
 		for (const attr of part.attributes) {
 			// Safely handle key which might be null (in tests) but should be string in production
-			const trimmed_key = attr.key?.trim() || ''; // eslint-disable-line @typescript-eslint/no-unnecessary-condition
+			const trimmed_key = attr.key?.trim() || '';  
 			if (trimmed_key) {
 				if (attr.value === '') {
 					// Handle boolean attributes (just the key)

@@ -19,7 +19,7 @@ export const TerminalJson = CellJson.extend({
 export type TerminalJson = z.infer<typeof TerminalJson>;
 export type TerminalJsonInput = z.input<typeof TerminalJson>;
 
-export interface TerminalOptions extends CellOptions<typeof TerminalJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
+export interface TerminalOptions extends CellOptions<typeof TerminalJson> {}  
 
 export class Terminal extends Cell<typeof TerminalJson> {
 	name: string = $state.raw()!;

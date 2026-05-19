@@ -12,7 +12,7 @@
 	const app = frontend_context.get();
 
 	// Initialize the Projects instance and set it in context
-	// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+	 
 	projects ??= new Projects({app});
 	projects_context.set(projects);
 

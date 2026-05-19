@@ -38,15 +38,13 @@ const zzz_roles = create_role_schema([]);
 
 // -- Composable suites --
 
-describe_standard_integration_tests({
-	...default_in_process_suite_options({
+describe_standard_integration_tests(
+	default_in_process_suite_options({
 		session_options: zzz_session_config,
 		create_route_specs: create_zzz_test_route_specs,
 		rpc_endpoints: zzz_rpc_endpoints,
 	}),
-	session_options: zzz_session_config,
-	rpc_endpoints: zzz_rpc_endpoints,
-});
+);
 
 describe_standard_admin_integration_tests({
 	...default_in_process_suite_options({
@@ -55,8 +53,6 @@ describe_standard_admin_integration_tests({
 		rpc_endpoints: zzz_rpc_endpoints,
 		keeper_roles: [ROLE_KEEPER, ROLE_ADMIN],
 	}),
-	session_options: zzz_session_config,
-	rpc_endpoints: zzz_rpc_endpoints,
 	roles: zzz_roles,
 });
 
@@ -66,9 +62,6 @@ describe_rate_limiting_tests({
 		create_route_specs: create_zzz_test_route_specs,
 		rpc_endpoints: zzz_rpc_endpoints,
 	}),
-	session_options: zzz_session_config,
-	create_route_specs: create_zzz_test_route_specs,
-	rpc_endpoints: zzz_rpc_endpoints,
 	db_factories,
 });
 
@@ -89,8 +82,6 @@ describe_rpc_round_trip_tests({
 		create_route_specs: create_zzz_test_route_specs,
 		rpc_endpoints: zzz_rpc_endpoints,
 	}),
-	session_options: zzz_session_config,
-	rpc_endpoints: zzz_rpc_endpoints,
 	// Domain handlers use a throwing stub Backend — the RPC dispatcher catches
 	// all throws and returns well-formed JSON-RPC error responses, which the
 	// round-trip test accepts. Only DiskfileDirectoryPath inputs need overrides
@@ -101,10 +92,10 @@ describe_rpc_round_trip_tests({
 	]),
 });
 
-describe_data_exposure_tests({
-	...default_in_process_suite_options({
+describe_data_exposure_tests(
+	default_in_process_suite_options({
 		session_options: zzz_session_config,
 		create_route_specs: create_zzz_test_route_specs,
 		surface_source: {kind: 'inline', spec: create_zzz_app_surface_spec()},
 	}),
-});
+);

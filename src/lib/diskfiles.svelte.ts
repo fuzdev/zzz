@@ -21,7 +21,7 @@ export const DiskfilesJson = CellJson.extend({
 export type DiskfilesJson = z.infer<typeof DiskfilesJson>;
 export type DiskfilesJsonInput = z.input<typeof DiskfilesJson>;
 
-export interface DiskfilesOptions extends CellOptions<typeof DiskfilesJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
+export interface DiskfilesOptions extends CellOptions<typeof DiskfilesJson> {}  
 
 export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	readonly items: IndexedCollection<Diskfile> = new IndexedCollection({

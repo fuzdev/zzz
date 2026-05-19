@@ -1,6 +1,6 @@
 # Server (Backend Reference Implementation)
 
-This directory contains Zzz's backend server - a **reference implementation** using Hono and Deno. A Rust backend (`crates/zzz_server`) is in development — Phase 1 (ping, static files) is complete, validated by integration tests in `test/integration/` that run the same assertions against both backends. See [crates/CLAUDE.md](../../../crates/CLAUDE.md).
+This directory contains Zzz's backend server - a **reference implementation** using Hono and Deno. A Rust backend (`crates/zzz_server`) is in development, validated by integration tests in `test/integration/` that run the same assertions against both backends. See [crates/CLAUDE.md](../../../crates/CLAUDE.md).
 
 ## Contents
 

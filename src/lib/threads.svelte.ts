@@ -18,7 +18,7 @@ export const ThreadsJson = CellJson.extend({
 export type ThreadsJson = z.infer<typeof ThreadsJson>;
 export type ThreadsJsonInput = z.input<typeof ThreadsJson>;
 
-export interface ThreadsOptions extends CellOptions<typeof ThreadsJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
+export interface ThreadsOptions extends CellOptions<typeof ThreadsJson> {}  
 
 export class Threads extends Cell<typeof ThreadsJson> {
 	readonly items: IndexedCollection<Thread> = new IndexedCollection({

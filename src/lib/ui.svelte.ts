@@ -16,7 +16,7 @@ export const UiJson = CellJson.extend({
 export type UiJson = z.infer<typeof UiJson>;
 export type UiJsonInput = z.input<typeof UiJson>;
 
-export interface UiOptions extends CellOptions<typeof UiJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
+export interface UiOptions extends CellOptions<typeof UiJson> {}  
 export class Ui extends Cell<typeof UiJson> {
 	show_main_dialog: boolean = $state.raw()!;
 	show_sidebar: boolean = $state.raw()!;

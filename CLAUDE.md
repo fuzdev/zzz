@@ -31,7 +31,7 @@ this repo — make the edits and stop, the user commits.
 
 ## Development Stage
 
-Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, daemon tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) still in-memory. The Hono/Deno backend is the reference implementation. The Rust backend (`crates/zzz_server`) is feature-complete through Phase 4 (full auth stack, filesystem, terminals, PostgreSQL, bootstrap, Anthropic provider with SSE streaming, audit emission with listener fan-out, trusted-proxy `client_ip` resolution, opt-in login rate limiting, Origin allowlist on every REST + RPC + WS handler) with 95 cross-backend + 17 Rust-only integration tests verifying parity, plus a cross-impl schema-parity gate (via fuz_app's `query_schema_snapshot` + `assert_schema_snapshots_equal`) that drop+recreates `zzz_test` between backends and fails on any DDL / migration-set / index / constraint / sequence drift between bootstraps. Phase 7 (Rust Spine consumption) underway — Steps 1+2 + Batch 5 partial applied 2026-05-17: spine path deps wired (`fuz_db`, `fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`); `App` grew 9 additive spine-backed fields; `fuz_actions::ActionRegistry` compiled at boot with 23 specs; four handler modules (workspace, filesystem, terminal, provider — except `completion_create`) migrated to the new `(Value, ActionContext, Arc<App>)` signature in `handlers_v2/`. Live `/api/rpc` + `/api/ws` continue to serve legacy dispatch unchanged. See [grimoire/lore/zzz/TODO.md](../grimoire/lore/zzz/TODO.md) for the migration plan. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
+Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, daemon tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) still in-memory. The Hono/Deno backend is the reference implementation. The Rust backend (`crates/zzz_server`) is the Axum JSON-RPC server (full auth stack, filesystem, terminals, PostgreSQL, bootstrap, Anthropic provider with SSE streaming, audit emission with listener fan-out, trusted-proxy `client_ip` resolution, opt-in login rate limiting, Origin allowlist on every REST + RPC + WS handler) with cross-backend + Rust-only integration tests verifying parity, plus a cross-impl schema-parity gate (via fuz_app's `query_schema_snapshot` + `assert_schema_snapshots_equal`) that drop+recreates `zzz_test` between backends and fails on any DDL / migration-set / index / constraint / sequence drift between bootstraps. Spine consumption is underway: spine path deps wired (`fuz_db`, `fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`); `App` carries spine-backed fields; `fuz_actions::ActionRegistry` compiled at boot; spine-signature handlers (workspace, filesystem, terminal, provider — except `completion_create`) live in `handlers_v2/` on the new `(Value, ActionContext, Arc<App>)` signature. Live `/api/rpc` + `/api/ws` continue to serve legacy dispatch unchanged. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
 
 See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 
@@ -67,15 +67,15 @@ crates/                               # Rust workspace
 │   ├── CLAUDE.md                     # Rust backend docs
 │   ├── zzz/                          # CLI scaffold (argh, stubs)
 │   ├── xtask/                        # Dev automation: `cargo xtask check-release` dep-graph audit (sanity check #2 of the test-binary pattern)
-│   ├── testing_zzz_server/           # Test-mode binary — wires `fuz_testing::TestingArgon2idHasher` for fast cross-process integration tests. **Never ships in a release.** See `~/dev/grimoire/lore/fuz_app/TODO_TEST_BINARY_PATTERN.md`
-│   └── zzz_server/                   # Axum JSON-RPC server (Phase 4 feature-complete; Phase 7 spine consumption Batch 5 partial)
+│   ├── testing_zzz_server/           # Test-mode binary — wires `fuz_testing::TestingArgon2idHasher` for fast cross-process integration tests. **Never ships in a release.**
+│   └── zzz_server/                   # Axum JSON-RPC server — spine consumption underway in `handlers_v2/` (not yet on live route)
 │       └── src/
 │           ├── lib.rs                # Library entry — `pub fn run_app(password_hasher: Arc<dyn PasswordHasher>, default_port: u16)`; the password-hasher seam is what `testing_zzz_server` uses to swap in fast argon2
 │           ├── main.rs               # Thin production entry — constructs `Argon2idHasher`, calls `run_app`
 │           ├── handlers/             # Legacy per-domain RPC handlers — `&Ctx` signature, live dispatch path
 │           │   └── mod.rs            # App state (+ 9 spine fields via SpineState), Ctx, dispatch
-│           ├── handlers_v2/          # Phase 7 Batch 5 — spine-signature handlers ((Value, ActionContext, Arc<App>)); not yet on live route
-│           ├── zzz_action_specs/     # Phase 7 Batch 5 — per-domain ActionSpec builders consumed by ActionRegistry::compile
+│           ├── handlers_v2/          # Spine-signature handlers ((Value, ActionContext, Arc<App>)); not yet on live route
+│           ├── zzz_action_specs/     # Per-domain ActionSpec builders consumed by ActionRegistry::compile
 │           ├── rpc.rs                # JSON-RPC classify, HTTP handler with auth pipeline
 │           ├── ws.rs                 # WebSocket handler with auth + connection tracking
 │           ├── auth/                 # Auth surface
@@ -99,7 +99,7 @@ crates/                               # Rust workspace
 │           ├── scoped_fs.rs          # Scoped filesystem (path validation, symlink rejection)
 │           └── error.rs              # Error types
 test/
-│   └── integration/                  # Cross-backend integration tests (Deno; upstreaming to fuz_app — see ~/dev/grimoire/quests/cross-backend-integration.md)
+│   └── integration/                  # Cross-backend integration tests (Deno; upstreaming to fuz_app)
 │       ├── run.ts                    # Test runner (--backend=deno|rust|both)
 │       ├── config.ts                 # Backend configurations
 │       └── tests.ts                  # Test cases
@@ -576,7 +576,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in ~/dev/private_fuz/. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Rust backend is Phase 4 + Phase 7 spine consumption underway** — 25 RPC methods with full auth stack, same `/api/*` route paths as Deno. `deno task dev` runs the Rust backend with Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable). No batch JSON-RPC, no Ollama actions (`ollama_list`, `ollama_ps`, etc.). Phase 7 Batch 5 partial: spine `ActionRegistry` compiled at boot with 23 specs, four handler modules migrated to `handlers_v2/` on the new `(Value, ActionContext, Arc<App>)` signature; not yet on a live route. See [Rust Backends quest](../grimoire/quests/rust-backends.md) for roadmap and [grimoire/lore/zzz/TODO.md](../grimoire/lore/zzz/TODO.md) for the Phase 7 migration plan
+- **Rust backend with spine consumption underway** — 25 RPC methods with full auth stack, same `/api/*` route paths as Deno. `deno task dev` runs the Rust backend with Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable). No batch JSON-RPC, no Ollama actions (`ollama_list`, `ollama_ps`, etc.). Spine `ActionRegistry` compiled at boot; four handler modules migrated to `handlers_v2/` on the new `(Value, ActionContext, Arc<App>)` signature, not yet on a live route.
 
 ## fuz_app
 

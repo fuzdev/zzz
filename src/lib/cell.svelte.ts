@@ -277,7 +277,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	 * Preserves current values for any properties not included in the input.
 	 */
 	set_json_partial(partial_value: Partial<z.input<TSchema>>): void {
-		if (!partial_value || typeof partial_value !== 'object') return; // eslint-disable-line @typescript-eslint/no-unnecessary-condition
+		if (!partial_value || typeof partial_value !== 'object') return;  
 
 		try {
 			let v = partial_value as any;

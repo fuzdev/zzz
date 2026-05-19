@@ -26,7 +26,7 @@ export const ChatJson = CellJson.extend({
 export type ChatJson = z.infer<typeof ChatJson>;
 export type ChatJsonInput = z.input<typeof ChatJson>;
 
-export interface ChatOptions extends CellOptions<typeof ChatJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
+export interface ChatOptions extends CellOptions<typeof ChatJson> {}  
 
 export class Chat extends Cell<typeof ChatJson> {
 	name: string = $state.raw()!;

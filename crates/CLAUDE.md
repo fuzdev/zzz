@@ -4,24 +4,22 @@ Shadow implementation of the Deno/Hono server using axum. Same JSON-RPC 2.0
 protocol, same wire format — the Deno server is ground truth and the
 integration tests enforce identical behaviour between both backends.
 
-**Workspace layout** (2026-05-18):
+**Workspace layout**:
 - `zzz_server/` — library + production binary. `pub fn run_app(password_hasher: Arc<dyn fuz_auth::PasswordHasher>, default_port: u16)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, drain). `src/main.rs` is the thin production entry — constructs `Argon2idHasher` and calls `run_app`.
-- `testing_zzz_server/` — separate test-binary package wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) for cross-process integration tests. Default port 1175 (production is 1174). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. See `~/dev/grimoire/lore/fuz_app/TODO_TEST_BINARY_PATTERN.md`.
+- `testing_zzz_server/` — separate test-binary package wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) for cross-process integration tests. Default port 1175 (production is 1174). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit.
 - `xtask/` — dev automation. `cargo xtask check-release` thin-wraps `fuz_audit::run_check_release_cli()`; marked `[package.metadata.fuz_audit] dev_only = true` so xtask itself is excluded from the production scan.
 - `zzz/` — Rust CLI scaffold (argh, stubs only).
 
-Phase 4 (AI provider system) feature-complete for Anthropic; OpenAI /
-Gemini / Ollama stubs ship status only. Phase 7 spine consumption
-underway — Steps 1+2 (spine path deps, `JsonrpcError` rename) +
-Batch 5 partial (additive `App` spine fields, `ActionRegistry`
-compiled at boot with 23 specs, four handler modules migrated to
-`handlers_v2/`) + sub-batches A (`/api/rpc/v2` mounted as parallel
-route) and B (admin + account migration decided as option (c) —
-fuz_auth's `auth_adapter::build_{account,admin}_specs` cover the
-zzz surface verbatim, no new handlers_v2 modules) on disk; legacy
-`/api/rpc` + `/api/ws` still serve live dispatch unchanged. See
-[Rust Spine quest](../../grimoire/quests/rust-spine.md) and
-`grimoire/lore/zzz/TODO.md` for the migration plan. 25 RPC methods:
+AI provider system feature-complete for Anthropic; OpenAI /
+Gemini / Ollama stubs ship status only. Spine consumption
+underway — spine path deps (`fuz_db`, `fuz_auth`, `fuz_http`,
+`fuz_realtime`, `fuz_actions`) and the `JsonrpcError` rename are in;
+additive `App` spine fields, `ActionRegistry` compiled at boot
+with 23 specs, and four handler modules migrated to `handlers_v2/`;
+`/api/rpc/v2` mounted as a parallel route; admin + account migration
+resolved by letting fuz_auth's `auth_adapter::build_{account,admin}_specs`
+cover the zzz surface verbatim (no new handlers_v2 modules). Legacy
+`/api/rpc` + `/api/ws` still serve live dispatch unchanged. 25 RPC methods:
 `ping`, `session_load`, `workspace_*`, `diskfile_*`, `directory_create`,
 `terminal_*`, `provider_load_status`, `provider_update_api_key`,
 `completion_create`, `account_verify`, `account_session_list`,
@@ -107,7 +105,7 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 | `ZZZ_STATIC_DIR`         | Static file directory                      |
 | `ZZZ_ENABLE_TEST_ACTIONS`| Register `_test_*` actions on live dispatchers (mirrors Zod `z.stringbool()`: `true`/`1`/`yes`/`on`/`y`/`enabled` opt in; `false`/`0`/`no`/`off`/`n`/`disabled` or unset opt out; case-insensitive; anything else errors at startup. Integration tests only — production must leave unset) |
 | `ZZZ_LOGIN_RATE_LIMIT_ENABLED`| Turn on per-IP + per-account rate limiting on `/login` and `/password` (same `z.stringbool()` shape as `ZZZ_ENABLE_TEST_ACTIONS`). Default off so existing integration tests don't trip the bucket. Defaults match fuz_app (5 attempts / 15 min IP, 10 / 30 min account). Per-IP key is the resolved client IP from `proxy::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when deploying behind a reverse proxy so the bucket keys on the originator, not the proxy. |
-| `ZZZ_TRUSTED_PROXIES`        | Comma-separated trusted-proxy entries (IPs and CIDR ranges, e.g. `127.0.0.1,10.0.0.0/8,fe80::/10`). Unset/empty → no XFF trust → `client_ip` falls back to the TCP peer IP on every request (Phase 4 direct-bind behavior). Set when deploying behind nginx / a cloud LB so the trusted-proxy middleware walks `X-Forwarded-For` right-to-left and resolves the real client IP for rate limiting + `audit_log.ip`. Parsed eagerly at startup — invalid entries (malformed IPs, non-aligned CIDRs, out-of-range prefixes) fail server boot. Mirrors fuz_app's `http/proxy.ts`. |
+| `ZZZ_TRUSTED_PROXIES`        | Comma-separated trusted-proxy entries (IPs and CIDR ranges, e.g. `127.0.0.1,10.0.0.0/8,fe80::/10`). Unset/empty → no XFF trust → `client_ip` falls back to the TCP peer IP on every request (direct-bind behavior). Set when deploying behind nginx / a cloud LB so the trusted-proxy middleware walks `X-Forwarded-For` right-to-left and resolves the real client IP for rate limiting + `audit_log.ip`. Parsed eagerly at startup — invalid entries (malformed IPs, non-aligned CIDRs, out-of-range prefixes) fail server boot. Mirrors fuz_app's `http/proxy.ts`. |
 
 ## Endpoints
 
@@ -407,13 +405,13 @@ crates/zzz_server/src/
 │   ├── provider.rs  # provider_load_status, provider_update_api_key, completion_create
 │   ├── terminal.rs  # terminal_create, terminal_data_send, terminal_resize, terminal_close
 │   └── workspace.rs # workspace_list, workspace_open, workspace_close (+ workspace_changed broadcast)
-├── handlers_v2/     # Phase 7 Batch 5 — spine-signature handlers (`(Value, ActionContext<'_>, Arc<App>)`). Registered into `App.action_registry` via `zzz_action_specs::build_*_specs`; served on `/api/rpc/v2` (sub-batch A). Migrated: workspace, filesystem, terminal, provider/load_status + provider/update_api_key. Deferred: completion_create (notify reshape — sub-batch C). Admin + account: NOT migrated to handlers_v2 — sub-batch B chose option (c), letting `fuz_auth`'s `auth_adapter::build_{account,admin}_specs` cover the surface verbatim (the legacy `handlers/{admin,account}.rs` files are line-for-line ports of fuz_auth's canonical handlers, so a parallel handlers_v2 module would re-implement the same logic for later deletion).
+├── handlers_v2/     # Spine-signature handlers (`(Value, ActionContext<'_>, Arc<App>)`). Registered into `App.action_registry` via `zzz_action_specs::build_*_specs`; served on `/api/rpc/v2`. Migrated: workspace, filesystem, terminal, provider/load_status + provider/update_api_key. Deferred: completion_create (notify reshape pending). Admin + account: NOT migrated to handlers_v2 — `fuz_auth`'s `auth_adapter::build_{account,admin}_specs` cover the surface verbatim (the legacy `handlers/{admin,account}.rs` files are line-for-line ports of fuz_auth's canonical handlers, so a parallel handlers_v2 module would re-implement the same logic for later deletion).
 │   ├── mod.rs
 │   ├── filesystem.rs
 │   ├── provider.rs
 │   ├── terminal.rs
 │   └── workspace.rs
-├── zzz_action_specs/ # Phase 7 Batch 5 — per-domain `ActionSpec` builders consumed by main.rs's `ActionRegistry::compile(...)`. Each builder takes `Arc<App>` and emits closures that call the corresponding `handlers_v2::*` function.
+├── zzz_action_specs/ # Per-domain `ActionSpec` builders consumed by main.rs's `ActionRegistry::compile(...)`. Each builder takes `Arc<App>` and emits closures that call the corresponding `handlers_v2::*` function.
 │   ├── mod.rs
 │   ├── filesystem.rs
 │   ├── provider.rs
@@ -606,8 +604,8 @@ failures carry `metadata: {credential_type}` only (no `reason`).
   `readTextFile` runs unconditionally, so multi-MB lockfiles / generated
   artifacts get pulled into RSS. The Rust port is deliberately stricter to
   bound memory under workspaces containing large lockfiles or build outputs.
-  Tracked for upstream convergence in `grimoire/lore/fuz_app/TODO.md` so
-  fuz_app converges DOWN to the bounded posture rather than Rust loosening.
+  Tracked for upstream convergence so fuz_app converges DOWN to the
+  bounded posture rather than Rust loosening.
   Cross-backend integration tests don't exercise files >4 MiB so parity is
   maintained on the existing fixture set.
 
@@ -685,9 +683,7 @@ identical JSON-RPC envelopes for all auth failures.
 
 ## What's Next
 
-**Phase 7 — Rust Spine consumption** (Steps 1+2 + Batch 5 partial +
-sub-batches A and B applied 2026-05-17; see
-`grimoire/lore/zzz/TODO.md` for the full plan):
+**Rust Spine consumption**:
 - [x] Spine path deps wired (`fuz_db`, `fuz_auth`, `fuz_http`,
   `fuz_realtime`, `fuz_actions`).
 - [x] `fuz_common::JsonRpcError` → `fuz_http::JsonrpcError` swap (17 files).
@@ -698,28 +694,26 @@ sub-batches A and B applied 2026-05-17; see
   filesystem / terminal / provider).
 - [x] `handlers_v2/` + `zzz_action_specs/` module trees — 4 domains
   on the new `(Value, ActionContext<'_>, Arc<App>)` signature.
-- [x] Sub-batch A: mount `fuz_actions::create_rpc_router(...)` as a
-  parallel `/api/rpc/v2` route; legacy `/api/rpc` + `/api/ws`
-  untouched.
-- [x] Sub-batch B: admin + account migration decided as option (c)
-  — keep `fuz_auth`'s `auth_adapter::build_{account,admin}_specs`
-  as-is, do NOT create `handlers_v2/{admin,account}.rs` (the 6 zzz
-  handlers are verbatim ports of fuz_auth's canonical handlers, so
-  a duplicate module would re-implement the same logic for later
-  deletion). Audit-emit flip moot for sub-batch B: no new
+- [x] Mount `fuz_actions::create_rpc_router(...)` as a parallel
+  `/api/rpc/v2` route; legacy `/api/rpc` + `/api/ws` untouched.
+- [x] Admin + account: keep `fuz_auth`'s
+  `auth_adapter::build_{account,admin}_specs` as-is, do NOT create
+  `handlers_v2/{admin,account}.rs` (the 6 zzz handlers are verbatim
+  ports of fuz_auth's canonical handlers, so a duplicate module
+  would re-implement the same logic for later deletion). No new
   handlers_v2 sites means zero zzz emit sites flip; the 14 sites in
   `handlers/{admin,account}.rs` + `account/*` + `bootstrap.rs` stay
-  legacy until original Batches 1–4 retire them along with the rest
-  of the legacy dispatch path.
-- [ ] Sub-batch C: `completion_create` notify reshape + `ws.rs`
-  collapse to `fuz_realtime::run_ws_connection`.
-- [ ] Batches 1–4: delete the legacy duplicates (`rate_limiter.rs`,
+  legacy until later cleanup retires them along with the rest of
+  the legacy dispatch path.
+- [ ] `completion_create` notify reshape + `ws.rs` collapse to
+  `fuz_realtime::run_ws_connection`.
+- [ ] Delete the legacy duplicates (`rate_limiter.rs`,
   `account/`, `proxy.rs`, `auth/`, `api_token.rs`, `daemon_token.rs`,
   `bootstrap.rs`, `db/`, `audit/`, `perform_action.rs`,
   `handlers/admin.rs`, `handlers/account.rs`) once all consumers
   route through the spine.
 
-**Phase 4** (AI providers — Anthropic complete, others pending):
+**AI providers** (Anthropic complete, others pending):
 - [x] Provider system: enum-dispatched `Provider` with `ProviderManager`, `ProviderStatus`, `CompletionOptions`
 - [x] Anthropic provider: full implementation with `reqwest` HTTP client, SSE streaming, message format conversion
 - [x] `provider_load_status` handler (cross-backend, all 4 providers report status)
@@ -730,18 +724,18 @@ sub-batches A and B applied 2026-05-17; see
 - [ ] Gemini provider: full completion implementation
 - [ ] Ollama provider: HTTP client to local Ollama API, `ollama_list`, `ollama_ps`, etc.
 
-**Phase 5** (remaining):
+**Other remaining work**:
 1. Codegen from Zod specs (action input/output types)
 2. Token management routes (create, list, revoke API tokens)
 - [x] Trusted-proxy `get_client_ip` port (XFF + CIDR + strict-IP
-  validation) — landed 2026-05-16. `proxy.rs` ports fuz_app's
+  validation). `proxy.rs` ports fuz_app's
   `http/proxy.ts`; `client_ip_middleware` sets `ClientIp` on every
   request via `from_fn_with_state`; consumer sites in `account/`,
   `bootstrap.rs`, `handlers/account.rs` plumb `audit.ip` on all 11
   emit sites and the rate-limit keys read the resolved value. Ten
   integration tests in `proxy_tests.ts` (Rust-only) + 86 Rust unit
-  tests in `proxy.rs`. Same-day review pass fixed three correctness
-  issues (IPv6 /0 host_mask overflow in `parse_proxy_entry`
+  tests in `proxy.rs`. Review pass fixed three correctness issues
+  (IPv6 /0 host_mask overflow in `parse_proxy_entry`
   (`1u128 << 128` UB — release would silently accept `fe80::/0`);
   empty-XFF parity drift; missed audit emit on the bootstrap
   post-lock verify-write race loser) and landed three security
@@ -760,7 +754,4 @@ sub-batches A and B applied 2026-05-17; see
   form a later login can find). Plus `is_request_origin_allowed`
   centralized in `auth/spec.rs` and called from every REST + RPC + WS
   handler (parity inversion: Rust drops the Referer fallback,
-  fuz_app tracks the convergence). See
-  `grimoire/lore/zzz/TODO.md` for the full review record.
-
-See the [Rust Backends quest](../../grimoire/quests/rust-backends.md).
+  fuz_app tracks the convergence).
