@@ -68,14 +68,14 @@ cargo build --workspace
 cargo clippy -p zzz_server        # workspace lints: pedantic + nursery
 cargo xtask check-release         # audit: no production binary depends on fuz_testing / fuz_audit
 
-# Run (requires DATABASE_URL and SECRET_COOKIE_KEYS)
+# Run (requires DATABASE_URL and SECRET_FUZ_COOKIE_KEYS)
 DATABASE_URL=postgres://localhost/zzz \
-SECRET_COOKIE_KEYS=dev-only-not-for-production-use-000 \
+SECRET_FUZ_COOKIE_KEYS=dev-only-not-for-production-use-000 \
 ./target/debug/zzz_server --port 1174
 
 # Test binary (cross-process integration tests — fast argon2)
 DATABASE_URL=postgres://localhost/zzz_test \
-SECRET_COOKIE_KEYS=dev-only-not-for-production-use-000 \
+SECRET_FUZ_COOKIE_KEYS=dev-only-not-for-production-use-000 \
 ./target/debug/testing_zzz_server
 
 # Quick smoke test
@@ -94,14 +94,14 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 | Variable             | Purpose                                            |
 |----------------------|----------------------------------------------------|
 | `DATABASE_URL`       | PostgreSQL connection (e.g. `postgres://localhost/zzz`) |
-| `SECRET_COOKIE_KEYS` | HMAC signing keys (min 32 chars, `__` separator for rotation) |
+| `SECRET_FUZ_COOKIE_KEYS` | HMAC signing keys (min 32 chars, `__` separator for rotation) |
 
 ### Optional Environment Variables
 
 | Variable                 | Purpose                                    |
 |--------------------------|--------------------------------------------|
-| `BOOTSTRAP_TOKEN_PATH`   | Path to bootstrap token file               |
-| `ALLOWED_ORIGINS`        | Comma-separated origin patterns            |
+| `ZZZ_BOOTSTRAP_TOKEN_PATH`   | Path to bootstrap token file           |
+| `ZZZ_ALLOWED_ORIGINS`        | Comma-separated origin patterns        |
 | `PUBLIC_ZZZ_SCOPED_DIRS` | Comma-separated filesystem paths           |
 | `ZZZ_PORT`               | Server port (default 1174, CLI overrides)  |
 | `ZZZ_STATIC_DIR`         | Static file directory                      |
@@ -132,7 +132,7 @@ Integration tests use identical config for both backends.
 Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
 
 1. **Keyring** — HMAC-SHA256 cookie signing with key rotation support.
-   Keys from `SECRET_COOKIE_KEYS` env, separated by `__`. First key signs,
+   Keys from `SECRET_FUZ_COOKIE_KEYS` env, separated by `__`. First key signs,
    all keys verify.
 
 2. **Cookie format** — `fuz_session` cookie containing signed
@@ -167,10 +167,10 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
    - `keeper` — requires `DaemonToken` credential type AND keeper role grant (`provider_update_api_key`). API tokens and session cookies cannot access keeper actions even if the account has the keeper role grant.
 
 8. **Bootstrap** — `POST /bootstrap` creates first admin account with keeper
-   + admin role grants. Reads token from `BOOTSTRAP_TOKEN_PATH`, timing-safe
+   + admin role grants. Reads token from `ZZZ_BOOTSTRAP_TOKEN_PATH`, timing-safe
    compare, Argon2 password hashing, all in a transaction with bootstrap_lock.
 
-9. **Origin verification** — `ALLOWED_ORIGINS` patterns checked on requests
+9. **Origin verification** — `ZZZ_ALLOWED_ORIGINS` patterns checked on requests
    with an `Origin` header. Supports exact match, wildcard port
    (`http://localhost:*`), subdomain wildcard (`https://*.example.com`).
 

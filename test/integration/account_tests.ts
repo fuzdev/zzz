@@ -96,8 +96,9 @@ const account_test_list: ReadonlyArray<{
 	},
 	{
 		// Origin-allowlist enforcement on the REST account routes. Both
-		// backends configure `ALLOWED_ORIGINS=http://localhost:*` in the
-		// integration runner; a request with an Origin header outside
+		// backends configure an origin allowlist of `http://localhost:*`
+		// in the integration runner (Deno via `FUZ_ALLOWED_ORIGINS`, Rust via
+		// `ZZZ_ALLOWED_ORIGINS`); a request with an Origin header outside
 		// that allowlist must 403 before any auth / argon2 work. No
 		// Origin header (the default for Deno's `fetch` on server-side
 		// calls) stays accepted — that's the curl / CLI path.

@@ -28,7 +28,7 @@ if (!env) {
 
 // -- Ensure bootstrap token exists --------------------------------------------
 
-const token_path = env.BOOTSTRAP_TOKEN_PATH;
+const token_path = env.ZZZ_BOOTSTRAP_TOKEN_PATH;
 if (token_path) {
 	try {
 		await Deno.stat(token_path);
@@ -46,10 +46,10 @@ if (token_path) {
 }
 
 // Override port so the Rust backend binds to the same port the Vite proxy expects.
-// The Vite proxy reads PUBLIC_SERVER_PROXIED_PORT from the process env.
+// The Vite proxy reads PUBLIC_ZZZ_SERVER_PROXIED_PORT from the process env.
 env.PORT = String(RUST_BACKEND_PORT);
-env.PUBLIC_SERVER_PROXIED_PORT = String(RUST_BACKEND_PORT);
-env.PUBLIC_WEBSOCKET_URL = `ws://localhost:${RUST_BACKEND_PORT}/api/ws`;
+env.PUBLIC_ZZZ_SERVER_PROXIED_PORT = String(RUST_BACKEND_PORT);
+env.PUBLIC_ZZZ_WEBSOCKET_URL = `ws://localhost:${RUST_BACKEND_PORT}/api/ws`;
 
 // Build the merged env for child processes.
 const child_env: Record<string, string> = {};

@@ -160,8 +160,8 @@ export const create_testadmin_session = async (
 	if (!result.ok) throw new Error(`create_testadmin_session: ${result.stderr}`);
 
 	const expires_at = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
-	const cookie_key = config.env?.SECRET_COOKIE_KEYS;
-	if (!cookie_key) throw new Error('SECRET_COOKIE_KEYS not configured');
+	const cookie_key = config.env?.SECRET_FUZ_COOKIE_KEYS;
+	if (!cookie_key) throw new Error('SECRET_FUZ_COOKIE_KEYS not configured');
 	const cookie_value = await hmac_sign(`${token}:${expires_at}`, cookie_key);
 	const cookie = `fuz_session=${cookie_value}; zzz_session=${cookie_value}`;
 

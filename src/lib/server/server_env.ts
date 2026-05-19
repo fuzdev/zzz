@@ -23,7 +23,7 @@ export const ZzzServerEnv = BaseServerEnv.extend({
 		.string()
 		.default('')
 		.meta({description: 'Comma-separated filesystem paths the server can access'}),
-	PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY: z.coerce
+	PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY: z.coerce
 		.number()
 		.default(0)
 		.meta({description: 'Artificial response delay in ms (testing)'}),
@@ -127,7 +127,7 @@ export const load_server_env = (
 		host: overrides?.host ?? raw.HOST,
 		websocket_path: overrides?.websocket_path ?? '/api/ws',
 		api_path: overrides?.api_path ?? '/api/rpc',
-		artificial_delay: overrides?.artificial_delay ?? raw.PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY,
+		artificial_delay: overrides?.artificial_delay ?? raw.PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY,
 		enable_test_actions: overrides?.enable_test_actions ?? raw.ZZZ_ENABLE_TEST_ACTIONS,
 		app_version: overrides?.app_version ?? '0.0.1',
 		secret_anthropic_api_key: overrides?.secret_anthropic_api_key ?? raw.SECRET_ANTHROPIC_API_KEY,

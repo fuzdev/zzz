@@ -323,7 +323,7 @@ unit tests in `auth/spec.rs::origin_tests`).
 ```bash
 cargo build -p zzz_server                          # Build
 cargo clippy -p zzz_server                         # Lint
-./target/debug/zzz_server --port 1174              # Run (requires DATABASE_URL, SECRET_COOKIE_KEYS)
+./target/debug/zzz_server --port 1174              # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS)
 deno task dev                                      # Dev server: Rust backend + Vite frontend
 deno task test:integration --backend=rust           # Integration tests (Rust)
 deno task test:integration --backend=deno           # Integration tests (Deno)
@@ -522,40 +522,40 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 
 ## Environment Variables
 
-### Server (BaseServerEnv from fuz_app)
+### Server (BaseServerEnv from fuz_app — ecosystem standard)
 
-| Variable               | Purpose                                  |
-| ---------------------- | ---------------------------------------- |
-| `NODE_ENV`             | `development` or `production`            |
-| `PORT`                 | HTTP server port (default 4040)          |
-| `HOST`                 | Bind address (default `localhost`)       |
-| `DATABASE_URL`         | `memory://`, `file://`, or `postgres://` |
-| `SECRET_COOKIE_KEYS`   | HMAC signing keys (min 32 chars)         |
-| `ALLOWED_ORIGINS`      | Origin patterns for API verification     |
-| `BOOTSTRAP_TOKEN_PATH` | One-shot admin bootstrap token path      |
+| Variable             | Purpose                                  |
+| -------------------- | ---------------------------------------- |
+| `NODE_ENV`           | `development` or `production`            |
+| `PORT`               | HTTP server port (default 4040)          |
+| `HOST`               | Bind address (default `localhost`)       |
+| `DATABASE_URL`       | `memory://`, `file://`, or `postgres://` |
+| `SECRET_FUZ_COOKIE_KEYS` | HMAC signing keys (min 32 chars)     |
 
 ### zzz-specific server vars
 
-| Variable                                   | Purpose                            |
-| ------------------------------------------ | ---------------------------------- |
-| `PUBLIC_ZZZ_DIR`                           | Zzz app directory (default `.zzz`) |
-| `PUBLIC_ZZZ_SCOPED_DIRS`                   | Comma-separated filesystem paths   |
-| `PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY` | Testing delay (ms)                 |
-| `ZZZ_ENABLE_TEST_ACTIONS`                  | Register `_test_*` actions on live dispatchers (integration tests only — must stay unset in prod) |
-| `SECRET_ANTHROPIC_API_KEY`                 | Claude API key                     |
-| `SECRET_OPENAI_API_KEY`                    | OpenAI API key                     |
-| `SECRET_GOOGLE_API_KEY`                    | Google Gemini API key              |
+| Variable                              | Purpose                                                                                            |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `ZZZ_ALLOWED_ORIGINS`                 | Origin patterns for API verification                                                               |
+| `ZZZ_BOOTSTRAP_TOKEN_PATH`            | One-shot admin bootstrap token path                                                                |
+| `PUBLIC_ZZZ_DIR`                      | Zzz app directory (default `.zzz`)                                                                 |
+| `PUBLIC_ZZZ_SCOPED_DIRS`              | Comma-separated filesystem paths                                                                   |
+| `PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY` | Testing delay (ms)                                                                                 |
+| `ZZZ_ENABLE_TEST_ACTIONS`             | Register `_test_*` actions on live dispatchers (integration tests only — must stay unset in prod) |
+| `SECRET_ANTHROPIC_API_KEY`            | Claude API key                                                                                     |
+| `SECRET_OPENAI_API_KEY`               | OpenAI API key                                                                                     |
+| `SECRET_GOOGLE_API_KEY`               | Google Gemini API key                                                                              |
 
-### SvelteKit frontend vars (PUBLIC\_\*)
+### SvelteKit frontend vars (PUBLIC_ZZZ_\*)
 
-| Variable                     | Purpose                      |
-| ---------------------------- | ---------------------------- |
-| `PUBLIC_SERVER_PROTOCOL`     | `http` or `https`            |
-| `PUBLIC_SERVER_HOST`         | Server hostname (frontend)   |
-| `PUBLIC_SERVER_PORT`         | SvelteKit dev server port    |
-| `PUBLIC_SERVER_API_PATH`     | API endpoint path            |
-| `PUBLIC_WEBSOCKET_URL`       | WebSocket URL                |
-| `PUBLIC_SERVER_PROXIED_PORT` | Hono backend port (frontend) |
+| Variable                         | Purpose                      |
+| -------------------------------- | ---------------------------- |
+| `PUBLIC_ZZZ_SERVER_PROTOCOL`     | `http` or `https`            |
+| `PUBLIC_ZZZ_SERVER_HOST`         | Server hostname (frontend)   |
+| `PUBLIC_ZZZ_SERVER_PORT`         | SvelteKit dev server port    |
+| `PUBLIC_ZZZ_SERVER_API_PATH`     | API endpoint path            |
+| `PUBLIC_ZZZ_WEBSOCKET_URL`       | WebSocket URL                |
+| `PUBLIC_ZZZ_SERVER_PROXIED_PORT` | Hono backend port (frontend) |
 
 ## Avoid
 

@@ -117,7 +117,7 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 	if (!env_config.ok) {
 		console.error(`[server] ERROR: Invalid ${env_config.field}:`);
 		for (const err of env_config.errors) console.error(`[server]   ${err}`);
-		if (env_config.field === 'SECRET_COOKIE_KEYS') {
+		if (env_config.field === 'SECRET_FUZ_COOKIE_KEYS') {
 			console.error('[server] Generate with: openssl rand -base64 32');
 		}
 		throw new Error(`Invalid server env: ${env_config.field}`);

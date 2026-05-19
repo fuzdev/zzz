@@ -3,12 +3,12 @@ import {describe, test, assert} from 'vitest';
 import {load_server_env} from '../../lib/server/server_env.js';
 
 describe('load_server_env', () => {
-	// BaseServerEnv requires NODE_ENV and ALLOWED_ORIGINS minimum
+	// BaseServerEnv requires NODE_ENV and FUZ_ALLOWED_ORIGINS minimum
 	const base_env = (key: string): string | undefined => {
 		if (key === 'NODE_ENV') return 'development';
 		if (key === 'DATABASE_URL') return 'memory://';
-		if (key === 'SECRET_COOKIE_KEYS') return 'dev-only-not-for-production-use-000';
-		if (key === 'ALLOWED_ORIGINS') return 'http://localhost:*';
+		if (key === 'SECRET_FUZ_COOKIE_KEYS') return 'dev-only-not-for-production-use-000';
+		if (key === 'FUZ_ALLOWED_ORIGINS') return 'http://localhost:*';
 		return undefined;
 	};
 
@@ -37,14 +37,14 @@ describe('load_server_env', () => {
 		assert.strictEqual(config.port, 9999);
 	});
 
-	test('env object contains ALLOWED_ORIGINS', () => {
+	test('env object contains FUZ_ALLOWED_ORIGINS', () => {
 		const config = load_server_env(base_env);
-		assert.strictEqual(config.env.ALLOWED_ORIGINS, 'http://localhost:*');
+		assert.strictEqual(config.env.FUZ_ALLOWED_ORIGINS, 'http://localhost:*');
 	});
 
-	test('respects ALLOWED_ORIGINS from env', () => {
-		const config = load_server_env(with_env({ALLOWED_ORIGINS: 'https://example.com'}));
-		assert.strictEqual(config.env.ALLOWED_ORIGINS, 'https://example.com');
+	test('respects FUZ_ALLOWED_ORIGINS from env', () => {
+		const config = load_server_env(with_env({FUZ_ALLOWED_ORIGINS: 'https://example.com'}));
+		assert.strictEqual(config.env.FUZ_ALLOWED_ORIGINS, 'https://example.com');
 	});
 
 	test('defaults websocket_path to /api/ws', () => {
@@ -88,7 +88,7 @@ describe('load_server_env', () => {
 	});
 
 	test('reads artificial delay from env', () => {
-		const config = load_server_env(with_env({PUBLIC_BACKEND_ARTIFICIAL_RESPONSE_DELAY: '500'}));
+		const config = load_server_env(with_env({PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY: '500'}));
 		assert.strictEqual(config.artificial_delay, 500);
 	});
 

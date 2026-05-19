@@ -63,15 +63,15 @@ export const backends = {
 		health_path: '/health',
 		startup_timeout_ms: 15_000,
 		// Override port so .env.development values don't conflict with test expectations.
-		// PORT is the server bind var (BaseServerEnv); PUBLIC_SERVER_PROXIED_PORT
+		// PORT is the server bind var (BaseServerEnv); PUBLIC_ZZZ_SERVER_PROXIED_PORT
 		// is the SvelteKit frontend var. Both need to agree.
 		env: {
 			PORT: '4460',
-			PUBLIC_SERVER_PROXIED_PORT: '4460',
-			BOOTSTRAP_TOKEN_PATH: INTEGRATION_TOKEN_FILE,
+			PUBLIC_ZZZ_SERVER_PROXIED_PORT: '4460',
+			FUZ_BOOTSTRAP_TOKEN_PATH: INTEGRATION_TOKEN_FILE,
 			DATABASE_URL: TEST_DATABASE_URL,
-			SECRET_COOKIE_KEYS: 'integration-test-cookie-key-min-32-chars',
-			ALLOWED_ORIGINS: 'http://localhost:*',
+			SECRET_FUZ_COOKIE_KEYS: 'integration-test-cookie-key-min-32-chars',
+			FUZ_ALLOWED_ORIGINS: 'http://localhost:*',
 			PUBLIC_ZZZ_SCOPED_DIRS: INTEGRATION_SCOPED_DIR,
 			PUBLIC_ZZZ_DIR: INTEGRATION_ZZZ_DIR,
 			// Opt the `_test_*` specs into the live dispatchers so
@@ -101,9 +101,9 @@ export const backends = {
 		startup_timeout_ms: 60_000, // includes compile time on first run
 		env: {
 			DATABASE_URL: TEST_DATABASE_URL,
-			SECRET_COOKIE_KEYS: 'integration-test-cookie-key-min-32-chars',
-			BOOTSTRAP_TOKEN_PATH: INTEGRATION_TOKEN_FILE,
-			ALLOWED_ORIGINS: 'http://localhost:*',
+			SECRET_FUZ_COOKIE_KEYS: 'integration-test-cookie-key-min-32-chars',
+			ZZZ_BOOTSTRAP_TOKEN_PATH: INTEGRATION_TOKEN_FILE,
+			ZZZ_ALLOWED_ORIGINS: 'http://localhost:*',
 			PUBLIC_ZZZ_SCOPED_DIRS: INTEGRATION_SCOPED_DIR,
 			PUBLIC_ZZZ_DIR: INTEGRATION_ZZZ_DIR,
 			// Opt the `_test_*` specs into the live dispatchers so

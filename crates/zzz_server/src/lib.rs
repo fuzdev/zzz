@@ -85,7 +85,7 @@ pub async fn run_app(
     let errors = fuz_auth::Keyring::validate(&config.secret_cookie_keys);
     if !errors.is_empty() {
         return Err(ServerError::Config(format!(
-            "SECRET_COOKIE_KEYS validation failed: {}",
+            "SECRET_FUZ_COOKIE_KEYS validation failed: {}",
             errors.join(", ")
         )));
     }
@@ -155,7 +155,7 @@ pub async fn run_app(
     let spine_keyring = Arc::new(
         fuz_auth::Keyring::new(&config.secret_cookie_keys).ok_or_else(|| {
             ServerError::Config(
-                "SECRET_COOKIE_KEYS is required for spine keyring (no valid keys found)".to_owned(),
+                "SECRET_FUZ_COOKIE_KEYS is required for spine keyring (no valid keys found)".to_owned(),
             )
         })?,
     );
@@ -628,11 +628,11 @@ fn parse_config(default_port: u16) -> Result<Config, ServerError> {
     let database_url = std::env::var("DATABASE_URL")
         .map_err(|_| ServerError::Config("DATABASE_URL is required".to_owned()))?;
 
-    let secret_cookie_keys = std::env::var("SECRET_COOKIE_KEYS")
-        .map_err(|_| ServerError::Config("SECRET_COOKIE_KEYS is required".to_owned()))?;
+    let secret_cookie_keys = std::env::var("SECRET_FUZ_COOKIE_KEYS")
+        .map_err(|_| ServerError::Config("SECRET_FUZ_COOKIE_KEYS is required".to_owned()))?;
 
-    let bootstrap_token_path = std::env::var("BOOTSTRAP_TOKEN_PATH").ok();
-    let allowed_origins = std::env::var("ALLOWED_ORIGINS").ok();
+    let bootstrap_token_path = std::env::var("ZZZ_BOOTSTRAP_TOKEN_PATH").ok();
+    let allowed_origins = std::env::var("ZZZ_ALLOWED_ORIGINS").ok();
 
     let scoped_dirs = std::env::var("PUBLIC_ZZZ_SCOPED_DIRS")
         .unwrap_or_default()

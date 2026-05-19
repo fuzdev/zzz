@@ -229,7 +229,7 @@ const cleanup_auth = async (config: BackendConfig): Promise<void> => {
 const setup_non_keeper_user = async (config: BackendConfig): Promise<string | undefined> => {
 	if (!config.auth || !config.env) return undefined;
 
-	const cookie_key = config.env.SECRET_COOKIE_KEYS;
+	const cookie_key = config.env.SECRET_FUZ_COOKIE_KEYS;
 	if (!cookie_key) return undefined;
 
 	const session_token = 'test-non-keeper-session-token';
