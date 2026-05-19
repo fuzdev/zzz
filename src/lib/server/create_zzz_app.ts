@@ -126,8 +126,6 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 	log.info('Cookie signing keyring initialized');
 	log.info(`Origin verification enabled: ${allowed_origins.length} pattern(s)`);
 
-	const bootstrap_token_path = env_config.bootstrap_token_path ?? null;
-
 	// TODO better config
 	const zzz_config = create_config();
 
@@ -210,9 +208,9 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 			trusted_proxies: ['127.0.0.1', '::1'],
 			get_connection_ip,
 		},
-		bootstrap: {
-			token_path: bootstrap_token_path,
-		},
+		bootstrap: env_config.bootstrap_token_path
+			? {mode: 'live', token_path: env_config.bootstrap_token_path}
+			: {mode: 'disabled'},
 		transform_middleware: (specs: Array<MiddlewareSpec>): Array<MiddlewareSpec> => {
 			// Insert host validation as the first middleware (before auth)
 			return [

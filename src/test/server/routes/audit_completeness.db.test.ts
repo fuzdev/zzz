@@ -14,7 +14,7 @@
 
 import {describe_audit_completeness_tests} from '@fuzdev/fuz_app/testing/audit_completeness.js';
 import {default_in_process_suite_options} from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
-import {ROLE_KEEPER, ROLE_ADMIN} from '@fuzdev/fuz_app/auth/role_schema.js';
+import {ROLE_ADMIN} from '@fuzdev/fuz_app/auth/role_schema.js';
 import type {AppServerContext} from '@fuzdev/fuz_app/server/app_server.js';
 import type {RouteSpec} from '@fuzdev/fuz_app/http/route_spec.js';
 import {stub} from '@fuzdev/fuz_app/testing/stubs.js';
@@ -41,6 +41,11 @@ describe_audit_completeness_tests(
 		session_options: zzz_session_config,
 		create_route_specs,
 		rpc_endpoints,
-		keeper_roles: [ROLE_KEEPER, ROLE_ADMIN],
+		extra_keeper_roles: [ROLE_ADMIN],
+		// Mirror production wiring (`create_zzz_app.ts`) — synthetic
+		// `token_path` since the test keeper bootstrap flips
+		// `bootstrap_lock`, making this 403 `ALREADY_BOOTSTRAPPED`
+		// regardless of token presence.
+		bootstrap: {mode: 'live', token_path: '/test/bootstrap.token'},
 	}),
 );

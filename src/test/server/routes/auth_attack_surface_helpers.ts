@@ -38,6 +38,10 @@ export const create_zzz_app_surface_spec = (): AppSurfaceSpec =>
 			}),
 		rpc_endpoints: (ctx) => build_rpc_endpoint_specs(ctx, zzz_stub_deps),
 		env_schema: ZzzServerEnv,
+		// zzz wires bootstrap in production (`create_zzz_app.ts`); the surface
+		// must include `POST /api/account/bootstrap` to match. `surface_only`
+		// mounts the route shape (permanent 403) for shape-symmetry tests.
+		bootstrap: {mode: 'surface_only'},
 		transform_middleware: (specs: Array<MiddlewareSpec>): Array<MiddlewareSpec> => [
 			{name: 'host_validation', path: '*', handler: stub_mw},
 			...specs,
