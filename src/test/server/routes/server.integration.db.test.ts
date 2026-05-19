@@ -4,7 +4,8 @@ import {describe_rate_limiting_tests} from '@fuzdev/fuz_app/testing/rate_limitin
 import {describe_round_trip_validation} from '@fuzdev/fuz_app/testing/round_trip.js';
 import {describe_rpc_round_trip_tests} from '@fuzdev/fuz_app/testing/rpc_round_trip.js';
 import {describe_data_exposure_tests} from '@fuzdev/fuz_app/testing/data_exposure.js';
-import {create_role_schema} from '@fuzdev/fuz_app/auth/role_schema.js';
+import {default_in_process_suite_options} from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
+import {create_role_schema, ROLE_KEEPER, ROLE_ADMIN} from '@fuzdev/fuz_app/auth/role_schema.js';
 import type {RouteSpec} from '@fuzdev/fuz_app/http/route_spec.js';
 import type {AppServerContext} from '@fuzdev/fuz_app/server/app_server.js';
 import {stub} from '@fuzdev/fuz_app/testing/stubs.js';
@@ -38,21 +39,33 @@ const zzz_roles = create_role_schema([]);
 // -- Composable suites --
 
 describe_standard_integration_tests({
+	...default_in_process_suite_options({
+		session_options: zzz_session_config,
+		create_route_specs: create_zzz_test_route_specs,
+		rpc_endpoints: zzz_rpc_endpoints,
+	}),
 	session_options: zzz_session_config,
-	create_route_specs: create_zzz_test_route_specs,
 	rpc_endpoints: zzz_rpc_endpoints,
-	db_factories,
 });
 
 describe_standard_admin_integration_tests({
+	...default_in_process_suite_options({
+		session_options: zzz_session_config,
+		create_route_specs: create_zzz_test_route_specs,
+		rpc_endpoints: zzz_rpc_endpoints,
+		keeper_roles: [ROLE_KEEPER, ROLE_ADMIN],
+	}),
 	session_options: zzz_session_config,
-	create_route_specs: create_zzz_test_route_specs,
 	rpc_endpoints: zzz_rpc_endpoints,
 	roles: zzz_roles,
-	db_factories,
 });
 
 describe_rate_limiting_tests({
+	...default_in_process_suite_options({
+		session_options: zzz_session_config,
+		create_route_specs: create_zzz_test_route_specs,
+		rpc_endpoints: zzz_rpc_endpoints,
+	}),
 	session_options: zzz_session_config,
 	create_route_specs: create_zzz_test_route_specs,
 	rpc_endpoints: zzz_rpc_endpoints,
@@ -60,8 +73,10 @@ describe_rate_limiting_tests({
 });
 
 describe_round_trip_validation({
-	session_options: zzz_session_config,
-	create_route_specs: create_zzz_test_route_specs,
+	...default_in_process_suite_options({
+		session_options: zzz_session_config,
+		create_route_specs: create_zzz_test_route_specs,
+	}),
 	skip_routes: [
 		'GET /api/rpc', // covered by describe_rpc_round_trip_tests
 		'POST /api/rpc',
@@ -69,8 +84,12 @@ describe_round_trip_validation({
 });
 
 describe_rpc_round_trip_tests({
+	...default_in_process_suite_options({
+		session_options: zzz_session_config,
+		create_route_specs: create_zzz_test_route_specs,
+		rpc_endpoints: zzz_rpc_endpoints,
+	}),
 	session_options: zzz_session_config,
-	create_route_specs: create_zzz_test_route_specs,
 	rpc_endpoints: zzz_rpc_endpoints,
 	// Domain handlers use a throwing stub Backend — the RPC dispatcher catches
 	// all throws and returns well-formed JSON-RPC error responses, which the
@@ -83,8 +102,9 @@ describe_rpc_round_trip_tests({
 });
 
 describe_data_exposure_tests({
-	build: create_zzz_app_surface_spec,
-	session_options: zzz_session_config,
-	create_route_specs: create_zzz_test_route_specs,
-	db_factories,
+	...default_in_process_suite_options({
+		session_options: zzz_session_config,
+		create_route_specs: create_zzz_test_route_specs,
+		surface_source: {kind: 'inline', spec: create_zzz_app_surface_spec()},
+	}),
 });
