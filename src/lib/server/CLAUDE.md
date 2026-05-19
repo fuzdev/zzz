@@ -131,8 +131,12 @@ Routes are defined as data via fuz_app's route spec system:
 ```
 create_zzz_app_route_specs(ctx, zzz_deps)
     ├── Health check route
-    ├── Account routes (login, logout, status, signup, bootstrap)
+    ├── Account routes (login, logout, password, verify, status) + server status
     └── Audit log SSE stream (admin)
+
+(Bootstrap routes are factory-managed by `create_app_server` — mounted
+under `/api/account` via the `bootstrap` option, not in
+`create_zzz_app_route_specs`. zzz does not mount `/signup`.)
 
 build_rpc_endpoint_specs(ctx, zzz_deps) → /api/rpc
     ├── zzz domain actions (create_zzz_action_handlers(backend))
