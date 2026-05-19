@@ -122,7 +122,7 @@ pub async fn run_app(
     ));
 
     if config.enable_test_actions {
-        tracing::info!("test actions enabled — `_test_*` methods registered on live dispatchers");
+        tracing::info!("test actions enabled — `_testing_*` methods registered on live dispatchers");
     }
 
     // Per-IP + per-account rate limiters on `/login` and `/password`.
@@ -303,7 +303,7 @@ pub async fn run_app(
         &app_state,
     )));
     if app_state.enable_test_actions {
-        all_specs.extend(zzz_action_specs::build_test_specs(Arc::clone(&app_state)));
+        all_specs.extend(zzz_action_specs::build_testing_specs(Arc::clone(&app_state)));
     }
     let action_registry = Arc::new(
         fuz_actions::ActionRegistry::compile(all_specs)
@@ -531,7 +531,7 @@ pub struct Config {
     pub allowed_origins: Option<String>,
     pub scoped_dirs: Vec<PathBuf>,
     pub zzz_dir: String,
-    /// Register `_test_*` actions on live dispatchers. Set by integration
+    /// Register `_testing_*` actions on live dispatchers. Set by integration
     /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave unset.
     pub enable_test_actions: bool,
     /// Enable per-IP + per-account rate limiting on `/login` and

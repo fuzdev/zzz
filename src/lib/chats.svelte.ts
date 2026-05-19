@@ -24,7 +24,7 @@ export const ChatsJson = CellJson.extend({
 export type ChatsJson = z.infer<typeof ChatsJson>;
 export type ChatsJsonInput = z.input<typeof ChatsJson>;
 
-export interface ChatsOptions extends CellOptions<typeof ChatsJson> {}  
+export interface ChatsOptions extends CellOptions<typeof ChatsJson> {}
 
 export class Chats extends Cell<typeof ChatsJson> {
 	readonly items: IndexedCollection<Chat> = new IndexedCollection({

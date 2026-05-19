@@ -18,7 +18,7 @@ export const ProviderJson = CellJson.extend({
 export type ProviderJson = z.infer<typeof ProviderJson>;
 export type ProviderJsonInput = z.input<typeof ProviderJson>;
 
-export interface ProviderOptions extends CellOptions<typeof ProviderJson> {}  
+export interface ProviderOptions extends CellOptions<typeof ProviderJson> {}
 
 export class Provider extends Cell<typeof ProviderJson> {
 	name: ProviderName = $state.raw()!;

@@ -18,7 +18,7 @@ export const SpacesJson = CellJson.extend({
 export type SpacesJson = z.infer<typeof SpacesJson>;
 export type SpacesJsonInput = z.input<typeof SpacesJson>;
 
-export interface SpacesOptions extends CellOptions<typeof SpacesJson> {}  
+export interface SpacesOptions extends CellOptions<typeof SpacesJson> {}
 
 export class Spaces extends Cell<typeof SpacesJson> {
 	readonly items: IndexedCollection<Space> = new IndexedCollection({

@@ -19,7 +19,7 @@ export const ActionJson = CellJson.extend({
 export type ActionJson = z.infer<typeof ActionJson>;
 export type ActionJsonInput = z.input<typeof ActionJson>;
 
-export interface ActionOptions extends CellOptions<typeof ActionJson> {}  
+export interface ActionOptions extends CellOptions<typeof ActionJson> {}
 
 /**
  * Represents a single action in the system, tracking its full lifecycle through action events.

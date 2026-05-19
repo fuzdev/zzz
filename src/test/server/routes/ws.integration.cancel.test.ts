@@ -2,7 +2,7 @@
  * WebSocket cancel integration — proves the shared `cancel_action` primitive
  * aborts zzz's in-flight handlers end-to-end.
  *
- * The test spec (`_test_emit_notifications`) is reused here with a streaming
+ * The test spec (`_testing_emit_notifications`) is reused here with a streaming
  * handler that awaits `ctx.signal` — when the client aborts its side
  * (`FrontendWebsocketClient.request({signal})`), the client sends the shared
  * `cancel` notification; `register_action_ws` looks up the matching pending
@@ -21,7 +21,7 @@ import {
 } from '@fuzdev/fuz_app/testing/ws_round_trip.js';
 import {cancel_action, cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.js';
 
-import {_test_emit_notifications_action_spec} from '$lib/test_action_specs.js';
+import {_testing_emit_notifications_action_spec} from '$lib/testing_action_specs.js';
 
 describe('zzz WebSocket — cancel', () => {
 	test('client cancel notification aborts matching in-flight handler', async () => {
@@ -31,7 +31,7 @@ describe('zzz WebSocket — cancel', () => {
 			actions: [
 				cancel_action,
 				{
-					spec: _test_emit_notifications_action_spec,
+					spec: _testing_emit_notifications_action_spec,
 					handler: async (_input, ctx) => {
 						captured_signal = ctx.signal;
 						await new Promise<void>((resolve) => {
@@ -53,7 +53,7 @@ describe('zzz WebSocket — cancel', () => {
 		void client.send({
 			jsonrpc: '2.0',
 			id: 42,
-			method: '_test_emit_notifications',
+			method: '_testing_emit_notifications',
 			params: {count: 1},
 		});
 
@@ -80,7 +80,7 @@ describe('zzz WebSocket — cancel', () => {
 			actions: [
 				cancel_action,
 				{
-					spec: _test_emit_notifications_action_spec,
+					spec: _testing_emit_notifications_action_spec,
 					handler: () => ({count: 0}),
 				},
 			],
@@ -89,7 +89,7 @@ describe('zzz WebSocket — cancel', () => {
 		const client = await harness.connect();
 
 		// Complete a request first.
-		const done = await client.request<{count: number}>(1, '_test_emit_notifications', {
+		const done = await client.request<{count: number}>(1, '_testing_emit_notifications', {
 			count: 0,
 		});
 		assert.deepStrictEqual(done, {count: 0});
@@ -102,7 +102,7 @@ describe('zzz WebSocket — cancel', () => {
 		});
 
 		// Follow-up request proves dispatch is still healthy.
-		const again = await client.request<{count: number}>(2, '_test_emit_notifications', {
+		const again = await client.request<{count: number}>(2, '_testing_emit_notifications', {
 			count: 0,
 		});
 		assert.deepStrictEqual(again, {count: 0});

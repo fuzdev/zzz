@@ -12,7 +12,7 @@
 	const app = frontend_context.get();
 
 	// Initialize the Projects instance and set it in context
-	 
+
 	projects ??= new Projects({app});
 	projects_context.set(projects);
 

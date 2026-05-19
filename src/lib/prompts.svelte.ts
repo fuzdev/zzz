@@ -22,7 +22,7 @@ export const PromptsJson = CellJson.extend({
 export type PromptsJson = z.infer<typeof PromptsJson>;
 export type PromptsJsonInput = z.input<typeof PromptsJson>;
 
-export interface PromptsOptions extends CellOptions<typeof PromptsJson> {}  
+export interface PromptsOptions extends CellOptions<typeof PromptsJson> {}
 
 export class Prompts extends Cell<typeof PromptsJson> {
 	// Initialize items with proper typing and unified indexes

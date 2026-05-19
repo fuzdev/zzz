@@ -11,7 +11,7 @@ export const SpaceJson = CellJson.extend({
 export type SpaceJson = z.infer<typeof SpaceJson>;
 export type SpaceJsonInput = z.input<typeof SpaceJson>;
 
-export interface SpaceOptions extends CellOptions<typeof SpaceJson> {}  
+export interface SpaceOptions extends CellOptions<typeof SpaceJson> {}
 
 export class Space extends Cell<typeof SpaceJson> {
 	name: string = $state.raw()!;

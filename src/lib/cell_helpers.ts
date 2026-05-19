@@ -55,7 +55,7 @@ export const get_schema_class_info = (
 	if (unwrapped instanceof z.ZodArray) {
 		// Get class name from element schema's metadata
 		// TODO temporary bug: https://github.com/typescript-eslint/typescript-eslint/issues/11666
-		 
+
 		const element_meta = (unwrapped.element as z.ZodType).meta?.();
 		const element_class = element_meta?.cell_class_name as string | undefined;
 		return {
@@ -67,7 +67,7 @@ export const get_schema_class_info = (
 
 	// Get class name from schema metadata if present for any schema type
 	// TODO temporary bug: https://github.com/typescript-eslint/typescript-eslint/issues/11666
-	 
+
 	const meta = schema.meta?.();
 	if (meta?.cell_class_name) {
 		return {

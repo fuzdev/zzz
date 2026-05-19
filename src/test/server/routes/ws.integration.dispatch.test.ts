@@ -28,21 +28,21 @@ import {
 
 import {provider_update_api_key_action_spec} from '$lib/action_specs.js';
 import {
-	_test_emit_notifications_action_spec,
-	_test_notification_action_spec,
-} from '$lib/test_action_specs.js';
+	_testing_emit_notifications_action_spec,
+	_testing_notification_action_spec,
+} from '$lib/testing_action_specs.js';
 
 describe('zzz WebSocket — dispatch', () => {
 	test('ctx.notify streams notifications to the originating socket only', async () => {
 		const harness = create_ws_test_harness({
 			actions: [
-				{spec: _test_notification_action_spec},
+				{spec: _testing_notification_action_spec},
 				{
-					spec: _test_emit_notifications_action_spec,
+					spec: _testing_emit_notifications_action_spec,
 					handler: (input: unknown, ctx) => {
 						const {count} = input as {count: number};
 						for (let i = 0; i < count; i++) {
-							ctx.notify('_test_notification', {index: i});
+							ctx.notify('_testing_notification', {index: i});
 						}
 						return {count};
 					},
@@ -53,12 +53,12 @@ describe('zzz WebSocket — dispatch', () => {
 		const originator = await harness.connect();
 		const bystander = await harness.connect();
 
-		const result = await originator.request<{count: number}>(1, '_test_emit_notifications', {
+		const result = await originator.request<{count: number}>(1, '_testing_emit_notifications', {
 			count: 3,
 		});
 		assert.deepStrictEqual(result, {count: 3});
 
-		const match = is_notification('_test_notification');
+		const match = is_notification('_testing_notification');
 		const received = originator.messages.filter(match) as Array<
 			JsonrpcNotificationFrame<{index: number}>
 		>;
@@ -112,7 +112,7 @@ describe('zzz WebSocket — dispatch', () => {
 		const harness = create_ws_test_harness({
 			actions: [
 				{
-					spec: _test_emit_notifications_action_spec,
+					spec: _testing_emit_notifications_action_spec,
 					handler: () => {
 						throw new Error('handler should not run for invalid input');
 					},
@@ -125,7 +125,7 @@ describe('zzz WebSocket — dispatch', () => {
 		await client.send({
 			jsonrpc: '2.0',
 			id: 7,
-			method: '_test_emit_notifications',
+			method: '_testing_emit_notifications',
 			params: {count: -1},
 		});
 
@@ -147,7 +147,7 @@ describe('zzz WebSocket — dispatch', () => {
 		const harness = create_ws_test_harness({
 			actions: [
 				{
-					spec: _test_emit_notifications_action_spec,
+					spec: _testing_emit_notifications_action_spec,
 					handler: async (_input, ctx) => {
 						captured_signal = ctx.signal;
 						await new Promise<void>((resolve) => {
@@ -172,7 +172,7 @@ describe('zzz WebSocket — dispatch', () => {
 		const dispatch = client.send({
 			jsonrpc: '2.0',
 			id: 1,
-			method: '_test_emit_notifications',
+			method: '_testing_emit_notifications',
 			params: {count: 0},
 		});
 
@@ -196,13 +196,13 @@ describe('zzz WebSocket — dispatch', () => {
 	test('concurrent requests on one socket preserve id correlation', async () => {
 		const harness = create_ws_test_harness({
 			actions: [
-				{spec: _test_notification_action_spec},
+				{spec: _testing_notification_action_spec},
 				{
-					spec: _test_emit_notifications_action_spec,
+					spec: _testing_emit_notifications_action_spec,
 					handler: async (input: unknown, ctx) => {
 						const {count} = input as {count: number};
 						for (let i = 0; i < count; i++) {
-							ctx.notify('_test_notification', {index: i});
+							ctx.notify('_testing_notification', {index: i});
 							// Yield between notifies so a second in-flight dispatch
 							// can interleave its sends between ours.
 							await Promise.resolve();
@@ -216,14 +216,14 @@ describe('zzz WebSocket — dispatch', () => {
 		const client = await harness.connect();
 
 		// Fire both without awaiting — overlapping dispatches on one socket.
-		const p1 = client.request<{count: number}>(101, '_test_emit_notifications', {count: 5});
-		const p2 = client.request<{count: number}>(102, '_test_emit_notifications', {count: 3});
+		const p1 = client.request<{count: number}>(101, '_testing_emit_notifications', {count: 5});
+		const p2 = client.request<{count: number}>(102, '_testing_emit_notifications', {count: 3});
 		const [r1, r2] = await Promise.all([p1, p2]);
 		assert.strictEqual(r1.count, 5);
 		assert.strictEqual(r2.count, 3);
 
 		// Total notifications = 5 + 3 = 8, regardless of interleaving order.
-		const notifs = client.messages.filter(is_notification('_test_notification'));
+		const notifs = client.messages.filter(is_notification('_testing_notification'));
 		assert.strictEqual(notifs.length, 8);
 	});
 });

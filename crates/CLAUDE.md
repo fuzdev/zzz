@@ -26,7 +26,7 @@ cover the zzz surface verbatim (no new handlers_v2 modules). Legacy
 `account_session_revoke`, `account_session_revoke_all`,
 `account_token_create`, `account_token_list`, `account_token_revoke`,
 `admin_session_revoke_all`, `admin_token_revoke_all`.
-`_test_emit_notifications` is gated behind
+`_testing_emit_notifications` is gated behind
 `ZZZ_ENABLE_TEST_ACTIONS=1` (set by the integration runner; production
 leaves it unset, dispatch returns `method_not_found`). Full auth stack (cookie sessions, bearer tokens, daemon
 tokens), account management routes, filesystem actions with `ScopedFs`,
@@ -103,7 +103,7 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 | `PUBLIC_ZZZ_SCOPED_DIRS` | Comma-separated filesystem paths           |
 | `ZZZ_PORT`               | Server port (default 1174, CLI overrides)  |
 | `ZZZ_STATIC_DIR`         | Static file directory                      |
-| `ZZZ_ENABLE_TEST_ACTIONS`| Register `_test_*` actions on live dispatchers (mirrors Zod `z.stringbool()`: `true`/`1`/`yes`/`on`/`y`/`enabled` opt in; `false`/`0`/`no`/`off`/`n`/`disabled` or unset opt out; case-insensitive; anything else errors at startup. Integration tests only — production must leave unset) |
+| `ZZZ_ENABLE_TEST_ACTIONS`| Register `_testing_*` actions on live dispatchers (mirrors Zod `z.stringbool()`: `true`/`1`/`yes`/`on`/`y`/`enabled` opt in; `false`/`0`/`no`/`off`/`n`/`disabled` or unset opt out; case-insensitive; anything else errors at startup. Integration tests only — production must leave unset) |
 | `ZZZ_LOGIN_RATE_LIMIT_ENABLED`| Turn on per-IP + per-account rate limiting on `/login` and `/password` (same `z.stringbool()` shape as `ZZZ_ENABLE_TEST_ACTIONS`). Default off so existing integration tests don't trip the bucket. Defaults match fuz_app (5 attempts / 15 min IP, 10 / 30 min account). Per-IP key is the resolved client IP from `proxy::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when deploying behind a reverse proxy so the bucket keys on the originator, not the proxy. |
 | `ZZZ_TRUSTED_PROXIES`        | Comma-separated trusted-proxy entries (IPs and CIDR ranges, e.g. `127.0.0.1,10.0.0.0/8,fe80::/10`). Unset/empty → no XFF trust → `client_ip` falls back to the TCP peer IP on every request (direct-bind behavior). Set when deploying behind nginx / a cloud LB so the trusted-proxy middleware walks `X-Forwarded-For` right-to-left and resolves the real client IP for rate limiting + `audit_log.ip`. Parsed eagerly at startup — invalid entries (malformed IPs, non-aligned CIDRs, out-of-range prefixes) fail server boot. Mirrors fuz_app's `http/proxy.ts`. |
 
@@ -399,7 +399,7 @@ cookie, then stops the backend and cleans up.
 crates/zzz_server/src/
 ├── main.rs          # Entry, config, DB/keyring/daemon-token init, route setup, graceful shutdown
 ├── handlers/        # Per-domain RPC handlers + App state + dispatch (legacy `&Ctx` signature, live `/api/rpc` + `/api/ws` dispatch path)
-│   ├── mod.rs       # App (state + connection tracking + watchers + 9 spine fields + SpineState), Ctx, dispatch, ping, session_load, _test_emit_notifications
+│   ├── mod.rs       # App (state + connection tracking + watchers + 9 spine fields + SpineState), Ctx, dispatch, ping, session_load, _testing_emit_notifications
 │   ├── account.rs   # account_verify, account_session_*, account_token_*
 │   ├── filesystem.rs # diskfile_update, diskfile_delete, directory_create
 │   ├── provider.rs  # provider_load_status, provider_update_api_key, completion_create

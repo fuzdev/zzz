@@ -1218,7 +1218,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 	{
 		// Socket-scoped ctx.notify: two WS connections on the same account open
 		// simultaneously; only the originator should receive progress
-		// notifications. Relies on the test-only _test_emit_notifications action
+		// notifications. Relies on the test-only _testing_emit_notifications action
 		// (see action_specs.ts) to drive ctx.notify without a real AI provider.
 		//
 		// This primitive covers `completion_progress` and `ollama_progress`
@@ -1241,7 +1241,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					JSON.stringify({
 						jsonrpc: '2.0',
 						id: 'notify-1',
-						method: '_test_emit_notifications',
+						method: '_testing_emit_notifications',
 						params: {count},
 					}),
 				);
@@ -1259,7 +1259,7 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 					messages.push((await conn1.receive(5_000)) as Record<string, unknown>);
 				}
 				const responses = messages.filter((m) => m.id === 'notify-1');
-				const notifications = messages.filter((m) => m.method === '_test_notification');
+				const notifications = messages.filter((m) => m.method === '_testing_notification');
 				assert_equal(responses.length, 1, 'exactly one response');
 				assert_equal(notifications.length, count, 'originator notification count');
 				assert_deep_equal(
@@ -1272,13 +1272,13 @@ const special_tests: ReadonlyArray<{name: string; fn: TestFn}> = [
 				for (let i = 0; i < count; i++) {
 					const n = notifications[i]!;
 					assert_equal(n.jsonrpc, '2.0', `notification ${i} jsonrpc`);
-					assert_equal(n.method, '_test_notification', `notification ${i} method`);
+					assert_equal(n.method, '_testing_notification', `notification ${i} method`);
 					assert_deep_equal(n.params, {index: i}, `notification ${i} params`);
 					assert_equal('id' in n, false, `notification ${i} has no id (is notification)`);
 				}
 
 				// The non-originator socket must NOT have received any
-				// _test_notification frames. expect_silence enforces this.
+				// _testing_notification frames. expect_silence enforces this.
 				await conn2.expect_silence(300);
 			} finally {
 				conn1.close();

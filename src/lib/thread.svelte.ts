@@ -14,7 +14,7 @@ import type {TurnJson} from './turn_types.js';
 
 // TODO add `thread.name` and lots of other things probably
 
-export interface ThreadOptions extends CellOptions<typeof ThreadJson> {}  
+export interface ThreadOptions extends CellOptions<typeof ThreadJson> {}
 /**
  * A thread is a linear sequence of turns that maintains a chronological
  * record of interactions between the user and the AI.

@@ -38,10 +38,10 @@ import {
 } from './server_env.js';
 import {all_action_specs} from '../action_specs.js';
 import {
-	_test_emit_notifications_action_spec,
-	handle_test_emit_notifications,
-	test_action_specs,
-} from '../test_action_specs.js';
+	_testing_emit_notifications_action_spec,
+	handle_testing_emit_notifications,
+	testing_action_specs,
+} from '../testing_action_specs.js';
 import {handle_filer_change} from './backend_actions_api.js';
 import {BackendProviderOllama} from './backend_provider_ollama.js';
 import {BackendProviderClaude} from './backend_provider_claude.js';
@@ -155,23 +155,23 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 	);
 
 	// In integration-test runs (`ZZZ_ENABLE_TEST_ACTIONS=1`), splice the
-	// `_test_*` specs and handler into the live dispatchers. Production
+	// `_testing_*` specs and handler into the live dispatchers. Production
 	// leaves the env var unset so the action surface stays clean.
 	const action_specs = config.enable_test_actions
-		? [...all_action_specs, ...test_action_specs]
+		? [...all_action_specs, ...testing_action_specs]
 		: all_action_specs;
 	const test_rpc_actions: ReadonlyArray<RpcAction> = config.enable_test_actions
 		? [
 				{
-					spec: _test_emit_notifications_action_spec,
-					handler: handle_test_emit_notifications,
+					spec: _testing_emit_notifications_action_spec,
+					handler: handle_testing_emit_notifications,
 				},
 			]
 		: [];
 	const test_ws_actions: ReadonlyArray<Action> = test_rpc_actions;
 
 	if (config.enable_test_actions) {
-		log.info('Test actions enabled — `_test_*` methods registered on live dispatchers');
+		log.info('Test actions enabled — `_testing_*` methods registered on live dispatchers');
 	}
 
 	// Create zzz domain Backend (files, terminals, providers, actions)

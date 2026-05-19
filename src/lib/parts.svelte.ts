@@ -15,7 +15,7 @@ export const PartsJson = CellJson.extend({
 export type PartsJson = z.infer<typeof PartsJson>;
 export type PartsJsonInput = z.input<typeof PartsJson>;
 
-export interface PartsOptions extends CellOptions<typeof PartsJson> {}  
+export interface PartsOptions extends CellOptions<typeof PartsJson> {}
 
 export class Parts extends Cell<typeof PartsJson> {
 	// Initialize items with proper typing and unified indexes

@@ -61,10 +61,10 @@ pub struct App {
     pub provider_manager: ProviderManager,
     /// Default completion options.
     pub completion_options: CompletionOptions,
-    /// Register `_test_*` actions on live dispatchers. Set by integration
+    /// Register `_testing_*` actions on live dispatchers. Set by integration
     /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave false.
     /// Read in `main.rs` at registry-compile time to conditionally
-    /// extend the spec set via `zzz_action_specs::build_test_specs`.
+    /// extend the spec set via `zzz_action_specs::build_testing_specs`.
     pub enable_test_actions: bool,
     /// `Arc<ConnectionRegistry>` — the spine's connection-tracking
     /// registry. Sole connection store on `App`; drives the

@@ -44,7 +44,7 @@ export const ModelJson = CellJson.extend({
 export type ModelJson = z.infer<typeof ModelJson>;
 export type ModelJsonInput = z.input<typeof ModelJson>;
 
-export interface ModelOptions extends CellOptions<typeof ModelJson> {}  
+export interface ModelOptions extends CellOptions<typeof ModelJson> {}
 
 export class Model extends Cell<typeof ModelJson> {
 	name: ModelName = $state.raw()!;

@@ -11,7 +11,7 @@ export const ProvidersJson = CellJson.extend({
 export type ProvidersJson = z.infer<typeof ProvidersJson>;
 export type ProvidersJsonInput = z.input<typeof ProvidersJson>;
 
-export interface ProvidersOptions extends CellOptions<typeof ProvidersJson> {}  
+export interface ProvidersOptions extends CellOptions<typeof ProvidersJson> {}
 export class Providers extends Cell<typeof ProvidersJson> {
 	items: Array<Provider> = $state()!; // TODO probably make an indexed collection for convenient querying, despite small N
 

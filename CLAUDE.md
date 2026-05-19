@@ -215,8 +215,8 @@ a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 
 ## Action Specs
 
-30 specs in `src/lib/action_specs.ts` (test-only `_test_emit_notifications`
-+ `_test_notification` live in `src/lib/test_action_specs.ts` and only
+30 specs in `src/lib/action_specs.ts` (test-only `_testing_emit_notifications`
++ `_testing_notification` live in `src/lib/testing_action_specs.ts` and only
 register on the live dispatchers when `ZZZ_ENABLE_TEST_ACTIONS=1`):
 
 | Method                     | Kind                  | Initiator  | Purpose                                                 |
@@ -541,7 +541,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 | `PUBLIC_ZZZ_DIR`                      | Zzz app directory (default `.zzz`)                                                                 |
 | `PUBLIC_ZZZ_SCOPED_DIRS`              | Comma-separated filesystem paths                                                                   |
 | `PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY` | Testing delay (ms)                                                                                 |
-| `ZZZ_ENABLE_TEST_ACTIONS`             | Register `_test_*` actions on live dispatchers (integration tests only — must stay unset in prod) |
+| `ZZZ_ENABLE_TEST_ACTIONS`             | Register `_testing_*` actions on live dispatchers (integration tests only — must stay unset in prod) |
 | `SECRET_ANTHROPIC_API_KEY`            | Claude API key                                                                                     |
 | `SECRET_OPENAI_API_KEY`               | OpenAI API key                                                                                     |
 | `SECRET_GOOGLE_API_KEY`               | Google Gemini API key                                                                              |

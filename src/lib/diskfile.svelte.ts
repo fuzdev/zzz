@@ -13,7 +13,7 @@ import type {PartUnion} from './part.svelte.js';
 
 // TODO support directories/folders
 
-export interface DiskfileOptions extends CellOptions<typeof DiskfileJson> {}  
+export interface DiskfileOptions extends CellOptions<typeof DiskfileJson> {}
 
 export class Diskfile extends Cell<typeof DiskfileJson> {
 	path: DiskfilePath = $state.raw()!;

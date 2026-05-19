@@ -31,7 +31,7 @@ export const WorkspaceJson = CellJson.extend({
 export type WorkspaceJson = z.infer<typeof WorkspaceJson>;
 export type WorkspaceJsonInput = z.input<typeof WorkspaceJson>;
 
-export interface WorkspaceOptions extends CellOptions<typeof WorkspaceJson> {}  
+export interface WorkspaceOptions extends CellOptions<typeof WorkspaceJson> {}
 
 /**
  * A workspace represents an open directory that zzz is watching and serving.

@@ -8,7 +8,7 @@ import type {Frontend} from './frontend.svelte.js';
 import {TurnJson} from './turn_types.js';
 import type {CompletionRequest, CompletionResponse, CompletionRole} from './completion_types.js';
 
-export interface TurnOptions extends CellOptions<typeof TurnJson> {}  
+export interface TurnOptions extends CellOptions<typeof TurnJson> {}
 
 /**
  * Turn represents a conversation turn (like A2A Message).

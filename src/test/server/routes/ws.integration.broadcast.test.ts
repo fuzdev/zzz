@@ -18,7 +18,7 @@ import {
 } from '@fuzdev/fuz_app/testing/ws_round_trip.js';
 
 import {workspace_changed_action_spec} from '$lib/action_specs.js';
-import {_test_emit_notifications_action_spec} from '$lib/test_action_specs.js';
+import {_testing_emit_notifications_action_spec} from '$lib/testing_action_specs.js';
 import {DiskfileDirectoryPath} from '$lib/diskfile_types.js';
 import type {BackendActionsApi} from '$lib/server/backend_action_types.js';
 
@@ -26,7 +26,7 @@ import type {BackendActionsApi} from '$lib/server/backend_action_types.js';
 // harness requires a handler per registered request/response spec. Kept
 // minimal so the intent of each test stays visible.
 const stub_emit_notifications = {
-	spec: _test_emit_notifications_action_spec,
+	spec: _testing_emit_notifications_action_spec,
 	handler: () => ({count: 0}),
 };
 

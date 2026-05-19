@@ -234,17 +234,17 @@ JSON-RPC response via WebSocket
 
 ### zzz-specific
 
-| Variable                              | Purpose                                                                 |
-| ------------------------------------- | ----------------------------------------------------------------------- |
-| `ZZZ_ALLOWED_ORIGINS`                 | Origin patterns for API verification                                    |
-| `ZZZ_BOOTSTRAP_TOKEN_PATH`            | One-shot admin bootstrap token path                                     |
-| `PUBLIC_ZZZ_DIR`                      | Zzz app directory (default `.zzz`)                                      |
-| `PUBLIC_ZZZ_SCOPED_DIRS`              | Comma-separated filesystem paths                                        |
-| `PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY` | Testing delay (ms)                                                      |
-| `ZZZ_ENABLE_TEST_ACTIONS`             | Register `_test_*` actions on live dispatchers (integration tests only) |
-| `SECRET_ANTHROPIC_API_KEY`            | Claude API key                                                          |
-| `SECRET_OPENAI_API_KEY`               | OpenAI API key                                                          |
-| `SECRET_GOOGLE_API_KEY`               | Google Gemini API key                                                   |
+| Variable                              | Purpose                                                                    |
+| ------------------------------------- | -------------------------------------------------------------------------- |
+| `ZZZ_ALLOWED_ORIGINS`                 | Origin patterns for API verification                                       |
+| `ZZZ_BOOTSTRAP_TOKEN_PATH`            | One-shot admin bootstrap token path                                        |
+| `PUBLIC_ZZZ_DIR`                      | Zzz app directory (default `.zzz`)                                         |
+| `PUBLIC_ZZZ_SCOPED_DIRS`              | Comma-separated filesystem paths                                           |
+| `PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY` | Testing delay (ms)                                                         |
+| `ZZZ_ENABLE_TEST_ACTIONS`             | Register `_testing_*` actions on live dispatchers (integration tests only) |
+| `SECRET_ANTHROPIC_API_KEY`            | Claude API key                                                             |
+| `SECRET_OPENAI_API_KEY`               | OpenAI API key                                                             |
+| `SECRET_GOOGLE_API_KEY`               | Google Gemini API key                                                      |
 
 ## Security
 

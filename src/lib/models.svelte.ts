@@ -17,7 +17,7 @@ export const ModelsJson = CellJson.extend({
 export type ModelsJson = z.infer<typeof ModelsJson>;
 export type ModelsJsonInput = z.input<typeof ModelsJson>;
 
-export interface ModelsOptions extends CellOptions<typeof ModelsJson> {}  
+export interface ModelsOptions extends CellOptions<typeof ModelsJson> {}
 
 export class Models extends Cell<typeof ModelsJson> {
 	readonly items: IndexedCollection<Model> = new IndexedCollection({

@@ -15,7 +15,7 @@ import {WEBSOCKET_URL, API_URL_FOR_HTTP_RPC} from './constants.js';
  */
 export const app_context: ReturnType<typeof create_context<App>> = frontend_context;
 
-export interface AppOptions extends FrontendOptions {}  
+export interface AppOptions extends FrontendOptions {}
 
 /**
  * The `App` is the user's implementation of the Zzz client app.

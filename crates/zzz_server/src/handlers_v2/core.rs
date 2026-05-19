@@ -23,7 +23,7 @@ struct PingResult {
 }
 
 #[derive(Serialize)]
-struct TestEmitNotificationsResult {
+struct TestingEmitNotificationsResult {
     count: u64,
 }
 
@@ -107,16 +107,16 @@ pub async fn session_load(
         .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }
 
-/// `_test_emit_notifications` — test-only action used by the integration
+/// `_testing_emit_notifications` — test-only action used by the integration
 /// suite to verify `ctx.notify` socket-scoped routing without a real AI
-/// provider. Emits `count` `_test_notification` frames through
+/// provider. Emits `count` `_testing_notification` frames through
 /// `ctx.notify`, then returns `{count}`. Gated at registry-compile time
 /// by `App.enable_test_actions` (`ZZZ_ENABLE_TEST_ACTIONS=1`).
 #[allow(
     clippy::unused_async,
     reason = "ActionHandler signature requires async"
 )]
-pub async fn test_emit_notifications(
+pub async fn testing_emit_notifications(
     params: Value,
     ctx: ActionContext<'_>,
     _app: Arc<App>,
@@ -129,8 +129,8 @@ pub async fn test_emit_notifications(
         return Err(rpc::invalid_params("count must be <= 100"));
     }
     for i in 0..count {
-        (ctx.notify)("_test_notification", &serde_json::json!({"index": i}));
+        (ctx.notify)("_testing_notification", &serde_json::json!({"index": i}));
     }
-    serde_json::to_value(TestEmitNotificationsResult { count })
+    serde_json::to_value(TestingEmitNotificationsResult { count })
         .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
 }

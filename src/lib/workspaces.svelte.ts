@@ -20,7 +20,7 @@ export const WorkspacesJson = CellJson.extend({
 export type WorkspacesJson = z.infer<typeof WorkspacesJson>;
 export type WorkspacesJsonInput = z.input<typeof WorkspacesJson>;
 
-export interface WorkspacesOptions extends CellOptions<typeof WorkspacesJson> {}  
+export interface WorkspacesOptions extends CellOptions<typeof WorkspacesJson> {}
 
 /**
  * Collection of open workspaces.
