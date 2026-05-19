@@ -234,6 +234,33 @@ pub async fn run_app(
         allowed_origins: Arc::clone(&spine_allowed_origins),
     };
 
+    // Signup route: mounted on the production server so the
+    // cross-process integration harness (testing_zzz_server reuses
+    // run_app) can mint per-test accounts through production RPC.
+    // Open_signup defaults to false in app_settings, so the route is
+    // invite-gated at runtime unless an admin flips the flag. The
+    // signup handler loads app_settings per request; switch to a
+    // cached Arc<RwLock<AppSettings>> shared with the future admin
+    // update handler when that lands on Rust.
+    //
+    // TS parity follow-up: zzz's Deno backend does not mount /signup
+    // today (see zzz/src/lib/server/CLAUDE.md). Mount it there too
+    // when the TS side catches up to the Rust-side decision so the
+    // two backends stay observationally identical at the wire.
+    let signup_route_state = fuz_auth::SignupRouteState {
+        deps: Arc::new(fuz_auth::SignupDeps {
+            pool: pool.clone(),
+            password_hasher: Arc::clone(&spine_password_hasher),
+            audit: Arc::clone(&spine_audit_emitter),
+            signup_ip_rate_limiter: None,
+            signup_account_rate_limiter: None,
+            signup_fail_floor_ms: fuz_auth::DEFAULT_SIGNUP_FAIL_FLOOR_MS,
+            signup_fail_jitter_ms: fuz_auth::DEFAULT_SIGNUP_FAIL_JITTER_MS,
+        }),
+        keyring: Arc::clone(&spine_keyring),
+        allowed_origins: Arc::clone(&spine_allowed_origins),
+    };
+
     let spine_state = handlers::SpineState {
         realtime: Arc::clone(&realtime),
     };
@@ -454,6 +481,17 @@ pub async fn run_app(
         fuz_http::client_ip_middleware,
     ));
 
+    // Spine signup router: mounts `/signup` at the router root, so
+    // nesting under `/api/account` produces `/api/account/signup`.
+    // Same client_ip_middleware layer so audit_log.ip on success +
+    // failure rows reflects the resolved client IP rather than the
+    // proxy peer.
+    let spine_signup_router = fuz_auth::signup_routes::signup_router(signup_route_state)
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&spine_trusted_proxies),
+            fuz_http::client_ip_middleware,
+        ));
+
     let mut app = Router::new()
         .route("/health", get(health_handler))
         // Spine REST routers — account REST + bootstrap. The order of
@@ -462,6 +500,7 @@ pub async fn run_app(
         // the four other paths. axum merges nests at the same prefix.
         .nest("/api/account", spine_account_router)
         .nest("/api/account", spine_bootstrap_router)
+        .nest("/api/account", spine_signup_router)
         // Spine RPC + WS — single canonical mount. `create_rpc_router`
         // exposes `/rpc` and `register_action_ws` exposes `/ws`, so
         // nesting at `/api` produces `/api/rpc` and `/api/ws`. Both

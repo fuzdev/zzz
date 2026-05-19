@@ -114,6 +114,7 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 | GET    | `/api/rpc`                        | JSON-RPC 2.0 (cacheable reads, query params) |
 | POST   | `/api/rpc`                        | JSON-RPC 2.0 (HTTP transport, auth-gated) |
 | POST   | `/api/account/bootstrap`          | One-shot admin account creation          |
+| POST   | `/api/account/signup`             | Public account creation (invite-gated by default; `open_signup=true` opens) |
 | GET    | `/api/account/status`             | Current account info or 401 + bootstrap status |
 | POST   | `/api/account/login`              | Username/password login → session cookie |
 | POST   | `/api/account/logout`             | Invalidate session, close WS connections |
@@ -630,7 +631,7 @@ identical JSON-RPC envelopes for all auth failures.
 - AI providers: Anthropic fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable)
 - No batch request support (JSON arrays)
 - No Ollama actions (`ollama_list`, `ollama_ps`, etc.)
-- No signup route (requires invite system)
+- `/api/account/signup` is mounted (added 2026-05-19 from cross-backend-integration quest Phase 3b.2 so the cross-process test harness can mint per-test accounts through production RPC). Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting to enable open signup. **Divergence**: TS zzz does NOT mount `/signup`; the Deno backend should follow the Rust-side decision as a follow-up so both backends stay observationally identical. `app_settings` is loaded per-request today; a cached `Arc<RwLock<AppSettings>>` shared with the future admin `app_settings_update` handler lands when that admin RPC moves to Rust.
 - No token management routes (GET /tokens, POST /tokens/create, etc.)
 - No SSE broadcast of audit events to admins — the in-process listener chain (`audit/`) only drives WebSocket socket revocation today; an SSE adapter mirroring fuz_app's `audit_log_sse` is future work
 - Login/password rate limiting is **opt-in via `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1`** (default off so existing integration tests don't trip the bucket). When enabled, per-IP (5 attempts / 15 min) + per-account (10 / 30 min) sliding windows fire on `/login` and `/password`; 429 carries `{error: 'rate_limit_exceeded', retry_after}` plus a `Retry-After` header. Per-IP key is the resolved client IP from `proxy::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when running behind a reverse proxy so the bucket keys on the originating client rather than the proxy
