@@ -798,6 +798,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuz_audit"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "fuz_auth"
 version = "0.1.0"
 dependencies = [
@@ -912,6 +920,18 @@ dependencies = [
  "tokio-util",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "fuz_testing"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "futures",
+ "fuz_auth",
+ "getrandom 0.3.4",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2424,6 +2444,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "testing_zzz_server"
+version = "0.1.0"
+dependencies = [
+ "fuz_auth",
+ "fuz_testing",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "zzz_server",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3392,6 +3424,13 @@ name = "writeable"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
+
+[[package]]
+name = "xtask"
+version = "0.1.0"
+dependencies = [
+ "fuz_audit",
+]
 
 [[package]]
 name = "yoke"

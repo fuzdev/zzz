@@ -4,6 +4,12 @@ Shadow implementation of the Deno/Hono server using axum. Same JSON-RPC 2.0
 protocol, same wire format — the Deno server is ground truth and the
 integration tests enforce identical behaviour between both backends.
 
+**Workspace layout** (2026-05-18):
+- `zzz_server/` — library + production binary. `pub fn run_app(password_hasher: Arc<dyn fuz_auth::PasswordHasher>, default_port: u16)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, drain). `src/main.rs` is the thin production entry — constructs `Argon2idHasher` and calls `run_app`.
+- `testing_zzz_server/` — separate test-binary package wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) for cross-process integration tests. Default port 1175 (production is 1174). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. See `~/dev/grimoire/lore/fuz_app/TODO_TEST_BINARY_PATTERN.md`.
+- `xtask/` — dev automation. `cargo xtask check-release` thin-wraps `fuz_audit::run_check_release_cli()`; marked `[package.metadata.fuz_audit] dev_only = true` so xtask itself is excluded from the production scan.
+- `zzz/` — Rust CLI scaffold (argh, stubs only).
+
 Phase 4 (AI provider system) feature-complete for Anthropic; OpenAI /
 Gemini / Ollama stubs ship status only. Phase 7 spine consumption
 underway — Steps 1+2 (spine path deps, `JsonrpcError` rename) +
@@ -58,13 +64,19 @@ createdb zzz_test  # integration tests
 ## Build and Run
 
 ```bash
-cargo build -p zzz_server
+cargo build --workspace
 cargo clippy -p zzz_server        # workspace lints: pedantic + nursery
+cargo xtask check-release         # audit: no production binary depends on fuz_testing / fuz_audit
 
 # Run (requires DATABASE_URL and SECRET_COOKIE_KEYS)
 DATABASE_URL=postgres://localhost/zzz \
 SECRET_COOKIE_KEYS=dev-only-not-for-production-use-000 \
 ./target/debug/zzz_server --port 1174
+
+# Test binary (cross-process integration tests — fast argon2)
+DATABASE_URL=postgres://localhost/zzz_test \
+SECRET_COOKIE_KEYS=dev-only-not-for-production-use-000 \
+./target/debug/testing_zzz_server
 
 # Quick smoke test
 curl http://localhost:1174/health

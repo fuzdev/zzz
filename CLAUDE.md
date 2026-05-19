@@ -65,9 +65,13 @@ The global daemon runs on port 4460 with state at `~/.zzz/`. Built via
 ```
 crates/                               # Rust workspace
 │   ├── CLAUDE.md                     # Rust backend docs
+│   ├── zzz/                          # CLI scaffold (argh, stubs)
+│   ├── xtask/                        # Dev automation: `cargo xtask check-release` dep-graph audit (sanity check #2 of the test-binary pattern)
+│   ├── testing_zzz_server/           # Test-mode binary — wires `fuz_testing::TestingArgon2idHasher` for fast cross-process integration tests. **Never ships in a release.** See `~/dev/grimoire/lore/fuz_app/TODO_TEST_BINARY_PATTERN.md`
 │   └── zzz_server/                   # Axum JSON-RPC server (Phase 4 feature-complete; Phase 7 spine consumption Batch 5 partial)
 │       └── src/
-│           ├── main.rs               # Entry point, config, DB/keyring init, spine state + ActionRegistry composition, shutdown
+│           ├── lib.rs                # Library entry — `pub fn run_app(password_hasher: Arc<dyn PasswordHasher>, default_port: u16)`; the password-hasher seam is what `testing_zzz_server` uses to swap in fast argon2
+│           ├── main.rs               # Thin production entry — constructs `Argon2idHasher`, calls `run_app`
 │           ├── handlers/             # Legacy per-domain RPC handlers — `&Ctx` signature, live dispatch path
 │           │   └── mod.rs            # App state (+ 9 spine fields via SpineState), Ctx, dispatch
 │           ├── handlers_v2/          # Phase 7 Batch 5 — spine-signature handlers ((Value, ActionContext, Arc<App>)); not yet on live route

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/zzz", "crates/zzz_server"]
+members = ["crates/zzz", "crates/zzz_server", "crates/testing_zzz_server", "crates/xtask"]
 
 [workspace.package]
 version = "0.1.0"
@@ -17,6 +17,8 @@ fuz_auth = { path = "../private_fuz/crates/fuz_auth" }
 fuz_http = { path = "../private_fuz/crates/fuz_http" }
 fuz_realtime = { path = "../private_fuz/crates/fuz_realtime" }
 fuz_actions = { path = "../private_fuz/crates/fuz_actions" }
+fuz_testing = { path = "../private_fuz/crates/fuz_testing" }
+fuz_audit = { path = "../private_fuz/crates/fuz_audit" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 axum = { version = "0.8", features = ["ws"] }
 axum-extra = { version = "0.12", features = ["cookie"] }
