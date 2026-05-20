@@ -76,24 +76,41 @@ async fn main() {
                 // watchers attached at boot for `zzz_dir` + `scoped_dirs`
                 // stay running (Permanent lifetime). `parking_lot::RwLock`
                 // is sync — no await.
+                //
+                // Cross-impl note: the TS reset closure
+                // (`testing_server_core.ts:workspace_close`) fires a
+                // `workspace_changed` notification per path as a
+                // side-effect of borrowing the production close path. This
+                // wholesale `.clear()` does not — cross-process tests
+                // don't share WS clients across resets, so the divergence
+                // isn't observable. Revisit (add a per-path `close_workspace`
+                // hook with notification fanout) when a UI consumer closes
+                // individual workspaces from the client, OR a subsystem
+                // (search index, semantic analysis) needs per-path
+                // cleanup cycles.
                 app.workspaces.write().clear();
 
-                // Kill every active terminal. `destroy()` drains the
+                // Kill every active terminal. `kill_all()` drains the
                 // terminal map and waitpids each entry; the manager
                 // itself stays usable for the next test's
                 // `terminal_create` calls.
-                app.pty_manager.destroy().await;
+                app.pty_manager.kill_all().await;
 
                 // Optional scoped-FS scratch root: tests that allocate
                 // per-case scratch dirs under `ZZZ_TESTING_SCRATCH_DIR`
-                // get a clean slate. Unset → no-op.
+                // get a clean slate. Unset → no-op. I/O failures here
+                // surface as a JSON-RPC error so the per-test fixture
+                // sees the reset short-circuit instead of silently
+                // running against a half-wiped scratch tree.
                 if let Ok(scratch_dir) = std::env::var("ZZZ_TESTING_SCRATCH_DIR")
                     && tokio::fs::metadata(&scratch_dir).await.is_ok()
                 {
-                    if let Err(e) = tokio::fs::remove_dir_all(&scratch_dir).await {
-                        tracing::warn!(path = %scratch_dir, error = %e, "[_testing_reset] failed to remove scratch dir");
-                    }
+                    tokio::fs::remove_dir_all(&scratch_dir).await.map_err(|e| {
+                        fuz_http::internal_error_with_source("remove scratch dir", &e)
+                    })?;
                 }
+
+                Ok(())
             })
         });
         vec![create_testing_reset_action_spec(Some(reset_state))]

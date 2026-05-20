@@ -51,9 +51,8 @@ pub const DEFAULT_PORT: u16 = 1174;
 /// `Arc<App>` for the consumer-side reset closure). `zzz_server` itself
 /// stays clean of any `fuz_testing` dep this way — the factory closes
 /// over `fuz_testing` types in the test binary's process only.
-pub type ExtraActionSpecsFactory = Box<
-    dyn FnOnce(Arc<handlers::App>) -> Vec<fuz_actions::ActionSpec> + Send,
->;
+pub type ExtraActionSpecsFactory =
+    Box<dyn FnOnce(Arc<handlers::App>) -> Vec<fuz_actions::ActionSpec> + Send>;
 
 /// Options for [`run_app`].
 ///
@@ -596,7 +595,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     }
 
     // Clean up spawned terminal processes before exiting
-    app_state_for_shutdown.pty_manager.destroy().await;
+    app_state_for_shutdown.pty_manager.kill_all().await;
 
     tracing::info!("server shutdown complete");
     Ok(())

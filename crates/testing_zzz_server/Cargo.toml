@@ -25,6 +25,7 @@ zzz_server = { path = "../zzz_server" }
 # `cargo xtask check-release` sanity check holds.
 fuz_actions.workspace = true
 fuz_auth.workspace = true
+fuz_http.workspace = true
 fuz_testing.workspace = true
 
 # Async runtime + tracing — same shape as `zzz_server`'s production

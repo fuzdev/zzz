@@ -205,9 +205,19 @@ export const start_testing_server = async (adapter: TestingServerAdapter): Promi
 			extra_rpc_actions_factory: (deps, zzz_backend) =>
 				create_testing_reset_actions(deps, {
 					reset_state: async () => {
-						// Close every open workspace via the production RPC path so
-						// persistence + post-commit fan-out (workspace_changed
-						// broadcast, scoped FS teardown) all run.
+						// Close every open workspace via the production RPC path.
+						// The `workspace_changed` notification fanout + post-commit
+						// hooks fire as an incidental side-effect of borrowing the
+						// `workspace_close` path — not load-bearing for reset itself.
+						// Cross-process tests don't share WS clients across resets,
+						// so the notification is unobservable. The Rust peer
+						// (`testing_zzz_server/src/main.rs` reset closure)
+						// wholesale-clears its workspace registry without per-path
+						// notifications because the Rust App's permanent file
+						// watchers + lack of a per-path close hook make wholesale
+						// the right shape there; that asymmetry is documented in
+						// the Rust closure's comment and is acceptable for the
+						// same reason.
 						const workspace_paths = [...zzz_backend.workspaces.keys()];
 						for (const path of workspace_paths) {
 							await zzz_backend.workspace_close(path);

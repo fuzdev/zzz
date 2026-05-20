@@ -128,15 +128,22 @@ impl PtyManager {
         Some(exit_code)
     }
 
-    /// Kill all terminals. Called on shutdown.
-    pub async fn destroy(&self) {
+    /// Kill every active terminal process without destroying the manager.
+    ///
+    /// The terminal map is drained and each entry waitpid'd; the manager
+    /// itself stays usable for new `terminal_create` calls. Used by the
+    /// test binary's `_testing_reset` `reset_state` callback to clear
+    /// cross-test terminal pollution without tearing the binary down, and
+    /// at shutdown to free PTY fds. TS peer:
+    /// `src/lib/server/backend_pty_manager.ts:kill_all`.
+    pub async fn kill_all(&self) {
         let entries: Vec<(String, TerminalEntry)> = {
             let mut terminals = self.terminals.write().await;
             terminals.drain().collect()
         };
 
         for (tid, entry) in entries {
-            tracing::info!(terminal_id = %tid, "destroying terminal");
+            tracing::info!(terminal_id = %tid, "killing terminal");
             entry.cancel.cancel();
             let _ = entry.pty.kill(libc::SIGTERM);
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;

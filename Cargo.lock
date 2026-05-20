@@ -2452,6 +2452,7 @@ version = "0.1.0"
 dependencies = [
  "fuz_actions",
  "fuz_auth",
+ "fuz_http",
  "fuz_testing",
  "tokio",
  "tracing",
