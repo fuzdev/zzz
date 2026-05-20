@@ -40,19 +40,11 @@ import {describe, test, inject, assert, afterAll} from 'vitest';
 import {Client} from 'pg';
 
 import {
-	type BootstrappedBackendHandle,
+	type ReconstructedBootstrappedBackendHandle,
 	reconstruct_bootstrapped_handle,
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
 
 import './cross_test_types.js';
-
-/**
- * Handle shape consumed by the proxy helpers — drops the live `child` /
- * `teardown` references that vitest strips during cross-process
- * `provide`/`inject`. The handle reaches helpers via the rebuilt shape
- * from {@link reconstruct_bootstrapped_handle}.
- */
-type ProxyHandle = Omit<BootstrappedBackendHandle, 'child' | 'teardown'>;
 
 /**
  * Connection string for the cross-backend test database. Matches
@@ -96,7 +88,7 @@ afterAll(async () => {
  * unexpected-status paths to keep the connection from leaking.
  */
 const fire_failed_login = async (
-	handle: ProxyHandle,
+	handle: ReconstructedBootstrappedBackendHandle,
 	username: string,
 	xff: string | null,
 ): Promise<Response> => {
@@ -173,7 +165,7 @@ const unique_username = (label: string): string =>
  * the shared three-step pattern so the per-test body is one call.
  */
 const assert_resolved_ip = async (
-	handle: ProxyHandle,
+	handle: ReconstructedBootstrappedBackendHandle,
 	label: string,
 	xff: string | null,
 	expected_ip: string,
