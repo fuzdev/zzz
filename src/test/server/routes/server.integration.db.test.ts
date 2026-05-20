@@ -51,6 +51,11 @@ describe_standard_integration_tests(
 		session_options: fuz_session_config,
 		create_route_specs: create_zzz_test_route_specs,
 		rpc_endpoints: zzz_rpc_endpoints,
+		// The 2 signup-invite-edge-case tests in this suite call
+		// `invite_create` (admin-gated) over the fixture's session. The
+		// fixture IS the keeper in-process, so granting admin to the
+		// bootstrapped keeper lets those tests drive `invite_create`.
+		extra_keeper_roles: [ROLE_ADMIN],
 		bootstrap: zzz_test_bootstrap,
 	}),
 );

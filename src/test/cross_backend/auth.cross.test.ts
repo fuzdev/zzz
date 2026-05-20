@@ -55,7 +55,7 @@ import {describe_round_trip_validation} from '@fuzdev/fuz_app/testing/round_trip
 import {describe_rpc_round_trip_tests} from '@fuzdev/fuz_app/testing/rpc_round_trip.js';
 import {describe_data_exposure_tests} from '@fuzdev/fuz_app/testing/data_exposure.js';
 import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.js';
-import {create_role_schema} from '@fuzdev/fuz_app/auth/role_schema.js';
+import {create_role_schema, ROLE_ADMIN} from '@fuzdev/fuz_app/auth/role_schema.js';
 import {stub} from '@fuzdev/fuz_app/testing/stubs.js';
 import type {AppServerContext} from '@fuzdev/fuz_app/server/app_server.js';
 import type {RpcEndpointSpec} from '@fuzdev/fuz_app/http/surface.js';
@@ -65,7 +65,14 @@ import {build_rpc_endpoint_specs} from '$lib/server/zzz_route_specs.js';
 import {create_zzz_app_surface_spec} from '../server/routes/auth_attack_surface_helpers.js';
 
 const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
-const setup_test = default_cross_process_setup(handle);
+// Grant `ROLE_ADMIN` to every per-test signup account via the production
+// offer/accept consent flow so the admin-observer tests in
+// `describe_standard_integration_tests` (signup invite edge cases) and
+// `describe_standard_admin_integration_tests` (invite/role-grant flows)
+// can drive admin-gated RPC methods through `fixture.create_session_headers()`.
+// Cost: ~2 RPCs × ~30-50ms per test. Cross-process analog of the in-process
+// `extra_keeper_roles: [ROLE_ADMIN]` wiring on `default_in_process_suite_options`.
+const setup_test = default_cross_process_setup(handle, {extra_keeper_roles: [ROLE_ADMIN]});
 const surface_source = create_zzz_app_surface_spec();
 const {capabilities} = handle.config;
 // Pass the factory form so the suites' setup-time resolution
