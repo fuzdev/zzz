@@ -86,6 +86,7 @@
 			"typescript-eslint": "^8.48.1",
 			"vite": "^7.3.1",
 			"vitest": "^4.0.15",
+			"ws": "^8.20.1",
 			"zimmerframe": "^1.1.4"
 		},
 		"dependencies": {
@@ -15520,7 +15521,6 @@
 					"server/backend_provider_gemini.ts",
 					"server/backend_provider_ollama.ts",
 					"server/db/zzz_schema.ts",
-					"server/routes/account.ts",
 					"server/security.ts",
 					"server/server_env.ts",
 					"server/zzz_route_specs.ts",
@@ -15871,19 +15871,6 @@
 				"module_comment": "WebSocket endpoint wiring — thin wrapper over fuz_app's\n`register_ws_endpoint`.\n\nzzz supplies the action tuples (spec + handler) and the per-request DB\nhandle; fuz_app owns the upgrade middleware stack (origin check, auth,\nauthorization phase that builds `RequestContext`), dispatch, validation,\nand transport bookkeeping. Domain deps flow through\n`create_zzz_action_handlers(backend)` — the factory closes over the\n`Backend`, so handlers receive the unified `ActionContext` directly.\n\nThe shared `protocol_actions` bundle (heartbeat + cancel pre-paired with\ntheir handlers) is spread first so disconnect detection and per-request\ncancellation are identical across every fuz_app consumer.",
 				"dependencies": ["action_specs.ts", "server/zzz_action_handlers.ts"],
 				"dependents": ["server/server.ts", "server/testing_server_core.ts"]
-			},
-			{
-				"path": "server/routes/account.ts",
-				"declarations": [
-					{
-						"name": "zzz_session_config",
-						"kind": "variable",
-						"source_line": 9,
-						"type_signature": "SessionOptions<string>"
-					}
-				],
-				"module_comment": "zzz session configuration.",
-				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
 				"path": "server/scoped_fs.ts",

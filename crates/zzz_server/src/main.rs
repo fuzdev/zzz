@@ -24,7 +24,14 @@ async fn main() {
 
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(fuz_auth::Argon2idHasher::new());
 
-    if let Err(e) = zzz_server::run_app(password_hasher, zzz_server::DEFAULT_PORT).await {
+    if let Err(e) = zzz_server::run_app(zzz_server::RunAppOptions {
+        password_hasher,
+        default_port: zzz_server::DEFAULT_PORT,
+        force_test_actions: false,
+        extra_action_specs_factory: None,
+    })
+    .await
+    {
         tracing::error!(error = %e, "fatal");
         std::process::exit(1);
     }

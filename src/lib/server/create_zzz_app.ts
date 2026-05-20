@@ -29,6 +29,7 @@ import type {MiddlewareSpec} from '@fuzdev/fuz_app/http/middleware_spec.js';
 import type {Action} from '@fuzdev/fuz_app/actions/action_types.js';
 import type {RpcAction} from '@fuzdev/fuz_app/actions/action_rpc.js';
 import type {AppDeps} from '@fuzdev/fuz_app/auth/deps.js';
+import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.js';
 
 import {build_allowed_hostnames, create_host_validation_middleware} from './security.js';
 import {Backend} from './backend.js';
@@ -49,7 +50,6 @@ import {BackendProviderClaude} from './backend_provider_claude.js';
 import {BackendProviderChatgpt} from './backend_provider_chatgpt.js';
 import {BackendProviderGemini} from './backend_provider_gemini.js';
 import create_config from '../config.js';
-import {zzz_session_config} from './routes/account.js';
 import {create_zzz_app_route_specs, build_rpc_endpoint_specs} from './zzz_route_specs.js';
 import {init_zzz_schema} from './db/zzz_schema.js';
 
@@ -224,7 +224,7 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 	const app_server: AppServer = await create_app_server({
 		backend: app_backend,
 		audit_log_sse: true,
-		session_options: zzz_session_config,
+		session_options: fuz_session_config,
 		allowed_origins,
 		proxy: {
 			trusted_proxies: ['127.0.0.1', '::1'],

@@ -11,8 +11,8 @@ import {create_test_app_surface_spec, stub, stub_mw} from '@fuzdev/fuz_app/testi
 import {resolve_fixture_path} from '@fuzdev/fuz_app/testing/assertions.js';
 import type {AppSurfaceSpec} from '@fuzdev/fuz_app/http/surface.js';
 import type {MiddlewareSpec} from '@fuzdev/fuz_app/http/middleware_spec.js';
+import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.js';
 
-import {zzz_session_config} from '$lib/server/routes/account.js';
 import {create_zzz_app_route_specs, build_rpc_endpoint_specs} from '$lib/server/zzz_route_specs.js';
 import {ZzzServerEnv} from '$lib/server/server_env.js';
 
@@ -29,7 +29,7 @@ const zzz_stub_deps = {
  */
 export const create_zzz_app_surface_spec = (): AppSurfaceSpec =>
 	create_test_app_surface_spec({
-		session_options: zzz_session_config,
+		session_options: fuz_session_config,
 		create_route_specs: (ctx) =>
 			create_zzz_app_route_specs(ctx, {
 				zzz: zzz_stub_deps,

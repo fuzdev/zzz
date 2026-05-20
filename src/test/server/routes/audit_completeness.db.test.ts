@@ -18,8 +18,8 @@ import {ROLE_ADMIN} from '@fuzdev/fuz_app/auth/role_schema.js';
 import type {AppServerContext} from '@fuzdev/fuz_app/server/app_server.js';
 import type {RouteSpec} from '@fuzdev/fuz_app/http/route_spec.js';
 import {stub} from '@fuzdev/fuz_app/testing/stubs.js';
+import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.js';
 
-import {zzz_session_config} from '$lib/server/routes/account.js';
 import {create_zzz_app_route_specs, build_rpc_endpoint_specs} from '$lib/server/zzz_route_specs.js';
 
 /** Stub deps — domain handlers are never called by audit completeness tests. */
@@ -38,7 +38,7 @@ const rpc_endpoints = (ctx: AppServerContext) => build_rpc_endpoint_specs(ctx, z
 
 describe_audit_completeness_tests(
 	default_in_process_suite_options({
-		session_options: zzz_session_config,
+		session_options: fuz_session_config,
 		create_route_specs,
 		rpc_endpoints,
 		extra_keeper_roles: [ROLE_ADMIN],

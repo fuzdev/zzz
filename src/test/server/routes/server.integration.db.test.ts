@@ -9,8 +9,8 @@ import {create_role_schema, ROLE_ADMIN} from '@fuzdev/fuz_app/auth/role_schema.j
 import type {RouteSpec} from '@fuzdev/fuz_app/http/route_spec.js';
 import type {AppServerContext} from '@fuzdev/fuz_app/server/app_server.js';
 import {stub} from '@fuzdev/fuz_app/testing/stubs.js';
+import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.js';
 
-import {zzz_session_config} from '$lib/server/routes/account.js';
 import {create_zzz_app_route_specs, build_rpc_endpoint_specs} from '$lib/server/zzz_route_specs.js';
 
 import {db_factories} from '../../db_fixture.js';
@@ -48,7 +48,7 @@ const zzz_test_bootstrap = {mode: 'live', token_path: '/test/bootstrap.token'} a
 
 describe_standard_integration_tests(
 	default_in_process_suite_options({
-		session_options: zzz_session_config,
+		session_options: fuz_session_config,
 		create_route_specs: create_zzz_test_route_specs,
 		rpc_endpoints: zzz_rpc_endpoints,
 		bootstrap: zzz_test_bootstrap,
@@ -57,7 +57,7 @@ describe_standard_integration_tests(
 
 describe_standard_admin_integration_tests({
 	...default_in_process_suite_options({
-		session_options: zzz_session_config,
+		session_options: fuz_session_config,
 		create_route_specs: create_zzz_test_route_specs,
 		rpc_endpoints: zzz_rpc_endpoints,
 		extra_keeper_roles: [ROLE_ADMIN],
@@ -68,7 +68,7 @@ describe_standard_admin_integration_tests({
 
 describe_rate_limiting_tests({
 	...default_in_process_suite_options({
-		session_options: zzz_session_config,
+		session_options: fuz_session_config,
 		create_route_specs: create_zzz_test_route_specs,
 		rpc_endpoints: zzz_rpc_endpoints,
 		bootstrap: zzz_test_bootstrap,
@@ -78,7 +78,7 @@ describe_rate_limiting_tests({
 
 describe_round_trip_validation({
 	...default_in_process_suite_options({
-		session_options: zzz_session_config,
+		session_options: fuz_session_config,
 		create_route_specs: create_zzz_test_route_specs,
 		bootstrap: zzz_test_bootstrap,
 	}),
@@ -90,7 +90,7 @@ describe_round_trip_validation({
 
 describe_rpc_round_trip_tests({
 	...default_in_process_suite_options({
-		session_options: zzz_session_config,
+		session_options: fuz_session_config,
 		create_route_specs: create_zzz_test_route_specs,
 		rpc_endpoints: zzz_rpc_endpoints,
 		bootstrap: zzz_test_bootstrap,
@@ -107,7 +107,7 @@ describe_rpc_round_trip_tests({
 
 describe_data_exposure_tests(
 	default_in_process_suite_options({
-		session_options: zzz_session_config,
+		session_options: fuz_session_config,
 		create_route_specs: create_zzz_test_route_specs,
 		surface_source: {kind: 'inline', spec: create_zzz_app_surface_spec()},
 		bootstrap: zzz_test_bootstrap,

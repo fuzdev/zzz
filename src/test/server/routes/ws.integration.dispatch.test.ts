@@ -18,13 +18,13 @@
  */
 
 import {test, assert, describe} from 'vitest';
+import {create_ws_test_harness} from '@fuzdev/fuz_app/testing/ws_round_trip.js';
 import {
-	create_ws_test_harness,
 	is_notification,
 	is_response_for,
 	type JsonrpcErrorResponseFrame,
 	type JsonrpcNotificationFrame,
-} from '@fuzdev/fuz_app/testing/ws_round_trip.js';
+} from '@fuzdev/fuz_app/testing/transports/ws_client.js';
 
 import {provider_update_api_key_action_spec} from '$lib/action_specs.js';
 import {

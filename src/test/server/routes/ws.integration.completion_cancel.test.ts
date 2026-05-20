@@ -25,11 +25,11 @@
  */
 
 import {test, assert, describe} from 'vitest';
+import {create_ws_test_harness} from '@fuzdev/fuz_app/testing/ws_round_trip.js';
 import {
-	create_ws_test_harness,
 	is_response_for,
 	type JsonrpcErrorResponseFrame,
-} from '@fuzdev/fuz_app/testing/ws_round_trip.js';
+} from '@fuzdev/fuz_app/testing/transports/ws_client.js';
 import {cancel_action, cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.js';
 import {JSONRPC_ERROR_CODES as BASE_JSONRPC_ERROR_CODES} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
 

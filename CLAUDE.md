@@ -70,8 +70,8 @@ crates/                               # Rust workspace
 │   ├── testing_zzz_server/           # Test-mode binary — wires `fuz_testing::TestingArgon2idHasher` for fast cross-process integration tests. **Never ships in a release.**
 │   └── zzz_server/                   # Axum JSON-RPC server — spine consumption underway in `handlers_v2/` (not yet on live route)
 │       └── src/
-│           ├── lib.rs                # Library entry — `pub fn run_app(password_hasher: Arc<dyn PasswordHasher>, default_port: u16)`; the password-hasher seam is what `testing_zzz_server` uses to swap in fast argon2
-│           ├── main.rs               # Thin production entry — constructs `Argon2idHasher`, calls `run_app`
+│           ├── lib.rs                # Library entry — `pub fn run_app(options: RunAppOptions)` where `RunAppOptions` carries the password-hasher swap point, the default port, a `force_test_actions` override, and an `extra_action_specs_factory` seam (`testing_zzz_server` injects `_testing_reset` via that factory without dragging `fuz_testing` into the production binary's dep graph)
+│           ├── main.rs               # Thin production entry — constructs `Argon2idHasher`, calls `run_app` with `force_test_actions: false, extra_action_specs_factory: None`
 │           ├── handlers/             # Legacy per-domain RPC handlers — `&Ctx` signature, live dispatch path
 │           │   └── mod.rs            # App state (+ 9 spine fields via SpineState), Ctx, dispatch
 │           ├── handlers_v2/          # Spine-signature handlers ((Value, ActionContext, Arc<App>)); not yet on live route

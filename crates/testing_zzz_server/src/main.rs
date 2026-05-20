@@ -3,8 +3,11 @@
 //! **NEVER ship this in a release.** The binary wires
 //! [`fuz_testing::TestingArgon2idHasher`] in place of
 //! [`fuz_auth::Argon2idHasher`] so cross-process integration tests get
-//! ~1-5 ms argon2 feedback instead of production's ~30-50 ms. Three
-//! layered guardrails keep this from leaking into production:
+//! ~1-5 ms argon2 feedback instead of production's ~30-50 ms, and
+//! registers the `_testing_reset` RPC action from
+//! [`fuz_testing::create_testing_reset_action_spec`] so per-test fixtures
+//! can opt into a fresh auth-table + domain-state reset between cases.
+//! Three layered guardrails keep this from leaking into production:
 //!
 //! 1. The `testing_` prefix is enforced by `fuz_release`'s manifest
 //!    filter (`is_test_binary_name` rejects any binary name starting
@@ -34,7 +37,7 @@
 use std::sync::Arc;
 
 use fuz_auth::PasswordHasher;
-use fuz_testing::TestingArgon2idHasher;
+use fuz_testing::{ResetStateFn, TestingArgon2idHasher, create_testing_reset_action_spec};
 use tracing_subscriber::EnvFilter;
 
 /// Default loopback port for the testing binary. Distinct from the
@@ -59,7 +62,51 @@ async fn main() {
     // active` line is emitted by `TestingArgon2idHasher::new` itself.
     eprintln!("testing_zzz_server starting (test-mode argon2 active)");
 
-    if let Err(e) = zzz_server::run_app(password_hasher, TESTING_DEFAULT_PORT).await {
+    // The `_testing_reset` factory closes over `Arc<App>` so the
+    // domain-state reset closure can clear zzz workspaces + terminals +
+    // the optional scratch dir.
+    let extra_specs_factory: zzz_server::ExtraActionSpecsFactory = Box::new(|app| {
+        let app_for_reset = Arc::clone(&app);
+        let reset_state: ResetStateFn = Arc::new(move || {
+            let app = Arc::clone(&app_for_reset);
+            Box::pin(async move {
+                // Clear every open workspace. The Rust App stores workspaces
+                // as a plain HashMap (no per-path close hook like the TS
+                // Backend), so a wholesale clear is the right shape — file
+                // watchers attached at boot for `zzz_dir` + `scoped_dirs`
+                // stay running (Permanent lifetime). `parking_lot::RwLock`
+                // is sync — no await.
+                app.workspaces.write().clear();
+
+                // Kill every active terminal. `destroy()` drains the
+                // terminal map and waitpids each entry; the manager
+                // itself stays usable for the next test's
+                // `terminal_create` calls.
+                app.pty_manager.destroy().await;
+
+                // Optional scoped-FS scratch root: tests that allocate
+                // per-case scratch dirs under `ZZZ_TESTING_SCRATCH_DIR`
+                // get a clean slate. Unset → no-op.
+                if let Ok(scratch_dir) = std::env::var("ZZZ_TESTING_SCRATCH_DIR")
+                    && tokio::fs::metadata(&scratch_dir).await.is_ok()
+                {
+                    if let Err(e) = tokio::fs::remove_dir_all(&scratch_dir).await {
+                        tracing::warn!(path = %scratch_dir, error = %e, "[_testing_reset] failed to remove scratch dir");
+                    }
+                }
+            })
+        });
+        vec![create_testing_reset_action_spec(Some(reset_state))]
+    });
+
+    if let Err(e) = zzz_server::run_app(zzz_server::RunAppOptions {
+        password_hasher,
+        default_port: TESTING_DEFAULT_PORT,
+        force_test_actions: true,
+        extra_action_specs_factory: Some(extra_specs_factory),
+    })
+    .await
+    {
         tracing::error!(error = %e, "fatal");
         eprintln!("error: {e}");
         std::process::exit(1);

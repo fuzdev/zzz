@@ -2,7 +2,7 @@
  * WebSocket broadcast integration tests.
  *
  * Covers the backend-initiated fan-out path: `create_broadcast_api` ↔
- * `BackendWebsocketTransport` ↔ every connected `MockWsClient`. Dispatch
+ * `BackendWebsocketTransport` ↔ every connected `WsClient`. Dispatch
  * plumbing (ctx.notify, per-action auth, input validation, ctx.signal,
  * concurrent requests) lives in `ws.integration.dispatch.test.ts`.
  *
@@ -13,9 +13,11 @@ import {test, assert, describe} from 'vitest';
 import {
 	build_broadcast_api,
 	create_ws_test_harness,
+} from '@fuzdev/fuz_app/testing/ws_round_trip.js';
+import {
 	is_notification,
 	type JsonrpcNotificationFrame,
-} from '@fuzdev/fuz_app/testing/ws_round_trip.js';
+} from '@fuzdev/fuz_app/testing/transports/ws_client.js';
 
 import {workspace_changed_action_spec} from '$lib/action_specs.js';
 import {_testing_emit_notifications_action_spec} from '$lib/testing_action_specs.js';

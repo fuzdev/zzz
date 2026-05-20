@@ -43,6 +43,47 @@ pub use error::ServerError;
 /// Default loopback port. Overridden by `--port` or `ZZZ_PORT`.
 pub const DEFAULT_PORT: u16 = 1174;
 
+/// Factory that constructs extra action specs to fold into the
+/// registry after the standard zzz specs.
+///
+/// Production passes `None`. The test binary (`testing_zzz_server`)
+/// passes `Some(_)` to inject `_testing_reset` (which captures
+/// `Arc<App>` for the consumer-side reset closure). `zzz_server` itself
+/// stays clean of any `fuz_testing` dep this way — the factory closes
+/// over `fuz_testing` types in the test binary's process only.
+pub type ExtraActionSpecsFactory = Box<
+    dyn FnOnce(Arc<handlers::App>) -> Vec<fuz_actions::ActionSpec> + Send,
+>;
+
+/// Options for [`run_app`].
+///
+/// Named fields rather than positional params so future swap points
+/// can land additively without churning every call site. The
+/// `extra_action_specs_factory` slot already follows that pattern —
+/// adding a second factory or a config override (e.g., a test-only
+/// notify decorator) would be one new named field plus a `Default`
+/// fallback.
+pub struct RunAppOptions {
+    /// Production-vs-test password hasher swap point.
+    /// Production: [`fuz_auth::Argon2idHasher`]. Test binary:
+    /// `fuz_testing::TestingArgon2idHasher`.
+    pub password_hasher: Arc<dyn fuz_auth::PasswordHasher>,
+    /// Default port when neither `--port` nor `ZZZ_PORT` is supplied.
+    /// Production: [`DEFAULT_PORT`] (1174). Test binary: 1175 so the
+    /// two can run side-by-side without colliding.
+    pub default_port: u16,
+    /// Override the `ZZZ_ENABLE_TEST_ACTIONS` env-parsed flag.
+    /// Production: `false`. Test binary: `true` so the `_testing_*`
+    /// registry branch fires regardless of operator env.
+    pub force_test_actions: bool,
+    /// Factory injecting extra action specs after the standard zzz set.
+    /// Production: `None`. Test binary: `Some(_)` so
+    /// `fuz_testing::create_testing_reset_action_spec` can register
+    /// without dragging `fuz_testing` into the production dep graph
+    /// (the `cargo xtask check-release` audit blocks that).
+    pub extra_action_specs_factory: Option<ExtraActionSpecsFactory>,
+}
+
 /// Run the `zzz_server` lifecycle to completion.
 ///
 /// Parses CLI args + env, opens the DB pool, runs migrations, builds
@@ -50,23 +91,26 @@ pub const DEFAULT_PORT: u16 = 1174;
 /// blocks on graceful shutdown (Ctrl-C / SIGTERM). Returns once all
 /// connections have drained and PTYs are torn down.
 ///
-/// `password_hasher` is the production-vs-test swap point. `default_port`
-/// is used when neither `--port` nor `ZZZ_PORT` is supplied — production
-/// passes [`DEFAULT_PORT`] (1174); the testing binary passes a distinct
-/// port (1175) so both binaries can run side-by-side locally without
-/// colliding. Every other configuration knob flows from CLI args or the
-/// process environment.
+/// Every configuration knob lives on [`RunAppOptions`]; everything
+/// not explicitly named there flows from CLI args or the process
+/// environment.
 ///
 /// # Errors
 ///
 /// Returns [`ServerError`] for env/config validation failures, DB
 /// connectivity / migration failures, listener bind failures, and
 /// `axum::serve` errors.
-pub async fn run_app(
-    password_hasher: Arc<dyn fuz_auth::PasswordHasher>,
-    default_port: u16,
-) -> Result<(), ServerError> {
-    let config = parse_config(default_port)?;
+pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
+    let RunAppOptions {
+        password_hasher,
+        default_port,
+        force_test_actions,
+        extra_action_specs_factory,
+    } = options;
+    let mut config = parse_config(default_port)?;
+    if force_test_actions {
+        config.enable_test_actions = true;
+    }
 
     // Database — required. Spine `fuz_db::create_pool` builds the
     // deadpool-postgres pool; `fuz_db::run_migrations` runs the auth DDL
@@ -336,6 +380,9 @@ pub async fn run_app(
         all_specs.extend(zzz_action_specs::build_testing_specs(Arc::clone(
             &app_state,
         )));
+    }
+    if let Some(factory) = extra_action_specs_factory {
+        all_specs.extend(factory(Arc::clone(&app_state)));
     }
     let action_registry = Arc::new(
         fuz_actions::ActionRegistry::compile(all_specs)

@@ -928,8 +928,11 @@ version = "0.1.0"
 dependencies = [
  "argon2",
  "futures",
+ "fuz_actions",
  "fuz_auth",
+ "fuz_http",
  "getrandom 0.3.4",
+ "serde_json",
  "tokio",
  "tracing",
 ]
@@ -2447,6 +2450,7 @@ dependencies = [
 name = "testing_zzz_server"
 version = "0.1.0"
 dependencies = [
+ "fuz_actions",
  "fuz_auth",
  "fuz_testing",
  "tokio",
