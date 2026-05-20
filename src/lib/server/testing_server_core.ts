@@ -178,12 +178,31 @@ export const start_testing_server = async (adapter: TestingServerAdapter): Promi
 
 	const scratch_dir = get_env(runtime, 'ZZZ_TESTING_SCRATCH_DIR');
 
+	// The cross-backend harness reads `${PUBLIC_ZZZ_DIR}/run/daemon_token`
+	// after the binary becomes health-probe-ready (see fuz_app's
+	// `spawn_backend.read_daemon_token`). Mirror that path here so the
+	// rotator writes where the harness looks. `PUBLIC_ZZZ_DIR` was
+	// defaulted to `${HOME}/.zzz` above when unset, so this is never null.
+	const zzz_dir = get_env(runtime, 'PUBLIC_ZZZ_DIR')!;
+	const daemon_token_path = `${zzz_dir}/run/daemon_token`;
+
 	const {app, backend, app_backend, close, allowed_origins, extra_ws_actions} =
 		await create_zzz_app({
 			config,
 			password: stub_password_deps,
 			runtime,
 			get_connection_ip,
+			daemon_token_path,
+			// Cross-process tests fire many signup / login round-trips per
+			// backend lifetime from a single host; the production defaults
+			// (5/15min IP login, 10/30min account) trip before the suite
+			// finishes. Disable the limiters here — the test binary's whole
+			// purpose is test-only.
+			disable_rate_limiters: true,
+			// Open signup so the cross-process harness mints per-test accounts
+			// via `POST /signup` — the default `open_signup: false` requires an
+			// invite, which the cross-process flow doesn't pre-seed.
+			app_settings_patch: {open_signup: true},
 			extra_rpc_actions_factory: (deps, zzz_backend) =>
 				create_testing_reset_actions(deps, {
 					reset_state: async () => {

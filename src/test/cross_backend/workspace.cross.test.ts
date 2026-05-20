@@ -17,19 +17,15 @@ import {randomUUID} from 'node:crypto';
 import {describe, test, inject, assert} from 'vitest';
 import {
 	default_cross_process_setup,
-	type BootstrappedBackendHandle,
+	reconstruct_bootstrapped_handle,
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
 import {rpc_call} from '@fuzdev/fuz_app/testing/rpc_helpers.js';
 import {create_ws_transport} from '@fuzdev/fuz_app/testing/transports/ws_transport.js';
 import {is_notification} from '@fuzdev/fuz_app/testing/transports/ws_client.js';
 
-declare module 'vitest' {
-	export interface ProvidedContext {
-		backend_handle: BootstrappedBackendHandle;
-	}
-}
+import './cross_test_types.js';
 
-const handle = inject('backend_handle');
+const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 const setup_test = default_cross_process_setup(handle);
 
 /** Create a fresh tmp directory for a workspace; caller cleans up. */

@@ -1,18 +1,21 @@
 /**
  * Vitest `globalSetup` for zzz cross-backend integration suites.
  *
- * Reads the `ZZZ_CROSS_BACKEND_NAME` env var to pick which backend
- * config to spawn ({@link deno_backend_config} / {@link node_backend_config} /
- * {@link rust_backend_config}), invokes `bootstrap_backend(config)` to
- * spawn the binary + bootstrap the keeper, and `provide('backend_handle',
- * bootstrapped)` so `*.cross.test.ts` files can `inject('backend_handle')`.
+ * Reads the project's `name` to pick which backend config to spawn
+ * ({@link deno_backend_config} / {@link node_backend_config} /
+ * {@link rust_backend_config} / {@link rust_proxy_backend_config}),
+ * invokes `bootstrap_backend(config)` to spawn the binary + bootstrap
+ * the keeper, and `provide('backend_handle', bootstrapped)` so
+ * `*.cross.test.ts` files can `inject('backend_handle')`.
  *
- * Each vitest project sets its own discriminator value
- * (`ZZZ_CROSS_BACKEND_NAME=deno|node|rust`); the project's globalSetup
- * entry points at this same module so the spawn/handoff is uniform across
- * all three cross-backend projects. Falls back to `'deno'` when unset so
- * the file is runnable standalone (matches the canonical reference
- * implementation).
+ * Each vitest project sets its own discriminator via `test.name`
+ * (`cross_backend_ts_deno`, `cross_backend_ts_node`,
+ * `cross_backend_rust`, `cross_backend_rust_proxy`). vitest 4 passes
+ * the `TestProject` instance to globalSetup as the first argument so
+ * the project name is the source of truth — no `process.env`-based
+ * hand-off is required (an earlier draft used `test.env` for this,
+ * which silently doesn't work: vitest applies `test.env` to spawned
+ * workers, not to the parent process where globalSetup runs).
  *
  * The teardown closure SIGTERMs the spawned child's process group +
  * awaits exit, leaving no stranded ports.
@@ -20,22 +23,13 @@
  * @module
  */
 
+import type {TestProject} from 'vitest/node';
+
 import {bootstrap_backend} from '@fuzdev/fuz_app/testing/cross_backend/bootstrap_backend.js';
-import type {BootstrappedBackendHandle} from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
 import type {BackendConfig} from '@fuzdev/fuz_app/testing/cross_backend/backend_config.js';
+import {serialize_bootstrapped_handle} from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
 
-// Vitest 4 dropped the named `GlobalSetupContext` export; the globalSetup
-// callback receives a `TestProject`-shaped argument whose only field we
-// touch is `provide`. Structural typing here avoids the missing-export
-// noise while preserving the type-safe `provide('backend_handle', ...)`
-// path via the module augmentation below.
-interface VitestGlobalSetupContext {
-	readonly provide: <K extends keyof import('vitest').ProvidedContext & string>(
-		key: K,
-		value: import('vitest').ProvidedContext[K],
-	) => void;
-}
-
+import './cross_test_types.js';
 import {
 	deno_backend_config,
 	node_backend_config,
@@ -44,39 +38,18 @@ import {
 } from './zzz_backend_config.js';
 
 /**
- * Vitest `provide`/`inject` channel — augments the typed `ProvidedContext`
- * so `inject('backend_handle')` returns a `BootstrappedBackendHandle`
- * without a per-site cast.
- *
- * Mirrored in `auth.cross.test.ts` so both the producer (this module)
- * and the consumer (the test file) agree on the type. Vitest's module
- * augmentation merges across both declarations.
+ * Strips the `cross_backend_` prefix (plus an optional `ts_`
+ * discriminator the TS canonical backends carry) to derive the backend
+ * name from the project name. Project names that don't reduce to a
+ * known backend fall through to {@link pick_backend_config}'s
+ * `default: throw` so typos surface clearly.
  */
-declare module 'vitest' {
-	export interface ProvidedContext {
-		backend_handle: BootstrappedBackendHandle;
-	}
-}
+const PROJECT_NAME_PREFIX = /^cross_backend_(?:ts_)?/;
 
 /**
- * Env var consulted to pick the backend config. Each vitest project
- * setting that wires this globalSetup is responsible for exporting its
- * own value (`deno`, `node`, or `rust`) before vitest starts the
- * worker.
- */
-const BACKEND_NAME_ENV = 'ZZZ_CROSS_BACKEND_NAME';
-
-/**
- * Default backend when the env var is unset. The Deno binary is the TS
- * canonical reference — same wire shape as production zzz, fastest
- * spawn, no PostgreSQL prerequisite.
- */
-const DEFAULT_BACKEND_NAME = 'deno';
-
-/**
- * Resolve the configured backend name to its `BackendConfig` factory
- * output. Unknown values throw with the full list of supported names so
- * a typo in a vitest project's env block surfaces clearly.
+ * Resolve a derived backend name to its `BackendConfig` factory
+ * output. Unknown values throw with the full list of supported names
+ * so a misnamed project surfaces clearly.
  */
 const pick_backend_config = (name: string): BackendConfig => {
 	switch (name) {
@@ -90,22 +63,27 @@ const pick_backend_config = (name: string): BackendConfig => {
 			return rust_proxy_backend_config();
 		default:
 			throw new Error(
-				`${BACKEND_NAME_ENV}='${name}' is not a recognized cross-backend name — ` +
+				`Could not derive backend name from vitest project '${name}' — ` +
 					`expected one of: deno, node, rust, rust_proxy`,
 			);
 	}
 };
 
 /**
- * Vitest globalSetup entry point. Spawns the chosen backend, bootstraps
- * the keeper, hands the handle to `inject('backend_handle')` consumers,
- * returns the teardown closure for vitest to fire after the suite.
+ * Vitest globalSetup entry point. vitest 4 passes the `TestProject`
+ * as the first arg; the project's `name` picks which backend to
+ * spawn. Spawns the chosen backend, bootstraps the keeper, hands the
+ * handle to `inject('backend_handle')` consumers, returns the
+ * teardown closure for vitest to fire after the suite.
  */
-const setup = async ({provide}: VitestGlobalSetupContext): Promise<() => Promise<void>> => {
-	const name = process.env[BACKEND_NAME_ENV] ?? DEFAULT_BACKEND_NAME;
+const setup = async (project: TestProject): Promise<() => Promise<void>> => {
+	const name = project.name.replace(PROJECT_NAME_PREFIX, '');
 	const config = pick_backend_config(name);
 	const bootstrapped = await bootstrap_backend(config);
-	provide('backend_handle', bootstrapped);
+	// vitest 4's `provide` hard-rejects non-serializable values, so strip
+	// the live `child` / `teardown` / `keeper_transport` and let test
+	// files rebuild a usable handle via `reconstruct_bootstrapped_handle`.
+	project.provide('backend_handle', serialize_bootstrapped_handle(bootstrapped));
 	return async () => {
 		await bootstrapped.teardown();
 	};

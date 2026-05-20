@@ -15404,7 +15404,7 @@
 						"name": "CreateZzzAppOptions",
 						"kind": "type",
 						"doc_comment": "Options for creating a zzz app.",
-						"source_line": 61,
+						"source_line": 63,
 						"type_signature": "CreateZzzAppOptions",
 						"properties": [
 							{
@@ -15422,8 +15422,8 @@
 							{
 								"name": "runtime",
 								"kind": "variable",
-								"type_signature": "{\n\t\tstat: (path: string) => Promise<StatResult | null>;\n\t\tread_text_file: (path: string) => Promise<string>;\n\t\tremove: (path: string) => Promise<void>;\n\t}",
-								"doc_comment": "Runtime filesystem operations.\nProvided by `create_deno_runtime` or `create_node_runtime`."
+								"type_signature": "EnvDeps &\n\t\tFsWriteDeps & {\n\t\t\tstat: (path: string) => Promise<StatResult | null>;\n\t\t\tread_text_file: (path: string) => Promise<string>;\n\t\t\tremove: (path: string) => Promise<void>;\n\t\t\tchmod?: (path: string, mode: number) => Promise<void>;\n\t\t}",
+								"doc_comment": "Runtime filesystem + env operations. Provided by `create_deno_runtime`\nor `create_node_runtime`. The write/env capabilities are only consulted\nwhen {@link CreateZzzAppOptions.daemon_token_path} is set (test binaries\nwire rotation; production callers can omit the daemon token and only\nthe read/remove slots are exercised)."
 							},
 							{
 								"name": "get_connection_ip",
@@ -15436,6 +15436,24 @@
 								"kind": "variable",
 								"type_signature": "(deps: AppDeps, backend: Backend) => ReadonlyArray<RpcAction>",
 								"doc_comment": "Optional factory for additional RPC actions to register on the live\ndispatcher. Invoked after `app_backend` and the zzz domain `backend`\nare constructed, so the factory can close over both. Used by the\nNode test-binary entry (`testing_server_node.ts`) to inject the\n`_testing_reset` action from fuz_app's\n`create_testing_reset_actions` factory with a `reset_state` callback\nthat clears zzz domain state (workspaces, terminals, optional\nscoped-FS scratch).\n\nProduction entries leave this unset."
+							},
+							{
+								"name": "daemon_token_path",
+								"kind": "variable",
+								"type_signature": "string",
+								"doc_comment": "When set, starts daemon-token rotation, persists the token to this\npath, and wires the daemon-token middleware so callers presenting\n`X-Daemon-Token` authenticate as the keeper. Test binaries pass the\ncross-backend harness's expected location\n(`${PUBLIC_ZZZ_DIR}/run/daemon_token`); production server entries\nleave this unset until daemon-token auth is needed on the live\nsurface.\n\nThe returned {@link ZzzApp.close} stops rotation and removes the\nfile as part of graceful shutdown."
+							},
+							{
+								"name": "disable_rate_limiters",
+								"kind": "variable",
+								"type_signature": "boolean",
+								"doc_comment": "When `true`, pass `null` for every rate limiter to `create_app_server`\nso the production defaults (5/15min IP login, 10/30min account, etc.)\ndon't trip in test scenarios where a single host fires hundreds of\nsignup / login round-trips per backend lifetime. Test binaries opt\nin; production entries leave this unset."
+							},
+							{
+								"name": "app_settings_patch",
+								"kind": "variable",
+								"type_signature": "Partial<AppSettings>",
+								"doc_comment": "Optional patch applied to the in-memory `app_settings` ref after\n`create_app_server` loads it from the DB. Used by test binaries to\nflip `open_signup: true` so the cross-process harness can mint\nper-test accounts through `/signup`. Production entries leave this\nunset and rely on the admin RPC (`app_settings_update`) to mutate\nsettings."
 							}
 						]
 					},
@@ -15443,7 +15461,7 @@
 						"name": "ZzzApp",
 						"kind": "type",
 						"doc_comment": "The created zzz app and related instances.",
-						"source_line": 95,
+						"source_line": 132,
 						"type_signature": "ZzzApp",
 						"properties": [
 							{
@@ -15500,7 +15518,7 @@
 						"name": "create_zzz_app",
 						"kind": "function",
 						"doc_comment": "Create the zzz Hono app with auth, database, Backend, providers, and endpoints.\n\nThis is the shared factory called by the server entry point.\nUses `create_app_backend` for database + auth, `create_app_server` for\nmiddleware assembly, and wires zzz's domain Backend through route deps.",
-						"source_line": 125,
+						"source_line": 162,
 						"type_signature": "(options: CreateZzzAppOptions): Promise<ZzzApp>",
 						"return_type": "Promise<ZzzApp>",
 						"parameters": [
@@ -16674,7 +16692,7 @@
 						"name": "ZzzAppRouteDeps",
 						"kind": "type",
 						"doc_comment": "zzz-specific deps not available in AppServerContext.",
-						"source_line": 30,
+						"source_line": 31,
 						"type_signature": "ZzzAppRouteDeps",
 						"properties": [
 							{
@@ -16704,7 +16722,7 @@
 						"name": "create_zzz_app_route_specs",
 						"kind": "function",
 						"doc_comment": "Build all zzz route specs.\n\nUsed by production server, integration tests, and attack surface helpers.\nDoes NOT include bootstrap routes (those are factory-managed by `create_app_server`).\n\nDoes NOT include the `/api/rpc` endpoint — `create_app_server` auto-mounts\nevery `RpcEndpointSpec` passed via `rpc_endpoints`. Consumers supply that\nendpoint spec through `build_rpc_endpoint_specs` below.",
-						"source_line": 48,
+						"source_line": 49,
 						"type_signature": "(ctx: AppServerContext, zzz_deps: ZzzAppRouteDeps): RouteSpec[]",
 						"return_type": "RouteSpec[]",
 						"parameters": [
@@ -16722,7 +16740,7 @@
 						"name": "build_rpc_endpoint_specs",
 						"kind": "function",
 						"doc_comment": "Build the `/api/rpc` endpoint spec(s) for `create_app_server`.\n\nPass to `rpc_endpoints` as a factory — closes over `ctx.deps` +\n`ctx.app_settings` for the standard admin + role-grant-offer + account\naction set. `create_app_server` auto-mounts each entry via\n`create_rpc_endpoint`.",
-						"source_line": 78,
+						"source_line": 88,
 						"type_signature": "(ctx: AppServerContext, zzz_deps: ZzzRpcDeps): RpcEndpointSpec[]",
 						"return_type": "RpcEndpointSpec[]",
 						"parameters": [

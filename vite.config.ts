@@ -5,6 +5,34 @@ import {vite_plugin_library_well_known} from '@fuzdev/fuz_ui/vite_plugin_library
 
 const max_workers = Math.max(1, Math.ceil(availableParallelism() / 2));
 
+/**
+ * Cross-backend integration projects. One project per spawned backend;
+ * each runs the shared `*.cross.test.ts` files against its own
+ * bootstrapped binary. The `globalSetup` picks the right `BackendConfig`
+ * factory from the project's `name` (vitest 4 passes the `TestProject`
+ * to globalSetup) and provides the `BootstrappedBackendHandle` to test
+ * files via vitest's `provide`/`inject` channel.
+ *
+ * The proxy variant is a separate project because flipping
+ * `ZZZ_TRUSTED_PROXIES` on the Rust backend can't be done mid-run
+ * (parsed once at boot) — the test file expects a backend spawned
+ * with the trust list already configured.
+ */
+const make_cross_backend_project = (name: string, proxy_only = false) => ({
+	extends: true as const,
+	test: {
+		name,
+		include: proxy_only
+			? ['src/test/cross_backend/proxy.cross.test.ts']
+			: ['src/test/cross_backend/*.cross.test.ts'],
+		exclude: proxy_only ? [] : ['src/test/cross_backend/proxy.cross.test.ts'],
+		globalSetup: ['./src/test/cross_backend/global_setup.ts'],
+		isolate: false,
+		fileParallelism: false,
+		sequence: {groupOrder: 3},
+	},
+});
+
 export default defineConfig(({mode}) => ({
 	plugins: [sveltekit(), vite_plugin_library_well_known()],
 	test: {
@@ -29,67 +57,10 @@ export default defineConfig(({mode}) => ({
 					sequence: {groupOrder: 2},
 				},
 			},
-			// Cross-backend integration projects. One project per spawned
-			// backend; each runs the shared `*.cross.test.ts` files against
-			// its own bootstrapped binary. The `globalSetup` picks the
-			// right `BackendConfig` factory via `ZZZ_CROSS_BACKEND_NAME`
-			// and provides the `BootstrappedBackendHandle` to test files
-			// via vitest's `provide`/`inject` channel. The proxy variant
-			// is a separate project because flipping `ZZZ_TRUSTED_PROXIES`
-			// on the Rust backend can't be done mid-run (parsed once at
-			// boot) — the test file expects a backend spawned with the
-			// trust list already configured.
-			{
-				extends: true,
-				test: {
-					name: 'cross_backend_ts_deno',
-					include: ['src/test/cross_backend/*.cross.test.ts'],
-					exclude: ['src/test/cross_backend/proxy.cross.test.ts'],
-					globalSetup: ['./src/test/cross_backend/global_setup.ts'],
-					env: {ZZZ_CROSS_BACKEND_NAME: 'deno'},
-					isolate: false,
-					fileParallelism: false,
-					sequence: {groupOrder: 3},
-				},
-			},
-			{
-				extends: true,
-				test: {
-					name: 'cross_backend_ts_node',
-					include: ['src/test/cross_backend/*.cross.test.ts'],
-					exclude: ['src/test/cross_backend/proxy.cross.test.ts'],
-					globalSetup: ['./src/test/cross_backend/global_setup.ts'],
-					env: {ZZZ_CROSS_BACKEND_NAME: 'node'},
-					isolate: false,
-					fileParallelism: false,
-					sequence: {groupOrder: 3},
-				},
-			},
-			{
-				extends: true,
-				test: {
-					name: 'cross_backend_rust',
-					include: ['src/test/cross_backend/*.cross.test.ts'],
-					exclude: ['src/test/cross_backend/proxy.cross.test.ts'],
-					globalSetup: ['./src/test/cross_backend/global_setup.ts'],
-					env: {ZZZ_CROSS_BACKEND_NAME: 'rust'},
-					isolate: false,
-					fileParallelism: false,
-					sequence: {groupOrder: 3},
-				},
-			},
-			{
-				extends: true,
-				test: {
-					name: 'cross_backend_rust_proxy',
-					include: ['src/test/cross_backend/proxy.cross.test.ts'],
-					globalSetup: ['./src/test/cross_backend/global_setup.ts'],
-					env: {ZZZ_CROSS_BACKEND_NAME: 'rust_proxy'},
-					isolate: false,
-					fileParallelism: false,
-					sequence: {groupOrder: 3},
-				},
-			},
+			make_cross_backend_project('cross_backend_ts_deno'),
+			make_cross_backend_project('cross_backend_ts_node'),
+			make_cross_backend_project('cross_backend_rust'),
+			make_cross_backend_project('cross_backend_rust_proxy', true),
 		],
 	},
 	// In test mode, use browser conditions so Svelte's mount() resolves to the client version

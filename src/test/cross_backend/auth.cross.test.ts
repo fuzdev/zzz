@@ -47,7 +47,7 @@
 import {inject} from 'vitest';
 import {
 	default_cross_process_setup,
-	type BootstrappedBackendHandle,
+	reconstruct_bootstrapped_handle,
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
 import {describe_standard_integration_tests} from '@fuzdev/fuz_app/testing/integration.js';
 import {describe_standard_admin_integration_tests} from '@fuzdev/fuz_app/testing/admin_integration.js';
@@ -60,22 +60,11 @@ import {stub} from '@fuzdev/fuz_app/testing/stubs.js';
 import type {AppServerContext} from '@fuzdev/fuz_app/server/app_server.js';
 import type {RpcEndpointSpec} from '@fuzdev/fuz_app/http/surface.js';
 
+import './cross_test_types.js';
 import {build_rpc_endpoint_specs} from '$lib/server/zzz_route_specs.js';
 import {create_zzz_app_surface_spec} from '../server/routes/auth_attack_surface_helpers.js';
 
-/**
- * Vitest `provide`/`inject` augmentation mirrored from `global_setup.ts`.
- * Both declarations merge into the same `ProvidedContext` shape so the
- * `inject('backend_handle')` call below resolves to
- * `BootstrappedBackendHandle` without a per-site cast.
- */
-declare module 'vitest' {
-	export interface ProvidedContext {
-		backend_handle: BootstrappedBackendHandle;
-	}
-}
-
-const handle = inject('backend_handle');
+const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 const setup_test = default_cross_process_setup(handle);
 const surface_source = create_zzz_app_surface_spec();
 const {capabilities} = handle.config;

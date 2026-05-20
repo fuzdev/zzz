@@ -13,17 +13,13 @@
 import {describe, test, inject, assert} from 'vitest';
 import {
 	default_cross_process_setup,
-	type BootstrappedBackendHandle,
+	reconstruct_bootstrapped_handle,
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
 import {rpc_call} from '@fuzdev/fuz_app/testing/rpc_helpers.js';
 
-declare module 'vitest' {
-	export interface ProvidedContext {
-		backend_handle: BootstrappedBackendHandle;
-	}
-}
+import './cross_test_types.js';
 
-const handle = inject('backend_handle');
+const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 const setup_test = default_cross_process_setup(handle);
 
 describe('completion cross-backend', () => {

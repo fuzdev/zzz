@@ -291,6 +291,63 @@
 			}
 		},
 		{
+			"method": "POST",
+			"path": "/api/account/signup",
+			"auth": {"account": "none", "actor": "none"},
+			"applicable_middleware": [
+				"host_validation",
+				"origin",
+				"session",
+				"request_context",
+				"bearer_auth"
+			],
+			"description": "Create account (invite-gated or open signup)",
+			"is_mutation": true,
+			"transaction": false,
+			"rate_limit_key": "ip",
+			"params_schema": null,
+			"query_schema": null,
+			"input_schema": null,
+			"output_schema": null,
+			"error_schemas": {
+				"400": {
+					"type": "object",
+					"properties": {
+						"error": {"type": "string", "enum": ["invalid_json_body", "invalid_request_body"]}
+					},
+					"required": ["error"],
+					"additionalProperties": {}
+				},
+				"401": {
+					"type": "object",
+					"properties": {"error": {"type": "string"}},
+					"required": ["error"],
+					"additionalProperties": {}
+				},
+				"403": {
+					"type": "object",
+					"properties": {"error": {"type": "string", "const": "no_matching_invite"}},
+					"required": ["error"],
+					"additionalProperties": {}
+				},
+				"409": {
+					"type": "object",
+					"properties": {"error": {"type": "string", "const": "signup_conflict"}},
+					"required": ["error"],
+					"additionalProperties": {}
+				},
+				"429": {
+					"type": "object",
+					"properties": {
+						"error": {"type": "string", "const": "rate_limit_exceeded"},
+						"retry_after": {"type": "number"}
+					},
+					"required": ["error", "retry_after"],
+					"additionalProperties": {}
+				}
+			}
+		},
+		{
 			"method": "GET",
 			"path": "/api/account/status",
 			"auth": {"account": "none", "actor": "none"},

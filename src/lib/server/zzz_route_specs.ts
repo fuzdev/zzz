@@ -22,6 +22,7 @@ import {
 	create_audit_log_route_specs,
 	type AuditLogRouteOptions,
 } from '@fuzdev/fuz_app/auth/audit_log_routes.js';
+import {create_signup_route_specs} from '@fuzdev/fuz_app/auth/signup_routes.js';
 import {create_standard_rpc_actions} from '@fuzdev/fuz_app/auth/standard_rpc_actions.js';
 
 import {create_zzz_rpc_actions, type ZzzRpcDeps} from './zzz_rpc_actions.js';
@@ -50,14 +51,23 @@ export const create_zzz_app_route_specs = (
 	zzz_deps: ZzzAppRouteDeps,
 ): Array<RouteSpec> => [
 	create_health_route_spec(),
-	...prefix_route_specs(
-		'/api/account',
-		create_account_route_specs(ctx.deps, {
+	...prefix_route_specs('/api/account', [
+		...create_account_route_specs(ctx.deps, {
 			session_options: ctx.session_options,
 			ip_rate_limiter: ctx.ip_rate_limiter,
 			login_account_rate_limiter: ctx.login_account_rate_limiter,
 		}),
-	),
+		// `/signup` mirrors the Rust backend so cross-process tests can
+		// mint per-test accounts through production RPC against either
+		// backend, and so the wire shape stays parity between Rust and
+		// TS.
+		...create_signup_route_specs(ctx.deps, {
+			session_options: ctx.session_options,
+			ip_rate_limiter: ctx.ip_rate_limiter,
+			signup_account_rate_limiter: ctx.signup_account_rate_limiter,
+			app_settings: ctx.app_settings,
+		}),
+	]),
 	create_account_status_route_spec({bootstrap_status: ctx.bootstrap_status}),
 	create_server_status_route_spec({
 		version: zzz_deps.version,

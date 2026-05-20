@@ -23,12 +23,14 @@ import {
 } from '@fuzdev/fuz_app/server/app_server.js';
 import type {AppSurface} from '@fuzdev/fuz_app/http/surface.js';
 import type {PasswordHashDeps} from '@fuzdev/fuz_app/auth/password.js';
-import type {StatResult} from '@fuzdev/fuz_app/runtime/deps.js';
+import type {EnvDeps, FsWriteDeps, StatResult} from '@fuzdev/fuz_app/runtime/deps.js';
 import type {MiddlewareSpec} from '@fuzdev/fuz_app/http/middleware_spec.js';
+import {start_daemon_token_rotation} from '@fuzdev/fuz_app/auth/daemon_token_middleware.js';
 
 import type {Action} from '@fuzdev/fuz_app/actions/action_types.js';
 import type {RpcAction} from '@fuzdev/fuz_app/actions/action_rpc.js';
 import type {AppDeps} from '@fuzdev/fuz_app/auth/deps.js';
+import type {AppSettings} from '@fuzdev/fuz_app/auth/app_settings_schema.js';
 import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.js';
 
 import {build_allowed_hostnames, create_host_validation_middleware} from './security.js';
@@ -64,14 +66,19 @@ export interface CreateZzzAppOptions {
 	/** Password hashing deps — `argon2_password_deps` for production, stubs for tests. */
 	password: PasswordHashDeps;
 	/**
-	 * Runtime filesystem operations.
-	 * Provided by `create_deno_runtime` or `create_node_runtime`.
+	 * Runtime filesystem + env operations. Provided by `create_deno_runtime`
+	 * or `create_node_runtime`. The write/env capabilities are only consulted
+	 * when {@link CreateZzzAppOptions.daemon_token_path} is set (test binaries
+	 * wire rotation; production callers can omit the daemon token and only
+	 * the read/remove slots are exercised).
 	 */
-	runtime: {
-		stat: (path: string) => Promise<StatResult | null>;
-		read_text_file: (path: string) => Promise<string>;
-		remove: (path: string) => Promise<void>;
-	};
+	runtime: EnvDeps &
+		FsWriteDeps & {
+			stat: (path: string) => Promise<StatResult | null>;
+			read_text_file: (path: string) => Promise<string>;
+			remove: (path: string) => Promise<void>;
+			chmod?: (path: string, mode: number) => Promise<void>;
+		};
 	/** Extract the raw TCP connection IP from the Hono context. */
 	get_connection_ip: (c: Context) => string | undefined;
 	/**
@@ -87,6 +94,36 @@ export interface CreateZzzAppOptions {
 	 * Production entries leave this unset.
 	 */
 	extra_rpc_actions_factory?: (deps: AppDeps, backend: Backend) => ReadonlyArray<RpcAction>;
+	/**
+	 * When set, starts daemon-token rotation, persists the token to this
+	 * path, and wires the daemon-token middleware so callers presenting
+	 * `X-Daemon-Token` authenticate as the keeper. Test binaries pass the
+	 * cross-backend harness's expected location
+	 * (`${PUBLIC_ZZZ_DIR}/run/daemon_token`); production server entries
+	 * leave this unset until daemon-token auth is needed on the live
+	 * surface.
+	 *
+	 * The returned {@link ZzzApp.close} stops rotation and removes the
+	 * file as part of graceful shutdown.
+	 */
+	daemon_token_path?: string;
+	/**
+	 * When `true`, pass `null` for every rate limiter to `create_app_server`
+	 * so the production defaults (5/15min IP login, 10/30min account, etc.)
+	 * don't trip in test scenarios where a single host fires hundreds of
+	 * signup / login round-trips per backend lifetime. Test binaries opt
+	 * in; production entries leave this unset.
+	 */
+	disable_rate_limiters?: boolean;
+	/**
+	 * Optional patch applied to the in-memory `app_settings` ref after
+	 * `create_app_server` loads it from the DB. Used by test binaries to
+	 * flip `open_signup: true` so the cross-process harness can mint
+	 * per-test accounts through `/signup`. Production entries leave this
+	 * unset and rely on the admin RPC (`app_settings_update`) to mutate
+	 * settings.
+	 */
+	app_settings_patch?: Partial<AppSettings>;
 }
 
 /**
@@ -164,6 +201,20 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 	// Run zzz-specific schema (placeholder — zzz-specific DDL will be added here)
 	await init_zzz_schema(app_backend.deps.db);
 
+	// Start daemon-token rotation when the caller wants the keeper-credential
+	// surface (test binaries today; production server until daemon-token
+	// auth is needed on the live wire). Keeper account is null pre-bootstrap;
+	// fuz_app's daemon-token middleware lazily refreshes it on first hit so
+	// the rotation-starts-before-bootstrap order is fine.
+	const daemon_token_rotation = options.daemon_token_path
+		? await start_daemon_token_rotation(
+				runtime,
+				{db: app_backend.deps.db},
+				{token_path: options.daemon_token_path},
+				log,
+			)
+		: null;
+
 	log.info(
 		`Database initialized (${app_backend.db_type}${app_backend.db_type !== 'pglite-memory' ? ': ' + app_backend.db_name : ''})`,
 	);
@@ -221,6 +272,24 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 	const host_validation_middleware = create_host_validation_middleware(allowed_hostnames);
 
 	// Assemble the server with fuz_app's create_app_server
+	const limiters_disabled: {
+		ip_rate_limiter?: null;
+		login_account_rate_limiter?: null;
+		signup_account_rate_limiter?: null;
+		bearer_ip_rate_limiter?: null;
+		action_ip_rate_limiter?: null;
+		action_account_rate_limiter?: null;
+	} = options.disable_rate_limiters
+		? {
+				ip_rate_limiter: null,
+				login_account_rate_limiter: null,
+				signup_account_rate_limiter: null,
+				bearer_ip_rate_limiter: null,
+				action_ip_rate_limiter: null,
+				action_account_rate_limiter: null,
+			}
+		: {};
+
 	const app_server: AppServer = await create_app_server({
 		backend: app_backend,
 		audit_log_sse: true,
@@ -230,6 +299,8 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 			trusted_proxies: ['127.0.0.1', '::1'],
 			get_connection_ip,
 		},
+		...limiters_disabled,
+		daemon_token_state: daemon_token_rotation?.state,
 		bootstrap: env_config.bootstrap_token_path
 			? {mode: 'live', token_path: env_config.bootstrap_token_path}
 			: {mode: 'disabled'},
@@ -260,6 +331,21 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 		},
 	});
 
+	// Test binaries flip `open_signup: true` so the cross-process harness
+	// can mint accounts via `/signup`. Mutates the in-memory ref the signup
+	// route reads from (the route checks `app_settings.open_signup`
+	// per-request, so this avoids a DB round-trip + an RPC dance).
+	if (options.app_settings_patch) {
+		Object.assign(app_server.app_settings, options.app_settings_patch);
+	}
+
+	const close = daemon_token_rotation
+		? async (): Promise<void> => {
+				await daemon_token_rotation.stop();
+				await app_server.close();
+			}
+		: app_server.close;
+
 	return {
 		app: app_server.app,
 		backend,
@@ -268,6 +354,6 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 		env,
 		allowed_origins,
 		extra_ws_actions: test_ws_actions,
-		close: app_server.close,
+		close,
 	};
 };
