@@ -152,8 +152,7 @@ export const start_testing_server = async (adapter: TestingServerAdapter): Promi
 	}
 
 	// Force unconditional test-action registration — the binary's whole
-	// purpose is test-only (Open Q5 resolution in
-	// grimoire/lore/fuz_app/TODO_CROSS_PROCESS_LIFT.md).
+	// purpose is test-only.
 	const config = load_server_env((key) => get_env(runtime, key), {
 		app_version: VERSION,
 		enable_test_actions: true,

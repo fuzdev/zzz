@@ -2,7 +2,7 @@
  * Cross-process `BackendConfig` factories for zzz's cross-backend
  * integration suites.
  *
- * Four target backends spanning both axes the cross-backend quest covers:
+ * Four target backends spanning both the JS-runtime and TS-vs-Rust axes:
  *
  * - {@link deno_backend_config} — TS canonical backend on Deno V8 (spawns
  *   `testing_server_deno.ts`). Same wire shape as production zzz today.

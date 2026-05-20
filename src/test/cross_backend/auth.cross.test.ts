@@ -25,10 +25,9 @@
  * - `describe_rate_limiting_tests` — bypasses `setup_test` to inject
  *   per-test rate-limiter overrides through a fresh `TestApp`; the
  *   spawned-binary path can't accept those overrides.
- * - `describe_audit_completeness_tests` — Tier 2 by the
- *   cross-backend-integration quest design; the suite reaches into
- *   FK-structural introspection that only the in-process backend
- *   exposes.
+ * - `describe_audit_completeness_tests` — in-process only; the suite
+ *   reaches into FK-structural introspection that only the in-process
+ *   backend exposes.
  * - `describe_bootstrap_success_tests` — bootstrap is one-shot; the
  *   `globalSetup` already consumed it.
  *
