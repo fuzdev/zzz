@@ -270,7 +270,7 @@ export const deno_backend_config = (): BackendConfig =>
 
 /**
  * TS canonical backend on Node V8. Spawns `testing_server_node.ts`
- * via `tsx` (matches the `test:server:node` package script). Same
+ * via `gro run` (matches the `test:server:node` package script). Same
  * source modules as the Deno entry — the runtime adapter is the
  * only divergence.
  */
@@ -278,7 +278,7 @@ export const node_backend_config = (): BackendConfig =>
 	make_ts_backend_config({
 		name: 'node',
 		port: 11742,
-		start_command: ['npx', 'tsx', 'src/lib/server/testing_server_node.ts'],
+		start_command: ['npx', 'gro', 'run', 'src/lib/server/testing_server_node.ts'],
 	});
 
 /**
