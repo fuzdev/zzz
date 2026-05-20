@@ -242,8 +242,8 @@ JSON-RPC response via WebSocket
 
 | Variable                              | Purpose                                                                    |
 | ------------------------------------- | -------------------------------------------------------------------------- |
-| `ZZZ_ALLOWED_ORIGINS`                 | Origin patterns for API verification                                       |
-| `ZZZ_BOOTSTRAP_TOKEN_PATH`            | One-shot admin bootstrap token path                                        |
+| `FUZ_ALLOWED_ORIGINS`                 | Origin patterns for API verification                                       |
+| `FUZ_BOOTSTRAP_TOKEN_PATH`            | One-shot admin bootstrap token path                                        |
 | `PUBLIC_ZZZ_DIR`                      | Zzz app directory (default `.zzz`)                                         |
 | `PUBLIC_ZZZ_SCOPED_DIRS`              | Comma-separated filesystem paths                                           |
 | `PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY` | Testing delay (ms)                                                         |

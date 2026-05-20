@@ -723,8 +723,8 @@ fn parse_config(default_port: u16) -> Result<Config, ServerError> {
     let secret_cookie_keys = std::env::var("SECRET_FUZ_COOKIE_KEYS")
         .map_err(|_| ServerError::Config("SECRET_FUZ_COOKIE_KEYS is required".to_owned()))?;
 
-    let bootstrap_token_path = std::env::var("ZZZ_BOOTSTRAP_TOKEN_PATH").ok();
-    let allowed_origins = std::env::var("ZZZ_ALLOWED_ORIGINS").ok();
+    let bootstrap_token_path = std::env::var("FUZ_BOOTSTRAP_TOKEN_PATH").ok();
+    let allowed_origins = std::env::var("FUZ_ALLOWED_ORIGINS").ok();
 
     let scoped_dirs = std::env::var("PUBLIC_ZZZ_SCOPED_DIRS")
         .unwrap_or_default()

@@ -11,7 +11,7 @@
  * the production-safety contract.
  *
  * Run with:
- *   npx tsx src/lib/server/testing_server_node.ts
+ *   gro run src/lib/server/testing_server_node.ts
  *   bun src/lib/server/testing_server_node.ts
  *
  * Env vars: see `testing_server_core.ts`.

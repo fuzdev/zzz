@@ -28,7 +28,7 @@ if (!env) {
 
 // -- Ensure bootstrap token exists --------------------------------------------
 
-const token_path = env.ZZZ_BOOTSTRAP_TOKEN_PATH;
+const token_path = env.FUZ_BOOTSTRAP_TOKEN_PATH;
 if (token_path) {
 	try {
 		await Deno.stat(token_path);

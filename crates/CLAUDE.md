@@ -98,8 +98,8 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 
 | Variable                 | Purpose                                    |
 |--------------------------|--------------------------------------------|
-| `ZZZ_BOOTSTRAP_TOKEN_PATH`   | Path to bootstrap token file           |
-| `ZZZ_ALLOWED_ORIGINS`        | Comma-separated origin patterns        |
+| `FUZ_BOOTSTRAP_TOKEN_PATH`   | Path to bootstrap token file           |
+| `FUZ_ALLOWED_ORIGINS`        | Comma-separated origin patterns        |
 | `PUBLIC_ZZZ_SCOPED_DIRS` | Comma-separated filesystem paths           |
 | `ZZZ_PORT`               | Server port (default 1174, CLI overrides)  |
 | `ZZZ_STATIC_DIR`         | Static file directory                      |
@@ -166,10 +166,10 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
    - `keeper` — requires `DaemonToken` credential type AND keeper role grant (`provider_update_api_key`). API tokens and session cookies cannot access keeper actions even if the account has the keeper role grant.
 
 8. **Bootstrap** — `POST /bootstrap` creates first admin account with keeper
-   + admin role grants. Reads token from `ZZZ_BOOTSTRAP_TOKEN_PATH`, timing-safe
+   + admin role grants. Reads token from `FUZ_BOOTSTRAP_TOKEN_PATH`, timing-safe
    compare, Argon2 password hashing, all in a transaction with bootstrap_lock.
 
-9. **Origin verification** — `ZZZ_ALLOWED_ORIGINS` patterns checked on requests
+9. **Origin verification** — `FUZ_ALLOWED_ORIGINS` patterns checked on requests
    with an `Origin` header. Supports exact match, wildcard port
    (`http://localhost:*`), subdomain wildcard (`https://*.example.com`).
 
