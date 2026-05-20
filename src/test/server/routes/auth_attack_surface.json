@@ -308,7 +308,12 @@
 			"params_schema": null,
 			"query_schema": null,
 			"input_schema": null,
-			"output_schema": null,
+			"output_schema": {
+				"type": "object",
+				"properties": {"ok": {"type": "boolean", "const": true}},
+				"required": ["ok"],
+				"additionalProperties": false
+			},
 			"error_schemas": {
 				"400": {
 					"type": "object",
@@ -545,7 +550,12 @@
 			"params_schema": null,
 			"query_schema": null,
 			"input_schema": null,
-			"output_schema": null,
+			"output_schema": {
+				"type": "object",
+				"properties": {"ok": {"type": "boolean", "const": true}, "username": {"type": "string"}},
+				"required": ["ok", "username"],
+				"additionalProperties": false
+			},
 			"error_schemas": {
 				"400": {
 					"type": "object",
@@ -569,7 +579,9 @@
 				},
 				"404": {
 					"type": "object",
-					"properties": {"error": {"type": "string", "const": "token_file_missing"}},
+					"properties": {
+						"error": {"type": "string", "enum": ["token_file_missing", "bootstrap_not_configured"]}
+					},
 					"required": ["error"],
 					"additionalProperties": {}
 				},
@@ -3077,42 +3089,42 @@
 			"optional": false
 		},
 		{
-			"name": "SECRET_FUZ_COOKIE_KEYS",
+			"name": "SECRET_COOKIE_KEYS",
 			"description": "Cookie signing keys, separated by __ for rotation",
 			"sensitivity": "secret",
 			"has_default": false,
 			"optional": false
 		},
 		{
-			"name": "FUZ_ALLOWED_ORIGINS",
+			"name": "ALLOWED_ORIGINS",
 			"description": "Comma-separated origin patterns for API verification",
 			"sensitivity": null,
 			"has_default": false,
 			"optional": false
 		},
 		{
-			"name": "PUBLIC_FUZ_API_URL",
+			"name": "PUBLIC_API_URL",
 			"description": "Public API base URL",
 			"sensitivity": null,
 			"has_default": true,
 			"optional": true
 		},
 		{
-			"name": "PUBLIC_FUZ_WEBSOCKET_URL",
+			"name": "PUBLIC_WEBSOCKET_URL",
 			"description": "Public WebSocket URL",
 			"sensitivity": null,
 			"has_default": false,
 			"optional": true
 		},
 		{
-			"name": "PUBLIC_FUZ_CONTACT_EMAIL",
+			"name": "PUBLIC_CONTACT_EMAIL",
 			"description": "Public contact email address",
 			"sensitivity": null,
 			"has_default": false,
 			"optional": true
 		},
 		{
-			"name": "FUZ_BOOTSTRAP_TOKEN_PATH",
+			"name": "BOOTSTRAP_TOKEN_PATH",
 			"description": "Path to one-shot admin bootstrap token",
 			"sensitivity": "secret",
 			"has_default": false,
