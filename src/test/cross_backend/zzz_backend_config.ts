@@ -7,7 +7,7 @@
  * - {@link deno_backend_config} — TS canonical backend on Deno V8 (spawns
  *   `testing_server_deno.ts`). Same wire shape as production zzz today.
  * - {@link node_backend_config} — TS canonical backend on Node V8 (spawns
- *   `testing_server_node.ts` under `tsx`). Isolates the JS-runtime axis
+ *   `testing_server_node.ts` via `gro run`). Isolates the JS-runtime axis
  *   (Deno vs Node V8) on identical TS canonical surfaces.
  * - {@link rust_backend_config} — Axum/JSON-RPC backend (spawns
  *   `testing_zzz_server`). Isolates the cross-language axis (TS vs
