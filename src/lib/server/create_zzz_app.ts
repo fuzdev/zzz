@@ -28,6 +28,7 @@ import type {MiddlewareSpec} from '@fuzdev/fuz_app/http/middleware_spec.js';
 
 import type {Action} from '@fuzdev/fuz_app/actions/action_types.js';
 import type {RpcAction} from '@fuzdev/fuz_app/actions/action_rpc.js';
+import type {AppDeps} from '@fuzdev/fuz_app/auth/deps.js';
 
 import {build_allowed_hostnames, create_host_validation_middleware} from './security.js';
 import {Backend} from './backend.js';
@@ -73,6 +74,19 @@ export interface CreateZzzAppOptions {
 	};
 	/** Extract the raw TCP connection IP from the Hono context. */
 	get_connection_ip: (c: Context) => string | undefined;
+	/**
+	 * Optional factory for additional RPC actions to register on the live
+	 * dispatcher. Invoked after `app_backend` and the zzz domain `backend`
+	 * are constructed, so the factory can close over both. Used by the
+	 * Node test-binary entry (`testing_server_node.ts`) to inject the
+	 * `_testing_reset` action from fuz_app's
+	 * `create_testing_reset_actions` factory with a `reset_state` callback
+	 * that clears zzz domain state (workspaces, terminals, optional
+	 * scoped-FS scratch).
+	 *
+	 * Production entries leave this unset.
+	 */
+	extra_rpc_actions_factory?: (deps: AppDeps, backend: Backend) => ReadonlyArray<RpcAction>;
 }
 
 /**
@@ -160,7 +174,7 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 	const action_specs = config.enable_test_actions
 		? [...all_action_specs, ...testing_action_specs]
 		: all_action_specs;
-	const test_rpc_actions: ReadonlyArray<RpcAction> = config.enable_test_actions
+	const env_test_rpc_actions: ReadonlyArray<RpcAction> = config.enable_test_actions
 		? [
 				{
 					spec: _testing_emit_notifications_action_spec,
@@ -168,7 +182,6 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 				},
 			]
 		: [];
-	const test_ws_actions: ReadonlyArray<Action> = test_rpc_actions;
 
 	if (config.enable_test_actions) {
 		log.info('Test actions enabled — `_testing_*` methods registered on live dispatchers');
@@ -182,6 +195,15 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 		action_specs,
 		handle_filer_change,
 	});
+
+	// Compose env-gated test actions with caller-supplied actions (test
+	// binary's `_testing_reset`). Production entries pass no factory.
+	const extra_rpc_actions = options.extra_rpc_actions_factory?.(app_backend.deps, backend) ?? [];
+	const test_rpc_actions: ReadonlyArray<RpcAction> = [
+		...env_test_rpc_actions,
+		...extra_rpc_actions,
+	];
+	const test_ws_actions: ReadonlyArray<Action> = env_test_rpc_actions;
 
 	// Register AI providers. Streaming progress is routed per-request via
 	// `ctx.notify` — providers have no broadcast callback.

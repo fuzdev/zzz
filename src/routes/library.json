@@ -36,7 +36,9 @@
 			"test": "gro test",
 			"preview": "vite preview",
 			"deploy": "gro deploy",
-			"serve": "gro build && npm run preview"
+			"serve": "gro build && npm run preview",
+			"test:server:node": "tsx src/lib/server/testing_server_node.ts",
+			"test:server:deno": "deno run --allow-net --allow-read --allow-env --allow-write --allow-sys --unstable-detect-cjs src/lib/server/testing_server_deno.ts"
 		},
 		"type": "module",
 		"engines": {
@@ -50,6 +52,8 @@
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.4.5",
 			"@fuzdev/fuz_app": "^0.64.0",
+			"@hono/node-server": "^1.19.9",
+			"@hono/node-ws": "^1.3.1",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.59.0",
 			"@fuzdev/fuz_ui": "^0.192.0",
@@ -77,6 +81,7 @@
 			"svelte-check": "^4.4.6",
 			"svelte2tsx": "^0.7.52",
 			"tslib": "^2.8.1",
+			"tsx": "^4.22.3",
 			"typescript": "^5.9.3",
 			"typescript-eslint": "^8.48.1",
 			"vite": "^7.3.1",
@@ -15062,6 +15067,14 @@
 								]
 							},
 							{
+								"name": "kill_all",
+								"kind": "function",
+								"doc_comment": "Kill every active terminal process without destroying the manager.\n\nNon-destructive variant of {@link destroy} — the manager stays\nreusable, so subsequent `spawn` calls work normally. Used by the\ntest binary's `_testing_reset` `reset_state` callback to clear\ncross-test terminal pollution without tearing the binary down\nbetween tests.",
+								"type_signature": "(): Promise<void>",
+								"return_type": "Promise<void>",
+								"parameters": []
+							},
+							{
 								"name": "destroy",
 								"kind": "function",
 								"doc_comment": "Kill all terminal processes. Called on backend shutdown.",
@@ -15376,7 +15389,11 @@
 					}
 				],
 				"module_comment": "Server-side constants (Deno-compile-safe).\n\nMirror of `src/lib/constants.ts` for modules in the Deno compile chain.\nMust not import `$env/static/public` or any SvelteKit build-time module —\nthose don't exist in Deno and crash `gro build` / `deno compile`.",
-				"dependents": ["server/server.ts", "server/zzz_action_handlers.ts"]
+				"dependents": [
+					"server/server.ts",
+					"server/testing_server_core.ts",
+					"server/zzz_action_handlers.ts"
+				]
 			},
 			{
 				"path": "server/create_zzz_app.ts",
@@ -15385,7 +15402,7 @@
 						"name": "CreateZzzAppOptions",
 						"kind": "type",
 						"doc_comment": "Options for creating a zzz app.",
-						"source_line": 60,
+						"source_line": 61,
 						"type_signature": "CreateZzzAppOptions",
 						"properties": [
 							{
@@ -15411,6 +15428,12 @@
 								"kind": "variable",
 								"type_signature": "(c: Context) => string | undefined",
 								"doc_comment": "Extract the raw TCP connection IP from the Hono context."
+							},
+							{
+								"name": "extra_rpc_actions_factory",
+								"kind": "variable",
+								"type_signature": "(deps: AppDeps, backend: Backend) => ReadonlyArray<RpcAction>",
+								"doc_comment": "Optional factory for additional RPC actions to register on the live\ndispatcher. Invoked after `app_backend` and the zzz domain `backend`\nare constructed, so the factory can close over both. Used by the\nNode test-binary entry (`testing_server_node.ts`) to inject the\n`_testing_reset` action from fuz_app's\n`create_testing_reset_actions` factory with a `reset_state` callback\nthat clears zzz domain state (workspaces, terminals, optional\nscoped-FS scratch).\n\nProduction entries leave this unset."
 							}
 						]
 					},
@@ -15418,7 +15441,7 @@
 						"name": "ZzzApp",
 						"kind": "type",
 						"doc_comment": "The created zzz app and related instances.",
-						"source_line": 81,
+						"source_line": 95,
 						"type_signature": "ZzzApp",
 						"properties": [
 							{
@@ -15475,7 +15498,7 @@
 						"name": "create_zzz_app",
 						"kind": "function",
 						"doc_comment": "Create the zzz Hono app with auth, database, Backend, providers, and endpoints.\n\nThis is the shared factory called by the server entry point.\nUses `create_app_backend` for database + auth, `create_app_server` for\nmiddleware assembly, and wires zzz's domain Backend through route deps.",
-						"source_line": 111,
+						"source_line": 125,
 						"type_signature": "(options: CreateZzzAppOptions): Promise<ZzzApp>",
 						"return_type": "Promise<ZzzApp>",
 						"parameters": [
@@ -15503,7 +15526,7 @@
 					"server/zzz_route_specs.ts",
 					"testing_action_specs.ts"
 				],
-				"dependents": ["server/server.ts"]
+				"dependents": ["server/server.ts", "server/testing_server_core.ts"]
 			},
 			{
 				"path": "server/db/zzz_schema.ts",
@@ -15847,7 +15870,7 @@
 				],
 				"module_comment": "WebSocket endpoint wiring — thin wrapper over fuz_app's\n`register_ws_endpoint`.\n\nzzz supplies the action tuples (spec + handler) and the per-request DB\nhandle; fuz_app owns the upgrade middleware stack (origin check, auth,\nauthorization phase that builds `RequestContext`), dispatch, validation,\nand transport bookkeeping. Domain deps flow through\n`create_zzz_action_handlers(backend)` — the factory closes over the\n`Backend`, so handlers receive the unified `ActionContext` directly.\n\nThe shared `protocol_actions` bundle (heartbeat + cancel pre-paired with\ntheir handlers) is spread first so disconnect detection and per-request\ncancellation are identical across every fuz_app consumer.",
 				"dependencies": ["action_specs.ts", "server/zzz_action_handlers.ts"],
-				"dependents": ["server/server.ts"]
+				"dependents": ["server/server.ts", "server/testing_server_core.ts"]
 			},
 			{
 				"path": "server/routes/account.ts",
@@ -16317,7 +16340,11 @@
 					}
 				],
 				"module_comment": "Host header validation middleware for DNS rebinding defense-in-depth.\n\nValidates that the Host header matches expected local hostnames.\nRequests without a Host header are allowed (HTTP/1.0, CLI tools).",
-				"dependents": ["server/create_zzz_app.ts", "server/server.ts"]
+				"dependents": [
+					"server/create_zzz_app.ts",
+					"server/server.ts",
+					"server/testing_server_core.ts"
+				]
 			},
 			{
 				"path": "server/server_env.ts",
@@ -16439,7 +16466,11 @@
 					}
 				],
 				"module_comment": "Server environment configuration.\n\nExtends `BaseServerEnv` from fuz_app with zzz-specific fields.\nUses `load_env` from fuz_app for schema-validated loading.",
-				"dependents": ["server/create_zzz_app.ts", "server/server.ts"]
+				"dependents": [
+					"server/create_zzz_app.ts",
+					"server/server.ts",
+					"server/testing_server_core.ts"
+				]
 			},
 			{
 				"path": "server/server.ts",
@@ -16464,6 +16495,143 @@
 					"zzz/build_info.ts"
 				],
 				"dependents": ["zzz/commands/daemon.ts"]
+			},
+			{
+				"path": "server/testing_server_core.ts",
+				"declarations": [
+					{
+						"name": "ServeHandle",
+						"kind": "type",
+						"doc_comment": "Adapter-built handle to a bound HTTP server.\n\n`shutdown` stops accepting new connections and waits for in-flight\nones to drain. `native` is an adapter-specific server reference —\nused by Node's `@hono/node-ws` `injectWebSocket(server)` post-serve\nhook; Deno leaves it unset (Deno.serve doesn't need post-serve WS\nwiring).",
+						"source_line": 65,
+						"type_signature": "ServeHandle",
+						"properties": [
+							{
+								"name": "shutdown",
+								"kind": "variable",
+								"type_signature": "() => Promise<void>"
+							},
+							{
+								"name": "native",
+								"kind": "variable",
+								"type_signature": "unknown",
+								"doc_comment": "Adapter-specific server ref for post-serve hooks. Type-erased at the seam."
+							}
+						]
+					},
+					{
+						"name": "PreparedWebsocket",
+						"kind": "type",
+						"doc_comment": "Result of an adapter's WS preparation step.\n\n`upgrade_websocket` is the Hono `UpgradeWebSocket` closure the\ndispatcher uses to register the WS endpoint. `attach_to_server` is\ncalled after `serve()` returns a `ServeHandle` — Node uses it for\n`injectWebSocket(server)`; Deno leaves it undefined.",
+						"source_line": 79,
+						"type_signature": "PreparedWebsocket",
+						"properties": [
+							{
+								"name": "upgrade_websocket",
+								"kind": "variable",
+								"type_signature": "UpgradeWebSocket"
+							},
+							{
+								"name": "attach_to_server",
+								"kind": "variable",
+								"type_signature": "(handle: ServeHandle) => void"
+							}
+						]
+					},
+					{
+						"name": "TestingServerAdapter",
+						"kind": "type",
+						"doc_comment": "Runtime adapter contract for the test-binary entry.\n\nEach adapter (`testing_server_deno.ts`, `testing_server_node.ts`)\nimplements this and hands the shape to {@link start_testing_server}.\nThe core owns env load, bind validation, `create_zzz_app`\nconstruction, WS endpoint wiring, daemon-info write, and shutdown\ncoordination; the adapter owns the runtime-boundary primitives.",
+						"source_line": 93,
+						"type_signature": "TestingServerAdapter",
+						"properties": [
+							{
+								"name": "runtime_label",
+								"kind": "variable",
+								"type_signature": "string",
+								"doc_comment": "Human-readable runtime label for log output (e.g. `\"Deno\"`, `\"Node\"`)."
+							},
+							{
+								"name": "runtime",
+								"kind": "variable",
+								"type_signature": "RuntimeDeps",
+								"doc_comment": "RuntimeDeps capability bundle from `create_deno_runtime` / `create_node_runtime`."
+							},
+							{
+								"name": "get_connection_ip",
+								"kind": "variable",
+								"type_signature": "(c: Context) => string | undefined",
+								"doc_comment": "Extract the raw TCP connection IP from a Hono context."
+							},
+							{
+								"name": "prepare_websocket",
+								"kind": "variable",
+								"type_signature": "(app: Hono) => PreparedWebsocket",
+								"doc_comment": "Build the WS upgrade closure after `create_zzz_app` returns the app."
+							},
+							{
+								"name": "serve",
+								"kind": "variable",
+								"type_signature": "(options: {fetch: Hono['fetch']; port: number; hostname: string}) => ServeHandle",
+								"doc_comment": "Bind `app.fetch` to `port` on `hostname`; return a {@link ServeHandle}."
+							},
+							{
+								"name": "pid",
+								"kind": "variable",
+								"type_signature": "number",
+								"doc_comment": "Current process pid (for `daemon.json`)."
+							},
+							{
+								"name": "register_shutdown_signals",
+								"kind": "variable",
+								"type_signature": "(handler: () => Promise<void>) => void",
+								"doc_comment": "Register SIGINT/SIGTERM listeners that invoke `handler` once each."
+							},
+							{
+								"name": "exit",
+								"kind": "variable",
+								"type_signature": "(code: number) => never",
+								"doc_comment": "Forceful exit on graceful-shutdown completion or fatal error."
+							}
+						]
+					},
+					{
+						"name": "start_testing_server",
+						"kind": "function",
+						"doc_comment": "Boot the test-mode zzz server using the supplied runtime adapter.\n\nMirrors `server.ts`'s `start_server` (Deno production) at the\nsurface level — same env loading, bind validation, daemon-info\nlifecycle, and shutdown drain — but forces `enable_test_actions:\ntrue`, swaps `stub_password_deps` in place of argon2, and registers\nthe `_testing_reset` RPC action with a zzz domain `reset_state`\nclosure.",
+						"source_line": 134,
+						"type_signature": "(adapter: TestingServerAdapter): Promise<void>",
+						"return_type": "Promise<void>",
+						"parameters": [
+							{
+								"name": "adapter",
+								"type": "TestingServerAdapter"
+							}
+						]
+					}
+				],
+				"module_comment": "Runtime-agnostic test-binary core for the TS canonical zzz server.\n\nShared by the Deno (`testing_server_deno.ts`) and Node\n(`testing_server_node.ts`) test-binary adapters: same `create_zzz_app`\nfactory, same `_testing_reset` registration, same `reset_state`\nclosure, same daemon-info + shutdown discipline. The two runtime\nadapters only supply the boundary primitives that diverge between\nDeno and Node (HTTP serve, WS upgrade construction, signal\nregistration, pid, exit).\n\nProduction stays on Deno (`server.ts`). Both test entries register\n`_testing_reset` from fuz_app's `create_testing_reset_actions` factory\nwith a zzz `reset_state` closure that closes all workspaces, kills\nterminals via `PtyManager.kill_all`, and wipes the optional\n`ZZZ_TESTING_SCRATCH_DIR` tree.\n\n**NEVER ship in a release.** The module reaches into fuz_app's\n`testing/cross_backend/` modules which throw at production-bundle\nload via `assert_dev_env`. The `testing_` filename prefix mirrors the\nRust `testing_zzz_server` convention and is enforced for the Rust\nside by `cargo xtask check-release`'s dep-graph audit.",
+				"dependencies": [
+					"server/constants.ts",
+					"server/create_zzz_app.ts",
+					"server/register_websocket_actions.ts",
+					"server/security.ts",
+					"server/server_env.ts",
+					"zzz/build_info.ts"
+				],
+				"dependents": ["server/testing_server_deno.ts", "server/testing_server_node.ts"]
+			},
+			{
+				"path": "server/testing_server_deno.ts",
+				"declarations": [],
+				"module_comment": "Deno test-binary adapter for the TS canonical zzz server.\n\nThin adapter over `testing_server_core.ts`: binds `Deno.serve` and\n`hono/deno`'s module-level `upgradeWebSocket` for the WS upgrade\npath. The shared core owns env loading, `_testing_reset`\nregistration, daemon-info lifecycle, and shutdown coordination.\n\nCounterpart to `testing_server_node.ts` — both spawn the same\n`create_zzz_app` factory and register `_testing_reset` against it.\nThe split exists so cross-process integration suites can compare\nruntime-level behavior on identical TS canonical surfaces:\n\n- Deno vs Node JS-runtime perf (V8 in both, but distinct I/O loops,\n  fetch impls, HTTP servers).\n- Wire-shape parity between the two TS runtimes (a divergence here\n  would mean fuz_app's runtime-agnosticism slipped).\n\nThe Rust `testing_zzz_server` covers the cross-language axis (TS\nvs Rust); these two cover the cross-runtime axis on the same TS\nsurface.\n\n**NEVER ship this in a release.** See `testing_server_core.ts` for\nthe production-safety contract.\n\nRun with:\n  deno run --allow-net --allow-read --allow-env --allow-write --allow-sys src/lib/server/testing_server_deno.ts\n\nOr via the npm script (recommended — bundles the permissions flags):\n  npm run test:server:deno\n\nEnv vars: see `testing_server_core.ts`.",
+				"dependencies": ["server/testing_server_core.ts"]
+			},
+			{
+				"path": "server/testing_server_node.ts",
+				"declarations": [],
+				"module_comment": "Node/bun-runnable test-binary adapter for the TS canonical zzz server.\n\nThin adapter over `testing_server_core.ts`: binds `Deno.serve`'s\ncounterpart `@hono/node-server`'s `serve()` and `@hono/node-ws`'s\n`createNodeWebSocket(app)` for the WS upgrade path. The shared core\nowns env loading, `_testing_reset` registration, daemon-info\nlifecycle, and shutdown coordination.\n\n**NEVER ship this in a release.** See `testing_server_core.ts` for\nthe production-safety contract.\n\nRun with:\n  npx tsx src/lib/server/testing_server_node.ts\n  bun src/lib/server/testing_server_node.ts\n\nEnv vars: see `testing_server_core.ts`.",
+				"dependencies": ["server/testing_server_core.ts"]
 			},
 			{
 				"path": "server/zzz_action_handlers.ts",
@@ -19722,7 +19890,12 @@
 						"type_signature": "\"zzz\""
 					}
 				],
-				"dependents": ["server/server.ts", "zzz/cli.ts", "zzz/cli/cli_help.ts"]
+				"dependents": [
+					"server/server.ts",
+					"server/testing_server_core.ts",
+					"zzz/cli.ts",
+					"zzz/cli/cli_help.ts"
+				]
 			},
 			{
 				"path": "zzz/cli_config.ts",

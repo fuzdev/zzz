@@ -279,6 +279,25 @@ export class PtyManager {
 	}
 
 	/**
+	 * Kill every active terminal process without destroying the manager.
+	 *
+	 * Non-destructive variant of {@link destroy} — the manager stays
+	 * reusable, so subsequent `spawn` calls work normally. Used by the
+	 * test binary's `_testing_reset` `reset_state` callback to clear
+	 * cross-test terminal pollution without tearing the binary down
+	 * between tests.
+	 */
+	async kill_all(): Promise<void> {
+		if (this.#processes.size === 0) return;
+		this.log?.info(`killing ${this.#processes.size} terminal(s)`);
+		const kill_promises: Array<Promise<number | null>> = [];
+		for (const terminal_id of this.#processes.keys()) {
+			kill_promises.push(this.kill(terminal_id));
+		}
+		await Promise.allSettled(kill_promises);
+	}
+
+	/**
 	 * Kill all terminal processes. Called on backend shutdown.
 	 */
 	async destroy(): Promise<void> {

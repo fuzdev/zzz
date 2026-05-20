@@ -108,6 +108,9 @@ src/
 │   ├── server/                   # Backend (Hono/Deno reference impl)
 │   │   ├── backend.ts
 │   │   ├── server.ts            # Deno server entry (dev + production)
+│   │   ├── testing_server_core.ts  # Runtime-agnostic test-binary core (env + reset wiring + shutdown)
+│   │   ├── testing_server_deno.ts  # Deno test-binary adapter (perf-comparison sibling to the Node entry)
+│   │   ├── testing_server_node.ts  # Node/bun test-binary adapter — TS analog of `testing_zzz_server`
 │   │   ├── zzz_action_handlers.ts  # Unified handlers — single source of truth
 │   │   ├── zzz_rpc_actions.ts      # Thin adapter for fuz_app RPC format
 │   │   ├── register_websocket_actions.ts # Thin wrapper over fuz_app's `register_action_ws`

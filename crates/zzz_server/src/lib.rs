@@ -122,7 +122,9 @@ pub async fn run_app(
     ));
 
     if config.enable_test_actions {
-        tracing::info!("test actions enabled — `_testing_*` methods registered on live dispatchers");
+        tracing::info!(
+            "test actions enabled — `_testing_*` methods registered on live dispatchers"
+        );
     }
 
     // Per-IP + per-account rate limiters on `/login` and `/password`.
@@ -155,7 +157,8 @@ pub async fn run_app(
     let spine_keyring = Arc::new(
         fuz_auth::Keyring::new(&config.secret_cookie_keys).ok_or_else(|| {
             ServerError::Config(
-                "SECRET_FUZ_COOKIE_KEYS is required for spine keyring (no valid keys found)".to_owned(),
+                "SECRET_FUZ_COOKIE_KEYS is required for spine keyring (no valid keys found)"
+                    .to_owned(),
             )
         })?,
     );
@@ -330,7 +333,9 @@ pub async fn run_app(
         &app_state,
     )));
     if app_state.enable_test_actions {
-        all_specs.extend(zzz_action_specs::build_testing_specs(Arc::clone(&app_state)));
+        all_specs.extend(zzz_action_specs::build_testing_specs(Arc::clone(
+            &app_state,
+        )));
     }
     let action_registry = Arc::new(
         fuz_actions::ActionRegistry::compile(all_specs)
@@ -486,11 +491,12 @@ pub async fn run_app(
     // Same client_ip_middleware layer so audit_log.ip on success +
     // failure rows reflects the resolved client IP rather than the
     // proxy peer.
-    let spine_signup_router = fuz_auth::signup_routes::signup_router(signup_route_state)
-        .layer(axum::middleware::from_fn_with_state(
+    let spine_signup_router = fuz_auth::signup_routes::signup_router(signup_route_state).layer(
+        axum::middleware::from_fn_with_state(
             Arc::clone(&spine_trusted_proxies),
             fuz_http::client_ip_middleware,
-        ));
+        ),
+    );
 
     let mut app = Router::new()
         .route("/health", get(health_handler))

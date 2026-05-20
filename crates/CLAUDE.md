@@ -6,7 +6,7 @@ integration tests enforce identical behaviour between both backends.
 
 **Workspace layout**:
 - `zzz_server/` — library + production binary. `pub fn run_app(password_hasher: Arc<dyn fuz_auth::PasswordHasher>, default_port: u16)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, drain). `src/main.rs` is the thin production entry — constructs `Argon2idHasher` and calls `run_app`.
-- `testing_zzz_server/` — separate test-binary package wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) for cross-process integration tests. Default port 1175 (production is 1174). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit.
+- `testing_zzz_server/` — separate test-binary package wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) for cross-process integration tests. Default port 1175 (production is 1174). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. **TS-side peers**: `../src/lib/server/testing_server_{deno,node}.ts` over a shared `testing_server_core.ts` cover the same `_testing_reset` wire contract on the TS canonical backend — together the three test entries (Rust + Deno + Node) span both the cross-language axis (TS vs Rust) and the cross-runtime axis (Deno V8 vs Node V8) on the same wire shape.
 - `xtask/` — dev automation. `cargo xtask check-release` thin-wraps `fuz_audit::run_check_release_cli()`; marked `[package.metadata.fuz_audit] dev_only = true` so xtask itself is excluded from the production scan.
 - `zzz/` — Rust CLI scaffold (argh, stubs only).
 
