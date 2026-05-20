@@ -138,12 +138,11 @@ create_zzz_app_route_specs(ctx, zzz_deps)
 
 (Bootstrap routes are factory-managed by `create_app_server` — mounted
 under `/api/account` via the `bootstrap` option, not in
-`create_zzz_app_route_specs`. The Deno backend does not mount `/signup`
-today; the Rust backend mounts it via `fuz_auth::signup_routes` so the
-cross-process test harness can mint per-test accounts through
-production RPC. Mounting `/signup` on the Deno backend is a parity
-follow-up so both backends stay observationally identical at the
-wire — see `crates/CLAUDE.md` §Endpoints.)
+`create_zzz_app_route_specs`. Both backends now mount `/signup`: the
+Deno backend via `create_signup_route_specs` in `create_zzz_app`'s
+route set (added in cross-process 3d.4 Issue 5), the Rust backend via
+`fuz_auth::signup_routes`. The cross-process test harness mints per-test
+accounts through this production endpoint.)
 
 build_rpc_endpoint_specs(ctx, zzz_deps) → /api/rpc
     ├── zzz domain actions (create_zzz_action_handlers(backend))

@@ -13,6 +13,7 @@ describe_standard_attack_surface_tests({
 		'GET /health',
 		'GET /api/account/status',
 		'POST /api/account/login',
+		'POST /api/account/signup',
 		'POST /api/account/bootstrap',
 		'GET /api/rpc',
 		'POST /api/rpc',
@@ -28,6 +29,7 @@ describe_standard_attack_surface_tests({
 	security_policy: {
 		public_mutation_allowlist: [
 			'POST /api/account/login',
+			'POST /api/account/signup',
 			'POST /api/account/bootstrap',
 			'POST /api/rpc',
 		],
