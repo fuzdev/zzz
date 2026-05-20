@@ -6,7 +6,7 @@ integration tests enforce identical behaviour between both backends.
 
 **Workspace layout**:
 - `zzz_server/` — library + production binary. `pub async fn run_app(options: RunAppOptions)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, drain). `RunAppOptions` carries: `password_hasher` (production-vs-test swap), `default_port`, `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag), and `extra_action_specs_factory` (lets the test binary inject `_testing_reset` without putting `fuz_testing` in the production dep graph). `src/main.rs` is the thin production entry — constructs `Argon2idHasher`, calls `run_app` with `force_test_actions: false, extra_action_specs_factory: None`.
-- `testing_zzz_server/` — separate test-binary package wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) AND `fuz_testing::create_testing_reset_action_spec` (auth-table reset preserving keeper + consumer-supplied `reset_state` callback; `credential_types: [DaemonToken]` auth gate). The reset closure here clears zzz workspaces, calls `pty_manager.destroy()`, and wipes the optional `ZZZ_TESTING_SCRATCH_DIR`. Default port 1175 (production is 1174). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. **TS-side peers**: `../src/lib/server/testing_server_{deno,node}.ts` over a shared `testing_server_core.ts` cover the same `_testing_reset` wire contract on the TS canonical backend — together the three test entries (Rust + Deno + Node) span both the cross-language axis (TS vs Rust) and the cross-runtime axis (Deno V8 vs Node V8) on the same wire shape.
+- `testing_zzz_server/` — separate test-binary package wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) AND `fuz_testing::create_testing_reset_action_spec` (auth-table reset preserving keeper + consumer-supplied `reset_state` callback; `credential_types: [DaemonToken]` auth gate). The reset closure here clears zzz workspaces, calls `pty_manager.kill_all()` (non-destructive — manager stays usable across tests), and wipes the optional `ZZZ_TESTING_SCRATCH_DIR`. Default port 1175 (production is 1174). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. **TS-side peers**: `../src/lib/server/testing_server_{deno,node}.ts` over a shared `testing_server_core.ts` cover the same `_testing_reset` wire contract on the TS canonical backend — together the three test entries (Rust + Deno + Node) span both the cross-language axis (TS vs Rust) and the cross-runtime axis (Deno V8 vs Node V8) on the same wire shape.
 - `xtask/` — dev automation. `cargo xtask check-release` thin-wraps `fuz_audit::run_check_release_cli()`; marked `[package.metadata.fuz_audit] dev_only = true` so xtask itself is excluded from the production scan.
 - `zzz/` — Rust CLI scaffold (argh, stubs only).
 
@@ -384,15 +384,23 @@ malformed-skip and leftmost-fallback, `cidr_contains` shift-edge
 cases).
 
 ```bash
-deno task test:integration --backend=rust   # Rust only
-deno task test:integration --backend=deno   # Deno only
-deno task test:integration --backend=both   # Both (default)
-deno task test:integration --filter=ping    # Substring match on test name
+npx vitest run --project cross_backend_rust          # Rust binary (postgres://localhost/zzz_test)
+npx vitest run --project cross_backend_rust_proxy    # Rust binary with ZZZ_TRUSTED_PROXIES=127.0.0.1 (proxy.cross.test.ts only)
+npx vitest run --project cross_backend_ts_node       # Node TS adapter (PGlite in-memory)
+npx vitest run --project cross_backend_ts_deno       # Deno TS adapter (PGlite in-memory)
+npx vitest run -t ping                                # Substring match on test name (vitest -t flag)
 ```
 
-The test runner cleans the `zzz_test` database, writes a bootstrap token,
-starts the backend, bootstraps an admin account, runs tests with the session
-cookie, then stops the backend and cleans up.
+The harness writes a bootstrap token to a per-backend tmpdir, spawns the
+test binary via the project's `BackendConfig.start_command`, waits for
+health, bootstraps an admin account via `POST /api/account/bootstrap`,
+then provides the bootstrapped handle to test files via vitest's
+`inject('backend_handle')`. SIGTERM on globalSetup teardown leaves no
+stranded ports. Rust projects target a real PostgreSQL at
+`postgres://localhost/zzz_test` (cleaned by `_testing_reset` between
+tests, preserving the keeper row); TS projects target in-memory
+PGlite. The old `zzz/test/integration/` runner this section once
+described was deleted in cross-process lift §3d.9.
 
 ## Architecture
 

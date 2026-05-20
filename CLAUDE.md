@@ -279,7 +279,7 @@ Use `npm install` (not `deno install`) for packages. With `nodeModulesDir: "manu
 | `gro typecheck`              | Type checking only (faster iteration)           |
 | `gro test`                   | Run Vitest unit tests                           |
 | `deno task test`             | All tests (Vitest + integration)                |
-| `deno task test:integration` | Cross-backend parity tests (Rust + Deno)        |
+| `npx vitest run --project cross_backend_ts_node` | Cross-process parity tests against a spawned backend (project: `cross_backend_ts_deno` / `cross_backend_ts_node` / `cross_backend_rust` / `cross_backend_rust_proxy`) |
 | `gro gen`                    | Regenerate `*.gen.ts` files                     |
 | `gro format`                 | Format with Prettier                            |
 | `gro build`                  | Production build                                |
@@ -309,35 +309,33 @@ signing, blake3 session/token hashing, per-action auth checks with credential
 type enforcement, bootstrap endpoint. AI provider system with enum-dispatched
 providers — Anthropic fully implemented (non-streaming + SSE streaming with
 connection-targeted `completion_progress` notifications), OpenAI/Gemini/Ollama
-stubs. The Deno server is ground truth — 95 cross-backend integration tests
-verify identical JSON-RPC responses (including `login_forbidden_origin`),
-plus 17 Rust-only tests (`bearer_rejects_account_token_create_ws` for the
-deferred fuz_app WS surface upstream,
-`rate_limit_login_blocks_after_threshold` for the Rust-only login
-rate-limit env-var gate, ten `proxy_*` tests for the trusted-proxy
-`client_ip` resolution, and five `admin_*` tests for the admin role-gated
-`admin_session_revoke_all` / `admin_token_revoke_all` handlers which the
-Deno reference backend doesn't expose — fuz_app covers the TS port at the
-unit-test layer in `http/proxy.test.ts`, and `crates/zzz_server/src/proxy.rs`
-ships 86 `#[cfg(test)]` unit tests covering the pure functions Rust-side;
-the shared `auth::is_request_origin_allowed` helper picks up another 7
-unit tests in `auth/spec.rs::origin_tests`).
+stubs. The Deno server is ground truth — cross-process integration tests
+in `src/test/cross_backend/*.cross.test.ts` verify identical JSON-RPC
+responses across backends via a shared TS contract. Rust-only tests
+cover surface the Deno backend doesn't expose (admin role-gated
+`admin_session_revoke_all` / `admin_token_revoke_all` handlers,
+trusted-proxy `client_ip` resolution, login-rate-limit env-var gate,
+deferred fuz_app WS surface upstream); pure functions on the Rust
+side are covered by per-module `#[cfg(test)]` unit tests
+(`crates/zzz_server/src/proxy.rs`, `auth/spec.rs::origin_tests`,
+etc.). Empirical baselines live in
+`~/dev/grimoire/lore/zzz/TODO.md` § Cross-process testing.
 
 ```bash
-cargo build -p zzz_server                          # Build
-cargo clippy -p zzz_server                         # Lint
-./target/debug/zzz_server --port 1174              # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS)
-deno task dev                                      # Dev server: Rust backend + Vite frontend
-deno task test:integration --backend=rust           # Integration tests (Rust)
-deno task test:integration --backend=deno           # Integration tests (Deno)
-deno task test:integration --backend=both           # Both (default, shows comparison)
-deno task test:integration --filter=ping            # Substring match on test name
+cargo build -p zzz_server                                                 # Build
+cargo clippy -p zzz_server                                                # Lint
+./target/debug/zzz_server --port 1174                                     # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS)
+deno task dev                                                             # Dev server: Rust backend + Vite frontend
+npx vitest run --project cross_backend_rust                               # Cross-process tests against the Rust binary (needs `postgres://localhost/zzz_test`)
+npx vitest run --project cross_backend_rust_proxy                         # Proxy variant (ZZZ_TRUSTED_PROXIES=127.0.0.1 set at boot)
+npx vitest run --project cross_backend_ts_node                            # Cross-process tests against the Node TS adapter (PGlite in-memory)
+npx vitest run --project cross_backend_ts_deno                            # Cross-process tests against the Deno TS adapter (PGlite in-memory)
 ```
 
-Requires ~/dev/private_fuz as a sibling directory (path deps) and PostgreSQL
-(`createdb zzz_test` for integration tests). Both backends share the same test
-database (`TEST_DATABASE_URL`, defaults to `postgres://localhost/zzz_test`),
-cleaned between runs.
+Requires ~/dev/private_fuz as a sibling directory (path deps). The
+Rust projects expect PostgreSQL at `postgres://localhost/zzz_test`
+(`createdb zzz_test`); the TS projects run against in-memory PGlite
+and need no external DB.
 See ./crates/CLAUDE.md for architecture, endpoints,
 prerequisites, and what the integration tests check.
 
