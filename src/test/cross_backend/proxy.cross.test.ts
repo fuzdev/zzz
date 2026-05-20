@@ -1,9 +1,8 @@
 /**
  * Trusted-proxy + client IP resolution cross-process tests (Rust-only).
  *
- * Ports `~/dev/zzz/test/integration/proxy_tests.ts` (10 tests) onto
- * the vitest cross-backend harness. Exercises Rust's
- * `proxy::client_ip_middleware` behind `ZZZ_TRUSTED_PROXIES=127.0.0.1`.
+ * Exercises Rust's `proxy::client_ip_middleware` behind
+ * `ZZZ_TRUSTED_PROXIES=127.0.0.1`.
  *
  * **Wiring constraint** — this suite must run against a Rust backend
  * spawned with `ZZZ_TRUSTED_PROXIES=127.0.0.1` in its environment. The

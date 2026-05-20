@@ -1,10 +1,10 @@
 /**
  * Cross-backend integration tests for `terminal_*` actions.
  *
- * Ported from `test/integration/tests.ts`. Each test mints a fresh
- * per-test account via `default_cross_process_setup` and exercises the
- * terminal RPC + WebSocket data/exit notification path against the
- * spawned test binary.
+ * Each test mints a fresh per-test account via
+ * `default_cross_process_setup` and exercises the terminal RPC +
+ * WebSocket data/exit notification path against the spawned test
+ * binary.
  *
  * @module
  */

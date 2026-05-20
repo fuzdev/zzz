@@ -30,7 +30,6 @@ import {start_daemon_token_rotation} from '@fuzdev/fuz_app/auth/daemon_token_mid
 import type {Action} from '@fuzdev/fuz_app/actions/action_types.js';
 import type {RpcAction} from '@fuzdev/fuz_app/actions/action_rpc.js';
 import type {AppDeps} from '@fuzdev/fuz_app/auth/deps.js';
-import type {AppSettings} from '@fuzdev/fuz_app/auth/app_settings_schema.js';
 import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.js';
 
 import {build_allowed_hostnames, create_host_validation_middleware} from './security.js';
@@ -115,15 +114,6 @@ export interface CreateZzzAppOptions {
 	 * in; production entries leave this unset.
 	 */
 	disable_rate_limiters?: boolean;
-	/**
-	 * Optional patch applied to the in-memory `app_settings` ref after
-	 * `create_app_server` loads it from the DB. Used by test binaries to
-	 * flip `open_signup: true` so the cross-process harness can mint
-	 * per-test accounts through `/signup`. Production entries leave this
-	 * unset and rely on the admin RPC (`app_settings_update`) to mutate
-	 * settings.
-	 */
-	app_settings_patch?: Partial<AppSettings>;
 }
 
 /**
@@ -330,14 +320,6 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 			log.error(`Pending effect failed (${ctx.method} ${ctx.path}):`, error);
 		},
 	});
-
-	// Test binaries flip `open_signup: true` so the cross-process harness
-	// can mint accounts via `/signup`. Mutates the in-memory ref the signup
-	// route reads from (the route checks `app_settings.open_signup`
-	// per-request, so this avoids a DB round-trip + an RPC dance).
-	if (options.app_settings_patch) {
-		Object.assign(app_server.app_settings, options.app_settings_patch);
-	}
 
 	const close = daemon_token_rotation
 		? async (): Promise<void> => {

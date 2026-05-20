@@ -1,8 +1,7 @@
 /**
  * Cross-backend integration tests for filesystem actions
  * (`diskfile_update`, `diskfile_delete`, `directory_create`) plus the
- * `filer_change` notification path. Ported from
- * `test/integration/tests.ts`.
+ * `filer_change` notification path.
  *
  * @module
  */

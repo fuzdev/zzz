@@ -1,11 +1,10 @@
 /**
  * Cross-backend integration tests for `workspace_*` actions.
  *
- * Ported from `test/integration/tests.ts` (Deno standalone runner) into
- * vitest's cross-backend layout. Each test mints a fresh per-test
- * account via `default_cross_process_setup` and drives RPC + WS frames
- * against the spawned test binary specified by the `backend_handle`
- * injected from `globalSetup`.
+ * Each test mints a fresh per-test account via
+ * `default_cross_process_setup` and drives RPC + WS frames against the
+ * spawned test binary specified by the `backend_handle` injected from
+ * `globalSetup`.
  *
  * @module
  */

@@ -1,10 +1,9 @@
 /**
  * Cross-backend integration tests for `completion_create`.
  *
- * The old standalone runner exercises completions through real provider
- * integrations, which the cross-backend matrix doesn't wire (no keeper
- * provider API keys in the test binaries). This file covers what is
- * portable today — invalid-provider rejection plus a smoke RPC against
+ * The cross-backend matrix doesn't wire real provider integrations (no
+ * keeper provider API keys in the test binaries). This file covers what
+ * is portable today — invalid-provider rejection plus a smoke RPC against
  * the Ollama provider, which the test binaries stub as unavailable.
  *
  * @module

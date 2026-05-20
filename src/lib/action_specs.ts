@@ -82,10 +82,9 @@ export type SessionLoadData = z.infer<typeof SessionLoadData>;
 /**
  * Output for `session_load`. The `data` wrapper is historical and kept for
  * cross-backend parity: the Rust backend serializes this exact shape
- * (`crates/zzz_server/src/handlers.rs::SessionLoadResult`) and three
- * integration tests in `test/integration/tests.ts` read `result.data.*`
- * directly. Flattening would break parity in both places, so the wrapper
- * stays until the Rust side moves alongside.
+ * (`crates/zzz_server/src/handlers.rs::SessionLoadResult`). Flattening
+ * would break parity in both places, so the wrapper stays until the Rust
+ * side moves alongside.
  */
 export const SessionLoadOutput = z.strictObject({
 	data: SessionLoadData,

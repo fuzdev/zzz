@@ -1,9 +1,8 @@
 /**
  * Cross-backend integration tests for provider + session_load actions.
  *
- * Ported from `test/integration/tests.ts`. The keeper-only
- * `provider_update_api_key` action requires daemon-token auth and is
- * not yet ported — see the TODO at the bottom.
+ * The keeper-only `provider_update_api_key` action requires daemon-token
+ * auth and is not yet ported — see the TODO at the bottom.
  *
  * @module
  */

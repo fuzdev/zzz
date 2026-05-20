@@ -4,12 +4,9 @@
  * `_testing_emit_notifications` + `_testing_notification` are kept out of the
  * production codegen surface (`all_action_specs` in `action_specs.ts`).
  * They register on the live HTTP-RPC + WebSocket dispatchers only when
- * `ZZZ_ENABLE_TEST_ACTIONS=1`, which the integration runner sets and
- * production never does.
+ * `ZZZ_ENABLE_TEST_ACTIONS=1`, which the cross-process test binary
+ * (`testing_zzz_server`) sets unconditionally and production never does.
  *
- * The cross-backend integration test `ctx_notify_socket_scoped`
- * (`test/integration/tests.ts`) exercises socket-scoped `ctx.notify`
- * routing through these specs without depending on a real AI provider.
  * In-process unit tests (`src/test/server/routes/ws.integration.*.test.ts`)
  * import the specs directly into custom action arrays — no env var needed
  * since they bypass the production registration path.

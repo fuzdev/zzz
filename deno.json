@@ -9,8 +9,7 @@
 		"dev:start": "NODE_ENV=development deno run --allow-all --env=.env.development src/lib/zzz/main.ts daemon start",
 		"install": "gro build && mkdir -p ~/.zzz/bin && cp dist_cli/zzz ~/.zzz/bin/zzz",
 		"check": "deno check src/lib/zzz/**/*.ts",
-		"test": "gro test && deno task test:integration",
-		"test:integration": "NODE_ENV=development deno run --allow-net --allow-run --allow-read --allow-write --allow-env test/integration/run.ts"
+		"test": "gro test"
 	},
 	"imports": {
 		"esm-env": "npm:esm-env@^1",

@@ -199,10 +199,10 @@ export const start_testing_server = async (adapter: TestingServerAdapter): Promi
 			// finishes. Disable the limiters here — the test binary's whole
 			// purpose is test-only.
 			disable_rate_limiters: true,
-			// Open signup so the cross-process harness mints per-test accounts
-			// via `POST /signup` — the default `open_signup: false` requires an
-			// invite, which the cross-process flow doesn't pre-seed.
-			app_settings_patch: {open_signup: true},
+			// `open_signup` stays at production default (`false`) — the
+			// cross-process harness's `mint_account` mints a username-scoped
+			// invite via the keeper before signup, so no `app_settings_patch`
+			// is needed here. Matches real-user signup (invite-gated).
 			extra_rpc_actions_factory: (deps, zzz_backend) =>
 				create_testing_reset_actions(deps, {
 					reset_state: async () => {
