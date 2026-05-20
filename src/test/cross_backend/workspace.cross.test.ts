@@ -22,8 +22,6 @@ import {
 import {rpc_call} from '@fuzdev/fuz_app/testing/rpc_helpers.js';
 import {create_ws_transport} from '@fuzdev/fuz_app/testing/transports/ws_transport.js';
 import {is_notification} from '@fuzdev/fuz_app/testing/transports/ws_client.js';
-import type {FetchTransport} from '@fuzdev/fuz_app/testing/transports/fetch_transport.js';
-import type {RpcTestTransport} from '@fuzdev/fuz_app/testing/rpc_helpers.js';
 
 declare module 'vitest' {
 	export interface ProvidedContext {
@@ -33,25 +31,6 @@ declare module 'vitest' {
 
 const handle = inject('backend_handle');
 const setup_test = default_cross_process_setup(handle);
-
-// Local adapters working around two type seams in fuz_app's cross-process
-// testing surface that didn't land in Session 2:
-//
-// 1. `TestFixtureBase.transport` is typed `RpcTestTransport` (a bare
-//    callable) but the cross-process runtime returns a `FetchTransport`
-//    (callable + `.cookies()`). The narrow shape forces a cast here.
-// 2. `rpc_call` takes `app: {request: (input, init) => Response}` but
-//    `RpcTestTransport` is the bare callable `(input, init) => Response`.
-//    No structural overlap, so wrap.
-//
-// Both seams should fold back into fuz_app — widen `TestFixtureBase.transport`
-// to a union including `FetchTransport`, and accept either shape on
-// `rpc_call.app`. Tracked in `grimoire/lore/fuz_app/TODO_CROSS_PROCESS_LIFT.md`
-// §Session 3d follow-ups.
-const fetch_transport = (t: RpcTestTransport): FetchTransport => t as unknown as FetchTransport;
-const as_rpc_app = (t: RpcTestTransport) => ({
-	request: (input: string, init: RequestInit) => t(input, init),
-});
 
 /** Create a fresh tmp directory for a workspace; caller cleans up. */
 const create_tmp_workspace = async (label: string): Promise<string> => {
@@ -70,7 +49,7 @@ describe('workspace cross-backend', () => {
 		const tmp_dir = await create_tmp_workspace('open_list');
 		try {
 			const open = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_open',
 				params: {path: tmp_dir},
@@ -86,7 +65,7 @@ describe('workspace cross-backend', () => {
 			assert.ok(Array.isArray(open_result.files), 'files is array');
 
 			const list = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_list',
 				headers: fixture.create_session_headers(),
@@ -95,7 +74,10 @@ describe('workspace cross-backend', () => {
 			const workspaces = (list.result as Record<string, unknown>).workspaces as Array<
 				Record<string, unknown>
 			>;
-			assert.ok(workspaces.some((w) => w.path === workspace.path), 'opened workspace in list');
+			assert.ok(
+				workspaces.some((w) => w.path === workspace.path),
+				'opened workspace in list',
+			);
 		} finally {
 			await remove_dir(tmp_dir);
 		}
@@ -106,7 +88,7 @@ describe('workspace cross-backend', () => {
 		const tmp_dir = await create_tmp_workspace('idempotent');
 		try {
 			const r1 = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_open',
 				params: {path: tmp_dir},
@@ -116,7 +98,7 @@ describe('workspace cross-backend', () => {
 			const w1 = (r1.result as Record<string, unknown>).workspace as Record<string, unknown>;
 
 			const r2 = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_open',
 				params: {path: tmp_dir},
@@ -135,7 +117,7 @@ describe('workspace cross-backend', () => {
 	test('workspace_open_nonexistent', async () => {
 		const fixture = await setup_test();
 		const res = await rpc_call({
-			app: as_rpc_app(fixture.transport),
+			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'workspace_open',
 			params: {path: `/tmp/zzz_nonexistent_${randomUUID()}`},
@@ -154,7 +136,7 @@ describe('workspace cross-backend', () => {
 		const tmp_dir = await create_tmp_workspace('close');
 		try {
 			const open = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_open',
 				params: {path: tmp_dir},
@@ -167,7 +149,7 @@ describe('workspace cross-backend', () => {
 			>;
 
 			const close = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_close',
 				params: {path: workspace.path},
@@ -177,7 +159,7 @@ describe('workspace cross-backend', () => {
 			assert.equal(close.result, null, 'close result is null');
 
 			const list = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_list',
 				headers: fixture.create_session_headers(),
@@ -189,7 +171,7 @@ describe('workspace cross-backend', () => {
 			assert.ok(!workspaces.some((w) => w.path === workspace.path), 'workspace gone');
 
 			const close2 = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_close',
 				params: {path: workspace.path},
@@ -214,7 +196,7 @@ describe('workspace cross-backend', () => {
 		try {
 			await writeFile(file_path, 'content', 'utf-8');
 			const res = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_open',
 				params: {path: file_path},
@@ -232,7 +214,7 @@ describe('workspace cross-backend', () => {
 		const ws = await create_ws_transport({
 			base_url: handle.config.base_url,
 			ws_path: handle.config.ws_path,
-			cookies: fetch_transport(fixture.transport).cookies(),
+			cookies: fixture.transport.cookies(),
 		});
 		const tmp_dir = await create_tmp_workspace('changed_open');
 		try {
@@ -240,7 +222,7 @@ describe('workspace cross-backend', () => {
 			await ws.request('_warmup', 'ping', undefined);
 
 			const open = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_open',
 				params: {path: tmp_dir},
@@ -262,7 +244,7 @@ describe('workspace cross-backend', () => {
 		} finally {
 			await ws.close();
 			await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_close',
 				params: {path: tmp_dir},
@@ -277,7 +259,7 @@ describe('workspace cross-backend', () => {
 		const tmp_dir = await create_tmp_workspace('changed_close');
 		try {
 			const open = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_open',
 				params: {path: tmp_dir},
@@ -292,13 +274,13 @@ describe('workspace cross-backend', () => {
 			const ws = await create_ws_transport({
 				base_url: handle.config.base_url,
 				ws_path: handle.config.ws_path,
-				cookies: fetch_transport(fixture.transport).cookies(),
+				cookies: fixture.transport.cookies(),
 			});
 			try {
 				await ws.request('_warmup', 'ping', undefined);
 
 				const close = await rpc_call({
-					app: as_rpc_app(fixture.transport),
+					app: fixture.transport,
 					path: handle.config.rpc_path,
 					method: 'workspace_close',
 					params: {path: workspace.path},
@@ -327,7 +309,7 @@ describe('workspace cross-backend', () => {
 		const tmp_dir = await create_tmp_workspace('changed_idempotent');
 		try {
 			await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_open',
 				params: {path: tmp_dir},
@@ -337,13 +319,13 @@ describe('workspace cross-backend', () => {
 			const ws = await create_ws_transport({
 				base_url: handle.config.base_url,
 				ws_path: handle.config.ws_path,
-				cookies: fetch_transport(fixture.transport).cookies(),
+				cookies: fixture.transport.cookies(),
 			});
 			try {
 				await ws.request('_warmup', 'ping', undefined);
 
 				await rpc_call({
-					app: as_rpc_app(fixture.transport),
+					app: fixture.transport,
 					path: handle.config.rpc_path,
 					method: 'workspace_open',
 					params: {path: tmp_dir},
@@ -358,16 +340,13 @@ describe('workspace cross-backend', () => {
 				} catch {
 					// expected timeout
 				}
-				assert.ok(
-					!saw_workspace_changed,
-					'idempotent open must not trigger workspace_changed',
-				);
+				assert.ok(!saw_workspace_changed, 'idempotent open must not trigger workspace_changed');
 			} finally {
 				await ws.close();
 			}
 		} finally {
 			await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_close',
 				params: {path: tmp_dir},

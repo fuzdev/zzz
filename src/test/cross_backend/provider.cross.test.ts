@@ -17,7 +17,6 @@ import {
 	type BootstrappedBackendHandle,
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
 import {rpc_call} from '@fuzdev/fuz_app/testing/rpc_helpers.js';
-import type {RpcTestTransport} from '@fuzdev/fuz_app/testing/rpc_helpers.js';
 
 declare module 'vitest' {
 	export interface ProvidedContext {
@@ -28,23 +27,13 @@ declare module 'vitest' {
 const handle = inject('backend_handle');
 const setup_test = default_cross_process_setup(handle);
 
-// Local adapter working around the fuz_app cross-process testing type seam:
-// `rpc_call.app` expects an object with `.request` but
-// `RpcTestTransport` (the fixture's transport type) is a bare callable.
-// Tracked in `grimoire/lore/fuz_app/TODO_CROSS_PROCESS_LIFT.md` §Session 3d
-// follow-ups.
-const as_rpc_app = (t: RpcTestTransport) => ({
-	request: (input: string, init: RequestInit) => t(input, init),
-});
-
-
 const zzz_dir = handle.config.env.PUBLIC_ZZZ_DIR!;
 
 describe('provider + session cross-backend', () => {
 	test('provider_load_status_empty', async () => {
 		const fixture = await setup_test();
 		const res = await rpc_call({
-			app: as_rpc_app(fixture.transport),
+			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'provider_load_status',
 			params: {provider_name: 'ollama'},
@@ -63,7 +52,7 @@ describe('provider + session cross-backend', () => {
 	test('session_load_basic', async () => {
 		const fixture = await setup_test();
 		const res = await rpc_call({
-			app: as_rpc_app(fixture.transport),
+			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'session_load',
 			headers: fixture.create_session_headers(),
@@ -96,7 +85,7 @@ describe('provider + session cross-backend', () => {
 			await writeFile(file_path, content, 'utf-8');
 
 			const res = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'session_load',
 				headers: fixture.create_session_headers(),
@@ -130,7 +119,7 @@ describe('provider + session cross-backend', () => {
 			await writeFile(file_path, 'nested content', 'utf-8');
 
 			const res = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'session_load',
 				headers: fixture.create_session_headers(),

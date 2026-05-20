@@ -16,8 +16,6 @@ import {
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
 import {rpc_call} from '@fuzdev/fuz_app/testing/rpc_helpers.js';
 import {create_ws_transport} from '@fuzdev/fuz_app/testing/transports/ws_transport.js';
-import type {FetchTransport} from '@fuzdev/fuz_app/testing/transports/fetch_transport.js';
-import type {RpcTestTransport} from '@fuzdev/fuz_app/testing/rpc_helpers.js';
 
 declare module 'vitest' {
 	export interface ProvidedContext {
@@ -28,17 +26,6 @@ declare module 'vitest' {
 const handle = inject('backend_handle');
 const setup_test = default_cross_process_setup(handle);
 
-// Local adapters working around fuz_app cross-process testing type seams:
-// (1) TestFixtureBase.transport is typed RpcTestTransport but the runtime
-// returns FetchTransport (has .cookies()); (2) rpc_call.app expects an
-// object with .request but RpcTestTransport is a bare callable. See
-// grimoire/lore/fuz_app/TODO_CROSS_PROCESS_LIFT.md §Session 3d follow-ups.
-const fetch_transport = (t: RpcTestTransport): FetchTransport => t as unknown as FetchTransport;
-const as_rpc_app = (t: RpcTestTransport) => ({
-	request: (input: string, init: RequestInit) => t(input, init),
-});
-
-
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 describe('terminal cross-backend', () => {
@@ -47,7 +34,7 @@ describe('terminal cross-backend', () => {
 		const ws = await create_ws_transport({
 			base_url: handle.config.base_url,
 			ws_path: handle.config.ws_path,
-			cookies: fetch_transport(fixture.transport).cookies(),
+			cookies: fixture.transport.cookies(),
 		});
 		try {
 			await ws.request('_warmup', 'ping', undefined);
@@ -90,7 +77,7 @@ describe('terminal cross-backend', () => {
 		const ws = await create_ws_transport({
 			base_url: handle.config.base_url,
 			ws_path: handle.config.ws_path,
-			cookies: fetch_transport(fixture.transport).cookies(),
+			cookies: fixture.transport.cookies(),
 		});
 		try {
 			await ws.request('_warmup', 'ping', undefined);
@@ -118,7 +105,7 @@ describe('terminal cross-backend', () => {
 		const ws = await create_ws_transport({
 			base_url: handle.config.base_url,
 			ws_path: handle.config.ws_path,
-			cookies: fetch_transport(fixture.transport).cookies(),
+			cookies: fixture.transport.cookies(),
 		});
 		try {
 			await ws.request('_warmup', 'ping', undefined);
@@ -146,9 +133,7 @@ describe('terminal cross-backend', () => {
 			}, 5_000)) as Record<string, unknown>;
 			assert.ok(echo_msg);
 
-			await ws
-				.request('twr-3', 'terminal_close', {terminal_id})
-				.catch(() => undefined);
+			await ws.request('twr-3', 'terminal_close', {terminal_id}).catch(() => undefined);
 		} finally {
 			await ws.close();
 		}
@@ -159,7 +144,7 @@ describe('terminal cross-backend', () => {
 		const ws = await create_ws_transport({
 			base_url: handle.config.base_url,
 			ws_path: handle.config.ws_path,
-			cookies: fetch_transport(fixture.transport).cookies(),
+			cookies: fixture.transport.cookies(),
 		});
 		try {
 			await ws.request('_warmup', 'ping', undefined);
@@ -177,9 +162,7 @@ describe('terminal cross-backend', () => {
 			});
 			assert.equal(resize_result, null, 'resize result is null');
 
-			await ws
-				.request('trl-3', 'terminal_close', {terminal_id})
-				.catch(() => undefined);
+			await ws.request('trl-3', 'terminal_close', {terminal_id}).catch(() => undefined);
 		} finally {
 			await ws.close();
 		}
@@ -190,7 +173,7 @@ describe('terminal cross-backend', () => {
 		const ws = await create_ws_transport({
 			base_url: handle.config.base_url,
 			ws_path: handle.config.ws_path,
-			cookies: fetch_transport(fixture.transport).cookies(),
+			cookies: fixture.transport.cookies(),
 		});
 		try {
 			await ws.request('_warmup', 'ping', undefined);
@@ -220,7 +203,7 @@ describe('terminal cross-backend', () => {
 		const ws = await create_ws_transport({
 			base_url: handle.config.base_url,
 			ws_path: handle.config.ws_path,
-			cookies: fetch_transport(fixture.transport).cookies(),
+			cookies: fixture.transport.cookies(),
 		});
 		try {
 			await ws.request('_warmup', 'ping', undefined);
@@ -267,7 +250,7 @@ describe('terminal cross-backend', () => {
 	test('terminal_data_send_missing', async () => {
 		const fixture = await setup_test();
 		const res = await rpc_call({
-			app: as_rpc_app(fixture.transport),
+			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'terminal_data_send',
 			params: {terminal_id: NIL_UUID, data: 'hello'},
@@ -280,7 +263,7 @@ describe('terminal cross-backend', () => {
 	test('terminal_close_missing', async () => {
 		const fixture = await setup_test();
 		const res = await rpc_call({
-			app: as_rpc_app(fixture.transport),
+			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'terminal_close',
 			params: {terminal_id: NIL_UUID},
@@ -293,7 +276,7 @@ describe('terminal cross-backend', () => {
 	test('terminal_resize_missing', async () => {
 		const fixture = await setup_test();
 		const res = await rpc_call({
-			app: as_rpc_app(fixture.transport),
+			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'terminal_resize',
 			params: {terminal_id: NIL_UUID, cols: 80, rows: 24},

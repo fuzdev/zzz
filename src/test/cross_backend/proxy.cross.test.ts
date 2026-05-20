@@ -52,8 +52,7 @@ declare module 'vitest' {
  * `rust_backend_config()` in `zzz_backend_config.ts`. Override via
  * `TEST_DATABASE_URL` for CI environments that pin a custom host.
  */
-const TEST_DATABASE_URL =
-	process.env.TEST_DATABASE_URL ?? 'postgres://localhost/zzz_test';
+const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgres://localhost/zzz_test';
 
 /**
  * Lazy-singleton `pg.Client` shared by every test in this file. Each
@@ -124,10 +123,7 @@ const fire_failed_login = async (
  */
 const wait_for_login_failure_ip = async (
 	username: string,
-	{
-		timeout_ms = 2_000,
-		interval_ms = 25,
-	}: {timeout_ms?: number; interval_ms?: number} = {},
+	{timeout_ms = 2_000, interval_ms = 25}: {timeout_ms?: number; interval_ms?: number} = {},
 ): Promise<string | null> => {
 	const client = await get_pg_client();
 	const deadline = performance.now() + timeout_ms;
@@ -185,7 +181,6 @@ const assert_resolved_ip = async (
 const handle = inject('backend_handle');
 
 describe('proxy.cross', () => {
-
 	// No XFF header — middleware uses the TCP peer (loopback). The harness
 	// always binds the backend to 127.0.0.1.
 	test('proxy_no_xff_uses_connection_ip', async () => {

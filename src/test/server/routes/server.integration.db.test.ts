@@ -109,7 +109,7 @@ describe_data_exposure_tests(
 	default_in_process_suite_options({
 		session_options: fuz_session_config,
 		create_route_specs: create_zzz_test_route_specs,
-		surface_source: {kind: 'inline', spec: create_zzz_app_surface_spec()},
+		surface_source: create_zzz_app_surface_spec(),
 		bootstrap: zzz_test_bootstrap,
 	}),
 );

@@ -19,9 +19,6 @@ import {
 import {rpc_call} from '@fuzdev/fuz_app/testing/rpc_helpers.js';
 import {create_ws_transport} from '@fuzdev/fuz_app/testing/transports/ws_transport.js';
 
-import type {FetchTransport} from '@fuzdev/fuz_app/testing/transports/fetch_transport.js';
-import type {RpcTestTransport} from '@fuzdev/fuz_app/testing/rpc_helpers.js';
-
 declare module 'vitest' {
 	export interface ProvidedContext {
 		backend_handle: BootstrappedBackendHandle;
@@ -30,17 +27,6 @@ declare module 'vitest' {
 
 const handle = inject('backend_handle');
 const setup_test = default_cross_process_setup(handle);
-
-// Local adapters working around fuz_app cross-process testing type seams:
-// (1) TestFixtureBase.transport is typed RpcTestTransport but the runtime
-// returns FetchTransport (has .cookies()); (2) rpc_call.app expects an
-// object with .request but RpcTestTransport is a bare callable. See
-// grimoire/lore/fuz_app/TODO_CROSS_PROCESS_LIFT.md §Session 3d follow-ups.
-const fetch_transport = (t: RpcTestTransport): FetchTransport => t as unknown as FetchTransport;
-const as_rpc_app = (t: RpcTestTransport) => ({
-	request: (input: string, init: RequestInit) => t(input, init),
-});
-
 
 const scoped_dir = handle.config.env.PUBLIC_ZZZ_SCOPED_DIRS!;
 const zzz_dir = handle.config.env.PUBLIC_ZZZ_DIR!;
@@ -62,7 +48,7 @@ describe('filesystem cross-backend', () => {
 		const content = 'hello from integration test';
 		try {
 			const res = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'diskfile_update',
 				params: {path: file_path, content},
@@ -85,7 +71,7 @@ describe('filesystem cross-backend', () => {
 		const content = 'write to zzz_dir';
 		try {
 			const res = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'diskfile_update',
 				params: {path: file_path, content},
@@ -109,7 +95,7 @@ describe('filesystem cross-backend', () => {
 		const content = 'nested write';
 		try {
 			const res = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'diskfile_update',
 				params: {path: file_path, content},
@@ -132,7 +118,7 @@ describe('filesystem cross-backend', () => {
 		await writeFile(file_path, 'to be deleted', 'utf-8');
 
 		const res = await rpc_call({
-			app: as_rpc_app(fixture.transport),
+			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'diskfile_delete',
 			params: {path: file_path},
@@ -150,7 +136,7 @@ describe('filesystem cross-backend', () => {
 		const dir_path = join(scoped_dir, `nested_${randomUUID()}`, 'deep', 'dir');
 		try {
 			const res = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'directory_create',
 				params: {path: dir_path},
@@ -172,7 +158,7 @@ describe('filesystem cross-backend', () => {
 		const dir_path = join(scoped_dir, `idempotent_dir_${randomUUID()}`);
 		try {
 			const r1 = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'directory_create',
 				params: {path: dir_path},
@@ -181,7 +167,7 @@ describe('filesystem cross-backend', () => {
 			assert.ok(r1.ok);
 
 			const r2 = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'directory_create',
 				params: {path: dir_path},
@@ -197,7 +183,7 @@ describe('filesystem cross-backend', () => {
 	test('diskfile_update_outside_scope', async () => {
 		const fixture = await setup_test();
 		const res = await rpc_call({
-			app: as_rpc_app(fixture.transport),
+			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'diskfile_update',
 			params: {path: '/tmp/zzz_outside_scope/evil.txt', content: 'nope'},
@@ -214,7 +200,7 @@ describe('filesystem cross-backend', () => {
 	test('diskfile_update_path_traversal', async () => {
 		const fixture = await setup_test();
 		const res = await rpc_call({
-			app: as_rpc_app(fixture.transport),
+			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'diskfile_update',
 			params: {
@@ -230,7 +216,7 @@ describe('filesystem cross-backend', () => {
 	test('diskfile_update_relative_path', async () => {
 		const fixture = await setup_test();
 		const res = await rpc_call({
-			app: as_rpc_app(fixture.transport),
+			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'diskfile_update',
 			params: {path: 'relative/path.txt', content: 'nope'},
@@ -244,7 +230,7 @@ describe('filesystem cross-backend', () => {
 		const fixture = await setup_test();
 		await mkdir(scoped_dir, {recursive: true});
 		const res = await rpc_call({
-			app: as_rpc_app(fixture.transport),
+			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'diskfile_delete',
 			params: {path: join(scoped_dir, `does_not_exist_${randomUUID()}.txt`)},
@@ -260,7 +246,7 @@ describe('filesystem cross-backend', () => {
 		await mkdir(tmp_dir, {recursive: true});
 		try {
 			const open = await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_open',
 				params: {path: tmp_dir},
@@ -271,7 +257,7 @@ describe('filesystem cross-backend', () => {
 			const ws = await create_ws_transport({
 				base_url: handle.config.base_url,
 				ws_path: handle.config.ws_path,
-				cookies: fetch_transport(fixture.transport).cookies(),
+				cookies: fixture.transport.cookies(),
 			});
 			try {
 				await ws.request('_warmup', 'ping', undefined);
@@ -285,9 +271,7 @@ describe('filesystem cross-backend', () => {
 					if (rec.method !== 'filer_change') return false;
 					const params = rec.params as Record<string, unknown> | undefined;
 					const change = params?.change as Record<string, unknown> | undefined;
-					return (
-						typeof change?.path === 'string' && typeof change?.type === 'string'
-					);
+					return typeof change?.path === 'string' && typeof change?.type === 'string';
 				}, 10_000)) as Record<string, unknown>;
 				assert.ok(msg, 'received filer_change notification');
 			} finally {
@@ -295,7 +279,7 @@ describe('filesystem cross-backend', () => {
 			}
 
 			await rpc_call({
-				app: as_rpc_app(fixture.transport),
+				app: fixture.transport,
 				path: handle.config.rpc_path,
 				method: 'workspace_close',
 				params: {path: tmp_dir},
