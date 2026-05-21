@@ -12,7 +12,7 @@
 use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionHandler, ActionSpec};
-use fuz_auth::{ActionAuth, AuthSpec, CredentialType};
+use fuz_auth::{AuthSpec, CredentialType};
 use serde_json::Value;
 
 use crate::handlers::App;
@@ -43,8 +43,7 @@ fn provider_update_api_key_spec(app: Arc<App>) -> ActionSpec {
         let app = Arc::clone(&app);
         Box::pin(async move { provider_v2::provider_update_api_key(params, ctx, app).await })
     });
-    let keeper_auth = AuthSpec {
-        auth: ActionAuth::Authenticated,
+    let keeper_auth = AuthSpec::Authenticated {
         credential_types: Some(DAEMON_TOKEN_ONLY),
         roles: Some(KEEPER_ROLE),
     };
