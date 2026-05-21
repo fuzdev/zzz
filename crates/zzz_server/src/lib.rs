@@ -325,12 +325,16 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         daemon_token_state: spine_daemon_token.clone(),
     };
     let bootstrap_route_state = fuz_auth::BootstrapRouteState {
-        deps: Arc::new(fuz_auth::BootstrapDeps {
+        options: Arc::new(fuz_auth::BootstrapOptions {
             pool: pool.clone(),
             password_hasher: Arc::clone(&spine_password_hasher),
             audit: Arc::clone(&spine_audit_emitter),
             bootstrap_available: Arc::clone(&bootstrap_available_atomic),
-            bootstrap_token_path: config.bootstrap_token_path.as_ref().map(PathBuf::from),
+            token_store: config.bootstrap_token_path.as_ref().map(|p| {
+                let store: Arc<dyn fuz_auth::BootstrapTokenStore> =
+                    Arc::new(fuz_auth::FileBootstrapTokenStore::new(PathBuf::from(p)));
+                store
+            }),
             on_keeper_resolved: None,
         }),
         keyring: Arc::clone(&spine_keyring),
@@ -351,7 +355,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // when the TS side catches up to the Rust-side decision so the
     // two backends stay observationally identical at the wire.
     let signup_route_state = fuz_auth::SignupRouteState {
-        deps: Arc::new(fuz_auth::SignupDeps {
+        options: Arc::new(fuz_auth::SignupOptions {
             pool: pool.clone(),
             password_hasher: Arc::clone(&spine_password_hasher),
             audit: Arc::clone(&spine_audit_emitter),
@@ -364,10 +368,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         allowed_origins: Arc::clone(&spine_allowed_origins),
     };
 
-    let spine_state = handlers::SpineState {
-        realtime: Arc::clone(&realtime),
-    };
-
     let app_state = Arc::new(handlers::App::new(
         pool,
         scoped_fs,
@@ -375,7 +375,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         scoped_dir_strings,
         provider_manager,
         config.enable_test_actions,
-        spine_state,
+        Arc::clone(&realtime),
     ));
 
     // Register audit-event → WebSocket socket-revocation listeners on

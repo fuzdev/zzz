@@ -15600,7 +15600,7 @@
 						"name": "is_ffi_available",
 						"kind": "function",
 						"doc_comment": "Check if the FFI library is available.",
-						"source_line": 100,
+						"source_line": 99,
 						"type_signature": "(): boolean",
 						"return_type": "boolean",
 						"parameters": []
@@ -15608,7 +15608,7 @@
 					{
 						"name": "PtySpawnResult",
 						"kind": "type",
-						"source_line": 113,
+						"source_line": 112,
 						"type_signature": "PtySpawnResult",
 						"properties": [
 							{
@@ -15627,7 +15627,7 @@
 						"name": "pty_spawn",
 						"kind": "function",
 						"doc_comment": "Spawn a process in a new PTY.",
-						"source_line": 121,
+						"source_line": 120,
 						"type_signature": "(command: string, args: string[], cwd?: string | undefined, cols?: number, rows?: number): PtySpawnResult",
 						"return_type": "PtySpawnResult",
 						"parameters": [
@@ -15660,7 +15660,7 @@
 						"name": "pty_read",
 						"kind": "function",
 						"doc_comment": "Read available data from the PTY. Returns null when no data (EAGAIN) or on EOF/error.",
-						"source_line": 163,
+						"source_line": 162,
 						"type_signature": "(master_fd: number): Uint8Array<ArrayBufferLike> | null",
 						"return_type": "Uint8Array<ArrayBufferLike> | null",
 						"parameters": [
@@ -15674,7 +15674,7 @@
 						"name": "pty_read_status",
 						"kind": "function",
 						"doc_comment": "Read from PTY, distinguishing EAGAIN (no data yet) from EOF/error.\nReturns: bytes read (Uint8Array), 'eagain', or 'eof'.",
-						"source_line": 174,
+						"source_line": 173,
 						"type_signature": "(master_fd: number): Uint8Array<ArrayBufferLike> | \"eagain\" | \"eof\"",
 						"return_type": "Uint8Array<ArrayBufferLike> | \"eagain\" | \"eof\"",
 						"parameters": [
@@ -15688,7 +15688,7 @@
 						"name": "pty_write",
 						"kind": "function",
 						"doc_comment": "Write data to the PTY.",
-						"source_line": 185,
+						"source_line": 184,
 						"type_signature": "(master_fd: number, data: Uint8Array<ArrayBufferLike>): number",
 						"return_type": "number",
 						"parameters": [
@@ -15706,7 +15706,7 @@
 						"name": "pty_resize",
 						"kind": "function",
 						"doc_comment": "Resize the PTY window.",
-						"source_line": 201,
+						"source_line": 200,
 						"type_signature": "(master_fd: number, cols: number, rows: number): void",
 						"return_type": "void",
 						"parameters": [
@@ -15728,7 +15728,7 @@
 						"name": "pty_close",
 						"kind": "function",
 						"doc_comment": "Close the PTY master fd.",
-						"source_line": 212,
+						"source_line": 211,
 						"type_signature": "(master_fd: number): void",
 						"return_type": "void",
 						"parameters": [
@@ -15742,7 +15742,7 @@
 						"name": "pty_kill",
 						"kind": "function",
 						"doc_comment": "Send a signal to a process. Defaults to SIGTERM.",
-						"source_line": 223,
+						"source_line": 222,
 						"type_signature": "(pid: number, signal?: number): void",
 						"return_type": "void",
 						"parameters": [
@@ -15760,7 +15760,7 @@
 					{
 						"name": "PtyWaitResult",
 						"kind": "type",
-						"source_line": 228,
+						"source_line": 227,
 						"type_signature": "PtyWaitResult",
 						"properties": [
 							{
@@ -15779,7 +15779,7 @@
 						"name": "pty_waitpid",
 						"kind": "function",
 						"doc_comment": "Non-blocking waitpid. Returns whether the process has exited and its status.",
-						"source_line": 236,
+						"source_line": 235,
 						"type_signature": "(pid: number): PtyWaitResult",
 						"return_type": "PtyWaitResult",
 						"parameters": [
@@ -15792,13 +15792,13 @@
 					{
 						"name": "SIGTERM",
 						"kind": "variable",
-						"source_line": 246,
+						"source_line": 245,
 						"type_signature": "15"
 					},
 					{
 						"name": "SIGKILL",
 						"kind": "variable",
-						"source_line": 246,
+						"source_line": 245,
 						"type_signature": "9"
 					}
 				],

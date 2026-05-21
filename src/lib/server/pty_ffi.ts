@@ -12,10 +12,9 @@ const get_library_path = (): string | null => {
 	const exe_path = join(exe_dir, `${LIB_NAME}.so`);
 	if (existsSync(exe_path)) return exe_path;
 
-	// 2. Dev path: ~/dev/private_fuz/target/release/
-	const home = Deno.env.get('HOME') ?? '';
-	const dev_path = join(home, 'dev', 'private_fuz', 'target', 'release', `${LIB_NAME}.so`);
-	if (existsSync(dev_path)) return dev_path;
+	// 2. FUZ_PTY_LIB env var (absolute path to the .so for dev workspaces)
+	const env_path = Deno.env.get('FUZ_PTY_LIB');
+	if (env_path && existsSync(env_path)) return env_path;
 
 	return null;
 };

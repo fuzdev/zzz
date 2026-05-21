@@ -80,13 +80,6 @@ pub struct App {
     pub action_registry: std::sync::OnceLock<Arc<ActionRegistry>>,
 }
 
-/// Spine-side fields packaged together so `App::new`'s argument list
-/// doesn't grow past the existing clippy threshold. Constructed at the
-/// composition root (main.rs) and moved into `App`.
-pub struct SpineState {
-    pub realtime: Arc<ConnectionRegistry>,
-}
-
 impl App {
     pub fn new(
         db_pool: Pool,
@@ -95,7 +88,7 @@ impl App {
         scoped_dirs: Vec<String>,
         provider_manager: ProviderManager,
         enable_test_actions: bool,
-        spine: SpineState,
+        realtime: Arc<ConnectionRegistry>,
     ) -> Self {
         Self {
             workspaces: RwLock::new(HashMap::new()),
@@ -108,7 +101,7 @@ impl App {
             provider_manager,
             completion_options: CompletionOptions::default(),
             enable_test_actions,
-            realtime: spine.realtime,
+            realtime,
             action_registry: std::sync::OnceLock::new(),
         }
     }

@@ -73,7 +73,7 @@ crates/                               # Rust workspace
 │           ├── lib.rs                # Library entry — `pub fn run_app(options: RunAppOptions)` where `RunAppOptions` carries the password-hasher swap point, the default port, a `force_test_actions` override, and an `extra_action_specs_factory` seam (`testing_zzz_server` injects `_testing_reset` via that factory without dragging `fuz_testing` into the production binary's dep graph)
 │           ├── main.rs               # Thin production entry — constructs `Argon2idHasher`, calls `run_app` with `force_test_actions: false, extra_action_specs_factory: None`
 │           ├── handlers/             # Legacy per-domain RPC handlers — `&Ctx` signature, live dispatch path
-│           │   └── mod.rs            # App state (+ 9 spine fields via SpineState), Ctx, dispatch
+│           │   └── mod.rs            # App state (+ spine `realtime` + `action_registry`), Ctx, dispatch
 │           ├── handlers_v2/          # Spine-signature handlers ((Value, ActionContext, Arc<App>)); not yet on live route
 │           ├── zzz_action_specs/     # Per-domain ActionSpec builders consumed by ActionRegistry::compile
 │           ├── rpc.rs                # JSON-RPC classify, HTTP handler with auth pipeline

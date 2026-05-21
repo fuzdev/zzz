@@ -408,7 +408,7 @@ described was deleted in cross-process lift §3d.9.
 crates/zzz_server/src/
 ├── main.rs          # Entry, config, DB/keyring/daemon-token init, route setup, graceful shutdown
 ├── handlers/        # Per-domain RPC handlers + App state + dispatch (legacy `&Ctx` signature, live `/api/rpc` + `/api/ws` dispatch path)
-│   ├── mod.rs       # App (state + connection tracking + watchers + 9 spine fields + SpineState), Ctx, dispatch, ping, session_load, _testing_emit_notifications
+│   ├── mod.rs       # App (state + `realtime` + `action_registry`), Ctx, dispatch, ping, session_load, _testing_emit_notifications
 │   ├── account.rs   # account_verify, account_session_*, account_token_*
 │   ├── filesystem.rs # diskfile_update, diskfile_delete, directory_create
 │   ├── provider.rs  # provider_load_status, provider_update_api_key, completion_create
@@ -474,7 +474,7 @@ connection tracking via `AtomicU64` + `RwLock<HashMap<ConnectionId,
 ConnectionInfo>>`, `FilerManager` with per-watcher ignore config, event
 debouncing, in-memory file index, and lifetime tracking (permanent for
 `zzz_dir`/`scoped_dirs`, workspace-scoped for `workspace_open`; deduplicates
-by path), plus 9 spine-backed fields packaged via `SpineState`:
+by path), plus spine-backed fields:
 `realtime: Arc<fuz_realtime::ConnectionRegistry>`, `audit_emitter:
 Arc<fuz_auth::AuditEmitter>` (transactional in-tx shape — distinct
 from the legacy spawn-and-await `audit`), `action_registry:

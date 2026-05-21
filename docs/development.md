@@ -18,17 +18,16 @@ Terminal integration uses a Rust shared library (`fuz_pty`) for real PTY
 support via Deno FFI. Without it, terminals fall back to `Deno.Command` pipes
 (commands run but no echo, no prompt, no interactivity).
 
-```bash
-cd ~/dev/private_fuz && cargo build -p fuz_pty --release
-```
+Build the `fuz_pty` crate with `cargo build -p fuz_pty --release` from its
+Rust workspace. This produces `target/release/libfuz_pty.so`, which zzz
+loads at runtime via `Deno.dlopen()`. The dev server needs `--allow-ffi`
+(already set in `gro.config.ts`). The compiled binary also has
+`--allow-ffi`.
 
-This produces `target/release/libfuz_pty.so`, which zzz loads at runtime via
-`Deno.dlopen()`. The dev server needs `--allow-ffi` (already set in
-`gro.config.ts`). The compiled binary also has `--allow-ffi`.
-
-For bundled/compiled binaries, place `libfuz_pty.so` next to the `zzz`
-executable. The library lookup checks exe-relative path first, then falls back
-to the dev path (~/dev/private_fuz/target/release/).
+The library lookup checks the exe-relative path first; if that's missing,
+it reads the `FUZ_PTY_LIB` environment variable for an absolute path to
+the `.so`. For bundled/compiled binaries, place `libfuz_pty.so` next to
+the `zzz` executable.
 
 ## Commands
 
