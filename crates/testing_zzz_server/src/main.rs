@@ -116,11 +116,34 @@ async fn main() {
         vec![create_testing_reset_action_spec(Some(reset_state))]
     });
 
+    // Pre-migration hook — wipes the auth-namespace schema when
+    // `FUZ_TESTING_RESET_DB_ON_STARTUP=true`, then migrations replay
+    // from nothing. Lifts the manual `psql DROP TABLE...` step out of
+    // the cross-backend test harness so projects can re-run against a
+    // shared PG without operator intervention between sessions.
+    // No-op when the env var is unset/false.
+    let pre_migration_hook: zzz_server::PreMigrationHook = Box::new(|pool: &fuz_db::Pool| {
+        Box::pin(async move {
+            let client = pool.get().await.map_err(|e| {
+                zzz_server::ServerError::Database(format!(
+                    "failed to get client for startup reset: {e}"
+                ))
+            })?;
+            fuz_testing::reset_db_on_startup_if_env_set(&client)
+                .await
+                .map_err(|e| {
+                    zzz_server::ServerError::Database(format!("startup DB reset failed: {e}"))
+                })?;
+            Ok(())
+        })
+    });
+
     if let Err(e) = zzz_server::run_app(zzz_server::RunAppOptions {
         password_hasher,
         default_port: TESTING_DEFAULT_PORT,
         force_test_actions: true,
         extra_action_specs_factory: Some(extra_specs_factory),
+        pre_migration_hook: Some(pre_migration_hook),
     })
     .await
     {

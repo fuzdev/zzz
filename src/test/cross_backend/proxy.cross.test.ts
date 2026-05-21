@@ -25,12 +25,19 @@
  * `proxy-test-<label>-<uuid>` username, with crafted `X-Forwarded-For`
  * headers, then queries the resulting `audit_log` row's `ip` column to
  * assert the resolved client IP. Uses a direct `pg` Client against the
- * shared `zzz_test` database rather than the `audit_log_list` RPC because
- * that RPC requires the `admin` role, and the bootstrapped keeper only
- * holds `keeper`. The direct query is acceptable here because (a) these
- * tests are Rust-only, (b) the test DB is the shared cross-backend
- * `zzz_test` Postgres (no PGlite path to confuse), and (c) the audit
- * write is fire-and-forget so we poll until the row appears.
+ * per-project Rust test database (`zzz_test_rust_proxy` for this
+ * suite) rather than the `audit_log_list` RPC because that RPC requires
+ * the `admin` role, and the bootstrapped keeper only holds `keeper`.
+ * The direct query is acceptable here because (a) these tests are
+ * Rust-only, (b) the test DB is a real Postgres (no PGlite path to
+ * confuse), and (c) the audit write is fire-and-forget so we poll
+ * until the row appears.
+ *
+ * The DB URL is sourced from `handle.config.env.DATABASE_URL` rather
+ * than a hardcoded constant — `zzz_backend_config.ts` builds it as
+ * `${RUST_DATABASE_URL_PREFIX}${name}` so the per-project DB
+ * isolation lifts cleanly into here without any harness↔test
+ * coordination.
  *
  * @module
  */
@@ -46,11 +53,26 @@ import {
 import './cross_test_types.js';
 
 /**
- * Connection string for the cross-backend test database. Matches
- * `rust_backend_config()` in `zzz_backend_config.ts`. Override via
- * `TEST_DATABASE_URL` for CI environments that pin a custom host.
+ * Resolve the connection string for the spawned backend's database.
+ *
+ * Reads `handle.config.env.DATABASE_URL` (built by
+ * `rust_proxy_backend_config()` in `zzz_backend_config.ts` as
+ * `postgres://localhost/zzz_test_rust_proxy`). `TEST_DATABASE_URL`
+ * remains as a CI override hook — useful when the runner needs a
+ * custom host even though the binary's URL is set per-project.
  */
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgres://localhost/zzz_test';
+const resolve_database_url = (handle: ReconstructedBootstrappedBackendHandle): string => {
+	const env_override = process.env.TEST_DATABASE_URL;
+	if (env_override) return env_override;
+	const backend_url = handle.config.env?.DATABASE_URL;
+	if (!backend_url) {
+		throw new Error(
+			'proxy.cross.test: handle.config.env.DATABASE_URL missing — ' +
+				'expected `rust_proxy_backend_config()` to set DATABASE_URL on the env block',
+		);
+	}
+	return backend_url;
+};
 
 /**
  * Lazy-singleton `pg.Client` shared by every test in this file. Each
@@ -60,9 +82,9 @@ const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgres://localhost
  */
 let pg_client: Client | null = null;
 
-const get_pg_client = async (): Promise<Client> => {
+const get_pg_client = async (handle: ReconstructedBootstrappedBackendHandle): Promise<Client> => {
 	if (pg_client) return pg_client;
-	const client = new Client({connectionString: TEST_DATABASE_URL});
+	const client = new Client({connectionString: resolve_database_url(handle)});
 	await client.connect();
 	pg_client = client;
 	return client;
@@ -120,10 +142,11 @@ const fire_failed_login = async (
  * workload, tight enough that failed assertions don't drag suite time.
  */
 const wait_for_login_failure_ip = async (
+	handle: ReconstructedBootstrappedBackendHandle,
 	username: string,
 	{timeout_ms = 2_000, interval_ms = 25}: {timeout_ms?: number; interval_ms?: number} = {},
 ): Promise<string | null> => {
-	const client = await get_pg_client();
+	const client = await get_pg_client(handle);
 	const deadline = performance.now() + timeout_ms;
 	let last_error: unknown;
 	while (performance.now() < deadline) {
@@ -172,7 +195,7 @@ const assert_resolved_ip = async (
 ): Promise<void> => {
 	const username = unique_username(label);
 	await fire_failed_login(handle, username, xff);
-	const resolved_ip = await wait_for_login_failure_ip(username);
+	const resolved_ip = await wait_for_login_failure_ip(handle, username);
 	assert.strictEqual(resolved_ip, expected_ip, message);
 };
 

@@ -35,6 +35,33 @@
  * Vitest projects spawn one backend each, so ports only need to not
  * collide cross-project, not cross-test.
  *
+ * **Per-project Postgres DBs** — each Rust project points at its own
+ * database (`zzz_test_rust` for `cross_backend_rust`, `zzz_test_rust_proxy`
+ * for `cross_backend_rust_proxy`). Decouples the two projects so vitest
+ * can run them in parallel without trashing the other's `bootstrap_lock`
+ * state, and removes the shared-DB race condition that forced a manual
+ * `DROP TABLE` between project switches.
+ *
+ * **Startup-reset env gate** — the Rust-family `env` block sets
+ * `FUZ_TESTING_RESET_DB_ON_STARTUP=true`, which makes
+ * `testing_zzz_server` wipe the auth-namespace schema (11 tables)
+ * before migrations replay on every boot. No more manual `psql DROP
+ * TABLE...` between vitest sessions — the binary self-cleans. The
+ * `_testing_reset` RPC action (per-test reset) is orthogonal and stays
+ * wired the same way it was; this is the per-process-startup wipe.
+ *
+ * **Operator setup** — the per-project DBs must exist before the test
+ * harness runs. One-time bootstrap (idempotent):
+ *
+ * ```bash
+ * createdb zzz_test_rust 2>/dev/null || true
+ * createdb zzz_test_rust_proxy 2>/dev/null || true
+ * ```
+ *
+ * Equivalent provisioning via your PG cluster is fine — the harness
+ * does not call `CREATE DATABASE` (deliberately, to avoid forcing a
+ * `CREATEDB` privilege on the test role).
+ *
  * @module
  */
 
@@ -70,8 +97,14 @@ const COOKIE_KEYS = 'dev_only_cookie_keys_for_cross_backend_tests_not_for_prod_u
 /** TS backend database URL — in-memory PGlite, matches `create_test_app`'s default. */
 const TS_DATABASE_URL = 'memory://';
 
-/** Rust backend database URL — real Postgres (PGlite isn't reachable from `tokio-postgres`). */
-const RUST_DATABASE_URL = 'postgres://localhost/zzz_test';
+/**
+ * Per-project Rust backend database URL prefix — real Postgres (PGlite
+ * isn't reachable from `tokio-postgres`). The full URL is built by
+ * appending the backend `name` so each Rust project gets its own
+ * database (`zzz_test_rust`, `zzz_test_rust_proxy`). See the module
+ * doc for the operator setup step.
+ */
+const RUST_DATABASE_URL_PREFIX = 'postgres://localhost/zzz_test_';
 
 /**
  * Capabilities shared by the two TS backends — same canonical
@@ -227,12 +260,18 @@ const make_rust_backend_config = ({
 			RUST_LOG: 'info,zzz_server=info,testing_zzz_server=info',
 			HOST: 'localhost',
 			ZZZ_PORT: String(port),
-			DATABASE_URL: RUST_DATABASE_URL,
+			DATABASE_URL: `${RUST_DATABASE_URL_PREFIX}${name}`,
 			SECRET_FUZ_COOKIE_KEYS: COOKIE_KEYS,
 			FUZ_ALLOWED_ORIGINS: 'http://localhost:*',
 			FUZ_BOOTSTRAP_TOKEN_PATH: paths.bootstrap_token_path,
 			PUBLIC_ZZZ_DIR: paths.zzz_dir,
 			PUBLIC_ZZZ_SCOPED_DIRS: paths.scoped_dir,
+			// Self-wipe the auth-namespace schema before migrations on
+			// every boot — see module doc. Read by
+			// `fuz_testing::reset_db_on_startup_if_env_set`, which
+			// `testing_zzz_server`'s `pre_migration_hook` invokes
+			// between pool creation and `fuz_db::run_migrations`.
+			FUZ_TESTING_RESET_DB_ON_STARTUP: 'true',
 			...extra_env,
 		},
 		bootstrap: {
@@ -282,9 +321,11 @@ export const node_backend_config = (): BackendConfig =>
 	});
 
 /**
- * Rust backend. Requires PostgreSQL — `DATABASE_URL` points at the
- * cross-backend test database, cleaned per backend run by the
- * harness.
+ * Rust backend. Requires PostgreSQL — `DATABASE_URL` resolves to
+ * `zzz_test_rust` (one of the per-project DBs the operator creates
+ * once; see the module doc). The test binary self-wipes the
+ * auth-namespace schema on every startup, so no manual `DROP TABLE`
+ * between vitest sessions is needed.
  */
 export const rust_backend_config = (): BackendConfig =>
 	make_rust_backend_config({
@@ -298,6 +339,10 @@ export const rust_backend_config = (): BackendConfig =>
  * regular Rust project — flipping `ZZZ_TRUSTED_PROXIES` mid-run isn't
  * supported (Rust parses it once at boot). Port `1176` so the proxy
  * binary doesn't collide with the regular Rust project on `1175`.
+ *
+ * Points at its own `zzz_test_rust_proxy` database so the two Rust
+ * projects don't fight over `bootstrap_lock` state and can run in
+ * parallel.
  */
 export const rust_proxy_backend_config = (): BackendConfig =>
 	make_rust_backend_config({

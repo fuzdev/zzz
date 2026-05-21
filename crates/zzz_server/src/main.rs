@@ -29,6 +29,7 @@ async fn main() {
         default_port: zzz_server::DEFAULT_PORT,
         force_test_actions: false,
         extra_action_specs_factory: None,
+        pre_migration_hook: None,
     })
     .await
     {

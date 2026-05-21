@@ -54,6 +54,27 @@ pub const DEFAULT_PORT: u16 = 1174;
 pub type ExtraActionSpecsFactory =
     Box<dyn FnOnce(Arc<handlers::App>) -> Vec<fuz_actions::ActionSpec> + Send>;
 
+/// Async hook fired between pool creation and migrations.
+///
+/// Production passes `None`. The test binary (`testing_zzz_server`)
+/// passes `Some(_)` to fire `fuz_testing::reset_db_on_startup_if_env_set`
+/// — env-gated schema wipe so cross-process tests don't have to drop
+/// the DB manually between runs. `zzz_server` itself stays clean of
+/// any `fuz_testing` dep this way — the hook closes over
+/// `fuz_testing` symbols in the test binary's process only.
+///
+/// The hook receives a borrowed `Pool` reference; cloning is cheap
+/// (`Arc` internally) when the hook needs an owned handle. Errors
+/// surface as a [`ServerError::Database`] so the test binary's
+/// startup chain fails the same way a real migration error would.
+pub type PreMigrationHook = Box<
+    dyn FnOnce(
+            &fuz_db::Pool,
+        )
+            -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), ServerError>> + Send + '_>>
+        + Send,
+>;
+
 /// Options for [`run_app`].
 ///
 /// Named fields rather than positional params so future swap points
@@ -81,6 +102,12 @@ pub struct RunAppOptions {
     /// without dragging `fuz_testing` into the production dep graph
     /// (the `cargo xtask check-release` audit blocks that).
     pub extra_action_specs_factory: Option<ExtraActionSpecsFactory>,
+    /// Hook fired after pool creation, **before** migrations run.
+    /// Production: `None`. Test binary: `Some(_)` to wire
+    /// `fuz_testing::reset_db_on_startup_if_env_set` so per-process
+    /// startup can wipe the auth-namespace schema and let migrations
+    /// replay from nothing.
+    pub pre_migration_hook: Option<PreMigrationHook>,
 }
 
 /// Run the `zzz_server` lifecycle to completion.
@@ -105,6 +132,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         default_port,
         force_test_actions,
         extra_action_specs_factory,
+        pre_migration_hook,
     } = options;
     let mut config = parse_config(default_port)?;
     if force_test_actions {
@@ -118,6 +146,12 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // `db::run_migrations` / `db::query_*`) wholesale.
     let pool = fuz_db::create_pool(&config.database_url)
         .map_err(|e| ServerError::Database(format!("failed to create pool: {e}")))?;
+    // Pre-migration hook — test binary uses this slot for the env-gated
+    // `fuz_testing::reset_db_on_startup_if_env_set` schema wipe so the
+    // migration chain below sees a clean DB. Production passes `None`.
+    if let Some(hook) = pre_migration_hook {
+        hook(&pool).await?;
+    }
     fuz_db::run_migrations(&pool, &[fuz_auth::AUTH_MIGRATIONS])
         .await
         .map_err(|e| ServerError::Database(format!("migration failed: {e}")))?;
@@ -189,6 +223,25 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     } else {
         (None, None)
     };
+
+    // Per-account rate limiter on admin RPC methods. Mirrors fuz_app's
+    // `default_action_account_rate_limit` (1200 / 15min per actor) —
+    // bounds paginated admin-side scraping pressure per the TS posture
+    // at `admin_action_specs.ts:262..400` (every admin spec carries
+    // `rate_limit: 'account'`). Always-on (no env gate); the production
+    // cap sits far above the cross-backend test suite's request volume.
+    let admin_account_rate_limiter: Option<Arc<fuz_auth::RateLimiter>> =
+        Some(Arc::new(fuz_auth::RateLimiter::new(
+            fuz_auth::RateLimiterOptions {
+                max_attempts: 1200,
+                window_ms: 15 * 60_000,
+            },
+        )));
+    // IP-axis admin limiter unwired today — TS shape `rate_limit: 'account'`
+    // doesn't gate on IP. Leave `None`; lift to a real limiter when a
+    // consumer files a need (e.g. a deployment fronted by a CDN where
+    // per-account scraping flows from one IP).
+    let admin_ip_rate_limiter: Option<Arc<fuz_auth::RateLimiter>> = None;
 
     // Spine connection registry + audit emitter — wired into `App` and
     // mounted into the spine RPC + WS dispatchers below. Listener
@@ -361,6 +414,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     all_specs.extend(fuz_actions::auth_adapter::build_admin_specs(
         Arc::clone(&spine_audit_emitter),
         Arc::clone(&socket_revoker),
+        admin_account_rate_limiter.clone(),
+        admin_ip_rate_limiter.clone(),
     ));
     all_specs.extend(fuz_actions::auth_adapter::build_role_grant_offer_specs(
         Arc::clone(&spine_audit_emitter),
