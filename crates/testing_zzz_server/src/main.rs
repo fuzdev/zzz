@@ -37,7 +37,9 @@
 use std::sync::Arc;
 
 use fuz_auth::PasswordHasher;
-use fuz_testing::{ResetStateFn, TestingArgon2idHasher, create_testing_reset_action_spec};
+use fuz_testing::{
+    ResetStateFn, TestingArgon2idHasher, TestingResetOptions, create_testing_reset_action_spec,
+};
 use tracing_subscriber::EnvFilter;
 
 /// Default loopback port for the testing binary. Distinct from the
@@ -65,7 +67,7 @@ async fn main() {
     // The `_testing_reset` factory closes over `Arc<App>` so the
     // domain-state reset closure can clear zzz workspaces + terminals +
     // the optional scratch dir.
-    let extra_specs_factory: zzz_server::ExtraActionSpecsFactory = Box::new(|app| {
+    let extra_specs_factory: zzz_server::ExtraActionSpecsFactory = Box::new(|app, runtime| {
         let app_for_reset = Arc::clone(&app);
         let reset_state: ResetStateFn = Arc::new(move || {
             let app = Arc::clone(&app_for_reset);
@@ -113,7 +115,16 @@ async fn main() {
                 Ok(())
             })
         });
-        vec![create_testing_reset_action_spec(Some(reset_state))]
+        let daemon_token_state = runtime.daemon_token_state.expect(
+            "testing_zzz_server requires daemon-token rotation to be wired \
+             (it provides keeper credentials for _testing_reset)",
+        );
+        vec![create_testing_reset_action_spec(TestingResetOptions {
+            password_hasher: runtime.password_hasher,
+            keyring: runtime.keyring,
+            daemon_token_state,
+            reset_state: Some(reset_state),
+        })]
     });
 
     // Pre-migration hook — wipes the auth-namespace schema when

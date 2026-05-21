@@ -10,8 +10,8 @@
  * registration, pid, exit).
  *
  * Production stays on Deno (`server.ts`). Both test entries register
- * `_testing_reset` from fuz_app's `create_testing_reset_actions` factory
- * with a zzz `reset_state` closure that closes all workspaces, kills
+ * `_testing_reset` from fuz_app's `create_testing_actions` factory with
+ * a zzz `reset_state` closure that closes all workspaces, kills
  * terminals via `PtyManager.kill_all`, and wipes the optional
  * `ZZZ_TESTING_SCRATCH_DIR` tree.
  *
@@ -36,7 +36,7 @@ import {
 } from '@fuzdev/fuz_app/cli/daemon.js';
 import {load_env_file} from '@fuzdev/fuz_app/env/dotenv.js';
 import {stub_password_deps} from '@fuzdev/fuz_app/testing/app_server.js';
-import {create_testing_reset_actions} from '@fuzdev/fuz_app/testing/cross_backend/testing_reset_actions.js';
+import {create_testing_actions} from '@fuzdev/fuz_app/testing/cross_backend/testing_reset_actions.js';
 import {BackendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws_backend.js';
 import {
 	create_ws_auth_guard,
@@ -202,8 +202,15 @@ export const start_testing_server = async (adapter: TestingServerAdapter): Promi
 			// cross-process harness's `mint_account` mints a username-scoped
 			// invite via the keeper before signup, so no `app_settings_patch`
 			// is needed here. Matches real-user signup (invite-gated).
-			extra_rpc_actions_factory: (deps, zzz_backend) =>
-				create_testing_reset_actions(deps, {
+			extra_rpc_actions_factory: (deps, zzz_backend, {daemon_token_state, session_options}) => {
+				if (!daemon_token_state) {
+					throw new Error(
+						'testing_server requires daemon-token rotation to be wired (it provides keeper credentials for _testing_reset)',
+					);
+				}
+				return create_testing_actions(deps, {
+					session_options,
+					daemon_token_state,
 					reset_state: async () => {
 						// Close every open workspace via the production RPC path.
 						// The `workspace_changed` notification fanout + post-commit
@@ -232,7 +239,8 @@ export const start_testing_server = async (adapter: TestingServerAdapter): Promi
 							await rm(scratch_dir, {recursive: true, force: true});
 						}
 					},
-				}),
+				});
+			},
 		});
 
 	const ws = adapter.prepare_websocket(app);

@@ -302,6 +302,8 @@ export const deno_backend_config = (): BackendConfig =>
 			'--allow-env',
 			'--allow-write',
 			'--allow-sys',
+			'--allow-ffi',
+			'--allow-run',
 			'--unstable-detect-cjs',
 			'src/lib/server/testing_server_deno.ts',
 		],

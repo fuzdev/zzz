@@ -38,7 +38,7 @@
 			"deploy": "gro deploy",
 			"serve": "gro build && npm run preview",
 			"test:server:node": "gro run src/lib/server/testing_server_node.ts",
-			"test:server:deno": "deno run --allow-net --allow-read --allow-env --allow-write --allow-sys --unstable-detect-cjs src/lib/server/testing_server_deno.ts"
+			"test:server:deno": "deno run --allow-net --allow-read --allow-env --allow-write --allow-sys --allow-ffi --allow-run --unstable-detect-cjs src/lib/server/testing_server_deno.ts"
 		},
 		"type": "module",
 		"engines": {
@@ -51,7 +51,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.4.5",
-			"@fuzdev/fuz_app": "^0.64.0",
+			"@fuzdev/fuz_app": "^0.65.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.59.0",
 			"@fuzdev/fuz_ui": "^0.192.0",
@@ -15403,7 +15403,7 @@
 						"name": "CreateZzzAppOptions",
 						"kind": "type",
 						"doc_comment": "Options for creating a zzz app.",
-						"source_line": 62,
+						"source_line": 64,
 						"type_signature": "CreateZzzAppOptions",
 						"properties": [
 							{
@@ -15433,8 +15433,8 @@
 							{
 								"name": "extra_rpc_actions_factory",
 								"kind": "variable",
-								"type_signature": "(deps: AppDeps, backend: Backend) => ReadonlyArray<RpcAction>",
-								"doc_comment": "Optional factory for additional RPC actions to register on the live\ndispatcher. Invoked after `app_backend` and the zzz domain `backend`\nare constructed, so the factory can close over both. Used by the\nNode test-binary entry (`testing_server_node.ts`) to inject the\n`_testing_reset` action from fuz_app's\n`create_testing_reset_actions` factory with a `reset_state` callback\nthat clears zzz domain state (workspaces, terminals, optional\nscoped-FS scratch).\n\nProduction entries leave this unset."
+								"type_signature": "(\n\t\tdeps: AppDeps,\n\t\tbackend: Backend,\n\t\truntime: {\n\t\t\t/**\n\t\t\t * Daemon-token runtime state, when `daemon_token_path` is wired.\n\t\t\t * `null` when daemon-token rotation isn't running. The test\n\t\t\t * binary's `_testing_reset` factory needs this to refresh\n\t\t\t * `keeper_account_id` after re-seeding the keeper.\n\t\t\t */\n\t\t\tdaemon_token_state: DaemonTokenState | null;\n\t\t\t/** Session cookie options the live server is wired with. */\n\t\t\tsession_options: SessionOptions<string>;\n\t\t},\n\t) => ReadonlyArray<RpcAction>",
+								"doc_comment": "Optional factory for additional RPC actions to register on the live\ndispatcher. Invoked after `app_backend` and the zzz domain `backend`\nare constructed, so the factory can close over both. Used by the\nNode test-binary entry (`testing_server_node.ts`) to inject the\n`_testing_reset` action from fuz_app's `create_testing_actions`\nfactory with a `reset_state` callback that clears zzz domain state\n(workspaces, terminals, optional scoped-FS scratch).\n\nProduction entries leave this unset."
 							},
 							{
 								"name": "daemon_token_path",
@@ -15454,7 +15454,7 @@
 						"name": "ZzzApp",
 						"kind": "type",
 						"doc_comment": "The created zzz app and related instances.",
-						"source_line": 122,
+						"source_line": 137,
 						"type_signature": "ZzzApp",
 						"properties": [
 							{
@@ -15511,7 +15511,7 @@
 						"name": "create_zzz_app",
 						"kind": "function",
 						"doc_comment": "Create the zzz Hono app with auth, database, Backend, providers, and endpoints.\n\nThis is the shared factory called by the server entry point.\nUses `create_app_backend` for database + auth, `create_app_server` for\nmiddleware assembly, and wires zzz's domain Backend through route deps.",
-						"source_line": 152,
+						"source_line": 167,
 						"type_signature": "(options: CreateZzzAppOptions): Promise<ZzzApp>",
 						"return_type": "Promise<ZzzApp>",
 						"parameters": [
@@ -16609,7 +16609,7 @@
 						]
 					}
 				],
-				"module_comment": "Runtime-agnostic test-binary core for the TS canonical zzz server.\n\nShared by the Deno (`testing_server_deno.ts`) and Node\n(`testing_server_node.ts`) test-binary adapters: same `create_zzz_app`\nfactory, same `_testing_reset` registration, same `reset_state`\nclosure, same daemon-info + shutdown discipline. The two runtime\nadapters only supply the boundary primitives that diverge between\nDeno and Node (HTTP serve, WS upgrade construction, signal\nregistration, pid, exit).\n\nProduction stays on Deno (`server.ts`). Both test entries register\n`_testing_reset` from fuz_app's `create_testing_reset_actions` factory\nwith a zzz `reset_state` closure that closes all workspaces, kills\nterminals via `PtyManager.kill_all`, and wipes the optional\n`ZZZ_TESTING_SCRATCH_DIR` tree.\n\n**NEVER ship in a release.** The module reaches into fuz_app's\n`testing/cross_backend/` modules which throw at production-bundle\nload via `assert_dev_env`. The `testing_` filename prefix mirrors the\nRust `testing_zzz_server` convention and is enforced for the Rust\nside by `cargo xtask check-release`'s dep-graph audit.",
+				"module_comment": "Runtime-agnostic test-binary core for the TS canonical zzz server.\n\nShared by the Deno (`testing_server_deno.ts`) and Node\n(`testing_server_node.ts`) test-binary adapters: same `create_zzz_app`\nfactory, same `_testing_reset` registration, same `reset_state`\nclosure, same daemon-info + shutdown discipline. The two runtime\nadapters only supply the boundary primitives that diverge between\nDeno and Node (HTTP serve, WS upgrade construction, signal\nregistration, pid, exit).\n\nProduction stays on Deno (`server.ts`). Both test entries register\n`_testing_reset` from fuz_app's `create_testing_actions` factory with\na zzz `reset_state` closure that closes all workspaces, kills\nterminals via `PtyManager.kill_all`, and wipes the optional\n`ZZZ_TESTING_SCRATCH_DIR` tree.\n\n**NEVER ship in a release.** The module reaches into fuz_app's\n`testing/cross_backend/` modules which throw at production-bundle\nload via `assert_dev_env`. The `testing_` filename prefix mirrors the\nRust `testing_zzz_server` convention and is enforced for the Rust\nside by `cargo xtask check-release`'s dep-graph audit.",
 				"dependencies": [
 					"server/constants.ts",
 					"server/create_zzz_app.ts",

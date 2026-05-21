@@ -33,15 +33,56 @@ use std::sync::Arc;
 
 use axum::routing::get;
 use axum::{Json, Router};
+use futures_util::future::BoxFuture;
 use serde::Serialize;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
 
+/// Wires the post-bootstrap keeper-account id into `spine_daemon_token`
+/// so subsequent daemon-token-authenticated calls (notably
+/// `_testing_reset` on test binaries) resolve the keeper. `fuz_auth`
+/// fires this callback after the bootstrap pipeline creates the keeper.
+struct SpineDaemonTokenKeeperResolved {
+    state: fuz_auth::SharedDaemonTokenState,
+}
+
+impl fuz_auth::BootstrapKeeperResolved for SpineDaemonTokenKeeperResolved {
+    fn on_keeper_resolved(&self, account_id: uuid::Uuid) -> BoxFuture<'static, ()> {
+        let state = Arc::clone(&self.state);
+        Box::pin(async move {
+            state.write().keeper_account_id = Some(account_id);
+            tracing::info!(%account_id, "daemon token: keeper account set by bootstrap");
+        })
+    }
+}
+
 pub use error::ServerError;
 
 /// Default loopback port. Overridden by `--port` or `ZZZ_PORT`.
 pub const DEFAULT_PORT: u16 = 1174;
+
+/// Runtime state surfaced to [`ExtraActionSpecsFactory`] — keyring +
+/// password hasher + daemon-token state needed by the test binary's
+/// `_testing_reset` action to seed a fresh keeper inline.
+///
+/// `zzz_server` builds these refs during normal assembly and threads
+/// them in here so `fuz_testing` doesn't have to re-derive the
+/// production shapes. Production passes no factory and never reads
+/// this struct.
+#[allow(missing_debug_implementations)] // Arc-of-dyn fields don't auto-derive Debug
+pub struct ExtraActionSpecsRuntime {
+    /// Argon2 hasher (Test binary swaps in
+    /// `fuz_testing::TestingArgon2idHasher` for ~1-5 ms feedback;
+    /// production wires `Argon2idHasher`).
+    pub password_hasher: Arc<dyn fuz_auth::PasswordHasher>,
+    /// Cookie-signing keyring — same instance the live server uses.
+    pub keyring: Arc<fuz_auth::keyring::Keyring>,
+    /// Daemon-token runtime state — `Some(_)` when daemon-token
+    /// rotation is wired (always true on test binaries). `_testing_reset`
+    /// refreshes `keeper_account_id` here after re-seeding.
+    pub daemon_token_state: Option<fuz_auth::SharedDaemonTokenState>,
+}
 
 /// Factory that constructs extra action specs to fold into the
 /// registry after the standard zzz specs.
@@ -51,8 +92,13 @@ pub const DEFAULT_PORT: u16 = 1174;
 /// `Arc<App>` for the consumer-side reset closure). `zzz_server` itself
 /// stays clean of any `fuz_testing` dep this way — the factory closes
 /// over `fuz_testing` types in the test binary's process only.
-pub type ExtraActionSpecsFactory =
-    Box<dyn FnOnce(Arc<handlers::App>) -> Vec<fuz_actions::ActionSpec> + Send>;
+///
+/// The factory receives an `ExtraActionSpecsRuntime` so it can wire
+/// the action-handler's required state (keyring, password hasher,
+/// daemon-token state) without re-deriving the production shapes.
+pub type ExtraActionSpecsFactory = Box<
+    dyn FnOnce(Arc<handlers::App>, ExtraActionSpecsRuntime) -> Vec<fuz_actions::ActionSpec> + Send,
+>;
 
 /// Async hook fired between pool creation and migrations.
 ///
@@ -335,7 +381,13 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
                     Arc::new(fuz_auth::FileBootstrapTokenStore::new(PathBuf::from(p)));
                 store
             }),
-            on_keeper_resolved: None,
+            on_keeper_resolved: spine_daemon_token.as_ref().map(|state| {
+                let cb: Arc<dyn fuz_auth::BootstrapKeeperResolved> =
+                    Arc::new(SpineDaemonTokenKeeperResolved {
+                        state: Arc::clone(state),
+                    });
+                cb
+            }),
         }),
         keyring: Arc::clone(&spine_keyring),
         allowed_origins: Arc::clone(&spine_allowed_origins),
@@ -436,7 +488,12 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         )));
     }
     if let Some(factory) = extra_action_specs_factory {
-        all_specs.extend(factory(Arc::clone(&app_state)));
+        let runtime = ExtraActionSpecsRuntime {
+            password_hasher: Arc::clone(&spine_password_hasher),
+            keyring: Arc::clone(&spine_keyring),
+            daemon_token_state: spine_daemon_token.clone(),
+        };
+        all_specs.extend(factory(Arc::clone(&app_state), runtime));
     }
     let action_registry = Arc::new(
         fuz_actions::ActionRegistry::compile(all_specs)

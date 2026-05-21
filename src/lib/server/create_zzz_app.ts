@@ -30,6 +30,8 @@ import {start_daemon_token_rotation} from '@fuzdev/fuz_app/auth/daemon_token_mid
 import type {Action} from '@fuzdev/fuz_app/actions/action_types.js';
 import type {RpcAction} from '@fuzdev/fuz_app/actions/action_rpc.js';
 import type {AppDeps} from '@fuzdev/fuz_app/auth/deps.js';
+import type {DaemonTokenState} from '@fuzdev/fuz_app/auth/daemon_token.js';
+import type {SessionOptions} from '@fuzdev/fuz_app/auth/session_cookie.js';
 import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.js';
 
 import {build_allowed_hostnames, create_host_validation_middleware} from './security.js';
@@ -85,14 +87,27 @@ export interface CreateZzzAppOptions {
 	 * dispatcher. Invoked after `app_backend` and the zzz domain `backend`
 	 * are constructed, so the factory can close over both. Used by the
 	 * Node test-binary entry (`testing_server_node.ts`) to inject the
-	 * `_testing_reset` action from fuz_app's
-	 * `create_testing_reset_actions` factory with a `reset_state` callback
-	 * that clears zzz domain state (workspaces, terminals, optional
-	 * scoped-FS scratch).
+	 * `_testing_reset` action from fuz_app's `create_testing_actions`
+	 * factory with a `reset_state` callback that clears zzz domain state
+	 * (workspaces, terminals, optional scoped-FS scratch).
 	 *
 	 * Production entries leave this unset.
 	 */
-	extra_rpc_actions_factory?: (deps: AppDeps, backend: Backend) => ReadonlyArray<RpcAction>;
+	extra_rpc_actions_factory?: (
+		deps: AppDeps,
+		backend: Backend,
+		runtime: {
+			/**
+			 * Daemon-token runtime state, when `daemon_token_path` is wired.
+			 * `null` when daemon-token rotation isn't running. The test
+			 * binary's `_testing_reset` factory needs this to refresh
+			 * `keeper_account_id` after re-seeding the keeper.
+			 */
+			daemon_token_state: DaemonTokenState | null;
+			/** Session cookie options the live server is wired with. */
+			session_options: SessionOptions<string>;
+		},
+	) => ReadonlyArray<RpcAction>;
 	/**
 	 * When set, starts daemon-token rotation, persists the token to this
 	 * path, and wires the daemon-token middleware so callers presenting
@@ -239,7 +254,11 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 
 	// Compose env-gated test actions with caller-supplied actions (test
 	// binary's `_testing_reset`). Production entries pass no factory.
-	const extra_rpc_actions = options.extra_rpc_actions_factory?.(app_backend.deps, backend) ?? [];
+	const extra_rpc_actions =
+		options.extra_rpc_actions_factory?.(app_backend.deps, backend, {
+			daemon_token_state: daemon_token_rotation?.state ?? null,
+			session_options: fuz_session_config,
+		}) ?? [];
 	const test_rpc_actions: ReadonlyArray<RpcAction> = [
 		...env_test_rpc_actions,
 		...extra_rpc_actions,
