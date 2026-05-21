@@ -224,24 +224,28 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         (None, None)
     };
 
-    // Per-account rate limiter on admin RPC methods. Mirrors fuz_app's
+    // Per-account rate limiter shared across admin RPC methods and the
+    // role-grant-offer surface. Mirrors fuz_app's
     // `default_action_account_rate_limit` (1200 / 15min per actor) —
     // bounds paginated admin-side scraping pressure per the TS posture
     // at `admin_action_specs.ts:262..400` (every admin spec carries
-    // `rate_limit: 'account'`). Always-on (no env gate); the production
-    // cap sits far above the cross-backend test suite's request volume.
-    let admin_account_rate_limiter: Option<Arc<fuz_auth::RateLimiter>> =
+    // `rate_limit: 'account'`) and offer-spam / account-existence-oracle
+    // pressure on `role_grant_offer_create` per
+    // `role_grant_offer_action_specs.ts:211..228`. Always-on (no env
+    // gate); the production cap sits far above the cross-backend test
+    // suite's request volume.
+    let action_account_rate_limiter: Option<Arc<fuz_auth::RateLimiter>> =
         Some(Arc::new(fuz_auth::RateLimiter::new(
             fuz_auth::RateLimiterOptions {
                 max_attempts: 1200,
                 window_ms: 15 * 60_000,
             },
         )));
-    // IP-axis admin limiter unwired today — TS shape `rate_limit: 'account'`
+    // IP-axis action limiter unwired today — TS shape `rate_limit: 'account'`
     // doesn't gate on IP. Leave `None`; lift to a real limiter when a
     // consumer files a need (e.g. a deployment fronted by a CDN where
     // per-account scraping flows from one IP).
-    let admin_ip_rate_limiter: Option<Arc<fuz_auth::RateLimiter>> = None;
+    let action_ip_rate_limiter: Option<Arc<fuz_auth::RateLimiter>> = None;
 
     // Spine connection registry + audit emitter — wired into `App` and
     // mounted into the spine RPC + WS dispatchers below. Listener
@@ -407,19 +411,11 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // then zzz-specific specs (workspace today; filesystem / terminal /
     // provider / etc. land as their `handlers_v2` modules ship).
     let mut all_specs: Vec<fuz_actions::ActionSpec> = fuz_actions::PROTOCOL_ACTION_SPECS();
-    all_specs.extend(fuz_actions::auth_adapter::build_account_specs(
+    all_specs.extend(fuz_actions::auth_adapter::build_auth_spec_set(
         Arc::clone(&spine_audit_emitter),
         Arc::clone(&socket_revoker),
-    ));
-    all_specs.extend(fuz_actions::auth_adapter::build_admin_specs(
-        Arc::clone(&spine_audit_emitter),
-        Arc::clone(&socket_revoker),
-        admin_account_rate_limiter.clone(),
-        admin_ip_rate_limiter.clone(),
-    ));
-    all_specs.extend(fuz_actions::auth_adapter::build_role_grant_offer_specs(
-        Arc::clone(&spine_audit_emitter),
-        Arc::clone(&socket_revoker),
+        action_account_rate_limiter.clone(),
+        action_ip_rate_limiter.clone(),
     ));
     all_specs.extend(zzz_action_specs::build_core_specs(Arc::clone(&app_state)));
     all_specs.extend(zzz_action_specs::build_workspace_specs(Arc::clone(
