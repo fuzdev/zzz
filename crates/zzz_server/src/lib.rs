@@ -362,6 +362,10 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         Arc::clone(&spine_audit_emitter),
         Arc::clone(&socket_revoker),
     ));
+    all_specs.extend(fuz_actions::auth_adapter::build_role_grant_offer_specs(
+        Arc::clone(&spine_audit_emitter),
+        Arc::clone(&socket_revoker),
+    ));
     all_specs.extend(zzz_action_specs::build_core_specs(Arc::clone(&app_state)));
     all_specs.extend(zzz_action_specs::build_workspace_specs(Arc::clone(
         &app_state,
