@@ -9,7 +9,7 @@
 **[zzz.software](https://www.zzz.software/)**
 
 Zzz, pronounced "zees" like bees,
-is a local-first forge for power users and developers.
+is a software garage for power users and devs.
 The idea is to make an integrated cross-platform environment that adapts to
 your needs and intent while remaining fully open, aligned, and designed for your autonomy.
 It's both a customizable web UI and local-first backend for power users,

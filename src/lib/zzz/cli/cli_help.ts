@@ -106,7 +106,7 @@ export const ZZZ_COMMANDS: Record<string, CommandMeta<ZzzCommandCategory>> = {
 const zzz_help = create_help({
 	name: NAME,
 	version: VERSION,
-	description: 'local-first forge for power users and devs',
+	description: 'software garage for power users and devs',
 	commands: ZZZ_COMMANDS,
 	categories: ZZZ_HELP_CATEGORIES,
 	examples: ZZZ_HELP_EXAMPLES,
