@@ -1,6 +1,7 @@
 import {vitePreprocess} from '@sveltejs/vite-plugin-svelte';
 import {svelte_preprocess_mdz} from '@fuzdev/fuz_ui/svelte_preprocess_mdz.js';
 import {svelte_preprocess_fuz_code} from '@fuzdev/fuz_code/svelte_preprocess_fuz_code.js';
+import {execSync} from 'node:child_process';
 // TODO debugging
 // import {create_csp_directives} from '@fuzdev/fuz_ui/csp.js';
 // import {csp_trusted_sources_of_fuzdev} from '@fuzdev/fuz_ui/csp_of_fuzdev.js';
@@ -48,6 +49,9 @@ export default {
 		// },
 		prerender: {
 			handleUnseenRoutes: 'ignore',
+		},
+		version: {
+			name: execSync('git rev-parse HEAD').toString().trim(),
 		},
 	},
 };
