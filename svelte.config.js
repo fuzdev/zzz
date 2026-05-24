@@ -35,11 +35,7 @@ export default {
 		// 		},
 		// 	}),
 		// },
-		prerender: {
-			handleUnseenRoutes: 'ignore',
-		},
-		version: {
-			name: execSync('git rev-parse HEAD').toString().trim(),
-		},
+		prerender: {handleUnseenRoutes: 'ignore'},
+		version: {name: execSync('git rev-parse HEAD').toString().trim()},
 	},
 };
