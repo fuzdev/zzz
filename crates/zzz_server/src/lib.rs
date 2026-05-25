@@ -217,7 +217,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // shared by the spine account router (returned on `/status` 401) and
     // the bootstrap router (gate on `/bootstrap`).
     let bootstrap_available =
-        check_bootstrap_available(&pool, config.bootstrap_token_path.as_ref()).await;
+        fuz_auth::is_bootstrap_available(&pool, config.bootstrap_token_path.as_deref()).await;
 
     let scoped_dir_strings: Vec<String> =
         config.scoped_dirs.iter().map(|p| resolve_dir(p)).collect();
@@ -869,44 +869,6 @@ fn parse_config(default_port: u16) -> Result<Config, ServerError> {
     })
 }
 
-/// Check if bootstrap is available (token file exists and not yet bootstrapped).
-async fn check_bootstrap_available(
-    pool: &deadpool_postgres::Pool,
-    token_path: Option<&String>,
-) -> bool {
-    let Some(path) = token_path else {
-        return false;
-    };
-
-    // Check if token file exists
-    if tokio::fs::metadata(path).await.is_err() {
-        tracing::info!("bootstrap unavailable: token file not found");
-        return false;
-    }
-
-    // Check bootstrap_lock table
-    let Ok(client) = pool.get().await else {
-        return false;
-    };
-
-    let Ok(row) = client
-        .query_opt("SELECT bootstrapped FROM bootstrap_lock WHERE id = 1", &[])
-        .await
-    else {
-        return false;
-    };
-
-    if let Some(row) = row {
-        let bootstrapped: bool = row.get(0);
-        if bootstrapped {
-            tracing::info!("bootstrap unavailable: already bootstrapped");
-            return false;
-        }
-    }
-
-    tracing::info!(path = %path, "bootstrap token available");
-    true
-}
 
 // -- Shutdown -----------------------------------------------------------------
 
