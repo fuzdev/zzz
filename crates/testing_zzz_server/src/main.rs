@@ -40,7 +40,6 @@ use fuz_auth::PasswordHasher;
 use fuz_testing::{
     ResetStateFn, TestingArgon2idHasher, TestingResetOptions, create_testing_reset_action_spec,
 };
-use tracing_subscriber::EnvFilter;
 
 /// Default loopback port for the testing binary. Distinct from the
 /// production default (1174) so both binaries can run side-by-side on
@@ -50,12 +49,10 @@ const TESTING_DEFAULT_PORT: u16 = 1175;
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info,zzz_server=info,testing_zzz_server=info")),
-        )
-        .init();
+    // Non-blocking stdout logging so a stalled stdout consumer can't starve
+    // the async runtime. `_log_guard` must stay live for the whole process.
+    let _log_guard =
+        fuz_common::logging::init_non_blocking_stdout("info,zzz_server=info,testing_zzz_server=info");
 
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(TestingArgon2idHasher::new());
 

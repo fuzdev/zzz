@@ -14,7 +14,7 @@ name = "zzz_server"
 path = "src/main.rs"
 
 [dependencies]
-fuz_common.workspace = true
+fuz_common = { workspace = true, features = ["logging"] }
 fuz_db.workspace = true
 fuz_auth.workspace = true
 fuz_http.workspace = true
@@ -29,7 +29,6 @@ thiserror.workspace = true
 tower.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
 futures-util.workspace = true
 tokio-util.workspace = true
 parking_lot.workspace = true

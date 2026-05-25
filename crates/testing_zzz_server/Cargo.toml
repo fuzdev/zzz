@@ -25,6 +25,8 @@ zzz_server = { path = "../zzz_server" }
 # `cargo xtask check-release` sanity check holds.
 fuz_actions.workspace = true
 fuz_auth.workspace = true
+# `logging` feature → non-blocking stdout subscriber init.
+fuz_common = { workspace = true, features = ["logging"] }
 fuz_db.workspace = true
 fuz_http.workspace = true
 fuz_testing.workspace = true
@@ -33,4 +35,3 @@ fuz_testing.workspace = true
 # `main.rs`.
 tokio.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true

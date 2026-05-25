@@ -12,15 +12,12 @@
 use std::sync::Arc;
 
 use fuz_auth::PasswordHasher;
-use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .init();
+    // Non-blocking stdout logging so a stalled stdout consumer can't starve
+    // the async runtime. `_log_guard` must stay live for the whole process.
+    let _log_guard = fuz_common::logging::init_non_blocking_stdout("info");
 
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(fuz_auth::Argon2idHasher::new());
 
