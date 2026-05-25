@@ -452,7 +452,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // run on the materialized row and call the same idempotent
     // `close_sockets_for_*` a second time; the duplication is
     // intentional defense-in-depth.
-    register_audit_listeners(&spine_audit_emitter, Arc::clone(&socket_revoker));
+    fuz_auth::register_socket_revocation_listeners(&spine_audit_emitter, &socket_revoker);
 
     // Compile the spine action registry — must run after `Arc<App>` is
     // constructed because the zzz-specific spec builders capture
@@ -867,111 +867,6 @@ fn parse_config(default_port: u16) -> Result<Config, ServerError> {
         enable_login_rate_limit,
         trusted_proxies,
     })
-}
-
-/// Register audit-event → WebSocket socket-revocation listeners on the
-/// spine [`fuz_auth::AuditEmitter`]. Listener bodies are sync (no
-/// `.await` inside) wrapped in `Box::pin(async { ... })` to match the
-/// spine's boxed-future listener signature.
-fn register_audit_listeners(
-    emitter: &Arc<fuz_auth::AuditEmitter>,
-    revoker: Arc<dyn fuz_auth::SocketRevoker>,
-) {
-    // session_revoke → close_sockets_for_session(metadata.session_id)
-    {
-        let revoker = Arc::clone(&revoker);
-        emitter.add_listener(Arc::new(move |event| {
-            let revoker = Arc::clone(&revoker);
-            Box::pin(async move {
-                if event.event_type != "session_revoke" || event.outcome != "success" {
-                    return;
-                }
-                let Some(meta) = event
-                    .metadata
-                    .as_ref()
-                    .and_then(serde_json::Value::as_object)
-                else {
-                    return;
-                };
-                let Some(session_id) = meta.get("session_id").and_then(serde_json::Value::as_str)
-                else {
-                    return;
-                };
-                let closed = revoker.close_sockets_for_session(session_id);
-                if closed > 0 {
-                    tracing::info!(
-                        count = closed,
-                        session_id,
-                        "audit listener: closed WebSocket connections (session_revoke)"
-                    );
-                }
-            })
-        }));
-    }
-
-    // token_revoke → close_sockets_for_token(metadata.token_id)
-    {
-        let revoker = Arc::clone(&revoker);
-        emitter.add_listener(Arc::new(move |event| {
-            let revoker = Arc::clone(&revoker);
-            Box::pin(async move {
-                if event.event_type != "token_revoke" || event.outcome != "success" {
-                    return;
-                }
-                let Some(meta) = event
-                    .metadata
-                    .as_ref()
-                    .and_then(serde_json::Value::as_object)
-                else {
-                    return;
-                };
-                let Some(token_id) = meta.get("token_id").and_then(serde_json::Value::as_str)
-                else {
-                    return;
-                };
-                let closed = revoker.close_sockets_for_token(token_id);
-                if closed > 0 {
-                    tracing::info!(
-                        count = closed,
-                        token_id,
-                        "audit listener: closed WebSocket connections (token_revoke)"
-                    );
-                }
-            })
-        }));
-    }
-
-    // session_revoke_all / token_revoke_all / password_change / logout →
-    // close_sockets_for_account(target_account_id ?? account_id).
-    // Mirrors `fuz_app`'s `ws_disconnect_event_types` collapsed
-    // account-wide case.
-    {
-        let revoker = Arc::clone(&revoker);
-        emitter.add_listener(Arc::new(move |event| {
-            let revoker = Arc::clone(&revoker);
-            Box::pin(async move {
-                let account_wide = matches!(
-                    event.event_type.as_str(),
-                    "session_revoke_all" | "token_revoke_all" | "password_change" | "logout"
-                );
-                if !account_wide || event.outcome != "success" {
-                    return;
-                }
-                let Some(target) = event.target_account_id.or(event.account_id) else {
-                    return;
-                };
-                let closed = revoker.close_sockets_for_account(target);
-                if closed > 0 {
-                    tracing::info!(
-                        count = closed,
-                        account_id = %target,
-                        event_type = %event.event_type,
-                        "audit listener: closed WebSocket connections"
-                    );
-                }
-            })
-        }));
-    }
 }
 
 /// Check if bootstrap is available (token file exists and not yet bootstrapped).
