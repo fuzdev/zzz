@@ -39,6 +39,9 @@ tmp/
 # Workflow
 /worktree
 
+# Benchmark run artifacts (per-run, machine-specific timings)
+/src/benchmarks/cross_impl.latest.json
+
 # Os
 .DS_Store
 Thumbs.db

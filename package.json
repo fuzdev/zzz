@@ -27,7 +27,8 @@
     "deploy": "gro deploy",
     "serve": "gro build && npm run preview",
     "test:server:node": "gro run src/lib/server/testing_server_node.ts",
-    "test:server:deno": "deno run --allow-net --allow-read --allow-env --allow-write --allow-sys --allow-ffi --allow-run --unstable-detect-cjs src/lib/server/testing_server_deno.ts"
+    "test:server:deno": "deno run --allow-net --allow-read --allow-env --allow-write --allow-sys --allow-ffi --allow-run --unstable-detect-cjs src/lib/server/testing_server_deno.ts",
+    "benchmark:cross-impl": "gro run src/benchmarks/cross_impl.bench.ts"
   },
   "type": "module",
   "engines": {
