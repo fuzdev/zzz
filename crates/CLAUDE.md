@@ -384,12 +384,16 @@ malformed-skip and leftmost-fallback, `cidr_contains` shift-edge
 cases).
 
 ```bash
-npx vitest run --project cross_backend_rust          # Rust binary (postgres://localhost/zzz_test)
-npx vitest run --project cross_backend_rust_proxy    # Rust binary with ZZZ_TRUSTED_PROXIES=127.0.0.1 (proxy.cross.test.ts only)
-npx vitest run --project cross_backend_ts_node       # Node TS adapter (PGlite in-memory)
-npx vitest run --project cross_backend_ts_deno       # Deno TS adapter (PGlite in-memory)
-npx vitest run -t ping                                # Substring match on test name (vitest -t flag)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Rust binary (postgres://localhost/zzz_test)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust_proxy # Rust binary with ZZZ_TRUSTED_PROXIES=127.0.0.1 (proxy.cross.test.ts only)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_ts_node    # Node TS adapter (PGlite in-memory)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_ts_deno    # Deno TS adapter (PGlite in-memory)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run -t ping                            # Substring match on test name (vitest -t flag)
 ```
+
+The `cross_backend_*` projects are gated behind `FUZ_TEST_CROSS_BACKEND=1`
+in `vite.config.ts` so a bare `gro test` never spawns backends; set the
+flag to opt in.
 
 The harness writes a bootstrap token to a per-backend tmpdir, spawns the
 test binary via the project's `BackendConfig.start_command`, waits for
