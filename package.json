@@ -23,6 +23,8 @@
     "check": "gro check",
     "typecheck": "gro typecheck",
     "test": "gro test",
+    "test:cross": "FUZ_TEST_CROSS_BACKEND=1 vitest run --project cross_backend_ts_node --project cross_backend_ts_deno",
+    "test:cross:rust": "FUZ_TEST_CROSS_BACKEND=1 vitest run --project cross_backend_rust --project cross_backend_rust_proxy",
     "preview": "vite preview",
     "deploy": "gro deploy",
     "serve": "gro build && npm run preview",

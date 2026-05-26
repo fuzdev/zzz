@@ -277,9 +277,11 @@ Use `npm install` (not `deno install`) for packages. With `nodeModulesDir: "manu
 | `deno task dev`              | Dev server: Rust backend + Vite frontend        |
 | `gro check`                  | All checks (typecheck, test, gen, format, lint) |
 | `gro typecheck`              | Type checking only (faster iteration)           |
-| `gro test`                   | Run Vitest unit tests                           |
-| `deno task test`             | All tests (Vitest + integration)                |
-| `FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_ts_node` | Cross-process parity tests against a spawned backend (project: `cross_backend_ts_deno` / `cross_backend_ts_node` / `cross_backend_rust` / `cross_backend_rust_proxy`). Gated behind `FUZ_TEST_CROSS_BACKEND=1` — see Rust Backend section |
+| `gro test`                   | Run Vitest unit + db tests (cross-backend gated out — see below) |
+| `deno task test`             | `gro test` (unit + db; cross-backend projects excluded unless `FUZ_TEST_CROSS_BACKEND=1`) |
+| `npm run test:cross`         | TS cross-process parity suites (ts_node + ts_deno; no external infra) — flag baked in |
+| `npm run test:cross:rust`    | Rust cross-process suites (needs rust binary + `zzz_test*` Postgres) |
+| `npm run benchmark:cross-impl` | Cross-impl latency benchmark (spawns deno + node + rust) |
 | `gro gen`                    | Regenerate `*.gen.ts` files                     |
 | `gro format`                 | Format with Prettier                            |
 | `gro build`                  | Production build                                |
@@ -326,18 +328,21 @@ cargo build -p zzz_server                                                 # Buil
 cargo clippy -p zzz_server                                                # Lint
 ./target/debug/zzz_server --port 1174                                     # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS)
 deno task dev                                                             # Dev server: Rust backend + Vite frontend
-FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Cross-process tests against the Rust binary (needs `postgres://localhost/zzz_test`)
-FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust_proxy # Proxy variant (ZZZ_TRUSTED_PROXIES=127.0.0.1 set at boot)
-FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_ts_node    # Cross-process tests against the Node TS adapter (PGlite in-memory)
-FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_ts_deno    # Cross-process tests against the Deno TS adapter (PGlite in-memory)
+npm run test:cross                                                        # TS cross-process suites (ts_node + ts_deno; no external infra) — flag baked in
+npm run test:cross:rust                                                   # Rust cross-process suites (needs rust binary + postgres://localhost/zzz_test*)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Single project (Rust binary; needs `postgres://localhost/zzz_test`)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust_proxy # Single project (proxy variant; ZZZ_TRUSTED_PROXIES=127.0.0.1 at boot)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_ts_node    # Single project (Node TS adapter; PGlite in-memory)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_ts_deno    # Single project (Deno TS adapter; PGlite in-memory)
 ```
 
 The `cross_backend_*` vitest projects are gated behind
 `FUZ_TEST_CROSS_BACKEND=1` (set in `vite.config.ts`) — they spawn real
 backend binaries via `globalSetup`, so a bare `gro test` stays a fast,
-infra-free unit+db run and never spawns. Set the flag to opt in (required
-both for `gro test` to include them and for the explicit `--project` runs
-above).
+infra-free unit+db run and never spawns. The `test:cross` /
+`test:cross:rust` package.json scripts bake in the flag (and run via
+`deno task test:cross` too, under Deno 2); set the flag manually only for
+single-project `--project` runs.
 
 Requires ~/dev/private_fuz as a sibling directory (path deps). The
 Rust projects expect PostgreSQL at `postgres://localhost/zzz_test`
