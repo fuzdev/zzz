@@ -3,14 +3,16 @@
  *
  * Reads the project's `name` to pick which backend config to spawn
  * ({@link deno_backend_config} / {@link node_backend_config} /
- * {@link rust_backend_config} / {@link rust_proxy_backend_config}),
+ * {@link bun_backend_config} / {@link rust_backend_config} /
+ * {@link rust_proxy_backend_config}),
  * invokes `bootstrap_backend(config)` to spawn the binary + bootstrap
  * the keeper, and `provide('backend_handle', bootstrapped)` so
  * `*.cross.test.ts` files can `inject('backend_handle')`.
  *
  * Each vitest project sets its own discriminator via `test.name`
  * (`cross_backend_ts_deno`, `cross_backend_ts_node`,
- * `cross_backend_rust`, `cross_backend_rust_proxy`). vitest 4 passes
+ * `cross_backend_ts_bun`, `cross_backend_rust`,
+ * `cross_backend_rust_proxy`). vitest 4 passes
  * the `TestProject` instance to globalSetup as the first argument so
  * the project name is the source of truth — no `process.env`-based
  * hand-off is required (an earlier draft used `test.env` for this,
@@ -31,6 +33,7 @@ import {serialize_bootstrapped_handle} from '@fuzdev/fuz_app/testing/cross_backe
 
 import './cross_test_types.js';
 import {
+	bun_backend_config,
 	deno_backend_config,
 	node_backend_config,
 	rust_backend_config,
@@ -57,6 +60,8 @@ const pick_backend_config = (name: string): BackendConfig => {
 			return deno_backend_config();
 		case 'node':
 			return node_backend_config();
+		case 'bun':
+			return bun_backend_config();
 		case 'rust':
 			return rust_backend_config();
 		case 'rust_proxy':
@@ -64,7 +69,7 @@ const pick_backend_config = (name: string): BackendConfig => {
 		default:
 			throw new Error(
 				`Could not derive backend name from vitest project '${name}' — ` +
-					`expected one of: deno, node, rust, rust_proxy`,
+					`expected one of: deno, node, bun, rust, rust_proxy`,
 			);
 	}
 };

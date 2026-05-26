@@ -2,13 +2,18 @@
  * Cross-process `BackendConfig` factories for zzz's cross-backend
  * integration suites.
  *
- * Four target backends spanning both the JS-runtime and TS-vs-Rust axes:
+ * Five target backends spanning both the JS-runtime and TS-vs-Rust axes:
  *
  * - {@link deno_backend_config} — TS canonical backend on Deno V8 (spawns
  *   `testing_server_deno.ts`). Same wire shape as production zzz today.
  * - {@link node_backend_config} — TS canonical backend on Node V8 (spawns
  *   `testing_server_node.ts` via `gro run`). Isolates the JS-runtime axis
  *   (Deno vs Node V8) on identical TS canonical surfaces.
+ * - {@link bun_backend_config} — TS canonical backend on Bun's JSC runtime
+ *   (spawns `testing_server_bun.ts` via `bun run`). Third native path on the
+ *   same TS surface; inherits fuz_app's bun exit-hang fix (the adapter
+ *   fire-and-forgets bun's never-resolving `server.stop()` and the shared
+ *   `spawn_backend` teardown SIGKILLs after a grace window).
  * - {@link rust_backend_config} — Axum/JSON-RPC backend (spawns
  *   `testing_zzz_server`). Isolates the cross-language axis (TS vs
  *   Rust) on the shared `/api/*` wire shape.
@@ -33,6 +38,7 @@
  *
  * - Deno test binary → `11741`
  * - Node test binary → `11742`
+ * - Bun test binary → `11743`
  * - Rust test binary → `1175` (matches `testing_zzz_server`'s
  *   `TESTING_DEFAULT_PORT`)
  * - Rust+proxy test binary → `1176`
@@ -162,6 +168,29 @@ export const node_backend_config = (): BackendConfig => {
 		name,
 		port: 11742,
 		start_command: ['npx', 'gro', 'run', 'src/lib/server/testing_server_node.ts'],
+		paths,
+		extra_env: {
+			PUBLIC_ZZZ_DIR: paths.zzz_dir,
+			PUBLIC_ZZZ_SCOPED_DIRS: paths.scoped_dir,
+		},
+	});
+};
+
+/**
+ * TS canonical backend on Bun's JSC runtime. Spawns `testing_server_bun.ts`
+ * via `bun run` — Bun resolves `.ts` + npm packages natively, and the
+ * entry's import graph is `$lib`-free (same modules the Deno entry runs
+ * directly, with no `$lib` map). Same source modules as the Node + Deno
+ * entries — the runtime adapter is the only divergence. Requires `bun` on
+ * PATH.
+ */
+export const bun_backend_config = (): BackendConfig => {
+	const name = 'bun';
+	const paths = build_zzz_paths(name);
+	return make_default_ts_backend_config({
+		name,
+		port: 11743,
+		start_command: ['bun', 'run', 'src/lib/server/testing_server_bun.ts'],
 		paths,
 		extra_env: {
 			PUBLIC_ZZZ_DIR: paths.zzz_dir,

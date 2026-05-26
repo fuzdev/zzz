@@ -45,6 +45,7 @@ const cross_backend_projects = cross_backend_enabled
 	? [
 			make_cross_backend_project('cross_backend_ts_deno'),
 			make_cross_backend_project('cross_backend_ts_node'),
+			make_cross_backend_project('cross_backend_ts_bun'),
 			make_cross_backend_project('cross_backend_rust'),
 			make_cross_backend_project('cross_backend_rust_proxy', true),
 		]
