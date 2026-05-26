@@ -79,19 +79,36 @@ describe('provider + session cross-backend', () => {
 		try {
 			await writeFile(file_path, content, 'utf-8');
 
-			const res = await rpc_call({
-				app: fixture.transport,
-				path: handle.config.rpc_path,
-				method: 'session_load',
-				headers: fixture.create_session_headers(),
-			});
-			assert.ok(res.ok);
-			const data = (res.result as Record<string, unknown>).data as Record<string, unknown>;
-			const files = data.files as Array<Record<string, unknown>>;
-			const test_file = files.find((f) => (f.id as string).endsWith(`/${file_name}`));
-			if (!test_file) {
-				const ids = files.map((f) => f.id);
-				assert.fail(`test file not found in ${files.length} files: ${JSON.stringify(ids)}`);
+			// Read-after-write race: the Filer indexes a newly-detected file
+			// before its content load completes, so an immediate `session_load`
+			// can snapshot the entry with `contents: null`. Poll until the
+			// watcher has loaded the contents (or time out). The exact timing
+			// differs across the TS runtimes (Deno/Node V8 vs Bun JSC), so a
+			// fixed single call is flaky; the poll makes it deterministic.
+			// (Cross-process analog of `wait_for_audit_row`; mirrors
+			// `session_load_returns_nested_files` below.)
+			let test_file: Record<string, unknown> | undefined;
+			const deadline = Date.now() + 5_000;
+			for (;;) {
+				const res = await rpc_call({
+					app: fixture.transport,
+					path: handle.config.rpc_path,
+					method: 'session_load',
+					headers: fixture.create_session_headers(),
+				});
+				assert.ok(res.ok);
+				const data = (res.result as Record<string, unknown>).data as Record<string, unknown>;
+				const files = data.files as Array<Record<string, unknown>>;
+				test_file = files.find((f) => (f.id as string).endsWith(`/${file_name}`));
+				if (test_file?.contents === content) break;
+				if (Date.now() > deadline) {
+					if (!test_file) {
+						const ids = files.map((f) => f.id);
+						assert.fail(`test file not found in ${files.length} files: ${JSON.stringify(ids)}`);
+					}
+					break; // fall through to the assertion below for a clear diff
+				}
+				await new Promise((resolve) => setTimeout(resolve, 50));
 			}
 			assert.equal(test_file.contents, content);
 			assert.ok((test_file.source_dir as string).startsWith('/'), 'source_dir absolute');
