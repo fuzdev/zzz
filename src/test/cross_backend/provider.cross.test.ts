@@ -113,19 +113,35 @@ describe('provider + session cross-backend', () => {
 		try {
 			await writeFile(file_path, 'nested content', 'utf-8');
 
-			const res = await rpc_call({
-				app: fixture.transport,
-				path: handle.config.rpc_path,
-				method: 'session_load',
-				headers: fixture.create_session_headers(),
-			});
-			assert.ok(res.ok);
-			const data = (res.result as Record<string, unknown>).data as Record<string, unknown>;
-			const files = data.files as Array<Record<string, unknown>>;
-			const nested = files.find((f) => (f.id as string).endsWith('/deep.txt'));
-			if (!nested) {
-				const ids = files.map((f) => f.id);
-				assert.fail(`nested file not found in ${files.length} files: ${JSON.stringify(ids)}`);
+			// Read-after-write race: the Filer indexes a newly-detected nested
+			// file before its content load completes, so an immediate
+			// `session_load` can snapshot the entry with `contents: null`.
+			// Poll until the watcher has loaded the contents (or time out).
+			// The exact timing differs across the TS runtimes (Deno/Node V8 vs
+			// Bun JSC), so a fixed single call is flaky; the poll makes it
+			// deterministic. (Cross-process analog of `wait_for_audit_row`.)
+			let nested: Record<string, unknown> | undefined;
+			const deadline = Date.now() + 5_000;
+			for (;;) {
+				const res = await rpc_call({
+					app: fixture.transport,
+					path: handle.config.rpc_path,
+					method: 'session_load',
+					headers: fixture.create_session_headers(),
+				});
+				assert.ok(res.ok);
+				const data = (res.result as Record<string, unknown>).data as Record<string, unknown>;
+				const files = data.files as Array<Record<string, unknown>>;
+				nested = files.find((f) => (f.id as string).endsWith('/deep.txt'));
+				if (nested?.contents === 'nested content') break;
+				if (Date.now() > deadline) {
+					if (!nested) {
+						const ids = files.map((f) => f.id);
+						assert.fail(`nested file not found in ${files.length} files: ${JSON.stringify(ids)}`);
+					}
+					break; // fall through to the assertion below for a clear diff
+				}
+				await new Promise((resolve) => setTimeout(resolve, 50));
 			}
 			assert.equal(nested.contents, 'nested content');
 		} finally {

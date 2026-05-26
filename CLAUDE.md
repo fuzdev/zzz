@@ -115,8 +115,11 @@ src/
 │   │   ├── zzz_rpc_actions.ts      # Thin adapter for fuz_app RPC format
 │   │   ├── register_websocket_actions.ts # Thin wrapper over fuz_app's `register_action_ws`
 │   │   ├── backend_provider_*.ts # Ollama, Claude, ChatGPT, Gemini
+│   │   ├── pty_backend.ts          # Runtime-neutral PtyBackend/PtySession DI contract
+│   │   ├── pty_backend_deno.ts      # Deno PtyBackend — fuz_pty FFI + Deno.Command fallback
+│   │   ├── pty_backend_node.ts      # Node/Bun PtyBackend — node:child_process pipes
 │   │   ├── pty_ffi.ts              # Deno FFI bindings for libfuz_pty.so
-│   │   ├── backend_pty_manager.ts  # PTY process management (FFI or fallback)
+│   │   ├── backend_pty_manager.ts  # PTY orchestration (delegates to injected PtyBackend)
 │   │   ├── scoped_fs.ts
 │   │   └── security.ts
 │   │
@@ -586,7 +589,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **Bearer auth soft-fails** — fuz_app's bearer middleware soft-fails for invalid/expired/empty tokens (calls `next()`, no error response). Auth enforcement happens downstream via `check_action_auth` (JSON-RPC) or `require_auth` (routes). Both Deno and Rust backends produce identical `{code: -32001, message: "unauthenticated"}` JSON-RPC errors. Public actions are not blocked by bad bearer credentials.
 - **Domain state is in-memory** — auth/accounts are in PGlite DB, but zzz domain state (files, terminals, workspaces) is in-memory, lost on restart. Workspaces persist to JSON file as a stopgap.
 - **No undo/history** — file edits are permanent
-- **PTY via FFI** — real PTY support via `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`). Requires `cargo build -p fuz_pty --release` in ~/dev/private_fuz/. For bundled binaries, place `libfuz_pty.so` next to the `zzz` executable. Falls back to `Deno.Command` pipes (no echo, no prompt) if `.so` not found
+- **PTY via FFI** — terminal spawning is a runtime-injected `PtyBackend` (`pty_backend.ts`), so `PtyManager` never sniffs the runtime. The production Deno daemon injects `create_deno_pty_backend`: real PTY via the `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`), falling back to `Deno.Command` pipes (no echo, no prompt, no resize) when `libfuz_pty.so` isn't found. Requires `cargo build -p fuz_pty --release` in ~/dev/private_fuz/; for bundled binaries place `libfuz_pty.so` next to the `zzz` executable. The cross-process Node/Bun test binaries inject `create_node_pty_backend` (`node:child_process` pipes) since Deno FFI is unavailable there — same pipe semantics, no real PTY.
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
 - **Rust backend with spine consumption underway** — 25 RPC methods with full auth stack, same `/api/*` route paths as Deno. `deno task dev` runs the Rust backend with Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable). No batch JSON-RPC, no Ollama actions (`ollama_list`, `ollama_ps`, etc.). Spine `ActionRegistry` compiled at boot; four handler modules migrated to `handlers_v2/` on the new `(Value, ActionContext, Arc<App>)` signature, not yet on a live route.

@@ -23,6 +23,7 @@ import {argon2_password_deps} from '@fuzdev/fuz_app/auth/password_argon2.js';
 
 import {VERSION} from '../zzz/build_info.ts';
 import {create_zzz_app} from './create_zzz_app.ts';
+import {create_deno_pty_backend} from './pty_backend_deno.ts';
 import {load_server_env} from './server_env.ts';
 import {is_open_host} from './security.ts';
 import {register_websocket_actions} from './register_websocket_actions.ts';
@@ -97,6 +98,7 @@ export const start_server = async (): Promise<void> => {
 				const addr = c.env?.remoteAddr;
 				return addr?.hostname;
 			},
+			pty_backend: create_deno_pty_backend(),
 		});
 
 	// Register WebSocket endpoint on the assembled app.

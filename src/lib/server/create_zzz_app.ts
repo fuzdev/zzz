@@ -36,6 +36,7 @@ import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.js';
 
 import {build_allowed_hostnames, create_host_validation_middleware} from './security.js';
 import {Backend} from './backend.js';
+import type {PtyBackend} from './pty_backend.js';
 import {
 	ZzzServerEnv as ZzzServerEnvSchema,
 	type ZzzServerConfig,
@@ -82,6 +83,14 @@ export interface CreateZzzAppOptions {
 		};
 	/** Extract the raw TCP connection IP from the Hono context. */
 	get_connection_ip: (c: Context) => string | undefined;
+	/**
+	 * Runtime-specific PTY backend for terminal actions. Supplied by the
+	 * runtime entry point so this factory stays runtime-agnostic: Deno
+	 * entries pass `create_deno_pty_backend` (FFI + `Deno.Command`), the
+	 * Node/Bun test binaries pass `create_node_pty_backend`
+	 * (`node:child_process`).
+	 */
+	pty_backend: PtyBackend;
 	/**
 	 * Optional factory for additional RPC actions to register on the live
 	 * dispatcher. Invoked after `app_backend` and the zzz domain `backend`
@@ -250,6 +259,7 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 		config: zzz_config,
 		action_specs,
 		handle_filer_change,
+		pty_backend: options.pty_backend,
 	});
 
 	// Compose env-gated test actions with caller-supplied actions (test

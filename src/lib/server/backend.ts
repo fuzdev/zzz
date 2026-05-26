@@ -26,6 +26,7 @@ import type {ActionMethod} from '../action_metatypes.js';
 import {create_backend_actions_api} from './backend_actions_api.js';
 import type {BackendActionsApi} from './backend_action_types.js';
 import {PtyManager} from './backend_pty_manager.js';
+import type {PtyBackend} from './pty_backend.js';
 import type {BackendProvider} from './backend_provider.js';
 
 // TODO refactor for extensibility
@@ -76,6 +77,12 @@ export interface BackendOptions {
 	 * Handler function for file system changes.
 	 */
 	handle_filer_change: FilerChangeHandler;
+	/**
+	 * Runtime-specific PTY backend (process spawning + I/O). The Deno entries
+	 * pass `create_deno_pty_backend`, the Node/Bun test entries pass
+	 * `create_node_pty_backend`.
+	 */
+	pty_backend: PtyBackend;
 	/**
 	 * Optional logger instance.
 	 * Disabled when `null`, and `undefined` falls back to a new `Logger` instance.
@@ -152,7 +159,11 @@ export class Backend implements ActionEventEnvironment {
 
 		this.log = options.log === undefined ? new Logger('[backend]') : options.log;
 
-		this.pty_manager = new PtyManager({api: this.api, log: this.log});
+		this.pty_manager = new PtyManager({
+			api: this.api,
+			backend: options.pty_backend,
+			log: this.log,
+		});
 
 		// TODO maybe do this in an `init` method
 		// Set up filer watcher for zzz_dir (always watched for app data)

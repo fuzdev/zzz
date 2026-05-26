@@ -28,3 +28,39 @@ jobs:
       - run: cp src/lib/server/.env.production.example .env.production
       - run: npx svelte-kit sync
       - run: npx @fuzdev/gro check --workspace --build
+
+  # Cross-backend wire-contract suites across the three JS runtimes (Deno V8,
+  # Node V8, Bun JSC) on the identical TS canonical surface. Each matrix cell
+  # spawns exactly one backend on its own fixed port (Deno 11741, Node 11742,
+  # Bun 11743), so cells never contend for a port. PGlite in-memory — no
+  # Postgres, no private_fuz, no native libfuz_pty (Node/Bun use
+  # node:child_process pipes, Deno falls back to Deno.Command). The Rust +
+  # spine_stub cells (cross_backend_rust / _proxy, fuz_app's spine_stub
+  # self-tests) are deferred: they need a private_fuz sibling checkout, a
+  # Postgres service, and a cached cargo build — tracked in the
+  # cross-backend-integration quest (Phase 5).
+  cross-backend-ts:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - cross_backend_ts_node
+          - cross_backend_ts_deno
+          - cross_backend_ts_bun
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Use Node.js 24.14
+        uses: actions/setup-node@v1
+        with:
+          node-version: '24.14'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: oven-sh/setup-bun@v2
+      - run: npm ci
+      - run: cp src/lib/server/.env.development.example .env.development
+      - run: npx svelte-kit sync
+      - run: FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project ${{ matrix.project }}

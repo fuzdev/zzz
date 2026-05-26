@@ -14,6 +14,7 @@ import {start_testing_server} from '@fuzdev/fuz_app/testing/cross_backend/testin
 import {create_bun_testing_adapter} from '@fuzdev/fuz_app/testing/cross_backend/testing_server_bun.js';
 
 import {build_zzz_testing_app, resolve_zzz_testing_config} from './testing_server_build.ts';
+import {create_node_pty_backend} from './pty_backend_node.ts';
 
 const start = async (): Promise<void> => {
 	const adapter = create_bun_testing_adapter();
@@ -31,6 +32,8 @@ const start = async (): Promise<void> => {
 				get_connection_ip: adapter.get_connection_ip,
 				daemon_token_path: resolved.daemon_token_path,
 				scratch_dir: resolved.scratch_dir,
+				// Bun implements `node:child_process`, so it shares the Node backend.
+				pty_backend: create_node_pty_backend(),
 			}),
 	});
 };

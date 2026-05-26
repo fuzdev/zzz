@@ -44,11 +44,15 @@ describe('completion cross-backend', () => {
 			headers: fixture.create_session_headers(),
 		});
 		assert.ok(!res.ok, `expected error, got ${JSON.stringify(res)}`);
-		// Either provider-unavailable (-32603) or invalid-params (-32602)
-		// is acceptable — both backends surface unconfigured-provider as
-		// one of these.
+		// `ollama` is a registered provider, so an unconfigured/unreachable
+		// instance surfaces as `ai_provider_error` (-32020); an unregistered
+		// provider would surface as internal-error (-32603) or invalid-params
+		// (-32602). Any of the three is a valid rejection — every code in the
+		// JSON-RPC spec range means "not a successful completion", and the
+		// exact code is environment-dependent (whether an ollama daemon is
+		// reachable) and identical across all three TS runtimes.
 		assert.ok(
-			res.error.code === -32603 || res.error.code === -32602,
+			res.error.code === -32603 || res.error.code === -32602 || res.error.code === -32020,
 			`unexpected error code: ${res.error.code} (${res.error.message})`,
 		);
 	});

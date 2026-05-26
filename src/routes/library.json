@@ -14831,104 +14831,21 @@
 				"path": "server/backend_pty_manager.ts",
 				"declarations": [
 					{
-						"name": "FfiPtyProcess",
-						"kind": "type",
-						"doc_comment": "FFI-backed PTY process — real terminal via forkpty.",
-						"source_line": 20,
-						"type_signature": "FfiPtyProcess",
-						"properties": [
-							{
-								"name": "kind",
-								"kind": "variable",
-								"type_signature": "'ffi'"
-							},
-							{
-								"name": "pid",
-								"kind": "variable",
-								"type_signature": "number"
-							},
-							{
-								"name": "master_fd",
-								"kind": "variable",
-								"type_signature": "number"
-							},
-							{
-								"name": "terminal_id",
-								"kind": "variable",
-								"type_signature": "Uuid"
-							},
-							{
-								"name": "command",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "args",
-								"kind": "variable",
-								"type_signature": "Array<string>"
-							},
-							{
-								"name": "reading",
-								"kind": "variable",
-								"type_signature": "boolean"
-							}
-						]
-					},
-					{
-						"name": "FallbackPtyProcess",
-						"kind": "type",
-						"doc_comment": "Fallback PTY process — Deno.Command with piped stdin/stdout/stderr.",
-						"source_line": 33,
-						"type_signature": "FallbackPtyProcess",
-						"properties": [
-							{
-								"name": "kind",
-								"kind": "variable",
-								"type_signature": "'fallback'"
-							},
-							{
-								"name": "process",
-								"kind": "variable",
-								"type_signature": "Deno.ChildProcess"
-							},
-							{
-								"name": "terminal_id",
-								"kind": "variable",
-								"type_signature": "Uuid"
-							},
-							{
-								"name": "command",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "args",
-								"kind": "variable",
-								"type_signature": "Array<string>"
-							},
-							{
-								"name": "stdin_writer",
-								"kind": "variable",
-								"type_signature": "WritableStreamDefaultWriter<Uint8Array>"
-							}
-						]
-					},
-					{
-						"name": "PtyProcess",
-						"kind": "type",
-						"source_line": 42,
-						"type_signature": "PtyProcess"
-					},
-					{
 						"name": "PtyManagerOptions",
 						"kind": "type",
-						"source_line": 44,
+						"source_line": 7,
 						"type_signature": "PtyManagerOptions",
 						"properties": [
 							{
 								"name": "api",
 								"kind": "variable",
 								"type_signature": "BackendActionsApi"
+							},
+							{
+								"name": "backend",
+								"kind": "variable",
+								"type_signature": "PtyBackend",
+								"doc_comment": "Runtime-specific spawn implementation. Injected at the server entry\npoint — `create_deno_pty_backend` for the Deno daemon, the same for the\nDeno test binary, `create_node_pty_backend` for the Node/Bun test\nbinaries. The manager never sniffs the runtime itself."
 							},
 							{
 								"name": "log",
@@ -14940,20 +14857,14 @@
 					{
 						"name": "PtyManager",
 						"kind": "class",
-						"doc_comment": "Manages spawned PTY processes keyed by terminal_id.\nUses real PTY via FFI when available, falls back to Deno.Command pipes.",
-						"source_line": 53,
+						"doc_comment": "Manages spawned PTY processes keyed by `terminal_id`, fanning their output\nand exit events out through `BackendActionsApi`. Process spawning + I/O is\ndelegated to the injected `PtyBackend`; this class owns only the\nterminal-id bookkeeping and the notification wiring.",
+						"source_line": 25,
 						"members": [
 							{
 								"name": "log",
 								"kind": "variable",
 								"modifiers": ["readonly"],
 								"type_signature": "Logger | null"
-							},
-							{
-								"name": "use_ffi",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "boolean"
 							},
 							{
 								"name": "constructor",
@@ -15000,6 +14911,12 @@
 										"type": "number",
 										"default_value": "24"
 									}
+								],
+								"throws": [
+									{
+										"type": "when",
+										"description": "the backend detects a spawn failure synchronously (e.g."
+									}
 								]
 							},
 							{
@@ -15022,7 +14939,7 @@
 							{
 								"name": "resize",
 								"kind": "function",
-								"doc_comment": "Resize the PTY window. Only works in FFI mode.",
+								"doc_comment": "Resize the PTY window. No-op for backends without real PTY sizing.",
 								"type_signature": "(terminal_id: string & $brand<\"Uuid\">, cols: number, rows: number): void",
 								"return_type": "void",
 								"parameters": [
@@ -15043,7 +14960,7 @@
 							{
 								"name": "kill",
 								"kind": "function",
-								"doc_comment": "Kill a terminal process.",
+								"doc_comment": "Kill a terminal process. Returns the exit status when known, else `null`.\nTolerant of an already-exited terminal (returns `null`) so concurrent\nnatural exits during `kill_all` / `destroy` don't throw.",
 								"type_signature": "(terminal_id: string & $brand<\"Uuid\">, signal?: string | undefined): Promise<number | null>",
 								"return_type": "Promise<number | null>",
 								"parameters": [
@@ -15090,7 +15007,6 @@
 						]
 					}
 				],
-				"dependencies": ["server/pty_ffi.ts"],
 				"dependents": ["server/backend.ts"]
 			},
 			{
@@ -15100,14 +15016,14 @@
 						"name": "FilerChangeHandler",
 						"kind": "type",
 						"doc_comment": "Function type for handling file system changes.",
-						"source_line": 42,
+						"source_line": 43,
 						"type_signature": "FilerChangeHandler"
 					},
 					{
 						"name": "FilerInstance",
 						"kind": "type",
 						"doc_comment": "Structure to hold a Filer and its cleanup function.",
-						"source_line": 53,
+						"source_line": 54,
 						"type_signature": "FilerInstance",
 						"properties": [
 							{
@@ -15125,7 +15041,7 @@
 					{
 						"name": "BackendOptions",
 						"kind": "type",
-						"source_line": 58,
+						"source_line": 59,
 						"type_signature": "BackendOptions",
 						"properties": [
 							{
@@ -15159,6 +15075,12 @@
 								"doc_comment": "Handler function for file system changes."
 							},
 							{
+								"name": "pty_backend",
+								"kind": "variable",
+								"type_signature": "PtyBackend",
+								"doc_comment": "Runtime-specific PTY backend (process spawning + I/O). The Deno entries\npass `create_deno_pty_backend`, the Node/Bun test entries pass\n`create_node_pty_backend`."
+							},
+							{
 								"name": "log",
 								"kind": "variable",
 								"type_signature": "Logger | null | undefined",
@@ -15170,7 +15092,7 @@
 						"name": "Backend",
 						"kind": "class",
 						"doc_comment": "Server for managing the Zzz application state and handling client messages.",
-						"source_line": 89,
+						"source_line": 96,
 						"extends": [],
 						"implements": ["ActionEventEnvironment"],
 						"members": [
@@ -15407,7 +15329,7 @@
 						"name": "CreateZzzAppOptions",
 						"kind": "type",
 						"doc_comment": "Options for creating a zzz app.",
-						"source_line": 64,
+						"source_line": 65,
 						"type_signature": "CreateZzzAppOptions",
 						"properties": [
 							{
@@ -15435,6 +15357,12 @@
 								"doc_comment": "Extract the raw TCP connection IP from the Hono context."
 							},
 							{
+								"name": "pty_backend",
+								"kind": "variable",
+								"type_signature": "PtyBackend",
+								"doc_comment": "Runtime-specific PTY backend for terminal actions. Supplied by the\nruntime entry point so this factory stays runtime-agnostic: Deno\nentries pass `create_deno_pty_backend` (FFI + `Deno.Command`), the\nNode/Bun test binaries pass `create_node_pty_backend`\n(`node:child_process`)."
+							},
+							{
 								"name": "extra_rpc_actions_factory",
 								"kind": "variable",
 								"type_signature": "(\n\t\tdeps: AppDeps,\n\t\tbackend: Backend,\n\t\truntime: {\n\t\t\t/**\n\t\t\t * Daemon-token runtime state, when `daemon_token_path` is wired.\n\t\t\t * `null` when daemon-token rotation isn't running. The test\n\t\t\t * binary's `_testing_reset` factory needs this to refresh\n\t\t\t * `keeper_account_id` after re-seeding the keeper.\n\t\t\t */\n\t\t\tdaemon_token_state: DaemonTokenState | null;\n\t\t\t/** Session cookie options the live server is wired with. */\n\t\t\tsession_options: SessionOptions<string>;\n\t\t},\n\t) => ReadonlyArray<RpcAction>",
@@ -15458,7 +15386,7 @@
 						"name": "ZzzApp",
 						"kind": "type",
 						"doc_comment": "The created zzz app and related instances.",
-						"source_line": 137,
+						"source_line": 146,
 						"type_signature": "ZzzApp",
 						"properties": [
 							{
@@ -15515,7 +15443,7 @@
 						"name": "create_zzz_app",
 						"kind": "function",
 						"doc_comment": "Create the zzz Hono app with auth, database, Backend, providers, and endpoints.\n\nThis is the shared factory called by the server entry point.\nUses `create_app_backend` for database + auth, `create_app_server` for\nmiddleware assembly, and wires zzz's domain Backend through route deps.",
-						"source_line": 167,
+						"source_line": 176,
 						"type_signature": "(options: CreateZzzAppOptions): Promise<ZzzApp>",
 						"return_type": "Promise<ZzzApp>",
 						"parameters": [
@@ -15596,6 +15524,135 @@
 				],
 				"dependencies": ["action_collections.ts", "server/scoped_fs.ts"],
 				"dependents": ["server/zzz_action_handlers.ts"]
+			},
+			{
+				"path": "server/pty_backend_deno.ts",
+				"declarations": [
+					{
+						"name": "create_deno_pty_backend",
+						"kind": "function",
+						"doc_comment": "Create the Deno PTY backend. Probes FFI availability once; falls back to\n`Deno.Command` pipes (no echo, no resize) when `libfuz_pty` isn't found.",
+						"source_line": 34,
+						"type_signature": "(log?: Logger | null): PtyBackend",
+						"return_type": "PtyBackend",
+						"parameters": [
+							{
+								"name": "log",
+								"type": "Logger | null",
+								"default_value": "new Logger('[pty_deno]')"
+							}
+						]
+					}
+				],
+				"module_comment": "Deno `PtyBackend` — real PTY via the `fuz_pty` FFI when available, with a\n`Deno.Command` piped-stdio fallback. This is the only PTY module that\ntouches Deno globals; `PtyManager` stays runtime-neutral and the Node/Bun\nentries inject `create_node_pty_backend` instead.",
+				"dependencies": ["server/pty_ffi.ts"],
+				"dependents": ["server/server.ts", "server/testing_server_deno.ts"]
+			},
+			{
+				"path": "server/pty_backend_node.ts",
+				"declarations": [
+					{
+						"name": "create_node_pty_backend",
+						"kind": "function",
+						"doc_comment": "Create the Node/Bun PTY backend backed by `node:child_process` pipes.",
+						"source_line": 20,
+						"type_signature": "(): PtyBackend",
+						"return_type": "PtyBackend",
+						"parameters": []
+					}
+				],
+				"module_comment": "Node/Bun `PtyBackend` — piped-stdio child processes via `node:child_process`.\n\nNo real PTY (no echo, no window sizing); the fallback semantics match the\nDeno `Command` path. Used by the cross-process test binaries on the Node\nand Bun runtimes, where Deno's FFI + `Deno.Command` aren't available. Bun\nimplements `node:child_process`, so it shares this backend.",
+				"dependents": ["server/testing_server_bun.ts", "server/testing_server_node.ts"]
+			},
+			{
+				"path": "server/pty_backend.ts",
+				"declarations": [
+					{
+						"name": "PtySpawnRequest",
+						"kind": "type",
+						"doc_comment": "A request to spawn one PTY/process.",
+						"source_line": 19,
+						"type_signature": "PtySpawnRequest",
+						"properties": [
+							{
+								"name": "terminal_id",
+								"kind": "variable",
+								"type_signature": "Uuid"
+							},
+							{
+								"name": "command",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "args",
+								"kind": "variable",
+								"type_signature": "Array<string>"
+							},
+							{
+								"name": "cwd",
+								"kind": "variable",
+								"type_signature": "string"
+							},
+							{
+								"name": "cols",
+								"kind": "variable",
+								"type_signature": "number"
+							},
+							{
+								"name": "rows",
+								"kind": "variable",
+								"type_signature": "number"
+							}
+						]
+					},
+					{
+						"name": "PtySpawnHandlers",
+						"kind": "type",
+						"doc_comment": "Callbacks a `PtyBackend` invokes over the life of a spawned process.",
+						"source_line": 29,
+						"type_signature": "PtySpawnHandlers",
+						"properties": [
+							{
+								"name": "on_data",
+								"kind": "variable",
+								"type_signature": "(data: string) => void | Promise<void>",
+								"doc_comment": "Invoked with each decoded chunk of terminal output."
+							},
+							{
+								"name": "on_exit",
+								"kind": "variable",
+								"type_signature": "(exit_code: number | null) => void",
+								"doc_comment": "Invoked once when the process exits on its own (EOF / natural exit /\nspawn failure). NOT invoked for a caller-initiated `PtySession.kill` —\nthe killer receives the exit status from `kill`'s return value instead,\nso terminals closed via `terminal_close` don't also emit a redundant\n`terminal_exited` notification."
+							}
+						]
+					},
+					{
+						"name": "PtySession",
+						"kind": "type",
+						"doc_comment": "A live PTY session — the runtime-specific process handle.",
+						"source_line": 43,
+						"type_signature": "PtySession",
+						"properties": []
+					},
+					{
+						"name": "PtyBackend",
+						"kind": "type",
+						"doc_comment": "Runtime-specific PTY implementation, injected at the server entry point.",
+						"source_line": 53,
+						"type_signature": "PtyBackend",
+						"properties": [
+							{
+								"name": "mode",
+								"kind": "variable",
+								"modifiers": ["readonly"],
+								"type_signature": "string",
+								"doc_comment": "Human-readable mode label for logging (e.g. `ffi (real PTY)`)."
+							}
+						]
+					}
+				],
+				"module_comment": "Runtime-neutral PTY backend contract.\n\n`PtyManager` orchestrates terminals (tracks them by `terminal_id`, fans\noutput/exit out to `BackendActionsApi`) but knows nothing about how a\nprocess is actually spawned. Each runtime supplies a `PtyBackend`: the\nDeno entry injects `create_deno_pty_backend` (`pty_backend_deno.ts`, real\nPTY via `fuz_pty` FFI with a `Deno.Command` pipe fallback); the Node/Bun\nentries inject `create_node_pty_backend` (`pty_backend_node.ts`,\n`node:child_process` pipes). The runtime is decided at the server entry\npoint, not sniffed inside the manager — no `typeof Deno` branching."
 			},
 			{
 				"path": "server/pty_ffi.ts",
@@ -15806,7 +15863,7 @@
 						"type_signature": "9"
 					}
 				],
-				"dependents": ["server/backend_pty_manager.ts"]
+				"dependents": ["server/pty_backend_deno.ts"]
 			},
 			{
 				"path": "server/register_websocket_actions.ts",
@@ -16478,7 +16535,7 @@
 						"name": "start_server",
 						"kind": "function",
 						"doc_comment": "Start the zzz server using Deno runtime.\n\nCreates the full backend with auth, database, providers, WebSocket, and HTTP RPC\nendpoints via `create_zzz_app`, then serves with `Deno.serve`.",
-						"source_line": 47,
+						"source_line": 48,
 						"type_signature": "(): Promise<void>",
 						"return_type": "Promise<void>",
 						"parameters": []
@@ -16488,6 +16545,7 @@
 				"dependencies": [
 					"server/constants.ts",
 					"server/create_zzz_app.ts",
+					"server/pty_backend_deno.ts",
 					"server/register_websocket_actions.ts",
 					"server/security.ts",
 					"server/server_env.ts",
@@ -16501,7 +16559,7 @@
 					{
 						"name": "ResolvedZzzTestingConfig",
 						"kind": "type",
-						"source_line": 41,
+						"source_line": 42,
 						"type_signature": "ResolvedZzzTestingConfig",
 						"properties": [
 							{
@@ -16525,7 +16583,7 @@
 						"name": "resolve_zzz_testing_config",
 						"kind": "function",
 						"doc_comment": "Load the env file (non-overriding), default `PUBLIC_ZZZ_DIR`, and build the\nforced-test-actions config. Mutates `runtime` env. Returns the config plus\nthe derived daemon-token path + optional scratch dir.",
-						"source_line": 52,
+						"source_line": 53,
 						"type_signature": "(runtime: RuntimeDeps): Promise<ResolvedZzzTestingConfig>",
 						"return_type": "Promise<ResolvedZzzTestingConfig>",
 						"parameters": [
@@ -16538,7 +16596,7 @@
 					{
 						"name": "BuildZzzTestingAppOptions",
 						"kind": "type",
-						"source_line": 76,
+						"source_line": 77,
 						"type_signature": "BuildZzzTestingAppOptions",
 						"properties": [
 							{
@@ -16565,6 +16623,12 @@
 								"name": "scratch_dir",
 								"kind": "variable",
 								"type_signature": "string | undefined"
+							},
+							{
+								"name": "pty_backend",
+								"kind": "variable",
+								"type_signature": "PtyBackend",
+								"doc_comment": "Runtime-specific PTY backend. The Deno entry passes\n`create_deno_pty_backend`; the Node + Bun entries pass\n`create_node_pty_backend`. Kept as a parameter (not hardcoded) because\nthis build is shared across all three JS-runtime entries."
 							}
 						]
 					},
@@ -16572,7 +16636,7 @@
 						"name": "build_zzz_testing_app",
 						"kind": "function",
 						"doc_comment": "Build the zzz test app: `create_zzz_app` + `_testing_reset` + WS mount hook.",
-						"source_line": 85,
+						"source_line": 93,
 						"type_signature": "(options: BuildZzzTestingAppOptions): Promise<BuiltTestingApp>",
 						"return_type": "Promise<BuiltTestingApp>",
 						"parameters": [
@@ -16600,17 +16664,17 @@
 			{
 				"path": "server/testing_server_bun.ts",
 				"declarations": [],
-				"dependencies": ["server/testing_server_build.ts"]
+				"dependencies": ["server/pty_backend_node.ts", "server/testing_server_build.ts"]
 			},
 			{
 				"path": "server/testing_server_deno.ts",
 				"declarations": [],
-				"dependencies": ["server/testing_server_build.ts"]
+				"dependencies": ["server/pty_backend_deno.ts", "server/testing_server_build.ts"]
 			},
 			{
 				"path": "server/testing_server_node.ts",
 				"declarations": [],
-				"dependencies": ["server/testing_server_build.ts"]
+				"dependencies": ["server/pty_backend_node.ts", "server/testing_server_build.ts"]
 			},
 			{
 				"path": "server/zzz_action_handlers.ts",

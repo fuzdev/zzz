@@ -32,6 +32,7 @@ import type {BuiltTestingApp} from '@fuzdev/fuz_app/testing/cross_backend/testin
 
 import {VERSION} from '../zzz/build_info.ts';
 import {create_zzz_app} from './create_zzz_app.ts';
+import type {PtyBackend} from './pty_backend.ts';
 import {load_server_env, type ZzzServerConfig} from './server_env.ts';
 import {register_websocket_actions} from './register_websocket_actions.ts';
 import {ENV_FILE} from './constants.ts';
@@ -79,13 +80,20 @@ export interface BuildZzzTestingAppOptions {
 	get_connection_ip: (c: Context) => string | undefined;
 	daemon_token_path: string;
 	scratch_dir: string | undefined;
+	/**
+	 * Runtime-specific PTY backend. The Deno entry passes
+	 * `create_deno_pty_backend`; the Node + Bun entries pass
+	 * `create_node_pty_backend`. Kept as a parameter (not hardcoded) because
+	 * this build is shared across all three JS-runtime entries.
+	 */
+	pty_backend: PtyBackend;
 }
 
 /** Build the zzz test app: `create_zzz_app` + `_testing_reset` + WS mount hook. */
 export const build_zzz_testing_app = async (
 	options: BuildZzzTestingAppOptions,
 ): Promise<BuiltTestingApp> => {
-	const {config, runtime, get_connection_ip, daemon_token_path, scratch_dir} = options;
+	const {config, runtime, get_connection_ip, daemon_token_path, scratch_dir, pty_backend} = options;
 
 	const {app, backend, app_backend, allowed_origins, extra_ws_actions, close} =
 		await create_zzz_app({
@@ -93,6 +101,7 @@ export const build_zzz_testing_app = async (
 			password: stub_password_deps,
 			runtime,
 			get_connection_ip,
+			pty_backend,
 			daemon_token_path,
 			disable_rate_limiters: true,
 			extra_rpc_actions_factory: (deps, zzz_backend, {daemon_token_state, session_options}) => {
