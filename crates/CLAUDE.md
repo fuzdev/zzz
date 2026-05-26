@@ -384,16 +384,20 @@ malformed-skip and leftmost-fallback, `cidr_contains` shift-edge
 cases).
 
 ```bash
-FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Rust binary (postgres://localhost/zzz_test)
-FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust_proxy # Rust binary with ZZZ_TRUSTED_PROXIES=127.0.0.1 (proxy.cross.test.ts only)
-FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_ts_node    # Node TS adapter (PGlite in-memory)
-FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_ts_deno    # Deno TS adapter (PGlite in-memory)
+npm run test:cross:rust                                                   # Both rust projects (rust + rust_proxy) — flag baked in
+npm run test:cross                                                        # Both TS projects (ts_node + ts_deno; no external infra)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Single project (Rust binary; postgres://localhost/zzz_test)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust_proxy # Single project (proxy variant; ZZZ_TRUSTED_PROXIES=127.0.0.1, proxy.cross.test.ts only)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_ts_node    # Single project (Node TS adapter; PGlite in-memory)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_ts_deno    # Single project (Deno TS adapter; PGlite in-memory)
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run -t ping                            # Substring match on test name (vitest -t flag)
 ```
 
 The `cross_backend_*` projects are gated behind `FUZ_TEST_CROSS_BACKEND=1`
-in `vite.config.ts` so a bare `gro test` never spawns backends; set the
-flag to opt in.
+in `vite.config.ts` so a bare `gro test` never spawns backends. The
+`test:cross` / `test:cross:rust` package.json scripts bake the flag in
+(and run via `deno task` under Deno 2); set the flag manually only for the
+single-project `--project` runs.
 
 The harness writes a bootstrap token to a per-backend tmpdir, spawns the
 test binary via the project's `BackendConfig.start_command`, waits for
