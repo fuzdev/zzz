@@ -1033,7 +1033,7 @@ describe('RequestTracker', () => {
 			results.forEach((result, index) => {
 				assert.strictEqual(result.id, ids[index]);
 				if (is_jsonrpc_response(result)) {
-					assert.strictEqual(result.result.test, 'result');
+					assert.deepStrictEqual(result.result, {test: 'result'});
 				}
 			});
 
