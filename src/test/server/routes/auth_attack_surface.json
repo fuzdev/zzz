@@ -452,7 +452,7 @@
 				"request_context",
 				"bearer_auth"
 			],
-			"description": "JSON-RPC 2.0 endpoint — 48 methods",
+			"description": "JSON-RPC 2.0 endpoint — 51 methods",
 			"is_mutation": true,
 			"transaction": false,
 			"rate_limit_key": null,
@@ -495,7 +495,7 @@
 				"request_context",
 				"bearer_auth"
 			],
-			"description": "JSON-RPC 2.0 endpoint (cacheable reads) — 48 methods",
+			"description": "JSON-RPC 2.0 endpoint (cacheable reads) — 51 methods",
 			"is_mutation": false,
 			"transaction": false,
 			"rate_limit_key": null,
@@ -1503,6 +1503,10 @@
 									{"type": "integer", "minimum": 0, "maximum": 9007199254740991},
 									{"type": "null"}
 								]
+							},
+							"include_deleted": {
+								"description": "Include soft-deleted (tombstoned) accounts in the listing. Default false (active only). Used by the admin UI to surface accounts for reactivation via `account_undelete`.",
+								"anyOf": [{"type": "boolean"}, {"type": "null"}]
 							}
 						},
 						"additionalProperties": false
@@ -1510,6 +1514,121 @@
 					"output_schema": null,
 					"side_effects": false,
 					"description": "List all accounts with their actors, role_grants, and pending offers. Admin-only.",
+					"rate_limit_key": "account"
+				},
+				{
+					"name": "account_delete",
+					"auth": {"account": "required", "actor": "required"},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"account_id": {
+								"description": "Account to soft-delete. Omit for self-delete; another account requires admin.",
+								"anyOf": [
+									{
+										"type": "string",
+										"format": "uuid",
+										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+									},
+									{"type": "null"}
+								]
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							}
+						},
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"ok": {"type": "boolean", "const": true},
+							"deleted": {"type": "boolean"}
+						},
+						"required": ["ok", "deleted"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Soft-delete an account (reversible tombstone): blocks auth, revokes sessions/tokens, soft-deletes its actor(s). Self-service for own account; admin required to delete another.",
+					"rate_limit_key": "account"
+				},
+				{
+					"name": "account_purge",
+					"auth": {
+						"account": "required",
+						"actor": "required",
+						"roles": ["keeper"],
+						"credential_types": ["daemon_token"]
+					},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"account_id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+								"description": "Account to hard-purge."
+							},
+							"confirm": {
+								"description": "Must be `true` — fail-loud guard against an accidental irreversible purge.",
+								"type": "boolean"
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							}
+						},
+						"required": ["account_id"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {"ok": {"type": "boolean", "const": true}, "purged": {"type": "boolean"}},
+						"required": ["ok", "purged"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Hard-purge an account (irreversible cascading delete). Keeper-only + explicit confirm. Audit ids survive; identity snapshotted in metadata.",
+					"rate_limit_key": "account"
+				},
+				{
+					"name": "account_undelete",
+					"auth": {"account": "required", "actor": "required", "roles": ["admin"]},
+					"input_schema": {
+						"type": "object",
+						"properties": {
+							"account_id": {
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+								"description": "Soft-deleted account to reactivate."
+							},
+							"acting": {
+								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",
+								"type": "string",
+								"format": "uuid",
+								"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+							}
+						},
+						"required": ["account_id"],
+						"additionalProperties": false
+					},
+					"output_schema": {
+						"type": "object",
+						"properties": {
+							"ok": {"type": "boolean", "const": true},
+							"undeleted": {"type": "boolean"}
+						},
+						"required": ["ok", "undeleted"],
+						"additionalProperties": false
+					},
+					"side_effects": true,
+					"description": "Reactivate a soft-deleted account (clears the deleted_at tombstone on the account + its actors). Admin-only. Does not restore revoked sessions/tokens — principals re-auth fresh.",
 					"rate_limit_key": "account"
 				},
 				{
@@ -3136,6 +3255,20 @@
 			"name": "SMTP_PASSWORD",
 			"description": "SMTP authentication password",
 			"sensitivity": "secret",
+			"has_default": false,
+			"optional": true
+		},
+		{
+			"name": "FUZ_FACTS_DIR",
+			"description": "Directory for referenced (large) fact bytes, sharded <shard>/<rest>",
+			"sensitivity": null,
+			"has_default": true,
+			"optional": true
+		},
+		{
+			"name": "FUZ_FACTS_X_ACCEL_REDIRECT_PREFIX",
+			"description": "Internal nginx prefix for X-Accel-Redirect fact delivery (production only)",
+			"sensitivity": null,
 			"has_default": false,
 			"optional": true
 		},

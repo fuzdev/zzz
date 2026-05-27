@@ -665,8 +665,9 @@ identical JSON-RPC envelopes for all auth failures.
   offloaded to `tokio::task::spawn_blocking` to avoid blocking the async runtime.
 - **Dispatch is async**: filesystem handlers (`diskfile_update`, etc.) use
   `tokio::fs` async I/O. Workspace handlers remain sync (no await points).
-- **`std::sync::RwLock`** (not tokio): current handlers are sync. When async
-  handlers arrive, scope lock guards before await points.
+- **`parking_lot::RwLock`** for sync handlers (workspaces, scoped-fs); no
+  poisoning. Async handlers (filer, pty, providers) use `tokio::sync::RwLock`
+  where a guard is held across an await — scope sync guards before await points.
 - **Session touch**: fire-and-forget via `tokio::spawn` — doesn't block
   the request pipeline.
 - **PTY terminals**: `fuz_pty` as a native crate dependency (no FFI

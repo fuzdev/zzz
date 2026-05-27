@@ -55,11 +55,11 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.4.5",
-			"@fuzdev/fuz_app": "^0.67.1",
+			"@fuzdev/fuz_app": "^0.68.0",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.59.0",
 			"@fuzdev/fuz_ui": "^0.192.0",
-			"@fuzdev/fuz_util": "^0.61.0",
+			"@fuzdev/fuz_util": "^0.61.1",
 			"@hono/node-server": "^1.19.9",
 			"@hono/node-ws": "^1.3.1",
 			"@jridgewell/trace-mapping": "^0.3.31",
@@ -16410,7 +16410,7 @@
 						"kind": "type",
 						"doc_comment": "Zod schema for zzz server environment variables.\n\nExtends `BaseServerEnv` with zzz-specific fields for app data,\nscoped directories, AI provider API keys, and testing configuration.",
 						"source_line": 20,
-						"type_signature": "ZodObject<{ NODE_ENV: ZodEnum<{ development: \"development\"; production: \"production\"; }>; PORT: ZodDefault<ZodCoercedNumber<unknown>>; HOST: ZodDefault<ZodString>; ... 16 more ...; SECRET_GOOGLE_API_KEY: ZodOptional<...>; }, $strict>"
+						"type_signature": "ZodObject<{ NODE_ENV: ZodEnum<{ development: \"development\"; production: \"production\"; }>; PORT: ZodDefault<ZodCoercedNumber<unknown>>; HOST: ZodDefault<ZodString>; ... 18 more ...; SECRET_GOOGLE_API_KEY: ZodOptional<...>; }, $strict>"
 					},
 					{
 						"name": "ZzzServerConfig",
