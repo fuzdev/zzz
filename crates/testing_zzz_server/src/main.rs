@@ -67,7 +67,11 @@ async fn main() {
     // the optional scratch dir.
     let extra_specs_factory: zzz_server::ExtraActionSpecsFactory = Box::new(|app, runtime| {
         let app_for_reset = Arc::clone(&app);
-        let reset_state: ResetStateFn = Arc::new(move || {
+        // zzz's domain state is in-memory (workspaces + terminals +
+        // scratch dir), so the in-tx `ActionDb` handed in by the spine
+        // reset is ignored here — only DB-domain consumers (fuz_forge)
+        // use it.
+        let reset_state: ResetStateFn = Arc::new(move |_db| {
             let app = Arc::clone(&app_for_reset);
             Box::pin(async move {
                 // Clear every open workspace. The Rust App stores workspaces
