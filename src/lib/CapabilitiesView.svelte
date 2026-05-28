@@ -34,10 +34,6 @@
 			<CapabilityWebsocket />
 		</section>
 		<section class="mb_xl12">
-			<h2><ProviderLogo name="ollama" /> Ollama</h2>
-			<CapabilityProvider provider_name="ollama" />
-		</section>
-		<section class="mb_xl12">
 			<h2><ProviderLogo name="claude" /> Claude</h2>
 			<CapabilityProvider provider_name="claude" />
 		</section>

@@ -3,11 +3,7 @@ import type {Uuid} from '@fuzdev/fuz_util/id.js';
 import type {CompletionMessage} from '../completion_types.js';
 import type {ActionInputs, ActionOutputs} from '../action_collections.js';
 import {jsonrpc_errors} from '../zzz_jsonrpc_errors.js';
-import {
-	type ProviderStatus,
-	PROVIDER_ERROR_NEEDS_API_KEY,
-	PROVIDER_ERROR_NOT_INSTALLED,
-} from '../provider_types.js';
+import {type ProviderStatus, PROVIDER_ERROR_NEEDS_API_KEY} from '../provider_types.js';
 
 // TODO proper logging
 
@@ -181,24 +177,4 @@ export abstract class BackendProviderRemote<TClient = unknown> extends BackendPr
 		this.provider_status = status;
 		return status;
 	}
-}
-
-/**
- * Base class for locally-installed providers (Ollama).
- * Handles installation checking and provides default error handling for missing installations.
- */
-export abstract class BackendProviderLocal<TClient = unknown> extends BackendProvider<TClient> {
-	constructor() {
-		super();
-		this.create_client();
-	}
-
-	override get_client(): TClient {
-		if (!this.client) {
-			throw jsonrpc_errors.ai_provider_error(this.name, PROVIDER_ERROR_NOT_INSTALLED);
-		}
-		return this.client;
-	}
-
-	// load_status() must be implemented by subclass with installation-specific logic
 }

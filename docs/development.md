@@ -10,7 +10,7 @@ deno task dev:setup
 npm install
 ```
 
-Optionally add API keys to `.env.development` for remote providers (Anthropic, OpenAI, Google). Ollama requires no key.
+Optionally add API keys to `.env.development` for remote providers (Anthropic, OpenAI, Google).
 
 ### PTY support (optional)
 
@@ -78,7 +78,6 @@ Components use `PascalCase` with domain prefixes:
 | `Chat` | Chat UI | `ChatView`, `ChatListitem` |
 | `Diskfile` | File editor | `DiskfileEditorView`, `DiskfileExplorer` |
 | `Model` | Model management | `ModelListitem`, `ModelPickerDialog` |
-| `Ollama` | Ollama-specific | `OllamaManager`, `OllamaPullModel` |
 | `Part` | Content parts | `PartView`, `PartEditorForText` |
 | `Prompt` | Prompts | `PromptList`, `PromptPickerDialog` |
 | `Terminal` | Terminals | `TerminalRunner`, `TerminalView`, `TerminalContextmenu` |
@@ -259,7 +258,7 @@ const chat = app.chats.items.by_id.get(id);
 const model = app.models.items.by('name', 'gpt-5-2025-08-07');
 
 // Query multi-index
-const ollama_models = app.models.items.where('provider_name', 'ollama');
+const claude_models = app.models.items.where('provider_name', 'claude');
 
 // Iterate
 for (const chat of app.chats.items.values) {

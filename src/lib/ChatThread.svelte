@@ -1,6 +1,5 @@
 <script lang="ts">
 	import PendingButton from '@fuzdev/fuz_ui/PendingButton.svelte';
-	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import {tick} from 'svelte';
 	import type {SvelteHTMLElements} from 'svelte/elements';
 
@@ -55,10 +54,6 @@
 
 	let show_model_picker = $state.raw(false);
 
-	// Show loading indicator for local models (Ollama) when they're not loaded
-	const is_local_model = $derived(thread.model.provider_name === 'ollama');
-	const show_loading_indicator = $derived(is_local_model && !thread.model.loaded);
-
 	const provider = $derived(thread.model.provider);
 	const provider_error = $derived(
 		provider?.available
@@ -86,11 +81,6 @@
 						onclick={() => (show_model_picker = true)}
 					>
 						{thread.model.name}
-						{#if show_loading_indicator}
-							<span class="ml_xs3" title="model loading">
-								<PendingAnimation inline />
-							</span>
-						{/if}
 					</button>
 					<small
 						><ProviderLink

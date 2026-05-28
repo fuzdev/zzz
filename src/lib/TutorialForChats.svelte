@@ -13,10 +13,9 @@
 		<div out:blur={{duration: DURATION_LG}}>
 			<aside out:fly={{duration: DURATION_LG, x: -10, y: -1}}>
 				<p>
-					This currently supports chatting with local models via Ollama, and if you bring your own
-					API key, it supports basic text chat with ChatGPT, Claude, and Gemini. It's still early,
-					share your ideas in the <ExternalLink href="https://github.com/fuzdev/zzz/discussions"
-						>discussions</ExternalLink
+					This currently supports basic text chat with ChatGPT, Claude, and Gemini if you bring your
+					own API key. It's still early, share your ideas in the <ExternalLink
+						href="https://github.com/fuzdev/zzz/discussions">discussions</ExternalLink
 					>.
 				</p>
 				<button

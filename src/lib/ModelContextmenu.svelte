@@ -40,17 +40,6 @@
 				<span>create new chat</span>
 			</ContextmenuEntry>
 
-			{#if model.provider_name === 'ollama'}
-				<ContextmenuEntry
-					run={async () => {
-						await model.navigate_to_provider_model_view();
-					}}
-				>
-					{#snippet icon()}<Glyph glyph={GLYPH_MODEL} />{/snippet}
-					<span>manage Ollama model</span>
-				</ContextmenuEntry>
-			{/if}
-
 			<!-- TODO probably want an "edit model" form, this is confusing as-is -->
 			<!-- <ContextmenuSubmenu>
 				{#snippet icon()}<Glyph glyph={GLYPH_PROVIDER} />{/snippet}

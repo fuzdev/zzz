@@ -49,7 +49,6 @@ import {
 	testing_action_specs,
 } from '../testing_action_specs.js';
 import {handle_filer_change} from './backend_actions_api.js';
-import {BackendProviderOllama} from './backend_provider_ollama.js';
 import {BackendProviderClaude} from './backend_provider_claude.js';
 import {BackendProviderChatgpt} from './backend_provider_chatgpt.js';
 import {BackendProviderGemini} from './backend_provider_gemini.js';
@@ -277,7 +276,6 @@ export const create_zzz_app = async (options: CreateZzzAppOptions): Promise<ZzzA
 
 	// Register AI providers. Streaming progress is routed per-request via
 	// `ctx.notify` — providers have no broadcast callback.
-	backend.add_provider(new BackendProviderOllama());
 	backend.add_provider(
 		new BackendProviderClaude({api_key: config.secret_anthropic_api_key ?? null}),
 	);

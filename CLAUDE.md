@@ -4,15 +4,15 @@
 
 `@fuzdev/zzz` — local-first AI forge: chat + files + prompts + terminals in one app.
 SvelteKit frontend (static SPA), Rust (Axum) backend, Svelte 5 runes, Zod schemas.
-v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PostgreSQL/PGlite DB. 31 cell classes, 30 action specs, 4 AI providers.
+v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PostgreSQL/PGlite DB. 31 cell classes, 21 action specs, 3 AI providers.
 
 zzz is going **Rust-only** on the backend: `crates/zzz_server` (Axum) is the
 backend going forward, and the legacy TypeScript/Deno/Hono backend under
-`src/lib/server/` is slated for removal. The SSE broadcast of audit events
-has landed in Rust; the one remaining divergence is the Ollama actions,
-which are **not** ported to Rust and are being retired from zzz instead.
-Until then the TS backend is retained solely as the cross-backend parity
-reference. The frontend is a
+`src/lib/server/` is slated for removal. The Rust backend has reached
+behavioral parity — the SSE broadcast of audit events landed, and Ollama
+(the last divergence) has been retired from zzz entirely rather than ported.
+Until the TS backend is deleted it is retained solely as the cross-backend
+parity reference. The frontend is a
 prerendered static SPA served by the Rust backend — no JS runtime in
 production.
 
@@ -28,13 +28,13 @@ this repo — make the edits and stop, the user commits.
 1. **Chat** with AI models — multi-thread, multi-model comparison, streaming responses
 2. **Edit files** on disk — scoped filesystem, syntax highlighting, multi-tab editor
 3. **Build prompts** — reusable content templates composed from text parts and file references
-4. **Manage models** — Ollama local models + Claude/ChatGPT/Gemini via BYOK API keys
+4. **Manage models** — Claude/ChatGPT/Gemini via BYOK API keys
 5. **Run terminals** — interactive PTY terminals via xterm.js with preset commands, contextmenu copy, and restart
 6. **Symmetric actions** — JSON-RPC 2.0 between frontend and backend, same ActionPeer on both sides
 
 ## Key Principles
 
-- **Local-first**: Ollama for local AI, sensitive data stays on your machine, no third-party lock-in
+- **Local-first**: your data stays on your machine, no third-party lock-in; providers are opt-in BYOK
 - **Schema-driven**: Every Cell and Action defined by Zod schemas, validated at boundaries
 - **Symmetric actions**: Frontend and backend are peers — same ActionPeer code, same spec format
 - **Cell pattern**: All state is Cell subclasses with `$state`/`$derived` runes, JSON-serializable
@@ -45,7 +45,7 @@ Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app au
 
 The Rust backend (`crates/zzz_server`, Axum) is zzz's backend going forward — full auth stack, filesystem, terminals, PostgreSQL, bootstrap, Anthropic provider with SSE streaming, audit emission with listener fan-out, trusted-proxy `client_ip` resolution, opt-in login rate limiting, Origin allowlist on every REST + RPC + WS handler. Spine consumption is complete: auth, HTTP, realtime (WS + SSE), dispatch, and DB all come from the spine crates (`fuz_db`, `fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`); a single `/api/rpc` + `/api/ws` serves the boot-compiled `fuz_actions::ActionRegistry`, with the zzz-specific handlers (workspace, filesystem, terminal, provider, `completion_create`) in `handlers_v2/` and the admin audit-log SSE stream at `GET /api/admin/audit/stream`.
 
-The legacy TypeScript/Deno/Hono backend (`src/lib/server/`) is **slated for removal**. It is retained only as the cross-backend parity reference until the Rust backend reaches full behavioral parity (the SSE audit broadcast has landed; the one remaining divergence is the Ollama actions, which are being retired from zzz rather than ported to Rust). Cross-backend + Rust-only integration tests (the `cross_backend_*` vitest projects, gated behind `FUZ_TEST_CROSS_BACKEND=1`) verify wire-shape parity by running fuz_app's standard suites against each backend over real HTTP. (A schema-parity snapshot gate exists as a fuz_app capability — `query_schema_snapshot` + `assert_schema_snapshots_equal` — but is not currently wired into zzz's cross-backend projects.) Once the Rust backend is at parity and the canonical cross-backend parity role has moved to the dual-impl forge consumer, the TS backend is deleted and zzz ships a single backend. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
+The legacy TypeScript/Deno/Hono backend (`src/lib/server/`) is **slated for removal**. It is retained only as the cross-backend parity reference. The Rust backend has reached behavioral parity — the SSE audit broadcast landed and Ollama (the last divergence) has been retired from zzz entirely. Cross-backend + Rust-only integration tests (the `cross_backend_*` vitest projects, gated behind `FUZ_TEST_CROSS_BACKEND=1`) verify wire-shape parity by running fuz_app's standard suites against each backend over real HTTP. (A schema-parity snapshot gate exists as a fuz_app capability — `query_schema_snapshot` + `assert_schema_snapshots_equal` — but is not currently wired into zzz's cross-backend projects.) Once the canonical cross-backend parity role has moved to the dual-impl forge consumer, the TS backend is deleted and zzz ships a single backend. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
 
 See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 
@@ -95,7 +95,7 @@ src/
 │   │   ├── zzz_action_handlers.ts  # Unified handlers — single source of truth
 │   │   ├── zzz_rpc_actions.ts      # Thin adapter for fuz_app RPC format
 │   │   ├── register_websocket_actions.ts # Thin wrapper over fuz_app's `register_action_ws`
-│   │   ├── backend_provider_*.ts # Ollama, Claude, ChatGPT, Gemini
+│   │   ├── backend_provider_*.ts # Claude, ChatGPT, Gemini
 │   │   ├── pty_backend.ts          # Runtime-neutral PtyBackend/PtySession DI contract
 │   │   ├── pty_backend_deno.ts      # Deno PtyBackend — fuz_pty FFI + Deno.Command fallback
 │   │   ├── pty_backend_node.ts      # Node/Bun PtyBackend — node:child_process pipes
@@ -202,7 +202,7 @@ a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 
 ## Action Specs
 
-30 specs in `src/lib/action_specs.ts` (test-only `_testing_emit_notifications`
+21 specs in `src/lib/action_specs.ts` (test-only `_testing_emit_notifications`
 + `_testing_notification` live in `src/lib/testing_action_specs.ts` and only
 register on the live dispatchers when `ZZZ_ENABLE_TEST_ACTIONS=1`):
 
@@ -216,16 +216,7 @@ register on the live dispatchers when `ZZZ_ENABLE_TEST_ACTIONS=1`):
 | `directory_create`         | `request_response`    | `frontend` | Create a directory                                      |
 | `completion_create`        | `request_response`    | `frontend` | Start AI completion                                     |
 | `completion_progress`      | `remote_notification` | `backend`  | Stream completion chunks                                |
-| `ollama_progress`          | `remote_notification` | `backend`  | Ollama model operation progress                         |
 | `toggle_main_menu`         | `local_call`          | `frontend` | Toggle main menu UI                                     |
-| `ollama_list`              | `request_response`    | `frontend` | List local Ollama models                                |
-| `ollama_ps`                | `request_response`    | `frontend` | List running Ollama models                              |
-| `ollama_show`              | `request_response`    | `frontend` | Show Ollama model details                               |
-| `ollama_pull`              | `request_response`    | `frontend` | Pull Ollama model                                       |
-| `ollama_delete`            | `request_response`    | `frontend` | Delete Ollama model                                     |
-| `ollama_copy`              | `request_response`    | `frontend` | Copy Ollama model                                       |
-| `ollama_create`            | `request_response`    | `frontend` | Create Ollama model                                     |
-| `ollama_unload`            | `request_response`    | `frontend` | Unload Ollama model from memory                         |
 | `provider_load_status`     | `request_response`    | `frontend` | Check provider availability                             |
 | `provider_update_api_key`  | `request_response`    | `frontend` | Update provider API key                                 |
 | `terminal_create`          | `request_response`    | `frontend` | Spawn PTY terminal process                              |
@@ -296,7 +287,7 @@ PostgreSQL via `tokio-postgres`/`deadpool-postgres`, HMAC-SHA256 cookie
 signing, blake3 session/token hashing, per-action auth checks with credential
 type enforcement, bootstrap endpoint. AI provider system with enum-dispatched
 providers — Anthropic fully implemented (non-streaming + SSE streaming with
-connection-targeted `completion_progress` notifications), OpenAI/Gemini/Ollama
+connection-targeted `completion_progress` notifications), OpenAI/Gemini
 stubs. Cross-process integration tests in `src/test/cross_backend/*.cross.test.ts`
 verify identical JSON-RPC responses across the Rust and legacy TS backends
 via a shared TS contract — the parity harness that gates the TS backend's
@@ -575,7 +566,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY via FFI** — terminal spawning is a runtime-injected `PtyBackend` (`pty_backend.ts`), so `PtyManager` never sniffs the runtime. The production Deno daemon injects `create_deno_pty_backend`: real PTY via the `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`), falling back to `Deno.Command` pipes (no echo, no prompt, no resize) when `libfuz_pty.so` isn't found. Requires `cargo build -p fuz_pty --release` in ~/dev/private_fuz/; for bundled binaries place `libfuz_pty.so` next to the `zzz` executable. The cross-process Node/Bun test binaries inject `create_node_pty_backend` (`node:child_process` pipes) since Deno FFI is unavailable there — same pipe semantics, no real PTY.
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Rust backend is the path forward; TS backend slated for removal** — `zzz_server` has 25 RPC methods with the full auth stack, same `/api/*` route paths as the legacy TS backend. `deno task dev` runs the Rust backend with the Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable). No batch JSON-RPC. Spine consumption is complete — a single `/api/rpc` + `/api/ws` serves the boot-compiled `ActionRegistry` (handlers in `handlers_v2/`), plus the admin audit-log SSE stream at `GET /api/admin/audit/stream`. The SSE audit-broadcast gap is closed; the one remaining cross-backend divergence before the TS backend can be deleted is the Ollama actions (`ollama_list`, `ollama_ps`, etc.), which are **not** ported to Rust and are slated for removal from zzz.
+- **Rust backend is the path forward; TS backend slated for removal** — `zzz_server` has 25 RPC methods with the full auth stack, same `/api/*` route paths as the legacy TS backend. `deno task dev` runs the Rust backend with the Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only). No batch JSON-RPC. Spine consumption is complete — a single `/api/rpc` + `/api/ws` serves the boot-compiled `ActionRegistry` (handlers in `handlers_v2/`), plus the admin audit-log SSE stream at `GET /api/admin/audit/stream`. The Rust backend has reached behavioral parity: the SSE audit-broadcast gap is closed and Ollama (the last divergence) has been retired from zzz entirely. The TS backend is retained only as the parity reference pending its deletion.
 
 ## fuz_app
 

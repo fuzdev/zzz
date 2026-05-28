@@ -29,19 +29,6 @@ import {
 import {ProviderStatus, ProviderName} from './provider_types.js';
 import {CompletionMessage, CompletionRequest, CompletionResponse} from './completion_types.js';
 import {WorkspaceInfoJson} from './workspace.svelte.js';
-import {
-	OllamaListRequest,
-	OllamaListResponse,
-	OllamaPsRequest,
-	OllamaPsResponse,
-	OllamaShowRequest,
-	OllamaShowResponse,
-	OllamaPullRequest,
-	OllamaDeleteRequest,
-	OllamaCopyRequest,
-	OllamaCreateRequest,
-	OllamaProgressResponse,
-} from './ollama_helpers.js';
 
 // -- Shared sub-schemas -----------------------------------------------------
 
@@ -134,10 +121,10 @@ export type CompletionCreateOutput = z.infer<typeof CompletionCreateOutput>;
 /**
  * Input for `completion_progress`.
  *
- * TODO improve `chunk` schema. Today it's Ollama-shaped (`model`,
- * `created_at`, `done`, `message`); add `done_reason`, timing fields
- * (`total_duration`, `load_duration`, `prompt_eval_*`, `eval_*`),
- * `thinking`, `images`, `tool_calls` as more provider streams land.
+ * TODO improve `chunk` schema. Today it carries a loose provider-shaped
+ * payload (`model`, `created_at`, `done`, `message`); add `done_reason`,
+ * timing fields (`total_duration`, `load_duration`, `prompt_eval_*`,
+ * `eval_*`), `thinking`, `images`, `tool_calls` as more provider streams land.
  */
 export const CompletionProgressInput = z.strictObject({
 	chunk: z
@@ -152,19 +139,6 @@ export const CompletionProgressInput = z.strictObject({
 });
 export type CompletionProgressInput = z.infer<typeof CompletionProgressInput>;
 
-/**
- * Input for `ollama_progress`. Composes the Ollama progress payload with the shared `_meta` envelope.
- *
- * Re-wraps with `z.strictObject` because `OllamaProgressResponse` is a
- * `z.looseObject` (Ollama API passthrough). Action-spec inputs must reject
- * unknown keys per the canonical convention.
- */
-export const OllamaProgressInput = z.strictObject({
-	...OllamaProgressResponse.shape,
-	_meta: ProgressMeta.optional(),
-});
-export type OllamaProgressInput = z.infer<typeof OllamaProgressInput>;
-
 // TODO this is just a placeholder for a local call
 /** Input for `toggle_main_menu`. Optional — omit to toggle, pass `{show}` to set explicitly. */
 export const ToggleMainMenuInput = z.strictObject({show: z.boolean().optional()}).optional();
@@ -173,38 +147,6 @@ export type ToggleMainMenuInput = z.infer<typeof ToggleMainMenuInput>;
 /** Output for `toggle_main_menu`. */
 export const ToggleMainMenuOutput = z.strictObject({show: z.boolean()});
 export type ToggleMainMenuOutput = z.infer<typeof ToggleMainMenuOutput>;
-
-/**
- * Input for `ollama_pull`. Composes the Ollama pull request with the streaming `_meta` envelope.
- *
- * Re-wraps with `z.strictObject` because `OllamaPullRequest` is a
- * `z.looseObject` (Ollama API passthrough). Action-spec inputs must reject
- * unknown keys per the canonical convention.
- */
-export const OllamaPullInput = z.strictObject({
-	...OllamaPullRequest.shape,
-	_meta: ProgressMeta.optional(),
-});
-export type OllamaPullInput = z.infer<typeof OllamaPullInput>;
-
-/**
- * Input for `ollama_create`. Composes the Ollama create request with the streaming `_meta` envelope.
- *
- * Re-wraps with `z.strictObject` because `OllamaCreateRequest` is a
- * `z.looseObject` (Ollama API passthrough). Action-spec inputs must reject
- * unknown keys per the canonical convention.
- */
-export const OllamaCreateInput = z.strictObject({
-	...OllamaCreateRequest.shape,
-	_meta: ProgressMeta.optional(),
-});
-export type OllamaCreateInput = z.infer<typeof OllamaCreateInput>;
-
-/** Input for `ollama_unload`. */
-export const OllamaUnloadInput = z.strictObject({
-	model: z.string(),
-});
-export type OllamaUnloadInput = z.infer<typeof OllamaUnloadInput>;
 
 /** Input for `provider_load_status`. */
 export const ProviderLoadStatusInput = z.strictObject({
@@ -423,18 +365,6 @@ export const completion_progress_action_spec = {
 	description: 'Streams a completion chunk to the frontend during a streaming AI response.',
 } satisfies RemoteNotificationActionSpec;
 
-export const ollama_progress_action_spec = {
-	method: 'ollama_progress',
-	kind: 'remote_notification',
-	initiator: 'backend',
-	auth: null,
-	side_effects: true,
-	input: OllamaProgressInput,
-	output: z.void(),
-	async: true,
-	description: 'Streams progress updates for an Ollama model operation (pull, create, etc.).',
-} satisfies RemoteNotificationActionSpec;
-
 export const toggle_main_menu_action_spec = {
 	method: 'toggle_main_menu',
 	kind: 'local_call',
@@ -446,104 +376,6 @@ export const toggle_main_menu_action_spec = {
 	async: false,
 	description: 'Toggle or set the visibility of the main navigation menu.',
 } satisfies LocalCallActionSpec;
-
-export const ollama_list_action_spec = {
-	method: 'ollama_list',
-	kind: 'request_response',
-	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
-	side_effects: false,
-	input: OllamaListRequest,
-	output: z.union([OllamaListResponse, z.null()]),
-	async: true,
-	description: 'List all locally available Ollama models.',
-} satisfies RequestResponseActionSpec;
-
-export const ollama_ps_action_spec = {
-	method: 'ollama_ps',
-	kind: 'request_response',
-	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
-	side_effects: false,
-	input: OllamaPsRequest,
-	output: z.union([OllamaPsResponse, z.null()]),
-	async: true,
-	description: 'List currently running Ollama models.',
-} satisfies RequestResponseActionSpec;
-
-export const ollama_show_action_spec = {
-	method: 'ollama_show',
-	kind: 'request_response',
-	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
-	side_effects: false,
-	input: OllamaShowRequest,
-	output: z.union([OllamaShowResponse, z.null()]),
-	async: true,
-	description: 'Show detailed information about an Ollama model.',
-} satisfies RequestResponseActionSpec;
-
-export const ollama_pull_action_spec = {
-	method: 'ollama_pull',
-	kind: 'request_response',
-	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
-	side_effects: true,
-	input: OllamaPullInput,
-	output: z.null(),
-	async: true,
-	streams: 'ollama_progress',
-	description: 'Pull an Ollama model from the registry.',
-} satisfies RequestResponseActionSpec;
-
-export const ollama_delete_action_spec = {
-	method: 'ollama_delete',
-	kind: 'request_response',
-	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
-	side_effects: true,
-	input: OllamaDeleteRequest,
-	output: z.null(),
-	async: true,
-	description: 'Delete an Ollama model from local storage.',
-} satisfies RequestResponseActionSpec;
-
-export const ollama_copy_action_spec = {
-	method: 'ollama_copy',
-	kind: 'request_response',
-	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
-	side_effects: true,
-	input: OllamaCopyRequest,
-	output: z.null(),
-	async: true,
-	description: 'Copy an Ollama model under a new name.',
-} satisfies RequestResponseActionSpec;
-
-export const ollama_create_action_spec = {
-	method: 'ollama_create',
-	kind: 'request_response',
-	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
-	side_effects: true,
-	input: OllamaCreateInput,
-	output: z.null(),
-	async: true,
-	streams: 'ollama_progress',
-	description: 'Create a new Ollama model from a Modelfile.',
-} satisfies RequestResponseActionSpec;
-
-export const ollama_unload_action_spec = {
-	method: 'ollama_unload',
-	kind: 'request_response',
-	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
-	side_effects: true,
-	input: OllamaUnloadInput,
-	output: z.null(),
-	async: true,
-	description: 'Unload an Ollama model from memory.',
-} satisfies RequestResponseActionSpec;
 
 export const provider_load_status_action_spec = {
 	method: 'provider_load_status',
@@ -717,16 +549,7 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	directory_create_action_spec,
 	completion_create_action_spec,
 	completion_progress_action_spec,
-	ollama_progress_action_spec,
 	toggle_main_menu_action_spec,
-	ollama_list_action_spec,
-	ollama_ps_action_spec,
-	ollama_show_action_spec,
-	ollama_pull_action_spec,
-	ollama_delete_action_spec,
-	ollama_copy_action_spec,
-	ollama_create_action_spec,
-	ollama_unload_action_spec,
 	provider_load_status_action_spec,
 	provider_update_api_key_action_spec,
 	terminal_create_action_spec,

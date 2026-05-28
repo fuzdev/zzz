@@ -2,11 +2,11 @@
 
 zzz's backend going forward, using axum. Same JSON-RPC 2.0 protocol and wire
 format as the legacy TS/Deno backend (`src/lib/server/`), which is retained
-only as the cross-backend parity reference until this Rust backend reaches
-full behavioral parity (remaining gaps: SSE broadcast of audit events, a few
-unported actions) — at which point the TS backend is removed. The integration
-tests enforce identical behaviour between the two backends, gating that
-removal.
+only as the cross-backend parity reference. This Rust backend has reached
+full behavioral parity — the SSE audit broadcast landed and Ollama (the last
+divergence) has been retired from zzz entirely — so the TS backend is now
+slated for removal. The integration tests enforce identical behaviour between
+the two backends, gating that removal.
 
 **Workspace layout**:
 - `zzz_server/` — library + production binary. `pub async fn run_app(options: RunAppOptions)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, drain). `RunAppOptions` carries: `password_hasher` (production-vs-test swap), `default_port`, `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag), and `extra_action_specs_factory` (lets the test binary inject `_testing_reset` without putting `fuz_testing` in the production dep graph). `src/main.rs` is the thin production entry — constructs `Argon2idHasher`, calls `run_app` with `force_test_actions: false, extra_action_specs_factory: None`.
@@ -15,7 +15,7 @@ removal.
 - `zzz/` — Rust CLI scaffold (argh, stubs only).
 
 AI provider system feature-complete for Anthropic; OpenAI /
-Gemini / Ollama stubs ship status only. Spine consumption is
+Gemini stubs ship status only. Spine consumption is
 complete — the spine crates (`fuz_db`, `fuz_auth`, `fuz_http`,
 `fuz_realtime`, `fuz_actions`) own auth, HTTP, realtime, and the
 boot-compiled `ActionRegistry` dispatch path. A single canonical
@@ -449,10 +449,8 @@ crates/zzz_server/src/
 │   ├── anthropic.rs  # AnthropicProvider — Messages API with SSE streaming
 │   ├── common.rs     # shared provider helpers
 │   ├── sse.rs        # provider SSE parsing
-│   ├── ndjson.rs     # provider NDJSON parsing
 │   ├── openai.rs     # OpenAiProvider stub (status only)
-│   ├── gemini.rs     # GeminiProvider stub (status only)
-│   └── ollama.rs     # OllamaProvider stub (status only) — slated for removal
+│   └── gemini.rs     # GeminiProvider stub (status only)
 ├── filer.rs          # Filer + FilerManager (notify crate) — immediate file index updates, debounced filer_change broadcasts
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) → terminal_data/exited notifications
 ├── scoped_fs.rs      # Scoped filesystem — path validation, symlink rejection
@@ -562,12 +560,11 @@ now produce identical JSON-RPC envelopes for all auth failures.
 
 - 25 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `provider_update_api_key` keeper-only, `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`, `admin_session_revoke_all` admin-only, `admin_token_revoke_all` admin-only)
 - 5 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debounced broadcasts with immediate index updates, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast), `completion_progress` (streaming completion chunks to requesting WS connection)
-- AI providers: Anthropic fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable)
+- AI providers: Anthropic fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only)
 - No batch request support (JSON arrays)
-- No Ollama actions (`ollama_list`, `ollama_ps`, etc.) — intentionally not ported to Rust; the Ollama provider + actions are slated for removal from zzz rather than reimplemented on this backend (the last cross-backend divergence before the TS backend is deleted)
 - `/api/account/signup` is mounted on both backends (Rust via `fuz_auth::signup_routes`, added 2026-05-19 in cross-backend-integration quest Phase 3b.2; Deno via `create_signup_route_specs`, added in cross-process 3d.4 Issue 5). Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting via `app_settings_update` to enable open signup. The cross-process test binary opts into `open_signup: true` at startup via `app_settings_patch` so per-test `mint_account` can sign up without invites. Rust `app_settings` is loaded per-request today; a cached `Arc<RwLock<AppSettings>>` shared with the future admin `app_settings_update` handler lands when that admin RPC moves to Rust.
 - No token management routes (GET /tokens, POST /tokens/create, etc.)
-- Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`, wired to the spine `AuditEmitter` via `fuz_realtime::register_audit_sse_listener` alongside the WS socket-revocation listeners. Byte-identical wire shape to fuz_app's `audit_log_sse`; the `sse.cross.test.ts` cross-backend suite verifies it on both backends. Close-on-revoke currently keys on the account-wide events (`session_revoke_all` / `token_revoke_all` / `password_change` / `logout`); a spine-level convergence question tracks aligning that set with fuz_app's TS guard
+- Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`, wired to the spine `AuditEmitter` via `fuz_realtime::register_audit_sse_listener` alongside the WS socket-revocation listeners. Byte-identical wire shape to fuz_app's `audit_log_sse`; the `sse.cross.test.ts` cross-backend suite verifies it on both backends. Close-on-revoke keys on the union of access-invalidation events, matching fuz_app's TS guard: `session_revoke` (session-hash-scoped) / `session_revoke_all` / `token_revoke_all` / `password_change` / `logout` (account-wide) / `role_grant_revoke` (role-matched). The single `token_revoke` is excluded (no SSE stream is keyed by an API token)
 - Login/password rate limiting is **opt-in via `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1`** (default off so existing integration tests don't trip the bucket). When enabled, per-IP (5 attempts / 15 min) + per-account (10 / 30 min) sliding windows fire on `/login` and `/password`; 429 carries `{error: 'rate_limit_exceeded', retry_after}` plus a `Retry-After` header. Per-IP key is the resolved client IP from `proxy::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when running behind a reverse proxy so the bucket keys on the originating client rather than the proxy
 
 ## Design Decisions
@@ -624,20 +621,19 @@ legacy in-house dispatch path (`Ctx` / `dispatch` / per-domain
 `App` state + the `broadcast` / `close_sockets_for_*` shims over
 `App.realtime`.
 
-Remaining before the TS backend is deleted:
-- [ ] Retire the Ollama provider + actions from zzz (TS-only;
-  intentionally not ported to Rust) — the last cross-backend divergence.
+Behavioral parity is reached — Ollama (the last divergence) has been retired
+from zzz entirely, so the TS backend is ready to delete once the canonical
+parity role moves to the dual-impl forge consumer.
 
 **AI providers** (Anthropic complete, others pending):
 - [x] Provider system: enum-dispatched `Provider` with `ProviderManager`, `ProviderStatus`, `CompletionOptions`
 - [x] Anthropic provider: full implementation with `reqwest` HTTP client, SSE streaming, message format conversion
-- [x] `provider_load_status` handler (cross-backend, all 4 providers report status)
+- [x] `provider_load_status` handler (cross-backend, all 3 providers report status)
 - [x] `provider_update_api_key` handler (keeper-only, runtime API key updates)
 - [x] `completion_create` handler with `completion_progress` streaming notifications (targeted to requesting WS connection)
 - [x] `session_load` returns real provider status from all providers
 - [ ] OpenAI provider: full completion implementation
 - [ ] Gemini provider: full completion implementation
-- [ ] Ollama provider + actions (`ollama_list`, `ollama_ps`, etc.): **not** ported to Rust — slated for removal from zzz rather than reimplemented here
 
 **Other remaining work**:
 1. Codegen from Zod specs (action input/output types)

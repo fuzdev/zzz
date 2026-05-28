@@ -67,15 +67,15 @@
 					>Gemini</ExternalLink
 				> -- bring your own API keys
 			</li>
-			<li>
-				<ExternalLink href="https://github.com/ollama/ollama">Ollama</ExternalLink> runs AI models locally
-				with easy installation and onboarding. I plan to support more local LLM backends like
-				<ExternalLink href="https://github.com/ggml-org/llama.cpp">llama.cpp</ExternalLink> which Ollama
-				is based on.
-			</li>
 		</ul>
 		<p>Planned integrations:</p>
 		<ul>
+			<li>
+				local LLM backends like <ExternalLink href="https://github.com/ollama/ollama"
+					>Ollama</ExternalLink
+				>
+				and <ExternalLink href="https://github.com/ggml-org/llama.cpp">llama.cpp</ExternalLink>
+			</li>
 			<li>
 				<!-- TODO @db -->
 				<ExternalLink href="https://github.com/electric-sql/pglite">pglite</ExternalLink>
@@ -235,7 +235,6 @@
 							>./.env.{DEV ? 'development' : 'production'}</code
 						>
 					</li>
-					<li>call Ollama's API if available -- low risk</li>
 					<li>
 						<strong class="color_c_50">there is no authentication yet</strong>, only an origin
 						check, so do not use this in production
@@ -292,10 +291,10 @@
 					title="Simon Willison's Weblog: The lethal trifecta for AI agents: private data, untrusted content, and external communication"
 					>insecure ways</ExternalLink
 				> that I want to account for before integrating. Zzz will integrate LLMs into its own functionality
-				slowly and carefully -- currently the only in-app LLM integration is using a local model to name
-				new chats. There will be more, and we'll make sure you always have visibility into and control
-				over this behavior. (for example see the
-				<a href={resolve('/providers/ollama')}>Ollama controls</a>)
+				slowly and carefully -- currently the only in-app LLM integration is using a configured model
+				to name new chats. There will be more, and we'll make sure you always have visibility into and
+				control over this behavior. (for example see the
+				<a href={resolve('/providers')}>providers</a>)
 			</li>
 			<li>
 				Security and privacy should be the expected default, so for example Zzz won't make calls to

@@ -20,16 +20,7 @@ export const ActionMethod = z.enum([
 	'directory_create',
 	'completion_create',
 	'completion_progress',
-	'ollama_progress',
 	'toggle_main_menu',
-	'ollama_list',
-	'ollama_ps',
-	'ollama_show',
-	'ollama_pull',
-	'ollama_delete',
-	'ollama_copy',
-	'ollama_create',
-	'ollama_unload',
 	'provider_load_status',
 	'provider_update_api_key',
 	'terminal_create',
@@ -56,14 +47,6 @@ export const RequestResponseActionMethod = z.enum([
 	'diskfile_delete',
 	'directory_create',
 	'completion_create',
-	'ollama_list',
-	'ollama_ps',
-	'ollama_show',
-	'ollama_pull',
-	'ollama_delete',
-	'ollama_copy',
-	'ollama_create',
-	'ollama_unload',
 	'provider_load_status',
 	'provider_update_api_key',
 	'terminal_create',
@@ -83,7 +66,6 @@ export const RemoteNotificationActionMethod = z.enum([
 	'cancel',
 	'filer_change',
 	'completion_progress',
-	'ollama_progress',
 	'terminal_data',
 	'terminal_exited',
 	'workspace_changed',
@@ -110,16 +92,7 @@ export const FrontendActionMethod = z.enum([
 	'directory_create',
 	'completion_create',
 	'completion_progress',
-	'ollama_progress',
 	'toggle_main_menu',
-	'ollama_list',
-	'ollama_ps',
-	'ollama_show',
-	'ollama_pull',
-	'ollama_delete',
-	'ollama_copy',
-	'ollama_create',
-	'ollama_unload',
 	'provider_load_status',
 	'provider_update_api_key',
 	'terminal_create',
@@ -149,15 +122,6 @@ export const BackendActionMethod = z.enum([
 	'directory_create',
 	'completion_create',
 	'completion_progress',
-	'ollama_progress',
-	'ollama_list',
-	'ollama_ps',
-	'ollama_show',
-	'ollama_pull',
-	'ollama_delete',
-	'ollama_copy',
-	'ollama_create',
-	'ollama_unload',
 	'provider_load_status',
 	'provider_update_api_key',
 	'terminal_create',
@@ -189,14 +153,6 @@ export const BackendRequestResponseMethod = z.enum([
 	'diskfile_delete',
 	'directory_create',
 	'completion_create',
-	'ollama_list',
-	'ollama_ps',
-	'ollama_show',
-	'ollama_pull',
-	'ollama_delete',
-	'ollama_copy',
-	'ollama_create',
-	'ollama_unload',
 	'provider_load_status',
 	'provider_update_api_key',
 	'terminal_create',
@@ -269,43 +225,7 @@ export interface FrontendActionsApi {
 		input?: ActionInputs['completion_progress'],
 		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['completion_progress']}, {error: JsonrpcErrorObject}>>;
-	ollama_progress: (
-		input: ActionInputs['ollama_progress'],
-		options?: RpcClientCallOptions,
-	) => Promise<Result<{value: ActionOutputs['ollama_progress']}, {error: JsonrpcErrorObject}>>;
 	toggle_main_menu: (input?: ActionInputs['toggle_main_menu']) => ActionOutputs['toggle_main_menu'];
-	ollama_list: (
-		input?: void,
-		options?: RpcClientCallOptions,
-	) => Promise<Result<{value: ActionOutputs['ollama_list']}, {error: JsonrpcErrorObject}>>;
-	ollama_ps: (
-		input?: void,
-		options?: RpcClientCallOptions,
-	) => Promise<Result<{value: ActionOutputs['ollama_ps']}, {error: JsonrpcErrorObject}>>;
-	ollama_show: (
-		input: ActionInputs['ollama_show'],
-		options?: RpcClientCallOptions,
-	) => Promise<Result<{value: ActionOutputs['ollama_show']}, {error: JsonrpcErrorObject}>>;
-	ollama_pull: (
-		input: ActionInputs['ollama_pull'],
-		options?: RpcClientCallOptions,
-	) => Promise<Result<{value: ActionOutputs['ollama_pull']}, {error: JsonrpcErrorObject}>>;
-	ollama_delete: (
-		input: ActionInputs['ollama_delete'],
-		options?: RpcClientCallOptions,
-	) => Promise<Result<{value: ActionOutputs['ollama_delete']}, {error: JsonrpcErrorObject}>>;
-	ollama_copy: (
-		input: ActionInputs['ollama_copy'],
-		options?: RpcClientCallOptions,
-	) => Promise<Result<{value: ActionOutputs['ollama_copy']}, {error: JsonrpcErrorObject}>>;
-	ollama_create: (
-		input: ActionInputs['ollama_create'],
-		options?: RpcClientCallOptions,
-	) => Promise<Result<{value: ActionOutputs['ollama_create']}, {error: JsonrpcErrorObject}>>;
-	ollama_unload: (
-		input: ActionInputs['ollama_unload'],
-		options?: RpcClientCallOptions,
-	) => Promise<Result<{value: ActionOutputs['ollama_unload']}, {error: JsonrpcErrorObject}>>;
 	provider_load_status: (
 		input: ActionInputs['provider_load_status'],
 		options?: RpcClientCallOptions,

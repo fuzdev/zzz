@@ -5,9 +5,7 @@
 	import ModelContextmenu from './ModelContextmenu.svelte';
 	import ProviderLink from './ProviderLink.svelte';
 	import type {Model} from './model.svelte.js';
-	import Glyph from './Glyph.svelte';
 	import ProviderLogo from './ProviderLogo.svelte';
-	import {GLYPH_DOWNLOAD} from './glyphs.js';
 	import {format_gigabytes} from './format_helpers.js';
 
 	const {
@@ -45,14 +43,6 @@
 					<small class="chip font-weight:400">{tag}</small>
 				{/each}
 			</ul>
-		{/if}
-
-		{#if model.downloaded === false}
-			{#if model.provider_name === 'ollama' && !model.downloaded}
-				<button type="button" class="plain sm" onclick={() => model.navigate_to_download()}>
-					<Glyph glyph={GLYPH_DOWNLOAD} />&nbsp; download
-				</button>
-			{/if}
 		{/if}
 
 		<div class="column gap_xs">

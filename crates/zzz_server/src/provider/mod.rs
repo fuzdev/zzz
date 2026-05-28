@@ -1,8 +1,6 @@
 pub mod anthropic;
 pub mod common;
 pub mod gemini;
-pub mod ndjson;
-pub mod ollama;
 pub mod openai;
 pub mod sse;
 
@@ -21,11 +19,10 @@ use crate::rpc;
 
 /// Known AI provider names.
 ///
-/// Matches the TypeScript `ProviderName = 'ollama' | 'claude' | 'chatgpt' | 'gemini'`.
+/// Matches the TypeScript `ProviderName = 'claude' | 'chatgpt' | 'gemini'`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProviderName {
-    Ollama,
     Claude,
     Chatgpt,
     Gemini,
@@ -33,13 +30,12 @@ pub enum ProviderName {
 
 impl ProviderName {
     #[allow(dead_code)]
-    pub const ALL: [Self; 4] = [Self::Ollama, Self::Claude, Self::Chatgpt, Self::Gemini];
+    pub const ALL: [Self; 3] = [Self::Claude, Self::Chatgpt, Self::Gemini];
 
     /// Parse a wire-format provider name (lowercase) without going through
     /// `serde_json` — avoids allocating a `Value::String` per request.
     pub fn parse(s: &str) -> Option<Self> {
         match s {
-            "ollama" => Some(Self::Ollama),
             "claude" => Some(Self::Claude),
             "chatgpt" => Some(Self::Chatgpt),
             "gemini" => Some(Self::Gemini),
@@ -51,7 +47,6 @@ impl ProviderName {
 impl fmt::Display for ProviderName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Ollama => write!(f, "ollama"),
             Self::Claude => write!(f, "claude"),
             Self::Chatgpt => write!(f, "chatgpt"),
             Self::Gemini => write!(f, "gemini"),
@@ -166,13 +161,12 @@ pub type ProgressSender = Box<dyn Fn(Value) + Send + Sync>;
 
 /// Enum-dispatched AI provider.
 ///
-/// Uses enum instead of trait objects: exactly 4 providers, known at compile
+/// Uses enum instead of trait objects: exactly 3 providers, known at compile
 /// time. Gives exhaustive matching, no heap indirection, simpler lifetimes.
 pub enum Provider {
     Anthropic(anthropic::AnthropicProvider),
     OpenAi(openai::OpenAiProvider),
     Gemini(gemini::GeminiProvider),
-    Ollama(ollama::OllamaProvider),
 }
 
 impl fmt::Debug for Provider {
@@ -187,7 +181,6 @@ impl Provider {
             Self::Anthropic(_) => ProviderName::Claude,
             Self::OpenAi(_) => ProviderName::Chatgpt,
             Self::Gemini(_) => ProviderName::Gemini,
-            Self::Ollama(_) => ProviderName::Ollama,
         }
     }
 
@@ -196,7 +189,6 @@ impl Provider {
             Self::Anthropic(p) => p.load_status(reload).await,
             Self::OpenAi(p) => p.load_status(reload).await,
             Self::Gemini(p) => p.load_status(reload).await,
-            Self::Ollama(p) => p.load_status(reload).await,
         }
     }
 
@@ -205,7 +197,6 @@ impl Provider {
             Self::Anthropic(p) => p.set_api_key(key).await,
             Self::OpenAi(p) => p.set_api_key(key).await,
             Self::Gemini(p) => p.set_api_key(key).await,
-            Self::Ollama(_) => {}
         }
     }
 
@@ -219,7 +210,6 @@ impl Provider {
             Self::Anthropic(p) => p.complete(options, progress_sender, signal).await,
             Self::OpenAi(p) => p.complete(options, progress_sender, signal).await,
             Self::Gemini(p) => p.complete(options, progress_sender, signal).await,
-            Self::Ollama(p) => p.complete(options, progress_sender, signal).await,
         }
     }
 }

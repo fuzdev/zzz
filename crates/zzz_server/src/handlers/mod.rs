@@ -57,7 +57,7 @@ pub struct App {
     pub filer_manager: FilerManager,
     /// PTY terminal manager.
     pub pty_manager: PtyManager,
-    /// AI provider manager (Anthropic, `OpenAI`, Gemini, Ollama).
+    /// AI provider manager (Anthropic, `OpenAI`, Gemini).
     pub provider_manager: ProviderManager,
     /// Default completion options.
     pub completion_options: CompletionOptions,

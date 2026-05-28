@@ -31,12 +31,12 @@ describe('provider + session cross-backend', () => {
 			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'provider_load_status',
-			params: {provider_name: 'ollama'},
+			params: {provider_name: 'gemini'},
 			headers: fixture.create_session_headers(),
 		});
 		assert.ok(res.ok, `provider_load_status failed: ${JSON.stringify(res)}`);
 		const status = (res.result as Record<string, unknown>).status as Record<string, unknown>;
-		assert.equal(status.name, 'ollama');
+		assert.equal(status.name, 'gemini');
 		assert.equal(typeof status.available, 'boolean');
 		assert.equal(typeof status.checked_at, 'number');
 		if (status.available === false) {

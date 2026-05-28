@@ -245,9 +245,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     provider_manager.add(provider::Provider::Gemini(
         provider::gemini::GeminiProvider::new(std::env::var("SECRET_GOOGLE_API_KEY").ok()),
     ));
-    provider_manager.add(provider::Provider::Ollama(
-        provider::ollama::OllamaProvider::new(),
-    ));
 
     if config.enable_test_actions {
         tracing::info!(

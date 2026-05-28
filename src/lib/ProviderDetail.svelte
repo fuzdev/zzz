@@ -9,8 +9,6 @@
 	import {GLYPH_PROVIDER} from './glyphs.js';
 	import ExternalLink from './ExternalLink.svelte';
 	import Glyph from './Glyph.svelte';
-	import OllamaManager from './OllamaManager.svelte';
-	import {frontend_context} from './frontend.svelte.js';
 	import ModelSummary from './ModelSummary.svelte';
 	import CapabilityProviderApi from './CapabilityProviderApi.svelte';
 
@@ -23,11 +21,6 @@
 	} = $props();
 
 	const at_detail_page = $derived(page.url.pathname === resolve(`/providers/${provider.name}`));
-
-	const app = frontend_context.get();
-
-	// TODO @many get and display Ollama version, JS API client doesnt have it but the REST API does
-	// maybe at `<Glyph glyph={GLYPH_PROVIDER} />{provider.name}`
 </script>
 
 <div {...attrs} class="panel p_lg {attrs?.class}">
@@ -57,16 +50,12 @@
 	</section>
 
 	<section>
-		{#if provider.name === 'ollama'}
-			<OllamaManager ollama={app.ollama} />
-		{:else}
-			<div class="width_atmost_md mb_lg">
-				<CapabilityProviderApi provider_name={provider.name} show_info={false} />
-				{#if provider.api_key_url}
-					<ExternalLink href={provider.api_key_url}>get API key</ExternalLink>
-				{/if}
-			</div>
-		{/if}
+		<div class="width_atmost_md mb_lg">
+			<CapabilityProviderApi provider_name={provider.name} show_info={false} />
+			{#if provider.api_key_url}
+				<ExternalLink href={provider.api_key_url}>get API key</ExternalLink>
+			{/if}
+		</div>
 	</section>
 
 	<section>

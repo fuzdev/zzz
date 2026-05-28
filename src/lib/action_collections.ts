@@ -24,16 +24,7 @@ export const ActionSpecs = {
 	directory_create: specs.directory_create_action_spec,
 	completion_create: specs.completion_create_action_spec,
 	completion_progress: specs.completion_progress_action_spec,
-	ollama_progress: specs.ollama_progress_action_spec,
 	toggle_main_menu: specs.toggle_main_menu_action_spec,
-	ollama_list: specs.ollama_list_action_spec,
-	ollama_ps: specs.ollama_ps_action_spec,
-	ollama_show: specs.ollama_show_action_spec,
-	ollama_pull: specs.ollama_pull_action_spec,
-	ollama_delete: specs.ollama_delete_action_spec,
-	ollama_copy: specs.ollama_copy_action_spec,
-	ollama_create: specs.ollama_create_action_spec,
-	ollama_unload: specs.ollama_unload_action_spec,
 	provider_load_status: specs.provider_load_status_action_spec,
 	provider_update_api_key: specs.provider_update_api_key_action_spec,
 	terminal_create: specs.terminal_create_action_spec,
@@ -58,16 +49,7 @@ export interface ActionSpecs {
 	directory_create: typeof specs.directory_create_action_spec;
 	completion_create: typeof specs.completion_create_action_spec;
 	completion_progress: typeof specs.completion_progress_action_spec;
-	ollama_progress: typeof specs.ollama_progress_action_spec;
 	toggle_main_menu: typeof specs.toggle_main_menu_action_spec;
-	ollama_list: typeof specs.ollama_list_action_spec;
-	ollama_ps: typeof specs.ollama_ps_action_spec;
-	ollama_show: typeof specs.ollama_show_action_spec;
-	ollama_pull: typeof specs.ollama_pull_action_spec;
-	ollama_delete: typeof specs.ollama_delete_action_spec;
-	ollama_copy: typeof specs.ollama_copy_action_spec;
-	ollama_create: typeof specs.ollama_create_action_spec;
-	ollama_unload: typeof specs.ollama_unload_action_spec;
 	provider_load_status: typeof specs.provider_load_status_action_spec;
 	provider_update_api_key: typeof specs.provider_update_api_key_action_spec;
 	terminal_create: typeof specs.terminal_create_action_spec;
@@ -100,16 +82,7 @@ export const ActionInputs = {
 	directory_create: specs.directory_create_action_spec.input,
 	completion_create: specs.completion_create_action_spec.input,
 	completion_progress: specs.completion_progress_action_spec.input,
-	ollama_progress: specs.ollama_progress_action_spec.input,
 	toggle_main_menu: specs.toggle_main_menu_action_spec.input,
-	ollama_list: specs.ollama_list_action_spec.input,
-	ollama_ps: specs.ollama_ps_action_spec.input,
-	ollama_show: specs.ollama_show_action_spec.input,
-	ollama_pull: specs.ollama_pull_action_spec.input,
-	ollama_delete: specs.ollama_delete_action_spec.input,
-	ollama_copy: specs.ollama_copy_action_spec.input,
-	ollama_create: specs.ollama_create_action_spec.input,
-	ollama_unload: specs.ollama_unload_action_spec.input,
 	provider_load_status: specs.provider_load_status_action_spec.input,
 	provider_update_api_key: specs.provider_update_api_key_action_spec.input,
 	terminal_create: specs.terminal_create_action_spec.input,
@@ -134,16 +107,7 @@ export interface ActionInputs {
 	directory_create: z.infer<typeof specs.directory_create_action_spec.input>;
 	completion_create: z.infer<typeof specs.completion_create_action_spec.input>;
 	completion_progress: z.infer<typeof specs.completion_progress_action_spec.input>;
-	ollama_progress: z.infer<typeof specs.ollama_progress_action_spec.input>;
 	toggle_main_menu: z.infer<typeof specs.toggle_main_menu_action_spec.input>;
-	ollama_list: z.infer<typeof specs.ollama_list_action_spec.input>;
-	ollama_ps: z.infer<typeof specs.ollama_ps_action_spec.input>;
-	ollama_show: z.infer<typeof specs.ollama_show_action_spec.input>;
-	ollama_pull: z.infer<typeof specs.ollama_pull_action_spec.input>;
-	ollama_delete: z.infer<typeof specs.ollama_delete_action_spec.input>;
-	ollama_copy: z.infer<typeof specs.ollama_copy_action_spec.input>;
-	ollama_create: z.infer<typeof specs.ollama_create_action_spec.input>;
-	ollama_unload: z.infer<typeof specs.ollama_unload_action_spec.input>;
 	provider_load_status: z.infer<typeof specs.provider_load_status_action_spec.input>;
 	provider_update_api_key: z.infer<typeof specs.provider_update_api_key_action_spec.input>;
 	terminal_create: z.infer<typeof specs.terminal_create_action_spec.input>;
@@ -174,16 +138,7 @@ export const ActionOutputs = {
 	directory_create: specs.directory_create_action_spec.output,
 	completion_create: specs.completion_create_action_spec.output,
 	completion_progress: specs.completion_progress_action_spec.output,
-	ollama_progress: specs.ollama_progress_action_spec.output,
 	toggle_main_menu: specs.toggle_main_menu_action_spec.output,
-	ollama_list: specs.ollama_list_action_spec.output,
-	ollama_ps: specs.ollama_ps_action_spec.output,
-	ollama_show: specs.ollama_show_action_spec.output,
-	ollama_pull: specs.ollama_pull_action_spec.output,
-	ollama_delete: specs.ollama_delete_action_spec.output,
-	ollama_copy: specs.ollama_copy_action_spec.output,
-	ollama_create: specs.ollama_create_action_spec.output,
-	ollama_unload: specs.ollama_unload_action_spec.output,
 	provider_load_status: specs.provider_load_status_action_spec.output,
 	provider_update_api_key: specs.provider_update_api_key_action_spec.output,
 	terminal_create: specs.terminal_create_action_spec.output,
@@ -208,16 +163,7 @@ export interface ActionOutputs {
 	directory_create: z.infer<typeof specs.directory_create_action_spec.output>;
 	completion_create: z.infer<typeof specs.completion_create_action_spec.output>;
 	completion_progress: z.infer<typeof specs.completion_progress_action_spec.output>;
-	ollama_progress: z.infer<typeof specs.ollama_progress_action_spec.output>;
 	toggle_main_menu: z.infer<typeof specs.toggle_main_menu_action_spec.output>;
-	ollama_list: z.infer<typeof specs.ollama_list_action_spec.output>;
-	ollama_ps: z.infer<typeof specs.ollama_ps_action_spec.output>;
-	ollama_show: z.infer<typeof specs.ollama_show_action_spec.output>;
-	ollama_pull: z.infer<typeof specs.ollama_pull_action_spec.output>;
-	ollama_delete: z.infer<typeof specs.ollama_delete_action_spec.output>;
-	ollama_copy: z.infer<typeof specs.ollama_copy_action_spec.output>;
-	ollama_create: z.infer<typeof specs.ollama_create_action_spec.output>;
-	ollama_unload: z.infer<typeof specs.ollama_unload_action_spec.output>;
 	provider_load_status: z.infer<typeof specs.provider_load_status_action_spec.output>;
 	provider_update_api_key: z.infer<typeof specs.provider_update_api_key_action_spec.output>;
 	terminal_create: z.infer<typeof specs.terminal_create_action_spec.output>;
@@ -275,54 +221,10 @@ export interface ActionEventDatas {
 		'completion_progress',
 		ActionInputs['completion_progress']
 	>;
-	ollama_progress: ActionEventRemoteNotificationData<
-		'ollama_progress',
-		ActionInputs['ollama_progress']
-	>;
 	toggle_main_menu: ActionEventLocalCallData<
 		'toggle_main_menu',
 		ActionInputs['toggle_main_menu'],
 		ActionOutputs['toggle_main_menu']
-	>;
-	ollama_list: ActionEventRequestResponseData<
-		'ollama_list',
-		ActionInputs['ollama_list'],
-		ActionOutputs['ollama_list']
-	>;
-	ollama_ps: ActionEventRequestResponseData<
-		'ollama_ps',
-		ActionInputs['ollama_ps'],
-		ActionOutputs['ollama_ps']
-	>;
-	ollama_show: ActionEventRequestResponseData<
-		'ollama_show',
-		ActionInputs['ollama_show'],
-		ActionOutputs['ollama_show']
-	>;
-	ollama_pull: ActionEventRequestResponseData<
-		'ollama_pull',
-		ActionInputs['ollama_pull'],
-		ActionOutputs['ollama_pull']
-	>;
-	ollama_delete: ActionEventRequestResponseData<
-		'ollama_delete',
-		ActionInputs['ollama_delete'],
-		ActionOutputs['ollama_delete']
-	>;
-	ollama_copy: ActionEventRequestResponseData<
-		'ollama_copy',
-		ActionInputs['ollama_copy'],
-		ActionOutputs['ollama_copy']
-	>;
-	ollama_create: ActionEventRequestResponseData<
-		'ollama_create',
-		ActionInputs['ollama_create'],
-		ActionOutputs['ollama_create']
-	>;
-	ollama_unload: ActionEventRequestResponseData<
-		'ollama_unload',
-		ActionInputs['ollama_unload'],
-		ActionOutputs['ollama_unload']
 	>;
 	provider_load_status: ActionEventRequestResponseData<
 		'provider_load_status',

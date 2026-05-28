@@ -156,33 +156,33 @@
 						"kind": "type",
 						"doc_comment": "Action specifications indexed by method name.\nThese represent the complete action spec definitions.",
 						"source_line": 16,
-						"type_signature": "{ readonly heartbeat: { method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: false; input: ZodDefault<ZodObject<{}, $strict>>; output: ZodObject<...>; async: true; description: string; }; ... 30 more ...; readonly workspace_changed: { ...; }; }"
+						"type_signature": "{ readonly heartbeat: { method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: false; input: ZodDefault<ZodObject<{}, $strict>>; output: ZodObject<...>; async: true; description: string; }; ... 21 more ...; readonly workspace_changed: { ...; }; }"
 					},
 					{
 						"name": "action_specs",
 						"kind": "variable",
-						"source_line": 85,
+						"source_line": 67,
 						"type_signature": "({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 6 more ...; rate_limit?: \"both\" | ... 2 more ... | undefined; } | { ...; } | { ...; ..."
 					},
 					{
 						"name": "ActionInputs",
 						"kind": "type",
 						"doc_comment": "Action parameter schemas indexed by method name.\nThese represent the input data for each action,\ne.g. JSON-RPC request/notification params and local call arguments.",
-						"source_line": 92,
-						"type_signature": "{ readonly heartbeat: ZodDefault<ZodObject<{}, $strict>>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 29 more ...; readonly workspace_changed: ZodObject<...>; }"
+						"source_line": 74,
+						"type_signature": "{ readonly heartbeat: ZodDefault<ZodObject<{}, $strict>>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 20 more ...; readonly workspace_changed: ZodObject<...>; }"
 					},
 					{
 						"name": "ActionOutputs",
 						"kind": "type",
 						"doc_comment": "Action result schemas indexed by method name.\nThese represent the output data for each action,\ne.g. JSON-RPC response results and local call return values.",
-						"source_line": 166,
-						"type_signature": "{ readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodVoid; readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 28 more ...; readonly workspace_changed: ZodVoid; }"
+						"source_line": 130,
+						"type_signature": "{ readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodVoid; readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 19 more ...; readonly workspace_changed: ZodVoid; }"
 					},
 					{
 						"name": "ActionEventDatas",
 						"kind": "type",
 						"doc_comment": "Action event data types indexed by method name.\nThese represent the full discriminated union of all possible states\nfor each action's event data, properly typed with inputs and outputs.",
-						"source_line": 240,
+						"source_line": 186,
 						"type_signature": "ActionEventDatas",
 						"properties": [
 							{
@@ -236,54 +236,9 @@
 								"type_signature": "ActionEventRemoteNotificationData<\n\t\t'completion_progress',\n\t\tActionInputs['completion_progress']\n\t>"
 							},
 							{
-								"name": "ollama_progress",
-								"kind": "variable",
-								"type_signature": "ActionEventRemoteNotificationData<\n\t\t'ollama_progress',\n\t\tActionInputs['ollama_progress']\n\t>"
-							},
-							{
 								"name": "toggle_main_menu",
 								"kind": "variable",
 								"type_signature": "ActionEventLocalCallData<\n\t\t'toggle_main_menu',\n\t\tActionInputs['toggle_main_menu'],\n\t\tActionOutputs['toggle_main_menu']\n\t>"
-							},
-							{
-								"name": "ollama_list",
-								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_list',\n\t\tActionInputs['ollama_list'],\n\t\tActionOutputs['ollama_list']\n\t>"
-							},
-							{
-								"name": "ollama_ps",
-								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_ps',\n\t\tActionInputs['ollama_ps'],\n\t\tActionOutputs['ollama_ps']\n\t>"
-							},
-							{
-								"name": "ollama_show",
-								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_show',\n\t\tActionInputs['ollama_show'],\n\t\tActionOutputs['ollama_show']\n\t>"
-							},
-							{
-								"name": "ollama_pull",
-								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_pull',\n\t\tActionInputs['ollama_pull'],\n\t\tActionOutputs['ollama_pull']\n\t>"
-							},
-							{
-								"name": "ollama_delete",
-								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_delete',\n\t\tActionInputs['ollama_delete'],\n\t\tActionOutputs['ollama_delete']\n\t>"
-							},
-							{
-								"name": "ollama_copy",
-								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_copy',\n\t\tActionInputs['ollama_copy'],\n\t\tActionOutputs['ollama_copy']\n\t>"
-							},
-							{
-								"name": "ollama_create",
-								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_create',\n\t\tActionInputs['ollama_create'],\n\t\tActionOutputs['ollama_create']\n\t>"
-							},
-							{
-								"name": "ollama_unload",
-								"kind": "variable",
-								"type_signature": "ActionEventRequestResponseData<\n\t\t'ollama_unload',\n\t\tActionInputs['ollama_unload'],\n\t\tActionOutputs['ollama_unload']\n\t>"
 							},
 							{
 								"name": "provider_load_status",
@@ -349,12 +304,7 @@
 					}
 				],
 				"dependencies": ["action_specs.ts"],
-				"dependents": [
-					"action.svelte.ts",
-					"frontend.svelte.ts",
-					"server/backend_provider_ollama.ts",
-					"server/helpers.ts"
-				]
+				"dependents": ["action.svelte.ts", "frontend.svelte.ts", "server/helpers.ts"]
 			},
 			{
 				"path": "action_metatypes.gen.ts",
@@ -375,69 +325,69 @@
 						"kind": "type",
 						"doc_comment": "All action method names. Request/response actions have two types per method.",
 						"source_line": 12,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 25 more ...; cancel: \"cancel\"; }>"
+						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 16 more ...; cancel: \"cancel\"; }>"
 					},
 					{
 						"name": "RequestResponseActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all request_response actions.",
-						"source_line": 51,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; completion_create: \"completion_create\"; ... 17 more ...; heartbeat: \"heartbeat\"; }>"
+						"source_line": 42,
+						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; completion_create: \"completion_create\"; ... 9 more ...; heartbeat: \"heartbeat\"; }>"
 					},
 					{
 						"name": "RemoteNotificationActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all remote_notification actions.",
-						"source_line": 82,
-						"type_signature": "ZodEnum<{ filer_change: \"filer_change\"; completion_progress: \"completion_progress\"; ollama_progress: \"ollama_progress\"; terminal_data: \"terminal_data\"; terminal_exited: \"terminal_exited\"; workspace_changed: \"workspace_changed\"; cancel: \"cancel\"; }>"
+						"source_line": 65,
+						"type_signature": "ZodEnum<{ filer_change: \"filer_change\"; completion_progress: \"completion_progress\"; terminal_data: \"terminal_data\"; terminal_exited: \"terminal_exited\"; workspace_changed: \"workspace_changed\"; cancel: \"cancel\"; }>"
 					},
 					{
 						"name": "LocalCallActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all local_call actions.",
-						"source_line": 96,
+						"source_line": 78,
 						"type_signature": "ZodEnum<{ toggle_main_menu: \"toggle_main_menu\"; }>"
 					},
 					{
 						"name": "FrontendActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all actions in the typed FrontendActionsApi surface — every spec the frontend may encounter (call, receive, or execute locally).",
-						"source_line": 102,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 25 more ...; cancel: \"cancel\"; }>"
+						"source_line": 84,
+						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 16 more ...; cancel: \"cancel\"; }>"
 					},
 					{
 						"name": "BackendActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of all actions the backend may encounter — request_response and remote_notification (local_call is frontend-only).",
-						"source_line": 141,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 24 more ...; cancel: \"cancel\"; }>"
+						"source_line": 114,
+						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; filer_change: \"filer_change\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; ... 15 more ...; cancel: \"cancel\"; }>"
 					},
 					{
 						"name": "FrontendRequestResponseMethod",
 						"kind": "type",
 						"doc_comment": "Names of request_response actions the frontend handles (initiator excludes frontend).",
-						"source_line": 179,
+						"source_line": 143,
 						"type_signature": "ZodEnum<{ ping: \"ping\"; }>"
 					},
 					{
 						"name": "BackendRequestResponseMethod",
 						"kind": "type",
 						"doc_comment": "Names of request_response actions the backend handles (initiator excludes backend).",
-						"source_line": 185,
-						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; completion_create: \"completion_create\"; ... 16 more ...; workspace_list: \"workspace_list\"; }>"
+						"source_line": 149,
+						"type_signature": "ZodEnum<{ ping: \"ping\"; session_load: \"session_load\"; diskfile_update: \"diskfile_update\"; diskfile_delete: \"diskfile_delete\"; directory_create: \"directory_create\"; completion_create: \"completion_create\"; ... 8 more ...; workspace_list: \"workspace_list\"; }>"
 					},
 					{
 						"name": "BroadcastActionMethod",
 						"kind": "type",
 						"doc_comment": "Names of remote_notification actions exposed by the broadcast API (backend-initiated, excluding request-scoped progress notifications named by another action's `streams`).",
-						"source_line": 215,
+						"source_line": 171,
 						"type_signature": "ZodEnum<{ filer_change: \"filer_change\"; terminal_data: \"terminal_data\"; terminal_exited: \"terminal_exited\"; workspace_changed: \"workspace_changed\"; }>"
 					},
 					{
 						"name": "FrontendActionsApi",
 						"kind": "type",
 						"doc_comment": "Typed dispatch surface for the frontend's RPC client. Symmetric counterpart\nof `BackendActionsApi`. Async methods (request_response, remote_notification,\nasync local_call) return `Promise<Result<...>>` and accept an optional\n`RpcClientCallOptions` second arg that threads `signal`, `transport_name`,\nand `queue` through to the peer. Sync local_call methods return values\ndirectly.",
-						"source_line": 231,
+						"source_line": 187,
 						"type_signature": "FrontendActionsApi",
 						"properties": [
 							{
@@ -491,54 +441,9 @@
 								"type_signature": "(\n\t\tinput?: ActionInputs['completion_progress'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['completion_progress']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
-								"name": "ollama_progress",
-								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['ollama_progress'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_progress']}, {error: JsonrpcErrorObject}>>"
-							},
-							{
 								"name": "toggle_main_menu",
 								"kind": "variable",
 								"type_signature": "(input?: ActionInputs['toggle_main_menu']) => ActionOutputs['toggle_main_menu']"
-							},
-							{
-								"name": "ollama_list",
-								"kind": "variable",
-								"type_signature": "(\n\t\tinput?: void,\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_list']}, {error: JsonrpcErrorObject}>>"
-							},
-							{
-								"name": "ollama_ps",
-								"kind": "variable",
-								"type_signature": "(\n\t\tinput?: void,\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_ps']}, {error: JsonrpcErrorObject}>>"
-							},
-							{
-								"name": "ollama_show",
-								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['ollama_show'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_show']}, {error: JsonrpcErrorObject}>>"
-							},
-							{
-								"name": "ollama_pull",
-								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['ollama_pull'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_pull']}, {error: JsonrpcErrorObject}>>"
-							},
-							{
-								"name": "ollama_delete",
-								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['ollama_delete'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_delete']}, {error: JsonrpcErrorObject}>>"
-							},
-							{
-								"name": "ollama_copy",
-								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['ollama_copy'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_copy']}, {error: JsonrpcErrorObject}>>"
-							},
-							{
-								"name": "ollama_create",
-								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['ollama_create'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_create']}, {error: JsonrpcErrorObject}>>"
-							},
-							{
-								"name": "ollama_unload",
-								"kind": "variable",
-								"type_signature": "(\n\t\tinput: ActionInputs['ollama_unload'],\n\t\toptions?: RpcClientCallOptions,\n\t) => Promise<Result<{value: ActionOutputs['ollama_unload']}, {error: JsonrpcErrorObject}>>"
 							},
 							{
 								"name": "provider_load_status",
@@ -612,432 +517,349 @@
 						"name": "ProgressMeta",
 						"kind": "type",
 						"doc_comment": "Progress-token envelope shared by streaming actions. Carries the caller's\n`progressToken` so streamed `*_progress` notifications can be correlated\nwith the originating request. `looseObject` lets transports tack on\nadditional MCP-style metadata without a schema bump.",
-						"source_line": 54,
+						"source_line": 41,
 						"type_signature": "ZodObject<{ progressToken: ZodOptional<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; }, $loose>"
 					},
 					{
 						"name": "PingOutput",
 						"kind": "type",
 						"doc_comment": "Output for `ping`. Echoes the JSON-RPC request id back as `ping_id`.",
-						"source_line": 60,
+						"source_line": 47,
 						"type_signature": "ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>"
 					},
 					{
 						"name": "SessionLoadData",
 						"kind": "type",
 						"doc_comment": "Inner payload of `session_load`. The fields here are the actual session\nsnapshot — files, scoped dirs, provider status, workspaces.\n\nTODO extract to `diskfile_types.ts` (or a session-specific module) once\nthe Rust backend grows its own typed session response and we can move\nthis schema to the shared boundary.",
-						"source_line": 73,
+						"source_line": 60,
 						"type_signature": "ZodObject<{ zzz_dir: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<ZodString, \"DiskfilePath\", \"out\">>, \"DiskfileDirectoryPath\", \"out\">; scoped_dirs: ZodReadonly<...>; files: ZodArray<...>; provider_status: ZodArray<...>; workspaces: ZodArray<...>; }, $strict>"
 					},
 					{
 						"name": "SessionLoadOutput",
 						"kind": "type",
 						"doc_comment": "Output for `session_load`. The `data` wrapper is historical and kept for\ncross-backend parity: the Rust backend serializes this exact shape\n(`crates/zzz_server/src/handlers.rs::SessionLoadResult`). Flattening\nwould break parity in both places, so the wrapper stays until the Rust\nside moves alongside.",
-						"source_line": 89,
+						"source_line": 76,
 						"type_signature": "ZodObject<{ data: ZodObject<{ zzz_dir: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<ZodString, \"DiskfilePath\", \"out\">>, \"DiskfileDirectoryPath\", \"out\">; scoped_dirs: ZodReadonly<...>; files: ZodArray<...>; provider_status: ZodArray<...>; workspaces: ZodArray<...>; }, $strict>; },..."
 					},
 					{
 						"name": "FilerChangeInput",
 						"kind": "type",
 						"doc_comment": "Input for `filer_change`.",
-						"source_line": 95,
+						"source_line": 82,
 						"type_signature": "ZodObject<{ change: ZodObject<{ type: ZodEnum<{ add: \"add\"; change: \"change\"; delete: \"delete\"; }>; path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>; disknode: ZodObject<...>; }, $strict>"
 					},
 					{
 						"name": "DiskfileUpdateInput",
 						"kind": "type",
 						"doc_comment": "Input for `diskfile_update`.",
-						"source_line": 102,
+						"source_line": 89,
 						"type_signature": "ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; content: ZodString; }, $strict>"
 					},
 					{
 						"name": "DiskfileDeleteInput",
 						"kind": "type",
 						"doc_comment": "Input for `diskfile_delete`.",
-						"source_line": 109,
+						"source_line": 96,
 						"type_signature": "ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>"
 					},
 					{
 						"name": "DirectoryCreateInput",
 						"kind": "type",
 						"doc_comment": "Input for `directory_create`.",
-						"source_line": 115,
+						"source_line": 102,
 						"type_signature": "ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>"
 					},
 					{
 						"name": "CompletionCreateInput",
 						"kind": "type",
 						"doc_comment": "Input for `completion_create`.",
-						"source_line": 121,
-						"type_signature": "ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; prompt: ZodString; completion_messages: ZodOptional<...>; }, $strict>; _meta: ZodOp..."
+						"source_line": 108,
+						"type_signature": "ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<{ claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; prompt: ZodString; completion_messages: ZodOptional<...>; }, $strict>; _meta: ZodOptional<...>; }, $s..."
 					},
 					{
 						"name": "CompletionCreateOutput",
 						"kind": "type",
 						"doc_comment": "Output for `completion_create`.",
-						"source_line": 128,
-						"type_signature": "ZodObject<{ completion_response: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; data: ZodDiscriminatedUnion<...>; }, $strict>; _meta: ZodOptional<...>; }, $strict>"
+						"source_line": 115,
+						"type_signature": "ZodObject<{ completion_response: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<{ claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; data: ZodDiscriminatedUnion<...>; }, $strict>; _meta: ZodOptional<...>; }, $strict>"
 					},
 					{
 						"name": "CompletionProgressInput",
 						"kind": "type",
-						"doc_comment": "Input for `completion_progress`.\n\nTODO improve `chunk` schema. Today it's Ollama-shaped (`model`,\n`created_at`, `done`, `message`); add `done_reason`, timing fields\n(`total_duration`, `load_duration`, `prompt_eval_*`, `eval_*`),\n`thinking`, `images`, `tool_calls` as more provider streams land.",
-						"source_line": 142,
+						"doc_comment": "Input for `completion_progress`.\n\nTODO improve `chunk` schema. Today it carries a loose provider-shaped\npayload (`model`, `created_at`, `done`, `message`); add `done_reason`,\ntiming fields (`total_duration`, `load_duration`, `prompt_eval_*`,\n`eval_*`), `thinking`, `images`, `tool_calls` as more provider streams land.",
+						"source_line": 129,
 						"type_signature": "ZodObject<{ chunk: ZodOptional<ZodObject<{ model: ZodOptional<ZodString>; created_at: ZodOptional<ZodString>; done: ZodOptional<ZodBoolean>; message: ZodOptional<...>; }, $loose>>; _meta: ZodOptional<...>; }, $strict>"
-					},
-					{
-						"name": "OllamaProgressInput",
-						"kind": "type",
-						"doc_comment": "Input for `ollama_progress`. Composes the Ollama progress payload with the shared `_meta` envelope.\n\nRe-wraps with `z.strictObject` because `OllamaProgressResponse` is a\n`z.looseObject` (Ollama API passthrough). Action-spec inputs must reject\nunknown keys per the canonical convention.",
-						"source_line": 162,
-						"type_signature": "ZodObject<{ _meta: ZodOptional<ZodObject<{ progressToken: ZodOptional<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; }, $loose>>; status: ZodString; digest: ZodOptional<...>; total: ZodOptional<...>; completed: ZodOptional<...>; }, $strict>"
 					},
 					{
 						"name": "ToggleMainMenuInput",
 						"kind": "type",
 						"doc_comment": "Input for `toggle_main_menu`. Optional — omit to toggle, pass `{show}` to set explicitly.",
-						"source_line": 170,
+						"source_line": 144,
 						"type_signature": "ZodOptional<ZodObject<{ show: ZodOptional<ZodBoolean>; }, $strict>>"
 					},
 					{
 						"name": "ToggleMainMenuOutput",
 						"kind": "type",
 						"doc_comment": "Output for `toggle_main_menu`.",
-						"source_line": 174,
+						"source_line": 148,
 						"type_signature": "ZodObject<{ show: ZodBoolean; }, $strict>"
-					},
-					{
-						"name": "OllamaPullInput",
-						"kind": "type",
-						"doc_comment": "Input for `ollama_pull`. Composes the Ollama pull request with the streaming `_meta` envelope.\n\nRe-wraps with `z.strictObject` because `OllamaPullRequest` is a\n`z.looseObject` (Ollama API passthrough). Action-spec inputs must reject\nunknown keys per the canonical convention.",
-						"source_line": 184,
-						"type_signature": "ZodObject<{ _meta: ZodOptional<ZodObject<{ progressToken: ZodOptional<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; }, $loose>>; model: ZodString; insecure: ZodOptional<...>; stream: ZodOptional<...>; }, $strict>"
-					},
-					{
-						"name": "OllamaCreateInput",
-						"kind": "type",
-						"doc_comment": "Input for `ollama_create`. Composes the Ollama create request with the streaming `_meta` envelope.\n\nRe-wraps with `z.strictObject` because `OllamaCreateRequest` is a\n`z.looseObject` (Ollama API passthrough). Action-spec inputs must reject\nunknown keys per the canonical convention.",
-						"source_line": 197,
-						"type_signature": "ZodObject<{ _meta: ZodOptional<ZodObject<{ progressToken: ZodOptional<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; }, $loose>>; ... 9 more ...; adapters: ZodOptional<...>; }, $strict>"
-					},
-					{
-						"name": "OllamaUnloadInput",
-						"kind": "type",
-						"doc_comment": "Input for `ollama_unload`.",
-						"source_line": 204,
-						"type_signature": "ZodObject<{ model: ZodString; }, $strict>"
 					},
 					{
 						"name": "ProviderLoadStatusInput",
 						"kind": "type",
 						"doc_comment": "Input for `provider_load_status`.",
-						"source_line": 210,
-						"type_signature": "ZodObject<{ provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; reload: ZodOptional<ZodDefault<ZodBoolean>>; }, $strict>"
+						"source_line": 152,
+						"type_signature": "ZodObject<{ provider_name: ZodEnum<{ claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; reload: ZodOptional<ZodDefault<ZodBoolean>>; }, $strict>"
 					},
 					{
 						"name": "ProviderLoadStatusOutput",
 						"kind": "type",
 						"doc_comment": "Output for `provider_load_status`.",
-						"source_line": 217,
+						"source_line": 159,
 						"type_signature": "ZodObject<{ status: ZodDiscriminatedUnion<[ZodObject<{ name: ZodString; available: ZodLiteral<true>; checked_at: ZodNumber; }, $strict>, ZodObject<{ name: ZodString; available: ZodLiteral<...>; error: ZodString; checked_at: ZodNumber; }, $strict>], \"available\">; }, $strict>"
 					},
 					{
 						"name": "ProviderUpdateApiKeyInput",
 						"kind": "type",
 						"doc_comment": "Input for `provider_update_api_key`.",
-						"source_line": 223,
-						"type_signature": "ZodObject<{ provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; api_key: ZodString; acting: ZodOptional<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; }, $strict>"
+						"source_line": 165,
+						"type_signature": "ZodObject<{ provider_name: ZodEnum<{ claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; api_key: ZodString; acting: ZodOptional<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; }, $strict>"
 					},
 					{
 						"name": "ProviderUpdateApiKeyOutput",
 						"kind": "type",
 						"doc_comment": "Output for `provider_update_api_key`.",
-						"source_line": 231,
+						"source_line": 173,
 						"type_signature": "ZodObject<{ status: ZodDiscriminatedUnion<[ZodObject<{ name: ZodString; available: ZodLiteral<true>; checked_at: ZodNumber; }, $strict>, ZodObject<{ name: ZodString; available: ZodLiteral<...>; error: ZodString; checked_at: ZodNumber; }, $strict>], \"available\">; }, $strict>"
 					},
 					{
 						"name": "TerminalCreateInput",
 						"kind": "type",
 						"doc_comment": "Input for `terminal_create`.",
-						"source_line": 237,
+						"source_line": 179,
 						"type_signature": "ZodObject<{ command: ZodString; args: ZodDefault<ZodArray<ZodString>>; cwd: ZodOptional<ZodString>; preset_id: ZodOptional<$ZodBranded<...>>; }, $strict>"
 					},
 					{
 						"name": "TerminalCreateOutput",
 						"kind": "type",
 						"doc_comment": "Output for `terminal_create`.",
-						"source_line": 246,
+						"source_line": 188,
 						"type_signature": "ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; }, $strict>"
 					},
 					{
 						"name": "TerminalDataSendInput",
 						"kind": "type",
 						"doc_comment": "Input for `terminal_data_send`.",
-						"source_line": 252,
+						"source_line": 194,
 						"type_signature": "ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; data: ZodString; }, $strict>"
 					},
 					{
 						"name": "TerminalDataInput",
 						"kind": "type",
 						"doc_comment": "Input for `terminal_data` (backend → frontend stdout/stderr stream).",
-						"source_line": 259,
+						"source_line": 201,
 						"type_signature": "ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; data: ZodString; }, $strict>"
 					},
 					{
 						"name": "TerminalResizeInput",
 						"kind": "type",
 						"doc_comment": "Input for `terminal_resize`.",
-						"source_line": 266,
+						"source_line": 208,
 						"type_signature": "ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; cols: ZodNumber; rows: ZodNumber; }, $strict>"
 					},
 					{
 						"name": "TerminalCloseInput",
 						"kind": "type",
 						"doc_comment": "Input for `terminal_close`.",
-						"source_line": 274,
+						"source_line": 216,
 						"type_signature": "ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; signal: ZodOptional<ZodDefault<ZodString>>; }, $strict>"
 					},
 					{
 						"name": "TerminalCloseOutput",
 						"kind": "type",
 						"doc_comment": "Output for `terminal_close`.",
-						"source_line": 281,
+						"source_line": 223,
 						"type_signature": "ZodObject<{ exit_code: ZodNullable<ZodNumber>; }, $strict>"
 					},
 					{
 						"name": "TerminalExitedInput",
 						"kind": "type",
 						"doc_comment": "Input for `terminal_exited`.",
-						"source_line": 287,
+						"source_line": 229,
 						"type_signature": "ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; exit_code: ZodNullable<ZodNumber>; }, $strict>"
 					},
 					{
 						"name": "WorkspaceOpenInput",
 						"kind": "type",
 						"doc_comment": "Input for `workspace_open`.",
-						"source_line": 294,
+						"source_line": 236,
 						"type_signature": "ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<ZodString, \"DiskfilePath\", \"out\">>, \"DiskfileDirectoryPath\", \"out\">; }, $strict>"
 					},
 					{
 						"name": "WorkspaceOpenOutput",
 						"kind": "type",
 						"doc_comment": "Output for `workspace_open`.",
-						"source_line": 300,
+						"source_line": 242,
 						"type_signature": "ZodObject<{ workspace: ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<ZodString, \"DiskfilePath\", \"out\">>, \"DiskfileDirectoryPath\", \"out\">; name: ZodString; opened_at: ZodString; }, $strict>; files: ZodArray<...>; }, $strict>"
 					},
 					{
 						"name": "WorkspaceCloseInput",
 						"kind": "type",
 						"doc_comment": "Input for `workspace_close`.",
-						"source_line": 307,
+						"source_line": 249,
 						"type_signature": "ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<ZodString, \"DiskfilePath\", \"out\">>, \"DiskfileDirectoryPath\", \"out\">; }, $strict>"
 					},
 					{
 						"name": "WorkspaceListOutput",
 						"kind": "type",
 						"doc_comment": "Output for `workspace_list`.",
-						"source_line": 313,
+						"source_line": 255,
 						"type_signature": "ZodObject<{ workspaces: ZodArray<ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<ZodString, \"DiskfilePath\", \"out\">>, \"DiskfileDirectoryPath\", \"out\">; name: ZodString; opened_at: ZodString; }, $strict>>; }, $strict>"
 					},
 					{
 						"name": "WorkspaceChangedInput",
 						"kind": "type",
 						"doc_comment": "Input for `workspace_changed`.",
-						"source_line": 319,
+						"source_line": 261,
 						"type_signature": "ZodObject<{ type: ZodEnum<{ open: \"open\"; close: \"close\"; }>; workspace: ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<ZodString, \"DiskfilePath\", \"out\">>, \"DiskfileDirectoryPath\", \"out\">; name: ZodString; opened_at: ZodString; }, $strict>; }, $strict>"
 					},
 					{
 						"name": "ping_action_spec",
 						"kind": "variable",
-						"source_line": 327,
+						"source_line": 269,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"both\"; auth: { account: \"none\"; actor: \"none\"; }; side_effects: false; input: ZodVoid; output: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; async: true; description: string; }"
 					},
 					{
 						"name": "session_load_action_spec",
 						"kind": "variable",
-						"source_line": 339,
+						"source_line": 281,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: false; input: ZodVoid; output: ZodObject<{ data: ZodObject<{ zzz_dir: $ZodBranded<ZodPipe<ZodPipe<...>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; scoped_dirs: ZodReadonly<...>; fi..."
 					},
 					{
 						"name": "filer_change_action_spec",
 						"kind": "variable",
-						"source_line": 353,
+						"source_line": 295,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ change: ZodObject<{ type: ZodEnum<{ add: \"add\"; change: \"change\"; delete: \"delete\"; }>; path: $ZodBranded<...>; }, $strict>; disknode: ZodObject<...>; }, $strict>; output: ZodVoid; async: true; des..."
 					},
 					{
 						"name": "diskfile_update_action_spec",
 						"kind": "variable",
-						"source_line": 365,
+						"source_line": 307,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; content: ZodString; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "diskfile_delete_action_spec",
 						"kind": "variable",
-						"source_line": 377,
+						"source_line": 319,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "directory_create_action_spec",
 						"kind": "variable",
-						"source_line": 389,
+						"source_line": 331,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodString, \"DiskfilePath\", \"out\">; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "completion_create_action_spec",
 						"kind": "variable",
-						"source_line": 401,
+						"source_line": 343,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ completion_request: ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<...>; model: ZodString; prompt: ZodStrin..."
 					},
 					{
 						"name": "completion_progress_action_spec",
 						"kind": "variable",
-						"source_line": 414,
+						"source_line": 356,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ chunk: ZodOptional<ZodObject<{ model: ZodOptional<ZodString>; created_at: ZodOptional<...>; done: ZodOptional<...>; message: ZodOptional<...>; }, $loose>>; _meta: ZodOptional<...>; }, $strict>; out..."
-					},
-					{
-						"name": "ollama_progress_action_spec",
-						"kind": "variable",
-						"source_line": 426,
-						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ _meta: ZodOptional<ZodObject<{ progressToken: ZodOptional<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; }, $loose>>; status: ZodString; digest: ZodOptional<...>; total: ZodOptional<...>; completed: ZodOpti..."
 					},
 					{
 						"name": "toggle_main_menu_action_spec",
 						"kind": "variable",
-						"source_line": 438,
+						"source_line": 368,
 						"type_signature": "{ method: string; kind: \"local_call\"; initiator: \"frontend\"; auth: null; side_effects: true; input: ZodOptional<ZodObject<{ show: ZodOptional<ZodBoolean>; }, $strict>>; output: ZodObject<...>; async: false; description: string; }"
-					},
-					{
-						"name": "ollama_list_action_spec",
-						"kind": "variable",
-						"source_line": 450,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodUnion<...>; async: true; description: string; }"
-					},
-					{
-						"name": "ollama_ps_action_spec",
-						"kind": "variable",
-						"source_line": 462,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: false; input: ZodOptional<ZodVoid>; output: ZodUnion<...>; async: true; description: string; }"
-					},
-					{
-						"name": "ollama_show_action_spec",
-						"kind": "variable",
-						"source_line": 474,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: false; input: ZodObject<{ model: ZodString; system: ZodOptional<ZodString>; template: ZodOptional<...>; options: ZodOptional<...>; }, $loose>; output: ZodUnion<...>; async: true; descriptio..."
-					},
-					{
-						"name": "ollama_pull_action_spec",
-						"kind": "variable",
-						"source_line": 486,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ _meta: ZodOptional<ZodObject<{ progressToken: ZodOptional<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; }, $loose>>; model: ZodString; insecure: ZodOptional<...>; stream: Z..."
-					},
-					{
-						"name": "ollama_delete_action_spec",
-						"kind": "variable",
-						"source_line": 499,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ model: ZodString; }, $loose>; output: ZodNull; async: true; description: string; }"
-					},
-					{
-						"name": "ollama_copy_action_spec",
-						"kind": "variable",
-						"source_line": 511,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ source: ZodString; destination: ZodString; }, $loose>; output: ZodNull; async: true; description: string; }"
-					},
-					{
-						"name": "ollama_create_action_spec",
-						"kind": "variable",
-						"source_line": 523,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ _meta: ZodOptional<ZodObject<{ progressToken: ZodOptional<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; }, $loose>>; ... 9 more ...; adapters: ZodOptional<...>; }, $strict>..."
-					},
-					{
-						"name": "ollama_unload_action_spec",
-						"kind": "variable",
-						"source_line": 536,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ model: ZodString; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "provider_load_status_action_spec",
 						"kind": "variable",
-						"source_line": 548,
-						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: false; input: ZodObject<{ provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; reload: ZodOptional<...>; }, $strict>; output: ZodObject<......"
+						"source_line": 380,
+						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: false; input: ZodObject<{ provider_name: ZodEnum<{ claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; reload: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; de..."
 					},
 					{
 						"name": "provider_update_api_key_action_spec",
 						"kind": "variable",
-						"source_line": 560,
+						"source_line": 392,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"required\"; roles: string[]; credential_types: string[]; }; side_effects: true; input: ZodObject<{ provider_name: ZodEnum<...>; api_key: ZodString; acting: ZodOptional<...>; }, $strict>; output: ZodObject<...>; asy..."
 					},
 					{
 						"name": "terminal_create_action_spec",
 						"kind": "variable",
-						"source_line": 577,
+						"source_line": 409,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ command: ZodString; args: ZodDefault<ZodArray<ZodString>>; cwd: ZodOptional<...>; preset_id: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; des..."
 					},
 					{
 						"name": "terminal_data_send_action_spec",
 						"kind": "variable",
-						"source_line": 589,
+						"source_line": 421,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; data: ZodString; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_data_action_spec",
 						"kind": "variable",
-						"source_line": 601,
+						"source_line": 433,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; data: ZodString; }, $strict>; output: ZodVoid; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_resize_action_spec",
 						"kind": "variable",
-						"source_line": 613,
+						"source_line": 445,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; cols: ZodNumber; rows: ZodNumber; }, $strict>; output: ZodNull; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_close_action_spec",
 						"kind": "variable",
-						"source_line": 625,
+						"source_line": 457,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; signal: ZodOptional<...>; }, $strict>; output: ZodObject<...>; async: true; description: string; }"
 					},
 					{
 						"name": "terminal_exited_action_spec",
 						"kind": "variable",
-						"source_line": 637,
+						"source_line": 469,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ terminal_id: $ZodBranded<ZodUUID, \"Uuid\", \"out\">; exit_code: ZodNullable<...>; }, $strict>; output: ZodVoid; async: true; description: string; }"
 					},
 					{
 						"name": "workspace_open_action_spec",
 						"kind": "variable",
-						"source_line": 649,
+						"source_line": 481,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; }, $strict>; output: ZodObject<...>;..."
 					},
 					{
 						"name": "workspace_close_action_spec",
 						"kind": "variable",
-						"source_line": 661,
+						"source_line": 493,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: true; input: ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<ZodString, ZodTransform<string, string>>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; }, $strict>; output: ZodNull; async:..."
 					},
 					{
 						"name": "workspace_list_action_spec",
 						"kind": "variable",
-						"source_line": 673,
+						"source_line": 505,
 						"type_signature": "{ method: string; kind: \"request_response\"; initiator: \"frontend\"; auth: { account: \"required\"; actor: \"none\"; }; side_effects: false; input: ZodVoid; output: ZodObject<{ workspaces: ZodArray<ZodObject<{ path: $ZodBranded<...>; name: ZodString; opened_at: ZodString; }, $strict>>; }, $strict>; async: true; descriptio..."
 					},
 					{
 						"name": "workspace_changed_action_spec",
 						"kind": "variable",
-						"source_line": 685,
+						"source_line": 517,
 						"type_signature": "{ method: string; kind: \"remote_notification\"; initiator: \"backend\"; auth: null; side_effects: true; input: ZodObject<{ type: ZodEnum<{ open: \"open\"; close: \"close\"; }>; workspace: ZodObject<{ path: $ZodBranded<ZodPipe<ZodPipe<...>, $ZodBranded<...>>, \"DiskfileDirectoryPath\", \"out\">; name: ZodString; opened_at: ZodS..."
 					},
 					{
 						"name": "all_action_specs",
 						"kind": "variable",
 						"doc_comment": "Canonical action spec list — fuz_app's protocol actions (`heartbeat`,\n`cancel`) plus zzz-owned specs. Single source of truth for codegen and\nruntime registries (`Frontend.action_registry`, `Backend.action_registry`).\n\nCodegen helpers default-filter protocol actions out of typed surfaces\n(`FrontendActionsApi`, `BackendActionHandlers`, `ActionMethod`, etc.) since\nthey're dispatcher-owned. Server WS registration pairs protocol specs with\nfuz_app-shipped handlers via `protocol_actions`; iteration over\n`all_action_specs` skips them via `is_protocol_action_method` to avoid\ndouble-registration. Adding a future protocol action requires no consumer\nedit — fuz_app's `protocol_action_specs` is the upstream canonical bundle.",
-						"source_line": 710,
+						"source_line": 542,
 						"type_signature": "({ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 6 more ...; rate_limit?: \"both\" | ... 2 more ... | undefined; } | { ...; } | { ...; ..."
 					}
 				],
 				"dependencies": [
 					"completion_types.ts",
 					"diskfile_types.ts",
-					"ollama_helpers.ts",
 					"provider_types.ts",
 					"workspace.svelte.ts"
 				],
@@ -1067,7 +889,7 @@
 						"name": "ActionJsonInput",
 						"kind": "type",
 						"source_line": 20,
-						"type_signature": "{ method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"cancel\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ....."
+						"type_signature": "{ method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"toggle_main_menu\" | ... 13 more ... | \"cancel\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ...."
 					},
 					{
 						"name": "ActionOptions",
@@ -1323,7 +1145,7 @@
 						"name": "ActionsJsonInput",
 						"kind": "type",
 						"source_line": 18,
-						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 26 more ... | \"cancel\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_dat..."
+						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 17 more ... | \"cancel\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_dat..."
 					},
 					{
 						"name": "ActionsOptions",
@@ -1373,12 +1195,12 @@
 								"name": "set_json",
 								"kind": "function",
 								"doc_comment": "Override to populate the indexed collection after parsing JSON.",
-								"type_signature": "(value?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 26 more ... | \"cancel\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ...; } | undefined; }[] | undefined; } | undefined): void",
+								"type_signature": "(value?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 17 more ... | \"cancel\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ...; } | undefined; }[] | undefined; } | undefined): void",
 								"return_type": "void",
 								"parameters": [
 									{
 										"name": "value",
-										"type": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 26 more ... | \"cancel\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_dat...",
+										"type": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | ... 17 more ... | \"cancel\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_dat...",
 										"optional": true
 									}
 								]
@@ -1398,12 +1220,12 @@
 							{
 								"name": "add_from_json",
 								"kind": "function",
-								"type_signature": "(action_json: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"cancel\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ...; } | undefined; }): Action",
+								"type_signature": "(action_json: { method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"toggle_main_menu\" | ... 13 more ... | \"cancel\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ...; } | undefined; }): Action",
 								"return_type": "Action",
 								"parameters": [
 									{
 										"name": "action_json",
-										"type": "{ method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"cancel\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ....."
+										"type": "{ method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"toggle_main_menu\" | ... 13 more ... | \"cancel\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; action_event_data?: { ...."
 									}
 								]
 							}
@@ -1477,26 +1299,26 @@
 						"name": "PING_HISTORY_MAX",
 						"kind": "variable",
 						"doc_comment": "Maximum number of ping records to keep.",
-						"source_line": 21,
+						"source_line": 16,
 						"type_signature": "6"
 					},
 					{
 						"name": "CapabilitiesJson",
 						"kind": "type",
-						"source_line": 23,
+						"source_line": 18,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "CapabilitiesJsonInput",
 						"kind": "type",
-						"source_line": 25,
+						"source_line": 20,
 						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; }"
 					},
 					{
 						"name": "Capability",
 						"kind": "type",
 						"doc_comment": "Generic interface for a capability with standardized status tracking.",
-						"source_line": 30,
+						"source_line": 25,
 						"type_signature": "Capability<T>",
 						"generic_params": [
 							{
@@ -1545,7 +1367,7 @@
 					{
 						"name": "PingData",
 						"kind": "type",
-						"source_line": 46,
+						"source_line": 41,
 						"type_signature": "PingData",
 						"properties": [
 							{
@@ -1578,7 +1400,7 @@
 					{
 						"name": "ServerCapabilityData",
 						"kind": "type",
-						"source_line": 54,
+						"source_line": 49,
 						"type_signature": "ServerCapabilityData",
 						"properties": [
 							{
@@ -1591,7 +1413,7 @@
 					{
 						"name": "WebsocketCapabilityData",
 						"kind": "type",
-						"source_line": 61,
+						"source_line": 56,
 						"type_signature": "WebsocketCapabilityData",
 						"properties": [
 							{
@@ -1639,7 +1461,7 @@
 					{
 						"name": "FilesystemCapabilityData",
 						"kind": "type",
-						"source_line": 72,
+						"source_line": 67,
 						"type_signature": "FilesystemCapabilityData",
 						"properties": [
 							{
@@ -1655,33 +1477,10 @@
 						]
 					},
 					{
-						"name": "OllamaCapabilityData",
-						"kind": "type",
-						"source_line": 77,
-						"type_signature": "OllamaCapabilityData",
-						"properties": [
-							{
-								"name": "list_response",
-								"kind": "variable",
-								"type_signature": "OllamaListResponse | null"
-							},
-							{
-								"name": "ps_response",
-								"kind": "variable",
-								"type_signature": "OllamaPsResponse | null"
-							},
-							{
-								"name": "round_trip_time",
-								"kind": "variable",
-								"type_signature": "number | null"
-							}
-						]
-					},
-					{
 						"name": "Capabilities",
 						"kind": "class",
 						"doc_comment": "A class that encapsulates system capabilities detection and management.\nThis is NOT generic or extensible - it contains hardcoded logic for\nall capabilities the system supports.",
-						"source_line": 88,
+						"source_line": 77,
 						"extends": ["Cell<typeof CapabilitiesJson>"],
 						"implements": [],
 						"members": [
@@ -1703,13 +1502,6 @@
 								"modifiers": ["readonly"],
 								"doc_comment": "The filesystem capability derives its state from the backend and `zzz_dir`.",
 								"type_signature": "Capability<FilesystemCapabilityData | null | undefined>"
-							},
-							{
-								"name": "ollama",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"doc_comment": "Ollama capability that derives its state from provider_status (authoritative)\nand app.ollama (for richer data when available).",
-								"type_signature": "Capability<OllamaCapabilityData | null | undefined>"
 							},
 							{
 								"name": "claude",
@@ -1774,13 +1566,6 @@
 								"type_signature": "boolean | null | undefined"
 							},
 							{
-								"name": "ollama_available",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"doc_comment": "Convenience accessor for ollama availability.\n`undefined` means uninitialized, `null` means loading/checking.\nboolean indicates if available.",
-								"type_signature": "boolean | null | undefined"
-							},
-							{
 								"name": "websocket_available",
 								"kind": "variable",
 								"modifiers": ["readonly"],
@@ -1793,13 +1578,6 @@
 								"modifiers": ["readonly"],
 								"doc_comment": "Convenience accessor for filesystem availability.\n`undefined` means uninitialized, `null` means loading/checking.\nboolean indicates if filesystem is available.",
 								"type_signature": "boolean | null | undefined"
-							},
-							{
-								"name": "ollama_models",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"doc_comment": "Latest Ollama model list response, if available.",
-								"type_signature": "Array<{\n\t\tname: string;\n\t\tsize: number;\n\t\tmodel_response: OllamaListResponseItem;\n\t}>"
 							},
 							{
 								"name": "constructor",
@@ -1824,22 +1602,6 @@
 								"name": "check_backend",
 								"kind": "function",
 								"doc_comment": "Check backend availability with a ping.",
-								"type_signature": "(): Promise<void>",
-								"return_type": "Promise<void>",
-								"parameters": []
-							},
-							{
-								"name": "init_ollama_check",
-								"kind": "function",
-								"doc_comment": "Check Ollama availability only if it hasn't been checked before.\n(when status is 'initial')",
-								"type_signature": "(): Promise<void>",
-								"return_type": "Promise<void>",
-								"parameters": []
-							},
-							{
-								"name": "check_ollama",
-								"kind": "function",
-								"doc_comment": "Check Ollama availability by loading provider status and refreshing models.",
 								"type_signature": "(): Promise<void>",
 								"return_type": "Promise<void>",
 								"parameters": []
@@ -2015,7 +1777,7 @@
 						"source_line": 1
 					}
 				],
-				"dependencies": ["CapabilityProviderApi.svelte", "CapabilityProviderOllama.svelte"],
+				"dependencies": ["CapabilityProviderApi.svelte"],
 				"dependents": ["CapabilitiesView.svelte"]
 			},
 			{
@@ -2047,27 +1809,6 @@
 					"glyphs.ts"
 				],
 				"dependents": ["CapabilityProvider.svelte", "ProviderDetail.svelte"]
-			},
-			{
-				"path": "CapabilityProviderOllama.svelte",
-				"declarations": [
-					{
-						"name": "CapabilityProviderOllama",
-						"kind": "component",
-						"source_line": 1
-					}
-				],
-				"dependencies": [
-					"ErrorMessage.svelte",
-					"ExternalLink.svelte",
-					"Glyph.svelte",
-					"ModelLink.svelte",
-					"OllamaPsStatus.svelte",
-					"ProviderLink.svelte",
-					"frontend.svelte.ts",
-					"glyphs.ts"
-				],
-				"dependents": ["CapabilityProvider.svelte"]
 			},
 			{
 				"path": "CapabilitySystem.svelte",
@@ -2563,7 +2304,6 @@
 					"frontend.svelte.ts",
 					"model.svelte.ts",
 					"models.svelte.ts",
-					"ollama.svelte.ts",
 					"part.svelte.ts",
 					"parts.svelte.ts",
 					"prompt.svelte.ts",
@@ -2948,7 +2688,6 @@
 					"frontend.svelte.ts",
 					"model.svelte.ts",
 					"models.svelte.ts",
-					"ollama.svelte.ts",
 					"part.svelte.ts",
 					"parts.svelte.ts",
 					"prompt.svelte.ts",
@@ -3938,13 +3677,13 @@
 						"name": "CompletionRequest",
 						"kind": "type",
 						"source_line": 16,
-						"type_signature": "ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; prompt: ZodString; completion_messages: ZodOptional<...>; }, $strict>"
+						"type_signature": "ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<{ claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; prompt: ZodString; completion_messages: ZodOptional<...>; }, $strict>"
 					},
 					{
 						"name": "CompletionResponse",
 						"kind": "type",
 						"source_line": 26,
-						"type_signature": "ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; data: ZodDiscriminatedUnion<...>; }, $strict>"
+						"type_signature": "ZodObject<{ created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; provider_name: ZodEnum<{ claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>; model: ZodString; data: ZodDiscriminatedUnion<...>; }, $strict>"
 					}
 				],
 				"dependencies": ["provider_types.ts"],
@@ -4017,19 +3756,19 @@
 						"name": "providers_default",
 						"kind": "variable",
 						"source_line": 28,
-						"type_signature": "{ name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; title: string; url: string; homepage: string; company: string; api_key_url: string | null; id?: string | undefined; created?: string | undefined; updated?: string | undefined; }[]"
+						"type_signature": "{ name: \"claude\" | \"chatgpt\" | \"gemini\"; title: string; url: string; homepage: string; company: string; api_key_url: string | null; id?: string | undefined; created?: string | undefined; updated?: string | undefined; }[]"
 					},
 					{
 						"name": "models_default",
 						"kind": "variable",
-						"source_line": 65,
-						"type_signature": "{ name: string; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; tags?: string[] | undefined; ... 13 more ...; ollama_show_response_error?: string | undefined; }[]"
+						"source_line": 57,
+						"type_signature": "{ name: string; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; tags?: string[] | undefined; architecture?: string | undefined; ... 7 more ...; training_cutoff?: string | undefined; }[]"
 					},
 					{
 						"name": "chat_template_defaults",
 						"kind": "variable",
 						"doc_comment": "Default chat templates available in the application",
-						"source_line": 105,
+						"source_line": 78,
 						"type_signature": "ChatTemplate[]"
 					}
 				],
@@ -6669,13 +6408,8 @@
 				"dependents": [
 					"CapabilityBackend.svelte",
 					"CapabilityProviderApi.svelte",
-					"CapabilityProviderOllama.svelte",
 					"DashboardChats.svelte",
-					"DashboardDiskfiles.svelte",
-					"OllamaConfigure.svelte",
-					"OllamaCopyModel.svelte",
-					"OllamaCreateModel.svelte",
-					"OllamaPullModel.svelte"
+					"DashboardDiskfiles.svelte"
 				]
 			},
 			{
@@ -6731,10 +6465,8 @@
 				"dependents": [
 					"CapabilityBackend.svelte",
 					"CapabilityProviderApi.svelte",
-					"CapabilityProviderOllama.svelte",
 					"CapabilitySystem.svelte",
 					"DashboardProviders.svelte",
-					"OllamaManager.svelte",
 					"ProviderDetail.svelte",
 					"ProviderSummary.svelte",
 					"Settings.svelte",
@@ -6847,12 +6579,7 @@
 						]
 					}
 				],
-				"dependents": [
-					"ModelSummary.svelte",
-					"OllamaModelDetail.svelte",
-					"OllamaModelListitem.svelte",
-					"OllamaPsStatus.svelte"
-				]
+				"dependents": ["ModelSummary.svelte"]
 			},
 			{
 				"path": "frontend_action_handlers.ts",
@@ -6940,54 +6667,9 @@
 								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: TypedActionEvent<'completion_progress', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
-								"name": "ollama_progress",
-								"kind": "variable",
-								"type_signature": "{\n\t\treceive?: (\n\t\t\taction_event: TypedActionEvent<'ollama_progress', 'receive', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
 								"name": "toggle_main_menu",
 								"kind": "variable",
 								"type_signature": "{\n\t\texecute?: (\n\t\t\taction_event: TypedActionEvent<'toggle_main_menu', 'execute', 'handling'>,\n\t\t) => ActionOutputs['toggle_main_menu'];\n\t}"
-							},
-							{
-								"name": "ollama_list",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_list', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_list', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_list', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_list', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_ps",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_ps', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_ps', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_ps', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_ps', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_show",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_show', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_show', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_show', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_show', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_pull",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_pull', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_pull', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_pull', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_pull', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_delete",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_delete', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_delete', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_delete', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_delete', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_copy",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_copy', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_copy', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_copy', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_copy', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_create",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_create', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_create', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_create', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_create', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
-							},
-							{
-								"name": "ollama_unload",
-								"kind": "variable",
-								"type_signature": "{\n\t\tsend_request?: (\n\t\t\taction_event: TypedActionEvent<'ollama_unload', 'send_request', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_response?: (\n\t\t\taction_event: TypedActionEvent<'ollama_unload', 'receive_response', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\tsend_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_unload', 'send_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t\treceive_error?: (\n\t\t\taction_event: TypedActionEvent<'ollama_unload', 'receive_error', 'handling'>,\n\t\t) => void | Promise<void>;\n\t}"
 							},
 							{
 								"name": "provider_load_status",
@@ -7059,25 +6741,25 @@
 					{
 						"name": "frontend_context",
 						"kind": "variable",
-						"source_line": 53,
+						"source_line": 52,
 						"type_signature": "{ get: (error_message?: string | undefined) => Frontend; get_maybe: () => Frontend | undefined; set: (value: Frontend) => Frontend; }"
 					},
 					{
 						"name": "FrontendJson",
 						"kind": "type",
-						"source_line": 55,
+						"source_line": 54,
 						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; ui: ZodDefault<...>; }, $strict>"
 					},
 					{
 						"name": "FrontendJsonInput",
 						"kind": "type",
-						"source_line": 60,
+						"source_line": 59,
 						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; ui?: { id?: string | undefined; created?: string | undefined; updated?: string | undefined; show_main_dialog?: boolean | undefined; ... 6 more ...; desk_pinned?: boolean | undefined; } | undefined; }"
 					},
 					{
 						"name": "FrontendOptions",
 						"kind": "type",
-						"source_line": 62,
+						"source_line": 61,
 						"type_signature": "FrontendOptions",
 						"extends": ["OmitStrict<CellOptions<typeof FrontendJson>, 'app'>"],
 						"properties": [
@@ -7138,7 +6820,7 @@
 						"name": "Frontend",
 						"kind": "class",
 						"doc_comment": "The base frontend app, typically used by creating your own `App extends Frontend`.\nGettable with `frontend_context.get()` inside a `FrontendRoot`.",
-						"source_line": 82,
+						"source_line": 81,
 						"extends": ["Cell<typeof FrontendJson>"],
 						"implements": ["ActionEventEnvironment"],
 						"members": [
@@ -7252,12 +6934,6 @@
 								"type_signature": "Capabilities"
 							},
 							{
-								"name": "ollama",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "Ollama"
-							},
-							{
 								"name": "spaces",
 								"kind": "variable",
 								"modifiers": ["readonly"],
@@ -7339,24 +7015,24 @@
 							{
 								"name": "add_providers",
 								"kind": "function",
-								"type_signature": "(providers_json: { name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; title: string; url: string; homepage: string; company: string; api_key_url: string | null; id?: string | undefined; created?: string | undefined; updated?: string | undefined; }[]): void",
+								"type_signature": "(providers_json: { name: \"claude\" | \"chatgpt\" | \"gemini\"; title: string; url: string; homepage: string; company: string; api_key_url: string | null; id?: string | undefined; created?: string | undefined; updated?: string | undefined; }[]): void",
 								"return_type": "void",
 								"parameters": [
 									{
 										"name": "providers_json",
-										"type": "{ name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; title: string; url: string; homepage: string; company: string; api_key_url: string | null; id?: string | undefined; created?: string | undefined; updated?: string | undefined; }[]"
+										"type": "{ name: \"claude\" | \"chatgpt\" | \"gemini\"; title: string; url: string; homepage: string; company: string; api_key_url: string | null; id?: string | undefined; created?: string | undefined; updated?: string | undefined; }[]"
 									}
 								]
 							},
 							{
 								"name": "add_provider",
 								"kind": "function",
-								"type_signature": "(provider_json: { name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; title: string; url: string; homepage: string; company: string; api_key_url: string | null; id?: string | undefined; created?: string | undefined; updated?: string | undefined; }): void",
+								"type_signature": "(provider_json: { name: \"claude\" | \"chatgpt\" | \"gemini\"; title: string; url: string; homepage: string; company: string; api_key_url: string | null; id?: string | undefined; created?: string | undefined; updated?: string | undefined; }): void",
 								"return_type": "void",
 								"parameters": [
 									{
 										"name": "provider_json",
-										"type": "{ name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; title: string; url: string; homepage: string; company: string; api_key_url: string | null; id?: string | undefined; created?: string | undefined; updated?: string | undefined; }"
+										"type": "{ name: \"claude\" | \"chatgpt\" | \"gemini\"; title: string; url: string; homepage: string; company: string; api_key_url: string | null; id?: string | undefined; created?: string | undefined; updated?: string | undefined; }"
 									}
 								]
 							},
@@ -7439,8 +7115,8 @@
 							{
 								"name": "lookup_action_input_schema",
 								"kind": "function",
-								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly heartbeat: ZodDefault<ZodObject<{}, $strict>>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 29 more ...; readonly workspace_changed: ZodObject<...>; }[TMethod] | undefined",
-								"return_type": "{ readonly heartbeat: ZodDefault<ZodObject<{}, $strict>>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 29 more ...; readonly workspace_changed: ZodObject<...>; }[TMethod] | undefined",
+								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly heartbeat: ZodDefault<ZodObject<{}, $strict>>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 20 more ...; readonly workspace_changed: ZodObject<...>; }[TMethod] | undefined",
+								"return_type": "{ readonly heartbeat: ZodDefault<ZodObject<{}, $strict>>; readonly cancel: ZodObject<{ request_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 20 more ...; readonly workspace_changed: ZodObject<...>; }[TMethod] | undefined",
 								"parameters": [
 									{
 										"name": "method",
@@ -7451,8 +7127,8 @@
 							{
 								"name": "lookup_action_output_schema",
 								"kind": "function",
-								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodVoid; readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 28 more ...; readonly workspace_changed: ZodVoid; }[TMethod] | undefined",
-								"return_type": "{ readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodVoid; readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 28 more ...; readonly workspace_changed: ZodVoid; }[TMethod] | undefined",
+								"type_signature": "<TMethod extends ActionMethod>(method: TMethod): { readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodVoid; readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 19 more ...; readonly workspace_changed: ZodVoid; }[TMethod] | undefined",
+								"return_type": "{ readonly heartbeat: ZodObject<{}, $strict>; readonly cancel: ZodVoid; readonly ping: ZodObject<{ ping_id: ZodUnion<readonly [ZodString, ZodNumber]>; }, $strict>; ... 19 more ...; readonly workspace_changed: ZodVoid; }[TMethod] | undefined",
 								"parameters": [
 									{
 										"name": "method",
@@ -7463,12 +7139,12 @@
 							{
 								"name": "is_valid_phase_for_method",
 								"kind": "function",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"cancel\", phase: \"send_request\" | ... 7 more ... | \"execute\"): boolean",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"toggle_main_menu\" | ... 13 more ... | \"cancel\", phase: \"send_request\" | ... 7 more ... | \"execute\"): boolean",
 								"return_type": "boolean",
 								"parameters": [
 									{
 										"name": "method",
-										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"cancel\""
+										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"toggle_main_menu\" | ... 13 more ... | \"cancel\""
 									},
 									{
 										"name": "phase",
@@ -7496,7 +7172,6 @@
 					"diskfiles.svelte.ts",
 					"frontend_action_handlers.ts",
 					"models.svelte.ts",
-					"ollama.svelte.ts",
 					"parts.svelte.ts",
 					"prompts.svelte.ts",
 					"provider.svelte.ts",
@@ -7514,7 +7189,6 @@
 					"CapabilityBackend.svelte",
 					"CapabilityFilesystem.svelte",
 					"CapabilityProviderApi.svelte",
-					"CapabilityProviderOllama.svelte",
 					"CapabilityWebsocket.svelte",
 					"ChatContextmenu.svelte",
 					"ChatInitializer.svelte",
@@ -7546,9 +7220,6 @@
 					"ModelPicker.svelte",
 					"ModelPickerDialog.svelte",
 					"ModelSelect.svelte",
-					"OllamaConfigure.svelte",
-					"OllamaManager.svelte",
-					"OllamaPullModel.svelte",
 					"PartContextmenu.svelte",
 					"PartEditorForDiskfile.svelte",
 					"PartPicker.svelte",
@@ -7559,7 +7230,6 @@
 					"PromptList.svelte",
 					"PromptPicker.svelte",
 					"PromptPickerDialog.svelte",
-					"ProviderDetail.svelte",
 					"ThreadContextmenu.svelte",
 					"ThreadList.svelte",
 					"TurnView.svelte",
@@ -7623,7 +7293,6 @@
 					"CapabilitiesView.svelte",
 					"CapabilityBackend.svelte",
 					"CapabilityProviderApi.svelte",
-					"CapabilityProviderOllama.svelte",
 					"CapabilityWebsocket.svelte",
 					"ChatContextmenu.svelte",
 					"ChatListitem.svelte",
@@ -7657,16 +7326,6 @@
 					"ModelContextmenu.svelte",
 					"ModelDetail.svelte",
 					"ModelLink.svelte",
-					"ModelSummary.svelte",
-					"OllamaActionItem.svelte",
-					"OllamaActions.svelte",
-					"OllamaConfigure.svelte",
-					"OllamaCopyModel.svelte",
-					"OllamaCreateModel.svelte",
-					"OllamaManager.svelte",
-					"OllamaModelDetail.svelte",
-					"OllamaPsStatus.svelte",
-					"OllamaPullModel.svelte",
 					"PartContextmenu.svelte",
 					"PartEditorForDiskfile.svelte",
 					"PartRemoveButton.svelte",
@@ -8137,12 +7796,12 @@
 						"name": "get_glyph_for_action_method",
 						"kind": "function",
 						"source_line": 101,
-						"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"cancel\"): string",
+						"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"toggle_main_menu\" | ... 13 more ... | \"cancel\"): string",
 						"return_type": "string",
 						"parameters": [
 							{
 								"name": "method",
-								"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"cancel\""
+								"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"toggle_main_menu\" | ... 13 more ... | \"cancel\""
 							}
 						]
 					},
@@ -8167,7 +7826,6 @@
 					"CapabilitiesView.svelte",
 					"CapabilityBackend.svelte",
 					"CapabilityProviderApi.svelte",
-					"CapabilityProviderOllama.svelte",
 					"CapabilityWebsocket.svelte",
 					"ChatContextmenu.svelte",
 					"ChatListitem.svelte",
@@ -8203,16 +7861,6 @@
 					"ModelContextmenu.svelte",
 					"ModelDetail.svelte",
 					"ModelLink.svelte",
-					"ModelSummary.svelte",
-					"OllamaActionItem.svelte",
-					"OllamaActions.svelte",
-					"OllamaConfigure.svelte",
-					"OllamaCopyModel.svelte",
-					"OllamaCreateModel.svelte",
-					"OllamaManager.svelte",
-					"OllamaModelDetail.svelte",
-					"OllamaPsStatus.svelte",
-					"OllamaPullModel.svelte",
 					"PartContextmenu.svelte",
 					"PartEditorForDiskfile.svelte",
 					"PartRemoveButton.svelte",
@@ -9125,7 +8773,7 @@
 						]
 					}
 				],
-				"dependents": ["diskfile_tabs.svelte.ts", "ollama.svelte.ts"]
+				"dependents": ["diskfile_tabs.svelte.ts"]
 			},
 			{
 				"path": "library.ts",
@@ -9259,25 +8907,25 @@
 					{
 						"name": "ModelName",
 						"kind": "type",
-						"source_line": 11,
+						"source_line": 8,
 						"type_signature": "ZodString"
 					},
 					{
 						"name": "ModelJson",
 						"kind": "type",
-						"source_line": 14,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 17 more ...; ollama_show_response_error: ZodOptional<...>; }, $strict>"
+						"source_line": 11,
+						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; ... 12 more ...; training_cutoff: ZodOptional<...>; }, $strict>"
 					},
 					{
 						"name": "ModelJsonInput",
 						"kind": "type",
-						"source_line": 45,
-						"type_signature": "{ name: string; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; tags?: string[] | undefined; ... 13 more ...; ollama_show_response_error?: string | undefined; }"
+						"source_line": 36,
+						"type_signature": "{ name: string; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; tags?: string[] | undefined; architecture?: string | undefined; ... 7 more ...; training_cutoff?: string | undefined; }"
 					},
 					{
 						"name": "ModelOptions",
 						"kind": "type",
-						"source_line": 47,
+						"source_line": 38,
 						"type_signature": "ModelOptions",
 						"extends": ["CellOptions<typeof ModelJson>"],
 						"properties": []
@@ -9285,7 +8933,7 @@
 					{
 						"name": "Model",
 						"kind": "class",
-						"source_line": 49,
+						"source_line": 40,
 						"extends": ["Cell<typeof ModelJson>"],
 						"implements": [],
 						"members": [
@@ -9351,38 +8999,6 @@
 								"type_signature": "string | undefined"
 							},
 							{
-								"name": "ollama_list_response_item",
-								"kind": "variable",
-								"type_signature": "OllamaListResponseItem | undefined"
-							},
-							{
-								"name": "ollama_show_response",
-								"kind": "variable",
-								"type_signature": "OllamaShowResponse | undefined"
-							},
-							{
-								"name": "ollama_show_response_loaded",
-								"kind": "variable",
-								"type_signature": "boolean"
-							},
-							{
-								"name": "ollama_show_response_loading",
-								"kind": "variable",
-								"type_signature": "boolean"
-							},
-							{
-								"name": "ollama_show_response_error",
-								"kind": "variable",
-								"type_signature": "string | undefined"
-							},
-							{
-								"name": "downloaded",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"doc_comment": "For models that run locally, this is a boolean indicating if the model is downloaded.\nIs `undefined` for non-local models.",
-								"type_signature": "boolean | undefined"
-							},
-							{
 								"name": "provider",
 								"kind": "variable",
 								"modifiers": ["readonly"],
@@ -9396,27 +9012,6 @@
 								"type_signature": "string | null"
 							},
 							{
-								"name": "ollama_modified_at",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"doc_comment": "Get the modified date from Ollama data if available.",
-								"type_signature": "Date | undefined"
-							},
-							{
-								"name": "needs_ollama_details",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"doc_comment": "Check if this model needs its details loaded.",
-								"type_signature": "boolean"
-							},
-							{
-								"name": "loaded",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"doc_comment": "Check if this model is currently loaded/running.\nFor Ollama models, this checks if the model is in the running models set.",
-								"type_signature": "boolean"
-							},
-							{
 								"name": "constructor",
 								"kind": "constructor",
 								"type_signature": "(options: ModelOptions): Model",
@@ -9426,43 +9021,20 @@
 										"type": "ModelOptions"
 									}
 								]
-							},
-							{
-								"name": "navigate_to_download",
-								"kind": "function",
-								"doc_comment": "Download this model. Currently only works for Ollama models.",
-								"type_signature": "(): Promise<void>",
-								"return_type": "Promise<void>",
-								"parameters": []
-							},
-							{
-								"name": "navigate_to_provider_model_view",
-								"kind": "function",
-								"doc_comment": "Navigate to the model view. Currently only works for Ollama models.",
-								"type_signature": "(): Promise<void>",
-								"return_type": "Promise<void>",
-								"parameters": []
 							}
 						]
 					},
 					{
 						"name": "ModelSchema",
 						"kind": "variable",
-						"source_line": 165,
+						"source_line": 72,
 						"type_signature": "ZodCustom<Model, Model>"
 					}
 				],
-				"dependencies": [
-					"cell.svelte.ts",
-					"cell_types.ts",
-					"navigation_helpers.ts",
-					"ollama_helpers.ts",
-					"provider_types.ts"
-				],
+				"dependencies": ["cell.svelte.ts", "cell_types.ts", "provider_types.ts"],
 				"dependents": [
 					"cell_classes.ts",
 					"models.svelte.ts",
-					"ollama.svelte.ts",
 					"thread_types.ts",
 					"threads.svelte.ts"
 				]
@@ -9492,9 +9064,7 @@
 					"ModelDetail.svelte",
 					"ModelLink.svelte",
 					"ModelListitem.svelte",
-					"ModelSummary.svelte",
-					"OllamaModelDetail.svelte",
-					"OllamaModelListitem.svelte"
+					"ModelSummary.svelte"
 				]
 			},
 			{
@@ -9521,7 +9091,6 @@
 					"Glyph.svelte",
 					"ModelContextmenu.svelte",
 					"ModelLink.svelte",
-					"OllamaModelDetail.svelte",
 					"ProviderLink.svelte",
 					"frontend.svelte.ts",
 					"glyphs.ts"
@@ -9560,13 +9129,10 @@
 					"glyphs.ts"
 				],
 				"dependents": [
-					"CapabilityProviderOllama.svelte",
 					"DashboardHome.svelte",
 					"DashboardProviders.svelte",
 					"ModelDetail.svelte",
-					"ModelSummary.svelte",
-					"OllamaModelDetail.svelte",
-					"OllamaPsStatus.svelte"
+					"ModelSummary.svelte"
 				]
 			},
 			{
@@ -9691,7 +9257,7 @@
 						"name": "ModelsJsonInput",
 						"kind": "type",
 						"source_line": 18,
-						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { name: string; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; id?: string | undefined; ... 16 more ...; ollama_show_response_error?: string | undefined; }[] | undefined; }"
+						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { name: string; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; id?: string | undefined; ... 11 more ...; training_cutoff?: string | undefined; }[] | undefined; }"
 					},
 					{
 						"name": "ModelsOptions",
@@ -9735,24 +9301,24 @@
 							{
 								"name": "add",
 								"kind": "function",
-								"type_signature": "(model_json: { name: string; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; tags?: string[] | undefined; ... 13 more ...; ollama_show_response_error?: string | undefined; }): void",
+								"type_signature": "(model_json: { name: string; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; tags?: string[] | undefined; architecture?: string | undefined; ... 7 more ...; training_cutoff?: string | undefined; }): void",
 								"return_type": "void",
 								"parameters": [
 									{
 										"name": "model_json",
-										"type": "{ name: string; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; tags?: string[] | undefined; ... 13 more ...; ollama_show_response_error?: string | undefined; }"
+										"type": "{ name: string; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; tags?: string[] | undefined; architecture?: string | undefined; ... 7 more ...; training_cutoff?: string | undefined; }"
 									}
 								]
 							},
 							{
 								"name": "add_many",
 								"kind": "function",
-								"type_signature": "(models_json: { name: string; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; tags?: string[] | undefined; ... 13 more ...; ollama_show_response_error?: string | undefined; }[]): void",
+								"type_signature": "(models_json: { name: string; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; tags?: string[] | undefined; architecture?: string | undefined; ... 7 more ...; training_cutoff?: string | undefined; }[]): void",
 								"return_type": "void",
 								"parameters": [
 									{
 										"name": "models_json",
-										"type": "{ name: string; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; tags?: string[] | undefined; ... 13 more ...; ollama_show_response_error?: string | undefined; }[]"
+										"type": "{ name: string; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; id?: string | undefined; created?: string | undefined; updated?: string | undefined; tags?: string[] | undefined; architecture?: string | undefined; ... 7 more ...; training_cutoff?: string | undefined; }[]"
 									}
 								]
 							},
@@ -9872,13 +9438,11 @@
 					}
 				],
 				"dependencies": [
-					"Glyph.svelte",
 					"ModelContextmenu.svelte",
 					"ModelLink.svelte",
 					"ProviderLink.svelte",
 					"ProviderLogo.svelte",
-					"format_helpers.ts",
-					"glyphs.ts"
+					"format_helpers.ts"
 				],
 				"dependents": ["DashboardModels.svelte", "ProviderDetail.svelte", "ProviderSummary.svelte"]
 			},
@@ -10012,7 +9576,7 @@
 						]
 					}
 				],
-				"dependents": ["chats.svelte.ts", "model.svelte.ts", "prompts.svelte.ts"]
+				"dependents": ["chats.svelte.ts", "prompts.svelte.ts"]
 			},
 			{
 				"path": "NavLink.svelte",
@@ -10044,985 +9608,6 @@
 					}
 				],
 				"dependents": ["ChatListitem.svelte", "Dashboard.svelte", "PromptListitem.svelte"]
-			},
-			{
-				"path": "ollama_helpers.ts",
-				"declarations": [
-					{
-						"name": "OLLAMA_URL",
-						"kind": "variable",
-						"source_line": 4,
-						"type_signature": "\"http://127.0.0.1:11434\""
-					},
-					{
-						"name": "OllamaStatusResponse",
-						"kind": "type",
-						"source_line": 12,
-						"type_signature": "ZodObject<{ status: ZodString; }, $loose>"
-					},
-					{
-						"name": "OllamaProgressResponse",
-						"kind": "type",
-						"source_line": 18,
-						"type_signature": "ZodObject<{ status: ZodString; digest: ZodOptional<ZodString>; total: ZodOptional<ZodNumber>; completed: ZodOptional<ZodNumber>; }, $loose>"
-					},
-					{
-						"name": "OllamaModelDetails",
-						"kind": "type",
-						"source_line": 27,
-						"type_signature": "ZodObject<{ families: ZodArray<ZodString>; family: ZodString; format: ZodString; parameter_size: ZodString; parent_model: ZodString; quantization_level: ZodString; }, $loose>"
-					},
-					{
-						"name": "OllamaListResponseItem",
-						"kind": "type",
-						"source_line": 38,
-						"type_signature": "ZodObject<{ details: ZodOptional<ZodObject<{ families: ZodArray<ZodString>; family: ZodString; format: ZodString; parameter_size: ZodString; parent_model: ZodString; quantization_level: ZodString; }, $loose>>; ... 4 more ...; size: ZodNumber; }, $loose>"
-					},
-					{
-						"name": "OllamaListResponse",
-						"kind": "type",
-						"source_line": 53,
-						"type_signature": "ZodObject<{ models: ZodArray<ZodObject<{ details: ZodOptional<ZodObject<{ families: ZodArray<ZodString>; family: ZodString; format: ZodString; parameter_size: ZodString; parent_model: ZodString; quantization_level: ZodString; }, $loose>>; ... 4 more ...; size: ZodNumber; }, $loose>>; }, $loose>"
-					},
-					{
-						"name": "OllamaShowResponse",
-						"kind": "type",
-						"source_line": 59,
-						"type_signature": "ZodObject<{ capabilities: ZodOptional<ZodArray<ZodString>>; details: ZodOptional<ZodObject<{ families: ZodArray<ZodString>; family: ZodString; format: ZodString; parameter_size: ZodString; parent_model: ZodString; quantization_level: ZodString; }, $loose>>; ... 5 more ...; tensors: ZodOptional<...>; }, $loose>"
-					},
-					{
-						"name": "OllamaPsResponseItem",
-						"kind": "type",
-						"source_line": 72,
-						"type_signature": "ZodObject<{ details: ZodOptional<ZodObject<{ families: ZodArray<ZodString>; family: ZodString; format: ZodString; parameter_size: ZodString; parent_model: ZodString; quantization_level: ZodString; }, $loose>>; ... 5 more ...; size_vram: ZodNumber; }, $loose>"
-					},
-					{
-						"name": "OllamaPsResponse",
-						"kind": "type",
-						"source_line": 84,
-						"type_signature": "ZodObject<{ models: ZodArray<ZodObject<{ details: ZodOptional<ZodObject<{ families: ZodArray<ZodString>; family: ZodString; format: ZodString; parameter_size: ZodString; parent_model: ZodString; quantization_level: ZodString; }, $loose>>; ... 5 more ...; size_vram: ZodNumber; }, $loose>>; }, $loose>"
-					},
-					{
-						"name": "OllamaListRequest",
-						"kind": "type",
-						"source_line": 90,
-						"type_signature": "ZodOptional<ZodVoid>"
-					},
-					{
-						"name": "OllamaPsRequest",
-						"kind": "type",
-						"source_line": 93,
-						"type_signature": "ZodOptional<ZodVoid>"
-					},
-					{
-						"name": "OllamaShowRequest",
-						"kind": "type",
-						"source_line": 96,
-						"type_signature": "ZodObject<{ model: ZodString; system: ZodOptional<ZodString>; template: ZodOptional<ZodString>; options: ZodOptional<ZodAny>; }, $loose>"
-					},
-					{
-						"name": "OllamaPullRequest",
-						"kind": "type",
-						"source_line": 104,
-						"type_signature": "ZodObject<{ model: ZodString; insecure: ZodOptional<ZodBoolean>; stream: ZodOptional<ZodBoolean>; }, $loose>"
-					},
-					{
-						"name": "OllamaPushRequest",
-						"kind": "type",
-						"source_line": 111,
-						"type_signature": "ZodObject<{ model: ZodString; insecure: ZodOptional<ZodBoolean>; stream: ZodOptional<ZodBoolean>; }, $loose>"
-					},
-					{
-						"name": "OllamaCreateRequest",
-						"kind": "type",
-						"source_line": 118,
-						"type_signature": "ZodObject<{ model: ZodString; from: ZodOptional<ZodString>; stream: ZodOptional<ZodBoolean>; quantize: ZodOptional<ZodString>; ... 5 more ...; adapters: ZodOptional<...>; }, $loose>"
-					},
-					{
-						"name": "OllamaDeleteRequest",
-						"kind": "type",
-						"source_line": 132,
-						"type_signature": "ZodObject<{ model: ZodString; }, $loose>"
-					},
-					{
-						"name": "OllamaCopyRequest",
-						"kind": "type",
-						"source_line": 137,
-						"type_signature": "ZodObject<{ source: ZodString; destination: ZodString; }, $loose>"
-					},
-					{
-						"name": "extract_parameter_count",
-						"kind": "function",
-						"doc_comment": "Extract parameter count from parameter size string like \"7B\", \"13B\", etc.",
-						"source_line": 146,
-						"type_signature": "(parameter_size: string | undefined): number | undefined",
-						"return_type": "number | undefined",
-						"parameters": [
-							{
-								"name": "parameter_size",
-								"type": "string | undefined"
-							}
-						]
-					},
-					{
-						"name": "ollama_logo",
-						"kind": "variable",
-						"source_line": 158,
-						"type_signature": "{ label: string; paths: { d: string; }[]; }"
-					}
-				],
-				"dependents": [
-					"OllamaConfigure.svelte",
-					"ProviderLogo.svelte",
-					"action_specs.ts",
-					"model.svelte.ts",
-					"ollama.svelte.ts"
-				]
-			},
-			{
-				"path": "ollama.svelte.ts",
-				"declarations": [
-					{
-						"name": "OllamaJson",
-						"kind": "type",
-						"source_line": 39,
-						"type_signature": "ZodObject<{ id: ZodDefault<$ZodBranded<ZodUUID, \"Uuid\", \"out\">>; created: ZodDefault<$ZodBranded<ZodISODateTime, \"Datetime\", \"out\">>; updated: ZodDefault<...>; host: ZodDefault<...>; }, $strict>"
-					},
-					{
-						"name": "OllamaJsonInput",
-						"kind": "type",
-						"source_line": 43,
-						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; host?: string | undefined; }"
-					},
-					{
-						"name": "OllamaOptions",
-						"kind": "type",
-						"source_line": 45,
-						"type_signature": "OllamaOptions"
-					},
-					{
-						"name": "Ollama",
-						"kind": "class",
-						"doc_comment": "Ollama client state management with simplified API.\nModel data is stored in `app.models`, not here.\n\n## Status Display Pattern\n\nFor unified status display (available/unavailable/checking), components should use:\n- `app.capabilities.ollama.status` - unified status (prioritizes provider status)\n- `app.capabilities.ollama.error_message` - unified error message\n\nThis ensures consistency with other providers (Claude, ChatGPT, Gemini) and maintains\na single source of truth. The `Capabilities` layer prioritizes backend provider status\n(authoritative - checks if Ollama is installed) over action-level status (checks if API responds).\n\nThe lower-level properties here (`list_status`, `list_error`, `provider_error`, etc.) are\noperational state that `capabilities.ollama` derives from. Use these for:\n- Operational state (models, pulling, creating, etc.)\n- Action-specific error handling\n- Internal state management",
-						"source_line": 67,
-						"extends": ["Cell<typeof OllamaJson>"],
-						"implements": [],
-						"members": [
-							{
-								"name": "list_response",
-								"kind": "variable",
-								"type_signature": "OllamaListResponse | null"
-							},
-							{
-								"name": "list_status",
-								"kind": "variable",
-								"type_signature": "AsyncStatus"
-							},
-							{
-								"name": "list_error",
-								"kind": "variable",
-								"type_signature": "string | null"
-							},
-							{
-								"name": "list_last_updated",
-								"kind": "variable",
-								"type_signature": "number | null"
-							},
-							{
-								"name": "list_round_trip_time",
-								"kind": "variable",
-								"type_signature": "number | null"
-							},
-							{
-								"name": "last_refreshed",
-								"kind": "variable",
-								"type_signature": "string | null"
-							},
-							{
-								"name": "ever_responded",
-								"kind": "variable",
-								"type_signature": "boolean"
-							},
-							{
-								"name": "ps_response",
-								"kind": "variable",
-								"type_signature": "OllamaPsResponse | null"
-							},
-							{
-								"name": "ps_status",
-								"kind": "variable",
-								"type_signature": "AsyncStatus"
-							},
-							{
-								"name": "ps_error",
-								"kind": "variable",
-								"type_signature": "string | null"
-							},
-							{
-								"name": "ps_polling_enabled",
-								"kind": "variable",
-								"type_signature": "boolean"
-							},
-							{
-								"name": "pull_model_name",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "pull_insecure",
-								"kind": "variable",
-								"type_signature": "boolean"
-							},
-							{
-								"name": "pulling_models",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "SvelteSet<string>"
-							},
-							{
-								"name": "copy_source_model",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "copy_destination_model",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "copy_is_copying",
-								"kind": "variable",
-								"type_signature": "boolean"
-							},
-							{
-								"name": "create_model_name",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "create_from_model",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "create_system_prompt",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "create_template",
-								"kind": "variable",
-								"type_signature": "string"
-							},
-							{
-								"name": "create_is_creating",
-								"kind": "variable",
-								"type_signature": "boolean"
-							},
-							{
-								"name": "manager_selected_view",
-								"kind": "variable",
-								"type_signature": "'configure' | 'model' | 'pull' | 'copy' | 'create'"
-							},
-							{
-								"name": "manager_selected_model",
-								"kind": "variable",
-								"type_signature": "Model | null"
-							},
-							{
-								"name": "manager_last_active_view",
-								"kind": "variable",
-								"type_signature": "{view: string; model: Model | null} | null"
-							},
-							{
-								"name": "show_read_actions",
-								"kind": "variable",
-								"type_signature": "boolean"
-							},
-							{
-								"name": "available",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "boolean"
-							},
-							{
-								"name": "actions",
-								"kind": "variable",
-								"modifiers": ["readonly"]
-							},
-							{
-								"name": "pending_actions",
-								"kind": "variable",
-								"modifiers": ["readonly"]
-							},
-							{
-								"name": "completed_actions",
-								"kind": "variable",
-								"modifiers": ["readonly"]
-							},
-							{
-								"name": "filtered_actions",
-								"kind": "variable",
-								"modifiers": ["readonly"]
-							},
-							{
-								"name": "models",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "Array<Model>"
-							},
-							{
-								"name": "models_downloaded",
-								"kind": "variable",
-								"modifiers": ["readonly"]
-							},
-							{
-								"name": "models_not_downloaded",
-								"kind": "variable",
-								"modifiers": ["readonly"]
-							},
-							{
-								"name": "model_by_name",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "Map<ModelName, Model>"
-							},
-							{
-								"name": "model_names",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "Array<ModelName>"
-							},
-							{
-								"name": "running_models",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "Array<OllamaPsResponseItem>"
-							},
-							{
-								"name": "running_model_names",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "Set<ModelName>"
-							},
-							{
-								"name": "pull_parsed_model_name",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "ModelName"
-							},
-							{
-								"name": "pull_already_downloaded",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "boolean"
-							},
-							{
-								"name": "pull_can_pull",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "boolean"
-							},
-							{
-								"name": "pull_is_pulling",
-								"kind": "function",
-								"type_signature": "(model_name: string): boolean",
-								"return_type": "boolean",
-								"parameters": [
-									{
-										"name": "model_name",
-										"type": "string"
-									}
-								]
-							},
-							{
-								"name": "copy_parsed_source_model",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "ModelName"
-							},
-							{
-								"name": "copy_parsed_destination_model",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "ModelName"
-							},
-							{
-								"name": "copy_is_duplicate_name",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "boolean"
-							},
-							{
-								"name": "copy_destination_model_changed",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "boolean"
-							},
-							{
-								"name": "create_parsed_model_name",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "ModelName"
-							},
-							{
-								"name": "create_is_duplicate_name",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "boolean"
-							},
-							{
-								"name": "create_can_create",
-								"kind": "variable",
-								"modifiers": ["readonly"],
-								"type_signature": "boolean"
-							},
-							{
-								"name": "constructor",
-								"kind": "constructor",
-								"type_signature": "(options: OllamaOptions): Ollama",
-								"parameters": [
-									{
-										"name": "options",
-										"type": "OllamaOptions"
-									}
-								]
-							},
-							{
-								"name": "dispose",
-								"kind": "function",
-								"type_signature": "(): void",
-								"return_type": "void",
-								"parameters": []
-							},
-							{
-								"name": "refresh",
-								"kind": "function",
-								"doc_comment": "Refresh the list of models and ps info and update the refresh timestamp.\nError handlers update state automatically.\n\nIf Ollama provider status indicates unavailability, skip API calls to avoid\noverwriting the provider status with action error messages.",
-								"type_signature": "(): Promise<{ list_response: { [x: string]: unknown; models: { [x: string]: unknown; digest: string; model: string; modified_at: string; name: string; size: number; details?: { [x: string]: unknown; families: string[]; family: string; format: string; parameter_size: string; parent_model: string; quantization_level: string; } | undefined; }[]; } | null; ps_response: { ...; } | null; }>",
-								"return_type": "Promise<{ list_response: { [x: string]: unknown; models: { [x: string]: unknown; digest: string; model: string; modified_at: string; name: string; size: number; details?: { [x: string]: unknown; families: string[]; family: string; format: string; parameter_size: string; parent_model: string; quantization_level: stri...",
-								"parameters": []
-							},
-							{
-								"name": "start_ps_polling",
-								"kind": "function",
-								"doc_comment": "Start polling for running models status.\nDefault interval is 10 seconds.",
-								"type_signature": "(options?: { immediate?: boolean | undefined; interval?: number | undefined; } | undefined): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "options",
-										"type": "{ immediate?: boolean | undefined; interval?: number | undefined; } | undefined",
-										"optional": true
-									}
-								]
-							},
-							{
-								"name": "stop_ps_polling",
-								"kind": "function",
-								"doc_comment": "Stop polling for running models status.",
-								"type_signature": "(): void",
-								"return_type": "void",
-								"parameters": []
-							},
-							{
-								"name": "handle_ollama_list_start",
-								"kind": "function",
-								"doc_comment": "Handle the start of a list operation.",
-								"type_signature": "(): void",
-								"return_type": "void",
-								"parameters": []
-							},
-							{
-								"name": "handle_ollama_list_complete",
-								"kind": "function",
-								"doc_comment": "List all models available on the Ollama server and sync with app.models.",
-								"type_signature": "(response: { [x: string]: unknown; models: { [x: string]: unknown; digest: string; model: string; modified_at: string; name: string; size: number; details?: { [x: string]: unknown; families: string[]; family: string; format: string; parameter_size: string; parent_model: string; quantization_level: string; } | undefined; }[]; } | null): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "response",
-										"type": "{ [x: string]: unknown; models: { [x: string]: unknown; digest: string; model: string; modified_at: string; name: string; size: number; details?: { [x: string]: unknown; families: string[]; family: string; format: string; parameter_size: string; parent_model: string; quantization_level: string; } | undefined; }[]; }..."
-									}
-								]
-							},
-							{
-								"name": "handle_ollama_ps_start",
-								"kind": "function",
-								"doc_comment": "Handle the start of a ps operation.",
-								"type_signature": "(): void",
-								"return_type": "void",
-								"parameters": []
-							},
-							{
-								"name": "handle_ollama_ps_complete",
-								"kind": "function",
-								"doc_comment": "Get the list of currently running models.",
-								"type_signature": "(response: { [x: string]: unknown; models: { [x: string]: unknown; digest: string; expires_at: string; model: string; name: string; size: number; size_vram: number; details?: { [x: string]: unknown; families: string[]; family: string; format: string; parameter_size: string; parent_model: string; quantization_level: string; } | undefined; }[]; } | null): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "response",
-										"type": "{ [x: string]: unknown; models: { [x: string]: unknown; digest: string; expires_at: string; model: string; name: string; size: number; size_vram: number; details?: { [x: string]: unknown; families: string[]; family: string; format: string; parameter_size: string; parent_model: string; quantization_level: string; } |..."
-									}
-								]
-							},
-							{
-								"name": "handle_ollama_show",
-								"kind": "function",
-								"doc_comment": "Get detailed information about a specific model.",
-								"type_signature": "(request: { [x: string]: unknown; model: string; system?: string | undefined; template?: string | undefined; options?: any; }, response: { [x: string]: unknown; capabilities?: string[] | undefined; details?: { [x: string]: unknown; ... 5 more ...; quantization_level: string; } | undefined; ... 5 more ...; tensors?: any[] | undefined; } | null): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "request",
-										"type": "{ [x: string]: unknown; model: string; system?: string | undefined; template?: string | undefined; options?: any; }"
-									},
-									{
-										"name": "response",
-										"type": "{ [x: string]: unknown; capabilities?: string[] | undefined; details?: { [x: string]: unknown; families: string[]; family: string; format: string; parameter_size: string; parent_model: string; quantization_level: string; } | undefined; ... 5 more ...; tensors?: any[] | undefined; } | null"
-									}
-								]
-							},
-							{
-								"name": "handle_ollama_delete",
-								"kind": "function",
-								"doc_comment": "Delete a model from the Ollama server.",
-								"type_signature": "(request: { [x: string]: unknown; model: string; }): Promise<void>",
-								"return_type": "Promise<void>",
-								"parameters": [
-									{
-										"name": "request",
-										"type": "{ [x: string]: unknown; model: string; }"
-									}
-								]
-							},
-							{
-								"name": "clear_model_details",
-								"kind": "function",
-								"doc_comment": "Clear details for a specific model.",
-								"type_signature": "(model: Model): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "model",
-										"type": "Model"
-									}
-								]
-							},
-							{
-								"name": "clear_all_model_details",
-								"kind": "function",
-								"doc_comment": "Clear all model details.",
-								"type_signature": "(): void",
-								"return_type": "void",
-								"parameters": []
-							},
-							{
-								"name": "pull",
-								"kind": "function",
-								"doc_comment": "Submit pull model form.",
-								"type_signature": "(): Promise<void>",
-								"return_type": "Promise<void>",
-								"parameters": []
-							},
-							{
-								"name": "copy",
-								"kind": "function",
-								"doc_comment": "Submit copy model form.",
-								"type_signature": "(): Promise<void>",
-								"return_type": "Promise<void>",
-								"parameters": []
-							},
-							{
-								"name": "create",
-								"kind": "function",
-								"doc_comment": "Submit create model form.",
-								"type_signature": "(): Promise<void>",
-								"return_type": "Promise<void>",
-								"parameters": []
-							},
-							{
-								"name": "delete",
-								"kind": "function",
-								"doc_comment": "Submit delete model form.",
-								"type_signature": "(model_name: string): Promise<void>",
-								"return_type": "Promise<void>",
-								"parameters": [
-									{
-										"name": "model_name",
-										"type": "string"
-									}
-								]
-							},
-							{
-								"name": "unload",
-								"kind": "function",
-								"doc_comment": "Unload a model from memory.",
-								"type_signature": "(model_name: string): Promise<void>",
-								"return_type": "Promise<void>",
-								"parameters": [
-									{
-										"name": "model_name",
-										"type": "string"
-									}
-								]
-							},
-							{
-								"name": "select",
-								"kind": "function",
-								"doc_comment": "Select model in manager.",
-								"type_signature": "(model: Model): Promise<void>",
-								"return_type": "Promise<void>",
-								"parameters": [
-									{
-										"name": "model",
-										"type": "Model"
-									}
-								]
-							},
-							{
-								"name": "close_form",
-								"kind": "function",
-								"doc_comment": "Handle close form in manager.",
-								"type_signature": "(): void",
-								"return_type": "void",
-								"parameters": []
-							},
-							{
-								"name": "set_manager_view",
-								"kind": "function",
-								"doc_comment": "Set the manager view and optionally the selected model.",
-								"type_signature": "(view: \"model\" | \"configure\" | \"pull\" | \"copy\" | \"create\", model?: Model | null | undefined): void",
-								"return_type": "void",
-								"parameters": [
-									{
-										"name": "view",
-										"type": "\"model\" | \"configure\" | \"pull\" | \"copy\" | \"create\""
-									},
-									{
-										"name": "model",
-										"type": "Model | null | undefined",
-										"optional": true
-									}
-								]
-							},
-							{
-								"name": "manager_back_to_last_view",
-								"kind": "function",
-								"doc_comment": "Navigate back to the last active view.",
-								"type_signature": "(): void",
-								"return_type": "void",
-								"parameters": []
-							}
-						]
-					}
-				],
-				"dependencies": [
-					"cell.svelte.ts",
-					"cell_types.ts",
-					"iterable_helpers.ts",
-					"model.svelte.ts",
-					"ollama_helpers.ts",
-					"poller.svelte.ts"
-				],
-				"dependents": ["frontend.svelte.ts"]
-			},
-			{
-				"path": "OllamaActionItem.svelte",
-				"declarations": [
-					{
-						"name": "OllamaActionItem",
-						"kind": "component",
-						"props": [
-							{
-								"name": "action",
-								"type": "Action"
-							}
-						],
-						"source_line": 1
-					}
-				],
-				"dependencies": ["Glyph.svelte", "ProgressBar.svelte", "glyphs.ts", "time_helpers.ts"],
-				"dependents": ["OllamaActions.svelte", "OllamaPullModel.svelte"]
-			},
-			{
-				"path": "OllamaActions.svelte",
-				"declarations": [
-					{
-						"name": "OllamaActions",
-						"kind": "component",
-						"props": [
-							{
-								"name": "ollama",
-								"type": "Ollama"
-							}
-						],
-						"source_line": 1
-					}
-				],
-				"dependencies": ["Glyph.svelte", "OllamaActionItem.svelte", "glyphs.ts"],
-				"dependents": ["OllamaConfigure.svelte"]
-			},
-			{
-				"path": "OllamaConfigure.svelte",
-				"declarations": [
-					{
-						"name": "OllamaConfigure",
-						"kind": "component",
-						"props": [
-							{
-								"name": "ollama",
-								"type": "Ollama"
-							},
-							{
-								"name": "last_active_view",
-								"type": "string | null"
-							},
-							{
-								"name": "onshowpull",
-								"type": "() => void"
-							},
-							{
-								"name": "onback",
-								"type": "() => void",
-								"optional": true
-							}
-						],
-						"source_line": 1
-					}
-				],
-				"dependencies": [
-					"ErrorMessage.svelte",
-					"Glyph.svelte",
-					"OllamaActions.svelte",
-					"OllamaPsStatus.svelte",
-					"frontend.svelte.ts",
-					"glyphs.ts",
-					"ollama_helpers.ts"
-				],
-				"dependents": ["OllamaManager.svelte"]
-			},
-			{
-				"path": "OllamaCopyModel.svelte",
-				"declarations": [
-					{
-						"name": "OllamaCopyModel",
-						"kind": "component",
-						"props": [
-							{
-								"name": "ollama",
-								"type": "Ollama"
-							},
-							{
-								"name": "onclose",
-								"type": "() => void"
-							}
-						],
-						"source_line": 1
-					}
-				],
-				"dependencies": ["ErrorMessage.svelte", "Glyph.svelte", "glyphs.ts"],
-				"dependents": ["OllamaManager.svelte"]
-			},
-			{
-				"path": "OllamaCreateModel.svelte",
-				"declarations": [
-					{
-						"name": "OllamaCreateModel",
-						"kind": "component",
-						"props": [
-							{
-								"name": "ollama",
-								"type": "Ollama"
-							},
-							{
-								"name": "onclose",
-								"type": "() => void"
-							},
-							{
-								"name": "onshowpull",
-								"type": "() => void"
-							}
-						],
-						"source_line": 1
-					}
-				],
-				"dependencies": ["ErrorMessage.svelte", "Glyph.svelte", "glyphs.ts"],
-				"dependents": ["OllamaManager.svelte"]
-			},
-			{
-				"path": "OllamaManager.svelte",
-				"declarations": [
-					{
-						"name": "OllamaManager",
-						"kind": "component",
-						"props": [
-							{
-								"name": "ollama",
-								"type": "Ollama"
-							}
-						],
-						"source_line": 1
-					}
-				],
-				"dependencies": [
-					"ExternalLink.svelte",
-					"Glyph.svelte",
-					"OllamaConfigure.svelte",
-					"OllamaCopyModel.svelte",
-					"OllamaCreateModel.svelte",
-					"OllamaModelDetail.svelte",
-					"OllamaModelListitem.svelte",
-					"OllamaPullModel.svelte",
-					"frontend.svelte.ts",
-					"glyphs.ts"
-				],
-				"dependents": ["ProviderDetail.svelte"]
-			},
-			{
-				"path": "OllamaModelDetail.svelte",
-				"declarations": [
-					{
-						"name": "OllamaModelDetail",
-						"kind": "component",
-						"props": [
-							{
-								"name": "model",
-								"type": "Model"
-							},
-							{
-								"name": "onshow",
-								"type": "(model: Model) => void"
-							},
-							{
-								"name": "onclose",
-								"type": "(model: Model) => void",
-								"optional": true
-							},
-							{
-								"name": "ondelete",
-								"type": "(model: Model) => void",
-								"optional": true
-							},
-							{
-								"name": "header",
-								"type": "Snippet",
-								"optional": true
-							}
-						],
-						"source_line": 1
-					}
-				],
-				"dependencies": [
-					"Glyph.svelte",
-					"ModelContextmenu.svelte",
-					"ModelLink.svelte",
-					"format_helpers.ts",
-					"glyphs.ts",
-					"time_helpers.ts"
-				],
-				"dependents": ["ModelDetail.svelte", "OllamaManager.svelte"]
-			},
-			{
-				"path": "OllamaModelListitem.svelte",
-				"declarations": [
-					{
-						"name": "OllamaModelListitem",
-						"kind": "component",
-						"props": [
-							{
-								"name": "model",
-								"type": "Model"
-							},
-							{
-								"name": "onclick",
-								"type": "() => void",
-								"optional": true
-							}
-						],
-						"source_line": 1
-					}
-				],
-				"dependencies": [
-					"ModelContextmenu.svelte",
-					"OllamaModelStatus.svelte",
-					"format_helpers.ts"
-				],
-				"dependents": ["OllamaManager.svelte"]
-			},
-			{
-				"path": "OllamaModelStatus.svelte",
-				"declarations": [
-					{
-						"name": "OllamaModelStatus",
-						"kind": "component",
-						"props": [
-							{
-								"name": "model",
-								"type": "Model"
-							},
-							{
-								"name": "ollama",
-								"type": "Ollama"
-							}
-						],
-						"source_line": 1
-					}
-				],
-				"dependents": ["OllamaModelListitem.svelte"]
-			},
-			{
-				"path": "OllamaPsStatus.svelte",
-				"declarations": [
-					{
-						"name": "OllamaPsStatus",
-						"kind": "component",
-						"props": [
-							{
-								"name": "ollama",
-								"type": "Ollama"
-							}
-						],
-						"source_line": 1
-					}
-				],
-				"dependencies": ["Glyph.svelte", "ModelLink.svelte", "format_helpers.ts", "glyphs.ts"],
-				"dependents": ["CapabilityProviderOllama.svelte", "OllamaConfigure.svelte"]
-			},
-			{
-				"path": "OllamaPullModel.svelte",
-				"declarations": [
-					{
-						"name": "OllamaPullModel",
-						"kind": "component",
-						"props": [
-							{
-								"name": "ollama",
-								"type": "Ollama"
-							},
-							{
-								"name": "onclose",
-								"type": "() => void",
-								"optional": true
-							},
-							{
-								"name": "oncancel",
-								"type": "() => void",
-								"optional": true
-							}
-						],
-						"source_line": 1
-					}
-				],
-				"dependencies": [
-					"ErrorMessage.svelte",
-					"Glyph.svelte",
-					"OllamaActionItem.svelte",
-					"frontend.svelte.ts",
-					"glyphs.ts"
-				],
-				"dependents": ["OllamaManager.svelte"]
 			},
 			{
 				"path": "part_helpers.ts",
@@ -12139,8 +10724,7 @@
 							}
 						]
 					}
-				],
-				"dependents": ["ollama.svelte.ts"]
+				]
 			},
 			{
 				"path": "ProgressBar.svelte",
@@ -12162,8 +10746,7 @@
 						],
 						"source_line": 1
 					}
-				],
-				"dependents": ["OllamaActionItem.svelte"]
+				]
 			},
 			{
 				"path": "prompt_helpers.ts",
@@ -12800,60 +11383,48 @@
 						"kind": "type",
 						"doc_comment": "See `app.providers.names` for the available names at runtime.",
 						"source_line": 4,
-						"type_signature": "ZodEnum<{ ollama: \"ollama\"; claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>"
-					},
-					{
-						"name": "ProviderDataOllama",
-						"kind": "type",
-						"source_line": 8,
-						"type_signature": "ZodObject<{ type: ZodLiteral<\"ollama\">; value: ZodDefault<ZodOptional<ZodAny>>; }, $strict>"
+						"type_signature": "ZodEnum<{ claude: \"claude\"; chatgpt: \"chatgpt\"; gemini: \"gemini\"; }>"
 					},
 					{
 						"name": "ProviderDataClaude",
 						"kind": "type",
-						"source_line": 14,
+						"source_line": 8,
 						"type_signature": "ZodObject<{ type: ZodLiteral<\"claude\">; value: ZodDefault<ZodOptional<ZodAny>>; }, $strict>"
 					},
 					{
 						"name": "ProviderDataChatgpt",
 						"kind": "type",
-						"source_line": 20,
+						"source_line": 14,
 						"type_signature": "ZodObject<{ type: ZodLiteral<\"chatgpt\">; value: ZodDefault<ZodOptional<ZodAny>>; }, $strict>"
 					},
 					{
 						"name": "ProviderDataGemini",
 						"kind": "type",
-						"source_line": 26,
+						"source_line": 20,
 						"type_signature": "ZodObject<{ type: ZodLiteral<\"gemini\">; value: ZodObject<{ text: ZodString; candidates: ZodOptional<ZodNullable<ZodArray<ZodAny>>>; function_calls: ZodOptional<...>; prompt_feedback: ZodOptional<...>; usage_metadata: ZodOptional<...>; }, $strict>; }, $strict>"
 					},
 					{
 						"name": "ProviderDataSchema",
 						"kind": "variable",
-						"source_line": 38,
-						"type_signature": "ZodDiscriminatedUnion<[ZodObject<{ type: ZodLiteral<\"ollama\">; value: ZodDefault<ZodOptional<ZodAny>>; }, $strict>, ZodObject<{ type: ZodLiteral<...>; value: ZodDefault<...>; }, $strict>, ZodObject<...>, ZodObject<...>], \"type\">"
+						"source_line": 32,
+						"type_signature": "ZodDiscriminatedUnion<[ZodObject<{ type: ZodLiteral<\"claude\">; value: ZodDefault<ZodOptional<ZodAny>>; }, $strict>, ZodObject<{ type: ZodLiteral<...>; value: ZodDefault<...>; }, $strict>, ZodObject<...>], \"type\">"
 					},
 					{
 						"name": "ProviderData",
 						"kind": "type",
-						"source_line": 44,
-						"type_signature": "{ type: \"ollama\"; value: any; } | { type: \"claude\"; value: any; } | { type: \"chatgpt\"; value: any; } | { type: \"gemini\"; value: { text: string; candidates?: any[] | null | undefined; function_calls?: any[] | null | undefined; prompt_feedback?: any; usage_metadata?: any; }; }"
+						"source_line": 37,
+						"type_signature": "{ type: \"claude\"; value: any; } | { type: \"chatgpt\"; value: any; } | { type: \"gemini\"; value: { text: string; candidates?: any[] | null | undefined; function_calls?: any[] | null | undefined; prompt_feedback?: any; usage_metadata?: any; }; }"
 					},
 					{
 						"name": "PROVIDER_ERROR_NEEDS_API_KEY",
 						"kind": "variable",
-						"source_line": 46,
+						"source_line": 39,
 						"type_signature": "\"needs API key\""
-					},
-					{
-						"name": "PROVIDER_ERROR_NOT_INSTALLED",
-						"kind": "variable",
-						"source_line": 47,
-						"type_signature": "\"not installed\""
 					},
 					{
 						"name": "ProviderStatus",
 						"kind": "type",
-						"source_line": 49,
+						"source_line": 41,
 						"type_signature": "ZodDiscriminatedUnion<[ZodObject<{ name: ZodString; available: ZodLiteral<true>; checked_at: ZodNumber; }, $strict>, ZodObject<{ name: ZodString; available: ZodLiteral<...>; error: ZodString; checked_at: ZodNumber; }, $strict>], \"available\">"
 					}
 				],
@@ -12862,8 +11433,7 @@
 					"completion_types.ts",
 					"model.svelte.ts",
 					"provider.svelte.ts",
-					"server/backend_provider.ts",
-					"server/backend_provider_ollama.ts"
+					"server/backend_provider.ts"
 				]
 			},
 			{
@@ -12879,7 +11449,7 @@
 						"name": "ProviderJsonInput",
 						"kind": "type",
 						"source_line": 19,
-						"type_signature": "{ name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; title: string; url: string; homepage: string; company: string; api_key_url: string | null; id?: string | undefined; created?: string | undefined; updated?: string | undefined; }"
+						"type_signature": "{ name: \"claude\" | \"chatgpt\" | \"gemini\"; title: string; url: string; homepage: string; company: string; api_key_url: string | null; id?: string | undefined; created?: string | undefined; updated?: string | undefined; }"
 					},
 					{
 						"name": "ProviderOptions",
@@ -12988,9 +11558,7 @@
 					"ExternalLink.svelte",
 					"Glyph.svelte",
 					"ModelSummary.svelte",
-					"OllamaManager.svelte",
 					"ProviderLogo.svelte",
-					"frontend.svelte.ts",
 					"glyphs.ts"
 				]
 			},
@@ -13037,7 +11605,6 @@
 				"dependencies": ["Glyph.svelte", "ProviderLogo.svelte", "glyphs.ts"],
 				"dependents": [
 					"CapabilityProviderApi.svelte",
-					"CapabilityProviderOllama.svelte",
 					"ChatThread.svelte",
 					"DashboardHome.svelte",
 					"DashboardProviders.svelte",
@@ -13075,7 +11642,7 @@
 						"source_line": 1
 					}
 				],
-				"dependencies": ["logos.ts", "ollama_helpers.ts"],
+				"dependencies": ["logos.ts"],
 				"dependents": [
 					"CapabilitiesView.svelte",
 					"ChatInitializer.svelte",
@@ -13101,7 +11668,7 @@
 						"name": "ProvidersJsonInput",
 						"kind": "type",
 						"source_line": 12,
-						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; title: string; url: string; homepage: string; ... 4 more ...; updated?: string | undefined; }[] | undefined; }"
+						"type_signature": "{ id?: string | undefined; created?: string | undefined; updated?: string | undefined; items?: { name: \"claude\" | \"chatgpt\" | \"gemini\"; title: string; url: string; homepage: string; company: string; api_key_url: string | null; id?: string | undefined; created?: string | undefined; updated?: string | undefined; }[] |..."
 					},
 					{
 						"name": "ProvidersOptions",
@@ -13764,12 +12331,12 @@
 						"kind": "function",
 						"doc_comment": "Extracts the text content from a completion response.",
 						"source_line": 14,
-						"type_signature": "(completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { type: \"claude\"; value: any; } | { ...; } | { ...; }; } | null | undefined): string | null",
+						"type_signature": "(completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"claude\"; value: any; } | { type: \"chatgpt\"; value: any; } | { ...; }; } | null | undefined): string | null",
 						"return_type": "string | null",
 						"parameters": [
 							{
 								"name": "completion_response",
-								"type": "{ created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { type: \"claude\"; value: any; } | { ...; } | { ...; }; } | null | undefined"
+								"type": "{ created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"claude\"; value: any; } | { type: \"chatgpt\"; value: any; } | { ...; }; } | null | undefined"
 							}
 						]
 					},
@@ -13777,13 +12344,13 @@
 						"name": "to_completion_result",
 						"kind": "function",
 						"doc_comment": "Creates a standardized `CompletionResponse` message from provider-specific responses.",
-						"source_line": 40,
-						"type_signature": "(provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\", model: string, api_response: unknown, progress_token?: (string & $brand<\"Uuid\">) | undefined): { completion_response: { ...; }; _meta?: { ...; } | undefined; }",
-						"return_type": "{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { ...; } | { ...; } | { ...; }; }; _meta?: { ...; } | undefined; }",
+						"source_line": 38,
+						"type_signature": "(provider_name: \"claude\" | \"chatgpt\" | \"gemini\", model: string, api_response: unknown, progress_token?: (string & $brand<\"Uuid\">) | undefined): { completion_response: { ...; }; _meta?: { ...; } | undefined; }",
+						"return_type": "{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"claude\"; value: any; } | { type: \"chatgpt\"; value: any; } | { ...; }; }; _meta?: { ...; } | undefined; }",
 						"parameters": [
 							{
 								"name": "provider_name",
-								"type": "\"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\""
+								"type": "\"claude\" | \"chatgpt\" | \"gemini\""
 							},
 							{
 								"name": "model",
@@ -13807,7 +12374,6 @@
 					"server/backend_provider_chatgpt.ts",
 					"server/backend_provider_claude.ts",
 					"server/backend_provider_gemini.ts",
-					"server/backend_provider_ollama.ts",
 					"thread_helpers.ts"
 				]
 			},
@@ -13939,12 +12505,12 @@
 								"name": "get_action_spec",
 								"kind": "function",
 								"doc_comment": "Get an action specification by method name.",
-								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"cancel\"): { ...; } | ... 2 more ... | undefined",
+								"type_signature": "(method: \"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"toggle_main_menu\" | ... 13 more ... | \"cancel\"): { ...; } | ... 2 more ... | undefined",
 								"return_type": "{ method: string; initiator: \"both\" | \"frontend\" | \"backend\"; side_effects: boolean; input: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; output: ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>; ... 6 more ...; rate_limit?: \"both\" | ... 2 more ... | undefined; } | { ...; } | { ...; }...",
 								"parameters": [
 									{
 										"name": "method",
-										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"ollama_progress\" | ... 22 more ... | \"cancel\""
+										"type": "\"ping\" | \"session_load\" | \"filer_change\" | \"diskfile_update\" | \"diskfile_delete\" | \"directory_create\" | \"completion_create\" | \"completion_progress\" | \"toggle_main_menu\" | ... 13 more ... | \"cancel\""
 									}
 								]
 							},
@@ -14189,8 +12755,8 @@
 							{
 								"name": "handle_streaming_completion",
 								"kind": "function",
-								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 2 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
-								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { ...; } | { ...; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 1 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"claude\"; value: any; } | { type: \"chatgpt\"; value: any; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
 								"parameters": [
 									{
 										"name": "options",
@@ -14201,8 +12767,8 @@
 							{
 								"name": "handle_non_streaming_completion",
 								"kind": "function",
-								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 2 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
-								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { ...; } | { ...; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 1 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"claude\"; value: any; } | { type: \"chatgpt\"; value: any; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
 								"parameters": [
 									{
 										"name": "options",
@@ -14242,8 +12808,8 @@
 							{
 								"name": "handle_streaming_completion",
 								"kind": "function",
-								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 2 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
-								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { ...; } | { ...; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 1 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"claude\"; value: any; } | { type: \"chatgpt\"; value: any; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
 								"parameters": [
 									{
 										"name": "options",
@@ -14254,8 +12820,8 @@
 							{
 								"name": "handle_non_streaming_completion",
 								"kind": "function",
-								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 2 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
-								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { ...; } | { ...; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 1 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"claude\"; value: any; } | { type: \"chatgpt\"; value: any; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
 								"parameters": [
 									{
 										"name": "options",
@@ -14295,8 +12861,8 @@
 							{
 								"name": "handle_streaming_completion",
 								"kind": "function",
-								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 2 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
-								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { ...; } | { ...; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 1 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"claude\"; value: any; } | { type: \"chatgpt\"; value: any; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
 								"parameters": [
 									{
 										"name": "options",
@@ -14307,8 +12873,8 @@
 							{
 								"name": "handle_non_streaming_completion",
 								"kind": "function",
-								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 2 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
-								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { ...; } | { ...; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 1 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"claude\"; value: any; } | { type: \"chatgpt\"; value: any; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
 								"parameters": [
 									{
 										"name": "options",
@@ -14323,89 +12889,18 @@
 				"dependents": ["server/create_zzz_app.ts"]
 			},
 			{
-				"path": "server/backend_provider_ollama.ts",
-				"declarations": [
-					{
-						"name": "BackendProviderOllama",
-						"kind": "class",
-						"source_line": 10,
-						"extends": ["BackendProviderLocal<Ollama>"],
-						"implements": [],
-						"members": [
-							{
-								"name": "name",
-								"kind": "variable",
-								"modifiers": ["readonly"]
-							},
-							{
-								"name": "create_client",
-								"kind": "function",
-								"modifiers": ["protected"],
-								"type_signature": "(): void",
-								"return_type": "void",
-								"parameters": []
-							},
-							{
-								"name": "load_status",
-								"kind": "function",
-								"type_signature": "(reload?: boolean): Promise<{ name: string; available: true; checked_at: number; } | { name: string; available: false; error: string; checked_at: number; }>",
-								"return_type": "Promise<{ name: string; available: true; checked_at: number; } | { name: string; available: false; error: string; checked_at: number; }>",
-								"parameters": [
-									{
-										"name": "reload",
-										"type": "boolean",
-										"default_value": "false"
-									}
-								]
-							},
-							{
-								"name": "handle_streaming_completion",
-								"kind": "function",
-								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 2 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
-								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { ...; } | { ...; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
-								"parameters": [
-									{
-										"name": "options",
-										"type": "CompletionHandlerOptions"
-									}
-								]
-							},
-							{
-								"name": "handle_non_streaming_completion",
-								"kind": "function",
-								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 2 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
-								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { ...; } | { ...; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
-								"parameters": [
-									{
-										"name": "options",
-										"type": "CompletionHandlerOptions"
-									}
-								]
-							}
-						]
-					}
-				],
-				"dependencies": [
-					"action_collections.ts",
-					"provider_types.ts",
-					"response_helpers.ts",
-					"server/backend_provider.ts"
-				],
-				"dependents": ["server/create_zzz_app.ts"]
-			},
-			{
 				"path": "server/backend_provider.ts",
 				"declarations": [
 					{
 						"name": "CompletionHandler",
 						"kind": "type",
-						"source_line": 16,
+						"source_line": 12,
 						"type_signature": "CompletionHandler"
 					},
 					{
 						"name": "CompletionOptions",
 						"kind": "type",
-						"source_line": 21,
+						"source_line": 17,
 						"type_signature": "CompletionOptions",
 						"properties": [
 							{
@@ -14458,7 +12953,7 @@
 					{
 						"name": "CompletionHandlerOptions",
 						"kind": "type",
-						"source_line": 34,
+						"source_line": 30,
 						"type_signature": "CompletionHandlerOptions",
 						"properties": [
 							{
@@ -14504,13 +12999,13 @@
 					{
 						"name": "OnCompletionProgress",
 						"kind": "type",
-						"source_line": 55,
+						"source_line": 51,
 						"type_signature": "OnCompletionProgress"
 					},
 					{
 						"name": "BackendProviderRemoteOptions",
 						"kind": "type",
-						"source_line": 57,
+						"source_line": 53,
 						"type_signature": "BackendProviderRemoteOptions",
 						"properties": [
 							{
@@ -14524,7 +13019,7 @@
 						"name": "BackendProvider",
 						"kind": "class",
 						"doc_comment": "Base class for all backend AI providers.\nProvides shared functionality for completion handlers and logging.",
-						"source_line": 65,
+						"source_line": 61,
 						"generic_params": [
 							{
 								"name": "TClient",
@@ -14554,8 +13049,8 @@
 								"name": "handle_streaming_completion",
 								"kind": "function",
 								"modifiers": ["abstract"],
-								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 2 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
-								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { ...; } | { ...; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 1 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"claude\"; value: any; } | { type: \"chatgpt\"; value: any; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
 								"parameters": [
 									{
 										"name": "options",
@@ -14567,8 +13062,8 @@
 								"name": "handle_non_streaming_completion",
 								"kind": "function",
 								"modifiers": ["abstract"],
-								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 2 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
-								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { ...; } | { ...; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"type_signature": "(options: CompletionHandlerOptions): Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { ...; } | ... 1 more ... | { ...; }; }; _meta?: { ...; } | undefined; }>",
+								"return_type": "Promise<{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"claude\"; value: any; } | { type: \"chatgpt\"; value: any; } | { ...; }; }; _meta?: { ...; } | undefined; }>",
 								"parameters": [
 									{
 										"name": "options",
@@ -14727,7 +13222,7 @@
 						"name": "BackendProviderRemote",
 						"kind": "class",
 						"doc_comment": "Base class for remote API-based providers (Claude, ChatGPT, Gemini).\nHandles API key management and provides default error handling for missing keys.",
-						"source_line": 144,
+						"source_line": 140,
 						"extends": ["BackendProvider<TClient>"],
 						"implements": [],
 						"generic_params": [
@@ -14788,43 +13283,13 @@
 								]
 							}
 						]
-					},
-					{
-						"name": "BackendProviderLocal",
-						"kind": "class",
-						"doc_comment": "Base class for locally-installed providers (Ollama).\nHandles installation checking and provides default error handling for missing installations.",
-						"source_line": 190,
-						"extends": ["BackendProvider<TClient>"],
-						"implements": [],
-						"generic_params": [
-							{
-								"name": "TClient",
-								"default_type": "unknown"
-							}
-						],
-						"members": [
-							{
-								"name": "constructor",
-								"kind": "constructor",
-								"type_signature": "<TClient = unknown>(): BackendProviderLocal<TClient>",
-								"parameters": []
-							},
-							{
-								"name": "get_client",
-								"kind": "function",
-								"type_signature": "(): TClient",
-								"return_type": "TClient",
-								"parameters": []
-							}
-						]
 					}
 				],
 				"dependencies": ["provider_types.ts", "zzz_jsonrpc_errors.ts"],
 				"dependents": [
 					"server/backend_provider_chatgpt.ts",
 					"server/backend_provider_claude.ts",
-					"server/backend_provider_gemini.ts",
-					"server/backend_provider_ollama.ts"
+					"server/backend_provider_gemini.ts"
 				]
 			},
 			{
@@ -15016,14 +13481,14 @@
 						"name": "FilerChangeHandler",
 						"kind": "type",
 						"doc_comment": "Function type for handling file system changes.",
-						"source_line": 43,
+						"source_line": 41,
 						"type_signature": "FilerChangeHandler"
 					},
 					{
 						"name": "FilerInstance",
 						"kind": "type",
 						"doc_comment": "Structure to hold a Filer and its cleanup function.",
-						"source_line": 54,
+						"source_line": 52,
 						"type_signature": "FilerInstance",
 						"properties": [
 							{
@@ -15041,7 +13506,7 @@
 					{
 						"name": "BackendOptions",
 						"kind": "type",
-						"source_line": 59,
+						"source_line": 57,
 						"type_signature": "BackendOptions",
 						"properties": [
 							{
@@ -15092,7 +13557,7 @@
 						"name": "Backend",
 						"kind": "class",
 						"doc_comment": "Server for managing the Zzz application state and handling client messages.",
-						"source_line": 96,
+						"source_line": 94,
 						"extends": [],
 						"implements": ["ActionEventEnvironment"],
 						"members": [
@@ -15329,7 +13794,7 @@
 						"name": "CreateZzzAppOptions",
 						"kind": "type",
 						"doc_comment": "Options for creating a zzz app.",
-						"source_line": 65,
+						"source_line": 64,
 						"type_signature": "CreateZzzAppOptions",
 						"properties": [
 							{
@@ -15386,7 +13851,7 @@
 						"name": "ZzzApp",
 						"kind": "type",
 						"doc_comment": "The created zzz app and related instances.",
-						"source_line": 146,
+						"source_line": 145,
 						"type_signature": "ZzzApp",
 						"properties": [
 							{
@@ -15443,7 +13908,7 @@
 						"name": "create_zzz_app",
 						"kind": "function",
 						"doc_comment": "Create the zzz Hono app with auth, database, Backend, providers, and endpoints.\n\nThis is the shared factory called by the server entry point.\nUses `create_app_backend` for database + auth, `create_app_server` for\nmiddleware assembly, and wires zzz's domain Backend through route deps.",
-						"source_line": 176,
+						"source_line": 175,
 						"type_signature": "(options: CreateZzzAppOptions): Promise<ZzzApp>",
 						"return_type": "Promise<ZzzApp>",
 						"parameters": [
@@ -15463,7 +13928,6 @@
 					"server/backend_provider_chatgpt.ts",
 					"server/backend_provider_claude.ts",
 					"server/backend_provider_gemini.ts",
-					"server/backend_provider_ollama.ts",
 					"server/db/zzz_schema.ts",
 					"server/security.ts",
 					"server/server_env.ts",
@@ -15500,16 +13964,16 @@
 						"name": "save_completion_response_to_disk",
 						"kind": "function",
 						"source_line": 11,
-						"type_signature": "(input: { completion_request: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; prompt: string; completion_messages?: { ...; }[] | undefined; }; _meta?: { ...; } | undefined; }, output: { ...; }, zzz_dir: string, scoped_fs: ScopedFs): Promise<...>",
+						"type_signature": "(input: { completion_request: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; prompt: string; completion_messages?: { [x: string]: unknown; role: string; content: string; }[] | undefined; }; _meta?: { ...; } | undefined; }, output: { ...; }, zzz_dir: string, scoped_fs: ScopedFs): Promise<...>",
 						"return_type": "Promise<void>",
 						"parameters": [
 							{
 								"name": "input",
-								"type": "{ completion_request: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; prompt: string; completion_messages?: { ...; }[] | undefined; }; _meta?: { ...; } | undefined; }"
+								"type": "{ completion_request: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; prompt: string; completion_messages?: { [x: string]: unknown; role: string; content: string; }[] | undefined; }; _meta?: { ...; } | undefined; }"
 							},
 							{
 								"name": "output",
-								"type": "{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"ollama\"; value: any; } | { ...; } | { ...; } | { ...; }; }; _meta?: { ...; } | undefined; }"
+								"type": "{ completion_response: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; data: { type: \"claude\"; value: any; } | { type: \"chatgpt\"; value: any; } | { ...; }; }; _meta?: { ...; } | undefined; }"
 							},
 							{
 								"name": "zzz_dir",
@@ -16683,7 +15147,7 @@
 						"name": "get_action_handler",
 						"kind": "function",
 						"doc_comment": "Look up a handler in the typed map by method name.\n\nCentralizes the unavoidable string-key → typed-handler cast that both\ntransports (`zzz_rpc_actions.ts`, `register_websocket_actions.ts`) need.\nReturns `undefined` for methods the factory doesn't produce — e.g.,\nfuz_app's `cancel` (handler lives in `protocol_actions`) or\nnotification specs (no request_response handler).",
-						"source_line": 39,
+						"source_line": 38,
 						"type_signature": "(handlers: BackendActionHandlers, method: string): ActionHandler | undefined",
 						"return_type": "ActionHandler | undefined",
 						"parameters": [
@@ -16701,7 +15165,7 @@
 						"name": "create_zzz_action_handlers",
 						"kind": "function",
 						"doc_comment": "Build the 23 request_response handlers bound to a zzz `Backend`.\n\nLogic sourced from the RPC versions (cleaner than the old WS handlers —\nno Deno-only bug in provider_update_api_key, no console.log noise).",
-						"source_line": 53,
+						"source_line": 52,
 						"type_signature": "(backend: Backend): BackendActionHandlers",
 						"return_type": "BackendActionHandlers",
 						"parameters": [
@@ -18247,7 +16711,7 @@
 								"name": "add_user_turn",
 								"kind": "function",
 								"doc_comment": "Create and add a user turn with the given content.",
-								"type_signature": "(content: string, request?: { created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; prompt: string; completion_messages?: { ...; }[] | undefined; } | undefined): Turn",
+								"type_signature": "(content: string, request?: { created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; prompt: string; completion_messages?: { [x: string]: unknown; role: string; content: string; }[] | undefined; } | undefined): Turn",
 								"return_type": "Turn",
 								"parameters": [
 									{
@@ -18256,7 +16720,7 @@
 									},
 									{
 										"name": "request",
-										"type": "{ created: string & $brand<\"Datetime\">; provider_name: \"ollama\" | \"claude\" | \"chatgpt\" | \"gemini\"; model: string; prompt: string; completion_messages?: { [x: string]: unknown; role: string; content: string; }[] | undefined; } | undefined",
+										"type": "{ created: string & $brand<\"Datetime\">; provider_name: \"claude\" | \"chatgpt\" | \"gemini\"; model: string; prompt: string; completion_messages?: { [x: string]: unknown; role: string; content: string; }[] | undefined; } | undefined",
 										"optional": true
 									}
 								]
@@ -18765,8 +17229,6 @@
 				"dependents": [
 					"CapabilityWebsocket.svelte",
 					"DiskfileHistoryView.svelte",
-					"OllamaActionItem.svelte",
-					"OllamaModelDetail.svelte",
 					"SocketMessageQueue.svelte",
 					"TimeWidget.svelte",
 					"cell.svelte.ts",
@@ -19006,7 +17468,7 @@
 						"name": "TurnJsonInput",
 						"kind": "type",
 						"source_line": 21,
-						"type_signature": "{ role: string; id?: string | undefined; created?: string | undefined; updated?: string | undefined; part_ids?: string[] | undefined; thread_id?: string | null | undefined; request?: { provider_name: \"ollama\" | ... 2 more ... | \"gemini\"; model: string; prompt: string; created?: string | undefined; completion_message..."
+						"type_signature": "{ role: string; id?: string | undefined; created?: string | undefined; updated?: string | undefined; part_ids?: string[] | undefined; thread_id?: string | null | undefined; request?: { provider_name: \"claude\" | ... 1 more ... | \"gemini\"; model: string; prompt: string; created?: string | undefined; completion_message..."
 					},
 					{
 						"name": "TurnSchema",

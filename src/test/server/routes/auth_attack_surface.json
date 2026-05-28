@@ -452,7 +452,7 @@
 				"request_context",
 				"bearer_auth"
 			],
-			"description": "JSON-RPC 2.0 endpoint — 51 methods",
+			"description": "JSON-RPC 2.0 endpoint — 43 methods",
 			"is_mutation": true,
 			"transaction": false,
 			"rate_limit_key": null,
@@ -495,7 +495,7 @@
 				"request_context",
 				"bearer_auth"
 			],
-			"description": "JSON-RPC 2.0 endpoint (cacheable reads) — 51 methods",
+			"description": "JSON-RPC 2.0 endpoint (cacheable reads) — 43 methods",
 			"is_mutation": false,
 			"transaction": false,
 			"rate_limit_key": null,
@@ -755,10 +755,7 @@
 										"format": "date-time",
 										"pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
 									},
-									"provider_name": {
-										"type": "string",
-										"enum": ["ollama", "claude", "chatgpt", "gemini"]
-									},
+									"provider_name": {"type": "string", "enum": ["claude", "chatgpt", "gemini"]},
 									"model": {"type": "string"},
 									"prompt": {"type": "string"},
 									"completion_messages": {
@@ -800,19 +797,10 @@
 										"format": "date-time",
 										"pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
 									},
-									"provider_name": {
-										"type": "string",
-										"enum": ["ollama", "claude", "chatgpt", "gemini"]
-									},
+									"provider_name": {"type": "string", "enum": ["claude", "chatgpt", "gemini"]},
 									"model": {"type": "string"},
 									"data": {
 										"oneOf": [
-											{
-												"type": "object",
-												"properties": {"type": {"type": "string", "const": "ollama"}, "value": {}},
-												"required": ["type", "value"],
-												"additionalProperties": false
-											},
 											{
 												"type": "object",
 												"properties": {"type": {"type": "string", "const": "claude"}, "value": {}},
@@ -875,299 +863,12 @@
 					"rate_limit_key": null
 				},
 				{
-					"name": "ollama_list",
-					"auth": {"account": "required", "actor": "none"},
-					"input_schema": null,
-					"output_schema": {
-						"anyOf": [
-							{
-								"type": "object",
-								"properties": {
-									"models": {
-										"type": "array",
-										"items": {
-											"type": "object",
-											"properties": {
-												"details": {
-													"type": "object",
-													"properties": {
-														"families": {"type": "array", "items": {"type": "string"}},
-														"family": {"type": "string"},
-														"format": {"type": "string"},
-														"parameter_size": {"type": "string"},
-														"parent_model": {"type": "string"},
-														"quantization_level": {"type": "string"}
-													},
-													"required": [
-														"families",
-														"family",
-														"format",
-														"parameter_size",
-														"parent_model",
-														"quantization_level"
-													],
-													"additionalProperties": {}
-												},
-												"digest": {"type": "string"},
-												"model": {"type": "string"},
-												"modified_at": {"type": "string"},
-												"name": {"type": "string"},
-												"size": {"type": "number"}
-											},
-											"required": ["digest", "model", "modified_at", "name", "size"],
-											"additionalProperties": {}
-										}
-									}
-								},
-								"required": ["models"],
-								"additionalProperties": {}
-							},
-							{"type": "null"}
-						]
-					},
-					"side_effects": false,
-					"description": "List all locally available Ollama models.",
-					"rate_limit_key": null
-				},
-				{
-					"name": "ollama_ps",
-					"auth": {"account": "required", "actor": "none"},
-					"input_schema": null,
-					"output_schema": {
-						"anyOf": [
-							{
-								"type": "object",
-								"properties": {
-									"models": {
-										"type": "array",
-										"items": {
-											"type": "object",
-											"properties": {
-												"details": {
-													"type": "object",
-													"properties": {
-														"families": {"type": "array", "items": {"type": "string"}},
-														"family": {"type": "string"},
-														"format": {"type": "string"},
-														"parameter_size": {"type": "string"},
-														"parent_model": {"type": "string"},
-														"quantization_level": {"type": "string"}
-													},
-													"required": [
-														"families",
-														"family",
-														"format",
-														"parameter_size",
-														"parent_model",
-														"quantization_level"
-													],
-													"additionalProperties": {}
-												},
-												"digest": {"type": "string"},
-												"expires_at": {"type": "string"},
-												"model": {"type": "string"},
-												"name": {"type": "string"},
-												"size": {"type": "number"},
-												"size_vram": {"type": "number"}
-											},
-											"required": ["digest", "expires_at", "model", "name", "size", "size_vram"],
-											"additionalProperties": {}
-										}
-									}
-								},
-								"required": ["models"],
-								"additionalProperties": {}
-							},
-							{"type": "null"}
-						]
-					},
-					"side_effects": false,
-					"description": "List currently running Ollama models.",
-					"rate_limit_key": null
-				},
-				{
-					"name": "ollama_show",
-					"auth": {"account": "required", "actor": "none"},
-					"input_schema": {
-						"type": "object",
-						"properties": {
-							"model": {"type": "string"},
-							"system": {"type": "string"},
-							"template": {"type": "string"},
-							"options": {}
-						},
-						"required": ["model"],
-						"additionalProperties": {}
-					},
-					"output_schema": {
-						"anyOf": [
-							{
-								"type": "object",
-								"properties": {
-									"capabilities": {"type": "array", "items": {"type": "string"}},
-									"details": {
-										"type": "object",
-										"properties": {
-											"families": {"type": "array", "items": {"type": "string"}},
-											"family": {"type": "string"},
-											"format": {"type": "string"},
-											"parameter_size": {"type": "string"},
-											"parent_model": {"type": "string"},
-											"quantization_level": {"type": "string"}
-										},
-										"required": [
-											"families",
-											"family",
-											"format",
-											"parameter_size",
-											"parent_model",
-											"quantization_level"
-										],
-										"additionalProperties": {}
-									},
-									"license": {"type": "string"},
-									"model_info": {},
-									"modelfile": {"type": "string"},
-									"modified_at": {"type": "string"},
-									"template": {"type": "string"},
-									"tensors": {"type": "array", "items": {}}
-								},
-								"additionalProperties": {}
-							},
-							{"type": "null"}
-						]
-					},
-					"side_effects": false,
-					"description": "Show detailed information about an Ollama model.",
-					"rate_limit_key": null
-				},
-				{
-					"name": "ollama_pull",
-					"auth": {"account": "required", "actor": "none"},
-					"input_schema": {
-						"type": "object",
-						"properties": {
-							"model": {"type": "string"},
-							"insecure": {"type": "boolean"},
-							"stream": {"type": "boolean"},
-							"_meta": {
-								"type": "object",
-								"properties": {
-									"progressToken": {
-										"type": "string",
-										"format": "uuid",
-										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-									}
-								},
-								"additionalProperties": {}
-							}
-						},
-						"required": ["model"],
-						"additionalProperties": false
-					},
-					"output_schema": null,
-					"side_effects": true,
-					"description": "Pull an Ollama model from the registry.",
-					"rate_limit_key": null
-				},
-				{
-					"name": "ollama_delete",
-					"auth": {"account": "required", "actor": "none"},
-					"input_schema": {
-						"type": "object",
-						"properties": {"model": {"type": "string"}},
-						"required": ["model"],
-						"additionalProperties": {}
-					},
-					"output_schema": null,
-					"side_effects": true,
-					"description": "Delete an Ollama model from local storage.",
-					"rate_limit_key": null
-				},
-				{
-					"name": "ollama_copy",
-					"auth": {"account": "required", "actor": "none"},
-					"input_schema": {
-						"type": "object",
-						"properties": {"source": {"type": "string"}, "destination": {"type": "string"}},
-						"required": ["source", "destination"],
-						"additionalProperties": {}
-					},
-					"output_schema": null,
-					"side_effects": true,
-					"description": "Copy an Ollama model under a new name.",
-					"rate_limit_key": null
-				},
-				{
-					"name": "ollama_create",
-					"auth": {"account": "required", "actor": "none"},
-					"input_schema": {
-						"type": "object",
-						"properties": {
-							"model": {"type": "string"},
-							"from": {"type": "string"},
-							"stream": {"type": "boolean"},
-							"quantize": {"type": "string"},
-							"template": {"type": "string"},
-							"license": {
-								"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]
-							},
-							"system": {"type": "string"},
-							"parameters": {
-								"type": "object",
-								"propertyNames": {"type": "string"},
-								"additionalProperties": {}
-							},
-							"messages": {"type": "array", "items": {}},
-							"adapters": {
-								"type": "object",
-								"propertyNames": {"type": "string"},
-								"additionalProperties": {"type": "string"}
-							},
-							"_meta": {
-								"type": "object",
-								"properties": {
-									"progressToken": {
-										"type": "string",
-										"format": "uuid",
-										"pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-									}
-								},
-								"additionalProperties": {}
-							}
-						},
-						"required": ["model"],
-						"additionalProperties": false
-					},
-					"output_schema": null,
-					"side_effects": true,
-					"description": "Create a new Ollama model from a Modelfile.",
-					"rate_limit_key": null
-				},
-				{
-					"name": "ollama_unload",
-					"auth": {"account": "required", "actor": "none"},
-					"input_schema": {
-						"type": "object",
-						"properties": {"model": {"type": "string"}},
-						"required": ["model"],
-						"additionalProperties": false
-					},
-					"output_schema": null,
-					"side_effects": true,
-					"description": "Unload an Ollama model from memory.",
-					"rate_limit_key": null
-				},
-				{
 					"name": "provider_load_status",
 					"auth": {"account": "required", "actor": "none"},
 					"input_schema": {
 						"type": "object",
 						"properties": {
-							"provider_name": {
-								"type": "string",
-								"enum": ["ollama", "claude", "chatgpt", "gemini"]
-							},
+							"provider_name": {"type": "string", "enum": ["claude", "chatgpt", "gemini"]},
 							"reload": {"type": "boolean"}
 						},
 						"required": ["provider_name"],
@@ -1220,10 +921,7 @@
 					"input_schema": {
 						"type": "object",
 						"properties": {
-							"provider_name": {
-								"type": "string",
-								"enum": ["ollama", "claude", "chatgpt", "gemini"]
-							},
+							"provider_name": {"type": "string", "enum": ["claude", "chatgpt", "gemini"]},
 							"api_key": {"type": "string"},
 							"acting": {
 								"description": "Actor on the authenticated account that this request acts as. Omit on single-actor accounts; required on multi-actor.",

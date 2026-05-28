@@ -41,7 +41,7 @@ export const completion_create_action_spec = {
 
 - **Request-scoped** (`ctx.notify(method, params)` from a handler) — delivered
   only to the originating socket. Used for progress streams tied to an
-  in-flight request (`completion_progress`, `ollama_progress`). Specs that use
+  in-flight request (`completion_progress`). Specs that use
   this pattern set `streams: '<notification_method>'` to name the companion
   notification.
 - **Broadcast** (`backend.api.<method>(input)`) — fanned out to all connected
@@ -172,16 +172,7 @@ MCP-compatible subset, no batching:
 | `directory_create`        | `request_response`    | `frontend` | Create a directory              |
 | `completion_create`       | `request_response`    | `frontend` | Start AI completion             |
 | `completion_progress`     | `remote_notification` | `backend`  | Stream completion chunks        |
-| `ollama_progress`         | `remote_notification` | `backend`  | Model operation progress        |
 | `toggle_main_menu`        | `local_call`          | `frontend` | Toggle main menu UI             |
-| `ollama_list`             | `request_response`    | `frontend` | List local models               |
-| `ollama_ps`               | `request_response`    | `frontend` | List running models             |
-| `ollama_show`             | `request_response`    | `frontend` | Show model details              |
-| `ollama_pull`             | `request_response`    | `frontend` | Pull model                      |
-| `ollama_delete`           | `request_response`    | `frontend` | Delete model                    |
-| `ollama_copy`             | `request_response`    | `frontend` | Copy model                      |
-| `ollama_create`           | `request_response`    | `frontend` | Create model                    |
-| `ollama_unload`           | `request_response`    | `frontend` | Unload model from memory        |
 | `provider_load_status`    | `request_response`    | `frontend` | Check provider availability     |
 | `provider_update_api_key` | `request_response`    | `frontend` | Update provider API key         |
 
@@ -428,7 +419,7 @@ Backend provider iterates chunks from SDK
               → UI re-renders incrementally
 ```
 
-Streaming progress (`completion_progress`, `ollama_progress`) is
+Streaming progress (`completion_progress`) is
 **socket-scoped** — it routes only to the client that initiated the request,
 never broadcast. On HTTP transport `ctx.notify` is a no-op (with a DEV warn).
 `backend.api.*` is reserved for genuine broadcasts (`filer_change`,
@@ -453,7 +444,7 @@ class IndexedCollection<T extends IndexedItem> {
 | Type      | Cardinality           | Example                            |
 | --------- | --------------------- | ---------------------------------- |
 | `single`  | One key → one item    | `by('name', 'gpt-5')`              |
-| `multi`   | One key → many items  | `where('provider_name', 'ollama')` |
+| `multi`   | One key → many items  | `where('provider_name', 'claude')` |
 | `derived` | Computed sorted array | `derived_index('ordered_by_name')` |
 | `dynamic` | Runtime-computed      | Custom queries                     |
 
@@ -484,7 +475,7 @@ const items = new IndexedCollection<Model>({
 
 // Query
 items.by('name', 'gpt-5'); // single → Model | undefined
-items.where('provider_name', 'ollama'); // multi → Array<Model>
+items.where('provider_name', 'claude'); // multi → Array<Model>
 items.derived_index('ordered_by_name'); // derived → Array<Model>
 ```
 

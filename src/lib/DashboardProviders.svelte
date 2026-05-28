@@ -57,10 +57,6 @@
 									<ProviderLogo name={model.provider_name} />
 									<span>{model.name}</span>
 								</div>
-								{#if model.provider_name === 'ollama'}<Glyph
-										glyph={model.downloaded ? GLYPH_CHECKMARK : ' '}
-										title={model.downloaded ? 'downloaded' : 'not downloaded'}
-									/>{/if}
 							</ModelLink>
 						</li>
 					{/each}

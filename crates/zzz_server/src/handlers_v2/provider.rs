@@ -76,10 +76,6 @@ pub async fn provider_update_api_key(
     let provider_name = ProviderName::parse(name_str)
         .ok_or_else(|| rpc::invalid_params(&format!("unknown provider: {name_str}")))?;
 
-    if provider_name == ProviderName::Ollama {
-        return Err(rpc::invalid_params("Ollama does not require an API key"));
-    }
-
     let api_key = params
         .get("api_key")
         .and_then(Value::as_str)

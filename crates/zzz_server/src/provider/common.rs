@@ -3,10 +3,8 @@
 //! `build_completion_response` wraps a provider's final payload in the
 //! discriminated-union envelope the frontend expects.
 //! `build_text_progress_chunk` produces the uniform streaming-chunk shape
-//! `{message: {role, content}}` that the three text-streaming providers
-//! emit on every delta. Ollama passes its raw NDJSON chunks through
-//! directly (they already match the wire schema), so the helper isn't
-//! used there.
+//! `{message: {role, content}}` that the text-streaming providers emit on
+//! every delta.
 
 use fuz_http::JsonrpcError;
 use reqwest::header::HeaderMap;
@@ -35,8 +33,7 @@ pub fn build_completion_response(provider_name: &str, model: &str, data_value: &
 /// Uniform streaming-chunk shape for text-only providers.
 ///
 /// Matches the TS `CompletionProgressInput.chunk` schema's text-delta
-/// shape: `{message: {role: 'assistant', content}}`. Ollama emits its
-/// own chunk shape (with `done`, `created_at`, etc.) and bypasses this.
+/// shape: `{message: {role: 'assistant', content}}`.
 pub fn build_text_progress_chunk(content: &str) -> Value {
     json!({
         "message": {
@@ -58,8 +55,8 @@ pub fn build_client_with_headers(headers: HeaderMap) -> reqwest::Client {
 /// Pass `response` through on success; on non-2xx, read the body, run
 /// `parse_api_error` over it, and return a provider-tagged JSON-RPC
 /// error. Each provider's wire format for errors differs (Anthropic,
-/// `OpenAI`, Gemini wrap under `error.message`; Ollama uses a plain
-/// `error` string), so the parser is supplied per call.
+/// `OpenAI`, Gemini wrap under `error.message`), so the parser is supplied
+/// per call.
 pub async fn check_response_status<F>(
     response: reqwest::Response,
     provider_name: &str,
@@ -99,7 +96,7 @@ mod tests {
 
     #[test]
     fn completion_response_data_type_matches_provider_name() {
-        for name in ["claude", "chatgpt", "gemini", "ollama"] {
+        for name in ["claude", "chatgpt", "gemini"] {
             let value = build_completion_response(name, "m", &Value::Null);
             assert_eq!(value["completion_response"]["provider_name"], name);
             assert_eq!(value["completion_response"]["data"]["type"], name);

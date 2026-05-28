@@ -13,7 +13,6 @@ import type {
 } from '@fuzdev/fuz_app/actions/action_event_types.js';
 import {ActionPeer} from '@fuzdev/fuz_app/actions/action_peer.js';
 
-import type {BackendProviderOllama} from './backend_provider_ollama.js';
 import type {BackendProviderGemini} from './backend_provider_gemini.js';
 import type {BackendProviderChatgpt} from './backend_provider_chatgpt.js';
 import type {BackendProviderClaude} from './backend_provider_claude.js';
@@ -31,7 +30,6 @@ import type {BackendProvider} from './backend_provider.js';
 
 // TODO refactor for extensibility
 interface BackendProviders {
-	ollama: BackendProviderOllama;
 	gemini: BackendProviderGemini;
 	chatgpt: BackendProviderChatgpt;
 	claude: BackendProviderClaude;

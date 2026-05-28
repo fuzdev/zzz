@@ -20,7 +20,6 @@ import {CellRegistry} from './cell_registry.svelte.js';
 import {Prompts} from './prompts.svelte.js';
 import {Parts} from './parts.svelte.js';
 import {Time} from './time.svelte.js';
-import {Ollama} from './ollama.svelte.js';
 import {Spaces} from './spaces.svelte.js';
 import {Workspaces} from './workspaces.svelte.js';
 import type {ZzzOptions} from './config_helpers.js';
@@ -105,7 +104,6 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly actions: Actions;
 	readonly socket: Socket;
 	readonly capabilities: Capabilities;
-	readonly ollama: Ollama;
 	readonly spaces: Spaces;
 	readonly workspaces: Workspaces;
 
@@ -205,7 +203,6 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.actions = new Actions({app: this});
 		this.socket = new Socket({app: this});
 		this.capabilities = new Capabilities({app: this});
-		this.ollama = new Ollama({app: this});
 		this.spaces = new Spaces({app: this});
 		this.workspaces = new Workspaces({app: this});
 

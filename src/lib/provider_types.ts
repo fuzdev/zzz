@@ -1,16 +1,10 @@
 import {z} from 'zod';
 
 /** See `app.providers.names` for the available names at runtime. */
-export const ProviderName = z.enum(['ollama', 'claude', 'chatgpt', 'gemini']);
+export const ProviderName = z.enum(['claude', 'chatgpt', 'gemini']);
 export type ProviderName = z.infer<typeof ProviderName>;
 
 // Provider-specific data schemas
-export const ProviderDataOllama = z.strictObject({
-	type: z.literal('ollama'),
-	value: z.any().optional().default({}),
-});
-export type ProviderDataOllama = z.infer<typeof ProviderDataOllama>;
-
 export const ProviderDataClaude = z.strictObject({
 	type: z.literal('claude'),
 	value: z.any().optional().default({}),
@@ -36,7 +30,6 @@ export const ProviderDataGemini = z.strictObject({
 export type ProviderDataGemini = z.infer<typeof ProviderDataGemini>;
 
 export const ProviderDataSchema = z.discriminatedUnion('type', [
-	ProviderDataOllama,
 	ProviderDataClaude,
 	ProviderDataChatgpt,
 	ProviderDataGemini,
@@ -44,7 +37,6 @@ export const ProviderDataSchema = z.discriminatedUnion('type', [
 export type ProviderData = z.infer<typeof ProviderDataSchema>;
 
 export const PROVIDER_ERROR_NEEDS_API_KEY = 'needs API key';
-export const PROVIDER_ERROR_NOT_INSTALLED = 'not installed';
 
 export const ProviderStatus = z.discriminatedUnion('available', [
 	z.strictObject({

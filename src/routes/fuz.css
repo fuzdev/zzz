@@ -1489,9 +1489,6 @@ a.chip {
 .p_xl3 {
 	padding: var(--space_xl3);
 }
-.pt_0 {
-	padding-top: 0;
-}
 .pt_md {
 	padding-top: var(--space_md);
 }
@@ -1685,9 +1682,6 @@ a.chip {
 .ml_auto {
 	margin-left: auto;
 }
-.ml_xs3 {
-	margin-left: var(--space_xs3);
-}
 .ml_xs2 {
 	margin-left: var(--space_xs2);
 }
@@ -1870,9 +1864,6 @@ a.chip {
 }
 .text-align\:right {
 	text-align: right;
-}
-.text-align\:start {
-	text-align: start;
 }
 .transform\:scaleX\(-1\) {
 	transform: scaleX(-1);

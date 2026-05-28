@@ -22,7 +22,6 @@ import {ENV_FILE} from './constants.js';
 import {to_serializable_disknode} from '../diskfile_helpers.js';
 import {SerializableDisknode} from '../diskfile_types.js';
 import {jsonrpc_errors} from '../zzz_jsonrpc_errors.js';
-import type {OllamaListResponse, OllamaPsResponse, OllamaShowResponse} from '../ollama_helpers.js';
 import type {ActionOutputs} from '../action_collections.js';
 import type {BackendRequestResponseMethod} from '../action_metatypes.js';
 import type {BackendActionHandlers} from './backend_action_types.js';
@@ -183,151 +182,6 @@ export const create_zzz_action_handlers = (backend: Backend): BackendActionHandl
 		return result;
 	},
 
-	ollama_list: async () => {
-		try {
-			return (await backend
-				.lookup_provider('ollama')
-				.get_client()
-				.list()) as unknown as OllamaListResponse;
-		} catch (error) {
-			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.ai_provider_error(
-				'ollama',
-				error instanceof Error ? error.message : 'unknown error',
-			);
-		}
-	},
-
-	ollama_ps: async () => {
-		try {
-			return (await backend
-				.lookup_provider('ollama')
-				.get_client()
-				.ps()) as unknown as OllamaPsResponse;
-		} catch (error) {
-			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.ai_provider_error(
-				'ollama',
-				error instanceof Error ? error.message : 'unknown error',
-			);
-		}
-	},
-
-	ollama_show: async (input) => {
-		try {
-			return (await backend
-				.lookup_provider('ollama')
-				.get_client()
-				.show(input)) as unknown as OllamaShowResponse;
-		} catch (error) {
-			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.ai_provider_error(
-				'ollama',
-				error instanceof Error ? error.message : 'unknown error',
-			);
-		}
-	},
-
-	ollama_pull: async (input, ctx) => {
-		const {_meta, ...params} = input;
-		try {
-			const response = await backend
-				.lookup_provider('ollama')
-				.get_client()
-				.pull({...params, stream: true});
-
-			for await (const progress of response) {
-				if (ctx.signal.aborted) break;
-				ctx.notify('ollama_progress', {
-					status: progress.status,
-					digest: progress.digest,
-					total: progress.total,
-					completed: progress.completed,
-					_meta: {progressToken: _meta?.progressToken},
-				});
-			}
-
-			return null;
-		} catch (error) {
-			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.ai_provider_error(
-				'ollama',
-				error instanceof Error ? error.message : 'unknown error',
-			);
-		}
-	},
-
-	ollama_delete: async (input) => {
-		try {
-			await backend.lookup_provider('ollama').get_client().delete(input);
-			return null;
-		} catch (error) {
-			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.ai_provider_error(
-				'ollama',
-				error instanceof Error ? error.message : 'unknown error',
-			);
-		}
-	},
-
-	ollama_copy: async (input) => {
-		try {
-			await backend.lookup_provider('ollama').get_client().copy(input);
-			return null;
-		} catch (error) {
-			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.ai_provider_error(
-				'ollama',
-				error instanceof Error ? error.message : 'unknown error',
-			);
-		}
-	},
-
-	ollama_create: async (input, ctx) => {
-		const {_meta, ...params} = input;
-		try {
-			const response = await backend
-				.lookup_provider('ollama')
-				.get_client()
-				.create({...params, stream: true});
-
-			for await (const progress of response) {
-				if (ctx.signal.aborted) break;
-				ctx.notify('ollama_progress', {
-					status: progress.status,
-					digest: progress.digest,
-					total: progress.total,
-					completed: progress.completed,
-					_meta: {progressToken: _meta?.progressToken},
-				});
-			}
-
-			return null;
-		} catch (error) {
-			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.ai_provider_error(
-				'ollama',
-				error instanceof Error ? error.message : 'unknown error',
-			);
-		}
-	},
-
-	ollama_unload: async (input) => {
-		try {
-			await backend
-				.lookup_provider('ollama')
-				.get_client()
-				.generate({model: input.model, prompt: '', keep_alive: 0});
-			return null;
-		} catch (error) {
-			if (error instanceof ThrownJsonrpcError) throw error;
-			throw jsonrpc_errors.ai_provider_error(
-				'ollama',
-				error instanceof Error ? error.message : 'unknown error',
-			);
-		}
-	},
-
 	provider_load_status: async (input) => {
 		const {provider_name, reload} = input;
 		const provider = backend.lookup_provider(provider_name);
@@ -339,10 +193,6 @@ export const create_zzz_action_handlers = (backend: Backend): BackendActionHandl
 		// `acting` is required on the input schema (keeper bucket invariant) but is
 		// resolved by fuz_app's authorization phase before this handler runs.
 		const {provider_name, api_key} = input;
-
-		if (provider_name === 'ollama') {
-			throw jsonrpc_errors.invalid_params('Ollama does not require an API key');
-		}
 
 		const env_var_map: Record<string, string> = {
 			claude: 'SECRET_ANTHROPIC_API_KEY',

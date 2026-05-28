@@ -3,8 +3,8 @@
  *
  * The cross-backend matrix doesn't wire real provider integrations (no
  * keeper provider API keys in the test binaries). This file covers what
- * is portable today — invalid-provider rejection plus a smoke RPC against
- * the Ollama provider, which the test binaries stub as unavailable.
+ * is portable today — a smoke RPC against a registered-but-unconfigured
+ * provider, which both backends reject for lack of an API key.
  *
  * @module
  */
@@ -36,7 +36,7 @@ describe('completion cross-backend', () => {
 			params: {
 				completion_request: {
 					created: new Date().toISOString(),
-					provider_name: 'ollama',
+					provider_name: 'gemini',
 					model: 'nonexistent_model_zzz_cross',
 					prompt: 'cross-backend completion smoke test',
 				},
@@ -44,13 +44,13 @@ describe('completion cross-backend', () => {
 			headers: fixture.create_session_headers(),
 		});
 		assert.ok(!res.ok, `expected error, got ${JSON.stringify(res)}`);
-		// `ollama` is a registered provider, so an unconfigured/unreachable
-		// instance surfaces as `ai_provider_error` (-32020); an unregistered
-		// provider would surface as internal-error (-32603) or invalid-params
-		// (-32602). Any of the three is a valid rejection — every code in the
-		// JSON-RPC spec range means "not a successful completion", and the
-		// exact code is environment-dependent (whether an ollama daemon is
-		// reachable) and identical across all three TS runtimes.
+		// `gemini` is a registered provider, so an unconfigured instance
+		// (no API key in the cross-process suite) surfaces as
+		// `ai_provider_error` (-32020); an unregistered provider would surface
+		// as internal-error (-32603) or invalid-params (-32602). Any of the
+		// three is a valid rejection — every code in the JSON-RPC spec range
+		// means "not a successful completion", and the exact code is
+		// environment-dependent and identical across all three TS runtimes.
 		assert.ok(
 			res.error.code === -32603 || res.error.code === -32602 || res.error.code === -32020,
 			`unexpected error code: ${res.error.code} (${res.error.message})`,

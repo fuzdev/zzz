@@ -6,16 +6,9 @@ Integration guide for AI providers and adding new ones.
 
 | Provider | Type | Class | SDK | API Key Env |
 |----------|------|-------|-----|-------------|
-| Ollama | Local | `BackendProviderOllama` | `ollama` | None required |
 | Claude | Remote (BYOK) | `BackendProviderClaude` | `@anthropic-ai/sdk` | `SECRET_ANTHROPIC_API_KEY` |
 | ChatGPT | Remote (BYOK) | `BackendProviderChatgpt` | `openai` | `SECRET_OPENAI_API_KEY` |
 | Gemini | Remote (BYOK) | `BackendProviderGemini` | `@google/generative-ai` | `SECRET_GOOGLE_API_KEY` |
-
-### Ollama (Local)
-
-No API key. Auto-detects available models. Model management UI at `/providers/ollama`.
-
-Setup: Install Ollama, run `ollama serve`, zzz auto-detects.
 
 ### Remote Providers (Claude, ChatGPT, Gemini)
 
@@ -30,18 +23,6 @@ SECRET_GOOGLE_API_KEY=AIza...
 ## Default Models
 
 Defined in `src/lib/config_defaults.ts` (`models_default`):
-
-### Ollama
-
-| Model | Tags |
-|-------|------|
-| `gemma3n:e2b`, `gemma3n:e4b` | small |
-| `gemma3:1b`, `gemma3:4b` | small |
-| `qwen3:0.6b`, `qwen3:1.7b`, `qwen3:4b`, `qwen3:8b` | small / (none) |
-| `deepseek-r1:1.5b`, `deepseek-r1:7b`, `deepseek-r1:8b` | reasoning |
-| `llama3.2:1b`, `llama3.2:3b` | small |
-| `phi4-mini:3.8b` | (none) |
-| `smollm2:135m`, `smollm2:360m`, `smollm2:1.7b` | small |
 
 ### Claude (Anthropic)
 
@@ -70,7 +51,7 @@ Defined in `src/lib/config_defaults.ts` (`models_default`):
 
 ### Chat Templates
 
-Pre-configured model groups in `config_defaults.ts` (`chat_template_defaults`): `frontier`, `cheap frontier`, `local 3-4b`, `local 1-2b`, `local <1b`, `local gemmas`, `quick test`.
+Pre-configured model groups in `config_defaults.ts` (`chat_template_defaults`): `frontier`, `cheap frontier`, `quick test`.
 
 ## Provider Architecture
 
@@ -78,8 +59,6 @@ Pre-configured model groups in `config_defaults.ts` (`chat_template_defaults`): 
 
 ```
 BackendProvider<TClient>              (backend_provider.ts)
-├── BackendProviderLocal<TClient>     (for locally-installed services)
-│   └── BackendProviderOllama         (backend_provider_ollama.ts)
 └── BackendProviderRemote<TClient>    (for API-based services, manages API keys)
     ├── BackendProviderClaude         (backend_provider_claude.ts)
     ├── BackendProviderChatgpt        (backend_provider_chatgpt.ts)
@@ -122,10 +101,6 @@ abstract class BackendProvider<TClient = unknown> {
 ### BackendProviderRemote
 
 Adds API key management. `set_api_key()` recreates the client. Returns error status if no key configured.
-
-### BackendProviderLocal
-
-Creates client on construction. `load_status()` checks if the service is available locally.
 
 ### CompletionHandlerOptions
 
@@ -244,15 +219,10 @@ User sends message
               → Return CompletionResult
 ```
 
-`ollama_pull` and `ollama_create` use the same pattern inline: they call
-`ctx.notify('ollama_progress', ...)` directly from the handler loop and
-check `ctx.signal.aborted` to terminate early on socket close.
-
-`completion_create` cooperates with `ctx.signal` too. The handler threads
+`completion_create` cooperates with `ctx.signal`. The handler threads
 `signal` into `CompletionHandlerOptions`; each provider forwards it to its
 SDK — Anthropic/OpenAI/Gemini accept `{signal}` as the second arg on their
-request methods, and Ollama (no native signal support) falls back to the
-`if (signal?.aborted) break;` pattern inside the streaming for-await.
+request methods.
 Post-abort SDK throws are translated to `request_cancelled` at the handler
 boundary — discriminated by `ctx.signal.aborted`, not error shape, since
 each SDK throws a different abort type. `Thread.cancel_pending()` fires
@@ -275,7 +245,6 @@ const status = await provider.load_status();
 ```
 
 Remote providers: `available` = `true` when API key is set and client created.
-Local providers (Ollama): `available` = `true` when service responds.
 
 ## Adding a New Provider
 

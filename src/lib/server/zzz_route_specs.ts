@@ -89,9 +89,6 @@ export const build_rpc_endpoint_specs = (
 ): Array<RpcEndpointSpec> => [
 	{
 		path: '/api/rpc',
-		actions: [
-			...create_zzz_rpc_actions(zzz_deps),
-			...create_standard_rpc_actions(ctx.deps),
-		],
+		actions: [...create_zzz_rpc_actions(zzz_deps), ...create_standard_rpc_actions(ctx.deps)],
 	},
 ];

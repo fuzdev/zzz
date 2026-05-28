@@ -19,8 +19,6 @@ export const to_completion_response_text = (
 	const {data} = completion_response;
 
 	switch (data.type) {
-		case 'ollama':
-			return data.value?.message?.content || null;
 		case 'claude':
 			return data.value?.content?.[0]?.text || null;
 		case 'chatgpt':
@@ -47,12 +45,6 @@ export const to_completion_result = (
 
 	// Convert provider-specific response format to our standard format
 	switch (provider_name) {
-		case 'ollama':
-			provider_data = {
-				type: 'ollama',
-				value: api_response,
-			};
-			break;
 		case 'claude':
 			provider_data = {
 				type: 'claude',
