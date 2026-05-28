@@ -82,6 +82,11 @@ pub struct ExtraActionSpecsRuntime {
     /// rotation is wired (always true on test binaries). `_testing_reset`
     /// refreshes `keeper_account_id` here after re-seeding.
     pub daemon_token_state: Option<fuz_auth::SharedDaemonTokenState>,
+    /// Per-app session cookie name (default
+    /// [`fuz_auth::SESSION_COOKIE_NAME`]) — `_testing_reset` signs the
+    /// seeded keeper's cookie under this so the harness jars it under the
+    /// same name the live server reads.
+    pub session_cookie_name: &'static str,
 }
 
 /// Factory that constructs extra action specs to fold into the
@@ -116,9 +121,9 @@ pub type ExtraActionSpecsFactory = Box<
 pub type PreMigrationHook = Box<
     dyn FnOnce(
             &fuz_db::Pool,
-        )
-            -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), ServerError>> + Send + '_>>
-        + Send,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<(), ServerError>> + Send + '_>,
+        > + Send,
 >;
 
 /// Options for [`run_app`].
@@ -280,13 +285,12 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // `role_grant_offer_action_specs.ts:211..228`. Always-on (no env
     // gate); the production cap sits far above the cross-backend test
     // suite's request volume.
-    let action_account_rate_limiter: Option<Arc<fuz_auth::RateLimiter>> =
-        Some(Arc::new(fuz_auth::RateLimiter::new(
-            fuz_auth::RateLimiterOptions {
-                max_attempts: 1200,
-                window_ms: 15 * 60_000,
-            },
-        )));
+    let action_account_rate_limiter: Option<Arc<fuz_auth::RateLimiter>> = Some(Arc::new(
+        fuz_auth::RateLimiter::new(fuz_auth::RateLimiterOptions {
+            max_attempts: 1200,
+            window_ms: 15 * 60_000,
+        }),
+    ));
     // IP-axis action limiter unwired today — TS shape `rate_limit: 'account'`
     // doesn't gate on IP. Leave `None`; lift to a real limiter when a
     // consumer files a need (e.g. a deployment fronted by a CDN where
@@ -369,6 +373,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         login_ip_rate_limiter,
         login_account_rate_limiter,
         daemon_token_state: spine_daemon_token.clone(),
+        session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
     };
     let bootstrap_route_state = fuz_auth::BootstrapRouteState {
         options: Arc::new(fuz_auth::BootstrapOptions {
@@ -391,6 +396,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         }),
         keyring: Arc::clone(&spine_keyring),
         allowed_origins: Arc::clone(&spine_allowed_origins),
+        session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
     };
 
     // Signup route: mounted on the production server so the
@@ -418,6 +424,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         }),
         keyring: Arc::clone(&spine_keyring),
         allowed_origins: Arc::clone(&spine_allowed_origins),
+        session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
     };
 
     let app_state = Arc::new(handlers::App::new(
@@ -492,6 +499,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             password_hasher: Arc::clone(&spine_password_hasher),
             keyring: Arc::clone(&spine_keyring),
             daemon_token_state: spine_daemon_token.clone(),
+            session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
         };
         all_specs.extend(factory(Arc::clone(&app_state), runtime));
     }
@@ -593,6 +601,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         registry: registry_for_rpc,
         audit: Arc::clone(&spine_audit_emitter),
         socket_revoker: Arc::clone(&socket_revoker),
+        session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
     };
     let spine_rpc_router = fuz_actions::create_rpc_router(spine_rpc_state).layer(
         axum::middleware::from_fn_with_state(
@@ -613,6 +622,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         audit: Arc::clone(&spine_audit_emitter),
         socket_revoker: Arc::clone(&socket_revoker),
         connection_registry: Arc::clone(&realtime),
+        session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
     };
     let spine_ws_router = fuz_actions::register_action_ws(spine_ws_state).layer(
         axum::middleware::from_fn_with_state(
@@ -868,7 +878,6 @@ fn parse_config(default_port: u16) -> Result<Config, ServerError> {
         trusted_proxies,
     })
 }
-
 
 // -- Shutdown -----------------------------------------------------------------
 

@@ -51,8 +51,9 @@ const TESTING_DEFAULT_PORT: u16 = 1175;
 async fn main() {
     // Non-blocking stdout logging so a stalled stdout consumer can't starve
     // the async runtime. `_log_guard` must stay live for the whole process.
-    let _log_guard =
-        fuz_common::logging::init_non_blocking_stdout("info,zzz_server=info,testing_zzz_server=info");
+    let _log_guard = fuz_common::logging::init_non_blocking_stdout(
+        "info,zzz_server=info,testing_zzz_server=info",
+    );
 
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(TestingArgon2idHasher::new());
 
@@ -120,6 +121,7 @@ async fn main() {
             password_hasher: runtime.password_hasher,
             keyring: runtime.keyring,
             daemon_token_state,
+            session_cookie_name: runtime.session_cookie_name,
             reset_state: Some(reset_state),
         })]
     });
