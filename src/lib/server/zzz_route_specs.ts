@@ -65,7 +65,6 @@ export const create_zzz_app_route_specs = (
 			session_options: ctx.session_options,
 			ip_rate_limiter: ctx.ip_rate_limiter,
 			signup_account_rate_limiter: ctx.signup_account_rate_limiter,
-			app_settings: ctx.app_settings,
 		}),
 	]),
 	create_account_status_route_spec({bootstrap_status: ctx.bootstrap_status}),
@@ -80,10 +79,9 @@ export const create_zzz_app_route_specs = (
 /**
  * Build the `/api/rpc` endpoint spec(s) for `create_app_server`.
  *
- * Pass to `rpc_endpoints` as a factory — closes over `ctx.deps` +
- * `ctx.app_settings` for the standard admin + role-grant-offer + account
- * action set. `create_app_server` auto-mounts each entry via
- * `create_rpc_endpoint`.
+ * Pass to `rpc_endpoints` as a factory — closes over `ctx.deps` for the
+ * standard admin + role-grant-offer + account action set.
+ * `create_app_server` auto-mounts each entry via `create_rpc_endpoint`.
  */
 export const build_rpc_endpoint_specs = (
 	ctx: AppServerContext,
@@ -93,7 +91,7 @@ export const build_rpc_endpoint_specs = (
 		path: '/api/rpc',
 		actions: [
 			...create_zzz_rpc_actions(zzz_deps),
-			...create_standard_rpc_actions(ctx.deps, {app_settings: ctx.app_settings}),
+			...create_standard_rpc_actions(ctx.deps),
 		],
 	},
 ];

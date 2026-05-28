@@ -151,7 +151,7 @@ accounts through this production endpoint.)
 
 build_rpc_endpoint_specs(ctx, zzz_deps) → /api/rpc
     ├── zzz domain actions (create_zzz_action_handlers(backend))
-    └── create_standard_rpc_actions(ctx.deps, {app_settings})
+    └── create_standard_rpc_actions(ctx.deps)
         — admin (account list, sessions, audit log, invites, app settings)
         — role-grant-offer lifecycle (create / accept / decline / retract / list / history)
         — account self-service (verify, sessions, tokens)
