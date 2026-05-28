@@ -15,15 +15,21 @@ removal.
 - `zzz/` — Rust CLI scaffold (argh, stubs only).
 
 AI provider system feature-complete for Anthropic; OpenAI /
-Gemini / Ollama stubs ship status only. Spine consumption
-underway — spine path deps (`fuz_db`, `fuz_auth`, `fuz_http`,
-`fuz_realtime`, `fuz_actions`) and the `JsonrpcError` rename are in;
-additive `App` spine fields, `ActionRegistry` compiled at boot
-with 23 specs, and four handler modules migrated to `handlers_v2/`;
-`/api/rpc/v2` mounted as a parallel route; admin + account migration
-resolved by letting fuz_auth's `auth_adapter::build_{account,admin}_specs`
-cover the zzz surface verbatim (no new handlers_v2 modules). Legacy
-`/api/rpc` + `/api/ws` still serve live dispatch unchanged. 25 RPC methods:
+Gemini / Ollama stubs ship status only. Spine consumption is
+complete — the spine crates (`fuz_db`, `fuz_auth`, `fuz_http`,
+`fuz_realtime`, `fuz_actions`) own auth, HTTP, realtime, and the
+boot-compiled `ActionRegistry` dispatch path. A single canonical
+`/api/rpc` + `/api/ws` (mounted via `fuz_actions::create_rpc_router` /
+`register_action_ws`) serves all dispatch; admin + account specs come
+from fuz_auth's `auth_adapter::build_auth_spec_set`, the zzz-specific
+workspace / filesystem / terminal / provider specs from
+`zzz_action_specs/` (handlers in `handlers_v2/`), and the admin audit-log
+SSE stream from `fuz_realtime::audit_stream_router`. The legacy in-house
+dispatch surface (`Ctx` / `dispatch` / per-domain `handlers/*` / `auth/` /
+`account/` / `db/` / `bootstrap.rs` / `audit/` / `rate_limiter.rs` /
+`proxy.rs` / `api_token.rs` / `daemon_token.rs` / `perform_action.rs` /
+`ws.rs`) was retired; `handlers/` now holds only `App` state plus a few
+`broadcast` / `close_sockets_for_*` shims over `App.realtime`. 25 RPC methods:
 `ping`, `session_load`, `workspace_*`, `diskfile_*`, `directory_create`,
 `terminal_*`, `provider_load_status`, `provider_update_api_key`,
 `completion_create`, `account_verify`, `account_session_list`,
@@ -124,6 +130,7 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 | POST   | `/api/account/logout`             | Invalidate session, close WS connections |
 | POST   | `/api/account/password`           | Change password, revoke all sessions/tokens |
 | GET    | `/api/ws`                         | JSON-RPC 2.0 (WebSocket, cookie/bearer/daemon) |
+| GET    | `/api/admin/audit/stream`         | Admin-gated audit-log SSE stream (`text/event-stream`) |
 | GET    | `/health`                         | Health check (`{"status":"ok"}`)         |
 | GET    | `/*`                              | Static files (if `--static-dir`)         |
 
@@ -418,193 +425,100 @@ described was deleted in cross-process lift §3d.9.
 
 ```
 crates/zzz_server/src/
-├── main.rs          # Entry, config, DB/keyring/daemon-token init, route setup, graceful shutdown
-├── handlers/        # Per-domain RPC handlers + App state + dispatch (legacy `&Ctx` signature, live `/api/rpc` + `/api/ws` dispatch path)
-│   ├── mod.rs       # App (state + `realtime` + `action_registry`), Ctx, dispatch, ping, session_load, _testing_emit_notifications
-│   ├── account.rs   # account_verify, account_session_*, account_token_*
+├── lib.rs            # `run_app(RunAppOptions)` — full lifecycle: env/config, DB pool + migrations, spine state construction (keyring, daemon token, audit emitter, connection + SSE registries, rate limiters), `ActionRegistry::compile`, file watchers, route composition, graceful shutdown
+├── main.rs           # Thin production entry — constructs `Argon2idHasher`, calls `run_app`
+├── handlers/
+│   └── mod.rs        # `App` long-lived state (workspaces, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `ProviderManager`, `realtime`, `action_registry` OnceLock) + the `broadcast` / `close_sockets_for_*` shims over `App.realtime`
+├── handlers_v2/      # zzz-specific spine-signature handlers (`(Value, ActionContext<'_>, Arc<App>)`), registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`
+│   ├── mod.rs
+│   ├── core.rs       # ping, session_load, _testing_emit_notifications
 │   ├── filesystem.rs # diskfile_update, diskfile_delete, directory_create
-│   ├── provider.rs  # provider_load_status, provider_update_api_key, completion_create
-│   ├── terminal.rs  # terminal_create, terminal_data_send, terminal_resize, terminal_close
-│   └── workspace.rs # workspace_list, workspace_open, workspace_close (+ workspace_changed broadcast)
-├── handlers_v2/     # Spine-signature handlers (`(Value, ActionContext<'_>, Arc<App>)`). Registered into `App.action_registry` via `zzz_action_specs::build_*_specs`; served on `/api/rpc/v2`. Migrated: workspace, filesystem, terminal, provider/load_status + provider/update_api_key. Deferred: completion_create (notify reshape pending). Admin + account: NOT migrated to handlers_v2 — `fuz_auth`'s `auth_adapter::build_{account,admin}_specs` cover the surface verbatim (the legacy `handlers/{admin,account}.rs` files are line-for-line ports of fuz_auth's canonical handlers, so a parallel handlers_v2 module would re-implement the same logic for later deletion).
+│   ├── provider.rs   # provider_load_status, provider_update_api_key, completion_create
+│   ├── terminal.rs   # terminal_create, terminal_data_send, terminal_resize, terminal_close
+│   └── workspace.rs  # workspace_list, workspace_open, workspace_close (+ workspace_changed broadcast)
+├── zzz_action_specs/ # Per-domain `ActionSpec` builders consumed by `run_app`'s `ActionRegistry::compile`; each captures `Arc<App>` and calls the matching `handlers_v2::*` fn
 │   ├── mod.rs
+│   ├── core.rs
 │   ├── filesystem.rs
 │   ├── provider.rs
 │   ├── terminal.rs
 │   └── workspace.rs
-├── zzz_action_specs/ # Per-domain `ActionSpec` builders consumed by main.rs's `ActionRegistry::compile(...)`. Each builder takes `Arc<App>` and emits closures that call the corresponding `handlers_v2::*` function.
-│   ├── mod.rs
-│   ├── filesystem.rs
-│   ├── provider.rs
-│   ├── terminal.rs
-│   └── workspace.rs
-├── rpc.rs           # JSON-RPC classify + notification builder, HTTP handler with auth pipeline
-├── ws.rs            # WebSocket upgrade with auth, connection tracking, select! message loop
-├── perform_action.rs # Transport-agnostic dispatch core shared by HTTP RPC + WS (mirrors fuz_app/src/lib/actions/perform_action.ts)
-├── audit/           # Audit emission + listeners
-│   ├── mod.rs       # AuditEmitter (pool-write + listener chain), AuditLogEvent / AuditLogInput
-│   └── listeners.rs # register() — translates audit events into WS socket revocation
-├── auth/            # Auth surface
-│   ├── mod.rs       # AuthError, RequestContext, build_request_context (+ pub use submodules)
-│   ├── keyring.rs   # Keyring (HMAC sign/verify), session-cookie parsing, hash_session_token
-│   ├── resolve.rs   # ResolvedAuth, cookie/bearer/daemon-token resolution pipeline
-│   └── spec.rs      # ActionAuth / CredentialType / MethodSpec, check_action_auth, method_spec, origin allowlist, REST credential gate (`enforce_session_only`)
-├── rate_limiter.rs  # Sliding-window RateLimiter (per-IP + per-account on /login + /password); opt-in via ZZZ_LOGIN_RATE_LIMIT_ENABLED
-├── proxy.rs         # Trusted-proxy parsing (IPv4/IPv6/CIDR), strict-IP validation, right-to-left XFF resolution, `client_ip_middleware` (sets `ClientIp` on request extensions). Gated by ZZZ_TRUSTED_PROXIES (empty → TCP peer fallback).
-├── api_token.rs     # generate_api_token (raw token + tok_<12> public id + blake3 hash)
-├── daemon_token.rs  # Daemon token state, generation, timing-safe validation, rotation task
-├── account/         # Account REST routes
-│   ├── mod.rs       # Shared helpers (cookies, hashing, rate-limit responses), LoginInput / PasswordInput (+ pub use handlers)
-│   ├── status.rs    # GET /api/account/status
-│   ├── login.rs     # POST /api/account/login
-│   ├── logout.rs    # POST /api/account/logout
-│   └── password.rs  # POST /api/account/password
-├── bootstrap.rs     # POST /bootstrap handler (account + session creation)
-├── db/              # Per-domain query modules
-│   ├── mod.rs       # Pool creation + re-exports
-│   ├── migrations.rs # AUTH_DDL constant + run_migrations
-│   ├── account.rs   # AccountRow, AccountSummaryRow, password_hash queries
-│   ├── actor.rs     # ActorRow, RoleGrantRow, role_grant queries, keeper_account_id
-│   ├── api_token.rs # api_token CRUD (create, list, validate, revoke, enforce_limit)
-│   └── auth.rs      # auth_session queries (validate, touch, create, delete)
-├── filer.rs         # Filer + FilerManager (notify crate) — immediate file index updates, debounced filer_change broadcasts
-├── provider/        # AI provider system
-│   ├── mod.rs       # ProviderName, ProviderStatus, Provider enum, ProviderManager, CompletionOptions
-│   ├── anthropic.rs # AnthropicProvider — Messages API with SSE streaming
-│   ├── openai.rs    # OpenAiProvider stub (status only)
-│   ├── gemini.rs    # GeminiProvider stub (status only)
-│   └── ollama.rs    # OllamaProvider stub (status only)
-├── pty_manager.rs   # PTY terminal manager (fuz_pty crate) → terminal_data/exited notifications
-├── scoped_fs.rs     # Scoped filesystem — path validation, symlink rejection
-└── error.rs         # ServerError (Bind, Serve, Database, Config)
+├── rpc.rs            # JSON-RPC helpers — error constructors + the `notification` builder used by broadcast / send_to sites
+├── provider/         # AI provider system
+│   ├── mod.rs        # ProviderName, ProviderStatus, Provider enum, ProviderManager, CompletionOptions
+│   ├── anthropic.rs  # AnthropicProvider — Messages API with SSE streaming
+│   ├── common.rs     # shared provider helpers
+│   ├── sse.rs        # provider SSE parsing
+│   ├── ndjson.rs     # provider NDJSON parsing
+│   ├── openai.rs     # OpenAiProvider stub (status only)
+│   ├── gemini.rs     # GeminiProvider stub (status only)
+│   └── ollama.rs     # OllamaProvider stub (status only) — slated for removal
+├── filer.rs          # Filer + FilerManager (notify crate) — immediate file index updates, debounced filer_change broadcasts
+├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) → terminal_data/exited notifications
+├── scoped_fs.rs      # Scoped filesystem — path validation, symlink rejection
+└── error.rs          # ServerError (Bind, Serve, Database, Config)
 ```
 
-**App/Ctx/dispatch pattern**: `App` holds long-lived server state (workspaces
-in `RwLock<HashMap>`, `deadpool_postgres::Pool`, `Keyring`, origin config,
-`ScopedFs`, `zzz_dir`, `scoped_dirs`, `PtyManager`, `DaemonTokenState`,
-connection tracking via `AtomicU64` + `RwLock<HashMap<ConnectionId,
-ConnectionInfo>>`, `FilerManager` with per-watcher ignore config, event
-debouncing, in-memory file index, and lifetime tracking (permanent for
-`zzz_dir`/`scoped_dirs`, workspace-scoped for `workspace_open`; deduplicates
-by path), plus spine-backed fields:
-`realtime: Arc<fuz_realtime::ConnectionRegistry>`, `audit_emitter:
-Arc<fuz_auth::AuditEmitter>` (transactional in-tx shape — distinct
-from the legacy spawn-and-await `audit`), `action_registry:
-OnceLock<Arc<fuz_actions::ActionRegistry>>` (OnceLock because spec
-builders capture `Arc<App>`), `account_route_state`,
-`bootstrap_route_state`, `spine_keyring`, `spine_daemon_token`,
-`spine_allowed_origins`, `spine_trusted_proxies`. The spine fields
-are additive — `#[allow(dead_code)]` until later Batch 5 sub-batches
-mount the spine routes and retire the legacy duplicates), constructed
-once in `main`, wrapped in `Arc`. `Ctx` is
-per-request context (borrows `App` + holds `Arc<App>` for spawning tasks,
-`request_id`, `auth: Option<&RequestContext>`, `notify: NotifyFn` for
-request-scoped JSON-RPC notifications — socket-scoped on WS via `app.send_to`,
-debug no-op on HTTP, mirrors TS `ctx.notify`; `signal: CancellationToken`
-for cancellation — per-socket on WS cancelled on disconnect, fresh per-request
-on HTTP, mirrors TS `ctx.signal`), constructed by each transport before
-calling `handlers::dispatch`.
+Auth, HTTP / origin / proxy, realtime (WS + SSE), dispatch (`ActionRegistry`
++ `perform_action`), and DB pool / migrations all live in the spine crates
+(`fuz_auth` / `fuz_http` / `fuz_realtime` / `fuz_actions` / `fuz_db`) —
+`zzz_server` composes them in `run_app`. The legacy in-house `auth/`,
+`account/`, `db/`, `audit/`, `bootstrap.rs`, `rate_limiter.rs`, `proxy.rs`,
+`api_token.rs`, `daemon_token.rs`, `perform_action.rs`, `ws.rs`, and
+per-domain `handlers/*` modules were retired.
 
-**Auth pipeline** (HTTP RPC path):
-1. Origin verification (if `Origin` header present)
-2. Try daemon token auth: `X-Daemon-Token` → timing-safe validate → resolve keeper account
-3. If no daemon token: try cookie auth: `fuz_session` cookie → HMAC verify → blake3 hash → `auth_session` lookup
-4. If no cookie: try bearer auth: `Authorization: Bearer` → reject browser context → blake3 hash → `api_token` lookup
-5. Build `RequestContext` (account → actor → role grants) with `CredentialType`
-6. Check per-action auth level (keeper actions require `DaemonToken` credential type)
+**App + dispatch**: `App` (in `handlers/mod.rs`) holds zzz's long-lived,
+non-spine state — `workspaces` (`RwLock<HashMap>`), `db_pool`, `ScopedFs`,
+`zzz_dir`, `scoped_dirs`, `FilerManager` (per-watcher ignore config, event
+debouncing, in-memory file index, lifetime tracking — permanent for
+`zzz_dir`/`scoped_dirs`, workspace-scoped for `workspace_open`),
+`PtyManager`, `ProviderManager`, `completion_options`, `enable_test_actions`,
+the spine `realtime: Arc<fuz_realtime::ConnectionRegistry>`, and the
+boot-compiled `action_registry: OnceLock<Arc<fuz_actions::ActionRegistry>>`
+(OnceLock because the spec builders capture `Arc<App>`). Constructed once
+in `run_app`, wrapped in `Arc`. Auth keyring, daemon-token state, audit
+emitter, rate limiters, allowed-origins, and trusted-proxy config are spine
+types built in `run_app` and threaded into the spine route states
+(`fuz_auth::AccountRouteState` / `BootstrapRouteState` / `SignupRouteState`,
+`fuz_actions::RpcRouteState` / `WsRouteState`, and
+`fuz_realtime::AuditStreamRouteState`) — not fields on `App`.
 
-**Message classification** (`rpc::classify`) is transport-agnostic:
-- HTTP: origin check → auth → classify → `perform_action`
-- WS: upgrade auth (reject 401) → classify → `perform_action`
+**Dispatch + auth run in the spine.** A single `/api/rpc` (via
+`fuz_actions::create_rpc_router`) and `/api/ws` (via `register_action_ws`
+→ `fuz_realtime::run_ws_connection`) drive the `ActionRegistry`;
+`fuz_actions::perform_action` owns the spec lookup, per-action auth
+(credential + role gates — keeper actions require the `DaemonToken`
+credential type), the transactional `side_effects` wrap, and the
+post-commit pending-effects drain. Auth resolution (daemon-token → cookie →
+bearer), Origin verification, trusted-proxy client-IP resolution, and rate
+limiting are `fuz_auth` / `fuz_http` concerns. Account / bootstrap / signup
+REST routes come from fuz_auth's routers; the admin audit-log SSE stream
+from `fuz_realtime::audit_stream_router`.
 
-**Shared dispatch core** (`perform_action::perform_action`): each
-transport assembles a `PerformActionInput` (method, params, request_id,
-optional auth context, credential type, notify closure, signal) and
-calls `perform_action(input, &app)`. The function runs the spec lookup
-(`auth::method_spec`), per-action auth (`auth::check_action_auth` —
-credential + role gates), and `handlers::dispatch` (which routes
-`side_effects: true` through its internal `dispatch_with_tx`). Returns
-a discriminated `PerformActionResult` (`Ok(Value) | Err {error,
-status}`); HTTP binds the status directly, WS ignores it. Mirrors
-fuz_app's `actions/perform_action.ts` shape — the TS port additionally
-owns input validation, the authorization phase, rate limiting, and
-DEV-only output validation inside `perform_action`; those land on Rust
-as later phases. The REST sibling `auth::enforce_session_only` enforces
-the session-only credential channel for `POST /api/account/password`
-out of the same module that holds `check_action_auth` so the two
-gates can't drift silently.
+**Audit emission**: all audit rows go through the spine
+`fuz_auth::AuditEmitter` (`spine_audit_emitter`, built in `run_app`),
+shared by the account / bootstrap / signup routers and the RPC dispatch
+path. Two listener sets hang off its event chain, both registered in
+`run_app` after `Arc<App>` exists:
 
-**Audit emission**: `audit/mod.rs` houses `AuditEmitter`, the bound capability
-threaded onto `App.audit`. Every `audit.emit(input)` site spawns a
-fire-and-forget pool-write (via `tokio::spawn`) that returns a
-`JoinHandle<()>`. RPC handlers (account session/token mutations) push the
-handle onto `Ctx.pending_effects`; `perform_action` drains that queue
-before returning to the transport so audit rows are persistent by
-response time. REST handlers (`login`, `logout`, `password`, `bootstrap`)
-await the handle directly via `let _ = app.audit.emit(input).await` —
-the spawn-then-await shape (rather than inlining the write into the
-REST future) is **load-bearing for cancel-safety**: if the REST future
-is dropped mid-`.await` (client disconnect), the spawned task continues
-independently on the runtime and the audit row still lands. The
-discriminant is "where does the write run?" — detached task = survives
-cancellation; inline = dies with the dropped future. Don't refactor the
-sites back to a single inline `write_and_notify` future without a
-plan to preserve cancel-safety. The emit task INSERTs into `audit_log`
-via the captured pool (rollback-resilient — survives a tx rollback)
-and then fans the materialized `AuditLogEvent` out to every listener
-on `AuditEmitter.on_event_chain` (registered in
-`audit::listeners::register` after `App` is constructed). Pool failures
-and INSERT failures are logged at `warn` and swallowed — same fail-open
-posture as fuz_app.
+- `fuz_auth::register_socket_revocation_listeners` — the WS half: closes
+  matching WebSocket connections on `session_revoke` / `token_revoke`
+  (granular) and `session_revoke_all` / `token_revoke_all` /
+  `password_change` / `logout` (account-wide). Revocation-emitting handlers
+  also call `close_sockets_for_*` synchronously before emitting, so
+  revocation lands even if the audit INSERT later fails.
+- `fuz_realtime::register_audit_sse_listener` — the SSE half: fans every
+  audit row to the open `GET /api/admin/audit/stream` subscriptions as one
+  `data:` frame and closes an account's streams on the account-wide
+  revocation events.
 
-The listener chain currently translates audit events into WebSocket
-socket revocation. Mirrors fuz_app's `create_ws_auth_guard` +
-`create_ws_logout_closer`:
-
-- `session_revoke` (success) → `close_sockets_for_session(metadata.session_id)`
-- `token_revoke` (success) → `close_sockets_for_token(metadata.token_id)`
-- `session_revoke_all` / `token_revoke_all` / `password_change` / `logout`
-  (success) → `close_sockets_for_account(target_account_id ?? account_id)`
-
-Failure-outcome rows never trigger socket close — they carry
-attacker-controlled metadata (e.g. a `session_revoke` row records the
-caller-submitted `session_id` even if the DB rejected it), so reacting
-to them would let an authenticated user disconnect another user by
-guessing a session hash.
-
-**Credential-channel metadata contract**: every audit row emitted by
-the four credential-gated RPC methods (`account_session_revoke`,
-`account_session_revoke_all`, `account_token_create`,
-`account_token_revoke`) plus the REST `POST /api/account/password`
-handler records `metadata.credential_type` (`'session' | 'api_token' |
-'daemon_token'`). Mirrors fuz_app v0.63.0's defense-in-depth contract —
-the spec gate already restricts these to `Session` credentials, but
-forensics survive a future loosening or bypass because the row records
-what actually authenticated the request. See
-`fuz_app/docs/security.md` §Credential-channel gating.
-
-**Bootstrap audit emission**. `POST /api/account/bootstrap` writes an
-audit row on both legs (matches fuz_app's `bootstrap_routes.ts`).
-Success rows carry both `account_id` (new keeper account) and
-`actor_id` (new keeper actor), `metadata: null`. Failure rows carry
-`metadata: {error: <reason>}` matching
-`audit_metadata_schemas.bootstrap` (a `looseObject` with
-`error: string`); four failure shapes are emitted —
-`bootstrap_not_configured`, `already_bootstrapped` (fired at both the
-pre-check and post-lock double-check sites), `token_file_missing`,
-`invalid_token`. Bootstrap is pre-auth so no `credential_type` in
-metadata.
-
-**`password_change` `concurrent_change` row**. `db/account.rs`'s
-`query_update_password` is a conditional UPDATE keyed on
-`WHERE id = $2 AND password_hash = $3` returning `bool`. When the
-loser's UPDATE matches zero rows (a concurrent password change
-committed first against the same starting hash), the REST handler
-emits `password_change` failure with
-`metadata: {reason: 'concurrent_change', credential_type}` and
-returns 401 — same shape as fuz_app's
-`query_update_account_password` + loser-path emit. Wrong-password
-failures carry `metadata: {credential_type}` only (no `reason`).
+Failure-outcome rows never trigger socket / stream close — they carry
+caller-submitted metadata (e.g. a failed `session_revoke` records the
+submitted `session_id`), so reacting to them would let an authenticated
+user disconnect another by guessing an id. The credential-channel
+metadata contract, the bootstrap success/failure audit rows, and the
+`password_change` `concurrent_change` race row are all spine
+(`fuz_auth`) behaviors now — see fuz_app's `auth/` docs for their shapes.
 
 ## Known Issues
 
@@ -650,10 +564,10 @@ now produce identical JSON-RPC envelopes for all auth failures.
 - 5 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debounced broadcasts with immediate index updates, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast), `completion_progress` (streaming completion chunks to requesting WS connection)
 - AI providers: Anthropic fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable)
 - No batch request support (JSON arrays)
-- No Ollama actions (`ollama_list`, `ollama_ps`, etc.)
+- No Ollama actions (`ollama_list`, `ollama_ps`, etc.) — intentionally not ported to Rust; the Ollama provider + actions are slated for removal from zzz rather than reimplemented on this backend (the last cross-backend divergence before the TS backend is deleted)
 - `/api/account/signup` is mounted on both backends (Rust via `fuz_auth::signup_routes`, added 2026-05-19 in cross-backend-integration quest Phase 3b.2; Deno via `create_signup_route_specs`, added in cross-process 3d.4 Issue 5). Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting via `app_settings_update` to enable open signup. The cross-process test binary opts into `open_signup: true` at startup via `app_settings_patch` so per-test `mint_account` can sign up without invites. Rust `app_settings` is loaded per-request today; a cached `Arc<RwLock<AppSettings>>` shared with the future admin `app_settings_update` handler lands when that admin RPC moves to Rust.
 - No token management routes (GET /tokens, POST /tokens/create, etc.)
-- No SSE broadcast of audit events to admins — the in-process listener chain (`audit/`) only drives WebSocket socket revocation today; an SSE adapter mirroring fuz_app's `audit_log_sse` is future work
+- Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`, wired to the spine `AuditEmitter` via `fuz_realtime::register_audit_sse_listener` alongside the WS socket-revocation listeners. Byte-identical wire shape to fuz_app's `audit_log_sse`; the `sse.cross.test.ts` cross-backend suite verifies it on both backends. Close-on-revoke currently keys on the account-wide events (`session_revoke_all` / `token_revoke_all` / `password_change` / `logout`); a spine-level convergence question tracks aligning that set with fuz_app's TS guard
 - Login/password rate limiting is **opt-in via `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1`** (default off so existing integration tests don't trip the bucket). When enabled, per-IP (5 attempts / 15 min) + per-account (10 / 30 min) sliding windows fire on `/login` and `/password`; 429 carries `{error: 'rate_limit_exceeded', retry_after}` plus a `Retry-After` header. Per-IP key is the resolved client IP from `proxy::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when running behind a reverse proxy so the bucket keys on the originating client rather than the proxy
 
 ## Design Decisions
@@ -686,54 +600,33 @@ now produce identical JSON-RPC envelopes for all auth failures.
   `reqwest::Client` (internally `Arc`'d) and releases the lock before HTTP
   calls, so `set_api_key` is never blocked by long-running streaming responses.
   SSE parsing is manual with `\r\n` normalization per RFC 8895.
-- **Dispatcher transaction wrap**: `auth::method_side_effects` mirrors the
-  `side_effects` field on each action spec. `dispatch` routes
-  `side_effects: true` actions through `dispatch_with_tx`, which begins a
-  `tokio_postgres` transaction, hands `&tx` to handlers that touch the DB
-  (the four `account_session_revoke*` / `account_token_*` mutators today),
-  and commits on `Ok` or rolls back on `Err`. Mirrors `fuz_app`'s
-  `perform_action` `db.transaction` wrap so paired writes (e.g.
-  `account_token_create`'s `INSERT api_token` + `query_api_token_enforce_limit`)
-  commit atomically — two concurrent token creates can no longer both bypass
-  the per-account cap. Query helpers in `db/*.rs` take
-  `&(impl deadpool_postgres::GenericClient + ?Sized)` so the same function
-  works against a pooled `Object` (read-only path) or a `Transaction`
-  (side-effects path) without per-handler match wiring. Read-only actions
-  acquire a pooled client only when the matched handler needs one (`ping`,
-  `session_load`, `workspace_list`, `provider_load_status` don't touch the
-  pool at all).
+- **Dispatcher transaction wrap**: `fuz_actions::perform_action` wraps
+  `side_effects: true` actions in a `tokio_postgres` transaction (commit on
+  `Ok`, rollback on `Err`) and drains post-commit pending effects, so paired
+  writes commit atomically and read-only actions skip the pool entirely.
+  zzz's `handlers_v2` functions receive the `ActionContext` DB handle and
+  stay transaction-agnostic — the wrap is the spine's concern.
 
 ## What's Next
 
-**Rust Spine consumption**:
-- [x] Spine path deps wired (`fuz_db`, `fuz_auth`, `fuz_http`,
-  `fuz_realtime`, `fuz_actions`).
-- [x] `fuz_common::JsonRpcError` → `fuz_http::JsonrpcError` swap (17 files).
-- [x] Additive `App` spine fields + `SpineState`.
-- [x] `ActionRegistry::compile(...)` at boot — 23 specs
-  (`PROTOCOL_ACTION_SPECS` + `auth_adapter::build_account_specs` +
-  `auth_adapter::build_admin_specs` + zzz-specific workspace /
-  filesystem / terminal / provider).
-- [x] `handlers_v2/` + `zzz_action_specs/` module trees — 4 domains
-  on the new `(Value, ActionContext<'_>, Arc<App>)` signature.
-- [x] Mount `fuz_actions::create_rpc_router(...)` as a parallel
-  `/api/rpc/v2` route; legacy `/api/rpc` + `/api/ws` untouched.
-- [x] Admin + account: keep `fuz_auth`'s
-  `auth_adapter::build_{account,admin}_specs` as-is, do NOT create
-  `handlers_v2/{admin,account}.rs` (the 6 zzz handlers are verbatim
-  ports of fuz_auth's canonical handlers, so a duplicate module
-  would re-implement the same logic for later deletion). No new
-  handlers_v2 sites means zero zzz emit sites flip; the 14 sites in
-  `handlers/{admin,account}.rs` + `account/*` + `bootstrap.rs` stay
-  legacy until later cleanup retires them along with the rest of
-  the legacy dispatch path.
-- [ ] `completion_create` notify reshape + `ws.rs` collapse to
-  `fuz_realtime::run_ws_connection`.
-- [ ] Delete the legacy duplicates (`rate_limiter.rs`,
-  `account/`, `proxy.rs`, `auth/`, `api_token.rs`, `daemon_token.rs`,
-  `bootstrap.rs`, `db/`, `audit/`, `perform_action.rs`,
-  `handlers/admin.rs`, `handlers/account.rs`) once all consumers
-  route through the spine.
+**Rust Spine consumption — complete.** The spine crates (`fuz_db`,
+`fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`) own auth, HTTP,
+realtime, and dispatch. A single `/api/rpc` + `/api/ws` (via
+`fuz_actions::create_rpc_router` / `register_action_ws`) serves the
+boot-compiled `ActionRegistry`; account / bootstrap / signup REST come
+from fuz_auth's routers; the admin audit-log SSE stream
+(`GET /api/admin/audit/stream`) comes from
+`fuz_realtime::audit_stream_router` + `register_audit_sse_listener`. The
+legacy in-house dispatch path (`Ctx` / `dispatch` / per-domain
+`handlers/*` / `auth/` / `account/` / `db/` / `bootstrap.rs` / `audit/` /
+`rate_limiter.rs` / `proxy.rs` / `api_token.rs` / `daemon_token.rs` /
+`perform_action.rs` / `ws.rs`) was deleted — `handlers/` retains only
+`App` state + the `broadcast` / `close_sockets_for_*` shims over
+`App.realtime`.
+
+Remaining before the TS backend is deleted:
+- [ ] Retire the Ollama provider + actions from zzz (TS-only;
+  intentionally not ported to Rust) — the last cross-backend divergence.
 
 **AI providers** (Anthropic complete, others pending):
 - [x] Provider system: enum-dispatched `Provider` with `ProviderManager`, `ProviderStatus`, `CompletionOptions`
@@ -744,36 +637,13 @@ now produce identical JSON-RPC envelopes for all auth failures.
 - [x] `session_load` returns real provider status from all providers
 - [ ] OpenAI provider: full completion implementation
 - [ ] Gemini provider: full completion implementation
-- [ ] Ollama provider: HTTP client to local Ollama API, `ollama_list`, `ollama_ps`, etc.
+- [ ] Ollama provider + actions (`ollama_list`, `ollama_ps`, etc.): **not** ported to Rust — slated for removal from zzz rather than reimplemented here
 
 **Other remaining work**:
 1. Codegen from Zod specs (action input/output types)
 2. Token management routes (create, list, revoke API tokens)
-- [x] Trusted-proxy `get_client_ip` port (XFF + CIDR + strict-IP
-  validation). `proxy.rs` ports fuz_app's
-  `http/proxy.ts`; `client_ip_middleware` sets `ClientIp` on every
-  request via `from_fn_with_state`; consumer sites in `account/`,
-  `bootstrap.rs`, `handlers/account.rs` plumb `audit.ip` on all 11
-  emit sites and the rate-limit keys read the resolved value. Ten
-  integration tests in `proxy_tests.ts` (Rust-only) + 86 Rust unit
-  tests in `proxy.rs`. Review pass fixed three correctness issues
-  (IPv6 /0 host_mask overflow in `parse_proxy_entry`
-  (`1u128 << 128` UB — release would silently accept `fe80::/0`);
-  empty-XFF parity drift; missed audit emit on the bootstrap
-  post-lock verify-write race loser) and landed three security
-  hardenings: belt-and-suspenders WS revocation in
-  logout / password / session_revoke / token_revoke handlers (sync
-  `close_sockets_for_*` before audit emit so revocation lands on the
-  live WS even if the audit INSERT fails); IPv6 string
-  canonicalization in `normalize_ip` (round-trip through
-  `IpAddr::from_str` → `to_string()` so `::01` / `::1` / fully-
-  expanded forms collapse to one rate-limit / `audit_log.ip` key);
-  and login-username canonicalization at the boundary
-  (`trim().to_lowercase()` on `LoginInput.username` before DB lookup
-  + rate-limit key + audit metadata, mirroring fuz_app's
-  `login_routes.ts:369`; same canonicalization applied to
-  `bootstrap_inner` so stored `account.username` is the canonical
-  form a later login can find). Plus `is_request_origin_allowed`
-  centralized in `auth/spec.rs` and called from every REST + RPC + WS
-  handler (parity inversion: Rust drops the Referer fallback,
-  fuz_app tracks the convergence).
+- [x] Trusted-proxy client-IP resolution (XFF + CIDR + strict-IP
+  validation), Origin allowlist (Origin-only, no Referer fallback), and
+  login-username canonicalization — all now provided by the spine
+  (`fuz_http` proxy/origin + `fuz_auth`); zzz wires them via config
+  (`ZZZ_TRUSTED_PROXIES`, `FUZ_ALLOWED_ORIGINS`).
