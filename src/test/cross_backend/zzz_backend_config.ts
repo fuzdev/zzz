@@ -78,6 +78,7 @@
 
 import {join} from 'node:path';
 import type {BackendConfig} from '@fuzdev/fuz_app/testing/cross_backend/backend_config.js';
+import type {BackendCapabilities} from '@fuzdev/fuz_app/testing/cross_backend/capabilities.js';
 import {
 	build_test_backend_paths,
 	type TestBackendPaths,
@@ -85,6 +86,8 @@ import {
 import {
 	make_default_rust_backend_config,
 	make_default_ts_backend_config,
+	rust_default_capabilities,
+	ts_default_capabilities,
 } from '@fuzdev/fuz_app/testing/cross_backend/default_backend_configs.js';
 
 /**
@@ -95,6 +98,16 @@ import {
  * doc for the operator setup step.
  */
 const RUST_DATABASE_URL_PREFIX = 'postgres://localhost/zzz_test_';
+
+/**
+ * Both zzz backends serve `GET /api/admin/audit/stream` — the Rust backend
+ * via `fuz_realtime::audit_stream_router`, the TS backend via `create_zzz_app`'s
+ * `audit_log_sse: true`. Advertise `sse` so `describe_cross_process_sse_tests`
+ * runs (rather than skips) against each. The Rust+proxy project never includes
+ * `sse.cross.test.ts`, so its flag is inert there but stays honest.
+ */
+const ts_capabilities: BackendCapabilities = {...ts_default_capabilities, sse: true};
+const rust_capabilities: BackendCapabilities = {...rust_default_capabilities, sse: true};
 
 interface ZzzBackendPaths extends TestBackendPaths {
 	zzz_dir: string;
@@ -134,6 +147,7 @@ export const deno_backend_config = (): BackendConfig => {
 	return make_default_ts_backend_config({
 		name,
 		port: 11741,
+		capabilities: ts_capabilities,
 		start_command: [
 			'deno',
 			'run',
@@ -167,6 +181,7 @@ export const node_backend_config = (): BackendConfig => {
 	return make_default_ts_backend_config({
 		name,
 		port: 11742,
+		capabilities: ts_capabilities,
 		start_command: ['npx', 'gro', 'run', 'src/lib/server/testing_server_node.ts'],
 		paths,
 		extra_env: {
@@ -190,6 +205,7 @@ export const bun_backend_config = (): BackendConfig => {
 	return make_default_ts_backend_config({
 		name,
 		port: 11743,
+		capabilities: ts_capabilities,
 		start_command: ['bun', 'run', 'src/lib/server/testing_server_bun.ts'],
 		paths,
 		extra_env: {
@@ -227,6 +243,7 @@ const make_zzz_rust_backend_config = ({
 		database_url: `${RUST_DATABASE_URL_PREFIX}${name}`,
 		port_env_var: 'ZZZ_PORT',
 		rust_log: 'info,zzz_server=info,testing_zzz_server=info',
+		capabilities: rust_capabilities,
 		paths,
 		extra_env: {
 			PUBLIC_ZZZ_DIR: paths.zzz_dir,

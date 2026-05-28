@@ -304,6 +304,11 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // available.
     let realtime = Arc::new(fuz_realtime::ConnectionRegistry::new());
     let spine_audit_emitter = Arc::new(fuz_auth::AuditEmitter::new(pool.clone()));
+    // SSE half of the realtime surface — the registry of open
+    // `GET /api/admin/audit/stream` subscriptions. The audit listener wired
+    // alongside the socket-revocation listeners below fans every audit row to
+    // these streams and closes account-keyed streams on revocation.
+    let audit_sse = Arc::new(fuz_realtime::SseRegistry::new());
     let spine_keyring = Arc::new(
         fuz_auth::Keyring::new(&config.secret_cookie_keys).ok_or_else(|| {
             ServerError::Config(
@@ -460,6 +465,13 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // `close_sockets_for_*` a second time; the duplication is
     // intentional defense-in-depth.
     fuz_auth::register_socket_revocation_listeners(&spine_audit_emitter, &socket_revoker);
+
+    // SSE half of the audit fan-out — every audit row becomes one `data:`
+    // frame on each open `/api/admin/audit/stream` subscription, and a
+    // successful account-wide revocation drops that account's streams. Mirrors
+    // `fuz_app`'s `create_audit_log_sse`; the socket-revocation listeners above
+    // are the WS half.
+    fuz_realtime::register_audit_sse_listener(&spine_audit_emitter, &audit_sse);
 
     // Compile the spine action registry — must run after `Arc<App>` is
     // constructed because the zzz-specific spec builders capture
@@ -666,6 +678,25 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         ),
     );
 
+    // Spine audit-log SSE stream: `GET /api/admin/audit/stream` — the shared
+    // `fuz_realtime::audit_stream_router` (admin-gated, account-keyed close on
+    // revocation), wired to the `audit_sse` registry the listener above fans
+    // rows into. Carries its own `origin_layer` so the origin allowlist gates
+    // it like every other zzz handler; it resolves auth itself and writes no
+    // `audit_log.ip`, so no `client_ip` layer is needed.
+    let spine_audit_stream_router = fuz_realtime::audit_stream_router(
+        fuz_realtime::AuditStreamRouteState::new(
+            app_state.db_pool.clone(),
+            Arc::clone(&spine_keyring),
+            spine_daemon_token.clone(),
+            Arc::clone(&audit_sse),
+        ),
+    )
+    .layer(axum::middleware::from_fn_with_state(
+        Arc::clone(&spine_allowed_origins),
+        fuz_http::origin_layer,
+    ));
+
     let mut app = Router::new()
         .route("/health", get(health_handler))
         // Spine REST routers — account REST + bootstrap. The order of
@@ -681,7 +712,9 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         // nested routers carry their own state (`RpcRouteState` /
         // `WsRouteState`) + middleware stack.
         .nest("/api", spine_rpc_router)
-        .nest("/api", spine_ws_router);
+        .nest("/api", spine_ws_router)
+        // Admin-gated audit-log SSE stream — absolute path, so merge (not nest).
+        .merge(spine_audit_stream_router);
 
     if let Some(ref dir) = config.static_dir {
         tracing::info!(dir = %dir.display(), "serving static files");

@@ -55,7 +55,7 @@
 		"devDependencies": {
 			"@changesets/changelog-git": "^0.2.1",
 			"@electric-sql/pglite": "^0.4.5",
-			"@fuzdev/fuz_app": "^0.68.0",
+			"@fuzdev/fuz_app": "^0.71.1",
 			"@fuzdev/fuz_code": "^0.45.1",
 			"@fuzdev/fuz_css": "^0.59.0",
 			"@fuzdev/fuz_ui": "^0.192.0",
@@ -16776,8 +16776,8 @@
 					{
 						"name": "build_rpc_endpoint_specs",
 						"kind": "function",
-						"doc_comment": "Build the `/api/rpc` endpoint spec(s) for `create_app_server`.\n\nPass to `rpc_endpoints` as a factory — closes over `ctx.deps` +\n`ctx.app_settings` for the standard admin + role-grant-offer + account\naction set. `create_app_server` auto-mounts each entry via\n`create_rpc_endpoint`.",
-						"source_line": 88,
+						"doc_comment": "Build the `/api/rpc` endpoint spec(s) for `create_app_server`.\n\nPass to `rpc_endpoints` as a factory — closes over `ctx.deps` for the\nstandard admin + role-grant-offer + account action set.\n`create_app_server` auto-mounts each entry via `create_rpc_endpoint`.",
+						"source_line": 86,
 						"type_signature": "(ctx: AppServerContext, zzz_deps: ZzzRpcDeps): RpcEndpointSpec[]",
 						"return_type": "RpcEndpointSpec[]",
 						"parameters": [
