@@ -1,8 +1,12 @@
 # zzz Rust Backend
 
-Shadow implementation of the Deno/Hono server using axum. Same JSON-RPC 2.0
-protocol, same wire format — the Deno server is ground truth and the
-integration tests enforce identical behaviour between both backends.
+zzz's backend going forward, using axum. Same JSON-RPC 2.0 protocol and wire
+format as the legacy TS/Deno backend (`src/lib/server/`), which is retained
+only as the cross-backend parity reference until this Rust backend reaches
+full behavioral parity (remaining gaps: SSE broadcast of audit events, a few
+unported actions) — at which point the TS backend is removed. The integration
+tests enforce identical behaviour between the two backends, gating that
+removal.
 
 **Workspace layout**:
 - `zzz_server/` — library + production binary. `pub async fn run_app(options: RunAppOptions)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, drain). `RunAppOptions` carries: `password_hasher` (production-vs-test swap), `default_port`, `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag), and `extra_action_specs_factory` (lets the test binary inject `_testing_reset` without putting `fuz_testing` in the production dep graph). `src/main.rs` is the thin production entry — constructs `Argon2idHasher`, calls `run_app` with `force_test_actions: false, extra_action_specs_factory: None`.
@@ -628,9 +632,9 @@ failures carry `metadata: {credential_type}` only (no `reason`).
 
 ### Cross-Backend Response Divergences
 
-Tracked asymmetries between Deno (ground truth) and Rust backends. Bearer
-auth response format (issue #1) was resolved — both backends now produce
-identical JSON-RPC envelopes for all auth failures.
+Tracked asymmetries between the Rust backend and the legacy TS/Deno parity
+reference. Bearer auth response format (issue #1) was resolved — both backends
+now produce identical JSON-RPC envelopes for all auth failures.
 
 | Issue | Status | Detail |
 |-------|--------|--------|

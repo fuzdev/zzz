@@ -1,6 +1,6 @@
-# Server (Backend Reference Implementation)
+# Server (Legacy TS/Deno Backend — slated for removal)
 
-This directory contains Zzz's backend server - a **reference implementation** using Hono and Deno. A Rust backend (`crates/zzz_server`) is in development, validated by cross-process integration tests under `src/test/cross_backend/` that run the same assertions against both backends via a shared TS contract. See [crates/CLAUDE.md](../../../crates/CLAUDE.md).
+This directory contains Zzz's legacy backend server, using Hono and Deno. The Rust backend (`crates/zzz_server`) is zzz's backend going forward; this TS backend is **retained only as the cross-backend parity reference** until the Rust backend reaches full behavioral parity (remaining gaps: SSE broadcast of audit events, a few unported actions), after which it is deleted and zzz ships a single backend. Parity is enforced by cross-process integration tests under `src/test/cross_backend/` that run the same assertions against both backends via a shared TS contract. See [crates/CLAUDE.md](../../../crates/CLAUDE.md).
 
 ## Contents
 

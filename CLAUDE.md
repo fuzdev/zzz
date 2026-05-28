@@ -3,8 +3,16 @@
 > nice web things for the tired
 
 `@fuzdev/zzz` — local-first AI forge: chat + files + prompts + terminals in one app.
-SvelteKit frontend, Hono/Deno backend, Svelte 5 runes, Zod schemas.
-v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PGlite DB. 31 cell classes, 30 action specs, 4 AI providers.
+SvelteKit frontend (static SPA), Rust (Axum) backend, Svelte 5 runes, Zod schemas.
+v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PostgreSQL/PGlite DB. 31 cell classes, 30 action specs, 4 AI providers.
+
+zzz is going **Rust-only** on the backend: `crates/zzz_server` (Axum) is the
+backend going forward, and the legacy TypeScript/Deno/Hono backend under
+`src/lib/server/` is slated for removal once its remaining behavior (SSE,
+the few unported actions) lands in Rust. Until then the TS backend is
+retained solely as the cross-backend parity reference. The frontend is a
+prerendered static SPA served by the Rust backend — no JS runtime in
+production.
 
 For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
 
@@ -31,7 +39,11 @@ this repo — make the edits and stop, the user commits.
 
 ## Development Stage
 
-Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, daemon tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) still in-memory. The Hono/Deno backend is the reference implementation. The Rust backend (`crates/zzz_server`) is the Axum JSON-RPC server (full auth stack, filesystem, terminals, PostgreSQL, bootstrap, Anthropic provider with SSE streaming, audit emission with listener fan-out, trusted-proxy `client_ip` resolution, opt-in login rate limiting, Origin allowlist on every REST + RPC + WS handler) with cross-backend + Rust-only integration tests verifying parity, plus a cross-impl schema-parity gate (via fuz_app's `query_schema_snapshot` + `assert_schema_snapshots_equal`) that drop+recreates `zzz_test` between backends and fails on any DDL / migration-set / index / constraint / sequence drift between bootstraps. Spine consumption is underway: spine path deps wired (`fuz_db`, `fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`); `App` carries spine-backed fields; `fuz_actions::ActionRegistry` compiled at boot; spine-signature handlers (workspace, filesystem, terminal, provider — except `completion_create`) live in `handlers_v2/` on the new `(Value, ActionContext, Arc<App>)` signature. Live `/api/rpc` + `/api/ws` continue to serve legacy dispatch unchanged. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
+Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, daemon tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) still in-memory.
+
+The Rust backend (`crates/zzz_server`, Axum) is zzz's backend going forward — full auth stack, filesystem, terminals, PostgreSQL, bootstrap, Anthropic provider with SSE streaming, audit emission with listener fan-out, trusted-proxy `client_ip` resolution, opt-in login rate limiting, Origin allowlist on every REST + RPC + WS handler. Spine consumption is underway: spine path deps wired (`fuz_db`, `fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`); `App` carries spine-backed fields; `fuz_actions::ActionRegistry` compiled at boot; spine-signature handlers (workspace, filesystem, terminal, provider — except `completion_create`) live in `handlers_v2/` on the new `(Value, ActionContext, Arc<App>)` signature.
+
+The legacy TypeScript/Deno/Hono backend (`src/lib/server/`) is **slated for removal**. It is retained only as the cross-backend parity reference until the Rust backend reaches full behavioral parity (the remaining gaps are SSE broadcast of audit events and the few unported actions). Cross-backend + Rust-only integration tests (the `cross_backend_*` vitest projects, gated behind `FUZ_TEST_CROSS_BACKEND=1`) verify wire-shape parity by running fuz_app's standard suites against each backend over real HTTP. (A schema-parity snapshot gate exists as a fuz_app capability — `query_schema_snapshot` + `assert_schema_snapshots_equal` — but is not currently wired into zzz's cross-backend projects.) Once the Rust backend is at parity and the canonical cross-backend parity role has moved to the dual-impl forge consumer, the TS backend is deleted and zzz ships a single backend. Long-term the CLI and daemon migrate to Rust fuz/fuzd.
 
 See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 
@@ -105,7 +117,7 @@ test/
 │       └── tests.ts                  # Test cases
 src/
 ├── lib/                          # Published as @fuzdev/zzz
-│   ├── server/                   # Backend (Hono/Deno reference impl)
+│   ├── server/                   # Legacy Hono/Deno backend — parity reference, slated for removal
 │   │   ├── backend.ts
 │   │   ├── server.ts            # Deno server entry (dev + production)
 │   │   ├── testing_server_core.ts  # Runtime-agnostic test-binary core (env + reset wiring + shutdown)
@@ -291,14 +303,16 @@ Use `npm install` (not `deno install`) for packages. With `nodeModulesDir: "manu
 
 Two dev server modes:
 
-- **`deno task dev`** — Rust `zzz_server` backend + Vite frontend (preferred)
-- **`gro dev`** — Deno/Hono backend + Vite frontend (legacy, still works)
+- **`deno task dev`** — Rust `zzz_server` backend + Vite frontend (the backend going forward)
+- **`gro dev`** — legacy Deno/Hono backend + Vite frontend (retained as the parity reference until the TS backend is removed)
 
 ### Rust Backend
 
-Shadow implementation of the Deno server using axum. Same `/api/*` route
-paths as the Deno server — both backends are interchangeable from the
-frontend's perspective. 25 RPC methods: `ping`, `session_load`, `workspace_*`,
+The Rust `zzz_server` (Axum) is zzz's backend. It shares the same `/api/*`
+route paths as the legacy TS/Deno backend — the two are interchangeable
+from the frontend's perspective, which is what lets the cross-backend
+parity tests assert identical behavior until the TS backend is removed.
+25 RPC methods: `ping`, `session_load`, `workspace_*`,
 `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`,
 `terminal_data_send`, `terminal_resize`, `terminal_close`,
 `provider_load_status`, `provider_update_api_key` (keeper-only),
@@ -314,17 +328,17 @@ signing, blake3 session/token hashing, per-action auth checks with credential
 type enforcement, bootstrap endpoint. AI provider system with enum-dispatched
 providers — Anthropic fully implemented (non-streaming + SSE streaming with
 connection-targeted `completion_progress` notifications), OpenAI/Gemini/Ollama
-stubs. The Deno server is ground truth — cross-process integration tests
-in `src/test/cross_backend/*.cross.test.ts` verify identical JSON-RPC
-responses across backends via a shared TS contract. Rust-only tests
+stubs. Cross-process integration tests in `src/test/cross_backend/*.cross.test.ts`
+verify identical JSON-RPC responses across the Rust and legacy TS backends
+via a shared TS contract — the parity harness that gates the TS backend's
+eventual removal. Rust-only tests
 cover surface the Deno backend doesn't expose (admin role-gated
 `admin_session_revoke_all` / `admin_token_revoke_all` handlers,
 trusted-proxy `client_ip` resolution, login-rate-limit env-var gate,
 deferred fuz_app WS surface upstream); pure functions on the Rust
 side are covered by per-module `#[cfg(test)]` unit tests
 (`crates/zzz_server/src/proxy.rs`, `auth/spec.rs::origin_tests`,
-etc.). Empirical baselines live in
-`~/dev/grimoire/lore/zzz/TODO.md` § Cross-process testing.
+etc.).
 
 ```bash
 cargo build -p zzz_server                                                 # Build
@@ -592,7 +606,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY via FFI** — terminal spawning is a runtime-injected `PtyBackend` (`pty_backend.ts`), so `PtyManager` never sniffs the runtime. The production Deno daemon injects `create_deno_pty_backend`: real PTY via the `fuz_pty` Rust crate loaded through Deno FFI (`forkpty()`), falling back to `Deno.Command` pipes (no echo, no prompt, no resize) when `libfuz_pty.so` isn't found. Requires `cargo build -p fuz_pty --release` in ~/dev/private_fuz/; for bundled binaries place `libfuz_pty.so` next to the `zzz` executable. The cross-process Node/Bun test binaries inject `create_node_pty_backend` (`node:child_process` pipes) since Deno FFI is unavailable there — same pipe semantics, no real PTY.
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Rust backend with spine consumption underway** — 25 RPC methods with full auth stack, same `/api/*` route paths as Deno. `deno task dev` runs the Rust backend with Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable). No batch JSON-RPC, no Ollama actions (`ollama_list`, `ollama_ps`, etc.). Spine `ActionRegistry` compiled at boot; four handler modules migrated to `handlers_v2/` on the new `(Value, ActionContext, Arc<App>)` signature, not yet on a live route.
+- **Rust backend is the path forward; TS backend slated for removal** — `zzz_server` has 25 RPC methods with the full auth stack, same `/api/*` route paths as the legacy TS backend. `deno task dev` runs the Rust backend with the Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only), Ollama stub (always unavailable). No batch JSON-RPC, no Ollama actions (`ollama_list`, `ollama_ps`, etc.). Spine `ActionRegistry` compiled at boot; four handler modules migrated to `handlers_v2/` on the new `(Value, ActionContext, Arc<App>)` signature, not yet on a live route. Remaining parity gaps before the TS backend can be deleted: SSE broadcast of audit events and the few unported actions.
 
 ## fuz_app
 
