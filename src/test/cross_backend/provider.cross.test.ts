@@ -83,8 +83,8 @@ describe('provider + session cross-backend', () => {
 			// before its content load completes, so an immediate `session_load`
 			// can snapshot the entry with `contents: null`. Poll until the
 			// watcher has loaded the contents (or time out). The exact timing
-			// differs across the TS runtimes (Deno/Node V8 vs Bun JSC), so a
-			// fixed single call is flaky; the poll makes it deterministic.
+			// is nondeterministic (async watcher + content load), so a fixed
+			// single call is flaky; the poll makes it deterministic.
 			// (Cross-process analog of `wait_for_audit_row`; mirrors
 			// `session_load_returns_nested_files` below.)
 			let test_file: Record<string, unknown> | undefined;
@@ -134,8 +134,8 @@ describe('provider + session cross-backend', () => {
 			// file before its content load completes, so an immediate
 			// `session_load` can snapshot the entry with `contents: null`.
 			// Poll until the watcher has loaded the contents (or time out).
-			// The exact timing differs across the TS runtimes (Deno/Node V8 vs
-			// Bun JSC), so a fixed single call is flaky; the poll makes it
+			// The exact timing is nondeterministic (async watcher + content
+			// load), so a fixed single call is flaky; the poll makes it
 			// deterministic. (Cross-process analog of `wait_for_audit_row`.)
 			let nested: Record<string, unknown> | undefined;
 			const deadline = Date.now() + 5_000;

@@ -22,7 +22,7 @@ workspace / filesystem / terminal / provider specs from
 `zzz_action_specs/` (handlers in `handlers/`), and the admin audit-log
 SSE stream from `fuz_realtime::audit_stream_router`. `handlers/` holds only
 `App` state plus a few `broadcast` / `close_sockets_for_*` shims over
-`App.realtime`. 25 RPC methods:
+`App.realtime`. RPC methods:
 `ping`, `session_load`, `workspace_*`, `diskfile_*`, `directory_create`,
 `terminal_*`, `provider_load_status`, `provider_update_api_key`,
 `completion_create`, `account_verify`, `account_session_list`,
@@ -393,7 +393,7 @@ metadata contract, the bootstrap success/failure audit rows, and the
 
 ## Known Limitations
 
-- 25 RPC methods (`ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `provider_update_api_key` keeper-only, `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`, `admin_session_revoke_all` admin-only, `admin_token_revoke_all` admin-only)
+- RPC methods: `ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `provider_update_api_key` (keeper-only), `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`, `admin_session_revoke_all` (admin-only), `admin_token_revoke_all` (admin-only)
 - 5 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debounced broadcasts with immediate index updates, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast), `completion_progress` (streaming completion chunks to requesting WS connection)
 - AI providers: Anthropic fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only)
 - No batch request support (JSON arrays)
@@ -427,7 +427,7 @@ metadata contract, the bootstrap success/failure audit rows, and the
   poll interval, 50ms wait after kill before waitpid, silent returns for
   missing terminal IDs.
 - **Provider system**: Enum-dispatched (`Provider` enum, not trait objects) —
-  4 providers known at compile time, exhaustive matching. Provider state behind
+  3 providers known at compile time, exhaustive matching. Provider state behind
   `tokio::sync::RwLock` for async `set_api_key`. `complete()` clones the
   `reqwest::Client` (internally `Arc`'d) and releases the lock before HTTP
   calls, so `set_api_key` is never blocked by long-running streaming responses.

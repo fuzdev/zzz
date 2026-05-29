@@ -122,7 +122,7 @@ export const my_action_action_spec = {
   method: 'my_action',
   kind: 'request_response',
   initiator: 'frontend',
-  auth: 'public',
+  auth: null, // public; or {account: 'required', actor: 'none'} to require a session
   side_effects: true,
   input: z.strictObject({
     message: z.string(),
@@ -168,7 +168,7 @@ export const my_long_job_action_spec = {
   method: 'my_long_job',
   kind: 'request_response',
   initiator: 'frontend',
-  auth: 'authenticated',
+  auth: {account: 'required', actor: 'none'},
   streams: 'my_long_job_progress', // name of the companion notification
   input: z.strictObject({...}),
   output: z.null(),

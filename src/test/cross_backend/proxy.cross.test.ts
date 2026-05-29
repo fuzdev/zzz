@@ -16,9 +16,9 @@
  * would always return the TCP peer IP and every test here would
  * collapse to the same assertion.
  *
- * The TS backend has no trusted-proxy phase — these tests are Rust-only
- * by capability and live in a Rust-only project rather than gating with
- * `test_if(capabilities.trusted_proxy, ...)` so the backend env stays
+ * These tests need the backend booted with a trusted-proxy list, so they
+ * live in a dedicated project (`cross_backend_rust_proxy`) rather than gating
+ * with `test_if(capabilities.trusted_proxy, ...)` — keeping the backend env
  * trusted-proxy-free for the rest of the suite.
  *
  * **Audit-read pattern** — each test fires a `/login` 401 under a unique
