@@ -1,13 +1,11 @@
-//! AI provider handlers — spine-backed signature.
+//! AI provider handlers.
 //!
-//! Migrates `provider_load_status`, `provider_update_api_key`, and (Phase 7
-//! sub-batch C) `completion_create` to the new shape. The `completion_create`
-//! reshape routes streaming progress notifications via
-//! `Arc<fuz_realtime::ConnectionRegistry>::send_to(conn_id, …)` instead of
-//! capturing the legacy `Arc<NotifyFn>` — `ctx.connection_id` carries the
-//! per-socket route on WS, `None` on HTTP. HTTP callers omit the progress
-//! token (or pass one with no WS counterpart) and receive the full result
-//! without intermediate chunks.
+//! `provider_load_status`, `provider_update_api_key`, and `completion_create`.
+//! `completion_create` routes streaming progress notifications via
+//! `Arc<fuz_realtime::ConnectionRegistry>::send_to(conn_id, …)` — `ctx.connection_id`
+//! carries the per-socket route on WS, `None` on HTTP. HTTP callers omit the
+//! progress token (or pass one with no WS counterpart) and receive the full
+//! result without intermediate chunks.
 
 use std::sync::Arc;
 

@@ -21,7 +21,7 @@ use fuz_http::JsonrpcError;
 use serde_json::Value;
 
 use crate::handlers::App;
-use crate::handlers_v2::workspace as workspace_v2;
+use crate::handlers::workspace;
 
 /// Build the workspace action specs.
 ///
@@ -41,7 +41,7 @@ pub fn build_workspace_specs(app: Arc<App>) -> Vec<ActionSpec> {
 fn workspace_list_spec(app: Arc<App>) -> ActionSpec {
     let handler: ActionHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
         let app = Arc::clone(&app);
-        Box::pin(async move { workspace_v2::workspace_list(params, ctx, app).await })
+        Box::pin(async move { workspace::workspace_list(params, ctx, app).await })
     });
     ActionSpec::read_only("workspace_list", AuthSpec::authenticated(), handler)
 }
@@ -49,7 +49,7 @@ fn workspace_list_spec(app: Arc<App>) -> ActionSpec {
 fn workspace_open_spec(app: Arc<App>) -> ActionSpec {
     let handler: ActionHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
         let app = Arc::clone(&app);
-        Box::pin(async move { workspace_v2::workspace_open(params, ctx, app).await })
+        Box::pin(async move { workspace::workspace_open(params, ctx, app).await })
     });
     ActionSpec::with_side_effects("workspace_open", AuthSpec::authenticated(), handler)
 }
@@ -57,7 +57,7 @@ fn workspace_open_spec(app: Arc<App>) -> ActionSpec {
 fn workspace_close_spec(app: Arc<App>) -> ActionSpec {
     let handler: ActionHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
         let app = Arc::clone(&app);
-        Box::pin(async move { workspace_v2::workspace_close(params, ctx, app).await })
+        Box::pin(async move { workspace::workspace_close(params, ctx, app).await })
     });
     ActionSpec::with_side_effects("workspace_close", AuthSpec::authenticated(), handler)
 }

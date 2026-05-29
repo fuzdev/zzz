@@ -1,29 +1,27 @@
-//! Long-lived `App` server state plus the surviving Strategy α
-//! `App.broadcast` / `close_sockets_for_*` shims.
+//! Long-lived `App` server state, the per-domain RPC handlers, and the
+//! `App.broadcast` / `close_sockets_for_*` connection shims.
 //!
-//! Phase 7 Batch 4 retired the legacy dispatch surface here:
-//! - The per-domain handler submodules (`account`, `admin`, `filesystem`,
-//!   `provider`, `terminal`, `workspace`) deleted — `handlers_v2/*` +
-//!   `zzz_action_specs/*` cover the spine-backed dispatch path.
-//! - `Ctx<'_>` / `NotifyFn` / `dispatch` / `dispatch_with_tx` /
-//!   `dispatch_no_tx` / `method_spec` / `check_action_auth` /
-//!   `MethodSpec` / `ActionAuth` retired wholesale — `fuz_actions::perform_action`
-//!   on the spine route owns the dispatch + auth-check surface.
-//! - `App.allowed_origins` / `bootstrap_token_path` / `bootstrap_available` /
-//!   `audit` / `keyring` / `daemon_token_state` / `login_*_rate_limiter` /
-//!   `account_route_state` / `bootstrap_route_state` / `spine_allowed_origins` /
-//!   `spine_trusted_proxies` dropped — those fields moved into the spine
-//!   `AccountRouteState` / `BootstrapRouteState` / `RpcRouteState` /
-//!   `WsRouteState` built directly in `main.rs`.
+//! The per-domain handler modules (`core`, `filesystem`, `provider`,
+//! `terminal`, `workspace`) hold the zzz-specific RPC handlers in the spine
+//! signature `(params: Value, ctx: ActionContext<'_>, app: Arc<App>) ->
+//! Result<Value, JsonrpcError>`. They are registered into
+//! `App.action_registry` via `crate::zzz_action_specs::build_*_specs`, which
+//! own the `Arc<App>` and clone it into each per-spec handler closure — the
+//! source of the zzz-specific deps (`PtyManager`, `FilerManager`,
+//! `ProviderManager`, the workspaces map) that don't live on `ActionContext`.
 //!
-//! What survives:
-//! - `App` — zzz-specific deps (`workspaces`, `FilerManager`, `PtyManager`,
-//!   `ProviderManager`, `ScopedFs`, `zzz_dir`, `scoped_dirs`,
-//!   `enable_test_actions`, the boot-compiled `action_registry`).
-//! - `App.realtime` — sole connection-tracking surface, drives the
-//!   Strategy α `broadcast` / `close_sockets_for_*` shims still called
-//!   from `filer.rs` / `pty_manager.rs` / `handlers_v2/workspace.rs`.
-//! - `WorkspaceInfo` — value type consumed by `handlers_v2/workspace`.
+//! Auth, dispatch, and the JSON-RPC / WS routes come from the spine
+//! (`fuz_actions::perform_action` plus the route states built in `main.rs`).
+//! `App.realtime` is the sole connection-tracking surface; it drives the
+//! `broadcast` / `close_sockets_for_*` shims called from `filer.rs`,
+//! `pty_manager.rs`, and `workspace.rs`. `WorkspaceInfo` is the value type
+//! consumed by `workspace`.
+
+pub mod core;
+pub mod filesystem;
+pub mod provider;
+pub mod terminal;
+pub mod workspace;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -108,12 +106,10 @@ impl App {
 
     /// Broadcast a message to all connected clients.
     ///
-    /// Strategy α shim over `App.realtime`. The spine WS handler
-    /// registers connections in `App.realtime`
-    /// (`Arc<fuz_realtime::ConnectionRegistry>`); existing call sites
-    /// (`filer::broadcast_filer_change`, `pty_manager` terminal data /
-    /// exited, `handlers_v2::workspace::workspace_*`) stay verbatim
-    /// through this shim.
+    /// Shim over `App.realtime`. The spine WS handler registers
+    /// connections in `App.realtime` (`Arc<fuz_realtime::ConnectionRegistry>`);
+    /// call sites (`filer::broadcast_filer_change`, `pty_manager` terminal
+    /// data / exited, `workspace::workspace_*`) broadcast through this shim.
     pub fn broadcast(&self, message: &str) {
         let _ = self.realtime.broadcast(message);
     }

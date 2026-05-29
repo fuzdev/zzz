@@ -153,7 +153,7 @@ my_action: {
 ```
 
 4. Add the backend handler in the Rust backend (`crates/zzz_server`): a spec
-   builder in `zzz_action_specs/` and the handler fn in `handlers_v2/`. Both
+   builder in `zzz_action_specs/` and the handler fn in `handlers/`. Both
    HTTP RPC and WebSocket paths dispatch through the same `ActionRegistry`,
    so the handler is picked up on both transports. See ../crates/CLAUDE.md.
 

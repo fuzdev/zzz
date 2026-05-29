@@ -20,7 +20,6 @@
 pub mod error;
 pub mod filer;
 pub mod handlers;
-pub mod handlers_v2;
 pub mod provider;
 pub mod pty_manager;
 pub mod rpc;
@@ -476,8 +475,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     //
     // Composition order: protocol (heartbeat + cancel), then
     // `fuz_auth` placeholder adapters (account + admin self-service),
-    // then zzz-specific specs (workspace today; filesystem / terminal /
-    // provider / etc. land as their `handlers_v2` modules ship).
+    // then zzz-specific specs (`core`, `workspace`, `filesystem`,
+    // `terminal`, `provider`).
     let mut all_specs: Vec<fuz_actions::ActionSpec> = fuz_actions::PROTOCOL_ACTION_SPECS();
     all_specs.extend(fuz_actions::auth_adapter::build_auth_spec_set(
         Arc::clone(&spine_audit_emitter),

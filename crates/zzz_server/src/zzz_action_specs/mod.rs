@@ -5,12 +5,9 @@
 //! rows), produces a `Vec<ActionSpec>` that `main.rs` concatenates into
 //! the `ActionRegistry::compile(...)` input.
 //!
-//! Phase 7 Batch 5 — additive. The per-domain builders are added as the
-//! corresponding `crate::handlers_v2::*` modules land. Until all six
-//! zzz-specific domains migrate (`workspace`, `filesystem`, `terminal`,
-//! `provider`, `admin`, `account`), the legacy dispatch path in
-//! `crate::handlers::dispatch` continues to serve the live `/api/rpc`
-//! and `/api/ws` routes.
+//! Each builder registers the zzz-specific handlers in `crate::handlers::*`
+//! (`core`, `workspace`, `filesystem`, `terminal`, `provider`) into the
+//! `ActionRegistry`.
 
 pub mod core;
 pub mod filesystem;

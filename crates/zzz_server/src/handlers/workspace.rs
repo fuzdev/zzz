@@ -1,9 +1,8 @@
-//! Workspace handlers — spine-backed signature.
+//! Workspace handlers.
 //!
-//! Mirrors `crate::handlers::workspace` but with
-//! `(params: Value, ctx: ActionContext<'_>)` and a closure-captured
-//! `Arc<App>` for the zzz-specific deps the spine `ActionContext`
-//! doesn't carry (`workspaces` map, `FilerManager`, `ScopedFs`,
+//! Spine signature `(Value, ActionContext<'_>, Arc<App>)`; the
+//! closure-captured `Arc<App>` carries the zzz-specific deps the spine
+//! `ActionContext` doesn't (`workspaces` map, `FilerManager`, `ScopedFs`,
 //! `ConnectionRegistry`-backed broadcast).
 
 use std::path::Path;

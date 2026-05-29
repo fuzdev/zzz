@@ -4,7 +4,7 @@ Core systems: actions, cells, content model, data flow, indexed collections, fil
 
 ## Action System
 
-Symmetric peer-to-peer JSON-RPC 2.0. The same `ActionPeer` code runs on frontend and backend.
+Symmetric peer-to-peer JSON-RPC 2.0 — by design either end can initiate. The frontend runs the TypeScript `ActionPeer` (from `@fuzdev/fuz_app`); the Rust `zzz_server` backend implements the same spec + wire contract via `fuz_actions`.
 
 ### Action Spec
 
@@ -15,7 +15,7 @@ export const completion_create_action_spec = {
 	method: 'completion_create',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: 'public',
+	auth: null,
 	side_effects: true,
 	input: z.strictObject({
 		completion_request: CompletionRequest,
@@ -71,6 +71,8 @@ export const completion_create_action_spec = {
 | `ActionPeer`     | `action_peer.ts`     | Send/receive on both sides                                             |
 | `ActionRegistry` | `action_registry.ts` | Type-safe action lookup                                                |
 
+These live in `@fuzdev/fuz_app/actions/` — the SAES runtime is extracted to fuz_app; zzz imports them. Cell patterns (the `Cell` base class, `IndexedCollection`) remain in zzz.
+
 ### Action Event Lifecycle
 
 ```
@@ -109,34 +111,17 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 	},
 };
 
-// Backend (server/zzz_action_handlers.ts)
-// Unified handler — called by both HTTP RPC and WebSocket paths.
-// ctx: {backend, request_id, notify, signal}
-export const zzz_action_handlers: ZzzActionHandlers = {
-	completion_create: async (input, ctx) => {
-		const {prompt, provider_name, model, completion_messages} = input.completion_request;
-		const progress_token = input._meta?.progressToken;
-		const provider = ctx.backend.lookup_provider(provider_name);
-		const handler = provider.get_handler(!!progress_token);
-		return await handler({
-			model,
-			prompt,
-			completion_messages,
-			completion_options,
-			progress_token,
-			// Route streaming chunks to the originating socket (WS) or no-op (HTTP).
-			on_progress: (progress_input) => {
-				ctx.notify('completion_progress', progress_input);
-				return Promise.resolve();
-			},
-		});
-	},
-};
+// The matching backend handler lives in
+// the Rust `zzz_server` (`crates/zzz_server/src/handlers/`), registered into
+// the spine `ActionRegistry`. It receives `(params, ActionContext, Arc<App>)`,
+// looks up the provider, and streams `completion_progress` chunks to the
+// originating socket via `ConnectionRegistry::send_to(ctx.connection_id, …)`.
+// See ../crates/CLAUDE.md for the backend handler patterns.
 ```
 
 ### Transport Layer
 
-Actions are transport-agnostic via the `Transport` interface (`transports.ts`):
+Actions are transport-agnostic via the `Transport` interface (from `@fuzdev/fuz_app/actions/`):
 
 ```typescript
 interface Transport {
@@ -147,7 +132,7 @@ interface Transport {
 }
 ```
 
-Implementations: `FrontendHttpTransport`, `FrontendWebsocketTransport`, `BackendWebsocketTransport`.
+Frontend implementations: `FrontendHttpTransport`, `FrontendWebsocketTransport`. The Rust backend serves the matching `/api/rpc` + `/api/ws` endpoints directly.
 
 ### JSON-RPC 2.0
 
@@ -160,7 +145,9 @@ MCP-compatible subset, no batching:
 // Notification (no id): { jsonrpc: "2.0", method: "completion_progress", params: {...} }
 ```
 
-### All 20 Actions
+### Actions
+
+21 specs in `src/lib/action_specs.ts`. A representative subset below — the `terminal_*` and `workspace_*` families are omitted here; see `action_specs.ts` or the project `CLAUDE.md` for the full table:
 
 | Method                    | Kind                  | Initiator  | Purpose                         |
 | ------------------------- | --------------------- | ---------- | ------------------------------- |
@@ -296,7 +283,7 @@ export const cell_classes = {
 	Chats,
 	Thread,
 	Threads,
-	Turn /* ... 26 total */,
+	Turn /* ... 31 total */,
 } satisfies Record<string, typeof Cell<any>>;
 
 // frontend.svelte.ts — auto-registers all classes
@@ -389,14 +376,12 @@ User types message in Chat UI
     → app.api.completion_create(request)
       → ActionEvent send_request phase
         → Transport.send(JSON-RPC request)
-          → WS dispatch: spec lookup → Zod validate → build ctx → handler call
-            → zzz_action_handlers.completion_create(input, ctx)
-              → ctx.backend.lookup_provider(provider_name)
-              → provider.get_handler(!!progress_token)
-              → handler({model, prompt, ..., on_progress: ctx.notify-adapter})
-                → For each chunk: on_progress({chunk, _meta})
-                  → ctx.notify('completion_progress', {chunk, _meta})
-                    → WS send to the originating socket only
+          → POST /api/rpc or /api/ws → Rust spine dispatch (spec lookup, auth check, schema validation)
+            → handlers::provider::completion_create(params, ctx, app)
+              → ProviderManager looks up the provider by name
+              → provider streams the completion (stream = true when a progress token is present)
+                → For each text chunk:
+                  → completion_progress notification to the originating WS connection (ctx.connection_id)
               → Return {completion_response}
             → JSON-RPC response via WebSocket
               → Frontend receive_response phase
@@ -408,15 +393,14 @@ User types message in Chat UI
 ### Streaming Progress
 
 ```
-Backend provider iterates chunks from SDK
-  → provider.send_streaming_progress(progress_token, chunk, on_progress)
-    → on_progress({progressToken, chunk})            (from handler's ctx.notify)
-      → ctx.notify('completion_progress', ...)
-        → WebSocket notification to the originating socket (no id, no response)
-          → frontend_action_handlers.completion_progress.receive()
-            → Find turn by progressToken in cell_registry
-            → Append chunk to turn content
-              → UI re-renders incrementally
+Rust provider parses the SSE stream from the API (`provider/sse.rs`)
+  → for each `content_block_delta` text chunk
+    → ConnectionRegistry::send_to(ctx.connection_id, completion_progress notification)
+      → WebSocket notification to the originating socket (no id, no response)
+        → frontend_action_handlers.completion_progress.receive()
+          → Find turn by progressToken in cell_registry
+          → Append chunk to turn content
+            → UI re-renders incrementally
 ```
 
 Streaming progress (`completion_progress`) is
@@ -490,7 +474,7 @@ Two separate concerns:
 
 ### ScopedFs
 
-All filesystem operations go through `ScopedFs` (`server/scoped_fs.ts`). Security: paths validated against allowed roots, symlinks rejected, absolute paths required, parent directories checked recursively.
+All filesystem operations go through `ScopedFs` (Rust: `crates/zzz_server/src/scoped_fs.rs`). Security: paths validated against allowed roots, symlinks rejected, absolute paths required, parent directories checked recursively.
 
 ### Filer
 

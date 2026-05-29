@@ -19,7 +19,7 @@ boot-compiled `ActionRegistry` dispatch path. A single canonical
 `register_action_ws`) serves all dispatch; admin + account specs come
 from fuz_auth's `auth_adapter::build_auth_spec_set`, the zzz-specific
 workspace / filesystem / terminal / provider specs from
-`zzz_action_specs/` (handlers in `handlers_v2/`), and the admin audit-log
+`zzz_action_specs/` (handlers in `handlers/`), and the admin audit-log
 SSE stream from `fuz_realtime::audit_stream_router`. `handlers/` holds only
 `App` state plus a few `broadcast` / `close_sockets_for_*` shims over
 `App.realtime`. 25 RPC methods:
@@ -286,16 +286,14 @@ wiped on backend startup (`FUZ_TESTING_RESET_DB_ON_STARTUP`) and
 crates/zzz_server/src/
 ├── lib.rs            # `run_app(RunAppOptions)` — full lifecycle: env/config, DB pool + migrations, spine state construction (keyring, daemon token, audit emitter, connection + SSE registries, rate limiters), `ActionRegistry::compile`, file watchers, route composition, graceful shutdown
 ├── main.rs           # Thin production entry — constructs `Argon2idHasher`, calls `run_app`
-├── handlers/
-│   └── mod.rs        # `App` long-lived state (workspaces, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `ProviderManager`, `realtime`, `action_registry` OnceLock) + the `broadcast` / `close_sockets_for_*` shims over `App.realtime`
-├── handlers_v2/      # zzz-specific spine-signature handlers (`(Value, ActionContext<'_>, Arc<App>)`), registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`
-│   ├── mod.rs
+├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`)
+│   ├── mod.rs        # `App` long-lived state (workspaces, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `ProviderManager`, `realtime`, `action_registry` OnceLock) + the `broadcast` / `close_sockets_for_*` shims over `App.realtime`
 │   ├── core.rs       # ping, session_load, _testing_emit_notifications
 │   ├── filesystem.rs # diskfile_update, diskfile_delete, directory_create
 │   ├── provider.rs   # provider_load_status, provider_update_api_key, completion_create
 │   ├── terminal.rs   # terminal_create, terminal_data_send, terminal_resize, terminal_close
 │   └── workspace.rs  # workspace_list, workspace_open, workspace_close (+ workspace_changed broadcast)
-├── zzz_action_specs/ # Per-domain `ActionSpec` builders consumed by `run_app`'s `ActionRegistry::compile`; each captures `Arc<App>` and calls the matching `handlers_v2::*` fn
+├── zzz_action_specs/ # Per-domain `ActionSpec` builders consumed by `run_app`'s `ActionRegistry::compile`; each captures `Arc<App>` and calls the matching `handlers::*` fn
 │   ├── mod.rs
 │   ├── core.rs
 │   ├── filesystem.rs
@@ -438,7 +436,7 @@ metadata contract, the bootstrap success/failure audit rows, and the
   `side_effects: true` actions in a `tokio_postgres` transaction (commit on
   `Ok`, rollback on `Err`) and drains post-commit pending effects, so paired
   writes commit atomically and read-only actions skip the pool entirely.
-  zzz's `handlers_v2` functions receive the `ActionContext` DB handle and
+  zzz's `handlers` functions receive the `ActionContext` DB handle and
   stay transaction-agnostic — the wrap is the spine's concern.
 
 ## What's Next

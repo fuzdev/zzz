@@ -13,7 +13,7 @@ use fuz_auth::AuthSpec;
 use serde_json::Value;
 
 use crate::handlers::App;
-use crate::handlers_v2::core as core_v2;
+use crate::handlers::core;
 
 /// Build the core action specs (`ping`, `session_load`).
 #[must_use]
@@ -24,7 +24,7 @@ pub fn build_core_specs(app: Arc<App>) -> Vec<ActionSpec> {
 fn ping_spec(app: Arc<App>) -> ActionSpec {
     let handler: ActionHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
         let app = Arc::clone(&app);
-        Box::pin(async move { core_v2::ping(params, ctx, app).await })
+        Box::pin(async move { core::ping(params, ctx, app).await })
     });
     ActionSpec::read_only("ping", AuthSpec::public(), handler)
 }
@@ -32,7 +32,7 @@ fn ping_spec(app: Arc<App>) -> ActionSpec {
 fn session_load_spec(app: Arc<App>) -> ActionSpec {
     let handler: ActionHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
         let app = Arc::clone(&app);
-        Box::pin(async move { core_v2::session_load(params, ctx, app).await })
+        Box::pin(async move { core::session_load(params, ctx, app).await })
     });
     ActionSpec::read_only("session_load", AuthSpec::authenticated(), handler)
 }
@@ -49,7 +49,7 @@ pub fn build_testing_specs(app: Arc<App>) -> Vec<ActionSpec> {
 fn testing_emit_notifications_spec(app: Arc<App>) -> ActionSpec {
     let handler: ActionHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
         let app = Arc::clone(&app);
-        Box::pin(async move { core_v2::testing_emit_notifications(params, ctx, app).await })
+        Box::pin(async move { core::testing_emit_notifications(params, ctx, app).await })
     });
     ActionSpec::read_only(
         "_testing_emit_notifications",

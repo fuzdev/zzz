@@ -1,7 +1,7 @@
-//! Terminal handlers — spine-backed signature.
+//! Terminal handlers.
 //!
-//! Mirrors `crate::handlers::terminal` with `(Value, ActionContext<'_>)`
-//! and closure-captured `Arc<App>` for the `PtyManager` reach-through.
+//! Spine signature `(Value, ActionContext<'_>, Arc<App>)`; the
+//! closure-captured `Arc<App>` provides the `PtyManager` reach-through.
 
 use std::sync::Arc;
 

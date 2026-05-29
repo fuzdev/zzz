@@ -4,8 +4,7 @@
 //! Spine-backed signature: `(Value, ActionContext<'_>, Arc<App>) ->
 //! Result<Value, JsonrpcError>`. `ping` is public (no auth); `session_load`
 //! is authenticated and returns the initial state envelope (open workspaces,
-//! zzz_dir contents, scoped_dirs, provider status). Wire shape matches the
-//! legacy `handlers::handle_ping` / `handle_session_load` byte-for-byte.
+//! zzz_dir contents, scoped_dirs, provider status).
 
 use std::sync::Arc;
 

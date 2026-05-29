@@ -37,7 +37,7 @@ this repo — make the edits and stop, the user commits.
 
 Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, daemon tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) is in-memory.
 
-The Rust backend (`crates/zzz_server`, Axum) provides the full auth stack, filesystem, terminals, PostgreSQL, bootstrap, Anthropic provider with SSE streaming, audit emission with listener fan-out, trusted-proxy `client_ip` resolution, opt-in login rate limiting, Origin allowlist on every REST + RPC + WS handler. Spine consumption is complete: auth, HTTP, realtime (WS + SSE), dispatch, and DB all come from the spine crates (`fuz_db`, `fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`); a single `/api/rpc` + `/api/ws` serves the boot-compiled `fuz_actions::ActionRegistry`, with the zzz-specific handlers (workspace, filesystem, terminal, provider, `completion_create`) in `handlers_v2/` and the admin audit-log SSE stream at `GET /api/admin/audit/stream`. AI providers are Anthropic (full, non-streaming + SSE streaming) plus OpenAI/Gemini status-only stubs.
+The Rust backend (`crates/zzz_server`, Axum) provides the full auth stack, filesystem, terminals, PostgreSQL, bootstrap, Anthropic provider with SSE streaming, audit emission with listener fan-out, trusted-proxy `client_ip` resolution, opt-in login rate limiting, Origin allowlist on every REST + RPC + WS handler. Spine consumption is complete: auth, HTTP, realtime (WS + SSE), dispatch, and DB all come from the spine crates (`fuz_db`, `fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`); a single `/api/rpc` + `/api/ws` serves the boot-compiled `fuz_actions::ActionRegistry`, with the zzz-specific handlers (workspace, filesystem, terminal, provider, `completion_create`) in `handlers/` and the admin audit-log SSE stream at `GET /api/admin/audit/stream`. AI providers are Anthropic (full, non-streaming + SSE streaming) plus OpenAI/Gemini status-only stubs.
 
 The `cross_backend_*` vitest projects (gated behind `FUZ_TEST_CROSS_BACKEND=1`) are the Rust backend's integration tests — they run fuz_app's standard suites against `zzz_server` over real HTTP, verifying wire-shape conformance to the shared fuz_app contract. (A schema-parity snapshot gate exists as a fuz_app capability — `query_schema_snapshot` + `assert_schema_snapshots_equal` — but is not currently wired into zzz's cross-backend projects.) Long-term the CLI and daemon migrate to Rust fuz/fuzd.
 
@@ -80,7 +80,7 @@ crates/                               # Rust workspace
 │   ├── xtask/                        # Dev automation: `cargo xtask check-release` dep-graph audit (sanity check #2 of the test-binary pattern)
 │   ├── testing_zzz_server/           # Test-mode binary — wires `fuz_testing::TestingArgon2idHasher` for fast cross-process integration tests. **Never ships in a release.**
 │   └── zzz_server/                   # Axum JSON-RPC server — full spine consumer (single `/api/rpc` + `/api/ws` on `fuz_actions::ActionRegistry`)
-│       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/mod.rs` (App state + `broadcast`/`close_sockets_for_*` shims), `handlers_v2/` + `zzz_action_specs/` (zzz RPC handlers + spec builders), `provider/` (AI providers), `rpc.rs` (JSON-RPC helpers), `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
+│       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast`/`close_sockets_for_*` shims + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `rpc.rs` (JSON-RPC helpers), `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
 src/
 ├── lib/                          # Published as @fuzdev/zzz
 │   ├── zzz/                      # CLI (Deno compiled binary)
@@ -401,7 +401,7 @@ Add it to the `all_action_specs` array at the bottom of the file.
 
 **3. Add the backend handler** in the Rust backend (`crates/zzz_server`):
 add a spec builder in `zzz_action_specs/` and the handler fn in
-`handlers_v2/` (see ./crates/CLAUDE.md). Both HTTP RPC and WebSocket paths
+`handlers/` (see ./crates/CLAUDE.md). Both HTTP RPC and WebSocket paths
 dispatch through the same `ActionRegistry`, so the new handler is picked up
 on both transports.
 
@@ -523,7 +523,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY terminals** — terminal spawning uses the `fuz_pty` Rust crate as a native dependency of `zzz_server` (no FFI indirection). `PtyManager` manages spawned processes with async read loops; `terminal_close` cancels the read loop before killing the process. Requires the sibling Rust workspace checked out alongside this repo (path dep).
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Backend** — `zzz_server` has 25 RPC methods with the full auth stack. `deno task dev` runs it with the Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only). No batch JSON-RPC. Spine consumption is complete — a single `/api/rpc` + `/api/ws` serves the boot-compiled `ActionRegistry` (handlers in `handlers_v2/`), plus the admin audit-log SSE stream at `GET /api/admin/audit/stream`.
+- **Backend** — `zzz_server` has 25 RPC methods with the full auth stack. `deno task dev` runs it with the Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only). No batch JSON-RPC. Spine consumption is complete — a single `/api/rpc` + `/api/ws` serves the boot-compiled `ActionRegistry` (handlers in `handlers/`), plus the admin audit-log SSE stream at `GET /api/admin/audit/stream`.
 
 ## fuz_app
 

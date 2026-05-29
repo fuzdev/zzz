@@ -1,14 +1,10 @@
 //! JSON-RPC helpers — error constructors + notification builder.
 //!
-//! Phase 7 Batch 1 retired the framework half of this module (the envelope
-//! dispatch + classification + HTTP handlers `rpc_handler` / `rpc_get_handler`).
-//! The spine `fuz_actions::create_rpc_router` mounted at `/api/rpc` now owns
-//! the dispatch path.
-//!
-//! Phase 7 Batch 4 trimmed the surviving surface further — only the helpers
-//! consumed by `crate::filer`, `crate::pty_manager`, `crate::handlers_v2/*`,
-//! and `crate::provider::*` remain (error constructors used by handlers +
-//! the `notification` builder used by broadcast / send_to sites).
+//! The spine `fuz_actions::create_rpc_router` mounted at `/api/rpc` owns the
+//! dispatch path; this module is just the helpers consumed by `crate::filer`,
+//! `crate::pty_manager`, `crate::handlers::*`, and `crate::provider::*` (error
+//! constructors used by handlers + the `notification` builder used by
+//! broadcast / send_to sites).
 
 use fuz_http::{JSONRPC_INTERNAL_ERROR, JSONRPC_INVALID_PARAMS, JSONRPC_VERSION, JsonrpcError};
 use serde::Serialize;

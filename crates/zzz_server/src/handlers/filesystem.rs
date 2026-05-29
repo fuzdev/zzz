@@ -1,8 +1,7 @@
-//! Filesystem handlers — spine-backed signature.
+//! Filesystem handlers.
 //!
-//! Mirrors `crate::handlers::filesystem` (~75 LOC) but with
-//! `(Value, ActionContext<'_>)` and closure-captured `Arc<App>` for the
-//! `ScopedFs` reach-through.
+//! Spine signature `(Value, ActionContext<'_>, Arc<App>)`; the
+//! closure-captured `Arc<App>` provides the `ScopedFs` reach-through.
 
 use std::sync::Arc;
 
