@@ -156,7 +156,7 @@
 		<p class="mb_md">
 			This project has a big speculative scope and it's early in development. What you're seeing is
 			a small part of the idea -- especially if you're viewing this on the website not natively via
-			Node -- so here's a button for previewing some of what's planned:
+			the local backend -- so here's a button for previewing some of what's planned:
 		</p>
 		<button
 			type="button"
