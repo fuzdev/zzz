@@ -218,7 +218,7 @@
 		<p>More thoughts about security:</p>
 		<ul>
 			<li>
-				Zzz's Node server can do things like:
+				Zzz's backend can do things like:
 				<ul>
 					<li>
 						read and write to the Zzz app directory (<code>PUBLIC_ZZZ_DIR</code>, defaults to
@@ -258,8 +258,8 @@
 			</li>
 			<li>
 				There are no mechanisms for end-users to load executable code or dangerous config. Of
-				course, developers have full control to shoot their own feet, and Node is currently the only
-				supported way to use Zzz. Deno is planned.
+				course, developers have full control to shoot their own feet, and running the local Rust
+				backend is currently the supported way to use Zzz.
 				<ul>
 					<li>
 						we'll develop a plugin API so people can make reusable integrations, and distribution
