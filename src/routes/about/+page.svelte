@@ -48,12 +48,12 @@
 		<p>Some early (rough) integrations include:</p>
 		<ul>
 			<li>
-				<ExternalLink href="https://hono.dev/">Hono</ExternalLink> is the backend web server that provides
-				local system access. It's uses web standards and supports all JS server runtimes.
+				<ExternalLink href="https://github.com/tokio-rs/axum">Axum</ExternalLink> is the Rust backend
+				web server that provides local system access — filesystem, terminals, and AI provider requests.
 			</li>
 			<li>
-				<ExternalLink href="https://svelte.dev/">SvelteKit</ExternalLink> is the frontend framework. Hono
-				integrates with its Node adapter, and it uses <ExternalLink href="https://vite.dev/"
+				<ExternalLink href="https://svelte.dev/">SvelteKit</ExternalLink> is the frontend framework, prerendered
+				to a static SPA that the backend serves. It uses <ExternalLink href="https://vite.dev/"
 					>Vite</ExternalLink
 				> in development.
 			</li>
@@ -71,10 +71,9 @@
 		<p>Planned integrations:</p>
 		<ul>
 			<li>
-				local LLM backends like <ExternalLink href="https://github.com/ollama/ollama"
-					>Ollama</ExternalLink
+				local LLM backends like <ExternalLink href="https://github.com/ggml-org/llama.cpp"
+					>llama.cpp</ExternalLink
 				>
-				and <ExternalLink href="https://github.com/ggml-org/llama.cpp">llama.cpp</ExternalLink>
 			</li>
 			<li>
 				<!-- TODO @db -->

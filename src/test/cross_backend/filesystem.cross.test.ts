@@ -260,14 +260,14 @@ describe('filesystem cross-backend', () => {
 				const new_file = join(tmp_dir, `filer_test_${randomUUID()}.txt`);
 				await writeFile(new_file, 'hello from filer test', 'utf-8');
 
-				const msg = (await ws.wait_for((m) => {
+				const msg = await ws.wait_for<Record<string, unknown>>((m) => {
 					if (!m || typeof m !== 'object') return false;
 					const rec = m as Record<string, unknown>;
 					if (rec.method !== 'filer_change') return false;
 					const params = rec.params as Record<string, unknown> | undefined;
 					const change = params?.change as Record<string, unknown> | undefined;
 					return typeof change?.path === 'string' && typeof change?.type === 'string';
-				}, 10_000)) as Record<string, unknown>;
+				}, 10_000);
 				assert.ok(msg, 'received filer_change notification');
 			} finally {
 				await ws.close();

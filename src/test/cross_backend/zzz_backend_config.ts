@@ -2,31 +2,20 @@
  * Cross-process `BackendConfig` factories for zzz's cross-backend
  * integration suites.
  *
- * Five target backends spanning both the JS-runtime and TS-vs-Rust axes:
+ * Two Rust target backends:
  *
- * - {@link deno_backend_config} — TS canonical backend on Deno V8 (spawns
- *   `testing_server_deno.ts`). Same wire shape as production zzz today.
- * - {@link node_backend_config} — TS canonical backend on Node V8 (spawns
- *   `testing_server_node.ts` via `gro run`). Isolates the JS-runtime axis
- *   (Deno vs Node V8) on identical TS canonical surfaces.
- * - {@link bun_backend_config} — TS canonical backend on Bun's JSC runtime
- *   (spawns `testing_server_bun.ts` via `bun run`). Third native path on the
- *   same TS surface; inherits fuz_app's bun exit-hang fix (the adapter
- *   fire-and-forgets bun's never-resolving `server.stop()` and the shared
- *   `spawn_backend` teardown SIGKILLs after a grace window).
  * - {@link rust_backend_config} — Axum/JSON-RPC backend (spawns
- *   `testing_zzz_server`). Isolates the cross-language axis (TS vs
- *   Rust) on the shared `/api/*` wire shape.
+ *   `testing_zzz_server`) on the `/api/*` wire shape.
  * - {@link rust_proxy_backend_config} — Rust variant with
  *   `ZZZ_TRUSTED_PROXIES=127.0.0.1` for the proxy suite. Separate
  *   project because flipping that env mid-run isn't supported (Rust
  *   parses it once at boot).
  *
  * Each factory composes a small per-backend declaration against the
- * lifted upstream builders
- * (`make_default_ts_backend_config` / `make_default_rust_backend_config`
- * in `@fuzdev/fuz_app/testing/cross_backend/default_backend_configs.js`).
- * The upstream builders own the common shape — `/api/*` paths, cookie
+ * lifted upstream builder
+ * (`make_default_rust_backend_config` in
+ * `@fuzdev/fuz_app/testing/cross_backend/default_backend_configs.js`).
+ * The upstream builder owns the common shape — `/api/*` paths, cookie
  * name, bootstrap block keyed off `default_test_*` secrets, the
  * `FUZ_TESTING_RESET_DB_ON_STARTUP` gate. Per-backend factories only
  * declare what genuinely differs: zzz-specific env vars (`PUBLIC_ZZZ_*`,
@@ -34,11 +23,8 @@
  * (proxy variant) `ZZZ_TRUSTED_PROXIES`.
  *
  * **Port assignments** — fixed-but-distinct, no collision with the
- * production daemon (zzz Deno on `4040`, zzz Rust on `1174`):
+ * production daemon (zzz on `4460`, dev on `8999`):
  *
- * - Deno test binary → `11741`
- * - Node test binary → `11742`
- * - Bun test binary → `11743`
  * - Rust test binary → `1175` (matches `testing_zzz_server`'s
  *   `TESTING_DEFAULT_PORT`)
  * - Rust+proxy test binary → `1176`
@@ -85,9 +71,7 @@ import {
 } from '@fuzdev/fuz_app/testing/cross_backend/build_test_backend_paths.js';
 import {
 	make_default_rust_backend_config,
-	make_default_ts_backend_config,
 	rust_default_capabilities,
-	ts_default_capabilities,
 } from '@fuzdev/fuz_app/testing/cross_backend/default_backend_configs.js';
 
 /**
@@ -100,13 +84,12 @@ import {
 const RUST_DATABASE_URL_PREFIX = 'postgres://localhost/zzz_test_';
 
 /**
- * Both zzz backends serve `GET /api/admin/audit/stream` — the Rust backend
- * via `fuz_realtime::audit_stream_router`, the TS backend via `create_zzz_app`'s
- * `audit_log_sse: true`. Advertise `sse` so `describe_cross_process_sse_tests`
- * runs (rather than skips) against each. The Rust+proxy project never includes
- * `sse.cross.test.ts`, so its flag is inert there but stays honest.
+ * The Rust backend serves `GET /api/admin/audit/stream` via
+ * `fuz_realtime::audit_stream_router`. Advertise `sse` so
+ * `describe_cross_process_sse_tests` runs (rather than skips). The
+ * Rust+proxy project never includes `sse.cross.test.ts`, so its flag is
+ * inert there but stays honest.
  */
-const ts_capabilities: BackendCapabilities = {...ts_default_capabilities, sse: true};
 const rust_capabilities: BackendCapabilities = {...rust_default_capabilities, sse: true};
 
 interface ZzzBackendPaths extends TestBackendPaths {
@@ -120,8 +103,7 @@ interface ZzzBackendPaths extends TestBackendPaths {
  * `scoped_dir` for `PUBLIC_ZZZ_DIR` / `PUBLIC_ZZZ_SCOPED_DIRS`. The
  * Rust daemon-token writer expects `{zzz_dir}/run/daemon_token`, so
  * `zzz_dir` is anchored to `paths.root` (the generic builder's tmpdir
- * subtree) — keeping the daemon-token convention consistent across
- * runtimes.
+ * subtree) — keeping the daemon-token convention consistent.
  */
 const build_zzz_paths = (backend_name: string): ZzzBackendPaths => {
 	const paths = build_test_backend_paths(`zzz_cross_${backend_name}`);
@@ -129,90 +111,11 @@ const build_zzz_paths = (backend_name: string): ZzzBackendPaths => {
 	return {
 		...paths,
 		// Override the daemon-token path to live under `{zzz_dir}/run/`,
-		// matching `init_daemon_token` (Rust) and the TS server's writer.
+		// matching `init_daemon_token` (Rust).
 		daemon_token_path: join(zzz_dir, 'run', 'daemon_token'),
 		zzz_dir,
 		scoped_dir: join(paths.root, 'scoped'),
 	};
-};
-
-/**
- * TS canonical backend on Deno V8. The `--allow-*` flag set mirrors
- * the `test:server:deno` package script (kept in sync — the script is
- * the source of truth for the permission set).
- */
-export const deno_backend_config = (): BackendConfig => {
-	const name = 'deno';
-	const paths = build_zzz_paths(name);
-	return make_default_ts_backend_config({
-		name,
-		port: 11741,
-		capabilities: ts_capabilities,
-		start_command: [
-			'deno',
-			'run',
-			'--allow-net',
-			'--allow-read',
-			'--allow-env',
-			'--allow-write',
-			'--allow-sys',
-			'--allow-ffi',
-			'--allow-run',
-			'--unstable-detect-cjs',
-			'src/lib/server/testing_server_deno.ts',
-		],
-		paths,
-		extra_env: {
-			PUBLIC_ZZZ_DIR: paths.zzz_dir,
-			PUBLIC_ZZZ_SCOPED_DIRS: paths.scoped_dir,
-		},
-	});
-};
-
-/**
- * TS canonical backend on Node V8. Spawns `testing_server_node.ts`
- * via `gro run` (matches the `test:server:node` package script). Same
- * source modules as the Deno entry — the runtime adapter is the
- * only divergence.
- */
-export const node_backend_config = (): BackendConfig => {
-	const name = 'node';
-	const paths = build_zzz_paths(name);
-	return make_default_ts_backend_config({
-		name,
-		port: 11742,
-		capabilities: ts_capabilities,
-		start_command: ['npx', 'gro', 'run', 'src/lib/server/testing_server_node.ts'],
-		paths,
-		extra_env: {
-			PUBLIC_ZZZ_DIR: paths.zzz_dir,
-			PUBLIC_ZZZ_SCOPED_DIRS: paths.scoped_dir,
-		},
-	});
-};
-
-/**
- * TS canonical backend on Bun's JSC runtime. Spawns `testing_server_bun.ts`
- * via `bun run` — Bun resolves `.ts` + npm packages natively, and the
- * entry's import graph is `$lib`-free (same modules the Deno entry runs
- * directly, with no `$lib` map). Same source modules as the Node + Deno
- * entries — the runtime adapter is the only divergence. Requires `bun` on
- * PATH.
- */
-export const bun_backend_config = (): BackendConfig => {
-	const name = 'bun';
-	const paths = build_zzz_paths(name);
-	return make_default_ts_backend_config({
-		name,
-		port: 11743,
-		capabilities: ts_capabilities,
-		start_command: ['bun', 'run', 'src/lib/server/testing_server_bun.ts'],
-		paths,
-		extra_env: {
-			PUBLIC_ZZZ_DIR: paths.zzz_dir,
-			PUBLIC_ZZZ_SCOPED_DIRS: paths.scoped_dir,
-		},
-	});
 };
 
 interface MakeZzzRustBackendOptions {

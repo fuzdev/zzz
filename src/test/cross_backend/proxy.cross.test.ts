@@ -168,7 +168,9 @@ const wait_for_login_failure_ip = async (
 	}
 	throw new Error(
 		`wait_for_login_failure_ip(${username}): no row matched within ${timeout_ms}ms` +
-			(last_error ? ` (last error: ${String(last_error)})` : ''),
+			(last_error
+				? ` (last error: ${last_error instanceof Error ? last_error.message : JSON.stringify(last_error)})`
+				: ''),
 	);
 };
 

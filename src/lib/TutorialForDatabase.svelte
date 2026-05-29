@@ -15,9 +15,8 @@
 			<aside out:scale={{duration: DURATION_LG, easing: (t) => sineInOut(t / 3)}}>
 				<p>
 					⚠️ This is an early prototype and your prompts are not saved yet, they are gone when you
-					refresh the page. Soon the Node backend will persist data to a Postgres or pglite
-					database. (<ExternalLink href="https://github.com/fuzdev/zzz/issues/7"
-						>issue 7</ExternalLink
+					refresh the page. Soon the backend will persist data to a Postgres database. (<ExternalLink
+						href="https://github.com/fuzdev/zzz/issues/7">issue 7</ExternalLink
 					>)
 				</p>
 				<button

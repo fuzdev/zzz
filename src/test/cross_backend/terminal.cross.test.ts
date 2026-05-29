@@ -35,32 +35,32 @@ describe('terminal cross-backend', () => {
 		try {
 			await ws.request('_warmup', 'ping', undefined);
 
-			const result = (await ws.request('tc-1', 'terminal_create', {
+			const result = await ws.request<Record<string, unknown>>('tc-1', 'terminal_create', {
 				command: 'echo',
 				args: ['hello'],
-			})) as Record<string, unknown>;
+			});
 			const terminal_id = result.terminal_id as string;
 			assert.equal(typeof terminal_id, 'string');
 			assert.ok(terminal_id.length > 0, 'terminal_id not empty');
 
 			// Wait for terminal_data containing 'hello'.
-			const data_msg = (await ws.wait_for((msg) => {
+			const data_msg = await ws.wait_for<Record<string, unknown>>((msg) => {
 				if (!msg || typeof msg !== 'object') return false;
 				const m = msg as Record<string, unknown>;
 				if (m.method !== 'terminal_data') return false;
 				const params = m.params as Record<string, unknown> | undefined;
 				if (!params) return false;
 				return params.terminal_id === terminal_id && String(params.data).includes('hello');
-			}, 5_000)) as Record<string, unknown>;
+			}, 5_000);
 			assert.ok(data_msg);
 
-			const exited_msg = (await ws.wait_for((msg) => {
+			const exited_msg = await ws.wait_for<Record<string, unknown>>((msg) => {
 				if (!msg || typeof msg !== 'object') return false;
 				const m = msg as Record<string, unknown>;
 				if (m.method !== 'terminal_exited') return false;
 				const params = m.params as Record<string, unknown> | undefined;
 				return params?.terminal_id === terminal_id;
-			}, 5_000)) as Record<string, unknown>;
+			}, 5_000);
 			const exit_params = exited_msg.params as Record<string, unknown>;
 			assert.equal(exit_params.exit_code, 0, 'exit_code is 0');
 		} finally {
@@ -78,15 +78,15 @@ describe('terminal cross-backend', () => {
 		try {
 			await ws.request('_warmup', 'ping', undefined);
 
-			const create_result = (await ws.request('tcl-1', 'terminal_create', {
+			const create_result = await ws.request<Record<string, unknown>>('tcl-1', 'terminal_create', {
 				command: 'sleep',
 				args: ['60'],
-			})) as Record<string, unknown>;
+			});
 			const terminal_id = create_result.terminal_id as string;
 
-			const close_result = (await ws.request('tcl-2', 'terminal_close', {
+			const close_result = await ws.request<Record<string, unknown>>('tcl-2', 'terminal_close', {
 				terminal_id,
-			})) as Record<string, unknown>;
+			});
 			assert.ok(
 				close_result.exit_code === null || typeof close_result.exit_code === 'number',
 				'exit_code is number or null',
@@ -106,10 +106,10 @@ describe('terminal cross-backend', () => {
 		try {
 			await ws.request('_warmup', 'ping', undefined);
 
-			const create_result = (await ws.request('twr-1', 'terminal_create', {
+			const create_result = await ws.request<Record<string, unknown>>('twr-1', 'terminal_create', {
 				command: 'cat',
 				args: [],
-			})) as Record<string, unknown>;
+			});
 			const terminal_id = create_result.terminal_id as string;
 			assert.equal(typeof terminal_id, 'string');
 
@@ -119,14 +119,14 @@ describe('terminal cross-backend', () => {
 			});
 			assert.equal(write_result, null, 'write result is null');
 
-			const echo_msg = (await ws.wait_for((msg) => {
+			const echo_msg = await ws.wait_for<Record<string, unknown>>((msg) => {
 				if (!msg || typeof msg !== 'object') return false;
 				const m = msg as Record<string, unknown>;
 				if (m.method !== 'terminal_data') return false;
 				const params = m.params as Record<string, unknown> | undefined;
 				if (!params || params.terminal_id !== terminal_id) return false;
 				return String(params.data).includes('integration test');
-			}, 5_000)) as Record<string, unknown>;
+			}, 5_000);
 			assert.ok(echo_msg);
 
 			await ws.request('twr-3', 'terminal_close', {terminal_id}).catch(() => undefined);
@@ -145,10 +145,10 @@ describe('terminal cross-backend', () => {
 		try {
 			await ws.request('_warmup', 'ping', undefined);
 
-			const create_result = (await ws.request('trl-1', 'terminal_create', {
+			const create_result = await ws.request<Record<string, unknown>>('trl-1', 'terminal_create', {
 				command: 'sleep',
 				args: ['60'],
-			})) as Record<string, unknown>;
+			});
 			const terminal_id = create_result.terminal_id as string;
 
 			const resize_result = await ws.request('trl-2', 'terminal_resize', {
@@ -174,20 +174,20 @@ describe('terminal cross-backend', () => {
 		try {
 			await ws.request('_warmup', 'ping', undefined);
 
-			const create_result = (await ws.request('tcc-1', 'terminal_create', {
+			const create_result = await ws.request<Record<string, unknown>>('tcc-1', 'terminal_create', {
 				command: 'pwd',
 				args: [],
 				cwd: '/tmp',
-			})) as Record<string, unknown>;
+			});
 			assert.equal(typeof create_result.terminal_id, 'string');
 
-			const data_msg = (await ws.wait_for((msg) => {
+			const data_msg = await ws.wait_for<Record<string, unknown>>((msg) => {
 				if (!msg || typeof msg !== 'object') return false;
 				const m = msg as Record<string, unknown>;
 				if (m.method !== 'terminal_data') return false;
 				const params = m.params as Record<string, unknown> | undefined;
 				return !!params && String(params.data).includes('/tmp');
-			}, 5_000)) as Record<string, unknown>;
+			}, 5_000);
 			assert.ok(data_msg);
 		} finally {
 			await ws.close();
@@ -212,10 +212,14 @@ describe('terminal cross-backend', () => {
 			let terminal_id: string | undefined;
 			let create_error: Error | undefined;
 			try {
-				const create_result = (await ws.request('tcne-1', 'terminal_create', {
-					command: '/nonexistent/binary_zzz_test',
-					args: [],
-				})) as Record<string, unknown>;
+				const create_result = await ws.request<Record<string, unknown>>(
+					'tcne-1',
+					'terminal_create',
+					{
+						command: '/nonexistent/binary_zzz_test',
+						args: [],
+					},
+				);
 				terminal_id = create_result.terminal_id as string;
 				assert.equal(typeof terminal_id, 'string');
 			} catch (e) {
@@ -228,13 +232,13 @@ describe('terminal cross-backend', () => {
 			} else {
 				// Forkpty path: child exits 127. Wait for the terminal_exited
 				// notification matching the just-created terminal_id.
-				const exited = (await ws.wait_for((msg) => {
+				const exited = await ws.wait_for<Record<string, unknown>>((msg) => {
 					if (!msg || typeof msg !== 'object') return false;
 					const m = msg as Record<string, unknown>;
 					if (m.method !== 'terminal_exited') return false;
 					const params = m.params as Record<string, unknown> | undefined;
 					return params?.terminal_id === terminal_id;
-				}, 5_000)) as Record<string, unknown>;
+				}, 5_000);
 				const exit_params = exited.params as Record<string, unknown>;
 				assert.equal(exit_params.exit_code, 127, 'exit_code is 127');
 			}

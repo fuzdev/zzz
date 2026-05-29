@@ -33,19 +33,16 @@ const make_cross_backend_project = (name: string, proxy_only = false) => ({
 	},
 });
 
-// The `cross_backend_*` projects spawn real backend binaries via `globalSetup`
-// (TS adapters in-process; the rust variants need a built rust binary + a
-// `zzz_test*` Postgres DB). Gate them behind `FUZ_TEST_CROSS_BACKEND=1` so a
-// bare `gro test` stays a fast, infra-free unit+db run and never spawns. Set
-// the flag to opt in — required both for `gro test` to include them and for
-// explicit `npx vitest run --project cross_backend_*` runs.
+// The `cross_backend_*` projects spawn the real Rust `zzz_server` binary via
+// `globalSetup` (needs a built rust binary + a `zzz_test*` Postgres DB). Gate
+// them behind `FUZ_TEST_CROSS_BACKEND=1` so a bare `gro test` stays a fast,
+// infra-free unit+db run and never spawns. Set the flag to opt in — required
+// both for `gro test` to include them and for explicit
+// `npx vitest run --project cross_backend_*` runs.
 const cross_backend_enabled = !!process.env.FUZ_TEST_CROSS_BACKEND;
 
 const cross_backend_projects = cross_backend_enabled
 	? [
-			make_cross_backend_project('cross_backend_ts_deno'),
-			make_cross_backend_project('cross_backend_ts_node'),
-			make_cross_backend_project('cross_backend_ts_bun'),
 			make_cross_backend_project('cross_backend_rust'),
 			make_cross_backend_project('cross_backend_rust_proxy', true),
 		]

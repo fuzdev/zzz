@@ -3,15 +3,13 @@
  *
  * Calls `describe_cross_process_sse_tests` against the spawned backend's
  * `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`
- * on the Rust backend, `create_audit_log_route_specs({stream})` on the TS
- * canonical backend. Three cases (the `: connected` comment, an audit `data:`
+ * on the Rust backend. Three cases (the `: connected` comment, an audit `data:`
  * frame on `admin_session_revoke_all`, and close-on-revoke on
- * `account_session_revoke_all`) assert one wire contract on both backends — the
- * "SSE broadcast of audit events" parity coverage that gates removing the TS
- * backend.
+ * `account_session_revoke_all`) assert the audit-log SSE wire contract against
+ * the fuz_app standard.
  *
- * Gated on `capabilities.sse` (set on every zzz backend config — both backends
- * serve the route). The keeper holds `ROLE_ADMIN` (via `extra_keeper_roles`) so
+ * Gated on `capabilities.sse` (set on the zzz backend config — the backend
+ * serves the route). The keeper holds `ROLE_ADMIN` (via `extra_keeper_roles`) so
  * it can subscribe to the admin-gated stream and drive `admin_session_revoke_all`
  * in the data-frame case. Cross-process only — `create_sse_transport` needs a
  * real bound socket, so this lives in a `*.cross.test.ts`, never an in-process

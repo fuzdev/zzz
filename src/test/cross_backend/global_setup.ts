@@ -2,17 +2,13 @@
  * Vitest `globalSetup` for zzz cross-backend integration suites.
  *
  * Reads the project's `name` to pick which backend config to spawn
- * ({@link deno_backend_config} / {@link node_backend_config} /
- * {@link bun_backend_config} / {@link rust_backend_config} /
- * {@link rust_proxy_backend_config}),
+ * ({@link rust_backend_config} / {@link rust_proxy_backend_config}),
  * invokes `bootstrap_backend(config)` to spawn the binary + bootstrap
  * the keeper, and `provide('backend_handle', bootstrapped)` so
  * `*.cross.test.ts` files can `inject('backend_handle')`.
  *
  * Each vitest project sets its own discriminator via `test.name`
- * (`cross_backend_ts_deno`, `cross_backend_ts_node`,
- * `cross_backend_ts_bun`, `cross_backend_rust`,
- * `cross_backend_rust_proxy`). vitest 4 passes
+ * (`cross_backend_rust`, `cross_backend_rust_proxy`). vitest 4 passes
  * the `TestProject` instance to globalSetup as the first argument so
  * the project name is the source of truth — no `process.env`-based
  * hand-off is required (an earlier draft used `test.env` for this,
@@ -32,22 +28,15 @@ import type {BackendConfig} from '@fuzdev/fuz_app/testing/cross_backend/backend_
 import {serialize_bootstrapped_handle} from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
 
 import './cross_test_types.js';
-import {
-	bun_backend_config,
-	deno_backend_config,
-	node_backend_config,
-	rust_backend_config,
-	rust_proxy_backend_config,
-} from './zzz_backend_config.js';
+import {rust_backend_config, rust_proxy_backend_config} from './zzz_backend_config.js';
 
 /**
- * Strips the `cross_backend_` prefix (plus an optional `ts_`
- * discriminator the TS canonical backends carry) to derive the backend
- * name from the project name. Project names that don't reduce to a
- * known backend fall through to {@link pick_backend_config}'s
- * `default: throw` so typos surface clearly.
+ * Strips the `cross_backend_` prefix to derive the backend name from the
+ * project name. Project names that don't reduce to a known backend fall
+ * through to {@link pick_backend_config}'s `default: throw` so typos
+ * surface clearly.
  */
-const PROJECT_NAME_PREFIX = /^cross_backend_(?:ts_)?/;
+const PROJECT_NAME_PREFIX = /^cross_backend_/;
 
 /**
  * Resolve a derived backend name to its `BackendConfig` factory
@@ -56,12 +45,6 @@ const PROJECT_NAME_PREFIX = /^cross_backend_(?:ts_)?/;
  */
 const pick_backend_config = (name: string): BackendConfig => {
 	switch (name) {
-		case 'deno':
-			return deno_backend_config();
-		case 'node':
-			return node_backend_config();
-		case 'bun':
-			return bun_backend_config();
 		case 'rust':
 			return rust_backend_config();
 		case 'rust_proxy':
@@ -69,7 +52,7 @@ const pick_backend_config = (name: string): BackendConfig => {
 		default:
 			throw new Error(
 				`Could not derive backend name from vitest project '${name}' — ` +
-					`expected one of: deno, node, bun, rust, rust_proxy`,
+					`expected one of: rust, rust_proxy`,
 			);
 	}
 };

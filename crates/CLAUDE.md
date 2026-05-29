@@ -1,16 +1,12 @@
 # zzz Rust Backend
 
-zzz's backend going forward, using axum. Same JSON-RPC 2.0 protocol and wire
-format as the legacy TS/Deno backend (`src/lib/server/`), which is retained
-only as the cross-backend parity reference. This Rust backend has reached
-full behavioral parity — the SSE audit broadcast landed and Ollama (the last
-divergence) has been retired from zzz entirely — so the TS backend is now
-slated for removal. The integration tests enforce identical behaviour between
-the two backends, gating that removal.
+zzz's backend, using axum. Serves the frontend (a prerendered static SPA) and
+a single JSON-RPC 2.0 API over HTTP + WebSocket. AI providers are Anthropic
+(full) plus OpenAI/Gemini status-only stubs.
 
 **Workspace layout**:
 - `zzz_server/` — library + production binary. `pub async fn run_app(options: RunAppOptions)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, drain). `RunAppOptions` carries: `password_hasher` (production-vs-test swap), `default_port`, `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag), and `extra_action_specs_factory` (lets the test binary inject `_testing_reset` without putting `fuz_testing` in the production dep graph). `src/main.rs` is the thin production entry — constructs `Argon2idHasher`, calls `run_app` with `force_test_actions: false, extra_action_specs_factory: None`.
-- `testing_zzz_server/` — separate test-binary package wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) AND `fuz_testing::create_testing_reset_action_spec` (auth-table wipe + fresh-keeper re-seed + consumer-supplied `reset_state(ActionDb)` callback; `credential_types: [DaemonToken]` auth gate). zzz's reset closure ignores the in-tx `ActionDb` handle (its domain state is in-memory, not in PG) — it clears zzz workspaces, calls `pty_manager.kill_all()` (non-destructive — manager stays usable across tests), and wipes the optional `ZZZ_TESTING_SCRATCH_DIR`. Default port 1175 (production is 1174). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. **TS-side peers**: `../src/lib/server/testing_server_{deno,node}.ts` over a shared `testing_server_core.ts` cover the same `_testing_reset` wire contract on the TS canonical backend — together the three test entries (Rust + Deno + Node) span both the cross-language axis (TS vs Rust) and the cross-runtime axis (Deno V8 vs Node V8) on the same wire shape.
+- `testing_zzz_server/` — separate test-binary package wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) AND `fuz_testing::create_testing_reset_action_spec` (auth-table wipe + fresh-keeper re-seed + consumer-supplied `reset_state(ActionDb)` callback; `credential_types: [DaemonToken]` auth gate). zzz's reset closure ignores the in-tx `ActionDb` handle (its domain state is in-memory, not in PG) — it clears zzz workspaces, calls `pty_manager.kill_all()` (non-destructive — manager stays usable across tests), and wipes the optional `ZZZ_TESTING_SCRATCH_DIR`. Default port 1175 (production is 1174). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. It is zzz's test binary, spawned by the cross-process integration tests.
 - `xtask/` — dev automation. `cargo xtask check-release` thin-wraps `fuz_audit::run_check_release_cli()`; marked `[package.metadata.fuz_audit] dev_only = true` so xtask itself is excluded from the production scan.
 - `zzz/` — Rust CLI scaffold (argh, stubs only).
 
@@ -24,12 +20,9 @@ boot-compiled `ActionRegistry` dispatch path. A single canonical
 from fuz_auth's `auth_adapter::build_auth_spec_set`, the zzz-specific
 workspace / filesystem / terminal / provider specs from
 `zzz_action_specs/` (handlers in `handlers_v2/`), and the admin audit-log
-SSE stream from `fuz_realtime::audit_stream_router`. The legacy in-house
-dispatch surface (`Ctx` / `dispatch` / per-domain `handlers/*` / `auth/` /
-`account/` / `db/` / `bootstrap.rs` / `audit/` / `rate_limiter.rs` /
-`proxy.rs` / `api_token.rs` / `daemon_token.rs` / `perform_action.rs` /
-`ws.rs`) was retired; `handlers/` now holds only `App` state plus a few
-`broadcast` / `close_sockets_for_*` shims over `App.realtime`. 25 RPC methods:
+SSE stream from `fuz_realtime::audit_stream_router`. `handlers/` holds only
+`App` state plus a few `broadcast` / `close_sockets_for_*` shims over
+`App.realtime`. 25 RPC methods:
 `ping`, `session_load`, `workspace_*`, `diskfile_*`, `directory_create`,
 `terminal_*`, `provider_load_status`, `provider_update_api_key`,
 `completion_create`, `account_verify`, `account_session_list`,
@@ -52,21 +45,23 @@ SSE parsing for streaming completions.
 
 ## Prerequisites
 
-`private_fuz` must be checked out as a sibling directory:
+The sibling Rust workspace must be checked out alongside this repo:
 
 ```
-~/dev/zzz/               (this repo)
-~/dev/private_fuz/        (path deps: fuz_common, fuz_pty, plus the 5 spine crates — fuz_db, fuz_auth, fuz_http, fuz_realtime, fuz_actions)
+~/dev/zzz/                  (this repo)
+<sibling Rust workspace>/   (path deps: fuz_common, fuz_pty, plus the 5 spine crates — fuz_db, fuz_auth, fuz_http, fuz_realtime, fuz_actions)
 ```
 
 If a path dep is missing, `cargo build` will fail with
-`failed to read .../private_fuz/crates/{crate}/Cargo.toml`.
+`failed to read .../crates/{crate}/Cargo.toml`.
 
 **PostgreSQL** is required. Create the development and test databases:
 
 ```bash
-createdb zzz       # development
-createdb zzz_test  # integration tests
+createdb zzz                 # development
+createdb zzz_test            # manual testing_zzz_server runs
+createdb zzz_test_rust        # cross-backend vitest project: cross_backend_rust
+createdb zzz_test_rust_proxy  # cross-backend vitest project: cross_backend_rust_proxy
 ```
 
 ## Build and Run
@@ -133,9 +128,6 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 | GET    | `/api/admin/audit/stream`         | Admin-gated audit-log SSE stream (`text/event-stream`) |
 | GET    | `/health`                         | Health check (`{"status":"ok"}`)         |
 | GET    | `/*`                              | Static files (if `--static-dir`)         |
-
-Route paths match the Deno server — both backends use the same `/api/*` prefix.
-Integration tests use identical config for both backends.
 
 ## Auth
 
@@ -214,70 +206,59 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
 
 ## Integration Tests
 
-94 cross-backend tests (95 with the new `login_forbidden_origin` shared
-test) + 17 Rust-only (`bearer_rejects_account_token_create_ws` skipped on
-Deno per the deferred fuz_app upstream; `rate_limit_login_blocks_after_threshold`
-skipped on Deno because the rate-limit env-var gate is Rust-only — Deno's
-limiter is fuz_app's concern; ten `proxy_*` tests skipped on Deno because
-fuz_app already covers the TS port of the proxy module at the unit-test
-layer in `http/proxy.test.ts` (87 cases) and `crates/zzz_server/src/proxy.rs`
-carries 86 `#[cfg(test)]` unit tests Rust-side, plus 7 `origin_tests` in
-`auth/spec.rs` covering the shared `is_request_origin_allowed` helper; five
-`admin_*` tests skipped on Deno because the Deno reference backend does
-not expose admin RPC methods today). All
-cross-backend tests pass on both
-backends (0 skips on the shared set). Both backends bootstrap
-auth (admin account + session cookie), create a non-keeper user (account +
-actor + session, no
-keeper role grant, cookie signed via HMAC-SHA256), and insert API tokens into
+The cross-process integration suite runs fuz_app's standard suites against
+`zzz_server` over real HTTP, verifying its responses conform to the shared
+fuz_app contract. The harness bootstraps auth (admin account + session
+cookie), creates a non-keeper user (account + actor + session, no keeper
+role grant, cookie signed via HMAC-SHA256), and inserts API tokens into
 the `api_token` table before tests. The test database (`zzz_test` by default,
 configurable via `TEST_DATABASE_URL`) is cleaned (TRUNCATE CASCADE) before
-each backend run. A scoped directory (`/tmp/zzz_integration_scoped`) is
+the run. A scoped directory (`/tmp/zzz_integration_scoped`) is
 created for filesystem tests. Tests are split across modules: `tests.ts`
 (core RPC, auth, filesystem, terminal tests), `bearer_tests.ts` (bearer
 token auth, keeper credential enforcement, session revocation),
 `account_tests.ts` (login, logout, password change, session management),
 `test_helpers.ts` (shared assertion and HTTP/WS helpers).
 
-**WS tests (both backends):** `ping_ws`, `parse_error_ws`,
+**WS tests:** `ping_ws`, `parse_error_ws`,
 `method_not_found_ws`, `invalid_request_ws`, `notification_ws`,
-`multi_message_ws`, `ws_workspace_list` — 7 tests verify identical WS
+`multi_message_ws`, `ws_workspace_list` — 7 tests verify WS
 behaviour including authenticated actions over WebSocket.
 
-**HTTP tests (both backends):** `null_id_is_invalid`, `parse_error_http`,
+**HTTP tests:** `null_id_is_invalid`, `parse_error_http`,
 `parse_error_empty_body`, `method_not_found_http`, `invalid_request_*`
-(4 variants), `notification_http` — 9 tests verify identical HTTP behaviour.
+(4 variants), `notification_http` — 9 tests verify HTTP behaviour.
 
-**HTTP tests (both backends):** `ping_http`, `ping_numeric_id` — ping handler
+**HTTP tests:** `ping_http`, `ping_numeric_id` — ping handler
 echoes the JSON-RPC request id back as `ping_id`.
 
-**Cross-backend:** `health_check` — 1 test on both backends.
+**Health:** `health_check` — 1 test.
 
-**Workspace tests (both backends):** `workspace_open_and_list`,
+**Workspace tests:** `workspace_open_and_list`,
 `workspace_open_idempotent`, `workspace_open_nonexistent`,
 `workspace_close` — 4 tests.
 
-**Workspace notification tests (both backends):**
+**Workspace notification tests:**
 `workspace_changed_on_open`, `workspace_changed_on_close`,
 `workspace_changed_idempotent_no_notification` — 3 tests verify
 `workspace_changed` notifications are broadcast to WebSocket clients on
 workspace open/close, and that idempotent opens do not broadcast.
 
-**Auth tests (both backends):** `auth_required_without_cookie`,
+**Auth tests:** `auth_required_without_cookie`,
 `auth_required_invalid_cookie`, `auth_public_no_cookie`,
 `auth_keeper_forbidden` — 4 tests verify auth enforcement (unauthenticated
 → -32001/401, public → success, non-keeper calling keeper action → -32002/403).
 
-**WebSocket auth test (both backends):** `ws_auth_required` — 1 test verifies
+**WebSocket auth test:** `ws_auth_required` — 1 test verifies
 unauthenticated WS upgrade is rejected.
 
-**Session/provider tests (both backends):** `session_load_basic`,
+**Session/provider tests:** `session_load_basic`,
 `session_load_returns_zzz_dir_files`, `session_load_returns_nested_files`,
 `provider_load_status_empty` — 4 tests verify session data loading
 (including zzz_dir file listing with contents and recursive subdirectory
 walk) and provider status stub.
 
-**Filesystem tests (both backends):** `diskfile_update_and_read`,
+**Filesystem tests:** `diskfile_update_and_read`,
 `diskfile_update_in_zzz_dir`, `diskfile_update_in_zzz_dir_subdirectory`,
 `diskfile_delete`, `directory_create`, `directory_create_already_exists`,
 `diskfile_update_outside_scope`, `diskfile_update_path_traversal`,
@@ -286,14 +267,14 @@ verify scoped filesystem operations (including writes to zzz_dir and nested
 subdirectories), idempotent directory creation, path traversal rejection,
 relative path rejection, and nonexistent file deletion.
 
-**Workspace edge cases (both backends):** `workspace_open_not_directory` —
+**Workspace edge cases:** `workspace_open_not_directory` —
 1 test verifies opening a file (not a directory) returns an error.
 
-**File watcher tests (both backends):** `filer_change_on_file_create` —
+**File watcher tests:** `filer_change_on_file_create` —
 1 test verifies `filer_change` notifications are broadcast when files are
 created in an open workspace.
 
-**Terminal tests (both backends):** `terminal_create_echo`,
+**Terminal tests:** `terminal_create_echo`,
 `terminal_close`, `terminal_write_and_read`, `terminal_resize_live`,
 `terminal_create_with_cwd`, `terminal_create_nonexistent_command`,
 `terminal_data_send_missing`, `terminal_close_missing`,
@@ -303,18 +284,18 @@ stdin write with echo verification, live resize, explicit cwd, nonexistent
 command handling, explicit process kill, and silent return behavior for
 missing terminal IDs.
 
-**Non-keeper tests (both backends):** `non_keeper_authenticated_action`,
+**Non-keeper tests:** `non_keeper_authenticated_action`,
 `auth_keeper_forbidden` — 2 tests verify non-keeper users can access
 authenticated actions but are rejected from keeper actions.
 
-**Bearer token tests (both backends unless noted):**
+**Bearer token tests:**
 `bearer_token_auth`, `bearer_token_invalid`, `bearer_token_expired`,
 `bearer_token_public_action`, `bearer_token_ws`,
 `bearer_token_ws_rejected_invalid`, `keeper_requires_daemon_token`,
 `ws_revocation_on_session_delete`, `ws_revocation_only_for_revoked_token`,
 `bearer_rejects_browser_context_origin`,
 `bearer_rejects_browser_context_referer`, `bearer_empty_value`,
-`bearer_cookie_priority` — 13 tests verify API token auth via
+`bearer_cookie_priority` — verify API token auth via
 `Authorization: Bearer` header on HTTP and WebSocket, expired/invalid token
 rejection, keeper credential enforcement (API tokens can't access keeper
 actions), session revocation via DB delete, per-token revocation granularity
@@ -322,7 +303,7 @@ actions), session revocation via DB delete, per-token revocation granularity
 same account), browser context discard (Origin/Referer headers → bearer
 silently ignored), empty bearer value handling, and cookie-over-bearer priority.
 
-**Audit emission tests (both backends):** `audit_bootstrap_success`,
+**Audit emission tests:** `audit_bootstrap_success`,
 `audit_token_create_records_credential_type`,
 `audit_session_revoke_all_records_credential_type`,
 `audit_password_change_records_credential_type`,
@@ -331,14 +312,13 @@ verify the bootstrap success row (carries `account_id` + `actor_id`,
 `metadata: null`) plus the four credential-gated paths (RPC
 `account_token_create` / `account_session_revoke_all` + REST
 `POST /password` on success and wrong-password failure) writing
-`audit_log` rows with `metadata.credential_type === 'session'` (the
-v0.63.0 wire-shape contract). The `password_change_concurrent_change`
-test under §Account management additionally verifies
-`metadata.reason === 'concurrent_change'` on the verify-write race
-loser. Direct `psql` query against the `audit_log` table — no
-admin RPC route required.
+`audit_log` rows with `metadata.credential_type === 'session'`. The
+`password_change_concurrent_change` test under §Account management
+additionally verifies `metadata.reason === 'concurrent_change'` on the
+verify-write race loser. Direct `psql` query against the `audit_log`
+table — no admin RPC route required.
 
-**Account management tests (both backends):**
+**Account management tests:**
 `login_success`, `login_invalid_password`, `login_nonexistent_user`,
 `logout_clears_session`, `logout_unauthenticated`,
 `password_change_revokes_all`, `password_wrong_current`,
@@ -355,20 +335,19 @@ password changes against the same starting hash: one wins, one returns
 (no `password_hash` leak), bulk session revocation closing every socket
 on the account (cookie, bearer, and daemon-token — matches fuz_app
 `transports_ws_auth_guard`), token creation with bearer round-trip
-(raw `secret_fuz_token_…` validates against the same backend's
+(raw `secret_fuz_token_…` validates against the
 `Authorization: Bearer` path), and token listing in `ClientApiTokenJson`
 shape (no `token_hash` field anywhere).
 
-**Rate limit tests (Rust-only):** `rate_limit_login_blocks_after_threshold`
-— runs in a dedicated post-suite phase that restarts the Rust backend
+**Rate limit tests:** `rate_limit_login_blocks_after_threshold`
+— runs in a dedicated post-suite phase that restarts the backend
 with `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1`. Fires 5 failed logins, asserts
 the 6th returns 429 with `{error: 'rate_limit_exceeded', retry_after}`
 plus a `Retry-After` header, and asserts correct credentials are also
 blocked while the bucket is full (the limiter check runs before
-argon2 verify). Skipped on Deno via `skip: ['deno']` — Deno's rate
-limiter is fuz_app's concern.
+argon2 verify).
 
-**Trusted-proxy tests (Rust-only):** `proxy_no_xff_uses_connection_ip`,
+**Trusted-proxy tests:** `proxy_no_xff_uses_connection_ip`,
 `proxy_trusted_xff_resolves_to_originator`,
 `proxy_multi_hop_stops_at_first_untrusted`,
 `proxy_malformed_xff_entry_skipped`,
@@ -378,48 +357,42 @@ limiter is fuz_app's concern.
 `proxy_ipv4_mapped_xff_normalizes`,
 `proxy_multi_hop_with_malformed_then_untrusted`,
 `proxy_all_malformed_xff_falls_back_to_connection_ip` — runs in a
-dedicated post-suite phase that restarts the Rust backend with
+dedicated post-suite phase that restarts the backend with
 `ZZZ_TRUSTED_PROXIES=127.0.0.1`. Each test triggers a failed login
 under a unique `proxy-test-<label>-<uuid>` username and asserts the
 resulting `audit_log.ip` row matches the expected resolved client IP
-for that XFF + connection-IP combination. Skipped on Deno via
-`skip: ['deno']` — fuz_app covers the TS port at the unit-test layer
-in `http/proxy.test.ts` (87 cases); `crates/zzz_server/src/proxy.rs`
-ships 86 Rust unit tests covering the pure functions
-(`normalize_ip` including the IPv6 canonicalization and the
-ipv4-mapped collapse ordering, `validate_ip_strict`,
-`parse_proxy_entry` + all `ProxyParseError` variants including the
-non-aligned `/0` regressions, `parse_proxy_list`, `is_trusted_ip`
-including the cross-family CIDR guard, `resolve_client_ip` including
-malformed-skip and leftmost-fallback, `cidr_contains` shift-edge
-cases).
+for that XFF + connection-IP combination. The pure functions are also
+covered by the 86 `#[cfg(test)]` unit tests in
+`crates/zzz_server/src/proxy.rs` (`normalize_ip` including IPv6
+canonicalization and the ipv4-mapped collapse ordering,
+`validate_ip_strict`, `parse_proxy_entry` + all `ProxyParseError`
+variants including the non-aligned `/0` regressions, `parse_proxy_list`,
+`is_trusted_ip` including the cross-family CIDR guard, `resolve_client_ip`
+including malformed-skip and leftmost-fallback, `cidr_contains`
+shift-edge cases).
 
 ```bash
-npm run test:cross:rust                                                   # Both rust projects (rust + rust_proxy) — flag baked in
-npm run test:cross                                                        # Both TS projects (ts_node + ts_deno; no external infra)
-FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Single project (Rust binary; postgres://localhost/zzz_test)
+npm run test:cross                                                        # Both rust projects (rust + rust_proxy) — flag baked in
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Single project (Rust binary; postgres://localhost/zzz_test_rust)
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust_proxy # Single project (proxy variant; ZZZ_TRUSTED_PROXIES=127.0.0.1, proxy.cross.test.ts only)
-FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_ts_node    # Single project (Node TS adapter; PGlite in-memory)
-FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_ts_deno    # Single project (Deno TS adapter; PGlite in-memory)
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run -t ping                            # Substring match on test name (vitest -t flag)
 ```
 
 The `cross_backend_*` projects are gated behind `FUZ_TEST_CROSS_BACKEND=1`
 in `vite.config.ts` so a bare `gro test` never spawns backends. The
-`test:cross` / `test:cross:rust` package.json scripts bake the flag in
-(and run via `deno task` under Deno 2); set the flag manually only for the
+`test:cross` package.json script bakes the flag in (and runs via
+`deno task` under Deno 2); set the flag manually only for the
 single-project `--project` runs.
 
-The harness writes a bootstrap token to a per-backend tmpdir, spawns the
-test binary via the project's `BackendConfig.start_command`, waits for
-health, bootstraps an admin account via `POST /api/account/bootstrap`,
-then provides the bootstrapped handle to test files via vitest's
+The harness writes a bootstrap token to a tmpdir, spawns the test binary
+via the project's `BackendConfig.start_command`, waits for health,
+bootstraps an admin account via `POST /api/account/bootstrap`, then
+provides the bootstrapped handle to test files via vitest's
 `inject('backend_handle')`. SIGTERM on globalSetup teardown leaves no
-stranded ports. Rust projects target a real PostgreSQL at
-`postgres://localhost/zzz_test` (cleaned by `_testing_reset` between
-tests, preserving the keeper row); TS projects target in-memory
-PGlite. The old `zzz/test/integration/` runner this section once
-described was deleted in cross-process lift §3d.9.
+stranded ports. Each project targets its own real PostgreSQL DB
+(`zzz_test_rust` / `zzz_test_rust_proxy`), with its auth-namespace schema
+wiped on backend startup (`FUZ_TESTING_RESET_DB_ON_STARTUP`) and
+`_testing_reset` clearing it between tests (preserving the keeper row).
 
 ## Architecture
 
@@ -460,10 +433,8 @@ crates/zzz_server/src/
 Auth, HTTP / origin / proxy, realtime (WS + SSE), dispatch (`ActionRegistry`
 + `perform_action`), and DB pool / migrations all live in the spine crates
 (`fuz_auth` / `fuz_http` / `fuz_realtime` / `fuz_actions` / `fuz_db`) —
-`zzz_server` composes them in `run_app`. The legacy in-house `auth/`,
-`account/`, `db/`, `audit/`, `bootstrap.rs`, `rate_limiter.rs`, `proxy.rs`,
-`api_token.rs`, `daemon_token.rs`, `perform_action.rs`, `ws.rs`, and
-per-domain `handlers/*` modules were retired.
+`zzz_server` composes them in `run_app`. `handlers/` holds only `App` state
+plus the `broadcast` / `close_sockets_for_*` shims over `App.realtime`.
 
 **App + dispatch**: `App` (in `handlers/mod.rs`) holds zzz's long-lived,
 non-spine state — `workspaces` (`RwLock<HashMap>`), `db_pool`, `ScopedFs`,
@@ -525,36 +496,16 @@ metadata contract, the bootstrap success/failure audit rows, and the
   connections via `close_sockets_for_session`/`close_sockets_for_account`).
   Per-message session recheck is not done — the event-driven approach is
   sufficient for current needs.
-- **error.data intentional divergence** — Deno includes Zod validation details
-  in `error.data` for -32602 errors; Rust omits for security (no schema leak to
-  unauthenticated callers). The integration test `normalize_error_data` function
-  handles this. Future: environment-conditional in both (include in dev, strip
-  in prod).
-- **filer file-size cap intentional divergence** — `filer::MAX_INDEXED_FILE_SIZE`
+- **error.data omits Zod validation details** — for -32602 (invalid params)
+  errors, `error.data` omits the Zod issues for security (no schema leak to
+  unauthenticated callers). The integration test `normalize_error_data`
+  function tolerates either shape. Future: env-conditional — include the
+  issues in dev, strip in prod.
+- **filer file-size cap** — `filer::MAX_INDEXED_FILE_SIZE`
   (4 MiB, `crates/zzz_server/src/filer.rs:22`) caps the in-memory index: files
-  over 4 MiB carry their metadata but store `contents: None`. The Deno
-  reference (`gro/src/lib/filer.ts`) and `fuz_app` have no cap today —
-  `readTextFile` runs unconditionally, so multi-MB lockfiles / generated
-  artifacts get pulled into RSS. The Rust port is deliberately stricter to
-  bound memory under workspaces containing large lockfiles or build outputs.
-  Tracked for upstream convergence so fuz_app converges DOWN to the
-  bounded posture rather than Rust loosening.
-  Cross-backend integration tests don't exercise files >4 MiB so parity is
-  maintained on the existing fixture set.
-
-### Cross-Backend Response Divergences
-
-Tracked asymmetries between the Rust backend and the legacy TS/Deno parity
-reference. Bearer auth response format (issue #1) was resolved — both backends
-now produce identical JSON-RPC envelopes for all auth failures.
-
-| Issue | Status | Detail |
-|-------|--------|--------|
-| Bearer invalid/expired token | **Resolved** | Both backends soft-fail → JSON-RPC `-32001` unauthenticated |
-| `provider_load_status` shape | **Resolved** | Both backends return `{status: ProviderStatus}` per the action spec. Test is cross-backend (no backend branching). |
-| `session_list` response | **Resolved** | Both backends now return `{sessions: [{id, account_id, created_at, last_seen_at, expires_at}]}` matching fuz_app `AuthSessionJson`. Tests are cross-backend. |
-| `session_revoke` format | **Resolved** | Both backends now return `{ok: true, revoked: boolean}` with idempotent 200 responses via the `account_session_revoke` JSON-RPC method. Tests are cross-backend. |
-| `error.data` (validation) | Intentional | Deno includes Zod issues in `error.data` for -32602; Rust omits. Intentional divergence — Rust's omission is the safer production default, Deno's inclusion aids DX. Handled by `normalize_error_data` in tests. Future: environment-conditional in both backends (include in dev, strip in prod). |
+  over 4 MiB carry their metadata but store `contents: None`. This bounds
+  memory under workspaces containing large lockfiles or build outputs.
+  The cross-backend integration tests don't exercise files >4 MiB.
 
 ## Known Limitations
 
@@ -562,9 +513,9 @@ now produce identical JSON-RPC envelopes for all auth failures.
 - 5 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debounced broadcasts with immediate index updates, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast), `completion_progress` (streaming completion chunks to requesting WS connection)
 - AI providers: Anthropic fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only)
 - No batch request support (JSON arrays)
-- `/api/account/signup` is mounted on both backends (Rust via `fuz_auth::signup_routes`, added 2026-05-19 in cross-backend-integration quest Phase 3b.2; Deno via `create_signup_route_specs`, added in cross-process 3d.4 Issue 5). Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting via `app_settings_update` to enable open signup. The cross-process test binary opts into `open_signup: true` at startup via `app_settings_patch` so per-test `mint_account` can sign up without invites. Rust `app_settings` is loaded per-request today; a cached `Arc<RwLock<AppSettings>>` shared with the future admin `app_settings_update` handler lands when that admin RPC moves to Rust.
+- `/api/account/signup` is mounted via `fuz_auth::signup_routes`. Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting via `app_settings_update` to enable open signup. The cross-process test binary opts into `open_signup: true` at startup via `app_settings_patch` so per-test `mint_account` can sign up without invites. `app_settings` is loaded per-request today; a cached `Arc<RwLock<AppSettings>>` shared with the future admin `app_settings_update` handler is planned.
 - No token management routes (GET /tokens, POST /tokens/create, etc.)
-- Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`, wired to the spine `AuditEmitter` via `fuz_realtime::register_audit_sse_listener` alongside the WS socket-revocation listeners. Byte-identical wire shape to fuz_app's `audit_log_sse`; the `sse.cross.test.ts` cross-backend suite verifies it on both backends. Close-on-revoke keys on the union of access-invalidation events, matching fuz_app's TS guard: `session_revoke` (session-hash-scoped) / `session_revoke_all` / `token_revoke_all` / `password_change` / `logout` (account-wide) / `role_grant_revoke` (role-matched). The single `token_revoke` is excluded (no SSE stream is keyed by an API token)
+- Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`, wired to the spine `AuditEmitter` via `fuz_realtime::register_audit_sse_listener` alongside the WS socket-revocation listeners. Wire shape matches fuz_app's `audit_log_sse`; the `sse.cross.test.ts` suite verifies it. Close-on-revoke keys on the union of access-invalidation events, matching fuz_app's guard: `session_revoke` (session-hash-scoped) / `session_revoke_all` / `token_revoke_all` / `password_change` / `logout` (account-wide) / `role_grant_revoke` (role-matched). The single `token_revoke` is excluded (no SSE stream is keyed by an API token)
 - Login/password rate limiting is **opt-in via `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1`** (default off so existing integration tests don't trip the bucket). When enabled, per-IP (5 attempts / 15 min) + per-account (10 / 30 min) sliding windows fire on `/login` and `/password`; 429 carries `{error: 'rate_limit_exceeded', retry_after}` plus a `Retry-After` header. Per-IP key is the resolved client IP from `proxy::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when running behind a reverse proxy so the bucket keys on the originating client rather than the proxy
 
 ## Design Decisions
@@ -588,9 +539,9 @@ now produce identical JSON-RPC envelopes for all auth failures.
 - **PTY terminals**: `fuz_pty` as a native crate dependency (no FFI
   indirection). `PtyManager` in `App` manages spawned processes with async
   read loops via `tokio::spawn`. Each terminal gets a `CancellationToken` so
-  `terminal_close` can stop the read loop before killing the process. Matching
-  Deno behavior: 10ms poll interval, 50ms wait after kill before waitpid,
-  silent returns for missing terminal IDs.
+  `terminal_close` can stop the read loop before killing the process. 10ms
+  poll interval, 50ms wait after kill before waitpid, silent returns for
+  missing terminal IDs.
 - **Provider system**: Enum-dispatched (`Provider` enum, not trait objects) —
   4 providers known at compile time, exhaustive matching. Provider state behind
   `tokio::sync::RwLock` for async `set_api_key`. `complete()` clones the
@@ -606,29 +557,21 @@ now produce identical JSON-RPC envelopes for all auth failures.
 
 ## What's Next
 
-**Rust Spine consumption — complete.** The spine crates (`fuz_db`,
+**Spine consumption — complete.** The spine crates (`fuz_db`,
 `fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`) own auth, HTTP,
 realtime, and dispatch. A single `/api/rpc` + `/api/ws` (via
 `fuz_actions::create_rpc_router` / `register_action_ws`) serves the
 boot-compiled `ActionRegistry`; account / bootstrap / signup REST come
 from fuz_auth's routers; the admin audit-log SSE stream
 (`GET /api/admin/audit/stream`) comes from
-`fuz_realtime::audit_stream_router` + `register_audit_sse_listener`. The
-legacy in-house dispatch path (`Ctx` / `dispatch` / per-domain
-`handlers/*` / `auth/` / `account/` / `db/` / `bootstrap.rs` / `audit/` /
-`rate_limiter.rs` / `proxy.rs` / `api_token.rs` / `daemon_token.rs` /
-`perform_action.rs` / `ws.rs`) was deleted — `handlers/` retains only
-`App` state + the `broadcast` / `close_sockets_for_*` shims over
-`App.realtime`.
-
-Behavioral parity is reached — Ollama (the last divergence) has been retired
-from zzz entirely, so the TS backend is ready to delete once the canonical
-parity role moves to the dual-impl forge consumer.
+`fuz_realtime::audit_stream_router` + `register_audit_sse_listener`.
+`handlers/` holds only `App` state + the `broadcast` /
+`close_sockets_for_*` shims over `App.realtime`.
 
 **AI providers** (Anthropic complete, others pending):
 - [x] Provider system: enum-dispatched `Provider` with `ProviderManager`, `ProviderStatus`, `CompletionOptions`
 - [x] Anthropic provider: full implementation with `reqwest` HTTP client, SSE streaming, message format conversion
-- [x] `provider_load_status` handler (cross-backend, all 3 providers report status)
+- [x] `provider_load_status` handler (all 3 providers report status)
 - [x] `provider_update_api_key` handler (keeper-only, runtime API key updates)
 - [x] `completion_create` handler with `completion_progress` streaming notifications (targeted to requesting WS connection)
 - [x] `session_load` returns real provider status from all providers

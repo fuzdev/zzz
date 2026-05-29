@@ -7,10 +7,6 @@
  * `ZZZ_ENABLE_TEST_ACTIONS=1`, which the cross-process test binary
  * (`testing_zzz_server`) sets unconditionally and production never does.
  *
- * In-process unit tests (`src/test/server/routes/ws.integration.*.test.ts`)
- * import the specs directly into custom action arrays — no env var needed
- * since they bypass the production registration path.
- *
  * Naming follows the test-binary safety convention — `_testing_*` /
  * `Testing*` for anything wire-visible or artifact-shipping, matching
  * `fuz_testing` / `TestingArgon2idHasher` / `testing_zzz_server`.

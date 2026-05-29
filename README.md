@@ -26,14 +26,13 @@ see the issues and [discussions](https://github.com/fuzdev/zzz/discussions).
 This project is in its early stages, and installing it
 currently requires some basic technical skills.
 Eventually there will be a desktop app but
-for now you'll need Node 22.15+
-(YMMV with Deno/Bun/etc, although Deno will be used for deployment soon)
-and Git to clone the repo.
+for now you'll need Deno, Node, a Rust toolchain (for the backend),
+PostgreSQL, and Git to clone the repo.
 
-Running Zzz locally in development with Node is the supported way to use it right now.
+Running Zzz locally in development (`deno task dev`) is the supported way to use it right now.
 It deploys via SvelteKit's static adapter with diminished capabilities
 ([zzz.software](https://www.zzz.software/)),
-and it will have a production build with the Node adapter and Hono server soon.
+and the full app is served by the Rust `zzz_server` backend.
 
 > Developing on Windows
 > requires something like [WSL](https://learn.microsoft.com/en-us/windows/wsl/install).

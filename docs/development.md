@@ -12,22 +12,12 @@ npm install
 
 Optionally add API keys to `.env.development` for remote providers (Anthropic, OpenAI, Google).
 
-### PTY support (optional)
+### PTY terminals
 
-Terminal integration uses a Rust shared library (`fuz_pty`) for real PTY
-support via Deno FFI. Without it, terminals fall back to `Deno.Command` pipes
-(commands run but no echo, no prompt, no interactivity).
-
-Build the `fuz_pty` crate with `cargo build -p fuz_pty --release` from its
-Rust workspace. This produces `target/release/libfuz_pty.so`, which zzz
-loads at runtime via `Deno.dlopen()`. The dev server needs `--allow-ffi`
-(already set in `gro.config.ts`). The compiled binary also has
-`--allow-ffi`.
-
-The library lookup checks the exe-relative path first; if that's missing,
-it reads the `FUZ_PTY_LIB` environment variable for an absolute path to
-the `.so`. For bundled/compiled binaries, place `libfuz_pty.so` next to
-the `zzz` executable.
+Terminal integration uses the `fuz_pty` Rust crate, a native dependency of
+the `zzz_server` backend (no FFI indirection). Building the backend
+(`cargo build -p zzz_server`) pulls it in. `fuz_pty` lives in a sibling
+Rust workspace, which must be checked out alongside this repo.
 
 ## Commands
 
@@ -43,7 +33,8 @@ the `zzz` executable.
 | `gro build` | Production build |
 | `gro deploy` | Deploy to production |
 
-Never run `gro dev` — the user manages the dev server.
+`deno task dev` runs the dev server (Rust backend + Vite frontend) — the
+user manages it; don't start it yourself.
 
 ## Code Generation
 
@@ -161,18 +152,10 @@ my_action: {
 },
 ```
 
-4. Add handler (`src/lib/server/zzz_action_handlers.ts`):
-
-```typescript
-my_action: async (input, ctx) => {
-  const {message} = input;
-  return {result: `Processed: ${message}`};
-},
-```
-
-Both HTTP RPC and WebSocket paths automatically pick up the new handler.
-The `ctx` arg is `{backend, request_id, notify, signal}` — see "Streaming
-handlers" below for `notify` / `signal` usage.
+4. Add the backend handler in the Rust backend (`crates/zzz_server`): a spec
+   builder in `zzz_action_specs/` and the handler fn in `handlers_v2/`. Both
+   HTTP RPC and WebSocket paths dispatch through the same `ActionRegistry`,
+   so the handler is picked up on both transports. See ../crates/CLAUDE.md.
 
 ### Streaming Handlers
 
@@ -201,22 +184,12 @@ export const my_long_job_progress_action_spec = {
 } satisfies ActionSpecUnion;
 ```
 
-In the handler, use `ctx.notify` to send chunks to the originating socket
-(request-scoped), and `ctx.signal` to terminate early when the socket closes:
-
-```typescript
-my_long_job: async (input, ctx) => {
-  for await (const chunk of produce_chunks(input)) {
-    if (ctx.signal.aborted) break;
-    ctx.notify('my_long_job_progress', chunk);
-  }
-  return null;
-},
-```
-
-For broadcast (all connected sockets) use `ctx.backend.api.<method>(input)`
-instead — appropriate for server-wide events like `filer_change` or
-`workspace_changed`.
+The backend handler sends progress chunks to the originating socket
+(request-scoped) and terminates early when the socket closes; `completion_create`
++ `completion_progress` is the worked example. Broadcasts to all connected
+sockets (server-wide events like `filer_change` or `workspace_changed`) go
+through the backend's realtime connection registry. See ../crates/CLAUDE.md
+for the Rust handler patterns.
 
 ### Adding a New Route
 

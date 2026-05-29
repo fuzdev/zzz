@@ -2,8 +2,9 @@
 
 > Deno-compiled binary for the zzz daemon — `zzz`
 
-Entry point for the zzz global daemon. Compiled to a standalone binary via
-`gro_plugin_deno_compile`. Follows the tx CLI pattern.
+Thin client for the zzz global daemon. Compiled to a standalone binary via
+`gro_plugin_deno_compile`. Follows the tx CLI pattern. It spawns and manages
+the Rust `zzz_server` backend binary.
 
 Deno is a shortcut — long-term, the CLI and daemon migrate to Rust fuz/fuzd.
 
@@ -12,16 +13,16 @@ Deno is a shortcut — long-term, the CLI and daemon migrate to Rust fuz/fuzd.
 ```
 zzz CLI (compiled Deno binary, thin client)
     │
-    ├── Auto-starts daemon if not running
+    ├── Auto-starts daemon if not running (spawns zzz_server)
     ├── Sends RPC to daemon
     └── Opens browser tab
     │
     ▼
-zzz daemon (Hono server on Deno, single process)
+zzz daemon (Rust zzz_server, Axum, single process)
     ├── Global state at ~/.zzz/
-    ├── PGlite for persistence (planned)
+    ├── PostgreSQL for auth persistence
     ├── JSON-RPC 2.0 over HTTP + WebSocket
-    └── Serves prerendered SvelteKit frontend (planned)
+    └── Serves the prerendered SvelteKit frontend (static SPA)
 ```
 
 One server, one port, one frontend. The SPA handles navigation between views.
@@ -50,8 +51,10 @@ a browser — the `code .` equivalent.
 ```
 ~/.zzz/
   config.json                # Daemon config (port)
-  state/db/                  # PGlite data (planned)
+  bin/zzz_server             # Spawned Rust backend binary (installed beside the CLI)
+  state/                     # Persistent data
   run/daemon.json            # PID, port, version (ephemeral)
+  run/daemon_token           # Daemon auth token (ephemeral)
   cache/                     # Regenerable data
 ```
 
@@ -106,7 +109,9 @@ to the `open` command. So `zzz ~/dev/` and `zzz open ~/dev/` are equivalent.
 `daemon.json` at `~/.zzz/run/daemon.json` tracks PID, port, version. Managed
 via `@fuzdev/fuz_app/cli/daemon.js` helpers (`write_daemon_info`,
 `read_daemon_info`, `is_daemon_running`, `stop_daemon`). Written atomically
-(temp file + rename). CLI checks if PID is alive via `kill -0`. Stale files
+(temp file + rename). On `zzz daemon start`, the CLI spawns the `zzz_server`
+child process and writes `daemon.json` with the child's PID once the backend
+reports healthy. CLI checks if the PID is alive via `kill -0`. Stale files
 are cleaned up automatically.
 
 ## Build
@@ -120,13 +125,16 @@ Binary compiled during `gro build` via `gro_plugin_deno_compile`:
 
 Config: `deno.json` (imports, tasks, excludes) + `gro.config.ts` (plugin setup).
 
-## Server Entry Point
+## Backend Process
 
-`src/lib/server/server.ts` — Deno server entry point, used by both `gro dev`
-(via `gro_plugin_deno_server`) and `zzz daemon start`. Calls the shared
-`create_zzz_app()` factory (in `create_zzz_app.ts`) which builds the full Hono
-app with Backend, AI providers, WebSocket, and HTTP RPC endpoints. Env is loaded
-via `server_env.ts` from `Deno.env.get` (no `$env` dependency).
+`zzz daemon start` spawns the compiled Rust `zzz_server` binary as a child
+process. The CLI locates it beside its own executable (e.g.
+`~/.zzz/bin/zzz_server`), with a dev fallback to `./target/debug/zzz_server`.
+Before spawning, the CLI loads the env file (`.env` / `.env.development`) and
+passes it through to the backend (`DATABASE_URL`, `SECRET_FUZ_COOKIE_KEYS`,
+port, etc.). `gro build` builds `zzz_server` and copies it into `dist_cli/`
+so the installed CLI can find it. See ../../../crates/CLAUDE.md for the
+backend architecture.
 
 ## Development
 
@@ -150,5 +158,4 @@ deno task install
 
 From `@fuzdev/fuz_util`: `argv_parse`, `args_parse` (CLI args).
 From `@fuzdev/fuz_app`: CLI daemon helpers, config, help, util; ActionSpec types.
-From `hono`: HTTP server framework.
 From `zod`: Schema validation (v4, with `.meta()` for CLI descriptions).

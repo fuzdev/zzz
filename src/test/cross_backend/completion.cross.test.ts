@@ -2,9 +2,9 @@
  * Cross-backend integration tests for `completion_create`.
  *
  * The cross-backend matrix doesn't wire real provider integrations (no
- * keeper provider API keys in the test binaries). This file covers what
+ * keeper provider API keys in the test binary). This file covers what
  * is portable today — a smoke RPC against a registered-but-unconfigured
- * provider, which both backends reject for lack of an API key.
+ * provider, which the backend rejects for lack of an API key.
  *
  * @module
  */

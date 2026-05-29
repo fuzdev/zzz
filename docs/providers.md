@@ -4,11 +4,11 @@ Integration guide for AI providers and adding new ones.
 
 ## Supported Providers
 
-| Provider | Type | Class | SDK | API Key Env |
-|----------|------|-------|-----|-------------|
-| Claude | Remote (BYOK) | `BackendProviderClaude` | `@anthropic-ai/sdk` | `SECRET_ANTHROPIC_API_KEY` |
-| ChatGPT | Remote (BYOK) | `BackendProviderChatgpt` | `openai` | `SECRET_OPENAI_API_KEY` |
-| Gemini | Remote (BYOK) | `BackendProviderGemini` | `@google/generative-ai` | `SECRET_GOOGLE_API_KEY` |
+| Provider | Type | Backend module | Status | API Key Env |
+|----------|------|----------------|--------|-------------|
+| Claude | Remote (BYOK) | `provider/anthropic.rs` | Full (non-streaming + SSE streaming) | `SECRET_ANTHROPIC_API_KEY` |
+| ChatGPT | Remote (BYOK) | `provider/openai.rs` | Status-only stub | `SECRET_OPENAI_API_KEY` |
+| Gemini | Remote (BYOK) | `provider/gemini.rs` | Status-only stub | `SECRET_GOOGLE_API_KEY` |
 
 ### Remote Providers (Claude, ChatGPT, Gemini)
 
@@ -55,82 +55,30 @@ Pre-configured model groups in `config_defaults.ts` (`chat_template_defaults`): 
 
 ## Provider Architecture
 
-### Class Hierarchy
+Providers live in the Rust backend (`crates/zzz_server/src/provider/`),
+enum-dispatched via the `Provider` enum (`provider/mod.rs`) — the providers
+are known at compile time and matched exhaustively, no trait objects.
+`ProviderManager` owns the set; `set_api_key` recreates the underlying
+`reqwest` client; a provider reports an error status when no key is
+configured. Anthropic (`provider/anthropic.rs`) is fully implemented with
+non-streaming and SSE-streaming completions (`provider/sse.rs`); OpenAI and
+Gemini are status-only stubs. See [../crates/CLAUDE.md](../crates/CLAUDE.md)
+for the backend details.
+
+### CompletionOptions
+
+The per-completion options the backend passes to a provider:
 
 ```
-BackendProvider<TClient>              (backend_provider.ts)
-└── BackendProviderRemote<TClient>    (for API-based services, manages API keys)
-    ├── BackendProviderClaude         (backend_provider_claude.ts)
-    ├── BackendProviderChatgpt        (backend_provider_chatgpt.ts)
-    └── BackendProviderGemini         (backend_provider_gemini.ts)
-```
-
-### BackendProvider Base
-
-From `server/backend_provider.ts`:
-
-```typescript
-abstract class BackendProvider<TClient = unknown> {
-  abstract readonly name: string;
-  protected client: TClient | null = null;
-  protected provider_status: ProviderStatus | null = null;
-
-  abstract handle_streaming_completion(options: CompletionHandlerOptions): Promise<ActionOutputs['completion_create']>;
-  abstract handle_non_streaming_completion(options: CompletionHandlerOptions): Promise<ActionOutputs['completion_create']>;
-
-  get_handler(streaming: boolean): CompletionHandler {
-    return streaming
-      ? this.handle_streaming_completion.bind(this)
-      : this.handle_non_streaming_completion.bind(this);
-  }
-
-  abstract create_client(): void;
-  abstract get_client(): TClient;
-  abstract load_status(reload?: boolean): Promise<ProviderStatus>;
-
-  protected validate_streaming_requirements(progress_token?: Uuid): asserts progress_token { ... }
-  /** Wraps `on_progress` with the `_meta.progressToken` envelope. */
-  protected async send_streaming_progress(
-    progress_token: Uuid,
-    chunk: ...,
-    on_progress: OnCompletionProgress,
-  ): Promise<void> { ... }
-}
-```
-
-### BackendProviderRemote
-
-Adds API key management. `set_api_key()` recreates the client. Returns error status if no key configured.
-
-### CompletionHandlerOptions
-
-```typescript
-interface CompletionHandlerOptions {
-  model: string;
-  completion_options: CompletionOptions;
-  completion_messages: Array<CompletionMessage> | undefined;
-  prompt: string;
-  progress_token?: Uuid;  // Opts into streaming when provided
-  /**
-   * Routes progress chunks to the originating WS socket via `ctx.notify`.
-   * Required for streaming handlers; ignored by non-streaming handlers.
-   */
-  on_progress: OnCompletionProgress;
-}
-
-type OnCompletionProgress = (input: ActionInputs['completion_progress']) => Promise<void>;
-
-interface CompletionOptions {
-  frequency_penalty?: number;
-  output_token_max: number;
-  presence_penalty?: number;
-  seed?: number;
-  stop_sequences?: Array<string>;
-  system_message: string;
-  temperature?: number;
-  top_k?: number;
-  top_p?: number;
-}
+frequency_penalty?: number
+output_token_max: number
+presence_penalty?: number
+seed?: number
+stop_sequences?: Array<string>
+system_message: string
+temperature?: number
+top_k?: number
+top_p?: number
 ```
 
 ### CompletionRequest / CompletionResponse
@@ -156,46 +104,12 @@ const CompletionResponse = z.strictObject({
 
 ## Real Provider Example
 
-From `server/backend_provider_claude.ts`:
-
-```typescript
-export class BackendProviderClaude extends BackendProviderRemote<Anthropic> {
-  readonly name = 'claude';
-
-  constructor(options: BackendProviderRemoteOptions) {
-    super({api_key: options.api_key ?? (SECRET_ANTHROPIC_API_KEY || null)});
-  }
-
-  protected override create_client(): void {
-    this.client = this.api_key ? new Anthropic({apiKey: this.api_key}) : null;
-  }
-
-  async handle_streaming_completion(options: CompletionHandlerOptions): Promise<ActionOutputs['completion_create']> {
-    const {model, completion_options, completion_messages, prompt, progress_token, on_progress} = options;
-    this.validate_streaming_requirements(progress_token);
-
-    const stream = await this.get_client().messages.create(
-      create_claude_completion_options(model, completion_options, completion_messages, prompt, true),
-    );
-
-    let accumulated_content = '';
-    for await (const event of stream) {
-      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-        accumulated_content += event.delta.text;
-        // Thread the caller's on_progress through — when called from the WS
-        // handler, this routes chunks to the originating socket via ctx.notify.
-        void this.send_streaming_progress(
-          progress_token,
-          { message: { role: 'assistant', content: event.delta.text } },
-          on_progress,
-        );
-      }
-    }
-
-    return to_completion_result('claude', model, api_response, progress_token);
-  }
-}
-```
+The Anthropic provider (`crates/zzz_server/src/provider/anthropic.rs`) calls
+the Messages API with a `reqwest` client. For streaming completions it sets
+`stream: true`, parses the SSE response (`provider/sse.rs`, manual `\r\n`
+normalization), and forwards each `content_block_delta` text chunk to the
+originating WebSocket connection as a `completion_progress` notification.
+See [../crates/CLAUDE.md](../crates/CLAUDE.md).
 
 ## Completion Flow
 
@@ -204,37 +118,21 @@ User sends message
   → Thread.send_message(content)
     → Build CompletionRequest (provider_name, model, prompt, completion_messages)
     → app.api.completion_create({completion_request, _meta: {progressToken}})
-      → WS dispatch builds ctx {backend, request_id, notify, signal}
-      → zzz_action_handlers.completion_create(input, ctx)
-        → Backend: backend.lookup_provider(provider_name)
-          → provider.get_handler(!!progress_token)
-            → provider.handle_streaming_completion({..., on_progress: ctx.notify-adapter})
-              → Call provider SDK with stream: true
-              → For each chunk:
-                → provider.send_streaming_progress(progress_token, chunk, on_progress)
-                  → on_progress({progressToken, chunk})
-                    → ctx.notify('completion_progress', ...)
-                      → WS notification to originating socket
-                        → Turn content updated incrementally
-              → Return CompletionResult
+      → WS dispatch → backend completion_create handler
+        → ProviderManager looks up the provider by name
+          → provider calls its API (stream: true when a progress token is present)
+            → For each text chunk:
+              → completion_progress notification to the originating WS connection
+                → Turn content updated incrementally
+        → Return the completion result
 ```
 
-`completion_create` cooperates with `ctx.signal`. The handler threads
-`signal` into `CompletionHandlerOptions`; each provider forwards it to its
-SDK — Anthropic/OpenAI/Gemini accept `{signal}` as the second arg on their
-request methods.
-Post-abort SDK throws are translated to `request_cancelled` at the handler
-boundary — discriminated by `ctx.signal.aborted`, not error shape, since
-each SDK throws a different abort type. `Thread.cancel_pending()` fires
-the `AbortController` from the client side; the frontend WS client sends
-the `cancel` notification and rejects the pending promise with
+Streaming progress is socket-scoped — the chunks go only to the originating
+WebSocket connection, never broadcast. Cancellation is supported:
+`Thread.cancel_pending()` fires from the client side, the frontend WS client
+sends the `cancel` notification and rejects the pending promise with
 `request_cancelled` so the UI can distinguish user-initiated cancels from
-real provider failures.
-
-Streaming progress is always socket-scoped via `ctx.notify` — the originating
-client is the only recipient, never a broadcast. `ctx.notify` is a no-op on
-HTTP transport (with a DEV warn), so streaming effectively requires a WS
-handler context.
+real provider failures; the backend aborts the in-flight request.
 
 ### Provider Status
 
@@ -248,11 +146,15 @@ Remote providers: `available` = `true` when API key is set and client created.
 
 ## Adding a New Provider
 
-1. Create `src/lib/server/backend_provider_newprovider.ts` extending `BackendProviderRemote<SDKClient>`
-2. Implement `create_client()`, `handle_streaming_completion()`, `handle_non_streaming_completion()`
-3. Register in `src/lib/server/server.ts`: `backend.add_provider(new BackendProviderNewProvider(provider_options))`
-4. Add response helper in `src/lib/response_helpers.ts`
-5. Add env var to `.env.development.example` and `.env.production.example`: `SECRET_NEWPROVIDER_API_KEY=`
-6. Add default models to `src/lib/config_defaults.ts` (`models_default`)
+Providers live in the Rust backend (`crates/zzz_server/src/provider/`), enum-
+dispatched via the `Provider` enum (no trait objects). To add one:
 
-See [src/lib/server/CLAUDE.md](../src/lib/server/CLAUDE.md) for detailed backend architecture.
+1. Add a variant to the `Provider` enum and `ProviderName` in `provider/mod.rs`
+2. Create `crates/zzz_server/src/provider/newprovider.rs` implementing the
+   completion path (status, non-streaming, and SSE streaming via `provider/sse.rs`)
+3. Wire it into `ProviderManager` and the exhaustive match arms
+4. Add env var to `.env.development.example` and `.env.production.example`:
+   `SECRET_NEWPROVIDER_API_KEY=`
+5. Add default models to `src/lib/config_defaults.ts` (`models_default`)
+
+See [../crates/CLAUDE.md](../crates/CLAUDE.md) for the backend architecture.

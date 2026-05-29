@@ -225,10 +225,10 @@ describe('workspace cross-backend', () => {
 			});
 			assert.ok(open.ok);
 
-			const notification = (await ws.wait_for(
+			const notification = await ws.wait_for<Record<string, unknown>>(
 				is_notification('workspace_changed'),
 				5_000,
-			)) as Record<string, unknown>;
+			);
 			const params = notification.params as Record<string, unknown>;
 			assert.equal(params.type, 'open');
 			const workspace = params.workspace as Record<string, unknown>;
@@ -283,10 +283,10 @@ describe('workspace cross-backend', () => {
 				});
 				assert.ok(close.ok);
 
-				const notification = (await ws.wait_for(
+				const notification = await ws.wait_for<Record<string, unknown>>(
 					is_notification('workspace_changed'),
 					5_000,
-				)) as Record<string, unknown>;
+				);
 				const params = notification.params as Record<string, unknown>;
 				assert.equal(params.type, 'close');
 				const info = params.workspace as Record<string, unknown>;
