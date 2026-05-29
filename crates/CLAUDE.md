@@ -206,170 +206,56 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
 
 ## Integration Tests
 
-The cross-process integration suite runs fuz_app's standard suites against
-`zzz_server` over real HTTP, verifying its responses conform to the shared
-fuz_app contract. The harness bootstraps auth (admin account + session
-cookie), creates a non-keeper user (account + actor + session, no keeper
-role grant, cookie signed via HMAC-SHA256), and inserts API tokens into
-the `api_token` table before tests. The test database (`zzz_test` by default,
-configurable via `TEST_DATABASE_URL`) is cleaned (TRUNCATE CASCADE) before
-the run. A scoped directory (`/tmp/zzz_integration_scoped`) is
-created for filesystem tests. Tests are split across modules: `tests.ts`
-(core RPC, auth, filesystem, terminal tests), `bearer_tests.ts` (bearer
-token auth, keeper credential enforcement, session revocation),
-`account_tests.ts` (login, logout, password change, session management),
-`test_helpers.ts` (shared assertion and HTTP/WS helpers).
+The `cross_backend_*` vitest projects run fuz_app's shared cross-process
+suites plus zzz-specific suites against the spawned `testing_zzz_server`
+binary over real HTTP + WebSocket, verifying its JSON-RPC / SSE responses
+conform to the shared fuz_app contract. The tests live in
+`src/test/cross_backend/` (TypeScript, not in the Rust crate):
 
-**WS tests:** `ping_ws`, `parse_error_ws`,
-`method_not_found_ws`, `invalid_request_ws`, `notification_ws`,
-`multi_message_ws`, `ws_workspace_list` — 7 tests verify WS
-behaviour including authenticated actions over WebSocket.
+- **`auth.cross.test.ts`** — invokes fuz_app's
+  `describe_standard_cross_process_tests` (the cross-process subset of the
+  standard bundle: ping; JSON-RPC parse / method / request errors over HTTP +
+  WS; auth enforcement; bearer-token auth on HTTP + WS incl. browser-context
+  discard and per-token revocation; session + account management; audit
+  emission; admin role-gated paths). The surface is built in TS from
+  `action_specs.ts` + fuz_app's standard route bundle via
+  `create_zzz_app_surface_spec` (`zzz_surface_spec.ts`) — no backend
+  dependency. The keeper is granted `ROLE_ADMIN` (`extra_keeper_roles`) so
+  admin-gated cases can drive admin RPC. The bundle omits `rate_limiting`,
+  `audit_completeness`, and `bootstrap_success` (in-process / FK-structural /
+  already consumed by globalSetup — see the bundle's module doc).
+- **`sse.cross.test.ts`** — `describe_cross_process_sse_tests` against
+  `GET /api/admin/audit/stream` (the shared `fuz_realtime::audit_stream_router`):
+  the `: connected` comment, an audit `data:` frame on
+  `admin_session_revoke_all`, and close-on-revoke. Gated on `capabilities.sse`.
+- **`workspace.cross.test.ts`** — workspace open / list / close, idempotency,
+  not-a-directory + nonexistent errors, and `workspace_changed` broadcast on
+  open/close (no broadcast on an idempotent open).
+- **`filesystem.cross.test.ts`** — scoped `diskfile_update` / `diskfile_delete`,
+  idempotent `directory_create`, writes into `zzz_dir` + nested subdirs,
+  path-traversal / out-of-scope / relative-path rejection, and `filer_change`
+  broadcast on file create in an open workspace.
+- **`terminal.cross.test.ts`** — PTY create / read / write / close lifecycle,
+  `terminal_data` / `terminal_exited` notifications over WS, live resize,
+  explicit cwd, nonexistent-command handling, and silent-null for missing
+  terminal IDs.
+- **`provider.cross.test.ts`** — `provider_load_status` stub plus `session_load`
+  (zzz_dir file listing with contents + recursive subdirectory walk).
+- **`completion.cross.test.ts`** — `completion_create` invalid-provider rejection.
+- **`proxy.cross.test.ts`** — runs only in the `cross_backend_rust_proxy`
+  project (backend booted with `ZZZ_TRUSTED_PROXIES=127.0.0.1`, which can't be
+  flipped mid-run). Each test triggers a failed login under a unique username
+  and asserts the resulting `audit_log.ip` matches the expected resolved client
+  IP for a given `X-Forwarded-For` + connection-IP combination (no-XFF,
+  trusted/untrusted hops, malformed entries, IPv6, IPv4-mapped normalization,
+  leftmost fallback). The resolution itself is `fuz_http::client_ip_middleware`
+  (spine crate), where the pure functions carry their own `#[cfg(test)]` unit
+  tests.
 
-**HTTP tests:** `null_id_is_invalid`, `parse_error_http`,
-`parse_error_empty_body`, `method_not_found_http`, `invalid_request_*`
-(4 variants), `notification_http` — 9 tests verify HTTP behaviour.
-
-**HTTP tests:** `ping_http`, `ping_numeric_id` — ping handler
-echoes the JSON-RPC request id back as `ping_id`.
-
-**Health:** `health_check` — 1 test.
-
-**Workspace tests:** `workspace_open_and_list`,
-`workspace_open_idempotent`, `workspace_open_nonexistent`,
-`workspace_close` — 4 tests.
-
-**Workspace notification tests:**
-`workspace_changed_on_open`, `workspace_changed_on_close`,
-`workspace_changed_idempotent_no_notification` — 3 tests verify
-`workspace_changed` notifications are broadcast to WebSocket clients on
-workspace open/close, and that idempotent opens do not broadcast.
-
-**Auth tests:** `auth_required_without_cookie`,
-`auth_required_invalid_cookie`, `auth_public_no_cookie`,
-`auth_keeper_forbidden` — 4 tests verify auth enforcement (unauthenticated
-→ -32001/401, public → success, non-keeper calling keeper action → -32002/403).
-
-**WebSocket auth test:** `ws_auth_required` — 1 test verifies
-unauthenticated WS upgrade is rejected.
-
-**Session/provider tests:** `session_load_basic`,
-`session_load_returns_zzz_dir_files`, `session_load_returns_nested_files`,
-`provider_load_status_empty` — 4 tests verify session data loading
-(including zzz_dir file listing with contents and recursive subdirectory
-walk) and provider status stub.
-
-**Filesystem tests:** `diskfile_update_and_read`,
-`diskfile_update_in_zzz_dir`, `diskfile_update_in_zzz_dir_subdirectory`,
-`diskfile_delete`, `directory_create`, `directory_create_already_exists`,
-`diskfile_update_outside_scope`, `diskfile_update_path_traversal`,
-`diskfile_update_relative_path`, `diskfile_delete_nonexistent` — 10 tests
-verify scoped filesystem operations (including writes to zzz_dir and nested
-subdirectories), idempotent directory creation, path traversal rejection,
-relative path rejection, and nonexistent file deletion.
-
-**Workspace edge cases:** `workspace_open_not_directory` —
-1 test verifies opening a file (not a directory) returns an error.
-
-**File watcher tests:** `filer_change_on_file_create` —
-1 test verifies `filer_change` notifications are broadcast when files are
-created in an open workspace.
-
-**Terminal tests:** `terminal_create_echo`,
-`terminal_close`, `terminal_write_and_read`, `terminal_resize_live`,
-`terminal_create_with_cwd`, `terminal_create_nonexistent_command`,
-`terminal_data_send_missing`, `terminal_close_missing`,
-`terminal_resize_missing` — 9 tests verify PTY spawn/read/write/close
-lifecycle, `terminal_data`/`terminal_exited` notifications over WebSocket,
-stdin write with echo verification, live resize, explicit cwd, nonexistent
-command handling, explicit process kill, and silent return behavior for
-missing terminal IDs.
-
-**Non-keeper tests:** `non_keeper_authenticated_action`,
-`auth_keeper_forbidden` — 2 tests verify non-keeper users can access
-authenticated actions but are rejected from keeper actions.
-
-**Bearer token tests:**
-`bearer_token_auth`, `bearer_token_invalid`, `bearer_token_expired`,
-`bearer_token_public_action`, `bearer_token_ws`,
-`bearer_token_ws_rejected_invalid`, `keeper_requires_daemon_token`,
-`ws_revocation_on_session_delete`, `ws_revocation_only_for_revoked_token`,
-`bearer_rejects_browser_context_origin`,
-`bearer_rejects_browser_context_referer`, `bearer_empty_value`,
-`bearer_cookie_priority` — verify API token auth via
-`Authorization: Bearer` header on HTTP and WebSocket, expired/invalid token
-rejection, keeper credential enforcement (API tokens can't access keeper
-actions), session revocation via DB delete, per-token revocation granularity
-(revoking one bearer token closes its socket only, not other sockets on the
-same account), browser context discard (Origin/Referer headers → bearer
-silently ignored), empty bearer value handling, and cookie-over-bearer priority.
-
-**Audit emission tests:** `audit_bootstrap_success`,
-`audit_token_create_records_credential_type`,
-`audit_session_revoke_all_records_credential_type`,
-`audit_password_change_records_credential_type`,
-`audit_password_change_failure_records_credential_type` — 5 tests
-verify the bootstrap success row (carries `account_id` + `actor_id`,
-`metadata: null`) plus the four credential-gated paths (RPC
-`account_token_create` / `account_session_revoke_all` + REST
-`POST /password` on success and wrong-password failure) writing
-`audit_log` rows with `metadata.credential_type === 'session'`. The
-`password_change_concurrent_change` test under §Account management
-additionally verifies `metadata.reason === 'concurrent_change'` on the
-verify-write race loser. Direct `psql` query against the `audit_log`
-table — no admin RPC route required.
-
-**Account management tests:**
-`login_success`, `login_invalid_password`, `login_nonexistent_user`,
-`logout_clears_session`, `logout_unauthenticated`,
-`password_change_revokes_all`, `password_wrong_current`,
-`password_change_concurrent_change`,
-`session_list`, `session_revoke`, `account_verify`, `session_revoke_all`,
-`token_create`, `token_list` — 14 tests verify login with
-valid/invalid/nonexistent credentials, logout with session invalidation and
-cookie clearing, password change with full session + token revocation and
-re-login verification, the verify-write race detection (two concurrent
-password changes against the same starting hash: one wins, one returns
-401 with `metadata.reason === 'concurrent_change'`), session listing
-(with `account_id` field), single session revocation (idempotent with
-`revoked` field), self-account verify echoing `SessionAccountJson`
-(no `password_hash` leak), bulk session revocation closing every socket
-on the account (cookie, bearer, and daemon-token — matches fuz_app
-`transports_ws_auth_guard`), token creation with bearer round-trip
-(raw `secret_fuz_token_…` validates against the
-`Authorization: Bearer` path), and token listing in `ClientApiTokenJson`
-shape (no `token_hash` field anywhere).
-
-**Rate limit tests:** `rate_limit_login_blocks_after_threshold`
-— runs in a dedicated post-suite phase that restarts the backend
-with `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1`. Fires 5 failed logins, asserts
-the 6th returns 429 with `{error: 'rate_limit_exceeded', retry_after}`
-plus a `Retry-After` header, and asserts correct credentials are also
-blocked while the bucket is full (the limiter check runs before
-argon2 verify).
-
-**Trusted-proxy tests:** `proxy_no_xff_uses_connection_ip`,
-`proxy_trusted_xff_resolves_to_originator`,
-`proxy_multi_hop_stops_at_first_untrusted`,
-`proxy_malformed_xff_entry_skipped`,
-`proxy_all_trusted_xff_falls_back_to_leftmost`,
-`proxy_empty_xff_uses_connection_ip`,
-`proxy_ipv6_originator_in_xff`,
-`proxy_ipv4_mapped_xff_normalizes`,
-`proxy_multi_hop_with_malformed_then_untrusted`,
-`proxy_all_malformed_xff_falls_back_to_connection_ip` — runs in a
-dedicated post-suite phase that restarts the backend with
-`ZZZ_TRUSTED_PROXIES=127.0.0.1`. Each test triggers a failed login
-under a unique `proxy-test-<label>-<uuid>` username and asserts the
-resulting `audit_log.ip` row matches the expected resolved client IP
-for that XFF + connection-IP combination. The pure functions are also
-covered by the 86 `#[cfg(test)]` unit tests in
-`crates/zzz_server/src/proxy.rs` (`normalize_ip` including IPv6
-canonicalization and the ipv4-mapped collapse ordering,
-`validate_ip_strict`, `parse_proxy_entry` + all `ProxyParseError`
-variants including the non-aligned `/0` regressions, `parse_proxy_list`,
-`is_trusted_ip` including the cross-family CIDR guard, `resolve_client_ip`
-including malformed-skip and leftmost-fallback, `cidr_contains`
-shift-edge cases).
+Supporting files: `global_setup.ts` (vitest globalSetup),
+`zzz_backend_config.ts` (per-project `BackendConfig` factories),
+`zzz_surface_spec.ts` (the TS `AppSurfaceSpec` + RPC endpoints), and
+`cross_test_types.ts` (`inject('backend_handle')` typing).
 
 ```bash
 npm run test:cross                                                        # Both rust projects (rust + rust_proxy) — flag baked in

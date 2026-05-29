@@ -3,8 +3,8 @@
 > Deno-compiled binary for the zzz daemon — `zzz`
 
 Thin client for the zzz global daemon. Compiled to a standalone binary via
-`gro_plugin_deno_compile`. Follows the tx CLI pattern. It spawns and manages
-the Rust `zzz_server` backend binary.
+`gro_plugin_deno_compile`. It spawns and manages the Rust `zzz_server`
+backend binary.
 
 Deno is a shortcut — long-term, the CLI and daemon migrate to Rust fuz/fuzd.
 

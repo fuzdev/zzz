@@ -265,10 +265,11 @@ stubs. Cross-process integration tests in `src/test/cross_backend/*.cross.test.t
 run fuz_app's standard suites against `zzz_server` over real HTTP, verifying
 its JSON-RPC responses conform to the shared fuz_app contract. They cover
 the full surface — including the admin role-gated `admin_session_revoke_all` /
-`admin_token_revoke_all` handlers, trusted-proxy `client_ip` resolution, and
-the login-rate-limit env-var gate. Pure functions are covered by per-module
-`#[cfg(test)]` unit tests (`crates/zzz_server/src/proxy.rs`,
-`auth/spec.rs::origin_tests`, etc.).
+`admin_token_revoke_all` handlers and trusted-proxy `client_ip` resolution
+(the `cross_backend_rust_proxy` project). `zzz_server`'s own `#[cfg(test)]`
+unit tests live in the provider modules (`provider/common.rs`,
+`provider/sse.rs`, etc.); auth, origin, and trusted-proxy pure functions are
+unit-tested in the spine crates (`fuz_auth`, `fuz_http`).
 
 ```bash
 cargo build -p zzz_server                                                 # Build
