@@ -1,5 +1,5 @@
 <script lang="ts">
-	import '$routes/fuz.css';
+	import 'virtual:fuz.css';
 	import '@fuzdev/fuz_code/theme.css';
 	import '$routes/style.css';
 
@@ -18,13 +18,17 @@
 	import {App} from '$lib/app.svelte.js';
 	import FrontendRoot from '$lib/FrontendRoot.svelte';
 	import {library_context} from '$lib/library.js';
-	import {library_json} from '$routes/library.js';
+	import {library_json_from_modules} from '@fuzdev/fuz_util/library_json.js';
+	import {modules} from 'virtual:svelte-docinfo';
+	import package_json from '../../package.json' with {type: 'json'};
 	import {ProviderJson} from '$lib/provider.svelte.js';
 	import create_zzz_config from '$lib/config.js';
 	import {ModelJson} from '$lib/model.svelte.js';
 	import {DOCS_PATH} from '@fuzdev/fuz_ui/docs_helpers.svelte.js';
 
 	const {children, params} = $props();
+
+	const library_json = library_json_from_modules(package_json, modules);
 
 	// Auth state — gate all content behind authentication
 	const auth_state = auth_state_context.set(new AuthState());

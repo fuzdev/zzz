@@ -45,7 +45,6 @@ user manages it; don't start it yourself.
 | `src/lib/action_metatypes.gen.ts` | Action method types |
 | `src/lib/action_collections.gen.ts` | Action spec collections |
 | `src/lib/frontend_action_types.gen.ts` | Frontend handler types |
-| `src/routes/library.gen.ts` | Route metadata |
 
 Run `gro gen` after changing `action_specs.ts`.
 

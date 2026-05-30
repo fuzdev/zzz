@@ -122,13 +122,11 @@ src/
 │   ├── views/
 │   └── workspaces/
 │
-├── test/                         # Tests (not co-located)
-│   ├── cell.svelte.*.test.ts
-│   ├── action_event.test.ts
-│   ├── indexed_collection.svelte.*.test.ts
-│   └── ...
-│
-└── routes/library.gen.ts         # Generated route metadata
+└── test/                         # Tests (not co-located)
+    ├── cell.svelte.*.test.ts
+    ├── action_event.test.ts
+    ├── indexed_collection.svelte.*.test.ts
+    └── ...
 ```
 
 ## Architecture
