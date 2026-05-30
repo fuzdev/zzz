@@ -16,7 +16,7 @@
 		"svelte": "npm:svelte@^5.55.5",
 		"zod": "npm:zod@^4",
 		"@fuzdev/blake3_wasm": "npm:@fuzdev/blake3_wasm@^0.1.1",
-		"@fuzdev/fuz_app/": "npm:/@fuzdev/fuz_app@^0.74.0/",
+		"@fuzdev/fuz_app/": "npm:/@fuzdev/fuz_app@^0.76.0/",
 		"@fuzdev/fuz_util/": "npm:/@fuzdev/fuz_util@^0.62.0/",
 		"@fuzdev/gro/": "npm:/@fuzdev/gro@^0.199.1/",
 		"date-fns": "npm:date-fns@^4"
