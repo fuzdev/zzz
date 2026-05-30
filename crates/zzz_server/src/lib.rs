@@ -35,7 +35,6 @@ use axum::{Json, Router};
 use futures_util::future::BoxFuture;
 use serde::Serialize;
 use tokio::net::TcpListener;
-use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
 
 /// Wires the post-bootstrap keeper-account id into `spine_daemon_token`
@@ -60,6 +59,11 @@ pub use error::ServerError;
 
 /// Default loopback port. Overridden by `--port` or `ZZZ_PORT`.
 pub const DEFAULT_PORT: u16 = 1174;
+
+/// Connection drain timeout on shutdown. Bounds how long the graceful
+/// drain waits for in-flight connections before returning. Matches the
+/// other spine consumers so operators see consistent shutdown UX.
+pub const DEFAULT_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// Runtime state surfaced to [`ExtraActionSpecsFactory`] — keyring +
 /// password hasher + daemon-token state needed by the test binary's
@@ -724,21 +728,15 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
 
     tracing::info!("zzz_server listening on {addr}");
 
-    let shutdown = CancellationToken::new();
-    let shutdown_signal = shutdown.clone();
-    tokio::spawn(async move {
-        wait_for_shutdown_signal().await;
-        tracing::info!("shutdown signal received");
-        shutdown_signal.cancel();
-    });
-
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .with_graceful_shutdown(shutdown.cancelled_owned())
-    .await
-    .map_err(ServerError::Serve)?;
+    // Signal handling + graceful drain come from the spine
+    // (`fuz_http::lifecycle`) — the SIGINT/SIGTERM → `CancellationToken`
+    // → drain dance is shared with the other spine consumers. zzz's own
+    // teardown (rotation-task abort, PTY cleanup) runs after the drain
+    // returns.
+    let shutdown = fuz_http::shutdown_token();
+    fuz_http::serve_with_shutdown(listener, app, shutdown, DEFAULT_DRAIN_TIMEOUT)
+        .await
+        .map_err(ServerError::Serve)?;
 
     // Stop daemon token rotation
     if let Some(handle) = rotation_handle {
@@ -790,21 +788,17 @@ pub struct Config {
     pub trusted_proxies: Option<String>,
 }
 
-/// Parse a Zod-`stringbool()`-shaped env var: case-insensitive truthy
+/// Read a Zod-`stringbool()`-shaped env var via the spine parser
+/// ([`fuz_common::env::parse_stringbool`]): case-insensitive truthy
 /// (`true`/`1`/`yes`/`on`/`y`/`enabled`) / falsy
-/// (`false`/`0`/`no`/`off`/`n`/`disabled`). Unknown values error so a typo
-/// doesn't silently disable the feature.
+/// (`false`/`0`/`no`/`off`/`n`/`disabled`). Unset → `false`; unknown
+/// values error so a typo doesn't silently disable the feature.
 fn parse_stringbool_env(name: &str) -> Result<bool, ServerError> {
-    match std::env::var(name).ok() {
-        None => Ok(false),
-        Some(v) => match v.to_ascii_lowercase().as_str() {
-            "true" | "1" | "yes" | "on" | "y" | "enabled" => Ok(true),
-            "false" | "0" | "no" | "off" | "n" | "disabled" => Ok(false),
-            other => Err(ServerError::Config(format!(
-                "{name}: expected one of true/1/yes/on/y/enabled/false/0/no/off/n/disabled (case-insensitive), got {other:?}"
-            ))),
-        },
-    }
+    let Ok(v) = std::env::var(name) else {
+        return Ok(false);
+    };
+    fuz_common::env::parse_stringbool(&v)
+        .map_err(|e| ServerError::Config(format!("{name}: {e}")))
 }
 
 /// Resolve a path to an absolute, canonical, normalized directory string
@@ -906,35 +900,4 @@ fn parse_config(default_port: u16) -> Result<Config, ServerError> {
         enable_login_rate_limit,
         trusted_proxies,
     })
-}
-
-// -- Shutdown -----------------------------------------------------------------
-
-async fn wait_for_shutdown_signal() {
-    let ctrl_c = async {
-        tokio::signal::ctrl_c().await.ok();
-    };
-
-    #[cfg(unix)]
-    {
-        let sigterm = async {
-            match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-                Ok(mut sig) => {
-                    sig.recv().await;
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "failed to install SIGTERM handler");
-                    std::future::pending::<()>().await;
-                }
-            }
-        };
-
-        tokio::select! {
-            () = ctrl_c => {}
-            () = sigterm => {}
-        }
-    }
-
-    #[cfg(not(unix))]
-    ctrl_c.await;
 }
