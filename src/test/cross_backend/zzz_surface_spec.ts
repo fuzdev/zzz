@@ -16,7 +16,7 @@
  * @module
  */
 
-import type {AppServerContext} from '@fuzdev/fuz_app/server/app_server.js';
+import type {AppServerContext} from '@fuzdev/fuz_app/server/app_server_context.js';
 import {prefix_route_specs, type RouteSpec} from '@fuzdev/fuz_app/http/route_spec.js';
 import type {RpcEndpointSpec, AppSurfaceSpec} from '@fuzdev/fuz_app/http/surface.js';
 import {
