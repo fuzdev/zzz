@@ -10,7 +10,8 @@
 	import type {SvelteHTMLElements} from 'svelte/elements';
 	import type {Snippet} from 'svelte';
 	import {logo_github} from '@fuzdev/fuz_ui/logos.js';
-	import Svg, {type SvgData} from '@fuzdev/fuz_ui/Svg.svelte';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import type {SvgData} from '@fuzdev/fuz_ui/svg.js';
 
 	import {logo_chatgpt, logo_claude, logo_gemini} from './logos.js';
 	import ExternalLinkIcon from './ExternalLinkIcon.svelte';

@@ -1,4 +1,4 @@
-import type {SvgData} from '@fuzdev/fuz_ui/Svg.svelte.js';
+import type {SvgData} from '@fuzdev/fuz_ui/svg.js';
 
 export const logo_zzz = {
 	label: "three sleepy z's",

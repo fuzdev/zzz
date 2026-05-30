@@ -11,12 +11,12 @@
 	const library = library_context.get();
 </script>
 
-<DocsFooter {library}>
+<DocsFooter repo_url={library.repo_url}>
 	<div class="mb_xl5">
 		{#if page.url.pathname === resolve('/')}
 			<a href={resolve('/about')}>{@render icon()}</a>
 		{:else}
-			<Breadcrumb>{@render icon()}</Breadcrumb>
+			<Breadcrumb />
 		{/if}
 	</div>
 </DocsFooter>

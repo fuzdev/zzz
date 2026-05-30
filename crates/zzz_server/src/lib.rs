@@ -336,13 +336,23 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             "trusted proxies configured — XFF resolution enabled"
         );
     }
-    let spine_allowed_origins: Arc<Vec<String>> = Arc::new(
-        config
-            .allowed_origins
-            .as_deref()
-            .map(fuz_http::parse_allowed_origins)
-            .unwrap_or_default(),
-    );
+    let spine_allowed_origins: Vec<String> = config
+        .allowed_origins
+        .as_deref()
+        .map(fuz_http::parse_allowed_origins)
+        .unwrap_or_default();
+    // Fail loud: an absent or all-empty allowlist would make
+    // `fuz_http::check_origin` allow every origin (empty list = allow-all),
+    // silently disabling the origin gate on every REST + RPC + WS handler.
+    // Refuse to boot instead — mirrors the TS `validate_server_env` contract.
+    if spine_allowed_origins.is_empty() {
+        return Err(ServerError::Config(
+            "FUZ_ALLOWED_ORIGINS is required and must list at least one origin \
+             (an empty allowlist would disable origin checks)"
+                .to_string(),
+        ));
+    }
+    let spine_allowed_origins = Arc::new(spine_allowed_origins);
     let bootstrap_available_atomic =
         Arc::new(std::sync::atomic::AtomicBool::new(bootstrap_available));
     let socket_revoker: Arc<dyn fuz_auth::SocketRevoker> =

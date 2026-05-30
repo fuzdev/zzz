@@ -98,13 +98,13 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 |----------------------|----------------------------------------------------|
 | `DATABASE_URL`       | PostgreSQL connection (e.g. `postgres://localhost/zzz`) |
 | `SECRET_FUZ_COOKIE_KEYS` | HMAC signing keys (min 32 chars, `__` separator for rotation) |
+| `FUZ_ALLOWED_ORIGINS`    | Comma-separated origin allowlist patterns — **required, non-empty**. The server hard-fails at boot on an empty list, because `fuz_http::check_origin` treats an empty allowlist as allow-all (every origin passes). Dev/prod `.env` set `http://localhost:*`. |
 
 ### Optional Environment Variables
 
 | Variable                 | Purpose                                    |
 |--------------------------|--------------------------------------------|
 | `FUZ_BOOTSTRAP_TOKEN_PATH`   | Path to bootstrap token file           |
-| `FUZ_ALLOWED_ORIGINS`        | Comma-separated origin patterns        |
 | `PUBLIC_ZZZ_SCOPED_DIRS` | Comma-separated filesystem paths           |
 | `ZZZ_PORT`               | Server port (default 1174, CLI overrides)  |
 | `ZZZ_STATIC_DIR`         | Static file directory                      |

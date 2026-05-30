@@ -1,4 +1,4 @@
-import type {SvgData} from '@fuzdev/fuz_ui/Svg.svelte';
+import type {SvgData} from '@fuzdev/fuz_ui/svg.js';
 import {resolve} from '$app/paths';
 import {page} from '$app/state';
 

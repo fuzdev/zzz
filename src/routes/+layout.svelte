@@ -18,6 +18,8 @@
 	import {App} from '$lib/app.svelte.js';
 	import FrontendRoot from '$lib/FrontendRoot.svelte';
 	import {library_context} from '$lib/library.js';
+	import {SiteState, site_context} from '@fuzdev/fuz_ui/site.svelte.js';
+	import {logo_zzz} from '$lib/logos.js';
 	import {library_json_from_modules} from '@fuzdev/fuz_util/library_json.js';
 	import {modules} from 'virtual:svelte-docinfo';
 	import package_json from '../../package.json' with {type: 'json'};
@@ -36,6 +38,13 @@
 
 	// TODO should load granularly when needed (/docs, /about), but currently the capabilities page uses the package json data, how better to get that? generate a more minimal metadata file?
 	library_context.set(new Library(library_json));
+	site_context.set(
+		new SiteState({
+			icon: logo_zzz,
+			glyph: '💤',
+			repo_url: 'https://github.com/fuzdev/zzz',
+		}),
+	);
 
 	// Create the frontend's App only after auth is verified
 	let app: App | undefined = $state.raw();
