@@ -125,7 +125,7 @@ pub type PreMigrationHook = Box<
     dyn FnOnce(
             &fuz_db::Pool,
         ) -> std::pin::Pin<
-            Box<dyn std::future::Future<Output = Result<(), ServerError>> + Send + '_>,
+            Box<dyn Future<Output = Result<(), ServerError>> + Send + '_>,
         > + Send,
 >;
 
@@ -623,6 +623,10 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         registry: registry_for_rpc,
         audit: Arc::clone(&spine_audit_emitter),
         socket_revoker: Arc::clone(&socket_revoker),
+        // Same `ConnectionRegistry` the WS endpoint populates, so a
+        // notification emitted on the HTTP dispatch path reaches the
+        // live sockets rather than an empty registry.
+        notification_sender: Arc::clone(&realtime).into_notification_sender(),
         session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
     };
     let spine_rpc_router = fuz_actions::create_rpc_router(spine_rpc_state).layer(
@@ -643,6 +647,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         registry: registry_for_ws,
         audit: Arc::clone(&spine_audit_emitter),
         socket_revoker: Arc::clone(&socket_revoker),
+        notification_sender: Arc::clone(&realtime).into_notification_sender(),
         connection_registry: Arc::clone(&realtime),
         session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
     };
