@@ -67,6 +67,7 @@ with a dev fallback to `./target/debug/zzzd`. Build both with `cargo`:
 - ./docs/architecture.md — Action system, Cell system, content model, data flow
 - ./docs/development.md — Development workflow, extension points, patterns
 - ./docs/providers.md — AI provider integration, adding new providers
+- ./docs/reference.md — generated action-spec + cell-class tables (`gro gen`)
 - ./crates/CLAUDE.md — Rust backend (`zzzd`) + Rust CLI (`crates/zzz`)
 
 ## Repository Structure

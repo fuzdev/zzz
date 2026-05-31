@@ -23,7 +23,7 @@ export default {
 		// 			'connect-src': [
 		// 				'self',
 		// 				// TODO switch to use env vars
-		// 				'ws://localhost:8999',
+		// 				'ws://localhost:4461',
 		// 			],
 		// 			'frame-src': [
 		// 				'self',

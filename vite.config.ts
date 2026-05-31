@@ -81,7 +81,7 @@ export default defineConfig(({mode}) => ({
 	optimizeDeps: {exclude: ['@fuzdev/blake3_wasm']},
 	server: {
 		proxy: {
-			'/api': `http://localhost:${process.env.PUBLIC_ZZZ_SERVER_PROXIED_PORT || '8999'}`,
+			'/api': `http://localhost:${process.env.PUBLIC_ZZZ_SERVER_PROXIED_PORT || '4461'}`,
 		},
 	},
 }));
