@@ -78,7 +78,6 @@
     "@xterm/xterm": "^6.0.0",
     "date-fns": "^4.1.0",
     "esm-env": "^1.2.2",
-    "hono": "^4.12.23",
     "zod": "^4.3.6"
   },
   "prettier": {
