@@ -157,7 +157,12 @@ pub fn resolve_server_bin() -> PathBuf {
         candidates.push(dir.join(DAEMON_BIN));
     }
     if let Some(home) = std::env::var_os("HOME") {
-        candidates.push(PathBuf::from(home).join(".zzz").join("bin").join(DAEMON_BIN));
+        candidates.push(
+            PathBuf::from(home)
+                .join(".zzz")
+                .join("bin")
+                .join(DAEMON_BIN),
+        );
     }
     candidates.push(PathBuf::from("./target/debug").join(DAEMON_BIN));
     candidates
@@ -341,7 +346,10 @@ mod tests {
         assert_eq!(parse_env_line("=novalue"), None);
         assert_eq!(
             parse_env_line("DATABASE_URL=postgres://localhost/zzz"),
-            Some(("DATABASE_URL".to_string(), "postgres://localhost/zzz".to_string()))
+            Some((
+                "DATABASE_URL".to_string(),
+                "postgres://localhost/zzz".to_string()
+            ))
         );
         assert_eq!(
             parse_env_line("KEY = \"quoted value\""),
@@ -381,7 +389,10 @@ mod tests {
                 let _ = sock.flush().await;
             }
         });
-        assert!(check_health(port).await, "expected healthy against a 200 /health");
+        assert!(
+            check_health(port).await,
+            "expected healthy against a 200 /health"
+        );
         let _ = server.await;
 
         // Bind then drop to obtain a port with nothing listening.

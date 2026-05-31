@@ -80,7 +80,10 @@ async fn cmd_daemon_start(args: &DaemonStart) -> Result<(), CliError> {
     if let Some(stale) = dl::read_daemon_info()
         && !dl::is_pid_alive(stale.pid)
     {
-        eprintln!("warning: stale daemon.json (pid {} not running), replacing", stale.pid);
+        eprintln!(
+            "warning: stale daemon.json (pid {} not running), replacing",
+            stale.pid
+        );
     }
 
     let bin = dl::resolve_server_bin();
@@ -108,7 +111,10 @@ async fn cmd_daemon_start(args: &DaemonStart) -> Result<(), CliError> {
     if !healthy {
         let _ = dl::send_sigterm(pid);
         let _ = child.wait().await;
-        return Err(CliError::ServerNotHealthy { port, ms: dl::HEALTH_TIMEOUT_MS });
+        return Err(CliError::ServerNotHealthy {
+            port,
+            ms: dl::HEALTH_TIMEOUT_MS,
+        });
     }
 
     dl::write_daemon_info(&dl::DaemonInfo {

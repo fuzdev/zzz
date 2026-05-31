@@ -60,11 +60,17 @@ pub async fn report_status(json: bool) -> Result<(), CliError> {
         println!("  started: {}", info.started);
         println!("  url:     http://localhost:{}", info.port);
     } else if pid_alive {
-        println!("daemon process alive but not responding on port {}", info.port);
+        println!(
+            "daemon process alive but not responding on port {}",
+            info.port
+        );
         println!("  pid:     {}", info.pid);
         println!("  port:    {} (not listening)", info.port);
     } else {
-        println!("stale daemon.json (pid {} not running) — cleaning up", info.pid);
+        println!(
+            "stale daemon.json (pid {} not running) — cleaning up",
+            info.pid
+        );
         dl::remove_daemon_info()?;
     }
     Ok(())

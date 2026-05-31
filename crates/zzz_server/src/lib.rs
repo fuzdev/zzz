@@ -123,9 +123,9 @@ pub type ExtraActionSpecsFactory = Box<
 pub type PreMigrationHook = Box<
     dyn FnOnce(
             &fuz_db::Pool,
-        ) -> std::pin::Pin<
-            Box<dyn Future<Output = Result<(), ServerError>> + Send + '_>,
-        > + Send,
+        )
+            -> std::pin::Pin<Box<dyn Future<Output = Result<(), ServerError>> + Send + '_>>
+        + Send,
 >;
 
 /// Options for [`run_app`].
@@ -693,18 +693,17 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // rows into. Carries its own `origin_layer` so the origin allowlist gates
     // it like every other zzz handler; it resolves auth itself and writes no
     // `audit_log.ip`, so no `client_ip` layer is needed.
-    let spine_audit_stream_router = fuz_realtime::audit_stream_router(
-        fuz_realtime::AuditStreamRouteState::new(
+    let spine_audit_stream_router =
+        fuz_realtime::audit_stream_router(fuz_realtime::AuditStreamRouteState::new(
             app_state.db_pool.clone(),
             Arc::clone(&spine_keyring),
             spine_daemon_token.clone(),
             Arc::clone(&audit_sse),
-        ),
-    )
-    .layer(axum::middleware::from_fn_with_state(
-        Arc::clone(&spine_allowed_origins),
-        fuz_http::origin_layer,
-    ));
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&spine_allowed_origins),
+            fuz_http::origin_layer,
+        ));
 
     let mut app = Router::new()
         .route("/health", get(health_handler))
@@ -806,8 +805,7 @@ fn parse_stringbool_env(name: &str) -> Result<bool, ServerError> {
     let Ok(v) = std::env::var(name) else {
         return Ok(false);
     };
-    fuz_common::env::parse_stringbool(&v)
-        .map_err(|e| ServerError::Config(format!("{name}: {e}")))
+    fuz_common::env::parse_stringbool(&v).map_err(|e| ServerError::Config(format!("{name}: {e}")))
 }
 
 /// Resolve a path to an absolute, canonical, normalized directory string

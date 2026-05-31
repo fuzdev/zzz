@@ -42,7 +42,11 @@ fn daemon_status_json_reports_not_running_when_no_daemon() {
         .output()
         .expect("run zzz daemon status");
 
-    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.contains("\"running\":false"),
@@ -71,9 +75,16 @@ fn daemon_status_cleans_up_stale_daemon_json() {
         .output()
         .expect("run zzz daemon status");
 
-    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("stale"), "expected a stale notice, got: {stdout}");
+    assert!(
+        stdout.contains("stale"),
+        "expected a stale notice, got: {stdout}"
+    );
     assert!(
         !daemon_json.exists(),
         "stale daemon.json should have been cleaned up"
