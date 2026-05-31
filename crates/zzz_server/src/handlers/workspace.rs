@@ -75,8 +75,7 @@ pub async fn workspace_list(
         workspaces.values().cloned().collect()
     };
     let result = WorkspaceListResult { workspaces: list };
-    serde_json::to_value(result)
-        .map_err(|e| internal_error_with_source("serialization failed", &e))
+    serde_json::to_value(result).map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 /// `workspace_open` — open a workspace directory.
@@ -172,8 +171,7 @@ pub async fn workspace_open(
         workspace,
         files: vec![],
     };
-    serde_json::to_value(result)
-        .map_err(|e| internal_error_with_source("serialization failed", &e))
+    serde_json::to_value(result).map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 /// `workspace_close` — close a workspace directory.

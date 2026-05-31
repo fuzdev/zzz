@@ -117,7 +117,10 @@ pub async fn completion_create(
         .map_err(|e| invalid_params(&format!("invalid completion_request: {e}"), None))?;
 
     let provider_name = ProviderName::parse(&request.provider_name).ok_or_else(|| {
-        invalid_params(&format!("unknown provider: {}", request.provider_name), None)
+        invalid_params(
+            &format!("unknown provider: {}", request.provider_name),
+            None,
+        )
     })?;
 
     let progress_token = params

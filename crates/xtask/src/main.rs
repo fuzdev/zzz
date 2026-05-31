@@ -149,7 +149,10 @@ fn run_dev() -> Result<()> {
     println!("[xtask] zzz_server healthy");
 
     println!("[xtask] starting vite dev server...");
-    let mut vite = Command::new("npx").args(["vite", "dev"]).envs(&child_env).spawn()?;
+    let mut vite = Command::new("npx")
+        .args(["vite", "dev"])
+        .envs(&child_env)
+        .spawn()?;
 
     // Ctrl+C reaches both children directly (shared process group), so they
     // shut themselves down; this loop reaps them and cleans up if one crashes.

@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
-
 // -- Provider name enum -------------------------------------------------------
 
 /// Known AI provider names.

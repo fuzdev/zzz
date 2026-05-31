@@ -55,8 +55,7 @@ pub async fn ping(
     let result = PingResult {
         ping_id: ctx.request_id.clone(),
     };
-    serde_json::to_value(result)
-        .map_err(|e| internal_error_with_source("serialization failed", &e))
+    serde_json::to_value(result).map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 /// `session_load` — authenticated initial-state load.
@@ -101,8 +100,7 @@ pub async fn session_load(
             workspaces,
         },
     };
-    serde_json::to_value(result)
-        .map_err(|e| internal_error_with_source("serialization failed", &e))
+    serde_json::to_value(result).map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 /// `_testing_emit_notifications` — test-only action used by the integration
