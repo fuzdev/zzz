@@ -31,28 +31,9 @@ use std::sync::Arc;
 
 use axum::routing::get;
 use axum::{Json, Router};
-use futures_util::future::BoxFuture;
 use serde::Serialize;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
-
-/// Wires the post-bootstrap keeper-account id into `spine_daemon_token`
-/// so subsequent daemon-token-authenticated calls (notably
-/// `_testing_reset` on test binaries) resolve the keeper. `fuz_auth`
-/// fires this callback after the bootstrap pipeline creates the keeper.
-struct SpineDaemonTokenKeeperResolved {
-    state: fuz_auth::SharedDaemonTokenState,
-}
-
-impl fuz_auth::BootstrapKeeperResolved for SpineDaemonTokenKeeperResolved {
-    fn on_keeper_resolved(&self, account_id: uuid::Uuid) -> BoxFuture<'static, ()> {
-        let state = Arc::clone(&self.state);
-        Box::pin(async move {
-            state.write().keeper_account_id = Some(account_id);
-            tracing::info!(%account_id, "daemon token: keeper account set by bootstrap");
-        })
-    }
-}
 
 pub use error::ServerError;
 
@@ -364,13 +345,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     let spine_daemon_token: Option<fuz_auth::SharedDaemonTokenState> =
         match fuz_auth::init_daemon_token(Path::new(&config.zzz_dir)).await {
             Ok(state) => {
-                if let Ok(client) = pool.get().await
-                    && let Ok(Some(account_id)) =
-                        fuz_auth::actor_queries::query_keeper_account_id(&client).await
-                {
-                    state.write().keeper_account_id = Some(account_id);
-                    tracing::info!(%account_id, "daemon token: keeper account resolved");
-                }
+                fuz_auth::resolve_keeper_into(&state, &pool).await;
                 Some(state)
             }
             Err(e) => {
@@ -404,9 +379,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             }),
             on_keeper_resolved: spine_daemon_token.as_ref().map(|state| {
                 let cb: Arc<dyn fuz_auth::BootstrapKeeperResolved> =
-                    Arc::new(SpineDaemonTokenKeeperResolved {
-                        state: Arc::clone(state),
-                    });
+                    Arc::new(fuz_auth::DaemonTokenKeeperResolved::new(Arc::clone(state)));
                 cb
             }),
         }),
