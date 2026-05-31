@@ -10,7 +10,7 @@ name = "zzz_server"
 path = "src/lib.rs"
 
 [[bin]]
-name = "zzz_server"
+name = "zzzd"
 path = "src/main.rs"
 
 [dependencies]

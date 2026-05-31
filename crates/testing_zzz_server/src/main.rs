@@ -43,16 +43,15 @@ const TESTING_DEFAULT_PORT: u16 = 1175;
 async fn main() {
     // Non-blocking stdout logging so a stalled stdout consumer can't starve
     // the async runtime. `_log_guard` must stay live for the whole process.
-    let _log_guard = fuz_common::logging::init_non_blocking_stdout(
-        "info,zzz_server=info,testing_zzz_server=info",
-    );
+    let _log_guard =
+        fuz_common::logging::init_non_blocking_stdout("info,zzz_server=info,testing_zzzd=info");
 
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(TestingArgon2idHasher::new());
 
     // Always-visible startup sentinel — survives any RUST_LOG filter that
     // would suppress `info!`. The sister `WARN: test-mode argon2 hasher
     // active` line is emitted by `TestingArgon2idHasher::new` itself.
-    eprintln!("testing_zzz_server starting (test-mode argon2 active)");
+    eprintln!("testing_zzzd starting (test-mode argon2 active)");
 
     // The `_testing_reset` factory closes over `Arc<App>` so the
     // domain-state reset closure can clear zzz workspaces + terminals +

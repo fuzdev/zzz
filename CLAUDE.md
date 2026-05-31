@@ -45,8 +45,8 @@ See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 
 ## CLI
 
-zzz has a Deno-compiled CLI binary for daemon management and browser launching.
-See ./src/lib/zzz/CLAUDE.md for full CLI architecture.
+zzz has a Rust CLI (`crates/zzz`, argh) for daemon management and browser
+launching. See ./crates/CLAUDE.md for the crate layout.
 
 ```bash
 zzz                          # start daemon if needed, open browser
@@ -56,41 +56,31 @@ zzz daemon status            # show daemon info
 zzz init                     # initialize ~/.zzz/
 ```
 
-The global daemon runs on port 4460 with state at `~/.zzz/`. `zzz daemon
-start` spawns the compiled `zzz_server` Rust binary as a subprocess (found
-beside the CLI executable, e.g. `~/.zzz/bin/zzz_server`, with a dev fallback
-to `./target/debug/zzz_server`). The CLI itself is built via
-`gro_plugin_deno_compile` (see `gro.config.ts` and `deno.json`); `gro build`
-also builds and copies `zzz_server` into `dist_cli/` so the CLI can spawn it.
+The global daemon runs on port 4460 with state at `~/.zzz/`. The CLI spawns
+and discovers the `zzzd` daemon binary (the `[[bin]]` target of the
+`zzz_server` crate) — found beside the CLI executable (e.g. `~/.zzz/bin/zzzd`),
+with a dev fallback to `./target/debug/zzzd`. Build both with `cargo`:
+`cargo build -p zzz` (CLI) and `cargo build -p zzz_server` (daemon → `zzzd`).
 
 ## Docs
 
 - ./docs/architecture.md — Action system, Cell system, content model, data flow
 - ./docs/development.md — Development workflow, extension points, patterns
 - ./docs/providers.md — AI provider integration, adding new providers
-- ./src/lib/zzz/CLAUDE.md — CLI architecture, commands, runtime abstraction
-- ./crates/CLAUDE.md — Rust backend (zzz_server)
+- ./crates/CLAUDE.md — Rust backend (`zzzd`) + Rust CLI (`crates/zzz`)
 
 ## Repository Structure
 
 ```
 crates/                               # Rust workspace
 │   ├── CLAUDE.md                     # Rust backend docs
-│   ├── zzz/                          # CLI scaffold (argh, stubs)
+│   ├── zzz/                          # Rust CLI (argh) — daemon lifecycle, init, open, version
 │   ├── xtask/                        # Dev automation: `cargo xtask check-release` dep-graph audit (sanity check #2 of the test-binary pattern)
 │   ├── testing_zzz_server/           # Test-mode binary — wires `fuz_testing::TestingArgon2idHasher` for fast cross-process integration tests. **Never ships in a release.**
 │   └── zzz_server/                   # Axum JSON-RPC server — full spine consumer (single `/api/rpc` + `/api/ws` on `fuz_actions::ActionRegistry`)
 │       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast`/`close_sockets_for_*` shims + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `rpc.rs` (JSON-RPC helpers), `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
 src/
 ├── lib/                          # Published as @fuzdev/zzz
-│   ├── zzz/                      # CLI (Deno compiled binary)
-│   │   ├── main.ts              # Entry point (deno compile target)
-│   │   ├── cli.ts               # Arg parsing wrapper
-│   │   ├── cli_config.ts        # ~/.zzz/config.json
-│   │   ├── runtime/             # ZzzRuntime abstraction
-│   │   ├── cli/                 # CLI infrastructure
-│   │   └── commands/            # init, daemon, open, status
-│   │
 │   ├── *.svelte.ts               # Cell state classes (31 classes)
 │   ├── action_specs.ts           # All 21 action spec definitions
 │   ├── cell.svelte.ts            # Base Cell class
@@ -214,14 +204,13 @@ register on the live dispatchers when `ZZZ_ENABLE_TEST_ACTIONS=1`):
 ```bash
 deno task dev:setup
 npm install
-
-# Optional: build fuz_pty for real PTY support (echo, prompts, colors, resize)
-# Without this, terminals fall back to Deno.Command pipes (no interactivity).
-# fuz_pty lives in the sibling Rust workspace; build it from that checkout:
-cargo build -p fuz_pty --release
 ```
 
-Use `npm install` (not `deno install`) for packages. With `nodeModulesDir: "manual"`, `npm install` produces a layout TypeScript resolves consistently; `deno install` creates hoisted + `.deno/` copies that TS treats as distinct modules, causing `#private`-symbol "two different types" errors on `Logger`, `Snippet`, etc. Versions must be kept in sync across `package.json` (runtime + SvelteKit/Vite) and `deno.json` `imports` (needed for `deno compile` at `gro build`, which runs from `dist_cli/` without access to `package.json`).
+The Rust backend (and its native `fuz_pty` PTY dependency) builds via `cargo`
+— `deno task dev` runs `cargo build -p zzz_server`. Requires the sibling Rust
+workspace checked out alongside this repo (path deps).
+
+Use `npm install` (not `deno install`) for packages. With `nodeModulesDir: "manual"`, `npm install` produces a layout TypeScript resolves consistently; `deno install` creates hoisted + `.deno/` copies that TS treats as distinct modules, causing `#private`-symbol "two different types" errors on `Logger`, `Snippet`, etc. Versions must be kept in sync across `package.json` (runtime + SvelteKit/Vite) and `deno.json` `imports` (used by `deno task dev` / `deno task test`).
 
 ### Daily Commands
 
@@ -272,7 +261,7 @@ unit-tested in the spine crates (`fuz_auth`, `fuz_http`).
 ```bash
 cargo build -p zzz_server                                                 # Build
 cargo clippy -p zzz_server                                                # Lint
-./target/debug/zzz_server --port 1174                                     # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS)
+./target/debug/zzzd --port 1174                                           # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS)
 deno task dev                                                             # Dev server: Rust backend + Vite frontend
 npm run test:cross                                                        # Rust cross-process suites (rust + rust_proxy; needs rust binary + zzz_test_rust/zzz_test_rust_proxy DBs) — flag baked in
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Single project (Rust binary; needs `postgres://localhost/zzz_test_rust`)

@@ -8,12 +8,9 @@
 //!   cache/          — regenerable data, safe to delete
 //!   run/daemon.json — PID, port, version (ephemeral)
 //! ```
-//! The TS reference at `src/lib/zzz/commands/init.ts` creates the
-//! directory and a default `config.json`; the config schema is at
-//! `src/lib/zzz/cli_config.ts`. Unlike the TS reference (which errors when
-//! `config.json` already exists), this port is idempotent: it `mkdir -p`s
-//! the subdirectories and only writes `config.json` when absent, so re-runs
-//! are safe and never clobber a configured port.
+//! Idempotent: it `mkdir -p`s the subdirectories and only writes
+//! `config.json` when absent, so re-runs are safe and never clobber a
+//! configured port.
 
 use std::fs;
 
@@ -28,8 +25,6 @@ use crate::daemon_lifecycle as dl;
 const STATE_SUBDIRS: &[&str] = &["state", "cache", "run"];
 
 /// Initialize zzz configuration (`~/.zzz/`).
-///
-/// Mirrors `src/lib/zzz/cli/schemas.ts` `InitArgs`.
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "init")]
 pub struct Init {
@@ -39,8 +34,6 @@ pub struct Init {
 }
 
 /// Handle `zzz init`.
-///
-/// Reference: `src/lib/zzz/commands/init.ts`.
 pub fn cmd_init(args: &Init) -> Result<(), CliError> {
     let zzz_dir = dl::zzz_dir()?;
     for sub in STATE_SUBDIRS {

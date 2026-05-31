@@ -3,8 +3,6 @@
 //! Three subcommands: `start` (foreground), `stop`, `status`. The shared
 //! plumbing (binary discovery, health probe, `daemon.json` I/O, PID ops)
 //! lives in `crate::daemon_lifecycle`; these handlers orchestrate it.
-//!
-//! Port of `src/lib/zzz/commands/daemon.ts`.
 
 use std::process::Stdio;
 use std::time::{Duration, Instant};

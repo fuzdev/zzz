@@ -1,9 +1,7 @@
 //! CLI error types.
 //!
-//! Typed variants grow per handler. The Deno reference at
-//! `src/lib/zzz/main.ts` collapses every error to a single `console.log` +
-//! `runtime.exit(1)`; the Rust port carries enough structure for
-//! per-variant exit codes and hints.
+//! Typed variants grow per handler, carrying enough structure for
+//! per-variant exit codes and user-facing hints.
 
 use thiserror::Error;
 

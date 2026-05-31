@@ -79,7 +79,7 @@ console.log('[dev] build complete');
 // -- Start Rust backend -------------------------------------------------------
 
 console.log(`[dev] starting zzz_server on port ${RUST_BACKEND_PORT}...`);
-const server_process = new Deno.Command('./target/debug/zzz_server', {
+const server_process = new Deno.Command('./target/debug/zzzd', {
 	args: ['--port', String(RUST_BACKEND_PORT)],
 	env: child_env,
 	stdout: 'inherit',

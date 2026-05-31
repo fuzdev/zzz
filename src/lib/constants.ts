@@ -20,8 +20,8 @@ import {
 // It should generally be preferred to using the variables directly.
 //
 // WARNING: This module imports $env/static/public (SvelteKit build-time) and
-// MUST NOT be imported by any module in the Deno compile chain (the CLI under
-// `src/lib/zzz/`) — $env doesn't exist in Deno and will crash the compile.
+// MUST NOT be imported by any non-SvelteKit context — $env doesn't exist
+// outside the SvelteKit build and will crash.
 
 // TODO a lot of these need to be moved to env or config etc
 // and maybe some need to be derived (in some/all cases)

@@ -5,10 +5,10 @@ a single JSON-RPC 2.0 API over HTTP + WebSocket. AI providers are Anthropic
 (full) plus OpenAI/Gemini status-only stubs.
 
 **Workspace layout**:
-- `zzz_server/` — library + production binary. `pub async fn run_app(options: RunAppOptions)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, drain). `RunAppOptions` carries: `password_hasher` (production-vs-test swap), `default_port`, `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag), and `extra_action_specs_factory` (lets the test binary inject `_testing_reset` without putting `fuz_testing` in the production dep graph). `src/main.rs` is the thin production entry — constructs `Argon2idHasher`, calls `run_app` with `force_test_actions: false, extra_action_specs_factory: None`.
-- `testing_zzz_server/` — separate test-binary package wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) AND `fuz_testing::create_testing_reset_action_spec` (auth-table wipe + fresh-keeper re-seed + consumer-supplied `reset_state(ActionDb)` callback; `credential_types: [DaemonToken]` auth gate). zzz's reset closure ignores the in-tx `ActionDb` handle (its domain state is in-memory, not in PG) — it clears zzz workspaces, calls `pty_manager.kill_all()` (non-destructive — manager stays usable across tests), and wipes the optional `ZZZ_TESTING_SCRATCH_DIR`. Default port 1175 (production is 1174). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. It is zzz's test binary, spawned by the cross-process integration tests.
+- `zzz_server/` — library (`zzz_server`) + production daemon binary (the `[[bin]]` target is named `zzzd`). `pub async fn run_app(options: RunAppOptions)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, drain). `RunAppOptions` carries: `password_hasher` (production-vs-test swap), `default_port`, `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag), and `extra_action_specs_factory` (lets the test binary inject `_testing_reset` without putting `fuz_testing` in the production dep graph). `src/main.rs` is the thin production entry — constructs `Argon2idHasher`, calls `run_app` with `force_test_actions: false, extra_action_specs_factory: None`.
+- `testing_zzz_server/` — separate test-binary package (its `[[bin]]` target is named `testing_zzzd`) wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) AND `fuz_testing::create_testing_reset_action_spec` (auth-table wipe + fresh-keeper re-seed + consumer-supplied `reset_state(ActionDb)` callback; `credential_types: [DaemonToken]` auth gate). zzz's reset closure ignores the in-tx `ActionDb` handle (its domain state is in-memory, not in PG) — it clears zzz workspaces, calls `pty_manager.kill_all()` (non-destructive — manager stays usable across tests), and wipes the optional `ZZZ_TESTING_SCRATCH_DIR`. Default port 1175 (production is 1174). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. It is zzz's test binary, spawned by the cross-process integration tests.
 - `xtask/` — dev automation. `cargo xtask check-release` thin-wraps `fuz_audit::run_check_release_cli()`; marked `[package.metadata.fuz_audit] dev_only = true` so xtask itself is excluded from the production scan.
-- `zzz/` — Rust CLI (argh). `daemon start/stop/status`, `status`, `init`, `open` (the default command — daemon discovery, detached auto-start, best-effort `workspace_open`, browser launch), and `version` (+ the `--version`/`-v` switch) are implemented, all backed by `daemon_lifecycle.rs` (port-based `daemon.json` I/O, `/health` probe, PID liveness, server-bin discovery, child-env build, ISO timestamp). Tests: unit tests per module, `tests/cli_daemon.rs` (infra-free status read-back), and `tests/cli_e2e.rs` (full `daemon start` ↔ live `testing_zzz_server` lifecycle, gated behind `ZZZ_TEST_E2E=1` + Postgres, self-skips otherwise). The shipped CLI is still the Deno-compiled binary; this crate is the in-progress Rust port reaching parity.
+- `zzz/` — Rust CLI (argh). `daemon start/stop/status`, `status`, `init`, `open` (the default command — daemon discovery, detached auto-start, best-effort `workspace_open`, browser launch), and `version` (+ the `--version`/`-v` switch) are implemented, all backed by `daemon_lifecycle.rs` (port-based `daemon.json` I/O, `/health` probe, PID liveness, server-bin discovery, child-env build, ISO timestamp). Tests: unit tests per module, `tests/cli_daemon.rs` (infra-free status read-back), and `tests/cli_e2e.rs` (full `daemon start` ↔ live `testing_zzzd` lifecycle, gated behind `ZZZ_TEST_E2E=1` + Postgres, self-skips otherwise). This is zzz's CLI — the Deno CLI has been removed; build it with `cargo build -p zzz`.
 
 AI provider system feature-complete for Anthropic; OpenAI /
 Gemini stubs ship status only. Spine consumption is
@@ -59,7 +59,7 @@ If a path dep is missing, `cargo build` will fail with
 
 ```bash
 createdb zzz                 # development
-createdb zzz_test            # manual testing_zzz_server runs
+createdb zzz_test            # manual testing_zzzd runs
 createdb zzz_test_rust        # cross-backend vitest project: cross_backend_rust
 createdb zzz_test_rust_proxy  # cross-backend vitest project: cross_backend_rust_proxy
 ```
@@ -74,12 +74,12 @@ cargo xtask check-release         # audit: no production binary depends on fuz_t
 # Run (requires DATABASE_URL and SECRET_FUZ_COOKIE_KEYS)
 DATABASE_URL=postgres://localhost/zzz \
 SECRET_FUZ_COOKIE_KEYS=dev-only-not-for-production-use-000 \
-./target/debug/zzz_server --port 1174
+./target/debug/zzzd --port 1174
 
 # Test binary (cross-process integration tests — fast argon2)
 DATABASE_URL=postgres://localhost/zzz_test \
 SECRET_FUZ_COOKIE_KEYS=dev-only-not-for-production-use-000 \
-./target/debug/testing_zzz_server
+./target/debug/testing_zzzd
 
 # Quick smoke test
 curl http://localhost:1174/health

@@ -25,9 +25,10 @@ use crate::CliError;
 
 /// Production daemon binary name. The CLI spawns and discovers this.
 ///
-/// Flips to `"zzzd"` in one place if/when the daemon binary is renamed for
-/// fuz/fuzd-style symmetry; nothing else in the CLI hardcodes the name.
-pub const DAEMON_BIN: &str = "zzz_server";
+/// The single source of truth for the daemon binary name (the `[[bin]]`
+/// target of the `zzz_server` crate), named `zzzd` for fuz/fuzd-style
+/// symmetry; nothing else in the CLI hardcodes the name.
+pub const DAEMON_BIN: &str = "zzzd";
 
 /// Default daemon port when neither `--port`, `PORT`, nor config supplies one.
 pub const DEFAULT_PORT: u16 = 4460;

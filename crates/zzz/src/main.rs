@@ -1,10 +1,10 @@
 //! zzz CLI
 //!
-//! Command-line client for the zzz daemon — Rust counterpart to the
-//! Deno-compiled `zzz` binary at `src/lib/zzz/main.ts`.
+//! Command-line client for the zzz daemon: starts/discovers it, opens the
+//! browser UI, and manages its lifecycle.
 //!
 //! Runs on a `tokio` runtime: the daemon-lifecycle and status handlers do
-//! network I/O (spawn `zzz_server`, poll `/health`) and signal handling, so
+//! network I/O (spawn `zzzd`, poll `/health`) and signal handling, so
 //! `main` is `#[tokio::main]`. The runtime spins for sync subcommands
 //! (`version`/`init`) too, which is cheap enough not to special-case.
 //!
@@ -36,9 +36,6 @@ use crate::cli::commands::{
 const KNOWN_SUBCOMMANDS: &[&str] = &["open", "init", "daemon", "status", "version", "help"];
 
 /// zzz — local-first forge for power users and devs.
-///
-/// Mirrors the Deno CLI surface at `src/lib/zzz/cli/cli_help.ts`
-/// (see `ZZZ_COMMANDS`).
 #[derive(FromArgs, Debug)]
 struct TopLevel {
     /// print version information and exit
@@ -94,10 +91,10 @@ async fn run() -> Result<(), CliError> {
 
 /// Parse argv into `TopLevel`, applying the path-as-command rewrite.
 ///
-/// Mirrors `src/lib/zzz/main.ts`: if the first positional isn't a known
-/// subcommand (and isn't a flag), inject `open` so argh routes it to the
-/// open handler with the original token as a positional argument. This
-/// lets `zzz ~/dev/` behave like `zzz open ~/dev/`.
+/// If the first positional isn't a known subcommand (and isn't a flag),
+/// inject `open` so argh routes it to the open handler with the original
+/// token as a positional argument. This lets `zzz ~/dev/` behave like
+/// `zzz open ~/dev/`.
 fn parse_argv(argv: Vec<String>) -> TopLevel {
     let rewritten = rewrite_argv_for_path_as_command(argv);
     let arg_strs: Vec<&str> = rewritten.iter().map(String::as_str).collect();

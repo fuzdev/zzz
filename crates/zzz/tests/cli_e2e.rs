@@ -7,7 +7,7 @@
 //!
 //! Infra-gated like the cross-backend vitest projects: it self-skips unless
 //! `ZZZ_TEST_E2E=1`. When opted in, it needs:
-//!   - a built `testing_zzz_server` binary (the fast-argon2 test binary;
+//!   - a built `testing_zzzd` binary (the fast-argon2 test binary;
 //!     `cargo build -p testing_zzz_server`), found beside the `zzz` test
 //!     binary or via `ZZZ_SERVER_BIN`;
 //!   - a reachable `PostgreSQL` DB (`DATABASE_URL`, default
@@ -35,8 +35,8 @@ const fn zzz_bin() -> &'static str {
     env!("CARGO_BIN_EXE_zzz")
 }
 
-/// The `testing_zzz_server` binary: `ZZZ_SERVER_BIN` override, else beside
-/// the `zzz` test binary (same `target/<profile>/` dir).
+/// The `testing_zzzd` binary: `ZZZ_SERVER_BIN` override, else beside the
+/// `zzz` test binary (same `target/<profile>/` dir).
 fn testing_server_bin() -> PathBuf {
     if let Some(path) = std::env::var_os("ZZZ_SERVER_BIN") {
         return PathBuf::from(path);
@@ -44,7 +44,7 @@ fn testing_server_bin() -> PathBuf {
     PathBuf::from(zzz_bin())
         .parent()
         .expect("zzz bin has a parent dir")
-        .join("testing_zzz_server")
+        .join("testing_zzzd")
 }
 
 /// A unique temp dir to use as `$HOME` (no `tempfile` dep in this crate).
@@ -68,7 +68,7 @@ fn daemon_start_status_stop_against_live_server() {
     let server_bin = testing_server_bin();
     assert!(
         server_bin.exists(),
-        "testing_zzz_server not found at {} — run `cargo build -p testing_zzz_server` or set ZZZ_SERVER_BIN",
+        "testing_zzzd not found at {} — run `cargo build -p testing_zzz_server` or set ZZZ_SERVER_BIN",
         server_bin.display()
     );
 

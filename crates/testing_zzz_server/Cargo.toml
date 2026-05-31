@@ -7,7 +7,7 @@ publish = false
 description = "Test-mode zzz_server binary — wires fuz_testing's TestingArgon2idHasher for fast cross-process integration tests. NEVER ship in a release."
 
 [[bin]]
-name = "testing_zzz_server"
+name = "testing_zzzd"
 path = "src/main.rs"
 
 [lints]

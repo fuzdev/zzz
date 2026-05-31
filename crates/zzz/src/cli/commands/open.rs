@@ -3,19 +3,19 @@
 //! Opens the zzz browser UI, auto-starting the daemon if needed.
 //! Handles `zzz`, `zzz <file>`, `zzz <dir>`.
 //!
-//! Port of `src/lib/zzz/commands/open.ts`. The flow:
+//! The flow:
 //!   1. Require init — `~/.zzz` must exist (`zzz init`).
 //!   2. Daemon discovery — read `~/.zzz/run/daemon.json`, verify the pid is
 //!      alive and `/health` responds; clean up a stale record otherwise.
-//!   3. Auto-start if not running — spawn `zzz_server` **detached** (new
-//!      process group, null stdio), poll `/health`, record `daemon.json`.
-//!      This differs from `daemon start`, which runs the server in the
-//!      foreground and forwards signals to it.
+//!   3. Auto-start if not running — spawn `zzzd` **detached** (new process
+//!      group, log-file stdio), poll `/health`, record `daemon.json`. This
+//!      differs from `daemon start`, which runs the server in the foreground
+//!      and forwards signals to it.
 //!   4. For a directory arg, a best-effort `workspace_open` JSON-RPC call.
 //!      `workspace_open` requires an authenticated account, which the CLI
 //!      can't supply (the daemon token is a different credential axis), so
 //!      this call warn-fails under auth — the authenticated browser does the
-//!      real open via the `?workspace=` query param below. Mirrors the TS.
+//!      real open via the `?workspace=` query param below.
 //!   5. Browser launch (`xdg-open` / `open` / `start`), with the
 //!      `?workspace=<path>` param when a path was given.
 
@@ -29,8 +29,7 @@ use crate::daemon_lifecycle::{self as dl, DaemonInfo};
 
 /// Open file or directory in browser (default command).
 ///
-/// Mirrors `src/lib/zzz/cli/schemas.ts` `OpenArgs` (at most one positional
-/// path).
+/// Accepts at most one positional path.
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "open")]
 pub struct Open {
@@ -40,8 +39,6 @@ pub struct Open {
 }
 
 /// Handle `zzz open` (and the implicit no-subcommand default).
-///
-/// Reference: `src/lib/zzz/commands/open.ts`.
 pub async fn cmd_open(args: &Open) -> Result<(), CliError> {
     let zzz_dir = dl::zzz_dir()?;
     if !zzz_dir.exists() {
@@ -105,8 +102,8 @@ async fn discover_running_daemon() -> Option<DaemonInfo> {
     None
 }
 
-/// Spawn `zzz_server` detached and wait for it to report healthy, then
-/// record `daemon.json`.
+/// Spawn `zzzd` detached and wait for it to report healthy, then record
+/// `daemon.json`.
 ///
 /// Detached = a new process group (`process_group(0)`, so the daemon ignores
 /// the launching terminal's Ctrl-C) with its stdio captured to
@@ -197,7 +194,7 @@ async fn start_daemon_detached() -> Result<DaemonInfo, CliError> {
 /// Best-effort `workspace_open` JSON-RPC call. Failures (including the
 /// `-32001 unauthenticated` the auth-gated handler returns to the
 /// credential-less CLI) only warn — the browser opens the workspace via the
-/// `?workspace=` query param. Mirrors the TS reference's warn-and-continue.
+/// `?workspace=` query param.
 async fn open_workspace_best_effort(port: u16, workspace_path: &str) {
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_millis(dl::HEALTH_REQUEST_TIMEOUT_MS))
@@ -240,8 +237,7 @@ async fn open_workspace_best_effort(port: u16, workspace_path: &str) {
 
 /// Resolve the target path to an absolute path. Absolute (`/…`) and
 /// home-relative (`~/…`) paths pass through unchanged — the daemon expands
-/// `~` — and everything else is joined onto the current directory. Mirrors
-/// the TS `resolve_path`.
+/// `~` — and everything else is joined onto the current directory.
 fn resolve_path(path: Option<&str>) -> Option<String> {
     let path = path?;
     if path.starts_with('/') || path.starts_with('~') {
@@ -282,7 +278,7 @@ fn encode_uri_component(input: &str) -> String {
 }
 
 /// Open `url` in the user's browser, trying the platform openers in turn and
-/// falling back to printing the URL. Mirrors the TS `open_browser`.
+/// falling back to printing the URL.
 async fn open_browser(url: &str) {
     for opener in ["xdg-open", "open", "start"] {
         let status = tokio::process::Command::new(opener)
