@@ -5,9 +5,13 @@
 //!   (the dev backend binds `4461`; Vite serves `5173` and proxies `/api` to it).
 //! - `dev-setup`  — generate `.env.development` from `.env.development.example`.
 //! - `prod-setup` — generate `.env.production` from `.env.production.example`.
-//! - anything else (including `check-release`, and the no-arg usage path) is
-//!   delegated to [`fuz_audit::xtask_main`], which owns its own dispatch and
-//!   usage message. `check-release` is sanity check #2 of the test-binary pattern.
+//! - `check-release` — the dep-graph audit (sanity check #2 of the test-binary
+//!   pattern); its work is delegated to [`fuz_audit::run_check_release_cli`].
+//! - no args / `help` / `-h` / `--help` — print the full subcommand list.
+//! - any other subcommand — error to stderr + usage, non-zero exit.
+//!
+//! Dispatch and the usage text live here (not in `fuz_audit`) so bare
+//! `cargo xtask` advertises zzz's own commands, not just `check-release`.
 //!
 //! Replaces the former Deno orchestration (`scripts/*.ts` + `deno.json`): the
 //! workspace builds and runs entirely on `cargo` + `npm`/`npx`, no Deno.
@@ -32,13 +36,27 @@ const DEV_ENV_FILE: &str = ".env.development";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
-    let outcome = match args.get(1).map(String::as_str) {
-        Some("dev") => run_dev(),
-        Some("dev-setup") => setup_env(DEV_ENV_FILE, ".env.development.example"),
-        Some("prod-setup") => setup_env(".env.production", ".env.production.example"),
-        // `check-release` (and usage / unknown subcommands) stay with fuz_audit.
-        _ => return fuz_audit::xtask_main(),
-    };
+    match args.get(1).map(String::as_str) {
+        Some("dev") => finish(run_dev()),
+        Some("dev-setup") => finish(setup_env(DEV_ENV_FILE, ".env.development.example")),
+        Some("prod-setup") => finish(setup_env(".env.production", ".env.production.example")),
+        // The dep-graph audit is fuz_audit's; everything else (dispatch, help) is ours.
+        Some("check-release") => fuz_audit::run_check_release_cli(),
+        None | Some("help" | "-h" | "--help") => {
+            print_usage();
+            ExitCode::SUCCESS
+        }
+        Some(other) => {
+            eprintln!("[xtask] error: unknown subcommand `{other}`\n");
+            print_usage();
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Collapse a subcommand's [`Result`] into a process exit code, printing the
+/// error to stderr on failure.
+fn finish(outcome: Result<()>) -> ExitCode {
     match outcome {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
@@ -46,6 +64,22 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Print the full subcommand list. Bare `cargo xtask`, `help`, and `-h`/`--help`
+/// land here so every command is discoverable — not just `check-release`.
+fn print_usage() {
+    println!(
+        "cargo xtask — dev and build automation for the zzz workspace
+
+usage: cargo xtask <command>
+
+commands:
+  dev            build zzz_server (port {DEV_BACKEND_PORT}), then run it alongside the Vite frontend
+  dev-setup      create {DEV_ENV_FILE} from {DEV_ENV_FILE}.example
+  prod-setup     create .env.production from .env.production.example
+  check-release  audit that no production binary depends on fuz_testing / fuz_audit"
+    );
 }
 
 /// Copy `example` → `target` (mode `0600`) when `target` is absent. Idempotent.
