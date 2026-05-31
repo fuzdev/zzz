@@ -25,14 +25,6 @@
 //! binary defaults to 1175 so a developer running both locally doesn't
 //! collide. Override via `ZZZ_PORT` or `--port` exactly as the
 //! production binary supports.
-//!
-//! TS-side peers: `../../src/lib/server/testing_server_{deno,node}.ts`
-//! over a shared `testing_server_core.ts` cover the same
-//! `_testing_reset` wire contract on the TS canonical backend (via
-//! `stub_password_deps` — the TS analog of [`TestingArgon2idHasher`]).
-//! Together the three test entries span both the cross-language axis
-//! (TS vs Rust) and the cross-runtime axis (Deno V8 vs Node V8) on
-//! the same wire shape.
 
 use std::sync::Arc;
 

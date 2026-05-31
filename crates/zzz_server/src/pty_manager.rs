@@ -134,8 +134,7 @@ impl PtyManager {
     /// itself stays usable for new `terminal_create` calls. Used by the
     /// test binary's `_testing_reset` `reset_state` callback to clear
     /// cross-test terminal pollution without tearing the binary down, and
-    /// at shutdown to free PTY fds. TS peer:
-    /// `src/lib/server/backend_pty_manager.ts:kill_all`.
+    /// at shutdown to free PTY fds.
     pub async fn kill_all(&self) {
         let entries: Vec<(String, TerminalEntry)> = {
             let mut terminals = self.terminals.write().await;

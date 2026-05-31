@@ -6,8 +6,7 @@
 //! route composition, signal handling, and graceful shutdown.
 //!
 //! The `password_hasher` parameter is the swap point for the
-//! test-binary pattern (see
-//! `~/dev/grimoire/lore/fuz_app/TODO_TEST_BINARY_PATTERN.md`):
+//! test-binary pattern (fast argon2 via a pluggable hasher):
 //!
 //! - Production wires [`fuz_auth::Argon2idHasher`] from `src/main.rs`.
 //! - `testing_zzz_server`'s `main.rs` wires
@@ -422,11 +421,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // signup handler loads app_settings per request; switch to a
     // cached Arc<RwLock<AppSettings>> shared with the future admin
     // update handler when that lands on Rust.
-    //
-    // TS parity follow-up: zzz's Deno backend does not mount /signup
-    // today (see zzz/src/lib/server/CLAUDE.md). Mount it there too
-    // when the TS side catches up to the Rust-side decision so the
-    // two backends stay observationally identical at the wire.
     let signup_route_state = fuz_auth::SignupRouteState {
         options: Arc::new(fuz_auth::SignupOptions {
             pool: pool.clone(),

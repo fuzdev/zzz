@@ -44,8 +44,8 @@ const noop_handler = (async () => undefined) as unknown as ActionHandler;
 
 /**
  * zzz domain RPC actions for surface generation — specs from
- * `all_action_specs`, no-op handlers. Mirrors `create_zzz_rpc_actions`'s
- * filter (request_response, non-protocol) without binding a `Backend`.
+ * `all_action_specs`, no-op handlers. Filters for request_response,
+ * non-protocol specs (the surface reads only `method` + `auth` metadata).
  */
 const zzz_domain_rpc_actions = (): Array<RpcAction> =>
 	all_action_specs

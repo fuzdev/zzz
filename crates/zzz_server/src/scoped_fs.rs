@@ -66,8 +66,6 @@ impl ScopedFs {
     }
 
     /// Add a path to the allowed set. No-op if already present.
-    ///
-    /// Mirrors `ScopedFs.add_path` in `src/lib/server/scoped_fs.ts`.
     pub fn add_path(&self, path: &Path) -> bool {
         let normalized = to_normalized_string(path);
         let mut paths = self.allowed_paths.write();
@@ -79,8 +77,6 @@ impl ScopedFs {
     }
 
     /// Remove a path from the allowed set.
-    ///
-    /// Mirrors `ScopedFs.remove_path` in `src/lib/server/scoped_fs.ts`.
     pub fn remove_path(&self, path: &Path) -> bool {
         let normalized = to_normalized_string(path);
         let mut paths = self.allowed_paths.write();

@@ -4,7 +4,6 @@
 //! ```text
 //! ~/.zzz/
 //!   config.json     — daemon config (port)
-//!   state/db/       — PGlite data (planned)
 //!   state/          — persistent data (completions, workspaces.json)
 //!   cache/          — regenerable data, safe to delete
 //!   run/daemon.json — PID, port, version (ephemeral)

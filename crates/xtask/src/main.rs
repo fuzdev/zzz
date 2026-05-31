@@ -3,8 +3,7 @@
 //!
 //! Thin wrapper around [`fuz_audit::xtask_main`], which owns the
 //! env-args dispatch + usage message + unknown-subcommand error path.
-//! See `~/dev/grimoire/lore/fuz_app/TODO_TEST_BINARY_PATTERN.md`
-//! §Sanity checks (sanity check #2).
+//! This is sanity check #2 of the test-binary pattern.
 
 fn main() -> std::process::ExitCode {
     fuz_audit::xtask_main()

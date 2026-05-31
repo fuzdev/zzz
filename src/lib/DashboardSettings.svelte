@@ -9,7 +9,7 @@
 
 	const app = frontend_context.get();
 
-	// TODO display capabilities (like what APIs are available, including remote server (off when deployed statically), local pglite (could be disconnected, websockets?))
+	// TODO display capabilities (like what APIs are available, including remote server (off when deployed statically), local DB (could be disconnected, websockets?))
 	// TODO display database info/explorer
 </script>
 

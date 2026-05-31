@@ -13,6 +13,19 @@ path = "src/main.rs"
 [dependencies]
 argh.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["process", "time"] }
+reqwest.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+# `kill(2)` for PID-liveness probes + SIGTERM forwarding. nix is the safe
+# wrapper (workspace lints `forbid` unsafe, so raw `libc::kill` is out).
+# Pinned to the version already resolved in the workspace lockfile.
+nix = { version = "0.29", features = ["signal"] }
+
+[dev-dependencies]
+# `io-util` for the in-module health-probe test's mock HTTP responder
+# (kept out of the production binary's tokio feature set).
+tokio = { workspace = true, features = ["io-util", "rt-multi-thread", "macros", "net", "time"] }
 
 [lints]
 workspace = true

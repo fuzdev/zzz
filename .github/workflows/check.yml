@@ -30,6 +30,6 @@ jobs:
       - run: npx @fuzdev/gro check --workspace --build
 
   # The cross-backend wire-contract suites (cross_backend_rust / _proxy) run
-  # against the Rust `zzz_server`. They need a private_fuz sibling checkout, a
+  # against the Rust `zzz_server`. They need a sibling Rust workspace checkout, a
   # Postgres service, and a cached cargo build, so they run locally
   # (`npm run test:cross`) rather than in CI for now.

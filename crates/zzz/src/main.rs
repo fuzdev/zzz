@@ -3,27 +3,16 @@
 //! Command-line client for the zzz daemon — Rust counterpart to the
 //! Deno-compiled `zzz` binary at `src/lib/zzz/main.ts`.
 //!
-//! Placeholder scaffold: every handler is a `// TODO:` stub. The Deno
-//! binary remains the source of truth — see `src/lib/zzz/CLAUDE.md`.
+//! Runs on a `tokio` runtime: the daemon-lifecycle and status handlers do
+//! network I/O (spawn `zzz_server`, poll `/health`) and signal handling, so
+//! `main` is `#[tokio::main]`. The runtime spins for sync subcommands
+//! (`version`/`init`) too, which is cheap enough not to special-case.
 //!
-//! # Future work
-//!
-//! - **Async runtime**: handlers are sync `fn` today. Real implementations
-//!   need network I/O (browser launch via `xdg-open`, RPC to the daemon,
-//!   health polling on daemon start). `tokio` is already a workspace dep
-//!   used by `zzz_server`. Open question — `#[tokio::main] async fn run`
-//!   (mirrors `private_fuz/crates/fuz/src/main.rs:62-63`, simple but
-//!   spins the runtime for sync subcommands too) or per-handler
-//!   `Runtime::new().block_on(...)` (more code, avoids runtime startup
-//!   for `version`/`init`). The fuz precedent is `#[tokio::main]`; I'd
-//!   default to that unless the cold-start cost shows up.
-//! - **Help examples**: argh supports a top-level `example = "..."`
-//!   attribute that renders an `Examples:` section in `--help`. The TS
-//!   side has 7 example invocations in `src/lib/zzz/cli/cli_help.ts`
-//!   (`ZZZ_HELP_EXAMPLES`). Mirror these on the `TopLevel` derive when
-//!   wiring real behavior.
+//! Arg parsing is argh, with a pre-parse argv rewrite for path-as-command
+//! (`zzz ~/dev/` ⇒ `zzz open ~/dev/`).
 
 mod cli;
+mod daemon_lifecycle;
 mod error;
 
 use argh::FromArgs;
@@ -31,11 +20,11 @@ use argh::FromArgs;
 pub use error::CliError;
 
 use crate::cli::commands::{
-    daemon::{self, Daemon},
-    init::{self, Init},
-    open::{self, Open},
-    status::{self, Status},
-    version::{self, Version},
+    daemon::{Daemon, cmd_daemon},
+    init::{Init, cmd_init},
+    open::{Open, cmd_open},
+    status::{Status, cmd_status},
+    version::{Version, cmd_version},
 };
 
 /// Known subcommand names. Used by `rewrite_argv_for_path_as_command` to
@@ -66,8 +55,9 @@ enum Subcommand {
     Version(Version),
 }
 
-fn main() {
-    if let Err(e) = run() {
+#[tokio::main]
+async fn main() {
+    if let Err(e) = run().await {
         eprintln!("error: {e}");
         if let Some(hint) = e.hint() {
             eprintln!("{hint}");
@@ -76,29 +66,28 @@ fn main() {
     }
 }
 
-fn run() -> Result<(), CliError> {
+async fn run() -> Result<(), CliError> {
     let argv: Vec<String> = std::env::args().collect();
     let cmd = parse_argv(argv);
-    // No subcommand → default to `open` with no path, matching the Deno CLI
-    // (`src/lib/zzz/main.ts:77-83`).
+    // No subcommand → default to `open` with no path, matching the Deno CLI.
     let Some(sub) = cmd.nested else {
-        return open::cmd_open(&Open { path: None });
+        return cmd_open(&Open { path: None });
     };
     match sub {
-        Subcommand::Open(args) => open::cmd_open(&args),
-        Subcommand::Init(args) => init::cmd_init(&args),
-        Subcommand::Daemon(args) => daemon::cmd_daemon(args),
-        Subcommand::Status(args) => status::cmd_status(&args),
-        Subcommand::Version(args) => version::cmd_version(&args),
+        Subcommand::Open(args) => cmd_open(&args),
+        Subcommand::Init(args) => cmd_init(&args),
+        Subcommand::Daemon(args) => cmd_daemon(args).await,
+        Subcommand::Status(args) => cmd_status(&args).await,
+        Subcommand::Version(args) => cmd_version(&args),
     }
 }
 
 /// Parse argv into `TopLevel`, applying the path-as-command rewrite.
 ///
-/// Mirrors `src/lib/zzz/main.ts:86-94`: if the first positional isn't a
-/// known subcommand (and isn't a flag), inject `open` so argh routes it to
-/// the open handler with the original token as a positional argument.
-/// This lets `zzz ~/dev/` behave like `zzz open ~/dev/`.
+/// Mirrors `src/lib/zzz/main.ts`: if the first positional isn't a known
+/// subcommand (and isn't a flag), inject `open` so argh routes it to the
+/// open handler with the original token as a positional argument. This
+/// lets `zzz ~/dev/` behave like `zzz open ~/dev/`.
 fn parse_argv(argv: Vec<String>) -> TopLevel {
     let rewritten = rewrite_argv_for_path_as_command(argv);
     let arg_strs: Vec<&str> = rewritten.iter().map(String::as_str).collect();
@@ -127,18 +116,9 @@ fn parse_argv(argv: Vec<String>) -> TopLevel {
 /// natively) and leaves `help` alone (argh's built-in help keyword).
 ///
 /// **`--version` / `-v` is not handled here yet.** argh does NOT handle
-/// `--version` natively (verified by direct test — it returns
-/// "Unrecognized argument: --version"). The TS CLI exposes
-/// `--version`/`-v` as a global flag via `ZzzGlobalArgs`
-/// (`src/lib/zzz/cli/cli_args.ts:22-31`). Two ways to add parity:
-///   1. Intercept here, before `from_args` — quick and matches the
-///      "argv rewrite" theme of this layer.
-///   2. Add `#[argh(switch, short = 'v')] version: bool` to `TopLevel` —
-///      idiomatic argh, but `--version` then shows in `--help` as a
-///      regular switch rather than a special token.
-///
-/// Option (2) is probably the right call; flagging both because the
-/// trade-off is real.
+/// `--version` natively. The TS CLI exposes `--version`/`-v` as a global
+/// flag; port that as a `#[argh(switch, short = 'v')]` on `TopLevel` when
+/// wiring the `version` command's real body (a follow-on to this slice).
 fn rewrite_argv_for_path_as_command(mut argv: Vec<String>) -> Vec<String> {
     let needs_rewrite = argv.get(1).is_some_and(|first| {
         !first.starts_with('-') && !KNOWN_SUBCOMMANDS.contains(&first.as_str())
