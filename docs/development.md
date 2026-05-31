@@ -4,13 +4,23 @@ Development workflow, extension points, and common patterns.
 
 ## Setup
 
+Requires Node (>=24.14), a Rust toolchain, PostgreSQL, and the sibling fuz
+Rust workspace checked out alongside this repo (path deps — including `fuz_pty`).
+
 ```bash
 git clone https://github.com/fuzdev/zzz.git && cd zzz
-deno task dev:setup
-npm install
+createdb zzz          # PostgreSQL database the backend connects to
+cargo xtask dev-setup   # generate .env.development (idempotent)
+npm install           # Node dependencies
+cargo xtask dev         # build the Rust backend + run it with the Vite frontend
 ```
 
-Optionally add API keys to `.env.development` for remote providers (Anthropic, OpenAI, Google).
+`cargo xtask dev` rebuilds `zzz_server` (`cargo build -p zzz_server`) on every run,
+binds the backend on `4461`, and serves the Vite frontend on `5173` (proxying
+`/api` → `4461`). Browse to `localhost:5173`.
+
+Optionally add API keys to `.env.development` for remote providers (Anthropic,
+OpenAI, Google), or set them at runtime on `/capabilities`.
 
 ### PTY terminals
 
@@ -33,14 +43,46 @@ Rust workspace, which must be checked out alongside this repo.
 | `gro build` | Production build |
 | `gro deploy` | Deploy to production |
 
-`deno task dev` runs the dev server (Rust backend + Vite frontend) — the
+`cargo xtask dev` runs the dev server (Rust backend + Vite frontend) — the
 user manages it; don't start it yourself.
 
 Three task runners, by role: **`gro`** for checks, build, gen, and tests
-(`gro check` / `build` / `gen` / `test`); **`deno task`** for the dev server and
-env setup (`dev`, `dev:setup`, `prod:setup`); **`npm run`** for the package
-scripts, notably `test:cross` (the Rust cross-process suites). `npm run dev` is
-an alias for `deno task dev`.
+(`gro check` / `build` / `gen` / `test`); **`cargo xtask`** for the dev server and
+env setup (`dev`, `dev-setup`, `prod-setup`); **`npm run`** for the package
+scripts, notably `test:cross` (the Rust cross-process suites). `npm run dev`,
+`npm run dev:setup`, and `npm run prod:setup` alias the matching `cargo xtask`
+commands.
+
+## Production build
+
+There are two production targets:
+
+- **Static-only** — `gro build` prerenders the SPA into `build/`, and `gro deploy`
+  publishes it to a static host (zzz.software). No Rust backend, so the
+  filesystem, terminals, AI, and auth are unavailable — the "diminished
+  capabilities" build.
+- **Full self-hosted** — the same `build/` SPA served by the Rust `zzz_server`
+  daemon, which also serves `/api`. This is the complete app, and needs **both**
+  a frontend build and a backend build (`gro build` only does the SPA).
+
+Build and run the full self-hosted server:
+
+```bash
+cargo xtask prod-setup                      # writes .env.production — edit its secrets
+gro build                                 # frontend → build/
+cargo build -p zzz_server --release       # backend  → target/release/zzzd
+./target/release/zzzd --static-dir build  # serve SPA + /api on PORT (default 4460)
+```
+
+`zzzd` reads its config from the **process environment** — it does *not* load
+`.env.production` itself (unlike `cargo xtask dev`, which loads `.env.development`
+and injects it into the child processes). Supply the env via your process manager, a systemd
+`EnvironmentFile`, or, in a shell, `set -a && . ./.env.production && set +a` before
+running. It requires `DATABASE_URL`, `SECRET_FUZ_COOKIE_KEYS`, and a non-empty
+`FUZ_ALLOWED_ORIGINS` (it hard-fails at boot otherwise). `--static-dir` (or
+`ZZZ_STATIC_DIR`) points it at the built frontend; CLI flags win over env. In
+production the SPA and API share one origin, so `.env.production` sets every
+`PUBLIC_ZZZ_SERVER_*` port to the backend port (4460).
 
 ## Code Generation
 

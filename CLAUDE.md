@@ -76,7 +76,7 @@ with a dev fallback to `./target/debug/zzzd`. Build both with `cargo`:
 crates/                               # Rust workspace
 │   ├── CLAUDE.md                     # Rust backend docs
 │   ├── zzz/                          # Rust CLI (argh) — daemon lifecycle, init, open, version
-│   ├── xtask/                        # Dev automation: `cargo xtask check-release` dep-graph audit (sanity check #2 of the test-binary pattern)
+│   ├── xtask/                        # Dev automation: `cargo xtask dev` (build + run zzzd + Vite), `dev-setup`/`prod-setup` (env files), `check-release` (dep-graph audit — sanity check #2 of the test-binary pattern). Replaces the former Deno `scripts/*.ts`
 │   ├── testing_zzz_server/           # Test-mode binary — wires `fuz_testing::TestingArgon2idHasher` for fast cross-process integration tests. **Never ships in a release.**
 │   └── zzz_server/                   # Axum JSON-RPC server — full spine consumer (single `/api/rpc` + `/api/ws` on `fuz_actions::ActionRegistry`)
 │       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast`/`close_sockets_for_*` shims + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `rpc.rs` (JSON-RPC helpers), `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
@@ -184,31 +184,35 @@ register on the live dispatchers when `ZZZ_ENABLE_TEST_ACTIONS=1`.
 ### Setup
 
 ```bash
-deno task dev:setup
+createdb zzz
+cargo xtask dev-setup
 npm install
+cargo xtask dev
 ```
 
 The Rust backend (and its native `fuz_pty` PTY dependency) builds via `cargo`
-— `deno task dev` runs `cargo build -p zzz_server`. Requires the sibling Rust
-workspace checked out alongside this repo (path deps).
+— `cargo xtask dev` runs `cargo build -p zzz_server` on every start. Requires the
+sibling Rust workspace checked out alongside this repo (path deps).
 
-Use `npm install` (not `deno install`) for packages. With `nodeModulesDir: "manual"`, `npm install` produces a layout TypeScript resolves consistently; `deno install` creates hoisted + `.deno/` copies that TS treats as distinct modules, causing `#private`-symbol "two different types" errors on `Logger`, `Snippet`, etc. Versions must be kept in sync across `package.json` (runtime + SvelteKit/Vite) and `deno.json` `imports` (used by `deno task dev` / `deno task test`).
+Node dependencies are installed with `npm install`. zzz has no Deno: the dev and
+env-setup orchestration is `cargo xtask` (see `crates/xtask/`), so there's no
+`deno.json` import map to keep version-synced — npm manages `node_modules`.
 
 ### Daily Commands
 
 | Command                      | Purpose                                         |
 | ---------------------------- | ----------------------------------------------- |
-| `deno task dev`              | Dev server: Rust backend + Vite frontend        |
+| `cargo xtask dev`              | Dev server: Rust backend + Vite frontend        |
 | `gro check`                  | All checks (typecheck, test, gen, format, lint) |
 | `gro typecheck`              | Type checking only (faster iteration)           |
 | `gro test`                   | Run Vitest unit + db tests (cross-backend gated out — see below) |
-| `deno task test`             | `gro test` (unit + db; cross-backend projects excluded unless `FUZ_TEST_CROSS_BACKEND=1`) |
+| `npm test`                   | `gro test` (unit + db; cross-backend projects excluded unless `FUZ_TEST_CROSS_BACKEND=1`) |
 | `npm run test:cross`         | Rust cross-process suites (rust + rust_proxy; needs rust binary + `zzz_test_rust`/`zzz_test_rust_proxy` Postgres DBs) — flag baked in |
 | `gro gen`                    | Run `*.gen.ts` generators (regenerate their outputs) |
 | `gro format`                 | Format with Prettier                            |
 | `gro build`                  | Production build                                |
 
-`deno task dev` is the dev command — it builds and runs `zzz_server` plus
+`cargo xtask dev` is the dev command — it builds and runs `zzz_server` plus
 the Vite frontend. (The user manages the dev server; don't start it yourself.)
 
 ### Rust Backend
@@ -244,7 +248,7 @@ unit-tested in the spine crates (`fuz_auth`, `fuz_http`).
 cargo build -p zzz_server                                                 # Build
 cargo clippy -p zzz_server                                                # Lint
 ./target/debug/zzzd --port 4460                                           # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS)
-deno task dev                                                             # Dev server: Rust backend + Vite frontend
+cargo xtask dev                                                             # Dev server: Rust backend + Vite frontend
 npm run test:cross                                                        # Rust cross-process suites (rust + rust_proxy; needs rust binary + zzz_test_rust/zzz_test_rust_proxy DBs) — flag baked in
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Single project (Rust binary; needs `postgres://localhost/zzz_test_rust`)
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust_proxy # Single project (proxy variant; ZZZ_TRUSTED_PROXIES=127.0.0.1 at boot)
@@ -254,8 +258,8 @@ The `cross_backend_*` vitest projects are gated behind
 `FUZ_TEST_CROSS_BACKEND=1` (set in `vite.config.ts`) — they spawn the real
 backend binary via `globalSetup`, so a bare `gro test` stays a fast,
 infra-free unit+db run and never spawns. The `test:cross` package.json
-script bakes in the flag (and runs via `deno task test:cross` too, under
-Deno 2); set the flag manually only for single-project `--project` runs.
+script (`npm run test:cross`) bakes in the flag; set it manually only for
+single-project `--project` runs.
 
 Requires the sibling Rust workspace checked out alongside this repo (path
 deps). Each cross-backend project expects its own PostgreSQL DB —
@@ -444,7 +448,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 | Variable             | Purpose                                  |
 | -------------------- | ---------------------------------------- |
 | `NODE_ENV`           | `development` or `production`            |
-| `PORT`               | HTTP server port (default 4460; `deno task dev` uses 4461) |
+| `PORT`               | HTTP server port (default 4460; `cargo xtask dev` uses 4461) |
 | `HOST`               | Bind address (default `localhost`)       |
 | `DATABASE_URL`       | PostgreSQL connection (`postgres://`)    |
 | `SECRET_FUZ_COOKIE_KEYS` | HMAC signing keys (min 32 chars)     |
@@ -476,7 +480,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 
 ## Avoid
 
-- **Don't start the dev server yourself** — the user manages `deno task dev`
+- **Don't start the dev server yourself** — the user manages `cargo xtask dev`
 - **Never edit generated outputs** (`action_collections.ts`, `action_metatypes.ts`, `frontend_action_types.ts`, `docs/reference.md`) — edit the `*.gen.ts` generators and run `gro gen`
 - **Use `z.strictObject()`** in action specs, not `z.object()` — unknown keys must be rejected
 - **No `$effect` in Cell classes** — effects belong in Svelte components only
@@ -493,7 +497,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY terminals** — terminal spawning uses the `fuz_pty` Rust crate as a native dependency of `zzz_server` (no FFI indirection). `PtyManager` manages spawned processes with async read loops; `terminal_close` cancels the read loop before killing the process. Requires the sibling Rust workspace checked out alongside this repo (path dep).
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Backend** — `zzz_server` serves the full RPC surface with the full auth stack. `deno task dev` runs it with the Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only). No batch JSON-RPC. A single `/api/rpc` + `/api/ws` serves the boot-compiled `ActionRegistry` (handlers in `handlers/`), plus the admin audit-log SSE stream at `GET /api/admin/audit/stream`.
+- **Backend** — `zzz_server` serves the full RPC surface with the full auth stack. `cargo xtask dev` runs it with the Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only). No batch JSON-RPC. A single `/api/rpc` + `/api/ws` serves the boot-compiled `ActionRegistry` (handlers in `handlers/`), plus the admin audit-log SSE stream at `GET /api/admin/audit/stream`.
 
 ## fuz_app
 

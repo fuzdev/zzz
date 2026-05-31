@@ -26,10 +26,10 @@ see the issues and [discussions](https://github.com/fuzdev/zzz/discussions).
 This project is in its early stages, and installing it
 currently requires some basic technical skills.
 Eventually there will be a desktop app but
-for now you'll need Deno, Node (>=24.14), a Rust toolchain (for the backend),
+for now you'll need Node (>=24.14), a Rust toolchain (for the backend),
 PostgreSQL, and Git to clone the repo.
 
-Running Zzz locally in development (`deno task dev`) is the supported way to use it right now.
+Running Zzz locally in development (`cargo xtask dev`) is the supported way to use it right now.
 It deploys via SvelteKit's static adapter with diminished capabilities
 ([zzz.software](https://www.zzz.software/)),
 and the full app is served by the Rust `zzz_server` backend.
@@ -49,19 +49,24 @@ After cloning, from the project root:
 createdb zzz
 
 # 2. Generate .env.development (idempotent — safe to re-run)
-deno task dev:setup
+cargo xtask dev-setup
 
 # 3. Install Node dependencies
 npm install
 
 # 4. Build the Rust backend and start everything (backend + Vite frontend)
-deno task dev
+cargo xtask dev
 ```
 
 You can edit `.env.development` with your API keys,
 or update them at runtime on the `/capabilities` page.
 
 Browse to the location it says, probably `localhost:5173`.
+
+On first run Zzz has no account yet, so it shows a bootstrap form. Copy the
+one-time token it points to (`cat .zzz/bootstrap_token`), paste it in, and pick a
+username and password to create your admin account — then you're logged in and
+ready.
 
 ## Roadmap
 
