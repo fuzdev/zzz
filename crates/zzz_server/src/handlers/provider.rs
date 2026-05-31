@@ -10,7 +10,7 @@
 use std::sync::Arc;
 
 use fuz_actions::ActionContext;
-use fuz_http::JsonrpcError;
+use fuz_http::{JsonrpcError, internal_error_with_source, invalid_params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -44,10 +44,10 @@ pub async fn provider_load_status(
     let name_str = params
         .get("provider_name")
         .and_then(Value::as_str)
-        .ok_or_else(|| rpc::invalid_params("missing or invalid 'provider_name' parameter"))?;
+        .ok_or_else(|| invalid_params("missing or invalid 'provider_name' parameter", None))?;
 
     let provider_name = ProviderName::parse(name_str)
-        .ok_or_else(|| rpc::invalid_params(&format!("unknown provider: {name_str}")))?;
+        .ok_or_else(|| invalid_params(&format!("unknown provider: {name_str}"), None))?;
 
     let reload = params
         .get("reload")
@@ -58,7 +58,7 @@ pub async fn provider_load_status(
     let status = provider.load_status(reload).await;
 
     serde_json::to_value(ProviderStatusResult { status })
-        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
+        .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 pub async fn provider_update_api_key(
@@ -69,22 +69,22 @@ pub async fn provider_update_api_key(
     let name_str = params
         .get("provider_name")
         .and_then(Value::as_str)
-        .ok_or_else(|| rpc::invalid_params("missing or invalid 'provider_name' parameter"))?;
+        .ok_or_else(|| invalid_params("missing or invalid 'provider_name' parameter", None))?;
 
     let provider_name = ProviderName::parse(name_str)
-        .ok_or_else(|| rpc::invalid_params(&format!("unknown provider: {name_str}")))?;
+        .ok_or_else(|| invalid_params(&format!("unknown provider: {name_str}"), None))?;
 
     let api_key = params
         .get("api_key")
         .and_then(Value::as_str)
-        .ok_or_else(|| rpc::invalid_params("missing or invalid 'api_key' parameter"))?;
+        .ok_or_else(|| invalid_params("missing or invalid 'api_key' parameter", None))?;
 
     let provider = app.provider_manager.require(provider_name)?;
     provider.set_api_key(Some(api_key.to_owned())).await;
     let status = provider.load_status(true).await;
 
     serde_json::to_value(ProviderStatusResult { status })
-        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
+        .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 /// Start an AI completion, streaming progress to the originating WS socket.
@@ -111,13 +111,13 @@ pub async fn completion_create(
 ) -> Result<Value, JsonrpcError> {
     let request_value = params
         .get("completion_request")
-        .ok_or_else(|| rpc::invalid_params("missing 'completion_request' parameter"))?;
+        .ok_or_else(|| invalid_params("missing 'completion_request' parameter", None))?;
 
     let request = CompletionRequestInput::deserialize(request_value)
-        .map_err(|e| rpc::invalid_params(&format!("invalid completion_request: {e}")))?;
+        .map_err(|e| invalid_params(&format!("invalid completion_request: {e}"), None))?;
 
     let provider_name = ProviderName::parse(&request.provider_name).ok_or_else(|| {
-        rpc::invalid_params(&format!("unknown provider: {}", request.provider_name))
+        invalid_params(&format!("unknown provider: {}", request.provider_name), None)
     })?;
 
     let progress_token = params

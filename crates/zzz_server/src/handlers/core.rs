@@ -9,12 +9,11 @@
 use std::sync::Arc;
 
 use fuz_actions::ActionContext;
-use fuz_http::JsonrpcError;
+use fuz_http::{JsonrpcError, internal_error_with_source, invalid_params};
 use serde::Serialize;
 use serde_json::Value;
 
 use crate::handlers::{App, WorkspaceInfo};
-use crate::rpc;
 
 #[derive(Serialize)]
 struct PingResult {
@@ -57,7 +56,7 @@ pub async fn ping(
         ping_id: ctx.request_id.clone(),
     };
     serde_json::to_value(result)
-        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
+        .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 /// `session_load` — authenticated initial-state load.
@@ -103,7 +102,7 @@ pub async fn session_load(
         },
     };
     serde_json::to_value(result)
-        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
+        .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 /// `_testing_emit_notifications` — test-only action used by the integration
@@ -123,13 +122,13 @@ pub async fn testing_emit_notifications(
     let count = params
         .get("count")
         .and_then(Value::as_u64)
-        .ok_or_else(|| rpc::invalid_params("missing or invalid 'count' parameter"))?;
+        .ok_or_else(|| invalid_params("missing or invalid 'count' parameter", None))?;
     if count > 100 {
-        return Err(rpc::invalid_params("count must be <= 100"));
+        return Err(invalid_params("count must be <= 100", None));
     }
     for i in 0..count {
         (ctx.notify)("_testing_notification", &serde_json::json!({"index": i}));
     }
     serde_json::to_value(TestingEmitNotificationsResult { count })
-        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
+        .map_err(|e| internal_error_with_source("serialization failed", &e))
 }

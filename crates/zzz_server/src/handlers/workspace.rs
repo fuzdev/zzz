@@ -9,14 +9,13 @@ use std::path::Path;
 use std::sync::Arc;
 
 use fuz_actions::ActionContext;
-use fuz_http::JsonrpcError;
+use fuz_http::{JsonrpcError, internal_error, internal_error_with_source, invalid_params};
 use fuz_realtime::notify_to_string;
 use serde::Serialize;
 use serde_json::Value;
 
 use crate::filer::{FilerConfig, FilerLifetime};
 use crate::handlers::{App, WorkspaceInfo};
-use crate::rpc;
 
 // -- Notification params -----------------------------------------------------
 
@@ -45,7 +44,7 @@ struct WorkspaceOpenResult {
 fn to_normalized_dir(path: &Path) -> Result<String, JsonrpcError> {
     let mut s = path
         .to_str()
-        .ok_or_else(|| rpc::internal_error("path is not valid UTF-8"))?
+        .ok_or_else(|| internal_error("path is not valid UTF-8"))?
         .to_owned();
     if !s.ends_with('/') {
         s.push('/');
@@ -77,7 +76,7 @@ pub async fn workspace_list(
     };
     let result = WorkspaceListResult { workspaces: list };
     serde_json::to_value(result)
-        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
+        .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 /// `workspace_open` — open a workspace directory.
@@ -93,18 +92,18 @@ pub async fn workspace_open(
     let path = params
         .get("path")
         .and_then(Value::as_str)
-        .ok_or_else(|| rpc::invalid_params("missing or invalid 'path' parameter"))?;
+        .ok_or_else(|| invalid_params("missing or invalid 'path' parameter", None))?;
 
     let canonical = Path::new(path).canonicalize().map_err(|_| {
         let suffix = if path.ends_with('/') { "" } else { "/" };
-        rpc::internal_error(&format!(
+        internal_error(&format!(
             "failed to open workspace: directory does not exist: {path}{suffix}"
         ))
     })?;
 
     if !canonical.is_dir() {
         let suffix = if path.ends_with('/') { "" } else { "/" };
-        return Err(rpc::internal_error(&format!(
+        return Err(internal_error(&format!(
             "failed to open workspace: not a directory: {path}{suffix}"
         )));
     }
@@ -122,7 +121,7 @@ pub async fn workspace_open(
             files: vec![],
         };
         return serde_json::to_value(result)
-            .map_err(|e| rpc::internal_error_with_source("serialization failed", &e));
+            .map_err(|e| internal_error_with_source("serialization failed", &e));
     }
 
     let name = canonical
@@ -165,7 +164,7 @@ pub async fn workspace_open(
         change_type: "open",
         workspace: &workspace,
     })
-    .map_err(|e| rpc::internal_error_with_source("notification params serialize failed", &e))?;
+    .map_err(|e| internal_error_with_source("notification params serialize failed", &e))?;
     let notification = notify_to_string("workspace_changed", &params_value);
     app.broadcast(&notification);
 
@@ -174,7 +173,7 @@ pub async fn workspace_open(
         files: vec![],
     };
     serde_json::to_value(result)
-        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
+        .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 /// `workspace_close` — close a workspace directory.
@@ -186,7 +185,7 @@ pub async fn workspace_close(
     let path = params
         .get("path")
         .and_then(Value::as_str)
-        .ok_or_else(|| rpc::invalid_params("missing or invalid 'path' parameter"))?;
+        .ok_or_else(|| invalid_params("missing or invalid 'path' parameter", None))?;
 
     let mut key = path.to_owned();
     if !key.ends_with('/') {
@@ -199,7 +198,7 @@ pub async fn workspace_close(
     };
 
     let Some(workspace) = removed else {
-        return Err(rpc::invalid_params(&format!("workspace not open: {path}")));
+        return Err(invalid_params(&format!("workspace not open: {path}"), None));
     };
 
     let is_initial_scoped_dir = app.scoped_dirs.contains(&key);
@@ -212,7 +211,7 @@ pub async fn workspace_close(
         change_type: "close",
         workspace: &workspace,
     })
-    .map_err(|e| rpc::internal_error_with_source("notification params serialize failed", &e))?;
+    .map_err(|e| internal_error_with_source("notification params serialize failed", &e))?;
     let notification = notify_to_string("workspace_changed", &params_value);
     app.broadcast(&notification);
 

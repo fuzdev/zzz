@@ -8,12 +8,11 @@ use std::collections::HashMap;
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use fuz_http::JsonrpcError;
+use fuz_http::{JsonrpcError, internal_error};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
-use crate::rpc;
 
 // -- Provider name enum -------------------------------------------------------
 
@@ -249,7 +248,7 @@ impl ProviderManager {
     /// Get a provider or return a `method_not_found`-style error.
     pub fn require(&self, name: ProviderName) -> Result<&Provider, JsonrpcError> {
         self.get(name)
-            .ok_or_else(|| rpc::internal_error(&format!("provider not found: {name}")))
+            .ok_or_else(|| internal_error(&format!("provider not found: {name}")))
     }
 
     /// Iterate all providers (for `session_load` status collection).
@@ -264,7 +263,7 @@ pub const PROVIDER_ERROR_NEEDS_API_KEY: &str = "needs API key";
 pub const PROVIDER_ERROR_NOT_INSTALLED: &str = "not installed";
 
 pub fn ai_provider_error(provider_name: &str, message: &str) -> JsonrpcError {
-    rpc::internal_error(&format!("{provider_name}: {message}"))
+    internal_error(&format!("{provider_name}: {message}"))
 }
 
 // -- Helpers ------------------------------------------------------------------

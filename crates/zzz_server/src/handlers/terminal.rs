@@ -6,12 +6,11 @@
 use std::sync::Arc;
 
 use fuz_actions::ActionContext;
-use fuz_http::JsonrpcError;
+use fuz_http::{JsonrpcError, internal_error, internal_error_with_source, invalid_params};
 use serde::Serialize;
 use serde_json::Value;
 
 use crate::handlers::App;
-use crate::rpc;
 
 #[derive(Serialize)]
 struct TerminalCreateResult {
@@ -31,7 +30,7 @@ pub async fn terminal_create(
     let command = params
         .get("command")
         .and_then(Value::as_str)
-        .ok_or_else(|| rpc::invalid_params("missing or invalid 'command' parameter"))?;
+        .ok_or_else(|| invalid_params("missing or invalid 'command' parameter", None))?;
 
     let args: Vec<String> = match params.get("args") {
         Some(Value::Array(arr)) => arr
@@ -39,11 +38,11 @@ pub async fn terminal_create(
             .map(|v| {
                 v.as_str()
                     .map(String::from)
-                    .ok_or_else(|| rpc::invalid_params("args must be an array of strings"))
+                    .ok_or_else(|| invalid_params("args must be an array of strings", None))
             })
             .collect::<Result<Vec<_>, _>>()?,
         Some(Value::Null) | None => vec![],
-        _ => return Err(rpc::invalid_params("args must be an array of strings")),
+        _ => return Err(invalid_params("args must be an array of strings", None)),
     };
 
     let cwd = params.get("cwd").and_then(Value::as_str);
@@ -53,10 +52,10 @@ pub async fn terminal_create(
     app.pty_manager
         .spawn(&terminal_id, command, &args, cwd, Arc::clone(&app))
         .await
-        .map_err(|e| rpc::internal_error(&format!("failed to create terminal: {e}")))?;
+        .map_err(|e| internal_error(&format!("failed to create terminal: {e}")))?;
 
     serde_json::to_value(TerminalCreateResult { terminal_id })
-        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
+        .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 pub async fn terminal_data_send(
@@ -67,12 +66,12 @@ pub async fn terminal_data_send(
     let terminal_id = params
         .get("terminal_id")
         .and_then(Value::as_str)
-        .ok_or_else(|| rpc::invalid_params("missing or invalid 'terminal_id' parameter"))?;
+        .ok_or_else(|| invalid_params("missing or invalid 'terminal_id' parameter", None))?;
 
     let data = params
         .get("data")
         .and_then(Value::as_str)
-        .ok_or_else(|| rpc::invalid_params("missing or invalid 'data' parameter"))?;
+        .ok_or_else(|| invalid_params("missing or invalid 'data' parameter", None))?;
 
     app.pty_manager.write(terminal_id, data).await;
 
@@ -87,17 +86,17 @@ pub async fn terminal_resize(
     let terminal_id = params
         .get("terminal_id")
         .and_then(Value::as_str)
-        .ok_or_else(|| rpc::invalid_params("missing or invalid 'terminal_id' parameter"))?;
+        .ok_or_else(|| invalid_params("missing or invalid 'terminal_id' parameter", None))?;
 
     let cols = params
         .get("cols")
         .and_then(Value::as_u64)
-        .ok_or_else(|| rpc::invalid_params("missing or invalid 'cols' parameter"))?;
+        .ok_or_else(|| invalid_params("missing or invalid 'cols' parameter", None))?;
 
     let rows = params
         .get("rows")
         .and_then(Value::as_u64)
-        .ok_or_else(|| rpc::invalid_params("missing or invalid 'rows' parameter"))?;
+        .ok_or_else(|| invalid_params("missing or invalid 'rows' parameter", None))?;
 
     #[expect(
         clippy::cast_possible_truncation,
@@ -120,7 +119,7 @@ pub async fn terminal_close(
     let terminal_id = params
         .get("terminal_id")
         .and_then(Value::as_str)
-        .ok_or_else(|| rpc::invalid_params("missing or invalid 'terminal_id' parameter"))?;
+        .ok_or_else(|| invalid_params("missing or invalid 'terminal_id' parameter", None))?;
 
     let signal_str = params
         .get("signal")
@@ -135,5 +134,5 @@ pub async fn terminal_close(
     let exit_code = app.pty_manager.kill(terminal_id, signal).await.flatten();
 
     serde_json::to_value(TerminalCloseResult { exit_code })
-        .map_err(|e| rpc::internal_error_with_source("serialization failed", &e))
+        .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
