@@ -71,7 +71,7 @@ pub fn daemon_info_path() -> Result<PathBuf, CliError> {
 }
 
 /// `~/.zzz/config.json`.
-fn config_path() -> Result<PathBuf, CliError> {
+pub fn config_path() -> Result<PathBuf, CliError> {
     Ok(zzz_dir()?.join("config.json"))
 }
 

@@ -10,12 +10,22 @@
 //! ```
 //! The TS reference at `src/lib/zzz/commands/init.ts` creates the
 //! directory and a default `config.json`; the config schema is at
-//! `src/lib/zzz/cli_config.ts`. Path is configurable via
-//! `PUBLIC_ZZZ_DIR` env (default `~/.zzz/`).
+//! `src/lib/zzz/cli_config.ts`. Unlike the TS reference (which errors when
+//! `config.json` already exists), this port is idempotent: it `mkdir -p`s
+//! the subdirectories and only writes `config.json` when absent, so re-runs
+//! are safe and never clobber a configured port.
+
+use std::fs;
 
 use argh::FromArgs;
 
 use crate::CliError;
+use crate::daemon_lifecycle as dl;
+
+/// State subdirectories created under `~/.zzz/`. `run/` also holds the
+/// ephemeral `daemon.json`; `daemon start` creates it on demand, but
+/// `init` makes it up front so the layout is complete after a fresh init.
+const STATE_SUBDIRS: &[&str] = &["state", "cache", "run"];
 
 /// Initialize zzz configuration (`~/.zzz/`).
 ///
@@ -23,25 +33,34 @@ use crate::CliError;
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "init")]
 pub struct Init {
-    // TODO: add flags from `src/lib/zzz/cli/schemas.ts` (`InitArgs` carries
-    // an optional `--port` for the daemon's default port).
-    /// daemon port (cross-stack flag — must align with `zzz daemon start --port`
-    /// and `zzz_server --port`; TODO: wire up)
-    // TODO: per workspace convention (rust_conventions.md §CLI Patterns,
-    // "naming parity across stack"), add `short = 'p'` when wiring up if
-    // either side (TS, Rust daemon) adopts the alias. Neither does today.
+    /// daemon port to record in `config.json` (default 4460)
     #[argh(option)]
-    #[allow(dead_code)] // TODO: wire up
     pub port: Option<u16>,
 }
 
 /// Handle `zzz init`.
 ///
 /// Reference: `src/lib/zzz/commands/init.ts`.
-#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)] // TODO: drop once implemented
-pub fn cmd_init(_args: &Init) -> Result<(), CliError> {
-    // TODO: implement — see `src/lib/zzz/commands/init.ts` for the Deno
-    // reference (create config dir + config.json with default port).
-    println!("TODO: implement zzz init");
+pub fn cmd_init(args: &Init) -> Result<(), CliError> {
+    let zzz_dir = dl::zzz_dir()?;
+    for sub in STATE_SUBDIRS {
+        fs::create_dir_all(zzz_dir.join(sub))?;
+    }
+
+    let config_path = dl::config_path()?;
+    if config_path.exists() {
+        println!("zzz already initialized at {}", zzz_dir.display());
+        println!("  config: {}", config_path.display());
+    } else {
+        let port = args.port.unwrap_or(dl::DEFAULT_PORT);
+        let config = serde_json::json!({ "zzz_config_port": port });
+        let mut content =
+            serde_json::to_string_pretty(&config).map_err(|e| CliError::Daemon(e.to_string()))?;
+        content.push('\n');
+        fs::write(&config_path, content)?;
+        println!("created {}", config_path.display());
+    }
+
+    println!("zzz is ready. Run `zzz` to auto-start the daemon and open the browser.");
     Ok(())
 }

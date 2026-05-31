@@ -9,16 +9,23 @@ use crate::CliError;
 #[argh(subcommand, name = "version")]
 pub struct Version {}
 
+/// Print `zzz v{VERSION}` to stdout.
+///
+/// Shared by the `version` subcommand and the top-level `--version`/`-v`
+/// switch. `CARGO_PKG_VERSION` is the `crates/zzz` package version; the TS
+/// reference reads `NAME`/`VERSION` from `src/lib/zzz/build_info.ts`.
+pub fn print_version() {
+    println!("zzz v{}", env!("CARGO_PKG_VERSION"));
+}
+
 /// Handle `zzz version`.
 ///
-/// Reference: `src/lib/zzz/cli.ts` `show_version` (delegates to
-/// `NAME`/`VERSION` from `src/lib/zzz/build_info.ts`).
-#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)] // TODO: drop once implemented
+/// Reference: `src/lib/zzz/cli.ts` `show_version`.
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "uniform Result signature for the argh dispatch in main.rs"
+)]
 pub fn cmd_version(_args: &Version) -> Result<(), CliError> {
-    // TODO: print `zzz v{VERSION}` matching `src/lib/zzz/cli.ts:55-57`.
-    // The TS side reads `NAME`/`VERSION` from `build_info.ts`; the Rust
-    // port should use `env!("CARGO_PKG_VERSION")` (or a build.rs that
-    // embeds a git hash, matching fuz's `FUZ_GIT_INFO` pattern).
-    println!("TODO: implement zzz version");
+    print_version();
     Ok(())
 }

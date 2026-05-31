@@ -24,7 +24,7 @@ use crate::cli::commands::{
     init::{Init, cmd_init},
     open::{Open, cmd_open},
     status::{Status, cmd_status},
-    version::{Version, cmd_version},
+    version::{Version, cmd_version, print_version},
 };
 
 /// Known subcommand names. Used by `rewrite_argv_for_path_as_command` to
@@ -41,6 +41,10 @@ const KNOWN_SUBCOMMANDS: &[&str] = &["open", "init", "daemon", "status", "versio
 /// (see `ZZZ_COMMANDS`).
 #[derive(FromArgs, Debug)]
 struct TopLevel {
+    /// print version information and exit
+    #[argh(switch, short = 'v')]
+    version: bool,
+
     #[argh(subcommand)]
     nested: Option<Subcommand>,
 }
@@ -69,12 +73,18 @@ async fn main() {
 async fn run() -> Result<(), CliError> {
     let argv: Vec<String> = std::env::args().collect();
     let cmd = parse_argv(argv);
+    // `--version` / `-v` short-circuits before any subcommand dispatch (and
+    // before the no-subcommand `open` default).
+    if cmd.version {
+        print_version();
+        return Ok(());
+    }
     // No subcommand → default to `open` with no path, matching the Deno CLI.
     let Some(sub) = cmd.nested else {
-        return cmd_open(&Open { path: None });
+        return cmd_open(&Open { path: None }).await;
     };
     match sub {
-        Subcommand::Open(args) => cmd_open(&args),
+        Subcommand::Open(args) => cmd_open(&args).await,
         Subcommand::Init(args) => cmd_init(&args),
         Subcommand::Daemon(args) => cmd_daemon(args).await,
         Subcommand::Status(args) => cmd_status(&args).await,
@@ -113,12 +123,9 @@ fn parse_argv(argv: Vec<String>) -> TopLevel {
 /// `open` at position 1 so argh dispatches via the `Open` handler.
 ///
 /// Leaves `--flag`-style tokens alone (argh handles `--help` / `-h`
-/// natively) and leaves `help` alone (argh's built-in help keyword).
-///
-/// **`--version` / `-v` is not handled here yet.** argh does NOT handle
-/// `--version` natively. The TS CLI exposes `--version`/`-v` as a global
-/// flag; port that as a `#[argh(switch, short = 'v')]` on `TopLevel` when
-/// wiring the `version` command's real body (a follow-on to this slice).
+/// natively, and the `--version` / `-v` switch on `TopLevel` is matched by
+/// argh and short-circuited in `run`) and leaves `help` alone (argh's
+/// built-in help keyword).
 fn rewrite_argv_for_path_as_command(mut argv: Vec<String>) -> Vec<String> {
     let needs_rewrite = argv.get(1).is_some_and(|first| {
         !first.starts_with('-') && !KNOWN_SUBCOMMANDS.contains(&first.as_str())
