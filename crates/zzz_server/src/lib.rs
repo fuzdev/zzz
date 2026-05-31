@@ -57,7 +57,9 @@ impl fuz_auth::BootstrapKeeperResolved for SpineDaemonTokenKeeperResolved {
 pub use error::ServerError;
 
 /// Default loopback port. Overridden by `--port` or `ZZZ_PORT`.
-pub const DEFAULT_PORT: u16 = 1174;
+/// Matches the `zzz` CLI's daemon default so a directly-run `zzzd` and a
+/// CLI-spawned daemon bind the same port.
+pub const DEFAULT_PORT: u16 = 4460;
 
 /// Connection drain timeout on shutdown. Bounds how long the graceful
 /// drain waits for in-flight connections before returning. Matches the
@@ -142,7 +144,7 @@ pub struct RunAppOptions {
     /// `fuz_testing::TestingArgon2idHasher`.
     pub password_hasher: Arc<dyn fuz_auth::PasswordHasher>,
     /// Default port when neither `--port` nor `ZZZ_PORT` is supplied.
-    /// Production: [`DEFAULT_PORT`] (1174). Test binary: 1175 so the
+    /// Production: [`DEFAULT_PORT`] (4460). Test binary: 4462 so the
     /// two can run side-by-side without colliding.
     pub default_port: u16,
     /// Override the `ZZZ_ENABLE_TEST_ACTIONS` env-parsed flag.

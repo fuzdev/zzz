@@ -4,7 +4,7 @@
 
 `@fuzdev/zzz` — local-first AI forge: chat + files + prompts + terminals in one app.
 SvelteKit frontend (static SPA), Rust (Axum) backend, Svelte 5 runes, Zod schemas.
-v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PostgreSQL DB. 31 cell classes, 21 action specs, 3 AI providers.
+v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PostgreSQL DB. Cell + Action patterns (generated roster in [docs/reference.md](./docs/reference.md)), 3 AI providers.
 
 zzz has a single **Rust** backend: `crates/zzz_server` (Axum). The frontend
 is a prerendered static SPA served by `zzz_server` — no JS runtime in
@@ -81,18 +81,19 @@ crates/                               # Rust workspace
 │       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast`/`close_sockets_for_*` shims + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `rpc.rs` (JSON-RPC helpers), `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
 src/
 ├── lib/                          # Published as @fuzdev/zzz
-│   ├── *.svelte.ts               # Cell state classes (31 classes)
-│   ├── action_specs.ts           # All 21 action spec definitions
+│   ├── *.svelte.ts               # Cell state classes
+│   ├── action_specs.ts           # Action spec definitions
 │   ├── cell.svelte.ts            # Base Cell class
 │   ├── cell_classes.ts           # Cell class registry
 │   ├── indexed_collection.svelte.ts
 │   │
 │   ├── *.svelte                  # UI components
-│   ├── action_collections.gen.ts # Generated
-│   ├── frontend_action_types.gen.ts
-│   └── action_metatypes.gen.ts
+│   ├── *.gen.ts                  # Generators (hand-written) — run `gro gen`
+│   ├── action_collections.ts     #   ↳ generated output (DO NOT EDIT)
+│   ├── action_metatypes.ts       #   ↳ generated output (DO NOT EDIT)
+│   └── frontend_action_types.ts  #   ↳ generated output (DO NOT EDIT)
 │
-├── routes/                       # SvelteKit routes (17 dirs)
+├── routes/                       # SvelteKit routes (one dir per page)
 │   ├── about/
 │   ├── actions/
 │   ├── bots/
@@ -129,9 +130,10 @@ See ./docs/architecture.md for detailed data flow, content model, and IndexedCol
 
 ## Cell Classes
 
-31 registered classes in `src/lib/cell_classes.ts` (`Socket` is not a Cell —
-it's a plain `.svelte.ts` wrapper around fuz_app's `FrontendWebsocketClient`,
-so it's not listed below):
+Registered in `src/lib/cell_classes.ts` — [docs/reference.md](./docs/reference.md)
+has the authoritative generated roster and count. Purposes below (`Socket` is
+not a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
+`FrontendWebsocketClient`, so it's not listed):
 
 | Class             | Source file                  | Purpose                            |
 | ----------------- | ---------------------------- | ---------------------------------- |
@@ -169,33 +171,12 @@ so it's not listed below):
 
 ## Action Specs
 
-21 specs in `src/lib/action_specs.ts` (test-only `_testing_emit_notifications`
-+ `_testing_notification` live in `src/lib/testing_action_specs.ts` and only
-register on the live dispatchers when `ZZZ_ENABLE_TEST_ACTIONS=1`):
-
-| Method                     | Kind                  | Initiator  | Purpose                                                 |
-| -------------------------- | --------------------- | ---------- | ------------------------------------------------------- |
-| `ping`                     | `request_response`    | `both`     | Health check                                            |
-| `session_load`             | `request_response`    | `frontend` | Load initial session data                               |
-| `filer_change`             | `remote_notification` | `backend`  | File system change notification                         |
-| `diskfile_update`          | `request_response`    | `frontend` | Write file content                                      |
-| `diskfile_delete`          | `request_response`    | `frontend` | Delete a file                                           |
-| `directory_create`         | `request_response`    | `frontend` | Create a directory                                      |
-| `completion_create`        | `request_response`    | `frontend` | Start AI completion                                     |
-| `completion_progress`      | `remote_notification` | `backend`  | Stream completion chunks                                |
-| `toggle_main_menu`         | `local_call`          | `frontend` | Toggle main menu UI                                     |
-| `provider_load_status`     | `request_response`    | `frontend` | Check provider availability                             |
-| `provider_update_api_key`  | `request_response`    | `frontend` | Update provider API key                                 |
-| `terminal_create`          | `request_response`    | `frontend` | Spawn PTY terminal process                              |
-| `terminal_data_send`       | `request_response`    | `frontend` | Send stdin to terminal                                  |
-| `terminal_data`            | `remote_notification` | `backend`  | Stream stdout/stderr to frontend                        |
-| `terminal_resize`          | `request_response`    | `frontend` | Update PTY dimensions                                   |
-| `terminal_close`           | `request_response`    | `frontend` | Kill terminal process                                   |
-| `terminal_exited`          | `remote_notification` | `backend`  | Terminal process exited naturally                       |
-| `workspace_open`           | `request_response`    | `frontend` | Open workspace directory                                |
-| `workspace_close`          | `request_response`    | `frontend` | Close workspace directory                               |
-| `workspace_list`           | `request_response`    | `frontend` | List open workspaces                                    |
-| `workspace_changed`        | `remote_notification` | `backend`  | Workspace open/close notification                       |
+Defined in `src/lib/action_specs.ts`. The full table — method, kind, initiator,
+auth, and description — is generated into [docs/reference.md](./docs/reference.md)
+from the specs themselves (`src/lib/reference.gen.ts`, refreshed by `gro gen`),
+so it can't drift. The test-only `_testing_emit_notifications` +
+`_testing_notification` specs live in `src/lib/testing_action_specs.ts` and only
+register on the live dispatchers when `ZZZ_ENABLE_TEST_ACTIONS=1`.
 
 ## Development Workflow
 
@@ -222,7 +203,7 @@ Use `npm install` (not `deno install`) for packages. With `nodeModulesDir: "manu
 | `gro test`                   | Run Vitest unit + db tests (cross-backend gated out — see below) |
 | `deno task test`             | `gro test` (unit + db; cross-backend projects excluded unless `FUZ_TEST_CROSS_BACKEND=1`) |
 | `npm run test:cross`         | Rust cross-process suites (rust + rust_proxy; needs rust binary + `zzz_test_rust`/`zzz_test_rust_proxy` Postgres DBs) — flag baked in |
-| `gro gen`                    | Regenerate `*.gen.ts` files                     |
+| `gro gen`                    | Run `*.gen.ts` generators (regenerate their outputs) |
 | `gro format`                 | Format with Prettier                            |
 | `gro build`                  | Production build                                |
 
@@ -261,7 +242,7 @@ unit-tested in the spine crates (`fuz_auth`, `fuz_http`).
 ```bash
 cargo build -p zzz_server                                                 # Build
 cargo clippy -p zzz_server                                                # Lint
-./target/debug/zzzd --port 1174                                           # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS)
+./target/debug/zzzd --port 4460                                           # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS)
 deno task dev                                                             # Dev server: Rust backend + Vite frontend
 npm run test:cross                                                        # Rust cross-process suites (rust + rust_proxy; needs rust binary + zzz_test_rust/zzz_test_rust_proxy DBs) — flag baked in
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Single project (Rust binary; needs `postgres://localhost/zzz_test_rust`)
@@ -385,6 +366,7 @@ Add it to the `all_action_specs` array at the bottom of the file.
 - `action_collections.ts` — `ActionInputs`/`ActionOutputs` type maps + `ActionEventDatas`
 - `action_metatypes.ts` — `ActionMethod` open union, narrow handler enums (`BackendRequestResponseMethod`, `BroadcastActionMethod`, …), `FrontendActionsApi` interface
 - `frontend_action_types.ts` — `TypedActionEvent` + `FrontendActionHandlers`
+- `docs/reference.md` — the human-readable action-spec + cell-class tables
 
 **3. Add the backend handler** in the Rust backend (`crates/zzz_server`):
 add a spec builder in `zzz_action_specs/` and the handler fn in
@@ -461,7 +443,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 | Variable             | Purpose                                  |
 | -------------------- | ---------------------------------------- |
 | `NODE_ENV`           | `development` or `production`            |
-| `PORT`               | HTTP server port (default 4040)          |
+| `PORT`               | HTTP server port (default 4460; `deno task dev` uses 4461) |
 | `HOST`               | Bind address (default `localhost`)       |
 | `DATABASE_URL`       | PostgreSQL connection (`postgres://`)    |
 | `SECRET_FUZ_COOKIE_KEYS` | HMAC signing keys (min 32 chars)     |
@@ -494,7 +476,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 ## Avoid
 
 - **Don't start the dev server yourself** — the user manages `deno task dev`
-- **Never edit `*.gen.ts` files** — they are regenerated by `gro gen`
+- **Never edit generated outputs** (`action_collections.ts`, `action_metatypes.ts`, `frontend_action_types.ts`, `docs/reference.md`) — edit the `*.gen.ts` generators and run `gro gen`
 - **Use `z.strictObject()`** in action specs, not `z.object()` — unknown keys must be rejected
 - **No `$effect` in Cell classes** — effects belong in Svelte components only
 - **Run `gro gen` after changing action specs** — handler types are generated from specs

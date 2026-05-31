@@ -147,7 +147,7 @@ MCP-compatible subset, no batching:
 
 ### Actions
 
-21 specs in `src/lib/action_specs.ts`. A representative subset below — the `terminal_*` and `workspace_*` families are omitted here; see `action_specs.ts` or the project `CLAUDE.md` for the full table:
+Defined in `src/lib/action_specs.ts`. A representative subset below — the `terminal_*` and `workspace_*` families are omitted here; see [reference.md](./reference.md) (generated from the specs) for the full table:
 
 | Method                    | Kind                  | Initiator  | Purpose                         |
 | ------------------------- | --------------------- | ---------- | ------------------------------- |

@@ -27,7 +27,7 @@ Rust workspace, which must be checked out alongside this repo.
 | `gro typecheck` | Type checking only (faster iteration) |
 | `gro test` | Run Vitest tests |
 | `gro test -- --watch` | Tests in watch mode |
-| `gro gen` | Regenerate `*.gen.ts` files |
+| `gro gen` | Run `*.gen.ts` generators (regenerate their outputs) |
 | `gro format` | Format with Prettier |
 | `gro lint` | ESLint checking |
 | `gro build` | Production build |
@@ -36,17 +36,27 @@ Rust workspace, which must be checked out alongside this repo.
 `deno task dev` runs the dev server (Rust backend + Vite frontend) — the
 user manages it; don't start it yourself.
 
+Three task runners, by role: **`gro`** for checks, build, gen, and tests
+(`gro check` / `build` / `gen` / `test`); **`deno task`** for the dev server and
+env setup (`dev`, `dev:setup`, `prod:setup`); **`npm run`** for the package
+scripts, notably `test:cross` (the Rust cross-process suites). `npm run dev` is
+an alias for `deno task dev`.
+
 ## Code Generation
 
-`gro gen` regenerates these files from action specs. Never edit them manually:
+The `*.gen.ts` files are hand-written generators; `gro gen` runs them and writes
+their outputs. Edit the generators, never the outputs (each output carries a
+`DO NOT EDIT` banner):
 
-| Generated file | Source |
-|---------------|--------|
-| `src/lib/action_metatypes.gen.ts` | Action method types |
-| `src/lib/action_collections.gen.ts` | Action spec collections |
-| `src/lib/frontend_action_types.gen.ts` | Frontend handler types |
+| Generator | Output | Contents |
+|-----------|--------|----------|
+| `action_collections.gen.ts` | `src/lib/action_collections.ts` | Action spec collections, input/output type maps |
+| `action_metatypes.gen.ts` | `src/lib/action_metatypes.ts` | Action method types, handler enums |
+| `frontend_action_types.gen.ts` | `src/lib/frontend_action_types.ts` | Frontend handler types |
+| `reference.gen.ts` | `docs/reference.md` | Action-spec + cell-class reference tables |
 
-Run `gro gen` after changing `action_specs.ts`.
+Run `gro gen` after changing `action_specs.ts` (or `cell_classes.ts`). `gro check`
+fails if any output is stale.
 
 ## File Naming
 

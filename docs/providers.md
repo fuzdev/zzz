@@ -22,36 +22,12 @@ SECRET_GOOGLE_API_KEY=AIza...
 
 ## Default Models
 
-Defined in `src/lib/config_defaults.ts` (`models_default`):
-
-### Claude (Anthropic)
-
-| Model | Tags |
-|-------|------|
-| `claude-sonnet-4-5-20250929` | smart |
-| `claude-opus-4-1-20250805` | smart, smartest |
-| `claude-3-5-haiku-20241022` | cheap |
-
-### ChatGPT (OpenAI)
-
-| Model | Tags |
-|-------|------|
-| `gpt-5-2025-08-07` | smart |
-| `gpt-5-nano-2025-08-07` | cheap, cheaper |
-| `gpt-5-mini-2025-08-07` | cheap |
-| `gpt-4.1-2025-04-14` | smart |
-
-### Gemini (Google)
-
-| Model | Tags |
-|-------|------|
-| `gemini-2.5-pro` | smart |
-| `gemini-2.5-flash` | cheap |
-| `gemini-2.5-flash-lite` | cheap, cheaper |
-
-### Chat Templates
-
-Pre-configured model groups in `config_defaults.ts` (`chat_template_defaults`): `frontier`, `cheap frontier`, `quick test`.
+The default model catalog is the source of truth in `src/lib/config_defaults.ts`
+(`models_default`) — model IDs churn, so it isn't duplicated here. Each entry
+carries a `provider_name` (`claude` / `chatgpt` / `gemini`) and `tags` drawn from
+`smart`, `smartest`, `cheap`, `cheaper`. Pre-configured model groups live
+alongside it in `chat_template_defaults` (`frontier`, `cheap frontier`,
+`quick test`).
 
 ## Provider Architecture
 

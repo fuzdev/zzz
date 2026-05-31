@@ -26,7 +26,7 @@ see the issues and [discussions](https://github.com/fuzdev/zzz/discussions).
 This project is in its early stages, and installing it
 currently requires some basic technical skills.
 Eventually there will be a desktop app but
-for now you'll need Deno, Node, a Rust toolchain (for the backend),
+for now you'll need Deno, Node (>=24.14), a Rust toolchain (for the backend),
 PostgreSQL, and Git to clone the repo.
 
 Running Zzz locally in development (`deno task dev`) is the supported way to use it right now.
@@ -34,27 +34,34 @@ It deploys via SvelteKit's static adapter with diminished capabilities
 ([zzz.software](https://www.zzz.software/)),
 and the full app is served by the Rust `zzz_server` backend.
 
+> The Rust backend depends on sibling crates from the fuz workspace via path
+> dependencies (including the native `fuz_pty` terminal crate). They must be
+> checked out alongside this repo for `cargo build` to succeed; until they're
+> published, building from a bare clone isn't yet reproducible.
+
 > Developing on Windows
 > requires something like [WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
 
-To run Zzz, we need an `.env.development` file in your project root.
-
-In your terminal, run the setup script (idempotent — safe to re-run):
+After cloning, from the project root:
 
 ```bash
+# 1. Create the PostgreSQL database the backend connects to
+createdb zzz
+
+# 2. Generate .env.development (idempotent — safe to re-run)
 deno task dev:setup
+
+# 3. Install Node dependencies
+npm install
+
+# 4. Build the Rust backend and start everything (backend + Vite frontend)
+deno task dev
 ```
 
 You can edit `.env.development` with your API keys,
 or update them at runtime on the `/capabilities` page.
 
-Then:
-
-```bash
-npm run dev
-```
-
-Browse to the location is says, probably `localhost:5173`.
+Browse to the location it says, probably `localhost:5173`.
 
 ## Roadmap
 

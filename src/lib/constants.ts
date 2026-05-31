@@ -40,7 +40,7 @@ export const SERVER_HOST: string = PUBLIC_ZZZ_SERVER_HOST || 'localhost';
  */
 export const SERVER_URL: string = `${SERVER_PROTOCOL}://${SERVER_HOST}:${PUBLIC_ZZZ_SERVER_PORT}`;
 
-export const SERVER_PROXIED_PORT: number = parseInt(PUBLIC_ZZZ_SERVER_PROXIED_PORT, 10) || 8999;
+export const SERVER_PROXIED_PORT: number = parseInt(PUBLIC_ZZZ_SERVER_PROXIED_PORT, 10) || 4461;
 
 export const BACKEND_ARTIFICIAL_RESPONSE_DELAY =
 	parseInt(PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY, 10) || 0;
@@ -102,7 +102,7 @@ export const API_URL_FOR_HTTP_RPC: string = SERVER_URL + API_PATH_FOR_HTTP_RPC;
  * */
 export const WEBSOCKET_URL: string = PUBLIC_ZZZ_WEBSOCKET_URL
 	? PathWithoutTrailingSlash.parse(PUBLIC_ZZZ_WEBSOCKET_URL)
-	: 'ws://localhost:8999/api/ws';
+	: 'ws://localhost:4461/api/ws';
 
 export const WEBSOCKET_URL_OBJECT: URL | null = WEBSOCKET_URL ? new URL(WEBSOCKET_URL) : null;
 

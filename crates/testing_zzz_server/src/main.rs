@@ -21,8 +21,8 @@
 //!
 //! Otherwise structurally identical to `zzz_server`'s production
 //! `main.rs`: same tracing init, same lifecycle, same shutdown.
-//! Production defaults to port 1174 (`zzz_server::DEFAULT_PORT`); this
-//! binary defaults to 1175 so a developer running both locally doesn't
+//! Production defaults to port 4460 (`zzz_server::DEFAULT_PORT`); this
+//! binary defaults to 4462 so a developer running both locally doesn't
 //! collide. Override via `ZZZ_PORT` or `--port` exactly as the
 //! production binary supports.
 
@@ -34,10 +34,10 @@ use fuz_testing::{
 };
 
 /// Default loopback port for the testing binary. Distinct from the
-/// production default (1174) so both binaries can run side-by-side on
+/// production default (4460) so both binaries can run side-by-side on
 /// `localhost` during local development. The cross-process harness can
 /// override via `ZZZ_PORT` or `--port` anyway.
-const TESTING_DEFAULT_PORT: u16 = 1175;
+const TESTING_DEFAULT_PORT: u16 = 4462;
 
 #[tokio::main]
 async fn main() {

@@ -19,4 +19,4 @@ console.log('Environment file:');
 await setup_env_file(runtime, '.env.development', '.env.development.example', {set_permissions});
 console.log();
 
-console.log('Done. Next: gro dev');
+console.log('Done. Next: npm install, then deno task dev');

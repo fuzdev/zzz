@@ -23,11 +23,11 @@
  * (proxy variant) `ZZZ_TRUSTED_PROXIES`.
  *
  * **Port assignments** — fixed-but-distinct, no collision with the
- * production daemon (zzz on `4460`, dev on `8999`):
+ * production daemon (zzz on `4460`, dev on `4461`):
  *
- * - Rust test binary → `1175` (matches `testing_zzz_server`'s
+ * - Rust test binary → `4462` (matches `testing_zzz_server`'s
  *   `TESTING_DEFAULT_PORT`)
- * - Rust+proxy test binary → `1176`
+ * - Rust+proxy test binary → `4463`
  *
  * Vitest projects spawn one backend each, so ports only need to not
  * collide cross-project, not cross-test.
@@ -166,15 +166,15 @@ const make_zzz_rust_backend_config = ({
 export const rust_backend_config = (): BackendConfig =>
 	make_zzz_rust_backend_config({
 		name: 'rust',
-		port: 1175,
+		port: 4462,
 	});
 
 /**
  * Rust backend variant with trusted-proxy enabled. Used by the proxy
  * cross-backend suite, which can't share a backend instance with the
  * regular Rust project — flipping `ZZZ_TRUSTED_PROXIES` mid-run isn't
- * supported (Rust parses it once at boot). Port `1176` so the proxy
- * binary doesn't collide with the regular Rust project on `1175`.
+ * supported (Rust parses it once at boot). Port `4463` so the proxy
+ * binary doesn't collide with the regular Rust project on `4462`.
  *
  * Points at its own `zzz_test_rust_proxy` database so the two Rust
  * projects don't fight over `bootstrap_lock` state and can run in
@@ -183,6 +183,6 @@ export const rust_backend_config = (): BackendConfig =>
 export const rust_proxy_backend_config = (): BackendConfig =>
 	make_zzz_rust_backend_config({
 		name: 'rust_proxy',
-		port: 1176,
+		port: 4463,
 		extra_env: {ZZZ_TRUSTED_PROXIES: '127.0.0.1'},
 	});

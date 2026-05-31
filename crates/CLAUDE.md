@@ -6,7 +6,7 @@ a single JSON-RPC 2.0 API over HTTP + WebSocket. AI providers are Anthropic
 
 **Workspace layout**:
 - `zzz_server/` — library (`zzz_server`) + production daemon binary (the `[[bin]]` target is named `zzzd`). `pub async fn run_app(options: RunAppOptions)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, drain). `RunAppOptions` carries: `password_hasher` (production-vs-test swap), `default_port`, `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag), and `extra_action_specs_factory` (lets the test binary inject `_testing_reset` without putting `fuz_testing` in the production dep graph). `src/main.rs` is the thin production entry — constructs `Argon2idHasher`, calls `run_app` with `force_test_actions: false, extra_action_specs_factory: None`.
-- `testing_zzz_server/` — separate test-binary package (its `[[bin]]` target is named `testing_zzzd`) wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) AND `fuz_testing::create_testing_reset_action_spec` (auth-table wipe + fresh-keeper re-seed + consumer-supplied `reset_state(ActionDb)` callback; `credential_types: [DaemonToken]` auth gate). zzz's reset closure ignores the in-tx `ActionDb` handle (its domain state is in-memory, not in PG) — it clears zzz workspaces, calls `pty_manager.kill_all()` (non-destructive — manager stays usable across tests), and wipes the optional `ZZZ_TESTING_SCRATCH_DIR`. Default port 1175 (production is 1174). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. It is zzz's test binary, spawned by the cross-process integration tests.
+- `testing_zzz_server/` — separate test-binary package (its `[[bin]]` target is named `testing_zzzd`) wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) AND `fuz_testing::create_testing_reset_action_spec` (auth-table wipe + fresh-keeper re-seed + consumer-supplied `reset_state(ActionDb)` callback; `credential_types: [DaemonToken]` auth gate). zzz's reset closure ignores the in-tx `ActionDb` handle (its domain state is in-memory, not in PG) — it clears zzz workspaces, calls `pty_manager.kill_all()` (non-destructive — manager stays usable across tests), and wipes the optional `ZZZ_TESTING_SCRATCH_DIR`. Default port 4462 (production is 4460). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. It is zzz's test binary, spawned by the cross-process integration tests.
 - `xtask/` — dev automation. `cargo xtask check-release` thin-wraps `fuz_audit::run_check_release_cli()`; marked `[package.metadata.fuz_audit] dev_only = true` so xtask itself is excluded from the production scan.
 - `zzz/` — Rust CLI (argh). `daemon start/stop/status`, `status`, `init`, `open` (the default command — daemon discovery, detached auto-start, best-effort `workspace_open`, browser launch), and `version` (+ the `--version`/`-v` switch) are implemented, all backed by `daemon_lifecycle.rs` (port-based `daemon.json` I/O, `/health` probe, PID liveness, server-bin discovery, child-env build, ISO timestamp). Tests: unit tests per module, `tests/cli_daemon.rs` (infra-free status read-back), and `tests/cli_e2e.rs` (full `daemon start` ↔ live `testing_zzzd` lifecycle, gated behind `ZZZ_TEST_E2E=1` + Postgres, self-skips otherwise). This is zzz's CLI — the Deno CLI has been removed; build it with `cargo build -p zzz`.
 
@@ -74,7 +74,7 @@ cargo xtask check-release         # audit: no production binary depends on fuz_t
 # Run (requires DATABASE_URL and SECRET_FUZ_COOKIE_KEYS)
 DATABASE_URL=postgres://localhost/zzz \
 SECRET_FUZ_COOKIE_KEYS=dev-only-not-for-production-use-000 \
-./target/debug/zzzd --port 1174
+./target/debug/zzzd --port 4460
 
 # Test binary (cross-process integration tests — fast argon2)
 DATABASE_URL=postgres://localhost/zzz_test \
@@ -82,8 +82,8 @@ SECRET_FUZ_COOKIE_KEYS=dev-only-not-for-production-use-000 \
 ./target/debug/testing_zzzd
 
 # Quick smoke test
-curl http://localhost:1174/health
-curl -X POST http://localhost:1174/api/rpc \
+curl http://localhost:4460/health
+curl -X POST http://localhost:4460/api/rpc \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":"1","method":"ping"}'
 # → {"jsonrpc":"2.0","id":"1","result":{"ping_id":"1"}}
@@ -106,7 +106,7 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 |--------------------------|--------------------------------------------|
 | `FUZ_BOOTSTRAP_TOKEN_PATH`   | Path to bootstrap token file           |
 | `PUBLIC_ZZZ_SCOPED_DIRS` | Comma-separated filesystem paths           |
-| `ZZZ_PORT`               | Server port (default 1174, CLI overrides)  |
+| `ZZZ_PORT`               | Server port (default 4460, CLI overrides)  |
 | `ZZZ_STATIC_DIR`         | Static file directory                      |
 | `ZZZ_ENABLE_TEST_ACTIONS`| Register `_testing_*` actions on live dispatchers (mirrors Zod `z.stringbool()`: `true`/`1`/`yes`/`on`/`y`/`enabled` opt in; `false`/`0`/`no`/`off`/`n`/`disabled` or unset opt out; case-insensitive; anything else errors at startup. Integration tests only — production must leave unset) |
 | `ZZZ_LOGIN_RATE_LIMIT_ENABLED`| Turn on per-IP + per-account rate limiting on `/login` and `/password` (same `z.stringbool()` shape as `ZZZ_ENABLE_TEST_ACTIONS`). Default off so existing integration tests don't trip the bucket. Defaults match fuz_app (5 attempts / 15 min IP, 10 / 30 min account). Per-IP key is the resolved client IP from `proxy::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when deploying behind a reverse proxy so the bucket keys on the originator, not the proxy. |
@@ -163,10 +163,13 @@ Cookie-based session auth and bearer token auth mirroring fuz_app's auth stack:
    `DaemonToken`) and optional `token_hash` (session connections only —
    bearer and daemon token connections have `None`).
 
-7. **Per-action auth** — Each RPC method has an auth level:
-   - `public` — no auth required (`ping`)
-   - `authenticated` — valid session or bearer token required (workspace_*, session_load, etc.)
-   - `keeper` — requires `DaemonToken` credential type AND keeper role grant (`provider_update_api_key`). API tokens and session cookies cannot access keeper actions even if the account has the keeper role grant.
+7. **Per-action auth** — these levels are the enforcement shorthand for the
+   four-axis `auth` record on each TS spec (`{account, actor, roles?,
+   credential_types?}` or `null`; see `src/lib/action_specs.ts` and the
+   generated `docs/reference.md`):
+   - `public` — `auth: null` or `{account: 'none', actor: 'none'}`; no auth required (`ping`)
+   - `authenticated` — `{account: 'required', actor: 'none'}`; valid session or bearer token required (workspace_*, session_load, etc.)
+   - `keeper` — `{account: 'required', actor: 'required', roles: ['keeper'], credential_types: ['daemon_token']}`; requires `DaemonToken` credential type AND keeper role grant (`provider_update_api_key`). API tokens and session cookies cannot access keeper actions even if the account has the keeper role grant.
 
 8. **Bootstrap** — `POST /bootstrap` creates first admin account with keeper
    + admin role grants. Reads token from `FUZ_BOOTSTRAP_TOKEN_PATH`, timing-safe

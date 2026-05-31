@@ -14,7 +14,7 @@ import {load_env_file} from '@fuzdev/fuz_app/env/dotenv.js';
 
 import {runtime, set_permissions} from './setup_helpers.ts';
 
-const RUST_BACKEND_PORT = 8999;
+const RUST_BACKEND_PORT = 4461;
 const ENV_FILE = '.env.development';
 
 // -- Load environment ---------------------------------------------------------
