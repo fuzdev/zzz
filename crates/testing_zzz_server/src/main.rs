@@ -44,7 +44,7 @@ async fn main() {
     // Non-blocking stdout logging so a stalled stdout consumer can't starve
     // the async runtime. `_log_guard` must stay live for the whole process.
     let _log_guard =
-        fuz_common::logging::init_non_blocking_stdout("info,zzz_server=info,testing_zzzd=info");
+        fuz_sys::logging::init_non_blocking_stdout("info,zzz_server=info,testing_zzzd=info");
 
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(TestingArgon2idHasher::new());
 

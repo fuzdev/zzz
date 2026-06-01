@@ -49,7 +49,7 @@ The sibling Rust workspace must be checked out alongside this repo:
 
 ```
 ~/dev/zzz/                  (this repo)
-<sibling Rust workspace>/   (path deps: fuz_common, fuz_pty, plus the 5 spine crates — fuz_db, fuz_auth, fuz_http, fuz_realtime, fuz_actions)
+<sibling Rust workspace>/   (path deps: fuz_sys, fuz_pty, plus the 5 spine crates — fuz_db, fuz_auth, fuz_http, fuz_realtime, fuz_actions)
 ```
 
 If a path dep is missing, `cargo build` will fail with

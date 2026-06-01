@@ -19,7 +19,7 @@ use super::ai_provider_error;
 pub fn build_completion_response(provider_name: &str, model: &str, data_value: &Value) -> Value {
     json!({
         "completion_response": {
-            "created": fuz_common::rfc3339_now(),
+            "created": fuz_sys::rfc3339_now(),
             "provider_name": provider_name,
             "model": model,
             "data": {

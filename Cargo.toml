@@ -10,7 +10,7 @@ publish = false
 
 [workspace.dependencies]
 argh = "0.1"
-fuz_common = { path = "../private_fuz/crates/fuz_common" }
+fuz_sys = { path = "../private_fuz/crates/fuz_sys" }
 fuz_pty = { path = "../private_fuz/crates/fuz_pty" }
 fuz_db = { path = "../private_fuz/crates/fuz_db" }
 fuz_auth = { path = "../private_fuz/crates/fuz_auth" }

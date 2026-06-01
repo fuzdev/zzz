@@ -714,7 +714,7 @@ pub struct Config {
 }
 
 /// Read a Zod-`stringbool()`-shaped env var via the spine parser
-/// ([`fuz_common::env::parse_stringbool`]): case-insensitive truthy
+/// ([`fuz_sys::env::parse_stringbool`]): case-insensitive truthy
 /// (`true`/`1`/`yes`/`on`/`y`/`enabled`) / falsy
 /// (`false`/`0`/`no`/`off`/`n`/`disabled`). Unset → `false`; unknown
 /// values error so a typo doesn't silently disable the feature.
@@ -722,7 +722,7 @@ fn parse_stringbool_env(name: &str) -> Result<bool, ServerError> {
     let Ok(v) = std::env::var(name) else {
         return Ok(false);
     };
-    fuz_common::env::parse_stringbool(&v).map_err(|e| ServerError::Config(format!("{name}: {e}")))
+    fuz_sys::env::parse_stringbool(&v).map_err(|e| ServerError::Config(format!("{name}: {e}")))
 }
 
 /// Resolve a path to an absolute, canonical, normalized directory string

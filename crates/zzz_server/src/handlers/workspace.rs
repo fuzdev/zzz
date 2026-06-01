@@ -132,7 +132,7 @@ pub async fn workspace_open(
     let info = WorkspaceInfo {
         path: normalized.clone(),
         name,
-        opened_at: fuz_common::rfc3339_now(),
+        opened_at: fuz_sys::rfc3339_now(),
     };
 
     let workspace = {

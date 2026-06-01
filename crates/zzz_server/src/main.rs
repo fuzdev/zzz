@@ -17,7 +17,7 @@ use fuz_auth::PasswordHasher;
 async fn main() {
     // Non-blocking stdout logging so a stalled stdout consumer can't starve
     // the async runtime. `_log_guard` must stay live for the whole process.
-    let _log_guard = fuz_common::logging::init_non_blocking_stdout("info");
+    let _log_guard = fuz_sys::logging::init_non_blocking_stdout("info");
 
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(fuz_auth::Argon2idHasher::new());
 

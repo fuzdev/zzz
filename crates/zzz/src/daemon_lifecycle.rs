@@ -8,12 +8,12 @@
 //! The on-disk contract mirrors `fuz_app`'s `cli/daemon.js`
 //! (`~/.zzz/run/daemon.json`, `{version, pid, port, started, app_version}`)
 //! so the file stays readable across the CLI's Deno-to-Rust transition.
-//! It keeps a **local** `DaemonInfo`: `fuz_common`'s daemon helpers model a
+//! It keeps a **local** `DaemonInfo`: `fuz_sys`'s daemon helpers model a
 //! socket-based v2 schema (no `port`) over a UDS transport, whereas
 //! `zzz_server` is HTTP/port-based and this file mirrors `fuz_app`'s v1
 //! `{port, started, app_version}` wire shape. The OS-level plumbing — PID
 //! liveness, signal forwarding, RFC-3339 timestamps, crash-safe atomic
-//! writes — does route through `fuz_common` rather than being re-derived here.
+//! writes — does route through `fuz_sys` rather than being re-derived here.
 
 use std::collections::HashMap;
 use std::fs;
@@ -86,7 +86,7 @@ pub fn read_daemon_info() -> Option<DaemonInfo> {
 }
 
 /// Atomically write `daemon.json`, creating `run/`. Crash-safe temp → fsync →
-/// rename → parent fsync via [`fuz_common::fs::write_atomic`]; mode `0o644`
+/// rename → parent fsync via [`fuz_sys::fs::write_atomic`]; mode `0o644`
 /// (the record — pid / port / version — is not secret).
 pub fn write_daemon_info(info: &DaemonInfo) -> Result<(), CliError> {
     let run_dir = zzz_dir()?.join("run");
@@ -95,7 +95,7 @@ pub fn write_daemon_info(info: &DaemonInfo) -> Result<(), CliError> {
     let mut content =
         serde_json::to_string_pretty(info).map_err(|e| CliError::Daemon(e.to_string()))?;
     content.push('\n');
-    fuz_common::fs::write_atomic(&path, content.as_bytes(), 0o644)?;
+    fuz_sys::fs::write_atomic(&path, content.as_bytes(), 0o644)?;
     Ok(())
 }
 
@@ -175,21 +175,21 @@ pub fn resolve_server_bin() -> PathBuf {
 
 /// Whether `pid` names a live process.
 ///
-/// Adapts the wire-shape `u32` pid to the `i32` [`fuz_common::is_pid_alive`]
+/// Adapts the wire-shape `u32` pid to the `i32` [`fuz_sys::is_pid_alive`]
 /// takes (a `/proc/{pid}` existence probe on Linux). A pid that overflows
 /// `i32` can't name a real process, so it reads as not-alive.
 #[must_use]
 pub fn is_pid_alive(pid: u32) -> bool {
-    i32::try_from(pid).is_ok_and(fuz_common::is_pid_alive)
+    i32::try_from(pid).is_ok_and(fuz_sys::is_pid_alive)
 }
 
-/// Send `SIGTERM` to `pid` via [`fuz_common::send_signal`].
+/// Send `SIGTERM` to `pid` via [`fuz_sys::send_signal`].
 ///
 /// A process that's already gone is not an error — `stop` is idempotent;
 /// only a failure to *issue* the signal surfaces.
 pub fn send_sigterm(pid: u32) -> Result<(), CliError> {
     let raw = i32::try_from(pid).map_err(|_| CliError::Daemon(format!("invalid pid {pid}")))?;
-    fuz_common::send_signal(raw, "-TERM")
+    fuz_sys::send_signal(raw, "-TERM")
         .map(|_| ())
         .map_err(|e| CliError::Daemon(format!("failed to signal pid {pid}: {e}")))
 }

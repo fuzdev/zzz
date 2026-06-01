@@ -173,7 +173,7 @@ async fn handle_streaming_response(
     let api_response = json!({
         "id": completion_id,
         "object": "chat.completion",
-        "created": fuz_common::rfc3339_now(),
+        "created": fuz_sys::rfc3339_now(),
         "model": options.model,
         "choices": [{
             "index": 0,

@@ -728,22 +728,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuz_common"
-version = "0.1.0"
-dependencies = [
- "blake3",
- "getrandom 0.3.4",
- "libc",
- "nix",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "time",
- "tracing-appender",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "fuz_db"
 version = "0.1.0"
 dependencies = [
@@ -759,6 +743,7 @@ name = "fuz_http"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "fuz_sys",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -797,6 +782,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuz_sys"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "getrandom 0.3.4",
+ "libc",
+ "nix",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "time",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "fuz_testing"
 version = "0.1.0"
 dependencies = [
@@ -805,9 +809,9 @@ dependencies = [
  "futures",
  "fuz_actions",
  "fuz_auth",
- "fuz_common",
  "fuz_db",
  "fuz_http",
+ "fuz_sys",
  "getrandom 0.3.4",
  "serde_json",
  "tokio",
@@ -2198,9 +2202,9 @@ version = "0.1.0"
 dependencies = [
  "fuz_actions",
  "fuz_auth",
- "fuz_common",
  "fuz_db",
  "fuz_http",
+ "fuz_sys",
  "fuz_testing",
  "tokio",
  "tracing",
@@ -3312,7 +3316,7 @@ name = "zzz"
 version = "0.1.0"
 dependencies = [
  "argh",
- "fuz_common",
+ "fuz_sys",
  "reqwest",
  "serde",
  "serde_json",
@@ -3333,11 +3337,11 @@ dependencies = [
  "futures-util",
  "fuz_actions",
  "fuz_auth",
- "fuz_common",
  "fuz_db",
  "fuz_http",
  "fuz_pty",
  "fuz_realtime",
+ "fuz_sys",
  "hmac 0.12.1",
  "libc",
  "notify",
