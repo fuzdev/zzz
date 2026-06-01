@@ -41,9 +41,9 @@ pub enum CliError {
 }
 
 impl CliError {
-    /// Process exit code for this error.
+    /// Process exit code for this error (for `ExitCode::from`).
     #[must_use]
-    pub const fn exit_code(&self) -> i32 {
+    pub const fn exit_code(&self) -> u8 {
         match self {
             // Config/environment problems use 2 (matches fuz); everything
             // else is a generic 1.

@@ -16,6 +16,7 @@ mod daemon_lifecycle;
 mod error;
 
 use argh::FromArgs;
+use std::process::ExitCode;
 
 pub use error::CliError;
 
@@ -57,14 +58,15 @@ enum Subcommand {
 }
 
 #[tokio::main]
-async fn main() {
-    if let Err(e) = run().await {
-        eprintln!("error: {e}");
-        if let Some(hint) = e.hint() {
-            eprintln!("{hint}");
-        }
-        std::process::exit(e.exit_code());
+async fn main() -> ExitCode {
+    let Err(e) = run().await else {
+        return ExitCode::SUCCESS;
+    };
+    eprintln!("error: {e}");
+    if let Some(hint) = e.hint() {
+        eprintln!("{hint}");
     }
+    ExitCode::from(e.exit_code())
 }
 
 async fn run() -> Result<(), CliError> {
