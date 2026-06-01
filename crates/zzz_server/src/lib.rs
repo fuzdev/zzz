@@ -47,69 +47,20 @@ pub const DEFAULT_PORT: u16 = 4460;
 /// other spine consumers so operators see consistent shutdown UX.
 pub const DEFAULT_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
-/// Runtime state surfaced to [`ExtraActionSpecsFactory`] — keyring +
-/// password hasher + daemon-token state needed by the test binary's
-/// `_testing_reset` action to seed a fresh keeper inline.
+/// zzz's concrete instantiation of [`fuz_actions::ExtraActionSpecsFactory`]
+/// over [`handlers::App`] — extra specs folded in after the standard zzz set.
 ///
-/// `zzz_server` builds these refs during normal assembly and threads
-/// them in here so `fuz_testing` doesn't have to re-derive the
-/// production shapes. Production passes no factory and never reads
-/// this struct.
-#[allow(missing_debug_implementations)] // Arc-of-dyn fields don't auto-derive Debug
-pub struct ExtraActionSpecsRuntime {
-    /// Argon2 hasher (Test binary swaps in
-    /// `fuz_testing::TestingArgon2idHasher` for ~1-5 ms feedback;
-    /// production wires `Argon2idHasher`).
-    pub password_hasher: Arc<dyn fuz_auth::PasswordHasher>,
-    /// Cookie-signing keyring — same instance the live server uses.
-    pub keyring: Arc<fuz_auth::keyring::Keyring>,
-    /// Daemon-token runtime state — `Some(_)` when daemon-token
-    /// rotation is wired (always true on test binaries). `_testing_reset`
-    /// refreshes `keeper_account_id` here after re-seeding.
-    pub daemon_token_state: Option<fuz_auth::SharedDaemonTokenState>,
-    /// Per-app session cookie name (default
-    /// [`fuz_auth::SESSION_COOKIE_NAME`]) — `_testing_reset` signs the
-    /// seeded keeper's cookie under this so the harness jars it under the
-    /// same name the live server reads.
-    pub session_cookie_name: &'static str,
-}
+/// Production passes `None`; the `testing_zzz_server` binary passes `Some(_)`
+/// to inject `_testing_reset`, closing over `fuz_testing` types in its own
+/// process so the production graph stays clean.
+pub type ExtraActionSpecsFactory = fuz_actions::ExtraActionSpecsFactory<handlers::App>;
 
-/// Factory that constructs extra action specs to fold into the
-/// registry after the standard zzz specs.
+/// zzz's concrete instantiation of [`fuz_actions::PreMigrationHook`].
 ///
-/// Production passes `None`. The test binary (`testing_zzz_server`)
-/// passes `Some(_)` to inject `_testing_reset` (which captures
-/// `Arc<App>` for the consumer-side reset closure). `zzz_server` itself
-/// stays clean of any `fuz_testing` dep this way — the factory closes
-/// over `fuz_testing` types in the test binary's process only.
-///
-/// The factory receives an `ExtraActionSpecsRuntime` so it can wire
-/// the action-handler's required state (keyring, password hasher,
-/// daemon-token state) without re-deriving the production shapes.
-pub type ExtraActionSpecsFactory = Box<
-    dyn FnOnce(Arc<handlers::App>, ExtraActionSpecsRuntime) -> Vec<fuz_actions::ActionSpec> + Send,
->;
-
-/// Async hook fired between pool creation and migrations.
-///
-/// Production passes `None`. The test binary (`testing_zzz_server`)
-/// passes `Some(_)` to fire `fuz_testing::reset_db_on_startup_if_env_set`
-/// — env-gated schema wipe so cross-process tests don't have to drop
-/// the DB manually between runs. `zzz_server` itself stays clean of
-/// any `fuz_testing` dep this way — the hook closes over
-/// `fuz_testing` symbols in the test binary's process only.
-///
-/// The hook receives a borrowed `Pool` reference; cloning is cheap
-/// (`Arc` internally) when the hook needs an owned handle. Errors
-/// surface as a [`ServerError::Database`] so the test binary's
-/// startup chain fails the same way a real migration error would.
-pub type PreMigrationHook = Box<
-    dyn FnOnce(
-            &fuz_db::Pool,
-        )
-            -> std::pin::Pin<Box<dyn Future<Output = Result<(), ServerError>> + Send + '_>>
-        + Send,
->;
+/// Production passes `None`; the `testing_zzz_server` binary passes `Some(_)`
+/// to fire `fuz_testing::reset_db_on_startup_if_env_set` (env-gated schema
+/// wipe). Errors surface as [`ServerError::Database`].
+pub type PreMigrationHook = fuz_actions::PreMigrationHook<ServerError>;
 
 /// Options for [`run_app`].
 ///
@@ -318,23 +269,14 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             "trusted proxies configured — XFF resolution enabled"
         );
     }
-    let spine_allowed_origins: Vec<String> = config
-        .allowed_origins
-        .as_deref()
-        .map(fuz_http::parse_allowed_origins)
-        .unwrap_or_default();
-    // Fail loud: an absent or all-empty allowlist would make
-    // `fuz_http::check_origin` allow every origin (empty list = allow-all),
-    // silently disabling the origin gate on every REST + RPC + WS handler.
-    // Refuse to boot instead — mirrors the TS `validate_server_env` contract.
-    if spine_allowed_origins.is_empty() {
-        return Err(ServerError::Config(
-            "FUZ_ALLOWED_ORIGINS is required and must list at least one origin \
-             (an empty allowlist would disable origin checks)"
-                .to_string(),
-        ));
-    }
-    let spine_allowed_origins = Arc::new(spine_allowed_origins);
+    // Refuse to boot (fail loud) on an absent / all-empty allowlist — an empty
+    // list silently fails *open* (allow-all), disabling the Origin gate on
+    // every REST + RPC + WS handler; see `fuz_http::require_non_empty_origins`.
+    // Mirrors the TS `validate_server_env` contract.
+    let spine_allowed_origins = Arc::new(
+        fuz_http::require_non_empty_origins(config.allowed_origins.as_deref())
+            .map_err(|e| ServerError::Config(e.to_string()))?,
+    );
     let bootstrap_available_atomic =
         Arc::new(std::sync::atomic::AtomicBool::new(bootstrap_available));
     let socket_revoker: Arc<dyn fuz_auth::SocketRevoker> =
@@ -486,7 +428,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         )));
     }
     if let Some(factory) = extra_action_specs_factory {
-        let runtime = ExtraActionSpecsRuntime {
+        let runtime = fuz_actions::ExtraActionSpecsRuntime {
             password_hasher: Arc::clone(&spine_password_hasher),
             keyring: Arc::clone(&spine_keyring),
             daemon_token_state: spine_daemon_token.clone(),

@@ -119,7 +119,7 @@ async fn cmd_daemon_start(args: &DaemonStart) -> Result<(), CliError> {
         version: 1,
         pid,
         port,
-        started: dl::now_iso8601(),
+        started: fuz_common::rfc3339_now(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
     })?;
     println!("daemon running on http://localhost:{port}");

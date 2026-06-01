@@ -17,10 +17,11 @@ tokio = { workspace = true, features = ["process", "time"] }
 reqwest.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-# `kill(2)` for PID-liveness probes + SIGTERM forwarding. nix is the safe
-# wrapper (workspace lints `forbid` unsafe, so raw `libc::kill` is out).
-# Pinned to the version already resolved in the workspace lockfile.
-nix = { version = "0.29", features = ["signal"] }
+# Shared daemon-lifecycle primitives — PID liveness (`/proc`), signal
+# forwarding, RFC-3339 timestamps, and crash-safe atomic writes. The CLI keeps
+# its own `DaemonInfo` (the fuz_app TS v1 wire shape), but routes the OS-level
+# plumbing through fuz_common rather than re-deriving it.
+fuz_common.workspace = true
 
 [dev-dependencies]
 # `io-util` for the in-module health-probe test's mock HTTP responder

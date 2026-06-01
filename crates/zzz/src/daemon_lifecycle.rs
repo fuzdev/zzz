@@ -8,17 +8,18 @@
 //! The on-disk contract mirrors `fuz_app`'s `cli/daemon.js`
 //! (`~/.zzz/run/daemon.json`, `{version, pid, port, started, app_version}`)
 //! so the file stays readable across the CLI's Deno-to-Rust transition.
-//! It deliberately does **not** reuse `fuz_common`'s daemon helpers: those
-//! model a socket-based v2 schema (no `port`) over a UDS transport, whereas
-//! `zzz_server` is HTTP/port-based.
+//! It keeps a **local** `DaemonInfo`: `fuz_common`'s daemon helpers model a
+//! socket-based v2 schema (no `port`) over a UDS transport, whereas
+//! `zzz_server` is HTTP/port-based and this file mirrors `fuz_app`'s v1
+//! `{port, started, app_version}` wire shape. The OS-level plumbing — PID
+//! liveness, signal forwarding, RFC-3339 timestamps, crash-safe atomic
+//! writes — does route through `fuz_common` rather than being re-derived here.
 
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
-use nix::sys::signal::{Signal, kill};
-use nix::unistd::Pid;
 use serde::{Deserialize, Serialize};
 
 use crate::CliError;
@@ -84,17 +85,17 @@ pub fn read_daemon_info() -> Option<DaemonInfo> {
     serde_json::from_str(&content).ok()
 }
 
-/// Atomically write `daemon.json` (temp file + rename), creating `run/`.
+/// Atomically write `daemon.json`, creating `run/`. Crash-safe temp → fsync →
+/// rename → parent fsync via [`fuz_common::fs::write_atomic`]; mode `0o644`
+/// (the record — pid / port / version — is not secret).
 pub fn write_daemon_info(info: &DaemonInfo) -> Result<(), CliError> {
     let run_dir = zzz_dir()?.join("run");
     fs::create_dir_all(&run_dir)?;
     let path = run_dir.join("daemon.json");
-    let tmp = run_dir.join("daemon.json.tmp");
     let mut content =
         serde_json::to_string_pretty(info).map_err(|e| CliError::Daemon(e.to_string()))?;
     content.push('\n');
-    fs::write(&tmp, content)?;
-    fs::rename(&tmp, &path)?;
+    fuz_common::fs::write_atomic(&path, content.as_bytes(), 0o644)?;
     Ok(())
 }
 
@@ -172,24 +173,24 @@ pub fn resolve_server_bin() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(DAEMON_BIN))
 }
 
-/// Whether `pid` names a live process (`kill -0`).
+/// Whether `pid` names a live process.
 ///
-/// `EPERM` counts as alive — the process exists, we just may not own it.
+/// Adapts the wire-shape `u32` pid to the `i32` [`fuz_common::is_pid_alive`]
+/// takes (a `/proc/{pid}` existence probe on Linux). A pid that overflows
+/// `i32` can't name a real process, so it reads as not-alive.
 #[must_use]
 pub fn is_pid_alive(pid: u32) -> bool {
-    let Ok(raw) = i32::try_from(pid) else {
-        return false;
-    };
-    matches!(
-        kill(Pid::from_raw(raw), None),
-        Ok(()) | Err(nix::errno::Errno::EPERM)
-    )
+    i32::try_from(pid).is_ok_and(fuz_common::is_pid_alive)
 }
 
-/// Send `SIGTERM` to `pid`.
+/// Send `SIGTERM` to `pid` via [`fuz_common::send_signal`].
+///
+/// A process that's already gone is not an error — `stop` is idempotent;
+/// only a failure to *issue* the signal surfaces.
 pub fn send_sigterm(pid: u32) -> Result<(), CliError> {
     let raw = i32::try_from(pid).map_err(|_| CliError::Daemon(format!("invalid pid {pid}")))?;
-    kill(Pid::from_raw(raw), Signal::SIGTERM)
+    fuz_common::send_signal(raw, "-TERM")
+        .map(|_| ())
         .map_err(|e| CliError::Daemon(format!("failed to signal pid {pid}: {e}")))
 }
 
@@ -294,42 +295,6 @@ pub fn build_child_env() -> HashMap<String, String> {
     env
 }
 
-/// Current UTC time as an ISO-8601 `YYYY-MM-DDTHH:MM:SSZ` string.
-///
-/// Hand-rolled (Howard Hinnant's civil-from-days) to avoid a date-crate
-/// dependency for one timestamp; the value is informational (shown by
-/// `status`, stored in `daemon.json`).
-#[must_use]
-#[allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss
-)]
-pub fn now_iso8601() -> String {
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs());
-    let days = (secs / 86_400) as i64;
-    let secs_of_day = secs % 86_400;
-    let hour = secs_of_day / 3_600;
-    let minute = (secs_of_day % 3_600) / 60;
-    let second = secs_of_day % 60;
-
-    // civil_from_days: epoch-days → (year, month, day), Gregorian.
-    let z = days + 719_468;
-    let era = (if z >= 0 { z } else { z - 146_096 }) / 146_097;
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
-    let year = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = if month <= 2 { year + 1 } else { year };
-
-    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
-}
-
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,
@@ -390,16 +355,6 @@ mod tests {
             parse_env_line("KEY = \"quoted value\""),
             Some(("KEY".to_string(), "quoted value".to_string()))
         );
-    }
-
-    #[test]
-    fn now_iso8601_is_well_formed() {
-        let s = now_iso8601();
-        // YYYY-MM-DDTHH:MM:SSZ
-        assert_eq!(s.len(), 20, "{s}");
-        assert!(s.ends_with('Z'));
-        assert_eq!(&s[4..5], "-");
-        assert_eq!(&s[10..11], "T");
     }
 
     #[tokio::test]

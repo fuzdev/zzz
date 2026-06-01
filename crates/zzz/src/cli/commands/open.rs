@@ -182,7 +182,7 @@ async fn start_daemon_detached() -> Result<DaemonInfo, CliError> {
         version: 1,
         pid,
         port,
-        started: dl::now_iso8601(),
+        started: fuz_common::rfc3339_now(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
     };
     dl::write_daemon_info(&info)?;
