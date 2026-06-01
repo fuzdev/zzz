@@ -40,15 +40,22 @@ impl ProviderName {
             _ => None,
         }
     }
+
+    /// The lowercase wire name — the single home for these literals.
+    /// `Display`, the serde rename, and each provider's `PROVIDER_NAME`
+    /// `&str` all derive from this (the inverse of `parse`).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Claude => "claude",
+            Self::Chatgpt => "chatgpt",
+            Self::Gemini => "gemini",
+        }
+    }
 }
 
 impl fmt::Display for ProviderName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Claude => write!(f, "claude"),
-            Self::Chatgpt => write!(f, "chatgpt"),
-            Self::Gemini => write!(f, "gemini"),
-        }
+        f.write_str(self.as_str())
     }
 }
 
@@ -56,37 +63,68 @@ impl fmt::Display for ProviderName {
 
 /// Status of an AI provider.
 ///
-/// Matches the TypeScript `ProviderStatus` discriminated union:
-/// `{name, available: true, checked_at}` or `{name, available: false, error, checked_at}`.
-///
-/// When `error` is `None`, the `error` field is omitted from JSON output,
-/// producing `{name, available: true, checked_at}`. When `Some`, produces
-/// `{name, available: false, error, checked_at}`.
-#[derive(Debug, Clone, Serialize)]
-pub struct ProviderStatus {
-    pub name: String,
-    pub available: bool,
-    pub checked_at: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+/// Mirrors the TypeScript `ProviderStatus` discriminated union — exactly one of
+/// `{name, available: true, checked_at}` or
+/// `{name, available: false, error, checked_at}`. Modeling it as an enum makes
+/// the impossible combinations (available-with-error, unavailable-without-error)
+/// unrepresentable rather than holding them off with private constructors; the
+/// custom `Serialize` emits the flat wire shape `available`/`error` describe.
+#[derive(Debug, Clone)]
+pub enum ProviderStatus {
+    Available {
+        name: ProviderName,
+        checked_at: u64,
+    },
+    Unavailable {
+        name: ProviderName,
+        checked_at: u64,
+        error: String,
+    },
 }
 
 impl ProviderStatus {
-    pub fn available(name: &str) -> Self {
-        Self {
-            name: name.to_owned(),
-            available: true,
+    pub fn available(name: ProviderName) -> Self {
+        Self::Available {
+            name,
             checked_at: now_millis(),
-            error: None,
         }
     }
 
-    pub fn unavailable(name: &str, error: &str) -> Self {
-        Self {
-            name: name.to_owned(),
-            available: false,
+    pub fn unavailable(name: ProviderName, error: &str) -> Self {
+        Self::Unavailable {
+            name,
             checked_at: now_millis(),
-            error: Some(error.to_owned()),
+            error: error.to_owned(),
+        }
+    }
+}
+
+impl Serialize for ProviderStatus {
+    /// Flat wire shape: `{name, available, checked_at}` for the available case,
+    /// plus `error` for the unavailable one. Field order matches the prior
+    /// struct so the serialized bytes are unchanged.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        match self {
+            Self::Available { name, checked_at } => {
+                let mut s = serializer.serialize_struct("ProviderStatus", 3)?;
+                s.serialize_field("name", name)?;
+                s.serialize_field("available", &true)?;
+                s.serialize_field("checked_at", checked_at)?;
+                s.end()
+            }
+            Self::Unavailable {
+                name,
+                checked_at,
+                error,
+            } => {
+                let mut s = serializer.serialize_struct("ProviderStatus", 4)?;
+                s.serialize_field("name", name)?;
+                s.serialize_field("available", &false)?;
+                s.serialize_field("checked_at", checked_at)?;
+                s.serialize_field("error", error)?;
+                s.end()
+            }
         }
     }
 }
@@ -276,4 +314,45 @@ fn now_millis() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    reason = "tests panic on assertion failure by design"
+)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn available_serializes_to_flat_wire_shape() {
+        let status = ProviderStatus::Available {
+            name: ProviderName::Claude,
+            checked_at: 42,
+        };
+        let value = serde_json::to_value(&status).unwrap();
+        assert_eq!(
+            value,
+            serde_json::json!({"name": "claude", "available": true, "checked_at": 42}),
+        );
+    }
+
+    #[test]
+    fn unavailable_serializes_with_error() {
+        let status = ProviderStatus::Unavailable {
+            name: ProviderName::Claude,
+            checked_at: 7,
+            error: "needs API key".to_owned(),
+        };
+        let value = serde_json::to_value(&status).unwrap();
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "name": "claude",
+                "available": false,
+                "checked_at": 7,
+                "error": "needs API key",
+            }),
+        );
+    }
 }

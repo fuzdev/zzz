@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 use argh::FromArgs;
 
 use crate::CliError;
-use crate::daemon_lifecycle::{self as dl, DaemonInfo};
+use crate::daemon_lifecycle::{self as dl, DaemonInfo, DaemonState};
 
 /// Open file or directory in browser (default command).
 ///
@@ -77,29 +77,31 @@ pub async fn cmd_open(args: &Open) -> Result<(), CliError> {
 /// running and answering `/health`. A stale or unresponsive record is
 /// cleaned up so the caller can auto-start a fresh daemon.
 async fn discover_running_daemon() -> Option<DaemonInfo> {
-    let info = dl::read_daemon_info()?;
-    if !dl::is_pid_alive(info.pid) {
-        let _ = dl::remove_daemon_info();
-        return None;
+    match dl::get_daemon_state().await {
+        DaemonState::Running(info) => Some(info),
+        DaemonState::Stopped => None,
+        DaemonState::Stale(_) => {
+            let _ = dl::remove_daemon_info();
+            None
+        }
+        DaemonState::Wedged(info) => {
+            // Alive but not answering `/health` — terminate it (mirroring
+            // `daemon stop`) so the auto-start below can rebind the port, then
+            // drop the stale record. Without this, the restart would collide
+            // with the old process still holding the port.
+            eprintln!(
+                "warning: daemon pid {} on port {} is not responding; restarting",
+                info.pid, info.port
+            );
+            let _ = dl::send_sigterm(info.pid);
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while Instant::now() < deadline && dl::is_pid_alive(info.pid) {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            let _ = dl::remove_daemon_info();
+            None
+        }
     }
-    if dl::check_health(info.port).await {
-        return Some(info);
-    }
-    // Alive but not answering `/health` — treat it as wedged and terminate it
-    // (mirroring `daemon stop`) so the auto-start below can rebind the port,
-    // then drop the stale record. Without this, the restart would collide with
-    // the old process still holding the port.
-    eprintln!(
-        "warning: daemon pid {} on port {} is not responding; restarting",
-        info.pid, info.port
-    );
-    let _ = dl::send_sigterm(info.pid);
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while Instant::now() < deadline && dl::is_pid_alive(info.pid) {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-    let _ = dl::remove_daemon_info();
-    None
 }
 
 /// Spawn `zzzd` detached and wait for it to report healthy, then record

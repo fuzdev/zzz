@@ -7,11 +7,13 @@ use tokio_util::sync::CancellationToken;
 
 use super::{
     CompletionHandlerOptions, CompletionMessage, PROVIDER_ERROR_NEEDS_API_KEY, ProgressSender,
-    ProviderStatus, ai_provider_error, common, sse,
+    ProviderName, ProviderStatus, ai_provider_error, common, sse,
 };
 
 const API_URL: &str = "https://api.openai.com/v1/chat/completions";
-const PROVIDER_NAME: &str = "chatgpt";
+const PROVIDER: ProviderName = ProviderName::Chatgpt;
+/// The `&str` form (derived from `PROVIDER`) for the error/SSE plumbing.
+const PROVIDER_NAME: &str = PROVIDER.as_str();
 const SSE_DONE_MARKER: &str = "[DONE]";
 
 struct OpenAiState {
@@ -46,9 +48,9 @@ impl OpenAiProvider {
         drop(state);
 
         let status = if has_client {
-            ProviderStatus::available(PROVIDER_NAME)
+            ProviderStatus::available(PROVIDER)
         } else {
-            ProviderStatus::unavailable(PROVIDER_NAME, PROVIDER_ERROR_NEEDS_API_KEY)
+            ProviderStatus::unavailable(PROVIDER, PROVIDER_ERROR_NEEDS_API_KEY)
         };
 
         let mut state = self.state.write().await;

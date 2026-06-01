@@ -205,6 +205,40 @@ pub async fn check_health(port: u16) -> bool {
     matches!(client.get(&url).send().await, Ok(r) if r.status().is_success())
 }
 
+/// Resolved liveness of the daemon described by `daemon.json`.
+///
+/// Collapses the read-record → probe-pid → probe-`/health` sequence into one
+/// value so each command branches on a single state instead of re-deriving a
+/// `pid_alive` + `healthy` boolean pair (which drifts apart per command). The
+/// payload carries the `DaemonInfo` for the cases that have one.
+#[derive(Debug)]
+pub enum DaemonState {
+    /// No `daemon.json` — nothing is recorded as running.
+    Stopped,
+    /// `daemon.json` records a pid that is no longer alive.
+    Stale(DaemonInfo),
+    /// Process is alive but not answering `/health` (wedged, or still binding).
+    Wedged(DaemonInfo),
+    /// Process is alive and answering `/health`.
+    Running(DaemonInfo),
+}
+
+/// Classify the recorded daemon's liveness. Probes `/health` only when the
+/// recorded pid is alive, so a stale record costs no network round-trip.
+pub async fn get_daemon_state() -> DaemonState {
+    let Some(info) = read_daemon_info() else {
+        return DaemonState::Stopped;
+    };
+    if !is_pid_alive(info.pid) {
+        return DaemonState::Stale(info);
+    }
+    if check_health(info.port).await {
+        DaemonState::Running(info)
+    } else {
+        DaemonState::Wedged(info)
+    }
+}
+
 /// Parse a `.env` file into key/value pairs. Missing file → empty.
 ///
 /// Minimal `KEY=VALUE` parsing: blank lines and `#` comments skipped,

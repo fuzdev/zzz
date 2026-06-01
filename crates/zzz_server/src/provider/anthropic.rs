@@ -7,12 +7,14 @@ use tokio_util::sync::CancellationToken;
 
 use super::{
     CompletionHandlerOptions, CompletionMessage, PROVIDER_ERROR_NEEDS_API_KEY, ProgressSender,
-    ProviderStatus, ai_provider_error, common, sse,
+    ProviderName, ProviderStatus, ai_provider_error, common, sse,
 };
 
 const API_URL: &str = "https://api.anthropic.com/v1/messages";
 const API_VERSION: &str = "2023-06-01";
-const PROVIDER_NAME: &str = "claude";
+const PROVIDER: ProviderName = ProviderName::Claude;
+/// The `&str` form (derived from `PROVIDER`) for the error/SSE plumbing.
+const PROVIDER_NAME: &str = PROVIDER.as_str();
 
 // -- Provider state -----------------------------------------------------------
 
@@ -52,9 +54,9 @@ impl AnthropicProvider {
         drop(state);
 
         let status = if has_client {
-            ProviderStatus::available(PROVIDER_NAME)
+            ProviderStatus::available(PROVIDER)
         } else {
-            ProviderStatus::unavailable(PROVIDER_NAME, PROVIDER_ERROR_NEEDS_API_KEY)
+            ProviderStatus::unavailable(PROVIDER, PROVIDER_ERROR_NEEDS_API_KEY)
         };
 
         let mut state = self.state.write().await;
