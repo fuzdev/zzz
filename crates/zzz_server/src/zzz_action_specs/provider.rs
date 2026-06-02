@@ -42,10 +42,7 @@ fn provider_update_api_key_spec(app: Arc<App>) -> ActionSpec {
         let app = Arc::clone(&app);
         Box::pin(async move { provider::provider_update_api_key(params, ctx, app).await })
     });
-    let keeper_auth = AuthSpec::Authenticated {
-        credential_types: Some(DAEMON_TOKEN_ONLY),
-        roles: Some(KEEPER_ROLE),
-    };
+    let keeper_auth = AuthSpec::authenticated_gated(Some(DAEMON_TOKEN_ONLY), Some(KEEPER_ROLE));
     ActionSpec::with_side_effects("provider_update_api_key", keeper_auth, handler)
 }
 
