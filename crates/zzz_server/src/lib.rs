@@ -128,9 +128,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
 
     // Database — required. Spine `fuz_db::create_pool` builds the
     // deadpool-postgres pool; `fuz_db::run_migrations` runs the auth DDL
-    // tracked under the reserved `fuz_auth` namespace. Phase 7 Batch 4
-    // retired the legacy `crate::db` module (`db::create_pool` /
-    // `db::run_migrations` / `db::query_*`) wholesale.
+    // tracked under the reserved `fuz_auth` namespace.
     let pool = fuz_db::create_pool(&config.database_url)
         .map_err(|e| ServerError::Database(format!("failed to create pool: {e}")))?;
     // Pre-migration hook — test binary uses this slot for the env-gated
@@ -144,8 +142,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         .map_err(|e| ServerError::Database(format!("migration failed: {e}")))?;
 
     // Validate the cookie keys env early; the spine `fuz_auth::Keyring`
-    // (constructed below as `spine_keyring`) is the sole keyring on `App`
-    // since Phase 7 Batch 3 retired `crate::auth`.
+    // (constructed below as `spine_keyring`) is the sole keyring on `App`.
     let errors = fuz_auth::Keyring::validate(&config.secret_cookie_keys);
     if !errors.is_empty() {
         return Err(ServerError::Config(format!(
@@ -193,7 +190,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // `default_login_ip_rate_limit` (5 / 15min) and
     // `default_login_account_rate_limit` (10 / 30min). `None` when the
     // env var is unset so the handlers skip the check entirely. Spine
-    // `fuz_auth::RateLimiter` (parking_lot, sync) since Phase 7 Batch 3.
+    // `fuz_auth::RateLimiter` (parking_lot, sync).
     let (login_ip_rate_limiter, login_account_rate_limiter) = if config.enable_login_rate_limit {
         tracing::info!("login rate limiting enabled (5/15min per-IP, 10/30min per-account)");
         (
@@ -255,8 +252,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // type. Empty/unset → empty vec → middleware treats every connection
     // as untrusted (XFF ignored, `client_ip` = TCP peer). Misconfiguration
     // fails fast so the operator sees the error instead of silently
-    // leaving a hole. Sole trusted-proxy state on `App` since Phase 7
-    // Batch 2 retired the legacy `crate::proxy` module.
+    // leaving a hole. Sole trusted-proxy state on `App`.
     let spine_trusted_proxies: Arc<Vec<fuz_http::ParsedProxy>> =
         Arc::new(match config.trusted_proxies.as_deref() {
             None => Vec::new(),
@@ -281,9 +277,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         Arc::new(std::sync::atomic::AtomicBool::new(bootstrap_available));
     let socket_revoker: Arc<dyn fuz_auth::SocketRevoker> =
         Arc::clone(&realtime).into_socket_revoker();
-    // Spine daemon-token state — sole daemon-token state on `App` since
-    // Phase 7 Batch 3 retired `crate::daemon_token`. Init failure
-    // degrades to `None` so the server still serves cookie + bearer auth.
+    // Spine daemon-token state — sole daemon-token state on `App`. Init
+    // failure degrades to `None` so the server still serves cookie + bearer auth.
     let spine_daemon_token: Option<fuz_auth::SharedDaemonTokenState> =
         match fuz_auth::init_daemon_token(Path::new(&config.zzz_dir)).await {
             Ok(state) => {
@@ -508,20 +503,17 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // compat shim, no deprecation period). The 24-spec
     // `ActionRegistry` (2 protocol + 9 auth_adapter + 13
     // zzz-specific) is the sole dispatcher for `/api/rpc` and
-    // `/api/ws` traffic; legacy `crate::ws` was retired in Phase 7
-    // Batch 1 and the framework half of `rpc.rs` (`rpc_handler` /
-    // `rpc_get_handler` / classify) alongside it.
+    // `/api/ws` traffic.
     //
     // Existing call sites (`app.broadcast` /
     // `app.close_sockets_for_*`) are shimmed onto `App.realtime`
-    // via Strategy α (see `handlers/mod.rs`).
+    // (see `handlers/mod.rs`).
     //
     // Middleware: each spine router carries its own
     // `fuz_http::client_ip_middleware` layer over
     // `spine_trusted_proxies`. The outer router (`/api/account/*` REST
-    // + `/api/account/bootstrap`) also reads `Extension<fuz_http::ClientIp>`
-    // since Phase 7 Batch 2 migrated those handlers off the legacy
-    // `crate::proxy::ClientIp`; a separate `fuz_http::client_ip_middleware`
+    // + `/api/account/bootstrap`) also reads `Extension<fuz_http::ClientIp>`;
+    // a separate `fuz_http::client_ip_middleware`
     // layer below covers the outer scope.
     let registry_for_rpc = Arc::clone(app_state.action_registry.get().ok_or_else(|| {
         ServerError::Config("action_registry must be set before mounting /api/rpc".to_owned())
@@ -570,8 +562,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     );
 
     // Spine account REST router: mounts `/status`, `/login`, `/logout`,
-    // `/password` under `/api/account`. Replaces the legacy
-    // `crate::account::*` handlers retired in Phase 7 Batch 4.
+    // `/password` under `/api/account`.
     // `fuz_http::client_ip_middleware` is wrapped on the router so
     // `Extension<fuz_http::ClientIp>` is populated for every account
     // route (rate-limit keys + audit_log.ip).

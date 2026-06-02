@@ -7,7 +7,7 @@
 //! The `testing_zzz_server` binary in `crates/testing_zzz_server/`
 //! ships the same lifecycle with `fuz_testing::TestingArgon2idHasher`
 //! swapped in for ~1-5 ms argon2 during cross-process integration
-//! tests. See `~/dev/grimoire/lore/fuz_app/TODO_TEST_BINARY_PATTERN.md`.
+//! tests.
 
 use std::sync::Arc;
 
