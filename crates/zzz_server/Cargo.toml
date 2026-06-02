@@ -14,7 +14,7 @@ name = "zzzd"
 path = "src/main.rs"
 
 [dependencies]
-fuz_sys = { workspace = true, features = ["logging"] }
+fuz_sys = { workspace = true, features = ["logging", "tls"] }
 fuz_db.workspace = true
 fuz_auth.workspace = true
 fuz_http.workspace = true
@@ -40,7 +40,6 @@ blake3.workspace = true
 base64.workspace = true
 uuid.workspace = true
 argon2.workspace = true
-rand.workspace = true
 notify.workspace = true
 fuz_pty.workspace = true
 reqwest.workspace = true

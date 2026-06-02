@@ -46,6 +46,8 @@ pub fn build_text_progress_chunk(content: &str) -> Value {
 /// Build a `reqwest::Client` with the given default headers, falling back
 /// to a bare client if header construction fails.
 pub fn build_client_with_headers(headers: HeaderMap) -> reqwest::Client {
+    // reqwest uses `rustls-no-provider`; install the `ring` provider first.
+    fuz_sys::tls::ensure_crypto_provider();
     reqwest::Client::builder()
         .default_headers(headers)
         .build()

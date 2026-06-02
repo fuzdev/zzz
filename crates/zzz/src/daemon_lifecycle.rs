@@ -196,6 +196,8 @@ pub fn send_sigterm(pid: u32) -> Result<(), CliError> {
 
 /// Probe `http://localhost:{port}/health`; `true` on a 2xx within timeout.
 pub async fn check_health(port: u16) -> bool {
+    // reqwest uses `rustls-no-provider`; install the `ring` provider first.
+    fuz_sys::tls::ensure_crypto_provider();
     let Ok(client) = reqwest::Client::builder()
         .timeout(Duration::from_millis(HEALTH_REQUEST_TIMEOUT_MS))
         .build()

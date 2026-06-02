@@ -40,9 +40,8 @@ blake3 = "1"
 base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
 argon2 = { version = "0.5", features = ["rand"] }
-rand = "0.10"
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "stream", "json"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "stream", "json"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

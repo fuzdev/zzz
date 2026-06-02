@@ -198,6 +198,8 @@ async fn start_daemon_detached() -> Result<DaemonInfo, CliError> {
 /// credential-less CLI) only warn — the browser opens the workspace via the
 /// `?workspace=` query param.
 async fn open_workspace_best_effort(port: u16, workspace_path: &str) {
+    // reqwest uses `rustls-no-provider`; install the `ring` provider first.
+    fuz_sys::tls::ensure_crypto_provider();
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_millis(dl::HEALTH_REQUEST_TIMEOUT_MS))
         .build()

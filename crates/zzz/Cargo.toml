@@ -21,7 +21,7 @@ serde_json.workspace = true
 # forwarding, RFC-3339 timestamps, and crash-safe atomic writes. The CLI keeps
 # its own `DaemonInfo` (the fuz_app TS v1 wire shape), but routes the OS-level
 # plumbing through fuz_sys rather than re-deriving it.
-fuz_sys.workspace = true
+fuz_sys = { workspace = true, features = ["tls"] }
 
 [dev-dependencies]
 # `io-util` for the in-module health-probe test's mock HTTP responder
