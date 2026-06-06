@@ -3,6 +3,7 @@ import {defineConfig} from 'vite';
 import {sveltekit} from '@sveltejs/kit/vite';
 import {vite_plugin_fuz_css} from '@fuzdev/fuz_css/vite_plugin_fuz_css.js';
 import svelte_docinfo from 'svelte-docinfo/vite.js';
+import {vite_plugin_pkg_json} from '@fuzdev/fuz_ui/vite_plugin_pkg_json.js';
 
 const max_workers = Math.max(1, Math.ceil(availableParallelism() / 2));
 
@@ -50,7 +51,7 @@ const cross_backend_projects = cross_backend_enabled
 	: [];
 
 export default defineConfig(({mode}) => ({
-	plugins: [vite_plugin_fuz_css(), sveltekit(), svelte_docinfo()],
+	plugins: [sveltekit(), svelte_docinfo(), vite_plugin_fuz_css(), vite_plugin_pkg_json()],
 	test: {
 		projects: [
 			{
@@ -82,6 +83,9 @@ export default defineConfig(({mode}) => ({
 	server: {
 		proxy: {
 			'/api': `http://localhost:${process.env.PUBLIC_ZZZ_SERVER_PROXIED_PORT || '4461'}`,
+			// `/health` lives outside `/api`; proxy it to the daemon so the gate's
+			// liveness probe hits zzzd in dev, not the SvelteKit SPA fallback.
+			'/health': `http://localhost:${process.env.PUBLIC_ZZZ_SERVER_PROXIED_PORT || '4461'}`,
 		},
 	},
 }));

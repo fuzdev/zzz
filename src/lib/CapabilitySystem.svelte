@@ -10,7 +10,7 @@
 </script>
 
 <div>
-	<p class="font_family_mono">{library.name}@{library.package_json.version}</p>
+	<p class="font_family_mono">{library.name}@{library.pkg_json.version}</p>
 	<p class="font_family_mono">
 		DEV: {DEV + ''}
 	</p>

@@ -13,6 +13,8 @@
 	import {AuthState, auth_state_context} from '@fuzdev/fuz_app/ui/auth_state.svelte.js';
 	import LoginForm from '@fuzdev/fuz_app/ui/LoginForm.svelte';
 	import BootstrapForm from '@fuzdev/fuz_app/ui/BootstrapForm.svelte';
+	import Alert from '@fuzdev/fuz_ui/Alert.svelte';
+	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 
 	import {parse_url_param_uuid} from '$lib/url_params_helpers.js';
 	import {App} from '$lib/app.svelte.js';
@@ -22,7 +24,7 @@
 	import {logo_zzz} from '$lib/logos.js';
 	import {library_json_from_modules} from '@fuzdev/fuz_util/library_json.js';
 	import {modules} from 'virtual:svelte-docinfo';
-	import package_json from '../../package.json' with {type: 'json'};
+	import pkg_json from 'virtual:pkg.json';
 	import {ProviderJson} from '$lib/provider.svelte.js';
 	import create_zzz_config from '$lib/config.js';
 	import {ModelJson} from '$lib/model.svelte.js';
@@ -30,21 +32,33 @@
 
 	const {children, params} = $props();
 
-	const library_json = library_json_from_modules(package_json, modules);
+	const library_json = library_json_from_modules(pkg_json, modules);
 
 	// Auth state — gate all content behind authentication
 	const auth_state = auth_state_context.set(new AuthState());
 	void auth_state.check_session();
 
+	// Gate liveness probe — `check_session` can't distinguish a downed daemon
+	// from a logged-out 401, so probe `/health` to show a recovery hint instead
+	// of a dead login form. Browser-only.
+	let probing = $state.raw(true);
+	let backend_unreachable = $state.raw(false);
+	if (BROWSER) {
+		void (async () => {
+			try {
+				const response = await fetch('/health');
+				backend_unreachable = !response.ok;
+			} catch {
+				backend_unreachable = true;
+			} finally {
+				probing = false;
+			}
+		})();
+	}
+
 	// TODO should load granularly when needed (/docs, /about), but currently the capabilities page uses the package json data, how better to get that? generate a more minimal metadata file?
 	library_context.set(new Library(library_json));
-	site_context.set(
-		new SiteState({
-			icon: logo_zzz,
-			glyph: '💤',
-			repo_url: 'https://github.com/fuzdev/zzz',
-		}),
-	);
+	site_context.set(new SiteState({icon: logo_zzz, pkg_json}));
 
 	// Create the frontend's App only after auth is verified
 	let app: App | undefined = $state.raw();
@@ -130,13 +144,25 @@
 	{/if}
 {:else}
 	<div class="gate">
-		{#if auth_state.verifying}
+		{#if auth_state.verifying || probing}
 			<p class="text_50">verifying session...</p>
+		{:else if backend_unreachable}
+			<div class="width_atmost_sm">
+				<Alert status="error">
+					<p class="mt_0 mb_sm"><strong>The zzz backend isn't responding.</strong></p>
+					<p class="mb_sm">Start it, then reload:</p>
+					<p class="row gap_sm mb_0">
+						<code>cargo xtask dev</code>
+						<CopyToClipboard text="cargo xtask dev" />
+					</p>
+				</Alert>
+			</div>
 		{:else if auth_state.needs_bootstrap}
 			<h1>zzz</h1>
 			<p>No accounts exist yet. Create the first admin account.</p>
 			<p>
 				Get the bootstrap token: <code>cat .zzz/bootstrap_token</code>
+				<CopyToClipboard text="cat .zzz/bootstrap_token" />
 			</p>
 			<BootstrapForm />
 		{:else}
