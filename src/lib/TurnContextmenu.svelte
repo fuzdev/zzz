@@ -5,6 +5,7 @@
 	import ContextmenuSubmenu from '@fuzdev/fuz_ui/ContextmenuSubmenu.svelte';
 	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
+	import DialogContent from '@fuzdev/fuz_ui/DialogContent.svelte';
 
 	import type {Turn} from './turn.svelte.js';
 	import {GLYPH_EDIT, GLYPH_TURN} from './glyphs.js';
@@ -68,9 +69,9 @@
 
 {#if show_editor}
 	<Dialog onclose={() => (show_editor = false)}>
-		<div class="pane p_md width_atmost_md mx_auto">
+		<DialogContent>
 			<h2 class="mt_0 mb_sm"><Glyph glyph={GLYPH_TURN} /> edit turn</h2>
 			<TurnView {turn} />
-		</div>
+		</DialogContent>
 	</Dialog>
 {/if}

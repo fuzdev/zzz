@@ -2,6 +2,7 @@
 	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
 	import type {Uuid} from '@fuzdev/fuz_util/id.js';
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
+	import DialogContent from '@fuzdev/fuz_ui/DialogContent.svelte';
 	import type {ComponentProps} from 'svelte';
 
 	import Picker from './Picker.svelte';
@@ -27,7 +28,7 @@
 			show = false;
 		}}
 	>
-		<div class="pane p_lg width_atmost_md mx_auto">
+		<DialogContent>
 			<Picker
 				{...rest}
 				onpick={(item) => {
@@ -38,6 +39,6 @@
 					}
 				}}
 			/>
-		</div>
+		</DialogContent>
 	</Dialog>
 {/if}
