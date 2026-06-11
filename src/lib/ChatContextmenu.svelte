@@ -7,13 +7,7 @@
 
 	import type {Chat} from './chat.svelte.js';
 	import {frontend_context} from './frontend.svelte.js';
-	import {
-		icon_add,
-		icon_chat,
-		icon_delete,
-		icon_remove,
-		icon_view,
-	} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_add, icon_chat, icon_delete, icon_remove, icon_view} from '@fuzdev/fuz_ui/icons.js';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';

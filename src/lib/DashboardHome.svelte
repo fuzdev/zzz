@@ -126,7 +126,11 @@
 				<ul class="unstyled">
 					{#each app.models.ordered_by_name as model (model.name)}
 						<li>
-							<ModelLink {model} icon="logo" class="menuitem row justify-content:start gap_xs py_xs" />
+							<ModelLink
+								{model}
+								icon="logo"
+								class="menuitem row justify-content:start gap_xs py_xs"
+							/>
 						</li>
 					{:else}
 						<p>no models available yet</p>
