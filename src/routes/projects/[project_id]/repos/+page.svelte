@@ -5,8 +5,8 @@
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import ReposSidebar from '$routes/projects/ReposSidebar.svelte';
-	import {GLYPH_ADD} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import {icon_add} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import RepoTableRow from '$routes/projects/RepoTableRow.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 
@@ -38,7 +38,7 @@
 								class="color_a"
 								onclick={() => project_viewmodel.create_new_repo()}
 							>
-								<Glyph glyph={GLYPH_ADD} />&nbsp; add your first repo
+								<Svg data={icon_add} />&nbsp; add your first repo
 							</button>
 						</p>
 					</div>
@@ -62,7 +62,7 @@
 
 				<div>
 					<button type="button" class="color_a" onclick={() => project_viewmodel.create_new_repo()}>
-						<Glyph glyph={GLYPH_ADD} />&nbsp; new repo
+						<Svg data={icon_add} />&nbsp; new repo
 					</button>
 				</div>
 			</div>

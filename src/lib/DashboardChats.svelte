@@ -6,9 +6,9 @@
 	import ChatList from './ChatList.svelte';
 	import ChatView from './ChatView.svelte';
 	import ChatContextmenu from './ChatContextmenu.svelte';
-	import {GLYPH_ADD, GLYPH_SORT} from './glyphs.js';
+	import {icon_add, icon_sort} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {frontend_context} from './frontend.svelte.js';
-	import Glyph from './Glyph.svelte';
 	import ChatsContextmenu from './ChatsContextmenu.svelte';
 	import TutorialForDatabase from './TutorialForDatabase.svelte';
 	import TutorialForChats from './TutorialForChats.svelte';
@@ -31,7 +31,7 @@
 					type="button"
 					onclick={() => chats.add(undefined, true)}
 				>
-					<Glyph glyph={GLYPH_ADD} />&nbsp; new chat
+					<Svg data={icon_add} />&nbsp; new chat
 				</button>
 				{#if chats.items.size > 1}
 					<button
@@ -41,7 +41,7 @@
 						title="toggle sort controls"
 						onclick={() => chats.toggle_sort_controls()}
 					>
-						<Glyph glyph={GLYPH_SORT} />
+						<Svg data={icon_sort} />
 					</button>
 				{/if}
 			</div>

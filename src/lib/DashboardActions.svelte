@@ -2,8 +2,8 @@
 	import ActionList from './ActionList.svelte';
 	import ActionDetail from './ActionDetail.svelte';
 	import DashboardHeader from './DashboardHeader.svelte';
-	import Glyph from './Glyph.svelte';
-	import {GLYPH_LOG} from './glyphs.js';
+	import {icon_log} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import type {Action} from './action.svelte.js';
 	import {app_context} from './app.svelte.js';
 	import TimeWidget from './TimeWidget.svelte';
@@ -21,7 +21,7 @@
 <div class="column p_lg height:100%">
 	<DashboardHeader>
 		{#snippet header()}
-			<h1><Glyph glyph={GLYPH_LOG} /> system actions</h1>
+			<h1><Svg data={icon_log} /> system actions</h1>
 		{/snippet}
 		<TimeWidget value={app.time.now} />
 	</DashboardHeader>

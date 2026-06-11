@@ -7,8 +7,8 @@
 	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
 
 	import type {Model} from './model.svelte.js';
-	import {GLYPH_MODEL, GLYPH_CHAT} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import {icon_chat, icon_model} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 
 	const {
@@ -25,24 +25,24 @@
 <!-- TODO maybe extract ModelContextmenuEntries that can be used elsewhere like the ModelLink as an action? -->
 {#snippet entries()}
 	<ContextmenuSubmenu>
-		{#snippet icon()}<Glyph glyph={GLYPH_MODEL} />{/snippet}
+		{#snippet icon()}<Svg data={icon_model} />{/snippet}
 		model
 
 		{#snippet menu()}
 			<ContextmenuLinkEntry href="/models/{model.name}">
-				{#snippet icon()}<Glyph glyph={GLYPH_MODEL} />{/snippet}
+				{#snippet icon()}<Svg data={icon_model} />{/snippet}
 			</ContextmenuLinkEntry>
 
 			<ContextmenuEntryCopyToClipboard content={model.name} label="copy name" />
 
 			<ContextmenuEntry run={() => model.app.chats.add(undefined, true).add_thread(model)}>
-				{#snippet icon()}<Glyph glyph={GLYPH_CHAT} />{/snippet}
+				{#snippet icon()}<Svg data={icon_chat} />{/snippet}
 				<span>create new chat</span>
 			</ContextmenuEntry>
 
 			<!-- TODO probably want an "edit model" form, this is confusing as-is -->
 			<!-- <ContextmenuSubmenu>
-				{#snippet icon()}<Glyph glyph={GLYPH_PROVIDER} />{/snippet}
+				{#snippet icon()}<Svg data={icon_provider} />{/snippet}
 				set provider
 
 				{#snippet menu()}
@@ -53,7 +53,7 @@
 							}}
 						>
 							{#snippet icon()}
-								{#if model.provider_name === provider_name}<Glyph glyph={GLYPH_CHECKMARK} />{/if}
+								{#if model.provider_name === provider_name}<Svg data={icon_checkmark} />{/if}
 							{/snippet}
 							<span>{provider_name}</span>
 						</ContextmenuEntry>

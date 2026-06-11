@@ -8,10 +8,16 @@
 	import {Part} from './part.svelte.js';
 	import type {Prompt} from './prompt.svelte.js';
 	import {frontend_context} from './frontend.svelte.js';
-	import {GLYPH_PART, GLYPH_DELETE, GLYPH_FILE, GLYPH_PROMPT, GLYPH_REMOVE} from './glyphs.js';
+	import {
+		icon_delete,
+		icon_file,
+		icon_part,
+		icon_prompt,
+		icon_remove,
+	} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		prompt,
@@ -30,7 +36,7 @@
 
 {#snippet entries()}
 	<ContextmenuSubmenu>
-		{#snippet icon()}<Glyph glyph={GLYPH_PROMPT} />{/snippet}
+		{#snippet icon()}<Svg data={icon_prompt} />{/snippet}
 		prompt
 		{#snippet menu()}
 			<!-- TODO @many maybe a copy submenu on this item with copy id, name, etc, leverage generic cells -->
@@ -50,7 +56,7 @@
 					);
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_PART} />{/snippet}
+				{#snippet icon()}<Svg data={icon_part} />{/snippet}
 				<span>add text part</span>
 			</ContextmenuEntry>
 			<ContextmenuEntry
@@ -63,12 +69,12 @@
 					show_diskfile_picker = true;
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_FILE} />{/snippet}
+				{#snippet icon()}<Svg data={icon_file} />{/snippet}
 				<span>add file part</span>
 			</ContextmenuEntry>
 			{#if prompt.parts.length}
 				<ContextmenuEntry run={() => prompt.remove_all_parts()}>
-					{#snippet icon()}<Glyph glyph={GLYPH_REMOVE} />{/snippet}
+					{#snippet icon()}<Svg data={icon_remove} />{/snippet}
 					<span>remove all parts</span>
 				</ContextmenuEntry>
 			{/if}
@@ -78,7 +84,7 @@
 					// prompt.rename() after part name picker
 				}}
 			>
-				{#snippet icon()}<Glyph text={GLYPH_EDIT} />{/snippet}
+				{#snippet icon()}<Svg data={icon_edit} />{/snippet}
 				<span>Rename prompt</span>
 			</ContextmenuEntry> -->
 			<ContextmenuEntry
@@ -91,7 +97,7 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
+				{#snippet icon()}<Svg data={icon_delete} />{/snippet}
 				<span>delete prompt</span>
 			</ContextmenuEntry>
 		{/snippet}

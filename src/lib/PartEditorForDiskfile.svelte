@@ -10,8 +10,9 @@
 	import {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
-	import Glyph from './Glyph.svelte';
-	import {GLYPH_FILE, GLYPH_PLACEHOLDER} from './glyphs.js';
+	import {icon_file} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import {GLYPH_PLACEHOLDER} from './glyphs.js';
 
 	const {
 		diskfile_part,
@@ -84,7 +85,7 @@
 			show_file_picker = true;
 		}}
 	>
-		<Glyph glyph={GLYPH_FILE} />
+		<Svg data={icon_file} />
 		<small class="ml_xs2">pick file</small>
 	</button>
 </div>

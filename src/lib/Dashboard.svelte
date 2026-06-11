@@ -7,16 +7,16 @@
 	import {is_editable, swallow} from '@fuzdev/fuz_util/dom.js';
 	import {slide} from 'svelte/transition';
 
+	import {
+		icon_arrow_left,
+		icon_arrow_right,
+		icon_desk,
+		icon_project,
+		icon_tab,
+	} from '@fuzdev/fuz_ui/icons.js';
+
 	import {logo_zzz} from './logos.js';
 	import NavLink from './NavLink.svelte';
-	import Glyph from './Glyph.svelte';
-	import {
-		GLYPH_ARROW_LEFT,
-		GLYPH_ARROW_RIGHT,
-		GLYPH_DESK,
-		GLYPH_PROJECT,
-		GLYPH_TAB,
-	} from './glyphs.js';
 	import {frontend_context} from './frontend.svelte.js';
 	import {main_nav_items_default, to_nav_link_href} from './nav.js';
 	import {DESK_WIDTH} from './DeskMenu.svelte';
@@ -59,7 +59,7 @@
 			// Add tabs to main group
 			const main_group = nav_items.find((l) => l.group === 'main');
 			if (main_group) {
-				main_group.items.unshift({label: 'tabs', href: resolve('/tabs'), icon: GLYPH_TAB});
+				main_group.items.unshift({label: 'tabs', href: resolve('/tabs'), icon: icon_tab});
 			}
 
 			// Add projects to main group
@@ -68,7 +68,7 @@
 				main_section.items.push({
 					label: 'projects',
 					href: resolve('/projects'),
-					icon: GLYPH_PROJECT,
+					icon: icon_project,
 				});
 			}
 		}
@@ -163,18 +163,14 @@
 						<div transition:slide>
 							<NavLink href={to_nav_link_href(app, link.label, link.href)}>
 								{#snippet children(selected)}
-									{#if typeof link.icon === 'string'}
-										<Glyph glyph={link.icon} class="icon-xs" /> {link.label}
-									{:else}
-										<span class="icon-xs">
-											<Svg
-												data={link.icon}
-												fill={selected ? 'var(--link_color)' : 'var(--text_90)'}
-												size="var(--icon_size_xs)"
-											/>
-										</span>
-										{link.label}
-									{/if}
+									<span class="icon-xs">
+										<Svg
+											data={link.icon}
+											fill={selected ? 'var(--link_color)' : 'var(--text_90)'}
+											size="var(--icon_size_xs)"
+										/>
+									</span>
+									{link.label}
 								{/snippet}
 							</NavLink>
 						</div>
@@ -192,7 +188,7 @@
 		title={sidebar_button_title}
 		onclick={() => app.ui.toggle_sidebar()}
 	>
-		<Glyph glyph={app.ui.show_sidebar ? GLYPH_ARROW_LEFT : GLYPH_ARROW_RIGHT} />
+		<Svg data={app.ui.show_sidebar ? icon_arrow_left : icon_arrow_right} />
 	</button>
 
 	<!-- desk menu button -->
@@ -204,7 +200,7 @@
 			title="desk menu — switch spaces [~]"
 			onclick={() => app.ui.toggle_desk_menu()}
 		>
-			<Glyph glyph={GLYPH_DESK} />
+			<Svg data={icon_desk} />
 		</button>
 	{/if}
 </div>

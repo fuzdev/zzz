@@ -8,8 +8,8 @@
 	import type {Diskfile} from './diskfile.svelte.js';
 	import ClearRestoreButton from './ClearRestoreButton.svelte';
 	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
-	import {GLYPH_PASTE, GLYPH_DELETE} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import {icon_delete, icon_paste} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const {
 		diskfile,
@@ -37,7 +37,7 @@
 			}}
 			class="plain icon-button font_size_lg"
 		>
-			<Glyph glyph={GLYPH_PASTE} />
+			<Svg data={icon_paste} />
 		</PasteFromClipboard>
 
 		<ClearRestoreButton bind:value={editor_state.current_content} />
@@ -49,7 +49,7 @@
 		class="plain icon-button"
 		title="delete file"
 	>
-		<Glyph glyph={GLYPH_DELETE} />
+		<Svg data={icon_delete} />
 	</ConfirmButton>
 </div>
 

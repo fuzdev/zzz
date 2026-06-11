@@ -7,8 +7,13 @@
 	import {frontend_context} from './frontend.svelte.js';
 	import type {Diskfile} from './diskfile.svelte.js';
 	import DiskfileListitem from './DiskfileListitem.svelte';
-	import Glyph from './Glyph.svelte';
-	import {GLYPH_DIRECTORY, GLYPH_CREATE_FILE, GLYPH_CREATE_FOLDER, GLYPH_SORT} from './glyphs.js';
+	import {
+		icon_create_directory,
+		icon_create_file,
+		icon_directory,
+		icon_sort,
+	} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import SortableList from './SortableList.svelte';
 	import {sort_by_text, sort_by_numeric} from './sortable.svelte.js';
 
@@ -72,7 +77,7 @@
 		<div class="row height-input-height"><PendingAnimation /></div>
 	{:else}
 		<div class="row height-input-height justify-content:space-between px_xs">
-			<small class="ellipsis"><Glyph glyph={GLYPH_DIRECTORY} /> {zzz_dir}</small>
+			<small class="ellipsis"><Svg data={icon_directory} /> {zzz_dir}</small>
 			<div class="display:flex gap_xs2">
 				<PendingButton
 					pending={TODO_create_file_pending}
@@ -80,7 +85,7 @@
 					title="create file in {zzz_dir}"
 					onclick={create_file}
 				>
-					<Glyph glyph={GLYPH_CREATE_FILE} />
+					<Svg data={icon_create_file} />
 				</PendingButton>
 				<PendingButton
 					pending={TODO_create_folder_pending}
@@ -88,7 +93,7 @@
 					title="create folder in {zzz_dir}"
 					onclick={create_folder}
 				>
-					<Glyph glyph={GLYPH_CREATE_FOLDER} />
+					<Svg data={icon_create_directory} />
 				</PendingButton>
 				{#if app.diskfiles.items.size > 1}
 					<button
@@ -98,7 +103,7 @@
 						title="toggle sort controls"
 						onclick={() => editor.toggle_sort_controls()}
 					>
-						<Glyph glyph={GLYPH_SORT} />
+						<Svg data={icon_sort} />
 					</button>
 				{/if}
 			</div>

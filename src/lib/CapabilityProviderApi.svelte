@@ -3,9 +3,9 @@
 	import {onMount} from 'svelte';
 
 	import {frontend_context} from './frontend.svelte.js';
-	import Glyph from './Glyph.svelte';
 	import ProviderLink from './ProviderLink.svelte';
-	import {GLYPH_PROVIDER} from './glyphs.js';
+	import {icon_provider} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 	import ExternalLink from './ExternalLink.svelte';
 
@@ -167,7 +167,7 @@
 					<div>
 						<ProviderLink {provider}
 							><span class="white-space:nowrap"
-								><Glyph glyph={GLYPH_PROVIDER} />
+								><Svg data={icon_provider} />
 								{provider.title}</span
 							> provider</ProviderLink
 						>

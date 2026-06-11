@@ -3,8 +3,9 @@
 
 	import type {PartUnion} from './part.svelte.js';
 	import XmlAttributeEditor from './XmlAttributeEditor.svelte';
-	import {GLYPH_ADD, GLYPH_PLACEHOLDER} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import {icon_add} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import {GLYPH_PLACEHOLDER} from './glyphs.js';
 
 	const {
 		part,
@@ -50,7 +51,7 @@
 			title="add xml attribute"
 			onclick={() => part.add_attribute()}
 		>
-			<Glyph glyph={GLYPH_ADD} />
+			<Svg data={icon_add} />
 		</button>
 	</div>
 

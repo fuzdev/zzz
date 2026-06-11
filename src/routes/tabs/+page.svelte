@@ -1,6 +1,6 @@
 <script lang="ts">
-	import {GLYPH_TAB} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import {icon_tab} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {Browser} from '$routes/tabs/browser.svelte.js';
 	import {sample_tabs} from '$routes/tabs/sample_tabs.js';
 	import BrowserView from '$routes/tabs/BrowserView.svelte';
@@ -27,7 +27,7 @@
 {/if}
 
 {#snippet content()}
-	<h1><Glyph glyph={GLYPH_TAB} /> tabs</h1>
+	<h1><Svg data={icon_tab} /> tabs</h1>
 
 	<section class="width_atmost_md">
 		{#if browser.browserified}

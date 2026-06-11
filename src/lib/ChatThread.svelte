@@ -11,8 +11,9 @@
 	import ThreadContextmenu from './ThreadContextmenu.svelte';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 	import ContentEditor from './ContentEditor.svelte';
-	import {GLYPH_ERROR, GLYPH_PLACEHOLDER, GLYPH_SEND, GLYPH_STOP} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import {icon_error, icon_send, icon_stop} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import {GLYPH_PLACEHOLDER} from './glyphs.js';
 
 	// TODO no longer uses `Chat`, maybe rename to `ThreadView` or similar?
 
@@ -85,11 +86,11 @@
 					<small
 						><ProviderLink
 							{provider}
-							icon="svg"
+							icon="logo"
 							icon_props={{size: 'var(--font_size_sm)'}}
-							show_name
+							label="name"
 						/>{#if provider_error}<span class="color_c_50 ml_sm"
-								><Glyph glyph={GLYPH_ERROR} /> {provider_error}</span
+								><Svg data={icon_error} /> {provider_error}</span
 							>{/if}</small
 					>
 				</header>
@@ -118,7 +119,7 @@
 							onclick={() => thread.cancel_pending()}
 							title="stop generating"
 						>
-							<Glyph glyph={GLYPH_STOP} />
+							<Svg data={icon_stop} />
 						</button>
 					{:else}
 						<PendingButton
@@ -130,7 +131,7 @@
 								? `send ${input_token_count} tokens to ${thread.model_name}`
 								: (provider_error ?? undefined)}
 						>
-							<Glyph glyph={GLYPH_SEND} />
+							<Svg data={icon_send} />
 						</PendingButton>
 					{/if}
 				</ContentEditor>

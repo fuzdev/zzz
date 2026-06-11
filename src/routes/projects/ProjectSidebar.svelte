@@ -5,8 +5,8 @@
 
 	import NavLink from '$lib/NavLink.svelte';
 	import {projects_context} from '$routes/projects/projects.svelte.js';
-	import {GLYPH_ADD} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import {icon_add} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const projects = projects_context.get();
 </script>
@@ -21,7 +21,7 @@
 				void goto(resolve(`/projects/${project.id}`));
 			}}
 		>
-			<Glyph glyph={GLYPH_ADD} />&nbsp; new project
+			<Svg data={icon_add} />&nbsp; new project
 		</button>
 	</div>
 

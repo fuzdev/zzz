@@ -3,8 +3,8 @@
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
 	import type {XmlAttributeWithDefaults} from './xml.js';
-	import {GLYPH_REMOVE} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import {icon_remove} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const {
 		attribute,
@@ -41,6 +41,6 @@
 		title="remove attribute {attribute.key || ''}"
 		class="plain sm"
 	>
-		<Glyph glyph={GLYPH_REMOVE} />
+		<Svg data={icon_remove} />
 	</ConfirmButton>
 </div>

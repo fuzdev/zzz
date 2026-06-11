@@ -2,8 +2,8 @@
 	import {resolve} from '$app/paths';
 
 	import {projects_context} from '$routes/projects/projects.svelte.js';
-	import Glyph from '$lib/Glyph.svelte';
-	import {GLYPH_ADD} from '$lib/glyphs.js';
+	import {icon_add} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const projects = projects_context.get();
 </script>
@@ -54,7 +54,7 @@
 
 	<div class="display:flex justify_content_between mt_lg">
 		<button type="button" class="color_a" onclick={() => projects.create_new_project()}>
-			<Glyph glyph={GLYPH_ADD} />&nbsp; new project
+			<Svg data={icon_add} />&nbsp; new project
 		</button>
 	</div>
 </section>

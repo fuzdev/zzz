@@ -60,11 +60,11 @@
 	{rel}
 	class:color_i_5={true}
 	>{#if children}{@render children()}{:else}{href}{/if}<ExternalLinkIcon
-		>{#snippet children(text_icon)}{#if icon}{@render icon(known_logo)}{:else if known_logo}<Svg
+		>{#snippet children(external_icon)}{#if icon}{@render icon(known_logo)}{:else if known_logo}<Svg
 					data={known_logo}
 					size="var(--font_size_xs)"
 					fill="var(--color_i_50)"
 					inline
-				/>{:else}{text_icon}{/if}{/snippet}</ExternalLinkIcon
+				/>{:else}<Svg data={external_icon} inline />{/if}{/snippet}</ExternalLinkIcon
 	></a
 >

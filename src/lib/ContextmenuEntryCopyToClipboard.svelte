@@ -4,9 +4,9 @@
 	import type {Thunk} from '@fuzdev/fuz_util/function.js';
 	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
 
-	import {GLYPH_COPY} from './glyphs.js';
+	import {icon_copy} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {to_preview} from './helpers.js';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		content,
@@ -43,7 +43,7 @@
 </script>
 
 <ContextmenuEntry run={copy_to_clipboard} {...rest}>
-	{#snippet icon()}<Glyph glyph={GLYPH_COPY} />{/snippet}
+	{#snippet icon()}<Svg data={icon_copy} />{/snippet}
 	{#if children}
 		{@render children()}
 	{:else}

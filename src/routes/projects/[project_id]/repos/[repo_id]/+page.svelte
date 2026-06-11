@@ -7,8 +7,8 @@
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import ReposSidebar from '$routes/projects/ReposSidebar.svelte';
-	import {GLYPH_DELETE, GLYPH_ADD} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import {icon_add, icon_delete} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 	import RepoCheckoutItem from '$routes/projects/RepoCheckoutItem.svelte';
 
@@ -97,7 +97,7 @@
 									class="color_b"
 									onclick={() => repos_viewmodel.add_checkout_dir()}
 								>
-									<Glyph glyph={GLYPH_ADD} />&nbsp; add checkout
+									<Svg data={icon_add} />&nbsp; add checkout
 								</button>
 							</div>
 						</div>
@@ -115,7 +115,7 @@
 
 							{#if repos_viewmodel.repo}
 								<button type="button" class="color_c" onclick={() => repos_viewmodel.remove_repo()}>
-									<Glyph glyph={GLYPH_DELETE} />&nbsp; delete repo
+									<Svg data={icon_delete} />&nbsp; delete repo
 								</button>
 							{/if}
 						</div>

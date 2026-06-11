@@ -4,10 +4,10 @@
 
 <script lang="ts">
 	import {frontend_context} from './frontend.svelte.js';
-	import Glyph from './Glyph.svelte';
 	import EditableText from './EditableText.svelte';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
-	import {GLYPH_ADD, GLYPH_DELETE, GLYPH_PIN, GLYPH_SPACE} from './glyphs.js';
+	import {icon_add, icon_delete, icon_pin, icon_space} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {SCRATCHPAD_NAME} from './spaces.svelte.js';
 	import {click_outside} from './click_outside.svelte.js';
 
@@ -23,7 +23,7 @@
 			<section class="box mb_xl3">
 				<div class="width:100% row gap_sm mb_xl">
 					<h2 class="mt_0 flex:1">
-						<Glyph glyph={GLYPH_SPACE} /> spaces
+						<Svg data={icon_space} /> spaces
 					</h2>
 					<button
 						type="button"
@@ -32,7 +32,7 @@
 						title={app.ui.desk_pinned ? 'unpin desk' : 'pin desk'}
 						onclick={() => app.ui.toggle_desk_pinned()}
 					>
-						<Glyph glyph={GLYPH_PIN} />
+						<Svg data={icon_pin} />
 					</button>
 				</div>
 				<ul class="unstyled width:100%">
@@ -58,7 +58,7 @@
 									class="icon-button compact plain deselectable"
 									title="delete space"
 								>
-									<Glyph glyph={GLYPH_DELETE} />
+									<Svg data={icon_delete} />
 								</ConfirmButton>
 							{/if}
 						</li>
@@ -73,7 +73,7 @@
 						app.spaces.activate(space.id);
 					}}
 				>
-					<Glyph glyph={GLYPH_ADD} /> new space
+					<Svg data={icon_add} /> new space
 				</button>
 			</section>
 

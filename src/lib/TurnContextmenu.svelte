@@ -8,10 +8,10 @@
 	import DialogContent from '@fuzdev/fuz_ui/DialogContent.svelte';
 
 	import type {Turn} from './turn.svelte.js';
-	import {GLYPH_EDIT, GLYPH_TURN} from './glyphs.js';
+	import {icon_edit, icon_turn} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import TurnView from './TurnView.svelte';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		turn,
@@ -28,7 +28,7 @@
 
 {#snippet entries()}
 	<ContextmenuSubmenu>
-		{#snippet icon()}<Glyph glyph={GLYPH_TURN} />{/snippet}
+		{#snippet icon()}<Svg data={icon_turn} />{/snippet}
 		turn
 		{#snippet menu()}
 			{#if turn.content}
@@ -44,7 +44,7 @@
 					show_editor = true;
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_EDIT} />{/snippet}
+				{#snippet icon()}<Svg data={icon_edit} />{/snippet}
 				<span>edit content</span>
 			</ContextmenuEntry>
 
@@ -70,7 +70,7 @@
 {#if show_editor}
 	<Dialog onclose={() => (show_editor = false)}>
 		<DialogContent>
-			<h2 class="mt_0 mb_sm"><Glyph glyph={GLYPH_TURN} /> edit turn</h2>
+			<h2 class="mt_0 mb_sm"><Svg data={icon_turn} /> edit turn</h2>
 			<TurnView {turn} />
 		</DialogContent>
 	</Dialog>

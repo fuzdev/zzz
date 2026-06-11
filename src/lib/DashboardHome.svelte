@@ -2,12 +2,12 @@
 	import {resolve} from '$app/paths';
 
 	import {frontend_context} from './frontend.svelte.js';
-	import Glyph from './Glyph.svelte';
 	import ProviderLink from './ProviderLink.svelte';
 	import PromptList from './PromptList.svelte';
 	import ChatList from './ChatList.svelte';
 	import ModelLink from './ModelLink.svelte';
-	import {GLYPH_ADD, GLYPH_PROVIDER, GLYPH_MODEL} from './glyphs.js';
+	import {icon_add, icon_model, icon_provider} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {to_nav_link_href} from './nav.js';
 
 	const app = frontend_context.get();
@@ -34,7 +34,7 @@
 						void app.chats.navigate_to(chat.id);
 					}}
 				>
-					<Glyph glyph={GLYPH_ADD} />
+					<Svg data={icon_add} />
 				</button>
 			</h3>
 			{#if app.chats.ordered_items.length}
@@ -73,7 +73,7 @@
 						void app.prompts.navigate_to(prompt.id);
 					}}
 				>
-					<Glyph glyph={GLYPH_ADD} />
+					<Svg data={icon_add} />
 				</button>
 			</h3>
 			{#if app.prompts.ordered_items.length}
@@ -95,7 +95,7 @@
 		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
 			<div class="mb_lg">
 				<a href={resolve('/providers')} class="text_80"
-					><Glyph glyph={GLYPH_PROVIDER} />
+					><Svg data={icon_provider} />
 					<h3 class="display:inline my_0">providers</h3></a
 				>
 			</div>
@@ -105,7 +105,7 @@
 						<li>
 							<ProviderLink
 								{provider}
-								icon="svg"
+								icon="logo"
 								class="menuitem row justify-content:start gap_xs py_xs"
 							/>
 						</li>
@@ -118,7 +118,7 @@
 		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
 			<div class="mb_lg">
 				<a href={resolve('/models')} class="text_80"
-					><Glyph glyph={GLYPH_MODEL} />
+					><Svg data={icon_model} />
 					<h3 class="display:inline my_0">models</h3></a
 				>
 			</div>
@@ -126,7 +126,7 @@
 				<ul class="unstyled">
 					{#each app.models.ordered_by_name as model (model.name)}
 						<li>
-							<ModelLink {model} icon class="menuitem row justify-content:start gap_xs py_xs" />
+							<ModelLink {model} icon="logo" class="menuitem row justify-content:start gap_xs py_xs" />
 						</li>
 					{:else}
 						<p>no models available yet</p>

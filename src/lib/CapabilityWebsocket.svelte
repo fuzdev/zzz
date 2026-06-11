@@ -9,14 +9,9 @@
 
 	import {frontend_context} from './frontend.svelte.js';
 	import type {Socket} from './socket.svelte.js';
-	import Glyph from './Glyph.svelte';
-	import {
-		GLYPH_CONNECT,
-		GLYPH_CANCEL,
-		GLYPH_DISCONNECT,
-		GLYPH_RESET,
-		GLYPH_PLACEHOLDER,
-	} from './glyphs.js';
+	import {icon_cancel, icon_connect, icon_disconnect, icon_reset} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import {GLYPH_PLACEHOLDER} from './glyphs.js';
 	import {format_ms_to_readable, format_timestamp} from './time_helpers.js';
 	import {
 		DEFAULT_HEARTBEAT_INTERVAL,
@@ -128,7 +123,7 @@
 						}}
 					>
 						<div class={has_undo_state ? 'transform:scaleX(-1)' : ''}>
-							<Glyph glyph={GLYPH_RESET} />
+							<Svg data={icon_reset} />
 						</div>
 					</button>
 				</div>
@@ -157,10 +152,10 @@
 							}
 						}}
 					>
-						<Glyph
-							glyph={socket.connected && socket.url === socket.url_input
-								? GLYPH_DISCONNECT
-								: GLYPH_CONNECT}
+						<Svg
+							data={socket.connected && socket.url === socket.url_input
+								? icon_disconnect
+								: icon_connect}
 							size="var(--font_size_xl)"
 						/>
 						<span class="font_size_lg font-weight:400 ml_md">
@@ -216,7 +211,7 @@
 								socket.cancel_reconnect();
 							}}
 						>
-							<Glyph glyph={GLYPH_CANCEL} />
+							<Svg data={icon_cancel} />
 						</button>
 						<div
 							class="bg_d_5 width:100% border_radius_xs position:relative overflow:hidden font-weight:600"
@@ -342,7 +337,7 @@
 								popover.hide();
 							}}
 						>
-							<Glyph glyph={GLYPH_RESET} />
+							<Svg data={icon_reset} />
 						</button>
 					{/snippet}
 				</ConfirmButton>

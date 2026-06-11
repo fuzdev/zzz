@@ -1,8 +1,8 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {GLYPH_DELETE} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import {icon_delete} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import type {RepoCheckout} from '$routes/projects/projects_schema.js';
 
 	const {
@@ -58,7 +58,7 @@
 						type="button"
 						class="icon-button plain font_size_xs ml_xs"
 						title="Remove tag"
-						onclick={() => on_remove_tag(index, tag_index)}><Glyph glyph={GLYPH_DELETE} /></button
+						onclick={() => on_remove_tag(index, tag_index)}><Svg data={icon_delete} /></button
 					>
 				</span>
 			{/each}
@@ -89,7 +89,7 @@
 
 	<div class="display:flex justify-content:end">
 		<button type="button" class="color_c" onclick={() => on_remove(index)}>
-			<Glyph glyph={GLYPH_DELETE} />&nbsp; delete checkout
+			<Svg data={icon_delete} />&nbsp; delete checkout
 		</button>
 	</div>
 </div>

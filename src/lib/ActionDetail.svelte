@@ -1,8 +1,9 @@
 <script lang="ts">
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 
-	import Glyph from './Glyph.svelte';
-	import {get_glyph_for_action_kind} from './glyphs.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+
+	import {get_icon_for_action_kind} from './action_icons.js';
 	import type {Action} from './action.svelte.js';
 
 	const {
@@ -16,7 +17,7 @@
 
 <div class="mb_md">
 	<h3 class="mt_md">
-		<Glyph glyph={get_glyph_for_action_kind(action.kind)} />
+		<Svg data={get_icon_for_action_kind(action.kind)} />
 		{action.method}
 	</h3>
 	<table>

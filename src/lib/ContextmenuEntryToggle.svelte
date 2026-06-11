@@ -4,8 +4,8 @@
 	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
 	import {DEV} from 'esm-env';
 
-	import {GLYPH_CHECKMARK} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import {icon_checkmark} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	let {
 		enabled = $bindable(),
@@ -41,6 +41,5 @@
 {/snippet}
 
 {#snippet icon_default()}
-	<span class:dormant={enabled} class:font_size_xs={enabled}><Glyph glyph={GLYPH_CHECKMARK} /></span
-	>
+	<span class:dormant={enabled} class:font_size_xs={enabled}><Svg data={icon_checkmark} /></span>
 {/snippet}

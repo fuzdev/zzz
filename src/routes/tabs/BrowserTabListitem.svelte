@@ -1,8 +1,8 @@
 <script lang="ts">
 	import {swallow} from '@fuzdev/fuz_util/dom.js';
 
-	import {GLYPH_REMOVE} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import {icon_remove, icon_tab} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import type {BrowserTab} from '$routes/tabs/browser_tab.svelte.js';
 
 	const {
@@ -36,7 +36,7 @@
 		aria-pressed={tab.selected}
 	>
 		<div class="ellipsis font-weight:400 flex:1">
-			<Glyph glyph="⎕" />
+			<Svg data={icon_tab} />
 			<small class="ml_xs">{tab.title}</small>
 		</div>
 		<button
@@ -49,7 +49,7 @@
 			title="close tab"
 			aria-label={`close tab ${tab.title}`}
 		>
-			<Glyph glyph={GLYPH_REMOVE} />
+			<Svg data={icon_remove} />
 		</button>
 	</div>
 </div>

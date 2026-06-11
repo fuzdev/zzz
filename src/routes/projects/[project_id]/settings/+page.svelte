@@ -5,8 +5,8 @@
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
-	import {GLYPH_DELETE} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import {icon_delete} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const projects = projects_context.get();
 
@@ -71,7 +71,7 @@
 						class="color_c"
 						onclick={() => project_viewmodel.delete_current_project()}
 					>
-						<Glyph glyph={GLYPH_DELETE} />&nbsp; delete project
+						<Svg data={icon_delete} />&nbsp; delete project
 					</button>
 				</div>
 			</div>

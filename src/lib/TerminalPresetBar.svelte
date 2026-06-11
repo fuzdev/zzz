@@ -1,6 +1,8 @@
 <script lang="ts">
+	import {icon_play, icon_add, icon_remove} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+
 	import type {TerminalPreset} from './terminal_preset.svelte.js';
-	import {GLYPH_PLAY, GLYPH_ADD, GLYPH_REMOVE} from './glyphs.js';
 
 	const {
 		presets,
@@ -42,7 +44,7 @@
 	{#each presets as preset (preset.id)}
 		<span class="preset-item">
 			<button type="button" onclick={() => onrun(preset)}>
-				{GLYPH_PLAY}
+				<Svg data={icon_play} />
 				{preset.name || preset.command}
 			</button>
 			{#if ondelete}
@@ -52,7 +54,7 @@
 					onclick={() => ondelete(preset)}
 					title="delete preset"
 				>
-					{GLYPH_REMOVE}
+					<Svg data={icon_remove} />
 				</button>
 			{/if}
 		</span>
@@ -75,12 +77,12 @@
 					class="preset-input preset-input-command"
 					onkeydown={handle_add_keydown}
 				/>
-				<button type="button" onclick={handle_add_submit}>{GLYPH_ADD}</button>
-				<button type="button" onclick={() => (adding = false)}>{GLYPH_REMOVE}</button>
+				<button type="button" onclick={handle_add_submit}><Svg data={icon_add} /></button>
+				<button type="button" onclick={() => (adding = false)}><Svg data={icon_remove} /></button>
 			</span>
 		{:else}
 			<button type="button" onclick={() => (adding = true)} title="add preset">
-				{GLYPH_ADD}
+				<Svg data={icon_add} />
 			</button>
 		{/if}
 	{/if}

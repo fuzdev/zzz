@@ -5,10 +5,11 @@
 
 	import {Chat} from './chat.svelte.js';
 	import ChatThread from './ChatThread.svelte';
-	import {GLYPH_ADD, GLYPH_PLACEHOLDER, GLYPH_REMOVE, GLYPH_SEND} from './glyphs.js';
+	import {icon_add, icon_remove, icon_send} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import {GLYPH_PLACEHOLDER} from './glyphs.js';
 	import ContentEditor from './ContentEditor.svelte';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		chat,
@@ -60,19 +61,19 @@
 				disabled={!count ? true : undefined}
 				class="plain"
 			>
-				<Glyph glyph={GLYPH_SEND} /> to {count}
+				<Svg data={icon_send} /> to {count}
 			</PendingButton>
 		</ContentEditor>
 
 		<div class="display:flex mt_lg">
 			<button type="button" class="plain" onclick={() => (show_model_picker = true)}>
-				<Glyph glyph={GLYPH_ADD} />&nbsp; add thread
+				<Svg data={icon_add} />&nbsp; add thread
 			</button>
 			<ConfirmButton
 				onconfirm={() => chat.remove_all_threads()}
 				position="right"
 				disabled={!count}
-				class="plain"><Glyph glyph={GLYPH_REMOVE} />&nbsp; remove all</ConfirmButton
+				class="plain"><Svg data={icon_remove} />&nbsp; remove all</ConfirmButton
 			>
 		</div>
 		<ul class="threads unstyled mt_lg">

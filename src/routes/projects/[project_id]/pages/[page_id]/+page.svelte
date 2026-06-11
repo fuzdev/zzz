@@ -10,8 +10,9 @@
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import PagesSidebar from '$routes/projects/PagesSidebar.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
-	import {GLYPH_DELETE, GLYPH_PREVIEW, GLYPH_PLACEHOLDER} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import {icon_delete, icon_preview} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import {GLYPH_PLACEHOLDER} from '$lib/glyphs.js';
 	import {frontend_context} from '$lib/frontend.svelte.js';
 
 	const projects = projects_context.get();
@@ -61,7 +62,7 @@
 			title="close preview"
 			onclick={toggle_preview}
 		>
-			<Glyph glyph={GLYPH_PREVIEW} />
+			<Svg data={icon_preview} />
 		</button>
 	</div>
 {:else}
@@ -95,12 +96,12 @@
 								</button>
 
 								<button type="button" onclick={toggle_preview} class="plain" title="Preview page">
-									<Glyph glyph={GLYPH_PREVIEW} />&nbsp; preview
+									<Svg data={icon_preview} />&nbsp; preview
 								</button>
 							</div>
 
 							<button type="button" onclick={delete_page} class="color_c"
-								><Glyph glyph={GLYPH_DELETE} />&nbsp; delete</button
+								><Svg data={icon_delete} />&nbsp; delete</button
 							>
 						</div>
 					</div>

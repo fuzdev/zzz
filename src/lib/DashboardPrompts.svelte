@@ -4,17 +4,17 @@
 	import {random_item} from '@fuzdev/fuz_util/random.js';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import Glyph from './Glyph.svelte';
 	import PartView from './PartView.svelte';
 	import {
-		GLYPH_PART,
-		GLYPH_ADD,
-		GLYPH_PROMPT,
-		GLYPH_REMOVE,
-		GLYPH_DELETE,
-		GLYPH_FILE,
-		GLYPH_SORT,
-	} from './glyphs.js';
+		icon_add,
+		icon_delete,
+		icon_file,
+		icon_part,
+		icon_prompt,
+		icon_remove,
+		icon_sort,
+	} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {frontend_context} from './frontend.svelte.js';
 	import PromptStats from './PromptStats.svelte';
 	import PartList from './PartList.svelte';
@@ -74,7 +74,7 @@
 					class="plain width:100% justify-content:start"
 					onclick={create_prompt}
 				>
-					<Glyph glyph={GLYPH_ADD} />&nbsp; new prompt
+					<Svg data={icon_add} />&nbsp; new prompt
 				</button>
 				{#if app.prompts.items.size > 1}
 					<button
@@ -84,7 +84,7 @@
 						title="toggle sort controls"
 						onclick={() => app.prompts.toggle_sort_controls()}
 					>
-						<Glyph glyph={GLYPH_SORT} />
+						<Svg data={icon_sort} />
 					</button>
 				{/if}
 			</div>
@@ -99,7 +99,7 @@
 			<div class="column-fixed pr_sm">
 				<section class="column-section">
 					<div class="font_size_lg display:flex align-items:center">
-						<Glyph glyph={GLYPH_PROMPT} />
+						<Svg data={icon_prompt} />
 						<EditableText bind:value={app.prompts.selected.name} />
 					</div>
 					<div class="column">
@@ -119,14 +119,14 @@
 							title="delete prompt {'"' + app.prompts.selected.name + '"'}"
 							class="plain icon-button"
 						>
-							<Glyph glyph={GLYPH_DELETE} />
-							{#snippet popover_button_content()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
+							<Svg data={icon_delete} />
+							{#snippet popover_button_content()}<Svg data={icon_delete} />{/snippet}
 						</ConfirmButton>
 					</div>
 					<ContentPreview content={app.prompts.selected.content} />
 				</section>
 				<section class="column-section">
-					<header class="font_size_lg mb_lg"><Glyph glyph={GLYPH_PART} /> parts</header>
+					<header class="font_size_lg mb_lg"><Svg data={icon_part} /> parts</header>
 					<PartList
 						parts={app.prompts.selected.parts}
 						prompt={app.prompts.selected}
@@ -143,7 +143,7 @@
 						<div class="display:flex flex-wrap:wrap gap_xs">
 							<button type="button" class="plain font_size_sm" onclick={add_text_part}>
 								<div class="row white-space:nowrap">
-									<Glyph glyph={GLYPH_PART} />&nbsp; add text
+									<Svg data={icon_part} />&nbsp; add text
 								</div>
 							</button>
 							<button
@@ -153,7 +153,7 @@
 								disabled={!app.diskfiles.items.size}
 							>
 								<div class="row white-space:nowrap">
-									<Glyph glyph={GLYPH_FILE} />&nbsp; add file
+									<Svg data={icon_file} />&nbsp; add file
 								</div>
 							</button>
 							<ConfirmButton
@@ -162,7 +162,7 @@
 								class="plain font_size_sm"
 							>
 								<div class="row white-space:nowrap">
-									<Glyph glyph={GLYPH_REMOVE} />&nbsp; remove all
+									<Svg data={icon_remove} />&nbsp; remove all
 								</div>
 							</ConfirmButton>
 						</div>

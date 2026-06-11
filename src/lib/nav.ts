@@ -2,26 +2,27 @@ import type {SvgData} from '@fuzdev/fuz_ui/svg.js';
 import {resolve} from '$app/paths';
 import {page} from '$app/state';
 
-import {logo_zzz} from './logos.js';
 import {
-	GLYPH_CAPABILITY,
-	GLYPH_CHAT,
-	GLYPH_FILE,
-	GLYPH_INFO,
-	GLYPH_LOG,
-	GLYPH_MODEL,
-	GLYPH_PROMPT,
-	GLYPH_PROVIDER,
-	GLYPH_SETTINGS,
-	GLYPH_TERMINAL,
-	GLYPH_WORKSPACE,
-} from './glyphs.js';
+	icon_capability,
+	icon_chat,
+	icon_file,
+	icon_info,
+	icon_log,
+	icon_model,
+	icon_prompt,
+	icon_provider,
+	icon_settings,
+	icon_terminal,
+	icon_workspace,
+} from '@fuzdev/fuz_ui/icons.js';
+
+import {logo_zzz} from './logos.js';
 import type {Frontend} from './frontend.svelte.js';
 
 export interface NavLinkItem {
 	label: string;
 	href: string;
-	icon: string | SvgData;
+	icon: SvgData;
 }
 
 // TODO fuz api for this in its library nav? look into it at the library -> docs rename
@@ -57,28 +58,28 @@ export const main_nav_items_default: Array<NavItem> = [
 	{
 		group: 'main',
 		items: [
-			{label: 'chats', href: resolve('/chats'), icon: GLYPH_CHAT},
-			{label: 'prompts', href: resolve('/prompts'), icon: GLYPH_PROMPT},
-			{label: 'files', href: resolve('/files'), icon: GLYPH_FILE},
-			{label: 'workspaces', href: resolve('/workspaces'), icon: GLYPH_WORKSPACE},
-			{label: 'terminals', href: resolve('/terminals'), icon: GLYPH_TERMINAL},
+			{label: 'chats', href: resolve('/chats'), icon: icon_chat},
+			{label: 'prompts', href: resolve('/prompts'), icon: icon_prompt},
+			{label: 'files', href: resolve('/files'), icon: icon_file},
+			{label: 'workspaces', href: resolve('/workspaces'), icon: icon_workspace},
+			{label: 'terminals', href: resolve('/terminals'), icon: icon_terminal},
 		],
 	},
 	{
 		group: 'llms',
 		items: [
-			{label: 'models', href: resolve('/models'), icon: GLYPH_MODEL},
-			{label: 'providers', href: resolve('/providers'), icon: GLYPH_PROVIDER},
+			{label: 'models', href: resolve('/models'), icon: icon_model},
+			{label: 'providers', href: resolve('/providers'), icon: icon_provider},
 		],
 	},
 	{
 		group: 'system',
 		items: [
 			{label: 'about', href: resolve('/about'), icon: logo_zzz},
-			{label: 'capabilities', href: resolve('/capabilities'), icon: GLYPH_CAPABILITY},
-			{label: 'docs', href: resolve('/docs'), icon: GLYPH_INFO},
-			{label: 'actions', href: resolve('/actions'), icon: GLYPH_LOG},
-			{label: 'settings', href: resolve('/settings'), icon: GLYPH_SETTINGS},
+			{label: 'capabilities', href: resolve('/capabilities'), icon: icon_capability},
+			{label: 'docs', href: resolve('/docs'), icon: icon_info},
+			{label: 'actions', href: resolve('/actions'), icon: icon_log},
+			{label: 'settings', href: resolve('/settings'), icon: icon_settings},
 		],
 	},
 ];

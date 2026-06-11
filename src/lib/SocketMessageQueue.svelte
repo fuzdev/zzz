@@ -7,8 +7,8 @@
 	import PopoverButton from '@fuzdev/fuz_app/ui/PopoverButton.svelte';
 
 	import type {Socket, QueuedMessage, FailedMessage} from './socket.svelte.js';
-	import Glyph from './Glyph.svelte';
-	import {GLYPH_RETRY, GLYPH_REMOVE, GLYPH_INFO} from './glyphs.js';
+	import {icon_close, icon_info, icon_remove, icon_retry} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {format_timestamp} from './time_helpers.js';
 	import {DURATION_SM} from './helpers.js';
 
@@ -140,7 +140,7 @@
 							onclick={retry_selected}
 							transition:slide
 						>
-							<Glyph glyph={GLYPH_RETRY} />
+							<Svg data={icon_retry} />
 						</button>
 					{/if}
 
@@ -150,7 +150,7 @@
 						class="icon-button plain"
 						title="remove selected messages"
 					>
-						<Glyph glyph={GLYPH_REMOVE} />
+						<Svg data={icon_remove} />
 					</ConfirmButton>
 				</div>
 			{/if}
@@ -242,7 +242,7 @@
 								class="icon-button plain font_size_sm"
 								title="view message details"
 							>
-								<Glyph glyph={GLYPH_INFO} size="var(--font_size_lg)" />
+								<Svg data={icon_info} size="var(--font_size_lg)" />
 								{#snippet popover_content(popover)}
 									<div
 										class="p_md overflow:auto shade_00 shadow_bottom_md"
@@ -260,7 +260,7 @@
 												class="icon-button plain font_size_xs"
 												onclick={() => popover.hide()}
 											>
-												✕
+												<Svg data={icon_close} />
 											</button>
 										</div>
 										<pre
@@ -278,7 +278,7 @@
 									title="retry message"
 									onclick={() => retry_queued_message(message)}
 								>
-									<Glyph glyph={GLYPH_RETRY} />
+									<Svg data={icon_retry} />
 								</button>
 							{/if}
 
@@ -289,7 +289,7 @@
 								class="icon-button plain font_size_sm"
 								title="remove message"
 							>
-								<Glyph glyph={GLYPH_REMOVE} />
+								<Svg data={icon_remove} />
 							</ConfirmButton>
 						</div>
 					</div>

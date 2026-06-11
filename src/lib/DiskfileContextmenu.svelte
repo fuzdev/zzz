@@ -6,10 +6,10 @@
 	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
 
 	import type {Diskfile} from './diskfile.svelte.js';
-	import {GLYPH_DELETE, GLYPH_FILE, GLYPH_REMOVE} from './glyphs.js';
+	import {icon_delete, icon_file, icon_remove} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {frontend_context} from './frontend.svelte.js';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		diskfile,
@@ -36,7 +36,7 @@
 		{@const tab = tabs.by_diskfile_id.get(diskfile.id)}
 		{@const selected = diskfile === tabs.selected_tab?.diskfile}
 		<ContextmenuSubmenu>
-			{#snippet icon()}<Glyph glyph={GLYPH_FILE} />{/snippet}
+			{#snippet icon()}<Svg data={icon_file} />{/snippet}
 			file
 			{#snippet menu()}
 				<!-- TODO maybe show disabled versions? changing what appears isn't great -->
@@ -46,7 +46,7 @@
 							diskfiles.select(diskfile.id, true);
 						}}
 					>
-						{#snippet icon()}<Glyph glyph={GLYPH_FILE} />{/snippet}
+						{#snippet icon()}<Svg data={icon_file} />{/snippet}
 						<span>select tab</span>
 					</ContextmenuEntry>
 				{/if}
@@ -57,7 +57,7 @@
 							diskfiles.select(diskfile.id, false);
 						}}
 					>
-						{#snippet icon()}<Glyph glyph={GLYPH_FILE} />{/snippet}
+						{#snippet icon()}<Svg data={icon_file} />{/snippet}
 						<span>preview tab</span>
 					</ContextmenuEntry>
 				{/if}
@@ -68,7 +68,7 @@
 							diskfiles.editor.close_tab(tab.id);
 						}}
 					>
-						{#snippet icon()}<Glyph glyph={GLYPH_REMOVE} />{/snippet}
+						{#snippet icon()}<Svg data={icon_remove} />{/snippet}
 						<span>close tab</span>
 					</ContextmenuEntry>
 				{/if}
@@ -96,7 +96,7 @@
 						}
 					}}
 				>
-					{#snippet icon()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
+					{#snippet icon()}<Svg data={icon_delete} />{/snippet}
 					<span>delete file</span>
 				</ContextmenuEntry>
 			{/snippet}

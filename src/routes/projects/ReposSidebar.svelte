@@ -4,8 +4,8 @@
 
 	import NavLink from '$lib/NavLink.svelte';
 	import {projects_context} from '$routes/projects/projects.svelte.js';
-	import {GLYPH_ADD} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import {icon_add} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const projects = projects_context.get();
 
@@ -20,7 +20,7 @@
 				class="plain justify-content:start flex:1"
 				onclick={() => project_viewmodel.create_new_repo()}
 			>
-				<Glyph glyph={GLYPH_ADD} />&nbsp; new repo
+				<Svg data={icon_add} />&nbsp; new repo
 			</button>
 		</div>
 

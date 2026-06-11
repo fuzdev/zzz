@@ -1,9 +1,11 @@
 <script lang="ts">
 	import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
+	import {icon_retry} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+
 	import TerminalView from './TerminalView.svelte';
 	import TerminalContextmenu from './TerminalContextmenu.svelte';
-	import {GLYPH_RETRY} from './glyphs.js';
 	import {app_context} from './app.svelte.js';
 
 	const {
@@ -68,7 +70,7 @@
 			</span>
 			{#if onrestart}
 				<button type="button" class="restart-button" onclick={onrestart} title="restart">
-					{GLYPH_RETRY}
+					<Svg data={icon_retry} />
 				</button>
 			{/if}
 		</div>

@@ -1,9 +1,9 @@
 <script lang="ts">
 	import {swallow} from '@fuzdev/fuz_util/dom.js';
 
-	import {GLYPH_REMOVE} from './glyphs.js';
+	import {icon_remove} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import type {DiskfileTab} from './diskfile_tab.svelte.js';
-	import Glyph from './Glyph.svelte';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 
 	const {
@@ -66,7 +66,7 @@
 				title="close tab"
 				aria-label={`close tab ${path}`}
 			>
-				<Glyph glyph={GLYPH_REMOVE} />
+				<Svg data={icon_remove} />
 			</button>
 		</div>
 	</div>

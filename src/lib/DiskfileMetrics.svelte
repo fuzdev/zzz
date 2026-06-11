@@ -1,9 +1,9 @@
 <script lang="ts">
 	import {fade, slide} from 'svelte/transition';
 
-	import {GLYPH_ARROW_RIGHT} from './glyphs.js';
+	import {icon_arrow_right} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		editor_state,
@@ -19,7 +19,7 @@
 			{editor_state.original_length}
 			{#if editor_state.original_length !== editor_state.current_length}
 				<span transition:fade={{duration: 80}}>
-					<Glyph glyph={GLYPH_ARROW_RIGHT} />
+					<Svg data={icon_arrow_right} />
 					{editor_state.current_length}</span
 				>{/if}
 		</div>
@@ -36,7 +36,7 @@
 			{editor_state.original_token_count}
 			{#if editor_state.original_token_count !== editor_state.current_token_count}
 				<span transition:fade={{duration: 80}}>
-					<Glyph glyph={GLYPH_ARROW_RIGHT} />
+					<Svg data={icon_arrow_right} />
 					{editor_state.current_token_count}</span
 				>{/if}
 		</div>

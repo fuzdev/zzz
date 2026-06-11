@@ -5,9 +5,9 @@
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import DomainsSidebar from '$routes/projects/DomainsSidebar.svelte';
-	import {GLYPH_DELETE} from '$lib/glyphs.js';
+	import {icon_delete} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ExternalLink from '$lib/ExternalLink.svelte';
-	import Glyph from '$lib/Glyph.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 
 	const projects = projects_context.get();
@@ -134,7 +134,7 @@
 									class="color_c"
 									onclick={() => domains_viewmodel.remove_domain()}
 								>
-									<Glyph glyph={GLYPH_DELETE} />&nbsp; delete domain
+									<Svg data={icon_delete} />&nbsp; delete domain
 								</button>
 							{/if}
 						</div>

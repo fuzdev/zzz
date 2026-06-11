@@ -1,8 +1,8 @@
 <script lang="ts">
 	import {resolve} from '$app/paths';
 
-	import {GLYPH_PROJECT} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import {icon_project} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ProjectList from '$routes/projects/ProjectList.svelte';
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import {projects_context} from '$routes/projects/projects.svelte.js';
@@ -25,7 +25,7 @@
 {/if}
 
 {#snippet content()}
-	<h1><Glyph glyph={GLYPH_PROJECT} /> projects</h1>
+	<h1><Svg data={icon_project} /> projects</h1>
 
 	<section class="width_atmost_md">
 		<p>

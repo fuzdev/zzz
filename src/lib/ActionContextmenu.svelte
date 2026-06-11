@@ -7,9 +7,9 @@
 
 	import type {Action} from './action.svelte.js';
 	import {frontend_context} from './frontend.svelte.js';
-	import {GLYPH_LOG, GLYPH_DELETE} from './glyphs.js';
+	import {icon_delete, icon_log} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		action,
@@ -26,7 +26,7 @@
 
 {#snippet entries()}
 	<ContextmenuSubmenu>
-		{#snippet icon()}<Glyph glyph={GLYPH_LOG} />{/snippet}
+		{#snippet icon()}<Svg data={icon_log} />{/snippet}
 		action
 		{#snippet menu()}
 			<ContextmenuEntryCopyToClipboard content={action.method} label="copy method" />
@@ -46,7 +46,7 @@
 						console.log('Retry action:', action.method);
 					}}
 				>
-					{#snippet icon()}<Glyph glyph={GLYPH_RETRY} />{/snippet}
+					{#snippet icon()}<Svg data={icon_retry} />{/snippet}
 					<span>retry action</span>
 				</ContextmenuEntry>
 			{/if} -->
@@ -60,7 +60,7 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
+				{#snippet icon()}<Svg data={icon_delete} />{/snippet}
 				<span>delete from history</span>
 			</ContextmenuEntry>
 		{/snippet}

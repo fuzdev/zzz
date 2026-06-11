@@ -7,8 +7,8 @@
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import PagesSidebar from '$routes/projects/PagesSidebar.svelte';
-	import Glyph from '$lib/Glyph.svelte';
-	import {GLYPH_ADD} from '$lib/glyphs.js';
+	import {icon_add} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 
 	const projects = projects_context.get();
@@ -39,7 +39,7 @@
 							class="color_a"
 							onclick={() => project_viewmodel.create_new_page()}
 						>
-							<Glyph glyph={GLYPH_ADD} />&nbsp; create your first page
+							<Svg data={icon_add} />&nbsp; create your first page
 						</button>
 					</p>
 				{:else}
@@ -74,7 +74,7 @@
 							class="color_a"
 							onclick={() => project_viewmodel.create_new_page()}
 						>
-							<Glyph glyph={GLYPH_ADD} />&nbsp; new page
+							<Svg data={icon_add} />&nbsp; new page
 						</button>
 					</div>
 				{/if}

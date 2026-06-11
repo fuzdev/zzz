@@ -5,13 +5,14 @@
 	import type {Snippet} from 'svelte';
 
 	import {
-		GLYPH_PLACEHOLDER,
-		GLYPH_ADD,
-		GLYPH_REFRESH,
-		GLYPH_ARROW_RIGHT,
-		GLYPH_ARROW_LEFT,
-	} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+		icon_add,
+		icon_arrow_left,
+		icon_arrow_right,
+		icon_drag,
+		icon_refresh,
+	} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import {GLYPH_PLACEHOLDER} from '$lib/glyphs.js';
 	import type {Browser} from '$routes/tabs/browser.svelte.js';
 	import BrowserTabContent from '$routes/tabs/BrowserTabContent.svelte';
 	import BrowserTabListitem from '$routes/tabs/BrowserTabListitem.svelte';
@@ -93,7 +94,7 @@
 					onclick={() => browser.add_new_tab()}
 					title="new tab"
 				>
-					<Glyph glyph={GLYPH_ADD} />
+					<Svg data={icon_add} />
 				</button>
 			</div>
 		</ul>
@@ -108,7 +109,7 @@
 					onclick={() => browser.go_back()}
 					disabled
 				>
-					<Glyph glyph={GLYPH_ARROW_LEFT} />
+					<Svg data={icon_arrow_left} />
 				</button>
 				<button
 					type="button"
@@ -117,7 +118,7 @@
 					onclick={() => browser.go_forward()}
 					disabled
 				>
-					<Glyph glyph={GLYPH_ARROW_RIGHT} />
+					<Svg data={icon_arrow_right} />
 				</button>
 				<button
 					type="button"
@@ -125,7 +126,7 @@
 					title="refresh"
 					onclick={() => browser.refresh()}
 				>
-					<Glyph glyph={GLYPH_REFRESH} />
+					<Svg data={icon_refresh} />
 				</button>
 			</div>
 
@@ -154,8 +155,11 @@
 					onclick={() => {
 						// eslint-disable-next-line no-alert
 						alert('not yet, thanks for clicking');
-					}}>☰</button
+					}}
 				>
+					<!-- TODO fuz_ui has no dedicated menu icon yet, `icon_drag` is the same three lines -->
+					<Svg data={icon_drag} label="main menu" />
+				</button>
 			</div>
 		</div>
 	</div>

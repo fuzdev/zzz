@@ -7,10 +7,16 @@
 
 	import type {Chat} from './chat.svelte.js';
 	import {frontend_context} from './frontend.svelte.js';
-	import {GLYPH_CHAT, GLYPH_DELETE, GLYPH_REMOVE, GLYPH_VIEW, GLYPH_ADD} from './glyphs.js';
+	import {
+		icon_add,
+		icon_chat,
+		icon_delete,
+		icon_remove,
+		icon_view,
+	} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		chat,
@@ -29,7 +35,7 @@
 
 {#snippet entries()}
 	<ContextmenuSubmenu>
-		{#snippet icon()}<Glyph glyph={GLYPH_CHAT} />{/snippet}
+		{#snippet icon()}<Svg data={icon_chat} />{/snippet}
 		chat
 		{#snippet menu()}
 			<ContextmenuEntry
@@ -37,7 +43,7 @@
 					show_model_picker = true;
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_ADD} />{/snippet}
+				{#snippet icon()}<Svg data={icon_add} />{/snippet}
 				<span>add thread</span>
 			</ContextmenuEntry>
 
@@ -46,7 +52,7 @@
 					chat.view_mode = chat.view_mode === 'simple' ? 'multi' : 'simple';
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_VIEW} />{/snippet}
+				{#snippet icon()}<Svg data={icon_view} />{/snippet}
 				<span>{chat.view_mode === 'simple' ? 'multi' : 'simple'} view</span>
 			</ContextmenuEntry>
 
@@ -55,7 +61,7 @@
 
 			{#if chat.threads.length}
 				<ContextmenuEntry run={() => chat.remove_all_threads()}>
-					{#snippet icon()}<Glyph glyph={GLYPH_REMOVE} />{/snippet}
+					{#snippet icon()}<Svg data={icon_remove} />{/snippet}
 					<span>remove all threads</span>
 				</ContextmenuEntry>
 			{/if}
@@ -72,7 +78,7 @@
 						chat.main_input = '';
 					}}
 				>
-					{#snippet icon()}<Glyph glyph={GLYPH_REMOVE} />{/snippet}
+					{#snippet icon()}<Svg data={icon_remove} />{/snippet}
 					<span>clear input</span>
 				</ContextmenuEntry>
 			{/if}
@@ -88,7 +94,7 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_EDIT} />{/snippet}
+				{#snippet icon()}<Svg data={icon_edit} />{/snippet}
 				<span>edit chat</span>
 			</ContextmenuEntry> -->
 
@@ -106,7 +112,7 @@
 					await app.chats.navigate_to(new_chat.id);
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_CHAT} />{/snippet}
+				{#snippet icon()}<Svg data={icon_chat} />{/snippet}
 				<span>duplicate chat</span>
 			</ContextmenuEntry>
 
@@ -119,7 +125,7 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
+				{#snippet icon()}<Svg data={icon_delete} />{/snippet}
 				<span>delete chat</span>
 			</ContextmenuEntry>
 		{/snippet}

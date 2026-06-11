@@ -1,20 +1,21 @@
 <script lang="ts">
 	import type {Snippet} from 'svelte';
-	import Glyph from './Glyph.svelte';
-	import {GLYPH_ERROR} from './glyphs.js';
+	import type {SvgData} from '@fuzdev/fuz_ui/svg.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import {icon_error} from '@fuzdev/fuz_ui/icons.js';
 
 	const {
-		glyph = GLYPH_ERROR,
+		icon = icon_error,
 		children,
 	}: {
-		glyph?: string | null;
+		icon?: SvgData | null;
 		children: Snippet;
 	} = $props();
 </script>
 
 <span class="color_c_50">
-	{#if glyph}
-		<Glyph {glyph} />
+	{#if icon}
+		<Svg data={icon} />
 	{/if}
 	{@render children()}
 </span>

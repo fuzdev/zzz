@@ -7,11 +7,11 @@
 
 	import type {Thread} from './thread.svelte.js';
 	import {frontend_context} from './frontend.svelte.js';
-	import {GLYPH_DELETE, GLYPH_REMOVE, GLYPH_THREAD, GLYPH_MODEL} from './glyphs.js';
+	import {icon_delete, icon_model, icon_remove, icon_thread} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryToggle from './ContextmenuEntryToggle.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		thread,
@@ -39,7 +39,7 @@
 
 {#snippet entries()}
 	<ContextmenuSubmenu>
-		{#snippet icon()}<Glyph glyph={GLYPH_THREAD} />{/snippet}
+		{#snippet icon()}<Svg data={icon_thread} />{/snippet}
 		thread
 		{#snippet menu()}
 			{#if thread.content}
@@ -56,7 +56,7 @@
 						thread.remove_all_turns();
 					}}
 				>
-					{#snippet icon()}<Glyph glyph={GLYPH_REMOVE} />{/snippet}
+					{#snippet icon()}<Svg data={icon_remove} />{/snippet}
 					<span>clear conversation</span>
 				</ContextmenuEntry>
 			{/if}
@@ -68,7 +68,7 @@
 					show_model_picker = true;
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_MODEL} />{/snippet}
+				{#snippet icon()}<Svg data={icon_model} />{/snippet}
 				switch model &nbsp; <small>{thread.model_name}</small>
 			</ContextmenuEntry>
 
@@ -81,7 +81,7 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
+				{#snippet icon()}<Svg data={icon_delete} />{/snippet}
 				<span>delete thread</span>
 			</ContextmenuEntry>
 		{/snippet}

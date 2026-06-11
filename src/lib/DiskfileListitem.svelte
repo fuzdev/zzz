@@ -3,8 +3,8 @@
 
 	import type {Diskfile} from './diskfile.svelte.js';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
-	import Glyph from './Glyph.svelte';
-	import {GLYPH_FILE} from './glyphs.js';
+	import {icon_file} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const {
 		diskfile,
@@ -50,7 +50,7 @@
 		aria-pressed={selected}
 	>
 		<small class="ellipsis">
-			<Glyph glyph={GLYPH_FILE} />
+			<Svg data={icon_file} />
 			<span class="ml_xs">{diskfile.path_relative}</span>
 		</small>
 	</div>

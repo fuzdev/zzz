@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type {Uuid} from '@fuzdev/fuz_util/id.js';
 
-	import {GLYPH_ARROW_LEFT, GLYPH_ARROW_RIGHT, GLYPH_REFRESH} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import {icon_arrow_left, icon_arrow_right, icon_refresh} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {frontend_context} from './frontend.svelte.js';
 	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
 
@@ -129,7 +129,7 @@
 		onclick={go_back}
 		disabled={!can_go_back}
 	>
-		<Glyph glyph={GLYPH_ARROW_LEFT} />
+		<Svg data={icon_arrow_left} />
 	</button>
 	<button
 		type="button"
@@ -138,7 +138,7 @@
 		onclick={go_forward}
 		disabled={!can_go_forward}
 	>
-		<Glyph glyph={GLYPH_ARROW_RIGHT} />
+		<Svg data={icon_arrow_right} />
 	</button>
 	<button
 		type="button"
@@ -150,6 +150,6 @@
 		}}
 		disabled
 	>
-		<Glyph glyph={GLYPH_REFRESH} />
+		<Svg data={icon_refresh} />
 	</button>
 </div>

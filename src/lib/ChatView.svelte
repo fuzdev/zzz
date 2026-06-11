@@ -3,10 +3,10 @@
 	import Details from '@fuzdev/fuz_ui/Details.svelte';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import Glyph from './Glyph.svelte';
 	import {Chat} from './chat.svelte.js';
 	import {frontend_context} from './frontend.svelte.js';
-	import {GLYPH_THREAD, GLYPH_CHAT, GLYPH_DELETE, GLYPH_VIEW} from './glyphs.js';
+	import {icon_chat, icon_delete, icon_thread, icon_view} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ThreadList from './ThreadList.svelte';
 	import ChatViewSimple from './ChatViewSimple.svelte';
 	import ChatViewMulti from './ChatViewMulti.svelte';
@@ -39,7 +39,7 @@
 			<section class="column-section" transition:slide>
 				<!-- TODO needs work -->
 				<div class="font_size_lg display:flex align-items:center">
-					<Glyph glyph={GLYPH_CHAT} />
+					<Svg data={icon_chat} />
 					<EditableText bind:value={chat.name} />
 				</div>
 				<div class="row">
@@ -58,7 +58,7 @@
 								class="plain sm"
 								title="toggle chat to ${chat.view_mode === 'multi' ? 'simple' : 'multi'} view"
 							>
-								<Glyph glyph={GLYPH_VIEW} class="mr_xs" />
+								<Svg data={icon_view} class="mr_xs" />
 							</ToggleButton>
 						{/if}
 						<ConfirmButton
@@ -66,8 +66,8 @@
 							title="delete chat {'"' + chat.name + '"'}"
 							class="plain icon-button"
 						>
-							<Glyph glyph={GLYPH_DELETE} />
-							{#snippet popover_button_content()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
+							<Svg data={icon_delete} />
+							{#snippet popover_button_content()}<Svg data={icon_delete} />{/snippet}
 						</ConfirmButton>
 					</div>
 				</div>
@@ -80,7 +80,7 @@
 					class="mt_0 mb_lg font_size_lg display:flex justify-content:space-between"
 					title="threads are the individual threads of conversation in a chat -- each chat can have many threads, comprising its history"
 				>
-					<span><Glyph glyph={GLYPH_THREAD} /> threads</span><span>{thread_count}</span>
+					<span><Svg data={icon_thread} /> threads</span><span>{thread_count}</span>
 				</header>
 				<ThreadList {chat} />
 			</section>

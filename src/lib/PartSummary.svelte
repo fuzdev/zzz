@@ -3,9 +3,9 @@
 	import type {PartUnion} from './part.svelte.js';
 	import PartToggleButton from './PartToggleButton.svelte';
 	import PartRemoveButton from './PartRemoveButton.svelte';
-	import Glyph from './Glyph.svelte';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import PartContextmenu from './PartContextmenu.svelte';
-	import {get_part_type_glyph} from './part_helpers.js';
+	import {get_part_type_icon} from './part_helpers.js';
 
 	const {
 		part,
@@ -29,7 +29,7 @@
 	>
 		<div class="progress-bar" style:width="{percent}%"></div>
 		<div class="flex:1 pl_sm py_xs3 ellipsis">
-			<Glyph glyph={get_part_type_glyph(part)} />&nbsp;
+			<Svg data={get_part_type_icon(part)} />&nbsp;
 			{part.name}
 			{part.content_preview}
 		</div>

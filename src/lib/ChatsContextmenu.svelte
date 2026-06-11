@@ -5,8 +5,8 @@
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 
 	import {frontend_context} from './frontend.svelte.js';
-	import {GLYPH_CHAT} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import {icon_chat} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const props: OmitStrict<ComponentProps<typeof Contextmenu>, 'entries'> & {children: Snippet} =
 		$props();
@@ -22,7 +22,7 @@
 			app.chats.add(undefined, true);
 		}}
 	>
-		{#snippet icon()}<Glyph glyph={GLYPH_CHAT} />{/snippet}
+		{#snippet icon()}<Svg data={icon_chat} />{/snippet}
 		<span>create new chat</span>
 	</ContextmenuEntry>
 {/snippet}

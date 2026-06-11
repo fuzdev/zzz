@@ -9,11 +9,11 @@
 
 	import type {PartUnion} from './part.svelte.js';
 	import {frontend_context} from './frontend.svelte.js';
-	import {GLYPH_PART, GLYPH_DELETE, GLYPH_EDIT} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import {icon_delete, icon_edit, icon_part} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import PartView from './PartView.svelte';
-	import {get_part_type_glyph} from './part_helpers.js';
+	import {get_part_type_icon} from './part_helpers.js';
 	import ContextmenuEntryToggle from './ContextmenuEntryToggle.svelte';
 
 	const {
@@ -33,7 +33,7 @@
 
 {#snippet entries()}
 	<ContextmenuSubmenu>
-		{#snippet icon()}{get_part_type_glyph(part)}{/snippet}
+		{#snippet icon()}<Svg data={get_part_type_icon(part)} />{/snippet}
 		part
 
 		{#snippet menu()}
@@ -53,7 +53,7 @@
 					show_editor = true;
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_EDIT} />{/snippet}
+				{#snippet icon()}<Svg data={icon_edit} />{/snippet}
 				<span>edit part</span>
 			</ContextmenuEntry>
 
@@ -66,7 +66,7 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
+				{#snippet icon()}<Svg data={icon_delete} />{/snippet}
 				<span>delete part</span>
 			</ContextmenuEntry>
 		{/snippet}
@@ -76,7 +76,7 @@
 {#if show_editor}
 	<Dialog onclose={() => (show_editor = false)}>
 		<DialogContent>
-			<h2 class="mt_0 mb_sm"><Glyph glyph={GLYPH_PART} /> edit part</h2>
+			<h2 class="mt_0 mb_sm"><Svg data={icon_part} /> edit part</h2>
 			<PartView {part} />
 		</DialogContent>
 	</Dialog>

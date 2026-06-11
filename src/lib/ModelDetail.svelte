@@ -8,9 +8,9 @@
 	import ModelLink from './ModelLink.svelte';
 	import ProviderLink from './ProviderLink.svelte';
 	import type {Model} from './model.svelte.js';
-	import {GLYPH_MODEL, GLYPH_ADD, GLYPH_ERROR} from './glyphs.js';
+	import {icon_add, icon_error, icon_model} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {frontend_context} from './frontend.svelte.js';
-	import Glyph from './Glyph.svelte';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 
 	const {
@@ -32,8 +32,8 @@
 
 <ModelContextmenu tag="div" attrs={{class: 'panel p_lg', ...attrs}} {model}>
 	<section class="row mb_xl3">
-		<div class="glyph-container">
-			<Glyph glyph={GLYPH_MODEL} size="var(--icon_size_xl)" />
+		<div class="icon-container">
+			<Svg data={icon_model} size="var(--icon_size_xl)" />
 		</div>
 		<div class="pl_xl">
 			{#if at_detail_page}
@@ -46,10 +46,10 @@
 				</h2>
 			{/if}
 			<div class="ml_sm mb_md">
-				<ProviderLink provider={model.provider} icon="svg" class="font_size_lg" />
+				<ProviderLink provider={model.provider} icon="logo" class="font_size_lg" />
 				{#if model.provider && !model.provider.available}
 					<span class="font_size_md color_c_50 ml_sm">
-						<Glyph glyph={GLYPH_ERROR} />
+						<Svg data={icon_error} />
 						{model.provider.status && !model.provider.status.available
 							? model.provider.status.error
 							: 'unavailable'}
@@ -78,7 +78,7 @@
 			class="color_d"
 			onclick={() => app.chats.add(undefined, true).add_thread(model)}
 		>
-			<Glyph glyph={GLYPH_ADD} />&nbsp; create a new chat
+			<Svg data={icon_add} />&nbsp; create a new chat
 		</button>
 	</section>
 	<!-- TODO do something like this when the warning above is addressed -->
@@ -143,7 +143,7 @@
 </ModelContextmenu>
 
 <style>
-	.glyph-container {
+	.icon-container {
 		display: flex;
 		align-items: center;
 		justify-content: center;

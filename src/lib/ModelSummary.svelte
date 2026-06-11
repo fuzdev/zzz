@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type {SvelteHTMLElements} from 'svelte/elements';
 
+	import {icon_provider} from '@fuzdev/fuz_ui/icons.js';
+
 	import ModelLink from './ModelLink.svelte';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 	import ProviderLink from './ProviderLink.svelte';
@@ -24,7 +26,7 @@
 <ModelContextmenu {model}>
 	<div {...attrs} class="panel p_lg {attrs?.class}">
 		<div class="font_size_xl mb_lg">
-			<ModelLink {model} icon class="row">
+			<ModelLink {model} class="row">
 				<div class="flex-shrink:0">
 					<ProviderLogo name={model.provider_name} />
 				</div>
@@ -33,7 +35,7 @@
 		</div>
 		{#if !omit_provider}
 			<div class="mb_lg">
-				<ProviderLink provider={model.provider} icon="glyph" show_name />
+				<ProviderLink provider={model.provider} icon={icon_provider} label="name" />
 			</div>
 		{/if}
 

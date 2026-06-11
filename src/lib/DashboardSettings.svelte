@@ -1,6 +1,6 @@
 <script lang="ts">
-	import {GLYPH_SETTINGS} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import {icon_settings} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import Settings from './Settings.svelte';
 	import {frontend_context} from './frontend.svelte.js';
 	import DashboardHeader from './DashboardHeader.svelte';
@@ -16,7 +16,7 @@
 <div class="p_lg">
 	<DashboardHeader>
 		{#snippet header()}
-			<h1><Glyph glyph={GLYPH_SETTINGS} /> system settings</h1>
+			<h1><Svg data={icon_settings} /> system settings</h1>
 		{/snippet}
 		<TimeWidget value={app.time.now} />
 	</DashboardHeader>

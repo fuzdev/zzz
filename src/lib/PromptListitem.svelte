@@ -2,10 +2,10 @@
 	import {resolve} from '$app/paths';
 
 	import NavLink from './NavLink.svelte';
-	import {GLYPH_PROMPT} from './glyphs.js';
+	import {icon_prompt} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import PromptContextmenu from './PromptContextmenu.svelte';
 	import type {Prompt} from './prompt.svelte.js';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		prompt,
@@ -24,7 +24,7 @@
 		style="min-height: 0;"
 	>
 		<div class="ellipsis">
-			<Glyph glyph={GLYPH_PROMPT} class="mr_xs2" />
+			<Svg data={icon_prompt} class="mr_xs2" />
 			<span>{prompt.name}</span>
 		</div>
 		{#if prompt.parts.length}<small>{prompt.parts.length}</small>{/if}

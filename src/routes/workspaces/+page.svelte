@@ -2,8 +2,8 @@
 	import {page} from '$app/state';
 	import {frontend_context} from '$lib/frontend.svelte.js';
 	import {DiskfileDirectoryPath} from '$lib/diskfile_types.js';
-	import Glyph from '$lib/Glyph.svelte';
-	import {GLYPH_WORKSPACE, GLYPH_DELETE, GLYPH_ADD, GLYPH_DIRECTORY} from '$lib/glyphs.js';
+	import {icon_add, icon_delete, icon_directory, icon_workspace} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import PageFooter from '$routes/PageFooter.svelte';
 
 	const app = frontend_context.get();
@@ -57,7 +57,7 @@
 
 <div class="workspaces_page p_xl">
 	<header class="mb_xl">
-		<h1><Glyph glyph={GLYPH_WORKSPACE} /> Workspaces</h1>
+		<h1><Svg data={icon_workspace} /> Workspaces</h1>
 		<p class="text_50">
 			Directories the daemon is watching. Open a workspace to access its files and receive change
 			events.
@@ -66,7 +66,7 @@
 
 	<!-- open a workspace -->
 	<section class="box mb_xl">
-		<h2 class="mt_0"><Glyph glyph={GLYPH_ADD} /> Open Workspace</h2>
+		<h2 class="mt_0"><Svg data={icon_add} /> Open Workspace</h2>
 		<form
 			class="row gap_sm"
 			onsubmit={(e) => {
@@ -92,7 +92,7 @@
 
 	<!-- list open workspaces -->
 	<section class="box">
-		<h2 class="mt_0"><Glyph glyph={GLYPH_DIRECTORY} /> Open Workspaces</h2>
+		<h2 class="mt_0"><Svg data={icon_directory} /> Open Workspaces</h2>
 		{#if app.workspaces.items.by_id.size === 0}
 			<p class="text_50">
 				No workspaces open. Use the form above or run <code>zzz &lt;dir&gt;</code> to open one.
@@ -107,7 +107,7 @@
 							class:selected={workspace.id === app.workspaces.active_id}
 							onclick={() => app.workspaces.activate(workspace.id)}
 						>
-							<Glyph glyph={GLYPH_WORKSPACE} />
+							<Svg data={icon_workspace} />
 							<span class="flex:1">
 								<strong>{workspace.name}</strong>
 								<span class="text_50 font_size_sm font_family_mono ml_sm">{workspace.path}</span>
@@ -119,7 +119,7 @@
 							title="close workspace"
 							onclick={() => void handle_close(workspace.path)}
 						>
-							<Glyph glyph={GLYPH_DELETE} />
+							<Svg data={icon_delete} />
 						</button>
 					</li>
 				{/each}

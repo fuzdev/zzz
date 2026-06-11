@@ -6,8 +6,8 @@
 	import type {PartUnion} from './part.svelte.js';
 	import type {Prompt} from './prompt.svelte.js';
 	import type {Prompts} from './prompts.svelte.js';
-	import {GLYPH_REMOVE} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import {icon_remove} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const {
 		part,
@@ -33,5 +33,5 @@
 	class="plain sm"
 	title="remove part {'"' + part.name + '"'}"
 >
-	<Glyph glyph={GLYPH_REMOVE} />
+	<Svg data={icon_remove} />
 </ConfirmButton>

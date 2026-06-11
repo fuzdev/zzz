@@ -4,8 +4,8 @@
 	import {onMount} from 'svelte';
 
 	import {frontend_context} from './frontend.svelte.js';
-	import Glyph from './Glyph.svelte';
-	import {GLYPH_ARROW_RIGHT} from './glyphs.js';
+	import {icon_arrow_right} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 	import {SERVER_URL} from './constants.js';
 	import PingForm from './PingForm.svelte';
@@ -46,7 +46,7 @@
 				<small class="font_family_mono"
 					>{SERVER_URL}
 					{#if capabilities.latest_ping_time !== null}<span
-							><Glyph glyph={GLYPH_ARROW_RIGHT} />
+							><Svg data={icon_arrow_right} />
 							{Math.round(capabilities.latest_ping_time)}ms</span
 						>{/if}
 				</small>

@@ -7,8 +7,8 @@
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import DomainsSidebar from '$routes/projects/DomainsSidebar.svelte';
-	import {GLYPH_ADD, GLYPH_CHECKMARK} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import {icon_add, icon_checkmark} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 
 	const projects = projects_context.get();
@@ -38,7 +38,7 @@
 								class="color_a"
 								onclick={() => project_viewmodel.create_new_domain()}
 							>
-								<Glyph glyph={GLYPH_ADD} />&nbsp; add your first domain
+								<Svg data={icon_add} />&nbsp; add your first domain
 							</button>
 						</p>
 					</div>
@@ -76,7 +76,9 @@
 											{domain.status}
 										</span>
 									</td>
-									<td>{domain.ssl ? GLYPH_CHECKMARK : ''}</td>
+									<td
+										>{#if domain.ssl}<Svg data={icon_checkmark} />{/if}</td
+									>
 									<td>{new Date(domain.created).toLocaleString()}</td>
 									<td>{new Date(domain.updated).toLocaleString()}</td>
 								</tr>
@@ -91,7 +93,7 @@
 						class="color_a"
 						onclick={() => project_viewmodel.create_new_domain()}
 					>
-						<Glyph glyph={GLYPH_ADD} />&nbsp; new domain
+						<Svg data={icon_add} />&nbsp; new domain
 					</button>
 				</div>
 			</div>

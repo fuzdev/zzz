@@ -6,9 +6,9 @@
 
 	import type {Provider} from './provider.svelte.js';
 	import ProviderLogo from './ProviderLogo.svelte';
-	import {GLYPH_PROVIDER} from './glyphs.js';
+	import {icon_provider} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ExternalLink from './ExternalLink.svelte';
-	import Glyph from './Glyph.svelte';
 	import ModelSummary from './ModelSummary.svelte';
 	import CapabilityProviderApi from './CapabilityProviderApi.svelte';
 
@@ -39,7 +39,7 @@
 				{/if}
 				<p class="mb_md">{provider.company}</p>
 				<p class="mb_md">
-					<Glyph glyph={GLYPH_PROVIDER} />{provider.name}
+					<Svg data={icon_provider} />{provider.name}
 				</p>
 				<div class="row gap_xl">
 					<ExternalLink href={provider.homepage}>{format_url(provider.homepage)}</ExternalLink>

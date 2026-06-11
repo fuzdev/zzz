@@ -2,8 +2,8 @@
 	import {slide} from 'svelte/transition';
 
 	import type {Diskfile} from './diskfile.svelte.js';
-	import {GLYPH_FILE} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import {icon_file} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {frontend_context} from './frontend.svelte.js';
 	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
 	import DiskfileMetrics from './DiskfileMetrics.svelte';
@@ -22,7 +22,7 @@
 
 <div class="display:flex flex-direction:column gap_xs width:100%">
 	<small class="overflow_wrap_break_all width:100%">
-		<Glyph glyph={GLYPH_FILE} />{app.diskfiles.to_relative_path(diskfile.path)}
+		<Svg data={icon_file} />{app.diskfiles.to_relative_path(diskfile.path)}
 	</small>
 
 	<small>

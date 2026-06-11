@@ -5,6 +5,7 @@
 
 	import {untrack} from 'svelte';
 	import {contextmenu_attachment} from '@fuzdev/fuz_ui/contextmenu_state.svelte.js';
+	import {icon_refresh, icon_settings} from '@fuzdev/fuz_ui/icons.js';
 	import {Library} from '@fuzdev/fuz_ui/library.svelte.js';
 	import {BROWSER} from 'esm-env';
 	import {page} from '$app/state';
@@ -114,7 +115,7 @@
 			snippet: 'text',
 			props: {
 				content: 'settings',
-				icon: '?',
+				icon: icon_settings,
 				run: () => {
 					app?.api.toggle_main_menu({show: true});
 				},
@@ -124,7 +125,7 @@
 			snippet: 'text',
 			props: {
 				content: 'reload',
-				icon: '⟳',
+				icon: icon_refresh,
 				run: () => {
 					location.reload();
 				},

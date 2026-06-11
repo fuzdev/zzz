@@ -3,8 +3,8 @@
 
 	import NavLink from './NavLink.svelte';
 	import ChatContextmenu from './ChatContextmenu.svelte';
-	import Glyph from './Glyph.svelte';
-	import {GLYPH_CHAT} from './glyphs.js';
+	import {icon_chat} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import type {Chat} from './chat.svelte.js';
 
 	const {
@@ -24,7 +24,7 @@
 		style="min-height: 0;"
 	>
 		<div class="ellipsis">
-			<Glyph glyph={GLYPH_CHAT} />&nbsp;
+			<Svg data={icon_chat} />&nbsp;
 			<span>{chat.name}</span>
 		</div>
 		{#if chat.threads.length}<small>{chat.threads.length}</small>{/if}

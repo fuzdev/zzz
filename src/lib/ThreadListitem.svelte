@@ -3,11 +3,11 @@
 
 	import type {Chat} from './chat.svelte.js';
 	import type {Thread} from './thread.svelte.js';
-	import {GLYPH_REMOVE} from './glyphs.js';
+	import {icon_remove} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ThreadContextmenu from './ThreadContextmenu.svelte';
 	import ProviderLogo from './ProviderLogo.svelte';
 	import ThreadToggleButton from './ThreadToggleButton.svelte';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		thread,
@@ -59,7 +59,7 @@
 					class="icon-button plain"
 					title="delete thread"
 				>
-					<Glyph glyph={GLYPH_REMOVE} />
+					<Svg data={icon_remove} />
 				</ConfirmButton>
 			</div>
 		</div>

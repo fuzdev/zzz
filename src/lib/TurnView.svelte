@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type {Turn} from './turn.svelte.js';
 	import PartStats from './PartStats.svelte';
-	import Glyph from './Glyph.svelte';
-	import {get_part_type_glyph} from './part_helpers.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import {get_part_type_icon} from './part_helpers.js';
 	import PartEditorForText from './PartEditorForText.svelte';
 	import TurnContextmenu from './TurnContextmenu.svelte';
 	import PartEditorForDiskfile from './PartEditorForDiskfile.svelte';
@@ -28,7 +28,7 @@
 			<div class="column gap_sm mb_md" class:dormant={!part.enabled}>
 				<div class="display:flex mb_0 justify-content:space-between">
 					<div class="font_size_lg m_0">
-						<Glyph glyph={get_part_type_glyph(part)} />&nbsp;
+						<Svg data={get_part_type_icon(part)} />&nbsp;
 						{part.name}
 					</div>
 					<div class="display:flex gap_xs">

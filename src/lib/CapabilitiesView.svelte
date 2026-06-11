@@ -4,9 +4,8 @@
 	import {logo_zzz} from './logos.js';
 	import CapabilityWebsocket from './CapabilityWebsocket.svelte';
 	import CapabilityFilesystem from './CapabilityFilesystem.svelte';
-	import Glyph from './Glyph.svelte';
 	import ProviderLogo from './ProviderLogo.svelte';
-	import {GLYPH_CONNECT, GLYPH_DIRECTORY, GLYPH_BACKEND} from './glyphs.js';
+	import {icon_backend, icon_connect, icon_directory} from '@fuzdev/fuz_ui/icons.js';
 	import CapabilityProvider from './CapabilityProvider.svelte';
 	import CapabilityBackend from './CapabilityBackend.svelte';
 	import CapabilitySystem from './CapabilitySystem.svelte';
@@ -17,15 +16,15 @@
 <div class="width_atmost_md">
 	<section>
 		<section class="mb_xl12">
-			<h2><Glyph glyph={GLYPH_BACKEND} /> backend</h2>
+			<h2><Svg data={icon_backend} /> backend</h2>
 			<CapabilityBackend />
 		</section>
 		<section class="mb_xl12">
-			<h2><Glyph glyph={GLYPH_DIRECTORY} /> backend filesystem</h2>
+			<h2><Svg data={icon_directory} /> backend filesystem</h2>
 			<CapabilityFilesystem />
 		</section>
 		<section class="mb_xl12">
-			<h2><Glyph glyph={GLYPH_CONNECT} /> backend websocket</h2>
+			<h2><Svg data={icon_connect} /> backend websocket</h2>
 			<p>
 				Websockets are an optional transport that's preferred by default. Zzz currently relies on
 				websockets for pushed updates like filesystem changes -- SSE will be supported as an option

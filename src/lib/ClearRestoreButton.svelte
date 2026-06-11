@@ -1,20 +1,22 @@
 <script lang="ts">
 	import type {Snippet} from 'svelte';
 	import type {SvelteHTMLElements} from 'svelte/elements';
+	import type {SvgData} from '@fuzdev/fuz_ui/svg.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import {icon_clear, icon_restore} from '@fuzdev/fuz_ui/icons.js';
 
-	import {GLYPH_CLEAR, GLYPH_RESTORE} from './glyphs.js';
 	import ToggleButton from './ToggleButton.svelte';
 
 	let {
 		value = $bindable(),
 		onchange,
-		restore_icon = GLYPH_RESTORE,
-		clear_icon = GLYPH_CLEAR,
+		restore_icon = icon_restore,
+		clear_icon = icon_clear,
 		...rest
 	}: SvelteHTMLElements['button'] & {
 		value: string;
-		restore_icon?: Snippet | string | undefined;
-		clear_icon?: Snippet | string | undefined;
+		restore_icon?: Snippet | string | SvgData | undefined;
+		clear_icon?: Snippet | string | SvgData | undefined;
 	} = $props();
 
 	let cleared_value = $state.raw('');
@@ -41,9 +43,17 @@
 			}
 		}
 	}
-	active_content={clear_icon}
-	inactive_content={restore_icon}
+	active_content={clear_content}
+	inactive_content={restore_content}
 	{...rest}
 	{disabled}
 	{title}
 />
+
+{#snippet render_icon(value: Snippet | string | SvgData)}
+	{#if typeof value === 'string'}{value}{:else if typeof value === 'function'}{@render value()}{:else}<Svg
+			data={value}
+		/>{/if}
+{/snippet}
+{#snippet clear_content()}{@render render_icon(clear_icon)}{/snippet}
+{#snippet restore_content()}{@render render_icon(restore_icon)}{/snippet}

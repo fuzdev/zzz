@@ -8,8 +8,9 @@
 	import {estimate_token_count} from './helpers.js';
 	import ContentStats from './ContentStats.svelte';
 	import ClearRestoreButton from './ClearRestoreButton.svelte';
-	import {GLYPH_PASTE, GLYPH_PLACEHOLDER} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import {icon_paste} from '@fuzdev/fuz_ui/icons.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import {GLYPH_PLACEHOLDER} from './glyphs.js';
 
 	let {
 		content = $bindable(),
@@ -107,7 +108,7 @@
 				class="plain icon-button font_size_lg"
 			>
 				<!-- TODO should be default -->
-				<Glyph glyph={GLYPH_PASTE} />
+				<Svg data={icon_paste} />
 			</PasteFromClipboard>
 			<ClearRestoreButton
 				bind:value={
