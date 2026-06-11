@@ -12,7 +12,7 @@
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 	import {icon_delete, icon_preview} from '@fuzdev/fuz_ui/icons.js';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {GLYPH_PLACEHOLDER} from '$lib/glyphs.js';
+	import {format_placeholder} from '$lib/helpers.js';
 	import {frontend_context} from '$lib/frontend.svelte.js';
 
 	const projects = projects_context.get();
@@ -138,7 +138,7 @@
 							<textarea
 								bind:value={page_viewmodel.content}
 								class="width:100% height:100% markdown-editor"
-								placeholder="{GLYPH_PLACEHOLDER} markup"
+								placeholder={format_placeholder('markup')}
 							></textarea>
 						</div>
 

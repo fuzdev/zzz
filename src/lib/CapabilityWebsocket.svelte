@@ -11,7 +11,7 @@
 	import type {Socket} from './socket.svelte.js';
 	import {icon_cancel, icon_connect, icon_disconnect, icon_reset} from '@fuzdev/fuz_ui/icons.js';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {GLYPH_PLACEHOLDER} from './glyphs.js';
+	import {format_placeholder} from './helpers.js';
 	import {format_ms_to_readable, format_timestamp} from './time_helpers.js';
 	import {
 		DEFAULT_HEARTBEAT_INTERVAL,
@@ -106,7 +106,7 @@
 					<input
 						type="text"
 						class="plain flex:1"
-						placeholder="{GLYPH_PLACEHOLDER} websocket url, ws:// or wss://"
+						placeholder={format_placeholder('websocket url, ws:// or wss://')}
 						bind:value={socket.url_input}
 					/>
 					<button

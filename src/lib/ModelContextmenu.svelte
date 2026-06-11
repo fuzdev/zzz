@@ -8,7 +8,6 @@
 
 	import type {Model} from './model.svelte.js';
 	import {icon_chat, icon_model} from '@fuzdev/fuz_ui/icons.js';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 
 	const {
@@ -24,37 +23,33 @@
 
 <!-- TODO maybe extract ModelContextmenuEntries that can be used elsewhere like the ModelLink as an action? -->
 {#snippet entries()}
-	<ContextmenuSubmenu>
-		{#snippet icon()}<Svg data={icon_model} />{/snippet}
+	<ContextmenuSubmenu icon={icon_model}>
 		model
 
 		{#snippet menu()}
-			<ContextmenuLinkEntry href="/models/{model.name}">
-				{#snippet icon()}<Svg data={icon_model} />{/snippet}
-			</ContextmenuLinkEntry>
+			<ContextmenuLinkEntry href="/models/{model.name}" icon={icon_model} />
 
 			<ContextmenuEntryCopyToClipboard content={model.name} label="copy name" />
 
-			<ContextmenuEntry run={() => model.app.chats.add(undefined, true).add_thread(model)}>
-				{#snippet icon()}<Svg data={icon_chat} />{/snippet}
+			<ContextmenuEntry
+				icon={icon_chat}
+				run={() => model.app.chats.add(undefined, true).add_thread(model)}
+			>
 				<span>create new chat</span>
 			</ContextmenuEntry>
 
 			<!-- TODO probably want an "edit model" form, this is confusing as-is -->
-			<!-- <ContextmenuSubmenu>
-				{#snippet icon()}<Svg data={icon_provider} />{/snippet}
+			<!-- <ContextmenuSubmenu icon={icon_provider}>
 				set provider
 
 				{#snippet menu()}
 					{#each model.app.providers.names as provider_name (provider_name)}
 						<ContextmenuEntry
+							icon={model.provider_name === provider_name ? icon_checkmark : undefined}
 							run={() => {
 								model.provider_name = provider_name;
 							}}
 						>
-							{#snippet icon()}
-								{#if model.provider_name === provider_name}<Svg data={icon_checkmark} />{/if}
-							{/snippet}
 							<span>{provider_name}</span>
 						</ContextmenuEntry>
 					{/each}

@@ -10,7 +10,7 @@
 	import DiskfileActions from './DiskfileActions.svelte';
 	import {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
-	import {GLYPH_PLACEHOLDER} from './glyphs.js';
+	import {format_placeholder} from './helpers.js';
 	import DiskfilePartView from './DiskfilePartView.svelte';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 	import DiskfileEditorNav from './DiskfileEditorNav.svelte';
@@ -66,7 +66,7 @@
 				bind:this={content_editor}
 				bind:content={editor_state.current_content}
 				token_count={editor_state.current_token_count}
-				placeholder={GLYPH_PLACEHOLDER + ' ' + diskfile.path_relative}
+				placeholder={format_placeholder(diskfile.path_relative)}
 				readonly={false}
 				attrs={{class: 'height:100% border-radius:0'}}
 				onsave={async () => {

@@ -3,7 +3,7 @@
 	import {tick} from 'svelte';
 	import type {SvelteHTMLElements} from 'svelte/elements';
 
-	import {estimate_token_count} from './helpers.js';
+	import {estimate_token_count, format_placeholder} from './helpers.js';
 	import type {Thread} from './thread.svelte.js';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';
 	import TurnList from './TurnList.svelte';
@@ -13,7 +13,6 @@
 	import ContentEditor from './ContentEditor.svelte';
 	import {icon_error, icon_send, icon_stop} from '@fuzdev/fuz_ui/icons.js';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {GLYPH_PLACEHOLDER} from './glyphs.js';
 
 	// TODO no longer uses `Chat`, maybe rename to `ThreadView` or similar?
 
@@ -106,7 +105,7 @@
 					bind:this={content_input}
 					bind:content={input}
 					token_count={input_token_count}
-					placeholder={GLYPH_PLACEHOLDER}
+					placeholder={format_placeholder()}
 					show_stats
 					show_actions
 					{focus_key}

@@ -39,7 +39,8 @@
 				{/if}
 				<p class="mb_md">{provider.company}</p>
 				<p class="mb_md">
-					<Svg data={icon_provider} />{provider.name}
+					<Svg data={icon_provider} />
+					{provider.name}
 				</p>
 				<div class="row gap_xl">
 					<ExternalLink href={provider.homepage}>{format_url(provider.homepage)}</ExternalLink>

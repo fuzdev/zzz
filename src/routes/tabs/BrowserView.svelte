@@ -12,7 +12,7 @@
 		icon_refresh,
 	} from '@fuzdev/fuz_ui/icons.js';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {GLYPH_PLACEHOLDER} from '$lib/glyphs.js';
+	import {format_placeholder} from '$lib/helpers.js';
 	import type {Browser} from '$routes/tabs/browser.svelte.js';
 	import BrowserTabContent from '$routes/tabs/BrowserTabContent.svelte';
 	import BrowserTabListitem from '$routes/tabs/BrowserTabListitem.svelte';
@@ -142,7 +142,7 @@
 							browser.submit_edited_url();
 						}
 					}}
-					placeholder={GLYPH_PLACEHOLDER}
+					placeholder={format_placeholder()}
 				/>
 			</div>
 

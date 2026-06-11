@@ -22,7 +22,8 @@
 
 <div class="display:flex flex-direction:column gap_xs width:100%">
 	<small class="overflow_wrap_break_all width:100%">
-		<Svg data={icon_file} />{app.diskfiles.to_relative_path(diskfile.path)}
+		<Svg data={icon_file} />
+		{app.diskfiles.to_relative_path(diskfile.path)}
 	</small>
 
 	<small>

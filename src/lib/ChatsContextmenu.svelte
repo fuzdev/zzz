@@ -6,7 +6,6 @@
 
 	import {frontend_context} from './frontend.svelte.js';
 	import {icon_chat} from '@fuzdev/fuz_ui/icons.js';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const props: OmitStrict<ComponentProps<typeof Contextmenu>, 'entries'> & {children: Snippet} =
 		$props();
@@ -18,11 +17,11 @@
 
 {#snippet entries()}
 	<ContextmenuEntry
+		icon={icon_chat}
 		run={() => {
 			app.chats.add(undefined, true);
 		}}
 	>
-		{#snippet icon()}<Svg data={icon_chat} />{/snippet}
 		<span>create new chat</span>
 	</ContextmenuEntry>
 {/snippet}

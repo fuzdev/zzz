@@ -7,7 +7,7 @@
 	import ChatThread from './ChatThread.svelte';
 	import {icon_add, icon_remove, icon_send} from '@fuzdev/fuz_ui/icons.js';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {GLYPH_PLACEHOLDER} from './glyphs.js';
+	import {format_placeholder} from './helpers.js';
 	import ContentEditor from './ContentEditor.svelte';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';
 
@@ -44,7 +44,7 @@
 			bind:this={content_input}
 			bind:content={chat.main_input}
 			token_count={chat.main_input_token_count}
-			placeholder="{GLYPH_PLACEHOLDER} to {count}"
+			placeholder={format_placeholder(`to ${count}`)}
 			show_actions
 			show_stats
 			focus_key={chat.id}

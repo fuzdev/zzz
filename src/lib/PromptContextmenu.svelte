@@ -15,7 +15,6 @@
 		icon_prompt,
 		icon_remove,
 	} from '@fuzdev/fuz_ui/icons.js';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
 
@@ -35,8 +34,7 @@
 <Contextmenu {...rest} {entries} />
 
 {#snippet entries()}
-	<ContextmenuSubmenu>
-		{#snippet icon()}<Svg data={icon_prompt} />{/snippet}
+	<ContextmenuSubmenu icon={icon_prompt}>
 		prompt
 		{#snippet menu()}
 			<!-- TODO @many maybe a copy submenu on this item with copy id, name, etc, leverage generic cells -->
@@ -47,6 +45,7 @@
 			/>
 
 			<ContextmenuEntry
+				icon={icon_part}
 				run={() => {
 					prompt.add_part(
 						Part.create(app, {
@@ -56,10 +55,10 @@
 					);
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_part} />{/snippet}
 				<span>add text part</span>
 			</ContextmenuEntry>
 			<ContextmenuEntry
+				icon={icon_file}
 				run={() => {
 					if (!app.diskfiles.items.size) {
 						alert('No files available. Add files first.'); // eslint-disable-line no-alert
@@ -69,25 +68,24 @@
 					show_diskfile_picker = true;
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_file} />{/snippet}
 				<span>add file part</span>
 			</ContextmenuEntry>
 			{#if prompt.parts.length}
-				<ContextmenuEntry run={() => prompt.remove_all_parts()}>
-					{#snippet icon()}<Svg data={icon_remove} />{/snippet}
+				<ContextmenuEntry icon={icon_remove} run={() => prompt.remove_all_parts()}>
 					<span>remove all parts</span>
 				</ContextmenuEntry>
 			{/if}
 			<!-- <ContextmenuEntry
+				icon={icon_edit}
 				run={() => {
 					// TODO implement
 					// prompt.rename() after part name picker
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_edit} />{/snippet}
 				<span>Rename prompt</span>
 			</ContextmenuEntry> -->
 			<ContextmenuEntry
+				icon={icon_delete}
 				run={() => {
 					// TODO confirm dialog that shows the prompt's summary
 					// TODO @many better confirmation
@@ -97,7 +95,6 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_delete} />{/snippet}
 				<span>delete prompt</span>
 			</ContextmenuEntry>
 		{/snippet}

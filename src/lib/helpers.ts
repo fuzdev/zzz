@@ -17,6 +17,17 @@ export const ESTIMATED_CHARS_PER_TOKEN = 3;
 export const estimate_token_count = (text: string): number =>
 	Math.ceil(text.length / ESTIMATED_CHARS_PER_TOKEN);
 
+// text, not an `icon_*` SVG from fuz_ui, because an attribute can't host markup
+const PLACEHOLDER_GLYPH = '↳';
+
+/**
+ * Formats input `placeholder` text, prefixed with a `↳` arrow.
+ * The arrow is a text glyph rather than an `icon_*` SVG
+ * because the `placeholder` attribute can't host markup.
+ */
+export const format_placeholder = (text?: string | null): string =>
+	text ? `${PLACEHOLDER_GLYPH} ${text}` : PLACEHOLDER_GLYPH;
+
 /** Creates an id suitable for insecure use on a single client, like for element ids. */
 export const create_client_id = (): string => Math.random().toString(36).substring(2);
 

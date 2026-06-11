@@ -5,7 +5,7 @@
 	import XmlAttributeEditor from './XmlAttributeEditor.svelte';
 	import {icon_add} from '@fuzdev/fuz_ui/icons.js';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {GLYPH_PLACEHOLDER} from './glyphs.js';
+	import {format_placeholder} from './helpers.js';
 
 	const {
 		part,
@@ -39,9 +39,7 @@
 		<input
 			class="plain flex:1 sm"
 			class:dormant={!part.has_xml_tag}
-			placeholder={part.has_xml_tag
-				? GLYPH_PLACEHOLDER + ' ' + part.xml_tag_name_default
-				: undefined}
+			placeholder={part.has_xml_tag ? format_placeholder(part.xml_tag_name_default) : undefined}
 			bind:value={part.xml_tag_name}
 			bind:this={input_el}
 		/>

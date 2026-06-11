@@ -5,17 +5,16 @@
 	import PasteFromClipboard from '@fuzdev/fuz_ui/PasteFromClipboard.svelte';
 	import {swallow} from '@fuzdev/fuz_util/dom.js';
 
-	import {estimate_token_count} from './helpers.js';
+	import {estimate_token_count, format_placeholder} from './helpers.js';
 	import ContentStats from './ContentStats.svelte';
 	import ClearRestoreButton from './ClearRestoreButton.svelte';
 	import {icon_paste} from '@fuzdev/fuz_ui/icons.js';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {GLYPH_PLACEHOLDER} from './glyphs.js';
 
 	let {
 		content = $bindable(),
 		token_count: token_count_prop,
-		placeholder = GLYPH_PLACEHOLDER,
+		placeholder = format_placeholder(),
 		readonly = false,
 		show_stats = false,
 		show_actions = false,

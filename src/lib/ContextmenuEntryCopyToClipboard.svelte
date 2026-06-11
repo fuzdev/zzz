@@ -5,7 +5,6 @@
 	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
 
 	import {icon_copy} from '@fuzdev/fuz_ui/icons.js';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {to_preview} from './helpers.js';
 
 	const {
@@ -42,8 +41,7 @@
 	};
 </script>
 
-<ContextmenuEntry run={copy_to_clipboard} {...rest}>
-	{#snippet icon()}<Svg data={icon_copy} />{/snippet}
+<ContextmenuEntry icon={icon_copy} run={copy_to_clipboard} {...rest}>
 	{#if children}
 		{@render children()}
 	{:else}

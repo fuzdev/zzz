@@ -8,7 +8,6 @@
 	import type {Chat} from './chat.svelte.js';
 	import {frontend_context} from './frontend.svelte.js';
 	import {icon_add, icon_chat, icon_delete, icon_remove, icon_view} from '@fuzdev/fuz_ui/icons.js';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';
 
@@ -28,25 +27,24 @@
 <Contextmenu {...rest} {entries} />
 
 {#snippet entries()}
-	<ContextmenuSubmenu>
-		{#snippet icon()}<Svg data={icon_chat} />{/snippet}
+	<ContextmenuSubmenu icon={icon_chat}>
 		chat
 		{#snippet menu()}
 			<ContextmenuEntry
+				icon={icon_add}
 				run={() => {
 					show_model_picker = true;
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_add} />{/snippet}
 				<span>add thread</span>
 			</ContextmenuEntry>
 
 			<ContextmenuEntry
+				icon={icon_view}
 				run={() => {
 					chat.view_mode = chat.view_mode === 'simple' ? 'multi' : 'simple';
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_view} />{/snippet}
 				<span>{chat.view_mode === 'simple' ? 'multi' : 'simple'} view</span>
 			</ContextmenuEntry>
 
@@ -54,8 +52,7 @@
 			<ContextmenuEntryCopyToClipboard content={chat.id} label="copy id" />
 
 			{#if chat.threads.length}
-				<ContextmenuEntry run={() => chat.remove_all_threads()}>
-					{#snippet icon()}<Svg data={icon_remove} />{/snippet}
+				<ContextmenuEntry icon={icon_remove} run={() => chat.remove_all_threads()}>
 					<span>remove all threads</span>
 				</ContextmenuEntry>
 			{/if}
@@ -68,11 +65,11 @@
 				/>
 
 				<ContextmenuEntry
+					icon={icon_remove}
 					run={() => {
 						chat.main_input = '';
 					}}
 				>
-					{#snippet icon()}<Svg data={icon_remove} />{/snippet}
 					<span>clear input</span>
 				</ContextmenuEntry>
 			{/if}
@@ -80,6 +77,7 @@
 			<!-- TODO I think the best UX here is to have a dialog for the chat editor,
 			 focusing the editable input doesn't work outside of the ChatView  -->
 			<!-- <ContextmenuEntry
+				icon={icon_edit}
 				run={() => {
 					// TODO make this focus the `EditableText` if available, somehow
 					const new_name = prompt('Enter new name for chat:', chat.name); // eslint-disable-line no-alert
@@ -88,11 +86,11 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_edit} />{/snippet}
 				<span>edit chat</span>
 			</ContextmenuEntry> -->
 
 			<ContextmenuEntry
+				icon={icon_chat}
 				run={async () => {
 					// TODO make it have a unique name, and adding threads looks hacky,
 					// maybe add a `chats.duplicate` method
@@ -106,11 +104,11 @@
 					await app.chats.navigate_to(new_chat.id);
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_chat} />{/snippet}
 				<span>duplicate chat</span>
 			</ContextmenuEntry>
 
 			<ContextmenuEntry
+				icon={icon_delete}
 				run={() => {
 					// TODO @many better confirmation
 					// eslint-disable-next-line no-alert
@@ -119,7 +117,6 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_delete} />{/snippet}
 				<span>delete chat</span>
 			</ContextmenuEntry>
 		{/snippet}

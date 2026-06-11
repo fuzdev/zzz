@@ -12,7 +12,7 @@
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
 	import {icon_file} from '@fuzdev/fuz_ui/icons.js';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {GLYPH_PLACEHOLDER} from './glyphs.js';
+	import {format_placeholder} from './helpers.js';
 
 	const {
 		diskfile_part,
@@ -104,7 +104,7 @@
 					}
 				}
 				token_count={editor_state.current_token_count}
-				placeholder={GLYPH_PLACEHOLDER + ' ' + diskfile.path_relative}
+				placeholder={format_placeholder(diskfile.path_relative)}
 				show_stats={false}
 				readonly={false}
 				onsave={async (value) => {

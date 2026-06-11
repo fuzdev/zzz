@@ -32,8 +32,7 @@
 <Contextmenu {...rest} {entries} />
 
 {#snippet entries()}
-	<ContextmenuSubmenu>
-		{#snippet icon()}<Svg data={get_part_type_icon(part)} />{/snippet}
+	<ContextmenuSubmenu icon={get_part_type_icon(part)}>
 		part
 
 		{#snippet menu()}
@@ -49,15 +48,16 @@
 			<ContextmenuEntryToggle bind:enabled={part.enabled} label="part" />
 
 			<ContextmenuEntry
+				icon={icon_edit}
 				run={() => {
 					show_editor = true;
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_edit} />{/snippet}
 				<span>edit part</span>
 			</ContextmenuEntry>
 
 			<ContextmenuEntry
+				icon={icon_delete}
 				run={() => {
 					// TODO @many better confirmation
 					// eslint-disable-next-line no-alert
@@ -66,7 +66,6 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_delete} />{/snippet}
 				<span>delete part</span>
 			</ContextmenuEntry>
 		{/snippet}

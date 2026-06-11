@@ -7,7 +7,6 @@
 
 	import type {Diskfile} from './diskfile.svelte.js';
 	import {icon_delete, icon_file, icon_remove} from '@fuzdev/fuz_ui/icons.js';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {frontend_context} from './frontend.svelte.js';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 
@@ -35,40 +34,39 @@
 		{@const {tabs} = diskfiles.editor}
 		{@const tab = tabs.by_diskfile_id.get(diskfile.id)}
 		{@const selected = diskfile === tabs.selected_tab?.diskfile}
-		<ContextmenuSubmenu>
-			{#snippet icon()}<Svg data={icon_file} />{/snippet}
+		<ContextmenuSubmenu icon={icon_file}>
 			file
 			{#snippet menu()}
 				<!-- TODO maybe show disabled versions? changing what appears isn't great -->
 				{#if !selected || tab?.is_preview}
 					<ContextmenuEntry
+						icon={icon_file}
 						run={() => {
 							diskfiles.select(diskfile.id, true);
 						}}
 					>
-						{#snippet icon()}<Svg data={icon_file} />{/snippet}
 						<span>select tab</span>
 					</ContextmenuEntry>
 				{/if}
 
 				{#if !tab || (!selected && tab.is_preview)}
 					<ContextmenuEntry
+						icon={icon_file}
 						run={() => {
 							diskfiles.select(diskfile.id, false);
 						}}
 					>
-						{#snippet icon()}<Svg data={icon_file} />{/snippet}
 						<span>preview tab</span>
 					</ContextmenuEntry>
 				{/if}
 
 				{#if tab}
 					<ContextmenuEntry
+						icon={icon_remove}
 						run={() => {
 							diskfiles.editor.close_tab(tab.id);
 						}}
 					>
-						{#snippet icon()}<Svg data={icon_remove} />{/snippet}
 						<span>close tab</span>
 					</ContextmenuEntry>
 				{/if}
@@ -88,6 +86,7 @@
 					/>
 				{/if}
 				<ContextmenuEntry
+					icon={icon_delete}
 					run={async () => {
 						// TODO @many better confirmation
 						// eslint-disable-next-line no-alert
@@ -96,7 +95,6 @@
 						}
 					}}
 				>
-					{#snippet icon()}<Svg data={icon_delete} />{/snippet}
 					<span>delete file</span>
 				</ContextmenuEntry>
 			{/snippet}

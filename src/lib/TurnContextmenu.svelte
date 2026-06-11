@@ -27,8 +27,7 @@
 <Contextmenu {...rest} {entries} />
 
 {#snippet entries()}
-	<ContextmenuSubmenu>
-		{#snippet icon()}<Svg data={icon_turn} />{/snippet}
+	<ContextmenuSubmenu icon={icon_turn}>
 		turn
 		{#snippet menu()}
 			{#if turn.content}
@@ -40,11 +39,11 @@
 			{/if}
 
 			<ContextmenuEntry
+				icon={icon_edit}
 				run={() => {
 					show_editor = true;
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_edit} />{/snippet}
 				<span>edit content</span>
 			</ContextmenuEntry>
 

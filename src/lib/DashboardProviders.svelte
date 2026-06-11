@@ -22,7 +22,8 @@
 					<ProviderLink {provider} icon="logo" />
 				</div>
 				<p>
-					<Svg data={icon_provider} />{provider.name}
+					<Svg data={icon_provider} />
+					{provider.name}
 					{#if provider.available}
 						<span class="color_b_50 ml_sm"><Svg data={icon_checkmark} /> available</span>
 					{:else}

@@ -8,7 +8,6 @@
 	import type {Action} from './action.svelte.js';
 	import {frontend_context} from './frontend.svelte.js';
 	import {icon_delete, icon_log} from '@fuzdev/fuz_ui/icons.js';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 
 	const {
@@ -25,8 +24,7 @@
 <Contextmenu {...rest} {entries} />
 
 {#snippet entries()}
-	<ContextmenuSubmenu>
-		{#snippet icon()}<Svg data={icon_log} />{/snippet}
+	<ContextmenuSubmenu icon={icon_log}>
 		action
 		{#snippet menu()}
 			<ContextmenuEntryCopyToClipboard content={action.method} label="copy method" />
@@ -42,16 +40,17 @@
 			<!-- TODO implement `action.retry` or `actions.retry` or something -- see `app.api` too
 			{#if action.has_error}
 				<ContextmenuEntry
+					icon={icon_retry}
 					run={() => {
 						console.log('Retry action:', action.method);
 					}}
 				>
-					{#snippet icon()}<Svg data={icon_retry} />{/snippet}
 					<span>retry action</span>
 				</ContextmenuEntry>
 			{/if} -->
 
 			<ContextmenuEntry
+				icon={icon_delete}
 				run={() => {
 					// TODO
 					// eslint-disable-next-line no-alert
@@ -60,7 +59,6 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_delete} />{/snippet}
 				<span>delete from history</span>
 			</ContextmenuEntry>
 		{/snippet}

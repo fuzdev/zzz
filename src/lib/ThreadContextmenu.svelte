@@ -8,7 +8,6 @@
 	import type {Thread} from './thread.svelte.js';
 	import {frontend_context} from './frontend.svelte.js';
 	import {icon_delete, icon_model, icon_remove, icon_thread} from '@fuzdev/fuz_ui/icons.js';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryToggle from './ContextmenuEntryToggle.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';
@@ -38,8 +37,7 @@
 />
 
 {#snippet entries()}
-	<ContextmenuSubmenu>
-		{#snippet icon()}<Svg data={icon_thread} />{/snippet}
+	<ContextmenuSubmenu icon={icon_thread}>
 		thread
 		{#snippet menu()}
 			{#if thread.content}
@@ -52,11 +50,11 @@
 
 			{#if thread.turns.size > 0}
 				<ContextmenuEntry
+					icon={icon_remove}
 					run={() => {
 						thread.remove_all_turns();
 					}}
 				>
-					{#snippet icon()}<Svg data={icon_remove} />{/snippet}
 					<span>clear conversation</span>
 				</ContextmenuEntry>
 			{/if}
@@ -64,15 +62,16 @@
 			<ContextmenuEntryToggle bind:enabled={thread.enabled} label="thread" />
 
 			<ContextmenuEntry
+				icon={icon_model}
 				run={() => {
 					show_model_picker = true;
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_model} />{/snippet}
 				switch model &nbsp; <small>{thread.model_name}</small>
 			</ContextmenuEntry>
 
 			<ContextmenuEntry
+				icon={icon_delete}
 				run={() => {
 					// TODO @many better confirmation
 					// eslint-disable-next-line no-alert
@@ -81,7 +80,6 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Svg data={icon_delete} />{/snippet}
 				<span>delete thread</span>
 			</ContextmenuEntry>
 		{/snippet}
