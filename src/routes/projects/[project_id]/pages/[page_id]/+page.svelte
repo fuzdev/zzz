@@ -3,7 +3,7 @@
 
 	import {goto} from '$app/navigation';
 	import {resolve} from '$app/paths';
-	import Mdz from '@fuzdev/fuz_ui/Mdz.svelte';
+	import Mdz from '@fuzdev/mdz/Mdz.svelte';
 
 	import {projects_context} from '$routes/projects/projects.svelte.js';
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
