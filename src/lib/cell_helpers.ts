@@ -77,15 +77,6 @@ export const get_schema_class_info = (
 		};
 	}
 
-	// Handle ZodObject with _zMetadata property
-	if (unwrapped instanceof z.ZodObject) {
-		const meta = unwrapped.meta();
-		if (typeof meta?.description === 'string' && meta.description.startsWith('_zMetadata:')) {
-			const class_name = meta.description.split(':')[1];
-			return {type: 'ZodObject', class_name, is_array: false};
-		}
-	}
-
 	// Handle other specific types
 	if (unwrapped instanceof z.ZodMap) {
 		return {type: 'ZodMap', is_array: false};

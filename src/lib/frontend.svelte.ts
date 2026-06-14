@@ -269,12 +269,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.provider_status = data.provider_status;
 
 		if (Array.isArray(data.files)) {
-			for (const disknode of data.files) {
-				this.diskfiles.handle_change({
-					change: {type: 'add', path: disknode.id},
-					disknode,
-				});
-			}
+			this.diskfiles.add_initial(data.files);
 		}
 
 		if (Array.isArray(data.workspaces)) {

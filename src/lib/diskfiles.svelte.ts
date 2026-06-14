@@ -4,7 +4,12 @@ import {Uuid} from '@fuzdev/fuz_util/id.js';
 import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
 
 import {Diskfile} from './diskfile.svelte.js';
-import {DiskfileJson, DiskfilePath, type DiskfileJsonInput} from './diskfile_types.js';
+import {
+	DiskfileJson,
+	DiskfilePath,
+	type DiskfileJsonInput,
+	type SerializableDisknode,
+} from './diskfile_types.js';
 import {disknode_to_diskfile_json, to_relative_path} from './diskfile_helpers.js';
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {HANDLED} from './cell_helpers.js';
@@ -117,6 +122,13 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		}
 
 		return diskfile;
+	}
+
+	/** Seed diskfiles from an initial file tree (e.g. session load or workspace open). */
+	add_initial(files: Array<SerializableDisknode>): void {
+		for (const disknode of files) {
+			this.add(disknode_to_diskfile_json(disknode));
+		}
 	}
 
 	async update(path: DiskfilePath, content: string): Promise<void> {

@@ -226,12 +226,7 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		receive_response: ({data: {output}}) => {
 			frontend.workspaces.add(output.workspace);
 			// populate diskfiles from initial file tree
-			for (const disknode of output.files) {
-				frontend.diskfiles.handle_change({
-					change: {type: 'add', path: disknode.id},
-					disknode,
-				});
-			}
+			frontend.diskfiles.add_initial(output.files);
 		},
 		receive_error: ({data: {error}}) => {
 			console.error('[frontend_action_handlers] workspace_open failed:', error);
