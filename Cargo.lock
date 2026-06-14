@@ -787,6 +787,7 @@ name = "fuz_http"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "fuz_db",
  "fuz_sys",
  "serde",
  "serde_json",

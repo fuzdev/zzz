@@ -24,11 +24,10 @@ import {
 	create_server_status_route_spec,
 } from '@fuzdev/fuz_app/http/common_routes.js';
 import {
-	create_account_status_route_spec,
-	create_account_route_specs,
-} from '@fuzdev/fuz_app/auth/account_routes.js';
-import {create_audit_log_route_specs} from '@fuzdev/fuz_app/auth/audit_log_routes.js';
-import {create_signup_route_specs} from '@fuzdev/fuz_app/auth/signup_routes.js';
+	account_status_route_shape,
+	create_account_route_shapes,
+} from '@fuzdev/fuz_app/auth/account_route_schema.js';
+import {create_signup_route_shape} from '@fuzdev/fuz_app/auth/signup_route_schema.js';
 import {create_standard_rpc_actions} from '@fuzdev/fuz_app/auth/standard_rpc_actions.js';
 import {create_test_app_surface_spec, stub_mw} from '@fuzdev/fuz_app/testing/stubs.js';
 import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.js';
@@ -41,6 +40,15 @@ import {all_action_specs} from '$lib/action_specs.js';
 
 /** Surface generation never invokes handlers — see module doc. */
 const noop_handler = (async () => undefined) as unknown as ActionHandler;
+
+/** Surface generation never invokes route handlers — only `method`/`path`/`auth`/schemas are read. */
+const noop_route_handler = (() => new Response()) as unknown as RouteSpec['handler'];
+
+/** Attach a no-op handler to a hono-free route shape so it satisfies `RouteSpec`. */
+const shape_to_route_spec = (shape: Omit<RouteSpec, 'handler'>): RouteSpec => ({
+	...shape,
+	handler: noop_route_handler,
+});
 
 /**
  * zzz domain RPC actions for surface generation — specs from
@@ -65,24 +73,27 @@ export const zzz_rpc_endpoints = (ctx: AppServerContext): Array<RpcEndpointSpec>
 	},
 ];
 
-/** Build the zzz route specs (health, account, signup, status, audit SSE). */
+/**
+ * Build the zzz route specs (health, account, signup, status) from the
+ * hono-free route shapes plus no-op handlers — never importing the live
+ * route factories, which statically pull `hono/cookie` (session middleware)
+ * and `hono/streaming` (SSE). The surface reads only `method` / `path` /
+ * `auth` / schemas, so the no-op handlers are never invoked.
+ */
 const create_route_specs = (ctx: AppServerContext): Array<RouteSpec> => [
 	create_health_route_spec(),
 	...prefix_route_specs('/api/account', [
-		...create_account_route_specs(ctx.deps, {
-			session_options: ctx.session_options,
-			ip_rate_limiter: ctx.ip_rate_limiter,
-			login_account_rate_limiter: ctx.login_account_rate_limiter,
-		}),
-		...create_signup_route_specs(ctx.deps, {
-			session_options: ctx.session_options,
-			ip_rate_limiter: ctx.ip_rate_limiter,
-			signup_account_rate_limiter: ctx.signup_account_rate_limiter,
-		}),
+		...create_account_route_shapes({
+			login_account_rate_limited: ctx.login_account_rate_limiter !== null,
+		}).map(shape_to_route_spec),
+		shape_to_route_spec(
+			create_signup_route_shape({
+				signup_account_rate_limited: ctx.signup_account_rate_limiter !== null,
+			}),
+		),
 	]),
-	create_account_status_route_spec({bootstrap_status: ctx.bootstrap_status}),
+	shape_to_route_spec(account_status_route_shape),
 	create_server_status_route_spec({version: '', get_uptime_ms: () => 0}),
-	...prefix_route_specs('/api/admin', create_audit_log_route_specs({stream: undefined})),
 ];
 
 /**
