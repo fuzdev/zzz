@@ -70,7 +70,8 @@ const format_auth = (auth: Action_Auth): string => {
 };
 
 /** Escape a value for a single Markdown table cell. */
-const escape_cell = (value: string): string => value.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+const escape_cell = (value: string): string =>
+	value.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
 
 const to_action_rows = (specs: typeof all_action_specs): string =>
 	[...specs]
