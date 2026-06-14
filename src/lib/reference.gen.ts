@@ -78,7 +78,7 @@ const to_action_rows = (specs: typeof all_action_specs): string =>
 		.sort((a, b) => a.method.localeCompare(b.method))
 		.map(
 			(spec) =>
-				`| \`${spec.method}\` | ${spec.kind} | ${spec.initiator} | ${format_auth(spec.auth)} | ${escape_cell(spec.description)} |`,
+				`| \`${spec.method}\` | ${spec.kind} | ${spec.initiator} | ${escape_cell(format_auth(spec.auth))} | ${escape_cell(spec.description)} |`,
 		)
 		.join('\n');
 
