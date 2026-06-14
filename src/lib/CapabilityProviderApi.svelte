@@ -173,9 +173,11 @@
 						>
 					</div>
 					<ul>
-						<li>
-							<ExternalLink href={provider.api_key_url!}>get API key</ExternalLink>
-						</li>
+						{#if provider.api_key_url}
+							<li>
+								<ExternalLink href={provider.api_key_url}>get API key</ExternalLink>
+							</li>
+						{/if}
 						<li>
 							<ExternalLink href={provider.homepage}>homepage</ExternalLink>
 						</li>

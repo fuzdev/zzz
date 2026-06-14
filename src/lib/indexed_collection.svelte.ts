@@ -296,18 +296,13 @@ export class IndexedCollection<
 	}
 
 	/**
-	 * Add multiple items to the collection at once with improved performance.
+	 * Add multiple items to the collection at once.
 	 */
 	add_many(items: Array<T>): void {
 		if (!items.length) return;
 
-		// Add all items to the collection
 		for (const item of items) {
-			// Update primary id index
-			this.by_id.set(item.id, item);
-
-			// Update all other indexes
-			this.#update_indexes_for_added_item(item); // TODO update afterwards instead? in a batch?
+			this.add(item);
 		}
 	}
 

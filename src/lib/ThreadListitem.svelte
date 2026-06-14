@@ -38,7 +38,9 @@
 		<div class="row justify-content:space-between gap_xs">
 			<div class="flex:1">
 				<div class="font-weight:400">
-					<ProviderLogo name={thread.model.provider_name} size="var(--font_size_md)" />
+					{#if thread.model}
+						<ProviderLogo name={thread.model.provider_name} size="var(--font_size_md)" />
+					{/if}
 					{thread.model_name}
 				</div>
 				<div class="display:flex gap_xs">

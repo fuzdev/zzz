@@ -235,10 +235,7 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 
 	workspace_close: {
 		receive_response: ({data: {input}}) => {
-			const workspace = frontend.workspaces.get_by_path(input.path);
-			if (workspace) {
-				frontend.workspaces.remove(workspace.id);
-			}
+			frontend.workspaces.remove_by_path(input.path);
 		},
 		receive_error: ({data: {error}}) => {
 			console.error('[frontend_action_handlers] workspace_close failed:', error);
@@ -261,10 +258,7 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 			if (input.type === 'open') {
 				frontend.workspaces.add(input.workspace);
 			} else {
-				const workspace = frontend.workspaces.get_by_path(input.workspace.path);
-				if (workspace) {
-					frontend.workspaces.remove(workspace.id);
-				}
+				frontend.workspaces.remove_by_path(input.workspace.path);
 			}
 		},
 	},

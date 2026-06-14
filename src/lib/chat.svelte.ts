@@ -99,7 +99,7 @@ export class Chat extends Cell<typeof ChatJson> {
 	}
 
 	remove_threads_by_model_tag(tag: string): void {
-		for (const thread of this.threads.filter((t) => t.model.tags.includes(tag))) {
+		for (const thread of this.threads.filter((t) => t.model?.tags.includes(tag) ?? false)) {
 			this.remove_thread(thread.id);
 		}
 	}

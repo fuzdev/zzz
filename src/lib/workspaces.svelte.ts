@@ -93,6 +93,14 @@ export class Workspaces extends Cell<typeof WorkspacesJson> {
 		return this.items.by_optional('by_path', path);
 	}
 
+	/**
+	 * Remove the workspace at `path`, if one exists. No-op when absent.
+	 */
+	remove_by_path(path: DiskfileDirectoryPath): void {
+		const workspace = this.get_by_path(path);
+		if (workspace) this.remove(workspace.id);
+	}
+
 	activate(id: Uuid): void {
 		if (this.items.by_id.has(id)) {
 			this.active_id = id;

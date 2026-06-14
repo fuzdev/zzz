@@ -54,7 +54,7 @@
 
 	let show_model_picker = $state.raw(false);
 
-	const provider = $derived(thread.model.provider);
+	const provider = $derived(thread.model?.provider);
 	const provider_error = $derived(
 		provider?.available
 			? null
@@ -80,7 +80,7 @@
 						class="plain sm font_size_lg text-align:left font-weight:400"
 						onclick={() => (show_model_picker = true)}
 					>
-						{thread.model.name}
+						{thread.model?.name ?? thread.model_name}
 					</button>
 					<small
 						><ProviderLink

@@ -36,15 +36,14 @@ import {HANDLED} from './cell_helpers.js';
 import {ActionPeer} from '@fuzdev/fuz_app/actions/action_peer.js';
 import {
 	ActionExecutor,
-	action_event_phase_by_kind,
 	type ActionEventEnvironment,
 } from '@fuzdev/fuz_app/actions/action_event_types.js';
 import {FrontendHttpTransport} from '@fuzdev/fuz_app/actions/transports_http.js';
 import {FrontendWebsocketTransport} from '@fuzdev/fuz_app/actions/transports_ws.js';
 import {create_rpc_client} from '@fuzdev/fuz_app/actions/rpc_client.js';
-import type {ActionMethod, FrontendActionsApi} from './action_metatypes.js';
+import type {FrontendActionsApi} from './action_metatypes.js';
 import type {FrontendActionHandlers} from './frontend_action_types.js';
-import {ActionInputs, ActionOutputs} from './action_collections.js';
+import {ActionOutputs} from './action_collections.js';
 import {all_action_specs} from './action_specs.js';
 import {create_frontend_action_handlers} from './frontend_action_handlers.js';
 
@@ -326,27 +325,5 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 	lookup_action_spec(method: string): ActionSpecUnion | undefined {
 		return this.action_registry.spec_by_method.get(method);
-	}
-
-	lookup_action_input_schema<TMethod extends ActionMethod>(
-		method: TMethod,
-	): (typeof ActionInputs)[TMethod] | undefined {
-		const spec = this.action_registry.spec_by_method.get(method);
-		return spec?.input as any;
-	}
-
-	lookup_action_output_schema<TMethod extends ActionMethod>(
-		method: TMethod,
-	): (typeof ActionOutputs)[TMethod] | undefined {
-		const spec = this.action_registry.spec_by_method.get(method);
-		return spec?.output as any;
-	}
-
-	// TODO maybe better type safety here and the `lookup_action_handler` method?
-	is_valid_phase_for_method(method: ActionMethod, phase: ActionEventPhase): boolean {
-		const spec = this.action_registry.spec_by_method.get(method);
-		if (!spec) return false;
-		const valid_phases = action_event_phase_by_kind[spec.kind];
-		return valid_phases.includes(phase);
 	}
 }

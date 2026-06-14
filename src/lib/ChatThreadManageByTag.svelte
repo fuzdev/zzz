@@ -43,7 +43,9 @@
 			<menu class="unstyled column">
 				{#each tags as tag (tag)}
 					<!-- TODO index this -->
-					{@const threads_with_tag = chat.threads.filter((t) => t.model.tags.includes(tag))}
+					{@const threads_with_tag = chat.threads.filter(
+						(t) => t.model?.tags.includes(tag) ?? false,
+					)}
 					<ConfirmButton
 						disabled={!threads_with_tag.length}
 						class="width:100% font_size_sm py_xs3 justify-content:space-between plain border_radius_xs font-weight:600"

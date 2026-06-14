@@ -107,15 +107,4 @@ export class Models extends Cell<typeof ModelsJson> {
 	filter_by_tag(tag: string): Array<Model> {
 		return this.items.where('tag', tag);
 	}
-
-	remove_by_name(name: string): void {
-		const model = this.items.by_optional('name', name);
-		if (model) {
-			this.items.remove(model.id);
-		}
-	}
-
-	clear(): void {
-		this.items.clear();
-	}
 }

@@ -8,17 +8,6 @@ import type {ChatTemplate} from './chat_template.js';
 // TODO this is a temporary source of truth, use APIs instead
 // TODO @many refactor with db
 
-// Configuration defaults
-export const SYSTEM_MESSAGE_DEFAULT =
-	'You are a helpful assistant that responds succinctly unless asked for more.';
-export const OUTPUT_TOKEN_MAX_DEFAULT = 1000;
-export const TEMPERATURE_DEFAULT: number | undefined = undefined;
-export const SEED_DEFAULT: number | undefined = undefined;
-export const TOP_K_DEFAULT: number | undefined = undefined;
-export const TOP_P_DEFAULT: number | undefined = undefined;
-export const FREQUENCY_PENALTY_DEFAULT: number | undefined = undefined;
-export const PRESENCE_PENALTY_DEFAULT: number | undefined = undefined;
-export const STOP_SEQUENCES_DEFAULT: Array<string> | undefined = undefined;
 export const BOTS_DEFAULT = {
 	namerbot: 'claude-3-5-haiku-20241022',
 };

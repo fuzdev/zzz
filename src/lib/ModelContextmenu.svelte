@@ -14,7 +14,7 @@
 		model,
 		...rest
 	}: OmitStrict<ComponentProps<typeof Contextmenu>, 'entries'> & {
-		model: Model;
+		model: Model | undefined;
 		children: Snippet;
 	} = $props();
 </script>
@@ -23,23 +23,24 @@
 
 <!-- TODO maybe extract ModelContextmenuEntries that can be used elsewhere like the ModelLink as an action? -->
 {#snippet entries()}
-	<ContextmenuSubmenu icon={icon_model}>
-		model
+	{#if model}
+		<ContextmenuSubmenu icon={icon_model}>
+			model
 
-		{#snippet menu()}
-			<ContextmenuLinkEntry href="/models/{model.name}" icon={icon_model} />
+			{#snippet menu()}
+				<ContextmenuLinkEntry href="/models/{model.name}" icon={icon_model} />
 
-			<ContextmenuEntryCopyToClipboard content={model.name} label="copy name" />
+				<ContextmenuEntryCopyToClipboard content={model.name} label="copy name" />
 
-			<ContextmenuEntry
-				icon={icon_chat}
-				run={() => model.app.chats.add(undefined, true).add_thread(model)}
-			>
-				<span>create new chat</span>
-			</ContextmenuEntry>
+				<ContextmenuEntry
+					icon={icon_chat}
+					run={() => model.app.chats.add(undefined, true).add_thread(model)}
+				>
+					<span>create new chat</span>
+				</ContextmenuEntry>
 
-			<!-- TODO probably want an "edit model" form, this is confusing as-is -->
-			<!-- <ContextmenuSubmenu icon={icon_provider}>
+				<!-- TODO probably want an "edit model" form, this is confusing as-is -->
+				<!-- <ContextmenuSubmenu icon={icon_provider}>
 				set provider
 
 				{#snippet menu()}
@@ -55,6 +56,7 @@
 					{/each}
 				{/snippet}
 			</ContextmenuSubmenu> -->
-		{/snippet}
-	</ContextmenuSubmenu>
+			{/snippet}
+		</ContextmenuSubmenu>
+	{/if}
 {/snippet}

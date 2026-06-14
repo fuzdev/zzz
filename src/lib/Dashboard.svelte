@@ -47,7 +47,6 @@
 			navigation.from?.route.id === '/' &&
 			navigation.to?.route.id !== '/'
 		) {
-			console.log('resetting');
 			futureclicks = 0;
 		}
 	});
@@ -56,15 +55,9 @@
 		const nav_items = structuredClone(main_nav_items_default);
 
 		if (app.futuremode) {
-			// Add tabs to main group
-			const main_group = nav_items.find((l) => l.group === 'main');
-			if (main_group) {
-				main_group.items.unshift({label: 'tabs', href: resolve('/tabs'), icon: icon_tab});
-			}
-
-			// Add projects to main group
-			const main_section = nav_items.find((section) => section.group === 'main');
+			const main_section = nav_items.find((s) => s.group === 'main');
 			if (main_section) {
+				main_section.items.unshift({label: 'tabs', href: resolve('/tabs'), icon: icon_tab});
 				main_section.items.push({
 					label: 'projects',
 					href: resolve('/projects'),

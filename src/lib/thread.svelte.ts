@@ -21,11 +21,9 @@ export interface ThreadOptions extends CellOptions<typeof ThreadJson> {}
  */
 export class Thread extends Cell<typeof ThreadJson> {
 	model_name: string = $state.raw()!;
-	readonly model: Model = $derived.by(() => {
-		const model = this.app.models.find_by_name(this.model_name);
-		if (!model) throw new Error(`Model "${this.model_name}" not found`); // TODO do this differently?
-		return model;
-	});
+	readonly model: Model | undefined = $derived.by(() =>
+		this.app.models.find_by_name(this.model_name),
+	);
 
 	readonly turns: IndexedCollection<Turn> = new IndexedCollection();
 
@@ -132,11 +130,17 @@ export class Thread extends Cell<typeof ThreadJson> {
 		// TODO rethink this API with the completion request/response (see OpenAI/MCP/A2A)
 		// TODO maybe do this in the `completion_create: {send_request:` handler?
 
+		const model = this.model;
+		if (!model) {
+			console.warn(`[thread.send_message] model '${this.model_name}' not found, skipping send`);
+			return null;
+		}
+
 		// Pre-flight check: verify provider is available (defensive - UI should prevent this)
-		const provider_status = this.app.lookup_provider_status(this.model.provider_name);
+		const provider_status = this.app.lookup_provider_status(model.provider_name);
 		if (provider_status && !provider_status.available) {
 			console.warn(
-				`[thread.send_message] provider '${this.model.provider_name}' unavailable, skipping send`,
+				`[thread.send_message] provider '${model.provider_name}' unavailable, skipping send`,
 			);
 			return null; // No turn created - UI already shows error
 		}
@@ -147,8 +151,8 @@ export class Thread extends Cell<typeof ThreadJson> {
 
 		const completion_request = CompletionRequest.parse({
 			created: user_turn.created,
-			provider_name: this.model.provider_name,
-			model: this.model.name,
+			provider_name: model.provider_name,
+			model: model.name,
 			prompt: content,
 			completion_messages,
 		});

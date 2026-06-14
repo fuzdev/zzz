@@ -97,7 +97,7 @@
 					const new_chat = app.chats.add_chat(chat.clone());
 					// TODO hacky
 					for (const thread of chat.threads) {
-						new_chat.add_thread(thread.model);
+						if (thread.model) new_chat.add_thread(thread.model);
 					}
 
 					// Select the new chat
