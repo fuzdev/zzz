@@ -7,7 +7,6 @@ use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
 use crate::handlers::App;
-use crate::rpc;
 
 // -- Notification params ------------------------------------------------------
 
@@ -185,7 +184,7 @@ async fn read_loop(
             ReadResult::Data(n) => {
                 let data = String::from_utf8_lossy(&buf[..n]);
                 if !data.is_empty() {
-                    let notification = rpc::notification(
+                    let notification = fuz_http::notification(
                         "terminal_data",
                         &TerminalDataParams {
                             terminal_id,
@@ -209,7 +208,7 @@ async fn read_loop(
                     WaitResult::StillRunning => None,
                 };
 
-                let notification = rpc::notification(
+                let notification = fuz_http::notification(
                     "terminal_exited",
                     &TerminalExitedParams {
                         terminal_id,

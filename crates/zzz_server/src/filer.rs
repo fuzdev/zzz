@@ -11,7 +11,6 @@ use tokio::sync::{RwLock, mpsc};
 use tokio::time::Instant;
 
 use crate::handlers::App;
-use crate::rpc;
 
 // -- Indexing limits ----------------------------------------------------------
 
@@ -584,7 +583,7 @@ async fn filer_event_loop(
                 },
                 disknode: event.disknode,
             };
-            let notification = rpc::notification("filer_change", &params);
+            let notification = fuz_http::notification("filer_change", &params);
             app.broadcast(&notification);
         }
     }

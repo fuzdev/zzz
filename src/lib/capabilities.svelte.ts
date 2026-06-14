@@ -7,6 +7,8 @@ import type {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.js';
 import {Cell, type CellOptions} from './cell.svelte.js';
 import {CellJson} from './cell_types.js';
 import type {DiskfileDirectoryPath} from './diskfile_types.js';
+import {ProviderCapability} from './provider_capability.svelte.js';
+import type {ProviderName} from './provider_types.js';
 
 // TODO namerbot capability, uses backend+(at least one provider) (or rethink its role in a bigger picture, not just names)
 
@@ -152,82 +154,10 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 	});
 
 	/**
-	 * Claude capability that derives its state from provider_status.
+	 * Per-provider availability capabilities, keyed by `ProviderName`.
+	 * Each derives its state from `provider_status`; see `ProviderCapability`.
 	 */
-	readonly claude: Capability<null | undefined> = $derived.by(() => {
-		const status = this.app.lookup_provider_status('claude');
-		if (!status) {
-			return {
-				name: 'claude',
-				data: undefined,
-				status: 'initial',
-				message_id: null,
-				error_message: null,
-				updated: null,
-			};
-		}
-		// TODO @many refactor capabilities with provider status (embed?)
-		return {
-			name: 'claude',
-			data: status.available ? null : undefined,
-			status: status.available ? 'success' : 'failure',
-			message_id: null,
-			error_message: status.available ? null : status.error,
-			updated: status.checked_at,
-		};
-	});
-
-	/**
-	 * ChatGPT capability that derives its state from provider_status.
-	 */
-	readonly chatgpt: Capability<null | undefined> = $derived.by(() => {
-		const status = this.app.lookup_provider_status('chatgpt');
-		if (!status) {
-			return {
-				name: 'chatgpt',
-				data: undefined,
-				status: 'initial',
-				message_id: null,
-				error_message: null,
-				updated: null,
-			};
-		}
-		// TODO @many refactor capabilities with provider status (embed?)
-		return {
-			name: 'chatgpt',
-			data: status.available ? null : undefined,
-			status: status.available ? 'success' : 'failure',
-			message_id: null,
-			error_message: status.available ? null : status.error,
-			updated: status.checked_at,
-		};
-	});
-
-	/**
-	 * Gemini capability that derives its state from provider_status.
-	 */
-	readonly gemini: Capability<null | undefined> = $derived.by(() => {
-		const status = this.app.lookup_provider_status('gemini');
-		if (!status) {
-			return {
-				name: 'gemini',
-				data: undefined,
-				status: 'initial',
-				message_id: null,
-				error_message: null,
-				updated: null,
-			};
-		}
-		// TODO @many refactor capabilities with provider status (embed?)
-		return {
-			name: 'gemini',
-			data: status.available ? null : undefined,
-			status: status.available ? 'success' : 'failure',
-			message_id: null,
-			error_message: status.available ? null : status.error,
-			updated: status.checked_at,
-		};
-	});
+	readonly providers: Record<ProviderName, ProviderCapability>;
 
 	/**
 	 * Store pings - both pending and completed.
@@ -297,6 +227,11 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 
 	constructor(options: CellOptions<typeof CapabilitiesJson>) {
 		super(CapabilitiesJson, options);
+		this.providers = {
+			claude: new ProviderCapability({app: this.app, name: 'claude'}),
+			chatgpt: new ProviderCapability({app: this.app, name: 'chatgpt'}),
+			gemini: new ProviderCapability({app: this.app, name: 'gemini'}),
+		};
 	}
 
 	/**
@@ -410,68 +345,5 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 			error_message: null,
 			updated: null,
 		};
-	}
-
-	/**
-	 * Check Claude availability only if it hasn't been checked before.
-	 */
-	async init_claude_check(): Promise<void> {
-		if (this.claude.status !== 'initial') {
-			return;
-		}
-		await this.check_claude();
-	}
-
-	/**
-	 * Check Claude availability by loading provider status.
-	 */
-	async check_claude(): Promise<void> {
-		if (!this.backend_available) {
-			console.log('[capabilities] skipping claude check: backend unavailable');
-			return;
-		}
-		await this.app.api.provider_load_status({provider_name: 'claude'});
-	}
-
-	/**
-	 * Check ChatGPT availability only if it hasn't been checked before.
-	 */
-	async init_chatgpt_check(): Promise<void> {
-		if (this.chatgpt.status !== 'initial') {
-			return;
-		}
-		await this.check_chatgpt();
-	}
-
-	/**
-	 * Check ChatGPT availability by loading provider status.
-	 */
-	async check_chatgpt(): Promise<void> {
-		if (!this.backend_available) {
-			console.log('[capabilities] skipping chatgpt check: backend unavailable');
-			return;
-		}
-		await this.app.api.provider_load_status({provider_name: 'chatgpt'});
-	}
-
-	/**
-	 * Check Gemini availability only if it hasn't been checked before.
-	 */
-	async init_gemini_check(): Promise<void> {
-		if (this.gemini.status !== 'initial') {
-			return;
-		}
-		await this.check_gemini();
-	}
-
-	/**
-	 * Check Gemini availability by loading provider status.
-	 */
-	async check_gemini(): Promise<void> {
-		if (!this.backend_available) {
-			console.log('[capabilities] skipping gemini check: backend unavailable');
-			return;
-		}
-		await this.app.api.provider_load_status({provider_name: 'gemini'});
 	}
 }

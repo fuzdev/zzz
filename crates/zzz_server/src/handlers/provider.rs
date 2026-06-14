@@ -10,13 +10,12 @@
 use std::sync::Arc;
 
 use fuz_actions::ActionContext;
-use fuz_http::{JsonrpcError, internal_error_with_source, invalid_params};
+use fuz_http::{JsonrpcError, internal_error_with_source, invalid_params, notification};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::handlers::App;
 use crate::provider::{self, CompletionHandlerOptions, ProviderName};
-use crate::rpc;
 
 /// Strongly-typed view of the `completion_request` param object.
 ///
@@ -152,7 +151,7 @@ pub async fn completion_create(
                         "chunk": chunk,
                         "_meta": { "progressToken": token },
                     });
-                    let wire = rpc::notification("completion_progress", &payload);
+                    let wire = notification("completion_progress", &payload);
                     realtime.send_to(conn_id, &wire);
                 });
                 Some(sender)

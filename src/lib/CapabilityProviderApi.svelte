@@ -20,7 +20,7 @@
 	const app = frontend_context.get();
 	const {capabilities} = app;
 
-	const capability = $derived(capabilities[provider_name]);
+	const capability = $derived(capabilities.providers[provider_name]);
 	const provider = $derived(app.providers.find_by_name(provider_name));
 
 	let api_key_input = $state.raw('');
@@ -30,8 +30,7 @@
 	const api_key_input_normalized = $derived(api_key_input.trim());
 
 	onMount(() => {
-		// TODO use a unified method
-		void capabilities[`init_${provider_name}_check` as const]();
+		void capabilities.providers[provider_name].init_check();
 	});
 
 	const update_api_key = async () => {

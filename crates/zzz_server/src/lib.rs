@@ -21,7 +21,6 @@ pub mod filer;
 pub mod handlers;
 pub mod provider;
 pub mod pty_manager;
-pub mod rpc;
 pub mod scoped_fs;
 pub mod zzz_action_specs;
 
