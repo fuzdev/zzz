@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type {Chat} from './chat.svelte.js';
-	import type {Thread} from './thread.svelte.js';
+	import type {Chat} from './chat.svelte.ts';
+	import type {Thread} from './thread.svelte.ts';
 	import ChatThread from './ChatThread.svelte';
 	import ChatThreadAddByModel from './ChatThreadAddByModel.svelte';
 	import ChatThreadManageByTag from './ChatThreadManageByTag.svelte';

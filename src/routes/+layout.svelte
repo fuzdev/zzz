@@ -1,35 +1,35 @@
 <script lang="ts">
 	import 'virtual:fuz.css';
 	import '@fuzdev/fuz_code/theme.css';
-	import '$routes/style.css';
+	import './style.css';
 
 	import {untrack} from 'svelte';
-	import {contextmenu_attachment} from '@fuzdev/fuz_ui/contextmenu_state.svelte.js';
-	import {icon_refresh, icon_settings} from '@fuzdev/fuz_ui/icons.js';
-	import {Library} from '@fuzdev/fuz_ui/library.svelte.js';
+	import {contextmenu_attachment} from '@fuzdev/fuz_ui/contextmenu_state.svelte.ts';
+	import {icon_refresh, icon_settings} from '@fuzdev/fuz_ui/icons.ts';
+	import {Library} from '@fuzdev/fuz_ui/library.svelte.ts';
 	import {BROWSER} from 'esm-env';
 	import {page} from '$app/state';
 	import {onNavigate} from '$app/navigation';
 	import {resolve} from '$app/paths';
-	import {AuthState, auth_state_context} from '@fuzdev/fuz_app/ui/auth_state.svelte.js';
+	import {AuthState, auth_state_context} from '@fuzdev/fuz_app/ui/auth_state.svelte.ts';
 	import LoginForm from '@fuzdev/fuz_app/ui/LoginForm.svelte';
 	import BootstrapForm from '@fuzdev/fuz_app/ui/BootstrapForm.svelte';
 	import Alert from '@fuzdev/fuz_ui/Alert.svelte';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 
-	import {parse_url_param_uuid} from '$lib/url_params_helpers.js';
-	import {App} from '$lib/app.svelte.js';
+	import {parse_url_param_uuid} from '$lib/url_params_helpers.ts';
+	import {App} from '$lib/app.svelte.ts';
 	import FrontendRoot from '$lib/FrontendRoot.svelte';
-	import {library_context} from '$lib/library.js';
-	import {SiteState, site_context} from '@fuzdev/fuz_ui/site.svelte.js';
-	import {logo_zzz} from '$lib/logos.js';
-	import {library_json_from_modules} from '@fuzdev/fuz_util/library_json.js';
+	import {library_context} from '$lib/library.ts';
+	import {SiteState, site_context} from '@fuzdev/fuz_ui/site.svelte.ts';
+	import {logo_zzz} from '$lib/logos.ts';
+	import {library_json_from_modules} from '@fuzdev/fuz_util/library_json.ts';
 	import {modules} from 'virtual:svelte-docinfo';
 	import pkg_json from 'virtual:pkg.json';
-	import {ProviderJson} from '$lib/provider.svelte.js';
-	import create_zzz_config from '$lib/config.js';
-	import {ModelJson} from '$lib/model.svelte.js';
-	import {DOCS_PATH} from '@fuzdev/fuz_ui/docs_helpers.svelte.js';
+	import {ProviderJson} from '$lib/provider.svelte.ts';
+	import create_zzz_config from '$lib/config.ts';
+	import {ModelJson} from '$lib/model.svelte.ts';
+	import {DOCS_PATH} from '@fuzdev/fuz_ui/docs_helpers.svelte.ts';
 
 	const {children, params} = $props();
 

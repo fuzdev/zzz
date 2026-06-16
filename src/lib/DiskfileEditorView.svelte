@@ -1,16 +1,16 @@
 <script lang="ts">
 	import {untrack} from 'svelte';
 	import {slide} from 'svelte/transition';
-	import type {Uuid} from '@fuzdev/fuz_util/id.js';
+	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-	import {frontend_context} from './frontend.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
 	import DiskfileInfo from './DiskfileInfo.svelte';
-	import type {Diskfile} from './diskfile.svelte.js';
+	import type {Diskfile} from './diskfile.svelte.ts';
 	import ContentEditor from './ContentEditor.svelte';
 	import DiskfileActions from './DiskfileActions.svelte';
-	import {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
+	import {DiskfileEditorState} from './diskfile_editor_state.svelte.ts';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
-	import {format_placeholder} from './helpers.js';
+	import {format_placeholder} from './helpers.ts';
 	import DiskfilePartView from './DiskfilePartView.svelte';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 	import DiskfileEditorNav from './DiskfileEditorNav.svelte';

@@ -1,17 +1,17 @@
 import {z} from 'zod';
-import type {AsyncStatus} from '@fuzdev/fuz_util/async.js';
-import {Uuid} from '@fuzdev/fuz_util/id.js';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
+import type {AsyncStatus} from '@fuzdev/fuz_util/async.ts';
+import {Uuid} from '@fuzdev/fuz_util/id.ts';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
 
-import type {Model} from './model.svelte.js';
-import {to_completion_response_text} from './response_helpers.js';
-import {Thread} from './thread.svelte.js';
-import {reorder_list} from './list_helpers.js';
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {CellJson} from './cell_types.js';
-import {get_unique_name, estimate_token_count} from './helpers.js';
-import {CompletionRequest} from './completion_types.js';
-import {render_message_with_role} from './thread_helpers.js';
+import type {Model} from './model.svelte.ts';
+import {to_completion_response_text} from './response_helpers.ts';
+import {Thread} from './thread.svelte.ts';
+import {reorder_list} from './list_helpers.ts';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {CellJson} from './cell_types.ts';
+import {get_unique_name, estimate_token_count} from './helpers.ts';
+import {CompletionRequest} from './completion_types.ts';
+import {render_message_with_role} from './thread_helpers.ts';
 
 const ChatViewMode = z.enum(['simple', 'multi']).default('simple');
 export type ChatViewMode = z.infer<typeof ChatViewMode>;

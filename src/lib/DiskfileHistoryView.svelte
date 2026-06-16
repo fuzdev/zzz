@@ -2,10 +2,10 @@
 	import {slide} from 'svelte/transition';
 	import type {SvelteHTMLElements} from 'svelte/elements';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
-	import type {Uuid} from '@fuzdev/fuz_util/id.js';
+	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
-	import {format_time} from './time_helpers.js';
+	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.ts';
+	import {format_time} from './time_helpers.ts';
 
 	const {
 		editor_state,

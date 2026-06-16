@@ -3,10 +3,10 @@
 	import type {Snippet} from 'svelte';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 
-	import {frontend_context} from './frontend.svelte.js';
-	import {icon_action_request_response, icon_ping, icon_xmark} from '@fuzdev/fuz_ui/icons.js';
+	import {frontend_context} from './frontend.svelte.ts';
+	import {icon_action_request_response, icon_ping, icon_xmark} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {PING_HISTORY_MAX, type PingData} from './capabilities.svelte.js';
+	import {PING_HISTORY_MAX, type PingData} from './capabilities.svelte.ts';
 
 	const {
 		children,

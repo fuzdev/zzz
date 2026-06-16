@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type {Model} from './model.svelte.js';
-	import {frontend_context} from './frontend.svelte.js';
+	import type {Model} from './model.svelte.ts';
+	import {frontend_context} from './frontend.svelte.ts';
 
 	const app = frontend_context.get();
 

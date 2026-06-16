@@ -23,12 +23,12 @@
 
 import type {TestProject} from 'vitest/node';
 
-import {bootstrap_backend} from '@fuzdev/fuz_app/testing/cross_backend/bootstrap_backend.js';
-import type {BackendConfig} from '@fuzdev/fuz_app/testing/cross_backend/backend_config.js';
-import {serialize_bootstrapped_handle} from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
+import {bootstrap_backend} from '@fuzdev/fuz_app/testing/cross_backend/bootstrap_backend.ts';
+import type {BackendConfig} from '@fuzdev/fuz_app/testing/cross_backend/backend_config.ts';
+import {serialize_bootstrapped_handle} from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 
-import './cross_test_types.js';
-import {rust_backend_config, rust_proxy_backend_config} from './zzz_backend_config.js';
+import './cross_test_types.ts';
+import {rust_backend_config, rust_proxy_backend_config} from './zzz_backend_config.ts';
 
 /**
  * Strips the `cross_backend_` prefix to derive the backend name from the

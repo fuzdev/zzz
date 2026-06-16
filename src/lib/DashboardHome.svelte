@@ -1,14 +1,14 @@
 <script lang="ts">
 	import {resolve} from '$app/paths';
 
-	import {frontend_context} from './frontend.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
 	import ProviderLink from './ProviderLink.svelte';
 	import PromptList from './PromptList.svelte';
 	import ChatList from './ChatList.svelte';
 	import ModelLink from './ModelLink.svelte';
-	import {icon_add, icon_model, icon_provider} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_add, icon_model, icon_provider} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {to_nav_link_href} from './nav.js';
+	import {to_nav_link_href} from './nav.ts';
 
 	const app = frontend_context.get();
 </script>

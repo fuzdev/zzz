@@ -1,8 +1,8 @@
 import {z} from 'zod';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {CellJson} from './cell_types.js';
-import {DiskfileDirectoryPath} from './diskfile_types.js';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {CellJson} from './cell_types.ts';
+import {DiskfileDirectoryPath} from './diskfile_types.ts';
 
 export const SpaceJson = CellJson.extend({
 	name: z.string().default(''),

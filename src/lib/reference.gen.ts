@@ -1,9 +1,9 @@
-import type {Gen} from '@fuzdev/gro/gen.js';
-import {is_protocol_action_method} from '@fuzdev/fuz_app/actions/action_codegen.js';
+import type {Gen} from '@fuzdev/gro/gen.ts';
+import {is_protocol_action_method} from '@fuzdev/fuz_app/actions/action_codegen.ts';
 import {readFileSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 
-import {all_action_specs} from './action_specs.js';
+import {all_action_specs} from './action_specs.ts';
 
 /**
  * zzz's own action specs, excluding the fuz_app protocol actions

@@ -2,9 +2,9 @@
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import {onMount} from 'svelte';
 
-	import {frontend_context} from './frontend.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
 	import ProviderLink from './ProviderLink.svelte';
-	import {icon_provider} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_provider} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 	import ExternalLink from './ExternalLink.svelte';

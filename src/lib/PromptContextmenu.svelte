@@ -3,18 +3,18 @@
 	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 	import ContextmenuSubmenu from '@fuzdev/fuz_ui/ContextmenuSubmenu.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
 
-	import {Part} from './part.svelte.js';
-	import type {Prompt} from './prompt.svelte.js';
-	import {frontend_context} from './frontend.svelte.js';
+	import {Part} from './part.svelte.ts';
+	import type {Prompt} from './prompt.svelte.ts';
+	import {frontend_context} from './frontend.svelte.ts';
 	import {
 		icon_delete,
 		icon_file,
 		icon_part,
 		icon_prompt,
 		icon_remove,
-	} from '@fuzdev/fuz_ui/icons.js';
+	} from '@fuzdev/fuz_ui/icons.ts';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
 

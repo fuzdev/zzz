@@ -1,8 +1,8 @@
 <script lang="ts">
-	import {icon_play, icon_add, icon_remove} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_play, icon_add, icon_remove} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
-	import type {TerminalPreset} from './terminal_preset.svelte.js';
+	import type {TerminalPreset} from './terminal_preset.svelte.ts';
 
 	const {
 		presets,

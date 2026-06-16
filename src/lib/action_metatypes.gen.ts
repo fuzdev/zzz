@@ -1,13 +1,13 @@
-import type {Gen} from '@fuzdev/gro/gen.js';
+import type {Gen} from '@fuzdev/gro/gen.ts';
 import {
 	type ActionMethodEnumKind,
 	ImportBuilder,
 	compose_gen_file,
 	generate_action_method_enums,
 	generate_frontend_actions_api,
-} from '@fuzdev/fuz_app/actions/action_codegen.js';
+} from '@fuzdev/fuz_app/actions/action_codegen.ts';
 
-import {all_action_specs} from './action_specs.js';
+import {all_action_specs} from './action_specs.ts';
 
 /**
  * Outputs a file with generated types and schemas using the action specs as the source of truth.

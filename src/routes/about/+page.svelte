@@ -6,11 +6,11 @@
 	import Details from '@fuzdev/fuz_ui/Details.svelte';
 	import {DEV} from 'esm-env';
 
-	import {logo_zzz} from '$lib/logos.js';
-	import {library_context} from '$lib/library.js';
+	import {logo_zzz} from '$lib/logos.ts';
+	import {library_context} from '$lib/library.ts';
 	import ExternalLink from '$lib/ExternalLink.svelte';
 	import PageFooter from '$routes/PageFooter.svelte';
-	import {frontend_context} from '$lib/frontend.svelte.js';
+	import {frontend_context} from '$lib/frontend.svelte.ts';
 
 	const library = library_context.get();
 	const app = frontend_context.get();

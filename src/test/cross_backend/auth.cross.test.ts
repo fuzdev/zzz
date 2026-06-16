@@ -21,13 +21,13 @@ import {inject} from 'vitest';
 import {
 	default_cross_process_setup,
 	reconstruct_bootstrapped_handle,
-} from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
-import {describe_standard_cross_process_tests} from '@fuzdev/fuz_app/testing/cross_backend/standard.js';
-import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.js';
-import {create_role_schema, ROLE_ADMIN} from '@fuzdev/fuz_app/auth/role_schema.js';
+} from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
+import {describe_standard_cross_process_tests} from '@fuzdev/fuz_app/testing/cross_backend/standard.ts';
+import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.ts';
+import {create_role_schema, ROLE_ADMIN} from '@fuzdev/fuz_app/auth/role_schema.ts';
 
-import './cross_test_types.js';
-import {create_zzz_app_surface_spec, zzz_rpc_endpoints} from './zzz_surface_spec.js';
+import './cross_test_types.ts';
+import {create_zzz_app_surface_spec, zzz_rpc_endpoints} from './zzz_surface_spec.ts';
 
 const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 // Grant `ROLE_ADMIN` to every per-test signup account via the production

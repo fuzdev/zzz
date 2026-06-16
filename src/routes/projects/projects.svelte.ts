@@ -1,24 +1,24 @@
 // @slop Claude Opus 4
 
 import {z} from 'zod';
-import {create_context} from '@fuzdev/fuz_ui/context_helpers.js';
+import {create_context} from '@fuzdev/fuz_ui/context_helpers.ts';
 import {page} from '$app/state';
-import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.js';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
+import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.ts';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
 
-import {Cell, type CellOptions} from '$lib/cell.svelte.js';
-import {ProjectsJson} from '$routes/projects/projects_schema.js';
-import {Project} from '$routes/projects/project.svelte.js';
-import {Page} from '$routes/projects/page.svelte.js';
-import {Domain} from '$routes/projects/domain.svelte.js';
-import {Repo} from '$routes/projects/repo.svelte.js';
-import {ProjectViewmodel} from '$routes/projects/project_viewmodel.svelte.js';
-import {PageViewmodel} from '$routes/projects/page_viewmodel.svelte.js';
-import {DomainViewmodel} from '$routes/projects/domain_viewmodel.svelte.js';
-import {RepoViewmodel} from '$routes/projects/repo_viewmodel.svelte.js';
-import {HANDLED} from '$lib/cell_helpers.js';
-import {get_unique_name} from '$lib/helpers.js';
-import {create_sample_projects as create_example_projects} from '$routes/projects/example_projects.js';
+import {Cell, type CellOptions} from '$lib/cell.svelte.ts';
+import {ProjectsJson} from './projects_schema.ts';
+import {Project} from './project.svelte.ts';
+import {Page} from './page.svelte.ts';
+import {Domain} from './domain.svelte.ts';
+import {Repo} from './repo.svelte.ts';
+import {ProjectViewmodel} from './project_viewmodel.svelte.ts';
+import {PageViewmodel} from './page_viewmodel.svelte.ts';
+import {DomainViewmodel} from './domain_viewmodel.svelte.ts';
+import {RepoViewmodel} from './repo_viewmodel.svelte.ts';
+import {HANDLED} from '$lib/cell_helpers.ts';
+import {get_unique_name} from '$lib/helpers.ts';
+import {create_sample_projects as create_example_projects} from './example_projects.ts';
 
 export const projects_context = create_context<Projects>();
 

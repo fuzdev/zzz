@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {zod_get_innermost_type} from '@fuzdev/fuz_util/zod.js';
+import {zod_get_innermost_type} from '@fuzdev/fuz_util/zod.ts';
 
 /** Sentinel value to indicate a parser has completely handled a property. */
 export const HANDLED = Symbol('HANDLED_BY_PARSER');

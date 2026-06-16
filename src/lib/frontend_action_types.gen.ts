@@ -1,12 +1,12 @@
-import type {Gen} from '@fuzdev/gro/gen.js';
+import type {Gen} from '@fuzdev/gro/gen.ts';
 import {
 	ImportBuilder,
 	compose_gen_file,
 	generate_frontend_action_handlers,
 	generate_typed_action_event_alias,
-} from '@fuzdev/fuz_app/actions/action_codegen.js';
+} from '@fuzdev/fuz_app/actions/action_codegen.ts';
 
-import {all_action_specs} from './action_specs.js';
+import {all_action_specs} from './action_specs.ts';
 
 /**
  * Generates frontend action handler types based on spec.initiator.

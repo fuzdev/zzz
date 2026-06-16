@@ -1,9 +1,9 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {icon_delete} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_delete} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import type {RepoCheckout} from '$routes/projects/projects_schema.js';
+	import type {RepoCheckout} from './projects_schema.ts';
 
 	const {
 		checkout,

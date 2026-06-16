@@ -1,18 +1,18 @@
 import {z} from 'zod';
 import {page} from '$app/state';
-import type {Uuid} from '@fuzdev/fuz_util/id.js';
+import type {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {Prompt, PromptJson, type PromptJsonInput} from './prompt.svelte.js';
-import {HANDLED} from './cell_helpers.js';
-import {IndexedCollection} from './indexed_collection.svelte.js';
-import {create_single_index, create_derived_index} from './indexed_collection_helpers.svelte.js';
-import {to_reordered_list} from './list_helpers.js';
-import type {PartUnion} from './part.svelte.js';
-import {get_unique_name} from './helpers.js';
-import {to_prompts_url} from './nav_helpers.js';
-import {CellJson} from './cell_types.js';
-import {goto_unless_current} from './navigation_helpers.js';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {Prompt, PromptJson, type PromptJsonInput} from './prompt.svelte.ts';
+import {HANDLED} from './cell_helpers.ts';
+import {IndexedCollection} from './indexed_collection.svelte.ts';
+import {create_single_index, create_derived_index} from './indexed_collection_helpers.svelte.ts';
+import {to_reordered_list} from './list_helpers.ts';
+import type {PartUnion} from './part.svelte.ts';
+import {get_unique_name} from './helpers.ts';
+import {to_prompts_url} from './nav_helpers.ts';
+import {CellJson} from './cell_types.ts';
+import {goto_unless_current} from './navigation_helpers.ts';
 
 export const PromptsJson = CellJson.extend({
 	items: z.array(PromptJson).default(() => []),

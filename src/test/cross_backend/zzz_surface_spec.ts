@@ -16,27 +16,27 @@
  * @module
  */
 
-import type {AppServerContext} from '@fuzdev/fuz_app/server/app_server_context.js';
-import {prefix_route_specs, type RouteSpec} from '@fuzdev/fuz_app/http/route_spec.js';
-import type {RpcEndpointSpec, AppSurfaceSpec} from '@fuzdev/fuz_app/http/surface.js';
+import type {AppServerContext} from '@fuzdev/fuz_app/server/app_server_context.ts';
+import {prefix_route_specs, type RouteSpec} from '@fuzdev/fuz_app/http/route_spec.ts';
+import type {RpcEndpointSpec, AppSurfaceSpec} from '@fuzdev/fuz_app/http/surface.ts';
 import {
 	create_health_route_spec,
 	create_server_status_route_spec,
-} from '@fuzdev/fuz_app/http/common_routes.js';
+} from '@fuzdev/fuz_app/http/common_routes.ts';
 import {
 	account_status_route_shape,
 	create_account_route_shapes,
-} from '@fuzdev/fuz_app/auth/account_route_schema.js';
-import {create_signup_route_shape} from '@fuzdev/fuz_app/auth/signup_route_schema.js';
-import {create_standard_rpc_actions} from '@fuzdev/fuz_app/auth/standard_rpc_actions.js';
-import {create_test_app_surface_spec, stub_mw} from '@fuzdev/fuz_app/testing/stubs.js';
-import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.js';
-import type {RpcAction, ActionHandler} from '@fuzdev/fuz_app/actions/action_rpc.js';
-import type {RequestResponseActionSpec} from '@fuzdev/fuz_app/actions/action_spec.js';
-import {is_protocol_action_method} from '@fuzdev/fuz_app/actions/action_codegen.js';
-import type {MiddlewareSpec} from '@fuzdev/fuz_app/http/middleware_spec.js';
+} from '@fuzdev/fuz_app/auth/account_route_schema.ts';
+import {create_signup_route_shape} from '@fuzdev/fuz_app/auth/signup_route_schema.ts';
+import {create_standard_rpc_actions} from '@fuzdev/fuz_app/auth/standard_rpc_actions.ts';
+import {create_test_app_surface_spec, stub_mw} from '@fuzdev/fuz_app/testing/stubs.ts';
+import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.ts';
+import type {RpcAction, ActionHandler} from '@fuzdev/fuz_app/actions/action_rpc.ts';
+import type {RequestResponseActionSpec} from '@fuzdev/fuz_app/actions/action_spec.ts';
+import {is_protocol_action_method} from '@fuzdev/fuz_app/actions/action_codegen.ts';
+import type {MiddlewareSpec} from '@fuzdev/fuz_app/http/middleware_spec.ts';
 
-import {all_action_specs} from '$lib/action_specs.js';
+import {all_action_specs} from '$lib/action_specs.ts';
 
 /** Surface generation never invokes handlers — see module doc. */
 const noop_handler = (async () => undefined) as unknown as ActionHandler;

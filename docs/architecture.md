@@ -482,4 +482,4 @@ Each scoped directory gets a `Filer` watcher. File changes are broadcast to clie
 
 ### Daemon Info
 
-`run/daemon.json` tracks the running server (PID, port, version). Written atomically on startup via `@fuzdev/fuz_app/cli/daemon.js`, removed on clean shutdown (SIGINT/SIGTERM). Stale detection via `kill -0`.
+`run/daemon.json` tracks the running server (PID, port, version). Written atomically on startup via `@fuzdev/fuz_app/cli/daemon.ts`, removed on clean shutdown (SIGINT/SIGTERM). Stale detection via `kill -0`.

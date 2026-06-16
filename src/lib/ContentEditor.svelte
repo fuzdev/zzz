@@ -3,12 +3,12 @@
 	import type {Snippet} from 'svelte';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 	import PasteFromClipboard from '@fuzdev/fuz_ui/PasteFromClipboard.svelte';
-	import {swallow} from '@fuzdev/fuz_util/dom.js';
+	import {swallow} from '@fuzdev/fuz_util/dom.ts';
 
-	import {estimate_token_count, format_placeholder} from './helpers.js';
+	import {estimate_token_count, format_placeholder} from './helpers.ts';
 	import ContentStats from './ContentStats.svelte';
 	import ClearRestoreButton from './ClearRestoreButton.svelte';
-	import {icon_paste} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_paste} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	let {

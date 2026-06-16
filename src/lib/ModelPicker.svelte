@@ -1,9 +1,9 @@
 <script lang="ts">
 	import Picker from './Picker.svelte';
 	import ModelListitem from './ModelListitem.svelte';
-	import {frontend_context} from './frontend.svelte.js';
-	import type {Model} from './model.svelte.js';
-	import {sort_by_text} from './sortable.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
+	import type {Model} from './model.svelte.ts';
+	import {sort_by_text} from './sortable.svelte.ts';
 
 	const app = frontend_context.get();
 	const {models} = app;

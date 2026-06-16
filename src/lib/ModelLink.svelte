@@ -4,10 +4,10 @@
 	import type {SvelteHTMLElements} from 'svelte/elements';
 	import {DEV} from 'esm-env';
 
-	import type {SvgData} from '@fuzdev/fuz_ui/svg.js';
+	import type {SvgData} from '@fuzdev/fuz_ui/svg.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
-	import type {Model} from './model.svelte.js';
+	import type {Model} from './model.svelte.ts';
 	import ProviderLogo from './ProviderLogo.svelte';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 

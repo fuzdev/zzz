@@ -1,11 +1,11 @@
 // @slop Claude Sonnet 3.7
 
 import {z} from 'zod';
-import {Uuid} from '@fuzdev/fuz_util/id.js';
+import {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {DiskfileTabs} from './diskfile_tabs.svelte.js';
-import {CellJson} from './cell_types.js';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {DiskfileTabs} from './diskfile_tabs.svelte.ts';
+import {CellJson} from './cell_types.ts';
 
 export const DiskfilesEditorJson = CellJson.extend({
 	show_sort_controls: z.boolean().default(false),

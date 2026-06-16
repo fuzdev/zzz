@@ -3,7 +3,7 @@
 
 	import {resolve} from '$app/paths';
 
-	import {projects_context} from '$routes/projects/projects.svelte.js';
+	import {projects_context} from '$routes/projects/projects.svelte.ts';
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';

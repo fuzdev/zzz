@@ -1,10 +1,10 @@
 <script lang="ts">
-	import {icon_tab} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_tab} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {Browser} from '$routes/tabs/browser.svelte.js';
-	import {sample_tabs} from '$routes/tabs/sample_tabs.js';
-	import BrowserView from '$routes/tabs/BrowserView.svelte';
-	import {frontend_context} from '$lib/frontend.svelte.js';
+	import {Browser} from './browser.svelte.ts';
+	import {sample_tabs} from './sample_tabs.ts';
+	import BrowserView from './BrowserView.svelte';
+	import {frontend_context} from '$lib/frontend.svelte.ts';
 	import ExternalLink from '$lib/ExternalLink.svelte';
 
 	const app = frontend_context.get();

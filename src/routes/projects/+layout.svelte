@@ -3,9 +3,9 @@
 </script>
 
 <script lang="ts">
-	import {projects_context, Projects} from '$routes/projects/projects.svelte.js';
-	import {frontend_context} from '$lib/frontend.svelte.js';
-	import {parse_url_param_uuid} from '$lib/url_params_helpers.js';
+	import {projects_context, Projects} from './projects.svelte.ts';
+	import {frontend_context} from '$lib/frontend.svelte.ts';
+	import {parse_url_param_uuid} from '$lib/url_params_helpers.ts';
 
 	const {children, params} = $props();
 

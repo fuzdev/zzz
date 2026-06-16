@@ -1,7 +1,7 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {swallow, is_editable} from '@fuzdev/fuz_util/dom.js';
+	import {swallow, is_editable} from '@fuzdev/fuz_util/dom.ts';
 	import type {Snippet} from 'svelte';
 
 	import {
@@ -10,13 +10,13 @@
 		icon_arrow_right,
 		icon_drag,
 		icon_refresh,
-	} from '@fuzdev/fuz_ui/icons.js';
+	} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {format_placeholder} from '$lib/helpers.js';
-	import type {Browser} from '$routes/tabs/browser.svelte.js';
-	import BrowserTabContent from '$routes/tabs/BrowserTabContent.svelte';
-	import BrowserTabListitem from '$routes/tabs/BrowserTabListitem.svelte';
-	import {Reorderable} from '$lib/reorderable.svelte.js';
+	import {format_placeholder} from '$lib/helpers.ts';
+	import type {Browser} from './browser.svelte.ts';
+	import BrowserTabContent from './BrowserTabContent.svelte';
+	import BrowserTabListitem from './BrowserTabListitem.svelte';
+	import {Reorderable} from '$lib/reorderable.svelte.ts';
 
 	const {
 		browser,

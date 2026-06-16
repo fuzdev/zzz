@@ -3,7 +3,7 @@
 	import ThemeRoot from '@fuzdev/fuz_ui/ThemeRoot.svelte';
 	import ContextmenuRoot from '@fuzdev/fuz_ui/ContextmenuRoot.svelte';
 
-	import {Frontend, frontend_context} from './frontend.svelte.js';
+	import {Frontend, frontend_context} from './frontend.svelte.ts';
 	import Dashboard from './Dashboard.svelte';
 	import MainDialog from './MainDialog.svelte';
 	import DeskMenu from './DeskMenu.svelte';

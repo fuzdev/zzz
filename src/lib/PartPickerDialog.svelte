@@ -1,14 +1,14 @@
 <script lang="ts">
 	import type {ComponentProps} from 'svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
-	import type {Uuid} from '@fuzdev/fuz_util/id.js';
+	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
+	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
 
 	import PickerDialog from './PickerDialog.svelte';
 	import PartListitem from './PartListitem.svelte';
-	import {frontend_context} from './frontend.svelte.js';
-	import type {PartUnion} from './part.svelte.js';
-	import {sort_by_text, sort_by_numeric} from './sortable.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
+	import type {PartUnion} from './part.svelte.ts';
+	import {sort_by_text, sort_by_numeric} from './sortable.svelte.ts';
 
 	const app = frontend_context.get();
 	const {parts} = app;

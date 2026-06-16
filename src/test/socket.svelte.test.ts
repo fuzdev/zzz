@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
 import {beforeEach, describe, test, vi, afterEach, assert} from 'vitest';
-import {DEFAULT_CLOSE_CODE} from '@fuzdev/fuz_app/actions/socket.svelte.js';
+import {DEFAULT_CLOSE_CODE} from '@fuzdev/fuz_app/actions/socket.svelte.ts';
 
-import {Socket} from '$lib/socket.svelte.js';
-import {Frontend} from '$lib/frontend.svelte.js';
+import {Socket} from '$lib/socket.svelte.ts';
+import {Frontend} from '$lib/frontend.svelte.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.js';
+import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
 
 /**
  * Reconnect, close-code backoff, and heartbeat are tested in fuz_app's

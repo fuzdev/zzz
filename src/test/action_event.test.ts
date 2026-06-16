@@ -1,24 +1,24 @@
 // @vitest-environment jsdom
 
 import {test, describe, assert} from 'vitest';
-import {assert_rejects} from '@fuzdev/fuz_util/testing.js';
-import {create_uuid} from '@fuzdev/fuz_util/id.js';
+import {assert_rejects} from '@fuzdev/fuz_util/testing.ts';
+import {create_uuid} from '@fuzdev/fuz_util/id.ts';
 
 import {
 	create_action_event,
 	create_action_event_from_json,
-} from '@fuzdev/fuz_app/actions/action_event.js';
+} from '@fuzdev/fuz_app/actions/action_event.ts';
 import type {
 	ActionEventEnvironment,
 	ActionExecutor,
-} from '@fuzdev/fuz_app/actions/action_event_types.js';
-import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
+} from '@fuzdev/fuz_app/actions/action_event_types.ts';
+import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.ts';
 import {
 	ping_action_spec,
 	filer_change_action_spec,
 	toggle_main_menu_action_spec,
 	completion_create_action_spec,
-} from '$lib/action_specs.js';
+} from '$lib/action_specs.ts';
 
 // Mock environment for testing
 class TestEnvironment implements ActionEventEnvironment {

@@ -2,11 +2,11 @@
 
 import {z} from 'zod';
 
-import {Cell, type CellOptions} from '$lib/cell.svelte.js';
-import {CellJson} from '$lib/cell_types.js';
-import {BrowserTabs} from '$routes/tabs/browser_tabs.svelte.js';
-import {BrowserTabJson} from '$routes/tabs/browser_tab.svelte.js';
-import {HANDLED} from '$lib/cell_helpers.js';
+import {Cell, type CellOptions} from '$lib/cell.svelte.ts';
+import {CellJson} from '$lib/cell_types.ts';
+import {BrowserTabs} from './browser_tabs.svelte.ts';
+import {BrowserTabJson} from './browser_tab.svelte.ts';
+import {HANDLED} from '$lib/cell_helpers.ts';
 
 export const BrowserJson = CellJson.extend({
 	tabs: z.array(BrowserTabJson).default(() => []),

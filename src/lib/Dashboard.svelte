@@ -4,7 +4,7 @@
 	import {page} from '$app/state';
 	import {onNavigate} from '$app/navigation';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {is_editable, swallow} from '@fuzdev/fuz_util/dom.js';
+	import {is_editable, swallow} from '@fuzdev/fuz_util/dom.ts';
 	import {slide} from 'svelte/transition';
 
 	import {
@@ -13,12 +13,12 @@
 		icon_desk,
 		icon_project,
 		icon_tab,
-	} from '@fuzdev/fuz_ui/icons.js';
+	} from '@fuzdev/fuz_ui/icons.ts';
 
-	import {logo_zzz} from './logos.js';
+	import {logo_zzz} from './logos.ts';
 	import NavLink from './NavLink.svelte';
-	import {frontend_context} from './frontend.svelte.js';
-	import {main_nav_items_default, to_nav_link_href} from './nav.js';
+	import {frontend_context} from './frontend.svelte.ts';
+	import {main_nav_items_default, to_nav_link_href} from './nav.ts';
 	import {DESK_WIDTH} from './DeskMenu.svelte';
 
 	// TODO dashboard should be mounted with Markdown

@@ -3,7 +3,7 @@
 	import {resolve} from '$app/paths';
 
 	import ModelDetail from '$lib/ModelDetail.svelte';
-	import {frontend_context} from '$lib/frontend.svelte.js';
+	import {frontend_context} from '$lib/frontend.svelte.ts';
 
 	const {params} = $props();
 

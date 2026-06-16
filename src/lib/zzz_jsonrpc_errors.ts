@@ -7,7 +7,7 @@
  * @module
  */
 
-import type {JsonrpcErrorCode, JsonrpcErrorObject} from '@fuzdev/fuz_app/http/jsonrpc.js';
+import type {JsonrpcErrorCode, JsonrpcErrorObject} from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import {
 	JSONRPC_ERROR_CODES as BASE_JSONRPC_ERROR_CODES,
 	JSONRPC_ERROR_CODE_TO_HTTP_STATUS,
@@ -16,7 +16,7 @@ import {
 	jsonrpc_errors as base_jsonrpc_errors,
 	ThrownJsonrpcError,
 	type JsonrpcErrorName as BaseJsonrpcErrorName,
-} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
+} from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 /** zzz error names — extends fuz_app's base set with AI provider errors. */
 export type JsonrpcErrorName = BaseJsonrpcErrorName | 'ai_provider_error';

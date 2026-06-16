@@ -1,13 +1,13 @@
-import type {Gen} from '@fuzdev/gro/gen.js';
+import type {Gen} from '@fuzdev/gro/gen.ts';
 import {
 	ImportBuilder,
 	compose_gen_file,
 	generate_action_event_datas,
 	generate_action_inputs_outputs,
 	generate_action_specs_record,
-} from '@fuzdev/fuz_app/actions/action_codegen.js';
+} from '@fuzdev/fuz_app/actions/action_codegen.ts';
 
-import {all_action_specs} from './action_specs.js';
+import {all_action_specs} from './action_specs.ts';
 
 /**
  * Outputs a file with action collection types that can be imported by schemas.ts.

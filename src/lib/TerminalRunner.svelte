@@ -1,13 +1,13 @@
 <script lang="ts">
 	import {slide} from 'svelte/transition';
-	import type {Uuid} from '@fuzdev/fuz_util/id.js';
+	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-	import {app_context} from './app.svelte.js';
-	import {TerminalPreset} from './terminal_preset.svelte.js';
+	import {app_context} from './app.svelte.ts';
+	import {TerminalPreset} from './terminal_preset.svelte.ts';
 	import TerminalRunItem from './TerminalRunItem.svelte';
 	import TerminalPresetBar from './TerminalPresetBar.svelte';
 	import TerminalCommandInput from './TerminalCommandInput.svelte';
-	import {Scrollable} from './scrollable.svelte.js';
+	import {Scrollable} from './scrollable.svelte.ts';
 
 	const app = app_context.get();
 

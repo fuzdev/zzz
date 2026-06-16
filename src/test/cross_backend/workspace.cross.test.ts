@@ -17,12 +17,12 @@ import {describe, test, inject, assert} from 'vitest';
 import {
 	default_cross_process_setup,
 	reconstruct_bootstrapped_handle,
-} from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
-import {rpc_call} from '@fuzdev/fuz_app/testing/rpc_helpers.js';
-import {create_ws_transport} from '@fuzdev/fuz_app/testing/transports/ws_transport.js';
-import {is_notification} from '@fuzdev/fuz_app/testing/transports/ws_client.js';
+} from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
+import {rpc_call} from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
+import {create_ws_transport} from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
+import {is_notification} from '@fuzdev/fuz_app/testing/transports/ws_client.ts';
 
-import './cross_test_types.js';
+import './cross_test_types.ts';
 
 const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 const setup_test = default_cross_process_setup(handle);

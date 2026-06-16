@@ -1,7 +1,7 @@
 // @slop Claude Sonnet 3.7
 
-import type {Thunk} from '@fuzdev/fuz_util/function.js';
-import type {Cell} from './cell.svelte.js';
+import type {Thunk} from '@fuzdev/fuz_util/function.ts';
+import type {Cell} from './cell.svelte.ts';
 
 export interface Sorter<T> {
 	key: string;

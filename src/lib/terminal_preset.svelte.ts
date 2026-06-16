@@ -1,7 +1,7 @@
 import {z} from 'zod';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {CellJson} from './cell_types.js';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {CellJson} from './cell_types.ts';
 
 export const TerminalPresetJson = CellJson.extend({
 	name: z.string().default(''),

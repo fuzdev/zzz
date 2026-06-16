@@ -2,8 +2,8 @@
 
 import type {Attachment} from 'svelte/attachments';
 import {on} from 'svelte/events';
-import type {Flavored} from '@fuzdev/fuz_util/types.js';
-import {EMPTY_OBJECT} from '@fuzdev/fuz_util/object.js';
+import type {Flavored} from '@fuzdev/fuz_util/types.ts';
+import {EMPTY_OBJECT} from '@fuzdev/fuz_util/object.ts';
 
 import {
 	detect_reorderable_direction,
@@ -12,8 +12,8 @@ import {
 	is_reorder_allowed,
 	validate_reorderable_target_index,
 	set_reorderable_drag_data_transfer,
-} from './reorderable_helpers.js';
-import {create_client_id} from './helpers.js';
+} from './reorderable_helpers.ts';
+import {create_client_id} from './helpers.ts';
 
 export type ReorderableId = Flavored<string, 'ReorderableId'>;
 export type ReorderableItemId = Flavored<string, 'ReorderableItemId'>;

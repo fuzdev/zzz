@@ -1,14 +1,14 @@
-import {strip_start} from '@fuzdev/fuz_util/string.js';
-import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.js';
-import {Datetime, DatetimeNow} from '@fuzdev/fuz_util/datetime.js';
+import {strip_start} from '@fuzdev/fuz_util/string.ts';
+import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.ts';
+import {Datetime, DatetimeNow} from '@fuzdev/fuz_util/datetime.ts';
 
-import {SerializableDisknode, type DiskfileJson} from './diskfile_types.js';
-import type {Diskfile} from './diskfile.svelte.js';
+import {SerializableDisknode, type DiskfileJson} from './diskfile_types.ts';
+import type {Diskfile} from './diskfile.svelte.ts';
 
-// TODO probably extract to `@fuzdev/fuz_util/path.js`
+// TODO probably extract to `@fuzdev/fuz_util/path.ts`
 export const is_path_absolute = (path: string): boolean => path[0] === '/';
 
-// TODO hacky, refactor path helpers with `@fuzdev/fuz_util/path.js`
+// TODO hacky, refactor path helpers with `@fuzdev/fuz_util/path.ts`
 export const to_relative_path = (path: string, parent: string): string =>
 	strip_start(strip_start(path, parent), '/');
 

@@ -1,7 +1,7 @@
 import {z} from 'zod';
 
-import {Cell, type CellOptions} from '$lib/cell.svelte.js';
-import {CellJson} from '$lib/cell_types.js';
+import {Cell, type CellOptions} from '$lib/cell.svelte.ts';
+import {CellJson} from '$lib/cell_types.ts';
 
 // Browser tab schema with discriminated union for tab types
 export const BrowserTabJson = CellJson.extend({

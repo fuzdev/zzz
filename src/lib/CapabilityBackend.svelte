@@ -3,11 +3,11 @@
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import {onMount} from 'svelte';
 
-	import {frontend_context} from './frontend.svelte.js';
-	import {icon_arrow_right} from '@fuzdev/fuz_ui/icons.js';
+	import {frontend_context} from './frontend.svelte.ts';
+	import {icon_arrow_right} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
-	import {SERVER_URL} from './constants.js';
+	import {SERVER_URL} from './constants.ts';
 	import PingForm from './PingForm.svelte';
 	import ExternalLink from './ExternalLink.svelte';
 

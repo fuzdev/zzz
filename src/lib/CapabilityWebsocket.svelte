@@ -7,19 +7,19 @@
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import {frontend_context} from './frontend.svelte.js';
-	import type {Socket} from './socket.svelte.js';
-	import {icon_cancel, icon_connect, icon_disconnect, icon_reset} from '@fuzdev/fuz_ui/icons.js';
+	import {frontend_context} from './frontend.svelte.ts';
+	import type {Socket} from './socket.svelte.ts';
+	import {icon_cancel, icon_connect, icon_disconnect, icon_reset} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {format_placeholder} from './helpers.js';
-	import {format_ms_to_readable, format_timestamp} from './time_helpers.js';
+	import {format_placeholder} from './helpers.ts';
+	import {format_ms_to_readable, format_timestamp} from './time_helpers.ts';
 	import {
 		DEFAULT_HEARTBEAT_INTERVAL,
 		DEFAULT_RECONNECT_DELAY,
 		DEFAULT_RECONNECT_DELAY_MAX,
-	} from './socket_helpers.js';
+	} from './socket_helpers.ts';
 	import SocketMessageQueue from './SocketMessageQueue.svelte';
-	import {WEBSOCKET_URL} from './constants.js';
+	import {WEBSOCKET_URL} from './constants.ts';
 
 	const pid = $props.id();
 

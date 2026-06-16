@@ -1,5 +1,5 @@
 import {test, describe, assert} from 'vitest';
-import {reorder_list, to_reordered_list} from '$lib/list_helpers.js';
+import {reorder_list, to_reordered_list} from '$lib/list_helpers.ts';
 
 // Test constants
 const SAMPLE_ARRAY = ['a', 'b', 'c', 'd', 'e'];

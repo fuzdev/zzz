@@ -1,4 +1,4 @@
-import type {ActionOutputs} from './action_collections.js';
+import type {ActionOutputs} from './action_collections.ts';
 
 // TODO hacky, shouldn't exist
 /**

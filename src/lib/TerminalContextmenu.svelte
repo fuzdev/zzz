@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type {Snippet} from 'svelte';
 	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
-	import type {Thunk} from '@fuzdev/fuz_util/function.js';
+	import type {Thunk} from '@fuzdev/fuz_util/function.ts';
 
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 

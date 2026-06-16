@@ -1,8 +1,8 @@
 <script lang="ts">
 	import {page} from '$app/state';
-	import {frontend_context} from '$lib/frontend.svelte.js';
-	import {DiskfileDirectoryPath} from '$lib/diskfile_types.js';
-	import {icon_add, icon_delete, icon_directory, icon_workspace} from '@fuzdev/fuz_ui/icons.js';
+	import {frontend_context} from '$lib/frontend.svelte.ts';
+	import {DiskfileDirectoryPath} from '$lib/diskfile_types.ts';
+	import {icon_add, icon_delete, icon_directory, icon_workspace} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import PageFooter from '$routes/PageFooter.svelte';
 

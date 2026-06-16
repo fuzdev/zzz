@@ -3,11 +3,11 @@
 import {z} from 'zod';
 import {goto} from '$app/navigation';
 import {resolve} from '$app/paths';
-import type {Uuid} from '@fuzdev/fuz_util/id.js';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
+import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
 
-import {Domain} from '$routes/projects/domain.svelte.js';
-import type {Projects} from '$routes/projects/projects.svelte.js';
+import {Domain} from './domain.svelte.ts';
+import type {Projects} from './projects.svelte.ts';
 
 export interface DomainViewmodelOptions {
 	projects: Projects;

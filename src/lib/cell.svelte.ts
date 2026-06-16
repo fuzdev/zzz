@@ -1,17 +1,17 @@
 import {z} from 'zod';
-import {zod_get_field_schema, zod_get_schema_keys} from '@fuzdev/fuz_util/zod.js';
-import type {Uuid} from '@fuzdev/fuz_util/id.js';
-import {get_datetime_now, type Datetime} from '@fuzdev/fuz_util/datetime.js';
+import {zod_get_field_schema, zod_get_schema_keys} from '@fuzdev/fuz_util/zod.ts';
+import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+import {get_datetime_now, type Datetime} from '@fuzdev/fuz_util/datetime.ts';
 
-import type {Frontend} from './frontend.svelte.js';
+import type {Frontend} from './frontend.svelte.ts';
 import {
 	get_schema_class_info,
 	type SchemaClassInfo,
 	HANDLED,
 	type CellValueDecoder,
-} from './cell_helpers.js';
-import type {SchemaKeys, CellJson} from './cell_types.js';
-import {format_datetime, format_short_date, format_time} from './time_helpers.js';
+} from './cell_helpers.ts';
+import type {SchemaKeys, CellJson} from './cell_types.ts';
+import {format_datetime, format_short_date, format_time} from './time_helpers.ts';
 
 // TODO improve types, especially casting
 

@@ -1,15 +1,15 @@
 // @slop Claude Opus 4
 
 import {z} from 'zod';
-import {ActionKind, type ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.js';
+import {ActionKind, type ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {ActionMethod} from './action_metatypes.js';
-import {ActionSpecs} from './action_collections.js';
-import {CellJson} from './cell_types.js';
-import {ActionEventData} from '@fuzdev/fuz_app/actions/action_event_data.js';
-import type {ActionEvent} from '@fuzdev/fuz_app/actions/action_event.js';
-import {is_action_complete} from '@fuzdev/fuz_app/actions/action_event_helpers.js';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {ActionMethod} from './action_metatypes.ts';
+import {ActionSpecs} from './action_collections.ts';
+import {CellJson} from './cell_types.ts';
+import {ActionEventData} from '@fuzdev/fuz_app/actions/action_event_data.ts';
+import type {ActionEvent} from '@fuzdev/fuz_app/actions/action_event.ts';
+import {is_action_complete} from '@fuzdev/fuz_app/actions/action_event_helpers.ts';
 
 // TODO this isnt in action_types.ts because of circular dependencies, idk what pattern is best yet
 export const ActionJson = CellJson.extend({

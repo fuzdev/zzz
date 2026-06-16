@@ -1,10 +1,10 @@
 <script lang="ts">
 	import type {ComponentProps, Snippet} from 'svelte';
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
 	import {DEV} from 'esm-env';
 
-	import {icon_checkmark} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_checkmark} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	let {

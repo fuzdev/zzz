@@ -1,5 +1,5 @@
 <script lang="ts">
-	import {format_timestamp} from './time_helpers.js';
+	import {format_timestamp} from './time_helpers.ts';
 
 	const {
 		value,

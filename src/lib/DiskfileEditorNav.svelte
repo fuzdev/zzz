@@ -1,10 +1,10 @@
 <script lang="ts">
-	import type {Uuid} from '@fuzdev/fuz_util/id.js';
+	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-	import {icon_arrow_left, icon_arrow_right, icon_refresh} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_arrow_left, icon_arrow_right, icon_refresh} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {frontend_context} from './frontend.svelte.js';
-	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
+	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.ts';
 
 	const {
 		editor_state,

@@ -1,7 +1,7 @@
-import type {SvgData} from '@fuzdev/fuz_ui/svg.js';
-import {icon_part, icon_file} from '@fuzdev/fuz_ui/icons.js';
+import type {SvgData} from '@fuzdev/fuz_ui/svg.ts';
+import {icon_part, icon_file} from '@fuzdev/fuz_ui/icons.ts';
 
-import type {PartUnion} from './part.svelte.js';
+import type {PartUnion} from './part.svelte.ts';
 
 export const PART_ICONS = {
 	text: icon_part,

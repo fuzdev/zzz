@@ -2,15 +2,15 @@
 
 import {test, describe, vi, assert} from 'vitest';
 import {z} from 'zod';
-import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.js';
+import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.ts';
 
-import {IndexedCollection} from '$lib/indexed_collection.svelte.js';
+import {IndexedCollection} from '$lib/indexed_collection.svelte.ts';
 import {
 	create_single_index,
 	create_multi_index,
 	create_derived_index,
 	create_dynamic_index,
-} from '$lib/indexed_collection_helpers.svelte.js';
+} from '$lib/indexed_collection_helpers.svelte.ts';
 
 // Mock item type that implements IndexedItem
 interface TestItem {

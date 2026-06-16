@@ -1,12 +1,12 @@
 <script lang="ts">
 	import Breadcrumb from '@fuzdev/fuz_ui/Breadcrumb.svelte';
 	import DocsFooter from '@fuzdev/fuz_ui/DocsFooter.svelte';
-	import {site_context} from '@fuzdev/fuz_ui/site.svelte.js';
+	import {site_context} from '@fuzdev/fuz_ui/site.svelte.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {page} from '$app/state';
 	import {resolve} from '$app/paths';
 
-	import {logo_zzz} from './logos.js';
+	import {logo_zzz} from './logos.ts';
 
 	const site = site_context.get();
 </script>

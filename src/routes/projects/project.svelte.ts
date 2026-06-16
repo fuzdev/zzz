@@ -1,16 +1,16 @@
 // @slop Claude Opus 4
 
 import {z} from 'zod';
-import type {ArrayElement} from '@fuzdev/fuz_util/types.js';
-import {Uuid} from '@fuzdev/fuz_util/id.js';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
+import type {ArrayElement} from '@fuzdev/fuz_util/types.ts';
+import {Uuid} from '@fuzdev/fuz_util/id.ts';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
 
-import {Cell, type CellOptions} from '$lib/cell.svelte.js';
-import {ProjectJson} from '$routes/projects/projects_schema.js';
-import {Domain} from '$routes/projects/domain.svelte.js';
-import {Page} from '$routes/projects/page.svelte.js';
-import {Repo} from '$routes/projects/repo.svelte.js';
-import {HANDLED} from '$lib/cell_helpers.js';
+import {Cell, type CellOptions} from '$lib/cell.svelte.ts';
+import {ProjectJson} from './projects_schema.ts';
+import {Domain} from './domain.svelte.ts';
+import {Page} from './page.svelte.ts';
+import {Repo} from './repo.svelte.ts';
+import {HANDLED} from '$lib/cell_helpers.ts';
 
 export const project_sections = ['project', 'pages', 'domains', 'repos', 'settings'] as const;
 export type ProjectSection = ArrayElement<typeof project_sections>;

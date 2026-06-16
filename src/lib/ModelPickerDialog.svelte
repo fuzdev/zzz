@@ -1,13 +1,13 @@
 <script lang="ts">
 	import type {ComponentProps, Snippet} from 'svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
 
 	import PickerDialog from './PickerDialog.svelte';
 	import ModelListitem from './ModelListitem.svelte';
-	import {frontend_context} from './frontend.svelte.js';
-	import type {Model} from './model.svelte.js';
-	import {sort_by_text} from './sortable.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
+	import type {Model} from './model.svelte.ts';
+	import {sort_by_text} from './sortable.svelte.ts';
 
 	const app = frontend_context.get();
 	const {models} = app;

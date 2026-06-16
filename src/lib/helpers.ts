@@ -1,4 +1,4 @@
-import {CONTENT_PREVIEW_LENGTH} from './constants.js';
+import {CONTENT_PREVIEW_LENGTH} from './constants.ts';
 
 // TODO import from fuz_css (and respect prefers-reduced-motion? maybe optionally)
 export const DURATION_LG = 1000;

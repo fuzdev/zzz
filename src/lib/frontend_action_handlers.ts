@@ -1,9 +1,9 @@
-import {JSONRPC_ERROR_CODES} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
+import {JSONRPC_ERROR_CODES} from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
-import type {Frontend} from './frontend.svelte.js';
-import type {FrontendActionHandlers} from './frontend_action_types.js';
-import {Turn} from './turn.svelte.js';
-import {to_completion_response_text} from './response_helpers.js';
+import type {Frontend} from './frontend.svelte.ts';
+import type {FrontendActionHandlers} from './frontend_action_types.ts';
+import {Turn} from './turn.svelte.ts';
+import {to_completion_response_text} from './response_helpers.ts';
 
 // TODO stubbing out a lot of these
 

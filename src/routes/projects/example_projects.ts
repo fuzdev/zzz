@@ -1,7 +1,7 @@
-import {create_uuid} from '@fuzdev/fuz_util/id.js';
+import {create_uuid} from '@fuzdev/fuz_util/id.ts';
 
-import type {Frontend} from '$lib/frontend.svelte.js';
-import {Project} from '$routes/projects/project.svelte.js';
+import type {Frontend} from '$lib/frontend.svelte.ts';
+import {Project} from './project.svelte.ts';
 
 export const create_sample_projects = (app: Frontend): Array<Project> => {
 	return [

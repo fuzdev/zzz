@@ -3,8 +3,8 @@
 
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
-	import {get_icon_for_action_kind} from './action_icons.js';
-	import type {Action} from './action.svelte.js';
+	import {get_icon_for_action_kind} from './action_icons.ts';
+	import type {Action} from './action.svelte.ts';
 
 	const {
 		action,

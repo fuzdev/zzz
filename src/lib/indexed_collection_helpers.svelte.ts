@@ -2,9 +2,9 @@
 
 import {SvelteMap} from 'svelte/reactivity';
 import {z} from 'zod';
-import {UuidWithDefault} from '@fuzdev/fuz_util/id.js';
+import {UuidWithDefault} from '@fuzdev/fuz_util/id.ts';
 
-import type {IndexDefinition, IndexedCollection} from './indexed_collection.svelte.js';
+import type {IndexDefinition, IndexedCollection} from './indexed_collection.svelte.ts';
 
 // TODO @many rethink the indexed collection API -
 // particularly type safety, performance, and integration with Svelte patterns -

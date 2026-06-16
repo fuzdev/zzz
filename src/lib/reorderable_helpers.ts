@@ -4,7 +4,7 @@ import type {
 	ReorderableDirection,
 	ReorderableValidDropPosition,
 	ReorderableItemId,
-} from './reorderable.svelte.js';
+} from './reorderable.svelte.ts';
 
 // TODO maybe make this a DOM helper? in fuz_util?
 /**

@@ -1,8 +1,8 @@
 import {z} from 'zod';
-import {Uuid} from '@fuzdev/fuz_util/id.js';
+import {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {CellJson} from './cell_types.js';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {CellJson} from './cell_types.ts';
 
 export const TerminalStatus = z.enum(['running', 'stopped', 'exited']);
 export type TerminalStatus = z.infer<typeof TerminalStatus>;

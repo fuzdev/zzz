@@ -1,10 +1,10 @@
 import {z} from 'zod';
-import {Uuid} from '@fuzdev/fuz_util/id.js';
+import {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {CellJson} from './cell_types.js';
-import type {Diskfile} from './diskfile.svelte.js';
-import type {DiskfileTabs} from './diskfile_tabs.svelte.js';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {CellJson} from './cell_types.ts';
+import type {Diskfile} from './diskfile.svelte.ts';
+import type {DiskfileTabs} from './diskfile_tabs.svelte.ts';
 
 export const DiskfileTabJson = CellJson.extend({
 	diskfile_id: Uuid,

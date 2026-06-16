@@ -1,15 +1,15 @@
 <script lang="ts">
-	import type {PartUnion} from './part.svelte.js';
+	import type {PartUnion} from './part.svelte.ts';
 	import XmlTagControls from './XmlTagControls.svelte';
 	import PartStats from './PartStats.svelte';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {get_part_type_icon} from './part_helpers.js';
+	import {get_part_type_icon} from './part_helpers.ts';
 	import PartEditorForText from './PartEditorForText.svelte';
 	import PartContextmenu from './PartContextmenu.svelte';
 	import PartEditorForDiskfile from './PartEditorForDiskfile.svelte';
 	import PartToggleButton from './PartToggleButton.svelte';
 	import PartRemoveButton from './PartRemoveButton.svelte';
-	import {frontend_context} from './frontend.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
 
 	const {
 		part,

@@ -1,10 +1,10 @@
 <script lang="ts">
 	import type {ComponentProps} from 'svelte';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
 
-	import {logo_chatgpt, logo_claude, logo_gemini} from './logos.js';
-	import type {ProviderName} from './provider_types.js';
+	import {logo_chatgpt, logo_claude, logo_gemini} from './logos.ts';
+	import type {ProviderName} from './provider_types.ts';
 
 	const {
 		name,

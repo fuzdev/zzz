@@ -1,12 +1,12 @@
 // @slop Claude Sonnet 3.7
 
-import type {Uuid} from '@fuzdev/fuz_util/id.js';
+import type {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-import {estimate_token_count} from './helpers.js';
-import type {Diskfile} from './diskfile.svelte.js';
-import type {DiskfilePath} from './diskfile_types.js';
-import type {Frontend} from './frontend.svelte.js';
-import type {DiskfileHistory, HistoryEntry} from './diskfile_history.svelte.js';
+import {estimate_token_count} from './helpers.ts';
+import type {Diskfile} from './diskfile.svelte.ts';
+import type {DiskfilePath} from './diskfile_types.ts';
+import type {Frontend} from './frontend.svelte.ts';
+import type {DiskfileHistory, HistoryEntry} from './diskfile_history.svelte.ts';
 
 // TODO maybe should be a cell?
 /**

@@ -4,18 +4,18 @@
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import PendingButton from '@fuzdev/fuz_ui/PendingButton.svelte';
 
-	import {frontend_context} from './frontend.svelte.js';
-	import type {Diskfile} from './diskfile.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
+	import type {Diskfile} from './diskfile.svelte.ts';
 	import DiskfileListitem from './DiskfileListitem.svelte';
 	import {
 		icon_create_directory,
 		icon_create_file,
 		icon_directory,
 		icon_sort,
-	} from '@fuzdev/fuz_ui/icons.js';
+	} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import SortableList from './SortableList.svelte';
-	import {sort_by_text, sort_by_numeric} from './sortable.svelte.js';
+	import {sort_by_text, sort_by_numeric} from './sortable.svelte.ts';
 
 	const {
 		empty,

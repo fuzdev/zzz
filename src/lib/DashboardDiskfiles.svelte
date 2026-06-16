@@ -1,14 +1,14 @@
 <script lang="ts">
-	import {swallow, is_editable} from '@fuzdev/fuz_util/dom.js';
-	import {random_item} from '@fuzdev/fuz_util/random.js';
+	import {swallow, is_editable} from '@fuzdev/fuz_util/dom.ts';
+	import {random_item} from '@fuzdev/fuz_util/random.ts';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import {onMount} from 'svelte';
 
-	import {frontend_context} from './frontend.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
 	import DiskfileExplorer from './DiskfileExplorer.svelte';
 	import DiskfileEditorView from './DiskfileEditorView.svelte';
 	import DiskfileTabListitem from './DiskfileTabListitem.svelte';
-	import {Reorderable} from './reorderable.svelte.js';
+	import {Reorderable} from './reorderable.svelte.ts';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 

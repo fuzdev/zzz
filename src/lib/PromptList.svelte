@@ -2,9 +2,9 @@
 	import {slide} from 'svelte/transition';
 
 	import PromptListitem from './PromptListitem.svelte';
-	import {frontend_context} from './frontend.svelte.js';
-	import {sort_by_text, sort_by_numeric} from './sortable.svelte.js';
-	import type {Prompt} from './prompt.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
+	import {sort_by_text, sort_by_numeric} from './sortable.svelte.ts';
+	import type {Prompt} from './prompt.svelte.ts';
 	import SortableList from './SortableList.svelte';
 
 	const app = frontend_context.get();

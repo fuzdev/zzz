@@ -14,7 +14,7 @@
  * Each factory composes a small per-backend declaration against the
  * lifted upstream builder
  * (`make_default_rust_backend_config` in
- * `@fuzdev/fuz_app/testing/cross_backend/default_backend_configs.js`).
+ * `@fuzdev/fuz_app/testing/cross_backend/default_backend_configs.ts`).
  * The upstream builder owns the common shape — `/api/*` paths, cookie
  * name, bootstrap block keyed off `default_test_*` secrets, the
  * `FUZ_TESTING_RESET_DB_ON_STARTUP` gate. Per-backend factories only
@@ -63,16 +63,16 @@
  */
 
 import {join} from 'node:path';
-import type {BackendConfig} from '@fuzdev/fuz_app/testing/cross_backend/backend_config.js';
-import type {BackendCapabilities} from '@fuzdev/fuz_app/testing/cross_backend/capabilities.js';
+import type {BackendConfig} from '@fuzdev/fuz_app/testing/cross_backend/backend_config.ts';
+import type {BackendCapabilities} from '@fuzdev/fuz_app/testing/cross_backend/capabilities.ts';
 import {
 	build_test_backend_paths,
 	type TestBackendPaths,
-} from '@fuzdev/fuz_app/testing/cross_backend/build_test_backend_paths.js';
+} from '@fuzdev/fuz_app/testing/cross_backend/build_test_backend_paths.ts';
 import {
 	make_default_rust_backend_config,
 	rust_default_capabilities,
-} from '@fuzdev/fuz_app/testing/cross_backend/default_backend_configs.js';
+} from '@fuzdev/fuz_app/testing/cross_backend/default_backend_configs.ts';
 
 /**
  * Per-project Rust backend database URL prefix — real Postgres (PGlite

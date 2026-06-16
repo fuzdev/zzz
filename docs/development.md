@@ -248,7 +248,7 @@ Create `src/routes/my_route/+page.svelte`:
 
 ```svelte
 <script lang="ts">
-  import {frontend_context} from '$lib/frontend.svelte.js';
+  import {frontend_context} from '$lib/frontend.svelte.ts';
 
   const app = frontend_context.get();
 </script>
@@ -262,7 +262,7 @@ Create `src/routes/my_route/+page.svelte`:
 
 ```svelte
 <script lang="ts">
-  import {frontend_context} from '$lib/frontend.svelte.js';
+  import {frontend_context} from '$lib/frontend.svelte.ts';
 
   const app = frontend_context.get();
   const {chats, models, prompts} = app;
@@ -359,7 +359,7 @@ Uses Vitest with `test` and `expect`:
 ```typescript
 import {test, expect} from 'vitest';
 
-import {providers_default, models_default} from '$lib/config_defaults.js';
+import {providers_default, models_default} from '$lib/config_defaults.ts';
 
 test('all model provider_names exist in providers_default', () => {
   const model_provider_names = new Set(models_default.map((model) => model.provider_name));
@@ -414,8 +414,8 @@ test('all model provider_names exist in providers_default', () => {
 import {z} from 'zod';
 import {SvelteMap} from 'svelte/reactivity';
 
-import {Cell} from '$lib/cell.svelte.js';
-import type {Frontend} from '$lib/frontend.svelte.js';
+import {Cell} from '$lib/cell.svelte.ts';
+import type {Frontend} from '$lib/frontend.svelte.ts';
 
 import {helper_function} from './helpers.js';
 ```

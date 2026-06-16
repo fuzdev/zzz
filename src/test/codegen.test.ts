@@ -6,7 +6,7 @@ import {
 	get_executor_phases,
 	get_handler_return_type,
 	generate_phase_handlers,
-} from '@fuzdev/fuz_app/actions/action_codegen.js';
+} from '@fuzdev/fuz_app/actions/action_codegen.ts';
 
 import {
 	ping_action_spec,
@@ -14,27 +14,27 @@ import {
 	filer_change_action_spec,
 	toggle_main_menu_action_spec,
 	completion_create_action_spec,
-} from '$lib/action_specs.js';
+} from '$lib/action_specs.ts';
 
 describe('ImportBuilder', () => {
 	describe('type-only imports', () => {
 		test('single module with type imports becomes import type', () => {
 			const imports = new ImportBuilder();
 
-			imports.add_type('$lib/types.js', 'Foo');
-			imports.add_type('$lib/types.js', 'Bar');
+			imports.add_type('$lib/types.ts', 'Foo');
+			imports.add_type('$lib/types.ts', 'Bar');
 
-			assert.strictEqual(imports.build(), `import type {Bar, Foo} from '$lib/types.js';`);
+			assert.strictEqual(imports.build(), `import type {Bar, Foo} from '$lib/types.ts';`);
 		});
 
 		test('add_types helper adds multiple types at once', () => {
 			const imports = new ImportBuilder();
 
-			imports.add_types('$lib/types.js', 'TypeA', 'TypeB', 'TypeC');
+			imports.add_types('$lib/types.ts', 'TypeA', 'TypeB', 'TypeC');
 
 			assert.strictEqual(
 				imports.build(),
-				`import type {TypeA, TypeB, TypeC} from '$lib/types.js';`,
+				`import type {TypeA, TypeB, TypeC} from '$lib/types.ts';`,
 			);
 		});
 
@@ -51,27 +51,27 @@ describe('ImportBuilder', () => {
 		test('mixed types and values use individual type annotations', () => {
 			const imports = new ImportBuilder();
 
-			imports.add('$lib/utils.js', 'helper');
-			imports.add_type('$lib/utils.js', 'HelperType');
-			imports.add('$lib/utils.js', 'another_helper');
+			imports.add('$lib/utils.ts', 'helper');
+			imports.add_type('$lib/utils.ts', 'HelperType');
+			imports.add('$lib/utils.ts', 'another_helper');
 
 			assert.strictEqual(
 				imports.build(),
-				`import {another_helper, helper, type HelperType} from '$lib/utils.js';`,
+				`import {another_helper, helper, type HelperType} from '$lib/utils.ts';`,
 			);
 		});
 
 		test('value import prevents module from being type-only', () => {
 			const imports = new ImportBuilder();
 
-			imports.add_type('$lib/mixed.js', 'TypeA');
-			imports.add_type('$lib/mixed.js', 'TypeB');
-			imports.add('$lib/mixed.js', 'value'); // This makes it mixed
-			imports.add_type('$lib/mixed.js', 'TypeC');
+			imports.add_type('$lib/mixed.ts', 'TypeA');
+			imports.add_type('$lib/mixed.ts', 'TypeB');
+			imports.add('$lib/mixed.ts', 'value'); // This makes it mixed
+			imports.add_type('$lib/mixed.ts', 'TypeC');
 
 			assert.strictEqual(
 				imports.build(),
-				`import {value, type TypeA, type TypeB, type TypeC} from '$lib/mixed.js';`,
+				`import {value, type TypeA, type TypeB, type TypeC} from '$lib/mixed.ts';`,
 			);
 		});
 
@@ -79,17 +79,17 @@ describe('ImportBuilder', () => {
 			const imports = new ImportBuilder();
 
 			// Add in random order
-			imports.add_type('$lib/mixed.js', 'ZType');
-			imports.add('$lib/mixed.js', 'z_value');
-			imports.add_type('$lib/mixed.js', 'AType');
-			imports.add('$lib/mixed.js', 'a_value');
-			imports.add_type('$lib/mixed.js', 'MType');
-			imports.add('$lib/mixed.js', 'm_value');
+			imports.add_type('$lib/mixed.ts', 'ZType');
+			imports.add('$lib/mixed.ts', 'z_value');
+			imports.add_type('$lib/mixed.ts', 'AType');
+			imports.add('$lib/mixed.ts', 'a_value');
+			imports.add_type('$lib/mixed.ts', 'MType');
+			imports.add('$lib/mixed.ts', 'm_value');
 
 			// Should sort values first (alphabetically), then types (alphabetically)
 			assert.strictEqual(
 				imports.build(),
-				`import {a_value, m_value, z_value, type AType, type MType, type ZType} from '$lib/mixed.js';`,
+				`import {a_value, m_value, z_value, type AType, type MType, type ZType} from '$lib/mixed.ts';`,
 			);
 		});
 	});
@@ -98,42 +98,42 @@ describe('ImportBuilder', () => {
 		test('namespace import is handled correctly', () => {
 			const imports = new ImportBuilder();
 
-			imports.add('$lib/action_specs.js', '* as specs');
+			imports.add('$lib/action_specs.ts', '* as specs');
 
-			assert.strictEqual(imports.build(), `import * as specs from '$lib/action_specs.js';`);
+			assert.strictEqual(imports.build(), `import * as specs from '$lib/action_specs.ts';`);
 		});
 
 		test('namespace import with other imports from same module', () => {
 			const imports = new ImportBuilder();
 
-			imports.add('$lib/utils.js', '* as utils');
-			imports.add('$lib/other.js', 'something');
+			imports.add('$lib/utils.ts', '* as utils');
+			imports.add('$lib/other.ts', 'something');
 
 			const result = imports.build();
 			const lines = result.split('\n');
 
 			assert.strictEqual(lines.length, 2);
-			assert.include(lines, `import * as utils from '$lib/utils.js';`);
-			assert.include(lines, `import {something} from '$lib/other.js';`);
+			assert.include(lines, `import * as utils from '$lib/utils.ts';`);
+			assert.include(lines, `import {something} from '$lib/other.ts';`);
 		});
 
 		test('add_many with namespace import', () => {
 			const imports = new ImportBuilder();
 
-			imports.add_many('$lib/helpers.js', '* as helpers');
+			imports.add_many('$lib/helpers.ts', '* as helpers');
 
-			assert.strictEqual(imports.build(), `import * as helpers from '$lib/helpers.js';`);
+			assert.strictEqual(imports.build(), `import * as helpers from '$lib/helpers.ts';`);
 		});
 
 		test('namespace imports are not mixed with regular imports', () => {
 			const imports = new ImportBuilder();
 
 			// These should create separate import statements
-			imports.add('$lib/module.js', '* as mod');
-			imports.add('$lib/module.js', 'specific');
+			imports.add('$lib/module.ts', '* as mod');
+			imports.add('$lib/module.ts', 'specific');
 
 			// Namespace imports should be on their own line
-			assert.strictEqual(imports.build(), `import * as mod from '$lib/module.js';`);
+			assert.strictEqual(imports.build(), `import * as mod from '$lib/module.ts';`);
 		});
 	});
 
@@ -141,38 +141,38 @@ describe('ImportBuilder', () => {
 		test('value import takes precedence over type import', () => {
 			const imports = new ImportBuilder();
 
-			imports.add_type('$lib/utils.js', 'Item');
-			imports.add('$lib/utils.js', 'Item'); // Upgrades to value
+			imports.add_type('$lib/utils.ts', 'Item');
+			imports.add('$lib/utils.ts', 'Item'); // Upgrades to value
 
-			assert.strictEqual(imports.build(), `import {Item} from '$lib/utils.js';`);
+			assert.strictEqual(imports.build(), `import {Item} from '$lib/utils.ts';`);
 		});
 
 		test('type import does not downgrade existing value import', () => {
 			const imports = new ImportBuilder();
 
-			imports.add('$lib/utils.js', 'Item');
-			imports.add_type('$lib/utils.js', 'Item'); // Should not downgrade
+			imports.add('$lib/utils.ts', 'Item');
+			imports.add_type('$lib/utils.ts', 'Item'); // Should not downgrade
 
-			assert.strictEqual(imports.build(), `import {Item} from '$lib/utils.js';`);
+			assert.strictEqual(imports.build(), `import {Item} from '$lib/utils.ts';`);
 		});
 
 		test('duplicate imports are deduplicated', () => {
 			const imports = new ImportBuilder();
 
-			imports.add_type('$lib/types.js', 'Foo');
-			imports.add_type('$lib/types.js', 'Foo');
-			imports.add_type('$lib/types.js', 'Foo');
+			imports.add_type('$lib/types.ts', 'Foo');
+			imports.add_type('$lib/types.ts', 'Foo');
+			imports.add_type('$lib/types.ts', 'Foo');
 
-			assert.strictEqual(imports.build(), `import type {Foo} from '$lib/types.js';`);
+			assert.strictEqual(imports.build(), `import type {Foo} from '$lib/types.ts';`);
 		});
 
 		test('namespace imports override previous imports', () => {
 			const imports = new ImportBuilder();
 
-			imports.add('$lib/module.js', 'foo');
-			imports.add('$lib/module.js', '* as module'); // Should override
+			imports.add('$lib/module.ts', 'foo');
+			imports.add('$lib/module.ts', '* as module'); // Should override
 
-			assert.strictEqual(imports.build(), `import * as module from '$lib/module.js';`);
+			assert.strictEqual(imports.build(), `import * as module from '$lib/module.ts';`);
 		});
 	});
 
@@ -180,44 +180,44 @@ describe('ImportBuilder', () => {
 		test('generates separate import statements per module', () => {
 			const imports = new ImportBuilder();
 
-			imports.add_types('$lib/types.js', 'TypeA', 'TypeB');
-			imports.add('$lib/utils.js', 'util');
-			imports.add_types('$lib/schemas.js', 'SchemaA', 'SchemaB');
+			imports.add_types('$lib/types.ts', 'TypeA', 'TypeB');
+			imports.add('$lib/utils.ts', 'util');
+			imports.add_types('$lib/schemas.ts', 'SchemaA', 'SchemaB');
 
 			const result = imports.build();
 			const lines = result.split('\n');
 
 			assert.strictEqual(lines.length, 3);
-			assert.include(lines, `import type {TypeA, TypeB} from '$lib/types.js';`);
-			assert.include(lines, `import {util} from '$lib/utils.js';`);
-			assert.include(lines, `import type {SchemaA, SchemaB} from '$lib/schemas.js';`);
+			assert.include(lines, `import type {TypeA, TypeB} from '$lib/types.ts';`);
+			assert.include(lines, `import {util} from '$lib/utils.ts';`);
+			assert.include(lines, `import type {SchemaA, SchemaB} from '$lib/schemas.ts';`);
 		});
 
 		test('imports are sorted alphabetically within modules', () => {
 			const imports = new ImportBuilder();
 
-			imports.add_type('$lib/types.js', 'Zebra');
-			imports.add_type('$lib/types.js', 'Apple');
-			imports.add_type('$lib/types.js', 'Middle');
+			imports.add_type('$lib/types.ts', 'Zebra');
+			imports.add_type('$lib/types.ts', 'Apple');
+			imports.add_type('$lib/types.ts', 'Middle');
 
 			assert.strictEqual(
 				imports.build(),
-				`import type {Apple, Middle, Zebra} from '$lib/types.js';`,
+				`import type {Apple, Middle, Zebra} from '$lib/types.ts';`,
 			);
 		});
 
 		test('handles imports with underscores and numbers correctly', () => {
 			const imports = new ImportBuilder();
 
-			imports.add_type('$lib/types.js', '_Private_Type');
-			imports.add_type('$lib/types.js', 'Type_1');
-			imports.add_type('$lib/types.js', 'Type_2');
-			imports.add_type('$lib/types.js', 'PUBLIC_TYPE');
+			imports.add_type('$lib/types.ts', '_Private_Type');
+			imports.add_type('$lib/types.ts', 'Type_1');
+			imports.add_type('$lib/types.ts', 'Type_2');
+			imports.add_type('$lib/types.ts', 'PUBLIC_TYPE');
 
 			// Underscores sort before letters in most locales
 			assert.strictEqual(
 				imports.build(),
-				`import type {PUBLIC_TYPE, Type_1, Type_2, _Private_Type} from '$lib/types.js';`,
+				`import type {PUBLIC_TYPE, Type_1, Type_2, _Private_Type} from '$lib/types.ts';`,
 			);
 		});
 
@@ -225,41 +225,41 @@ describe('ImportBuilder', () => {
 			const imports = new ImportBuilder();
 
 			// Add in specific order
-			imports.add_type('$lib/third.js', 'Type3');
-			imports.add_type('$lib/first.js', 'Type1');
-			imports.add_type('$lib/second.js', 'Type2');
+			imports.add_type('$lib/third.ts', 'Type3');
+			imports.add_type('$lib/first.ts', 'Type1');
+			imports.add_type('$lib/second.ts', 'Type2');
 
 			// Then add more to existing modules
-			imports.add_type('$lib/first.js', 'Type1b');
-			imports.add_type('$lib/third.js', 'Type3b');
+			imports.add_type('$lib/first.ts', 'Type1b');
+			imports.add_type('$lib/third.ts', 'Type3b');
 
 			const lines = imports.preview();
 
 			// Module order should be based on insertion order
-			assert.include(lines[0], '$lib/third.js');
-			assert.include(lines[1], '$lib/first.js');
-			assert.include(lines[2], '$lib/second.js');
+			assert.include(lines[0], '$lib/third.ts');
+			assert.include(lines[1], '$lib/first.ts');
+			assert.include(lines[2], '$lib/second.ts');
 
 			// But items within modules are sorted
-			assert.strictEqual(lines[0], `import type {Type3, Type3b} from '$lib/third.js';`);
-			assert.strictEqual(lines[1], `import type {Type1, Type1b} from '$lib/first.js';`);
+			assert.strictEqual(lines[0], `import type {Type3, Type3b} from '$lib/third.ts';`);
+			assert.strictEqual(lines[1], `import type {Type1, Type1b} from '$lib/first.ts';`);
 		});
 
 		test('handles mixed namespace and regular imports across modules', () => {
 			const imports = new ImportBuilder();
 
-			imports.add('$lib/specs.js', '* as specs');
-			imports.add_type('$lib/types.js', 'TypeA');
-			imports.add('$lib/utils.js', 'helper');
-			imports.add('$lib/schemas.js', '* as schemas');
+			imports.add('$lib/specs.ts', '* as specs');
+			imports.add_type('$lib/types.ts', 'TypeA');
+			imports.add('$lib/utils.ts', 'helper');
+			imports.add('$lib/schemas.ts', '* as schemas');
 
 			const lines = imports.preview();
 
 			assert.strictEqual(lines.length, 4);
-			assert.include(lines, `import * as specs from '$lib/specs.js';`);
-			assert.include(lines, `import type {TypeA} from '$lib/types.js';`);
-			assert.include(lines, `import {helper} from '$lib/utils.js';`);
-			assert.include(lines, `import * as schemas from '$lib/schemas.js';`);
+			assert.include(lines, `import * as specs from '$lib/specs.ts';`);
+			assert.include(lines, `import type {TypeA} from '$lib/types.ts';`);
+			assert.include(lines, `import {helper} from '$lib/utils.ts';`);
+			assert.include(lines, `import * as schemas from '$lib/schemas.ts';`);
 		});
 	});
 
@@ -269,7 +269,7 @@ describe('ImportBuilder', () => {
 
 			assert.ok(!imports.has_imports());
 
-			imports.add_type('$lib/types.js', 'Foo');
+			imports.add_type('$lib/types.ts', 'Foo');
 
 			assert.ok(imports.has_imports());
 		});
@@ -279,35 +279,35 @@ describe('ImportBuilder', () => {
 
 			assert.strictEqual(imports.import_count, 0);
 
-			imports.add_type('$lib/types.js', 'Foo');
+			imports.add_type('$lib/types.ts', 'Foo');
 			assert.strictEqual(imports.import_count, 1);
 
-			imports.add('$lib/utils.js', 'bar');
+			imports.add('$lib/utils.ts', 'bar');
 			assert.strictEqual(imports.import_count, 2);
 
 			// Adding to existing module doesn't increase count
-			imports.add_type('$lib/types.js', 'Bar');
+			imports.add_type('$lib/types.ts', 'Bar');
 			assert.strictEqual(imports.import_count, 2);
 		});
 
 		test('preview returns array of import statements', () => {
 			const imports = new ImportBuilder();
 
-			imports.add_types('$lib/types.js', 'Foo', 'Bar');
-			imports.add('$lib/utils.js', 'helper');
+			imports.add_types('$lib/types.ts', 'Foo', 'Bar');
+			imports.add('$lib/utils.ts', 'helper');
 
 			const preview = imports.preview();
 
 			assert.strictEqual(preview.length, 2);
-			assert.strictEqual(preview[0], `import type {Bar, Foo} from '$lib/types.js';`);
-			assert.strictEqual(preview[1], `import {helper} from '$lib/utils.js';`);
+			assert.strictEqual(preview[0], `import type {Bar, Foo} from '$lib/types.ts';`);
+			assert.strictEqual(preview[1], `import {helper} from '$lib/utils.ts';`);
 		});
 
 		test('clear removes all imports', () => {
 			const imports = new ImportBuilder();
 
-			imports.add_types('$lib/types.js', 'Foo', 'Bar');
-			imports.add('$lib/utils.js', 'helper');
+			imports.add_types('$lib/types.ts', 'Foo', 'Bar');
+			imports.add('$lib/utils.ts', 'helper');
 
 			assert.strictEqual(imports.import_count, 2);
 
@@ -321,14 +321,14 @@ describe('ImportBuilder', () => {
 			const imports = new ImportBuilder();
 
 			const result = imports
-				.add_type('$lib/types.js', 'Foo')
-				.add('$lib/utils.js', 'helper')
-				.add_types('$lib/types.js', 'Bar', 'Baz')
+				.add_type('$lib/types.ts', 'Foo')
+				.add('$lib/utils.ts', 'helper')
+				.add_types('$lib/types.ts', 'Bar', 'Baz')
 				.clear()
-				.add_type('$lib/final.js', 'Final');
+				.add_type('$lib/final.ts', 'Final');
 
 			assert.strictEqual(result, imports); // Chainable
-			assert.strictEqual(imports.build(), `import type {Final} from '$lib/final.js';`);
+			assert.strictEqual(imports.build(), `import type {Final} from '$lib/final.ts';`);
 		});
 	});
 
@@ -336,18 +336,18 @@ describe('ImportBuilder', () => {
 		test('adds multiple value imports', () => {
 			const imports = new ImportBuilder();
 
-			imports.add_many('$lib/utils.js', 'util_a', 'util_b', 'util_c');
+			imports.add_many('$lib/utils.ts', 'util_a', 'util_b', 'util_c');
 
-			assert.strictEqual(imports.build(), `import {util_a, util_b, util_c} from '$lib/utils.js';`);
+			assert.strictEqual(imports.build(), `import {util_a, util_b, util_c} from '$lib/utils.ts';`);
 		});
 
 		test('add_many can handle namespace imports', () => {
 			const imports = new ImportBuilder();
 
-			imports.add_many('$lib/all.js', '* as all', 'specific');
+			imports.add_many('$lib/all.ts', '* as all', 'specific');
 
 			// Only the namespace import should be used
-			assert.strictEqual(imports.build(), `import * as all from '$lib/all.js';`);
+			assert.strictEqual(imports.build(), `import * as all from '$lib/all.ts';`);
 		});
 	});
 
@@ -355,7 +355,7 @@ describe('ImportBuilder', () => {
 		test('handles empty string imports gracefully', () => {
 			const imports = new ImportBuilder();
 
-			imports.add('$lib/module.js', '');
+			imports.add('$lib/module.ts', '');
 
 			// Empty imports should be ignored
 			assert.strictEqual(imports.build(), '');
@@ -365,10 +365,10 @@ describe('ImportBuilder', () => {
 		test('handles special characters in import names', () => {
 			const imports = new ImportBuilder();
 
-			imports.add('$lib/module.js', '$special');
-			imports.add('$lib/module.js', '_underscore');
+			imports.add('$lib/module.ts', '$special');
+			imports.add('$lib/module.ts', '_underscore');
 
-			assert.strictEqual(imports.build(), `import {$special, _underscore} from '$lib/module.js';`);
+			assert.strictEqual(imports.build(), `import {$special, _underscore} from '$lib/module.ts';`);
 		});
 	});
 });
@@ -473,7 +473,7 @@ describe('get_handler_return_type', () => {
 			// Check that ActionOutputs was added to imports
 			const built = imports.build();
 			assert.include(built, 'ActionOutputs');
-			assert.include(built, './action_collections.js');
+			assert.include(built, './action_collections.ts');
 		});
 
 		test('other phases return void and do not add imports', () => {
@@ -706,10 +706,10 @@ describe('generate_phase_handlers', () => {
 		generate_phase_handlers(ping_action_spec, 'frontend', imports);
 
 		const import_str = imports.build();
-		assert.include(import_str, "from '@fuzdev/fuz_app/actions/action_event.js'");
-		assert.include(import_str, "from './action_collections.js'");
+		assert.include(import_str, "from '@fuzdev/fuz_app/actions/action_event.ts'");
+		assert.include(import_str, "from './action_collections.ts'");
 		// No environment type import paths
-		assert.notInclude(import_str, 'frontend.svelte.js');
+		assert.notInclude(import_str, 'frontend.svelte.ts');
 	});
 
 	test('backend generates correct import paths', () => {
@@ -717,9 +717,9 @@ describe('generate_phase_handlers', () => {
 		generate_phase_handlers(ping_action_spec, 'backend', imports);
 
 		const import_str = imports.build();
-		assert.include(import_str, "from '@fuzdev/fuz_app/actions/action_event.js'");
-		assert.include(import_str, "from './action_collections.js'");
+		assert.include(import_str, "from '@fuzdev/fuz_app/actions/action_event.ts'");
+		assert.include(import_str, "from './action_collections.ts'");
 		// No environment type import paths
-		assert.notInclude(import_str, 'backend.js');
+		assert.notInclude(import_str, 'backend.ts');
 	});
 });

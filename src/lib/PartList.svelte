@@ -3,10 +3,10 @@
 	import type {Snippet} from 'svelte';
 	import type {SvelteHTMLElements} from 'svelte/elements';
 
-	import {Reorderable, type ReorderableOptions} from './reorderable.svelte.js';
+	import {Reorderable, type ReorderableOptions} from './reorderable.svelte.ts';
 	import PartSummary from './PartSummary.svelte';
-	import type {PartUnion} from './part.svelte.js';
-	import type {Prompt} from './prompt.svelte.js';
+	import type {PartUnion} from './part.svelte.ts';
+	import type {Prompt} from './prompt.svelte.ts';
 
 	const {
 		parts,

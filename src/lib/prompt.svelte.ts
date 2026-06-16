@@ -1,12 +1,12 @@
 import {z} from 'zod';
-import {Uuid} from '@fuzdev/fuz_util/id.js';
+import {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-import {to_preview, estimate_token_count} from './helpers.js';
-import {PartJson, type PartUnion} from './part.svelte.js';
-import {reorder_list} from './list_helpers.js';
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {CellJson} from './cell_types.js';
-import {format_prompt_content} from './prompt_helpers.js';
+import {to_preview, estimate_token_count} from './helpers.ts';
+import {PartJson, type PartUnion} from './part.svelte.ts';
+import {reorder_list} from './list_helpers.ts';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {CellJson} from './cell_types.ts';
+import {format_prompt_content} from './prompt_helpers.ts';
 
 export interface PromptMessage {
 	role: 'user' | 'system'; // TODO assistant? string? eh?

@@ -1,6 +1,6 @@
 import {test, assert} from 'vitest';
 
-import {providers_default, models_default, chat_template_defaults} from '$lib/config_defaults.js';
+import {providers_default, models_default, chat_template_defaults} from '$lib/config_defaults.ts';
 
 test('all model provider_names exist in providers_default', () => {
 	// Extract all unique provider names from models

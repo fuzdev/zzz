@@ -24,6 +24,7 @@
 		"allowJs": true,
 		"erasableSyntaxOnly": true,
 		"allowImportingTsExtensions": true,
+		"rewriteRelativeImportExtensions": false,
 		"checkJs": true
 	},
 	"include": [

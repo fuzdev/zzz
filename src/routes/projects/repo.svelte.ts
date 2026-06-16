@@ -1,5 +1,5 @@
-import {Cell, type CellOptions} from '$lib/cell.svelte.js';
-import {RepoJson, type RepoCheckout} from '$routes/projects/projects_schema.js';
+import {Cell, type CellOptions} from '$lib/cell.svelte.ts';
+import {RepoJson, type RepoCheckout} from './projects_schema.ts';
 
 export type RepoOptions = CellOptions<typeof RepoJson>;
 

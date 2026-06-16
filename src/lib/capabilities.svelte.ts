@@ -1,14 +1,14 @@
 // @slop Claude Sonnet 3.7
 
 import {z} from 'zod';
-import type {AsyncStatus} from '@fuzdev/fuz_util/async.js';
-import type {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.js';
+import type {AsyncStatus} from '@fuzdev/fuz_util/async.ts';
+import type {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {CellJson} from './cell_types.js';
-import type {DiskfileDirectoryPath} from './diskfile_types.js';
-import {ProviderCapability} from './provider_capability.svelte.js';
-import type {ProviderName} from './provider_types.js';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {CellJson} from './cell_types.ts';
+import type {DiskfileDirectoryPath} from './diskfile_types.ts';
+import {ProviderCapability} from './provider_capability.svelte.ts';
+import type {ProviderName} from './provider_types.ts';
 
 // TODO namerbot capability, uses backend+(at least one provider) (or rethink its role in a bigger picture, not just names)
 

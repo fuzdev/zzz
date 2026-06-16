@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {ensure_end, ensure_start, strip_end} from '@fuzdev/fuz_util/string.js';
+import {ensure_end, ensure_start, strip_end} from '@fuzdev/fuz_util/string.ts';
 
 // TODO @many how to handle paths? need some more structure to the way they're normalized and joined
 // TODO rethink with ensure/turn usages, normally we'd want to validate these not transform

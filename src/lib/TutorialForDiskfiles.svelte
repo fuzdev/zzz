@@ -1,8 +1,8 @@
 <script lang="ts">
 	import {blur, fly, slide} from 'svelte/transition';
 
-	import {DURATION_LG} from './helpers.js';
-	import {frontend_context} from './frontend.svelte.js';
+	import {DURATION_LG} from './helpers.ts';
+	import {frontend_context} from './frontend.svelte.ts';
 
 	const app = frontend_context.get();
 </script>

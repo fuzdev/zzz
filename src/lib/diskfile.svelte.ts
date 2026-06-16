@@ -1,15 +1,15 @@
 import {z} from 'zod';
-import {strip_start} from '@fuzdev/fuz_util/string.js';
+import {strip_start} from '@fuzdev/fuz_util/string.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
+import {Cell, type CellOptions} from './cell.svelte.ts';
 import {
 	DiskfileDirectoryPath,
 	DiskfileJson,
 	type DiskfilePath,
 	type SerializableDisknode,
-} from './diskfile_types.js';
-import {to_preview} from './helpers.js';
-import type {PartUnion} from './part.svelte.js';
+} from './diskfile_types.ts';
+import {to_preview} from './helpers.ts';
+import type {PartUnion} from './part.svelte.ts';
 
 // TODO support directories/folders
 

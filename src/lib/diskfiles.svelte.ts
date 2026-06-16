@@ -1,23 +1,23 @@
 import {z} from 'zod';
-import {strip_start} from '@fuzdev/fuz_util/string.js';
-import {Uuid} from '@fuzdev/fuz_util/id.js';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
+import {strip_start} from '@fuzdev/fuz_util/string.ts';
+import {Uuid} from '@fuzdev/fuz_util/id.ts';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
 
-import {Diskfile} from './diskfile.svelte.js';
+import {Diskfile} from './diskfile.svelte.ts';
 import {
 	DiskfileJson,
 	DiskfilePath,
 	type DiskfileJsonInput,
 	type SerializableDisknode,
-} from './diskfile_types.js';
-import {disknode_to_diskfile_json, to_relative_path} from './diskfile_helpers.js';
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {HANDLED} from './cell_helpers.js';
-import {IndexedCollection} from './indexed_collection.svelte.js';
-import {create_single_index, create_multi_index} from './indexed_collection_helpers.svelte.js';
-import {DiskfilesEditor} from './diskfiles_editor.svelte.js';
-import {CellJson} from './cell_types.js';
-import type {ActionInputs} from './action_collections.js';
+} from './diskfile_types.ts';
+import {disknode_to_diskfile_json, to_relative_path} from './diskfile_helpers.ts';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {HANDLED} from './cell_helpers.ts';
+import {IndexedCollection} from './indexed_collection.svelte.ts';
+import {create_single_index, create_multi_index} from './indexed_collection_helpers.svelte.ts';
+import {DiskfilesEditor} from './diskfiles_editor.svelte.ts';
+import {CellJson} from './cell_types.ts';
+import type {ActionInputs} from './action_collections.ts';
 
 export const DiskfilesJson = CellJson.extend({
 	diskfiles: z.array(DiskfileJson).default(() => []),

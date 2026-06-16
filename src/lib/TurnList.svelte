@@ -1,9 +1,9 @@
 <script lang="ts">
 	import {slide} from 'svelte/transition';
 
-	import type {Thread} from './thread.svelte.js';
+	import type {Thread} from './thread.svelte.ts';
 	import TurnListitem from './TurnListitem.svelte';
-	import {Scrollable} from './scrollable.svelte.js';
+	import {Scrollable} from './scrollable.svelte.ts';
 	import type {SvelteHTMLElements} from 'svelte/elements';
 
 	const {

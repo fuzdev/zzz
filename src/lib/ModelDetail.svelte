@@ -7,10 +7,10 @@
 
 	import ModelLink from './ModelLink.svelte';
 	import ProviderLink from './ProviderLink.svelte';
-	import type {Model} from './model.svelte.js';
-	import {icon_add, icon_error, icon_model} from '@fuzdev/fuz_ui/icons.js';
+	import type {Model} from './model.svelte.ts';
+	import {icon_add, icon_error, icon_model} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {frontend_context} from './frontend.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 
 	const {

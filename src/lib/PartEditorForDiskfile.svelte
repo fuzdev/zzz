@@ -2,17 +2,17 @@
 	import {untrack} from 'svelte';
 	import {slide} from 'svelte/transition';
 
-	import {DiskfilePart} from './part.svelte.js';
-	import {frontend_context} from './frontend.svelte.js';
+	import {DiskfilePart} from './part.svelte.ts';
+	import {frontend_context} from './frontend.svelte.ts';
 	import ContentEditor from './ContentEditor.svelte';
 	import DiskfileActions from './DiskfileActions.svelte';
 	import DiskfileMetrics from './DiskfileMetrics.svelte';
-	import {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
+	import {DiskfileEditorState} from './diskfile_editor_state.svelte.ts';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
-	import {icon_file} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_file} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {format_placeholder} from './helpers.js';
+	import {format_placeholder} from './helpers.ts';
 
 	const {
 		diskfile_part,

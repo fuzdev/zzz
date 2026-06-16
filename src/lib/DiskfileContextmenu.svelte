@@ -3,11 +3,11 @@
 	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 	import ContextmenuSubmenu from '@fuzdev/fuz_ui/ContextmenuSubmenu.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
 
-	import type {Diskfile} from './diskfile.svelte.js';
-	import {icon_delete, icon_file, icon_remove} from '@fuzdev/fuz_ui/icons.js';
-	import {frontend_context} from './frontend.svelte.js';
+	import type {Diskfile} from './diskfile.svelte.ts';
+	import {icon_delete, icon_file, icon_remove} from '@fuzdev/fuz_ui/icons.ts';
+	import {frontend_context} from './frontend.svelte.ts';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 
 	const {

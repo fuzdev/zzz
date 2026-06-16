@@ -1,9 +1,9 @@
 <script lang="ts">
-	import {swallow} from '@fuzdev/fuz_util/dom.js';
+	import {swallow} from '@fuzdev/fuz_util/dom.ts';
 
-	import {icon_remove, icon_tab} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_remove, icon_tab} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import type {BrowserTab} from '$routes/tabs/browser_tab.svelte.js';
+	import type {BrowserTab} from './browser_tab.svelte.ts';
 
 	const {
 		tab,

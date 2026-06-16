@@ -1,7 +1,7 @@
-import {create_uuid} from '@fuzdev/fuz_util/id.js';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
+import {create_uuid} from '@fuzdev/fuz_util/id.ts';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
 
-import type {BrowserTabJson} from '$routes/tabs/browser_tab.svelte.js';
+import type {BrowserTabJson} from './browser_tab.svelte.ts';
 
 // Fake site content for embedded HTML tabs
 export const fake_sites = {

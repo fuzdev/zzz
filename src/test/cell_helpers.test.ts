@@ -1,7 +1,7 @@
 import {describe, test, assert} from 'vitest';
 import {z} from 'zod';
 
-import {get_schema_class_info} from '$lib/cell_helpers.js';
+import {get_schema_class_info} from '$lib/cell_helpers.ts';
 
 describe('get_schema_class_info', () => {
 	test('handles null or undefined schemas', () => {

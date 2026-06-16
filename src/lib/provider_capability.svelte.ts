@@ -1,9 +1,9 @@
-import type {AsyncStatus} from '@fuzdev/fuz_util/async.js';
-import type {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.js';
+import type {AsyncStatus} from '@fuzdev/fuz_util/async.ts';
+import type {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.ts';
 
-import type {Frontend} from './frontend.svelte.js';
-import type {Capability} from './capabilities.svelte.js';
-import type {ProviderName, ProviderStatus} from './provider_types.js';
+import type {Frontend} from './frontend.svelte.ts';
+import type {Capability} from './capabilities.svelte.ts';
+import type {ProviderName, ProviderStatus} from './provider_types.ts';
 
 export interface ProviderCapabilityOptions {
 	app: Frontend;

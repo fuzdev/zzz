@@ -1,4 +1,4 @@
-import type {SvgData} from '@fuzdev/fuz_ui/svg.js';
+import type {SvgData} from '@fuzdev/fuz_ui/svg.ts';
 import {resolve} from '$app/paths';
 import {page} from '$app/state';
 
@@ -14,10 +14,10 @@ import {
 	icon_settings,
 	icon_terminal,
 	icon_workspace,
-} from '@fuzdev/fuz_ui/icons.js';
+} from '@fuzdev/fuz_ui/icons.ts';
 
-import {logo_zzz} from './logos.js';
-import type {Frontend} from './frontend.svelte.js';
+import {logo_zzz} from './logos.ts';
+import type {Frontend} from './frontend.svelte.ts';
 
 export interface NavLinkItem {
 	label: string;

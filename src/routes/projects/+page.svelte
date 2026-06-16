@@ -1,11 +1,11 @@
 <script lang="ts">
 	import {resolve} from '$app/paths';
 
-	import {icon_project} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_project} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import ProjectList from '$routes/projects/ProjectList.svelte';
-	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
-	import {projects_context} from '$routes/projects/projects.svelte.js';
+	import ProjectList from './ProjectList.svelte';
+	import ProjectSidebar from './ProjectSidebar.svelte';
+	import {projects_context} from './projects.svelte.ts';
 
 	const projects = projects_context.get();
 </script>

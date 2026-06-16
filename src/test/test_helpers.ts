@@ -1,5 +1,5 @@
-import type {Frontend} from '../lib/frontend.svelte.js';
-import type {DiskfilePath} from '../lib/diskfile_types.js';
+import type {Frontend} from '$lib/frontend.svelte.ts';
+import type {DiskfilePath} from '$lib/diskfile_types.ts';
 
 // TODO improve this pattern
 /**

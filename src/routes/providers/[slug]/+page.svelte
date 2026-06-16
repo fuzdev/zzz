@@ -4,7 +4,7 @@
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 
 	import ProviderDetail from '$lib/ProviderDetail.svelte';
-	import {frontend_context} from '$lib/frontend.svelte.js';
+	import {frontend_context} from '$lib/frontend.svelte.ts';
 
 	const {params} = $props();
 

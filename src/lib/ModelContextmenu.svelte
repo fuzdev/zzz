@@ -4,10 +4,10 @@
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 	import ContextmenuSubmenu from '@fuzdev/fuz_ui/ContextmenuSubmenu.svelte';
 	import ContextmenuLinkEntry from '@fuzdev/fuz_ui/ContextmenuLinkEntry.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
 
-	import type {Model} from './model.svelte.js';
-	import {icon_chat, icon_model} from '@fuzdev/fuz_ui/icons.js';
+	import type {Model} from './model.svelte.ts';
+	import {icon_chat, icon_model} from '@fuzdev/fuz_ui/icons.ts';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 
 	const {

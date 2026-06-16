@@ -3,11 +3,11 @@
 	import {slide} from 'svelte/transition';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import {Chat} from './chat.svelte.js';
+	import {Chat} from './chat.svelte.ts';
 	import ChatThread from './ChatThread.svelte';
-	import {icon_add, icon_remove, icon_send} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_add, icon_remove, icon_send} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {format_placeholder} from './helpers.js';
+	import {format_placeholder} from './helpers.ts';
 	import ContentEditor from './ContentEditor.svelte';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';
 

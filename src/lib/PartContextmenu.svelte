@@ -3,17 +3,17 @@
 	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 	import ContextmenuSubmenu from '@fuzdev/fuz_ui/ContextmenuSubmenu.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
 	import DialogContent from '@fuzdev/fuz_ui/DialogContent.svelte';
 
-	import type {PartUnion} from './part.svelte.js';
-	import {frontend_context} from './frontend.svelte.js';
-	import {icon_delete, icon_edit, icon_part} from '@fuzdev/fuz_ui/icons.js';
+	import type {PartUnion} from './part.svelte.ts';
+	import {frontend_context} from './frontend.svelte.ts';
+	import {icon_delete, icon_edit, icon_part} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import PartView from './PartView.svelte';
-	import {get_part_type_icon} from './part_helpers.js';
+	import {get_part_type_icon} from './part_helpers.ts';
 	import ContextmenuEntryToggle from './ContextmenuEntryToggle.svelte';
 
 	const {

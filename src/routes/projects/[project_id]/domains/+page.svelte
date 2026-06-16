@@ -3,11 +3,11 @@
 
 	import {resolve} from '$app/paths';
 
-	import {projects_context} from '$routes/projects/projects.svelte.js';
+	import {projects_context} from '$routes/projects/projects.svelte.ts';
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import DomainsSidebar from '$routes/projects/DomainsSidebar.svelte';
-	import {icon_add, icon_checkmark} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_add, icon_checkmark} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 

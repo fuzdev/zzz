@@ -7,7 +7,7 @@ import {
 	type ReorderableItemId,
 	type ReorderableItemParams,
 	type ReorderableListParams,
-} from '$lib/reorderable.svelte.js';
+} from '$lib/reorderable.svelte.ts';
 
 // Mock helper function for DOM testing
 const create_elements = (): {

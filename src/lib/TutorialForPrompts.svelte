@@ -2,8 +2,8 @@
 	import {blur, fly, slide} from 'svelte/transition';
 	import {resolve} from '$app/paths';
 
-	import {DURATION_LG} from './helpers.js';
-	import {frontend_context} from './frontend.svelte.js';
+	import {DURATION_LG} from './helpers.ts';
+	import {frontend_context} from './frontend.svelte.ts';
 	import ExternalLink from './ExternalLink.svelte';
 
 	const app = frontend_context.get();

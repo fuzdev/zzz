@@ -6,11 +6,11 @@
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 	import PopoverButton from '@fuzdev/fuz_app/ui/PopoverButton.svelte';
 
-	import type {Socket, QueuedMessage, FailedMessage} from './socket.svelte.js';
-	import {icon_close, icon_info, icon_remove, icon_retry} from '@fuzdev/fuz_ui/icons.js';
+	import type {Socket, QueuedMessage, FailedMessage} from './socket.svelte.ts';
+	import {icon_close, icon_info, icon_remove, icon_retry} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {format_timestamp} from './time_helpers.js';
-	import {DURATION_SM} from './helpers.js';
+	import {format_timestamp} from './time_helpers.ts';
+	import {DURATION_SM} from './helpers.ts';
 
 	const {
 		socket,

@@ -1,5 +1,5 @@
 import {resolve} from '$app/paths';
-import type {Uuid} from '@fuzdev/fuz_util/id.js';
+import type {Uuid} from '@fuzdev/fuz_util/id.ts';
 
 // TODO think about refactoring with related code
 

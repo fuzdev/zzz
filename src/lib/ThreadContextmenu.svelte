@@ -3,11 +3,11 @@
 	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 	import ContextmenuSubmenu from '@fuzdev/fuz_ui/ContextmenuSubmenu.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
 
-	import type {Thread} from './thread.svelte.js';
-	import {frontend_context} from './frontend.svelte.js';
-	import {icon_delete, icon_model, icon_remove, icon_thread} from '@fuzdev/fuz_ui/icons.js';
+	import type {Thread} from './thread.svelte.ts';
+	import {frontend_context} from './frontend.svelte.ts';
+	import {icon_delete, icon_model, icon_remove, icon_thread} from '@fuzdev/fuz_ui/icons.ts';
 	import ContextmenuEntryToggle from './ContextmenuEntryToggle.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';

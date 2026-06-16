@@ -1,18 +1,18 @@
 import {z} from 'zod';
-import {EMPTY_OBJECT} from '@fuzdev/fuz_util/object.js';
+import {EMPTY_OBJECT} from '@fuzdev/fuz_util/object.ts';
 import {DEV} from 'esm-env';
-import {UnreachableError} from '@fuzdev/fuz_util/error.js';
-import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
-import {Uuid} from '@fuzdev/fuz_util/id.js';
+import {UnreachableError} from '@fuzdev/fuz_util/error.ts';
+import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
+import {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-import {estimate_token_count} from './helpers.js';
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {XmlAttributeWithDefaults} from './xml.js';
-import {CellJson} from './cell_types.js';
-import type {Diskfile} from './diskfile.svelte.js';
-import type {Frontend} from './frontend.svelte.js';
-import {DiskfilePath} from './diskfile_types.js';
-import {CONTENT_PREVIEW_LENGTH} from './constants.js';
+import {estimate_token_count} from './helpers.ts';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {XmlAttributeWithDefaults} from './xml.ts';
+import {CellJson} from './cell_types.ts';
+import type {Diskfile} from './diskfile.svelte.ts';
+import type {Frontend} from './frontend.svelte.ts';
+import {DiskfilePath} from './diskfile_types.ts';
+import {CONTENT_PREVIEW_LENGTH} from './constants.ts';
 
 /** Common properties for all part types. */
 export const PartJsonBase = CellJson.extend({

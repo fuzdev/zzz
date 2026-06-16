@@ -3,12 +3,12 @@
 import {z} from 'zod';
 import {goto} from '$app/navigation';
 import {resolve} from '$app/paths';
-import {create_uuid, type Uuid} from '@fuzdev/fuz_util/id.js';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
+import {create_uuid, type Uuid} from '@fuzdev/fuz_util/id.ts';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
 
-import {Repo} from '$routes/projects/repo.svelte.js';
-import type {RepoCheckout} from '$routes/projects/projects_schema.js';
-import type {Projects} from '$routes/projects/projects.svelte.js';
+import {Repo} from './repo.svelte.ts';
+import type {RepoCheckout} from './projects_schema.ts';
+import type {Projects} from './projects.svelte.ts';
 
 export interface RepoViewmodelOptions {
 	projects: Projects;

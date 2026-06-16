@@ -1,16 +1,16 @@
-import type {Uuid} from '@fuzdev/fuz_util/id.js';
+import type {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-import type {Model} from './model.svelte.js';
-import {Turn, create_turn_from_text, create_turn_from_part} from './turn.svelte.js';
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {ThreadJson} from './thread_types.js';
-import {CompletionRequest, CompletionRole} from './completion_types.js';
-import {render_messages_to_string, render_completion_messages} from './thread_helpers.js';
-import type {PartUnion} from './part.svelte.js';
-import {HANDLED} from './cell_helpers.js';
-import {to_preview, estimate_token_count} from './helpers.js';
-import {IndexedCollection} from './indexed_collection.svelte.js';
-import type {TurnJson} from './turn_types.js';
+import type {Model} from './model.svelte.ts';
+import {Turn, create_turn_from_text, create_turn_from_part} from './turn.svelte.ts';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {ThreadJson} from './thread_types.ts';
+import {CompletionRequest, CompletionRole} from './completion_types.ts';
+import {render_messages_to_string, render_completion_messages} from './thread_helpers.ts';
+import type {PartUnion} from './part.svelte.ts';
+import {HANDLED} from './cell_helpers.ts';
+import {to_preview, estimate_token_count} from './helpers.ts';
+import {IndexedCollection} from './indexed_collection.svelte.ts';
+import type {TurnJson} from './turn_types.ts';
 
 // TODO add `thread.name` and lots of other things probably
 

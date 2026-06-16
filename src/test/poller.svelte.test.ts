@@ -2,7 +2,7 @@
 
 import {test, describe, vi, beforeEach, afterEach, assert} from 'vitest';
 
-import {Poller} from '$lib/poller.svelte.js';
+import {Poller} from '$lib/poller.svelte.ts';
 
 describe('Poller', () => {
 	beforeEach(() => {

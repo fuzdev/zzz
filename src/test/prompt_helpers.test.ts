@@ -1,6 +1,6 @@
 import {test, assert} from 'vitest';
 
-import {format_prompt_content} from '$lib/prompt_helpers.js';
+import {format_prompt_content} from '$lib/prompt_helpers.ts';
 
 // Instead of mocking modules, we'll create a simplified part structure
 // that mirrors the interface we need for the tests

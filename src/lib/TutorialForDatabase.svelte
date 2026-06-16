@@ -3,8 +3,8 @@
 	import {sineInOut} from 'svelte/easing';
 
 	import ExternalLink from './ExternalLink.svelte';
-	import {DURATION_LG} from './helpers.js';
-	import {frontend_context} from './frontend.svelte.js';
+	import {DURATION_LG} from './helpers.ts';
+	import {frontend_context} from './frontend.svelte.ts';
 
 	const app = frontend_context.get();
 </script>

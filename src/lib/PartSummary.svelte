@@ -1,11 +1,11 @@
 <script lang="ts">
-	import type {Prompt} from './prompt.svelte.js';
-	import type {PartUnion} from './part.svelte.js';
+	import type {Prompt} from './prompt.svelte.ts';
+	import type {PartUnion} from './part.svelte.ts';
 	import PartToggleButton from './PartToggleButton.svelte';
 	import PartRemoveButton from './PartRemoveButton.svelte';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import PartContextmenu from './PartContextmenu.svelte';
-	import {get_part_type_icon} from './part_helpers.js';
+	import {get_part_type_icon} from './part_helpers.ts';
 
 	const {
 		part,

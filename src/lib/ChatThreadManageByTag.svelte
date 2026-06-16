@@ -1,7 +1,7 @@
 <script lang="ts">
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import {Chat} from './chat.svelte.js';
+	import {Chat} from './chat.svelte.ts';
 
 	const {
 		chat,

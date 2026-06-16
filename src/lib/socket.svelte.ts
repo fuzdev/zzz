@@ -1,23 +1,23 @@
 import {SvelteMap} from 'svelte/reactivity';
-import type {AsyncStatus} from '@fuzdev/fuz_util/async.js';
+import type {AsyncStatus} from '@fuzdev/fuz_util/async.ts';
 import {
 	FrontendWebsocketClient,
 	socket_status_to_async_status,
 	type SocketMessageHandler,
 	type SocketErrorHandler,
-} from '@fuzdev/fuz_app/actions/socket.svelte.js';
-import type {WebsocketRpcConnection} from '@fuzdev/fuz_app/actions/transports_ws.js';
-import type {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.js';
-import {UNKNOWN_ERROR_MESSAGE} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
-import {create_uuid, type Uuid} from '@fuzdev/fuz_util/id.js';
+} from '@fuzdev/fuz_app/actions/socket.svelte.ts';
+import type {WebsocketRpcConnection} from '@fuzdev/fuz_app/actions/transports_ws.ts';
+import type {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.ts';
+import {UNKNOWN_ERROR_MESSAGE} from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+import {create_uuid, type Uuid} from '@fuzdev/fuz_util/id.ts';
 
 import {
 	DEFAULT_HEARTBEAT_INTERVAL,
 	DEFAULT_RECONNECT_DELAY,
 	DEFAULT_RECONNECT_DELAY_MAX,
 	DEFAULT_AUTO_RECONNECT,
-} from './socket_helpers.js';
-import type {Frontend} from './frontend.svelte.js';
+} from './socket_helpers.ts';
+import type {Frontend} from './frontend.svelte.ts';
 
 export interface SocketOptions {
 	app: Frontend;

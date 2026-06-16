@@ -1,9 +1,9 @@
 import {z} from 'zod';
-import {Uuid} from '@fuzdev/fuz_util/id.js';
+import {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-import {Cell} from './cell.svelte.js';
-import {CellJson} from './cell_types.js';
-import {CompletionRequest, CompletionResponse, CompletionRole} from './completion_types.js';
+import {Cell} from './cell.svelte.ts';
+import {CellJson} from './cell_types.ts';
+import {CompletionRequest, CompletionResponse, CompletionRole} from './completion_types.ts';
 
 /**
  * Turn is a conversation turn (like A2A Message) that references one or more parts (content entities).

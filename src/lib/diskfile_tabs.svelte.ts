@@ -2,14 +2,14 @@
 
 import {z} from 'zod';
 import {SvelteMap} from 'svelte/reactivity';
-import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.js';
+import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {IndexedCollection} from './indexed_collection.svelte.js';
-import {to_reordered_list} from './list_helpers.js';
-import {DiskfileTab} from './diskfile_tab.svelte.js';
-import {CellJson} from './cell_types.js';
-import {create_map_by_property} from './iterable_helpers.js';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {IndexedCollection} from './indexed_collection.svelte.ts';
+import {to_reordered_list} from './list_helpers.ts';
+import {DiskfileTab} from './diskfile_tab.svelte.ts';
+import {CellJson} from './cell_types.ts';
+import {create_map_by_property} from './iterable_helpers.ts';
 
 export const DiskfileTabsJson = CellJson.extend({
 	selected_tab_id: Uuid.nullable().default(null),

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import {print_number_with_separators} from '@fuzdev/fuz_util/print.js';
+	import {print_number_with_separators} from '@fuzdev/fuz_util/print.ts';
 
 	const {
 		token_count,

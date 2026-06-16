@@ -5,8 +5,8 @@
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import {resolve} from '$app/paths';
 
-	import {logo_zzz} from './logos.js';
-	import {frontend_context} from './frontend.svelte.js';
+	import {logo_zzz} from './logos.ts';
+	import {frontend_context} from './frontend.svelte.ts';
 
 	const {
 		disabled,

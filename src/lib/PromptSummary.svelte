@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type {Prompt} from './prompt.svelte.js';
+	import type {Prompt} from './prompt.svelte.ts';
 
 	const {
 		prompt,

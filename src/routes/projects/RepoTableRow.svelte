@@ -1,6 +1,6 @@
 <script lang="ts">
 	import {resolve} from '$app/paths';
-	import type {Repo} from '$routes/projects/repo.svelte.js';
+	import type {Repo} from './repo.svelte.ts';
 
 	const {
 		repo,

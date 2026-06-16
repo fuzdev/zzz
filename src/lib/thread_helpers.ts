@@ -1,6 +1,6 @@
-import type {Turn} from './turn.svelte.js';
-import type {CompletionMessage, CompletionRole} from './completion_types.js';
-import {to_completion_response_text} from './response_helpers.js';
+import type {Turn} from './turn.svelte.ts';
+import type {CompletionMessage, CompletionRole} from './completion_types.ts';
+import {to_completion_response_text} from './response_helpers.ts';
 
 // TODO refactor where?
 /**

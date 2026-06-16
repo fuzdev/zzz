@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type {ProviderName} from './provider_types.js';
+	import type {ProviderName} from './provider_types.ts';
 
 	import CapabilityProviderApi from './CapabilityProviderApi.svelte';
 

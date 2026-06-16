@@ -5,14 +5,14 @@ import {
 	JSONRPC_INTERNAL_ERROR,
 	JSONRPC_VERSION,
 	JsonrpcErrorCode,
-} from '@fuzdev/fuz_app/http/jsonrpc.js';
+} from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import {
 	create_jsonrpc_response,
 	is_jsonrpc_response,
-} from '@fuzdev/fuz_app/http/jsonrpc_helpers.js';
-import {ThrownJsonrpcError} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
+} from '@fuzdev/fuz_app/http/jsonrpc_helpers.ts';
+import {ThrownJsonrpcError} from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
-import {RequestTracker} from '@fuzdev/fuz_app/actions/request_tracker.svelte.js';
+import {RequestTracker} from '@fuzdev/fuz_app/actions/request_tracker.svelte.ts';
 
 describe('RequestTracker', () => {
 	let warn_spy: ReturnType<typeof vi.spyOn>;

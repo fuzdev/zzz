@@ -1,8 +1,8 @@
 <script lang="ts">
-	import {icon_settings} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_settings} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import Settings from './Settings.svelte';
-	import {frontend_context} from './frontend.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
 	import DashboardHeader from './DashboardHeader.svelte';
 	import TimeWidget from './TimeWidget.svelte';
 	import Footer from './Footer.svelte';

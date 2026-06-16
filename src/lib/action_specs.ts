@@ -1,16 +1,16 @@
 import {z} from 'zod';
-import {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.js';
+import {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import type {
 	LocalCallActionSpec,
 	RemoteNotificationActionSpec,
 	RequestResponseActionSpec,
 	ActionSpecUnion,
-} from '@fuzdev/fuz_app/actions/action_spec.js';
-import {heartbeat_action_spec} from '@fuzdev/fuz_app/actions/heartbeat.js';
-import {cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.js';
-import {protocol_action_specs} from '@fuzdev/fuz_app/actions/protocol.js';
-import {Uuid} from '@fuzdev/fuz_util/id.js';
-import {ActingActor} from '@fuzdev/fuz_app/http/auth_shape.js';
+} from '@fuzdev/fuz_app/actions/action_spec.ts';
+import {heartbeat_action_spec} from '@fuzdev/fuz_app/actions/heartbeat.ts';
+import {cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.ts';
+import {protocol_action_specs} from '@fuzdev/fuz_app/actions/protocol.ts';
+import {Uuid} from '@fuzdev/fuz_util/id.ts';
+import {ActingActor} from '@fuzdev/fuz_app/http/auth_shape.ts';
 
 // Re-export so codegen (which builds `import * as specs from './action_specs'`)
 // resolves `specs.heartbeat_action_spec` / `specs.cancel_action_spec` via the
@@ -25,10 +25,10 @@ import {
 	DiskfileDirectoryPath,
 	DiskfilePath,
 	SerializableDisknode,
-} from './diskfile_types.js';
-import {ProviderStatus, ProviderName} from './provider_types.js';
-import {CompletionMessage, CompletionRequest, CompletionResponse} from './completion_types.js';
-import {WorkspaceInfoJson} from './workspace.svelte.js';
+} from './diskfile_types.ts';
+import {ProviderStatus, ProviderName} from './provider_types.ts';
+import {CompletionMessage, CompletionRequest, CompletionResponse} from './completion_types.ts';
+import {WorkspaceInfoJson} from './workspace.svelte.ts';
 
 // -- Shared sub-schemas -----------------------------------------------------
 

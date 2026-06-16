@@ -3,8 +3,8 @@
 	import type {SvelteHTMLElements} from 'svelte/elements';
 	import type {Snippet} from 'svelte';
 	import {resolve} from '$app/paths';
-	import {strip_end} from '@fuzdev/fuz_util/string.js';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import {strip_end} from '@fuzdev/fuz_util/string.ts';
+	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
 
 	const {
 		href,

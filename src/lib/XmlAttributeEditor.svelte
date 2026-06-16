@@ -1,9 +1,9 @@
 <script lang="ts">
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import type {XmlAttributeWithDefaults} from './xml.js';
-	import {icon_remove} from '@fuzdev/fuz_ui/icons.js';
+	import type {XmlAttributeWithDefaults} from './xml.ts';
+	import {icon_remove} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const {

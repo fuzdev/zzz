@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
 import {test, beforeEach, describe, assert} from 'vitest';
-import {create_uuid} from '@fuzdev/fuz_util/id.js';
+import {create_uuid} from '@fuzdev/fuz_util/id.ts';
 
-import {DiskfileHistory} from '$lib/diskfile_history.svelte.js';
-import {DiskfilePath} from '$lib/diskfile_types.js';
-import {Frontend} from '$lib/frontend.svelte.js';
+import {DiskfileHistory} from '$lib/diskfile_history.svelte.ts';
+import {DiskfilePath} from '$lib/diskfile_types.ts';
+import {Frontend} from '$lib/frontend.svelte.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.js';
+import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
 
 // Test data
 const TEST_PATH = DiskfilePath.parse('/path/to/file.txt');

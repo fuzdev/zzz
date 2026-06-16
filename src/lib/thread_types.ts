@@ -1,8 +1,8 @@
 import {z} from 'zod';
 
-import {ModelName} from './model.svelte.js';
-import {CellJson} from './cell_types.js';
-import {TurnJson} from './turn_types.js';
+import {ModelName} from './model.svelte.ts';
+import {CellJson} from './cell_types.ts';
+import {TurnJson} from './turn_types.ts';
 
 // TODO add thread name and make it editable
 export const ThreadJson = CellJson.extend({

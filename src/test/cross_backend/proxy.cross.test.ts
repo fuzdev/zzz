@@ -48,9 +48,9 @@ import {Client} from 'pg';
 import {
 	type ReconstructedBootstrappedBackendHandle,
 	reconstruct_bootstrapped_handle,
-} from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
+} from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 
-import './cross_test_types.js';
+import './cross_test_types.ts';
 
 /**
  * Resolve the connection string for the spawned backend's database.

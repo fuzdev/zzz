@@ -2,14 +2,14 @@
 
 import {test, vi, beforeEach, describe, assert} from 'vitest';
 import {z} from 'zod';
-import {create_uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.js';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
+import {create_uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.ts';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
 
-import {Cell, type CellOptions} from '$lib/cell.svelte.js';
-import {CellJson} from '$lib/cell_types.js';
-import {Frontend} from '$lib/frontend.svelte.js';
+import {Cell, type CellOptions} from '$lib/cell.svelte.ts';
+import {CellJson} from '$lib/cell_types.ts';
+import {Frontend} from '$lib/frontend.svelte.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.js';
+import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
 
 // Constants for testing
 const TEST_ID = create_uuid();

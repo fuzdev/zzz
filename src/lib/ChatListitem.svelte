@@ -3,9 +3,9 @@
 
 	import NavLink from './NavLink.svelte';
 	import ChatContextmenu from './ChatContextmenu.svelte';
-	import {icon_chat} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_chat} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import type {Chat} from './chat.svelte.js';
+	import type {Chat} from './chat.svelte.ts';
 
 	const {
 		chat,

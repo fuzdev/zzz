@@ -2,8 +2,8 @@
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 
 	import ErrorMessageInline from './ErrorMessageInline.svelte';
-	import type {Turn} from './turn.svelte.js';
-	import {UNKNOWN_ERROR_MESSAGE} from '@fuzdev/fuz_app/http/jsonrpc_errors.js';
+	import type {Turn} from './turn.svelte.ts';
+	import {UNKNOWN_ERROR_MESSAGE} from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 	import TurnContextmenu from './TurnContextmenu.svelte';
 
 	const {

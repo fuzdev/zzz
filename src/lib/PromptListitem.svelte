@@ -2,10 +2,10 @@
 	import {resolve} from '$app/paths';
 
 	import NavLink from './NavLink.svelte';
-	import {icon_prompt} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_prompt} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import PromptContextmenu from './PromptContextmenu.svelte';
-	import type {Prompt} from './prompt.svelte.js';
+	import type {Prompt} from './prompt.svelte.ts';
 
 	const {
 		prompt,

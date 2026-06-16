@@ -3,13 +3,13 @@
 </script>
 
 <script lang="ts">
-	import {frontend_context} from './frontend.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
 	import EditableText from './EditableText.svelte';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
-	import {icon_add, icon_delete, icon_pin, icon_space} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_add, icon_delete, icon_pin, icon_space} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {SCRATCHPAD_NAME} from './spaces.svelte.js';
-	import {click_outside} from './click_outside.svelte.js';
+	import {SCRATCHPAD_NAME} from './spaces.svelte.ts';
+	import {click_outside} from './click_outside.svelte.ts';
 
 	const app = frontend_context.get();
 </script>

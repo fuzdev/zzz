@@ -1,9 +1,9 @@
 <script lang="ts">
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import type {Chat} from './chat.svelte.js';
-	import type {Thread} from './thread.svelte.js';
-	import {icon_remove} from '@fuzdev/fuz_ui/icons.js';
+	import type {Chat} from './chat.svelte.ts';
+	import type {Thread} from './thread.svelte.ts';
+	import {icon_remove} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ThreadContextmenu from './ThreadContextmenu.svelte';
 	import ProviderLogo from './ProviderLogo.svelte';

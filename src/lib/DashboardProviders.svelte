@@ -1,11 +1,11 @@
 <script lang="ts">
-	import {format_url} from '@fuzdev/fuz_util/url.js';
+	import {format_url} from '@fuzdev/fuz_util/url.ts';
 
 	import ProviderLink from './ProviderLink.svelte';
 	import ModelLink from './ModelLink.svelte';
-	import {icon_checkmark, icon_error, icon_provider} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_checkmark, icon_error, icon_provider} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {frontend_context} from './frontend.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
 	import ExternalLink from './ExternalLink.svelte';
 	import ProviderLogo from './ProviderLogo.svelte';
 

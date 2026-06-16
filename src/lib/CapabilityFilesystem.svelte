@@ -1,7 +1,7 @@
 <script lang="ts">
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 
-	import {frontend_context} from './frontend.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
 
 	const app = frontend_context.get();
 	const {capabilities} = app;

@@ -1,12 +1,12 @@
 import {z} from 'zod';
-import type {Uuid} from '@fuzdev/fuz_util/id.js';
+import type {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {Thread} from './thread.svelte.js';
-import {ThreadJson} from './thread_types.js';
-import {HANDLED} from './cell_helpers.js';
-import {IndexedCollection} from './indexed_collection.svelte.js';
-import {CellJson} from './cell_types.js';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {Thread} from './thread.svelte.ts';
+import {ThreadJson} from './thread_types.ts';
+import {HANDLED} from './cell_helpers.ts';
+import {IndexedCollection} from './indexed_collection.svelte.ts';
+import {CellJson} from './cell_types.ts';
 
 export const ThreadsJson = CellJson.extend({
 	items: z.array(ThreadJson).default(() => []),

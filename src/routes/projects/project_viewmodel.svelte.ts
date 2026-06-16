@@ -3,14 +3,14 @@
 import {z} from 'zod';
 import {goto} from '$app/navigation';
 import {resolve} from '$app/paths';
-import {create_uuid, type Uuid} from '@fuzdev/fuz_util/id.js';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
+import {create_uuid, type Uuid} from '@fuzdev/fuz_util/id.ts';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
 
-import {Domain} from '$routes/projects/domain.svelte.js';
-import {Page} from '$routes/projects/page.svelte.js';
-import {Projects} from '$routes/projects/projects.svelte.js';
-import {Repo} from '$routes/projects/repo.svelte.js';
-import {get_unique_name} from '$lib/helpers.js';
+import {Domain} from './domain.svelte.ts';
+import {Page} from './page.svelte.ts';
+import {Projects} from './projects.svelte.ts';
+import {Repo} from './repo.svelte.ts';
+import {get_unique_name} from '$lib/helpers.ts';
 
 export interface ProjectViewmodelOptions {
 	projects: Projects;

@@ -1,12 +1,12 @@
-import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
-import {Uuid} from '@fuzdev/fuz_util/id.js';
+import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
+import {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-import {estimate_token_count} from './helpers.js';
-import {Cell, type CellOptions} from './cell.svelte.js';
-import type {PartUnion} from './part.svelte.js';
-import type {Frontend} from './frontend.svelte.js';
-import {TurnJson} from './turn_types.js';
-import type {CompletionRequest, CompletionResponse, CompletionRole} from './completion_types.js';
+import {estimate_token_count} from './helpers.ts';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import type {PartUnion} from './part.svelte.ts';
+import type {Frontend} from './frontend.svelte.ts';
+import {TurnJson} from './turn_types.ts';
+import type {CompletionRequest, CompletionResponse, CompletionRole} from './completion_types.ts';
 
 export interface TurnOptions extends CellOptions<typeof TurnJson> {}
 

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import {fade} from 'svelte/transition';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
-	import {random_item} from '@fuzdev/fuz_util/random.js';
+	import {random_item} from '@fuzdev/fuz_util/random.ts';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
 	import PartView from './PartView.svelte';
@@ -13,20 +13,20 @@
 		icon_prompt,
 		icon_remove,
 		icon_sort,
-	} from '@fuzdev/fuz_ui/icons.js';
+	} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {frontend_context} from './frontend.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
 	import PromptStats from './PromptStats.svelte';
 	import PartList from './PartList.svelte';
 	import ContentPreview from './ContentPreview.svelte';
-	import {Part} from './part.svelte.js';
+	import {Part} from './part.svelte.ts';
 	import PromptContextmenu from './PromptContextmenu.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
 	import PromptList from './PromptList.svelte';
 	import EditableText from './EditableText.svelte';
 	import TutorialForDatabase from './TutorialForDatabase.svelte';
 	import TutorialForPrompts from './TutorialForPrompts.svelte';
-	import {DURATION_SM} from './helpers.js';
+	import {DURATION_SM} from './helpers.ts';
 
 	const app = frontend_context.get();
 

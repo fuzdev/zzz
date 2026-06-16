@@ -1,17 +1,17 @@
 // @slop Claude Opus 4
 
 import {z} from 'zod';
-import {create_uuid} from '@fuzdev/fuz_util/id.js';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.js';
+import {create_uuid} from '@fuzdev/fuz_util/id.ts';
+import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
 
-import {Cell, type CellOptions} from '$lib/cell.svelte.js';
-import {IndexedCollection} from '$lib/indexed_collection.svelte.js';
-import {create_single_index, create_derived_index} from '$lib/indexed_collection_helpers.svelte.js';
-import {CellJson} from '$lib/cell_types.js';
-import {BrowserTab, BrowserTabJson} from '$routes/tabs/browser_tab.svelte.js';
-import {HANDLED} from '$lib/cell_helpers.js';
-import {to_reordered_list} from '$lib/list_helpers.js';
-import {fake_sites} from '$routes/tabs/sample_tabs.js';
+import {Cell, type CellOptions} from '$lib/cell.svelte.ts';
+import {IndexedCollection} from '$lib/indexed_collection.svelte.ts';
+import {create_single_index, create_derived_index} from '$lib/indexed_collection_helpers.svelte.ts';
+import {CellJson} from '$lib/cell_types.ts';
+import {BrowserTab, BrowserTabJson} from './browser_tab.svelte.ts';
+import {HANDLED} from '$lib/cell_helpers.ts';
+import {to_reordered_list} from '$lib/list_helpers.ts';
+import {fake_sites} from './sample_tabs.ts';
 
 export const BrowserTabsJson = CellJson.extend({
 	tabs: z.array(BrowserTabJson).default(() => []),

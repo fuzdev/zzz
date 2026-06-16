@@ -22,11 +22,11 @@ import {inject} from 'vitest';
 import {
 	default_cross_process_setup,
 	reconstruct_bootstrapped_handle,
-} from '@fuzdev/fuz_app/testing/cross_backend/setup.js';
-import {describe_cross_process_sse_tests} from '@fuzdev/fuz_app/testing/cross_backend/sse_round_trip.js';
-import {ROLE_ADMIN} from '@fuzdev/fuz_app/auth/role_schema.js';
+} from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
+import {describe_cross_process_sse_tests} from '@fuzdev/fuz_app/testing/cross_backend/sse_round_trip.ts';
+import {ROLE_ADMIN} from '@fuzdev/fuz_app/auth/role_schema.ts';
 
-import './cross_test_types.js';
+import './cross_test_types.ts';
 
 const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 // The keeper needs `ROLE_ADMIN` to subscribe to the admin-gated audit stream

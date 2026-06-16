@@ -1,9 +1,9 @@
 <script lang="ts">
 	import {fade, slide} from 'svelte/transition';
 
-	import {icon_arrow_right} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_arrow_right} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
+	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.ts';
 
 	const {
 		editor_state,

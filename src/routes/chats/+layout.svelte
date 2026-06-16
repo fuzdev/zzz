@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type {Snippet} from 'svelte';
 
-	import {frontend_context} from '$lib/frontend.svelte.js';
+	import {frontend_context} from '$lib/frontend.svelte.ts';
 
 	const {
 		children,

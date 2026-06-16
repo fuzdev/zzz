@@ -3,10 +3,10 @@
 import {SvelteMap} from 'svelte/reactivity';
 import type {z} from 'zod';
 import {DEV} from 'esm-env';
-import {EMPTY_ARRAY} from '@fuzdev/fuz_util/array.js';
-import {Uuid} from '@fuzdev/fuz_util/id.js';
+import {EMPTY_ARRAY} from '@fuzdev/fuz_util/array.ts';
+import {Uuid} from '@fuzdev/fuz_util/id.ts';
 
-import type {IndexedItem} from './indexed_collection_helpers.svelte.js';
+import type {IndexedItem} from './indexed_collection_helpers.svelte.ts';
 
 // TODO @many rethink the indexed collection API -
 // particularly type safety, performance, and integration with Svelte patterns -

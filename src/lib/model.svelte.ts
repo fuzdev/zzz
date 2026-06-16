@@ -1,9 +1,9 @@
 import {z} from 'zod';
 
-import {ProviderName} from './provider_types.js';
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {CellJson} from './cell_types.js';
-import type {Provider} from './provider.svelte.js';
+import {ProviderName} from './provider_types.ts';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {CellJson} from './cell_types.ts';
+import type {Provider} from './provider.svelte.ts';
 
 export const ModelName = z.string().trim();
 export type ModelName = z.infer<typeof ModelName>;

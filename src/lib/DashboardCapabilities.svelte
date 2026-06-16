@@ -1,11 +1,11 @@
 <script lang="ts">
-	import {icon_capability} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_capability} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import Footer from './Footer.svelte';
 	import CapabilitiesView from './CapabilitiesView.svelte';
 	import TimeWidget from './TimeWidget.svelte';
 	import DashboardHeader from './DashboardHeader.svelte';
-	import {frontend_context} from './frontend.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
 
 	const app = frontend_context.get();
 </script>

@@ -1,14 +1,14 @@
 <script lang="ts">
-	import {random_item} from '@fuzdev/fuz_util/random.js';
+	import {random_item} from '@fuzdev/fuz_util/random.ts';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import {onMount} from 'svelte';
 
 	import ChatList from './ChatList.svelte';
 	import ChatView from './ChatView.svelte';
 	import ChatContextmenu from './ChatContextmenu.svelte';
-	import {icon_add, icon_sort} from '@fuzdev/fuz_ui/icons.js';
+	import {icon_add, icon_sort} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {frontend_context} from './frontend.svelte.js';
+	import {frontend_context} from './frontend.svelte.ts';
 	import ChatsContextmenu from './ChatsContextmenu.svelte';
 	import TutorialForDatabase from './TutorialForDatabase.svelte';
 	import TutorialForChats from './TutorialForChats.svelte';

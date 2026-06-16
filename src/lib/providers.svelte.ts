@@ -1,9 +1,9 @@
 import {z} from 'zod';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {Provider, ProviderJson} from './provider.svelte.js';
-import {CellJson} from './cell_types.js';
-import type {ProviderName} from './provider_types.js';
+import {Cell, type CellOptions} from './cell.svelte.ts';
+import {Provider, ProviderJson} from './provider.svelte.ts';
+import {CellJson} from './cell_types.ts';
+import type {ProviderName} from './provider_types.ts';
 
 export const ProvidersJson = CellJson.extend({
 	items: z.array(ProviderJson).default(() => []),

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type {Model} from './model.svelte.js';
+	import type {Model} from './model.svelte.ts';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 	import ProviderLogo from './ProviderLogo.svelte';
 

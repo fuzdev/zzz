@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type {Snippet} from 'svelte';
 
-	import type {BrowserTab} from '$routes/tabs/browser_tab.svelte.js';
+	import type {BrowserTab} from './browser_tab.svelte.ts';
 
 	const {
 		tab,
