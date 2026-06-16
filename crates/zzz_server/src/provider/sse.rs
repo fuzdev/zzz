@@ -220,7 +220,10 @@ mod tests {
         let mut raw = vec![0xC3];
         let mut buffer = String::new();
         drain_decoded(&mut raw, &mut buffer);
-        assert!(buffer.is_empty(), "incomplete code point must stay buffered");
+        assert!(
+            buffer.is_empty(),
+            "incomplete code point must stay buffered"
+        );
         assert_eq!(raw, vec![0xC3], "lead byte retained for next chunk");
 
         // Continuation byte arrives — now the full "é" decodes intact.

@@ -25,6 +25,7 @@ async fn main() {
         password_hasher,
         default_port: zzz_server::DEFAULT_PORT,
         force_test_actions: false,
+        disable_login_rate_limit: false,
         extra_action_specs_factory: None,
         pre_migration_hook: None,
     })

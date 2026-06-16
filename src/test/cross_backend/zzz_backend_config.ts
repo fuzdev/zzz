@@ -126,12 +126,16 @@ interface MakeZzzRustBackendOptions {
 
 /**
  * Rust-family wrapper that threads the zzz-specific env vars + port
- * variable name through the upstream builder. `cargo run --release`
- * keeps the source-of-truth invocation in cargo's hands so a stale
- * `target/release/testing_zzzd` from a prior checkout never
- * serves silently. Consumers iterating locally can swap to
- * `['target/release/testing_zzzd']` for faster spawns once
- * they've built the binary at least once.
+ * variable name through the upstream builder. `cargo run` (debug, not
+ * release) keeps the source-of-truth invocation in cargo's hands so a
+ * stale `target/debug/testing_zzzd` from a prior checkout never serves
+ * silently. Debug because the cross-backend suite is wire-shape /
+ * behavioral conformance (the fast argon2 hasher is already wired), so a
+ * release LTO build buys it nothing while a cold release build would
+ * exceed the backend-spawn health timeout — matching `fuz_forge_server`'s
+ * harness. Consumers iterating locally can swap to
+ * `['target/debug/testing_zzzd']` for faster spawns once they've built
+ * the binary at least once.
  */
 const make_zzz_rust_backend_config = ({
 	name,
@@ -142,7 +146,7 @@ const make_zzz_rust_backend_config = ({
 	return make_default_rust_backend_config({
 		name,
 		port,
-		start_command: ['cargo', 'run', '--release', '--bin', 'testing_zzzd'],
+		start_command: ['cargo', 'run', '--bin', 'testing_zzzd'],
 		database_url: `${RUST_DATABASE_URL_PREFIX}${name}`,
 		port_env_var: 'ZZZ_PORT',
 		rust_log: 'info,zzz_server=info,testing_zzzd=info',

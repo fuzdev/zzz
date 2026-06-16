@@ -147,6 +147,7 @@ async fn main() {
         password_hasher,
         default_port: TESTING_DEFAULT_PORT,
         force_test_actions: true,
+        disable_login_rate_limit: true,
         extra_action_specs_factory: Some(extra_specs_factory),
         pre_migration_hook: Some(pre_migration_hook),
     })

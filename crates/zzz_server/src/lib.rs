@@ -82,6 +82,12 @@ pub struct RunAppOptions {
     /// Production: `false`. Test binary: `true` so the `_testing_*`
     /// registry branch fires regardless of operator env.
     pub force_test_actions: bool,
+    /// Disable the per-IP + per-account `/login` + `/password` rate limiters.
+    /// Production: `false` — login rate limiting is always on, matching
+    /// `fuz_forge_server` + `mageguild_server` and the fuz defaults. Test
+    /// binary: `true` so the cross-backend auth suite's repeated logins don't
+    /// trip the bucket.
+    pub disable_login_rate_limit: bool,
     /// Factory injecting extra action specs after the standard zzz set.
     /// Production: `None`. Test binary: `Some(_)` so
     /// `fuz_testing::create_testing_reset_action_spec` can register
@@ -117,6 +123,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         password_hasher,
         default_port,
         force_test_actions,
+        disable_login_rate_limit,
         extra_action_specs_factory,
         pre_migration_hook,
     } = options;
@@ -184,13 +191,16 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         );
     }
 
-    // Per-IP + per-account rate limiters on `/login` and `/password`.
-    // Opt-in via `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1`. Mirrors fuz_app's
-    // `default_login_ip_rate_limit` (5 / 15min) and
-    // `default_login_account_rate_limit` (10 / 30min). `None` when the
-    // env var is unset so the handlers skip the check entirely. Spine
-    // `fuz_auth::RateLimiter` (parking_lot, sync).
-    let (login_ip_rate_limiter, login_account_rate_limiter) = if config.enable_login_rate_limit {
+    // Per-IP + per-account rate limiters on `/login` and `/password`, always
+    // on in production — matching `fuz_forge_server` + `mageguild_server` and
+    // the fuz defaults (`DEFAULT_LOGIN_IP_RATE_LIMIT` 5/15min,
+    // `DEFAULT_LOGIN_ACCOUNT_RATE_LIMIT` 10/30min). The test binary sets
+    // `disable_login_rate_limit` so the cross-backend auth suite's repeated
+    // logins don't trip the bucket. Spine `fuz_auth::RateLimiter`
+    // (parking_lot, sync).
+    let (login_ip_rate_limiter, login_account_rate_limiter) = if disable_login_rate_limit {
+        (None, None)
+    } else {
         tracing::info!("login rate limiting enabled (5/15min per-IP, 10/30min per-account)");
         (
             Some(Arc::new(fuz_auth::RateLimiter::new(
@@ -200,8 +210,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
                 fuz_auth::DEFAULT_LOGIN_ACCOUNT_RATE_LIMIT,
             ))),
         )
-    } else {
-        (None, None)
     };
 
     // Per-account rate limiter shared across admin RPC methods and the
@@ -215,10 +223,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // gate); the production cap sits far above the cross-backend test
     // suite's request volume.
     let action_account_rate_limiter: Option<Arc<fuz_auth::RateLimiter>> = Some(Arc::new(
-        fuz_auth::RateLimiter::new(fuz_auth::RateLimiterOptions {
-            max_attempts: 1200,
-            window_ms: 15 * 60_000,
-        }),
+        fuz_auth::RateLimiter::new(fuz_auth::DEFAULT_ACTION_ACCOUNT_RATE_LIMIT),
     ));
     // IP-axis action limiter unwired today — TS shape `rate_limit: 'account'`
     // doesn't gate on IP. Leave `None`; lift to a real limiter when a
@@ -531,12 +536,18 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         notification_sender: Arc::clone(&realtime).into_notification_sender(),
         session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
     };
-    let spine_rpc_router = fuz_actions::create_rpc_router(spine_rpc_state).layer(
-        axum::middleware::from_fn_with_state(
+    let spine_rpc_router = fuz_actions::create_rpc_router(spine_rpc_state)
+        .layer(axum::middleware::from_fn_with_state(
             Arc::clone(&spine_trusted_proxies),
             fuz_http::client_ip_middleware,
-        ),
-    );
+        ))
+        // 1 MiB request-body cap — the shared `DEFAULT_BODY_LIMIT_BYTES`, same
+        // as fuz_forge_server + mageguild_server. diskfile content rides the
+        // RPC body, so edits are bounded to 1 MiB over RPC; a streaming
+        // content-addressed route is the deferred path for larger / binary blobs.
+        .layer(fuz_http::body_limit_layer(
+            fuz_http::DEFAULT_BODY_LIMIT_BYTES,
+        ));
 
     let registry_for_ws = Arc::clone(app_state.action_registry.get().ok_or_else(|| {
         ServerError::Config("action_registry must be set before mounting /api/ws".to_owned())
@@ -565,34 +576,41 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // `fuz_http::client_ip_middleware` is wrapped on the router so
     // `Extension<fuz_http::ClientIp>` is populated for every account
     // route (rate-limit keys + audit_log.ip).
-    let spine_account_router =
-        fuz_auth::account_router(account_route_state).layer(axum::middleware::from_fn_with_state(
+    let spine_account_router = fuz_auth::account_router(account_route_state)
+        .layer(axum::middleware::from_fn_with_state(
             Arc::clone(&spine_trusted_proxies),
             fuz_http::client_ip_middleware,
+        ))
+        .layer(fuz_http::body_limit_layer(
+            fuz_http::DEFAULT_BODY_LIMIT_BYTES,
         ));
 
     // Spine bootstrap router: mounts `/bootstrap` at the router root, so
     // nesting under `/api/account` produces `/api/account/bootstrap`.
     // Replaces the legacy `crate::bootstrap::bootstrap_handler`.
-    let spine_bootstrap_router = fuz_auth::bootstrap_routes::bootstrap_router(
-        bootstrap_route_state,
-    )
-    .layer(axum::middleware::from_fn_with_state(
-        Arc::clone(&spine_trusted_proxies),
-        fuz_http::client_ip_middleware,
-    ));
+    let spine_bootstrap_router =
+        fuz_auth::bootstrap_routes::bootstrap_router(bootstrap_route_state)
+            .layer(axum::middleware::from_fn_with_state(
+                Arc::clone(&spine_trusted_proxies),
+                fuz_http::client_ip_middleware,
+            ))
+            .layer(fuz_http::body_limit_layer(
+                fuz_http::DEFAULT_BODY_LIMIT_BYTES,
+            ));
 
     // Spine signup router: mounts `/signup` at the router root, so
     // nesting under `/api/account` produces `/api/account/signup`.
     // Same client_ip_middleware layer so audit_log.ip on success +
     // failure rows reflects the resolved client IP rather than the
     // proxy peer.
-    let spine_signup_router = fuz_auth::signup_routes::signup_router(signup_route_state).layer(
-        axum::middleware::from_fn_with_state(
+    let spine_signup_router = fuz_auth::signup_routes::signup_router(signup_route_state)
+        .layer(axum::middleware::from_fn_with_state(
             Arc::clone(&spine_trusted_proxies),
             fuz_http::client_ip_middleware,
-        ),
-    );
+        ))
+        .layer(fuz_http::body_limit_layer(
+            fuz_http::DEFAULT_BODY_LIMIT_BYTES,
+        ));
 
     // Spine audit-log SSE stream: `GET /api/admin/audit/stream` — the shared
     // `fuz_realtime::audit_stream_router` (admin-gated, account-keyed close on
@@ -689,11 +707,6 @@ pub struct Config {
     /// Register `_testing_*` actions on live dispatchers. Set by integration
     /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave unset.
     pub enable_test_actions: bool,
-    /// Enable per-IP + per-account rate limiting on `/login` and
-    /// `/password`. Set in production via `ZZZ_LOGIN_RATE_LIMIT_ENABLED=1`;
-    /// default off so integration tests don't trip the bucket. The
-    /// dedicated rate-limit integration test sets it explicitly.
-    pub enable_login_rate_limit: bool,
     /// Comma-separated trusted-proxy entries (IPs and CIDR ranges).
     /// Unset/empty → no XFF trust → `client_ip` falls back to the TCP
     /// peer IP on every request. Set when running behind a reverse
@@ -798,7 +811,6 @@ fn parse_config(default_port: u16) -> Result<Config, ServerError> {
     };
 
     let enable_test_actions = parse_stringbool_env("ZZZ_ENABLE_TEST_ACTIONS")?;
-    let enable_login_rate_limit = parse_stringbool_env("ZZZ_LOGIN_RATE_LIMIT_ENABLED")?;
     let trusted_proxies = std::env::var("ZZZ_TRUSTED_PROXIES").ok();
 
     Ok(Config {
@@ -811,7 +823,6 @@ fn parse_config(default_port: u16) -> Result<Config, ServerError> {
         scoped_dirs,
         zzz_dir,
         enable_test_actions,
-        enable_login_rate_limit,
         trusted_proxies,
     })
 }
