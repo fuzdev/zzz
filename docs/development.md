@@ -31,17 +31,15 @@ Rust workspace, which must be checked out alongside this repo.
 
 ## Commands
 
-| Command | Purpose |
-|---------|---------|
-| `gro check` | All checks (typecheck, test, gen, format, lint) |
-| `gro typecheck` | Type checking only (faster iteration) |
-| `gro test` | Run Vitest tests |
-| `gro test -- --watch` | Tests in watch mode |
-| `gro gen` | Run `*.gen.ts` generators (regenerate their outputs) |
-| `gro format` | Format with Prettier |
-| `gro lint` | ESLint checking |
-| `gro build` | Production build |
-| `gro deploy` | Deploy to production |
+- `gro check` — All checks (typecheck, test, gen, format, lint)
+- `gro typecheck` — Type checking only (faster iteration)
+- `gro test` — Run Vitest tests
+- `gro test -- --watch` — Tests in watch mode
+- `gro gen` — Run `*.gen.ts` generators (regenerate their outputs)
+- `gro format` — Format with Prettier
+- `gro lint` — ESLint checking
+- `gro build` — Production build
+- `gro deploy` — Deploy to production
 
 `cargo xtask dev` runs the dev server (Rust backend + Vite frontend) — the
 user manages it; don't start it yourself.
@@ -90,41 +88,35 @@ The `*.gen.ts` files are hand-written generators; `gro gen` runs them and writes
 their outputs. Edit the generators, never the outputs (each output carries a
 `DO NOT EDIT` banner):
 
-| Generator | Output | Contents |
-|-----------|--------|----------|
-| `action_collections.gen.ts` | `src/lib/action_collections.ts` | Action spec collections, input/output type maps |
-| `action_metatypes.gen.ts` | `src/lib/action_metatypes.ts` | Action method types, handler enums |
-| `frontend_action_types.gen.ts` | `src/lib/frontend_action_types.ts` | Frontend handler types |
-| `reference.gen.ts` | `docs/reference.md` | Action-spec + cell-class reference tables |
+- `action_collections.gen.ts` (`src/lib/action_collections.ts`) — Action spec collections, input/output type maps
+- `action_metatypes.gen.ts` (`src/lib/action_metatypes.ts`) — Action method types, handler enums
+- `frontend_action_types.gen.ts` (`src/lib/frontend_action_types.ts`) — Frontend handler types
+- `reference.gen.ts` (`docs/reference.md`) — Action-spec + cell-class reference lists
 
 Run `gro gen` after changing `action_specs.ts` (or `cell_classes.ts`). `gro check`
 fails if any output is stale.
 
 ## File Naming
 
-| Pattern | Purpose | Example |
-|---------|---------|---------|
-| `snake_case.ts` | TypeScript modules | `helpers.ts`, `action_dispatcher.ts` |
-| `snake_case.svelte.ts` | Svelte 5 reactive state | `chat.svelte.ts` |
-| `PascalCase.svelte` | Svelte components | `ChatView.svelte` |
-| `snake_case.test.ts` | Test files (in `src/test/`) | `cell.svelte.base.test.ts` |
-| `*_types.ts` | Type definitions | `action_types.ts` |
-| `*_helpers.ts` | Utility functions | `jsonrpc_helpers.ts` |
+- `snake_case.ts` — TypeScript modules. Example: `helpers.ts`, `action_dispatcher.ts`
+- `snake_case.svelte.ts` — Svelte 5 reactive state. Example: `chat.svelte.ts`
+- `PascalCase.svelte` — Svelte components. Example: `ChatView.svelte`
+- `snake_case.test.ts` — Test files (in `src/test/`). Example: `cell.svelte.base.test.ts`
+- `*_types.ts` — Type definitions. Example: `action_types.ts`
+- `*_helpers.ts` — Utility functions. Example: `jsonrpc_helpers.ts`
 
 ### Component Naming
 
 Components use `PascalCase` with domain prefixes:
 
-| Prefix | Domain | Examples |
-|--------|--------|----------|
-| `Chat` | Chat UI | `ChatView`, `ChatListitem` |
-| `Diskfile` | File editor | `DiskfileEditorView`, `DiskfileExplorer` |
-| `Model` | Model management | `ModelListitem`, `ModelPickerDialog` |
-| `Part` | Content parts | `PartView`, `PartEditorForText` |
-| `Prompt` | Prompts | `PromptList`, `PromptPickerDialog` |
-| `Terminal` | Terminals | `TerminalRunner`, `TerminalView`, `TerminalContextmenu` |
-| `Thread` | Threads | `ThreadList`, `ThreadContextmenu` |
-| `Turn` | Turns | `TurnView`, `TurnListitem` |
+- `Chat` — Chat UI. Examples: `ChatView`, `ChatListitem`
+- `Diskfile` — File editor. Examples: `DiskfileEditorView`, `DiskfileExplorer`
+- `Model` — Model management. Examples: `ModelListitem`, `ModelPickerDialog`
+- `Part` — Content parts. Examples: `PartView`, `PartEditorForText`
+- `Prompt` — Prompts. Examples: `PromptList`, `PromptPickerDialog`
+- `Terminal` — Terminals. Examples: `TerminalRunner`, `TerminalView`, `TerminalContextmenu`
+- `Thread` — Threads. Examples: `ThreadList`, `ThreadContextmenu`
+- `Turn` — Turns. Examples: `TurnView`, `TurnListitem`
 
 ## Extension Points
 
@@ -187,14 +179,16 @@ export const my_action_action_spec = {
 
 2. Run `gro gen` to regenerate handler types.
 
-3. Add frontend handler (`src/lib/frontend_action_handlers.ts`):
+3. Add frontend handler (`src/lib/frontend_action_handlers.ts`) — handlers go
+   inside `create_frontend_action_handlers(frontend)` and reach app state via the
+   closed-over `frontend` (the action event itself carries no `app`):
 
 ```typescript
 my_action: {
   send_request: ({data: {input}}) => {
     console.log('sending:', input.message);
   },
-  receive_response: ({app, data: {output}}) => {
+  receive_response: ({data: {output}}) => {
     console.log('received:', output.result);
   },
   receive_error: ({data: {error}}) => {
@@ -376,33 +370,27 @@ test('all model provider_names exist in providers_default', () => {
 
 ### Test File Naming
 
-| Pattern | Example |
-|---------|---------|
-| `module.test.ts` | `action_event.test.ts` |
-| `module.aspect.test.ts` | `cell.svelte.base.test.ts`, `cell.svelte.decoders.test.ts` |
-| `module.aspect.test.ts` | `indexed_collection.svelte.queries.test.ts` |
+- `module.test.ts` — `action_event.test.ts`
+- `module.aspect.test.ts` — `cell.svelte.base.test.ts`, `cell.svelte.decoders.test.ts`
+- `module.aspect.test.ts` — `indexed_collection.svelte.queries.test.ts`
 
 ## Code Style
 
 ### Naming
 
-| Type | Convention | Example |
-|------|-----------|---------|
-| Variables/functions | `snake_case` | `send_message`, `user_input` |
-| Classes | `PascalCase` | `ChatView`, `ActionDispatcher` |
-| Types/interfaces | `PascalCase` | `ChatOptions`, `ActionSpec` |
-| Zod schemas | `PascalCase` | `ChatJson`, `CompletionRequest` |
-| Private fields | `#field` | `#internal_state` |
+- Variables/functions — `snake_case`. Example: `send_message`, `user_input`
+- Classes — `PascalCase`. Example: `ChatView`, `ActionDispatcher`
+- Types/interfaces — `PascalCase`. Example: `ChatOptions`, `ActionSpec`
+- Zod schemas — `PascalCase`. Example: `ChatJson`, `CompletionRequest`
+- Private fields — `#field`. Example: `#internal_state`
 
 ### Code Markers
 
-| Marker | Meaning |
-|--------|---------|
-| `// @slop [Model]` | LLM-generated code needing review |
-| `// TODO` | Work item |
-| `// TODO @many` | Affects multiple locations |
-| `// TODO @api` | API design question |
-| `// TODO @db` | Database-related |
+- `// @slop [Model]` — LLM-generated code needing review
+- `// TODO` — Work item
+- `// TODO @many` — Affects multiple locations
+- `// TODO @api` — API design question
+- `// TODO @db` — Database-related
 
 ### Import Order
 

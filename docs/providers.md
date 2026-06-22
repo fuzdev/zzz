@@ -4,11 +4,9 @@ Integration guide for AI providers and adding new ones.
 
 ## Supported Providers
 
-| Provider | Type | Backend module | Status | API Key Env |
-|----------|------|----------------|--------|-------------|
-| Claude | Remote (BYOK) | `provider/anthropic.rs` | Full (non-streaming + SSE streaming) | `SECRET_ANTHROPIC_API_KEY` |
-| ChatGPT | Remote (BYOK) | `provider/openai.rs` | Status-only stub | `SECRET_OPENAI_API_KEY` |
-| Gemini | Remote (BYOK) | `provider/gemini.rs` | Status-only stub | `SECRET_GOOGLE_API_KEY` |
+- Claude (`provider/anthropic.rs`) — Full (non-streaming + SSE streaming). Type: Remote (BYOK). API Key Env: `SECRET_ANTHROPIC_API_KEY`
+- ChatGPT (`provider/openai.rs`) — Full (non-streaming + SSE streaming). Type: Remote (BYOK). API Key Env: `SECRET_OPENAI_API_KEY`
+- Gemini (`provider/gemini.rs`) — Full (non-streaming + SSE streaming). Type: Remote (BYOK). API Key Env: `SECRET_GOOGLE_API_KEY`
 
 ### Remote Providers (Claude, ChatGPT, Gemini)
 
@@ -36,10 +34,11 @@ enum-dispatched via the `Provider` enum (`provider/mod.rs`) — the providers
 are known at compile time and matched exhaustively, no trait objects.
 `ProviderManager` owns the set; `set_api_key` recreates the underlying
 `reqwest` client; a provider reports an error status when no key is
-configured. Anthropic (`provider/anthropic.rs`) is fully implemented with
-non-streaming and SSE-streaming completions (`provider/sse.rs`); OpenAI and
-Gemini are status-only stubs. See [../crates/CLAUDE.md](../crates/CLAUDE.md)
-for the backend details.
+configured. All three providers — Anthropic (`provider/anthropic.rs`), OpenAI
+(`provider/openai.rs`), and Gemini (`provider/gemini.rs`) — are fully
+implemented with non-streaming and SSE-streaming completions through the shared
+`provider/sse.rs`. See [../crates/CLAUDE.md](../crates/CLAUDE.md) for the
+backend details.
 
 ### CompletionOptions
 
@@ -84,7 +83,9 @@ The Anthropic provider (`crates/zzz_server/src/provider/anthropic.rs`) calls
 the Messages API with a `reqwest` client. For streaming completions it sets
 `stream: true`, parses the SSE response (`provider/sse.rs`, manual `\r\n`
 normalization), and forwards each `content_block_delta` text chunk to the
-originating WebSocket connection as a `completion_progress` notification.
+originating WebSocket connection as a `completion_progress` notification. The
+OpenAI (Chat Completions) and Gemini (Generative Language) providers follow the
+same pattern against their respective APIs, sharing `provider/sse.rs`.
 See [../crates/CLAUDE.md](../crates/CLAUDE.md).
 
 ## Completion Flow
@@ -118,7 +119,7 @@ const status = await provider.load_status();
 // { name: 'claude', available: false, error: 'API key required', checked_at: ... }
 ```
 
-Remote providers: `available` = `true` when API key is set and client created.
+Remote providers: `available` = `true` when an API key is configured.
 
 ## Adding a New Provider
 

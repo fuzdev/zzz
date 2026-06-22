@@ -37,7 +37,7 @@ this repo — make the edits and stop, the user commits.
 
 Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, daemon tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) is in-memory.
 
-The Rust backend (`crates/zzz_server`, Axum) provides the full auth stack, filesystem, terminals, PostgreSQL, bootstrap, Anthropic provider with SSE streaming, audit emission with listener fan-out, trusted-proxy `client_ip` resolution, login rate limiting (always on; disabled in the test binary), Origin allowlist on every REST + RPC + WS handler. Auth, HTTP, realtime (WS + SSE), dispatch, and DB all come from the spine crates (`fuz_db`, `fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`); a single `/api/rpc` + `/api/ws` serves the boot-compiled `fuz_actions::ActionRegistry`, with the zzz-specific handlers (workspace, filesystem, terminal, provider, `completion_create`) in `handlers/` and the admin audit-log SSE stream at `GET /api/admin/audit/stream`. AI providers are Anthropic (full, non-streaming + SSE streaming) plus OpenAI/Gemini status-only stubs.
+The Rust backend (`crates/zzz_server`, Axum) provides the full auth stack, filesystem, terminals, PostgreSQL, bootstrap, AI providers with SSE streaming, audit emission with listener fan-out, trusted-proxy `client_ip` resolution, login rate limiting (always on; disabled in the test binary), Origin allowlist on every REST + RPC + WS handler. Auth, HTTP, realtime (WS + SSE), dispatch, and DB all come from the spine crates (`fuz_db`, `fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`); a single `/api/rpc` + `/api/ws` serves the boot-compiled `fuz_actions::ActionRegistry`, with the zzz-specific handlers (workspace, filesystem, terminal, provider, `completion_create`) in `handlers/` and the admin audit-log SSE stream at `GET /api/admin/audit/stream`. AI providers are Anthropic, OpenAI, and Gemini, all with non-streaming and SSE streaming completions.
 
 The `cross_backend_*` vitest projects (gated behind `FUZ_TEST_CROSS_BACKEND=1`) are the Rust backend's integration tests — they run fuz_app's standard suites against `zzz_server` over real HTTP, verifying wire-shape conformance to the shared fuz_app contract. (A schema-parity snapshot gate exists as a fuz_app capability — `query_schema_snapshot` + `assert_schema_snapshots_equal` — but is not currently wired into zzz's cross-backend projects.) Long-term the CLI and daemon migrate to Rust fuz/fuzd.
 
@@ -79,7 +79,7 @@ crates/                               # Rust workspace
 │   ├── xtask/                        # Dev automation: `cargo xtask dev` (build + run zzzd + Vite), `dev-setup`/`prod-setup` (env files), `check-release` (dep-graph audit — sanity check #2 of the test-binary pattern). Replaces the former Deno `scripts/*.ts`
 │   ├── testing_zzz_server/           # Test-mode binary — wires `fuz_testing::TestingArgon2idHasher` for fast cross-process integration tests. **Never ships in a release.**
 │   └── zzz_server/                   # Axum JSON-RPC server — full spine consumer (single `/api/rpc` + `/api/ws` on `fuz_actions::ActionRegistry`)
-│       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast`/`close_sockets_for_*` shims + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `rpc.rs` (JSON-RPC helpers), `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
+│       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast`/`close_sockets_for_*` shims + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB (and the JSON-RPC `notification` builder + error constructors) all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
 src/
 ├── lib/                          # Published as @fuzdev/zzz
 │   ├── *.svelte.ts               # Cell state classes
@@ -136,43 +136,41 @@ has the authoritative generated roster and count. Purposes below (`Socket` is
 not a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 `FrontendWebsocketClient`, so it's not listed):
 
-| Class             | Source file                  | Purpose                            |
-| ----------------- | ---------------------------- | ---------------------------------- |
-| `Parts`           | `parts.svelte.ts`            | Collection of all parts            |
-| `TextPart`        | `part.svelte.ts`             | Direct text content                |
-| `DiskfilePart`    | `part.svelte.ts`             | File reference content             |
-| `Capabilities`    | `capabilities.svelte.ts`     | Feature capability tracking        |
-| `Chat`            | `chat.svelte.ts`             | Chat container with threads        |
-| `Chats`           | `chats.svelte.ts`            | Collection of chats                |
-| `Diskfile`        | `diskfile.svelte.ts`         | Single file on disk                |
-| `DiskfileTab`     | `diskfile_tab.svelte.ts`     | Editor tab for a file              |
-| `DiskfileTabs`    | `diskfile_tabs.svelte.ts`    | Tab manager                        |
-| `DiskfileHistory` | `diskfile_history.svelte.ts` | File edit history                  |
-| `Diskfiles`       | `diskfiles.svelte.ts`        | Collection of disk files           |
-| `DiskfilesEditor` | `diskfiles_editor.svelte.ts` | Multi-file editor state            |
-| `Model`           | `model.svelte.ts`            | AI model definition                |
-| `Models`          | `models.svelte.ts`           | Model catalog with indexes         |
-| `Action`          | `action.svelte.ts`           | Single action event state          |
-| `Actions`         | `actions.svelte.ts`          | Action history                     |
-| `Prompt`          | `prompt.svelte.ts`           | Reusable prompt template           |
-| `Prompts`         | `prompts.svelte.ts`          | Collection of prompts              |
-| `Provider`        | `provider.svelte.ts`         | AI provider config                 |
-| `Providers`       | `providers.svelte.ts`        | Collection of providers            |
-| `Turn`            | `turn.svelte.ts`             | Single conversation message        |
-| `Thread`          | `thread.svelte.ts`           | Linear conversation with one model |
-| `Threads`         | `threads.svelte.ts`          | Collection of threads              |
-| `Space`           | `space.svelte.ts`            | Named grouping of workspace dirs   |
-| `Spaces`          | `spaces.svelte.ts`           | Collection of spaces               |
-| `Terminal`        | `terminal.svelte.ts`         | PTY terminal process state         |
-| `TerminalPreset`  | `terminal_preset.svelte.ts`  | Saved terminal command config      |
-| `Time`            | `time.svelte.ts`             | Reactive time state                |
-| `Ui`              | `ui.svelte.ts`               | UI state (menus, layout)           |
-| `Workspace`       | `workspace.svelte.ts`        | Open workspace directory           |
-| `Workspaces`      | `workspaces.svelte.ts`       | Collection of workspaces           |
+- `Parts` (`parts.svelte.ts`) — Collection of all parts
+- `TextPart` (`part.svelte.ts`) — Direct text content
+- `DiskfilePart` (`part.svelte.ts`) — File reference content
+- `Capabilities` (`capabilities.svelte.ts`) — Feature capability tracking
+- `Chat` (`chat.svelte.ts`) — Chat container with threads
+- `Chats` (`chats.svelte.ts`) — Collection of chats
+- `Diskfile` (`diskfile.svelte.ts`) — Single file on disk
+- `DiskfileTab` (`diskfile_tab.svelte.ts`) — Editor tab for a file
+- `DiskfileTabs` (`diskfile_tabs.svelte.ts`) — Tab manager
+- `DiskfileHistory` (`diskfile_history.svelte.ts`) — File edit history
+- `Diskfiles` (`diskfiles.svelte.ts`) — Collection of disk files
+- `DiskfilesEditor` (`diskfiles_editor.svelte.ts`) — Multi-file editor state
+- `Model` (`model.svelte.ts`) — AI model definition
+- `Models` (`models.svelte.ts`) — Model catalog with indexes
+- `Action` (`action.svelte.ts`) — Single action event state
+- `Actions` (`actions.svelte.ts`) — Action history
+- `Prompt` (`prompt.svelte.ts`) — Reusable prompt template
+- `Prompts` (`prompts.svelte.ts`) — Collection of prompts
+- `Provider` (`provider.svelte.ts`) — AI provider config
+- `Providers` (`providers.svelte.ts`) — Collection of providers
+- `Turn` (`turn.svelte.ts`) — Single conversation message
+- `Thread` (`thread.svelte.ts`) — Linear conversation with one model
+- `Threads` (`threads.svelte.ts`) — Collection of threads
+- `Space` (`space.svelte.ts`) — Named grouping of workspace dirs
+- `Spaces` (`spaces.svelte.ts`) — Collection of spaces
+- `Terminal` (`terminal.svelte.ts`) — PTY terminal process state
+- `TerminalPreset` (`terminal_preset.svelte.ts`) — Saved terminal command config
+- `Time` (`time.svelte.ts`) — Reactive time state
+- `Ui` (`ui.svelte.ts`) — UI state (menus, layout)
+- `Workspace` (`workspace.svelte.ts`) — Open workspace directory
+- `Workspaces` (`workspaces.svelte.ts`) — Collection of workspaces
 
 ## Action Specs
 
-Defined in `src/lib/action_specs.ts`. The full table — method, kind, initiator,
+Defined in `src/lib/action_specs.ts`. The full list — method, kind, initiator,
 auth, and description — is generated into [docs/reference.md](./docs/reference.md)
 from the specs themselves (`src/lib/reference.gen.ts`, refreshed by `gro gen`),
 so it can't drift. The test-only `_testing_emit_notifications` +
@@ -200,17 +198,15 @@ env-setup orchestration is `cargo xtask` (see `crates/xtask/`), so there's no
 
 ### Daily Commands
 
-| Command                      | Purpose                                         |
-| ---------------------------- | ----------------------------------------------- |
-| `cargo xtask dev`              | Dev server: Rust backend + Vite frontend        |
-| `gro check`                  | All checks (typecheck, test, gen, format, lint) |
-| `gro typecheck`              | Type checking only (faster iteration)           |
-| `gro test`                   | Run Vitest unit + db tests (cross-backend gated out — see below) |
-| `npm test`                   | `gro test` (unit + db; cross-backend projects excluded unless `FUZ_TEST_CROSS_BACKEND=1`) |
-| `npm run test:cross`         | Rust cross-process suites (rust + rust_proxy; needs rust binary + `zzz_test_rust`/`zzz_test_rust_proxy` Postgres DBs) — flag baked in |
-| `gro gen`                    | Run `*.gen.ts` generators (regenerate their outputs) |
-| `gro format`                 | Format with Prettier                            |
-| `gro build`                  | Production build                                |
+- `cargo xtask dev` — Dev server: Rust backend + Vite frontend
+- `gro check` — All checks (typecheck, test, gen, format, lint)
+- `gro typecheck` — Type checking only (faster iteration)
+- `gro test` — Run Vitest unit + db tests (cross-backend gated out — see below)
+- `npm test` — `gro test` (unit + db; cross-backend projects excluded unless `FUZ_TEST_CROSS_BACKEND=1`)
+- `npm run test:cross` — Rust cross-process suites (rust + rust_proxy; needs rust binary + `zzz_test_rust`/`zzz_test_rust_proxy` Postgres DBs) — flag baked in
+- `gro gen` — Run `*.gen.ts` generators (regenerate their outputs)
+- `gro format` — Format with Prettier
+- `gro build` — Production build
 
 `cargo xtask dev` is the dev command — it builds and runs `zzz_server` plus
 the Vite frontend. (The user manages the dev server; don't start it yourself.)
@@ -232,9 +228,9 @@ native crate, and WebSocket connection tracking (`broadcast`/`send_to`).
 PostgreSQL via `tokio-postgres`/`deadpool-postgres`, HMAC-SHA256 cookie
 signing, blake3 session/token hashing, per-action auth checks with credential
 type enforcement, bootstrap endpoint. AI provider system with enum-dispatched
-providers — Anthropic fully implemented (non-streaming + SSE streaming with
-connection-targeted `completion_progress` notifications), OpenAI/Gemini
-stubs. Cross-process integration tests in `src/test/cross_backend/*.cross.test.ts`
+providers — Anthropic, OpenAI, and Gemini all fully implemented (non-streaming +
+SSE streaming with connection-targeted `completion_progress` notifications).
+Cross-process integration tests in `src/test/cross_backend/*.cross.test.ts`
 run fuz_app's standard suites against `zzz_server` over real HTTP, verifying
 its JSON-RPC responses conform to the shared fuz_app contract. They cover
 the full surface — including the admin role-gated `admin_session_revoke_all` /
@@ -270,12 +266,10 @@ prerequisites, and what the integration tests check.
 
 ### Naming Conventions
 
-| Thing            | Convention                 | Example                    |
-| ---------------- | -------------------------- | -------------------------- |
-| TypeScript files | `snake_case.ts`            | `action_dispatcher.ts`           |
-| Svelte 5 state   | `snake_case.svelte.ts`     | `chat.svelte.ts`           |
-| Components       | `PascalCase.svelte`        | `ChatView.svelte`          |
-| Tests            | `*.test.ts` in `src/test/` | `cell.svelte.base.test.ts` |
+- TypeScript files — `snake_case.ts`. Example: `action_dispatcher.ts`
+- Svelte 5 state — `snake_case.svelte.ts`. Example: `chat.svelte.ts`
+- Components — `PascalCase.svelte`. Example: `ChatView.svelte`
+- Tests — `*.test.ts` in `src/test/`. Example: `cell.svelte.base.test.ts`
 
 ## Code Patterns
 
@@ -338,11 +332,9 @@ export const diskfile_update_action_spec = {
 
 Action kinds:
 
-| Kind                  | Transport         | Pattern                         |
-| --------------------- | ----------------- | ------------------------------- |
-| `request_response`    | HTTP or WebSocket | Frontend sends, backend replies |
-| `remote_notification` | WebSocket only    | Backend pushes to frontend      |
-| `local_call`          | None (in-process) | Frontend-only                   |
+- `request_response` — HTTP or WebSocket. Pattern: Frontend sends, backend replies
+- `remote_notification` — WebSocket only. Pattern: Backend pushes to frontend
+- `local_call` — None (in-process). Pattern: Frontend-only
 
 ### Adding an Action (End-to-End)
 
@@ -379,15 +371,17 @@ add a spec builder in `zzz_action_specs/` and the handler fn in
 dispatch through the same `ActionRegistry`, so the new handler is picked up
 on both transports.
 
-**4. Add frontend handler** in `src/lib/frontend_action_handlers.ts`:
+**4. Add frontend handler** in `src/lib/frontend_action_handlers.ts` — handlers
+live inside `create_frontend_action_handlers(frontend)` and reach app state via
+the closed-over `frontend` (the action event carries no `app`):
 
 ```typescript
 my_action: {
   // For request_response:
-  receive_response: ({app, data: {output}}) => { /* handle success */ },
+  receive_response: ({data: {output}}) => { /* handle success */ },
   receive_error: ({data: {error}}) => { /* handle error */ },
   // For remote_notification:
-  receive: ({app, data: {input}}) => { /* handle notification */ },
+  receive: ({data: {input}}) => { /* handle notification */ },
 },
 ```
 
@@ -433,11 +427,9 @@ connection registry — see the `broadcast` / notification builders in
 
 The `.zzz/` directory stores app data. Configured via `PUBLIC_ZZZ_DIR`.
 
-| Subdirectory | Purpose                                        |
-| ------------ | ---------------------------------------------- |
-| `state/`     | Persistent data (completions, workspaces.json) |
-| `cache/`     | Regenerable data, safe to delete               |
-| `run/`       | Runtime ephemeral (daemon.json: PID, port)     |
+- `state/` — Persistent data (completions, workspaces.json)
+- `cache/` — Regenerable data, safe to delete
+- `run/` — Runtime ephemeral (daemon.json: PID, port)
 
 All filesystem access goes through `ScopedFs` — path validation, no symlinks, absolute paths only.
 
@@ -445,38 +437,32 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 
 ### Server (BaseServerEnv from fuz_app — ecosystem standard)
 
-| Variable             | Purpose                                  |
-| -------------------- | ---------------------------------------- |
-| `NODE_ENV`           | `development` or `production`            |
-| `PORT`               | HTTP server port (default 4460; `cargo xtask dev` uses 4461) |
-| `HOST`               | Bind address (default `localhost`)       |
-| `DATABASE_URL`       | PostgreSQL connection (`postgres://`)    |
-| `SECRET_FUZ_COOKIE_KEYS` | HMAC signing keys (min 32 chars)     |
+- `NODE_ENV` — `development` or `production`
+- `PORT` — HTTP server port (default 4460; `cargo xtask dev` uses 4461)
+- `HOST` — Bind address (default `localhost`)
+- `DATABASE_URL` — PostgreSQL connection (`postgres://`)
+- `SECRET_FUZ_COOKIE_KEYS` — HMAC signing keys (min 32 chars)
 
 ### zzz-specific server vars
 
-| Variable                              | Purpose                                                                                            |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `FUZ_ALLOWED_ORIGINS`                 | Origin patterns for API verification                                                               |
-| `FUZ_BOOTSTRAP_TOKEN_PATH`            | One-shot admin bootstrap token path                                                                |
-| `PUBLIC_ZZZ_DIR`                      | Zzz app directory (default `.zzz`)                                                                 |
-| `PUBLIC_ZZZ_SCOPED_DIRS`              | Comma-separated filesystem paths                                                                   |
-| `PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY` | Testing delay (ms)                                                                                 |
-| `ZZZ_ENABLE_TEST_ACTIONS`             | Register `_testing_*` actions on live dispatchers (integration tests only — must stay unset in prod) |
-| `SECRET_ANTHROPIC_API_KEY`            | Claude API key                                                                                     |
-| `SECRET_OPENAI_API_KEY`               | OpenAI API key                                                                                     |
-| `SECRET_GOOGLE_API_KEY`               | Google Gemini API key                                                                              |
+- `FUZ_ALLOWED_ORIGINS` — Origin patterns for API verification
+- `FUZ_BOOTSTRAP_TOKEN_PATH` — One-shot admin bootstrap token path
+- `PUBLIC_ZZZ_DIR` — Zzz app directory (default `.zzz`)
+- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths
+- `PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY` — Testing delay (ms)
+- `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live dispatchers (integration tests only — must stay unset in prod)
+- `SECRET_ANTHROPIC_API_KEY` — Claude API key
+- `SECRET_OPENAI_API_KEY` — OpenAI API key
+- `SECRET_GOOGLE_API_KEY` — Google Gemini API key
 
 ### SvelteKit frontend vars (PUBLIC_ZZZ_\*)
 
-| Variable                         | Purpose                      |
-| -------------------------------- | ---------------------------- |
-| `PUBLIC_ZZZ_SERVER_PROTOCOL`     | `http` or `https`            |
-| `PUBLIC_ZZZ_SERVER_HOST`         | Server hostname (frontend)   |
-| `PUBLIC_ZZZ_SERVER_PORT`         | SvelteKit dev server port    |
-| `PUBLIC_ZZZ_SERVER_API_PATH`     | API endpoint path            |
-| `PUBLIC_ZZZ_WEBSOCKET_URL`       | WebSocket URL                |
-| `PUBLIC_ZZZ_SERVER_PROXIED_PORT` | Backend port (frontend)      |
+- `PUBLIC_ZZZ_SERVER_PROTOCOL` — `http` or `https`
+- `PUBLIC_ZZZ_SERVER_HOST` — Server hostname (frontend)
+- `PUBLIC_ZZZ_SERVER_PORT` — SvelteKit dev server port
+- `PUBLIC_ZZZ_SERVER_API_PATH` — API endpoint path
+- `PUBLIC_ZZZ_WEBSOCKET_URL` — WebSocket URL
+- `PUBLIC_ZZZ_SERVER_PROXIED_PORT` — Backend port (frontend)
 
 ## Avoid
 
@@ -497,7 +483,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **PTY terminals** — terminal spawning uses the `fuz_pty` Rust crate as a native dependency of `zzz_server` (no FFI indirection). `PtyManager` manages spawned processes with async read loops; `terminal_close` cancels the read loop before killing the process. Requires the sibling Rust workspace checked out alongside this repo (path dep).
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Backend** — `zzz_server` serves the full RPC surface with the full auth stack. `cargo xtask dev` runs it with the Vite frontend. Anthropic provider fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only). No batch JSON-RPC. A single `/api/rpc` + `/api/ws` serves the boot-compiled `ActionRegistry` (handlers in `handlers/`), plus the admin audit-log SSE stream at `GET /api/admin/audit/stream`.
+- **Backend** — `zzz_server` serves the full RPC surface with the full auth stack. `cargo xtask dev` runs it with the Vite frontend. Anthropic, OpenAI, and Gemini providers fully implemented (non-streaming + SSE streaming). No batch JSON-RPC. A single `/api/rpc` + `/api/ws` serves the boot-compiled `ActionRegistry` (handlers in `handlers/`), plus the admin audit-log SSE stream at `GET /api/admin/audit/stream`.
 
 ## fuz_app
 

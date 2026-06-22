@@ -1,8 +1,8 @@
 # zzz Rust Backend
 
 zzz's backend, using axum. Serves the frontend (a prerendered static SPA) and
-a single JSON-RPC 2.0 API over HTTP + WebSocket. AI providers are Anthropic
-(full) plus OpenAI/Gemini status-only stubs.
+a single JSON-RPC 2.0 API over HTTP + WebSocket. AI providers are Anthropic,
+OpenAI, and Gemini (all full).
 
 **Workspace layout**:
 - `zzz_server/` — library (`zzz_server`) + production daemon binary (the `[[bin]]` target is named `zzzd`). `pub async fn run_app(options: RunAppOptions)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, drain). `RunAppOptions` carries: `password_hasher` (production-vs-test swap), `default_port`, `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag), and `extra_action_specs_factory` (lets the test binary inject `_testing_reset` without putting `fuz_testing` in the production dep graph). `src/main.rs` is the thin production entry — constructs `Argon2idHasher`, calls `run_app` with `force_test_actions: false, extra_action_specs_factory: None`.
@@ -10,8 +10,8 @@ a single JSON-RPC 2.0 API over HTTP + WebSocket. AI providers are Anthropic
 - `xtask/` — dev automation (`cargo xtask <cmd>`, pure `std` + `fuz_audit`, no extra deps). `dev` loads `.env.development`, builds `zzz_server`, then runs `zzzd` (port 4461) + the Vite frontend (5173, proxying `/api`); `dev-setup` / `prod-setup` generate `.env.development` / `.env.production` from the `.example` templates; `check-release` (the dep-graph audit — sanity check #2 of the test-binary pattern) delegates its work to `fuz_audit::run_check_release_cli()`. Dispatch and usage live in xtask itself: bare `cargo xtask` / `help` / `-h` / `--help` print the full subcommand list (exit 0); an unknown subcommand prints an error + usage (exit 1). Marked `[package.metadata.fuz_audit] dev_only = true` so xtask itself is excluded from the production scan. Replaces the former Deno orchestration (`deno.json` + `scripts/*.ts`).
 - `zzz/` — Rust CLI (argh). `daemon start/stop/status`, `status`, `init`, `open` (the default command — daemon discovery, detached auto-start, best-effort `workspace_open`, browser launch), and `version` (+ the `--version`/`-v` switch) are implemented, all backed by `daemon_lifecycle.rs` (port-based `daemon.json` I/O, `/health` probe, PID liveness, server-bin discovery, child-env build, ISO timestamp). Tests: unit tests per module, `tests/cli_daemon.rs` (infra-free status read-back), and `tests/cli_e2e.rs` (full `daemon start` ↔ live `testing_zzzd` lifecycle, gated behind `ZZZ_TEST_E2E=1` + Postgres, self-skips otherwise). This is zzz's CLI — the Deno CLI has been removed; build it with `cargo build -p zzz`.
 
-AI provider system feature-complete for Anthropic; OpenAI /
-Gemini stubs ship status only. Spine consumption is
+AI provider system feature-complete for all three providers (Anthropic,
+OpenAI, Gemini). Spine consumption is
 complete — the spine crates (`fuz_db`, `fuz_auth`, `fuz_http`,
 `fuz_realtime`, `fuz_actions`) own auth, HTTP, realtime, and the
 boot-compiled `ActionRegistry` dispatch path. A single canonical
@@ -94,39 +94,33 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 
 ### Required Environment Variables
 
-| Variable             | Purpose                                            |
-|----------------------|----------------------------------------------------|
-| `DATABASE_URL`       | PostgreSQL connection (e.g. `postgres://localhost/zzz`) |
-| `SECRET_FUZ_COOKIE_KEYS` | HMAC signing keys (min 32 chars, `__` separator for rotation) |
-| `FUZ_ALLOWED_ORIGINS`    | Comma-separated origin allowlist patterns — **required, non-empty**. The server hard-fails at boot on an empty list, because `fuz_http::check_origin` treats an empty allowlist as allow-all (every origin passes). Dev/prod `.env` set `http://localhost:*`. |
+- `DATABASE_URL` — PostgreSQL connection (e.g. `postgres://localhost/zzz`)
+- `SECRET_FUZ_COOKIE_KEYS` — HMAC signing keys (min 32 chars, `__` separator for rotation)
+- `FUZ_ALLOWED_ORIGINS` — Comma-separated origin allowlist patterns — required, non-empty. The server hard-fails at boot on an empty list, because `fuz_http::check_origin` treats an empty allowlist as allow-all (every origin passes). Dev/prod `.env` set `http://localhost:*`.
 
 ### Optional Environment Variables
 
-| Variable                 | Purpose                                    |
-|--------------------------|--------------------------------------------|
-| `FUZ_BOOTSTRAP_TOKEN_PATH`   | Path to bootstrap token file           |
-| `PUBLIC_ZZZ_SCOPED_DIRS` | Comma-separated filesystem paths           |
-| `ZZZ_PORT`               | Server port (default 4460, CLI overrides)  |
-| `ZZZ_STATIC_DIR`         | Static file directory                      |
-| `ZZZ_ENABLE_TEST_ACTIONS`| Register `_testing_*` actions on live dispatchers (mirrors Zod `z.stringbool()`: `true`/`1`/`yes`/`on`/`y`/`enabled` opt in; `false`/`0`/`no`/`off`/`n`/`disabled` or unset opt out; case-insensitive; anything else errors at startup. Integration tests only — production must leave unset) |
-| `ZZZ_TRUSTED_PROXIES`        | Comma-separated trusted-proxy entries (IPs and CIDR ranges, e.g. `127.0.0.1,10.0.0.0/8,fe80::/10`). Unset/empty → no XFF trust → `client_ip` falls back to the TCP peer IP on every request (direct-bind behavior). Set when deploying behind nginx / a cloud LB so the trusted-proxy middleware walks `X-Forwarded-For` right-to-left and resolves the real client IP for rate limiting + `audit_log.ip`. Parsed eagerly at startup — invalid entries (malformed IPs, non-aligned CIDRs, out-of-range prefixes) fail server boot. Mirrors fuz_app's `http/proxy.ts`. |
+- `FUZ_BOOTSTRAP_TOKEN_PATH` — Path to bootstrap token file
+- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths
+- `ZZZ_PORT` — Server port (default 4460, CLI overrides)
+- `ZZZ_STATIC_DIR` — Static file directory
+- `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live dispatchers (mirrors Zod `z.stringbool()`: `true`/`1`/`yes`/`on`/`y`/`enabled` opt in; `false`/`0`/`no`/`off`/`n`/`disabled` or unset opt out; case-insensitive; anything else errors at startup. Integration tests only — production must leave unset)
+- `ZZZ_TRUSTED_PROXIES` — Comma-separated trusted-proxy entries (IPs and CIDR ranges, e.g. `127.0.0.1,10.0.0.0/8,fe80::/10`). Unset/empty → no XFF trust → `client_ip` falls back to the TCP peer IP on every request (direct-bind behavior). Set when deploying behind nginx / a cloud LB so the trusted-proxy middleware walks `X-Forwarded-For` right-to-left and resolves the real client IP for rate limiting + `audit_log.ip`. Parsed eagerly at startup — invalid entries (malformed IPs, non-aligned CIDRs, out-of-range prefixes) fail server boot. Mirrors fuz_app's `http/proxy.ts`.
 
 ## Endpoints
 
-| Method | Path                              | Description                              |
-|--------|-----------------------------------|------------------------------------------|
-| GET    | `/api/rpc`                        | JSON-RPC 2.0 (cacheable reads, query params) |
-| POST   | `/api/rpc`                        | JSON-RPC 2.0 (HTTP transport, auth-gated) |
-| POST   | `/api/account/bootstrap`          | One-shot admin account creation          |
-| POST   | `/api/account/signup`             | Public account creation (invite-gated by default; `open_signup=true` opens) |
-| GET    | `/api/account/status`             | Current account info or 401 + bootstrap status |
-| POST   | `/api/account/login`              | Username/password login → session cookie |
-| POST   | `/api/account/logout`             | Invalidate session, close WS connections |
-| POST   | `/api/account/password`           | Change password, revoke all sessions/tokens |
-| GET    | `/api/ws`                         | JSON-RPC 2.0 (WebSocket, cookie/bearer/daemon) |
-| GET    | `/api/admin/audit/stream`         | Admin-gated audit-log SSE stream (`text/event-stream`) |
-| GET    | `/health`                         | Health check (`{"status":"ok"}`)         |
-| GET    | `/*`                              | Static files (if `--static-dir`)         |
+- `/api/rpc` (GET) — JSON-RPC 2.0 (cacheable reads, query params)
+- `/api/rpc` (POST) — JSON-RPC 2.0 (HTTP transport, auth-gated)
+- `/api/account/bootstrap` (POST) — One-shot admin account creation
+- `/api/account/signup` (POST) — Public account creation (invite-gated by default; `open_signup=true` opens)
+- `/api/account/status` (GET) — Current account info or 401 + bootstrap status
+- `/api/account/login` (POST) — Username/password login → session cookie
+- `/api/account/logout` (POST) — Invalidate session, close WS connections
+- `/api/account/password` (POST) — Change password, revoke all sessions/tokens
+- `/api/ws` (GET) — JSON-RPC 2.0 (WebSocket, cookie/bearer/daemon)
+- `/api/admin/audit/stream` (GET) — Admin-gated audit-log SSE stream (`text/event-stream`)
+- `/health` (GET) — Health check (`{"status":"ok"}`)
+- `/*` (GET) — Static files (if `--static-dir`)
 
 ## Auth
 
@@ -241,9 +235,14 @@ conform to the shared fuz_app contract. The tests live in
   `terminal_data` / `terminal_exited` notifications over WS, live resize,
   explicit cwd, nonexistent-command handling, and silent-null for missing
   terminal IDs.
-- **`provider.cross.test.ts`** — `provider_load_status` stub plus `session_load`
+- **`provider.cross.test.ts`** — `provider_load_status` (no-key status) plus `session_load`
   (zzz_dir file listing with contents + recursive subdirectory walk).
 - **`completion.cross.test.ts`** — `completion_create` invalid-provider rejection.
+- **`peer_ping_ws.cross.test.ts`** — server-initiated `peer/ping` round-trip
+  (client invokes, server pings back over the same socket, client responder
+  echoes, server validates) plus security negatives. Invokes fuz_app's shared
+  `describe_peer_ping_ws_tests`; gated on `capabilities.peer_request` (runs in
+  the `cross_backend_rust` project).
 - **`proxy.cross.test.ts`** — runs only in the `cross_backend_rust_proxy`
   project (backend booted with `ZZZ_TRUSTED_PROXIES=127.0.0.1`, which can't be
   flipped mid-run). Each test triggers a failed login under a unique username
@@ -301,14 +300,13 @@ crates/zzz_server/src/
 │   ├── provider.rs
 │   ├── terminal.rs
 │   └── workspace.rs
-├── rpc.rs            # JSON-RPC helpers — error constructors + the `notification` builder used by broadcast / send_to sites
 ├── provider/         # AI provider system
 │   ├── mod.rs        # ProviderName, ProviderStatus, Provider enum, ProviderManager, CompletionOptions
 │   ├── anthropic.rs  # AnthropicProvider — Messages API with SSE streaming
 │   ├── common.rs     # shared provider helpers
 │   ├── sse.rs        # provider SSE parsing
-│   ├── openai.rs     # OpenAiProvider stub (status only)
-│   └── gemini.rs     # GeminiProvider stub (status only)
+│   ├── openai.rs     # OpenAiProvider — Chat Completions API with SSE streaming
+│   └── gemini.rs     # GeminiProvider — Generative Language API with SSE streaming
 ├── filer.rs          # Filer + FilerManager (notify crate) — immediate file index updates, debounced filer_change broadcasts
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) → terminal_data/exited notifications
 ├── scoped_fs.rs      # Scoped filesystem — path validation, symlink rejection
@@ -387,7 +385,7 @@ metadata contract, the bootstrap success/failure audit rows, and the
   function tolerates either shape. Future: env-conditional — include the
   issues in dev, strip in prod.
 - **filer file-size cap** — `filer::MAX_INDEXED_FILE_SIZE`
-  (4 MiB, `crates/zzz_server/src/filer.rs:22`) caps the in-memory index: files
+  (4 MiB, `crates/zzz_server/src/filer.rs:23`) caps the in-memory index: files
   over 4 MiB carry their metadata but store `contents: None`. This bounds
   memory under workspaces containing large lockfiles or build outputs.
   The cross-backend integration tests don't exercise files >4 MiB.
@@ -396,7 +394,7 @@ metadata contract, the bootstrap success/failure audit rows, and the
 
 - RPC methods: `ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `provider_update_api_key` (keeper-only), `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`, `admin_session_revoke_all` (admin-only), `admin_token_revoke_all` (admin-only)
 - 5 `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debounced broadcasts with immediate index updates, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast), `completion_progress` (streaming completion chunks to requesting WS connection)
-- AI providers: Anthropic fully implemented (non-streaming + SSE streaming), OpenAI/Gemini stubs (status only)
+- AI providers: Anthropic, OpenAI, and Gemini all fully implemented (non-streaming + SSE streaming)
 - No batch request support (JSON arrays)
 - `/api/account/signup` is mounted via `fuz_auth::signup_routes`. Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting via `app_settings_update` to enable open signup. The cross-process test binary opts into `open_signup: true` at startup via `app_settings_patch` so per-test `mint_account` can sign up without invites. `app_settings` is loaded per-request today; a cached `Arc<RwLock<AppSettings>>` shared with the future admin `app_settings_update` handler is planned.
 - No token management routes (GET /tokens, POST /tokens/create, etc.)
@@ -454,15 +452,15 @@ from fuz_auth's routers; the admin audit-log SSE stream
 `handlers/` holds only `App` state + the `broadcast` /
 `close_sockets_for_*` shims over `App.realtime`.
 
-**AI providers** (Anthropic complete, others pending):
+**AI providers** (Anthropic, OpenAI, and Gemini all complete):
 - [x] Provider system: enum-dispatched `Provider` with `ProviderManager`, `ProviderStatus`, `CompletionOptions`
 - [x] Anthropic provider: full implementation with `reqwest` HTTP client, SSE streaming, message format conversion
 - [x] `provider_load_status` handler (all 3 providers report status)
 - [x] `provider_update_api_key` handler (keeper-only, runtime API key updates)
 - [x] `completion_create` handler with `completion_progress` streaming notifications (targeted to requesting WS connection)
 - [x] `session_load` returns real provider status from all providers
-- [ ] OpenAI provider: full completion implementation
-- [ ] Gemini provider: full completion implementation
+- [x] OpenAI provider: full completion implementation (Chat Completions API, non-streaming + SSE streaming)
+- [x] Gemini provider: full completion implementation (Generative Language API, non-streaming + SSE streaming)
 
 **Other remaining work**:
 1. Codegen from Zod specs (action input/output types)

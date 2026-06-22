@@ -15,7 +15,7 @@ export const completion_create_action_spec = {
 	method: 'completion_create',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: null,
+	auth: {account: 'required', actor: 'none'},
 	side_effects: true,
 	input: z.strictObject({
 		completion_request: CompletionRequest,
@@ -31,11 +31,9 @@ export const completion_create_action_spec = {
 
 ### Action Kinds
 
-| Kind                  | Phases                                                                    | Transport         | Use                                     |
-| --------------------- | ------------------------------------------------------------------------- | ----------------- | --------------------------------------- |
-| `request_response`    | `send_request` → `receive_request` → `send_response` → `receive_response` | HTTP or WebSocket | Standard RPC                            |
-| `remote_notification` | `send` → `receive`                                                        | WebSocket only    | Backend → frontend push (progress, broadcast) |
-| `local_call`          | `execute`                                                                 | None              | Frontend-only UI actions                |
+- `request_response` — Standard RPC. Phases: `send_request` → `receive_request` → `send_response` → `receive_response`. Transport: HTTP or WebSocket
+- `remote_notification` — Backend → frontend push (progress, broadcast). Phases: `send` → `receive`. Transport: WebSocket only
+- `local_call` — Frontend-only UI actions. Phases: `execute`. Transport: None
 
 `remote_notification` actions have two routing paths on the backend:
 
@@ -46,30 +44,26 @@ export const completion_create_action_spec = {
   notification.
 - **Broadcast** (`backend.api.<method>(input)`) — fanned out to all connected
   sockets. Used for server-wide events that every client needs
-  (`filer_change`, `workspace_changed`, `terminal_data`).
+  (`filer_change`, `workspace_changed`, `terminal_data`, `terminal_exited`).
 
 ### Action Spec Fields
 
-| Field          | Type                 | Values                                                            |
-| -------------- | -------------------- | ----------------------------------------------------------------- |
-| `method`       | `string`             | Action name (e.g. `'completion_create'`)                          |
-| `kind`         | `ActionKind`         | `'request_response'` \| `'remote_notification'` \| `'local_call'` |
-| `initiator`    | `ActionInitiator`    | `'frontend'` \| `'backend'` \| `'both'`                           |
-| `auth`         | `RouteAuth \| null` | `{account, actor, roles?, credential_types?}` \| `null` (four-axis flat record) |
-| `side_effects` | `boolean \| null`    | Whether action mutates state                                      |
-| `input`        | `z.ZodType`          | Zod schema for request params                                     |
-| `output`       | `z.ZodType`          | Zod schema for response                                           |
-| `async`        | `boolean`            | Whether handler is async                                          |
-| `streams`      | `string` (optional)  | Name of companion `remote_notification` method this action emits via `ctx.notify` (e.g. `'completion_progress'`) |
+- `method` (`string`) — Action name (e.g. `'completion_create'`)
+- `kind` (`ActionKind`) — `'request_response'` | `'remote_notification'` | `'local_call'`
+- `initiator` (`ActionInitiator`) — `'frontend'` | `'backend'` | `'both'`
+- `auth` (`RouteAuth | null`) — `{account, actor, roles?, credential_types?}` | `null` (four-axis flat record)
+- `side_effects` (`boolean | null`) — Whether action mutates state
+- `input` (`z.ZodType`) — Zod schema for request params
+- `output` (`z.ZodType`) — Zod schema for response
+- `async` (`boolean`) — Whether handler is async
+- `streams` (`string` (optional)) — Name of companion `remote_notification` method this action emits via `ctx.notify` (e.g. `'completion_progress'`)
 
 ### Core Components
 
-| Component        | File                 | Purpose                                                                |
-| ---------------- | -------------------- | ---------------------------------------------------------------------- |
-| `ActionSpec`     | `action_spec.ts`     | Action metadata schema                                                 |
-| `ActionEvent`    | `action_event.ts`    | Lifecycle state machine (initial → parsed → handling → handled/failed) |
-| `ActionDispatcher`     | `action_dispatcher.ts`     | Send/receive on both sides                                             |
-| `ActionRegistry` | `action_registry.ts` | Type-safe action lookup                                                |
+- `ActionSpec` (`action_spec.ts`) — Action metadata schema
+- `ActionEvent` (`action_event.ts`) — Lifecycle state machine (initial → parsed → handling → handled/failed)
+- `ActionDispatcher` (`action_dispatcher.ts`) — Send/receive on both sides
+- `ActionRegistry` (`action_registry.ts`) — Type-safe action lookup
 
 These live in `@fuzdev/fuz_app/actions/` — the SAES runtime is extracted to fuz_app; zzz imports them. Cell patterns (the `Cell` base class, `IndexedCollection`) remain in zzz.
 
@@ -90,15 +84,16 @@ Frontend and backend register handlers per action per phase:
 
 ```typescript
 // Frontend (frontend_action_handlers.ts)
-export const frontend_action_handlers: FrontendActionHandlers = {
+// Handlers are built by a factory that closes over the `Frontend` instance:
+export const create_frontend_action_handlers = (frontend: Frontend): FrontendActionHandlers => ({
 	completion_create: {
 		send_request: ({data: {input}}) => {
 			console.log('sending prompt:', input.completion_request.prompt);
 		},
-		receive_response: ({app, data: {input, output}}) => {
+		receive_response: ({data: {input, output}}) => {
 			const progress_token = input._meta?.progressToken;
 			if (progress_token) {
-				const turn = app.cell_registry.all.get(progress_token);
+				const turn = frontend.cell_registry.all.get(progress_token);
 				if (turn instanceof Turn) {
 					turn.content = to_completion_response_text(output.completion_response) || '';
 					turn.response = output.completion_response;
@@ -109,7 +104,7 @@ export const frontend_action_handlers: FrontendActionHandlers = {
 			console.error('completion failed:', error);
 		},
 	},
-};
+});
 
 // The matching backend handler lives in
 // the Rust `zzz_server` (`crates/zzz_server/src/handlers/`), registered into
@@ -147,21 +142,19 @@ MCP-compatible subset, no batching:
 
 ### Actions
 
-Defined in `src/lib/action_specs.ts`. A representative subset below — the `terminal_*` and `workspace_*` families are omitted here; see [reference.md](./reference.md) (generated from the specs) for the full table:
+Defined in `src/lib/action_specs.ts`. A representative subset below — the `terminal_*` and `workspace_*` families are omitted here; see [reference.md](./reference.md) (generated from the specs) for the full list:
 
-| Method                    | Kind                  | Initiator  | Purpose                         |
-| ------------------------- | --------------------- | ---------- | ------------------------------- |
-| `ping`                    | `request_response`    | `both`     | Health check                    |
-| `session_load`            | `request_response`    | `frontend` | Load initial session data       |
-| `filer_change`            | `remote_notification` | `backend`  | File system change notification |
-| `diskfile_update`         | `request_response`    | `frontend` | Write file content              |
-| `diskfile_delete`         | `request_response`    | `frontend` | Delete a file                   |
-| `directory_create`        | `request_response`    | `frontend` | Create a directory              |
-| `completion_create`       | `request_response`    | `frontend` | Start AI completion             |
-| `completion_progress`     | `remote_notification` | `backend`  | Stream completion chunks        |
-| `toggle_main_menu`        | `local_call`          | `frontend` | Toggle main menu UI             |
-| `provider_load_status`    | `request_response`    | `frontend` | Check provider availability     |
-| `provider_update_api_key` | `request_response`    | `frontend` | Update provider API key         |
+- `ping` — Health check. Kind: `request_response`. Initiator: `both`
+- `session_load` — Load initial session data. Kind: `request_response`. Initiator: `frontend`
+- `filer_change` — File system change notification. Kind: `remote_notification`. Initiator: `backend`
+- `diskfile_update` — Write file content. Kind: `request_response`. Initiator: `frontend`
+- `diskfile_delete` — Delete a file. Kind: `request_response`. Initiator: `frontend`
+- `directory_create` — Create a directory. Kind: `request_response`. Initiator: `frontend`
+- `completion_create` — Start AI completion. Kind: `request_response`. Initiator: `frontend`
+- `completion_progress` — Stream completion chunks. Kind: `remote_notification`. Initiator: `backend`
+- `toggle_main_menu` — Toggle main menu UI. Kind: `local_call`. Initiator: `frontend`
+- `provider_load_status` — Check provider availability. Kind: `request_response`. Initiator: `frontend`
+- `provider_update_api_key` — Update provider API key. Kind: `request_response`. Initiator: `frontend`
 
 ## Cell System
 
@@ -309,10 +302,8 @@ Prompt → parts: Array<Part>  (reusable content templates)
 
 ### Parts
 
-| Type     | Class          | Content source                                         |
-| -------- | -------------- | ------------------------------------------------------ |
-| Text     | `TextPart`     | `content: string` stored directly                      |
-| Diskfile | `DiskfilePart` | `path: DiskfilePath` → reads from disk or editor state |
+- Text (`TextPart`) — `content: string` stored directly
+- Diskfile (`DiskfilePart`) — `path: DiskfilePath` → reads from disk or editor state
 
 ### Turns
 
@@ -425,12 +416,10 @@ class IndexedCollection<T extends IndexedItem> {
 
 ### Index Types
 
-| Type      | Cardinality           | Example                            |
-| --------- | --------------------- | ---------------------------------- |
-| `single`  | One key → one item    | `by('name', 'gpt-5')`              |
-| `multi`   | One key → many items  | `where('provider_name', 'claude')` |
-| `derived` | Computed sorted array | `derived_index('ordered_by_name')` |
-| `dynamic` | Runtime-computed      | Custom queries                     |
+- `single` — One key → one item. Example: `by('name', 'gpt-5')`
+- `multi` — One key → many items. Example: `where('provider_name', 'claude')`
+- `derived` — Computed sorted array. Example: `derived_index('ordered_by_name')`
+- `dynamic` — Runtime-computed. Example: Custom queries
 
 ### Index Definition
 
@@ -467,10 +456,8 @@ items.derived_index('ordered_by_name'); // derived → Array<Model>
 
 Two separate concerns:
 
-| Concern       | Env Var                  | Purpose                                                    |
-| ------------- | ------------------------ | ---------------------------------------------------------- |
-| App directory | `PUBLIC_ZZZ_DIR`         | Zzz's own data (`.zzz/state/`, `.zzz/cache/`, `.zzz/run/`) |
-| Scoped dirs   | `PUBLIC_ZZZ_SCOPED_DIRS` | User file access (comma-separated paths)                   |
+- App directory (`PUBLIC_ZZZ_DIR`) — Zzz's own data (`.zzz/state/`, `.zzz/cache/`, `.zzz/run/`)
+- Scoped dirs (`PUBLIC_ZZZ_SCOPED_DIRS`) — User file access (comma-separated paths)
 
 ### ScopedFs
 

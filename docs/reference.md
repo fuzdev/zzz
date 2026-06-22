@@ -10,29 +10,27 @@ Run `gro gen` to refresh it; `gro check` fails if it drifts. Don't edit by hand.
 The fuz_app protocol actions `heartbeat` and `cancel` are dispatched too but
 omitted here — they belong to the shared runtime, not zzz.
 
-| Method                    | Kind                | Initiator | Auth                                                               | Description                                                                     |
-| ------------------------- | ------------------- | --------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `completion_create`       | request_response    | frontend  | account=required, actor=none                                       | Start an AI completion request, optionally with a progress token for streaming. |
-| `completion_progress`     | remote_notification | backend   | public                                                             | Streams a completion chunk to the frontend during a streaming AI response.      |
-| `directory_create`        | request_response    | frontend  | account=required, actor=none                                       | Create a new directory on disk.                                                 |
-| `diskfile_delete`         | request_response    | frontend  | account=required, actor=none                                       | Delete a file from disk.                                                        |
-| `diskfile_update`         | request_response    | frontend  | account=required, actor=none                                       | Write new content to a file on disk.                                            |
-| `filer_change`            | remote_notification | backend   | public                                                             | Notifies the frontend of a file system change detected by the watcher.          |
-| `ping`                    | request_response    | both      | account=none, actor=none                                           | Health check — echoes the request ID back to the caller.                        |
-| `provider_load_status`    | request_response    | frontend  | account=required, actor=none                                       | Check the availability and status of an AI provider.                            |
-| `provider_update_api_key` | request_response    | frontend  | account=required, actor=required, roles=keeper, creds=daemon_token | Update the API key for an AI provider.                                          |
-| `session_load`            | request_response    | frontend  | account=required, actor=none                                       | Load initial session data including filesystem state and provider status.       |
-| `terminal_close`          | request_response    | frontend  | account=required, actor=none                                       | Kill a terminal process and return the exit code.                               |
-| `terminal_create`         | request_response    | frontend  | account=required, actor=none                                       | Spawn a PTY process and return the terminal ID.                                 |
-| `terminal_data`           | remote_notification | backend   | public                                                             | Stream stdout/stderr bytes from a terminal to the frontend.                     |
-| `terminal_data_send`      | request_response    | frontend  | account=required, actor=none                                       | Send stdin bytes to a terminal.                                                 |
-| `terminal_exited`         | remote_notification | backend   | public                                                             | Notify the frontend that a terminal process exited naturally.                   |
-| `terminal_resize`         | request_response    | frontend  | account=required, actor=none                                       | Update PTY dimensions for a terminal.                                           |
-| `toggle_main_menu`        | local_call          | frontend  | public                                                             | Toggle or set the visibility of the main navigation menu.                       |
-| `workspace_changed`       | remote_notification | backend   | public                                                             | Notifies frontends when a workspace is opened or closed.                        |
-| `workspace_close`         | request_response    | frontend  | account=required, actor=none                                       | Close a workspace directory — stops file watching and removes from ScopedFs.    |
-| `workspace_list`          | request_response    | frontend  | account=required, actor=none                                       | List all open workspaces.                                                       |
-| `workspace_open`          | request_response    | frontend  | account=required, actor=none                                       | Open a workspace directory — registers with ScopedFs and starts file watching.  |
+- `completion_create` — Start an AI completion request, optionally with a progress token for streaming. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `completion_progress` — Streams a completion chunk to the frontend during a streaming AI response. Kind: remote_notification. Initiator: backend. Auth: public
+- `directory_create` — Create a new directory on disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `diskfile_delete` — Delete a file from disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `diskfile_update` — Write new content to a file on disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `filer_change` — Notifies the frontend of a file system change detected by the watcher. Kind: remote_notification. Initiator: backend. Auth: public
+- `ping` — Health check — echoes the request ID back to the caller. Kind: request_response. Initiator: both. Auth: account=none, actor=none
+- `provider_load_status` — Check the availability and status of an AI provider. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `provider_update_api_key` — Update the API key for an AI provider. Kind: request_response. Initiator: frontend. Auth: account=required, actor=required, roles=keeper, creds=daemon_token
+- `session_load` — Load initial session data including filesystem state and provider status. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `terminal_close` — Kill a terminal process and return the exit code. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `terminal_create` — Spawn a PTY process and return the terminal ID. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `terminal_data` — Stream stdout/stderr bytes from a terminal to the frontend. Kind: remote_notification. Initiator: backend. Auth: public
+- `terminal_data_send` — Send stdin bytes to a terminal. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `terminal_exited` — Notify the frontend that a terminal process exited naturally. Kind: remote_notification. Initiator: backend. Auth: public
+- `terminal_resize` — Update PTY dimensions for a terminal. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `toggle_main_menu` — Toggle or set the visibility of the main navigation menu. Kind: local_call. Initiator: frontend. Auth: public
+- `workspace_changed` — Notifies frontends when a workspace is opened or closed. Kind: remote_notification. Initiator: backend. Auth: public
+- `workspace_close` — Close a workspace directory — stops file watching and removes from ScopedFs. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `workspace_list` — List all open workspaces. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `workspace_open` — Open a workspace directory — registers with ScopedFs and starts file watching. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 
 ## Cell classes (31)
 

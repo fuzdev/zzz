@@ -12,9 +12,10 @@ import {all_action_specs} from './action_specs.ts';
 const domain_specs = all_action_specs.filter((spec) => !is_protocol_action_method(spec.method));
 
 /**
- * Generates `docs/reference.md` — the action-spec and cell-class tables —
- * directly from `action_specs.ts` and `cell_classes.ts`, so the reference
- * can't drift from source. `gro check` (gen --check) fails if it goes stale.
+ * Generates `docs/reference.md` — the action-spec and cell-class reference
+ * lists — directly from `action_specs.ts` and `cell_classes.ts`, so the
+ * reference can't drift from source. `gro check` (gen --check) fails if it
+ * goes stale.
  *
  * The cell registry is read as text rather than imported because the
  * `*.svelte.ts` cell modules use runes (`$state`) that aren't available in
@@ -39,9 +40,7 @@ Run \`gro gen\` to refresh it; \`gro check\` fails if it drifts. Don't edit by h
 The fuz_app protocol actions \`heartbeat\` and \`cancel\` are dispatched too but
 omitted here — they belong to the shared runtime, not zzz.
 
-| Method | Kind | Initiator | Auth | Description |
-| ------ | ---- | --------- | ---- | ----------- |
-${to_action_rows(domain_specs)}
+${to_action_bullets(domain_specs)}
 
 ## Cell classes (${cell_names.length})
 
@@ -69,17 +68,16 @@ const format_auth = (auth: Action_Auth): string => {
 	return parts.join(', ');
 };
 
-/** Escape a value for a single Markdown table cell. */
-const escape_cell = (value: string): string =>
-	value.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+/** Flatten a value to a single line for a Markdown bullet. */
+const bullet_text = (value: string): string => value.replace(/\n/g, ' ');
 
-const to_action_rows = (specs: typeof all_action_specs): string =>
+const to_action_bullets = (specs: typeof all_action_specs): string =>
 	[...specs]
 		.sort((a, b) => a.method.localeCompare(b.method))
-		.map(
-			(spec) =>
-				`| \`${spec.method}\` | ${spec.kind} | ${spec.initiator} | ${escape_cell(format_auth(spec.auth))} | ${escape_cell(spec.description)} |`,
-		)
+		.map((spec) => {
+			const desc = bullet_text(spec.description).replace(/\.\s*$/, '');
+			return `- \`${spec.method}\` — ${desc}. Kind: ${spec.kind}. Initiator: ${spec.initiator}. Auth: ${bullet_text(format_auth(spec.auth))}`;
+		})
 		.join('\n');
 
 /** Extract the registered cell class names from `cell_classes.ts` source text. */
