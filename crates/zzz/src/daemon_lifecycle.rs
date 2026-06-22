@@ -189,7 +189,7 @@ pub fn is_pid_alive(pid: u32) -> bool {
 /// only a failure to *issue* the signal surfaces.
 pub fn send_sigterm(pid: u32) -> Result<(), CliError> {
     let raw = i32::try_from(pid).map_err(|_| CliError::Daemon(format!("invalid pid {pid}")))?;
-    fuz_sys::send_signal(raw, "-TERM")
+    fuz_sys::send_signal(raw, fuz_sys::Signal::SIGTERM)
         .map(|_| ())
         .map_err(|e| CliError::Daemon(format!("failed to signal pid {pid}: {e}")))
 }

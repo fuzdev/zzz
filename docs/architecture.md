@@ -4,7 +4,7 @@ Core systems: actions, cells, content model, data flow, indexed collections, fil
 
 ## Action System
 
-Symmetric peer-to-peer JSON-RPC 2.0 — by design either end can initiate. The frontend runs the TypeScript `ActionPeer` (from `@fuzdev/fuz_app`); the Rust `zzz_server` backend implements the same spec + wire contract via `fuz_actions`.
+Symmetric peer-to-peer JSON-RPC 2.0 — by design either end can initiate. The frontend runs the TypeScript `ActionDispatcher` (from `@fuzdev/fuz_app`); the Rust `zzz_server` backend implements the same spec + wire contract via `fuz_actions`.
 
 ### Action Spec
 
@@ -68,7 +68,7 @@ export const completion_create_action_spec = {
 | ---------------- | -------------------- | ---------------------------------------------------------------------- |
 | `ActionSpec`     | `action_spec.ts`     | Action metadata schema                                                 |
 | `ActionEvent`    | `action_event.ts`    | Lifecycle state machine (initial → parsed → handling → handled/failed) |
-| `ActionPeer`     | `action_peer.ts`     | Send/receive on both sides                                             |
+| `ActionDispatcher`     | `action_dispatcher.ts`     | Send/receive on both sides                                             |
 | `ActionRegistry` | `action_registry.ts` | Type-safe action lookup                                                |
 
 These live in `@fuzdev/fuz_app/actions/` — the SAES runtime is extracted to fuz_app; zzz imports them. Cell patterns (the `Cell` base class, `IndexedCollection`) remain in zzz.

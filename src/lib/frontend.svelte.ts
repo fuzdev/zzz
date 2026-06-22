@@ -33,7 +33,7 @@ import {Socket} from './socket.svelte.ts';
 import {Capabilities} from './capabilities.svelte.ts';
 import {DiskfileHistory} from './diskfile_history.svelte.ts';
 import {HANDLED} from './cell_helpers.ts';
-import {ActionPeer} from '@fuzdev/fuz_app/actions/action_peer.ts';
+import {ActionDispatcher} from '@fuzdev/fuz_app/actions/action_dispatcher.ts';
 import {
 	ActionExecutor,
 	type ActionEventEnvironment,
@@ -88,7 +88,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly action_registry: ActionRegistry;
 	readonly action_handlers: FrontendActionHandlers;
 	readonly api: FrontendActionsApi;
-	readonly peer: ActionPeer;
+	readonly peer: ActionDispatcher;
 
 	// Cells - these are managed objects/collections that contain the app state
 	readonly time: Time;
@@ -207,7 +207,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 		this.bots = options.bots ?? BOTS_DEFAULT;
 
-		this.peer = new ActionPeer({environment: this});
+		this.peer = new ActionDispatcher({environment: this});
 
 		this.api = create_rpc_client<FrontendActionsApi>({
 			peer: this.peer,

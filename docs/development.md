@@ -104,7 +104,7 @@ fails if any output is stale.
 
 | Pattern | Purpose | Example |
 |---------|---------|---------|
-| `snake_case.ts` | TypeScript modules | `helpers.ts`, `action_peer.ts` |
+| `snake_case.ts` | TypeScript modules | `helpers.ts`, `action_dispatcher.ts` |
 | `snake_case.svelte.ts` | Svelte 5 reactive state | `chat.svelte.ts` |
 | `PascalCase.svelte` | Svelte components | `ChatView.svelte` |
 | `snake_case.test.ts` | Test files (in `src/test/`) | `cell.svelte.base.test.ts` |
@@ -389,7 +389,7 @@ test('all model provider_names exist in providers_default', () => {
 | Type | Convention | Example |
 |------|-----------|---------|
 | Variables/functions | `snake_case` | `send_message`, `user_input` |
-| Classes | `PascalCase` | `ChatView`, `ActionPeer` |
+| Classes | `PascalCase` | `ChatView`, `ActionDispatcher` |
 | Types/interfaces | `PascalCase` | `ChatOptions`, `ActionSpec` |
 | Zod schemas | `PascalCase` | `ChatJson`, `CompletionRequest` |
 | Private fields | `#field` | `#internal_state` |

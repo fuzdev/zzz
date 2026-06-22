@@ -272,7 +272,7 @@ prerequisites, and what the integration tests check.
 
 | Thing            | Convention                 | Example                    |
 | ---------------- | -------------------------- | -------------------------- |
-| TypeScript files | `snake_case.ts`            | `action_peer.ts`           |
+| TypeScript files | `snake_case.ts`            | `action_dispatcher.ts`           |
 | Svelte 5 state   | `snake_case.svelte.ts`     | `chat.svelte.ts`           |
 | Components       | `PascalCase.svelte`        | `ChatView.svelte`          |
 | Tests            | `*.test.ts` in `src/test/` | `cell.svelte.base.test.ts` |
@@ -503,7 +503,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 
 zzz is the reference implementation for Cell and Action patterns. The SAES
 runtime lives in `@fuzdev/fuz_app` — zzz imports ActionSpec, ActionEvent,
-ActionPeer, transports, and `create_rpc_client` from
+ActionDispatcher, transports, and `create_rpc_client` from
 `@fuzdev/fuz_app/actions/*.js`. Cell patterns (Cell base class, cell classes,
 IndexedCollection) remain in zzz. The generated `TypedActionEvent` alias
 intersects fuz_app's generic `ActionEvent` with zzz's `ActionEventDatas` map
