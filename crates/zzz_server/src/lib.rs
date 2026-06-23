@@ -36,15 +36,12 @@ use tower_http::services::ServeDir;
 
 pub use error::ServerError;
 
-/// Default loopback port. Overridden by `--port` or `ZZZ_PORT`.
-/// Matches the `zzz` CLI's daemon default so a directly-run `zzzd` and a
-/// CLI-spawned daemon bind the same port.
-pub const DEFAULT_PORT: u16 = 4460;
-
-/// Connection drain timeout on shutdown. Bounds how long the graceful
-/// drain waits for in-flight connections before returning. Matches the
-/// other spine consumers so operators see consistent shutdown UX.
-pub const DEFAULT_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+/// Default loopback bind address (port 4460). `--port` or `ZZZ_PORT`
+/// override the port; the host stays loopback. The port matches the `zzz`
+/// CLI's daemon default so a directly-run `zzzd` and a CLI-spawned daemon
+/// bind the same port.
+pub const DEFAULT_ADDR: SocketAddr =
+    SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), 4460);
 
 /// zzz's concrete instantiation of [`fuz_actions::ExtraActionSpecsFactory`]
 /// over [`handlers::App`] — extra specs folded in after the standard zzz set.
@@ -74,10 +71,15 @@ pub struct RunAppOptions {
     /// Production: [`fuz_auth::Argon2idHasher`]. Test binary:
     /// `fuz_testing::TestingArgon2idHasher`.
     pub password_hasher: Arc<dyn fuz_auth::PasswordHasher>,
-    /// Default port when neither `--port` nor `ZZZ_PORT` is supplied.
-    /// Production: [`DEFAULT_PORT`] (4460). Test binary: 4462 so the
-    /// two can run side-by-side without colliding.
-    pub default_port: u16,
+    /// Default bind address when neither `--port` nor `ZZZ_PORT` supplies a
+    /// port. The host stays this address's host (loopback); only the port is
+    /// overridable. Production: [`DEFAULT_ADDR`] (`127.0.0.1:4460`). Test
+    /// binary: `127.0.0.1:4462` so the two can run side-by-side.
+    pub default_addr: SocketAddr,
+    /// Bounds the graceful-shutdown connection drain. Pass
+    /// [`fuz_http::DEFAULT_DRAIN_TIMEOUT`] unless a consumer needs a different
+    /// bound — the other spine consumers all pass that shared default.
+    pub drain_timeout: std::time::Duration,
     /// Override the `ZZZ_ENABLE_TEST_ACTIONS` env-parsed flag.
     /// Production: `false`. Test binary: `true` so the `_testing_*`
     /// registry branch fires regardless of operator env.
@@ -121,13 +123,14 @@ pub struct RunAppOptions {
 pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     let RunAppOptions {
         password_hasher,
-        default_port,
+        default_addr,
+        drain_timeout,
         force_test_actions,
         disable_login_rate_limit,
         extra_action_specs_factory,
         pre_migration_hook,
     } = options;
-    let mut config = parse_config(default_port)?;
+    let mut config = parse_config(default_addr)?;
     if force_test_actions {
         config.enable_test_actions = true;
     }
@@ -659,7 +662,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         app = app.fallback_service(ServeDir::new(dir));
     }
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], config.port));
+    let addr = config.bind_addr;
     let listener = TcpListener::bind(addr)
         .await
         .map_err(|source| ServerError::Bind { addr, source })?;
@@ -672,7 +675,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // teardown (rotation-task abort, PTY cleanup) runs after the drain
     // returns.
     let shutdown = fuz_http::shutdown_token();
-    fuz_http::serve_with_shutdown(listener, app, shutdown, DEFAULT_DRAIN_TIMEOUT)
+    fuz_http::serve_with_shutdown(listener, app, shutdown, drain_timeout)
         .await
         .map_err(ServerError::Serve)?;
 
@@ -701,7 +704,7 @@ async fn health_handler() -> Json<HealthResponse> {
 
 /// Validated config built from CLI args + env vars.
 pub struct Config {
-    pub port: u16,
+    pub bind_addr: SocketAddr,
     pub static_dir: Option<PathBuf>,
     pub database_url: String,
     pub secret_cookie_keys: String,
@@ -747,7 +750,7 @@ fn resolve_dir(path: &Path) -> String {
     s
 }
 
-fn parse_config(default_port: u16) -> Result<Config, ServerError> {
+fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
     let mut port: Option<u16> = None;
     let mut static_dir: Option<PathBuf> = None;
 
@@ -819,7 +822,10 @@ fn parse_config(default_port: u16) -> Result<Config, ServerError> {
     let trusted_proxies = std::env::var("ZZZ_TRUSTED_PROXIES").ok();
 
     Ok(Config {
-        port: port.unwrap_or(default_port),
+        bind_addr: SocketAddr::new(
+            default_addr.ip(),
+            port.unwrap_or_else(|| default_addr.port()),
+        ),
         static_dir,
         database_url,
         secret_cookie_keys,

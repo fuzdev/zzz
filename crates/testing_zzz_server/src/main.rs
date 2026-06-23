@@ -21,11 +21,12 @@
 //!
 //! Otherwise structurally identical to `zzz_server`'s production
 //! `main.rs`: same tracing init, same lifecycle, same shutdown.
-//! Production defaults to port 4460 (`zzz_server::DEFAULT_PORT`); this
-//! binary defaults to 4462 so a developer running both locally doesn't
-//! collide. Override via `ZZZ_PORT` or `--port` exactly as the
-//! production binary supports.
+//! Production defaults to `127.0.0.1:4460` (`zzz_server::DEFAULT_ADDR`);
+//! this binary defaults to `127.0.0.1:4462` so a developer running both
+//! locally doesn't collide. Override the port via `ZZZ_PORT` or `--port`
+//! exactly as the production binary supports.
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use fuz_auth::PasswordHasher;
@@ -33,11 +34,12 @@ use fuz_testing::{
     ResetStateFn, TestingArgon2idHasher, TestingResetOptions, create_testing_reset_action_spec,
 };
 
-/// Default loopback port for the testing binary. Distinct from the
-/// production default (4460) so both binaries can run side-by-side on
-/// `localhost` during local development. The cross-process harness can
-/// override via `ZZZ_PORT` or `--port` anyway.
-const TESTING_DEFAULT_PORT: u16 = 4462;
+/// Default loopback bind address for the testing binary (port 4462).
+/// Distinct from the production default (4460) so both binaries can run
+/// side-by-side on `localhost` during local development. `ZZZ_PORT` or
+/// `--port` override the port; the host stays loopback.
+const TESTING_DEFAULT_ADDR: SocketAddr =
+    SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), 4462);
 
 #[tokio::main]
 async fn main() {
@@ -145,7 +147,8 @@ async fn main() {
 
     if let Err(e) = zzz_server::run_app(zzz_server::RunAppOptions {
         password_hasher,
-        default_port: TESTING_DEFAULT_PORT,
+        default_addr: TESTING_DEFAULT_ADDR,
+        drain_timeout: fuz_http::DEFAULT_DRAIN_TIMEOUT,
         force_test_actions: true,
         disable_login_rate_limit: true,
         extra_action_specs_factory: Some(extra_specs_factory),

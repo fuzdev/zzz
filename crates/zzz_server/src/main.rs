@@ -23,7 +23,8 @@ async fn main() {
 
     if let Err(e) = zzz_server::run_app(zzz_server::RunAppOptions {
         password_hasher,
-        default_port: zzz_server::DEFAULT_PORT,
+        default_addr: zzz_server::DEFAULT_ADDR,
+        drain_timeout: fuz_http::DEFAULT_DRAIN_TIMEOUT,
         force_test_actions: false,
         disable_login_rate_limit: false,
         extra_action_specs_factory: None,
