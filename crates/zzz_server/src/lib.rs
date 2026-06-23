@@ -407,6 +407,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         Arc::clone(&socket_revoker),
         action_account_rate_limiter.clone(),
         action_ip_rate_limiter.clone(),
+        Arc::new(fuz_auth::DefaultOfferAuthorize),
     ));
     all_specs.extend(zzz_action_specs::build_core_specs(Arc::clone(&app_state)));
     all_specs.extend(zzz_action_specs::build_workspace_specs(Arc::clone(
@@ -535,6 +536,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         // live sockets rather than an empty registry.
         notification_sender: Arc::clone(&realtime).into_notification_sender(),
         session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
+        account_rate_limiter: None,
+        ip_rate_limiter: None,
     };
     let spine_rpc_router = fuz_actions::create_rpc_router(spine_rpc_state)
         .layer(axum::middleware::from_fn_with_state(
@@ -563,6 +566,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         notification_sender: Arc::clone(&realtime).into_notification_sender(),
         connection_registry: Arc::clone(&realtime),
         session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
+        account_rate_limiter: None,
+        ip_rate_limiter: None,
     };
     let spine_ws_router = fuz_actions::register_action_ws(spine_ws_state).layer(
         axum::middleware::from_fn_with_state(
