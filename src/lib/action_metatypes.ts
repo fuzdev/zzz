@@ -12,6 +12,7 @@ import type {JsonrpcErrorObject} from '@fuzdev/fuz_app/http/jsonrpc.ts';
 export const ActionMethod = z.enum([
 	'heartbeat',
 	'cancel',
+	'peer/ping',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -41,6 +42,7 @@ export type ActionMethod = z.infer<typeof ActionMethod>;
  */
 export const RequestResponseActionMethod = z.enum([
 	'heartbeat',
+	'peer/ping',
 	'ping',
 	'session_load',
 	'diskfile_update',
@@ -84,6 +86,7 @@ export type LocalCallActionMethod = z.infer<typeof LocalCallActionMethod>;
 export const FrontendActionMethod = z.enum([
 	'heartbeat',
 	'cancel',
+	'peer/ping',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -114,6 +117,7 @@ export type FrontendActionMethod = z.infer<typeof FrontendActionMethod>;
 export const BackendActionMethod = z.enum([
 	'heartbeat',
 	'cancel',
+	'peer/ping',
 	'ping',
 	'session_load',
 	'filer_change',
@@ -193,6 +197,10 @@ export interface FrontendActionsApi {
 		input: ActionInputs['cancel'],
 		options?: RpcClientCallOptions,
 	) => Promise<Result<{value: ActionOutputs['cancel']}, {error: JsonrpcErrorObject}>>;
+	'peer/ping': (
+		input?: ActionInputs['peer/ping'],
+		options?: RpcClientCallOptions,
+	) => Promise<Result<{value: ActionOutputs['peer/ping']}, {error: JsonrpcErrorObject}>>;
 	ping: (
 		input?: void,
 		options?: RpcClientCallOptions,

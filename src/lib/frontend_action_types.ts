@@ -38,6 +38,26 @@ export interface FrontendActionHandlers {
 	cancel?: {
 		send?: (action_event: TypedActionEvent<'cancel', 'send', 'handling'>) => void | Promise<void>;
 	};
+	'peer/ping'?: {
+		send_request?: (
+			action_event: TypedActionEvent<'peer/ping', 'send_request', 'handling'>,
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: TypedActionEvent<'peer/ping', 'receive_response', 'handling'>,
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: TypedActionEvent<'peer/ping', 'send_error', 'handling'>,
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: TypedActionEvent<'peer/ping', 'receive_error', 'handling'>,
+		) => void | Promise<void>;
+		receive_request?: (
+			action_event: TypedActionEvent<'peer/ping', 'receive_request', 'handling'>,
+		) => ActionOutputs['peer/ping'] | Promise<ActionOutputs['peer/ping']>;
+		send_response?: (
+			action_event: TypedActionEvent<'peer/ping', 'send_response', 'handling'>,
+		) => void | Promise<void>;
+	};
 	ping?: {
 		send_request?: (
 			action_event: TypedActionEvent<'ping', 'send_request', 'handling'>,

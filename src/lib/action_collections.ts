@@ -16,6 +16,7 @@ import type {
 export const ActionSpecs = {
 	heartbeat: specs.heartbeat_action_spec,
 	cancel: specs.cancel_action_spec,
+	'peer/ping': specs.peer_ping_action_spec,
 	ping: specs.ping_action_spec,
 	session_load: specs.session_load_action_spec,
 	filer_change: specs.filer_change_action_spec,
@@ -41,6 +42,7 @@ export const ActionSpecs = {
 export interface ActionSpecs {
 	heartbeat: typeof specs.heartbeat_action_spec;
 	cancel: typeof specs.cancel_action_spec;
+	'peer/ping': typeof specs.peer_ping_action_spec;
 	ping: typeof specs.ping_action_spec;
 	session_load: typeof specs.session_load_action_spec;
 	filer_change: typeof specs.filer_change_action_spec;
@@ -74,6 +76,7 @@ export const action_specs: Array<ActionSpecUnion> = Object.values(ActionSpecs);
 export const ActionInputs = {
 	heartbeat: specs.heartbeat_action_spec.input,
 	cancel: specs.cancel_action_spec.input,
+	'peer/ping': specs.peer_ping_action_spec.input,
 	ping: specs.ping_action_spec.input,
 	session_load: specs.session_load_action_spec.input,
 	filer_change: specs.filer_change_action_spec.input,
@@ -99,6 +102,7 @@ export const ActionInputs = {
 export interface ActionInputs {
 	heartbeat: z.infer<typeof specs.heartbeat_action_spec.input>;
 	cancel: z.infer<typeof specs.cancel_action_spec.input>;
+	'peer/ping': z.infer<typeof specs.peer_ping_action_spec.input>;
 	ping: z.infer<typeof specs.ping_action_spec.input>;
 	session_load: z.infer<typeof specs.session_load_action_spec.input>;
 	filer_change: z.infer<typeof specs.filer_change_action_spec.input>;
@@ -130,6 +134,7 @@ export interface ActionInputs {
 export const ActionOutputs = {
 	heartbeat: specs.heartbeat_action_spec.output,
 	cancel: specs.cancel_action_spec.output,
+	'peer/ping': specs.peer_ping_action_spec.output,
 	ping: specs.ping_action_spec.output,
 	session_load: specs.session_load_action_spec.output,
 	filer_change: specs.filer_change_action_spec.output,
@@ -155,6 +160,7 @@ export const ActionOutputs = {
 export interface ActionOutputs {
 	heartbeat: z.infer<typeof specs.heartbeat_action_spec.output>;
 	cancel: z.infer<typeof specs.cancel_action_spec.output>;
+	'peer/ping': z.infer<typeof specs.peer_ping_action_spec.output>;
 	ping: z.infer<typeof specs.ping_action_spec.output>;
 	session_load: z.infer<typeof specs.session_load_action_spec.output>;
 	filer_change: z.infer<typeof specs.filer_change_action_spec.output>;
@@ -190,6 +196,11 @@ export interface ActionEventDatas {
 		ActionOutputs['heartbeat']
 	>;
 	cancel: ActionEventRemoteNotificationData<'cancel', ActionInputs['cancel']>;
+	'peer/ping': ActionEventRequestResponseData<
+		'peer/ping',
+		ActionInputs['peer/ping'],
+		ActionOutputs['peer/ping']
+	>;
 	ping: ActionEventRequestResponseData<'ping', ActionInputs['ping'], ActionOutputs['ping']>;
 	session_load: ActionEventRequestResponseData<
 		'session_load',

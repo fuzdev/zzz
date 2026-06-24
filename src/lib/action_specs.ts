@@ -8,17 +8,20 @@ import type {
 } from '@fuzdev/fuz_app/actions/action_spec.ts';
 import {heartbeat_action_spec} from '@fuzdev/fuz_app/actions/heartbeat.ts';
 import {cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.ts';
+import {peer_ping_action_spec} from '@fuzdev/fuz_app/actions/peer_ping.ts';
 import {protocol_action_specs} from '@fuzdev/fuz_app/actions/protocol.ts';
 import {Uuid} from '@fuzdev/fuz_util/id.ts';
 import {ActingActor} from '@fuzdev/fuz_app/http/auth_shape.ts';
 
 // Re-export so codegen (which builds `import * as specs from './action_specs'`)
-// resolves `specs.heartbeat_action_spec` / `specs.cancel_action_spec` via the
-// namespace lookup. The runtime array `all_action_specs` references each spec
-// once via `protocol_action_specs`; the re-exports are name aliases only —
-// nothing is duplicated at runtime. A `create_protocol_aware_qualifier`-style
-// helper in fuz_app could eliminate this enumeration; tracked as a follow-up.
-export {heartbeat_action_spec, cancel_action_spec};
+// resolves `specs.heartbeat_action_spec` / `specs.cancel_action_spec` /
+// `specs.peer_ping_action_spec` via the namespace lookup (the `peer/ping`
+// method's spec identifier sanitizes to `peer_ping_action_spec`). The runtime
+// array `all_action_specs` references each spec once via `protocol_action_specs`;
+// the re-exports are name aliases only — nothing is duplicated at runtime. A
+// `create_protocol_aware_qualifier`-style helper in fuz_app could eliminate this
+// enumeration; tracked as a follow-up.
+export {heartbeat_action_spec, cancel_action_spec, peer_ping_action_spec};
 
 import {
 	DiskfileChange,
