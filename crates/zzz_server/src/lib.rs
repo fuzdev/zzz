@@ -410,7 +410,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         Arc::clone(&socket_revoker),
         action_account_rate_limiter.clone(),
         action_ip_rate_limiter.clone(),
-        Arc::new(fuz_auth::DefaultOfferAuthorize),
+        Arc::new(fuz_auth::AdminOfferAuthorize),
+        Arc::new(fuz_auth::RoleRegistry::default()),
     ));
     all_specs.extend(zzz_action_specs::build_core_specs(Arc::clone(&app_state)));
     all_specs.extend(zzz_action_specs::build_workspace_specs(Arc::clone(
