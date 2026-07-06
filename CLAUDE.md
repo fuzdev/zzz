@@ -10,7 +10,7 @@ zzz has a single **Rust** backend: `crates/zzz_server` (Axum). The frontend
 is a prerendered static SPA served by `zzz_server` — no JS runtime in
 production.
 
-For coding conventions, see [`fuz-stack`](../fuz-stack/CLAUDE.md).
+For coding conventions, see Skill(fuz-stack).
 
 ## Committing
 
