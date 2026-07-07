@@ -69,7 +69,7 @@ Build and run the full self-hosted server:
 cargo xtask prod-setup                      # writes .env.production — edit its secrets
 gro build                                 # frontend → build/
 cargo build -p zzz_server --release       # backend  → target/release/zzzd
-./target/release/zzzd --static-dir build  # serve SPA + /api on PORT (default 4460)
+./target/release/zzzd --static-dir build  # serve SPA + /api (port 4460; --port/ZZZ_PORT overrides)
 ```
 
 `zzzd` reads its config from the **process environment** — it does *not* load
@@ -405,10 +405,12 @@ import {SvelteMap} from 'svelte/reactivity';
 import {Cell} from '$lib/cell.svelte.ts';
 import type {Frontend} from '$lib/frontend.svelte.ts';
 
-import {helper_function} from './helpers.js';
+import {helper_function} from './helpers.ts';
 ```
 
-All imports use `.js` extensions (ESM convention).
+Imports use the real source extension (`.ts` / `.svelte.ts` / `.svelte`) —
+library code (`src/lib`) imports relative, while `src/routes` and `src/test`
+use the `$lib` alias.
 
 ### Svelte 5 Runes in State Classes
 

@@ -37,7 +37,7 @@ are known at compile time and matched exhaustively, no trait objects.
 configured. All three providers — Anthropic (`provider/anthropic.rs`), OpenAI
 (`provider/openai.rs`), and Gemini (`provider/gemini.rs`) — are fully
 implemented with non-streaming and SSE-streaming completions through the shared
-`provider/sse.rs`. See [../crates/CLAUDE.md](../crates/CLAUDE.md) for the
+`provider/sse.rs`. See ../crates/CLAUDE.md for the
 backend details.
 
 ### CompletionOptions
@@ -86,7 +86,7 @@ normalization), and forwards each `content_block_delta` text chunk to the
 originating WebSocket connection as a `completion_progress` notification. The
 OpenAI (Chat Completions) and Gemini (Generative Language) providers follow the
 same pattern against their respective APIs, sharing `provider/sse.rs`.
-See [../crates/CLAUDE.md](../crates/CLAUDE.md).
+See ../crates/CLAUDE.md.
 
 ## Completion Flow
 
@@ -116,7 +116,7 @@ real provider failures; the backend aborts the in-flight request.
 ```typescript
 const status = await provider.load_status();
 // { name: 'claude', available: true, checked_at: 1234567890 }
-// { name: 'claude', available: false, error: 'API key required', checked_at: ... }
+// { name: 'claude', available: false, error: 'needs API key', checked_at: ... }
 ```
 
 Remote providers: `available` = `true` when an API key is configured.
@@ -129,9 +129,11 @@ dispatched via the `Provider` enum (no trait objects). To add one:
 1. Add a variant to the `Provider` enum and `ProviderName` in `provider/mod.rs`
 2. Create `crates/zzz_server/src/provider/newprovider.rs` implementing the
    completion path (status, non-streaming, and SSE streaming via `provider/sse.rs`)
-3. Wire it into `ProviderManager` and the exhaustive match arms
+3. Wire it into `ProviderManager` and the exhaustive match arms — construction
+   and registration happen at boot in `crates/zzz_server/src/lib.rs`
+   (`provider_manager.add(Provider::...)`, reading the key env var)
 4. Add env var to `.env.development.example` and `.env.production.example`:
    `SECRET_NEWPROVIDER_API_KEY=`
 5. Add default models to `src/lib/config_defaults.ts` (`models_default`)
 
-See [../crates/CLAUDE.md](../crates/CLAUDE.md) for the backend architecture.
+See ../crates/CLAUDE.md for the backend architecture.

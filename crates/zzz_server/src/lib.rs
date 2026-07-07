@@ -509,13 +509,12 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // The spine `ActionRegistry` dispatcher is mounted at `/api/rpc`
     // and the spine WS handler at `/api/ws` — the single namespace
     // per the ecosystem's pre-stable posture (no `/v2` suffix, no
-    // compat shim, no deprecation period). The 24-spec
-    // `ActionRegistry` (2 protocol + 9 auth_adapter + 13
-    // zzz-specific) is the sole dispatcher for `/api/rpc` and
-    // `/api/ws` traffic.
+    // compat shim, no deprecation period). The boot-compiled
+    // `ActionRegistry` (protocol + auth_adapter + zzz-specific
+    // specs) is the sole dispatcher for `/api/rpc` and `/api/ws`
+    // traffic.
     //
-    // Existing call sites (`app.broadcast` /
-    // `app.close_sockets_for_*`) are shimmed onto `App.realtime`
+    // `app.broadcast` is shimmed onto `App.realtime`
     // (see `handlers/mod.rs`).
     //
     // Middleware: each spine router carries its own

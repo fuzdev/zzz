@@ -4,7 +4,7 @@
 
 `@fuzdev/zzz` — local-first AI forge: chat + files + prompts + terminals in one app.
 SvelteKit frontend (static SPA), Rust (Axum) backend, Svelte 5 runes, Zod schemas.
-v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PostgreSQL DB. Cell + Action patterns (generated roster in [docs/reference.md](./docs/reference.md)), 3 AI providers.
+v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PostgreSQL DB. Cell + Action patterns (generated roster in ./docs/reference.md), 3 AI providers.
 
 zzz has a single **Rust** backend: `crates/zzz_server` (Axum). The frontend
 is a prerendered static SPA served by `zzz_server` — no JS runtime in
@@ -79,7 +79,7 @@ crates/                               # Rust workspace
 │   ├── xtask/                        # Dev automation: `cargo xtask dev` (build + run zzzd + Vite), `dev-setup`/`prod-setup` (env files), `check-release` (dep-graph audit — sanity check #2 of the test-binary pattern). Replaces the former Deno `scripts/*.ts`
 │   ├── testing_zzz_server/           # Test-mode binary — wires `fuz_testing::TestingArgon2idHasher` for fast cross-process integration tests. **Never ships in a release.**
 │   └── zzz_server/                   # Axum JSON-RPC server — full spine consumer (single `/api/rpc` + `/api/ws` on `fuz_actions::ActionRegistry`)
-│       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast`/`close_sockets_for_*` shims + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB (and the JSON-RPC `notification` builder + error constructors) all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
+│       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast` shim + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB (and the JSON-RPC `notification` builder + error constructors + socket revocation) all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
 src/
 ├── lib/                          # Published as @fuzdev/zzz
 │   ├── *.svelte.ts               # Cell state classes
@@ -131,7 +131,7 @@ See ./docs/architecture.md for detailed data flow, content model, and IndexedCol
 
 ## Cell Classes
 
-Registered in `src/lib/cell_classes.ts` — [docs/reference.md](./docs/reference.md)
+Registered in `src/lib/cell_classes.ts` — ./docs/reference.md
 has the authoritative generated roster and count. Purposes below (`Socket` is
 not a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 `FrontendWebsocketClient`, so it's not listed):
@@ -171,11 +171,16 @@ not a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 ## Action Specs
 
 Defined in `src/lib/action_specs.ts`. The full list — method, kind, initiator,
-auth, and description — is generated into [docs/reference.md](./docs/reference.md)
+auth, and description — is generated into ./docs/reference.md
 from the specs themselves (`src/lib/reference.gen.ts`, refreshed by `gro gen`),
 so it can't drift. The test-only `_testing_emit_notifications` +
 `_testing_notification` specs live in `src/lib/testing_action_specs.ts` and only
 register on the live dispatchers when `ZZZ_ENABLE_TEST_ACTIONS=1`.
+
+The generated tables cover zzz's own TS specs only — the fuz_app methods the
+backend registers from the spine (`account_*`, `admin_*`, invites, role
+grants, …) never pass through `action_specs.ts`, so they don't appear in
+./docs/reference.md; see the Rust Backend section for that surface.
 
 ## Development Workflow
 
@@ -222,6 +227,13 @@ RPC methods: `ping`, `session_load`, `workspace_*`,
 `account_session_revoke`, `account_session_revoke_all`,
 `account_token_create`, `account_token_list`, `account_token_revoke`,
 `admin_session_revoke_all`, `admin_token_revoke_all`.
+Those are the zzz-domain methods plus fuz_app's account self-service and
+admin-revocation slice; `run_app` also registers the rest of `fuz_auth`'s
+standard bundle — admin account/audit/invite management, `app_settings_*`,
+and the consent-based `role_grant_*` / `role_grant_offer_*` flow with its own
+notifications — plus the protocol specs (`heartbeat`, `cancel`, `peer/ping`).
+That spine surface is live on `/api/rpc` + `/api/ws` even though zzz ships no
+UI for most of it.
 Cookie session auth and bearer token auth (API tokens)
 on HTTP and WebSocket, `ScopedFs` path safety, PTY terminals via `fuz_pty`
 native crate, and WebSocket connection tracking (`broadcast`/`send_to`).
@@ -418,42 +430,46 @@ connection registry — see the `broadcast` / notification builders in
 
 - `// @slop [Model]` marks LLM-generated code needing review
 - `// TODO` for work items, `// TODO @api` for API design questions
-- Import from `*.js` extensions (ESM convention): `import {Chat} from './chat.svelte.js'`
+- Import the real source extension (`.ts` / `.svelte.ts` / `.svelte`): `import {Chat} from './chat.svelte.ts'`
 - Prefer pure functions; mark mutations with `@mutates` JSDoc tag
 - Tests in `src/test/`, split by aspect: `cell.svelte.base.test.ts`, `cell.svelte.decoders.test.ts`
 - UI uses `@fuzdev/fuz_css` style variables and semantic classes, not inline styles
 
 ## Zzz App Directory
 
-The `.zzz/` directory stores app data. Configured via `PUBLIC_ZZZ_DIR`.
+The `.zzz/` directory stores app data. Configured via `PUBLIC_ZZZ_DIR`
+(default `.zzz`, cwd-relative). The CLI's global daemon home `~/.zzz/` is a
+distinct directory that shares the name — the two coincide only when the
+daemon runs with `~` as its working directory.
 
-- `state/` — Persistent data (completions, workspaces.json)
+- `state/` — Persistent data (reserved — the Rust backend currently keeps domain state in memory)
 - `cache/` — Regenerable data, safe to delete
-- `run/` — Runtime ephemeral (daemon.json: PID, port)
+- `run/` — Runtime ephemeral (daemon.json: PID, port — written by the CLI)
 
 All filesystem access goes through `ScopedFs` — path validation, no symlinks, absolute paths only.
 
 ## Environment Variables
 
-### Server (BaseServerEnv from fuz_app — ecosystem standard)
+### Server (read by `zzz_server` at boot)
 
-- `NODE_ENV` — `development` or `production`
-- `PORT` — HTTP server port (default 4460; `cargo xtask dev` uses 4461)
-- `HOST` — Bind address (default `localhost`)
+- `ZZZ_PORT` — HTTP server port (default 4460; `cargo xtask dev` uses 4461); the `--port` flag wins. The bind address is always loopback — there is no `HOST` override.
+- `ZZZ_STATIC_DIR` — directory of the built SPA to serve (`--static-dir` wins)
+- `ZZZ_TRUSTED_PROXIES` — comma-separated trusted proxy IPs for `client_ip` resolution
 - `DATABASE_URL` — PostgreSQL connection (`postgres://`)
 - `SECRET_FUZ_COOKIE_KEYS` — HMAC signing keys (min 32 chars)
-
-### zzz-specific server vars
-
-- `FUZ_ALLOWED_ORIGINS` — Origin patterns for API verification
+- `FUZ_ALLOWED_ORIGINS` — Origin patterns for API verification (required in production)
 - `FUZ_BOOTSTRAP_TOKEN_PATH` — One-shot admin bootstrap token path
 - `PUBLIC_ZZZ_DIR` — Zzz app directory (default `.zzz`)
 - `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths
-- `PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY` — Testing delay (ms)
 - `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live dispatchers (integration tests only — must stay unset in prod)
 - `SECRET_ANTHROPIC_API_KEY` — Claude API key
 - `SECRET_OPENAI_API_KEY` — OpenAI API key
 - `SECRET_GOOGLE_API_KEY` — Google Gemini API key
+
+`NODE_ENV` and `PORT` belong to the CLI/xtask layer, not the server: the CLI
+picks the env file by `NODE_ENV` (`.env` when `production`, else
+`.env.development`) and reads `PORT` to choose the port it passes to
+`zzzd --port`.
 
 ### SvelteKit frontend vars (PUBLIC_ZZZ_\*)
 
@@ -463,6 +479,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - `PUBLIC_ZZZ_SERVER_API_PATH` — API endpoint path
 - `PUBLIC_ZZZ_WEBSOCKET_URL` — WebSocket URL
 - `PUBLIC_ZZZ_SERVER_PROXIED_PORT` — Backend port (frontend)
+- `PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY` — Testing delay (ms) — frontend-only; currently parsed but unwired
 
 ## Avoid
 
@@ -472,13 +489,13 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - **No `$effect` in Cell classes** — effects belong in Svelte components only
 - **Run `gro gen` after changing action specs** — handler types are generated from specs
 - **Register new Cell classes in `cell_classes.ts`** — the registry must be complete
-- **Don't import without `.js` extension** — ESM requires explicit extensions
+- **Don't omit import extensions** — use the real source extension (`.ts` / `.svelte.ts` / `.svelte`)
 
 ## Known Limitations
 
-- **WebSocket auth** — Auth is enforced at upgrade time via `require_auth` middleware (cookie sessions, bearer tokens — bearer silently discarded in browser context via Origin/Referer defense). Per-action auth checks enforce spec-level auth: `keeper` requires `daemon_token` + keeper role; `{role}` requires the named role via `has_role` (matches the HTTP path). Batch JSON-RPC is rejected (not yet supported). Sockets are closed on session/token revocation, logout, and password change via audit events — `token_revoke` closes only the revoked token's sockets (granular), `session_revoke_all` / `token_revoke_all` / `password_change` close all sockets on the account. No per-message session revalidation — event-driven revocation is sufficient. ActionPeer itself has no auth awareness.
-- **Bearer auth soft-fails** — fuz_app's bearer middleware soft-fails for invalid/expired/empty tokens (calls `next()`, no error response). Auth enforcement happens downstream via `check_action_auth` (JSON-RPC) or `require_auth` (routes), producing `{code: -32001, message: "unauthenticated"}` JSON-RPC errors. Public actions are not blocked by bad bearer credentials.
-- **Domain state is in-memory** — auth/accounts are in the PostgreSQL DB, but zzz domain state (files, terminals, workspaces) is in-memory, lost on restart. Workspaces persist to JSON file as a stopgap.
+- **WebSocket auth** — Auth is enforced at upgrade time — the spine resolves credentials from the request headers before upgrading (cookie sessions, bearer tokens — bearer silently discarded in browser context via Origin/Referer defense). Per-action auth checks enforce spec-level auth: `keeper` requires `daemon_token` + keeper role; `{role}` requires the named role via `has_role` (matches the HTTP path). Batch JSON-RPC is rejected (not yet supported). Sockets are closed on session/token revocation, logout, and password change via audit events — `token_revoke` closes only the revoked token's sockets (granular), `session_revoke_all` / `token_revoke_all` / `password_change` close all sockets on the account. No per-message session revalidation — event-driven revocation is sufficient. ActionPeer itself has no auth awareness.
+- **Bearer auth soft-fails** — bearer resolution soft-fails for invalid/expired/empty tokens (no early error response). Auth enforcement happens downstream via the per-action auth checks, producing `{code: -32001, message: "unauthenticated"}` JSON-RPC errors. Public actions are not blocked by bad bearer credentials.
+- **Domain state is in-memory** — auth/accounts are in the PostgreSQL DB, but zzz domain state (files, terminals, workspaces) is in-memory, lost on restart.
 - **No undo/history** — file edits are permanent
 - **PTY terminals** — terminal spawning uses the `fuz_pty` Rust crate as a native dependency of `zzz_server` (no FFI indirection). `PtyManager` manages spawned processes with async read loops; `terminal_close` cancels the read loop before killing the process. Requires the sibling Rust workspace checked out alongside this repo (path dep).
 - **No git integration** — no commit/push/pull from the UI
@@ -490,12 +507,14 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 zzz is the reference implementation for Cell and Action patterns. The SAES
 runtime lives in `@fuzdev/fuz_app` — zzz imports ActionSpec, ActionEvent,
 ActionDispatcher, transports, and `create_rpc_client` from
-`@fuzdev/fuz_app/actions/*.js`. Cell patterns (Cell base class, cell classes,
+`@fuzdev/fuz_app/actions/*.ts`. Cell patterns (Cell base class, cell classes,
 IndexedCollection) remain in zzz. The generated `TypedActionEvent` alias
 intersects fuz_app's generic `ActionEvent` with zzz's `ActionEventDatas` map
-for typed input/output in handlers. `Uuid` and `create_uuid` are re-exported
-from `@fuzdev/fuz_app/uuid.js` via `zod_helpers.ts`.
+for typed input/output in handlers. `Uuid` and `create_uuid` come from
+`@fuzdev/fuz_util/id.ts`, imported directly.
 
-The CLI and daemon lifecycle use `@fuzdev/fuz_app/cli/*` helpers: `DaemonInfo`
-schema, `write_daemon_info`, `read_daemon_info`, `is_daemon_running`,
-`stop_daemon`. The server writes `~/.zzz/run/daemon.json` (not `server.json`).
+Daemon lifecycle is owned by the Rust CLI (`crates/zzz/src/daemon_lifecycle.rs`)
+— it atomically writes `~/.zzz/run/daemon.json` (`{version, pid, port, started,
+app_version}`) when spawning `zzzd`, reads it back for discovery/`status`, and
+checks PID liveness. The shape follows fuz_app's `DaemonInfo` by convention —
+patterns only, no code reuse.

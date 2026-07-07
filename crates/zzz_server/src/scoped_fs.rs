@@ -33,12 +33,11 @@ pub enum ScopedFsError {
 /// Secure wrapper around filesystem operations.
 ///
 /// Restricts all operations to specified allowed directories. Rejects
-/// relative paths, path traversal, and symlinks. Mirrors the TypeScript
-/// `ScopedFs` from `src/lib/server/scoped_fs.ts`.
+/// relative paths, path traversal, and symlinks.
 ///
 /// NOTE: There is an inherent TOCTOU gap between the symlink check (`lstat`)
 /// and the caller's subsequent filesystem operation. A symlink could be
-/// created after validation. This is the same caveat as the Deno implementation.
+/// created after validation.
 pub struct ScopedFs {
     /// Allowed directory roots, each normalized with a trailing `/`.
     ///

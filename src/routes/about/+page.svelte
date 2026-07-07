@@ -58,13 +58,11 @@
 				> in development.
 			</li>
 			<li>
-				AI providers with <ExternalLink href="https://github.com/openai/openai-node"
+				AI providers with <ExternalLink href="https://platform.openai.com/docs"
 					>ChatGPT</ExternalLink
 				>,
-				<ExternalLink href="https://github.com/anthropics/anthropic-sdk-typescript"
-					>Claude</ExternalLink
-				>, and <ExternalLink href="https://github.com/google-gemini/generative-ai-js"
-					>Gemini</ExternalLink
+				<ExternalLink href="https://docs.anthropic.com/">Claude</ExternalLink>, and <ExternalLink
+					href="https://ai.google.dev/">Gemini</ExternalLink
 				> -- bring your own API keys
 			</li>
 		</ul>
@@ -77,12 +75,12 @@
 			</li>
 			<li>
 				<!-- TODO @db -->
-				<ExternalLink href="https://github.com/electric-sql/pglite">pglite</ExternalLink>
-				and full <ExternalLink href="https://www.postgresql.org/">Postgres</ExternalLink> when desired,
-				using <ExternalLink href="https://github.com/porsager/postgres">Postgres.js</ExternalLink>
-				and probably <ExternalLink href="https://github.com/drizzle-team/drizzle-orm"
-					>Drizzle</ExternalLink
-				>, see <ExternalLink href="https://github.com/fuzdev/zzz/issues/7">issue #7</ExternalLink>
+				persisting your domain data (chats, workspaces, prompts) -- <ExternalLink
+					href="https://www.postgresql.org/">Postgres</ExternalLink
+				> is already integrated for auth (the Rust backend requires it), and your other data is in-memory
+				until this lands, see <ExternalLink href="https://github.com/fuzdev/zzz/issues/7"
+					>issue #7</ExternalLink
+				>
 			</li>
 			<li>
 				<ExternalLink href="https://modelcontextprotocol.io/">Model Context Protocol</ExternalLink>,
@@ -207,13 +205,14 @@
 		<aside>
 			⚠️ I am not a security professional and Zzz has not been audited; it may be <strong
 				class="color_c_50">dangerous</strong
-			> to run and there is no auth yet
+			> to run
 		</aside>
 		<p>
-			My current plan is to extract <ExternalLink href="https://github.com/fuzdev/fuz_ui"
-				>a reusable framework</ExternalLink
-			> out of Zzz that prioritizes security from the first commit. More on that soon. For now Zzz is
-			insecure and should definitely not be run in production, and it should be used with caution in development.
+			Much of the reusable security framework now exists — Zzz runs on <ExternalLink
+				href="https://github.com/fuzdev/fuz_app">fuz_app</ExternalLink
+			>'s auth stack (cookie sessions, bearer tokens, a one-shot bootstrap flow) with a Rust
+			backend. It's still early and unaudited: don't run Zzz in production, and use it with caution
+			in development.
 		</p>
 		<p>More thoughts about security:</p>
 		<ul>
@@ -230,17 +229,18 @@
 						in a scoped directory (configure with care!)
 					</li>
 					<li>
-						use your API keys for calls to Claude, ChatGPT, and Gemini, and write them to <code
+						use your API keys for calls to Claude, ChatGPT, and Gemini -- loaded from <code
 							>./.env.{DEV ? 'development' : 'production'}</code
-						>
+						> or set at runtime (held in memory only)
 					</li>
 					<li>
-						<strong class="color_c_50">there is no authentication yet</strong>, only an origin
-						check, so do not use this in production
+						authentication is cookie sessions and bearer tokens with a one-shot bootstrap flow, plus
+						an origin allowlist -- it's young and <strong class="color_c_50">unaudited</strong>, so
+						do not use this in production
 					</li>
 					<li>
-						soon, more integrations including terminal access assuming Bash, but nothing that
-						powerful before auth
+						run interactive terminals -- full shell access as your user, the most powerful
+						capability here, gated behind the auth
 					</li>
 				</ul>
 			</li>
@@ -248,11 +248,11 @@
 				The frontend <ExternalLink
 					href="https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/ContentSecurityPolicy"
 					>CSP</ExternalLink
-				> is fairly locked down, including blocking all unknown network connections. For details, see
-				the CSP config in <ExternalLink
+				> is designed to be fairly locked down, including blocking all unknown network connections --
+				it's currently disabled while being reworked (see <ExternalLink
 					href="https://github.com/fuzdev/zzz/blob/main/svelte.config.js"
 					>svelte.config.js</ExternalLink
-				> and the <ExternalLink href="https://ui.fuz.dev/docs/csp">Fuz CSP docs</ExternalLink>.
+				> and the <ExternalLink href="https://ui.fuz.dev/docs/csp">Fuz CSP docs</ExternalLink>).
 				Configuration will be needed for many usecases, unlocking shenanigans good and bad, so we'll
 				tread carefully.
 			</li>

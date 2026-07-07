@@ -133,8 +133,7 @@ impl Serialize for ProviderStatus {
 
 /// Options controlling completion generation.
 ///
-/// Matches the TypeScript `CompletionOptions` interface from `backend_provider.ts`.
-/// Also serves as server-level defaults (stored on `App`, cloned per-request).
+/// Server-level defaults (stored on `App`, cloned per-request).
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct CompletionOptions {

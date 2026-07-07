@@ -16,9 +16,8 @@ pub struct Status {
 
 /// Handle `zzz status`.
 ///
-/// Reports daemon status (the same report as `zzz daemon status`). The
-/// fuller workspace/watcher summary the Deno `status.ts` sketches is
-/// follow-on work once those land in the Rust CLI.
+/// Reports daemon status (the same report as `zzz daemon status`). A
+/// fuller summary (open workspaces, watcher state) is follow-on work.
 pub async fn cmd_status(args: &Status) -> Result<(), CliError> {
     report_status(args.json).await
 }
