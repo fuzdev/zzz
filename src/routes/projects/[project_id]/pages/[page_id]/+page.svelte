@@ -89,7 +89,7 @@
 								<button
 									type="button"
 									onclick={() => page_viewmodel.save_page()}
-									class="color_a"
+									class="palette_a"
 									disabled={!page_viewmodel.has_changes}
 								>
 									save
@@ -100,7 +100,7 @@
 								</button>
 							</div>
 
-							<button type="button" onclick={delete_page} class="color_c"
+							<button type="button" onclick={delete_page} class="palette_c"
 								><Svg data={icon_delete} />&nbsp; delete</button
 							>
 						</div>

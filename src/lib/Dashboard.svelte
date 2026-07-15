@@ -140,7 +140,7 @@
 								<Svg
 									data={logo_zzz}
 									size="var(--icon_size_md)"
-									fill={app.futuremode ? 'var(--color_h_50)' : undefined}
+									fill={app.futuremode ? 'var(--palette_h_50)' : undefined}
 									style="transition: transform 200ms ease"
 									class={app.futuremode ? 'transform:scaleX(-1)' : ''}
 								/>

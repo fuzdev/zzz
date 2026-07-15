@@ -75,7 +75,7 @@
 		border: var(--border_width_2) var(--border_style) transparent;
 	}
 	.thread-listitem.selected {
-		border-color: var(--color_a_50);
+		border-color: var(--palette_a_50);
 	}
 	.thread-listitem:hover {
 		background-color: var(--shade_10);

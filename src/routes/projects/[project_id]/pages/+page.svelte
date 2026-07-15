@@ -36,7 +36,7 @@
 					<p>
 						<button
 							type="button"
-							class="color_a"
+							class="palette_a"
 							onclick={() => project_viewmodel.create_new_page()}
 						>
 							<Svg data={icon_add} />&nbsp; create your first page
@@ -71,7 +71,7 @@
 					<div class="mb_lg">
 						<button
 							type="button"
-							class="color_a"
+							class="palette_a"
 							onclick={() => project_viewmodel.create_new_page()}
 						>
 							<Svg data={icon_add} />&nbsp; new page

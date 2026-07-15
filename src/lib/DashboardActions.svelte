@@ -70,7 +70,7 @@
 					<p>
 						select an action from the list or <button
 							type="button"
-							class="inline color_f"
+							class="inline palette_f"
 							onclick={() => {
 								selected_action = random_item(actions.items.values);
 							}}>go fish</button
@@ -82,7 +82,7 @@
 					<p>
 						no actions yet, <button
 							type="button"
-							class="inline color_d"
+							class="inline palette_d"
 							onclick={() => {
 								app.api.toggle_main_menu();
 							}}>do something?</button

@@ -43,7 +43,7 @@
 				<div class="text-align:center p_md">
 					<button
 						type="button"
-						class="color_d"
+						class="palette_d"
 						onclick={() => {
 							const chat = app.chats.add();
 							void app.chats.navigate_to(chat.id);

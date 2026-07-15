@@ -31,7 +31,7 @@
 						<div class="display:flex gap_sm mb_sm">
 							<button
 								type="button"
-								class="color_a"
+								class="palette_a"
 								onclick={() => project_viewmodel.save_project_details()}
 								disabled={!project_viewmodel.has_changes}>save</button
 							>
@@ -114,7 +114,7 @@
 							<button
 								type="button"
 								onclick={() => project_viewmodel.create_new_page()}
-								class="color_a">+ add page</button
+								class="palette_a">+ add page</button
 							>
 						</div>
 					</div>
@@ -154,7 +154,7 @@
 							<button
 								type="button"
 								onclick={() => project_viewmodel.create_new_domain()}
-								class="color_a">+ add domain</button
+								class="palette_a">+ add domain</button
 							>
 						</div>
 					</div>
@@ -186,7 +186,7 @@
 							<button
 								type="button"
 								onclick={() => project_viewmodel.create_new_repo()}
-								class="color_a">+ add repo</button
+								class="palette_a">+ add repo</button
 							>
 						</div>
 					</div>
@@ -270,13 +270,13 @@
 	}
 
 	.status-active {
-		background-color: var(--color_b_20);
-		color: var(--color_b_90);
+		background-color: var(--palette_b_20);
+		color: var(--palette_b_90);
 	}
 
 	.status-pending {
-		background-color: var(--color_e_20);
-		color: var(--color_e_90);
+		background-color: var(--palette_e_20);
+		color: var(--palette_e_90);
 	}
 
 	.status-inactive {

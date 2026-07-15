@@ -121,7 +121,7 @@
 							<div>
 								<button
 									type="submit"
-									class="color_a"
+									class="palette_a"
 									disabled={domains_viewmodel.domain && !domains_viewmodel.has_changes}
 								>
 									{domains_viewmodel.domain ? 'save changes' : 'add domain'}
@@ -131,7 +131,7 @@
 							{#if domains_viewmodel.domain}
 								<button
 									type="button"
-									class="color_c"
+									class="palette_c"
 									onclick={() => domains_viewmodel.remove_domain()}
 								>
 									<Svg data={icon_delete} />&nbsp; delete domain

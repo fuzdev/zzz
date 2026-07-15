@@ -35,7 +35,7 @@
 						<p>
 							<button
 								type="button"
-								class="color_a"
+								class="palette_a"
 								onclick={() => project_viewmodel.create_new_domain()}
 							>
 								<Svg data={icon_add} />&nbsp; add your first domain
@@ -90,7 +90,7 @@
 				<div>
 					<button
 						type="button"
-						class="color_a"
+						class="palette_a"
 						onclick={() => project_viewmodel.create_new_domain()}
 					>
 						<Svg data={icon_add} />&nbsp; new domain
@@ -123,13 +123,13 @@
 	}
 
 	.status-active {
-		background-color: var(--color_b_20);
-		color: var(--color_b_90);
+		background-color: var(--palette_b_20);
+		color: var(--palette_b_90);
 	}
 
 	.status-pending {
-		background-color: var(--color_e_20);
-		color: var(--color_e_90);
+		background-color: var(--palette_e_20);
+		color: var(--palette_e_90);
 	}
 
 	.status-inactive {

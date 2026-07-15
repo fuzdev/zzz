@@ -67,5 +67,5 @@
 {:else if fallback}
 	{@render fallback()}
 {:else}
-	<small class="font_family_mono color_c_50"><Svg data={icon_provider} /> missing provider</small>
+	<small class="font_family_mono palette_c_50"><Svg data={icon_provider} /> missing provider</small>
 {/if}

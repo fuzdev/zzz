@@ -43,8 +43,8 @@
 			the one on this page, then <button
 				type="button"
 				onclick={() => (browser.browserified = !browser.browserified)}
-				class:color_i={!browser.browserified}
-				class:color_h={browser.browserified}
+				class:palette_i={!browser.browserified}
+				class:palette_h={browser.browserified}
 				class="inline sm">{browser.browserified ? 'un' : ''}browserify!</button
 			> I'm planning to make a native version of Zzz.
 		</p>
@@ -56,8 +56,8 @@
 			<button
 				type="button"
 				class="inline sm"
-				class:color_d={app.ui.show_sidebar}
-				class:color_f={!app.ui.show_sidebar}
+				class:palette_d={app.ui.show_sidebar}
+				class:palette_f={!app.ui.show_sidebar}
 				onclick={() => {
 					app.ui.toggle_sidebar();
 					if (!browser.browserified) {

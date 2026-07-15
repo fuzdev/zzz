@@ -20,10 +20,10 @@
 	style:display="display:flex !important"
 	style:align-items="flex-start !important"
 	style:font-weight="400 !important"
-	class:color_b={capabilities.filesystem.status === 'success'}
-	class:color_c={capabilities.filesystem.status === 'failure'}
-	class:color_d={capabilities.filesystem.status === 'pending'}
-	class:color_e={capabilities.filesystem.status === 'initial'}
+	class:palette_b={capabilities.filesystem.status === 'success'}
+	class:palette_c={capabilities.filesystem.status === 'failure'}
+	class:palette_d={capabilities.filesystem.status === 'pending'}
+	class:palette_e={capabilities.filesystem.status === 'initial'}
 >
 	<div class="column justify-content:center gap_xs p_md" style:min-height="80px">
 		<div class="font_size_xl">

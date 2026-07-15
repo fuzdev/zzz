@@ -56,7 +56,7 @@
 {#if !readonly && !auto_save}
 	<div class="mt_xs display:flex" transition:slide>
 		<button
-			class="flex:1 color_f"
+			class="flex:1 palette_f"
 			type="button"
 			disabled={!editor_state.has_changes}
 			onclick={() => editor_state.save_changes()}

@@ -164,7 +164,7 @@
 		padding: var(--space_xl);
 	}
 	.error-message {
-		color: var(--color_c_50, #f88);
+		color: var(--palette_c_50, #f88);
 		padding: 0 var(--space_md);
 		margin: 0;
 	}

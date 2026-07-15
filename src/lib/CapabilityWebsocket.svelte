@@ -80,11 +80,11 @@
 				style:display="display:flex !important"
 				style:align-items="flex-start !important"
 				style:font-weight="400 !important"
-				class:color_b={capabilities.websocket.status === 'success' && socket.connected}
-				class:color_c={capabilities.websocket.status === 'failure'}
-				class:color_d={capabilities.websocket.status === 'pending'}
-				class:color_e={capabilities.websocket.status === 'initial'}
-				class:color_h={capabilities.websocket.status === 'success' && !socket.connected}
+				class:palette_b={capabilities.websocket.status === 'success' && socket.connected}
+				class:palette_c={capabilities.websocket.status === 'failure'}
+				class:palette_d={capabilities.websocket.status === 'pending'}
+				class:palette_e={capabilities.websocket.status === 'initial'}
+				class:palette_h={capabilities.websocket.status === 'success' && !socket.connected}
 			>
 				<div class="column justify-content:center gap_xs pl_md" style:min-height="80px">
 					<span
@@ -132,10 +132,10 @@
 					<button
 						type="button"
 						class="flex:1 justify-content:start"
-						class:color_d={socket.connected &&
+						class:palette_d={socket.connected &&
 							socket.url !== socket.url_input &&
 							socket.url_input !== ''}
-						class:color_a={!socket.connected && socket.status !== 'pending'}
+						class:palette_a={!socket.connected && socket.status !== 'pending'}
 						disabled={socket.status === 'pending' || (!socket.connected && !socket.url_input)}
 						onclick={() => {
 							if (socket.connected) {
@@ -205,7 +205,7 @@
 					<div class="row flex:1 gap_xs" transition:slide>
 						<button
 							type="button"
-							class="color_d font_size_xl icon-button plain"
+							class="palette_d font_size_xl icon-button plain"
 							title="cancel reconnection attempt"
 							onclick={() => {
 								socket.cancel_reconnect();
@@ -330,7 +330,7 @@
 					{#snippet popover_content(popover)}
 						<button
 							type="button"
-							class="color_c icon-button"
+							class="palette_c icon-button"
 							title="confirm reset settings"
 							onclick={() => {
 								reset_to_defaults();

@@ -25,10 +25,10 @@
 			class="chip px_xl plain font-weight:400 width_atmost_sm"
 			style:padding="0 var(--space_xl) !important"
 			style:font-weight="400 !important"
-			class:color_b={capabilities.backend.status === 'success'}
-			class:color_c={capabilities.backend.status === 'failure'}
-			class:color_d={capabilities.backend.status === 'pending'}
-			class:color_e={capabilities.backend.status === 'initial'}
+			class:palette_b={capabilities.backend.status === 'success'}
+			class:palette_c={capabilities.backend.status === 'failure'}
+			class:palette_d={capabilities.backend.status === 'pending'}
+			class:palette_e={capabilities.backend.status === 'initial'}
 		>
 			<div class="column justify-content:center gap_xs" style:min-height="80px">
 				<div class="font_size_xl">

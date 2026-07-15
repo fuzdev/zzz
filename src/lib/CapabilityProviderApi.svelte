@@ -85,10 +85,10 @@
 					style:display="display:flex !important"
 					style:align-items="flex-start !important"
 					style:font-weight="400 !important"
-					class:color_b={capability.status === 'success'}
-					class:color_c={capability.status === 'failure'}
-					class:color_d={capability.status === 'pending' || checking}
-					class:color_e={capability.status === 'initial'}
+					class:palette_b={capability.status === 'success'}
+					class:palette_c={capability.status === 'failure'}
+					class:palette_d={capability.status === 'pending' || checking}
+					class:palette_e={capability.status === 'initial'}
 				>
 					<div class="column justify-content:center gap_xs pl_md" style:min-height="80px">
 						<div class="font_size_xl">

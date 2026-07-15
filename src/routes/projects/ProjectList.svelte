@@ -53,7 +53,7 @@
 	{/if}
 
 	<div class="display:flex justify_content_between mt_lg">
-		<button type="button" class="color_a" onclick={() => projects.create_new_project()}>
+		<button type="button" class="palette_a" onclick={() => projects.create_new_project()}>
 			<Svg data={icon_add} />&nbsp; new project
 		</button>
 	</div>
@@ -98,11 +98,11 @@
 	}
 
 	.status-active {
-		background-color: var(--color_b_50);
+		background-color: var(--palette_b_50);
 	}
 
 	.status-pending {
-		background-color: var(--color_e_50);
+		background-color: var(--palette_e_50);
 	}
 
 	.status-inactive {

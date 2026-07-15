@@ -123,7 +123,7 @@
 <div class="message-queue-container">
 	<!-- Header with message count and action buttons -->
 	<div class="display:flex justify-content:space-between align-items:center mb_sm">
-		<span class="chip {type === 'queued' ? 'color_e' : 'color_c'}">
+		<span class="chip {type === 'queued' ? 'palette_e' : 'palette_c'}">
 			{type}: {queued_messages_count}
 		</span>
 
@@ -146,7 +146,7 @@
 
 					<ConfirmButton
 						onconfirm={remove_selected}
-						popover_button_attrs={{class: 'icon-button color_c font_size_sm'}}
+						popover_button_attrs={{class: 'icon-button palette_c font_size_sm'}}
 						class="icon-button plain"
 						title="remove selected messages"
 					>
@@ -285,7 +285,7 @@
 							<ConfirmButton
 								onconfirm={() => remove_message(message.id)}
 								position="center"
-								popover_button_attrs={{class: 'icon-button color_c font_size_sm'}}
+								popover_button_attrs={{class: 'icon-button palette_c font_size_sm'}}
 								class="icon-button plain font_size_sm"
 								title="remove message"
 							>
@@ -304,7 +304,7 @@
 							</div>
 							<div class="display:flex justify-content:space-between">
 								<span>Reason:</span>
-								<span class="font_family_mono color_c">{failed_message.reason}</span>
+								<span class="font_family_mono palette_c">{failed_message.reason}</span>
 							</div>
 						</div>
 					{/if}
@@ -336,6 +336,6 @@
 	}
 
 	.message-item.selected {
-		border-left: 2px solid var(--color_a);
+		border-left: 2px solid var(--palette_a);
 	}
 </style>

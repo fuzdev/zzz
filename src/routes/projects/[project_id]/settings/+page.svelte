@@ -55,7 +55,7 @@
 					<button
 						type="button"
 						onclick={() => project_viewmodel.save_project_details()}
-						class="color_a"
+						class="palette_a"
 						disabled={!project_viewmodel.has_changes}
 					>
 						save changes
@@ -68,7 +68,7 @@
 
 					<button
 						type="button"
-						class="color_c"
+						class="palette_c"
 						onclick={() => project_viewmodel.delete_current_project()}
 					>
 						<Svg data={icon_delete} />&nbsp; delete project

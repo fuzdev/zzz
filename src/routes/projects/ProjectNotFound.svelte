@@ -12,7 +12,7 @@
 	<p>
 		project not found, <button
 			type="button"
-			class="inline color_d"
+			class="inline palette_d"
 			onclick={() => {
 				const project = projects.create_new_project();
 				void goto(resolve(`/projects/${project.id}`));

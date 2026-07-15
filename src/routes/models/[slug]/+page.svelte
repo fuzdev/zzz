@@ -24,7 +24,7 @@
 			no model found with name "{model_name}", maybe
 			<button
 				type="button"
-				class="inline color_f"
+				class="inline palette_f"
 				onclick={() =>
 					// TODO UI for choosing provider
 					app.models.add({name: model_name, provider_name: 'claude'})}

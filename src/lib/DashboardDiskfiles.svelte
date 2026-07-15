@@ -159,7 +159,7 @@
 						a file from the list or
 						<button
 							type="button"
-							class="inline color_f"
+							class="inline palette_f"
 							onclick={() => {
 								const diskfile = random_item(app.diskfiles.items.values);
 								diskfiles.select(diskfile.id);
@@ -170,7 +170,7 @@
 			{:else}
 				<div class="box height:100%">
 					<p>
-						no files yet, <button type="button" class="inline color_d" onclick={create_file}
+						no files yet, <button type="button" class="inline palette_d" onclick={create_file}
 							>create a new file</button
 						>?
 					</p>

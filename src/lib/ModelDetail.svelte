@@ -48,7 +48,7 @@
 			<div class="ml_sm mb_md">
 				<ProviderLink provider={model.provider} icon="logo" class="font_size_lg" />
 				{#if model.provider && !model.provider.available}
-					<span class="font_size_md color_c_50 ml_sm">
+					<span class="font_size_md palette_c_50 ml_sm">
 						<Svg data={icon_error} />
 						{model.provider.status && !model.provider.status.available
 							? model.provider.status.error
@@ -75,7 +75,7 @@
 	<section class="display:flex gap_xs">
 		<button
 			type="button"
-			class="color_d"
+			class="palette_d"
 			onclick={() => app.chats.add(undefined, true).add_thread(model)}
 		>
 			<Svg data={icon_add} />&nbsp; create a new chat

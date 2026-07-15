@@ -94,7 +94,7 @@
 							<div class="mt_md">
 								<button
 									type="button"
-									class="color_b"
+									class="palette_b"
 									onclick={() => repos_viewmodel.add_checkout_dir()}
 								>
 									<Svg data={icon_add} />&nbsp; add checkout
@@ -106,7 +106,7 @@
 							<div>
 								<button
 									type="submit"
-									class="color_a"
+									class="palette_a"
 									disabled={repos_viewmodel.repo && !repos_viewmodel.has_changes}
 								>
 									{repos_viewmodel.repo ? 'save changes' : 'add repo'}
@@ -114,7 +114,11 @@
 							</div>
 
 							{#if repos_viewmodel.repo}
-								<button type="button" class="color_c" onclick={() => repos_viewmodel.remove_repo()}>
+								<button
+									type="button"
+									class="palette_c"
+									onclick={() => repos_viewmodel.remove_repo()}
+								>
 									<Svg data={icon_delete} />&nbsp; delete repo
 								</button>
 							{/if}

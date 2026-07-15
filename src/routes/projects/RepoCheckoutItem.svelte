@@ -52,7 +52,7 @@
 		<span class="display:block mb_xs">Tags</span>
 		<div class="display:flex flex-wrap:wrap gap_xs mb_xs">
 			{#each checkout.tags as tag, tag_index (tag_index)}
-				<span class="chip color_e display:flex align-items:center">
+				<span class="chip palette_e display:flex align-items:center">
 					{tag}
 					<button
 						type="button"
@@ -88,7 +88,7 @@
 	</div>
 
 	<div class="display:flex justify-content:end">
-		<button type="button" class="color_c" onclick={() => on_remove(index)}>
+		<button type="button" class="palette_c" onclick={() => on_remove(index)}>
 			<Svg data={icon_delete} />&nbsp; delete checkout
 		</button>
 	</div>

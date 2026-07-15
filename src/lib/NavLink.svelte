@@ -60,11 +60,11 @@
 		border-color: var(--border_color_50);
 	}
 	.nav-link:active {
-		border-color: var(--color_a_50);
+		border-color: var(--palette_a_50);
 	}
 	.nav-link.selected {
-		border-color: var(--color_a_50);
-		color: var(--color_a_60);
+		border-color: var(--palette_a_50);
+		color: var(--palette_a_60);
 	}
 	.nav-link.selected-descendent {
 		border-color: var(--border_color_50);

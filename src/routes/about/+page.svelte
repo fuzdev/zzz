@@ -158,7 +158,7 @@
 		</p>
 		<button
 			type="button"
-			class:color_h={app.futuremode}
+			class:palette_h={app.futuremode}
 			onclick={() => {
 				app.futuremode = !app.futuremode;
 			}}
@@ -166,7 +166,7 @@
 			<Svg
 				data={logo_zzz}
 				size="var(--icon_size_sm)"
-				fill={app.futuremode ? 'var(--color_h_50)' : 'var(--text_color)'}
+				fill={app.futuremode ? 'var(--palette_h_50)' : 'var(--text_color)'}
 				class="mr_md {app.futuremode ? ' transform:scaleX(-1)' : ''}"
 				style="transition: transform 200ms ease"
 			/>
@@ -179,7 +179,7 @@
 			<Svg
 				data={logo_zzz}
 				size="var(--icon_size_sm)"
-				fill={app.futuremode ? 'var(--color_h_50)' : 'var(--text_color)'}
+				fill={app.futuremode ? 'var(--palette_h_50)' : 'var(--text_color)'}
 				class="ml_md {app.futuremode ? '' : ' transform:scaleX(-1)'}"
 				style="transition: transform 200ms ease"
 			/>
@@ -204,7 +204,7 @@
 		</p>
 		<aside>
 			⚠️ I am not a security professional and Zzz has not been audited; it may be <strong
-				class="color_c_50">dangerous</strong
+				class="palette_c_50">dangerous</strong
 			> to run
 		</aside>
 		<p>
@@ -235,8 +235,8 @@
 					</li>
 					<li>
 						authentication is cookie sessions and bearer tokens with a one-shot bootstrap flow, plus
-						an origin allowlist -- it's young and <strong class="color_c_50">unaudited</strong>, so
-						do not use this in production
+						an origin allowlist -- it's young and <strong class="palette_c_50">unaudited</strong>,
+						so do not use this in production
 					</li>
 					<li>
 						run interactive terminals -- full shell access as your user, the most powerful

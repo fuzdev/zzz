@@ -69,7 +69,7 @@
 			<PendingAnimation inline />
 		</span>
 	{:else if ping.round_trip_time === null}
-		<span class="font_family_mono color_c_50"
+		<span class="font_family_mono palette_c_50"
 			><Svg data={icon_xmark} />
 			{ping.received_time ? Math.round(ping.received_time - ping.sent_time) : 0}ms</span
 		>

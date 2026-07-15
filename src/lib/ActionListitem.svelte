@@ -26,7 +26,7 @@
 		type="button"
 		class="width:100% text-align:left justify-content:start py_xs px_md border-radius:0 border-style:none box_shadow_none"
 		class:selected
-		class:color_c={action.has_error}
+		class:palette_c={action.has_error}
 		onclick={() => {
 			onselect?.(action);
 		}}
@@ -39,7 +39,7 @@
 			{#if action.pending}
 				<PendingAnimation inline />
 			{:else if action.has_error}
-				<Svg class="color_c" data={icon_error} />
+				<Svg class="palette_c" data={icon_error} />
 			{/if}
 			<small class="font_family_mono ml_auto">{action.created_formatted_time}</small>
 		</div>

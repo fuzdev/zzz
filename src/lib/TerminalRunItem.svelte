@@ -113,13 +113,13 @@
 		font-size: var(--font_size_sm);
 	}
 	.running {
-		color: var(--color_a_50, #8f8);
+		color: var(--palette_a_50, #8f8);
 	}
 	.exit-code {
 		opacity: 0.6;
 	}
 	.exit-code.error {
-		color: var(--color_c_50, #f88);
+		color: var(--palette_c_50, #f88);
 	}
 	.restart-button {
 		font-size: var(--font_size_sm);

@@ -89,12 +89,14 @@
 				<div class="p_md text-align:center">
 					<p>
 						select a chat from the list,
-						<button type="button" class="inline color_d" onclick={() => chats.add(undefined, true)}
-							>create a new chat</button
+						<button
+							type="button"
+							class="inline palette_d"
+							onclick={() => chats.add(undefined, true)}>create a new chat</button
 						>, or
 						<button
 							type="button"
-							class="inline color_f"
+							class="inline palette_f"
 							onclick={() => {
 								const chat = random_item(chats.ordered_items);
 								void chats.navigate_to(chat.id);
@@ -107,7 +109,7 @@
 			<div class="box height:100%">
 				<p>
 					no chats yet,
-					<button type="button" class="inline color_d" onclick={() => chats.add(undefined, true)}
+					<button type="button" class="inline palette_d" onclick={() => chats.add(undefined, true)}
 						>create a new chat</button
 					>?
 				</p>

@@ -35,7 +35,7 @@
 						<p>
 							<button
 								type="button"
-								class="color_a"
+								class="palette_a"
 								onclick={() => project_viewmodel.create_new_repo()}
 							>
 								<Svg data={icon_add} />&nbsp; add your first repo
@@ -61,7 +61,11 @@
 				{/if}
 
 				<div>
-					<button type="button" class="color_a" onclick={() => project_viewmodel.create_new_repo()}>
+					<button
+						type="button"
+						class="palette_a"
+						onclick={() => project_viewmodel.create_new_repo()}
+					>
 						<Svg data={icon_add} />&nbsp; new repo
 					</button>
 				</div>

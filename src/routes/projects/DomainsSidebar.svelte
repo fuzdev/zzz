@@ -61,11 +61,11 @@
 	}
 
 	.status-active {
-		background-color: var(--color_a_50);
+		background-color: var(--palette_a_50);
 	}
 
 	.status-pending {
-		background-color: var(--color_e_50);
+		background-color: var(--palette_e_50);
 	}
 
 	.status-inactive {
