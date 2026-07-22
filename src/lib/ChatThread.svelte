@@ -1,17 +1,17 @@
 <script lang="ts">
 	import PendingButton from '@fuzdev/fuz_ui/PendingButton.svelte';
-	import {tick} from 'svelte';
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import { tick } from 'svelte';
+	import type { SvelteHTMLElements } from 'svelte/elements';
 
-	import {estimate_token_count, format_placeholder} from './helpers.ts';
-	import type {Thread} from './thread.svelte.ts';
+	import { estimate_token_count, format_placeholder } from './helpers.ts';
+	import type { Thread } from './thread.svelte.ts';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';
 	import TurnList from './TurnList.svelte';
 	import ProviderLink from './ProviderLink.svelte';
 	import ThreadContextmenu from './ThreadContextmenu.svelte';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 	import ContentEditor from './ContentEditor.svelte';
-	import {icon_error, icon_send, icon_stop} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_error, icon_send, icon_stop } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	// TODO no longer uses `Chat`, maybe rename to `ThreadView` or similar?
@@ -22,7 +22,7 @@
 		focus_key,
 		pending_element_to_focus_key = $bindable(),
 		turns_attrs,
-		attrs,
+		attrs
 	}: {
 		thread: Thread;
 		onsend: (input: string) => Promise<void>;
@@ -35,7 +35,7 @@
 
 	let input = $state.raw('');
 	const input_token_count = $derived(estimate_token_count(input));
-	let content_input: {focus: () => void} | undefined;
+	let content_input: { focus: () => void } | undefined;
 
 	const send = async () => {
 		const parsed = input.trim();
@@ -60,7 +60,7 @@
 			? null
 			: provider?.status && !provider.status.available
 				? provider.status.error
-				: 'provider unavailable',
+				: 'provider unavailable'
 	);
 	const send_disabled = $derived(thread.pending || !!provider_error);
 </script>
@@ -86,7 +86,7 @@
 						><ProviderLink
 							{provider}
 							icon="logo"
-							icon_props={{size: 'var(--font_size_sm)'}}
+							icon_props={{ size: 'var(--font_size_sm)' }}
 							label="name"
 						/>{#if provider_error}<span class="palette_c_50 ml_sm"
 								><Svg data={icon_error} /> {provider_error}</span

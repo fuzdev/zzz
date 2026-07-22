@@ -1,12 +1,12 @@
 <script lang="ts">
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import type { SvelteHTMLElements } from 'svelte/elements';
 
 	const {
 		content,
 		height = '200px',
 		min_height = height,
 		max_height = height,
-		attrs,
+		attrs
 	}: {
 		content: string;
 		height?: string | undefined;

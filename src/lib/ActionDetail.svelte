@@ -3,11 +3,11 @@
 
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
-	import {get_icon_for_action_kind} from './action_icons.ts';
-	import type {Action} from './action.svelte.ts';
+	import { get_icon_for_action_kind } from './action_icons.ts';
+	import type { Action } from './action.svelte.ts';
 
 	const {
-		action,
+		action
 	}: {
 		action: Action;
 	} = $props();
@@ -65,5 +65,5 @@
 	class="font_family_mono font_size_sm white-space:pre-wrap word-break:break-word p_sm width:100%">{JSON.stringify(
 		action.json,
 		null,
-		2,
+		2
 	)}</pre>

@@ -1,24 +1,24 @@
 <script lang="ts">
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
-	import {onMount} from 'svelte';
+	import { onMount } from 'svelte';
 
-	import {frontend_context} from './frontend.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 	import ProviderLink from './ProviderLink.svelte';
-	import {icon_provider} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_provider } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 	import ExternalLink from './ExternalLink.svelte';
 
 	const {
 		provider_name,
-		show_info = true,
+		show_info = true
 	}: {
 		provider_name: 'claude' | 'chatgpt' | 'gemini';
 		show_info?: boolean;
 	} = $props();
 
 	const app = frontend_context.get();
-	const {capabilities} = app;
+	const { capabilities } = app;
 
 	const capability = $derived(capabilities.providers[provider_name]);
 	const provider = $derived(app.providers.find_by_name(provider_name));
@@ -40,7 +40,7 @@
 		try {
 			await app.api.provider_update_api_key({
 				provider_name,
-				api_key: api_key_input_normalized,
+				api_key: api_key_input_normalized
 			});
 			api_key_input = '';
 		} catch (error) {
@@ -55,7 +55,7 @@
 		try {
 			await app.api.provider_update_api_key({
 				provider_name,
-				api_key: '',
+				api_key: ''
 			});
 		} catch (error) {
 			console.error(`Failed to delete ${provider_name} API key:`, error);
@@ -67,7 +67,7 @@
 	const reload_status = async () => {
 		checking = true;
 		try {
-			await app.api.provider_load_status({provider_name});
+			await app.api.provider_load_status({ provider_name });
 		} catch (error) {
 			console.error(`Failed to check ${provider_name} connection:`, error);
 		} finally {

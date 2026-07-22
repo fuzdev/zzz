@@ -1,14 +1,14 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
+	import { slide } from 'svelte/transition';
 
-	import type {Thread} from './thread.svelte.ts';
+	import type { Thread } from './thread.svelte.ts';
 	import TurnListitem from './TurnListitem.svelte';
-	import {Scrollable} from './scrollable.svelte.ts';
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import { Scrollable } from './scrollable.svelte.ts';
+	import type { SvelteHTMLElements } from 'svelte/elements';
 
 	const {
 		thread,
-		attrs,
+		attrs
 	}: {
 		thread: Thread;
 		attrs?: SvelteHTMLElements['div'] | undefined;

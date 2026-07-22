@@ -2,15 +2,15 @@
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import LibraryDetail from '@fuzdev/fuz_ui/LibraryDetail.svelte';
 	import EcosystemLinksPanel from '@fuzdev/fuz_ui/EcosystemLinksPanel.svelte';
-	import {resolve} from '$app/paths';
+	import { resolve } from '$app/paths';
 	import Details from '@fuzdev/fuz_ui/Details.svelte';
-	import {DEV} from 'esm-env';
+	import { DEV } from 'esm-env';
 
-	import {logo_zzz} from '$lib/logos.ts';
-	import {library_context} from '$lib/library.ts';
+	import { logo_zzz } from '$lib/logos.ts';
+	import { library_context } from '$lib/library.ts';
 	import ExternalLink from '$lib/ExternalLink.svelte';
 	import PageFooter from '$routes/PageFooter.svelte';
-	import {frontend_context} from '$lib/frontend.svelte.ts';
+	import { frontend_context } from '$lib/frontend.svelte.ts';
 
 	const library = library_context.get();
 	const app = frontend_context.get();

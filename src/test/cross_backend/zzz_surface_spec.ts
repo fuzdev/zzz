@@ -16,27 +16,27 @@
  * @module
  */
 
-import type {AppServerContext} from '@fuzdev/fuz_app/server/app_server_context.ts';
-import {prefix_route_specs, type RouteSpec} from '@fuzdev/fuz_app/http/route_spec.ts';
-import type {RpcEndpointSpec, AppSurfaceSpec} from '@fuzdev/fuz_app/http/surface.ts';
+import type { AppServerContext } from '@fuzdev/fuz_app/server/app_server_context.ts';
+import { prefix_route_specs, type RouteSpec } from '@fuzdev/fuz_app/http/route_spec.ts';
+import type { RpcEndpointSpec, AppSurfaceSpec } from '@fuzdev/fuz_app/http/surface.ts';
 import {
 	create_health_route_spec,
-	create_server_status_route_spec,
+	create_server_status_route_spec
 } from '@fuzdev/fuz_app/http/common_routes.ts';
 import {
 	account_status_route_shape,
-	create_account_route_shapes,
+	create_account_route_shapes
 } from '@fuzdev/fuz_app/auth/account_route_schema.ts';
-import {create_signup_route_shape} from '@fuzdev/fuz_app/auth/signup_route_schema.ts';
-import {create_standard_rpc_actions} from '@fuzdev/fuz_app/auth/standard_rpc_actions.ts';
-import {create_test_app_surface_spec, stub_mw} from '@fuzdev/fuz_app/testing/stubs.ts';
-import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.ts';
-import type {RpcAction, ActionHandler} from '@fuzdev/fuz_app/actions/action_rpc.ts';
-import type {RequestResponseActionSpec} from '@fuzdev/fuz_app/actions/action_spec.ts';
-import {is_protocol_action_method} from '@fuzdev/fuz_app/actions/action_codegen.ts';
-import type {MiddlewareSpec} from '@fuzdev/fuz_app/http/middleware_spec.ts';
+import { create_signup_route_shape } from '@fuzdev/fuz_app/auth/signup_route_schema.ts';
+import { create_standard_rpc_actions } from '@fuzdev/fuz_app/auth/standard_rpc_actions.ts';
+import { create_test_app_surface_spec, stub_mw } from '@fuzdev/fuz_app/testing/stubs.ts';
+import { fuz_session_config } from '@fuzdev/fuz_app/auth/session_cookie.ts';
+import type { RpcAction, ActionHandler } from '@fuzdev/fuz_app/actions/action_rpc.ts';
+import type { RequestResponseActionSpec } from '@fuzdev/fuz_app/actions/action_spec.ts';
+import { is_protocol_action_method } from '@fuzdev/fuz_app/actions/action_codegen.ts';
+import type { MiddlewareSpec } from '@fuzdev/fuz_app/http/middleware_spec.ts';
 
-import {all_action_specs} from '$lib/action_specs.ts';
+import { all_action_specs } from '$lib/action_specs.ts';
 
 /** Surface generation never invokes handlers — see module doc. */
 const noop_handler = (async () => undefined) as unknown as ActionHandler;
@@ -47,7 +47,7 @@ const noop_route_handler = (() => new Response()) as unknown as RouteSpec['handl
 /** Attach a no-op handler to a hono-free route shape so it satisfies `RouteSpec`. */
 const shape_to_route_spec = (shape: Omit<RouteSpec, 'handler'>): RouteSpec => ({
 	...shape,
-	handler: noop_route_handler,
+	handler: noop_route_handler
 });
 
 /**
@@ -59,7 +59,7 @@ const zzz_domain_rpc_actions = (): Array<RpcAction> =>
 	all_action_specs
 		.filter((spec): spec is RequestResponseActionSpec => spec.kind === 'request_response')
 		.filter((spec) => !is_protocol_action_method(spec.method))
-		.map((spec) => ({spec, handler: noop_handler}));
+		.map((spec) => ({ spec, handler: noop_handler }));
 
 /**
  * Build the `/api/rpc` endpoint spec(s) — zzz domain actions plus the standard
@@ -69,8 +69,8 @@ const zzz_domain_rpc_actions = (): Array<RpcAction> =>
 export const zzz_rpc_endpoints = (ctx: AppServerContext): Array<RpcEndpointSpec> => [
 	{
 		path: '/api/rpc',
-		actions: [...zzz_domain_rpc_actions(), ...create_standard_rpc_actions(ctx.deps)],
-	},
+		actions: [...zzz_domain_rpc_actions(), ...create_standard_rpc_actions(ctx.deps)]
+	}
 ];
 
 /**
@@ -84,16 +84,16 @@ const create_route_specs = (ctx: AppServerContext): Array<RouteSpec> => [
 	create_health_route_spec(),
 	...prefix_route_specs('/api/account', [
 		...create_account_route_shapes({
-			login_account_rate_limited: ctx.login_account_rate_limiter !== null,
+			login_account_rate_limited: ctx.login_account_rate_limiter !== null
 		}).map(shape_to_route_spec),
 		shape_to_route_spec(
 			create_signup_route_shape({
-				signup_account_rate_limited: ctx.signup_account_rate_limiter !== null,
-			}),
-		),
+				signup_account_rate_limited: ctx.signup_account_rate_limiter !== null
+			})
+		)
 	]),
 	shape_to_route_spec(account_status_route_shape),
-	create_server_status_route_spec({version: '', get_uptime_ms: () => 0}),
+	create_server_status_route_spec({ version: '', get_uptime_ms: () => 0 })
 ];
 
 /**
@@ -110,9 +110,9 @@ export const create_zzz_app_surface_spec = (): AppSurfaceSpec =>
 		// zzz wires bootstrap in production; the surface must include
 		// `POST /api/account/bootstrap` to match. `surface_only` mounts the
 		// route shape (permanent 403) for shape-symmetry tests.
-		bootstrap: {mode: 'surface_only'},
+		bootstrap: { mode: 'surface_only' },
 		transform_middleware: (specs: Array<MiddlewareSpec>): Array<MiddlewareSpec> => [
-			{name: 'host_validation', path: '*', handler: stub_mw},
-			...specs,
-		],
+			{ name: 'host_validation', path: '*', handler: stub_mw },
+			...specs
+		]
 	});

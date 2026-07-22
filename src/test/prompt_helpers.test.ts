@@ -1,6 +1,6 @@
-import {test, assert} from 'vitest';
+import { test, assert } from 'vitest';
 
-import {format_prompt_content} from '$lib/prompt_helpers.ts';
+import { format_prompt_content } from '$lib/prompt_helpers.ts';
 
 // Instead of mocking modules, we'll create a simplified part structure
 // that mirrors the interface we need for the tests
@@ -31,7 +31,7 @@ const create_part = (partial: Partial<SimplePart> = {}): SimplePart => {
 		type,
 		xml_tag_name_default: type === 'diskfile' ? 'File' : 'Fragment',
 		attributes: [],
-		...partial,
+		...partial
 	};
 };
 
@@ -43,8 +43,8 @@ test('format_prompt_content - returns empty string for empty parts array', () =>
 
 test('format_prompt_content - filters out disabled parts', () => {
 	const parts = [
-		create_part({enabled: false, content: 'Content 1'}),
-		create_part({enabled: true, content: 'Content 2'}),
+		create_part({ enabled: false, content: 'Content 1' }),
+		create_part({ enabled: true, content: 'Content 2' })
 	];
 
 	const result = format_prompt_content(parts as any);
@@ -52,7 +52,7 @@ test('format_prompt_content - filters out disabled parts', () => {
 });
 
 test('format_prompt_content - joins multiple enabled parts with double newlines', () => {
-	const parts = [create_part({content: 'Content 1'}), create_part({content: 'Content 2'})];
+	const parts = [create_part({ content: 'Content 1' }), create_part({ content: 'Content 2' })];
 
 	const result = format_prompt_content(parts as any);
 	assert.strictEqual(result, 'Content 1\n\nContent 2');
@@ -64,8 +64,8 @@ test('format_prompt_content - wraps content with XML tags when specified', () =>
 		create_part({
 			content: 'Content with tag',
 			has_xml_tag: true,
-			xml_tag_name: 'system',
-		}),
+			xml_tag_name: 'system'
+		})
 	];
 
 	const result = format_prompt_content(parts as any);
@@ -78,8 +78,8 @@ test('format_prompt_content - uses xml_tag_name_default when no XML tag name is 
 			content: 'Content with default tag',
 			has_xml_tag: true,
 			xml_tag_name: '',
-			type: 'text',
-		}),
+			type: 'text'
+		})
 	];
 
 	const result = format_prompt_content(parts as any);
@@ -93,20 +93,20 @@ test('format_prompt_content - uses different part types as defaults', () => {
 			content: 'File content',
 			has_xml_tag: true,
 			xml_tag_name: '',
-			type: 'diskfile',
+			type: 'diskfile'
 		}),
 		create_part({
 			content: 'Sequence content',
 			has_xml_tag: true,
 			xml_tag_name: '',
-			type: 'sequence',
-		}),
+			type: 'sequence'
+		})
 	];
 
 	const result = format_prompt_content(parts as any);
 	assert.strictEqual(
 		result,
-		'<File>\nFile content\n</File>\n\n<Fragment>\nSequence content\n</Fragment>',
+		'<File>\nFile content\n</File>\n\n<Fragment>\nSequence content\n</Fragment>'
 	);
 });
 
@@ -116,26 +116,26 @@ test('format_prompt_content - uses different default XML tag names for different
 			content: 'File content',
 			has_xml_tag: true,
 			xml_tag_name: '',
-			type: 'diskfile',
+			type: 'diskfile'
 		}),
 		create_part({
 			content: 'Text content',
 			has_xml_tag: true,
 			xml_tag_name: '',
-			type: 'text',
+			type: 'text'
 		}),
 		create_part({
 			content: 'Sequence content',
 			has_xml_tag: true,
 			xml_tag_name: '',
-			type: 'sequence',
-		}),
+			type: 'sequence'
+		})
 	];
 
 	const result = format_prompt_content(parts as any);
 	assert.strictEqual(
 		result,
-		'<File>\nFile content\n</File>\n\n<Fragment>\nText content\n</Fragment>\n\n<Fragment>\nSequence content\n</Fragment>',
+		'<File>\nFile content\n</File>\n\n<Fragment>\nText content\n</Fragment>\n\n<Fragment>\nSequence content\n</Fragment>'
 	);
 });
 
@@ -146,8 +146,8 @@ test('format_prompt_content - includes attributes with key and value', () => {
 			content: 'Content with attributes',
 			has_xml_tag: true,
 			xml_tag_name: 'div',
-			attributes: [{id: '1', key: 'class', value: 'container'}],
-		}),
+			attributes: [{ id: '1', key: 'class', value: 'container' }]
+		})
 	];
 
 	const result = format_prompt_content(parts as any);
@@ -160,8 +160,8 @@ test('format_prompt_content - handles empty values as boolean attributes', () =>
 			content: 'Content with boolean attribute',
 			has_xml_tag: true,
 			xml_tag_name: 'input',
-			attributes: [{id: '1', key: 'disabled', value: ''}],
-		}),
+			attributes: [{ id: '1', key: 'disabled', value: '' }]
+		})
 	];
 
 	const result = format_prompt_content(parts as any);
@@ -175,16 +175,16 @@ test('format_prompt_content - handles explicitly empty string values', () => {
 			has_xml_tag: true,
 			xml_tag_name: 'div',
 			attributes: [
-				{id: '1', key: 'data-test', value: ''}, // Empty string should be boolean attribute
-				{id: '2', key: 'class', value: 'container'}, // Normal attribute
-			],
-		}),
+				{ id: '1', key: 'data-test', value: '' }, // Empty string should be boolean attribute
+				{ id: '2', key: 'class', value: 'container' } // Normal attribute
+			]
+		})
 	];
 
 	const result = format_prompt_content(parts as any);
 	assert.strictEqual(
 		result,
-		'<div data-test class="container">\nContent with explicit empty value\n</div>',
+		'<div data-test class="container">\nContent with explicit empty value\n</div>'
 	);
 });
 
@@ -194,8 +194,8 @@ test('format_prompt_content - filters out attributes without keys', () => {
 			content: 'Content with missing key',
 			has_xml_tag: true,
 			xml_tag_name: 'div',
-			attributes: [{id: '1', key: '', value: 'should-be-ignored'}],
-		}),
+			attributes: [{ id: '1', key: '', value: 'should-be-ignored' }]
+		})
 	];
 
 	const result = format_prompt_content(parts as any);
@@ -209,19 +209,19 @@ test('format_prompt_content - handles multiple attributes with mix of empty and 
 			has_xml_tag: true,
 			xml_tag_name: 'div',
 			attributes: [
-				{id: '1', key: 'class', value: 'container'},
-				{id: '2', key: 'id', value: 'main'},
-				{id: '3', key: 'data-test', value: 'true'},
-				{id: '4', key: 'hidden', value: ''},
-				{id: '5', key: 'disabled', value: ''},
-			],
-		}),
+				{ id: '1', key: 'class', value: 'container' },
+				{ id: '2', key: 'id', value: 'main' },
+				{ id: '3', key: 'data-test', value: 'true' },
+				{ id: '4', key: 'hidden', value: '' },
+				{ id: '5', key: 'disabled', value: '' }
+			]
+		})
 	];
 
 	const result = format_prompt_content(parts as any);
 	assert.strictEqual(
 		result,
-		'<div class="container" id="main" data-test="true" hidden disabled>\nMultiple attributes\n</div>',
+		'<div class="container" id="main" data-test="true" hidden disabled>\nMultiple attributes\n</div>'
 	);
 });
 
@@ -233,10 +233,10 @@ test('format_prompt_content - ignores attributes with empty keys after trimming'
 			has_xml_tag: true,
 			xml_tag_name: 'div',
 			attributes: [
-				{id: '1', key: '   ', value: 'should-be-ignored'},
-				{id: '2', key: 'class', value: 'container'},
-			],
-		}),
+				{ id: '1', key: '   ', value: 'should-be-ignored' },
+				{ id: '2', key: 'class', value: 'container' }
+			]
+		})
 	];
 
 	const result = format_prompt_content(parts as any);
@@ -250,16 +250,16 @@ test('format_prompt_content - trims attribute keys before rendering', () => {
 			has_xml_tag: true,
 			xml_tag_name: 'div',
 			attributes: [
-				{id: '1', key: '  class  ', value: 'container'},
-				{id: '2', key: ' data-test ', value: 'true'},
-			],
-		}),
+				{ id: '1', key: '  class  ', value: 'container' },
+				{ id: '2', key: ' data-test ', value: 'true' }
+			]
+		})
 	];
 
 	const result = format_prompt_content(parts as any);
 	assert.strictEqual(
 		result,
-		'<div class="container" data-test="true">\nContent with trimmed keys\n</div>',
+		'<div class="container" data-test="true">\nContent with trimmed keys\n</div>'
 	);
 });
 
@@ -270,12 +270,12 @@ test('format_prompt_content - removes attributes with empty keys but preserves o
 			has_xml_tag: true,
 			xml_tag_name: 'div',
 			attributes: [
-				{id: '1', key: '', value: 'invalid'},
-				{id: '2', key: 'class', value: 'container'},
-				{id: '3', key: '  ', value: 'also-invalid'},
-				{id: '4', key: 'data-valid', value: 'true'},
-			],
-		}),
+				{ id: '1', key: '', value: 'invalid' },
+				{ id: '2', key: 'class', value: 'container' },
+				{ id: '3', key: '  ', value: 'also-invalid' },
+				{ id: '4', key: 'data-valid', value: 'true' }
+			]
+		})
 	];
 
 	const result = format_prompt_content(parts as any);
@@ -288,8 +288,8 @@ test('format_prompt_content - filters out attributes with empty keys', () => {
 			content: 'Content with empty key',
 			has_xml_tag: true,
 			xml_tag_name: 'div',
-			attributes: [{id: '1', key: '', value: 'should-be-ignored'}],
-		}),
+			attributes: [{ id: '1', key: '', value: 'should-be-ignored' }]
+		})
 	];
 
 	const result = format_prompt_content(parts as any);
@@ -298,7 +298,7 @@ test('format_prompt_content - filters out attributes with empty keys', () => {
 
 // Edge cases
 test('format_prompt_content - trims whitespace from content', () => {
-	const parts = [create_part({content: '  Content with whitespace  '})];
+	const parts = [create_part({ content: '  Content with whitespace  ' })];
 
 	const result = format_prompt_content(parts as any);
 	assert.strictEqual(result, 'Content with whitespace');
@@ -306,9 +306,9 @@ test('format_prompt_content - trims whitespace from content', () => {
 
 test('format_prompt_content - skips parts with empty content', () => {
 	const parts = [
-		create_part({content: ''}),
-		create_part({content: '  '}),
-		create_part({content: 'Real content'}),
+		create_part({ content: '' }),
+		create_part({ content: '  ' }),
+		create_part({ content: 'Real content' })
 	];
 
 	const result = format_prompt_content(parts as any);
@@ -320,8 +320,8 @@ test('format_prompt_content - trims whitespace from XML tag name', () => {
 		create_part({
 			content: 'Trimmed tag name',
 			has_xml_tag: true,
-			xml_tag_name: '  system  ',
-		}),
+			xml_tag_name: '  system  '
+		})
 	];
 
 	const result = format_prompt_content(parts as any);
@@ -337,7 +337,7 @@ test('format_prompt_content - ensures diskfile parts have path attribute', () =>
 		has_xml_tag: true,
 		xml_tag_name: '',
 		relative_path: 'src/example.ts', // Add this property for the test
-		attributes: [{id: '1', key: 'path', value: 'src/example.ts'}], // Pre-set attribute for mock
+		attributes: [{ id: '1', key: 'path', value: 'src/example.ts' }] // Pre-set attribute for mock
 	});
 
 	const result = format_prompt_content([diskfile_part] as any);
@@ -353,15 +353,15 @@ test('format_prompt_content - combines path attribute with other attributes for 
 		xml_tag_name: 'code',
 		relative_path: 'src/utils.js',
 		attributes: [
-			{id: '1', key: 'path', value: 'src/utils.js'},
-			{id: '2', key: 'language', value: 'javascript'},
-			{id: '3', key: 'highlight', value: ''},
-		],
+			{ id: '1', key: 'path', value: 'src/utils.js' },
+			{ id: '2', key: 'language', value: 'javascript' },
+			{ id: '3', key: 'highlight', value: '' }
+		]
 	});
 
 	const result = format_prompt_content([diskfile_part] as any);
 	assert.strictEqual(
 		result,
-		'<code path="src/utils.js" language="javascript" highlight>\nFile with multiple attributes\n</code>',
+		'<code path="src/utils.js" language="javascript" highlight>\nFile with multiple attributes\n</code>'
 	);
 });

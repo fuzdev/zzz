@@ -1,19 +1,19 @@
-import {z} from 'zod';
+import { z } from 'zod';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {Model, ModelJson, type ModelJsonInput} from './model.svelte.ts';
-import {HANDLED} from './cell_helpers.ts';
-import {IndexedCollection} from './indexed_collection.svelte.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { Model, ModelJson, type ModelJsonInput } from './model.svelte.ts';
+import { HANDLED } from './cell_helpers.ts';
+import { IndexedCollection } from './indexed_collection.svelte.ts';
 import {
 	create_single_index,
 	create_multi_index,
-	create_derived_index,
+	create_derived_index
 } from './indexed_collection_helpers.svelte.ts';
-import {CellJson} from './cell_types.ts';
+import { CellJson } from './cell_types.ts';
 
 export const ModelsJson = CellJson.extend({
-	items: z.array(ModelJson).default(() => []),
-}).meta({cell_class_name: 'Models'});
+	items: z.array(ModelJson).default(() => [])
+}).meta({ cell_class_name: 'Models' });
 export type ModelsJson = z.infer<typeof ModelsJson>;
 export type ModelsJsonInput = z.input<typeof ModelsJson>;
 
@@ -30,28 +30,28 @@ export class Models extends Cell<typeof ModelsJson> {
 			create_single_index({
 				key: 'name',
 				extractor: (model) => model.name,
-				query_schema: z.string(),
+				query_schema: z.string()
 			}),
 
 			create_multi_index({
 				key: 'provider_name',
 				extractor: (model) => model.provider_name,
-				query_schema: z.string(),
+				query_schema: z.string()
 			}),
 
 			create_multi_index({
 				key: 'tag',
 				extractor: (model) => model.tags,
 				query_schema: z.string(),
-				matches: (model) => model.tags.length > 0,
+				matches: (model) => model.tags.length > 0
 			}),
 
 			create_derived_index({
 				key: 'ordered_by_name',
 				compute: (collection) => collection.values,
-				sort: (a, b) => a.name.localeCompare(b.name),
-			}),
-		],
+				sort: (a, b) => a.name.localeCompare(b.name)
+			})
+		]
 	});
 
 	/** Get all models ordered alphabetically by name. */
@@ -72,19 +72,19 @@ export class Models extends Cell<typeof ModelsJson> {
 					}
 				}
 				return HANDLED;
-			},
+			}
 		};
 
 		this.init();
 	}
 
 	add(model_json: ModelJsonInput): void {
-		const model = new Model({app: this.app, json: model_json});
+		const model = new Model({ app: this.app, json: model_json });
 		this.items.add(model);
 	}
 
 	add_many(models_json: Array<ModelJsonInput>): void {
-		const models = models_json.map((json) => new Model({app: this.app, json}));
+		const models = models_json.map((json) => new Model({ app: this.app, json }));
 		this.items.add_many(models);
 	}
 

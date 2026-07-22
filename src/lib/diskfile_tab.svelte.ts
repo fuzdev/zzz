@@ -1,14 +1,14 @@
-import {z} from 'zod';
-import {Uuid} from '@fuzdev/fuz_util/id.ts';
+import { z } from 'zod';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {CellJson} from './cell_types.ts';
-import type {Diskfile} from './diskfile.svelte.ts';
-import type {DiskfileTabs} from './diskfile_tabs.svelte.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { CellJson } from './cell_types.ts';
+import type { Diskfile } from './diskfile.svelte.ts';
+import type { DiskfileTabs } from './diskfile_tabs.svelte.ts';
 
 export const DiskfileTabJson = CellJson.extend({
-	diskfile_id: Uuid,
-}).meta({cell_class_name: 'DiskfileTab'});
+	diskfile_id: Uuid
+}).meta({ cell_class_name: 'DiskfileTab' });
 export type DiskfileTabJson = z.infer<typeof DiskfileTabJson>;
 export type DiskfileTabJsonInput = z.input<typeof DiskfileTabJson>;
 
@@ -38,7 +38,7 @@ export class DiskfileTab extends Cell<typeof DiskfileTabJson> {
 	readonly is_selected: boolean = $derived.by(() => this.tabs.selected_tab_id === this.id);
 
 	readonly diskfile: Diskfile | undefined = $derived(
-		this.app.diskfiles.items.by_id.get(this.diskfile_id),
+		this.app.diskfiles.items.by_id.get(this.diskfile_id)
 	);
 
 	constructor(options: DiskfileTabOptions) {

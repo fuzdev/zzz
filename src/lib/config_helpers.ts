@@ -1,5 +1,5 @@
-import type {ProviderJsonInput} from './provider.svelte.ts';
-import type {ModelJsonInput, ModelName} from './model.svelte.ts';
+import type { ProviderJsonInput } from './provider.svelte.ts';
+import type { ModelJsonInput, ModelName } from './model.svelte.ts';
 
 // TODO expand similar to gitops/gro config
 

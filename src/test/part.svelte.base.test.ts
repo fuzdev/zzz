@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 
-import {test, assert, describe, beforeEach} from 'vitest';
-import {create_uuid} from '@fuzdev/fuz_util/id.ts';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
+import { test, assert, describe, beforeEach } from 'vitest';
+import { create_uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import {Part, TextPart, DiskfilePart} from '$lib/part.svelte.ts';
-import {DiskfileDirectoryPath, DiskfilePath} from '$lib/diskfile_types.ts';
-import {Frontend} from '$lib/frontend.svelte.ts';
-import {estimate_token_count} from '$lib/helpers.ts';
+import { Part, TextPart, DiskfilePart } from '$lib/part.svelte.ts';
+import { DiskfileDirectoryPath, DiskfilePath } from '$lib/diskfile_types.ts';
+import { Frontend } from '$lib/frontend.svelte.ts';
+import { estimate_token_count } from '$lib/helpers.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Test suite variables
 let app: Frontend;
@@ -18,7 +18,7 @@ let app: Frontend;
 const TEST_CONTENT = {
 	BASIC: 'Basic test content',
 	SECONDARY: 'Secondary test content',
-	EMPTY: '',
+	EMPTY: ''
 };
 
 const TEST_PATH = DiskfilePath.parse('/path/to/test/file.txt');
@@ -33,16 +33,16 @@ describe('Part base class functionality', () => {
 	test('attribute management works across all part types', () => {
 		const text_part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: TEST_CONTENT.BASIC,
+			content: TEST_CONTENT.BASIC
 		});
 
 		const diskfile_part = app.cell_registry.instantiate('DiskfilePart', {
 			type: 'diskfile',
-			path: TEST_PATH,
+			path: TEST_PATH
 		});
 
 		for (const part of [text_part, diskfile_part]) {
-			part.add_attribute({key: 'test-attr', value: 'test-value'});
+			part.add_attribute({ key: 'test-attr', value: 'test-value' });
 			assert.strictEqual(part.attributes.length, 1);
 			let first_attr = part.attributes[0];
 			if (!first_attr) throw new Error('Expected first attribute');
@@ -51,14 +51,14 @@ describe('Part base class functionality', () => {
 
 			const attr_id = first_attr.id;
 
-			const updated = part.update_attribute(attr_id, {value: 'updated-value'});
+			const updated = part.update_attribute(attr_id, { value: 'updated-value' });
 			assert.ok(updated);
 			first_attr = part.attributes[0];
 			if (!first_attr) throw new Error('Expected attribute after update');
 			assert.strictEqual(first_attr.key, 'test-attr');
 			assert.strictEqual(first_attr.value, 'updated-value');
 
-			part.update_attribute(attr_id, {key: 'updated-key', value: 'updated-value-2'});
+			part.update_attribute(attr_id, { key: 'updated-key', value: 'updated-value-2' });
 			first_attr = part.attributes[0];
 			if (!first_attr) throw new Error('Expected attribute after second update');
 			assert.strictEqual(first_attr.key, 'updated-key');
@@ -68,7 +68,7 @@ describe('Part base class functionality', () => {
 			assert.strictEqual(part.attributes.length, 0);
 
 			const non_existent_update = part.update_attribute(create_uuid(), {
-				value: 'test',
+				value: 'test'
 			});
 			assert.ok(!non_existent_update);
 		}
@@ -78,7 +78,7 @@ describe('Part base class functionality', () => {
 		// Create a text part to test length and token properties
 		const text_part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: TEST_CONTENT.BASIC,
+			content: TEST_CONTENT.BASIC
 		});
 
 		// Test initial derivations
@@ -98,13 +98,13 @@ describe('Part factory method', () => {
 		const text_part = Part.create(app, {
 			type: 'text',
 			content: TEST_CONTENT.BASIC,
-			name: 'Text Part',
+			name: 'Text Part'
 		});
 
 		const diskfile_part = Part.create(app, {
 			type: 'diskfile',
 			path: TEST_PATH,
-			name: 'Diskfile Part',
+			name: 'Diskfile Part'
 		});
 
 		assert.instanceOf(text_part, TextPart);
@@ -120,7 +120,7 @@ describe('Part factory method', () => {
 
 	test('Part.create throws error for unknown part type', () => {
 		const invalid_json = {
-			type: 'unknown' as const,
+			type: 'unknown' as const
 		};
 
 		assert.throws(() => Part.create(app, invalid_json as any), /Unreachable case: unknown/);
@@ -128,12 +128,12 @@ describe('Part factory method', () => {
 
 	test('Part.create throws error for missing type field', () => {
 		const invalid_json = {
-			name: 'Test',
+			name: 'Test'
 		};
 
 		assert.throws(
 			() => Part.create(app, invalid_json as any),
-			/Missing required "type" field in part JSON/,
+			/Missing required "type" field in part JSON/
 		);
 	});
 });
@@ -143,7 +143,7 @@ describe('TextPart specific behavior', () => {
 		// Create with constructor
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: TEST_CONTENT.BASIC,
+			content: TEST_CONTENT.BASIC
 		});
 
 		assert.strictEqual(part.type, 'text');
@@ -175,11 +175,11 @@ describe('TextPart specific behavior', () => {
 			end: 15,
 			enabled: false,
 			title: 'Test Title',
-			summary: 'Test Summary',
+			summary: 'Test Summary'
 		});
 
 		// Add attributes
-		original.add_attribute({key: 'class', value: 'highlight'});
+		original.add_attribute({ key: 'class', value: 'highlight' });
 
 		// Serialize to JSON
 		const json = original.to_json();
@@ -211,7 +211,7 @@ describe('TextPart specific behavior', () => {
 		const original = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
 			content: TEST_CONTENT.BASIC,
-			name: 'Original',
+			name: 'Original'
 		});
 
 		// Clone the part
@@ -242,13 +242,13 @@ describe('DiskfilePart specific behavior', () => {
 		const diskfile = app.diskfiles.add({
 			path: TEST_PATH,
 			source_dir: TEST_DIR,
-			content: TEST_CONTENT.BASIC,
+			content: TEST_CONTENT.BASIC
 		});
 
 		// Create diskfile part that references the diskfile
 		const part = app.cell_registry.instantiate('DiskfilePart', {
 			type: 'diskfile',
-			path: TEST_PATH,
+			path: TEST_PATH
 		});
 
 		// Test basic properties
@@ -268,7 +268,7 @@ describe('DiskfilePart specific behavior', () => {
 	test('DiskfilePart handles null path properly', () => {
 		const part = app.cell_registry.instantiate('DiskfilePart', {
 			type: 'diskfile',
-			path: null,
+			path: null
 		});
 
 		assert.isNull(part.path);
@@ -284,19 +284,19 @@ describe('DiskfilePart specific behavior', () => {
 		app.diskfiles.add({
 			path: path1,
 			source_dir: DiskfileDirectoryPath.parse('/path/'),
-			content: 'File 1 content',
+			content: 'File 1 content'
 		});
 
 		app.diskfiles.add({
 			path: path2,
 			source_dir: DiskfileDirectoryPath.parse('/path/'),
-			content: 'File 2 content',
+			content: 'File 2 content'
 		});
 
 		// Create part referencing first file
 		const part = app.cell_registry.instantiate('DiskfilePart', {
 			type: 'diskfile',
-			path: path1,
+			path: path1
 		});
 
 		assert.strictEqual(part.path, path1);
@@ -316,14 +316,14 @@ describe('Common part behavior across types', () => {
 			type: 'text',
 			content: TEST_CONTENT.BASIC,
 			start: 5,
-			end: 10,
+			end: 10
 		});
 
 		const diskfile_part = app.cell_registry.instantiate('DiskfilePart', {
 			type: 'diskfile',
 			path: TEST_PATH,
 			start: 15,
-			end: 20,
+			end: 20
 		});
 
 		assert.strictEqual(text_part.start, 5);
@@ -349,13 +349,13 @@ describe('Common part behavior across types', () => {
 		const text_part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
 			has_xml_tag: true,
-			xml_tag_name: 'text-tag',
+			xml_tag_name: 'text-tag'
 		});
 
 		const diskfile_part = app.cell_registry.instantiate('DiskfilePart', {
 			type: 'diskfile',
 			has_xml_tag: true,
-			xml_tag_name: 'file-tag',
+			xml_tag_name: 'file-tag'
 		});
 
 		assert.ok(text_part.has_xml_tag);
@@ -384,10 +384,10 @@ describe('Common part behavior across types', () => {
 		assert.ok(diskfile_part.has_xml_tag);
 
 		const custom_text_part = app.cell_registry.instantiate('TextPart', {
-			has_xml_tag: true,
+			has_xml_tag: true
 		});
 		const custom_diskfile_part = app.cell_registry.instantiate('DiskfilePart', {
-			has_xml_tag: false,
+			has_xml_tag: false
 		});
 
 		assert.ok(custom_text_part.has_xml_tag);

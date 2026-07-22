@@ -1,13 +1,13 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
+	import { slide } from 'svelte/transition';
 
-	import type {Chat} from './chat.svelte.ts';
-	import {Reorderable} from './reorderable.svelte.ts';
+	import type { Chat } from './chat.svelte.ts';
+	import { Reorderable } from './reorderable.svelte.ts';
 	import ThreadListitem from './ThreadListitem.svelte';
-	import {frontend_context} from './frontend.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 
 	const {
-		chat = frontend_context.get().chats.selected,
+		chat = frontend_context.get().chats.selected
 	}: {
 		chat?: Chat | undefined;
 	} = $props();
@@ -23,11 +23,11 @@
 		{@attach reorderable.list({
 			onreorder: (from_index, to_index) => {
 				chat.reorder_threads(from_index, to_index);
-			},
+			}
 		})}
 	>
 		{#each chat.threads as thread, i (thread.id)}
-			<li class="border_radius_xs" {@attach reorderable.item({index: i})} transition:slide>
+			<li class="border_radius_xs" {@attach reorderable.item({ index: i })} transition:slide>
 				<ThreadListitem {thread} {chat} />
 			</li>
 		{/each}

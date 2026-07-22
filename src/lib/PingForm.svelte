@@ -1,25 +1,25 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
-	import type {Snippet} from 'svelte';
+	import { slide } from 'svelte/transition';
+	import type { Snippet } from 'svelte';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 
-	import {frontend_context} from './frontend.svelte.ts';
-	import {icon_action_request_response, icon_ping, icon_xmark} from '@fuzdev/fuz_ui/icons.ts';
+	import { frontend_context } from './frontend.svelte.ts';
+	import { icon_action_request_response, icon_ping, icon_xmark } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {PING_HISTORY_MAX, type PingData} from './capabilities.svelte.ts';
+	import { PING_HISTORY_MAX, type PingData } from './capabilities.svelte.ts';
 
 	const {
-		children,
+		children
 	}: {
 		children?: Snippet | undefined;
 	} = $props();
 
 	const app = frontend_context.get();
-	const {capabilities} = app;
+	const { capabilities } = app;
 
 	// Calculate placeholders to maintain consistent spacing
 	const remaining_placeholders = $derived(
-		Math.max(0, PING_HISTORY_MAX - capabilities.pings.length),
+		Math.max(0, PING_HISTORY_MAX - capabilities.pings.length)
 	);
 
 	// TODO consider multiple buttons for each transport, so we can compare latency
@@ -46,7 +46,7 @@
 		{/each}
 
 		<!-- Empty placeholders to maintain consistent size -->
-		{#each {length: remaining_placeholders} as _, i (i)}
+		{#each { length: remaining_placeholders } as _, i (i)}
 			<li transition:slide>
 				<div style:visibility="hidden">
 					{@render ping_item({
@@ -54,7 +54,7 @@
 						completed: true,
 						sent_time: 0,
 						received_time: 0,
-						round_trip_time: 0,
+						round_trip_time: 0
 					})}
 				</div>
 			</li>

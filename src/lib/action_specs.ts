@@ -1,17 +1,17 @@
-import {z} from 'zod';
-import {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.ts';
+import { z } from 'zod';
+import { JsonrpcRequestId } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import type {
 	LocalCallActionSpec,
 	RemoteNotificationActionSpec,
 	RequestResponseActionSpec,
-	ActionSpecUnion,
+	ActionSpecUnion
 } from '@fuzdev/fuz_app/actions/action_spec.ts';
-import {heartbeat_action_spec} from '@fuzdev/fuz_app/actions/heartbeat.ts';
-import {cancel_action_spec} from '@fuzdev/fuz_app/actions/cancel.ts';
-import {peer_ping_action_spec} from '@fuzdev/fuz_app/actions/peer_ping.ts';
-import {protocol_action_specs} from '@fuzdev/fuz_app/actions/protocol.ts';
-import {Uuid} from '@fuzdev/fuz_util/id.ts';
-import {ActingActor} from '@fuzdev/fuz_app/http/auth_shape.ts';
+import { heartbeat_action_spec } from '@fuzdev/fuz_app/actions/heartbeat.ts';
+import { cancel_action_spec } from '@fuzdev/fuz_app/actions/cancel.ts';
+import { peer_ping_action_spec } from '@fuzdev/fuz_app/actions/peer_ping.ts';
+import { protocol_action_specs } from '@fuzdev/fuz_app/actions/protocol.ts';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { ActingActor } from '@fuzdev/fuz_app/http/auth_shape.ts';
 
 // Re-export so codegen (which builds `import * as specs from './action_specs'`)
 // resolves `specs.heartbeat_action_spec` / `specs.cancel_action_spec` /
@@ -21,17 +21,17 @@ import {ActingActor} from '@fuzdev/fuz_app/http/auth_shape.ts';
 // the re-exports are name aliases only — nothing is duplicated at runtime. A
 // `create_protocol_aware_qualifier`-style helper in fuz_app could eliminate this
 // enumeration; tracked as a follow-up.
-export {heartbeat_action_spec, cancel_action_spec, peer_ping_action_spec};
+export { heartbeat_action_spec, cancel_action_spec, peer_ping_action_spec };
 
 import {
 	DiskfileChange,
 	DiskfileDirectoryPath,
 	DiskfilePath,
-	SerializableDisknode,
+	SerializableDisknode
 } from './diskfile_types.ts';
-import {ProviderStatus, ProviderName} from './provider_types.ts';
-import {CompletionMessage, CompletionRequest, CompletionResponse} from './completion_types.ts';
-import {WorkspaceInfoJson} from './workspace.svelte.ts';
+import { ProviderStatus, ProviderName } from './provider_types.ts';
+import { CompletionMessage, CompletionRequest, CompletionResponse } from './completion_types.ts';
+import { WorkspaceInfoJson } from './workspace.svelte.ts';
 
 // -- Shared sub-schemas -----------------------------------------------------
 
@@ -41,14 +41,14 @@ import {WorkspaceInfoJson} from './workspace.svelte.ts';
  * with the originating request. `looseObject` lets transports tack on
  * additional MCP-style metadata without a schema bump.
  */
-export const ProgressMeta = z.looseObject({progressToken: Uuid.optional()});
+export const ProgressMeta = z.looseObject({ progressToken: Uuid.optional() });
 export type ProgressMeta = z.infer<typeof ProgressMeta>;
 
 // -- Input/output schemas ---------------------------------------------------
 
 /** Output for `ping`. Echoes the JSON-RPC request id back as `ping_id`. */
 export const PingOutput = z.strictObject({
-	ping_id: JsonrpcRequestId,
+	ping_id: JsonrpcRequestId
 });
 export type PingOutput = z.infer<typeof PingOutput>;
 
@@ -65,7 +65,7 @@ export const SessionLoadData = z.strictObject({
 	scoped_dirs: z.readonly(z.array(DiskfileDirectoryPath)),
 	files: z.array(SerializableDisknode),
 	provider_status: z.array(ProviderStatus),
-	workspaces: z.array(WorkspaceInfoJson),
+	workspaces: z.array(WorkspaceInfoJson)
 });
 export type SessionLoadData = z.infer<typeof SessionLoadData>;
 
@@ -76,47 +76,47 @@ export type SessionLoadData = z.infer<typeof SessionLoadData>;
  * both sides.
  */
 export const SessionLoadOutput = z.strictObject({
-	data: SessionLoadData,
+	data: SessionLoadData
 });
 export type SessionLoadOutput = z.infer<typeof SessionLoadOutput>;
 
 /** Input for `filer_change`. */
 export const FilerChangeInput = z.strictObject({
 	change: DiskfileChange,
-	disknode: SerializableDisknode,
+	disknode: SerializableDisknode
 });
 export type FilerChangeInput = z.infer<typeof FilerChangeInput>;
 
 /** Input for `diskfile_update`. */
 export const DiskfileUpdateInput = z.strictObject({
 	path: DiskfilePath,
-	content: z.string(),
+	content: z.string()
 });
 export type DiskfileUpdateInput = z.infer<typeof DiskfileUpdateInput>;
 
 /** Input for `diskfile_delete`. */
 export const DiskfileDeleteInput = z.strictObject({
-	path: DiskfilePath,
+	path: DiskfilePath
 });
 export type DiskfileDeleteInput = z.infer<typeof DiskfileDeleteInput>;
 
 /** Input for `directory_create`. */
 export const DirectoryCreateInput = z.strictObject({
-	path: DiskfilePath,
+	path: DiskfilePath
 });
 export type DirectoryCreateInput = z.infer<typeof DirectoryCreateInput>;
 
 /** Input for `completion_create`. */
 export const CompletionCreateInput = z.strictObject({
 	completion_request: CompletionRequest,
-	_meta: ProgressMeta.optional(),
+	_meta: ProgressMeta.optional()
 });
 export type CompletionCreateInput = z.infer<typeof CompletionCreateInput>;
 
 /** Output for `completion_create`. */
 export const CompletionCreateOutput = z.strictObject({
 	completion_response: CompletionResponse,
-	_meta: ProgressMeta.optional(),
+	_meta: ProgressMeta.optional()
 });
 export type CompletionCreateOutput = z.infer<typeof CompletionCreateOutput>;
 
@@ -134,32 +134,32 @@ export const CompletionProgressInput = z.strictObject({
 			model: z.string().optional(),
 			created_at: z.string().optional(),
 			done: z.boolean().optional(),
-			message: CompletionMessage.optional(),
+			message: CompletionMessage.optional()
 		})
 		.optional(),
-	_meta: ProgressMeta.optional(),
+	_meta: ProgressMeta.optional()
 });
 export type CompletionProgressInput = z.infer<typeof CompletionProgressInput>;
 
 // TODO this is just a placeholder for a local call
 /** Input for `toggle_main_menu`. Optional — omit to toggle, pass `{show}` to set explicitly. */
-export const ToggleMainMenuInput = z.strictObject({show: z.boolean().optional()}).optional();
+export const ToggleMainMenuInput = z.strictObject({ show: z.boolean().optional() }).optional();
 export type ToggleMainMenuInput = z.infer<typeof ToggleMainMenuInput>;
 
 /** Output for `toggle_main_menu`. */
-export const ToggleMainMenuOutput = z.strictObject({show: z.boolean()});
+export const ToggleMainMenuOutput = z.strictObject({ show: z.boolean() });
 export type ToggleMainMenuOutput = z.infer<typeof ToggleMainMenuOutput>;
 
 /** Input for `provider_load_status`. */
 export const ProviderLoadStatusInput = z.strictObject({
 	provider_name: ProviderName,
-	reload: z.boolean().default(true).optional(),
+	reload: z.boolean().default(true).optional()
 });
 export type ProviderLoadStatusInput = z.infer<typeof ProviderLoadStatusInput>;
 
 /** Output for `provider_load_status`. */
 export const ProviderLoadStatusOutput = z.strictObject({
-	status: ProviderStatus,
+	status: ProviderStatus
 });
 export type ProviderLoadStatusOutput = z.infer<typeof ProviderLoadStatusOutput>;
 
@@ -167,13 +167,13 @@ export type ProviderLoadStatusOutput = z.infer<typeof ProviderLoadStatusOutput>;
 export const ProviderUpdateApiKeyInput = z.strictObject({
 	provider_name: ProviderName,
 	api_key: z.string(),
-	acting: ActingActor,
+	acting: ActingActor
 });
 export type ProviderUpdateApiKeyInput = z.infer<typeof ProviderUpdateApiKeyInput>;
 
 /** Output for `provider_update_api_key`. */
 export const ProviderUpdateApiKeyOutput = z.strictObject({
-	status: ProviderStatus,
+	status: ProviderStatus
 });
 export type ProviderUpdateApiKeyOutput = z.infer<typeof ProviderUpdateApiKeyOutput>;
 
@@ -182,27 +182,27 @@ export const TerminalCreateInput = z.strictObject({
 	command: z.string(),
 	args: z.array(z.string()).default(() => []),
 	cwd: z.string().optional(),
-	preset_id: Uuid.optional(),
+	preset_id: Uuid.optional()
 });
 export type TerminalCreateInput = z.infer<typeof TerminalCreateInput>;
 
 /** Output for `terminal_create`. */
 export const TerminalCreateOutput = z.strictObject({
-	terminal_id: Uuid,
+	terminal_id: Uuid
 });
 export type TerminalCreateOutput = z.infer<typeof TerminalCreateOutput>;
 
 /** Input for `terminal_data_send`. */
 export const TerminalDataSendInput = z.strictObject({
 	terminal_id: Uuid,
-	data: z.string(),
+	data: z.string()
 });
 export type TerminalDataSendInput = z.infer<typeof TerminalDataSendInput>;
 
 /** Input for `terminal_data` (backend → frontend stdout/stderr stream). */
 export const TerminalDataInput = z.strictObject({
 	terminal_id: Uuid,
-	data: z.string(),
+	data: z.string()
 });
 export type TerminalDataInput = z.infer<typeof TerminalDataInput>;
 
@@ -210,59 +210,59 @@ export type TerminalDataInput = z.infer<typeof TerminalDataInput>;
 export const TerminalResizeInput = z.strictObject({
 	terminal_id: Uuid,
 	cols: z.number().int(),
-	rows: z.number().int(),
+	rows: z.number().int()
 });
 export type TerminalResizeInput = z.infer<typeof TerminalResizeInput>;
 
 /** Input for `terminal_close`. */
 export const TerminalCloseInput = z.strictObject({
 	terminal_id: Uuid,
-	signal: z.string().default('SIGTERM').optional(),
+	signal: z.string().default('SIGTERM').optional()
 });
 export type TerminalCloseInput = z.infer<typeof TerminalCloseInput>;
 
 /** Output for `terminal_close`. */
 export const TerminalCloseOutput = z.strictObject({
-	exit_code: z.number().nullable(),
+	exit_code: z.number().nullable()
 });
 export type TerminalCloseOutput = z.infer<typeof TerminalCloseOutput>;
 
 /** Input for `terminal_exited`. */
 export const TerminalExitedInput = z.strictObject({
 	terminal_id: Uuid,
-	exit_code: z.number().nullable(),
+	exit_code: z.number().nullable()
 });
 export type TerminalExitedInput = z.infer<typeof TerminalExitedInput>;
 
 /** Input for `workspace_open`. */
 export const WorkspaceOpenInput = z.strictObject({
-	path: DiskfileDirectoryPath,
+	path: DiskfileDirectoryPath
 });
 export type WorkspaceOpenInput = z.infer<typeof WorkspaceOpenInput>;
 
 /** Output for `workspace_open`. */
 export const WorkspaceOpenOutput = z.strictObject({
 	workspace: WorkspaceInfoJson,
-	files: z.array(SerializableDisknode),
+	files: z.array(SerializableDisknode)
 });
 export type WorkspaceOpenOutput = z.infer<typeof WorkspaceOpenOutput>;
 
 /** Input for `workspace_close`. */
 export const WorkspaceCloseInput = z.strictObject({
-	path: DiskfileDirectoryPath,
+	path: DiskfileDirectoryPath
 });
 export type WorkspaceCloseInput = z.infer<typeof WorkspaceCloseInput>;
 
 /** Output for `workspace_list`. */
 export const WorkspaceListOutput = z.strictObject({
-	workspaces: z.array(WorkspaceInfoJson),
+	workspaces: z.array(WorkspaceInfoJson)
 });
 export type WorkspaceListOutput = z.infer<typeof WorkspaceListOutput>;
 
 /** Input for `workspace_changed`. */
 export const WorkspaceChangedInput = z.strictObject({
 	type: z.enum(['open', 'close']),
-	workspace: WorkspaceInfoJson,
+	workspace: WorkspaceInfoJson
 });
 export type WorkspaceChangedInput = z.infer<typeof WorkspaceChangedInput>;
 
@@ -272,12 +272,12 @@ export const ping_action_spec = {
 	method: 'ping',
 	kind: 'request_response',
 	initiator: 'both',
-	auth: {account: 'none', actor: 'none'},
+	auth: { account: 'none', actor: 'none' },
 	side_effects: false,
 	input: z.void(),
 	output: PingOutput,
 	async: true,
-	description: 'Health check — echoes the request ID back to the caller.',
+	description: 'Health check — echoes the request ID back to the caller.'
 } satisfies RequestResponseActionSpec;
 
 export const session_load_action_spec = {
@@ -286,12 +286,12 @@ export const session_load_action_spec = {
 	// TODO @api is this actually a good restriction to have?
 	// or should the server be calling actions internally too?
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: false,
 	input: z.void(),
 	output: SessionLoadOutput,
 	async: true,
-	description: 'Load initial session data including filesystem state and provider status.',
+	description: 'Load initial session data including filesystem state and provider status.'
 } satisfies RequestResponseActionSpec;
 
 export const filer_change_action_spec = {
@@ -303,56 +303,56 @@ export const filer_change_action_spec = {
 	input: FilerChangeInput,
 	output: z.void(),
 	async: true,
-	description: 'Notifies the frontend of a file system change detected by the watcher.',
+	description: 'Notifies the frontend of a file system change detected by the watcher.'
 } satisfies RemoteNotificationActionSpec;
 
 export const diskfile_update_action_spec = {
 	method: 'diskfile_update',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: DiskfileUpdateInput,
 	output: z.null(),
 	async: true,
-	description: 'Write new content to a file on disk.',
+	description: 'Write new content to a file on disk.'
 } satisfies RequestResponseActionSpec;
 
 export const diskfile_delete_action_spec = {
 	method: 'diskfile_delete',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: DiskfileDeleteInput,
 	output: z.null(),
 	async: true,
-	description: 'Delete a file from disk.',
+	description: 'Delete a file from disk.'
 } satisfies RequestResponseActionSpec;
 
 export const directory_create_action_spec = {
 	method: 'directory_create',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: DirectoryCreateInput,
 	output: z.null(),
 	async: true,
-	description: 'Create a new directory on disk.',
+	description: 'Create a new directory on disk.'
 } satisfies RequestResponseActionSpec;
 
 export const completion_create_action_spec = {
 	method: 'completion_create',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: CompletionCreateInput,
 	output: CompletionCreateOutput,
 	async: true,
 	streams: 'completion_progress',
-	description: 'Start an AI completion request, optionally with a progress token for streaming.',
+	description: 'Start an AI completion request, optionally with a progress token for streaming.'
 } satisfies RequestResponseActionSpec;
 
 export const completion_progress_action_spec = {
@@ -364,7 +364,7 @@ export const completion_progress_action_spec = {
 	input: CompletionProgressInput,
 	output: z.void(),
 	async: true,
-	description: 'Streams a completion chunk to the frontend during a streaming AI response.',
+	description: 'Streams a completion chunk to the frontend during a streaming AI response.'
 } satisfies RemoteNotificationActionSpec;
 
 export const toggle_main_menu_action_spec = {
@@ -376,19 +376,19 @@ export const toggle_main_menu_action_spec = {
 	input: ToggleMainMenuInput,
 	output: ToggleMainMenuOutput,
 	async: false,
-	description: 'Toggle or set the visibility of the main navigation menu.',
+	description: 'Toggle or set the visibility of the main navigation menu.'
 } satisfies LocalCallActionSpec;
 
 export const provider_load_status_action_spec = {
 	method: 'provider_load_status',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: false,
 	input: ProviderLoadStatusInput,
 	output: ProviderLoadStatusOutput,
 	async: true,
-	description: 'Check the availability and status of an AI provider.',
+	description: 'Check the availability and status of an AI provider.'
 } satisfies RequestResponseActionSpec;
 
 export const provider_update_api_key_action_spec = {
@@ -399,37 +399,37 @@ export const provider_update_api_key_action_spec = {
 		account: 'required',
 		actor: 'required',
 		roles: ['keeper'],
-		credential_types: ['daemon_token'],
+		credential_types: ['daemon_token']
 	},
 	side_effects: true,
 	input: ProviderUpdateApiKeyInput,
 	output: ProviderUpdateApiKeyOutput,
 	async: true,
-	description: 'Update the API key for an AI provider.',
+	description: 'Update the API key for an AI provider.'
 } satisfies RequestResponseActionSpec;
 
 export const terminal_create_action_spec = {
 	method: 'terminal_create',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: TerminalCreateInput,
 	output: TerminalCreateOutput,
 	async: true,
-	description: 'Spawn a PTY process and return the terminal ID.',
+	description: 'Spawn a PTY process and return the terminal ID.'
 } satisfies RequestResponseActionSpec;
 
 export const terminal_data_send_action_spec = {
 	method: 'terminal_data_send',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: TerminalDataSendInput,
 	output: z.null(),
 	async: true,
-	description: 'Send stdin bytes to a terminal.',
+	description: 'Send stdin bytes to a terminal.'
 } satisfies RequestResponseActionSpec;
 
 export const terminal_data_action_spec = {
@@ -441,31 +441,31 @@ export const terminal_data_action_spec = {
 	input: TerminalDataInput,
 	output: z.void(),
 	async: true,
-	description: 'Stream stdout/stderr bytes from a terminal to the frontend.',
+	description: 'Stream stdout/stderr bytes from a terminal to the frontend.'
 } satisfies RemoteNotificationActionSpec;
 
 export const terminal_resize_action_spec = {
 	method: 'terminal_resize',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: TerminalResizeInput,
 	output: z.null(),
 	async: true,
-	description: 'Update PTY dimensions for a terminal.',
+	description: 'Update PTY dimensions for a terminal.'
 } satisfies RequestResponseActionSpec;
 
 export const terminal_close_action_spec = {
 	method: 'terminal_close',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: TerminalCloseInput,
 	output: TerminalCloseOutput,
 	async: true,
-	description: 'Kill a terminal process and return the exit code.',
+	description: 'Kill a terminal process and return the exit code.'
 } satisfies RequestResponseActionSpec;
 
 export const terminal_exited_action_spec = {
@@ -477,43 +477,43 @@ export const terminal_exited_action_spec = {
 	input: TerminalExitedInput,
 	output: z.void(),
 	async: true,
-	description: 'Notify the frontend that a terminal process exited naturally.',
+	description: 'Notify the frontend that a terminal process exited naturally.'
 } satisfies RemoteNotificationActionSpec;
 
 export const workspace_open_action_spec = {
 	method: 'workspace_open',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: WorkspaceOpenInput,
 	output: WorkspaceOpenOutput,
 	async: true,
-	description: 'Open a workspace directory — registers with ScopedFs and starts file watching.',
+	description: 'Open a workspace directory — registers with ScopedFs and starts file watching.'
 } satisfies RequestResponseActionSpec;
 
 export const workspace_close_action_spec = {
 	method: 'workspace_close',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: WorkspaceCloseInput,
 	output: z.null(),
 	async: true,
-	description: 'Close a workspace directory — stops file watching and removes from ScopedFs.',
+	description: 'Close a workspace directory — stops file watching and removes from ScopedFs.'
 } satisfies RequestResponseActionSpec;
 
 export const workspace_list_action_spec = {
 	method: 'workspace_list',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: false,
 	input: z.void(),
 	output: WorkspaceListOutput,
 	async: true,
-	description: 'List all open workspaces.',
+	description: 'List all open workspaces.'
 } satisfies RequestResponseActionSpec;
 
 export const workspace_changed_action_spec = {
@@ -525,7 +525,7 @@ export const workspace_changed_action_spec = {
 	input: WorkspaceChangedInput,
 	output: z.void(),
 	async: true,
-	description: 'Notifies frontends when a workspace is opened or closed.',
+	description: 'Notifies frontends when a workspace is opened or closed.'
 } satisfies RemoteNotificationActionSpec;
 
 /**
@@ -563,5 +563,5 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	workspace_open_action_spec,
 	workspace_close_action_spec,
 	workspace_list_action_spec,
-	workspace_changed_action_spec,
+	workspace_changed_action_spec
 ];

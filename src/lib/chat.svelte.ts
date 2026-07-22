@@ -1,17 +1,17 @@
-import {z} from 'zod';
-import type {AsyncStatus} from '@fuzdev/fuz_util/async.ts';
-import {Uuid} from '@fuzdev/fuz_util/id.ts';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
+import { z } from 'zod';
+import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import type {Model} from './model.svelte.ts';
-import {to_completion_response_text} from './response_helpers.ts';
-import {Thread} from './thread.svelte.ts';
-import {reorder_list} from './list_helpers.ts';
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {CellJson} from './cell_types.ts';
-import {get_unique_name, estimate_token_count} from './helpers.ts';
-import {CompletionRequest} from './completion_types.ts';
-import {render_message_with_role} from './thread_helpers.ts';
+import type { Model } from './model.svelte.ts';
+import { to_completion_response_text } from './response_helpers.ts';
+import { Thread } from './thread.svelte.ts';
+import { reorder_list } from './list_helpers.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { CellJson } from './cell_types.ts';
+import { get_unique_name, estimate_token_count } from './helpers.ts';
+import { CompletionRequest } from './completion_types.ts';
+import { render_message_with_role } from './thread_helpers.ts';
 
 const ChatViewMode = z.enum(['simple', 'multi']).default('simple');
 export type ChatViewMode = z.infer<typeof ChatViewMode>;
@@ -21,8 +21,8 @@ export const ChatJson = CellJson.extend({
 	thread_ids: z.array(Uuid).default(() => []),
 	main_input: z.string().default(''),
 	view_mode: ChatViewMode,
-	selected_thread_id: Uuid.nullable().default(null),
-}).meta({cell_class_name: 'Chat'});
+	selected_thread_id: Uuid.nullable().default(null)
+}).meta({ cell_class_name: 'Chat' });
 export type ChatJson = z.infer<typeof ChatJson>;
 export type ChatJsonInput = z.input<typeof ChatJson>;
 
@@ -41,7 +41,7 @@ export class Chat extends Cell<typeof ChatJson> {
 	// TODO look into using an index for this, incremental from `this.thread_ids`
 	readonly threads: Array<Thread> = $derived.by(() => {
 		const result: Array<Thread> = [];
-		const {by_id} = this.app.threads.items;
+		const { by_id } = this.app.threads.items;
 
 		for (const id of this.thread_ids) {
 			const thread = by_id.get(id);
@@ -56,11 +56,11 @@ export class Chat extends Cell<typeof ChatJson> {
 	readonly enabled_threads = $derived(this.threads.filter((t) => t.enabled)); // TODO indexed collection, also disabled variant?
 
 	readonly selected_thread: Thread | undefined = $derived(
-		this.selected_thread_id ? this.app.threads.items.by_id.get(this.selected_thread_id) : undefined,
+		this.selected_thread_id ? this.app.threads.items.by_id.get(this.selected_thread_id) : undefined
 	);
 
 	readonly current_thread: Thread | undefined = $derived(
-		this.selected_thread || this.enabled_threads[0],
+		this.selected_thread || this.enabled_threads[0]
 	);
 
 	// TODO refactor
@@ -72,7 +72,7 @@ export class Chat extends Cell<typeof ChatJson> {
 	}
 
 	add_thread(model: Model, select?: boolean): void {
-		const thread = new Thread({app: this.app, json: {model_name: model.name}});
+		const thread = new Thread({ app: this.app, json: { model_name: model.name } });
 		this.app.threads.add_thread(thread);
 		this.thread_ids.push(thread.id);
 		if (select || (!this.selected_thread_id && this.thread_ids.length === 1)) {
@@ -111,7 +111,7 @@ export class Chat extends Cell<typeof ChatJson> {
 	async send_to_all(content: string): Promise<void> {
 		await Promise.all(
 			// TODO batched endpoint
-			this.enabled_threads.map((thread) => this.send_to_thread(thread.id, content)),
+			this.enabled_threads.map((thread) => this.send_to_thread(thread.id, content))
 		);
 	}
 
@@ -144,7 +144,7 @@ export class Chat extends Cell<typeof ChatJson> {
 		const namerbot_model = this.app.models.find_by_name(this.app.bots.namerbot);
 		if (!namerbot_model) {
 			console.warn(
-				`[chat.init_name_from_turns] namerbot model not found: ${this.app.bots.namerbot}`,
+				`[chat.init_name_from_turns] namerbot model not found: ${this.app.bots.namerbot}`
 			);
 			return; // Stay in 'initial' state for retry later
 		}
@@ -152,7 +152,7 @@ export class Chat extends Cell<typeof ChatJson> {
 		const provider_status = this.app.lookup_provider_status(namerbot_model.provider_name);
 		if (provider_status && !provider_status.available) {
 			console.warn(
-				`[chat.init_name_from_turns] namerbot provider '${namerbot_model.provider_name}' unavailable, skipping auto-naming`,
+				`[chat.init_name_from_turns] namerbot provider '${namerbot_model.provider_name}' unavailable, skipping auto-naming`
 			);
 			return; // Stay in 'initial' state for retry later
 		}
@@ -175,8 +175,8 @@ export class Chat extends Cell<typeof ChatJson> {
 				completion_request: CompletionRequest.parse({
 					provider_name: namerbot_model.provider_name,
 					model: this.app.bots.namerbot,
-					prompt: p,
-				}),
+					prompt: p
+				})
 			});
 
 			if (!name_response.ok) {
@@ -185,7 +185,7 @@ export class Chat extends Cell<typeof ChatJson> {
 				return;
 			}
 
-			const {completion_response} = name_response.value;
+			const { completion_response } = name_response.value;
 
 			const response_text = to_completion_response_text(completion_response) || '';
 

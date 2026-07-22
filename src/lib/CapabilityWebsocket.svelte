@@ -1,30 +1,30 @@
 <script lang="ts">
 	// @slop Claude Sonnet 3.7
 
-	import {slide} from 'svelte/transition';
-	import {formatDuration, intervalToDuration} from 'date-fns';
-	import {BROWSER} from 'esm-env';
+	import { slide } from 'svelte/transition';
+	import { formatDuration, intervalToDuration } from 'date-fns';
+	import { BROWSER } from 'esm-env';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import {frontend_context} from './frontend.svelte.ts';
-	import type {Socket} from './socket.svelte.ts';
-	import {icon_cancel, icon_connect, icon_disconnect, icon_reset} from '@fuzdev/fuz_ui/icons.ts';
+	import { frontend_context } from './frontend.svelte.ts';
+	import type { Socket } from './socket.svelte.ts';
+	import { icon_cancel, icon_connect, icon_disconnect, icon_reset } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {format_placeholder} from './helpers.ts';
-	import {format_ms_to_readable, format_timestamp} from './time_helpers.ts';
+	import { format_placeholder } from './helpers.ts';
+	import { format_ms_to_readable, format_timestamp } from './time_helpers.ts';
 	import {
 		DEFAULT_HEARTBEAT_INTERVAL,
 		DEFAULT_RECONNECT_DELAY,
-		DEFAULT_RECONNECT_DELAY_MAX,
+		DEFAULT_RECONNECT_DELAY_MAX
 	} from './socket_helpers.ts';
 	import SocketMessageQueue from './SocketMessageQueue.svelte';
-	import {WEBSOCKET_URL} from './constants.ts';
+	import { WEBSOCKET_URL } from './constants.ts';
 
 	const pid = $props.id();
 
 	const {
-		socket: socket_prop,
+		socket: socket_prop
 	}: {
 		socket?: Socket | undefined;
 	} = $props();
@@ -32,7 +32,7 @@
 	// Get socket from props or context
 	const app = frontend_context.get();
 	const socket = $derived(socket_prop || app.socket);
-	const {capabilities} = app;
+	const { capabilities } = app;
 
 	// Track URL state for reset/undo functionality
 	let previous_url = $state.raw('');
@@ -366,7 +366,7 @@
 				<small>
 					{socket.connection_duration_rounded
 						? formatDuration(
-								intervalToDuration({start: 0, end: socket.connection_duration_rounded}),
+								intervalToDuration({ start: 0, end: socket.connection_duration_rounded })
 							)
 						: '-'}
 				</small>

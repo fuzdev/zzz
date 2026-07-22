@@ -7,13 +7,13 @@
 </script>
 
 <script lang="ts">
-	import type {SvelteHTMLElements} from 'svelte/elements';
-	import type {Snippet} from 'svelte';
-	import {logo_github} from '@fuzdev/fuz_ui/logos.ts';
+	import type { SvelteHTMLElements } from 'svelte/elements';
+	import type { Snippet } from 'svelte';
+	import { logo_github } from '@fuzdev/fuz_ui/logos.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import type {SvgData} from '@fuzdev/fuz_ui/svg.ts';
+	import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
 
-	import {logo_chatgpt, logo_claude, logo_gemini} from './logos.ts';
+	import { logo_chatgpt, logo_claude, logo_gemini } from './logos.ts';
 	import ExternalLinkIcon from './ExternalLinkIcon.svelte';
 
 	// TODO maybe make this `Link` and infer optional prop `external`?
@@ -40,7 +40,7 @@
 					? logo_claude
 					: google_regex.test(href)
 						? logo_gemini
-						: null,
+						: null
 	);
 
 	const rel: string = $derived.by(() => {

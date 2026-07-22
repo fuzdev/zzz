@@ -1,19 +1,19 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {goto} from '$app/navigation';
-	import {resolve} from '$app/paths';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import Mdz from '@fuzdev/mdz/Mdz.svelte';
 
-	import {projects_context} from '$routes/projects/projects.svelte.ts';
+	import { projects_context } from '$routes/projects/projects.svelte.ts';
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import PagesSidebar from '$routes/projects/PagesSidebar.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
-	import {icon_delete, icon_preview} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_delete, icon_preview } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {format_placeholder} from '$lib/helpers.ts';
-	import {frontend_context} from '$lib/frontend.svelte.ts';
+	import { format_placeholder } from '$lib/helpers.ts';
+	import { frontend_context } from '$lib/frontend.svelte.ts';
 
 	const projects = projects_context.get();
 	const app = frontend_context.get();
@@ -138,8 +138,7 @@
 							<textarea
 								bind:value={page_viewmodel.content}
 								class="width:100% height:100% markdown-editor"
-								placeholder={format_placeholder('markup')}
-							></textarea>
+								placeholder={format_placeholder('markup')}></textarea>
 						</div>
 
 						<div class="panel p_md preview-area">

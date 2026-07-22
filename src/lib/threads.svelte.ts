@@ -1,16 +1,16 @@
-import {z} from 'zod';
-import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+import { z } from 'zod';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {Thread} from './thread.svelte.ts';
-import {ThreadJson} from './thread_types.ts';
-import {HANDLED} from './cell_helpers.ts';
-import {IndexedCollection} from './indexed_collection.svelte.ts';
-import {CellJson} from './cell_types.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { Thread } from './thread.svelte.ts';
+import { ThreadJson } from './thread_types.ts';
+import { HANDLED } from './cell_helpers.ts';
+import { IndexedCollection } from './indexed_collection.svelte.ts';
+import { CellJson } from './cell_types.ts';
 
 export const ThreadsJson = CellJson.extend({
-	items: z.array(ThreadJson).default(() => []),
-}).meta({cell_class_name: 'Threads'});
+	items: z.array(ThreadJson).default(() => [])
+}).meta({ cell_class_name: 'Threads' });
 export type ThreadsJson = z.infer<typeof ThreadsJson>;
 export type ThreadsJsonInput = z.input<typeof ThreadsJson>;
 
@@ -28,11 +28,11 @@ export class Threads extends Cell<typeof ThreadsJson> {
 				if (Array.isArray(items)) {
 					this.items.clear();
 					for (const item_json of items) {
-						this.add_thread(new Thread({app: this.app, json: item_json}));
+						this.add_thread(new Thread({ app: this.app, json: item_json }));
 					}
 				}
 				return HANDLED;
-			},
+			}
 		};
 
 		// Initialize explicitly after all properties are defined

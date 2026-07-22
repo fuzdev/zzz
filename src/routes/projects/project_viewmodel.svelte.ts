@@ -1,16 +1,16 @@
 // @slop Claude Opus 4
 
-import {z} from 'zod';
-import {goto} from '$app/navigation';
-import {resolve} from '$app/paths';
-import {create_uuid, type Uuid} from '@fuzdev/fuz_util/id.ts';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
+import { z } from 'zod';
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
+import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import {Domain} from './domain.svelte.ts';
-import {Page} from './page.svelte.ts';
-import {Projects} from './projects.svelte.ts';
-import {Repo} from './repo.svelte.ts';
-import {get_unique_name} from '$lib/helpers.ts';
+import { Domain } from './domain.svelte.ts';
+import { Page } from './page.svelte.ts';
+import { Projects } from './projects.svelte.ts';
+import { Repo } from './repo.svelte.ts';
+import { get_unique_name } from '$lib/helpers.ts';
 
 export interface ProjectViewmodelOptions {
 	projects: Projects;
@@ -35,7 +35,7 @@ export class ProjectViewmodel {
 		() =>
 			this.project &&
 			(this.edited_name !== this.project.name ||
-				this.edited_description !== this.project.description),
+				this.edited_description !== this.project.description)
 	);
 
 	/** The current project. */
@@ -90,7 +90,7 @@ export class ProjectViewmodel {
 
 		// eslint-disable-next-line no-alert
 		const confirmed = confirm(
-			'Are you sure you want to delete this project? This action cannot be undone.',
+			'Are you sure you want to delete this project? This action cannot be undone.'
 		);
 
 		if (confirmed) {
@@ -107,7 +107,7 @@ export class ProjectViewmodel {
 
 		// eslint-disable-next-line no-alert
 		const confirmed = confirm(
-			'Are you sure you want to delete this page? This action cannot be undone.',
+			'Are you sure you want to delete this page? This action cannot be undone.'
 		);
 
 		if (confirmed) {
@@ -137,8 +137,8 @@ export class ProjectViewmodel {
 				path: '/new-page',
 				content: `# ${unique_title}\n\nAdd your **content** here.`,
 				created,
-				updated: created,
-			},
+				updated: created
+			}
 		});
 
 		this.project.add_page(page);
@@ -162,8 +162,8 @@ export class ProjectViewmodel {
 				updated: created,
 				name: '',
 				status: 'pending',
-				ssl: false,
-			},
+				ssl: false
+			}
 		});
 
 		this.project.add_domain(domain);
@@ -185,8 +185,8 @@ export class ProjectViewmodel {
 			json: {
 				id: repo_id,
 				git_url: '',
-				checkouts: [],
-			},
+				checkouts: []
+			}
 		});
 
 		// Add to project

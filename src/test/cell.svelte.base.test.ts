@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 
-import {test, vi, beforeEach, describe, assert} from 'vitest';
-import {z} from 'zod';
-import {create_uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.ts';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
+import { test, vi, beforeEach, describe, assert } from 'vitest';
+import { z } from 'zod';
+import { create_uuid, UuidWithDefault } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import {Cell, type CellOptions} from '$lib/cell.svelte.ts';
-import {CellJson} from '$lib/cell_types.ts';
-import {Frontend} from '$lib/frontend.svelte.ts';
+import { Cell, type CellOptions } from '$lib/cell.svelte.ts';
+import { CellJson } from '$lib/cell_types.ts';
+import { Frontend } from '$lib/frontend.svelte.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Constants for testing
 const TEST_ID = create_uuid();
@@ -20,7 +20,7 @@ const TestSchema = CellJson.extend({
 	text: z.string().default(''),
 	number: z.number().default(0),
 	items: z.array(z.string()).default(() => []),
-	flag: z.boolean().default(true),
+	flag: z.boolean().default(true)
 });
 
 // Basic test cell implementation
@@ -54,8 +54,8 @@ describe('Cell initialization', () => {
 				created: TEST_DATETIME,
 				text: 'Sample',
 				number: 42,
-				items: ['item1', 'item2'],
-			},
+				items: ['item1', 'item2']
+			}
 		});
 
 		// Verify basic properties
@@ -73,7 +73,7 @@ describe('Cell initialization', () => {
 
 	test('uses default values when json is empty', () => {
 		const test_cell = new BasicTestCell({
-			app,
+			app
 		});
 
 		// Should use schema defaults
@@ -90,8 +90,8 @@ describe('Cell initialization', () => {
 		const test_cell = new BasicTestCell({
 			app,
 			json: {
-				id: TEST_ID,
-			},
+				id: TEST_ID
+			}
 		});
 
 		// Check if schema keys contain expected fields
@@ -125,8 +125,8 @@ describe('Cell registry lifecycle', () => {
 			app,
 			json: {
 				id: cell_id,
-				created: TEST_DATETIME,
-			},
+				created: TEST_DATETIME
+			}
 		});
 
 		// Cell should be registered automatically in init()
@@ -141,8 +141,8 @@ describe('Cell registry lifecycle', () => {
 			app,
 			json: {
 				id: cell_id,
-				created: TEST_DATETIME,
-			},
+				created: TEST_DATETIME
+			}
 		});
 
 		// Verify initial registration
@@ -161,8 +161,8 @@ describe('Cell registry lifecycle', () => {
 		const test_cell = new BasicTestCell({
 			app,
 			json: {
-				id: cell_id,
-			},
+				id: cell_id
+			}
 		});
 
 		// First dispose
@@ -180,7 +180,7 @@ describe('Cell id handling', () => {
 		id: UuidWithDefault,
 		type: z.literal('test').default('test'),
 		content: z.string().default(''),
-		version: z.number().default(0),
+		version: z.number().default(0)
 	});
 
 	// Test implementation of the Cell class with id-specific tests
@@ -189,7 +189,7 @@ describe('Cell id handling', () => {
 		content: string = $state()!;
 		version: number = $state()!;
 
-		constructor(options: {app: Frontend; json?: any}) {
+		constructor(options: { app: Frontend; json?: any }) {
 			super(IdTestSchema, options);
 			this.init();
 		}
@@ -197,7 +197,7 @@ describe('Cell id handling', () => {
 
 	test('set_json overwrites id when provided in input', () => {
 		// Create initial cell
-		const cell = new IdTestCell({app});
+		const cell = new IdTestCell({ app });
 		const initial_id = cell.id;
 
 		// Verify initial state
@@ -212,7 +212,7 @@ describe('Cell id handling', () => {
 			id: new_id,
 			type: 'test',
 			content: 'New content',
-			version: 2,
+			version: 2
 		});
 
 		// Verify id was changed to the new value
@@ -222,7 +222,7 @@ describe('Cell id handling', () => {
 
 	test('set_json_partial updates id when included in partial update', () => {
 		// Create initial cell
-		const cell = new IdTestCell({app});
+		const cell = new IdTestCell({ app });
 		const initial_id = cell.id;
 
 		// Create a new id to set
@@ -231,7 +231,7 @@ describe('Cell id handling', () => {
 		// Update only the id
 		cell.set_json_partial({
 			id: new_id,
-			version: 3,
+			version: 3
 		});
 
 		// Verify id was updated and other properties preserved
@@ -244,13 +244,13 @@ describe('Cell id handling', () => {
 
 	test('set_json_partial preserves id when not included in partial update', () => {
 		// Create initial cell
-		const cell = new IdTestCell({app});
+		const cell = new IdTestCell({ app });
 		const initial_id = cell.id;
 		const initial_content = '';
 
 		// Update content but not id
 		cell.set_json_partial({
-			content: 'Partial update content',
+			content: 'Partial update content'
 		});
 
 		// Verify id preserved and content updated
@@ -261,12 +261,12 @@ describe('Cell id handling', () => {
 
 	test('schema validation rejects invalid id formats', () => {
 		// Create initial cell
-		const cell = new IdTestCell({app});
+		const cell = new IdTestCell({ app });
 
 		// Attempt to set invalid id
 		assert.throws(() => {
 			cell.set_json_partial({
-				id: 'not-a-valid-uuid' as any,
+				id: 'not-a-valid-uuid' as any
 			});
 		});
 	});
@@ -278,8 +278,8 @@ describe('Cell id handling', () => {
 			json: {
 				type: 'test',
 				content: 'Original content',
-				version: 1,
-			},
+				version: 1
+			}
 		});
 		const original_id = cell.id;
 
@@ -306,8 +306,8 @@ describe('Cell serialization', () => {
 				created: TEST_DATETIME,
 				text: 'JSON Test',
 				number: 100,
-				items: ['value1', 'value2'],
-			},
+				items: ['value1', 'value2']
+			}
 		});
 
 		const json = test_cell.to_json();
@@ -324,8 +324,8 @@ describe('Cell serialization', () => {
 			app,
 			json: {
 				id: TEST_ID,
-				text: 'Stringify Test',
-			},
+				text: 'Stringify Test'
+			}
 		});
 
 		const stringified = JSON.stringify(test_cell);
@@ -341,8 +341,8 @@ describe('Cell serialization', () => {
 			json: {
 				id: TEST_ID,
 				text: 'Initial',
-				number: 10,
-			},
+				number: 10
+			}
 		});
 
 		// Check initial values
@@ -370,15 +370,15 @@ describe('Cell modification methods', () => {
 			app,
 			json: {
 				id: TEST_ID,
-				text: 'Initial',
-			},
+				text: 'Initial'
+			}
 		});
 
 		// Update using set_json
 		test_cell.set_json({
 			text: 'Updated via set_json',
 			number: 50,
-			items: ['new1', 'new2'],
+			items: ['new1', 'new2']
 		});
 
 		assert.strictEqual(test_cell.text, 'Updated via set_json');
@@ -388,10 +388,10 @@ describe('Cell modification methods', () => {
 	});
 
 	test('set_json rejects invalid data', () => {
-		const test_cell = new BasicTestCell({app});
+		const test_cell = new BasicTestCell({ app });
 
 		// Should reject invalid data with a schema error
-		assert.throws(() => test_cell.set_json({number: 'not a number' as any}));
+		assert.throws(() => test_cell.set_json({ number: 'not a number' as any }));
 	});
 
 	test('set_json_partial updates only specified properties', () => {
@@ -402,14 +402,14 @@ describe('Cell modification methods', () => {
 				text: 'Initial text',
 				number: 10,
 				items: ['item1', 'item2'],
-				flag: true,
-			},
+				flag: true
+			}
 		});
 
 		// Update only text and number
 		test_cell.set_json_partial({
 			text: 'Updated text',
-			number: 20,
+			number: 20
 		});
 
 		// Verify updated properties
@@ -427,8 +427,8 @@ describe('Cell modification methods', () => {
 			app,
 			json: {
 				id: TEST_ID,
-				text: 'Initial',
-			},
+				text: 'Initial'
+			}
 		});
 
 		// These should not throw errors
@@ -445,12 +445,12 @@ describe('Cell modification methods', () => {
 			app,
 			json: {
 				id: TEST_ID,
-				text: 'Initial',
-			},
+				text: 'Initial'
+			}
 		});
 
 		// Should reject invalid data with a schema error
-		assert.throws(() => test_cell.set_json_partial({number: 'not a number' as any}));
+		assert.throws(() => test_cell.set_json_partial({ number: 'not a number' as any }));
 
 		// Original values should remain unchanged after failed update
 		assert.strictEqual(test_cell.text, 'Initial');
@@ -468,8 +468,8 @@ describe('Cell date formatting', () => {
 			json: {
 				id: TEST_ID,
 				created,
-				updated,
-			},
+				updated
+			}
 		});
 
 		// Verify date objects
@@ -492,8 +492,8 @@ describe('Cell date formatting', () => {
 			json: {
 				id: TEST_ID,
 				created: TEST_DATETIME,
-				updated: TEST_DATETIME,
-			},
+				updated: TEST_DATETIME
+			}
 		});
 
 		assert.ok(test_cell.updated_date);
@@ -511,8 +511,8 @@ describe('Cell cloning', () => {
 				id: TEST_ID,
 				text: 'Original',
 				number: 42,
-				items: ['value1'],
-			},
+				items: ['value1']
+			}
 		});
 
 		const clone = original.clone();
@@ -540,8 +540,8 @@ describe('Cell cloning', () => {
 		const original = new BasicTestCell({
 			app,
 			json: {
-				id: TEST_ID,
-			},
+				id: TEST_ID
+			}
 		});
 
 		const clone = original.clone();
@@ -559,8 +559,8 @@ describe('Schema validation', () => {
 			app,
 			json: {
 				id: TEST_ID,
-				text: 'Valid',
-			},
+				text: 'Valid'
+			}
 		});
 
 		// Initial state should be valid
@@ -573,9 +573,9 @@ describe('Schema validation', () => {
 					app,
 					json: {
 						id: TEST_ID,
-						text: 123 as any,
-					},
-				}),
+						text: 123 as any
+					}
+				})
 		);
 	});
 });

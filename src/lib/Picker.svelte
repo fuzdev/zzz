@@ -1,9 +1,9 @@
 <script lang="ts" generics="T extends {id: Uuid}">
-	import {EMPTY_ARRAY} from '@fuzdev/fuz_util/array.ts';
-	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
-	import type {Snippet} from 'svelte';
+	import { EMPTY_ARRAY } from '@fuzdev/fuz_util/array.ts';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+	import type { Snippet } from 'svelte';
 
-	import type {Sorter} from './sortable.svelte.ts';
+	import type { Sorter } from './sortable.svelte.ts';
 	import SortableList from './SortableList.svelte';
 
 	const {
@@ -16,7 +16,7 @@
 		show_sort_controls = false,
 		no_items,
 		heading = null,
-		children: children_prop,
+		children: children_prop
 	}: {
 		/** The collection of items - required */
 		items: Array<T>;

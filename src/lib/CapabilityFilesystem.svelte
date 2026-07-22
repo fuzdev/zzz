@@ -1,17 +1,17 @@
 <script lang="ts">
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 
-	import {frontend_context} from './frontend.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 
 	const app = frontend_context.get();
-	const {capabilities} = app;
+	const { capabilities } = app;
 
 	const zzz_dir = $derived(app.zzz_dir);
 	const scoped_dirs = $derived(app.scoped_dirs);
 
 	// workspace paths that aren't in the original scoped_dirs
 	const workspace_paths = $derived(
-		app.workspaces.items.values.map((w) => w.path).filter((p) => !scoped_dirs.includes(p)),
+		app.workspaces.items.values.map((w) => w.path).filter((p) => !scoped_dirs.includes(p))
 	);
 </script>
 

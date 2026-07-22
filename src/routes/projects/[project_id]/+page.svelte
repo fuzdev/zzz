@@ -1,9 +1,9 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {resolve} from '$app/paths';
+	import { resolve } from '$app/paths';
 
-	import {projects_context} from '$routes/projects/projects.svelte.ts';
+	import { projects_context } from '$routes/projects/projects.svelte.ts';
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
@@ -67,8 +67,7 @@
 								<textarea
 									bind:value={project_viewmodel.edited_description}
 									class="width:100%"
-									rows="3"
-								></textarea>
+									rows="3"></textarea>
 							</label>
 						</div>
 					</div>

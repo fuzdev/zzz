@@ -1,21 +1,21 @@
 <script lang="ts">
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 	import PasteFromClipboard from '@fuzdev/fuz_ui/PasteFromClipboard.svelte';
-	import {slide} from 'svelte/transition';
+	import { slide } from 'svelte/transition';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import {frontend_context} from './frontend.svelte.ts';
-	import type {Diskfile} from './diskfile.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
+	import type { Diskfile } from './diskfile.svelte.ts';
 	import ClearRestoreButton from './ClearRestoreButton.svelte';
-	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.ts';
-	import {icon_delete, icon_paste} from '@fuzdev/fuz_ui/icons.ts';
+	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
+	import { icon_delete, icon_paste } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const {
 		diskfile,
 		editor_state,
 		readonly = false,
-		auto_save = false,
+		auto_save = false
 	}: {
 		diskfile: Diskfile;
 		editor_state: DiskfileEditorState;

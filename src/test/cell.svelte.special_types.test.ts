@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 
-import {test, vi, beforeEach, assert} from 'vitest';
-import {z} from 'zod';
-import {create_uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.ts';
-import {DatetimeNow, get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
+import { test, vi, beforeEach, assert } from 'vitest';
+import { z } from 'zod';
+import { create_uuid, UuidWithDefault } from '@fuzdev/fuz_util/id.ts';
+import { DatetimeNow, get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import {Cell, type CellOptions} from '$lib/cell.svelte.ts';
-import {CellJson, type SchemaKeys} from '$lib/cell_types.ts';
-import {Frontend} from '$lib/frontend.svelte.ts';
+import { Cell, type CellOptions } from '$lib/cell.svelte.ts';
+import { CellJson, type SchemaKeys } from '$lib/cell_types.ts';
+import { Frontend } from '$lib/frontend.svelte.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Constants for testing
 const TEST_ID = create_uuid();
@@ -27,7 +27,7 @@ beforeEach(() => {
 
 test('Cell uses registry for instantiating class relationships', () => {
 	const RegistrySchema = CellJson.extend({
-		text: z.string().default(''),
+		text: z.string().default('')
 	});
 
 	class RegistryTestCell extends Cell<typeof RegistrySchema> {
@@ -47,8 +47,8 @@ test('Cell uses registry for instantiating class relationships', () => {
 		app,
 		json: {
 			id: TEST_ID,
-			created: TEST_DATETIME,
-		},
+			created: TEST_DATETIME
+		}
 	});
 
 	// Mock the registry instantiate method for this specific test
@@ -56,17 +56,17 @@ test('Cell uses registry for instantiating class relationships', () => {
 		.spyOn(app.cell_registry, 'instantiate')
 		.mockImplementation((name: any, json) => {
 			if (name === 'TestType') {
-				return {type: 'TestType', ...((json as any) || {})};
+				return { type: 'TestType', ...((json as any) || {}) };
 			}
 			return null;
 		});
 
-	const test_object = {key: 'value'};
+	const test_object = { key: 'value' };
 	const result = cell.test_instantiate(test_object, 'TestType');
 
 	assert.ok(mock_instantiate.mock.calls.length > 0);
 	assert.deepEqual(mock_instantiate.mock.calls[0], ['TestType', test_object] as any);
-	assert.deepEqual(result, {type: 'TestType', key: 'value'});
+	assert.deepEqual(result, { type: 'TestType', key: 'value' });
 
 	// Clean up
 	mock_instantiate.mockRestore();
@@ -74,7 +74,7 @@ test('Cell uses registry for instantiating class relationships', () => {
 
 test('Cell.encode_property uses $state.snapshot for values', () => {
 	const TestSchema = CellJson.extend({
-		text: z.string().default(''),
+		text: z.string().default('')
 	});
 
 	class EncodingTestCell extends Cell<typeof TestSchema> {
@@ -94,8 +94,8 @@ test('Cell.encode_property uses $state.snapshot for values', () => {
 		app,
 		json: {
 			id: TEST_ID,
-			created: TEST_DATETIME,
-		},
+			created: TEST_DATETIME
+		}
 	});
 
 	// Test with Date object
@@ -105,7 +105,7 @@ test('Cell.encode_property uses $state.snapshot for values', () => {
 	assert.strictEqual(encoded_date.getFullYear(), TEST_YEAR);
 
 	// Test with nested object
-	const test_object = {outer: {inner: 42}};
+	const test_object = { outer: { inner: 42 } };
 	const encoded_object = cell.test_encode(test_object, 'object_field');
 	assert.deepEqual(encoded_object, test_object);
 });
@@ -118,13 +118,13 @@ test('Cell handles special types like Map and Set', () => {
 		// Test map collection
 		map_field: z.preprocess(
 			(val) => (Array.isArray(val) ? new Map(val as Array<[string, number]>) : val),
-			z.map(z.string(), z.number()),
+			z.map(z.string(), z.number())
 		),
 		// Test set collection
 		set_field: z.preprocess(
 			(val) => (Array.isArray(val) ? new Set(val as Array<string>) : val),
-			z.set(z.string()),
-		),
+			z.set(z.string())
+		)
 	});
 
 	class CollectionsTestCell extends Cell<typeof CollectionsSchema> {
@@ -154,10 +154,10 @@ test('Cell handles special types like Map and Set', () => {
 			created: TEST_DATETIME,
 			map_field: [
 				['key1', 1],
-				['key2', 2],
+				['key2', 2]
 			],
-			set_field: ['item1', 'item2', 'item3'],
-		},
+			set_field: ['item1', 'item2', 'item3']
+		}
 	});
 
 	// Verify Map handling
@@ -189,17 +189,17 @@ test('Cell - JSON serialization excludes undefined values correctly', () => {
 		data: z
 			.object({
 				code: z.string().optional(),
-				value: z.number().optional(),
+				value: z.number().optional()
 			})
 			.optional(),
 		items: z.array(z.string()).optional(),
-		state: z.enum(['on', 'off']).optional(),
+		state: z.enum(['on', 'off']).optional()
 	});
 
 	class SerializationTestCell extends Cell<typeof SerializationSchema> {
 		type: 'type1' | 'type2' = $state()!;
 		name?: string = $state();
-		data?: {code?: string; value?: number} = $state();
+		data?: { code?: string; value?: number } = $state();
 		items?: Array<string> = $state();
 		state?: 'on' | 'off' = $state();
 
@@ -215,8 +215,8 @@ test('Cell - JSON serialization excludes undefined values correctly', () => {
 		json: {
 			id: TEST_ID,
 			created: TEST_DATETIME,
-			type: 'type1',
-		},
+			type: 'type1'
+		}
 	});
 
 	// Cell with optional fields
@@ -227,9 +227,9 @@ test('Cell - JSON serialization excludes undefined values correctly', () => {
 			created: TEST_DATETIME,
 			type: 'type2',
 			name: 'test_name',
-			data: {code: 'test_code'},
-			items: ['item1', 'item2'],
-		},
+			data: { code: 'test_code' },
+			items: ['item1', 'item2']
+		}
 	});
 
 	// Test minimal cell serialization
@@ -244,7 +244,7 @@ test('Cell - JSON serialization excludes undefined values correctly', () => {
 	const complete_json = complete_cell.to_json();
 	assert.strictEqual(complete_json.type, 'type2');
 	assert.strictEqual(complete_json.name, 'test_name');
-	assert.deepEqual(complete_json.data, {code: 'test_code'});
+	assert.deepEqual(complete_json.data, { code: 'test_code' });
 	assert.ok(complete_json.data?.value === undefined);
 	assert.deepEqual(complete_json.items, ['item1', 'item2']);
 	assert.ok(complete_json.state === undefined);

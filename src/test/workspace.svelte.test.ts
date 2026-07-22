@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 
-import {test, beforeEach, describe, assert} from 'vitest';
-import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+import { test, beforeEach, describe, assert } from 'vitest';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {Workspace} from '$lib/workspace.svelte.ts';
-import {Workspaces} from '$lib/workspaces.svelte.ts';
-import {Frontend} from '$lib/frontend.svelte.ts';
-import {DiskfileDirectoryPath} from '$lib/diskfile_types.ts';
+import { Workspace } from '$lib/workspace.svelte.ts';
+import { Workspaces } from '$lib/workspaces.svelte.ts';
+import { Frontend } from '$lib/frontend.svelte.ts';
+import { DiskfileDirectoryPath } from '$lib/diskfile_types.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 let app: Frontend;
 
@@ -19,7 +19,7 @@ beforeEach(() => {
 describe('Workspace', () => {
 	test('initializes with path and defaults', () => {
 		const path = DiskfileDirectoryPath.parse('/some/dir/');
-		const workspace = new Workspace({app, json: {path}});
+		const workspace = new Workspace({ app, json: { path } });
 
 		assert.isDefined(workspace.id);
 		assert.strictEqual(workspace.path, path);
@@ -34,8 +34,8 @@ describe('Workspace', () => {
 			json: {
 				path,
 				name: 'project',
-				opened_at: '2026-04-08T00:00:00.000Z',
-			},
+				opened_at: '2026-04-08T00:00:00.000Z'
+			}
 		});
 
 		assert.strictEqual(workspace.path, path);
@@ -45,7 +45,7 @@ describe('Workspace', () => {
 
 	test('registers in cell registry', () => {
 		const path = DiskfileDirectoryPath.parse('/some/dir/');
-		const workspace = new Workspace({app, json: {path}});
+		const workspace = new Workspace({ app, json: { path } });
 		assert.ok(app.cell_registry.all.has(workspace.id));
 	});
 
@@ -53,7 +53,7 @@ describe('Workspace', () => {
 		const path = DiskfileDirectoryPath.parse('/some/dir/');
 		const workspace = new Workspace({
 			app,
-			json: {path, name: 'dir', opened_at: '2026-01-01T00:00:00.000Z'},
+			json: { path, name: 'dir', opened_at: '2026-01-01T00:00:00.000Z' }
 		});
 
 		const json = workspace.json;
@@ -65,7 +65,7 @@ describe('Workspace', () => {
 
 describe('Workspaces', () => {
 	test('initializes empty', () => {
-		const workspaces = new Workspaces({app});
+		const workspaces = new Workspaces({ app });
 
 		assert.strictEqual(workspaces.items.by_id.size, 0);
 		assert.strictEqual(workspaces.active_id, null);
@@ -73,13 +73,13 @@ describe('Workspaces', () => {
 	});
 
 	test('add creates a workspace and auto-activates first', () => {
-		const workspaces = new Workspaces({app});
+		const workspaces = new Workspaces({ app });
 		const path = DiskfileDirectoryPath.parse('/home/user/project/');
 
 		const workspace = workspaces.add({
 			path,
 			name: 'project',
-			opened_at: '2026-01-01T00:00:00.000Z',
+			opened_at: '2026-01-01T00:00:00.000Z'
 		});
 
 		assert.strictEqual(workspaces.items.by_id.size, 1);
@@ -88,23 +88,23 @@ describe('Workspaces', () => {
 	});
 
 	test('add deduplicates by path', () => {
-		const workspaces = new Workspaces({app});
+		const workspaces = new Workspaces({ app });
 		const path = DiskfileDirectoryPath.parse('/home/user/project/');
 
-		const first = workspaces.add({path, name: 'project', opened_at: '2026-01-01T00:00:00.000Z'});
-		const second = workspaces.add({path, name: 'project', opened_at: '2026-02-01T00:00:00.000Z'});
+		const first = workspaces.add({ path, name: 'project', opened_at: '2026-01-01T00:00:00.000Z' });
+		const second = workspaces.add({ path, name: 'project', opened_at: '2026-02-01T00:00:00.000Z' });
 
 		assert.strictEqual(first, second);
 		assert.strictEqual(workspaces.items.by_id.size, 1);
 	});
 
 	test('add multiple workspaces', () => {
-		const workspaces = new Workspaces({app});
+		const workspaces = new Workspaces({ app });
 		const path_a = DiskfileDirectoryPath.parse('/path/a/');
 		const path_b = DiskfileDirectoryPath.parse('/path/b/');
 
-		const a = workspaces.add({path: path_a, name: 'a', opened_at: ''});
-		const b = workspaces.add({path: path_b, name: 'b', opened_at: ''});
+		const a = workspaces.add({ path: path_a, name: 'a', opened_at: '' });
+		const b = workspaces.add({ path: path_b, name: 'b', opened_at: '' });
 
 		assert.strictEqual(workspaces.items.by_id.size, 2);
 		// First added is auto-activated
@@ -113,12 +113,12 @@ describe('Workspaces', () => {
 	});
 
 	test('remove deletes workspace and updates active_id', () => {
-		const workspaces = new Workspaces({app});
+		const workspaces = new Workspaces({ app });
 		const path_a = DiskfileDirectoryPath.parse('/path/a/');
 		const path_b = DiskfileDirectoryPath.parse('/path/b/');
 
-		const a = workspaces.add({path: path_a, name: 'a', opened_at: ''});
-		workspaces.add({path: path_b, name: 'b', opened_at: ''});
+		const a = workspaces.add({ path: path_a, name: 'a', opened_at: '' });
+		workspaces.add({ path: path_b, name: 'b', opened_at: '' });
 
 		assert.strictEqual(workspaces.active_id, a.id);
 
@@ -131,10 +131,10 @@ describe('Workspaces', () => {
 	});
 
 	test('remove last workspace sets active_id to null', () => {
-		const workspaces = new Workspaces({app});
+		const workspaces = new Workspaces({ app });
 		const path = DiskfileDirectoryPath.parse('/path/only/');
 
-		const only = workspaces.add({path, name: 'only', opened_at: ''});
+		const only = workspaces.add({ path, name: 'only', opened_at: '' });
 		workspaces.remove(only.id);
 
 		assert.strictEqual(workspaces.items.by_id.size, 0);
@@ -142,22 +142,22 @@ describe('Workspaces', () => {
 	});
 
 	test('get_by_path returns workspace or undefined', () => {
-		const workspaces = new Workspaces({app});
+		const workspaces = new Workspaces({ app });
 		const path = DiskfileDirectoryPath.parse('/home/user/project/');
 
 		assert.strictEqual(workspaces.get_by_path(path), undefined);
 
-		const workspace = workspaces.add({path, name: 'project', opened_at: ''});
+		const workspace = workspaces.add({ path, name: 'project', opened_at: '' });
 		assert.strictEqual(workspaces.get_by_path(path), workspace);
 	});
 
 	test('activate changes active workspace', () => {
-		const workspaces = new Workspaces({app});
+		const workspaces = new Workspaces({ app });
 		const path_a = DiskfileDirectoryPath.parse('/path/a/');
 		const path_b = DiskfileDirectoryPath.parse('/path/b/');
 
-		const a = workspaces.add({path: path_a, name: 'a', opened_at: ''});
-		const b = workspaces.add({path: path_b, name: 'b', opened_at: ''});
+		const a = workspaces.add({ path: path_a, name: 'a', opened_at: '' });
+		const b = workspaces.add({ path: path_b, name: 'b', opened_at: '' });
 
 		assert.strictEqual(workspaces.active_id, a.id);
 
@@ -167,10 +167,10 @@ describe('Workspaces', () => {
 	});
 
 	test('activate with unknown id is a no-op', () => {
-		const workspaces = new Workspaces({app});
+		const workspaces = new Workspaces({ app });
 		const path = DiskfileDirectoryPath.parse('/path/a/');
 
-		const a = workspaces.add({path, name: 'a', opened_at: ''});
+		const a = workspaces.add({ path, name: 'a', opened_at: '' });
 		workspaces.activate('nonexistent-id' as Uuid);
 
 		assert.strictEqual(workspaces.active_id, a.id);
@@ -184,10 +184,10 @@ describe('Workspaces', () => {
 			app,
 			json: {
 				items: [
-					{path: path_a, name: 'a', opened_at: '2026-01-01T00:00:00.000Z'},
-					{path: path_b, name: 'b', opened_at: '2026-02-01T00:00:00.000Z'},
-				],
-			},
+					{ path: path_a, name: 'a', opened_at: '2026-01-01T00:00:00.000Z' },
+					{ path: path_b, name: 'b', opened_at: '2026-02-01T00:00:00.000Z' }
+				]
+			}
 		});
 
 		assert.strictEqual(workspaces.items.by_id.size, 2);

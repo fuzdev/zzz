@@ -1,14 +1,14 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
+	import { slide } from 'svelte/transition';
 
 	import ChatListitem from './ChatListitem.svelte';
-	import {frontend_context} from './frontend.svelte.ts';
-	import {sort_by_text, sort_by_numeric} from './sortable.svelte.ts';
-	import type {Chat} from './chat.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
+	import { sort_by_text, sort_by_numeric } from './sortable.svelte.ts';
+	import type { Chat } from './chat.svelte.ts';
 	import SortableList from './SortableList.svelte';
 
 	const app = frontend_context.get();
-	const {chats} = app;
+	const { chats } = app;
 	const selected_chat_id = $derived(chats.selected_id);
 </script>
 
@@ -21,7 +21,7 @@
 		sort_by_numeric<Chat>('created_newest', 'created (newest)', 'created', 'desc'),
 		sort_by_numeric<Chat>('created_oldest', 'created (oldest)', 'created', 'asc'),
 		sort_by_text<Chat>('name_asc', 'name (a-z)', 'name'),
-		sort_by_text<Chat>('name_desc', 'name (z-a)', 'name', 'desc'),
+		sort_by_text<Chat>('name_desc', 'name (z-a)', 'name', 'desc')
 	]}
 	sort_key_default="updated_newest"
 >

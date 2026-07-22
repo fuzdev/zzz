@@ -1,5 +1,5 @@
-import {z} from 'zod';
-import {zod_get_innermost_type} from '@fuzdev/fuz_util/zod.ts';
+import { z } from 'zod';
+import { zod_get_innermost_type } from '@fuzdev/fuz_util/zod.ts';
 
 /** Sentinel value to indicate a parser has completely handled a property. */
 export const HANDLED = Symbol('HANDLED_BY_PARSER');
@@ -22,7 +22,7 @@ export interface SchemaClassInfo {
 // A type helper that makes it easier to define value parsers with correct input types
 export type ValueParser<
 	TSchema extends z.ZodType,
-	TKey extends keyof z.infer<TSchema> = keyof z.infer<TSchema>,
+	TKey extends keyof z.infer<TSchema> = keyof z.infer<TSchema>
 > = {
 	[K in TKey]?: (value: unknown) => z.infer<TSchema>[K] | undefined;
 };
@@ -34,7 +34,7 @@ export type ValueParser<
  */
 export type CellValueDecoder<
 	TSchema extends z.ZodType,
-	TKey extends keyof z.infer<TSchema> = keyof z.infer<TSchema>,
+	TKey extends keyof z.infer<TSchema> = keyof z.infer<TSchema>
 > = {
 	[K in TKey]?: (value: unknown) => z.infer<TSchema>[K] | undefined | typeof HANDLED;
 };
@@ -44,7 +44,7 @@ export type CellValueDecoder<
  * This helps determine how to decode values based on their schema definition.
  */
 export const get_schema_class_info = (
-	schema: z.ZodType | null | undefined,
+	schema: z.ZodType | null | undefined
 ): SchemaClassInfo | null => {
 	if (!schema) return null;
 
@@ -61,7 +61,7 @@ export const get_schema_class_info = (
 		return {
 			type: 'ZodArray',
 			is_array: true,
-			element_class,
+			element_class
 		};
 	}
 
@@ -73,18 +73,18 @@ export const get_schema_class_info = (
 		return {
 			type: unwrapped.constructor.name,
 			class_name: meta.cell_class_name as string,
-			is_array: false,
+			is_array: false
 		};
 	}
 
 	// Handle other specific types
 	if (unwrapped instanceof z.ZodMap) {
-		return {type: 'ZodMap', is_array: false};
+		return { type: 'ZodMap', is_array: false };
 	}
 	if (unwrapped instanceof z.ZodSet) {
-		return {type: 'ZodSet', is_array: false};
+		return { type: 'ZodSet', is_array: false };
 	}
 
 	// Default case for any other schema type
-	return {type: unwrapped.constructor.name, is_array: false};
+	return { type: unwrapped.constructor.name, is_array: false };
 };

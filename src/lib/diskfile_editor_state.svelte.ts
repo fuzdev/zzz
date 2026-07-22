@@ -1,12 +1,12 @@
 // @slop Claude Sonnet 3.7
 
-import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {estimate_token_count} from './helpers.ts';
-import type {Diskfile} from './diskfile.svelte.ts';
-import type {DiskfilePath} from './diskfile_types.ts';
-import type {Frontend} from './frontend.svelte.ts';
-import type {DiskfileHistory, HistoryEntry} from './diskfile_history.svelte.ts';
+import { estimate_token_count } from './helpers.ts';
+import type { Diskfile } from './diskfile.svelte.ts';
+import type { DiskfilePath } from './diskfile_types.ts';
+import type { Frontend } from './frontend.svelte.ts';
+import type { DiskfileHistory, HistoryEntry } from './diskfile_history.svelte.ts';
 
 // TODO maybe should be a cell?
 /**
@@ -41,19 +41,19 @@ export class DiskfileEditorState {
 
 	// History-related derived states
 	readonly history: DiskfileHistory | undefined = $derived.by(() =>
-		this.app.get_diskfile_history(this.diskfile.path),
+		this.app.get_diskfile_history(this.diskfile.path)
 	);
 	readonly selected_history_entry = $derived.by(() =>
 		this.history && this.selected_history_entry_id
 			? this.history.find_entry_by_id(this.selected_history_entry_id)
-			: null,
+			: null
 	);
 	readonly content_history: Array<HistoryEntry> = $derived(this.history?.entries || []);
 	readonly saved_history_entries: Array<HistoryEntry> = $derived(
-		this.content_history.filter((entry) => !entry.is_unsaved_edit),
+		this.content_history.filter((entry) => !entry.is_unsaved_edit)
 	);
 	readonly unsaved_history_entries: Array<HistoryEntry> = $derived(
-		this.content_history.filter((entry) => entry.is_unsaved_edit),
+		this.content_history.filter((entry) => entry.is_unsaved_edit)
 	);
 
 	readonly has_history = $derived(this.content_history.length > 1);
@@ -67,7 +67,7 @@ export class DiskfileEditorState {
 	readonly content_matching_entry_ids: Array<Uuid> = $derived(
 		this.content_history
 			.filter((entry) => entry.content === this.current_content)
-			.map((entry) => entry.id),
+			.map((entry) => entry.id)
 	);
 
 	// Length-related calculations
@@ -75,19 +75,19 @@ export class DiskfileEditorState {
 	readonly current_length = $derived(this.current_content.length);
 	readonly length_diff = $derived(this.current_length - this.original_length);
 	readonly length_diff_percent = $derived(
-		this.original_length > 0 ? Math.round((this.length_diff / this.original_length) * 100) : 100,
+		this.original_length > 0 ? Math.round((this.length_diff / this.original_length) * 100) : 100
 	);
 
 	// Token-related calculations
 	readonly original_token_count = $derived.by(() =>
-		this.original_content == null ? 0 : estimate_token_count(this.original_content),
+		this.original_content == null ? 0 : estimate_token_count(this.original_content)
 	);
 	readonly current_token_count = $derived(estimate_token_count(this.current_content));
 	readonly token_diff = $derived(this.current_token_count - this.original_token_count);
 	readonly token_diff_percent = $derived(
 		this.original_token_count > 0
 			? Math.round((this.token_diff / this.original_token_count) * 100)
-			: 100,
+			: 100
 	);
 
 	// Getter/setter for current_content
@@ -113,7 +113,7 @@ export class DiskfileEditorState {
 		}
 	}
 
-	constructor(options: {app: Frontend; diskfile: Diskfile}) {
+	constructor(options: { app: Frontend; diskfile: Diskfile }) {
 		this.app = options.app; // TODO make this a Cell
 		this.diskfile = options.diskfile;
 
@@ -126,7 +126,7 @@ export class DiskfileEditorState {
 		// Only add entry if content is not null and history is empty
 		if (this.original_content !== null && history.entries.length === 0) {
 			history.add_entry(this.original_content, {
-				is_original_state: true,
+				is_original_state: true
 			});
 		}
 
@@ -148,7 +148,7 @@ export class DiskfileEditorState {
 		// Ensure we always have at least one entry for the original content
 		if (this.original_content !== null && history.entries.length === 0) {
 			history.add_entry(this.original_content, {
-				is_original_state: true,
+				is_original_state: true
 			});
 		}
 
@@ -167,7 +167,7 @@ export class DiskfileEditorState {
 			if (this.unsaved_edit_entry_id) {
 				// Find and remove the unsaved entry
 				const entry_index = history.entries.findIndex(
-					(entry) => entry.id === this.unsaved_edit_entry_id,
+					(entry) => entry.id === this.unsaved_edit_entry_id
 				);
 				if (entry_index !== -1) {
 					history.entries.splice(entry_index, 1);
@@ -177,7 +177,7 @@ export class DiskfileEditorState {
 
 			// Find the original entry (most likely the first non-unsaved entry that matches original content)
 			const original_entry = history.entries.find(
-				(entry) => !entry.is_unsaved_edit && entry.content === this.original_content,
+				(entry) => !entry.is_unsaved_edit && entry.content === this.original_content
 			);
 
 			if (original_entry) {
@@ -203,7 +203,7 @@ export class DiskfileEditorState {
 
 		// First look for an existing unsaved edit with matching content
 		const matching_unsaved_entry = history.entries.find(
-			(entry) => entry.content === content && entry.is_unsaved_edit,
+			(entry) => entry.content === content && entry.is_unsaved_edit
 		);
 
 		if (matching_unsaved_entry) {
@@ -215,7 +215,7 @@ export class DiskfileEditorState {
 
 		// Then look for a matching saved entry
 		const matching_saved_entry = history.entries.find(
-			(entry) => entry.content === content && !entry.is_unsaved_edit,
+			(entry) => entry.content === content && !entry.is_unsaved_edit
 		);
 
 		if (matching_saved_entry) {
@@ -229,7 +229,7 @@ export class DiskfileEditorState {
 		const new_entry = history.add_entry(content, {
 			created: Date.now(),
 			label: 'Unsaved edit',
-			is_unsaved_edit: true,
+			is_unsaved_edit: true
 		});
 
 		this.unsaved_edit_entry_id = new_entry.id;
@@ -284,7 +284,7 @@ export class DiskfileEditorState {
 		) {
 			const disk_entry = history.add_entry(this.diskfile.content, {
 				is_disk_change: true,
-				label: 'Disk change',
+				label: 'Disk change'
 			});
 
 			// If user hasn't made edits, automatically select the disk change
@@ -318,7 +318,7 @@ export class DiskfileEditorState {
 		if (this.unsaved_edit_entry_id !== null) {
 			// Find and remove the unsaved entry from history
 			const entry_index = history.entries.findIndex(
-				(entry) => entry.id === this.unsaved_edit_entry_id,
+				(entry) => entry.id === this.unsaved_edit_entry_id
 			);
 			if (entry_index !== -1) {
 				history.entries.splice(entry_index, 1);
@@ -390,7 +390,7 @@ export class DiskfileEditorState {
 			// Only add an entry if there's no history yet for this file
 			if (history.entries.length === 0) {
 				history.add_entry(this.original_content, {
-					is_original_state: true,
+					is_original_state: true
 				});
 			}
 
@@ -463,7 +463,7 @@ export class DiskfileEditorState {
 		if (current_selection_was_unsaved) {
 			// Find the original entry to select
 			const original_entry = history.entries.find(
-				(entry) => entry.content === this.original_content,
+				(entry) => entry.content === this.original_content
 			);
 
 			if (original_entry) {

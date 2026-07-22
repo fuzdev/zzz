@@ -62,16 +62,16 @@
  * @module
  */
 
-import {join} from 'node:path';
-import type {BackendConfig} from '@fuzdev/fuz_app/testing/cross_backend/backend_config.ts';
-import type {BackendCapabilities} from '@fuzdev/fuz_app/testing/cross_backend/capabilities.ts';
+import { join } from 'node:path';
+import type { BackendConfig } from '@fuzdev/fuz_app/testing/cross_backend/backend_config.ts';
+import type { BackendCapabilities } from '@fuzdev/fuz_app/testing/cross_backend/capabilities.ts';
 import {
 	build_test_backend_paths,
-	type TestBackendPaths,
+	type TestBackendPaths
 } from '@fuzdev/fuz_app/testing/cross_backend/build_test_backend_paths.ts';
 import {
 	make_default_rust_backend_config,
-	rust_default_capabilities,
+	rust_default_capabilities
 } from '@fuzdev/fuz_app/testing/cross_backend/default_backend_configs.ts';
 
 /**
@@ -90,7 +90,7 @@ const RUST_DATABASE_URL_PREFIX = 'postgres://localhost/zzz_test_';
  * Rust+proxy project never includes `sse.cross.test.ts`, so its flag is
  * inert there but stays honest.
  */
-const rust_capabilities: BackendCapabilities = {...rust_default_capabilities, sse: true};
+const rust_capabilities: BackendCapabilities = { ...rust_default_capabilities, sse: true };
 
 interface ZzzBackendPaths extends TestBackendPaths {
 	zzz_dir: string;
@@ -114,7 +114,7 @@ const build_zzz_paths = (backend_name: string): ZzzBackendPaths => {
 		// matching `init_daemon_token` (Rust).
 		daemon_token_path: join(zzz_dir, 'run', 'daemon_token'),
 		zzz_dir,
-		scoped_dir: join(paths.root, 'scoped'),
+		scoped_dir: join(paths.root, 'scoped')
 	};
 };
 
@@ -140,7 +140,7 @@ interface MakeZzzRustBackendOptions {
 const make_zzz_rust_backend_config = ({
 	name,
 	port,
-	extra_env,
+	extra_env
 }: MakeZzzRustBackendOptions): BackendConfig => {
 	const paths = build_zzz_paths(name);
 	return make_default_rust_backend_config({
@@ -155,8 +155,8 @@ const make_zzz_rust_backend_config = ({
 		extra_env: {
 			PUBLIC_ZZZ_DIR: paths.zzz_dir,
 			PUBLIC_ZZZ_SCOPED_DIRS: paths.scoped_dir,
-			...extra_env,
-		},
+			...extra_env
+		}
 	});
 };
 
@@ -170,7 +170,7 @@ const make_zzz_rust_backend_config = ({
 export const rust_backend_config = (): BackendConfig =>
 	make_zzz_rust_backend_config({
 		name: 'rust',
-		port: 4462,
+		port: 4462
 	});
 
 /**
@@ -188,5 +188,5 @@ export const rust_proxy_backend_config = (): BackendConfig =>
 	make_zzz_rust_backend_config({
 		name: 'rust_proxy',
 		port: 4463,
-		extra_env: {ZZZ_TRUSTED_PROXIES: '127.0.0.1'},
+		extra_env: { ZZZ_TRUSTED_PROXIES: '127.0.0.1' }
 	});

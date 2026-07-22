@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
-import {test, describe, assert} from 'vitest';
+import { test, describe, assert } from 'vitest';
 import {
 	ImportBuilder,
 	get_executor_phases,
 	get_handler_return_type,
-	generate_phase_handlers,
+	generate_phase_handlers
 } from '@fuzdev/fuz_app/actions/action_codegen.ts';
 
 import {
@@ -13,7 +13,7 @@ import {
 	session_load_action_spec,
 	filer_change_action_spec,
 	toggle_main_menu_action_spec,
-	completion_create_action_spec,
+	completion_create_action_spec
 } from '$lib/action_specs.ts';
 
 describe('ImportBuilder', () => {
@@ -34,7 +34,7 @@ describe('ImportBuilder', () => {
 
 			assert.strictEqual(
 				imports.build(),
-				`import type {TypeA, TypeB, TypeC} from '$lib/types.ts';`,
+				`import type {TypeA, TypeB, TypeC} from '$lib/types.ts';`
 			);
 		});
 
@@ -57,7 +57,7 @@ describe('ImportBuilder', () => {
 
 			assert.strictEqual(
 				imports.build(),
-				`import {another_helper, helper, type HelperType} from '$lib/utils.ts';`,
+				`import {another_helper, helper, type HelperType} from '$lib/utils.ts';`
 			);
 		});
 
@@ -71,7 +71,7 @@ describe('ImportBuilder', () => {
 
 			assert.strictEqual(
 				imports.build(),
-				`import {value, type TypeA, type TypeB, type TypeC} from '$lib/mixed.ts';`,
+				`import {value, type TypeA, type TypeB, type TypeC} from '$lib/mixed.ts';`
 			);
 		});
 
@@ -89,7 +89,7 @@ describe('ImportBuilder', () => {
 			// Should sort values first (alphabetically), then types (alphabetically)
 			assert.strictEqual(
 				imports.build(),
-				`import {a_value, m_value, z_value, type AType, type MType, type ZType} from '$lib/mixed.ts';`,
+				`import {a_value, m_value, z_value, type AType, type MType, type ZType} from '$lib/mixed.ts';`
 			);
 		});
 	});
@@ -202,7 +202,7 @@ describe('ImportBuilder', () => {
 
 			assert.strictEqual(
 				imports.build(),
-				`import type {Apple, Middle, Zebra} from '$lib/types.ts';`,
+				`import type {Apple, Middle, Zebra} from '$lib/types.ts';`
 			);
 		});
 
@@ -217,7 +217,7 @@ describe('ImportBuilder', () => {
 			// Underscores sort before letters in most locales
 			assert.strictEqual(
 				imports.build(),
-				`import type {PUBLIC_TYPE, Type_1, Type_2, _Private_Type} from '$lib/types.ts';`,
+				`import type {PUBLIC_TYPE, Type_1, Type_2, _Private_Type} from '$lib/types.ts';`
 			);
 		});
 
@@ -383,7 +383,7 @@ describe('get_executor_phases', () => {
 				'send_error',
 				'receive_error',
 				'receive_request',
-				'send_response',
+				'send_response'
 			]);
 			assert.deepEqual(get_executor_phases(ping_action_spec, 'backend'), [
 				'send_request',
@@ -391,7 +391,7 @@ describe('get_executor_phases', () => {
 				'send_error',
 				'receive_error',
 				'receive_request',
-				'send_response',
+				'send_response'
 			]);
 		});
 
@@ -401,12 +401,12 @@ describe('get_executor_phases', () => {
 				'send_request',
 				'receive_response',
 				'send_error',
-				'receive_error',
+				'receive_error'
 			]);
 			assert.deepEqual(get_executor_phases(session_load_action_spec, 'backend'), [
 				'receive_request',
 				'send_response',
-				'send_error',
+				'send_error'
 			]);
 		});
 
@@ -416,12 +416,12 @@ describe('get_executor_phases', () => {
 				'send_request',
 				'receive_response',
 				'send_error',
-				'receive_error',
+				'receive_error'
 			]);
 			assert.deepEqual(get_executor_phases(completion_create_action_spec, 'backend'), [
 				'receive_request',
 				'send_response',
-				'send_error',
+				'send_error'
 			]);
 		});
 	});
@@ -447,14 +447,14 @@ describe('get_executor_phases', () => {
 			const frontend_phases = get_executor_phases(ping_action_spec, 'frontend');
 			// Send phases should come before receive phases
 			assert.ok(
-				frontend_phases.indexOf('send_request') < frontend_phases.indexOf('receive_request'),
+				frontend_phases.indexOf('send_request') < frontend_phases.indexOf('receive_request')
 			);
 		});
 
 		test('returns empty array for invalid initiator', () => {
 			const spec_with_backend_only = {
 				...toggle_main_menu_action_spec,
-				initiator: 'backend' as const,
+				initiator: 'backend' as const
 			};
 			assert.deepEqual(get_executor_phases(spec_with_backend_only, 'frontend'), []);
 		});
@@ -481,15 +481,15 @@ describe('get_handler_return_type', () => {
 
 			assert.strictEqual(
 				get_handler_return_type(session_load_action_spec, 'send_request', imports),
-				'void | Promise<void>',
+				'void | Promise<void>'
 			);
 			assert.strictEqual(
 				get_handler_return_type(session_load_action_spec, 'send_response', imports),
-				'void | Promise<void>',
+				'void | Promise<void>'
 			);
 			assert.strictEqual(
 				get_handler_return_type(session_load_action_spec, 'receive_response', imports),
-				'void | Promise<void>',
+				'void | Promise<void>'
 			);
 
 			// Should not add ActionOutputs for void returns
@@ -515,13 +515,13 @@ describe('get_handler_return_type', () => {
 			// Create an async local_call spec
 			const async_local_spec = {
 				...toggle_main_menu_action_spec,
-				async: true,
+				async: true
 			};
 
 			const result = get_handler_return_type(async_local_spec, 'execute', imports);
 			assert.strictEqual(
 				result,
-				`ActionOutputs['toggle_main_menu'] | Promise<ActionOutputs['toggle_main_menu']>`,
+				`ActionOutputs['toggle_main_menu'] | Promise<ActionOutputs['toggle_main_menu']>`
 			);
 		});
 	});
@@ -532,11 +532,11 @@ describe('get_handler_return_type', () => {
 
 			assert.strictEqual(
 				get_handler_return_type(filer_change_action_spec, 'send', imports),
-				'void | Promise<void>',
+				'void | Promise<void>'
 			);
 			assert.strictEqual(
 				get_handler_return_type(filer_change_action_spec, 'receive', imports),
-				'void | Promise<void>',
+				'void | Promise<void>'
 			);
 
 			// Should not add imports for void returns

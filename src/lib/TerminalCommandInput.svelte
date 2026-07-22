@@ -1,5 +1,5 @@
 <script lang="ts">
-	const {onsend}: {onsend: (command_text: string) => void} = $props();
+	const { onsend }: { onsend: (command_text: string) => void } = $props();
 
 	let input = $state.raw('');
 

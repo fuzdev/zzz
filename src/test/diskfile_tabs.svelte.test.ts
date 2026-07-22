@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
-import {test, beforeEach, describe, assert} from 'vitest';
-import {create_uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.ts';
+import { test, beforeEach, describe, assert } from 'vitest';
+import { create_uuid, UuidWithDefault } from '@fuzdev/fuz_util/id.ts';
 
-import {DiskfileTabs} from '$lib/diskfile_tabs.svelte.ts';
-import {DiskfileTab} from '$lib/diskfile_tab.svelte.ts';
-import {Frontend} from '$lib/frontend.svelte.ts';
+import { DiskfileTabs } from '$lib/diskfile_tabs.svelte.ts';
+import { DiskfileTab } from '$lib/diskfile_tab.svelte.ts';
+import { Frontend } from '$lib/frontend.svelte.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Test data
 const TEST_DISKFILE_ID_1 = UuidWithDefault.parse(undefined);
@@ -29,8 +29,8 @@ describe('DiskfileTabs', () => {
 		tabs = new DiskfileTabs({
 			app,
 			json: {
-				id: create_uuid(),
-			},
+				id: create_uuid()
+			}
 		});
 	});
 
@@ -804,7 +804,7 @@ describe('DiskfileTabs', () => {
 			if (tabs.preview_tab_id && tabs.items.by_id.get(tabs.preview_tab_id)) {
 				assert.strictEqual(
 					tabs.items.by_id.get(tabs.preview_tab_id)?.diskfile_id,
-					TEST_DISKFILE_ID_3,
+					TEST_DISKFILE_ID_3
 				);
 			}
 		});

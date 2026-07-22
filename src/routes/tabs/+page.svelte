@@ -1,10 +1,10 @@
 <script lang="ts">
-	import {icon_tab} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_tab } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {Browser} from './browser.svelte.ts';
-	import {sample_tabs} from './sample_tabs.ts';
+	import { Browser } from './browser.svelte.ts';
+	import { sample_tabs } from './sample_tabs.ts';
 	import BrowserView from './BrowserView.svelte';
-	import {frontend_context} from '$lib/frontend.svelte.ts';
+	import { frontend_context } from '$lib/frontend.svelte.ts';
 	import ExternalLink from '$lib/ExternalLink.svelte';
 
 	const app = frontend_context.get();
@@ -12,7 +12,7 @@
 	// TODO super hacky but w/e, inits app.browser to the global
 	const browser: Browser = ((app as any).browser ??= new Browser({
 		app,
-		json: {tabs: sample_tabs},
+		json: { tabs: sample_tabs }
 	}));
 </script>
 

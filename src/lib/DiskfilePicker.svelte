@@ -1,17 +1,17 @@
 <script lang="ts">
-	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
 	import Picker from './Picker.svelte';
-	import {frontend_context} from './frontend.svelte.ts';
-	import type {Diskfile} from './diskfile.svelte.ts';
-	import {sort_by_text, sort_by_numeric} from './sortable.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
+	import type { Diskfile } from './diskfile.svelte.ts';
+	import { sort_by_text, sort_by_numeric } from './sortable.svelte.ts';
 	import DiskfileListitem from './DiskfileListitem.svelte';
 
 	const {
 		onpick,
 		filter,
 		exclude_ids,
-		selected_ids,
+		selected_ids
 	}: {
 		onpick: (diskfile: Diskfile | undefined) => boolean | void;
 		filter?: ((diskfile: Diskfile) => boolean) | undefined;
@@ -20,7 +20,7 @@
 	} = $props();
 
 	const app = frontend_context.get();
-	const {diskfiles} = app;
+	const { diskfiles } = app;
 </script>
 
 <Picker
@@ -37,7 +37,7 @@
 		sort_by_numeric('updated_recently', 'recently updated', 'updated_date', 'desc'),
 		sort_by_numeric('updated_oldest', 'least recently updated', 'updated_date', 'asc'),
 		sort_by_numeric<Diskfile>('font_size_largest', 'largest first', 'content_length', 'desc'),
-		sort_by_numeric<Diskfile>('font_size_smallest', 'smallest first', 'content_length', 'asc'),
+		sort_by_numeric<Diskfile>('font_size_smallest', 'smallest first', 'content_length', 'asc')
 	]}
 	sort_key_default="path_asc"
 	show_sort_controls

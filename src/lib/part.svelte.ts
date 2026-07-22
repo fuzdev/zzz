@@ -1,18 +1,18 @@
-import {z} from 'zod';
-import {EMPTY_OBJECT} from '@fuzdev/fuz_util/object.ts';
-import {DEV} from 'esm-env';
-import {UnreachableError} from '@fuzdev/fuz_util/error.ts';
-import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
-import {Uuid} from '@fuzdev/fuz_util/id.ts';
+import { z } from 'zod';
+import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
+import { DEV } from 'esm-env';
+import { UnreachableError } from '@fuzdev/fuz_util/error.ts';
+import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {estimate_token_count} from './helpers.ts';
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {XmlAttributeWithDefaults} from './xml.ts';
-import {CellJson} from './cell_types.ts';
-import type {Diskfile} from './diskfile.svelte.ts';
-import type {Frontend} from './frontend.svelte.ts';
-import {DiskfilePath} from './diskfile_types.ts';
-import {CONTENT_PREVIEW_LENGTH} from './constants.ts';
+import { estimate_token_count } from './helpers.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { XmlAttributeWithDefaults } from './xml.ts';
+import { CellJson } from './cell_types.ts';
+import type { Diskfile } from './diskfile.svelte.ts';
+import type { Frontend } from './frontend.svelte.ts';
+import { DiskfilePath } from './diskfile_types.ts';
+import { CONTENT_PREVIEW_LENGTH } from './constants.ts';
 
 /** Common properties for all part types. */
 export const PartJsonBase = CellJson.extend({
@@ -26,14 +26,14 @@ export const PartJsonBase = CellJson.extend({
 	// TODO should maybe be swapped to `disabled`
 	enabled: z.boolean().default(true),
 	title: z.string().nullable().default(null),
-	summary: z.string().nullable().default(null),
+	summary: z.string().nullable().default(null)
 });
 export type PartJsonBase = z.infer<typeof PartJsonBase>;
 
 /** Text part schema - direct content storage. */
 export const TextPartJson = PartJsonBase.extend({
 	type: z.literal('text').default('text'),
-	content: z.string().default(''),
+	content: z.string().default('')
 });
 export type TextPartJson = z.infer<typeof TextPartJson>;
 export type TextPartJsonInput = z.input<typeof TextPartJson>;
@@ -42,7 +42,7 @@ export type TextPartJsonInput = z.input<typeof TextPartJson>;
 export const DiskfilePartJson = PartJsonBase.extend({
 	type: z.literal('diskfile').default('diskfile'),
 	path: DiskfilePath.nullable().default(null),
-	has_xml_tag: PartJsonBase.shape.has_xml_tag.default(true), // Override to make true only for diskfiles
+	has_xml_tag: PartJsonBase.shape.has_xml_tag.default(true) // Override to make true only for diskfiles
 	// `content` is on disk at `path`, not in the serialized representation
 });
 export type DiskfilePartJson = z.infer<typeof DiskfilePartJson>;
@@ -51,7 +51,7 @@ export type DiskfilePartJsonInput = z.input<typeof DiskfilePartJson>;
 /** Union of all part types for deserialization. */
 export const PartJson = z
 	.discriminatedUnion('type', [TextPartJson, DiskfilePartJson])
-	.meta({cell_class_name: 'Part'});
+	.meta({ cell_class_name: 'Part' });
 export type PartJson = z.infer<typeof PartJson>;
 export type PartJsonInput = z.input<typeof PartJson>;
 
@@ -79,13 +79,13 @@ export abstract class Part<T extends z.ZodType = typeof PartJsonBase> extends Ce
 	end: number | null = $state.raw()!;
 	readonly length: number | null | undefined = $derived.by(() => this.content?.length);
 	readonly token_count: number | null | undefined = $derived.by(() =>
-		this.content == null ? this.content : estimate_token_count(this.content),
+		this.content == null ? this.content : estimate_token_count(this.content)
 	);
 	/** `content` with a max length. */
 	readonly content_preview = $derived.by(() =>
 		this.content && this.content.length > CONTENT_PREVIEW_LENGTH
 			? this.content.substring(0, CONTENT_PREVIEW_LENGTH)
-			: this.content,
+			: this.content
 	);
 
 	// TODO rethink these patterns, see A2A Parts
@@ -99,7 +99,7 @@ export abstract class Part<T extends z.ZodType = typeof PartJsonBase> extends Ce
 	summary: string | null = $state.raw()!;
 
 	readonly xml_tag_name_default: string = $derived.by(() =>
-		this.type === 'diskfile' ? 'File' : 'Fragment',
+		this.type === 'diskfile' ? 'File' : 'Fragment'
 	);
 
 	add_attribute(partial: z.input<typeof XmlAttributeWithDefaults> = EMPTY_OBJECT): void {
@@ -112,7 +112,7 @@ export abstract class Part<T extends z.ZodType = typeof PartJsonBase> extends Ce
 	 */
 	update_attribute(
 		id: Uuid,
-		updates: Partial<OmitStrict<XmlAttributeWithDefaults, 'id'>>,
+		updates: Partial<OmitStrict<XmlAttributeWithDefaults, 'id'>>
 	): boolean {
 		// Find the attribute by id
 		const index = this.attributes.findIndex((a) => a.id === id);
@@ -147,7 +147,7 @@ export abstract class Part<T extends z.ZodType = typeof PartJsonBase> extends Ce
 	static create(
 		app: Frontend,
 		json: DiskfilePartJsonInput,
-		options?: DiskfilePartOptions,
+		options?: DiskfilePartOptions
 	): DiskfilePart;
 	static create(app: Frontend, json: PartJsonInput, options?: PartOptionsUnion): PartUnion;
 	static create(app: Frontend, json: PartJsonInput, options?: PartOptionsUnion): PartUnion {
@@ -157,9 +157,9 @@ export abstract class Part<T extends z.ZodType = typeof PartJsonBase> extends Ce
 
 		switch (json.type) {
 			case 'text':
-				return new TextPart({...options, app, json});
+				return new TextPart({ ...options, app, json });
 			case 'diskfile':
-				return new DiskfilePart({...options, app, json});
+				return new DiskfilePart({ ...options, app, json });
 			default:
 				throw new UnreachableError(json.type);
 		}
@@ -224,16 +224,16 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 			// Add new path attribute
 			this.add_attribute({
 				key: 'path',
-				value: relative_path,
+				value: relative_path
 			});
 		}
 	}
 
 	// Reference to the editor state for this part
-	#editor_state: {current_content: string} | null = $state(null); // TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
+	#editor_state: { current_content: string } | null = $state(null); // TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
 
 	readonly diskfile: Diskfile | null | undefined = $derived(
-		this.path && this.app.diskfiles.get_by_path(this.path),
+		this.path && this.app.diskfiles.get_by_path(this.path)
 	);
 
 	// The current relative path value for display in the XML path attribute
@@ -264,7 +264,7 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 	/**
 	 * Links this part to an editor state.
 	 */
-	link_editor_state(editor_state: {current_content: string} | null): void {
+	link_editor_state(editor_state: { current_content: string } | null): void {
 		this.#editor_state = editor_state;
 	}
 }

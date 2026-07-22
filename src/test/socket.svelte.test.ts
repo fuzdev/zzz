@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
-import {beforeEach, describe, test, vi, afterEach, assert} from 'vitest';
-import {DEFAULT_CLOSE_CODE} from '@fuzdev/fuz_app/actions/socket.svelte.ts';
+import { beforeEach, describe, test, vi, afterEach, assert } from 'vitest';
+import { DEFAULT_CLOSE_CODE } from '@fuzdev/fuz_app/actions/socket.svelte.ts';
 
-import {Socket} from '$lib/socket.svelte.ts';
-import {Frontend} from '$lib/frontend.svelte.ts';
+import { Socket } from '$lib/socket.svelte.ts';
+import { Frontend } from '$lib/frontend.svelte.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 /**
  * Reconnect, close-code backoff, and heartbeat are tested in fuz_app's
@@ -28,7 +28,7 @@ class Mocket {
 		open: [],
 		close: [],
 		error: [],
-		message: [],
+		message: []
 	};
 	url: string;
 	readyState: number = Mocket.CONNECTING;
@@ -65,7 +65,7 @@ class Mocket {
 	close(code: number = 1000) {
 		this.close_code = code;
 		this.readyState = Mocket.CLOSED;
-		this.dispatchEvent('close', {code});
+		this.dispatchEvent('close', { code });
 	}
 
 	// Helper to simulate connection
@@ -77,11 +77,11 @@ class Mocket {
 
 const TEST_URLS = {
 	BASE: 'ws://test.zzz.software',
-	ALTERNATE: 'ws://alternate.zzz.software',
+	ALTERNATE: 'ws://alternate.zzz.software'
 };
 
 const TEST_MESSAGE = {
-	BASIC: {method: 'test_action', params: 'test_data'},
+	BASIC: { method: 'test_action', params: 'test_data' }
 };
 
 describe('Socket', () => {
@@ -98,13 +98,13 @@ describe('Socket', () => {
 
 		// Mock action API for testing
 		(app as any).api = {
-			ping: vi.fn(),
+			ping: vi.fn()
 		};
 
 		// Stub time so connection_duration derivations don't depend on real clock.
 		(app as any).time = {
 			now_ms: Date.now(),
-			interval: 1000,
+			interval: 1000
 		};
 
 		// `new WebSocket(url)` returns the shared mock; we then drive open/close
@@ -133,7 +133,7 @@ describe('Socket', () => {
 
 	describe('Connection management', () => {
 		test('connect creates WebSocket with provided URL', () => {
-			const socket = new Socket({app});
+			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
 
 			assert.ok((globalThis.WebSocket as any).mock.calls.length > 0);
@@ -143,7 +143,7 @@ describe('Socket', () => {
 		});
 
 		test('disconnect closes WebSocket with default close code', () => {
-			const socket = new Socket({app});
+			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
 
@@ -157,7 +157,7 @@ describe('Socket', () => {
 		});
 
 		test('connection success updates state correctly', () => {
-			const socket = new Socket({app});
+			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
 
@@ -167,7 +167,7 @@ describe('Socket', () => {
 		});
 
 		test('update_url reconnects with new URL if already connected', () => {
-			const socket = new Socket({app});
+			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
 
@@ -183,7 +183,7 @@ describe('Socket', () => {
 
 	describe('Message handling', () => {
 		test('send queues message when socket is not connected', () => {
-			const socket = new Socket({app});
+			const socket = new Socket({ app });
 
 			const sent = socket.send(TEST_MESSAGE.BASIC);
 			assert.ok(!sent);
@@ -191,7 +191,7 @@ describe('Socket', () => {
 		});
 
 		test('send transmits message when socket is connected', () => {
-			const socket = new Socket({app});
+			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
 
@@ -205,11 +205,11 @@ describe('Socket', () => {
 		});
 
 		test('retry_queued_messages sends queued messages when connected', () => {
-			const socket = new Socket({app});
+			const socket = new Socket({ app });
 
 			// Queue messages while disconnected (no url_input, so no auto-connect)
-			socket.send({method: 'message_a'});
-			socket.send({method: 'message_b'});
+			socket.send({ method: 'message_a' });
+			socket.send({ method: 'message_b' });
 			assert.strictEqual(socket.queued_message_count, 2);
 
 			socket.connect(TEST_URLS.BASE);
@@ -227,7 +227,7 @@ describe('Socket', () => {
 			// `FrontendWebsocketClient.send()` catches thrown errors and returns
 			// `false`, so the wrapper surfaces a generic reason rather than the
 			// underlying `Error.message`.
-			const socket = new Socket({app});
+			const socket = new Socket({ app });
 
 			socket.send(TEST_MESSAGE.BASIC);
 			assert.strictEqual(socket.queued_message_count, 1);
@@ -249,7 +249,7 @@ describe('Socket', () => {
 		});
 
 		test('clear_failed_messages removes all failed messages', () => {
-			const socket = new Socket({app});
+			const socket = new Socket({ app });
 
 			socket.send(TEST_MESSAGE.BASIC);
 
@@ -271,14 +271,14 @@ describe('Socket', () => {
 
 	describe('Automatic reconnection', () => {
 		test('auto reconnect attempts to reconnect after close', () => {
-			const socket = new Socket({app});
+			const socket = new Socket({ app });
 			socket.reconnect_delay = 1000;
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
 
 			// Simulate unexpected close; the wrapper maps fuz_app's 'reconnecting'
 			// to zzz's 'failure' AsyncStatus for UI compatibility.
-			mock_socket.dispatchEvent('close', {code: 1006});
+			mock_socket.dispatchEvent('close', { code: 1006 });
 
 			assert.ok(!socket.open);
 			assert.strictEqual(socket.status, 'failure');

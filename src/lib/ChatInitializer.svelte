@@ -1,11 +1,11 @@
 <script lang="ts">
-	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-	import {frontend_context} from './frontend.svelte.ts';
-	import type {ChatTemplate} from './chat_template.ts';
-	import type {Model} from './model.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
+	import type { ChatTemplate } from './chat_template.ts';
+	import type { Model } from './model.svelte.ts';
 	import ModelPicker from './ModelPicker.svelte';
-	import type {Chat} from './chat.svelte.ts';
+	import type { Chat } from './chat.svelte.ts';
 	import ProviderLogo from './ProviderLogo.svelte';
 
 	const app = frontend_context.get();
@@ -14,7 +14,7 @@
 		chat: chat_prop,
 		oninit,
 		heading = 'create new chat',
-		items,
+		items
 	}: {
 		chat?: Chat;
 		oninit?: (chat_id: Uuid) => void;

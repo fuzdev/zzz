@@ -1,9 +1,9 @@
 <script lang="ts">
-	import type {Snippet} from 'svelte';
+	import type { Snippet } from 'svelte';
 
 	const {
 		header,
-		children,
+		children
 	}: {
 		header: Snippet;
 		children: Snippet;

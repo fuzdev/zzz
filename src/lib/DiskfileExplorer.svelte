@@ -1,33 +1,33 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
-	import type {Snippet} from 'svelte';
+	import { slide } from 'svelte/transition';
+	import type { Snippet } from 'svelte';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import PendingButton from '@fuzdev/fuz_ui/PendingButton.svelte';
 
-	import {frontend_context} from './frontend.svelte.ts';
-	import type {Diskfile} from './diskfile.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
+	import type { Diskfile } from './diskfile.svelte.ts';
 	import DiskfileListitem from './DiskfileListitem.svelte';
 	import {
 		icon_create_directory,
 		icon_create_file,
 		icon_directory,
-		icon_sort,
+		icon_sort
 	} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import SortableList from './SortableList.svelte';
-	import {sort_by_text, sort_by_numeric} from './sortable.svelte.ts';
+	import { sort_by_text, sort_by_numeric } from './sortable.svelte.ts';
 
 	const {
-		empty,
+		empty
 	}: {
 		empty?: Snippet | undefined;
 	} = $props();
 
 	const app = frontend_context.get();
-	const {diskfiles} = app;
-	const {editor} = diskfiles;
+	const { diskfiles } = app;
+	const { editor } = diskfiles;
 
-	const {zzz_dir} = $derived(app);
+	const { zzz_dir } = $derived(app);
 
 	// TODO need awaitable websocket calls?
 	const TODO_create_file_pending = false;
@@ -120,7 +120,7 @@
 				sort_by_numeric<Diskfile>('updated_newest', 'updated (latest)', 'updated', 'desc'),
 				sort_by_numeric<Diskfile>('updated_oldest', 'updated (past)', 'updated', 'asc'),
 				sort_by_numeric<Diskfile>('created_newest', 'created (newest)', 'created', 'desc'),
-				sort_by_numeric<Diskfile>('created_oldest', 'created (oldest)', 'created', 'asc'),
+				sort_by_numeric<Diskfile>('created_oldest', 'created (oldest)', 'created', 'asc')
 			]}
 			sort_key_default="path_asc"
 			no_items={empty ? undefined : '[no files available]'}

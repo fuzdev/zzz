@@ -21,23 +21,23 @@
  * @module
  */
 
-import {inject} from 'vitest';
+import { inject } from 'vitest';
 import {
 	default_cross_process_setup,
-	reconstruct_bootstrapped_handle,
+	reconstruct_bootstrapped_handle
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
-import {describe_peer_ping_ws_tests} from '@fuzdev/fuz_app/testing/cross_backend/peer_ping_ws.ts';
-import {ROLE_ADMIN} from '@fuzdev/fuz_app/auth/role_schema.ts';
+import { describe_peer_ping_ws_tests } from '@fuzdev/fuz_app/testing/cross_backend/peer_ping_ws.ts';
+import { ROLE_ADMIN } from '@fuzdev/fuz_app/auth/role_schema.ts';
 
 import './cross_test_types.ts';
 
 const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
-const setup_test = default_cross_process_setup(handle, {extra_keeper_roles: [ROLE_ADMIN]});
-const {base_url, ws_path, capabilities} = handle.config;
+const setup_test = default_cross_process_setup(handle, { extra_keeper_roles: [ROLE_ADMIN] });
+const { base_url, ws_path, capabilities } = handle.config;
 
 describe_peer_ping_ws_tests({
 	setup_test,
 	capabilities,
 	base_url,
-	ws_path,
+	ws_path
 });

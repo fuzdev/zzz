@@ -1,22 +1,25 @@
 // @slop Claude Opus 4
 
-import {z} from 'zod';
-import {create_uuid} from '@fuzdev/fuz_util/id.ts';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
+import { z } from 'zod';
+import { create_uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import {Cell, type CellOptions} from '$lib/cell.svelte.ts';
-import {IndexedCollection} from '$lib/indexed_collection.svelte.ts';
-import {create_single_index, create_derived_index} from '$lib/indexed_collection_helpers.svelte.ts';
-import {CellJson} from '$lib/cell_types.ts';
-import {BrowserTab, BrowserTabJson} from './browser_tab.svelte.ts';
-import {HANDLED} from '$lib/cell_helpers.ts';
-import {to_reordered_list} from '$lib/list_helpers.ts';
-import {fake_sites} from './sample_tabs.ts';
+import { Cell, type CellOptions } from '$lib/cell.svelte.ts';
+import { IndexedCollection } from '$lib/indexed_collection.svelte.ts';
+import {
+	create_single_index,
+	create_derived_index
+} from '$lib/indexed_collection_helpers.svelte.ts';
+import { CellJson } from '$lib/cell_types.ts';
+import { BrowserTab, BrowserTabJson } from './browser_tab.svelte.ts';
+import { HANDLED } from '$lib/cell_helpers.ts';
+import { to_reordered_list } from '$lib/list_helpers.ts';
+import { fake_sites } from './sample_tabs.ts';
 
 export const BrowserTabsJson = CellJson.extend({
 	tabs: z.array(BrowserTabJson).default(() => []),
-	recently_closed_tabs: z.array(BrowserTabJson).default(() => []),
-}).meta({cell_class_name: 'BrowserTabs'});
+	recently_closed_tabs: z.array(BrowserTabJson).default(() => [])
+}).meta({ cell_class_name: 'BrowserTabs' });
 export type BrowserTabsJsonInput = z.input<typeof BrowserTabsJson>;
 
 export type BrowserTabsOptions = CellOptions<typeof BrowserTabsJson>;
@@ -27,13 +30,13 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 			create_single_index({
 				key: 'url',
 				extractor: (tab) => tab.url,
-				query_schema: z.string(),
+				query_schema: z.string()
 			}),
 			create_derived_index({
 				key: 'manual_order',
-				compute: (collection) => collection.values,
-			}),
-		],
+				compute: (collection) => collection.values
+			})
+		]
 	});
 
 	/** Ordered array of tabs derived from the `manual_order` index. */
@@ -42,7 +45,7 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 	recently_closed_tabs: Array<BrowserTab> = $state([]);
 
 	readonly selected_tab: BrowserTab | undefined = $derived(
-		this.ordered_tabs.find((t) => t.selected),
+		this.ordered_tabs.find((t) => t.selected)
 	);
 
 	readonly selected_url: string = $derived(this.selected_tab?.url || '');
@@ -60,7 +63,7 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 					for (const tab_json of tabs) {
 						const tab = new BrowserTab({
 							app: this.app,
-							json: tab_json,
+							json: tab_json
 						});
 						this.items.add(tab);
 					}
@@ -73,12 +76,12 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 						(tab_json) =>
 							new BrowserTab({
 								app: this.app,
-								json: tab_json,
-							}),
+								json: tab_json
+							})
 					);
 				}
 				return HANDLED;
-			},
+			}
 		};
 
 		this.init();
@@ -88,7 +91,7 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 		// Add new tab to collection
 		const tab = new BrowserTab({
 			app: this.app,
-			json: tab_data,
+			json: tab_data
 		});
 		this.items.add(tab);
 	}
@@ -110,7 +113,7 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 			content: fake_sites.new_tab.content,
 			refresh_counter: 0,
 			created,
-			updated: created,
+			updated: created
 		});
 	}
 

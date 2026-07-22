@@ -1,9 +1,9 @@
 <script lang="ts">
-	import type {Prompt} from './prompt.svelte.ts';
+	import type { Prompt } from './prompt.svelte.ts';
 	import ContentStats from './ContentStats.svelte';
 
 	const {
-		prompt,
+		prompt
 	}: {
 		prompt: Prompt;
 	} = $props();

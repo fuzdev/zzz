@@ -1,7 +1,7 @@
 <script lang="ts">
-	import {fade} from 'svelte/transition';
+	import { fade } from 'svelte/transition';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
-	import {random_item} from '@fuzdev/fuz_util/random.ts';
+	import { random_item } from '@fuzdev/fuz_util/random.ts';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
 	import PartView from './PartView.svelte';
@@ -12,21 +12,21 @@
 		icon_part,
 		icon_prompt,
 		icon_remove,
-		icon_sort,
+		icon_sort
 	} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {frontend_context} from './frontend.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 	import PromptStats from './PromptStats.svelte';
 	import PartList from './PartList.svelte';
 	import ContentPreview from './ContentPreview.svelte';
-	import {Part} from './part.svelte.ts';
+	import { Part } from './part.svelte.ts';
 	import PromptContextmenu from './PromptContextmenu.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
 	import PromptList from './PromptList.svelte';
 	import EditableText from './EditableText.svelte';
 	import TutorialForDatabase from './TutorialForDatabase.svelte';
 	import TutorialForPrompts from './TutorialForPrompts.svelte';
-	import {DURATION_SM} from './helpers.ts';
+	import { DURATION_SM } from './helpers.ts';
 
 	const app = frontend_context.get();
 
@@ -44,7 +44,7 @@
 
 		const part = Part.create(app, {
 			type: 'text',
-			content: '',
+			content: ''
 		});
 
 		app.prompts.selected.add_part(part);
@@ -172,7 +172,7 @@
 						style:grid-template-columns="repeat(auto-fill, minmax(300px, 1fr))"
 					>
 						{#each app.prompts.selected.parts as part (part.id)}
-							<li in:fade={{duration: DURATION_SM}}>
+							<li in:fade={{ duration: DURATION_SM }}>
 								<!-- the extra wrapper makes the grid items not stretch vertically -->
 								<div class="shade_00 border_radius_xs p_sm">
 									<PartView {part} />
@@ -184,7 +184,7 @@
 			</div>
 		</PromptContextmenu>
 	{:else if app.prompts.items.size}
-		<div class="box height:100% flex:1" in:fade={{duration: DURATION_SM}}>
+		<div class="box height:100% flex:1" in:fade={{ duration: DURATION_SM }}>
 			<p>
 				select a prompt from the list or <button
 					type="button"
@@ -203,7 +203,7 @@
 			</p>
 		</div>
 	{:else}
-		<div class="box height:100% flex:1" in:fade={{duration: DURATION_SM}}>
+		<div class="box height:100% flex:1" in:fade={{ duration: DURATION_SM }}>
 			<p>
 				no prompts yet, <button type="button" class="inline palette_d" onclick={create_prompt}
 					>create a new prompt</button
@@ -220,7 +220,7 @@
 
 		const part = Part.create(app, {
 			type: 'diskfile',
-			path: diskfile.path,
+			path: diskfile.path
 		});
 
 		app.prompts.selected.add_part(part);

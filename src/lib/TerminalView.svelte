@@ -1,15 +1,15 @@
 <script lang="ts">
 	import '@xterm/xterm/css/xterm.css';
-	import {onMount} from 'svelte';
+	import { onMount } from 'svelte';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
-	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-	import {app_context} from './app.svelte.ts';
+	import { app_context } from './app.svelte.ts';
 
 	const {
 		terminal_id,
 		onclose,
-		get_text,
+		get_text
 	}: {
 		terminal_id: Uuid;
 		onclose?: (exit_code: number | null) => void;
@@ -90,7 +90,7 @@
 		});
 
 		const setup = async (): Promise<void> => {
-			const {Terminal} = await import('@xterm/xterm');
+			const { Terminal } = await import('@xterm/xterm');
 
 			if (destroyed) return;
 
@@ -101,8 +101,8 @@
 				fontFamily: 'monospace',
 				theme: {
 					background: '#1a1a2e',
-					foreground: '#e0e0e0',
-				},
+					foreground: '#e0e0e0'
+				}
 			});
 
 			if (container_el) {
@@ -124,16 +124,16 @@
 			term.onData((data: string) => {
 				void app.api.terminal_data_send({
 					terminal_id,
-					data,
+					data
 				});
 			});
 
 			// notify backend of resize
-			term.onResize(({cols, rows}: {cols: number; rows: number}) => {
+			term.onResize(({ cols, rows }: { cols: number; rows: number }) => {
 				void app.api.terminal_resize({
 					terminal_id,
 					cols,
-					rows,
+					rows
 				});
 			});
 		};
@@ -150,7 +150,7 @@
 
 	const handle_close = async (): Promise<void> => {
 		if (exited) return; // already exited via notification
-		const result = await app.api.terminal_close({terminal_id});
+		const result = await app.api.terminal_close({ terminal_id });
 		exited = true;
 		onclose?.(result.ok ? result.value.exit_code : null);
 	};

@@ -1,19 +1,19 @@
 <script lang="ts">
-	import type {ComponentProps, Snippet} from 'svelte';
+	import type { ComponentProps, Snippet } from 'svelte';
 	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 	import ContextmenuSubmenu from '@fuzdev/fuz_ui/ContextmenuSubmenu.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 
-	import {Part} from './part.svelte.ts';
-	import type {Prompt} from './prompt.svelte.ts';
-	import {frontend_context} from './frontend.svelte.ts';
+	import { Part } from './part.svelte.ts';
+	import type { Prompt } from './prompt.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 	import {
 		icon_delete,
 		icon_file,
 		icon_part,
 		icon_prompt,
-		icon_remove,
+		icon_remove
 	} from '@fuzdev/fuz_ui/icons.ts';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
@@ -50,8 +50,8 @@
 					prompt.add_part(
 						Part.create(app, {
 							type: 'text',
-							content: '',
-						}),
+							content: ''
+						})
 					);
 				}}
 			>
@@ -109,8 +109,8 @@
 		prompt.add_part(
 			Part.create(app, {
 				type: 'diskfile',
-				path: diskfile.path,
-			}),
+				path: diskfile.path
+			})
 		);
 		return true;
 	}}

@@ -1,14 +1,14 @@
 <script lang="ts">
-	import {icon_play, icon_add, icon_remove} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_play, icon_add, icon_remove } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
-	import type {TerminalPreset} from './terminal_preset.svelte.ts';
+	import type { TerminalPreset } from './terminal_preset.svelte.ts';
 
 	const {
 		presets,
 		onrun,
 		oncreate,
-		ondelete,
+		ondelete
 	}: {
 		presets: Array<TerminalPreset>;
 		onrun: (preset: TerminalPreset) => void;

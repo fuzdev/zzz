@@ -1,4 +1,4 @@
-import type {SvgData} from '@fuzdev/fuz_ui/svg.ts';
+import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
 import {
 	icon_ping,
 	icon_response,
@@ -7,11 +7,11 @@ import {
 	icon_action,
 	icon_action_local_call,
 	icon_action_request_response,
-	icon_action_remote_notification,
+	icon_action_remote_notification
 } from '@fuzdev/fuz_ui/icons.ts';
-import type {ActionKind} from '@fuzdev/fuz_app/actions/action_spec.ts';
+import type { ActionKind } from '@fuzdev/fuz_app/actions/action_spec.ts';
 
-import type {ActionMethod} from './action_metatypes.ts';
+import type { ActionMethod } from './action_metatypes.ts';
 
 export const get_icon_for_action_method = (method: ActionMethod): SvgData => {
 	switch (method) {

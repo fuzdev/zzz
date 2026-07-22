@@ -1,23 +1,23 @@
 // @vitest-environment jsdom
 
-import {test, describe, assert} from 'vitest';
-import {assert_rejects} from '@fuzdev/fuz_util/testing.ts';
-import {create_uuid} from '@fuzdev/fuz_util/id.ts';
+import { test, describe, assert } from 'vitest';
+import { assert_rejects } from '@fuzdev/fuz_util/testing.ts';
+import { create_uuid } from '@fuzdev/fuz_util/id.ts';
 
 import {
 	create_action_event,
-	create_action_event_from_json,
+	create_action_event_from_json
 } from '@fuzdev/fuz_app/actions/action_event.ts';
 import type {
 	ActionEventEnvironment,
-	ActionExecutor,
+	ActionExecutor
 } from '@fuzdev/fuz_app/actions/action_event_types.ts';
-import type {ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.ts';
+import type { ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';
 import {
 	ping_action_spec,
 	filer_change_action_spec,
 	toggle_main_menu_action_spec,
-	completion_create_action_spec,
+	completion_create_action_spec
 } from '$lib/action_specs.ts';
 
 // Mock environment for testing
@@ -75,8 +75,8 @@ describe('ActionEvent', () => {
 					request_id: create_uuid(),
 					provider_name: 'claude',
 					model: 'claude-3-opus',
-					prompt: 'test prompt',
-				},
+					prompt: 'test prompt'
+				}
 			};
 
 			const event = create_action_event(env, completion_create_action_spec, input);
@@ -98,7 +98,7 @@ describe('ActionEvent', () => {
 			// filer_change has initiator: 'backend', so frontend can't initiate send
 			assert.throws(
 				() => create_action_event(env, filer_change_action_spec, {}),
-				/executor 'frontend' cannot initiate action 'filer_change'/,
+				/executor 'frontend' cannot initiate action 'filer_change'/
 			);
 		});
 	});
@@ -122,9 +122,9 @@ describe('ActionEvent', () => {
 					created: '2024-01-01T00:00:00Z',
 					provider_name: 'claude',
 					model: 'claude-3-opus',
-					prompt: 'test prompt',
+					prompt: 'test prompt'
 				},
-				_meta: {progressToken: create_uuid()},
+				_meta: { progressToken: create_uuid() }
 			};
 
 			const event = create_action_event(env, completion_create_action_spec, input);
@@ -139,8 +139,8 @@ describe('ActionEvent', () => {
 			const invalid_input = {
 				completion_request: {
 					// Missing required fields
-					prompt: 'test',
-				},
+					prompt: 'test'
+				}
 			};
 
 			const event = create_action_event(env, completion_create_action_spec, invalid_input);
@@ -270,7 +270,7 @@ describe('ActionEvent', () => {
 			event.data.request = {
 				jsonrpc: '2.0',
 				id: create_uuid(),
-				method: 'ping',
+				method: 'ping'
 			};
 
 			event.transition('receive_response');
@@ -281,8 +281,8 @@ describe('ActionEvent', () => {
 				id: event.data.request.id,
 				error: {
 					code: -32603,
-					message: 'Server error',
-				},
+					message: 'Server error'
+				}
 			} as const;
 
 			event.set_response(errorResponse);
@@ -306,7 +306,7 @@ describe('ActionEvent', () => {
 			env.executor = 'backend';
 
 			env.add_handler('ping', 'receive_request', () => {
-				return Promise.resolve({ping_id: create_uuid()});
+				return Promise.resolve({ ping_id: create_uuid() });
 			});
 
 			const event = create_action_event(env, ping_action_spec, undefined, 'receive_request');
@@ -333,8 +333,8 @@ describe('ActionEvent', () => {
 			const invalid_input = {
 				completion_request: {
 					// Missing required fields
-					prompt: 'test',
-				},
+					prompt: 'test'
+				}
 			};
 
 			const event = create_action_event(env, completion_create_action_spec, invalid_input);
@@ -356,11 +356,11 @@ describe('ActionEvent', () => {
 	describe('handle_sync()', () => {
 		test('executes synchronous local_call', () => {
 			const env = new TestEnvironment([toggle_main_menu_action_spec]);
-			const output = {show: true};
+			const output = { show: true };
 
 			env.add_handler('toggle_main_menu', 'execute', () => output);
 
-			const event = create_action_event(env, toggle_main_menu_action_spec, {show: true});
+			const event = create_action_event(env, toggle_main_menu_action_spec, { show: true });
 			event.parse();
 
 			event.handle_sync();
@@ -376,7 +376,7 @@ describe('ActionEvent', () => {
 
 			assert.throws(
 				() => event.handle_sync(),
-				/handle_sync can only be used with synchronous local_call actions/,
+				/handle_sync can only be used with synchronous local_call actions/
 			);
 		});
 
@@ -384,7 +384,9 @@ describe('ActionEvent', () => {
 			const env = new TestEnvironment([toggle_main_menu_action_spec]);
 
 			// Force a failure by providing invalid input - show must be boolean
-			const event = create_action_event(env, toggle_main_menu_action_spec, {show: 'not-a-boolean'});
+			const event = create_action_event(env, toggle_main_menu_action_spec, {
+				show: 'not-a-boolean'
+			});
 			event.parse();
 
 			// Should be failed after parsing invalid input
@@ -431,7 +433,7 @@ describe('ActionEvent', () => {
 			// Can't go from send_request to send_response
 			assert.throws(
 				() => event.transition('send_response'),
-				/Invalid phase transition from 'send_request' to 'send_response'/,
+				/Invalid phase transition from 'send_request' to 'send_response'/
 			);
 		});
 
@@ -442,7 +444,7 @@ describe('ActionEvent', () => {
 			// Still in initial step
 			assert.throws(
 				() => event.transition('receive_response'),
-				/cannot transition from step 'initial' - must be 'handled'/,
+				/cannot transition from step 'initial' - must be 'handled'/
 			);
 		});
 
@@ -454,11 +456,11 @@ describe('ActionEvent', () => {
 			const request = {
 				jsonrpc: '2.0',
 				id: create_uuid(),
-				method: 'ping',
+				method: 'ping'
 			} as const;
 			event.set_request(request);
 
-			env.add_handler('ping', 'receive_request', () => ({ping_id: request.id}));
+			env.add_handler('ping', 'receive_request', () => ({ ping_id: request.id }));
 
 			event.parse();
 			await event.handle_async();
@@ -468,7 +470,7 @@ describe('ActionEvent', () => {
 
 			assert.strictEqual(event.data.phase, 'send_response');
 			assert.deepEqual(event.data.request, request);
-			assert.deepEqual(event.data.output, {ping_id: request.id});
+			assert.deepEqual(event.data.output, { ping_id: request.id });
 			assert.isDefined(event.data.response);
 			assert.ok(Object.hasOwn(event.data.response as any, 'result'));
 		});
@@ -521,7 +523,7 @@ describe('ActionEvent', () => {
 			const request = {
 				jsonrpc: '2.0',
 				id: create_uuid(),
-				method: 'ping',
+				method: 'ping'
 			} as const;
 
 			event.set_request(request);
@@ -542,7 +544,7 @@ describe('ActionEvent', () => {
 			event.data.request = {
 				jsonrpc: '2.0',
 				id: create_uuid(),
-				method: 'ping',
+				method: 'ping'
 			};
 
 			event.transition('receive_response');
@@ -550,7 +552,7 @@ describe('ActionEvent', () => {
 			const response = {
 				jsonrpc: '2.0',
 				id: event.data.request.id,
-				result: {ping_id: create_uuid()},
+				result: { ping_id: create_uuid() }
 			} as const;
 
 			event.set_response(response);
@@ -572,7 +574,7 @@ describe('ActionEvent', () => {
 			event.data.request = {
 				jsonrpc: '2.0',
 				id: create_uuid(),
-				method: 'ping',
+				method: 'ping'
 			};
 
 			event.transition('receive_response');
@@ -583,8 +585,8 @@ describe('ActionEvent', () => {
 				error: {
 					code: -32603,
 					message: 'Internal error',
-					data: {details: 'Test error'},
-				},
+					data: { details: 'Test error' }
+				}
 			} as const;
 
 			event.set_response(errorResponse);
@@ -608,9 +610,9 @@ describe('ActionEvent', () => {
 				jsonrpc: '2.0',
 				method: 'filer_change',
 				params: {
-					change: {type: 'add', path: '/test.txt'},
-					disknode: {} as any,
-				},
+					change: { type: 'add', path: '/test.txt' },
+					disknode: {} as any
+				}
 			} as const;
 
 			event.set_notification(notification);
@@ -624,12 +626,12 @@ describe('ActionEvent', () => {
 
 			assert.throws(
 				() => event.set_request({} as any),
-				/can only set request in receive_request phase/,
+				/can only set request in receive_request phase/
 			);
 
 			assert.throws(
 				() => event.set_notification({} as any),
-				/can only set notification in receive phase/,
+				/can only set notification in receive phase/
 			);
 		});
 	});
@@ -650,7 +652,7 @@ describe('ActionEvent', () => {
 			event.set_response({
 				jsonrpc: '2.0',
 				id: create_uuid(),
-				result: {ping_id: create_uuid()},
+				result: { ping_id: create_uuid() }
 			});
 			event.parse();
 			await event.handle_async();
@@ -661,7 +663,7 @@ describe('ActionEvent', () => {
 
 		test('returns true for failed state', () => {
 			const env = new TestEnvironment([ping_action_spec]);
-			const event = create_action_event(env, ping_action_spec, {invalid: 'input'});
+			const event = create_action_event(env, ping_action_spec, { invalid: 'input' });
 
 			event.parse(); // Will fail due to invalid input
 
@@ -685,12 +687,12 @@ describe('ActionEvent', () => {
 			const env = new TestEnvironment([ping_action_spec]);
 			const event = create_action_event(env, ping_action_spec, undefined);
 
-			const changes: Array<{old_step: string; new_step: string}> = [];
+			const changes: Array<{ old_step: string; new_step: string }> = [];
 
 			event.observe((new_data, old_data) => {
 				changes.push({
 					old_step: old_data.step,
-					new_step: new_data.step,
+					new_step: new_data.step
 				});
 			});
 
@@ -699,7 +701,7 @@ describe('ActionEvent', () => {
 			assert.strictEqual(changes.length, 1);
 			assert.deepEqual(changes[0], {
 				old_step: 'initial',
-				new_step: 'parsed',
+				new_step: 'parsed'
 			});
 		});
 
@@ -778,12 +780,12 @@ describe('ActionEvent', () => {
 				error: null,
 				request: null,
 				response: null,
-				notification: null,
+				notification: null
 			};
 
 			assert.throws(
 				() => create_action_event_from_json(json as any, env),
-				/no spec found for method 'unknown_method'/,
+				/no spec found for method 'unknown_method'/
 			);
 		});
 	});
@@ -794,8 +796,8 @@ describe('ActionEvent', () => {
 			env.executor = 'backend';
 
 			const invalid_input = {
-				change: {type: 'add', path: '/test.txt'},
-				disknode: {} as any, // Missing required fields
+				change: { type: 'add', path: '/test.txt' },
+				disknode: {} as any // Missing required fields
 			};
 
 			const event = create_action_event(env, filer_change_action_spec, invalid_input);
@@ -817,7 +819,7 @@ describe('ActionEvent', () => {
 			env.executor = 'backend';
 
 			const input = {
-				change: {type: 'add', path: '/test.txt'},
+				change: { type: 'add', path: '/test.txt' },
 				disknode: {
 					id: '/test.txt',
 					source_dir: '/',
@@ -825,8 +827,8 @@ describe('ActionEvent', () => {
 					ctime: Date.now(),
 					mtime: Date.now(),
 					dependents: [],
-					dependencies: [],
-				},
+					dependencies: []
+				}
 			};
 
 			const event = create_action_event(env, filer_change_action_spec, input);
@@ -841,15 +843,15 @@ describe('ActionEvent', () => {
 		test('local_call completes in single phase', () => {
 			const env = new TestEnvironment([toggle_main_menu_action_spec]);
 
-			env.add_handler('toggle_main_menu', 'execute', () => ({show: false}));
+			env.add_handler('toggle_main_menu', 'execute', () => ({ show: false }));
 
-			const event = create_action_event(env, toggle_main_menu_action_spec, {show: true});
+			const event = create_action_event(env, toggle_main_menu_action_spec, { show: true });
 			event.parse();
 			event.handle_sync();
 
 			assert.strictEqual(event.data.phase, 'execute');
 			assert.strictEqual(event.data.step, 'handled');
-			assert.deepEqual(event.data.output, {show: false});
+			assert.deepEqual(event.data.output, { show: false });
 			assert.ok(event.is_complete());
 		});
 	});

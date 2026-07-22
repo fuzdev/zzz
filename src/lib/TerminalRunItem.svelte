@@ -1,19 +1,19 @@
 <script lang="ts">
-	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-	import {icon_retry} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_retry } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	import TerminalView from './TerminalView.svelte';
 	import TerminalContextmenu from './TerminalContextmenu.svelte';
-	import {app_context} from './app.svelte.ts';
+	import { app_context } from './app.svelte.ts';
 
 	const {
 		terminal_id,
 		command,
 		args,
 		onclose,
-		onrestart,
+		onrestart
 	}: {
 		terminal_id: Uuid;
 		command: string;
@@ -44,7 +44,7 @@
 
 	const send_stdin = (): void => {
 		if (!stdin_input || exited) return;
-		void app.api.terminal_data_send({terminal_id, data: stdin_input + '\n'});
+		void app.api.terminal_data_send({ terminal_id, data: stdin_input + '\n' });
 		stdin_input = '';
 	};
 

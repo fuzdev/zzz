@@ -1,13 +1,13 @@
-import {z} from 'zod';
+import { z } from 'zod';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {CellJson} from './cell_types.ts';
-import {DiskfileDirectoryPath} from './diskfile_types.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { CellJson } from './cell_types.ts';
+import { DiskfileDirectoryPath } from './diskfile_types.ts';
 
 export const SpaceJson = CellJson.extend({
 	name: z.string().default(''),
-	directory_paths: z.array(DiskfileDirectoryPath).default(() => []),
-}).meta({cell_class_name: 'Space'});
+	directory_paths: z.array(DiskfileDirectoryPath).default(() => [])
+}).meta({ cell_class_name: 'Space' });
 export type SpaceJson = z.infer<typeof SpaceJson>;
 export type SpaceJsonInput = z.input<typeof SpaceJson>;
 
@@ -24,7 +24,7 @@ export class Space extends Cell<typeof SpaceJson> {
 	 * Stale entries (from closed workspaces) are excluded.
 	 */
 	readonly active_directory_paths: Array<DiskfileDirectoryPath> = $derived(
-		this.directory_paths.filter((p) => this.app.workspaces.get_by_path(p) !== undefined),
+		this.directory_paths.filter((p) => this.app.workspaces.get_by_path(p) !== undefined)
 	);
 
 	constructor(options: SpaceOptions) {

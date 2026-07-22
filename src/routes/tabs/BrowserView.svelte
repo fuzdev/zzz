@@ -1,32 +1,32 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {swallow, is_editable} from '@fuzdev/fuz_util/dom.ts';
-	import type {Snippet} from 'svelte';
+	import { swallow, is_editable } from '@fuzdev/fuz_util/dom.ts';
+	import type { Snippet } from 'svelte';
 
 	import {
 		icon_add,
 		icon_arrow_left,
 		icon_arrow_right,
 		icon_drag,
-		icon_refresh,
+		icon_refresh
 	} from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {format_placeholder} from '$lib/helpers.ts';
-	import type {Browser} from './browser.svelte.ts';
+	import { format_placeholder } from '$lib/helpers.ts';
+	import type { Browser } from './browser.svelte.ts';
 	import BrowserTabContent from './BrowserTabContent.svelte';
 	import BrowserTabListitem from './BrowserTabListitem.svelte';
-	import {Reorderable} from '$lib/reorderable.svelte.ts';
+	import { Reorderable } from '$lib/reorderable.svelte.ts';
 
 	const {
 		browser,
-		children,
+		children
 	}: {
 		browser: Browser;
 		children: Snippet;
 	} = $props();
 
-	const tabs_reorderable = new Reorderable({item_class: null}); // remove the normal reorderable item styling
+	const tabs_reorderable = new Reorderable({ item_class: null }); // remove the normal reorderable item styling
 </script>
 
 <svelte:window
@@ -70,11 +70,11 @@
 		<ul
 			class="browser-tab-bar unstyled display:flex overflow-x:auto overflow-y:hidden scrollbar-width:thin"
 			{@attach tabs_reorderable.list({
-				onreorder: (from_index, to_index) => browser.reorder_tab(from_index, to_index),
+				onreorder: (from_index, to_index) => browser.reorder_tab(from_index, to_index)
 			})}
 		>
 			{#each browser.tabs.ordered_tabs as tab, index (tab.id)}
-				<li class="display:flex" {@attach tabs_reorderable.item({index})}>
+				<li class="display:flex" {@attach tabs_reorderable.item({ index })}>
 					<BrowserTabListitem
 						{tab}
 						{index}

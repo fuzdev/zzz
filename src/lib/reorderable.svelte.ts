@@ -1,9 +1,9 @@
 // @slop Claude Opus 4
 
-import type {Attachment} from 'svelte/attachments';
-import {on} from 'svelte/events';
-import type {Flavored} from '@fuzdev/fuz_util/types.ts';
-import {EMPTY_OBJECT} from '@fuzdev/fuz_util/object.ts';
+import type { Attachment } from 'svelte/attachments';
+import { on } from 'svelte/events';
+import type { Flavored } from '@fuzdev/fuz_util/types.ts';
+import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
 
 import {
 	detect_reorderable_direction,
@@ -11,9 +11,9 @@ import {
 	calculate_reorderable_target_index,
 	is_reorder_allowed,
 	validate_reorderable_target_index,
-	set_reorderable_drag_data_transfer,
+	set_reorderable_drag_data_transfer
 } from './reorderable_helpers.ts';
-import {create_client_id} from './helpers.ts';
+import { create_client_id } from './helpers.ts';
 
 export type ReorderableId = Flavored<string, 'ReorderableId'>;
 export type ReorderableItemId = Flavored<string, 'ReorderableItemId'>;
@@ -115,7 +115,7 @@ export class Reorderable implements ReorderableStyleOptions {
 			this.drag_over_bottom_class,
 			this.drag_over_left_class,
 			this.drag_over_right_class,
-			this.invalid_drop_class,
+			this.invalid_drop_class
 		].filter((c): c is string => c !== null);
 	}
 
@@ -145,7 +145,7 @@ export class Reorderable implements ReorderableStyleOptions {
 			drag_over_left_class = DRAG_OVER_LEFT_CLASS_DEFAULT,
 			drag_over_right_class = DRAG_OVER_RIGHT_CLASS_DEFAULT,
 			invalid_drop_class = INVALID_DROP_CLASS_DEFAULT,
-			direction,
+			direction
 		} = options;
 
 		this.list_class = list_class;
@@ -164,7 +164,7 @@ export class Reorderable implements ReorderableStyleOptions {
 	init(): void {
 		if (!this.list_node || this.initialized) return;
 
-		for (const {id, index, element} of this.pending_items) {
+		for (const { id, index, element } of this.pending_items) {
 			this.indices.set(id, index);
 			this.elements.set(id, element);
 		}
@@ -206,7 +206,7 @@ export class Reorderable implements ReorderableStyleOptions {
 	update_indicator(
 		item_id: ReorderableItemId,
 		new_indicator: ReorderableDropPosition,
-		is_valid = true,
+		is_valid = true
 	): void {
 		if (this.source_item_id === item_id || new_indicator === 'none') {
 			this.clear_indicators();
@@ -231,7 +231,7 @@ export class Reorderable implements ReorderableStyleOptions {
 				top: this.drag_over_top_class,
 				bottom: this.drag_over_bottom_class,
 				left: this.drag_over_left_class,
-				right: this.drag_over_right_class,
+				right: this.drag_over_right_class
 			}[new_indicator];
 
 			if (direction_class) element.classList.add(direction_class);
@@ -242,7 +242,7 @@ export class Reorderable implements ReorderableStyleOptions {
 	}
 
 	#find_item_from_event(
-		event: Event,
+		event: Event
 	): [item_id: ReorderableItemId, index: number, item: HTMLElement] | null {
 		const target = event.target as HTMLElement | null;
 		if (!target || !this.list_node) return null;
@@ -286,7 +286,7 @@ export class Reorderable implements ReorderableStyleOptions {
 
 					set_reorderable_drag_data_transfer(e.dataTransfer, item_id);
 				},
-				{capture: true},
+				{ capture: true }
 			),
 			on(
 				list,
@@ -294,7 +294,7 @@ export class Reorderable implements ReorderableStyleOptions {
 				() => {
 					this.#reset_drag_state();
 				},
-				{capture: true},
+				{ capture: true }
 			),
 			on(list, 'dragover', (e: DragEvent) => {
 				e.preventDefault();
@@ -321,19 +321,19 @@ export class Reorderable implements ReorderableStyleOptions {
 				const position = get_reorderable_drop_position(
 					this.direction,
 					this.source_index,
-					item_index,
+					item_index
 				);
 
 				const target_index = calculate_reorderable_target_index(
 					this.source_index,
 					item_index,
-					position,
+					position
 				);
 
 				const allowed = is_reorder_allowed(
 					this.list_params?.can_reorder,
 					this.source_index,
-					target_index,
+					target_index
 				);
 
 				this.update_indicator(item_id, position, allowed);
@@ -362,13 +362,13 @@ export class Reorderable implements ReorderableStyleOptions {
 				const position = get_reorderable_drop_position(
 					this.direction,
 					this.source_index,
-					item_index,
+					item_index
 				);
 
 				let target_index = calculate_reorderable_target_index(
 					this.source_index,
 					item_index,
-					position,
+					position
 				);
 				target_index = validate_reorderable_target_index(target_index, this.indices.size - 1);
 
@@ -398,7 +398,7 @@ export class Reorderable implements ReorderableStyleOptions {
 				if (e.dataTransfer) {
 					e.dataTransfer.dropEffect = 'move';
 				}
-			}),
+			})
 		];
 
 		this.#cleanup = () => {
@@ -474,7 +474,7 @@ export class Reorderable implements ReorderableStyleOptions {
 
 	item = (params: ReorderableItemParams): Attachment<HTMLElement> => {
 		return (node) => {
-			const {index} = params;
+			const { index } = params;
 
 			let item_id = node.dataset.reorderable_item_id as ReorderableItemId | undefined;
 			if (!item_id) {
@@ -491,7 +491,7 @@ export class Reorderable implements ReorderableStyleOptions {
 				this.indices.set(item_id, index);
 				this.elements.set(item_id, node);
 			} else {
-				this.pending_items.push({id: item_id, index, element: node});
+				this.pending_items.push({ id: item_id, index, element: node });
 			}
 
 			return () => {

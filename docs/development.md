@@ -72,7 +72,7 @@ cargo build -p zzz_server --release       # backend  → target/release/zzzd
 ./target/release/zzzd --static-dir build  # serve SPA + /api (port 4460; --port/ZZZ_PORT overrides)
 ```
 
-`zzzd` reads its config from the **process environment** — it does *not* load
+`zzzd` reads its config from the **process environment** — it does _not_ load
 `.env.production` itself (unlike `cargo xtask dev`, which loads `.env.development`
 and injects it into the child processes). Supply the env via your process manager, a systemd
 `EnvironmentFile`, or, in a shell, `set -a && . ./.env.production && set +a` before
@@ -126,24 +126,24 @@ Components use `PascalCase` with domain prefixes:
 
 ```typescript
 export const MyThingJson = CellJson.extend({
-  name: z.string().default(''),
-  value: z.number().default(0),
-}).meta({cell_class_name: 'MyThing'});
+	name: z.string().default(''),
+	value: z.number().default(0)
+}).meta({ cell_class_name: 'MyThing' });
 ```
 
 2. Create the class (`src/lib/my_thing.svelte.ts`):
 
 ```typescript
 export class MyThing extends Cell<typeof MyThingJson> {
-  name: string = $state.raw()!;
-  value: number = $state.raw()!;
+	name: string = $state.raw()!;
+	value: number = $state.raw()!;
 
-  readonly doubled = $derived(this.value * 2);
+	readonly doubled = $derived(this.value * 2);
 
-  constructor(options: MyThingOptions) {
-    super(MyThingJson, options);
-    this.init(); // Must call at end
-  }
+	constructor(options: MyThingOptions) {
+		super(MyThingJson, options);
+		this.init(); // Must call at end
+	}
 }
 ```
 
@@ -151,8 +151,8 @@ export class MyThing extends Cell<typeof MyThingJson> {
 
 ```typescript
 export const cell_classes = {
-  // ... existing classes
-  MyThing,
+	// ... existing classes
+	MyThing
 } satisfies Record<string, typeof Cell<any>>;
 ```
 
@@ -162,18 +162,18 @@ export const cell_classes = {
 
 ```typescript
 export const my_action_action_spec = {
-  method: 'my_action',
-  kind: 'request_response',
-  initiator: 'frontend',
-  auth: null, // public; or {account: 'required', actor: 'none'} to require a session
-  side_effects: true,
-  input: z.strictObject({
-    message: z.string(),
-  }),
-  output: z.strictObject({
-    result: z.string(),
-  }),
-  async: true,
+	method: 'my_action',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: null, // public; or {account: 'required', actor: 'none'} to require a session
+	side_effects: true,
+	input: z.strictObject({
+		message: z.string()
+	}),
+	output: z.strictObject({
+		result: z.string()
+	}),
+	async: true
 } satisfies ActionSpecUnion;
 ```
 
@@ -231,10 +231,11 @@ export const my_long_job_progress_action_spec = {
 
 The backend handler sends progress chunks to the originating socket
 (request-scoped) and terminates early when the socket closes; `completion_create`
-+ `completion_progress` is the worked example. Broadcasts to all connected
-sockets (server-wide events like `filer_change` or `workspace_changed`) go
-through the backend's realtime connection registry. See ../crates/CLAUDE.md
-for the Rust handler patterns.
+
+- `completion_progress` is the worked example. Broadcasts to all connected
+  sockets (server-wide events like `filer_change` or `workspace_changed`) go
+  through the backend's realtime connection registry. See ../crates/CLAUDE.md
+  for the Rust handler patterns.
 
 ### Adding a New Route
 
@@ -242,9 +243,9 @@ Create `src/routes/my_route/+page.svelte`:
 
 ```svelte
 <script lang="ts">
-  import {frontend_context} from '$lib/frontend.svelte.ts';
+	import { frontend_context } from '$lib/frontend.svelte.ts';
 
-  const app = frontend_context.get();
+	const app = frontend_context.get();
 </script>
 
 <h1>My Route</h1>
@@ -256,10 +257,10 @@ Create `src/routes/my_route/+page.svelte`:
 
 ```svelte
 <script lang="ts">
-  import {frontend_context} from '$lib/frontend.svelte.ts';
+	import { frontend_context } from '$lib/frontend.svelte.ts';
 
-  const app = frontend_context.get();
-  const {chats, models, prompts} = app;
+	const app = frontend_context.get();
+	const { chats, models, prompts } = app;
 </script>
 ```
 
@@ -267,7 +268,7 @@ Create `src/routes/my_route/+page.svelte`:
 
 ```typescript
 // Add
-const chat = app.chats.add({name: 'New Chat'});
+const chat = app.chats.add({ name: 'New Chat' });
 
 // Get by ID
 const chat = app.chats.items.by_id.get(id);
@@ -280,7 +281,7 @@ const claude_models = app.models.items.where('provider_name', 'claude');
 
 // Iterate
 for (const chat of app.chats.items.values) {
-  console.log(chat.name);
+	console.log(chat.name);
 }
 ```
 
@@ -301,22 +302,22 @@ app.api.toggle_main_menu();
 
 ```svelte
 <script lang="ts">
-  import type {Snippet} from 'svelte';
+	import type { Snippet } from 'svelte';
 
-  const {
-    title,
-    children,
-  }: {
-    title: string;
-    children?: Snippet;
-  } = $props();
+	const {
+		title,
+		children
+	}: {
+		title: string;
+		children?: Snippet;
+	} = $props();
 </script>
 
 <div class="my-component">
-  <h2>{title}</h2>
-  {#if children}
-    {@render children()}
-  {/if}
+	<h2>{title}</h2>
+	{#if children}
+		{@render children()}
+	{/if}
 </div>
 ```
 
@@ -324,15 +325,15 @@ app.api.toggle_main_menu();
 
 ```svelte
 <script lang="ts">
-  import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
-  import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
+	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
+	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 </script>
 
 <Contextmenu>
-  {#snippet entries()}
-    <ContextmenuEntry onclick={() => doSomething()}>Action Label</ContextmenuEntry>
-  {/snippet}
-  <div>Right-click me</div>
+	{#snippet entries()}
+		<ContextmenuEntry onclick={() => doSomething()}>Action Label</ContextmenuEntry>
+	{/snippet}
+	<div>Right-click me</div>
 </Contextmenu>
 ```
 
@@ -351,20 +352,20 @@ gro test -- src/test/cell.svelte.base.test.ts  # specific file
 Uses Vitest with `test` and `expect`:
 
 ```typescript
-import {test, expect} from 'vitest';
+import { test, expect } from 'vitest';
 
-import {providers_default, models_default} from '$lib/config_defaults.ts';
+import { providers_default, models_default } from '$lib/config_defaults.ts';
 
 test('all model provider_names exist in providers_default', () => {
-  const model_provider_names = new Set(models_default.map((model) => model.provider_name));
-  const provider_names = new Set(providers_default.map((provider) => provider.name));
+	const model_provider_names = new Set(models_default.map((model) => model.provider_name));
+	const provider_names = new Set(providers_default.map((provider) => provider.name));
 
-  for (const provider_name of model_provider_names) {
-    expect(
-      provider_names.has(provider_name),
-      `Provider "${provider_name}" does not exist in providers_default`,
-    ).toBe(true);
-  }
+	for (const provider_name of model_provider_names) {
+		expect(
+			provider_names.has(provider_name),
+			`Provider "${provider_name}" does not exist in providers_default`
+		).toBe(true);
+	}
 });
 ```
 
@@ -399,13 +400,13 @@ test('all model provider_names exist in providers_default', () => {
 3. Relative imports (`./...`)
 
 ```typescript
-import {z} from 'zod';
-import {SvelteMap} from 'svelte/reactivity';
+import { z } from 'zod';
+import { SvelteMap } from 'svelte/reactivity';
 
-import {Cell} from '$lib/cell.svelte.ts';
-import type {Frontend} from '$lib/frontend.svelte.ts';
+import { Cell } from '$lib/cell.svelte.ts';
+import type { Frontend } from '$lib/frontend.svelte.ts';
 
-import {helper_function} from './helpers.ts';
+import { helper_function } from './helpers.ts';
 ```
 
 Imports use the real source extension (`.ts` / `.svelte.ts` / `.svelte`) —
@@ -437,6 +438,6 @@ throw jsonrpc_errors.ai_provider_error(provider_name, error_message);
 
 // Let ThrownJsonrpcError bubble through
 if (error instanceof ThrownJsonrpcError) {
-  throw error;
+	throw error;
 }
 ```

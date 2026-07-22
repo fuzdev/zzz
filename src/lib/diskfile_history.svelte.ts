@@ -1,12 +1,12 @@
 // @slop Claude Sonnet 3.7
 
-import {z} from 'zod';
-import {EMPTY_OBJECT} from '@fuzdev/fuz_util/object.ts';
-import {create_uuid, Uuid, UuidWithDefault} from '@fuzdev/fuz_util/id.ts';
+import { z } from 'zod';
+import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
+import { create_uuid, Uuid, UuidWithDefault } from '@fuzdev/fuz_util/id.ts';
 
-import {DiskfilePath} from './diskfile_types.ts';
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {CellJson} from './cell_types.ts';
+import { DiskfilePath } from './diskfile_types.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { CellJson } from './cell_types.ts';
 
 /**
  * Schema for history entries.
@@ -18,7 +18,7 @@ export const HistoryEntry = z.strictObject({
 	label: z.string(),
 	is_disk_change: z.boolean().default(false),
 	is_unsaved_edit: z.boolean().default(false), // Indicates entries containing unsaved user edits
-	is_original_state: z.boolean().default(false), // Indicates if this entry represents the original disk state
+	is_original_state: z.boolean().default(false) // Indicates if this entry represents the original disk state
 });
 export type HistoryEntry = z.infer<typeof HistoryEntry>;
 
@@ -28,8 +28,8 @@ export type HistoryEntry = z.infer<typeof HistoryEntry>;
 export const DiskfileHistoryJson = CellJson.extend({
 	path: DiskfilePath,
 	entries: z.array(HistoryEntry).default(() => []),
-	max_entries: z.number().default(100), // TODO rename? `history_size`? `max_size`? `capacity`?
-}).meta({cell_class_name: 'DiskfileHistory'});
+	max_entries: z.number().default(100) // TODO rename? `history_size`? `max_size`? `capacity`?
+}).meta({ cell_class_name: 'DiskfileHistory' });
 export type DiskfileHistoryJson = z.infer<typeof DiskfileHistoryJson>;
 export type DiskfileHistoryJsonInput = z.input<typeof DiskfileHistoryJson>;
 
@@ -66,7 +66,7 @@ export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
 			is_original_state?: boolean;
 			label?: string;
 			created?: number;
-		} = EMPTY_OBJECT,
+		} = EMPTY_OBJECT
 	): HistoryEntry {
 		// Don't add duplicate entries with the same content and metadata back-to-back
 		if (
@@ -83,7 +83,7 @@ export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
 			label: options.label ?? '',
 			is_disk_change: options.is_disk_change ?? false,
 			is_unsaved_edit: options.is_unsaved_edit ?? false,
-			is_original_state: options.is_original_state ?? false,
+			is_original_state: options.is_original_state ?? false
 		};
 
 		// Process the entries in a single operation
@@ -123,7 +123,7 @@ export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
 			is_unsaved_edit?: boolean;
 			is_original_state?: boolean;
 			label?: string;
-		},
+		}
 	): boolean {
 		return (
 			entry.is_disk_change === (options.is_disk_change ?? entry.is_disk_change) &&

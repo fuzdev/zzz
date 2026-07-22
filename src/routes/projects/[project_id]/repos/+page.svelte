@@ -1,11 +1,11 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {projects_context} from '$routes/projects/projects.svelte.ts';
+	import { projects_context } from '$routes/projects/projects.svelte.ts';
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import ReposSidebar from '$routes/projects/ReposSidebar.svelte';
-	import {icon_add} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import RepoTableRow from '$routes/projects/RepoTableRow.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';

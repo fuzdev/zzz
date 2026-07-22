@@ -1,6 +1,6 @@
-import type {SvgData} from '@fuzdev/fuz_ui/svg.ts';
-import {resolve} from '$app/paths';
-import {page} from '$app/state';
+import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
+import { resolve } from '$app/paths';
+import { page } from '$app/state';
 
 import {
 	icon_capability,
@@ -13,11 +13,11 @@ import {
 	icon_provider,
 	icon_settings,
 	icon_terminal,
-	icon_workspace,
+	icon_workspace
 } from '@fuzdev/fuz_ui/icons.ts';
 
-import {logo_zzz} from './logos.ts';
-import type {Frontend} from './frontend.svelte.ts';
+import { logo_zzz } from './logos.ts';
+import type { Frontend } from './frontend.svelte.ts';
 
 export interface NavLinkItem {
 	label: string;
@@ -58,28 +58,28 @@ export const main_nav_items_default: Array<NavItem> = [
 	{
 		group: 'main',
 		items: [
-			{label: 'chats', href: resolve('/chats'), icon: icon_chat},
-			{label: 'prompts', href: resolve('/prompts'), icon: icon_prompt},
-			{label: 'files', href: resolve('/files'), icon: icon_file},
-			{label: 'workspaces', href: resolve('/workspaces'), icon: icon_workspace},
-			{label: 'terminals', href: resolve('/terminals'), icon: icon_terminal},
-		],
+			{ label: 'chats', href: resolve('/chats'), icon: icon_chat },
+			{ label: 'prompts', href: resolve('/prompts'), icon: icon_prompt },
+			{ label: 'files', href: resolve('/files'), icon: icon_file },
+			{ label: 'workspaces', href: resolve('/workspaces'), icon: icon_workspace },
+			{ label: 'terminals', href: resolve('/terminals'), icon: icon_terminal }
+		]
 	},
 	{
 		group: 'llms',
 		items: [
-			{label: 'models', href: resolve('/models'), icon: icon_model},
-			{label: 'providers', href: resolve('/providers'), icon: icon_provider},
-		],
+			{ label: 'models', href: resolve('/models'), icon: icon_model },
+			{ label: 'providers', href: resolve('/providers'), icon: icon_provider }
+		]
 	},
 	{
 		group: 'system',
 		items: [
-			{label: 'about', href: resolve('/about'), icon: logo_zzz},
-			{label: 'capabilities', href: resolve('/capabilities'), icon: icon_capability},
-			{label: 'docs', href: resolve('/docs'), icon: icon_info},
-			{label: 'actions', href: resolve('/actions'), icon: icon_log},
-			{label: 'settings', href: resolve('/settings'), icon: icon_settings},
-		],
-	},
+			{ label: 'about', href: resolve('/about'), icon: logo_zzz },
+			{ label: 'capabilities', href: resolve('/capabilities'), icon: icon_capability },
+			{ label: 'docs', href: resolve('/docs'), icon: icon_info },
+			{ label: 'actions', href: resolve('/actions'), icon: icon_log },
+			{ label: 'settings', href: resolve('/settings'), icon: icon_settings }
+		]
+	}
 ];

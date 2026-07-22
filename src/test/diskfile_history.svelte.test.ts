@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
-import {test, beforeEach, describe, assert} from 'vitest';
-import {create_uuid} from '@fuzdev/fuz_util/id.ts';
+import { test, beforeEach, describe, assert } from 'vitest';
+import { create_uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {DiskfileHistory} from '$lib/diskfile_history.svelte.ts';
-import {DiskfilePath} from '$lib/diskfile_types.ts';
-import {Frontend} from '$lib/frontend.svelte.ts';
+import { DiskfileHistory } from '$lib/diskfile_history.svelte.ts';
+import { DiskfilePath } from '$lib/diskfile_types.ts';
+import { Frontend } from '$lib/frontend.svelte.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Test data
 const TEST_PATH = DiskfilePath.parse('/path/to/file.txt');
@@ -27,8 +27,8 @@ describe('DiskfileHistory', () => {
 			app,
 			json: {
 				path: TEST_PATH,
-				entries: [],
-			},
+				entries: []
+			}
 		});
 	});
 
@@ -63,7 +63,7 @@ describe('DiskfileHistory', () => {
 				is_disk_change: true,
 				is_unsaved_edit: true,
 				is_original_state: true,
-				label: 'Custom Label',
+				label: 'Custom Label'
 			});
 
 			// Verify all options were applied
@@ -107,9 +107,9 @@ describe('DiskfileHistory', () => {
 			const time2 = time3 - 1000;
 			const time1 = time2 - 1000;
 
-			history.add_entry('content 2', {created: time2});
-			history.add_entry('content 3', {created: time3});
-			history.add_entry('content 1', {created: time1});
+			history.add_entry('content 2', { created: time2 });
+			history.add_entry('content 3', { created: time3 });
+			history.add_entry('content 1', { created: time1 });
 
 			// Verify entries are sorted newest first
 			assert.strictEqual(history.entries.length, 3);
@@ -139,10 +139,10 @@ describe('DiskfileHistory', () => {
 			history.max_entries = 3;
 
 			// Add more entries than the maximum
-			history.add_entry('content 1', {created: Date.now() - 3000});
-			history.add_entry('content 2', {created: Date.now() - 2000});
-			history.add_entry('content 3', {created: Date.now() - 1000});
-			history.add_entry('content 4', {created: Date.now()});
+			history.add_entry('content 1', { created: Date.now() - 3000 });
+			history.add_entry('content 2', { created: Date.now() - 2000 });
+			history.add_entry('content 3', { created: Date.now() - 1000 });
+			history.add_entry('content 4', { created: Date.now() });
 
 			// Verify only the most recent entries were kept
 			assert.strictEqual(history.entries.length, 3);
@@ -157,15 +157,15 @@ describe('DiskfileHistory', () => {
 
 			// Add entry with middle timestamp
 			const middle_time = Date.now() - 1000;
-			history.add_entry('middle entry', {created: middle_time});
+			history.add_entry('middle entry', { created: middle_time });
 
 			// Add entry with newest timestamp
 			const newest_time = Date.now();
-			history.add_entry('newest entry', {created: newest_time});
+			history.add_entry('newest entry', { created: newest_time });
 
 			// Add entry with oldest timestamp (should be dropped due to capacity)
 			const oldest_time = Date.now() - 2000;
-			history.add_entry('oldest entry', {created: oldest_time});
+			history.add_entry('oldest entry', { created: oldest_time });
 
 			// Verify correct entries were kept (newest two)
 			assert.strictEqual(history.entries.length, 2);
@@ -259,7 +259,7 @@ describe('DiskfileHistory', () => {
 
 		test('clear_except_current with keep predicate preserves matching entries', () => {
 			// Add entries with different flags
-			const original = history.add_entry('original state', {is_original_state: true});
+			const original = history.add_entry('original state', { is_original_state: true });
 			history.add_entry('regular edit');
 			const newest = history.add_entry('newest content');
 
@@ -288,10 +288,10 @@ describe('DiskfileHistory', () => {
 	describe('edge cases and integration', () => {
 		test('add_entry with same content but different options creates new entry', () => {
 			// Add first entry
-			history.add_entry(TEST_CONTENT, {is_disk_change: true});
+			history.add_entry(TEST_CONTENT, { is_disk_change: true });
 
 			// Add entry with same content but different options
-			const second = history.add_entry(TEST_CONTENT, {is_unsaved_edit: true});
+			const second = history.add_entry(TEST_CONTENT, { is_unsaved_edit: true });
 
 			// Both entries should be added since they represent different states
 			assert.strictEqual(history.entries.length, 2);
@@ -302,18 +302,18 @@ describe('DiskfileHistory', () => {
 			// Add original state
 			const original = history.add_entry('original content', {
 				is_original_state: true,
-				is_disk_change: true,
+				is_disk_change: true
 			});
 
 			// Add some edits
-			history.add_entry('first edit', {is_unsaved_edit: true});
-			history.add_entry('second edit', {is_unsaved_edit: true});
+			history.add_entry('first edit', { is_unsaved_edit: true });
+			history.add_entry('second edit', { is_unsaved_edit: true });
 
 			// Add a save
-			const saved = history.add_entry('saved content', {is_disk_change: true});
+			const saved = history.add_entry('saved content', { is_disk_change: true });
 
 			// More edits
-			const latest = history.add_entry('latest edit', {is_unsaved_edit: true});
+			const latest = history.add_entry('latest edit', { is_unsaved_edit: true });
 
 			// Verify state
 			assert.strictEqual(history.entries.length, 5);

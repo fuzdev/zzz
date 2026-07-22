@@ -1,11 +1,11 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {projects_context} from '$routes/projects/projects.svelte.ts';
+	import { projects_context } from '$routes/projects/projects.svelte.ts';
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
-	import {icon_delete} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_delete } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const projects = projects_context.get();
@@ -47,8 +47,7 @@
 								bind:value={project_viewmodel.edited_description}
 								class="width:100%"
 								rows="3"
-								placeholder={project_viewmodel.project.description || 'No description'}
-							></textarea>
+								placeholder={project_viewmodel.project.description || 'No description'}></textarea>
 						</label>
 					</div>
 

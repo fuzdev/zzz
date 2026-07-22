@@ -295,8 +295,8 @@ export const ChatJson = CellJson.extend({
 	name: z.string().default(''),
 	thread_ids: z.array(Uuid).default(() => []),
 	view_mode: z.enum(['simple', 'multi']).default('simple'),
-	selected_thread_id: Uuid.nullable().default(null),
-}).meta({cell_class_name: 'Chat'});
+	selected_thread_id: Uuid.nullable().default(null)
+}).meta({ cell_class_name: 'Chat' });
 
 // 2. Class with $state.raw for most fields, $state for in-place-mutated arrays
 export class Chat extends Cell<typeof ChatJson> {
@@ -331,14 +331,14 @@ export const diskfile_update_action_spec = {
 	description: 'Write content to a file on disk',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: z.strictObject({
 		path: DiskfilePath,
-		content: z.string(),
+		content: z.string()
 	}),
 	output: z.null(),
-	async: true,
+	async: true
 } satisfies ActionSpecUnion;
 ```
 
@@ -361,10 +361,10 @@ export const my_action_spec = {
 	initiator: 'frontend', // or 'backend', 'both'
 	auth: null, // public; or {account: 'required', actor: 'none'} to require a session
 	side_effects: true, // or null for read-only
-	input: z.strictObject({foo: z.string()}),
-	output: z.strictObject({bar: z.number()}),
+	input: z.strictObject({ foo: z.string() }),
+	output: z.strictObject({ bar: z.number() }),
 	async: true,
-	description: 'What this action does.',
+	description: 'What this action does.'
 } satisfies ActionSpecUnion;
 ```
 
@@ -401,7 +401,7 @@ my_action: {
 
 ```typescript
 // Returns Result<{value: OutputType}, {error: JsonrpcError}>
-const result = await app.api.my_action({foo: 'hello'});
+const result = await app.api.my_action({ foo: 'hello' });
 if (result.ok) {
 	console.log(result.value.bar); // 42
 }

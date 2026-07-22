@@ -1,12 +1,12 @@
-import type {Gen} from '@fuzdev/gro/gen.ts';
+import type { Gen } from '@fuzdev/gro/gen.ts';
 import {
 	ImportBuilder,
 	compose_gen_file,
 	generate_frontend_action_handlers,
-	generate_typed_action_event_alias,
+	generate_typed_action_event_alias
 } from '@fuzdev/fuz_app/actions/action_codegen.ts';
 
-import {all_action_specs} from './action_specs.ts';
+import { all_action_specs } from './action_specs.ts';
 
 /**
  * Generates frontend action handler types based on spec.initiator.
@@ -19,7 +19,7 @@ import {all_action_specs} from './action_specs.ts';
  *
  * @nodocs
  */
-export const gen: Gen = ({origin_path}) => {
+export const gen: Gen = ({ origin_path }) => {
 	const imports = new ImportBuilder();
 	return compose_gen_file({
 		origin_path,
@@ -27,8 +27,8 @@ export const gen: Gen = ({origin_path}) => {
 		blocks: [
 			generate_typed_action_event_alias(imports),
 			generate_frontend_action_handlers(all_action_specs, imports, {
-				include_protocol_actions: true,
-			}),
-		],
+				include_protocol_actions: true
+			})
+		]
 	});
 };

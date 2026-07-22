@@ -1,7 +1,7 @@
-import {z} from 'zod';
+import { z } from 'zod';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {CellJson} from './cell_types.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { CellJson } from './cell_types.ts';
 
 export const UiJson = CellJson.extend({
 	show_main_dialog: z.boolean().default(false),
@@ -11,8 +11,8 @@ export const UiJson = CellJson.extend({
 	tutorial_for_prompts: z.boolean().default(true),
 	tutorial_for_diskfiles: z.boolean().default(true),
 	show_desk_menu: z.boolean().default(false),
-	desk_pinned: z.boolean().default(false),
-}).meta({cell_class_name: 'Ui'});
+	desk_pinned: z.boolean().default(false)
+}).meta({ cell_class_name: 'Ui' });
 export type UiJson = z.infer<typeof UiJson>;
 export type UiJsonInput = z.input<typeof UiJson>;
 

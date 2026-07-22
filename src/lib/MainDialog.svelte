@@ -1,15 +1,15 @@
 <script lang="ts">
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
 	import DialogContent from '@fuzdev/fuz_ui/DialogContent.svelte';
-	import {onNavigate} from '$app/navigation';
+	import { onNavigate } from '$app/navigation';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {resolve} from '$app/paths';
+	import { resolve } from '$app/paths';
 
-	import {logo_zzz} from './logos.ts';
-	import {frontend_context} from './frontend.svelte.ts';
+	import { logo_zzz } from './logos.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 
 	const {
-		disabled,
+		disabled
 	}: {
 		disabled?: boolean | undefined;
 	} = $props();
@@ -17,12 +17,12 @@
 	const app = frontend_context.get();
 
 	onNavigate(() => {
-		if (app.ui.show_main_dialog) app.api.toggle_main_menu({show: false});
+		if (app.ui.show_main_dialog) app.api.toggle_main_menu({ show: false });
 	});
 </script>
 
 {#if !disabled && app.ui.show_main_dialog}
-	<Dialog onclose={() => app.api.toggle_main_menu({show: false})} align="top">
+	<Dialog onclose={() => app.api.toggle_main_menu({ show: false })} align="top">
 		<DialogContent class="box">
 			<section class="box mb_xl3">
 				<h1 class="mb_0">work in progress</h1>

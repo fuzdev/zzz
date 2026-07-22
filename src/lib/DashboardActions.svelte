@@ -2,16 +2,16 @@
 	import ActionList from './ActionList.svelte';
 	import ActionDetail from './ActionDetail.svelte';
 	import DashboardHeader from './DashboardHeader.svelte';
-	import {icon_log} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_log } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import type {Action} from './action.svelte.ts';
-	import {app_context} from './app.svelte.ts';
+	import type { Action } from './action.svelte.ts';
+	import { app_context } from './app.svelte.ts';
 	import TimeWidget from './TimeWidget.svelte';
-	import {random_item} from '@fuzdev/fuz_util/random.ts';
+	import { random_item } from '@fuzdev/fuz_util/random.ts';
 
 	const app = app_context.get();
 
-	const {actions} = $derived(app);
+	const { actions } = $derived(app);
 
 	// TODO could potentially be removed from the collection by some external process,
 	// so having this state be component-local solves some problems but not all

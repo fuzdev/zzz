@@ -1,7 +1,7 @@
-import {z} from 'zod';
+import { z } from 'zod';
 
-import {Cell, type CellOptions} from '$lib/cell.svelte.ts';
-import {CellJson} from '$lib/cell_types.ts';
+import { Cell, type CellOptions } from '$lib/cell.svelte.ts';
+import { CellJson } from '$lib/cell_types.ts';
 
 // Browser tab schema with discriminated union for tab types
 export const BrowserTabJson = CellJson.extend({
@@ -11,8 +11,8 @@ export const BrowserTabJson = CellJson.extend({
 	refresh_counter: z.number().default(0),
 	type: z.enum(['raw', 'embedded_html', 'external_url']),
 	// Optional content field for embedded HTML tabs
-	content: z.string().optional(),
-}).meta({cell_class_name: 'BrowserTab'});
+	content: z.string().optional()
+}).meta({ cell_class_name: 'BrowserTab' });
 export type BrowserTabJson = z.infer<typeof BrowserTabJson>;
 export type BrowserTabJsonInput = z.input<typeof BrowserTabJson>;
 

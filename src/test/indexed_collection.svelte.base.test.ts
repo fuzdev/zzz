@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 
-import {test, assert, describe} from 'vitest';
-import {z} from 'zod';
-import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.ts';
+import { test, assert, describe } from 'vitest';
+import { z } from 'zod';
+import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {IndexedCollection} from '$lib/indexed_collection.svelte.ts';
+import { IndexedCollection } from '$lib/indexed_collection.svelte.ts';
 import {
 	create_single_index,
 	create_multi_index,
 	create_derived_index,
 	create_dynamic_index,
-	type IndexedItem,
+	type IndexedItem
 } from '$lib/indexed_collection_helpers.svelte.ts';
 
 // Mock item type that implements IndexedItem
@@ -28,14 +28,14 @@ const create_item = (
 	text: string,
 	category: string,
 	list: Array<string> = [],
-	number: number = 0,
+	number: number = 0
 ): TestItem => ({
 	id: create_uuid(),
 	text,
 	category,
 	list,
 	date: new Date(),
-	number,
+	number
 });
 
 // Helper functions for id-based equality checks
@@ -80,9 +80,9 @@ describe('IndexedCollection - Base Functionality', () => {
 				create_single_index({
 					key: 'by_text',
 					extractor: (item) => item.text,
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Add items with unique identifiers
@@ -121,9 +121,9 @@ describe('IndexedCollection - Index Types', () => {
 				create_multi_index({
 					key: 'by_category',
 					extractor: (item) => item.category,
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Add items with shared category keys
@@ -174,9 +174,9 @@ describe('IndexedCollection - Index Types', () => {
 					},
 					matches: (item) => item.number > 5,
 					sort: (a, b) => b.number - a.number,
-					query_schema: z.void(),
-				}),
-			],
+					query_schema: z.void()
+				})
+			]
 		});
 
 		// Add items with various numbers
@@ -242,9 +242,9 @@ describe('IndexedCollection - Index Types', () => {
 							return result;
 						};
 					},
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Add items with different number values
@@ -277,17 +277,17 @@ describe('IndexedCollection - Advanced Features', () => {
 				create_single_index({
 					key: 'by_text',
 					extractor: (item) => item.text,
-					query_schema: z.string(),
+					query_schema: z.string()
 				}),
 				create_multi_index({
 					key: 'by_category',
 					extractor: (item) => item.category,
-					query_schema: z.string(),
+					query_schema: z.string()
 				}),
 				create_multi_index({
 					key: 'by_listitem',
 					extractor: (item) => item.list[0],
-					query_schema: z.string(),
+					query_schema: z.string()
 				}),
 				create_derived_index({
 					key: 'recent_high_numbers',
@@ -302,9 +302,9 @@ describe('IndexedCollection - Advanced Features', () => {
 					},
 					matches: (item) => item.number >= 8,
 					sort: (a, b) => b.date.getTime() - a.date.getTime(),
-					query_schema: z.void(),
-				}),
-			],
+					query_schema: z.void()
+				})
+			]
 		});
 
 		// Create items with a mix of properties
@@ -321,7 +321,7 @@ describe('IndexedCollection - Advanced Features', () => {
 		// Test multi index lookup
 		assert.strictEqual(collection.where<string>('by_category', 'c1').length, 3);
 		assert.ok(
-			collection.where<string>('by_listitem', 'l1').some((item) => item.id === high_number_item.id),
+			collection.where<string>('by_listitem', 'l1').some((item) => item.id === high_number_item.id)
 		);
 
 		// Test derived index
@@ -341,7 +341,7 @@ describe('IndexedCollection - Advanced Features', () => {
 				return {
 					count: items.length,
 					average: items.reduce((sum, item: any) => sum + item.number, 0) / (items.length || 1),
-					unique_values: new Set(items.map((item: any) => item.category)),
+					unique_values: new Set(items.map((item: any) => item.category))
 				};
 			},
 			query_schema: z.void(),
@@ -369,11 +369,11 @@ describe('IndexedCollection - Advanced Features', () => {
 				stats.unique_values = all_unique_values;
 
 				return stats;
-			},
+			}
 		});
 
 		const collection: IndexedCollection<TestItem> = new IndexedCollection({
-			indexes: [create_stats_index<TestItem>('stats')],
+			indexes: [create_stats_index<TestItem>('stats')]
 		});
 
 		// Add items
@@ -406,9 +406,9 @@ describe('IndexedCollection - Advanced Features', () => {
 				create_multi_index({
 					key: 'by_category',
 					extractor: (item) => item.category,
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Create test items
@@ -417,7 +417,7 @@ describe('IndexedCollection - Advanced Features', () => {
 			create_item('a2', 'c1', [], 2),
 			create_item('a3', 'c1', [], 3),
 			create_item('a4', 'c2', [], 4),
-			create_item('a5', 'c2', [], 5),
+			create_item('a5', 'c2', [], 5)
 		];
 
 		// Add multiple items at once

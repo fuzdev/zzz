@@ -1,12 +1,12 @@
 <script lang="ts">
-	import {fade, slide} from 'svelte/transition';
+	import { fade, slide } from 'svelte/transition';
 
-	import {icon_arrow_right} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_arrow_right } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.ts';
+	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 
 	const {
-		editor_state,
+		editor_state
 	}: {
 		editor_state: DiskfileEditorState;
 	} = $props();
@@ -18,13 +18,13 @@
 			chars
 			{editor_state.original_length}
 			{#if editor_state.original_length !== editor_state.current_length}
-				<span transition:fade={{duration: 80}}>
+				<span transition:fade={{ duration: 80 }}>
 					<Svg data={icon_arrow_right} />
 					{editor_state.current_length}</span
 				>{/if}
 		</div>
 		{#if editor_state.length_diff}
-			<div class="white-space:nowrap" transition:slide={{axis: 'x'}}>
+			<div class="white-space:nowrap" transition:slide={{ axis: 'x' }}>
 				{editor_state.length_diff > 0 ? '+' : ''}{editor_state.length_diff} =
 				{editor_state.length_diff > 0 ? '+' : ''}{editor_state.length_diff_percent}%
 			</div>
@@ -35,13 +35,13 @@
 			tokens
 			{editor_state.original_token_count}
 			{#if editor_state.original_token_count !== editor_state.current_token_count}
-				<span transition:fade={{duration: 80}}>
+				<span transition:fade={{ duration: 80 }}>
 					<Svg data={icon_arrow_right} />
 					{editor_state.current_token_count}</span
 				>{/if}
 		</div>
 		{#if editor_state.token_diff}
-			<div class="white-space:nowrap" transition:slide={{axis: 'x'}}>
+			<div class="white-space:nowrap" transition:slide={{ axis: 'x' }}>
 				{editor_state.token_diff > 0 ? '+' : ''}{editor_state.token_diff} =
 				{editor_state.token_diff > 0 ? '+' : ''}{editor_state.token_diff_percent}%
 			</div>

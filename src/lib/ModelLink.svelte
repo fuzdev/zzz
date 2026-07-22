@@ -1,13 +1,13 @@
 <script lang="ts">
-	import {page} from '$app/state';
-	import {resolve} from '$app/paths';
-	import type {SvelteHTMLElements} from 'svelte/elements';
-	import {DEV} from 'esm-env';
+	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
+	import type { SvelteHTMLElements } from 'svelte/elements';
+	import { DEV } from 'esm-env';
 
-	import type {SvgData} from '@fuzdev/fuz_ui/svg.ts';
+	import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
-	import type {Model} from './model.svelte.ts';
+	import type { Model } from './model.svelte.ts';
 	import ProviderLogo from './ProviderLogo.svelte';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 

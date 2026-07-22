@@ -1,9 +1,9 @@
-import {z} from 'zod';
-import {Cell, type CellOptions} from './cell.svelte.ts';
+import { z } from 'zod';
+import { Cell, type CellOptions } from './cell.svelte.ts';
 
-import type {Model} from './model.svelte.ts';
-import {ProviderName, type ProviderStatus} from './provider_types.ts';
-import {CellJson} from './cell_types.ts';
+import type { Model } from './model.svelte.ts';
+import { ProviderName, type ProviderStatus } from './provider_types.ts';
+import { CellJson } from './cell_types.ts';
 
 // TODO optional/defaults?
 export const ProviderJson = CellJson.extend({
@@ -13,8 +13,8 @@ export const ProviderJson = CellJson.extend({
 	url: z.string(),
 	homepage: z.string(), // TODO name? see `url` too
 	company: z.string(),
-	api_key_url: z.string().nullable(),
-}).meta({cell_class_name: 'Provider'});
+	api_key_url: z.string().nullable()
+}).meta({ cell_class_name: 'Provider' });
 export type ProviderJson = z.infer<typeof ProviderJson>;
 export type ProviderJsonInput = z.input<typeof ProviderJson>;
 

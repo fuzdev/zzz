@@ -1,9 +1,9 @@
 <script lang="ts" generics="T extends {id: Uuid}">
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
-	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
 	import DialogContent from '@fuzdev/fuz_ui/DialogContent.svelte';
-	import type {ComponentProps} from 'svelte';
+	import type { ComponentProps } from 'svelte';
 
 	import Picker from './Picker.svelte';
 

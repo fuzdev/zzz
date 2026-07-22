@@ -1,13 +1,13 @@
-import type {Gen} from '@fuzdev/gro/gen.ts';
+import type { Gen } from '@fuzdev/gro/gen.ts';
 import {
 	ImportBuilder,
 	compose_gen_file,
 	generate_action_event_datas,
 	generate_action_inputs_outputs,
-	generate_action_specs_record,
+	generate_action_specs_record
 } from '@fuzdev/fuz_app/actions/action_codegen.ts';
 
-import {all_action_specs} from './action_specs.ts';
+import { all_action_specs } from './action_specs.ts';
 
 /**
  * Outputs a file with action collection types that can be imported by schemas.ts.
@@ -21,9 +21,9 @@ import {all_action_specs} from './action_specs.ts';
  *
  * @nodocs
  */
-export const gen: Gen = ({origin_path}) => {
+export const gen: Gen = ({ origin_path }) => {
 	const imports = new ImportBuilder();
-	const options = {include_protocol_actions: true};
+	const options = { include_protocol_actions: true };
 	return compose_gen_file({
 		origin_path,
 		imports,
@@ -33,7 +33,7 @@ export const gen: Gen = ({origin_path}) => {
 			// `collections_path` left unset — same-file scope: this gen feeds the
 			// same `action_collections.ts` output as `generate_action_inputs_outputs`,
 			// so `ActionInputs` / `ActionOutputs` resolve locally without imports.
-			generate_action_event_datas(all_action_specs, imports, options),
-		],
+			generate_action_event_datas(all_action_specs, imports, options)
+		]
 	});
 };

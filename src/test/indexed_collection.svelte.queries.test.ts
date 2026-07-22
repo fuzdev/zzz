@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 
-import {test, describe, beforeEach, assert} from 'vitest';
-import {z} from 'zod';
-import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.ts';
+import { test, describe, beforeEach, assert } from 'vitest';
+import { z } from 'zod';
+import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {IndexedCollection} from '$lib/indexed_collection.svelte.ts';
+import { IndexedCollection } from '$lib/indexed_collection.svelte.ts';
 import {
 	create_single_index,
 	create_multi_index,
 	create_derived_index,
-	type IndexedItem,
+	type IndexedItem
 } from '$lib/indexed_collection_helpers.svelte.ts';
 
 // Test item representing a generic item
@@ -34,7 +34,7 @@ const create_test_item = (overrides: Partial<TestItem> = {}): TestItem => ({
 	date_a: new Date(),
 	number_a: 3,
 	boolean_a: false,
-	...overrides,
+	...overrides
 });
 
 // Helper functions for id-based object equality checks
@@ -53,39 +53,39 @@ describe('IndexedCollection - Query Capabilities', () => {
 				create_single_index({
 					key: 'by_string_a',
 					extractor: (item) => item.string_a.toLowerCase(), // Case insensitive
-					query_schema: z.string(),
+					query_schema: z.string()
 				}),
 				create_single_index({
 					key: 'by_string_b',
 					extractor: (item) => item.string_b, // Case sensitive
-					query_schema: z.string(),
+					query_schema: z.string()
 				}),
 
 				// Multi value indexes
 				create_multi_index({
 					key: 'by_string_c',
 					extractor: (item) => item.string_c,
-					query_schema: z.string(),
+					query_schema: z.string()
 				}),
 				create_multi_index({
 					key: 'by_array_a',
 					extractor: (item) => item.array_a,
-					query_schema: z.string(),
+					query_schema: z.string()
 				}),
 				create_multi_index({
 					key: 'by_number_a',
 					extractor: (item) => item.number_a,
-					query_schema: z.number(),
+					query_schema: z.number()
 				}),
 				create_multi_index({
 					key: 'by_boolean_a',
 					extractor: (item) => (item.boolean_a ? 'y' : 'n'),
-					query_schema: z.enum(['y', 'n']),
+					query_schema: z.enum(['y', 'n'])
 				}),
 				create_multi_index({
 					key: 'by_year',
 					extractor: (item) => item.date_a.getFullYear(),
-					query_schema: z.number(),
+					query_schema: z.number()
 				}),
 
 				// Derived indexes
@@ -108,7 +108,7 @@ describe('IndexedCollection - Query Capabilities', () => {
 
 						// Find the right position based on date_a (newer items first)
 						const index = items.findIndex(
-							(existing) => item.date_a.getTime() > existing.date_a.getTime(),
+							(existing) => item.date_a.getTime() > existing.date_a.getTime()
 						);
 
 						if (index === -1) {
@@ -129,7 +129,7 @@ describe('IndexedCollection - Query Capabilities', () => {
 							items.splice(index, 1);
 						}
 						return items;
-					},
+					}
 				}),
 				create_derived_index({
 					key: 'high_number_a',
@@ -155,9 +155,9 @@ describe('IndexedCollection - Query Capabilities', () => {
 							items.splice(index, 1);
 						}
 						return items;
-					},
-				}),
-			],
+					}
+				})
+			]
 		});
 
 		// Create test items with simple names
@@ -170,7 +170,7 @@ describe('IndexedCollection - Query Capabilities', () => {
 				string_c: 'c1',
 				date_a: new Date(now - 1000 * 60 * 60 * 24 * 10), // 10 days ago
 				number_a: 4,
-				boolean_a: true,
+				boolean_a: true
 			}),
 			create_test_item({
 				string_a: 'a2',
@@ -179,7 +179,7 @@ describe('IndexedCollection - Query Capabilities', () => {
 				string_c: 'c1',
 				date_a: new Date(now - 1000 * 60 * 60 * 24 * 20), // 20 days ago
 				number_a: 5,
-				boolean_a: true,
+				boolean_a: true
 			}),
 			create_test_item({
 				string_a: 'b1',
@@ -188,7 +188,7 @@ describe('IndexedCollection - Query Capabilities', () => {
 				string_c: 'c2',
 				date_a: new Date(now - 1000 * 60 * 60 * 24 * 5), // 5 days ago
 				number_a: 4,
-				boolean_a: false,
+				boolean_a: false
 			}),
 			create_test_item({
 				string_a: 'other',
@@ -197,7 +197,7 @@ describe('IndexedCollection - Query Capabilities', () => {
 				string_c: 'c3',
 				date_a: new Date(now - 1000 * 60 * 60 * 24 * 30), // 30 days ago
 				number_a: 3,
-				boolean_a: false,
+				boolean_a: false
 			}),
 			create_test_item({
 				string_a: 'b2',
@@ -206,8 +206,8 @@ describe('IndexedCollection - Query Capabilities', () => {
 				string_c: 'c2',
 				date_a: new Date(now - 1000 * 60 * 60 * 24 * 3), // 3 days ago
 				number_a: 5,
-				boolean_a: true,
-			}),
+				boolean_a: true
+			})
 		];
 
 		// Add all items to the collection
@@ -252,11 +252,11 @@ describe('IndexedCollection - Query Capabilities', () => {
 		assert.strictEqual(high_value_boolean_a_true.length, 2);
 		assert.include(
 			high_value_boolean_a_true.map((i) => i.string_a),
-			'a2',
+			'a2'
 		);
 		assert.include(
 			high_value_boolean_a_true.map((i) => i.string_a),
-			'b2',
+			'b2'
 		);
 	});
 
@@ -266,15 +266,15 @@ describe('IndexedCollection - Query Capabilities', () => {
 		assert.strictEqual(tag1_items.length, 3);
 		assert.include(
 			tag1_items.map((i) => i.string_a),
-			'a1',
+			'a1'
 		);
 		assert.include(
 			tag1_items.map((i) => i.string_a),
-			'a2',
+			'a2'
 		);
 		assert.include(
 			tag1_items.map((i) => i.string_a),
-			'b2',
+			'b2'
 		);
 
 		// Multiple tags intersection (using multiple queries)
@@ -326,22 +326,22 @@ describe('IndexedCollection - Query Capabilities', () => {
 		const this_year_items = collection.where('by_year', current_year);
 
 		const items_this_year_count = collection.values.filter(
-			(item) => item.date_a.getFullYear() === current_year,
+			(item) => item.date_a.getFullYear() === current_year
 		).length;
 		assert.strictEqual(this_year_items.length, items_this_year_count);
 
 		// More complex date range query - last 7 days
 		const now = Date.now();
 		const recent_items = collection.values.filter(
-			(item) => item.date_a.getTime() > now - 1000 * 60 * 60 * 24 * 7,
+			(item) => item.date_a.getTime() > now - 1000 * 60 * 60 * 24 * 7
 		);
 		assert.include(
 			recent_items.map((i) => i.string_a),
-			'b1',
+			'b1'
 		); // 5 days ago
 		assert.include(
 			recent_items.map((i) => i.string_a),
-			'b2',
+			'b2'
 		); // 3 days ago
 	});
 
@@ -354,7 +354,7 @@ describe('IndexedCollection - Query Capabilities', () => {
 			string_c: 'c4',
 			date_a: new Date(), // Now (most recent)
 			number_a: 5,
-			boolean_a: true,
+			boolean_a: true
 		});
 
 		collection.add(new_item);
@@ -414,7 +414,7 @@ describe('IndexedCollection - Search Patterns', () => {
 				create_multi_index({
 					key: 'by_word',
 					extractor: (item) => item.string_a.toLowerCase().split(/\s+/),
-					query_schema: z.string(),
+					query_schema: z.string()
 				}),
 
 				// Range-based categorization
@@ -425,28 +425,28 @@ describe('IndexedCollection - Search Patterns', () => {
 						if (item.number_a <= 4) return 'mid';
 						return 'high';
 					},
-					query_schema: z.enum(['low', 'mid', 'high']),
-				}),
-			],
+					query_schema: z.enum(['low', 'mid', 'high'])
+				})
+			]
 		});
 
 		const test_items = [
 			create_test_item({
 				string_a: 'alpha beta gamma',
-				number_a: 5,
+				number_a: 5
 			}),
 			create_test_item({
 				string_a: 'alpha delta',
-				number_a: 4,
+				number_a: 4
 			}),
 			create_test_item({
 				string_a: 'beta epsilon',
-				number_a: 3,
+				number_a: 3
 			}),
 			create_test_item({
 				string_a: 'gamma delta',
-				number_a: 2,
-			}),
+				number_a: 2
+			})
 		];
 
 		collection.add_many(test_items);
@@ -463,7 +463,7 @@ describe('IndexedCollection - Search Patterns', () => {
 
 		// Find items with both "alpha" and "beta" (intersection)
 		const alpha_beta_items = alpha_items.filter((item) =>
-			item.string_a.toLowerCase().includes('beta'),
+			item.string_a.toLowerCase().includes('beta')
 		);
 		assert.strictEqual(alpha_beta_items.length, 1);
 		assert.strictEqual(alpha_beta_items[0]!.string_a, 'alpha beta gamma');

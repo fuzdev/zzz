@@ -1,14 +1,14 @@
 <script lang="ts">
-	import {resolve} from '$app/paths';
+	import { resolve } from '$app/paths';
 
-	import {frontend_context} from './frontend.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 	import ProviderLink from './ProviderLink.svelte';
 	import PromptList from './PromptList.svelte';
 	import ChatList from './ChatList.svelte';
 	import ModelLink from './ModelLink.svelte';
-	import {icon_add, icon_model, icon_provider} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_add, icon_model, icon_provider } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {to_nav_link_href} from './nav.ts';
+	import { to_nav_link_href } from './nav.ts';
 
 	const app = frontend_context.get();
 </script>
@@ -22,7 +22,7 @@
 					href={/* eslint-disable-line svelte/no-navigation-without-resolve */ to_nav_link_href(
 						app,
 						'chats',
-						resolve('/chats'),
+						resolve('/chats')
 					)}>chats</a
 				>
 				<button
@@ -61,7 +61,7 @@
 					href={/* eslint-disable-line svelte/no-navigation-without-resolve */ to_nav_link_href(
 						app,
 						'prompts',
-						resolve('/prompts'),
+						resolve('/prompts')
 					)}>prompts</a
 				>
 				<button

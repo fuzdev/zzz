@@ -1,7 +1,7 @@
 // @slop Claude Sonnet 4
 
-import type {Attachment} from 'svelte/attachments';
-import {on} from 'svelte/events';
+import type { Attachment } from 'svelte/attachments';
+import { on } from 'svelte/events';
 
 // TODO upstream to Fuz, and see the global `.scrolled` style
 

@@ -7,15 +7,15 @@
  * @module
  */
 
-import {join} from 'node:path';
-import {mkdir, rm, writeFile} from 'node:fs/promises';
-import {randomUUID} from 'node:crypto';
-import {describe, test, inject, assert} from 'vitest';
+import { join } from 'node:path';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { describe, test, inject, assert } from 'vitest';
 import {
 	default_cross_process_setup,
-	reconstruct_bootstrapped_handle,
+	reconstruct_bootstrapped_handle
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
-import {rpc_call} from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
+import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 
 import './cross_test_types.ts';
 
@@ -31,8 +31,8 @@ describe('provider + session cross-backend', () => {
 			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'provider_load_status',
-			params: {provider_name: 'gemini'},
-			headers: fixture.create_session_headers(),
+			params: { provider_name: 'gemini' },
+			headers: fixture.create_session_headers()
 		});
 		assert.ok(res.ok, `provider_load_status failed: ${JSON.stringify(res)}`);
 		const status = (res.result as Record<string, unknown>).status as Record<string, unknown>;
@@ -50,7 +50,7 @@ describe('provider + session cross-backend', () => {
 			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'session_load',
-			headers: fixture.create_session_headers(),
+			headers: fixture.create_session_headers()
 		});
 		assert.ok(res.ok);
 		const data = (res.result as Record<string, unknown>).data as Record<string, unknown>;
@@ -72,7 +72,7 @@ describe('provider + session cross-backend', () => {
 
 	test('session_load_returns_zzz_dir_files', async () => {
 		const fixture = await setup_test();
-		await mkdir(zzz_dir, {recursive: true});
+		await mkdir(zzz_dir, { recursive: true });
 		const file_name = `test_session_${randomUUID()}.txt`;
 		const file_path = join(zzz_dir, file_name);
 		const content = 'session load file test';
@@ -94,7 +94,7 @@ describe('provider + session cross-backend', () => {
 					app: fixture.transport,
 					path: handle.config.rpc_path,
 					method: 'session_load',
-					headers: fixture.create_session_headers(),
+					headers: fixture.create_session_headers()
 				});
 				assert.ok(res.ok);
 				const data = (res.result as Record<string, unknown>).data as Record<string, unknown>;
@@ -118,14 +118,14 @@ describe('provider + session cross-backend', () => {
 			assert.deepEqual(test_file.dependencies, []);
 			assert.equal(typeof test_file.mtime, 'number');
 		} finally {
-			await rm(file_path, {force: true});
+			await rm(file_path, { force: true });
 		}
 	});
 
 	test('session_load_returns_nested_files', async () => {
 		const fixture = await setup_test();
 		const sub_dir = join(zzz_dir, 'state', `nested_${randomUUID()}`);
-		await mkdir(sub_dir, {recursive: true});
+		await mkdir(sub_dir, { recursive: true });
 		const file_path = join(sub_dir, 'deep.txt');
 		try {
 			await writeFile(file_path, 'nested content', 'utf-8');
@@ -144,7 +144,7 @@ describe('provider + session cross-backend', () => {
 					app: fixture.transport,
 					path: handle.config.rpc_path,
 					method: 'session_load',
-					headers: fixture.create_session_headers(),
+					headers: fixture.create_session_headers()
 				});
 				assert.ok(res.ok);
 				const data = (res.result as Record<string, unknown>).data as Record<string, unknown>;
@@ -162,7 +162,7 @@ describe('provider + session cross-backend', () => {
 			}
 			assert.equal(nested.contents, 'nested content');
 		} finally {
-			await rm(sub_dir, {recursive: true, force: true});
+			await rm(sub_dir, { recursive: true, force: true });
 		}
 	});
 

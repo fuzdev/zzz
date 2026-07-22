@@ -18,13 +18,13 @@
  * @module
  */
 
-import {inject} from 'vitest';
+import { inject } from 'vitest';
 import {
 	default_cross_process_setup,
-	reconstruct_bootstrapped_handle,
+	reconstruct_bootstrapped_handle
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
-import {describe_cross_process_sse_tests} from '@fuzdev/fuz_app/testing/cross_backend/sse_round_trip.ts';
-import {ROLE_ADMIN} from '@fuzdev/fuz_app/auth/role_schema.ts';
+import { describe_cross_process_sse_tests } from '@fuzdev/fuz_app/testing/cross_backend/sse_round_trip.ts';
+import { ROLE_ADMIN } from '@fuzdev/fuz_app/auth/role_schema.ts';
 
 import './cross_test_types.ts';
 
@@ -32,12 +32,12 @@ const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 // The keeper needs `ROLE_ADMIN` to subscribe to the admin-gated audit stream
 // and to drive `admin_session_revoke_all` in the data-frame case — same
 // `extra_keeper_roles` wiring as `auth.cross.test.ts`.
-const setup_test = default_cross_process_setup(handle, {extra_keeper_roles: [ROLE_ADMIN]});
-const {capabilities, base_url, rpc_path} = handle.config;
+const setup_test = default_cross_process_setup(handle, { extra_keeper_roles: [ROLE_ADMIN] });
+const { capabilities, base_url, rpc_path } = handle.config;
 
 describe_cross_process_sse_tests({
 	setup_test,
 	capabilities,
 	base_url,
-	rpc_path,
+	rpc_path
 });

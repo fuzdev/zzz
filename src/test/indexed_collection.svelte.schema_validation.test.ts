@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 
-import {test, assert, describe, vi} from 'vitest';
-import {z} from 'zod';
-import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.ts';
+import { test, assert, describe, vi } from 'vitest';
+import { z } from 'zod';
+import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {IndexedCollection} from '$lib/indexed_collection.svelte.ts';
+import { IndexedCollection } from '$lib/indexed_collection.svelte.ts';
 import {
 	create_single_index,
 	create_multi_index,
 	create_derived_index,
-	create_dynamic_index,
+	create_dynamic_index
 } from '$lib/indexed_collection_helpers.svelte.ts';
 
 // Mock item type that implements IndexedItem
@@ -33,7 +33,7 @@ const create_item = (
 	number: number,
 	flag: boolean = true,
 	array: Array<string> = ['item1'],
-	option: 'x' | 'y' = 'x',
+	option: 'x' | 'y' = 'x'
 ): TestItem => ({
 	id: create_uuid(),
 	string_a,
@@ -43,8 +43,8 @@ const create_item = (
 	array,
 	nested: {
 		option,
-		enabled: true,
-	},
+		enabled: true
+	}
 });
 
 // Define test schemas
@@ -60,15 +60,15 @@ describe('IndexedCollection - Schema Validation', () => {
 				create_single_index({
 					key: 'by_string_b',
 					extractor: (item) => item.string_b,
-					query_schema: email_schema,
+					query_schema: email_schema
 				}),
 				create_single_index({
 					key: 'by_string_a',
 					extractor: (item) => item.string_a,
-					query_schema: z.string(),
-				}),
+					query_schema: z.string()
+				})
 			],
-			validate: true, // Enable schema validation
+			validate: true // Enable schema validation
 		});
 
 		// Add valid items
@@ -96,7 +96,7 @@ describe('IndexedCollection - Schema Validation', () => {
 				create_multi_index({
 					key: 'by_array',
 					extractor: (item) => item.array,
-					query_schema: str_schema,
+					query_schema: str_schema
 				}),
 				create_multi_index({
 					key: 'by_number_range',
@@ -105,10 +105,10 @@ describe('IndexedCollection - Schema Validation', () => {
 						if (item.number < 50) return 'mid';
 						return 'high';
 					},
-					query_schema: z.enum(['low', 'mid', 'high']),
-				}),
+					query_schema: z.enum(['low', 'mid', 'high'])
+				})
 			],
-			validate: true,
+			validate: true
 		});
 
 		// Add items across different ranges
@@ -153,10 +153,10 @@ describe('IndexedCollection - Schema Validation', () => {
 						return result;
 					},
 					matches: (item) => item.flag && item.number >= 18,
-					query_schema: z.void(),
-				}),
+					query_schema: z.void()
+				})
 			],
-			validate: true,
+			validate: true
 		});
 
 		// Add mix of items with different flag/number values
@@ -181,7 +181,7 @@ describe('IndexedCollection - Schema Validation', () => {
 			min_number: z.number().optional(),
 			max_number: z.number().optional(),
 			only_flagged: z.boolean().optional(),
-			array_values: z.array(z.string()).optional(),
+			array_values: z.array(z.string()).optional()
 		});
 
 		type ItemQuery = z.infer<typeof query_schema>;
@@ -213,10 +213,10 @@ describe('IndexedCollection - Schema Validation', () => {
 							return result;
 						};
 					},
-					query_schema,
-				}),
+					query_schema
+				})
 			],
-			validate: true,
+			validate: true
 		});
 
 		// Add various items
@@ -230,12 +230,12 @@ describe('IndexedCollection - Schema Validation', () => {
 		const search_fn = collection.get_index<(query: ItemQuery) => Array<TestItem>>('item_search');
 
 		// Test number range query
-		const young_range = search_fn({min_number: 18, max_number: 30});
+		const young_range = search_fn({ min_number: 18, max_number: 30 });
 		assert.strictEqual(young_range.length, 2);
 		assert.deepEqual(young_range.map((item) => item.string_a).sort(), ['a1', 'a3']);
 
 		// Test flag with specific array values
-		const flagged_with_item1 = search_fn({only_flagged: true, array_values: ['item1']});
+		const flagged_with_item1 = search_fn({ only_flagged: true, array_values: ['item1'] });
 		assert.strictEqual(flagged_with_item1.length, 2);
 		assert.deepEqual(flagged_with_item1.map((item) => item.string_a).sort(), ['a1', 'a4']);
 
@@ -243,14 +243,14 @@ describe('IndexedCollection - Schema Validation', () => {
 		const high_number_with_item3 = search_fn({
 			min_number: 30,
 			only_flagged: true,
-			array_values: ['item3'],
+			array_values: ['item3']
 		});
 		assert.strictEqual(high_number_with_item3.length, 2);
 		assert.deepEqual(high_number_with_item3.map((item) => item.string_a).sort(), ['a2', 'a4']);
 
 		// Test using query method
 		const with_item5 = collection.query<Array<TestItem>, ItemQuery>('item_search', {
-			array_values: ['item5'],
+			array_values: ['item5']
 		});
 		assert.strictEqual(with_item5.length, 1);
 		assert.strictEqual(with_item5[0]!.string_a, 'a4');
@@ -266,15 +266,15 @@ describe('IndexedCollection - Schema Validation', () => {
 				create_single_index({
 					key: 'by_string_b',
 					extractor: (item) => item.string_b,
-					query_schema: email_schema,
+					query_schema: email_schema
 				}),
 				create_single_index({
 					key: 'by_number',
 					extractor: (item) => item.number,
-					query_schema: range_schema,
-				}),
+					query_schema: range_schema
+				})
 			],
-			validate: true,
+			validate: true
 		});
 
 		// Add items with valid data
@@ -285,8 +285,8 @@ describe('IndexedCollection - Schema Validation', () => {
 		assert.ok(
 			console_error_spy.mock.calls.some(
 				([msg]) =>
-					typeof msg === 'string' && msg.includes('Query validation failed for index by_string_b'),
-			),
+					typeof msg === 'string' && msg.includes('Query validation failed for index by_string_b')
+			)
 		);
 
 		// Try querying with out-of-range number
@@ -294,8 +294,8 @@ describe('IndexedCollection - Schema Validation', () => {
 		assert.ok(
 			console_error_spy.mock.calls.some(
 				([msg]) =>
-					typeof msg === 'string' && msg.includes('Query validation failed for index by_number'),
-			),
+					typeof msg === 'string' && msg.includes('Query validation failed for index by_number')
+			)
 		);
 
 		console_error_spy.mockRestore();
@@ -311,15 +311,15 @@ describe('IndexedCollection - Schema Validation', () => {
 				create_single_index({
 					key: 'by_string_b',
 					extractor: (item) => item.string_b,
-					query_schema: email_schema,
+					query_schema: email_schema
 				}),
 				create_single_index({
 					key: 'by_number',
 					extractor: (item) => item.number,
-					query_schema: range_schema,
-				}),
+					query_schema: range_schema
+				})
 			],
-			validate: false, // Explicitly disable validation
+			validate: false // Explicitly disable validation
 		});
 
 		// Add items
@@ -345,7 +345,7 @@ describe('IndexedCollection - Schema Validation', () => {
 				create_single_index({
 					key: 'by_nested_option',
 					extractor: (item) => item.nested.option,
-					query_schema: option_schema,
+					query_schema: option_schema
 				}),
 				create_multi_index({
 					key: 'by_compound',
@@ -353,10 +353,10 @@ describe('IndexedCollection - Schema Validation', () => {
 						// Return a compound key made from multiple fields
 						return `${item.string_a}-${item.nested.option}`;
 					},
-					query_schema: z.string().regex(/^[a-z0-9]+-[xy]$/),
-				}),
+					query_schema: z.string().regex(/^[a-z0-9]+-[xy]$/)
+				})
 			],
-			validate: true,
+			validate: true
 		});
 
 		// Add items with valid nested properties

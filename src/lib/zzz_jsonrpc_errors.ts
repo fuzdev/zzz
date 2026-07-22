@@ -7,7 +7,7 @@
  * @module
  */
 
-import type {JsonrpcErrorCode, JsonrpcErrorObject} from '@fuzdev/fuz_app/http/jsonrpc.ts';
+import type { JsonrpcErrorCode, JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import {
 	JSONRPC_ERROR_CODES as BASE_JSONRPC_ERROR_CODES,
 	JSONRPC_ERROR_CODE_TO_HTTP_STATUS,
@@ -15,7 +15,7 @@ import {
 	jsonrpc_error_messages as base_jsonrpc_error_messages,
 	jsonrpc_errors as base_jsonrpc_errors,
 	ThrownJsonrpcError,
-	type JsonrpcErrorName as BaseJsonrpcErrorName,
+	type JsonrpcErrorName as BaseJsonrpcErrorName
 } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 /** zzz error names — extends fuz_app's base set with AI provider errors. */
@@ -24,7 +24,7 @@ export type JsonrpcErrorName = BaseJsonrpcErrorName | 'ai_provider_error';
 /** Extended error codes with zzz-specific AI provider error. */
 export const JSONRPC_ERROR_CODES = {
 	...BASE_JSONRPC_ERROR_CODES,
-	ai_provider_error: -32020 as JsonrpcErrorCode,
+	ai_provider_error: -32020 as JsonrpcErrorCode
 } as const satisfies Record<JsonrpcErrorName, JsonrpcErrorCode>;
 
 /** Extended error message constructors. */
@@ -38,13 +38,13 @@ export const jsonrpc_error_messages = {
 				: provider
 					? `${provider}: error`
 					: (message ?? 'ai provider error'),
-		data,
-	}),
+		data
+	})
 } as const;
 
 const create_error_thrower =
 	<TFn extends (...args: Array<any>) => JsonrpcErrorObject>(
-		error_fn: TFn,
+		error_fn: TFn
 	): ((...args: Parameters<TFn>) => ThrownJsonrpcError) =>
 	(...args: Parameters<TFn>) => {
 		const m = error_fn(...args);
@@ -54,7 +54,7 @@ const create_error_thrower =
 /** Extended error throwers. */
 export const jsonrpc_errors = {
 	...base_jsonrpc_errors,
-	ai_provider_error: create_error_thrower(jsonrpc_error_messages.ai_provider_error),
+	ai_provider_error: create_error_thrower(jsonrpc_error_messages.ai_provider_error)
 } as const;
 
 // Extend fuz_app's HTTP status mappings with zzz-specific codes.

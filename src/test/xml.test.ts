@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import {describe, test, assert} from 'vitest';
-import {z} from 'zod';
+import { describe, test, assert } from 'vitest';
+import { z } from 'zod';
 
 import {
 	XmlAttributeKey,
@@ -9,7 +9,7 @@ import {
 	XmlAttributeValue,
 	XmlAttributeValueWithDefault,
 	XmlAttribute,
-	XmlAttributeWithDefaults,
+	XmlAttributeWithDefaults
 } from '$lib/xml.ts';
 
 // Test helpers
@@ -125,7 +125,7 @@ describe('XmlAttribute', () => {
 	const valid_base_attr = {
 		id: test_uuid_a,
 		key: 'class',
-		value: 'container',
+		value: 'container'
 	};
 
 	test('accepts complete valid attributes', () => {
@@ -133,51 +133,51 @@ describe('XmlAttribute', () => {
 	});
 
 	test('requires all properties', () => {
-		assert_parse_failure(XmlAttribute, {id: test_uuid_a, key: 'class'});
-		assert_parse_failure(XmlAttribute, {id: test_uuid_a, value: 'test'});
-		assert_parse_failure(XmlAttribute, {key: 'class', value: 'test'});
+		assert_parse_failure(XmlAttribute, { id: test_uuid_a, key: 'class' });
+		assert_parse_failure(XmlAttribute, { id: test_uuid_a, value: 'test' });
+		assert_parse_failure(XmlAttribute, { key: 'class', value: 'test' });
 	});
 
 	test('validates uuid format', () => {
-		assert_parse_failure(XmlAttribute, {...valid_base_attr, id: 'invalid-uuid'});
-		assert_parse_failure(XmlAttribute, {...valid_base_attr, id: ''});
+		assert_parse_failure(XmlAttribute, { ...valid_base_attr, id: 'invalid-uuid' });
+		assert_parse_failure(XmlAttribute, { ...valid_base_attr, id: '' });
 	});
 
 	test('validates key constraints', () => {
-		assert_parse_failure(XmlAttribute, {...valid_base_attr, key: ''});
-		assert_parse_failure(XmlAttribute, {...valid_base_attr, key: '   '});
+		assert_parse_failure(XmlAttribute, { ...valid_base_attr, key: '' });
+		assert_parse_failure(XmlAttribute, { ...valid_base_attr, key: '   ' });
 	});
 
 	test('strict mode rejects extra properties', () => {
-		const attr_with_extra = {...valid_base_attr, extra: 'property'};
+		const attr_with_extra = { ...valid_base_attr, extra: 'property' };
 		assert_parse_failure(XmlAttribute, attr_with_extra);
 	});
 
 	test('accepts empty values', () => {
-		assert_parse_success(XmlAttribute, {...valid_base_attr, value: ''});
+		assert_parse_success(XmlAttribute, { ...valid_base_attr, value: '' });
 	});
 });
 
 describe('XmlAttributeWithDefaults', () => {
 	test('accepts complete attributes', () => {
-		const attr = {id: test_uuid_a, key: 'id', value: 'main'};
+		const attr = { id: test_uuid_a, key: 'id', value: 'main' };
 		assert_parse_success(XmlAttributeWithDefaults, attr);
 	});
 
 	test('generates uuid when missing', () => {
-		const attr_no_id = {key: 'class', value: 'test'};
+		const attr_no_id = { key: 'class', value: 'test' };
 		const result = assert_parse_success(XmlAttributeWithDefaults, attr_no_id);
 		assert.match(result.id, uuid_regex);
 	});
 
 	test('applies key default when missing', () => {
-		const attr_no_key = {id: test_uuid_a, value: 'test'};
+		const attr_no_key = { id: test_uuid_a, value: 'test' };
 		const result = assert_parse_success(XmlAttributeWithDefaults, attr_no_key);
 		assert.strictEqual(result.key, 'attr');
 	});
 
 	test('applies value default when missing', () => {
-		const attr_no_value = {id: test_uuid_a, key: 'disabled'};
+		const attr_no_value = { id: test_uuid_a, key: 'disabled' };
 		const result = assert_parse_success(XmlAttributeWithDefaults, attr_no_value);
 		assert.strictEqual(result.value, '');
 	});
@@ -190,18 +190,18 @@ describe('XmlAttributeWithDefaults', () => {
 	});
 
 	test('handles undefined id explicitly', () => {
-		const attr = {id: undefined, key: 'test', value: 'value'};
+		const attr = { id: undefined, key: 'test', value: 'value' };
 		const result = assert_parse_success(XmlAttributeWithDefaults, attr);
 		assert.match(result.id, uuid_regex);
 	});
 
 	test('strict mode rejects extra properties', () => {
-		const attr_with_extra = {id: test_uuid_a, key: 'test', value: 'val', extra: 'prop'};
+		const attr_with_extra = { id: test_uuid_a, key: 'test', value: 'val', extra: 'prop' };
 		assert_parse_failure(XmlAttributeWithDefaults, attr_with_extra);
 	});
 
 	test('validates constraints after applying defaults', () => {
-		const attr_empty_key = {id: test_uuid_a, key: '', value: 'test'};
+		const attr_empty_key = { id: test_uuid_a, key: '', value: 'test' };
 		assert_parse_failure(XmlAttributeWithDefaults, attr_empty_key);
 	});
 });
@@ -210,7 +210,7 @@ describe('XML use cases', () => {
 	test('boolean attributes with empty values', () => {
 		const boolean_attrs = ['disabled', 'checked', 'selected', 'hidden'];
 		for (const key of boolean_attrs) {
-			const attr = {id: test_uuid_a, key, value: ''};
+			const attr = { id: test_uuid_a, key, value: '' };
 			assert_parse_success(XmlAttributeWithDefaults, attr);
 		}
 	});
@@ -218,7 +218,7 @@ describe('XML use cases', () => {
 	test('namespace prefixed attributes', () => {
 		const ns_attrs = ['xml:lang', 'xmlns:foo', 'xsi:type', 'data:custom'];
 		for (const key of ns_attrs) {
-			const attr = {id: test_uuid_a, key, value: 'test'};
+			const attr = { id: test_uuid_a, key, value: 'test' };
 			assert_parse_success(XmlAttributeWithDefaults, attr);
 		}
 	});
@@ -228,10 +228,10 @@ describe('XML use cases', () => {
 			'rgb(255, 0, 0)',
 			'url(#gradient)',
 			'calc(100% - 20px)',
-			'{"key": "value"}',
+			'{"key": "value"}'
 		];
 		for (const value of complex_values) {
-			const attr = {id: test_uuid_a, key: 'style', value};
+			const attr = { id: test_uuid_a, key: 'style', value };
 			assert_parse_success(XmlAttributeWithDefaults, attr);
 		}
 	});
@@ -239,8 +239,8 @@ describe('XML use cases', () => {
 	test('integration with array of attributes', () => {
 		const AttributeArray = z.array(XmlAttributeWithDefaults);
 		const attrs = [
-			{key: 'class', value: 'container'},
-			{key: 'id', value: 'main'},
+			{ key: 'class', value: 'container' },
+			{ key: 'id', value: 'main' }
 		];
 		const result = assert_parse_success(AttributeArray, attrs);
 		assert.strictEqual(result.length, 2);
@@ -255,8 +255,8 @@ describe('XML use cases', () => {
 	test('integration with record of attributes', () => {
 		const AttributeRecord = z.record(z.string(), XmlAttributeWithDefaults);
 		const attrs = {
-			class_attr: {key: 'class', value: 'container'},
-			id_attr: {key: 'id', value: 'main'},
+			class_attr: { key: 'class', value: 'container' },
+			id_attr: { key: 'id', value: 'main' }
 		};
 		assert_parse_success(AttributeRecord, attrs);
 	});
@@ -264,7 +264,7 @@ describe('XML use cases', () => {
 
 describe('error handling', () => {
 	test('provides meaningful error messages', () => {
-		const invalid_attr = {id: 'not-uuid', key: '', value: 123};
+		const invalid_attr = { id: 'not-uuid', key: '', value: 123 };
 		const error = assert_parse_failure(XmlAttributeWithDefaults, invalid_attr);
 
 		const issue_paths = error.issues.map((i) => i.path.join('.'));

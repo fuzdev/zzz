@@ -1,14 +1,14 @@
 // @slop Claude Opus 4
 
-import {z} from 'zod';
-import {goto} from '$app/navigation';
-import {resolve} from '$app/paths';
-import {create_uuid, type Uuid} from '@fuzdev/fuz_util/id.ts';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
+import { z } from 'zod';
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
+import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import {Repo} from './repo.svelte.ts';
-import type {RepoCheckout} from './projects_schema.ts';
-import type {Projects} from './projects.svelte.ts';
+import { Repo } from './repo.svelte.ts';
+import type { RepoCheckout } from './projects_schema.ts';
+import type { Projects } from './projects.svelte.ts';
 
 export interface RepoViewmodelOptions {
 	projects: Projects;
@@ -34,7 +34,7 @@ export class RepoViewmodel {
 			this.repo === null ||
 			this.git_url !== this.repo.git_url ||
 			// TODO this is bugged, doesn't show as having changes when only the checkouts have been edited
-			JSON.stringify(this.checkouts) !== JSON.stringify(this.repo.checkouts),
+			JSON.stringify(this.checkouts) !== JSON.stringify(this.repo.checkouts)
 	);
 
 	/** The current project. */
@@ -42,7 +42,7 @@ export class RepoViewmodel {
 
 	/** The repo being edited. */
 	readonly repo = $derived.by(() => {
-		const {repo_id} = this;
+		const { repo_id } = this;
 		if (!repo_id) return null;
 		return this.project?.repos.find((r) => r.id === repo_id) || null;
 	});
@@ -80,7 +80,7 @@ export class RepoViewmodel {
 			id: create_uuid(),
 			path: json?.path ?? '',
 			label: json?.label ?? '',
-			tags: json?.tags ?? [],
+			tags: json?.tags ?? []
 		});
 	}
 
@@ -114,8 +114,8 @@ export class RepoViewmodel {
 					git_url: this.git_url,
 					checkouts: this.checkouts,
 					created: now,
-					updated: now,
-				},
+					updated: now
+				}
 			});
 
 			this.projects.add_repo(this.project_id, repo);

@@ -1,15 +1,15 @@
 <script lang="ts">
-	import type {Snippet} from 'svelte';
-	import {resolve} from '$app/paths';
-	import type {SvelteHTMLElements} from 'svelte/elements';
-	import {page} from '$app/state';
-	import {DEV} from 'esm-env';
+	import type { Snippet } from 'svelte';
+	import { resolve } from '$app/paths';
+	import type { SvelteHTMLElements } from 'svelte/elements';
+	import { page } from '$app/state';
+	import { DEV } from 'esm-env';
 
-	import type {SvgData} from '@fuzdev/fuz_ui/svg.ts';
-	import {icon_provider} from '@fuzdev/fuz_ui/icons.ts';
+	import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
+	import { icon_provider } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
-	import type {Provider} from './provider.svelte.ts';
+	import type { Provider } from './provider.svelte.ts';
 	import ProviderLogo from './ProviderLogo.svelte';
 
 	const {
@@ -47,7 +47,7 @@
 	}
 
 	const selected = $derived(
-		!!provider && page.url.pathname === resolve(`/providers/${provider.name}`),
+		!!provider && page.url.pathname === resolve(`/providers/${provider.name}`)
 	);
 </script>
 

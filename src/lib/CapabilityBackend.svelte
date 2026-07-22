@@ -1,18 +1,18 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
+	import { slide } from 'svelte/transition';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
-	import {onMount} from 'svelte';
+	import { onMount } from 'svelte';
 
-	import {frontend_context} from './frontend.svelte.ts';
-	import {icon_arrow_right} from '@fuzdev/fuz_ui/icons.ts';
+	import { frontend_context } from './frontend.svelte.ts';
+	import { icon_arrow_right } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
-	import {SERVER_URL} from './constants.ts';
+	import { SERVER_URL } from './constants.ts';
 	import PingForm from './PingForm.svelte';
 	import ExternalLink from './ExternalLink.svelte';
 
 	const app = frontend_context.get();
-	const {capabilities} = app;
+	const { capabilities } = app;
 
 	onMount(() => {
 		void capabilities.init_backend_check();

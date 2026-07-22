@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
-import {test, vi, describe, beforeEach, afterEach, assert} from 'vitest';
+import { test, vi, describe, beforeEach, afterEach, assert } from 'vitest';
 
 import {
 	Reorderable,
 	type ReorderableItemId,
 	type ReorderableItemParams,
-	type ReorderableListParams,
+	type ReorderableListParams
 } from '$lib/reorderable.svelte.ts';
 
 // Mock helper function for DOM testing
@@ -31,25 +31,25 @@ const create_elements = (): {
 		items.push(item);
 	}
 
-	return {container, list, items};
+	return { container, list, items };
 };
 
 // Mock DragEvent for testing
 const create_mock_drag_event = (
 	type: string,
 	target?: HTMLElement,
-	data_transfer?: object,
+	data_transfer?: object
 ): DragEvent => {
-	const event = new Event(type, {bubbles: true}) as DragEvent;
+	const event = new Event(type, { bubbles: true }) as DragEvent;
 
 	// Add target
 	if (target) {
-		Object.defineProperty(event, 'target', {value: target});
+		Object.defineProperty(event, 'target', { value: target });
 	}
 
 	// Add dataTransfer
 	if (data_transfer) {
-		Object.defineProperty(event, 'dataTransfer', {value: data_transfer});
+		Object.defineProperty(event, 'dataTransfer', { value: data_transfer });
 	} else {
 		Object.defineProperty(event, 'dataTransfer', {
 			value: {
@@ -59,8 +59,8 @@ const create_mock_drag_event = (
 				effectAllowed: 'none',
 				types: [],
 				files: [],
-				items: [],
-			},
+				items: []
+			}
 		});
 	}
 
@@ -79,7 +79,7 @@ const force_initialize = (reorderable: Reorderable): void => {
 const attach_list = (
 	reorderable: Reorderable,
 	list: HTMLElement,
-	params: ReorderableListParams,
+	params: ReorderableListParams
 ): (() => void) => {
 	const attachment = reorderable.list(params);
 	const cleanup = attachment(list);
@@ -90,7 +90,7 @@ const attach_list = (
 const attach_item = (
 	reorderable: Reorderable,
 	item: HTMLElement,
-	params: ReorderableItemParams,
+	params: ReorderableItemParams
 ): (() => void) => {
 	const attachment = reorderable.item(params);
 	const cleanup = attachment(item);
@@ -115,7 +115,7 @@ describe('Reorderable', () => {
 		});
 
 		test('creates with custom direction', () => {
-			const reorderable = new Reorderable({direction: 'horizontal'});
+			const reorderable = new Reorderable({ direction: 'horizontal' });
 			assert.strictEqual(reorderable.direction, 'horizontal');
 		});
 
@@ -123,7 +123,7 @@ describe('Reorderable', () => {
 			const reorderable = new Reorderable({
 				list_class: 'custom_list',
 				item_class: 'custom_item',
-				dragging_class: 'custom_dragging',
+				dragging_class: 'custom_dragging'
 			});
 
 			assert.strictEqual(reorderable.list_class, 'custom_list');
@@ -152,10 +152,10 @@ describe('Reorderable', () => {
 		});
 
 		test('initializes correctly', () => {
-			cleanup_fn = attach_list(reorderable, list, {onreorder: mock_callback});
+			cleanup_fn = attach_list(reorderable, list, { onreorder: mock_callback });
 
 			assert.strictEqual(reorderable.list_node, list);
-			assert.deepEqual(reorderable.list_params, {onreorder: mock_callback});
+			assert.deepEqual(reorderable.list_params, { onreorder: mock_callback });
 			assert.ok(list.classList.contains(reorderable.list_class!));
 			assert.strictEqual(list.getAttribute('role'), 'list');
 			assert.strictEqual(list.dataset.reorderable_list_id, reorderable.id);
@@ -163,19 +163,19 @@ describe('Reorderable', () => {
 
 		test('re-attachment changes callbacks', () => {
 			const mock_callback2 = vi.fn();
-			const cleanup1 = attach_list(reorderable, list, {onreorder: mock_callback});
+			const cleanup1 = attach_list(reorderable, list, { onreorder: mock_callback });
 
-			assert.deepEqual(reorderable.list_params, {onreorder: mock_callback});
+			assert.deepEqual(reorderable.list_params, { onreorder: mock_callback });
 
 			// Re-attach with new callback
 			cleanup1();
-			cleanup_fn = attach_list(reorderable, list, {onreorder: mock_callback2});
+			cleanup_fn = attach_list(reorderable, list, { onreorder: mock_callback2 });
 
-			assert.deepEqual(reorderable.list_params, {onreorder: mock_callback2});
+			assert.deepEqual(reorderable.list_params, { onreorder: mock_callback2 });
 		});
 
 		test('destroy cleans up', () => {
-			cleanup_fn = attach_list(reorderable, list, {onreorder: mock_callback});
+			cleanup_fn = attach_list(reorderable, list, { onreorder: mock_callback });
 
 			// Before destroy
 			assert.strictEqual(reorderable.list_node, list);
@@ -214,7 +214,7 @@ describe('Reorderable', () => {
 		});
 
 		test('initializes correctly', () => {
-			cleanup_fn = attach_item(reorderable, item, {index: 0});
+			cleanup_fn = attach_item(reorderable, item, { index: 0 });
 
 			assert.ok(item.classList.contains(reorderable.item_class!));
 			assert.strictEqual(item.getAttribute('draggable'), 'true');
@@ -232,7 +232,7 @@ describe('Reorderable', () => {
 		});
 
 		test('re-attachment changes index', () => {
-			const cleanup1 = attach_item(reorderable, item, {index: 0});
+			const cleanup1 = attach_item(reorderable, item, { index: 0 });
 
 			// Get the item id
 			const item_id = item.dataset.reorderable_item_id as ReorderableItemId;
@@ -247,7 +247,7 @@ describe('Reorderable', () => {
 
 			// Re-attach with new index
 			cleanup1();
-			cleanup_fn = attach_item(reorderable, item, {index: 5});
+			cleanup_fn = attach_item(reorderable, item, { index: 5 });
 
 			// Get the new item id after re-attachment
 			const new_item_id = item.dataset.reorderable_item_id as ReorderableItemId;
@@ -262,7 +262,7 @@ describe('Reorderable', () => {
 		});
 
 		test('destroy cleans up', () => {
-			cleanup_fn = attach_item(reorderable, item, {index: 0});
+			cleanup_fn = attach_item(reorderable, item, { index: 0 });
 
 			const item_id = item.dataset.reorderable_item_id as ReorderableItemId;
 
@@ -303,7 +303,7 @@ describe('Reorderable', () => {
 			item = first_item;
 
 			// Set up item
-			cleanup_fn = attach_item(reorderable, item, {index: 0});
+			cleanup_fn = attach_item(reorderable, item, { index: 0 });
 			item_id = item.dataset.reorderable_item_id as ReorderableItemId;
 
 			// Manually add the element to the elements map to fix the test
@@ -347,7 +347,7 @@ describe('Reorderable', () => {
 		let list: HTMLElement;
 		let items: Array<HTMLElement>;
 		let reorderable: Reorderable;
-		let action_results: Array<{destroy?: () => void} | undefined>;
+		let action_results: Array<{ destroy?: () => void } | undefined>;
 
 		beforeEach(() => {
 			const elements = create_elements();
@@ -356,12 +356,12 @@ describe('Reorderable', () => {
 			reorderable = new Reorderable();
 
 			// Initialize list and items
-			const list_attachment = reorderable.list({onreorder: vi.fn()});
+			const list_attachment = reorderable.list({ onreorder: vi.fn() });
 			list_attachment(list);
 			action_results = items.map((item, i) => {
-				const attachment = reorderable.item({index: i});
+				const attachment = reorderable.item({ index: i });
 				const cleanup = attachment(item);
-				return cleanup ? {destroy: cleanup} : undefined;
+				return cleanup ? { destroy: cleanup } : undefined;
 			});
 
 			// Force initialization
@@ -385,7 +385,7 @@ describe('Reorderable', () => {
 			const mock_data_transfer = {
 				setData: vi.fn(),
 				dropEffect: 'none',
-				effectAllowed: 'none',
+				effectAllowed: 'none'
 			};
 			const drag_event = create_mock_drag_event('dragstart', first_item, mock_data_transfer);
 
@@ -422,33 +422,33 @@ describe('Reorderable', () => {
 
 	describe('edge cases', () => {
 		test('same list used twice does not throw error', () => {
-			const {list} = create_elements();
+			const { list } = create_elements();
 			const reorderable1 = new Reorderable();
 			const reorderable2 = new Reorderable();
 
 			// Initialize first reorderable
-			const cleanup1 = attach_list(reorderable1, list, {onreorder: vi.fn()});
+			const cleanup1 = attach_list(reorderable1, list, { onreorder: vi.fn() });
 
 			// Should not throw when trying to initialize second reorderable with same list
-			attach_list(reorderable2, list, {onreorder: vi.fn()});
+			attach_list(reorderable2, list, { onreorder: vi.fn() });
 
 			// Clean up
 			cleanup1();
 		});
 
 		test('reinitialization of same list works', () => {
-			const {list} = create_elements();
+			const { list } = create_elements();
 			const reorderable = new Reorderable();
 
 			// Initialize first time
-			const attachment1 = reorderable.list({onreorder: vi.fn()});
+			const attachment1 = reorderable.list({ onreorder: vi.fn() });
 			const cleanup1 = attachment1(list);
 
 			// Clean up
 			if (cleanup1) cleanup1();
 
 			// Initialize again
-			const attachment2 = reorderable.list({onreorder: vi.fn()});
+			const attachment2 = reorderable.list({ onreorder: vi.fn() });
 			const cleanup2 = attachment2(list);
 
 			// Should work without errors
@@ -459,7 +459,7 @@ describe('Reorderable', () => {
 		});
 
 		test('nested items find correct target', () => {
-			const {list} = create_elements();
+			const { list } = create_elements();
 			const reorderable = new Reorderable();
 
 			// Create a nested structure
@@ -469,11 +469,11 @@ describe('Reorderable', () => {
 			list.appendChild(outer_item);
 
 			// Initialize
-			const list_attachment = reorderable.list({onreorder: vi.fn()});
+			const list_attachment = reorderable.list({ onreorder: vi.fn() });
 			list_attachment(list);
-			const outer_attachment = reorderable.item({index: 0});
+			const outer_attachment = reorderable.item({ index: 0 });
 			const outer_cleanup = outer_attachment(outer_item);
-			const outer_action = {destroy: outer_cleanup};
+			const outer_action = { destroy: outer_cleanup };
 
 			// Get outer item id
 			const outer_id = outer_item.dataset.reorderable_item_id as ReorderableItemId;
@@ -485,7 +485,7 @@ describe('Reorderable', () => {
 			const mock_data_transfer = {
 				setData: vi.fn(),
 				dropEffect: 'none',
-				effectAllowed: 'none',
+				effectAllowed: 'none'
 			};
 			const drag_event = create_mock_drag_event('dragstart', inner_item, mock_data_transfer);
 
@@ -501,7 +501,7 @@ describe('Reorderable', () => {
 		});
 
 		test('can_reorder function prevents invalid reordering', () => {
-			const {list, items} = create_elements();
+			const { list, items } = create_elements();
 			const reorderable = new Reorderable();
 
 			// Create a can_reorder function that only allows moving to index 2
@@ -509,12 +509,12 @@ describe('Reorderable', () => {
 			const onreorder = vi.fn();
 
 			// Initialize
-			const list_attachment = reorderable.list({onreorder, can_reorder});
+			const list_attachment = reorderable.list({ onreorder, can_reorder });
 			list_attachment(list);
 			const action_results = items.map((item, i) => {
-				const attachment = reorderable.item({index: i});
+				const attachment = reorderable.item({ index: i });
 				const cleanup = attachment(item);
-				return cleanup ? {destroy: cleanup} : undefined;
+				return cleanup ? { destroy: cleanup } : undefined;
 			});
 
 			// Force initialization
@@ -546,16 +546,16 @@ describe('Reorderable', () => {
 		});
 
 		test('update_indicator on source item clears indicators', () => {
-			const {list, items} = create_elements();
+			const { list, items } = create_elements();
 			const reorderable = new Reorderable();
 
 			// Initialize
-			const list_attachment = reorderable.list({onreorder: vi.fn()});
+			const list_attachment = reorderable.list({ onreorder: vi.fn() });
 			list_attachment(list);
 			const action_results = items.map((item, i) => {
-				const attachment = reorderable.item({index: i});
+				const attachment = reorderable.item({ index: i });
 				const cleanup = attachment(item);
-				return cleanup ? {destroy: cleanup} : undefined;
+				return cleanup ? { destroy: cleanup } : undefined;
 			});
 
 			// Force initialization
@@ -590,8 +590,8 @@ describe('Reorderable', () => {
 
 		test('multiple instances work independently', () => {
 			// Create two separate lists
-			const {list: list1, items: items1} = create_elements();
-			const {list: list2, items: items2} = create_elements();
+			const { list: list1, items: items1 } = create_elements();
+			const { list: list2, items: items2 } = create_elements();
 
 			const reorderable1 = new Reorderable();
 			const reorderable2 = new Reorderable();
@@ -600,20 +600,20 @@ describe('Reorderable', () => {
 			const onreorder1 = vi.fn();
 			const onreorder2 = vi.fn();
 
-			const list1_attachment = reorderable1.list({onreorder: onreorder1});
-			const list2_attachment = reorderable2.list({onreorder: onreorder2});
+			const list1_attachment = reorderable1.list({ onreorder: onreorder1 });
+			const list2_attachment = reorderable2.list({ onreorder: onreorder2 });
 			list1_attachment(list1);
 			list2_attachment(list2);
 
 			const action_results1 = items1.map((item, i) => {
-				const attachment = reorderable1.item({index: i});
+				const attachment = reorderable1.item({ index: i });
 				const cleanup = attachment(item);
-				return cleanup ? {destroy: cleanup} : undefined;
+				return cleanup ? { destroy: cleanup } : undefined;
 			});
 			const action_results2 = items2.map((item, i) => {
-				const attachment = reorderable2.item({index: i});
+				const attachment = reorderable2.item({ index: i });
 				const cleanup = attachment(item);
-				return cleanup ? {destroy: cleanup} : undefined;
+				return cleanup ? { destroy: cleanup } : undefined;
 			});
 
 			// Force initialization for both instances
@@ -627,7 +627,7 @@ describe('Reorderable', () => {
 			const mock_data_transfer1 = {
 				setData: vi.fn(),
 				dropEffect: 'none',
-				effectAllowed: 'none',
+				effectAllowed: 'none'
 			};
 			const drag_event1 = create_mock_drag_event('dragstart', first_item1, mock_data_transfer1);
 			first_item1.dispatchEvent(drag_event1);
@@ -651,7 +651,7 @@ describe('Reorderable', () => {
 
 	describe('styling and accessibility', () => {
 		test('custom class names are applied', () => {
-			const {list, items} = create_elements();
+			const { list, items } = create_elements();
 
 			// Create reorderable with custom class names
 			const reorderable = new Reorderable({
@@ -659,16 +659,16 @@ describe('Reorderable', () => {
 				item_class: 'my_item',
 				dragging_class: 'my_dragging',
 				drag_over_class: 'my_drag_over',
-				drag_over_top_class: 'my_drag_over_top',
+				drag_over_top_class: 'my_drag_over_top'
 			});
 
 			// Initialize
-			const list_attachment = reorderable.list({onreorder: vi.fn()});
+			const list_attachment = reorderable.list({ onreorder: vi.fn() });
 			list_attachment(list);
 			const action_results = items.map((item, i) => {
-				const attachment = reorderable.item({index: i});
+				const attachment = reorderable.item({ index: i });
 				const cleanup = attachment(item);
-				return cleanup ? {destroy: cleanup} : undefined;
+				return cleanup ? { destroy: cleanup } : undefined;
 			});
 
 			// Check list class
@@ -696,16 +696,16 @@ describe('Reorderable', () => {
 		});
 
 		test('correct ARIA attributes are set', () => {
-			const {list, items} = create_elements();
+			const { list, items } = create_elements();
 			const reorderable = new Reorderable();
 
 			// Initialize
-			const list_attachment = reorderable.list({onreorder: vi.fn()});
+			const list_attachment = reorderable.list({ onreorder: vi.fn() });
 			list_attachment(list);
 			const action_results = items.map((item, i) => {
-				const attachment = reorderable.item({index: i});
+				const attachment = reorderable.item({ index: i });
 				const cleanup = attachment(item);
-				return cleanup ? {destroy: cleanup} : undefined;
+				return cleanup ? { destroy: cleanup } : undefined;
 			});
 
 			// Check list role

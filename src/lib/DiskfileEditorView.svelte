@@ -1,16 +1,16 @@
 <script lang="ts">
-	import {untrack} from 'svelte';
-	import {slide} from 'svelte/transition';
-	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+	import { untrack } from 'svelte';
+	import { slide } from 'svelte/transition';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-	import {frontend_context} from './frontend.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 	import DiskfileInfo from './DiskfileInfo.svelte';
-	import type {Diskfile} from './diskfile.svelte.ts';
+	import type { Diskfile } from './diskfile.svelte.ts';
 	import ContentEditor from './ContentEditor.svelte';
 	import DiskfileActions from './DiskfileActions.svelte';
-	import {DiskfileEditorState} from './diskfile_editor_state.svelte.ts';
+	import { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
-	import {format_placeholder} from './helpers.ts';
+	import { format_placeholder } from './helpers.ts';
 	import DiskfilePartView from './DiskfilePartView.svelte';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 	import DiskfileEditorNav from './DiskfileEditorNav.svelte';
@@ -18,7 +18,7 @@
 
 	const {
 		diskfile,
-		onmodified,
+		onmodified
 	}: {
 		diskfile: Diskfile;
 		onmodified?: (diskfile_id: Uuid) => void;
@@ -27,10 +27,10 @@
 	const app = frontend_context.get();
 
 	// TODO @many refactor, maybe move a collection on `app.diskfiles`? one problem is the contextmenu can't access it without hacking something with context
-	const editor_state = new DiskfileEditorState({app, diskfile}); // TODO make diskfile a getter
+	const editor_state = new DiskfileEditorState({ app, diskfile }); // TODO make diskfile a getter
 
 	// Reference to the content editor component
-	let content_editor: {focus: () => void} | undefined = $state.raw();
+	let content_editor: { focus: () => void } | undefined = $state.raw();
 
 	// TODO refactor, try to remove
 	$effect(() => {
@@ -68,7 +68,7 @@
 				token_count={editor_state.current_token_count}
 				placeholder={format_placeholder(diskfile.path_relative)}
 				readonly={false}
-				attrs={{class: 'height:100% border-radius:0'}}
+				attrs={{ class: 'height:100% border-radius:0' }}
 				onsave={async () => {
 					await editor_state.save_changes();
 				}}

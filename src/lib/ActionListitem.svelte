@@ -1,18 +1,18 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
+	import { slide } from 'svelte/transition';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 
-	import {icon_error} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_error } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
-	import type {Action} from './action.svelte.ts';
-	import {get_icon_for_action_method, get_icon_for_action_kind} from './action_icons.ts';
+	import type { Action } from './action.svelte.ts';
+	import { get_icon_for_action_method, get_icon_for_action_kind } from './action_icons.ts';
 	import ActionContextmenu from './ActionContextmenu.svelte';
 
 	const {
 		action,
 		selected = false,
-		onselect,
+		onselect
 	}: {
 		action: Action;
 		selected?: boolean;

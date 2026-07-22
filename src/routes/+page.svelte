@@ -1,10 +1,10 @@
 <script lang="ts">
-	import {resolve} from '$app/paths';
+	import { resolve } from '$app/paths';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	import PageFooter from './PageFooter.svelte';
 
-	import {logo_zzz} from '$lib/logos.ts';
+	import { logo_zzz } from '$lib/logos.ts';
 	import DashboardHome from '$lib/DashboardHome.svelte';
 </script>
 

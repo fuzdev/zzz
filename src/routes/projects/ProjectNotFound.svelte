@@ -1,8 +1,8 @@
 <script lang="ts">
-	import {goto} from '$app/navigation';
-	import {resolve} from '$app/paths';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 
-	import {projects_context} from './projects.svelte.ts';
+	import { projects_context } from './projects.svelte.ts';
 
 	const projects = projects_context.get();
 </script>

@@ -1,16 +1,16 @@
-import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import type {Model} from './model.svelte.ts';
-import {Turn, create_turn_from_text, create_turn_from_part} from './turn.svelte.ts';
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {ThreadJson} from './thread_types.ts';
-import {CompletionRequest, CompletionRole} from './completion_types.ts';
-import {render_messages_to_string, render_completion_messages} from './thread_helpers.ts';
-import type {PartUnion} from './part.svelte.ts';
-import {HANDLED} from './cell_helpers.ts';
-import {to_preview, estimate_token_count} from './helpers.ts';
-import {IndexedCollection} from './indexed_collection.svelte.ts';
-import type {TurnJson} from './turn_types.ts';
+import type { Model } from './model.svelte.ts';
+import { Turn, create_turn_from_text, create_turn_from_part } from './turn.svelte.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { ThreadJson } from './thread_types.ts';
+import { CompletionRequest, CompletionRole } from './completion_types.ts';
+import { render_messages_to_string, render_completion_messages } from './thread_helpers.ts';
+import type { PartUnion } from './part.svelte.ts';
+import { HANDLED } from './cell_helpers.ts';
+import { to_preview, estimate_token_count } from './helpers.ts';
+import { IndexedCollection } from './indexed_collection.svelte.ts';
+import type { TurnJson } from './turn_types.ts';
 
 // TODO add `thread.name` and lots of other things probably
 
@@ -22,7 +22,7 @@ export interface ThreadOptions extends CellOptions<typeof ThreadJson> {}
 export class Thread extends Cell<typeof ThreadJson> {
 	model_name: string = $state.raw()!;
 	readonly model: Model | undefined = $derived.by(() =>
-		this.app.models.find_by_name(this.model_name),
+		this.app.models.find_by_name(this.model_name)
 	);
 
 	readonly turns: IndexedCollection<Turn> = new IndexedCollection();
@@ -58,7 +58,7 @@ export class Thread extends Cell<typeof ThreadJson> {
 					}
 				}
 				return HANDLED;
-			},
+			}
 		};
 
 		this.init();
@@ -76,7 +76,7 @@ export class Thread extends Cell<typeof ThreadJson> {
 	 * Create and add a user turn with the given content.
 	 */
 	add_user_turn(content: string, request?: CompletionRequest): Turn {
-		const turn = create_turn_from_text(content, 'user', {thread_id: this.id, request}, this.app);
+		const turn = create_turn_from_text(content, 'user', { thread_id: this.id, request }, this.app);
 		this.add_turn(turn);
 		return turn;
 	}
@@ -88,8 +88,8 @@ export class Thread extends Cell<typeof ThreadJson> {
 		const turn = create_turn_from_text(
 			content,
 			'assistant',
-			{...json, thread_id: this.id},
-			this.app,
+			{ ...json, thread_id: this.id },
+			this.app
 		);
 		this.add_turn(turn);
 		return turn;
@@ -99,7 +99,7 @@ export class Thread extends Cell<typeof ThreadJson> {
 	 * Create and add a system turn with the given content.
 	 */
 	add_system_turn(content: string): Turn {
-		const turn = create_turn_from_text(content, 'system', {thread_id: this.id}, this.app);
+		const turn = create_turn_from_text(content, 'system', { thread_id: this.id }, this.app);
 		this.add_turn(turn);
 		return turn;
 	}
@@ -109,7 +109,7 @@ export class Thread extends Cell<typeof ThreadJson> {
 	 */
 	add_turn_from_part(part: PartUnion, role: CompletionRole): Turn {
 		const turn = create_turn_from_part(part, role, {
-			thread_id: this.id,
+			thread_id: this.id
 		});
 		this.add_turn(turn);
 		return turn;
@@ -140,7 +140,7 @@ export class Thread extends Cell<typeof ThreadJson> {
 		const provider_status = this.app.lookup_provider_status(model.provider_name);
 		if (provider_status && !provider_status.available) {
 			console.warn(
-				`[thread.send_message] provider '${model.provider_name}' unavailable, skipping send`,
+				`[thread.send_message] provider '${model.provider_name}' unavailable, skipping send`
 			);
 			return null; // No turn created - UI already shows error
 		}
@@ -154,11 +154,11 @@ export class Thread extends Cell<typeof ThreadJson> {
 			provider_name: model.provider_name,
 			model: model.name,
 			prompt: content,
-			completion_messages,
+			completion_messages
 		});
 
 		// Create assistant turn with the request info so streaming updates can find it
-		const assistant_turn = this.add_assistant_turn('', {request: completion_request});
+		const assistant_turn = this.add_assistant_turn('', { request: completion_request });
 
 		// Update the user turn with the request
 		user_turn.request = completion_request;
@@ -174,9 +174,9 @@ export class Thread extends Cell<typeof ThreadJson> {
 			await this.app.api.completion_create(
 				{
 					completion_request,
-					_meta: {progressToken: assistant_turn.id},
+					_meta: { progressToken: assistant_turn.id }
 				},
-				{signal: controller.signal},
+				{ signal: controller.signal }
 			);
 		} finally {
 			// Only clear if this is still the active controller — a concurrent

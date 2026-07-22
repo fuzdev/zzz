@@ -1,19 +1,19 @@
 <script lang="ts">
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import type { SvelteHTMLElements } from 'svelte/elements';
 
-	import {icon_provider} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_provider } from '@fuzdev/fuz_ui/icons.ts';
 
 	import ModelLink from './ModelLink.svelte';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 	import ProviderLink from './ProviderLink.svelte';
-	import type {Model} from './model.svelte.ts';
+	import type { Model } from './model.svelte.ts';
 	import ProviderLogo from './ProviderLogo.svelte';
-	import {format_gigabytes} from './format_helpers.ts';
+	import { format_gigabytes } from './format_helpers.ts';
 
 	const {
 		model,
 		omit_provider,
-		attrs,
+		attrs
 	}: {
 		model: Model;
 		omit_provider?: boolean | undefined;

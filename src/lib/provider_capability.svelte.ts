@@ -1,9 +1,9 @@
-import type {AsyncStatus} from '@fuzdev/fuz_util/async.ts';
-import type {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.ts';
+import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
+import type { JsonrpcRequestId } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 
-import type {Frontend} from './frontend.svelte.ts';
-import type {Capability} from './capabilities.svelte.ts';
-import type {ProviderName, ProviderStatus} from './provider_types.ts';
+import type { Frontend } from './frontend.svelte.ts';
+import type { Capability } from './capabilities.svelte.ts';
+import type { ProviderName, ProviderStatus } from './provider_types.ts';
 
 export interface ProviderCapabilityOptions {
 	app: Frontend;
@@ -29,16 +29,16 @@ export class ProviderCapability implements Capability<null | undefined> {
 	// body assigns them, and TS flags an eager read as use-before-init.
 	/** Latest backend status for this provider, or `null` if never checked. */
 	readonly #status: ProviderStatus | null = $derived.by(() =>
-		this.app.lookup_provider_status(this.name),
+		this.app.lookup_provider_status(this.name)
 	);
 
 	readonly status: AsyncStatus = $derived(
-		!this.#status ? 'initial' : this.#status.available ? 'success' : 'failure',
+		!this.#status ? 'initial' : this.#status.available ? 'success' : 'failure'
 	);
 	/** `null` available, `undefined` unknown — matches the `Capability` data contract. */
 	readonly data: null | undefined = $derived(this.#status?.available ? null : undefined);
 	readonly error_message: string | null = $derived(
-		this.#status && !this.#status.available ? this.#status.error : null,
+		this.#status && !this.#status.available ? this.#status.error : null
 	);
 	readonly updated: number | null = $derived(this.#status?.checked_at ?? null);
 
@@ -62,6 +62,6 @@ export class ProviderCapability implements Capability<null | undefined> {
 			console.log(`[capabilities] skipping ${this.name} check: backend unavailable`);
 			return;
 		}
-		await this.app.api.provider_load_status({provider_name: this.name});
+		await this.app.api.provider_load_status({ provider_name: this.name });
 	}
 }

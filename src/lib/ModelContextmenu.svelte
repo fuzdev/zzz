@@ -1,13 +1,13 @@
 <script lang="ts">
-	import type {ComponentProps, Snippet} from 'svelte';
+	import type { ComponentProps, Snippet } from 'svelte';
 	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 	import ContextmenuSubmenu from '@fuzdev/fuz_ui/ContextmenuSubmenu.svelte';
 	import ContextmenuLinkEntry from '@fuzdev/fuz_ui/ContextmenuLinkEntry.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 
-	import type {Model} from './model.svelte.ts';
-	import {icon_chat, icon_model} from '@fuzdev/fuz_ui/icons.ts';
+	import type { Model } from './model.svelte.ts';
+	import { icon_chat, icon_model } from '@fuzdev/fuz_ui/icons.ts';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 
 	const {

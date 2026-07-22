@@ -1,9 +1,9 @@
-import {z} from 'zod';
+import { z } from 'zod';
 
-import {ProviderName} from './provider_types.ts';
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {CellJson} from './cell_types.ts';
-import type {Provider} from './provider.svelte.ts';
+import { ProviderName } from './provider_types.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { CellJson } from './cell_types.ts';
+import type { Provider } from './provider.svelte.ts';
 
 export const ModelName = z.string().trim();
 export type ModelName = z.infer<typeof ModelName>;
@@ -30,8 +30,8 @@ export const ModelJson = CellJson.extend({
 	filesize: z.number().optional(),
 	cost_input: z.number().optional(),
 	cost_output: z.number().optional(),
-	training_cutoff: z.string().optional(),
-}).meta({cell_class_name: 'Model'});
+	training_cutoff: z.string().optional()
+}).meta({ cell_class_name: 'Model' });
 export type ModelJson = z.infer<typeof ModelJson>;
 export type ModelJsonInput = z.input<typeof ModelJson>;
 
@@ -56,11 +56,11 @@ export class Model extends Cell<typeof ModelJson> {
 	 * Lookup the provider for this model.
 	 */
 	readonly provider: Provider | undefined = $derived(
-		this.app.providers.find_by_name(this.provider_name),
+		this.app.providers.find_by_name(this.provider_name)
 	);
 
 	readonly context_window_formatted: string | null = $derived(
-		this.context_window ? (this.context_window / 1000).toFixed(0) + 'k' : null,
+		this.context_window ? (this.context_window / 1000).toFixed(0) + 'k' : null
 	);
 
 	constructor(options: ModelOptions) {

@@ -5,6 +5,7 @@ a single JSON-RPC 2.0 API over HTTP + WebSocket. AI providers are Anthropic,
 OpenAI, and Gemini (all full).
 
 **Workspace layout**:
+
 - `zzz_server/` — library (`zzz_server`) + production daemon binary (the `[[bin]]` target is named `zzzd`). `pub async fn run_app(options: RunAppOptions)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, drain). `RunAppOptions` carries: `password_hasher` (production-vs-test swap), `default_addr: SocketAddr` (bind address when `--port`/`ZZZ_PORT` don't supply one; host stays loopback, only the port is overridable), `drain_timeout` (graceful-shutdown drain bound), `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag), `disable_login_rate_limit` (test binary only), `extra_action_specs_factory` (lets the test binary inject `_testing_reset` without putting `fuz_testing` in the production dep graph), and `pre_migration_hook` (fires after pool creation, before migrations — the test binary wires `fuz_testing::reset_db_on_startup_if_env_set`). `src/main.rs` is the thin production entry — constructs `Argon2idHasher`, calls `run_app` with `force_test_actions: false, extra_action_specs_factory: None`.
 - `testing_zzz_server/` — separate test-binary package (its `[[bin]]` target is named `testing_zzzd`) wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) AND `fuz_testing::create_testing_reset_action_spec` (auth-table wipe + fresh-keeper re-seed + consumer-supplied `reset_state(ActionDb)` callback; `credential_types: [DaemonToken]` auth gate). zzz's reset closure ignores the in-tx `ActionDb` handle (its domain state is in-memory, not in PG) — it clears zzz workspaces, calls `pty_manager.kill_all()` (non-destructive — manager stays usable across tests), and wipes the optional `ZZZ_TESTING_SCRATCH_DIR`. Default port 4462 (production is 4460). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. It is zzz's test binary, spawned by the cross-process integration tests.
 - `xtask/` — dev automation (`cargo xtask <cmd>`, pure `std` + `fuz_audit`, no extra deps). `dev` loads `.env.development`, builds `zzz_server`, then runs `zzzd` (port 4461) + the Vite frontend (5173, proxying `/api`); `dev-setup` / `prod-setup` generate `.env.development` / `.env.production` from the `.example` templates; `check-release` (the dep-graph audit — sanity check #2 of the test-binary pattern) delegates its work to `fuz_audit::run_check_release_cli()`. Dispatch and usage live in xtask itself: bare `cargo xtask` / `help` / `-h` / `--help` print the full subcommand list (exit 0); an unknown subcommand prints an error + usage (exit 1). Marked `[package.metadata.fuz_audit] dev_only = true` so xtask itself is excluded from the production scan. Replaces the former Deno orchestration (`deno.json` + `scripts/*.ts`).
@@ -169,15 +170,15 @@ orientation; the spine crates are authoritative:
 
 7. **Per-action auth** — these levels are the enforcement shorthand for the
    four-axis `auth` record on each TS spec (`{account, actor, roles?,
-   credential_types?}` or `null`; see `src/lib/action_specs.ts` and the
+credential_types?}` or `null`; see `src/lib/action_specs.ts` and the
    generated `docs/reference.md`):
    - `public` — `auth: null` or `{account: 'none', actor: 'none'}`; no auth required (`ping`)
    - `authenticated` — `{account: 'required', actor: 'none'}`; valid session or bearer token required (workspace_*, session_load, etc.)
    - `keeper` — `{account: 'required', actor: 'required', roles: ['keeper'], credential_types: ['daemon_token']}`; requires `DaemonToken` credential type AND keeper role grant (`provider_update_api_key`). API tokens and session cookies cannot access keeper actions even if the account has the keeper role grant.
 
 8. **Bootstrap** — `POST /bootstrap` creates first admin account with keeper
-   + admin role grants. Reads token from `FUZ_BOOTSTRAP_TOKEN_PATH`, timing-safe
-   compare, Argon2 password hashing, all in a transaction with bootstrap_lock.
+   - admin role grants. Reads token from `FUZ_BOOTSTRAP_TOKEN_PATH`, timing-safe
+     compare, Argon2 password hashing, all in a transaction with bootstrap_lock.
 
 9. **Origin verification** — `FUZ_ALLOWED_ORIGINS` patterns checked on requests
    with an `Origin` header. Supports exact match, wildcard port
@@ -328,11 +329,12 @@ crates/zzz_server/src/
 ```
 
 Auth, HTTP / origin / proxy, realtime (WS + SSE), dispatch (`ActionRegistry`
-+ `perform_action`), and DB pool / migrations all live in the spine crates
-(`fuz_auth` / `fuz_http` / `fuz_realtime` / `fuz_actions` / `fuz_db`) —
-`zzz_server` composes them in `run_app`. `handlers/` holds only `App` state
-plus a `broadcast` shim over `App.realtime`; socket revocation is the
-spine `ConnectionRegistry`'s `SocketRevoker` (see Auth item 10).
+
+- `perform_action`), and DB pool / migrations all live in the spine crates
+  (`fuz_auth` / `fuz_http` / `fuz_realtime` / `fuz_actions` / `fuz_db`) —
+  `zzz_server` composes them in `run_app`. `handlers/` holds only `App` state
+  plus a `broadcast` shim over `App.realtime`; socket revocation is the
+  spine `ConnectionRegistry`'s `SocketRevoker` (see Auth item 10).
 
 **App + dispatch**: `App` (in `handlers/mod.rs`) holds zzz's long-lived,
 non-spine state — `workspaces` (`RwLock<HashMap>`), `db_pool`, `ScopedFs`,
@@ -468,6 +470,7 @@ from fuz_auth's routers; the admin audit-log SSE stream
 `App.realtime`.
 
 **AI providers** (Anthropic, OpenAI, and Gemini all complete):
+
 - [x] Provider system: enum-dispatched `Provider` with `ProviderManager`, `ProviderStatus`, `CompletionOptions`
 - [x] Anthropic provider: full implementation with `reqwest` HTTP client, SSE streaming, message format conversion
 - [x] `provider_load_status` handler (all 3 providers report status)
@@ -478,9 +481,11 @@ from fuz_auth's routers; the admin audit-log SSE stream
 - [x] Gemini provider: full completion implementation (Generative Language API, non-streaming + SSE streaming)
 
 **Other remaining work**:
+
 1. Codegen from Zod specs (action input/output types)
+
 - [x] Trusted-proxy client-IP resolution (XFF + CIDR + strict-IP
-  validation), Origin allowlist (Origin-only, no Referer fallback), and
-  login-username canonicalization — all now provided by the spine
-  (`fuz_http` proxy/origin + `fuz_auth`); zzz wires them via config
-  (`ZZZ_TRUSTED_PROXIES`, `FUZ_ALLOWED_ORIGINS`).
+      validation), Origin allowlist (Origin-only, no Referer fallback), and
+      login-username canonicalization — all now provided by the spine
+      (`fuz_http` proxy/origin + `fuz_auth`); zzz wires them via config
+      (`ZZZ_TRUSTED_PROXIES`, `FUZ_ALLOWED_ORIGINS`).

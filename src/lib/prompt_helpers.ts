@@ -1,4 +1,4 @@
-import type {PartUnion} from './part.svelte.ts';
+import type { PartUnion } from './part.svelte.ts';
 
 /**
  * Formats a collection of parts into a prompt string,

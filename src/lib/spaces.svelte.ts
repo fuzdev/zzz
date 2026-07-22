@@ -1,20 +1,20 @@
-import {z} from 'zod';
-import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+import { z } from 'zod';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {Space, SpaceJson, type SpaceJsonInput} from './space.svelte.ts';
-import {HANDLED} from './cell_helpers.ts';
-import {IndexedCollection} from './indexed_collection.svelte.ts';
-import {create_single_index} from './indexed_collection_helpers.svelte.ts';
-import {get_unique_name} from './helpers.ts';
-import {CellJson} from './cell_types.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { Space, SpaceJson, type SpaceJsonInput } from './space.svelte.ts';
+import { HANDLED } from './cell_helpers.ts';
+import { IndexedCollection } from './indexed_collection.svelte.ts';
+import { create_single_index } from './indexed_collection_helpers.svelte.ts';
+import { get_unique_name } from './helpers.ts';
+import { CellJson } from './cell_types.ts';
 
 export const SCRATCHPAD_NAME = 'scratchpad';
 
 export const SpacesJson = CellJson.extend({
 	items: z.array(SpaceJson).default(() => []),
-	active_id: z.string().nullable().default(null),
-}).meta({cell_class_name: 'Spaces'});
+	active_id: z.string().nullable().default(null)
+}).meta({ cell_class_name: 'Spaces' });
 export type SpacesJson = z.infer<typeof SpacesJson>;
 export type SpacesJsonInput = z.input<typeof SpacesJson>;
 
@@ -26,19 +26,19 @@ export class Spaces extends Cell<typeof SpacesJson> {
 			create_single_index({
 				key: 'by_name',
 				extractor: (space) => space.name,
-				query_schema: z.string(),
-			}),
-		],
+				query_schema: z.string()
+			})
+		]
 	});
 
 	active_id: Uuid | null = $state.raw()!;
 
 	readonly active: Space | undefined = $derived(
-		this.active_id ? this.items.by_id.get(this.active_id) : undefined,
+		this.active_id ? this.items.by_id.get(this.active_id) : undefined
 	);
 
 	readonly scratchpad: Space | undefined = $derived(
-		this.items.single_index('by_name').get(SCRATCHPAD_NAME),
+		this.items.single_index('by_name').get(SCRATCHPAD_NAME)
 	);
 
 	constructor(options: SpacesOptions) {
@@ -53,7 +53,7 @@ export class Spaces extends Cell<typeof SpacesJson> {
 					}
 				}
 				return HANDLED;
-			},
+			}
 		};
 
 		this.init();
@@ -64,15 +64,15 @@ export class Spaces extends Cell<typeof SpacesJson> {
 	ensure_scratchpad(): Space {
 		let scratchpad = this.scratchpad;
 		if (!scratchpad) {
-			scratchpad = this.add({name: SCRATCHPAD_NAME});
+			scratchpad = this.add({ name: SCRATCHPAD_NAME });
 			this.active_id = scratchpad.id;
 		}
 		return scratchpad;
 	}
 
 	add(json?: SpaceJsonInput): Space {
-		const j = !json?.name ? {...json, name: this.generate_unique_name('new space')} : json;
-		const space = new Space({app: this.app, json: j});
+		const j = !json?.name ? { ...json, name: this.generate_unique_name('new space') } : json;
+		const space = new Space({ app: this.app, json: j });
 		this.items.add(space);
 		return space;
 	}

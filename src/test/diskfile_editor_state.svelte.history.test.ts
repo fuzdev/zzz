@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
-import {test, beforeEach, describe, assert} from 'vitest';
+import { test, beforeEach, describe, assert } from 'vitest';
 
-import {DiskfileEditorState} from '$lib/diskfile_editor_state.svelte.ts';
-import {DiskfilePath, SerializableDisknode} from '$lib/diskfile_types.ts';
-import {Frontend} from '$lib/frontend.svelte.ts';
-import {Diskfile} from '$lib/diskfile.svelte.ts';
+import { DiskfileEditorState } from '$lib/diskfile_editor_state.svelte.ts';
+import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
+import { Frontend } from '$lib/frontend.svelte.ts';
+import { Diskfile } from '$lib/diskfile.svelte.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Constants for testing
 const TEST_PATH = DiskfilePath.parse('/path/to/test.txt');
@@ -27,13 +27,13 @@ beforeEach(() => {
 	test_diskfile = app.diskfiles.add({
 		path: TEST_PATH,
 		source_dir: TEST_DIR,
-		content: TEST_CONTENT,
+		content: TEST_CONTENT
 	});
 
 	// Create the editor state with real components
 	editor_state = new DiskfileEditorState({
 		app,
-		diskfile: test_diskfile,
+		diskfile: test_diskfile
 	});
 });
 
@@ -53,7 +53,7 @@ describe('unsaved edit creation', () => {
 		assert.include(new_entry, {
 			content: new_content,
 			is_unsaved_edit: true,
-			label: 'Unsaved edit',
+			label: 'Unsaved edit'
 		});
 
 		// Selection should match the unsaved entry
@@ -81,7 +81,7 @@ describe('unsaved edit creation', () => {
 
 		assert.include(updated_entry, {
 			content: 'Third edit',
-			is_unsaved_edit: true,
+			is_unsaved_edit: true
 		});
 	});
 
@@ -117,7 +117,7 @@ describe('unsaved edit creation', () => {
 	test('editing to match existing unsaved edit selects that entry', () => {
 		// Create an unsaved entry
 		const history = app.get_diskfile_history(TEST_PATH)!;
-		const unsaved_entry = history.add_entry('Unsaved content', {is_unsaved_edit: true});
+		const unsaved_entry = history.add_entry('Unsaved content', { is_unsaved_edit: true });
 
 		// Select a different entry
 		const other_entry = history.add_entry('Other content');
@@ -157,7 +157,7 @@ describe('history navigation', () => {
 	test('set_content_from_history with unsaved edit sets unsaved_edit_entry_id', () => {
 		// Create unsaved entry
 		const history = app.get_diskfile_history(TEST_PATH)!;
-		const unsaved_entry = history.add_entry('Unsaved content', {is_unsaved_edit: true});
+		const unsaved_entry = history.add_entry('Unsaved content', { is_unsaved_edit: true });
 
 		// Select unsaved entry
 		editor_state.set_content_from_history(unsaved_entry.id);
@@ -222,7 +222,7 @@ describe('saving history changes', () => {
 		const history = app.get_diskfile_history(TEST_PATH)!;
 		assert.include(history.entries[0]!, {
 			content: 'Content to save',
-			is_unsaved_edit: false,
+			is_unsaved_edit: false
 		});
 
 		// Selection should point to the new entry
@@ -283,12 +283,12 @@ describe('managing unsaved edits', () => {
 
 		assert.include(unsaved1, {
 			content: 'Modified 1',
-			is_unsaved_edit: true,
+			is_unsaved_edit: true
 		});
 
 		assert.include(unsaved2, {
 			content: 'Modified 2',
-			is_unsaved_edit: true,
+			is_unsaved_edit: true
 		});
 	});
 
@@ -300,7 +300,7 @@ describe('managing unsaved edits', () => {
 		editor_state.current_content = 'Unsaved 1';
 
 		// Add another directly to history
-		history.add_entry('Unsaved 2', {is_unsaved_edit: true});
+		history.add_entry('Unsaved 2', { is_unsaved_edit: true });
 
 		// Clear unsaved edits
 		editor_state.clear_unsaved_edits();
@@ -345,7 +345,7 @@ describe('history clearing', () => {
 		assert.include(history.entries[0], {
 			id: newest.id,
 			content: 'Newest entry',
-			is_original_state: true,
+			is_original_state: true
 		});
 
 		// Selection should be updated
@@ -363,12 +363,12 @@ describe('history clearing', () => {
 		// Add two unsaved entries
 		const unsaved_entry1 = history.add_entry('Unsaved edit 1', {
 			is_unsaved_edit: true,
-			label: 'Unsaved 1',
+			label: 'Unsaved 1'
 		});
 
 		const unsaved_entry2 = history.add_entry('Unsaved edit 2', {
 			is_unsaved_edit: true,
-			label: 'Unsaved 2',
+			label: 'Unsaved 2'
 		});
 
 		// Clear history
@@ -378,20 +378,20 @@ describe('history clearing', () => {
 		assert.include(history.find_entry_by_id(unsaved_entry1.id), {
 			content: 'Unsaved edit 1',
 			is_unsaved_edit: true,
-			label: 'Unsaved 1',
+			label: 'Unsaved 1'
 		});
 
 		assert.include(history.find_entry_by_id(unsaved_entry2.id), {
 			content: 'Unsaved edit 2',
 			is_unsaved_edit: true,
-			label: 'Unsaved 2',
+			label: 'Unsaved 2'
 		});
 
 		// Verify the newest non-unsaved entry was also preserved
 		const newest_after_clear = history.entries.find((entry) => !entry.is_unsaved_edit);
 		assert.include(newest_after_clear, {
 			content: 'Newest entry',
-			is_original_state: true,
+			is_original_state: true
 		});
 
 		// Verify the original entry was removed (since it's not the newest saved entry)

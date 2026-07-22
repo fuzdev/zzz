@@ -1,14 +1,14 @@
-import {z} from 'zod';
+import { z } from 'zod';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {CellJson} from './cell_types.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { CellJson } from './cell_types.ts';
 
 export const TerminalPresetJson = CellJson.extend({
 	name: z.string().default(''),
 	command: z.string().default(''),
 	args: z.array(z.string()).default(() => []),
-	cwd: z.string().optional(),
-}).meta({cell_class_name: 'TerminalPreset'});
+	cwd: z.string().optional()
+}).meta({ cell_class_name: 'TerminalPreset' });
 export type TerminalPresetJson = z.infer<typeof TerminalPresetJson>;
 export type TerminalPresetJsonInput = z.input<typeof TerminalPresetJson>;
 

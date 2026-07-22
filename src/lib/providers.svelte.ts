@@ -1,13 +1,13 @@
-import {z} from 'zod';
+import { z } from 'zod';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {Provider, ProviderJson} from './provider.svelte.ts';
-import {CellJson} from './cell_types.ts';
-import type {ProviderName} from './provider_types.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { Provider, ProviderJson } from './provider.svelte.ts';
+import { CellJson } from './cell_types.ts';
+import type { ProviderName } from './provider_types.ts';
 
 export const ProvidersJson = CellJson.extend({
-	items: z.array(ProviderJson).default(() => []),
-}).meta({cell_class_name: 'Providers'});
+	items: z.array(ProviderJson).default(() => [])
+}).meta({ cell_class_name: 'Providers' });
 export type ProvidersJson = z.infer<typeof ProvidersJson>;
 export type ProvidersJsonInput = z.input<typeof ProvidersJson>;
 

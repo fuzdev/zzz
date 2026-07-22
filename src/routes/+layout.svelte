@@ -3,35 +3,35 @@
 	import '@fuzdev/fuz_code/theme.css';
 	import './style.css';
 
-	import {untrack} from 'svelte';
-	import {contextmenu_attachment} from '@fuzdev/fuz_ui/contextmenu_state.svelte.ts';
-	import {icon_refresh, icon_settings} from '@fuzdev/fuz_ui/icons.ts';
-	import {Library} from '@fuzdev/fuz_ui/library.svelte.ts';
-	import {BROWSER} from 'esm-env';
-	import {page} from '$app/state';
-	import {onNavigate} from '$app/navigation';
-	import {resolve} from '$app/paths';
-	import {AuthState, auth_state_context} from '@fuzdev/fuz_app/ui/auth_state.svelte.ts';
+	import { untrack } from 'svelte';
+	import { contextmenu_attachment } from '@fuzdev/fuz_ui/contextmenu_state.svelte.ts';
+	import { icon_refresh, icon_settings } from '@fuzdev/fuz_ui/icons.ts';
+	import { Library } from '@fuzdev/fuz_ui/library.svelte.ts';
+	import { BROWSER } from 'esm-env';
+	import { page } from '$app/state';
+	import { onNavigate } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { AuthState, auth_state_context } from '@fuzdev/fuz_app/ui/auth_state.svelte.ts';
 	import LoginForm from '@fuzdev/fuz_app/ui/LoginForm.svelte';
 	import BootstrapForm from '@fuzdev/fuz_app/ui/BootstrapForm.svelte';
 	import Alert from '@fuzdev/fuz_ui/Alert.svelte';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 
-	import {parse_url_param_uuid} from '$lib/url_params_helpers.ts';
-	import {App} from '$lib/app.svelte.ts';
+	import { parse_url_param_uuid } from '$lib/url_params_helpers.ts';
+	import { App } from '$lib/app.svelte.ts';
 	import FrontendRoot from '$lib/FrontendRoot.svelte';
-	import {library_context} from '$lib/library.ts';
-	import {SiteState, site_context} from '@fuzdev/fuz_ui/site.svelte.ts';
-	import {logo_zzz} from '$lib/logos.ts';
-	import {library_json_from_modules} from '@fuzdev/fuz_util/library_json.ts';
-	import {modules} from 'virtual:svelte-docinfo';
+	import { library_context } from '$lib/library.ts';
+	import { SiteState, site_context } from '@fuzdev/fuz_ui/site.svelte.ts';
+	import { logo_zzz } from '$lib/logos.ts';
+	import { library_json_from_modules } from '@fuzdev/fuz_util/library_json.ts';
+	import { modules } from 'virtual:svelte-docinfo';
 	import pkg_json from 'virtual:pkg.json';
-	import {ProviderJson} from '$lib/provider.svelte.ts';
+	import { ProviderJson } from '$lib/provider.svelte.ts';
 	import create_zzz_config from '$lib/config.ts';
-	import {ModelJson} from '$lib/model.svelte.ts';
-	import {DOCS_PATH} from '@fuzdev/fuz_ui/docs_helpers.svelte.ts';
+	import { ModelJson } from '$lib/model.svelte.ts';
+	import { DOCS_PATH } from '@fuzdev/fuz_ui/docs_helpers.svelte.ts';
 
-	const {children, params} = $props();
+	const { children, params } = $props();
 
 	const library_json = library_json_from_modules(pkg_json, modules);
 
@@ -59,7 +59,7 @@
 
 	// TODO should load granularly when needed (/docs, /about), but currently the capabilities page uses the package json data, how better to get that? generate a more minimal metadata file?
 	library_context.set(new Library(library_json));
-	site_context.set(new SiteState({icon: logo_zzz, pkg_json}));
+	site_context.set(new SiteState({ icon: logo_zzz, pkg_json }));
 
 	// Create the frontend's App only after auth is verified
 	let app: App | undefined = $state.raw();
@@ -96,7 +96,7 @@
 	// TODO refactor this, doesn't belong here - see the comment at `to_nav_link_href`
 	onNavigate(() => {
 		if (!app) return;
-		const {pathname} = page.url;
+		const { pathname } = page.url;
 		if (pathname === resolve('/chats')) {
 			app.chats.selected_id_last_non_null = null;
 		} else if (pathname === resolve('/prompts')) {
@@ -117,9 +117,9 @@
 				content: 'settings',
 				icon: icon_settings,
 				run: () => {
-					app?.api.toggle_main_menu({show: true});
-				},
-			},
+					app?.api.toggle_main_menu({ show: true });
+				}
+			}
 		},
 		{
 			snippet: 'text',
@@ -128,9 +128,9 @@
 				icon: icon_refresh,
 				run: () => {
 					location.reload();
-				},
-			},
-		},
+				}
+			}
+		}
 	])}
 />
 

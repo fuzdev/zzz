@@ -1,4 +1,4 @@
-import {CONTENT_PREVIEW_LENGTH} from './constants.ts';
+import { CONTENT_PREVIEW_LENGTH } from './constants.ts';
 
 // TODO import from fuz_css (and respect prefers-reduced-motion? maybe optionally)
 export const DURATION_LG = 1000;
@@ -33,10 +33,10 @@ export const create_client_id = (): string => Math.random().toString(36).substri
 
 export const get_unique_name = (
 	name: string,
-	existing_names: {has: (name: string) => boolean} | {includes: (name: string) => boolean},
+	existing_names: { has: (name: string) => boolean } | { includes: (name: string) => boolean }
 ): string => {
 	const check = (existing_names as any)['has' in existing_names ? 'has' : 'includes'].bind(
-		existing_names,
+		existing_names
 	);
 	let result = name;
 	let i = 2;
@@ -55,6 +55,6 @@ export const defined = <T>(value: T | undefined): T => {
 
 export const to_preview = (
 	content: string | null | undefined,
-	max_length: number = CONTENT_PREVIEW_LENGTH,
+	max_length: number = CONTENT_PREVIEW_LENGTH
 ): string =>
 	content ? (content.length > max_length ? content.substring(0, max_length) + '...' : content) : '';

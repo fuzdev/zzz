@@ -1,22 +1,22 @@
 <script lang="ts">
-	import {untrack} from 'svelte';
-	import {slide} from 'svelte/transition';
+	import { untrack } from 'svelte';
+	import { slide } from 'svelte/transition';
 
-	import {DiskfilePart} from './part.svelte.ts';
-	import {frontend_context} from './frontend.svelte.ts';
+	import { DiskfilePart } from './part.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 	import ContentEditor from './ContentEditor.svelte';
 	import DiskfileActions from './DiskfileActions.svelte';
 	import DiskfileMetrics from './DiskfileMetrics.svelte';
-	import {DiskfileEditorState} from './diskfile_editor_state.svelte.ts';
+	import { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
-	import {icon_file} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_file } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {format_placeholder} from './helpers.ts';
+	import { format_placeholder } from './helpers.ts';
 
 	const {
 		diskfile_part,
-		show_actions = true,
+		show_actions = true
 	}: {
 		diskfile_part: DiskfilePart;
 		show_actions?: boolean | undefined;
@@ -24,7 +24,7 @@
 
 	const app = frontend_context.get();
 
-	const {diskfile} = $derived(diskfile_part);
+	const { diskfile } = $derived(diskfile_part);
 
 	// Create editor state reference - will be initialized in the effect
 	// TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
@@ -32,7 +32,7 @@
 	let editor_state: DiskfileEditorState | undefined = $state.raw();
 
 	// Keep track of the content editor for focusing
-	let content_editor: {focus: () => void} | undefined = $state.raw();
+	let content_editor: { focus: () => void } | undefined = $state.raw();
 
 	let show_file_picker = $state.raw(false);
 
@@ -52,7 +52,7 @@
 		untrack(() => {
 			// Create new editor state if it doesn't exist
 			if (!editor_state) {
-				editor_state = new DiskfileEditorState({app, diskfile}); // TODO @many refactor, maybe move a collection on `app.diskfiles`?
+				editor_state = new DiskfileEditorState({ app, diskfile }); // TODO @many refactor, maybe move a collection on `app.diskfiles`?
 				diskfile_part.link_editor_state(editor_state); // TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
 				return;
 			}
@@ -144,7 +144,7 @@
 		content={diskfile_part.content || ''}
 		readonly
 		placeholder="[no file]"
-		attrs={{disabled: true}}
+		attrs={{ disabled: true }}
 	/>
 {/if}
 

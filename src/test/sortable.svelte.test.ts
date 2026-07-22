@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 
-import {test, describe, beforeEach, assert} from 'vitest';
-import {z} from 'zod';
-import {create_uuid, UuidWithDefault, type Uuid} from '@fuzdev/fuz_util/id.ts';
-import {DatetimeNow} from '@fuzdev/fuz_util/datetime.ts';
+import { test, describe, beforeEach, assert } from 'vitest';
+import { z } from 'zod';
+import { create_uuid, UuidWithDefault, type Uuid } from '@fuzdev/fuz_util/id.ts';
+import { DatetimeNow } from '@fuzdev/fuz_util/datetime.ts';
 
-import {Sortable, type Sorter, sort_by_text, sort_by_numeric} from '$lib/sortable.svelte.ts';
-import {Cell} from '$lib/cell.svelte.ts';
-import {Frontend} from '$lib/frontend.svelte.ts';
+import { Sortable, type Sorter, sort_by_text, sort_by_numeric } from '$lib/sortable.svelte.ts';
+import { Cell } from '$lib/cell.svelte.ts';
+import { Frontend } from '$lib/frontend.svelte.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Create a schema for our test cell
 const TestCellSchema = z.object({
@@ -17,7 +17,7 @@ const TestCellSchema = z.object({
 	created: DatetimeNow,
 	updated: DatetimeNow,
 	name: z.string(),
-	value: z.number(),
+	value: z.number()
 });
 
 // Real cell class for testing - extends the Cell base class
@@ -31,8 +31,8 @@ class TestCell extends Cell<typeof TestCellSchema> {
 			json: {
 				id,
 				name,
-				value,
-			},
+				value
+			}
 		});
 
 		// Allow test to override the monotonic cid for testing sorting behavior
@@ -63,14 +63,14 @@ describe('Sortable', () => {
 			new TestCell(app, id3, 'Banana', 10, 30),
 			new TestCell(app, id1, 'Apple', 5, 10),
 			new TestCell(app, id2, 'Cherry', 15, 20),
-			new TestCell(app, id4, 'Apple', 20, 40), // Same name as item with id1
+			new TestCell(app, id4, 'Apple', 20, 40) // Same name as item with id1
 		];
 
 		sorters = [
 			sort_by_text('name', 'Name', 'name'),
 			sort_by_text('name_desc', 'Name (desc)', 'name', 'desc'),
 			sort_by_numeric('value', 'Value', 'value'),
-			sort_by_numeric('value_desc', 'Value (desc)', 'value', 'desc'),
+			sort_by_numeric('value_desc', 'Value (desc)', 'value', 'desc')
 		];
 	});
 
@@ -78,7 +78,7 @@ describe('Sortable', () => {
 		test('initializes with default values', () => {
 			const sortable = new Sortable(
 				() => items,
-				() => sorters,
+				() => sorters
 			);
 
 			const first_sorter = sorters[0];
@@ -94,7 +94,7 @@ describe('Sortable', () => {
 			const sortable = new Sortable(
 				() => items,
 				() => sorters,
-				() => 'value',
+				() => 'value'
 			);
 
 			const sorter_at_2 = sorters[2];
@@ -108,7 +108,7 @@ describe('Sortable', () => {
 			const sortable = new Sortable(
 				() => items,
 				() => sorters,
-				() => 'invalid_key',
+				() => 'invalid_key'
 			);
 
 			const first_sorter = sorters[0];
@@ -120,7 +120,7 @@ describe('Sortable', () => {
 		test('handles empty sorters array', () => {
 			const sortable = new Sortable(
 				() => items,
-				() => [],
+				() => []
 			);
 
 			assert.strictEqual(sortable.active_key, '');
@@ -134,7 +134,7 @@ describe('Sortable', () => {
 			let current_sorters = $state([...sorters]);
 			const sortable = new Sortable(
 				() => items,
-				() => current_sorters,
+				() => current_sorters
 			);
 
 			const first_sorter = sorters[0];
@@ -156,7 +156,7 @@ describe('Sortable', () => {
 			let current_sorters = [...sorters];
 			const sortable = new Sortable(
 				() => items,
-				() => current_sorters,
+				() => current_sorters
 			);
 
 			const sorter_at_1 = sorters[1];
@@ -181,7 +181,7 @@ describe('Sortable', () => {
 			assert.isDefined(sorter_0);
 			const sortable = new Sortable(
 				() => items,
-				() => [sorter_0],
+				() => [sorter_0]
 			);
 			const sorted = sortable.sorted_items;
 
@@ -209,7 +209,7 @@ describe('Sortable', () => {
 			assert.isDefined(sorter_1);
 			const sortable = new Sortable(
 				() => items,
-				() => [sorter_1],
+				() => [sorter_1]
 			);
 			const sorted = sortable.sorted_items;
 
@@ -239,7 +239,7 @@ describe('Sortable', () => {
 			assert.isDefined(sorter_2);
 			const sortable = new Sortable(
 				() => items,
-				() => [sorter_2],
+				() => [sorter_2]
 			);
 			const sorted = sortable.sorted_items;
 
@@ -263,7 +263,7 @@ describe('Sortable', () => {
 			assert.isDefined(sorter_3);
 			const sortable = new Sortable(
 				() => items,
-				() => [sorter_3],
+				() => [sorter_3]
 			);
 			const sorted = sortable.sorted_items;
 
@@ -287,13 +287,13 @@ describe('Sortable', () => {
 			const equal_items = [
 				new TestCell(app, create_uuid(), 'Item3', 10, 300),
 				new TestCell(app, create_uuid(), 'Item1', 10, 100),
-				new TestCell(app, create_uuid(), 'Item2', 10, 200),
+				new TestCell(app, create_uuid(), 'Item2', 10, 200)
 			];
 
 			const equal_sorter = sort_by_numeric<TestCell>('value', 'Value', 'value');
 			const sortable = new Sortable(
 				() => equal_items,
-				() => [equal_sorter],
+				() => [equal_sorter]
 			);
 			const sorted = sortable.sorted_items;
 
@@ -317,7 +317,7 @@ describe('Sortable', () => {
 			let current_items = $state([...items]);
 			const sortable = new Sortable(
 				() => current_items,
-				() => sorters,
+				() => sorters
 			);
 
 			// Start with 4 items
@@ -337,7 +337,7 @@ describe('Sortable', () => {
 		test('updates when active_key changes', () => {
 			const sortable = new Sortable(
 				() => items,
-				() => sorters,
+				() => sorters
 			);
 
 			const first_item = sortable.sorted_items[0];

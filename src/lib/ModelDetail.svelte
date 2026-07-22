@@ -1,21 +1,21 @@
 <script lang="ts">
 	// @slop Claude Sonnet 3.7
 
-	import {resolve} from '$app/paths';
-	import {page} from '$app/state';
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import type { SvelteHTMLElements } from 'svelte/elements';
 
 	import ModelLink from './ModelLink.svelte';
 	import ProviderLink from './ProviderLink.svelte';
-	import type {Model} from './model.svelte.ts';
-	import {icon_add, icon_error, icon_model} from '@fuzdev/fuz_ui/icons.ts';
+	import type { Model } from './model.svelte.ts';
+	import { icon_add, icon_error, icon_model } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {frontend_context} from './frontend.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 
 	const {
 		model,
-		attrs,
+		attrs
 	}: {
 		model: Model;
 		attrs?: SvelteHTMLElements['span'] | undefined;
@@ -30,7 +30,7 @@
 	// TODO add custom models/providers, show in the UI when they're in a bad state
 </script>
 
-<ModelContextmenu tag="div" attrs={{class: 'panel p_lg', ...attrs}} {model}>
+<ModelContextmenu tag="div" attrs={{ class: 'panel p_lg', ...attrs }} {model}>
 	<section class="row mb_xl3">
 		<div class="icon-container">
 			<Svg data={icon_model} size="var(--icon_size_xl)" />

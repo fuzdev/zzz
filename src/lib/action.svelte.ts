@@ -1,21 +1,21 @@
 // @slop Claude Opus 4
 
-import {z} from 'zod';
-import {ActionKind, type ActionSpecUnion} from '@fuzdev/fuz_app/actions/action_spec.ts';
+import { z } from 'zod';
+import { ActionKind, type ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {ActionMethod} from './action_metatypes.ts';
-import {ActionSpecs} from './action_collections.ts';
-import {CellJson} from './cell_types.ts';
-import {ActionEventData} from '@fuzdev/fuz_app/actions/action_event_data.ts';
-import type {ActionEvent} from '@fuzdev/fuz_app/actions/action_event.ts';
-import {is_action_complete} from '@fuzdev/fuz_app/actions/action_event_helpers.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { ActionMethod } from './action_metatypes.ts';
+import { ActionSpecs } from './action_collections.ts';
+import { CellJson } from './cell_types.ts';
+import { ActionEventData } from '@fuzdev/fuz_app/actions/action_event_data.ts';
+import type { ActionEvent } from '@fuzdev/fuz_app/actions/action_event.ts';
+import { is_action_complete } from '@fuzdev/fuz_app/actions/action_event_helpers.ts';
 
 // TODO this isnt in action_types.ts because of circular dependencies, idk what pattern is best yet
 export const ActionJson = CellJson.extend({
 	method: ActionMethod,
-	action_event_data: ActionEventData.optional(),
-}).meta({cell_class_name: 'Action'});
+	action_event_data: ActionEventData.optional()
+}).meta({ cell_class_name: 'Action' });
 export type ActionJson = z.infer<typeof ActionJson>;
 export type ActionJsonInput = z.input<typeof ActionJson>;
 
@@ -65,7 +65,7 @@ export class Action extends Cell<typeof ActionJson> {
 			return false; // no data yet means not successful
 		}
 
-		const {step, error} = this.action_event_data;
+		const { step, error } = this.action_event_data;
 
 		// Action must be complete, step must be 'handled', and there must be no error
 		return is_action_complete(this.action_event_data) && step === 'handled' && !error;

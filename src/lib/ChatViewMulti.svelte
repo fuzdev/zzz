@@ -1,23 +1,23 @@
 <script lang="ts">
 	import PendingButton from '@fuzdev/fuz_ui/PendingButton.svelte';
-	import {slide} from 'svelte/transition';
+	import { slide } from 'svelte/transition';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import {Chat} from './chat.svelte.ts';
+	import { Chat } from './chat.svelte.ts';
 	import ChatThread from './ChatThread.svelte';
-	import {icon_add, icon_remove, icon_send} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_add, icon_remove, icon_send } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {format_placeholder} from './helpers.ts';
+	import { format_placeholder } from './helpers.ts';
 	import ContentEditor from './ContentEditor.svelte';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';
 
 	const {
-		chat,
+		chat
 	}: {
 		chat: Chat;
 	} = $props();
 
-	let content_input: {focus: () => void} | undefined;
+	let content_input: { focus: () => void } | undefined;
 	let pending = $state.raw(false); // TODO refactor request state
 
 	const send_to_all = async () => {
@@ -82,8 +82,8 @@
 					<ChatThread
 						{thread}
 						onsend={(input) => chat.send_to_thread(thread.id, input)}
-						turns_attrs={{class: 'max-height-sm'}}
-						attrs={{class: 'p_md'}}
+						turns_attrs={{ class: 'max-height-sm' }}
+						attrs={{ class: 'p_md' }}
 					/>
 				</li>
 			{/each}

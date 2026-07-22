@@ -15,17 +15,17 @@ export const completion_create_action_spec = {
 	method: 'completion_create',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: {account: 'required', actor: 'none'},
+	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: z.strictObject({
 		completion_request: CompletionRequest,
-		_meta: z.looseObject({progressToken: Uuid.optional()}).optional(),
+		_meta: z.looseObject({ progressToken: Uuid.optional() }).optional()
 	}),
 	output: z.strictObject({
 		completion_response: CompletionResponse,
-		_meta: z.looseObject({progressToken: Uuid.optional()}).optional(),
+		_meta: z.looseObject({ progressToken: Uuid.optional() }).optional()
 	}),
-	async: true,
+	async: true
 } satisfies ActionSpecUnion;
 ```
 
@@ -87,10 +87,10 @@ Frontend and backend register handlers per action per phase:
 // Handlers are built by a factory that closes over the `Frontend` instance:
 export const create_frontend_action_handlers = (frontend: Frontend): FrontendActionHandlers => ({
 	completion_create: {
-		send_request: ({data: {input}}) => {
+		send_request: ({ data: { input } }) => {
 			console.log('sending prompt:', input.completion_request.prompt);
 		},
-		receive_response: ({data: {input, output}}) => {
+		receive_response: ({ data: { input, output } }) => {
 			const progress_token = input._meta?.progressToken;
 			if (progress_token) {
 				const turn = frontend.cell_registry.all.get(progress_token);
@@ -100,10 +100,10 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 				}
 			}
 		},
-		receive_error: ({data: {error}}) => {
+		receive_error: ({ data: { error } }) => {
 			console.error('completion failed:', error);
-		},
-	},
+		}
+	}
 });
 
 // The matching backend handler lives in
@@ -211,8 +211,8 @@ export const ChatJson = CellJson.extend({
 	thread_ids: z.array(Uuid).default(() => []),
 	main_input: z.string().default(''),
 	view_mode: z.enum(['simple', 'multi']).default('simple'),
-	selected_thread_id: Uuid.nullable().default(null),
-}).meta({cell_class_name: 'Chat'});
+	selected_thread_id: Uuid.nullable().default(null)
+}).meta({ cell_class_name: 'Chat' });
 
 // 2. Class: $state.raw by default, $state only for in-place-mutated arrays
 export class Chat extends Cell<typeof ChatJson> {
@@ -276,7 +276,7 @@ export const cell_classes = {
 	Chats,
 	Thread,
 	Threads,
-	Turn /* ... 31 total */,
+	Turn /* ... 31 total */
 } satisfies Record<string, typeof Cell<any>>;
 
 // frontend.svelte.ts — auto-registers all classes
@@ -335,7 +335,7 @@ class Turn extends Cell<typeof TurnJson> {
 			this.is_content_loaded &&
 			this.is_content_empty &&
 			!this.response &&
-			!this.error_message,
+			!this.error_message
 	);
 }
 ```
@@ -495,10 +495,10 @@ interface IndexDefinition<T extends IndexedItem, TResult = any, TQuery = any> {
 // Create with indexes
 const items = new IndexedCollection<Model>({
 	indexes: [
-		create_single_index({key: 'name', extractor: (m) => m.name}),
-		create_multi_index({key: 'provider_name', extractor: (m) => m.provider_name}),
-		create_derived_index({key: 'ordered_by_name', sort: (a, b) => a.name.localeCompare(b.name)}),
-	],
+		create_single_index({ key: 'name', extractor: (m) => m.name }),
+		create_multi_index({ key: 'provider_name', extractor: (m) => m.provider_name }),
+		create_derived_index({ key: 'ordered_by_name', sort: (a, b) => a.name.localeCompare(b.name) })
+	]
 });
 
 // Query
@@ -537,7 +537,7 @@ The frontend file pipeline is five Cells plus a per-file editor-session class:
   client-side identity, `path` is the disk identity used for backend
   correlation
 - `DiskfilesEditor` → `DiskfileTabs` → `DiskfileTab` — VS-Code-style tabs:
-  single-click opens a reusable *preview* tab, editing or an explicit open
+  single-click opens a reusable _preview_ tab, editing or an explicit open
   promotes it to permanent; tab order, recent-tab history, and
   reopen-closed-tab state live on `DiskfileTabs`
 - `DiskfileHistory` — per-path edit history (disk changes, unsaved edits,

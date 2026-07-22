@@ -1,10 +1,10 @@
 <script lang="ts">
-	import {resolve} from '$app/paths';
-	import type {Repo} from './repo.svelte.ts';
+	import { resolve } from '$app/paths';
+	import type { Repo } from './repo.svelte.ts';
 
 	const {
 		repo,
-		project_id,
+		project_id
 	}: {
 		repo: Repo;
 		project_id: string;

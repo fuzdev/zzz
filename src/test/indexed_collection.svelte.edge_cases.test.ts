@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 
-import {test, describe, vi, assert} from 'vitest';
-import {z} from 'zod';
-import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.ts';
+import { test, describe, vi, assert } from 'vitest';
+import { z } from 'zod';
+import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {IndexedCollection} from '$lib/indexed_collection.svelte.ts';
+import { IndexedCollection } from '$lib/indexed_collection.svelte.ts';
 import {
 	create_single_index,
 	create_multi_index,
 	create_derived_index,
-	create_dynamic_index,
+	create_dynamic_index
 } from '$lib/indexed_collection_helpers.svelte.ts';
 
 // Mock item type that implements IndexedItem
@@ -26,13 +26,13 @@ const create_test_item = (
 	string_a: string,
 	number_a: number | null = 0,
 	array_a: Array<string> = [],
-	boolean_a = true,
+	boolean_a = true
 ): TestItem => ({
 	id: create_uuid(),
 	string_a,
 	number_a,
 	array_a,
-	boolean_a,
+	boolean_a
 });
 
 describe('IndexedCollection - Edge Cases', () => {
@@ -44,16 +44,16 @@ describe('IndexedCollection - Edge Cases', () => {
 				create_single_index({
 					key: 'by_number_a',
 					extractor: (item) => item.number_a, // May return null
-					query_schema: z.number().nullable(),
+					query_schema: z.number().nullable()
 				}),
 
 				// Multi-index that handles undefined values safely
 				create_multi_index({
 					key: 'by_array_a',
 					extractor: (item) => (item.array_a.length > 0 ? item.array_a : undefined),
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Add items with edge case values
@@ -101,15 +101,15 @@ describe('IndexedCollection - Edge Cases', () => {
 				create_single_index({
 					key: 'by_prefix',
 					extractor: (item) => item.string_a.substring(0, 1), // First char
-					query_schema: z.string(),
+					query_schema: z.string()
 				}),
 				// Add explicit text index for easier item retrieval
 				create_single_index({
 					key: 'by_string_a',
 					extractor: (item) => item.string_a,
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Add items with duplicate prefixes
@@ -139,20 +139,20 @@ describe('IndexedCollection - Edge Cases', () => {
 		console_warn_spy.mockRestore();
 	});
 
-	test('batch operations performance', {timeout: 10000}, () => {
+	test('batch operations performance', { timeout: 10000 }, () => {
 		// Create a collection with multiple indexes to stress test performance
 		const collection: IndexedCollection<TestItem> = new IndexedCollection({
 			indexes: [
 				create_single_index({
 					key: 'by_string_a',
 					extractor: (item) => item.string_a,
-					query_schema: z.string(),
+					query_schema: z.string()
 				}),
 
 				create_multi_index({
 					key: 'by_array_a',
 					extractor: (item) => item.array_a,
-					query_schema: z.string(),
+					query_schema: z.string()
 				}),
 
 				create_derived_index({
@@ -167,13 +167,13 @@ describe('IndexedCollection - Edge Cases', () => {
 						return result.sort((a, b) => (b.number_a || 0) - (a.number_a || 0));
 					},
 					matches: (item) => item.boolean_a && item.number_a !== null,
-					sort: (a, b) => (b.number_a || 0) - (a.number_a || 0),
-				}),
-			],
+					sort: (a, b) => (b.number_a || 0) - (a.number_a || 0)
+				})
+			]
 		});
 
 		// Create a smaller batch with varied properties
-		const test_batch = Array.from({length: 100}, (_, i) => {
+		const test_batch = Array.from({ length: 100 }, (_, i) => {
 			const boolean_a = i % 3 === 0;
 			const number_a = i % 5 === 0 ? null : i;
 			const array_a = [`tag${i % 10}`, `category${i % 5}`];
@@ -197,7 +197,7 @@ describe('IndexedCollection - Edge Cases', () => {
 		assert.strictEqual(collection.where('by_array_a', 'tag5').length, 10); // 10% of items have tag5
 		assert.strictEqual(
 			collection.derived_index('filtered_items').length,
-			test_batch.filter((i) => i.boolean_a && i.number_a !== null).length,
+			test_batch.filter((i) => i.boolean_a && i.number_a !== null).length
 		);
 
 		// Test removing half of the items
@@ -217,14 +217,14 @@ describe('IndexedCollection - Edge Cases', () => {
 				create_single_index({
 					key: 'by_string_a',
 					extractor: (item) => item.string_a,
-					query_schema: z.string(),
+					query_schema: z.string()
 				}),
 				create_multi_index({
 					key: 'by_array_a',
 					extractor: (item) => item.array_a,
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Add a test item
@@ -249,10 +249,10 @@ describe('IndexedCollection - Edge Cases', () => {
 				create_single_index({
 					key: 'by_number_a',
 					extractor: (item) => item.number_a,
-					query_schema: z.number().positive(), // Must be positive number
-				}),
+					query_schema: z.number().positive() // Must be positive number
+				})
 			],
-			validate: true, // Enable validation
+			validate: true // Enable validation
 		});
 
 		// Add test items
@@ -329,9 +329,9 @@ describe('IndexedCollection - Edge Cases', () => {
 					},
 					query_schema: z.string(),
 					onadd: onadd_fn,
-					onremove: onremove_fn,
-				}),
-			],
+					onremove: onremove_fn
+				})
+			]
 		});
 
 		// Add test items and verify custom handlers
@@ -370,7 +370,7 @@ describe('IndexedCollection - Edge Cases', () => {
 				create_single_index({
 					key: 'by_string_a',
 					extractor: (item) => item.string_a,
-					query_schema: z.string(),
+					query_schema: z.string()
 				}),
 				// Custom index that maintains an aggregated stats object
 				{
@@ -387,7 +387,7 @@ describe('IndexedCollection - Edge Cases', () => {
 									freq[value] = (freq[value] || 0) + 1;
 								}
 								return freq;
-							}, {}),
+							}, {})
 						};
 					},
 					onadd: (stats: any, item: TestItem) => {
@@ -417,9 +417,9 @@ describe('IndexedCollection - Edge Cases', () => {
 							}
 						}
 						return stats;
-					},
-				},
-			],
+					}
+				}
+			]
 		});
 
 		// Add items to test stats tracking
@@ -447,7 +447,7 @@ describe('IndexedCollection - Edge Cases', () => {
 		assert.deepEqual(stats.array_a_frequency, {
 			tag1: 2,
 			tag2: 2,
-			tag3: 2,
+			tag3: 2
 		});
 
 		// Test incremental update - add an item
@@ -481,9 +481,9 @@ describe('IndexedCollection - Edge Cases', () => {
 				create_multi_index({
 					key: 'by_boolean_a',
 					extractor: (item) => item.boolean_a,
-					query_schema: z.boolean(),
-				}),
-			],
+					query_schema: z.boolean()
+				})
+			]
 		});
 
 		// Get array before adding items
@@ -520,9 +520,9 @@ describe('IndexedCollection - Edge Cases', () => {
 						if (item.number_a < 50) return 'medium';
 						return 'large';
 					},
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Get initial references
@@ -549,7 +549,7 @@ describe('IndexedCollection - Edge Cases', () => {
 		collection.add_many([
 			create_test_item('a4', 8),
 			create_test_item('a5', 35),
-			create_test_item('a6', 100),
+			create_test_item('a6', 100)
 		]);
 		assert.strictEqual(small_items.length, 2);
 		assert.strictEqual(medium_items.length, 2);
@@ -563,7 +563,7 @@ describe('IndexedCollection - Edge Cases', () => {
 				create_multi_index({
 					key: 'by_tags',
 					extractor: (item) => item.array_a,
-					query_schema: z.string(),
+					query_schema: z.string()
 				}),
 				create_multi_index({
 					key: 'by_conditional_tags',
@@ -571,9 +571,9 @@ describe('IndexedCollection - Edge Cases', () => {
 						// only index if boolean_a is true
 						return item.boolean_a ? item.array_a : undefined;
 					},
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Get initial references
@@ -611,9 +611,9 @@ describe('IndexedCollection - Edge Cases', () => {
 					key: 'by_boolean_sorted',
 					extractor: (item) => item.boolean_a,
 					sort: (a, b) => (a.number_a || 0) - (b.number_a || 0), // ascending by number
-					query_schema: z.boolean(),
-				}),
-			],
+					query_schema: z.boolean()
+				})
+			]
 		});
 
 		// Add items out of order
@@ -628,7 +628,7 @@ describe('IndexedCollection - Edge Cases', () => {
 		// Verify initial sort order
 		assert.deepEqual(
 			true_items.map((i) => i.string_a),
-			['a2', 'a3', 'a1'],
+			['a2', 'a3', 'a1']
 		);
 
 		// Add new item that should be inserted in middle
@@ -638,7 +638,7 @@ describe('IndexedCollection - Edge Cases', () => {
 		// Verify array maintains sort order
 		assert.deepEqual(
 			true_items.map((i) => i.string_a),
-			['a2', 'a3', 'a4', 'a1'],
+			['a2', 'a3', 'a4', 'a1']
 		);
 
 		// Add item at beginning
@@ -647,14 +647,14 @@ describe('IndexedCollection - Edge Cases', () => {
 
 		assert.deepEqual(
 			true_items.map((i) => i.string_a),
-			['a5', 'a2', 'a3', 'a4', 'a1'],
+			['a5', 'a2', 'a3', 'a4', 'a1']
 		);
 
 		// Remove middle item
 		collection.remove(item3.id);
 		assert.deepEqual(
 			true_items.map((i) => i.string_a),
-			['a5', 'a2', 'a4', 'a1'],
+			['a5', 'a2', 'a4', 'a1']
 		);
 	});
 
@@ -665,9 +665,9 @@ describe('IndexedCollection - Edge Cases', () => {
 				create_multi_index({
 					key: 'by_category',
 					extractor: (item) => item.string_a.split('_')[0], // extract prefix before underscore
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Get initial reference
@@ -687,7 +687,7 @@ describe('IndexedCollection - Edge Cases', () => {
 		collection.add_many([
 			create_test_item('x_2', 2),
 			create_test_item('x_3', 3),
-			create_test_item('y_1', 4),
+			create_test_item('y_1', 4)
 		]);
 
 		assert.strictEqual(category_x.length, 3);
@@ -707,9 +707,9 @@ describe('IndexedCollection - Edge Cases', () => {
 				create_multi_index({
 					key: 'by_prefix',
 					extractor: (item) => item.string_a.charAt(0),
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Get reference before adding any items
@@ -742,9 +742,9 @@ describe('IndexedCollection - Edge Cases', () => {
 						if (item.number_a % 2 === 0) return 'even';
 						return undefined; // odd numbers not indexed
 					},
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Add items
@@ -752,7 +752,7 @@ describe('IndexedCollection - Edge Cases', () => {
 			create_test_item('a1', 2), // even
 			create_test_item('a2', 3), // odd - not indexed
 			create_test_item('a3', 4), // even
-			create_test_item('a4', null), // null - not indexed
+			create_test_item('a4', null) // null - not indexed
 		]);
 
 		const even_items = collection.where('by_even_numbers', 'even');
@@ -771,9 +771,9 @@ describe('IndexedCollection - Edge Cases', () => {
 				create_multi_index({
 					key: 'by_category',
 					extractor: (item) => item.string_a.split('_')[0],
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Step 1: Get initial empty array references
@@ -786,7 +786,7 @@ describe('IndexedCollection - Edge Cases', () => {
 		collection.add_many([
 			create_test_item('a_1', 1),
 			create_test_item('a_2', 2),
-			create_test_item('b_1', 3),
+			create_test_item('b_1', 3)
 		]);
 
 		// Step 3: Verify same array instances are updated
@@ -818,9 +818,9 @@ describe('IndexedCollection - Edge Cases', () => {
 				create_multi_index({
 					key: 'by_boolean_a',
 					extractor: (item) => item.boolean_a,
-					query_schema: z.boolean(),
-				}),
-			],
+					query_schema: z.boolean()
+				})
+			]
 		});
 
 		// Create derived values that track array lengths
@@ -835,7 +835,7 @@ describe('IndexedCollection - Edge Cases', () => {
 		collection.add_many([
 			create_test_item('a1', 1, [], true),
 			create_test_item('a2', 2, [], false),
-			create_test_item('a3', 3, [], true),
+			create_test_item('a3', 3, [], true)
 		]);
 
 		// Derived values should update
@@ -857,9 +857,9 @@ describe('IndexedCollection - Edge Cases', () => {
 				create_multi_index({
 					key: 'by_tags',
 					extractor: (item) => item.array_a,
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Create reactive context to observe changes
@@ -871,7 +871,7 @@ describe('IndexedCollection - Edge Cases', () => {
 		// Add items
 		collection.add_many([
 			create_test_item('a1', 1, ['tag1', 'tag2']),
-			create_test_item('a2', 2, ['tag1', 'tag3']),
+			create_test_item('a2', 2, ['tag1', 'tag3'])
 		]);
 
 		// Derived value should update

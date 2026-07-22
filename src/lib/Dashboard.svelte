@@ -1,30 +1,30 @@
 <script lang="ts">
-	import {resolve} from '$app/paths';
-	import type {Snippet} from 'svelte';
-	import {page} from '$app/state';
-	import {onNavigate} from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import type { Snippet } from 'svelte';
+	import { page } from '$app/state';
+	import { onNavigate } from '$app/navigation';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {is_editable, swallow} from '@fuzdev/fuz_util/dom.ts';
-	import {slide} from 'svelte/transition';
+	import { is_editable, swallow } from '@fuzdev/fuz_util/dom.ts';
+	import { slide } from 'svelte/transition';
 
 	import {
 		icon_arrow_left,
 		icon_arrow_right,
 		icon_desk,
 		icon_project,
-		icon_tab,
+		icon_tab
 	} from '@fuzdev/fuz_ui/icons.ts';
 
-	import {logo_zzz} from './logos.ts';
+	import { logo_zzz } from './logos.ts';
 	import NavLink from './NavLink.svelte';
-	import {frontend_context} from './frontend.svelte.ts';
-	import {main_nav_items_default, to_nav_link_href} from './nav.ts';
-	import {DESK_WIDTH} from './DeskMenu.svelte';
+	import { frontend_context } from './frontend.svelte.ts';
+	import { main_nav_items_default, to_nav_link_href } from './nav.ts';
+	import { DESK_WIDTH } from './DeskMenu.svelte';
 
 	// TODO dashboard should be mounted with Markdown
 
 	const {
-		children,
+		children
 	}: {
 		children: Snippet;
 	} = $props();
@@ -57,11 +57,11 @@
 		if (app.futuremode) {
 			const main_section = nav_items.find((s) => s.group === 'main');
 			if (main_section) {
-				main_section.items.unshift({label: 'tabs', href: resolve('/tabs'), icon: icon_tab});
+				main_section.items.unshift({ label: 'tabs', href: resolve('/tabs'), icon: icon_tab });
 				main_section.items.push({
 					label: 'projects',
 					href: resolve('/projects'),
-					icon: icon_project,
+					icon: icon_project
 				});
 			}
 		}
@@ -70,7 +70,7 @@
 	});
 
 	const sidebar_button_title = $derived(
-		(app.ui.show_sidebar ? 'hide sidebar' : 'show sidebar') + ' [backtick `]',
+		(app.ui.show_sidebar ? 'hide sidebar' : 'show sidebar') + ' [backtick `]'
 	);
 </script>
 

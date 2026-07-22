@@ -1,5 +1,5 @@
-import type {ZzzOptionsCreator} from './config_helpers.ts';
-import {models_default, providers_default, BOTS_DEFAULT} from './config_defaults.ts';
+import type { ZzzOptionsCreator } from './config_helpers.ts';
+import { models_default, providers_default, BOTS_DEFAULT } from './config_defaults.ts';
 
 // TODO hacky and temporary, just thinking through designs
 // some of the model param defaults definitely do not belong her
@@ -10,7 +10,7 @@ const config: ZzzOptionsCreator = () => {
 	return {
 		providers: providers_default,
 		models: models_default,
-		bots: BOTS_DEFAULT,
+		bots: BOTS_DEFAULT
 	};
 };
 

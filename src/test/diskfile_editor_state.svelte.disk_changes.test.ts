@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
-import {test, beforeEach, describe, assert} from 'vitest';
+import { test, beforeEach, describe, assert } from 'vitest';
 
-import {DiskfileEditorState} from '$lib/diskfile_editor_state.svelte.ts';
-import {DiskfilePath, SerializableDisknode} from '$lib/diskfile_types.ts';
-import {Frontend} from '$lib/frontend.svelte.ts';
-import {Diskfile} from '$lib/diskfile.svelte.ts';
+import { DiskfileEditorState } from '$lib/diskfile_editor_state.svelte.ts';
+import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
+import { Frontend } from '$lib/frontend.svelte.ts';
+import { Diskfile } from '$lib/diskfile.svelte.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Constants for testing
 const TEST_PATH = DiskfilePath.parse('/path/to/test.txt');
@@ -27,13 +27,13 @@ beforeEach(() => {
 	test_diskfile = app.diskfiles.add({
 		path: TEST_PATH,
 		source_dir: TEST_DIR,
-		content: TEST_CONTENT,
+		content: TEST_CONTENT
 	});
 
 	// Create the editor state with real components
 	editor_state = new DiskfileEditorState({
 		app,
-		diskfile: test_diskfile,
+		diskfile: test_diskfile
 	});
 });
 
@@ -69,12 +69,12 @@ describe('disk change detection', () => {
 		// History should have a new entry with disk change flag
 		const history = app.get_diskfile_history(TEST_PATH)!;
 		const disk_entry = history.entries.find(
-			(entry) => entry.is_disk_change && entry.content === disk_content,
+			(entry) => entry.is_disk_change && entry.content === disk_content
 		);
 
 		assert.include(disk_entry, {
 			content: disk_content,
-			is_disk_change: true,
+			is_disk_change: true
 		});
 
 		// Selection should point to the new disk change entry
@@ -110,12 +110,12 @@ describe('disk change detection', () => {
 		const new_diskfile = app.diskfiles.add({
 			path: DiskfilePath.parse('/new/file.txt'),
 			source_dir: SerializableDisknode.shape.source_dir.parse('/new/'),
-			content: 'Initial content',
+			content: 'Initial content'
 		});
 
 		const new_editor_state = new DiskfileEditorState({
 			app,
-			diskfile: new_diskfile,
+			diskfile: new_diskfile
 		});
 
 		// Artificially set last_seen_disk_content to null to simulate first check
@@ -147,12 +147,12 @@ describe('disk change detection', () => {
 		// Find the disk change entry
 		const history = app.get_diskfile_history(TEST_PATH)!;
 		const disk_entry = history.entries.find(
-			(entry) => entry.is_disk_change && entry.content === 'Changed on disk',
+			(entry) => entry.is_disk_change && entry.content === 'Changed on disk'
 		);
 
 		assert.include(disk_entry, {
 			content: 'Changed on disk',
-			is_disk_change: true,
+			is_disk_change: true
 		});
 
 		// Selection should not automatically change to disk entry
@@ -179,7 +179,7 @@ describe('disk change detection', () => {
 		const history = app.get_diskfile_history(TEST_PATH)!;
 		const entry = history.add_entry('New content on disk', {
 			is_disk_change: false,
-			is_unsaved_edit: true, // Initially mark as unsaved
+			is_unsaved_edit: true // Initially mark as unsaved
 		});
 
 		// Verify the entry isn't marked as a disk change yet
@@ -213,21 +213,21 @@ describe('file history management', () => {
 
 		// Verify disk change entries exist with correct content
 		const firstEntry = history.entries.find(
-			(e) => e.content === 'First disk change' && e.is_disk_change,
+			(e) => e.content === 'First disk change' && e.is_disk_change
 		);
 
 		const secondEntry = history.entries.find(
-			(e) => e.content === 'Second disk change' && e.is_disk_change,
+			(e) => e.content === 'Second disk change' && e.is_disk_change
 		);
 
 		assert.include(firstEntry, {
 			content: 'First disk change',
-			is_disk_change: true,
+			is_disk_change: true
 		});
 
 		assert.include(secondEntry, {
 			content: 'Second disk change',
-			is_disk_change: true,
+			is_disk_change: true
 		});
 	});
 
@@ -315,7 +315,7 @@ describe('edge cases', () => {
 
 		assert.include(empty_entry, {
 			content: '',
-			is_disk_change: true,
+			is_disk_change: true
 		});
 	});
 
@@ -325,13 +325,13 @@ describe('edge cases', () => {
 		const empty_history_diskfile = app.diskfiles.add({
 			path: empty_history_path,
 			source_dir: SerializableDisknode.shape.source_dir.parse('/empty/'),
-			content: 'Initial',
+			content: 'Initial'
 		});
 
 		// Create editor state but clear the history manually
 		const empty_history_editor = new DiskfileEditorState({
 			app,
-			diskfile: empty_history_diskfile,
+			diskfile: empty_history_diskfile
 		});
 
 		// Manually clear history entries
@@ -348,7 +348,7 @@ describe('edge cases', () => {
 		// The implementation should create an entry with the disk_change flag
 		assert.include(history.entries[0]!, {
 			content: 'Disk changed',
-			is_disk_change: true,
+			is_disk_change: true
 		});
 	});
 

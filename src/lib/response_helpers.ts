@@ -1,15 +1,15 @@
-import type {ActionOutputs} from './action_collections.ts';
+import type { ActionOutputs } from './action_collections.ts';
 
 // TODO hacky, shouldn't exist
 /**
  * Extracts the text content from a completion response.
  */
 export const to_completion_response_text = (
-	completion_response: ActionOutputs['completion_create']['completion_response'] | null | undefined,
+	completion_response: ActionOutputs['completion_create']['completion_response'] | null | undefined
 ): string | null => {
 	if (!completion_response) return null;
 
-	const {data} = completion_response;
+	const { data } = completion_response;
 
 	switch (data.type) {
 		case 'claude':

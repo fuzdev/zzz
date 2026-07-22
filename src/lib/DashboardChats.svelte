@@ -1,28 +1,28 @@
 <script lang="ts">
-	import {random_item} from '@fuzdev/fuz_util/random.ts';
+	import { random_item } from '@fuzdev/fuz_util/random.ts';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
-	import {onMount} from 'svelte';
+	import { onMount } from 'svelte';
 
 	import ChatList from './ChatList.svelte';
 	import ChatView from './ChatView.svelte';
 	import ChatContextmenu from './ChatContextmenu.svelte';
-	import {icon_add, icon_sort} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_add, icon_sort } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {frontend_context} from './frontend.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 	import ChatsContextmenu from './ChatsContextmenu.svelte';
 	import TutorialForDatabase from './TutorialForDatabase.svelte';
 	import TutorialForChats from './TutorialForChats.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 
 	const app = frontend_context.get();
-	const {chats, capabilities} = app;
+	const { chats, capabilities } = app;
 
 	onMount(() => {
 		void capabilities.init_backend_check();
 	});
 </script>
 
-<ChatsContextmenu attrs={{class: 'display:flex width:100% height:100%'}}>
+<ChatsContextmenu attrs={{ class: 'display:flex width:100% height:100%' }}>
 	<div class="column-fixed">
 		<div class="py_sm pr_sm">
 			<div class="row gap_xs2 mb_xs pl_xs2">

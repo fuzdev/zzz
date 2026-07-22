@@ -1,20 +1,20 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
-	import {format} from 'date-fns';
-	import {SvelteMap} from 'svelte/reactivity';
+	import { slide } from 'svelte/transition';
+	import { format } from 'date-fns';
+	import { SvelteMap } from 'svelte/reactivity';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 	import PopoverButton from '@fuzdev/fuz_app/ui/PopoverButton.svelte';
 
-	import type {Socket, QueuedMessage, FailedMessage} from './socket.svelte.ts';
-	import {icon_close, icon_info, icon_remove, icon_retry} from '@fuzdev/fuz_ui/icons.ts';
+	import type { Socket, QueuedMessage, FailedMessage } from './socket.svelte.ts';
+	import { icon_close, icon_info, icon_remove, icon_retry } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {format_timestamp} from './time_helpers.ts';
-	import {DURATION_SM} from './helpers.ts';
+	import { format_timestamp } from './time_helpers.ts';
+	import { DURATION_SM } from './helpers.ts';
 
 	const {
 		socket,
-		type,
+		type
 	}: {
 		socket: Socket;
 		type: 'queued' | 'failed';
@@ -41,7 +41,7 @@
 	const queued_messages_count = $derived(queued_messages.length);
 	const selected_count = $derived(selected_queued_messages.size);
 	const all_selected = $derived(
-		selected_count === queued_messages_count && queued_messages_count > 0,
+		selected_count === queued_messages_count && queued_messages_count > 0
 	);
 
 	// Message selection handlers
@@ -109,7 +109,7 @@
 	const remove_selected = () => {
 		if (type === 'queued') {
 			socket.message_queue = socket.message_queue.filter(
-				(m) => !selected_queued_messages.has(m.id),
+				(m) => !selected_queued_messages.has(m.id)
 			);
 		} else {
 			for (const id of selected_queued_messages.keys()) {
@@ -146,7 +146,7 @@
 
 					<ConfirmButton
 						onconfirm={remove_selected}
-						popover_button_attrs={{class: 'icon-button palette_c font_size_sm'}}
+						popover_button_attrs={{ class: 'icon-button palette_c font_size_sm' }}
 						class="icon-button plain"
 						title="remove selected messages"
 					>
@@ -176,7 +176,7 @@
 				{@const message_data_serialized = JSON.stringify(message.data, null, 2)}
 				<div
 					class="message-item p_sm {selected ? 'selected shade_20' : ''} {queued_messages.indexOf(
-						message,
+						message
 					) > 0
 						? 'border_top border-style:solid border_color_30'
 						: ''}"
@@ -207,7 +207,7 @@
 									{#if copied}
 										<div><small class="font_size_xs">{message.id}</small></div>
 									{:else}
-										<div in:slide={{duration: DURATION_SM}}>
+										<div in:slide={{ duration: DURATION_SM }}>
 											<small class="font_size_xs">{message.id}</small>
 										</div>
 									{/if}
@@ -225,7 +225,7 @@
 									{#if copied}
 										<div><small class="font_size_xs">{message.data.id}</small></div>
 									{:else}
-										<div in:slide={{duration: DURATION_SM}}>
+										<div in:slide={{ duration: DURATION_SM }}>
 											<small class="font_size_xs">{message.data.id}</small>
 										</div>
 									{/if}
@@ -285,7 +285,7 @@
 							<ConfirmButton
 								onconfirm={() => remove_message(message.id)}
 								position="center"
-								popover_button_attrs={{class: 'icon-button palette_c font_size_sm'}}
+								popover_button_attrs={{ class: 'icon-button palette_c font_size_sm' }}
 								class="icon-button plain font_size_sm"
 								title="remove message"
 							>

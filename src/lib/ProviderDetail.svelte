@@ -1,12 +1,12 @@
 <script lang="ts">
-	import {resolve} from '$app/paths';
-	import {page} from '$app/state';
-	import type {SvelteHTMLElements} from 'svelte/elements';
-	import {format_url} from '@fuzdev/fuz_util/url.ts';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import type { SvelteHTMLElements } from 'svelte/elements';
+	import { format_url } from '@fuzdev/fuz_util/url.ts';
 
-	import type {Provider} from './provider.svelte.ts';
+	import type { Provider } from './provider.svelte.ts';
 	import ProviderLogo from './ProviderLogo.svelte';
-	import {icon_provider} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_provider } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ExternalLink from './ExternalLink.svelte';
 	import ModelSummary from './ModelSummary.svelte';
@@ -14,7 +14,7 @@
 
 	const {
 		provider,
-		attrs,
+		attrs
 	}: {
 		provider: Provider;
 		attrs?: SvelteHTMLElements['div'] | undefined;

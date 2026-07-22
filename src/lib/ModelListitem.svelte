@@ -1,11 +1,11 @@
 <script lang="ts">
-	import type {Model} from './model.svelte.ts';
+	import type { Model } from './model.svelte.ts';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 	import ProviderLogo from './ProviderLogo.svelte';
 
 	const {
 		model,
-		show_tags,
+		show_tags
 	}: {
 		model: Model;
 		show_tags?: boolean | undefined;
@@ -14,7 +14,7 @@
 	// TODO show something to show if it's local (probably not file size?)
 </script>
 
-<ModelContextmenu attrs={{class: 'width:100% py_sm'}} {model}>
+<ModelContextmenu attrs={{ class: 'width:100% py_sm' }} {model}>
 	<div class="font_size_md row">
 		<ProviderLogo name={model.provider_name} size="var(--font_size_xl)" />
 		<div class="pl_sm">

@@ -1,14 +1,14 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
+	import { slide } from 'svelte/transition';
 
-	import type {PartUnion} from './part.svelte.ts';
+	import type { PartUnion } from './part.svelte.ts';
 	import XmlAttributeEditor from './XmlAttributeEditor.svelte';
-	import {icon_add} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {format_placeholder} from './helpers.ts';
+	import { format_placeholder } from './helpers.ts';
 
 	const {
-		part,
+		part
 	}: {
 		part: PartUnion;
 	} = $props();

@@ -1,26 +1,26 @@
 <script lang="ts">
-	import {swallow, is_editable} from '@fuzdev/fuz_util/dom.ts';
-	import {random_item} from '@fuzdev/fuz_util/random.ts';
+	import { swallow, is_editable } from '@fuzdev/fuz_util/dom.ts';
+	import { random_item } from '@fuzdev/fuz_util/random.ts';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
-	import {onMount} from 'svelte';
+	import { onMount } from 'svelte';
 
-	import {frontend_context} from './frontend.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 	import DiskfileExplorer from './DiskfileExplorer.svelte';
 	import DiskfileEditorView from './DiskfileEditorView.svelte';
 	import DiskfileTabListitem from './DiskfileTabListitem.svelte';
-	import {Reorderable} from './reorderable.svelte.ts';
+	import { Reorderable } from './reorderable.svelte.ts';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 
 	const app = frontend_context.get();
-	const {diskfiles, capabilities} = app;
-	const {editor} = diskfiles;
+	const { diskfiles, capabilities } = app;
+	const { editor } = diskfiles;
 
-	const tabs_reorderable = new Reorderable({item_class: null}); // remove the normal reorderable item styling
+	const tabs_reorderable = new Reorderable({ item_class: null }); // remove the normal reorderable item styling
 
 	const selected_tab = $derived(editor.tabs.selected_tab);
 	const selected_diskfile = $derived(
-		selected_tab ? diskfiles.items.by_id.get(selected_tab.diskfile_id) : undefined,
+		selected_tab ? diskfiles.items.by_id.get(selected_tab.diskfile_id) : undefined
 	);
 
 	let show_diskfile_picker = $state.raw(false);
@@ -109,12 +109,12 @@
 			<menu
 				class="unstyled display:flex overflow-x:auto scrollbar-width:thin"
 				{@attach tabs_reorderable.list({
-					onreorder: (from_index, to_index) => editor.reorder_tabs(from_index, to_index),
+					onreorder: (from_index, to_index) => editor.reorder_tabs(from_index, to_index)
 				})}
 			>
 				{#each editor.tabs.ordered_tabs as tab, index (tab.id)}
 					<li class="display:flex py_xs3 px_xs4">
-						<div class="display:flex" {@attach tabs_reorderable.item({index})}>
+						<div class="display:flex" {@attach tabs_reorderable.item({ index })}>
 							<!-- TODO notice the different APIs here, needs fixing, diskfiles is higher in the tree -->
 							<DiskfileTabListitem
 								{tab}

@@ -1,4 +1,4 @@
-import {Uuid} from '@fuzdev/fuz_util/id.ts';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
 
 /**
  * Parse and validate a UUID parameter value from the URL.

@@ -1,13 +1,13 @@
 <script lang="ts">
-	import type {ComponentProps, Snippet} from 'svelte';
+	import type { ComponentProps, Snippet } from 'svelte';
 	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 	import ContextmenuSubmenu from '@fuzdev/fuz_ui/ContextmenuSubmenu.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 
-	import type {Diskfile} from './diskfile.svelte.ts';
-	import {icon_delete, icon_file, icon_remove} from '@fuzdev/fuz_ui/icons.ts';
-	import {frontend_context} from './frontend.svelte.ts';
+	import type { Diskfile } from './diskfile.svelte.ts';
+	import { icon_delete, icon_file, icon_remove } from '@fuzdev/fuz_ui/icons.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 
 	const {
@@ -30,8 +30,8 @@
 
 {#snippet entries()}
 	{#if diskfile}
-		{@const {diskfiles} = diskfile.app}
-		{@const {tabs} = diskfiles.editor}
+		{@const { diskfiles } = diskfile.app}
+		{@const { tabs } = diskfiles.editor}
 		{@const tab = tabs.by_diskfile_id.get(diskfile.id)}
 		{@const selected = diskfile === tabs.selected_tab?.diskfile}
 		<ContextmenuSubmenu icon={icon_file}>

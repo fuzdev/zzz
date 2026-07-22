@@ -9,12 +9,12 @@
  * @module
  */
 
-import {describe, test, inject, assert} from 'vitest';
+import { describe, test, inject, assert } from 'vitest';
 import {
 	default_cross_process_setup,
-	reconstruct_bootstrapped_handle,
+	reconstruct_bootstrapped_handle
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
-import {rpc_call} from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
+import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 
 import './cross_test_types.ts';
 
@@ -38,10 +38,10 @@ describe('completion cross-backend', () => {
 					created: new Date().toISOString(),
 					provider_name: 'gemini',
 					model: 'nonexistent_model_zzz_cross',
-					prompt: 'cross-backend completion smoke test',
-				},
+					prompt: 'cross-backend completion smoke test'
+				}
 			},
-			headers: fixture.create_session_headers(),
+			headers: fixture.create_session_headers()
 		});
 		assert.ok(!res.ok, `expected error, got ${JSON.stringify(res)}`);
 		// `gemini` is a registered provider, so an unconfigured instance
@@ -53,7 +53,7 @@ describe('completion cross-backend', () => {
 		// environment-dependent and identical across all three TS runtimes.
 		assert.ok(
 			res.error.code === -32603 || res.error.code === -32602 || res.error.code === -32020,
-			`unexpected error code: ${res.error.code} (${res.error.message})`,
+			`unexpected error code: ${res.error.code} (${res.error.message})`
 		);
 	});
 

@@ -1,12 +1,12 @@
 // @slop Claude Sonnet 3.7
 
-import {SvelteMap} from 'svelte/reactivity';
-import type {z} from 'zod';
-import {DEV} from 'esm-env';
-import {EMPTY_ARRAY} from '@fuzdev/fuz_util/array.ts';
-import {Uuid} from '@fuzdev/fuz_util/id.ts';
+import { SvelteMap } from 'svelte/reactivity';
+import type { z } from 'zod';
+import { DEV } from 'esm-env';
+import { EMPTY_ARRAY } from '@fuzdev/fuz_util/array.ts';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import type {IndexedItem} from './indexed_collection_helpers.svelte.ts';
+import type { IndexedItem } from './indexed_collection_helpers.svelte.ts';
 
 // TODO @many rethink the indexed collection API -
 // particularly type safety, performance, and integration with Svelte patterns -
@@ -53,7 +53,7 @@ export interface IndexedCollectionOptions<
 	TKeySingle extends string = string,
 	TKeyMulti extends string = string,
 	TKeyDerived extends string = string,
-	TKeyDynamic extends string = string,
+	TKeyDynamic extends string = string
 > {
 	indexes?: Array<IndexDefinition<T>>;
 	initial_items?: Array<T>;
@@ -81,7 +81,7 @@ export class IndexedCollection<
 	TKeySingle extends string = string,
 	TKeyMulti extends string = string,
 	TKeyDerived extends string = string,
-	TKeyDynamic extends string = string,
+	TKeyDynamic extends string = string
 > {
 	/** The main source of truth, the full collection keyed by `Uuid`. */
 	readonly by_id: SvelteMap<Uuid, T> = new SvelteMap();
@@ -109,7 +109,7 @@ export class IndexedCollection<
 	readonly #validate: boolean;
 
 	constructor(
-		options?: IndexedCollectionOptions<T, TKeySingle, TKeyMulti, TKeyDerived, TKeyDynamic>,
+		options?: IndexedCollectionOptions<T, TKeySingle, TKeyMulti, TKeyDerived, TKeyDynamic>
 	) {
 		// Set validation flag (default to false)
 		this.#validate = options?.validate ?? false;
@@ -134,7 +134,7 @@ export class IndexedCollection<
 					Array.isArray(
 						[...this.indexes[def.key].values()].length > 0
 							? [...this.indexes[def.key].values()][0]
-							: [],
+							: []
 					)
 				) {
 					this.#index_types.set(def.key, 'multi');
@@ -233,7 +233,7 @@ export class IndexedCollection<
 		const actual_type = this.#index_types.get(key);
 		if (actual_type !== expected_type) {
 			throw new Error(
-				`Index type mismatch: ${key} is a ${actual_type || 'unknown'} index, not a ${expected_type} index`,
+				`Index type mismatch: ${key} is a ${actual_type || 'unknown'} index, not a ${expected_type} index`
 			);
 		}
 	}
@@ -245,7 +245,7 @@ export class IndexedCollection<
 	 */
 	query<TResult = any, TQuery = any>(
 		key: TKeySingle | TKeyMulti | TKeyDerived | TKeyDynamic,
-		query: TQuery,
+		query: TQuery
 	): TResult {
 		const index = this.indexes[key];
 		if (!index) return undefined as unknown as TResult;
@@ -277,14 +277,14 @@ export class IndexedCollection<
 	 * Add an item to the collection and update all indexes.
 	 */
 	add(item: T): void {
-		const {by_id} = this;
+		const { by_id } = this;
 
 		if (by_id.has(item.id)) {
 			if (DEV)
 				console.error(
 					'item already exists in collection with id: ' + item.id,
 					item,
-					by_id.get(item.id),
+					by_id.get(item.id)
 				);
 			return;
 		}

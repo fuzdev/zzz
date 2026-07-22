@@ -62,18 +62,18 @@ From `completion_types.ts`:
 
 ```typescript
 const CompletionRequest = z.strictObject({
-  created: DatetimeNow,
-  provider_name: ProviderName,
-  model: z.string(),
-  prompt: z.string(),
-  completion_messages: z.array(CompletionMessage).optional(),
+	created: DatetimeNow,
+	provider_name: ProviderName,
+	model: z.string(),
+	prompt: z.string(),
+	completion_messages: z.array(CompletionMessage).optional()
 });
 
 const CompletionResponse = z.strictObject({
-  created: DatetimeNow,
-  provider_name: ProviderName,
-  model: z.string(),
-  data: ProviderDataSchema,
+	created: DatetimeNow,
+	provider_name: ProviderName,
+	model: z.string(),
+	data: ProviderDataSchema
 });
 ```
 

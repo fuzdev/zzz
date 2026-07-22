@@ -1,20 +1,20 @@
 <script lang="ts">
-	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-	import {icon_arrow_left, icon_arrow_right, icon_refresh} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_arrow_left, icon_arrow_right, icon_refresh } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {frontend_context} from './frontend.svelte.ts';
-	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
+	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 
 	const {
-		editor_state,
+		editor_state
 	}: {
 		editor_state: DiskfileEditorState;
 	} = $props();
 
 	const app = frontend_context.get();
-	const {diskfiles} = app;
-	const {editor} = diskfiles;
+	const { diskfiles } = app;
+	const { editor } = diskfiles;
 
 	// Track navigation history
 	let history_stack = $state<Array<Uuid>>([]); // Forward stack (for "back" operations)
@@ -79,7 +79,7 @@
 
 				// Replace previous_id with the new tab id in any history stacks
 				future_stack = future_stack.map((id) =>
-					id === previous_id ? result.resulting_tab_id! : id,
+					id === previous_id ? result.resulting_tab_id! : id
 				);
 			} else {
 				current_id = result.resulting_tab_id;

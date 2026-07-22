@@ -1,11 +1,11 @@
 <script lang="ts">
-	import type {Snippet} from 'svelte';
+	import type { Snippet } from 'svelte';
 
-	import type {BrowserTab} from './browser_tab.svelte.ts';
+	import type { BrowserTab } from './browser_tab.svelte.ts';
 
 	const {
 		tab,
-		children,
+		children
 	}: {
 		tab: BrowserTab;
 		children: Snippet;
@@ -48,7 +48,7 @@
 ${tab.content}
 </body>
 </html>`
-			: tab.content,
+			: tab.content
 	);
 </script>
 

@@ -1,9 +1,9 @@
-import {z} from 'zod';
-import type {Datetime} from '@fuzdev/fuz_util/datetime.ts';
+import { z } from 'zod';
+import type { Datetime } from '@fuzdev/fuz_util/datetime.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {CellJson} from './cell_types.ts';
-import {DiskfileDirectoryPath} from './diskfile_types.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { CellJson } from './cell_types.ts';
+import { DiskfileDirectoryPath } from './diskfile_types.ts';
 
 // TODO: per-workspace state — open tabs, active chats, terminal presets (needs DB)
 // TODO: workspace settings/config (e.g. default model, prompt templates)
@@ -19,15 +19,15 @@ export const WorkspaceInfoJson = z.strictObject({
 	/** Display name, auto-derived from directory basename. */
 	name: z.string(),
 	/** ISO timestamp of when this workspace was opened. */
-	opened_at: z.string(),
+	opened_at: z.string()
 });
 export type WorkspaceInfoJson = z.infer<typeof WorkspaceInfoJson>;
 
 export const WorkspaceJson = CellJson.extend({
 	path: DiskfileDirectoryPath,
 	name: z.string().default(''),
-	opened_at: z.string().default(''),
-}).meta({cell_class_name: 'Workspace'});
+	opened_at: z.string().default('')
+}).meta({ cell_class_name: 'Workspace' });
 export type WorkspaceJson = z.infer<typeof WorkspaceJson>;
 export type WorkspaceJsonInput = z.input<typeof WorkspaceJson>;
 

@@ -1,13 +1,13 @@
 // @slop Claude Opus 4
 
-import {z} from 'zod';
-import {goto} from '$app/navigation';
-import {resolve} from '$app/paths';
-import type {Uuid} from '@fuzdev/fuz_util/id.ts';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
+import { z } from 'zod';
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import {Domain} from './domain.svelte.ts';
-import type {Projects} from './projects.svelte.ts';
+import { Domain } from './domain.svelte.ts';
+import type { Projects } from './projects.svelte.ts';
 
 export interface DomainViewmodelOptions {
 	projects: Projects;
@@ -34,7 +34,7 @@ export class DomainViewmodel {
 			this.domain === null ||
 			this.domain_name !== this.domain.name ||
 			this.domain_status !== this.domain.status ||
-			this.ssl_enabled !== this.domain.ssl,
+			this.ssl_enabled !== this.domain.ssl
 	);
 
 	/** The current project. */
@@ -42,7 +42,7 @@ export class DomainViewmodel {
 
 	/** The domain being edited. */
 	readonly domain = $derived.by(() => {
-		const {domain_id} = this;
+		const { domain_id } = this;
 		if (!domain_id) return null;
 		return this.project?.domains.find((d) => d.id === domain_id) || null;
 	});
@@ -97,8 +97,8 @@ export class DomainViewmodel {
 					status: this.domain_status,
 					ssl: this.ssl_enabled,
 					created: now,
-					updated: now,
-				},
+					updated: now
+				}
 			});
 
 			this.projects.add_domain(this.project_id, domain);

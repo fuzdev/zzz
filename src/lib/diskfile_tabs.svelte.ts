@@ -1,15 +1,15 @@
 // @slop Claude Sonnet 3.7
 
-import {z} from 'zod';
-import {SvelteMap} from 'svelte/reactivity';
-import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.ts';
+import { z } from 'zod';
+import { SvelteMap } from 'svelte/reactivity';
+import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {IndexedCollection} from './indexed_collection.svelte.ts';
-import {to_reordered_list} from './list_helpers.ts';
-import {DiskfileTab} from './diskfile_tab.svelte.ts';
-import {CellJson} from './cell_types.ts';
-import {create_map_by_property} from './iterable_helpers.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { IndexedCollection } from './indexed_collection.svelte.ts';
+import { to_reordered_list } from './list_helpers.ts';
+import { DiskfileTab } from './diskfile_tab.svelte.ts';
+import { CellJson } from './cell_types.ts';
+import { create_map_by_property } from './iterable_helpers.ts';
 
 export const DiskfileTabsJson = CellJson.extend({
 	selected_tab_id: Uuid.nullable().default(null),
@@ -18,8 +18,8 @@ export const DiskfileTabsJson = CellJson.extend({
 	/** Tracks recently accessed tabs for better tab selection when closing tabs. */
 	recent_tab_ids: z.array(Uuid).default(() => []),
 	/** Maximum number of tabs to track in access history. */
-	max_tab_history: z.number().default(20),
-}).meta({cell_class_name: 'DiskfileTabs'});
+	max_tab_history: z.number().default(20)
+}).meta({ cell_class_name: 'DiskfileTabs' });
 export type DiskfileTabsJson = z.infer<typeof DiskfileTabsJson>;
 export type DiskfileTabsJsonInput = z.input<typeof DiskfileTabsJson>;
 
@@ -41,7 +41,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * Map for looking up tabs by their associated diskfile_id.
 	 */
 	readonly by_diskfile_id: Map<Uuid, DiskfileTab> = $derived(
-		create_map_by_property(this.items.by_id.values(), 'diskfile_id'),
+		create_map_by_property(this.items.by_id.values(), 'diskfile_id')
 	);
 
 	/**
@@ -49,7 +49,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * Includes tabs in the explicit order plus any tabs not yet in the order.
 	 */
 	readonly ordered_tabs: Array<DiskfileTab> = $derived.by(() => {
-		const {by_id} = this.items;
+		const { by_id } = this.items;
 		const result: Array<DiskfileTab> = [];
 		// Track which tabs have been added to avoid duplicates
 		const added_tab_ids: Set<string> = new Set();
@@ -75,7 +75,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 
 	/** The currently selected tab. */
 	readonly selected_tab: DiskfileTab | undefined = $derived(
-		this.selected_tab_id ? this.items.by_id.get(this.selected_tab_id) : undefined,
+		this.selected_tab_id ? this.items.by_id.get(this.selected_tab_id) : undefined
 	);
 
 	/** The selected tab's diskfile id. */
@@ -83,7 +83,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 
 	/** The preview tab, if any. */
 	readonly preview_tab: DiskfileTab | undefined = $derived(
-		this.preview_tab_id ? this.items.by_id.get(this.preview_tab_id) : undefined,
+		this.preview_tab_id ? this.items.by_id.get(this.preview_tab_id) : undefined
 	);
 
 	readonly recent_tabs: Array<DiskfileTab> = $derived.by(() => {
@@ -145,7 +145,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * Sets the selected tab.
 	 */
 	select_tab(tab_id: Uuid): void {
-		console.log('DiskfileTabs.select_tab', {tab_id});
+		console.log('DiskfileTabs.select_tab', { tab_id });
 		this.selected_tab_id = tab_id;
 		this.#update_tab_history(tab_id);
 	}
@@ -186,8 +186,8 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 			tabs: this,
 			json: {
 				id: create_uuid(),
-				diskfile_id,
-			},
+				diskfile_id
+			}
 		});
 
 		this.items.add(new_tab);
@@ -204,8 +204,8 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 */
 	#get_or_create_tab(
 		diskfile_id: Uuid,
-		create_mode: 'preview' | 'permanent',
-	): {tab: DiskfileTab; is_new: boolean} {
+		create_mode: 'preview' | 'permanent'
+	): { tab: DiskfileTab; is_new: boolean } {
 		// Check if the file is already open in a tab - use direct map lookup for reliability
 		const existing_tab = this.by_diskfile_id.get(diskfile_id);
 		if (existing_tab) {
@@ -213,7 +213,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 			if (create_mode === 'permanent' && existing_tab.id === this.preview_tab_id) {
 				this.preview_tab_id = null;
 			}
-			return {tab: existing_tab, is_new: false};
+			return { tab: existing_tab, is_new: false };
 		}
 
 		// Check if we have a preview tab that could be repurposed
@@ -229,7 +229,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 			// Update the tab content
 			current_preview.diskfile_id = diskfile_id;
 
-			return {tab: current_preview, is_new: false};
+			return { tab: current_preview, is_new: false };
 		}
 
 		// Create a new tab positioned after the selected tab
@@ -240,7 +240,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 			this.preview_tab_id = new_tab.id;
 		}
 
-		return {tab: new_tab, is_new: true};
+		return { tab: new_tab, is_new: true };
 	}
 
 	/**
@@ -248,11 +248,11 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * If a preview tab for this file already exists, it just selects it.
 	 */
 	preview_diskfile(diskfile_id: Uuid): DiskfileTab {
-		console.log('DiskfileTabs.preview_diskfile', {diskfile_id});
+		console.log('DiskfileTabs.preview_diskfile', { diskfile_id });
 
 		const previously_selected_id = this.selected_tab_id;
 		const previous_preview_diskfile_id = this.preview_tab?.diskfile_id;
-		const {tab, is_new} = this.#get_or_create_tab(diskfile_id, 'preview');
+		const { tab, is_new } = this.#get_or_create_tab(diskfile_id, 'preview');
 
 		// Select the tab
 		this.selected_tab_id = tab.id;
@@ -277,9 +277,9 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * If the file is already in a preview tab, promotes it to permanent.
 	 */
 	open_diskfile(diskfile_id: Uuid): DiskfileTab {
-		console.log('DiskfileTabs.open_diskfile', {diskfile_id});
+		console.log('DiskfileTabs.open_diskfile', { diskfile_id });
 
-		const {tab} = this.#get_or_create_tab(diskfile_id, 'permanent');
+		const { tab } = this.#get_or_create_tab(diskfile_id, 'permanent');
 
 		// Select the tab
 		this.selected_tab_id = tab.id;
@@ -305,7 +305,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * Closes a tab by id.
 	 */
 	close_tab(tab_id: Uuid): void {
-		console.log('DiskfileTabs.close_tab', {tab_id});
+		console.log('DiskfileTabs.close_tab', { tab_id });
 		const tab_to_close = this.items.by_id.get(tab_id);
 		if (!tab_to_close) return;
 
@@ -363,13 +363,13 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * @param tab_id - the tab id to navigate to
 	 * @returns object containing the resulting tab id and a boolean indicating if a new tab was created
 	 */
-	navigate_to_tab(tab_id: Uuid): {resulting_tab_id: Uuid | null; created_preview: boolean} {
-		console.log('DiskfileTabs.navigate_to_tab', {tab_id});
+	navigate_to_tab(tab_id: Uuid): { resulting_tab_id: Uuid | null; created_preview: boolean } {
+		console.log('DiskfileTabs.navigate_to_tab', { tab_id });
 
 		// If the tab still exists, just select it
 		if (this.items.by_id.has(tab_id)) {
 			this.select_tab(tab_id);
-			return {resulting_tab_id: tab_id, created_preview: false};
+			return { resulting_tab_id: tab_id, created_preview: false };
 		}
 
 		// If the tab was closed but we know what diskfile it pointed to, create a preview
@@ -377,18 +377,18 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		if (diskfile_id) {
 			// Create a new preview tab for this diskfile
 			const preview_tab = this.preview_diskfile(diskfile_id);
-			return {resulting_tab_id: preview_tab.id, created_preview: true};
+			return { resulting_tab_id: preview_tab.id, created_preview: true };
 		}
 
 		// Tab doesn't exist and we don't know what diskfile it was for
-		return {resulting_tab_id: null, created_preview: false};
+		return { resulting_tab_id: null, created_preview: false };
 	}
 
 	/**
 	 * Opens (makes permanent) a tab by id.
 	 */
 	open_tab(tab_id: Uuid): void {
-		console.log('DiskfileTabs.open_tab', {tab_id});
+		console.log('DiskfileTabs.open_tab', { tab_id });
 		if (tab_id === this.preview_tab_id) {
 			this.preview_tab_id = null;
 		}
@@ -398,7 +398,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * Reorders tabs by dragging.
 	 */
 	reorder_tabs(from_index: number, to_index: number): void {
-		console.log('DiskfileTabs.reorder_tabs', {from_index, to_index});
+		console.log('DiskfileTabs.reorder_tabs', { from_index, to_index });
 		this.tab_order = to_reordered_list(this.tab_order, from_index, to_index);
 	}
 

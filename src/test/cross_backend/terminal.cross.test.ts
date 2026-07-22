@@ -9,13 +9,13 @@
  * @module
  */
 
-import {describe, test, inject, assert} from 'vitest';
+import { describe, test, inject, assert } from 'vitest';
 import {
 	default_cross_process_setup,
-	reconstruct_bootstrapped_handle,
+	reconstruct_bootstrapped_handle
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
-import {rpc_call} from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
-import {create_ws_transport} from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
+import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
+import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
 
 import './cross_test_types.ts';
 
@@ -30,14 +30,14 @@ describe('terminal cross-backend', () => {
 		const ws = await create_ws_transport({
 			base_url: handle.config.base_url,
 			ws_path: handle.config.ws_path,
-			cookies: fixture.transport.cookies(),
+			cookies: fixture.transport.cookies()
 		});
 		try {
 			await ws.request('_warmup', 'ping', undefined);
 
 			const result = await ws.request<Record<string, unknown>>('tc-1', 'terminal_create', {
 				command: 'echo',
-				args: ['hello'],
+				args: ['hello']
 			});
 			const terminal_id = result.terminal_id as string;
 			assert.equal(typeof terminal_id, 'string');
@@ -73,23 +73,23 @@ describe('terminal cross-backend', () => {
 		const ws = await create_ws_transport({
 			base_url: handle.config.base_url,
 			ws_path: handle.config.ws_path,
-			cookies: fixture.transport.cookies(),
+			cookies: fixture.transport.cookies()
 		});
 		try {
 			await ws.request('_warmup', 'ping', undefined);
 
 			const create_result = await ws.request<Record<string, unknown>>('tcl-1', 'terminal_create', {
 				command: 'sleep',
-				args: ['60'],
+				args: ['60']
 			});
 			const terminal_id = create_result.terminal_id as string;
 
 			const close_result = await ws.request<Record<string, unknown>>('tcl-2', 'terminal_close', {
-				terminal_id,
+				terminal_id
 			});
 			assert.ok(
 				close_result.exit_code === null || typeof close_result.exit_code === 'number',
-				'exit_code is number or null',
+				'exit_code is number or null'
 			);
 		} finally {
 			await ws.close();
@@ -101,21 +101,21 @@ describe('terminal cross-backend', () => {
 		const ws = await create_ws_transport({
 			base_url: handle.config.base_url,
 			ws_path: handle.config.ws_path,
-			cookies: fixture.transport.cookies(),
+			cookies: fixture.transport.cookies()
 		});
 		try {
 			await ws.request('_warmup', 'ping', undefined);
 
 			const create_result = await ws.request<Record<string, unknown>>('twr-1', 'terminal_create', {
 				command: 'cat',
-				args: [],
+				args: []
 			});
 			const terminal_id = create_result.terminal_id as string;
 			assert.equal(typeof terminal_id, 'string');
 
 			const write_result = await ws.request('twr-2', 'terminal_data_send', {
 				terminal_id,
-				data: 'integration test\n',
+				data: 'integration test\n'
 			});
 			assert.equal(write_result, null, 'write result is null');
 
@@ -129,7 +129,7 @@ describe('terminal cross-backend', () => {
 			}, 5_000);
 			assert.ok(echo_msg);
 
-			await ws.request('twr-3', 'terminal_close', {terminal_id}).catch(() => undefined);
+			await ws.request('twr-3', 'terminal_close', { terminal_id }).catch(() => undefined);
 		} finally {
 			await ws.close();
 		}
@@ -140,25 +140,25 @@ describe('terminal cross-backend', () => {
 		const ws = await create_ws_transport({
 			base_url: handle.config.base_url,
 			ws_path: handle.config.ws_path,
-			cookies: fixture.transport.cookies(),
+			cookies: fixture.transport.cookies()
 		});
 		try {
 			await ws.request('_warmup', 'ping', undefined);
 
 			const create_result = await ws.request<Record<string, unknown>>('trl-1', 'terminal_create', {
 				command: 'sleep',
-				args: ['60'],
+				args: ['60']
 			});
 			const terminal_id = create_result.terminal_id as string;
 
 			const resize_result = await ws.request('trl-2', 'terminal_resize', {
 				terminal_id,
 				cols: 120,
-				rows: 40,
+				rows: 40
 			});
 			assert.equal(resize_result, null, 'resize result is null');
 
-			await ws.request('trl-3', 'terminal_close', {terminal_id}).catch(() => undefined);
+			await ws.request('trl-3', 'terminal_close', { terminal_id }).catch(() => undefined);
 		} finally {
 			await ws.close();
 		}
@@ -169,7 +169,7 @@ describe('terminal cross-backend', () => {
 		const ws = await create_ws_transport({
 			base_url: handle.config.base_url,
 			ws_path: handle.config.ws_path,
-			cookies: fixture.transport.cookies(),
+			cookies: fixture.transport.cookies()
 		});
 		try {
 			await ws.request('_warmup', 'ping', undefined);
@@ -177,7 +177,7 @@ describe('terminal cross-backend', () => {
 			const create_result = await ws.request<Record<string, unknown>>('tcc-1', 'terminal_create', {
 				command: 'pwd',
 				args: [],
-				cwd: '/tmp',
+				cwd: '/tmp'
 			});
 			assert.equal(typeof create_result.terminal_id, 'string');
 
@@ -199,7 +199,7 @@ describe('terminal cross-backend', () => {
 		const ws = await create_ws_transport({
 			base_url: handle.config.base_url,
 			ws_path: handle.config.ws_path,
-			cookies: fixture.transport.cookies(),
+			cookies: fixture.transport.cookies()
 		});
 		try {
 			await ws.request('_warmup', 'ping', undefined);
@@ -217,8 +217,8 @@ describe('terminal cross-backend', () => {
 					'terminal_create',
 					{
 						command: '/nonexistent/binary_zzz_test',
-						args: [],
-					},
+						args: []
+					}
 				);
 				terminal_id = create_result.terminal_id as string;
 				assert.equal(typeof terminal_id, 'string');
@@ -253,8 +253,8 @@ describe('terminal cross-backend', () => {
 			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'terminal_data_send',
-			params: {terminal_id: NIL_UUID, data: 'hello'},
-			headers: fixture.create_session_headers(),
+			params: { terminal_id: NIL_UUID, data: 'hello' },
+			headers: fixture.create_session_headers()
 		});
 		assert.ok(res.ok);
 		assert.equal(res.result, null, 'silent null for missing terminal');
@@ -266,11 +266,11 @@ describe('terminal cross-backend', () => {
 			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'terminal_close',
-			params: {terminal_id: NIL_UUID},
-			headers: fixture.create_session_headers(),
+			params: { terminal_id: NIL_UUID },
+			headers: fixture.create_session_headers()
 		});
 		assert.ok(res.ok);
-		assert.deepEqual(res.result, {exit_code: null}, 'result is {exit_code: null}');
+		assert.deepEqual(res.result, { exit_code: null }, 'result is {exit_code: null}');
 	});
 
 	test('terminal_resize_missing', async () => {
@@ -279,8 +279,8 @@ describe('terminal cross-backend', () => {
 			app: fixture.transport,
 			path: handle.config.rpc_path,
 			method: 'terminal_resize',
-			params: {terminal_id: NIL_UUID, cols: 80, rows: 24},
-			headers: fixture.create_session_headers(),
+			params: { terminal_id: NIL_UUID, cols: 80, rows: 24 },
+			headers: fixture.create_session_headers()
 		});
 		assert.ok(res.ok);
 		assert.equal(res.result, null, 'silent null for missing terminal');

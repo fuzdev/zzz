@@ -42,12 +42,12 @@
  * @module
  */
 
-import {describe, test, inject, assert, afterAll} from 'vitest';
-import {Client} from 'pg';
+import { describe, test, inject, assert, afterAll } from 'vitest';
+import { Client } from 'pg';
 
 import {
 	type ReconstructedBootstrappedBackendHandle,
-	reconstruct_bootstrapped_handle,
+	reconstruct_bootstrapped_handle
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 
 import './cross_test_types.ts';
@@ -68,7 +68,7 @@ const resolve_database_url = (handle: ReconstructedBootstrappedBackendHandle): s
 	if (!backend_url) {
 		throw new Error(
 			'proxy.cross.test: handle.config.env.DATABASE_URL missing — ' +
-				'expected `rust_proxy_backend_config()` to set DATABASE_URL on the env block',
+				'expected `rust_proxy_backend_config()` to set DATABASE_URL on the env block'
 		);
 	}
 	return backend_url;
@@ -84,7 +84,7 @@ let pg_client: Client | null = null;
 
 const get_pg_client = async (handle: ReconstructedBootstrappedBackendHandle): Promise<Client> => {
 	if (pg_client) return pg_client;
-	const client = new Client({connectionString: resolve_database_url(handle)});
+	const client = new Client({ connectionString: resolve_database_url(handle) });
 	await client.connect();
 	pg_client = client;
 	return client;
@@ -111,17 +111,17 @@ afterAll(async () => {
 const fire_failed_login = async (
 	handle: ReconstructedBootstrappedBackendHandle,
 	username: string,
-	xff: string | null,
+	xff: string | null
 ): Promise<Response> => {
 	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
-		Origin: handle.config.base_url,
+		Origin: handle.config.base_url
 	};
 	if (xff !== null) headers['X-Forwarded-For'] = xff;
 	const response = await fetch(`${handle.config.base_url}/api/account/login`, {
 		method: 'POST',
 		headers,
-		body: JSON.stringify({username, password: 'proxy-test-wrong-pw'}),
+		body: JSON.stringify({ username, password: 'proxy-test-wrong-pw' })
 	});
 	// Drain the body so the socket releases cleanly. The 401 path returns
 	// a small JSON envelope; we don't assert on shape here (audit-row IP is
@@ -144,21 +144,21 @@ const fire_failed_login = async (
 const wait_for_login_failure_ip = async (
 	handle: ReconstructedBootstrappedBackendHandle,
 	username: string,
-	{timeout_ms = 2_000, interval_ms = 25}: {timeout_ms?: number; interval_ms?: number} = {},
+	{ timeout_ms = 2_000, interval_ms = 25 }: { timeout_ms?: number; interval_ms?: number } = {}
 ): Promise<string | null> => {
 	const client = await get_pg_client(handle);
 	const deadline = performance.now() + timeout_ms;
 	let last_error: unknown;
 	while (performance.now() < deadline) {
 		try {
-			const result = await client.query<{ip: string | null}>(
+			const result = await client.query<{ ip: string | null }>(
 				`SELECT ip FROM audit_log
 				 WHERE event_type = 'login'
 				   AND outcome = 'failure'
 				   AND metadata->>'username' = $1
 				 ORDER BY seq DESC
 				 LIMIT 1`,
-				[username],
+				[username]
 			);
 			if (result.rows.length > 0) return result.rows[0]!.ip;
 		} catch (e) {
@@ -170,7 +170,7 @@ const wait_for_login_failure_ip = async (
 		`wait_for_login_failure_ip(${username}): no row matched within ${timeout_ms}ms` +
 			(last_error
 				? ` (last error: ${last_error instanceof Error ? last_error.message : JSON.stringify(last_error)})`
-				: ''),
+				: '')
 	);
 };
 
@@ -193,7 +193,7 @@ const assert_resolved_ip = async (
 	label: string,
 	xff: string | null,
 	expected_ip: string,
-	message: string,
+	message: string
 ): Promise<void> => {
 	const username = unique_username(label);
 	await fire_failed_login(handle, username, xff);
@@ -219,7 +219,7 @@ describe('proxy.cross', () => {
 			'trusted',
 			'203.0.113.1',
 			'203.0.113.1',
-			'audit.ip = XFF originator',
+			'audit.ip = XFF originator'
 		);
 	});
 
@@ -232,7 +232,7 @@ describe('proxy.cross', () => {
 			'multi-hop',
 			'203.0.113.1, 198.51.100.7, 127.0.0.1',
 			'198.51.100.7',
-			'audit.ip = first untrusted from right',
+			'audit.ip = first untrusted from right'
 		);
 	});
 
@@ -245,7 +245,7 @@ describe('proxy.cross', () => {
 			'malformed',
 			'attacker-controlled, 203.0.113.1',
 			'203.0.113.1',
-			'audit.ip skips malformed entry',
+			'audit.ip skips malformed entry'
 		);
 	});
 
@@ -259,7 +259,7 @@ describe('proxy.cross', () => {
 			'all-trusted',
 			'127.0.0.1',
 			'127.0.0.1',
-			'audit.ip = leftmost trusted entry',
+			'audit.ip = leftmost trusted entry'
 		);
 	});
 
@@ -273,7 +273,7 @@ describe('proxy.cross', () => {
 			'empty-xff',
 			'',
 			'127.0.0.1',
-			'audit.ip = connection IP on empty XFF',
+			'audit.ip = connection IP on empty XFF'
 		);
 	});
 
@@ -286,7 +286,7 @@ describe('proxy.cross', () => {
 			'v6-origin',
 			'2001:db8::1, 127.0.0.1',
 			'2001:db8::1',
-			'audit.ip = IPv6 originator',
+			'audit.ip = IPv6 originator'
 		);
 	});
 
@@ -300,7 +300,7 @@ describe('proxy.cross', () => {
 			'v4-mapped',
 			'::ffff:203.0.113.1, 127.0.0.1',
 			'203.0.113.1',
-			'audit.ip = normalized IPv4-mapped form',
+			'audit.ip = normalized IPv4-mapped form'
 		);
 	});
 
@@ -315,7 +315,7 @@ describe('proxy.cross', () => {
 			'mixed',
 			'198.51.100.7, attacker-controlled, 127.0.0.1',
 			'198.51.100.7',
-			'audit.ip skips malformed and stops at first valid untrusted',
+			'audit.ip skips malformed and stops at first valid untrusted'
 		);
 	});
 
@@ -333,7 +333,7 @@ describe('proxy.cross', () => {
 			'all-malformed',
 			'attacker-rotation-a, attacker-rotation-b',
 			'127.0.0.1',
-			'audit.ip = connection IP on all-malformed XFF',
+			'audit.ip = connection IP on all-malformed XFF'
 		);
 	});
 });

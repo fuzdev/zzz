@@ -1,18 +1,18 @@
 // @vitest-environment jsdom
 
-import {test, describe, vi, beforeEach, afterEach, assert} from 'vitest';
+import { test, describe, vi, beforeEach, afterEach, assert } from 'vitest';
 import {
 	JSONRPC_INTERNAL_ERROR,
 	JSONRPC_VERSION,
-	JsonrpcErrorCode,
+	JsonrpcErrorCode
 } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import {
 	create_jsonrpc_response,
-	is_jsonrpc_response,
+	is_jsonrpc_response
 } from '@fuzdev/fuz_app/http/jsonrpc_helpers.ts';
-import {ThrownJsonrpcError} from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+import { ThrownJsonrpcError } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
-import {RequestTracker} from '@fuzdev/fuz_app/actions/request_tracker.svelte.ts';
+import { RequestTracker } from '@fuzdev/fuz_app/actions/request_tracker.svelte.ts';
 
 describe('RequestTracker', () => {
 	let warn_spy: ReturnType<typeof vi.spyOn>;
@@ -196,14 +196,14 @@ describe('RequestTracker', () => {
 						return false;
 					}),
 				// Add a timeout to ensure test completes
-				new Promise((resolve) => setTimeout(() => resolve('timeout'), 100)),
+				new Promise((resolve) => setTimeout(() => resolve('timeout'), 100))
 			]);
 
 			// Track second request with same id
 			tracker.track_request(id);
 
 			// Resolve the second request (not the first one)
-			tracker.resolve_request(id, create_jsonrpc_response(id, {test: 'result'}));
+			tracker.resolve_request(id, create_jsonrpc_response(id, { test: 'result' }));
 
 			// Fast-forward time to ensure timeout promises resolve
 			vi.advanceTimersByTime(101);
@@ -226,7 +226,7 @@ describe('RequestTracker', () => {
 		test('resolves tracked request with value', async () => {
 			const tracker = new RequestTracker();
 			const id = 'req_1';
-			const response = create_jsonrpc_response(id, {test: 'result'});
+			const response = create_jsonrpc_response(id, { test: 'result' });
 
 			const deferred = tracker.track_request(id);
 			const clear_timeout_spy = vi.spyOn(global, 'clearTimeout');
@@ -250,30 +250,30 @@ describe('RequestTracker', () => {
 			const tracker = new RequestTracker();
 			const unknown_id = 'unknown_req';
 
-			const response = create_jsonrpc_response(unknown_id, {test: 'result'});
+			const response = create_jsonrpc_response(unknown_id, { test: 'result' });
 
 			tracker.resolve_request(unknown_id, response);
 
 			assert.strictEqual(warn_spy.mock.calls.length, 1);
 			assert.deepEqual(warn_spy.mock.calls[0], [
-				`received response for unknown request: ${unknown_id}`,
+				`received response for unknown request: ${unknown_id}`
 			]);
 		});
 
 		test('handles various data types', async () => {
 			const tracker = new RequestTracker();
 			const test_cases = [
-				{id: 'string_req', method: 'test_method_1'},
-				{id: 'number_req', method: 'test_method_2'},
-				{id: 'boolean_req', method: 'test_method_3'},
-				{id: 'null_req', method: 'test_method_4'},
-				{id: 'object_req', method: 'test_method_5'},
-				{id: 'array_req', method: 'test_method_6'},
+				{ id: 'string_req', method: 'test_method_1' },
+				{ id: 'number_req', method: 'test_method_2' },
+				{ id: 'boolean_req', method: 'test_method_3' },
+				{ id: 'null_req', method: 'test_method_4' },
+				{ id: 'object_req', method: 'test_method_5' },
+				{ id: 'array_req', method: 'test_method_6' }
 			];
 
-			const promises = test_cases.map(async ({id, method}) => {
+			const promises = test_cases.map(async ({ id, method }) => {
 				const deferred = tracker.track_request(id);
-				const response = create_jsonrpc_response(id, {method});
+				const response = create_jsonrpc_response(id, { method });
 				tracker.resolve_request(id, response);
 				const result = await deferred.promise;
 				assert.strictEqual(result, response);
@@ -300,7 +300,7 @@ describe('RequestTracker', () => {
 
 			const promise = request.deferred.promise;
 
-			tracker.resolve_request(id, create_jsonrpc_response(id, {test: 'result'}));
+			tracker.resolve_request(id, create_jsonrpc_response(id, { test: 'result' }));
 
 			await promise;
 			assert.strictEqual(status_when_resolved, 'success');
@@ -314,7 +314,7 @@ describe('RequestTracker', () => {
 			const error = {
 				jsonrpc: JSONRPC_VERSION,
 				id,
-				error: {code: JsonrpcErrorCode.parse(-32000), message: 'test error'},
+				error: { code: JsonrpcErrorCode.parse(-32000), message: 'test error' }
 			} as const;
 
 			const deferred = tracker.track_request(id);
@@ -342,12 +342,12 @@ describe('RequestTracker', () => {
 			tracker.reject_request(unknown_id, {
 				jsonrpc: JSONRPC_VERSION,
 				id: unknown_id,
-				error: {code: JsonrpcErrorCode.parse(-32000), message: 'test'},
+				error: { code: JsonrpcErrorCode.parse(-32000), message: 'test' }
 			});
 
 			assert.strictEqual(warn_spy.mock.calls.length, 1);
 			assert.deepEqual(warn_spy.mock.calls[0], [
-				`received error for unknown request: ${unknown_id}`,
+				`received error for unknown request: ${unknown_id}`
 			]);
 		});
 
@@ -359,8 +359,8 @@ describe('RequestTracker', () => {
 					error: {
 						jsonrpc: JSONRPC_VERSION,
 						id: 'error_req',
-						error: {code: JsonrpcErrorCode.parse(-32000), message: 'standard error'},
-					},
+						error: { code: JsonrpcErrorCode.parse(-32000), message: 'standard error' }
+					}
 				},
 				{
 					id: 'data_req',
@@ -370,21 +370,21 @@ describe('RequestTracker', () => {
 						error: {
 							code: JsonrpcErrorCode.parse(-32001),
 							message: 'error with data',
-							data: {detail: 'extra info'},
-						},
-					},
+							data: { detail: 'extra info' }
+						}
+					}
 				},
 				{
 					id: 'object_req',
 					error: {
 						jsonrpc: JSONRPC_VERSION,
 						id: 'object_req',
-						error: {code: JsonrpcErrorCode.parse(-32000), message: 'object error'},
-					},
-				},
+						error: { code: JsonrpcErrorCode.parse(-32000), message: 'object error' }
+					}
+				}
 			] as const;
 
-			for (const {id, error} of test_cases) {
+			for (const { id, error } of test_cases) {
 				const deferred = tracker.track_request(id);
 				tracker.reject_request(id, error);
 				const rejection_error = await deferred.promise.catch((err) => err);
@@ -419,7 +419,7 @@ describe('RequestTracker', () => {
 			tracker.reject_request(id, {
 				jsonrpc: JSONRPC_VERSION,
 				id,
-				error: {code: JsonrpcErrorCode.parse(-32000), message: 'test error'},
+				error: { code: JsonrpcErrorCode.parse(-32000), message: 'test error' }
 			});
 			await promise;
 
@@ -435,7 +435,7 @@ describe('RequestTracker', () => {
 				jsonrpc: JSONRPC_VERSION,
 				id,
 				method: 'test_method',
-				result: {data: 'test_result'},
+				result: { data: 'test_result' }
 			};
 			const resolve_spy = vi.spyOn(tracker, 'resolve_request');
 
@@ -458,12 +458,12 @@ describe('RequestTracker', () => {
 		test('rejects request with error when message contains error', async () => {
 			const tracker = new RequestTracker();
 			const id = 'req_2';
-			const error = {code: -32000, message: 'test error'};
+			const error = { code: -32000, message: 'test error' };
 			const message = {
 				jsonrpc: JSONRPC_VERSION,
 				id,
 				method: 'test_method',
-				error,
+				error
 			};
 			const reject_spy = vi.spyOn(tracker, 'reject_request');
 
@@ -498,7 +498,7 @@ describe('RequestTracker', () => {
 			tracker.handle_message({
 				jsonrpc: JSONRPC_VERSION,
 				method: 'notification',
-				params: {},
+				params: {}
 			});
 
 			// Verify no resolve/reject was called
@@ -525,7 +525,7 @@ describe('RequestTracker', () => {
 			tracker.handle_message({
 				jsonrpc: JSONRPC_VERSION,
 				id: 'test_id',
-				method: 'test',
+				method: 'test'
 			});
 
 			// Verify no resolve/reject was called
@@ -571,7 +571,7 @@ describe('RequestTracker', () => {
 				jsonrpc: JSONRPC_VERSION,
 				id,
 				method: 'test_method',
-				result: 'zero id result',
+				result: 'zero id result'
 			};
 			const resolve_spy = vi.spyOn(tracker, 'resolve_request');
 
@@ -590,14 +590,14 @@ describe('RequestTracker', () => {
 		test('prioritizes error over result if both exist in the message', async () => {
 			const tracker = new RequestTracker();
 			const id = 'conflict_req';
-			const error = {code: -32000, message: 'test error'};
+			const error = { code: -32000, message: 'test error' };
 
 			// Create message with both error and result
 			const message = {
 				jsonrpc: JSONRPC_VERSION,
 				id,
 				method: 'test_method',
-				error,
+				error
 			};
 
 			const deferred = tracker.track_request(id);
@@ -687,7 +687,7 @@ describe('RequestTracker', () => {
 						return false;
 					}),
 				// Add a timeout to ensure test completes
-				new Promise((resolve) => setTimeout(() => resolve('timeout'), 100)),
+				new Promise((resolve) => setTimeout(() => resolve('timeout'), 100))
 			]);
 
 			// Cancel the request
@@ -844,17 +844,17 @@ describe('RequestTracker', () => {
 		test('handles various JsonrpcRequestId types', async () => {
 			const tracker = new RequestTracker();
 			const test_cases = [
-				{id: 123, method: 'test'},
-				{id: 'string-id', method: 'test'},
-				{id: 0, method: 'test'},
-				{id: '', method: 'test'},
+				{ id: 123, method: 'test' },
+				{ id: 'string-id', method: 'test' },
+				{ id: 0, method: 'test' },
+				{ id: '', method: 'test' }
 			];
 
-			for (const {id, method} of test_cases) {
+			for (const { id, method } of test_cases) {
 				const deferred = tracker.track_request(id);
 				assert.ok(tracker.pending_requests.has(id));
 
-				const response = create_jsonrpc_response(id, {method});
+				const response = create_jsonrpc_response(id, { method });
 				tracker.resolve_request(id, response);
 				assert.ok(!tracker.pending_requests.has(id));
 
@@ -873,7 +873,7 @@ describe('RequestTracker', () => {
 				jsonrpc: JSONRPC_VERSION,
 				id,
 				method: 'test',
-				result: null,
+				result: null
 			});
 
 			const result = await deferred.promise;
@@ -881,7 +881,7 @@ describe('RequestTracker', () => {
 				jsonrpc: JSONRPC_VERSION,
 				id,
 				method: 'test',
-				result: null,
+				result: null
 			});
 			assert.ok(!tracker.pending_requests.has(id));
 		});
@@ -935,11 +935,11 @@ describe('RequestTracker', () => {
 			tracker.pending_requests.delete(id);
 
 			// These should not throw errors
-			tracker.resolve_request(id, create_jsonrpc_response(id, {test: 'result'}));
+			tracker.resolve_request(id, create_jsonrpc_response(id, { test: 'result' }));
 			tracker.reject_request(id, {
 				jsonrpc: '2.0' as const,
 				id,
-				error: {code: JsonrpcErrorCode.parse(-32000), message: 'test error'},
+				error: { code: JsonrpcErrorCode.parse(-32000), message: 'test error' }
 			});
 			tracker.cancel_request(id);
 		});
@@ -951,10 +951,10 @@ describe('RequestTracker', () => {
 			const deferred = tracker.track_request(id);
 
 			// First call should resolve
-			tracker.resolve_request(id, create_jsonrpc_response(id, {test: 'result'}));
+			tracker.resolve_request(id, create_jsonrpc_response(id, { test: 'result' }));
 
 			// Second call should have no effect and log warning
-			tracker.resolve_request(id, create_jsonrpc_response(id, {test: 'result'}));
+			tracker.resolve_request(id, create_jsonrpc_response(id, { test: 'result' }));
 
 			// Rejection after resolution should have no effect
 			tracker.reject_request(id, {
@@ -962,8 +962,8 @@ describe('RequestTracker', () => {
 				id,
 				error: {
 					code: JsonrpcErrorCode.parse(-32000),
-					message: 'ignored',
-				},
+					message: 'ignored'
+				}
 			});
 
 			// Promise should resolve with first value
@@ -972,8 +972,8 @@ describe('RequestTracker', () => {
 				jsonrpc: '2.0',
 				id,
 				result: {
-					test: 'result',
-				},
+					test: 'result'
+				}
 			});
 
 			// Warnings should be logged for the duplicate calls
@@ -992,7 +992,7 @@ describe('RequestTracker', () => {
 			assert.strictEqual(tracker.pending_requests.get(id)?.status, 'pending');
 
 			// Resolve the request
-			const response = create_jsonrpc_response(id, {status: 'success'});
+			const response = create_jsonrpc_response(id, { status: 'success' });
 			tracker.handle_message(response);
 
 			// Wait for promise to resolve
@@ -1001,7 +1001,7 @@ describe('RequestTracker', () => {
 			// Request should be resolved and removed
 			assert.deepEqual(result, {
 				...response,
-				result: {status: 'success'},
+				result: { status: 'success' }
 			});
 			assert.ok(!tracker.pending_requests.has(id));
 		});
@@ -1013,7 +1013,7 @@ describe('RequestTracker', () => {
 			// Track multiple requests
 			const deferreds = ids.map((id) => ({
 				id,
-				deferred: tracker.track_request(id),
+				deferred: tracker.track_request(id)
 			}));
 
 			// All requests should be pending
@@ -1023,17 +1023,17 @@ describe('RequestTracker', () => {
 			for (let i = ids.length - 1; i >= 0; i--) {
 				const id = ids[i];
 				if (id === undefined) throw Error();
-				tracker.resolve_request(id, create_jsonrpc_response(id, {test: 'result'}));
+				tracker.resolve_request(id, create_jsonrpc_response(id, { test: 'result' }));
 			}
 
 			// All requests should be resolved
-			const results = await Promise.all(deferreds.map(({deferred}) => deferred.promise));
+			const results = await Promise.all(deferreds.map(({ deferred }) => deferred.promise));
 
 			// Verify each result matches its request
 			results.forEach((result, index) => {
 				assert.strictEqual(result.id, ids[index]);
 				if (is_jsonrpc_response(result)) {
-					assert.deepStrictEqual(result.result, {test: 'result'});
+					assert.deepStrictEqual(result.result, { test: 'result' });
 				}
 			});
 
@@ -1054,13 +1054,13 @@ describe('RequestTracker', () => {
 			const timeout_deferred = tracker.track_request(timeout_id);
 
 			// Resolve one request
-			tracker.resolve_request(resolve_id, create_jsonrpc_response(resolve_id, {test: 'result'}));
+			tracker.resolve_request(resolve_id, create_jsonrpc_response(resolve_id, { test: 'result' }));
 
 			// Reject another request
 			tracker.reject_request(reject_id, {
 				jsonrpc: '2.0' as const,
 				id: reject_id,
-				error: {code: JsonrpcErrorCode.parse(-32000), message: 'rejected'},
+				error: { code: JsonrpcErrorCode.parse(-32000), message: 'rejected' }
 			});
 
 			// Let the third request time out

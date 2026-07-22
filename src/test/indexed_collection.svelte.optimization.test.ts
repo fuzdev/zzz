@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 
-import {test, assert, describe, vi} from 'vitest';
-import {z} from 'zod';
-import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.ts';
+import { test, assert, describe, vi } from 'vitest';
+import { z } from 'zod';
+import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {IndexedCollection} from '$lib/indexed_collection.svelte.ts';
+import { IndexedCollection } from '$lib/indexed_collection.svelte.ts';
 import {
 	create_derived_index,
 	create_dynamic_index,
-	create_multi_index,
+	create_multi_index
 } from '$lib/indexed_collection_helpers.svelte.ts';
 
 // Mock item type that implements IndexedItem
@@ -25,13 +25,13 @@ const create_item = (
 	string_a: string,
 	string_b: string,
 	array: Array<string> = [],
-	number: number = 0,
+	number: number = 0
 ): TestItem => ({
 	id: create_uuid(),
 	string_a,
 	string_b,
 	array,
-	number,
+	number
 });
 
 describe('IndexedCollection - Optimization Tests', () => {
@@ -49,10 +49,10 @@ describe('IndexedCollection - Optimization Tests', () => {
 			indexes: [
 				{
 					key: 'test_index',
-					compute: compute_spy,
-				},
+					compute: compute_spy
+				}
 			],
-			initial_items: [create_item('string_a1', 'string_b1'), create_item('string_a2', 'string_b2')],
+			initial_items: [create_item('string_a1', 'string_b1'), create_item('string_a2', 'string_b2')]
 		});
 
 		// Verify compute was called exactly once during initialization
@@ -85,13 +85,13 @@ describe('IndexedCollection - Optimization Tests', () => {
 					key: 'high_number',
 					compute: compute_spy,
 					matches: (item) => item.number > 10,
-					onadd: onadd_spy,
-				}),
+					onadd: onadd_spy
+				})
 			],
 			initial_items: [
 				create_item('string_a1', 'string_b1', [], 15),
-				create_item('string_a2', 'string_b2', [], 5),
-			],
+				create_item('string_a2', 'string_b2', [], 5)
+			]
 		});
 
 		// Verify compute was called exactly once during initialization
@@ -139,16 +139,16 @@ describe('IndexedCollection - Optimization Tests', () => {
 						return map;
 					},
 					query_schema: z.string(),
-					onadd: onadd_spy,
-				},
-			],
+					onadd: onadd_spy
+				}
+			]
 		});
 
 		// Test batch add performance
 		const start_time = performance.now();
 
-		const items = Array.from({length: 100}, (_, i) =>
-			create_item(`string_a${i}`, i % 5 === 0 ? 'string_b1' : 'string_b2', [], i),
+		const items = Array.from({ length: 100 }, (_, i) =>
+			create_item(`string_a${i}`, i % 5 === 0 ? 'string_b1' : 'string_b2', [], i)
 		);
 
 		collection.add_many(items);
@@ -165,8 +165,8 @@ describe('IndexedCollection - Optimization Tests', () => {
 		// Test individual adds
 		const individual_start = performance.now();
 
-		const more_items = Array.from({length: 100}, (_, i) =>
-			create_item(`string_a${i + 100}`, i % 5 === 0 ? 'string_b1' : 'string_b2', [], i + 100),
+		const more_items = Array.from({ length: 100 }, (_, i) =>
+			create_item(`string_a${i + 100}`, i % 5 === 0 ? 'string_b1' : 'string_b2', [], i + 100)
 		);
 
 		for (const item of more_items) {
@@ -202,15 +202,15 @@ describe('IndexedCollection - Optimization Tests', () => {
 							return result;
 						};
 					},
-					query_schema: z.string(),
-				}),
-			],
+					query_schema: z.string()
+				})
+			]
 		});
 
 		// Add test data
 		for (let i = 0; i < 20; i++) {
 			collection.add(
-				create_item(`string_a${i}`, `string_b${i % 3}`, [`array_item${i % 5}`], i * 5),
+				create_item(`string_a${i}`, `string_b${i % 3}`, [`array_item${i % 5}`], i * 5)
 			);
 		}
 
@@ -230,17 +230,17 @@ describe('IndexedCollection - Optimization Tests', () => {
 		const by_string_b_index = create_multi_index<TestItem, string>({
 			key: 'by_string_b',
 			extractor: (item) => item.string_b,
-			query_schema: z.string(),
+			query_schema: z.string()
 		});
 
 		// Create a collection with the proper index
 		const collection: IndexedCollection<TestItem> = new IndexedCollection({
-			indexes: [by_string_b_index],
+			indexes: [by_string_b_index]
 		});
 
 		// Create a large dataset (~1000 items)
-		const large_dataset = Array.from({length: 1000}, (_, i) =>
-			create_item(`string_a${i}`, `string_b${i % 10}`, [`array_item${i % 20}`], i),
+		const large_dataset = Array.from({ length: 1000 }, (_, i) =>
+			create_item(`string_a${i}`, `string_b${i % 10}`, [`array_item${i % 20}`], i)
 		);
 
 		// Add them in one batch

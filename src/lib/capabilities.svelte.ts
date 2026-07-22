@@ -1,14 +1,14 @@
 // @slop Claude Sonnet 3.7
 
-import {z} from 'zod';
-import type {AsyncStatus} from '@fuzdev/fuz_util/async.ts';
-import type {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.ts';
+import { z } from 'zod';
+import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
+import type { JsonrpcRequestId } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {CellJson} from './cell_types.ts';
-import type {DiskfileDirectoryPath} from './diskfile_types.ts';
-import {ProviderCapability} from './provider_capability.svelte.ts';
-import type {ProviderName} from './provider_types.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { CellJson } from './cell_types.ts';
+import type { DiskfileDirectoryPath } from './diskfile_types.ts';
+import { ProviderCapability } from './provider_capability.svelte.ts';
+import type { ProviderName } from './provider_types.ts';
 
 // TODO namerbot capability, uses backend+(at least one provider) (or rethink its role in a bigger picture, not just names)
 
@@ -17,7 +17,7 @@ import type {ProviderName} from './provider_types.ts';
 /** Maximum number of ping records to keep. */
 export const PING_HISTORY_MAX = 6;
 
-export const CapabilitiesJson = CellJson.extend({}).meta({cell_class_name: 'Capabilities'});
+export const CapabilitiesJson = CellJson.extend({}).meta({ cell_class_name: 'Capabilities' });
 export type CapabilitiesJson = z.infer<typeof CapabilitiesJson>;
 export type CapabilitiesJsonInput = z.input<typeof CapabilitiesJson>;
 
@@ -83,7 +83,7 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 		status: 'initial',
 		message_id: null,
 		error_message: null,
-		updated: null,
+		updated: null
 	});
 
 	/**
@@ -91,8 +91,8 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 	 */
 	readonly websocket: Capability<WebsocketCapabilityData | null | undefined> = $derived.by(() => {
 		// Map socket status to capability status, but consider connection state
-		const {socket} = this.app;
-		const {status} = socket;
+		const { socket } = this.app;
+		const { status } = socket;
 
 		// Socket is available if we're connected,
 		// otherwise it's not available but we have data about its state
@@ -107,7 +107,7 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 						last_send_time: socket.last_send_time,
 						last_receive_time: socket.last_receive_time,
 						connection_duration: socket.connection_duration,
-						pending_pings: this.pending_ping_count, // Update to use new count
+						pending_pings: this.pending_ping_count // Update to use new count
 					};
 
 		return {
@@ -116,7 +116,7 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 			status,
 			message_id: null,
 			error_message: null, // Socket doesn't expose error messages directly
-			updated: data?.last_connect_time ?? null,
+			updated: data?.last_connect_time ?? null
 		};
 	});
 
@@ -124,7 +124,7 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 	 * The filesystem capability derives its state from the backend and `zzz_dir`.
 	 */
 	readonly filesystem: Capability<FilesystemCapabilityData | null | undefined> = $derived.by(() => {
-		const {zzz_dir, scoped_dirs} = this.app;
+		const { zzz_dir, scoped_dirs } = this.app;
 		let status: AsyncStatus;
 
 		if (this.backend.status !== 'success') {
@@ -145,11 +145,11 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 
 		return {
 			name: 'filesystem',
-			data: status === 'success' ? {zzz_dir, scoped_dirs} : undefined,
+			data: status === 'success' ? { zzz_dir, scoped_dirs } : undefined,
 			status,
 			message_id: null,
 			error_message: null,
-			updated: Date.now(),
+			updated: Date.now()
 		};
 	});
 
@@ -168,7 +168,7 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 	 * Most recent completed ping round trip time in milliseconds.
 	 */
 	readonly latest_ping_time: number | null = $derived(
-		this.pings.find((p) => p.completed)?.round_trip_time ?? null,
+		this.pings.find((p) => p.completed)?.round_trip_time ?? null
 	);
 
 	/**
@@ -196,7 +196,7 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 			? undefined
 			: this.backend.status === 'pending'
 				? null
-				: this.backend.status === 'success' && this.backend.data !== null,
+				: this.backend.status === 'success' && this.backend.data !== null
 	);
 
 	/**
@@ -209,7 +209,7 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 			? undefined
 			: this.websocket.status === 'pending'
 				? null
-				: this.websocket.status === 'success',
+				: this.websocket.status === 'success'
 	);
 
 	/**
@@ -222,15 +222,15 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 			? undefined
 			: this.filesystem.status === 'pending'
 				? null
-				: this.filesystem.status === 'success',
+				: this.filesystem.status === 'success'
 	);
 
 	constructor(options: CellOptions<typeof CapabilitiesJson>) {
 		super(CapabilitiesJson, options);
 		this.providers = {
-			claude: new ProviderCapability({app: this.app, name: 'claude'}),
-			chatgpt: new ProviderCapability({app: this.app, name: 'chatgpt'}),
-			gemini: new ProviderCapability({app: this.app, name: 'gemini'}),
+			claude: new ProviderCapability({ app: this.app, name: 'claude' }),
+			chatgpt: new ProviderCapability({ app: this.app, name: 'chatgpt' }),
+			gemini: new ProviderCapability({ app: this.app, name: 'gemini' })
 		};
 	}
 
@@ -261,7 +261,7 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 			completed: false,
 			sent_time: Date.now(),
 			received_time: null,
-			round_trip_time: null,
+			round_trip_time: null
 		};
 
 		// Add the new ping to the start of the array
@@ -275,7 +275,7 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 			status: 'pending',
 			message_id: request_id,
 			error_message: null,
-			updated: Date.now(),
+			updated: Date.now()
 		};
 	}
 
@@ -299,12 +299,12 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 			this.backend = {
 				name: 'backend',
 				data: {
-					round_trip_time: ping.round_trip_time,
+					round_trip_time: ping.round_trip_time
 				},
 				status: 'success',
 				message_id: ping_id,
 				error_message: null,
-				updated: Date.now(),
+				updated: Date.now()
 			};
 		}
 	}
@@ -328,7 +328,7 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 				status: 'failure',
 				message_id: ping_id,
 				error_message,
-				updated: Date.now(),
+				updated: Date.now()
 			};
 		}
 	}
@@ -343,7 +343,7 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 			status: 'initial',
 			message_id: null,
 			error_message: null,
-			updated: null,
+			updated: null
 		};
 	}
 }

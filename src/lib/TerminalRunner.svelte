@@ -1,13 +1,13 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
-	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+	import { slide } from 'svelte/transition';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-	import {app_context} from './app.svelte.ts';
-	import {TerminalPreset} from './terminal_preset.svelte.ts';
+	import { app_context } from './app.svelte.ts';
+	import { TerminalPreset } from './terminal_preset.svelte.ts';
 	import TerminalRunItem from './TerminalRunItem.svelte';
 	import TerminalPresetBar from './TerminalPresetBar.svelte';
 	import TerminalCommandInput from './TerminalCommandInput.svelte';
-	import {Scrollable} from './scrollable.svelte.ts';
+	import { Scrollable } from './scrollable.svelte.ts';
 
 	const app = app_context.get();
 
@@ -23,17 +23,17 @@
 	const scrollable = new Scrollable();
 
 	const default_preset_configs = [
-		{name: 'echo hello world', command: 'echo', args: ['hello', 'world']},
-		{name: 'check', command: 'gro', args: ['check']},
-		{name: 'build', command: 'gro', args: ['build']},
-		{name: 'dev', command: 'gro', args: ['dev']},
+		{ name: 'echo hello world', command: 'echo', args: ['hello', 'world'] },
+		{ name: 'check', command: 'gro', args: ['check'] },
+		{ name: 'build', command: 'gro', args: ['build'] },
+		{ name: 'dev', command: 'gro', args: ['dev'] }
 	];
 
 	// Seed preset Cell instances from defaults
 	const presets: Array<TerminalPreset> = $state(
 		default_preset_configs.map(
-			(p) => new TerminalPreset({app, json: {name: p.name, command: p.command, args: p.args}}),
-		),
+			(p) => new TerminalPreset({ app, json: { name: p.name, command: p.command, args: p.args } })
+		)
 	);
 
 	const format_command = (command: string, args: Array<string>): string =>
@@ -42,13 +42,13 @@
 	// Spawn a shell session so the terminal stays alive for follow-up commands,
 	// then send `input` followed by a newline to run it.
 	const spawn_and_run = async (
-		input: string,
-	): Promise<{ok: true; terminal_id: Uuid} | {ok: false; error: string}> => {
-		const result = await app.api.terminal_create({command: 'sh', args: []});
-		if (!result.ok) return {ok: false, error: result.error.message};
-		const {terminal_id} = result.value;
-		void app.api.terminal_data_send({terminal_id, data: input + '\n'});
-		return {ok: true, terminal_id};
+		input: string
+	): Promise<{ ok: true; terminal_id: Uuid } | { ok: false; error: string }> => {
+		const result = await app.api.terminal_create({ command: 'sh', args: [] });
+		if (!result.ok) return { ok: false, error: result.error.message };
+		const { terminal_id } = result.value;
+		void app.api.terminal_data_send({ terminal_id, data: input + '\n' });
+		return { ok: true, terminal_id };
 	};
 
 	const create_terminal = async (command: string, args: Array<string>): Promise<void> => {
@@ -56,7 +56,7 @@
 		const input = format_command(command, args);
 		const result = await spawn_and_run(input);
 		if (result.ok) {
-			runs.push({terminal_id: result.terminal_id, command, args});
+			runs.push({ terminal_id: result.terminal_id, command, args });
 		} else {
 			error_message = `failed to run "${input}": ${result.error}`;
 		}
@@ -75,7 +75,7 @@
 	};
 
 	const handle_preset_create = (name: string, command: string, args: Array<string>): void => {
-		presets.push(new TerminalPreset({app, json: {name, command, args}}));
+		presets.push(new TerminalPreset({ app, json: { name, command, args } }));
 	};
 
 	const handle_preset_delete = (preset: TerminalPreset): void => {
@@ -91,12 +91,12 @@
 
 	const handle_restart = (run: RunEntry) => async (): Promise<void> => {
 		// close may fail if the terminal already exited — ignore
-		await app.api.terminal_close({terminal_id: run.terminal_id}).catch(() => undefined);
+		await app.api.terminal_close({ terminal_id: run.terminal_id }).catch(() => undefined);
 		const result = await spawn_and_run(format_command(run.command, run.args));
 		if (result.ok) {
 			const index = runs.indexOf(run);
 			if (index !== -1) {
-				runs[index] = {terminal_id: result.terminal_id, command: run.command, args: run.args};
+				runs[index] = { terminal_id: result.terminal_id, command: run.command, args: run.args };
 			}
 		}
 	};

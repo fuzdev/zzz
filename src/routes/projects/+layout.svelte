@@ -3,17 +3,17 @@
 </script>
 
 <script lang="ts">
-	import {projects_context, Projects} from './projects.svelte.ts';
-	import {frontend_context} from '$lib/frontend.svelte.ts';
-	import {parse_url_param_uuid} from '$lib/url_params_helpers.ts';
+	import { projects_context, Projects } from './projects.svelte.ts';
+	import { frontend_context } from '$lib/frontend.svelte.ts';
+	import { parse_url_param_uuid } from '$lib/url_params_helpers.ts';
 
-	const {children, params} = $props();
+	const { children, params } = $props();
 
 	const app = frontend_context.get();
 
 	// Initialize the Projects instance and set it in context
 
-	projects ??= new Projects({app});
+	projects ??= new Projects({ app });
 	projects_context.set(projects);
 
 	// Synchronize URL params to project state

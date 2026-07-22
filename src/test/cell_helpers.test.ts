@@ -1,7 +1,7 @@
-import {describe, test, assert} from 'vitest';
-import {z} from 'zod';
+import { describe, test, assert } from 'vitest';
+import { z } from 'zod';
 
-import {get_schema_class_info} from '$lib/cell_helpers.ts';
+import { get_schema_class_info } from '$lib/cell_helpers.ts';
 
 describe('get_schema_class_info', () => {
 	test('handles null or undefined schemas', () => {
@@ -31,7 +31,7 @@ describe('get_schema_class_info', () => {
 	test('identifies array schemas correctly', () => {
 		const string_array = z.array(z.string());
 		const number_array = z.array(z.number());
-		const object_array = z.array(z.object({name: z.string()}));
+		const object_array = z.array(z.object({ name: z.string() }));
 
 		const string_array_info = get_schema_class_info(string_array);
 		const number_array_info = get_schema_class_info(number_array);
@@ -67,7 +67,7 @@ describe('get_schema_class_info', () => {
 	test('handles object schemas', () => {
 		const object_schema = z.object({
 			name: z.string(),
-			count: z.number(),
+			count: z.number()
 		});
 
 		const object_info = get_schema_class_info(object_schema);
@@ -76,15 +76,15 @@ describe('get_schema_class_info', () => {
 	});
 
 	test('detects class names set with cell_class', () => {
-		const schema = z.object({id: z.string()});
-		const schema_with_class = schema.meta({cell_class_name: 'TestClass'});
+		const schema = z.object({ id: z.string() });
+		const schema_with_class = schema.meta({ cell_class_name: 'TestClass' });
 
 		const info = get_schema_class_info(schema_with_class);
 		assert.strictEqual(info?.class_name, 'TestClass');
 	});
 
 	test('detects element classes from element metadata', () => {
-		const element_schema = z.string().meta({cell_class_name: 'ElementClass'});
+		const element_schema = z.string().meta({ cell_class_name: 'ElementClass' });
 		const array_schema = z.array(element_schema);
 
 		const info = get_schema_class_info(array_schema);
@@ -93,7 +93,7 @@ describe('get_schema_class_info', () => {
 	});
 
 	test('handles default-wrapped array with element metadata', () => {
-		const element_schema = z.string().meta({cell_class_name: 'ElementClass'});
+		const element_schema = z.string().meta({ cell_class_name: 'ElementClass' });
 		const array_schema = z.array(element_schema).default([]);
 
 		const info = get_schema_class_info(array_schema);
@@ -104,8 +104,8 @@ describe('get_schema_class_info', () => {
 	test('reads element class from nested element schema', () => {
 		// Test that metadata on element schema is properly read
 		const element_schema = z
-			.object({name: z.string()})
-			.meta({cell_class_name: 'DirectElementClass'});
+			.object({ name: z.string() })
+			.meta({ cell_class_name: 'DirectElementClass' });
 		const array_schema = z.array(element_schema);
 
 		// Verify that get_schema_class_info can read element metadata
@@ -153,7 +153,7 @@ describe('get_schema_class_info', () => {
 		// ZodEffects (refinement) wrapping an array
 		const refined_array = z
 			.array(z.string())
-			.refine((arr) => arr.length > 0, {message: 'Array must not be empty'});
+			.refine((arr) => arr.length > 0, { message: 'Array must not be empty' });
 
 		const refined_info = get_schema_class_info(refined_array);
 		assert.strictEqual(refined_info?.type, 'ZodArray');
@@ -174,7 +174,7 @@ describe('get_schema_class_info', () => {
 		// Complex chain: optional -> default -> refine -> transform -> array
 		const complex_chain = z
 			.array(z.string())
-			.refine((arr) => arr.every((s) => s.length > 0), {message: 'No empty strings'})
+			.refine((arr) => arr.every((s) => s.length > 0), { message: 'No empty strings' })
 			.transform((arr) => arr.map((s) => s.trim()))
 			.default([])
 			.optional();
@@ -186,7 +186,7 @@ describe('get_schema_class_info', () => {
 
 	test('recursive unwrapping preserves metadata through wrappers', () => {
 		// Create an array with element that has metadata
-		const element = z.string().meta({cell_class_name: 'TestElement'});
+		const element = z.string().meta({ cell_class_name: 'TestElement' });
 		const array_with_class = z.array(element);
 
 		// Wrap it multiple times
@@ -200,7 +200,7 @@ describe('get_schema_class_info', () => {
 
 	test('handles deeply nested schemas with element metadata', () => {
 		// Create a deeply nested schema with element metadata
-		const element = z.string().meta({cell_class_name: 'NestedElement'});
+		const element = z.string().meta({ cell_class_name: 'NestedElement' });
 		const nested_schema = z.array(element).optional().default([]);
 
 		// Verify metadata is found correctly through the wrappers
@@ -212,8 +212,8 @@ describe('get_schema_class_info', () => {
 
 describe('cell_class', () => {
 	test('adds class name metadata to schemas', () => {
-		const schema = z.object({name: z.string()});
-		const result = schema.meta({cell_class_name: 'TestCellClass'});
+		const schema = z.object({ name: z.string() });
+		const result = schema.meta({ cell_class_name: 'TestCellClass' });
 
 		// Should add the metadata via .meta()
 		assert.strictEqual(result.meta()?.cell_class_name, 'TestCellClass');

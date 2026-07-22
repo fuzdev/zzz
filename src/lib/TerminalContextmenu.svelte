@@ -1,14 +1,14 @@
 <script lang="ts">
-	import type {Snippet} from 'svelte';
+	import type { Snippet } from 'svelte';
 	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
-	import type {Thunk} from '@fuzdev/fuz_util/function.ts';
+	import type { Thunk } from '@fuzdev/fuz_util/function.ts';
 
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 
 	const {
 		get_terminal_text,
 		display_command,
-		children,
+		children
 	}: {
 		get_terminal_text: Thunk<string> | null;
 		display_command: string;

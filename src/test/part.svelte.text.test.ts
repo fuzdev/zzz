@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
-import {test, describe, beforeEach, assert} from 'vitest';
-import {create_uuid} from '@fuzdev/fuz_util/id.ts';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
+import { test, describe, beforeEach, assert } from 'vitest';
+import { create_uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import {estimate_token_count} from '$lib/helpers.ts';
-import {Frontend} from '$lib/frontend.svelte.ts';
+import { estimate_token_count } from '$lib/helpers.ts';
+import { Frontend } from '$lib/frontend.svelte.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Test suite variables
 let app: Frontend;
@@ -27,7 +27,7 @@ function test() {
 }
 
 <div class="test">This is <strong>HTML</strong> content</div>
-`.trim(),
+`.trim()
 };
 
 // Setup function to create a real Zzz instance
@@ -57,7 +57,7 @@ describe('TextPart initialization', () => {
 		const content = TEST_CONTENT.INITIAL;
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content,
+			content
 		});
 
 		assert.strictEqual(part.content, content);
@@ -82,7 +82,7 @@ describe('TextPart initialization', () => {
 			start: 5,
 			end: 20,
 			enabled: false,
-			attributes: [{id: create_uuid(), key: 'attr1', value: 'value1'}],
+			attributes: [{ id: create_uuid(), key: 'attr1', value: 'value1' }]
 		});
 
 		assert.strictEqual(part.id, test_id);
@@ -108,7 +108,7 @@ describe('TextPart reactive properties', () => {
 	test('derived properties update when content changes', () => {
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: TEST_CONTENT.INITIAL,
+			content: TEST_CONTENT.INITIAL
 		});
 
 		// Verify initial state
@@ -129,7 +129,7 @@ describe('TextPart reactive properties', () => {
 	test('length is zero when content is empty', () => {
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: TEST_CONTENT.EMPTY,
+			content: TEST_CONTENT.EMPTY
 		});
 
 		assert.strictEqual(part.content, TEST_CONTENT.EMPTY);
@@ -155,7 +155,7 @@ describe('TextPart serialization', () => {
 			content: 'Test content',
 			name: 'Test part',
 			start: 10,
-			end: 20,
+			end: 20
 		});
 
 		const json = part.to_json();
@@ -174,17 +174,17 @@ describe('TextPart serialization', () => {
 	test('clone creates independent copy with same values', () => {
 		const ORIGINAL = {
 			CONTENT: 'Original content',
-			NAME: 'Original name',
+			NAME: 'Original name'
 		};
 		const MODIFIED = {
 			CONTENT: 'Modified content',
-			NAME: 'Modified name',
+			NAME: 'Modified name'
 		};
 
 		const original = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
 			content: ORIGINAL.CONTENT,
-			name: ORIGINAL.NAME,
+			name: ORIGINAL.NAME
 		});
 
 		const clone = original.clone();
@@ -209,7 +209,7 @@ describe('TextPart content modification', () => {
 	test('update_content method directly updates content', () => {
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: TEST_CONTENT.INITIAL,
+			content: TEST_CONTENT.INITIAL
 		});
 
 		// Initial state
@@ -225,7 +225,7 @@ describe('TextPart content modification', () => {
 	test('content setter directly updates content', () => {
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: TEST_CONTENT.INITIAL,
+			content: TEST_CONTENT.INITIAL
 		});
 
 		// Initial state
@@ -243,7 +243,7 @@ describe('TextPart content edge cases', () => {
 	test('handles long content correctly', () => {
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: TEST_CONTENT.LONG,
+			content: TEST_CONTENT.LONG
 		});
 
 		assert.strictEqual(part.content, TEST_CONTENT.LONG);
@@ -254,7 +254,7 @@ describe('TextPart content edge cases', () => {
 	test('handles unicode characters correctly', () => {
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: TEST_CONTENT.UNICODE,
+			content: TEST_CONTENT.UNICODE
 		});
 
 		assert.strictEqual(part.content, TEST_CONTENT.UNICODE);
@@ -265,7 +265,7 @@ describe('TextPart content edge cases', () => {
 	test('handles special characters correctly', () => {
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: TEST_CONTENT.SPECIAL_CHARS,
+			content: TEST_CONTENT.SPECIAL_CHARS
 		});
 
 		assert.strictEqual(part.content, TEST_CONTENT.SPECIAL_CHARS);
@@ -276,7 +276,7 @@ describe('TextPart content edge cases', () => {
 	test('handles code and markup content correctly', () => {
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: TEST_CONTENT.CODE,
+			content: TEST_CONTENT.CODE
 		});
 
 		assert.strictEqual(part.content, TEST_CONTENT.CODE);
@@ -289,11 +289,11 @@ describe('TextPart attribute management', () => {
 	test('can add, update and remove attributes', () => {
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: 'Test content',
+			content: 'Test content'
 		});
 
 		// Add attribute
-		part.add_attribute({key: 'class', value: 'highlight'});
+		part.add_attribute({ key: 'class', value: 'highlight' });
 		assert.strictEqual(part.attributes.length, 1);
 		let first_attr = part.attributes[0];
 		if (!first_attr) throw new Error('Expected first attribute');
@@ -303,7 +303,7 @@ describe('TextPart attribute management', () => {
 		const attr_id = first_attr.id;
 
 		// Update attribute
-		const updated = part.update_attribute(attr_id, {value: 'special-highlight'});
+		const updated = part.update_attribute(attr_id, { value: 'special-highlight' });
 		assert.ok(updated);
 		first_attr = part.attributes[0];
 		if (!first_attr) throw new Error('Expected attribute after update');
@@ -315,20 +315,20 @@ describe('TextPart attribute management', () => {
 		assert.strictEqual(part.attributes.length, 0);
 
 		// Attempting to update non-existent attribute returns false
-		const fake_update = part.update_attribute(create_uuid(), {key: 'test', value: 'test'});
+		const fake_update = part.update_attribute(create_uuid(), { key: 'test', value: 'test' });
 		assert.ok(!fake_update);
 	});
 
 	test('updates attribute key and value together', () => {
 		const part = app.cell_registry.instantiate('TextPart');
 
-		part.add_attribute({key: 'class', value: 'highlight'});
+		part.add_attribute({ key: 'class', value: 'highlight' });
 		const first_attr = part.attributes[0];
 		if (!first_attr) throw new Error('Expected first attribute');
 		const attr_id = first_attr.id;
 
 		// Update both key and value
-		const updated = part.update_attribute(attr_id, {key: 'data-type', value: 'important'});
+		const updated = part.update_attribute(attr_id, { key: 'data-type', value: 'important' });
 		assert.ok(updated);
 		const updated_attr = part.attributes[0];
 		if (!updated_attr) throw new Error('Expected attribute after update');
@@ -339,11 +339,11 @@ describe('TextPart attribute management', () => {
 	test('attributes are preserved when serializing to JSON', () => {
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: 'Test content',
+			content: 'Test content'
 		});
 
-		part.add_attribute({key: 'data-test', value: 'true'});
-		part.add_attribute({key: 'class', value: 'important'});
+		part.add_attribute({ key: 'data-test', value: 'true' });
+		part.add_attribute({ key: 'class', value: 'important' });
 
 		const json = part.to_json();
 
@@ -371,7 +371,7 @@ describe('TextPart instance management', () => {
 		// Create a part
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: 'Registry test content',
+			content: 'Registry test content'
 		});
 
 		// Add to the registry
@@ -386,7 +386,7 @@ describe('TextPart instance management', () => {
 		// Create a part and add to registry
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: 'Removable content',
+			content: 'Removable content'
 		});
 
 		app.parts.items.add(part);
@@ -408,7 +408,7 @@ describe('TextPart start and end position markers', () => {
 			type: 'text',
 			content: 'Position test',
 			start: 10,
-			end: 25,
+			end: 25
 		});
 
 		assert.strictEqual(part.start, 10);
@@ -418,7 +418,7 @@ describe('TextPart start and end position markers', () => {
 	test('start and end positions can be updated', () => {
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
-			content: 'Position test',
+			content: 'Position test'
 		});
 
 		// Initial values are null
@@ -438,7 +438,7 @@ describe('TextPart start and end position markers', () => {
 			type: 'text',
 			content: 'Position preservation test',
 			start: 8,
-			end: 30,
+			end: 30
 		});
 
 		// Serialize to JSON

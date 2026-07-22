@@ -1,14 +1,14 @@
 <script lang="ts">
-	import type {SvelteHTMLElements} from 'svelte/elements';
-	import type {Snippet} from 'svelte';
+	import type { SvelteHTMLElements } from 'svelte/elements';
+	import type { Snippet } from 'svelte';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 	import PasteFromClipboard from '@fuzdev/fuz_ui/PasteFromClipboard.svelte';
-	import {swallow} from '@fuzdev/fuz_util/dom.ts';
+	import { swallow } from '@fuzdev/fuz_util/dom.ts';
 
-	import {estimate_token_count, format_placeholder} from './helpers.ts';
+	import { estimate_token_count, format_placeholder } from './helpers.ts';
 	import ContentStats from './ContentStats.svelte';
 	import ClearRestoreButton from './ClearRestoreButton.svelte';
-	import {icon_paste} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_paste } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	let {
@@ -24,7 +24,7 @@
 		attrs, // TODO probably extend base props with SvelteHTMLElements['textarea'] and delete this
 		after,
 		children,
-		onsave,
+		onsave
 	}: {
 		content: string; // TODO maybe rename to value? rethink `ContentEditor` in general when we switch to CodeMirror
 		/** Estimated if not provided and `show_stats` is true. */
@@ -84,8 +84,7 @@
 							pending_element_to_focus_key = null;
 							focus();
 						}
-					}}
-		></textarea>
+					}}></textarea>
 		{@render children?.()}
 	</div>
 

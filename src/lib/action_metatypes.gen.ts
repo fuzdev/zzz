@@ -1,13 +1,13 @@
-import type {Gen} from '@fuzdev/gro/gen.ts';
+import type { Gen } from '@fuzdev/gro/gen.ts';
 import {
 	type ActionMethodEnumKind,
 	ImportBuilder,
 	compose_gen_file,
 	generate_action_method_enums,
-	generate_frontend_actions_api,
+	generate_frontend_actions_api
 } from '@fuzdev/fuz_app/actions/action_codegen.ts';
 
-import {all_action_specs} from './action_specs.ts';
+import { all_action_specs } from './action_specs.ts';
 
 /**
  * Outputs a file with generated types and schemas using the action specs as the source of truth.
@@ -34,15 +34,15 @@ const OPEN_UNION_KINDS: ReadonlySet<ActionMethodEnumKind> = new Set([
 	'remote_notification',
 	'local_call',
 	'frontend',
-	'backend',
+	'backend'
 ]);
 const HANDLER_NARROW_KINDS: ReadonlySet<ActionMethodEnumKind> = new Set([
 	'frontend_handled',
 	'backend_handled',
-	'broadcast',
+	'broadcast'
 ]);
 
-export const gen: Gen = ({origin_path}) => {
+export const gen: Gen = ({ origin_path }) => {
 	const imports = new ImportBuilder();
 	return compose_gen_file({
 		origin_path,
@@ -50,14 +50,14 @@ export const gen: Gen = ({origin_path}) => {
 		blocks: [
 			generate_action_method_enums(all_action_specs, imports, {
 				emit: OPEN_UNION_KINDS,
-				include_protocol_actions: true,
+				include_protocol_actions: true
 			}),
 			generate_action_method_enums(all_action_specs, imports, {
-				emit: HANDLER_NARROW_KINDS,
+				emit: HANDLER_NARROW_KINDS
 			}),
 			generate_frontend_actions_api(all_action_specs, imports, {
-				include_protocol_actions: true,
-			}),
-		],
+				include_protocol_actions: true
+			})
+		]
 	});
 };

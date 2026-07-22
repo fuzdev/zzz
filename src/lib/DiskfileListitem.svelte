@@ -1,16 +1,16 @@
 <script lang="ts">
-	import {swallow} from '@fuzdev/fuz_util/dom.ts';
+	import { swallow } from '@fuzdev/fuz_util/dom.ts';
 
-	import type {Diskfile} from './diskfile.svelte.ts';
+	import type { Diskfile } from './diskfile.svelte.ts';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
-	import {icon_file} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_file } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const {
 		diskfile,
 		selected = false,
 		attrs,
-		onselect,
+		onselect
 	}: {
 		diskfile: Diskfile;
 		selected?: boolean | undefined;

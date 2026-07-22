@@ -1,15 +1,15 @@
-import {z} from 'zod';
-import {strip_start} from '@fuzdev/fuz_util/string.ts';
+import { z } from 'zod';
+import { strip_start } from '@fuzdev/fuz_util/string.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
 import {
 	DiskfileDirectoryPath,
 	DiskfileJson,
 	type DiskfilePath,
-	type SerializableDisknode,
+	type SerializableDisknode
 } from './diskfile_types.ts';
-import {to_preview} from './helpers.ts';
-import type {PartUnion} from './part.svelte.ts';
+import { to_preview } from './helpers.ts';
+import type { PartUnion } from './part.svelte.ts';
 
 // TODO support directories/folders
 
@@ -22,7 +22,7 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 	content: string | null = $state.raw()!;
 
 	readonly part: PartUnion | undefined = $derived(
-		this.app.parts.find_part_by_diskfile_path(this.path),
+		this.app.parts.find_part_by_diskfile_path(this.path)
 	);
 
 	// TODO @many add UI support for deps for module diskfiles (TS, Svelte, etc)
@@ -34,11 +34,11 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 
 	/** e.g. .zzz/foo/bar.json */
 	readonly pathname: string | null | undefined = $derived(
-		this.path && this.app.zzz_dir && strip_start(this.path, this.app.zzz_dir),
+		this.path && this.app.zzz_dir && strip_start(this.path, this.app.zzz_dir)
 	);
 	/** e.g. bar/foo.json */
 	readonly path_relative: string | null | undefined = $derived(
-		this.app.diskfiles.to_relative_path(this.path),
+		this.app.diskfiles.to_relative_path(this.path)
 	);
 
 	readonly content_length: number = $derived(this.content?.length ?? 0);

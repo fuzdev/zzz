@@ -1,13 +1,13 @@
-import {z} from 'zod';
-import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+import { z } from 'zod';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {CellJson} from './cell_types.ts';
-import {HANDLED} from './cell_helpers.ts';
-import {IndexedCollection} from './indexed_collection.svelte.ts';
-import {create_single_index} from './indexed_collection_helpers.svelte.ts';
-import {Workspace, WorkspaceJson, type WorkspaceJsonInput} from './workspace.svelte.ts';
-import type {DiskfileDirectoryPath} from './diskfile_types.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { CellJson } from './cell_types.ts';
+import { HANDLED } from './cell_helpers.ts';
+import { IndexedCollection } from './indexed_collection.svelte.ts';
+import { create_single_index } from './indexed_collection_helpers.svelte.ts';
+import { Workspace, WorkspaceJson, type WorkspaceJsonInput } from './workspace.svelte.ts';
+import type { DiskfileDirectoryPath } from './diskfile_types.ts';
 
 // TODO: workspace history — soft-close keeps workspace in set for later re-opening (needs DB)
 // TODO: pull-based lazy activation — only start Filers when a client connects or requests data
@@ -15,8 +15,8 @@ import type {DiskfileDirectoryPath} from './diskfile_types.ts';
 
 export const WorkspacesJson = CellJson.extend({
 	items: z.array(WorkspaceJson).default(() => []),
-	active_id: z.string().nullable().default(null),
-}).meta({cell_class_name: 'Workspaces'});
+	active_id: z.string().nullable().default(null)
+}).meta({ cell_class_name: 'Workspaces' });
 export type WorkspacesJson = z.infer<typeof WorkspacesJson>;
 export type WorkspacesJsonInput = z.input<typeof WorkspacesJson>;
 
@@ -34,15 +34,15 @@ export class Workspaces extends Cell<typeof WorkspacesJson> {
 			create_single_index({
 				key: 'by_path',
 				extractor: (workspace) => workspace.path,
-				query_schema: z.string(),
-			}),
-		],
+				query_schema: z.string()
+			})
+		]
 	});
 
 	active_id: Uuid | null = $state.raw()!;
 
 	readonly active: Workspace | undefined = $derived(
-		this.active_id ? this.items.by_id.get(this.active_id) : undefined,
+		this.active_id ? this.items.by_id.get(this.active_id) : undefined
 	);
 
 	constructor(options: WorkspacesOptions) {
@@ -57,7 +57,7 @@ export class Workspaces extends Cell<typeof WorkspacesJson> {
 					}
 				}
 				return HANDLED;
-			},
+			}
 		};
 
 		this.init();
@@ -70,7 +70,7 @@ export class Workspaces extends Cell<typeof WorkspacesJson> {
 		const existing = this.get_by_path(json.path as DiskfileDirectoryPath);
 		if (existing) return existing;
 
-		const workspace = new Workspace({app: this.app, json});
+		const workspace = new Workspace({ app: this.app, json });
 		this.items.add(workspace);
 
 		// Auto-activate if no active workspace

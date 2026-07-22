@@ -1,9 +1,9 @@
 <script lang="ts">
-	import type {Snippet} from 'svelte';
+	import type { Snippet } from 'svelte';
 	import ThemeRoot from '@fuzdev/fuz_ui/ThemeRoot.svelte';
 	import ContextmenuRoot from '@fuzdev/fuz_ui/ContextmenuRoot.svelte';
 
-	import {Frontend, frontend_context} from './frontend.svelte.ts';
+	import { Frontend, frontend_context } from './frontend.svelte.ts';
 	import Dashboard from './Dashboard.svelte';
 	import MainDialog from './MainDialog.svelte';
 	import DeskMenu from './DeskMenu.svelte';
@@ -18,7 +18,7 @@
 
 	const {
 		app,
-		children,
+		children
 	}: {
 		app: Frontend;
 		children: Snippet<[zzz: Frontend]>;

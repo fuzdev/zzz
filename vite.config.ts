@@ -1,9 +1,9 @@
-import {availableParallelism} from 'node:os';
-import {defineConfig} from 'vite';
-import {sveltekit} from '@sveltejs/kit/vite';
-import {vite_plugin_fuz_css} from '@fuzdev/fuz_css/vite_plugin_fuz_css.ts';
+import { availableParallelism } from 'node:os';
+import { defineConfig } from 'vite';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { vite_plugin_fuz_css } from '@fuzdev/fuz_css/vite_plugin_fuz_css.ts';
 import svelte_docinfo from 'svelte-docinfo/vite.js';
-import {vite_plugin_pkg_json} from '@fuzdev/fuz_ui/vite_plugin_pkg_json.ts';
+import { vite_plugin_pkg_json } from '@fuzdev/fuz_ui/vite_plugin_pkg_json.ts';
 
 const max_workers = Math.max(1, Math.ceil(availableParallelism() / 2));
 
@@ -31,8 +31,8 @@ const make_cross_backend_project = (name: string, proxy_only = false) => ({
 		globalSetup: ['./src/test/cross_backend/global_setup.ts'],
 		isolate: false,
 		fileParallelism: false,
-		sequence: {groupOrder: 3},
-	},
+		sequence: { groupOrder: 3 }
+	}
 });
 
 // The `cross_backend_*` projects spawn the real Rust `zzz_server` binary via
@@ -46,11 +46,11 @@ const cross_backend_enabled = !!process.env.FUZ_TEST_CROSS_BACKEND;
 const cross_backend_projects = cross_backend_enabled
 	? [
 			make_cross_backend_project('cross_backend_rust'),
-			make_cross_backend_project('cross_backend_rust_proxy', true),
+			make_cross_backend_project('cross_backend_rust_proxy', true)
 		]
 	: [];
 
-export default defineConfig(({mode}) => ({
+export default defineConfig(({ mode }) => ({
 	plugins: [sveltekit(), svelte_docinfo(), vite_plugin_fuz_css(), vite_plugin_pkg_json()],
 	test: {
 		projects: [
@@ -61,8 +61,8 @@ export default defineConfig(({mode}) => ({
 					include: ['src/test/**/*.test.ts'],
 					exclude: ['src/test/**/*.db.test.ts', 'src/test/**/*.cross.test.ts'],
 					maxWorkers: max_workers,
-					sequence: {groupOrder: 1},
-				},
+					sequence: { groupOrder: 1 }
+				}
 			},
 			{
 				extends: true,
@@ -71,21 +71,21 @@ export default defineConfig(({mode}) => ({
 					include: ['src/test/**/*.db.test.ts'],
 					isolate: false,
 					fileParallelism: false,
-					sequence: {groupOrder: 2},
-				},
+					sequence: { groupOrder: 2 }
+				}
 			},
-			...cross_backend_projects,
-		],
+			...cross_backend_projects
+		]
 	},
 	// In test mode, use browser conditions so Svelte's mount() resolves to the client version
-	resolve: mode === 'test' ? {conditions: ['browser']} : undefined,
-	optimizeDeps: {exclude: ['@fuzdev/blake3_wasm']},
+	resolve: mode === 'test' ? { conditions: ['browser'] } : undefined,
+	optimizeDeps: { exclude: ['@fuzdev/blake3_wasm'] },
 	server: {
 		proxy: {
 			'/api': `http://localhost:${process.env.PUBLIC_ZZZ_SERVER_PROXIED_PORT || '4461'}`,
 			// `/health` lives outside `/api`; proxy it to the daemon so the gate's
 			// liveness probe hits zzzd in dev, not the SvelteKit SPA fallback.
-			'/health': `http://localhost:${process.env.PUBLIC_ZZZ_SERVER_PROXIED_PORT || '4461'}`,
-		},
-	},
+			'/health': `http://localhost:${process.env.PUBLIC_ZZZ_SERVER_PROXIED_PORT || '4461'}`
+		}
+	}
 }));

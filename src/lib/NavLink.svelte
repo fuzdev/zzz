@@ -1,10 +1,10 @@
 <script lang="ts">
-	import {page} from '$app/state';
-	import type {SvelteHTMLElements} from 'svelte/elements';
-	import type {Snippet} from 'svelte';
-	import {resolve} from '$app/paths';
-	import {strip_end} from '@fuzdev/fuz_util/string.ts';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.ts';
+	import { page } from '$app/state';
+	import type { SvelteHTMLElements } from 'svelte/elements';
+	import type { Snippet } from 'svelte';
+	import { resolve } from '$app/paths';
+	import { strip_end } from '@fuzdev/fuz_util/string.ts';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 
 	const {
 		href,
@@ -27,7 +27,7 @@
 		show_selected_descendent &&
 			(selected || href_normalized === resolve('/')
 				? false
-				: (pathname_normalized + '/').startsWith(href + '/')),
+				: (pathname_normalized + '/').startsWith(href + '/'))
 	);
 
 	// TODO link styles should have focus always be blue, and active should be thicker

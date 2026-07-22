@@ -1,8 +1,8 @@
-import {z} from 'zod';
-import {Uuid} from '@fuzdev/fuz_util/id.ts';
+import { z } from 'zod';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.ts';
-import {CellJson} from './cell_types.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { CellJson } from './cell_types.ts';
 
 export const TerminalStatus = z.enum(['running', 'stopped', 'exited']);
 export type TerminalStatus = z.infer<typeof TerminalStatus>;
@@ -14,8 +14,8 @@ export const TerminalJson = CellJson.extend({
 	cwd: z.string().optional(),
 	status: TerminalStatus.default('stopped'),
 	exit_code: z.number().nullable().default(null),
-	preset_id: Uuid.nullable().default(null),
-}).meta({cell_class_name: 'Terminal'});
+	preset_id: Uuid.nullable().default(null)
+}).meta({ cell_class_name: 'Terminal' });
 export type TerminalJson = z.infer<typeof TerminalJson>;
 export type TerminalJsonInput = z.input<typeof TerminalJson>;
 

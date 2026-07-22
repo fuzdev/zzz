@@ -17,17 +17,17 @@
  * @module
  */
 
-import {inject} from 'vitest';
+import { inject } from 'vitest';
 import {
 	default_cross_process_setup,
-	reconstruct_bootstrapped_handle,
+	reconstruct_bootstrapped_handle
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
-import {describe_standard_cross_process_tests} from '@fuzdev/fuz_app/testing/cross_backend/standard.ts';
-import {fuz_session_config} from '@fuzdev/fuz_app/auth/session_cookie.ts';
-import {create_role_schema, ROLE_ADMIN} from '@fuzdev/fuz_app/auth/role_schema.ts';
+import { describe_standard_cross_process_tests } from '@fuzdev/fuz_app/testing/cross_backend/standard.ts';
+import { fuz_session_config } from '@fuzdev/fuz_app/auth/session_cookie.ts';
+import { create_role_schema, ROLE_ADMIN } from '@fuzdev/fuz_app/auth/role_schema.ts';
 
 import './cross_test_types.ts';
-import {create_zzz_app_surface_spec, zzz_rpc_endpoints} from './zzz_surface_spec.ts';
+import { create_zzz_app_surface_spec, zzz_rpc_endpoints } from './zzz_surface_spec.ts';
 
 const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 // Grant `ROLE_ADMIN` to every per-test signup account via the production
@@ -37,9 +37,9 @@ const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 // can drive admin-gated RPC methods through `fixture.create_session_headers()`.
 // Cost: ~2 RPCs × ~30-50ms per test. Cross-process analog of the in-process
 // `extra_keeper_roles: [ROLE_ADMIN]` wiring on `default_in_process_suite_options`.
-const setup_test = default_cross_process_setup(handle, {extra_keeper_roles: [ROLE_ADMIN]});
+const setup_test = default_cross_process_setup(handle, { extra_keeper_roles: [ROLE_ADMIN] });
 const surface_source = create_zzz_app_surface_spec();
-const {capabilities} = handle.config;
+const { capabilities } = handle.config;
 // Factory form: the suites' setup-time resolution
 // (`resolve_rpc_endpoints_for_setup` against a stub ctx) reads `path` +
 // `spec.method` names. Handler closures are never invoked across the process
@@ -58,5 +58,5 @@ describe_standard_cross_process_tests({
 	capabilities,
 	session_options,
 	rpc_endpoints,
-	roles,
+	roles
 });

@@ -1,15 +1,15 @@
 <script lang="ts">
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import {Chat} from './chat.svelte.ts';
+	import { Chat } from './chat.svelte.ts';
 
 	const {
-		chat,
+		chat
 	}: {
 		chat: Chat;
 	} = $props();
 
-	const {app} = $derived(chat);
+	const { app } = $derived(chat);
 
 	const tags = $derived(Array.from(app.tags)); // TODO refactor, `Tags` may be a class, maybe with an indexed collection
 </script>
@@ -44,7 +44,7 @@
 				{#each tags as tag (tag)}
 					<!-- TODO index this -->
 					{@const threads_with_tag = chat.threads.filter(
-						(t) => t.model?.tags.includes(tag) ?? false,
+						(t) => t.model?.tags.includes(tag) ?? false
 					)}
 					<ConfirmButton
 						disabled={!threads_with_tag.length}

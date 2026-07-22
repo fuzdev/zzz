@@ -1,12 +1,12 @@
 <script lang="ts">
-	import {resolve} from '$app/paths';
+	import { resolve } from '$app/paths';
 
 	import NavLink from '$lib/NavLink.svelte';
-	import type {Project, ProjectSection} from './project.svelte.ts';
+	import type { Project, ProjectSection } from './project.svelte.ts';
 
 	const {
 		project,
-		section,
+		section
 	}: {
 		project: Project;
 		section: ProjectSection;

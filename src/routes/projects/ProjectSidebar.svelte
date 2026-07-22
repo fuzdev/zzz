@@ -1,11 +1,11 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
-	import {goto} from '$app/navigation';
-	import {resolve} from '$app/paths';
+	import { slide } from 'svelte/transition';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 
 	import NavLink from '$lib/NavLink.svelte';
-	import {projects_context} from './projects.svelte.ts';
-	import {icon_add} from '@fuzdev/fuz_ui/icons.ts';
+	import { projects_context } from './projects.svelte.ts';
+	import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const projects = projects_context.get();

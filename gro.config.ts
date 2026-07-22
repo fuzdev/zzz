@@ -1,4 +1,4 @@
-import type {CreateGroConfig} from '@fuzdev/gro';
+import type { CreateGroConfig } from '@fuzdev/gro';
 
 // eslint-disable-next-line @typescript-eslint/require-await
 const config: CreateGroConfig = async (base_config) => {

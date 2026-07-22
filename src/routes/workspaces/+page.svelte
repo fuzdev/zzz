@@ -1,8 +1,8 @@
 <script lang="ts">
-	import {page} from '$app/state';
-	import {frontend_context} from '$lib/frontend.svelte.ts';
-	import {DiskfileDirectoryPath} from '$lib/diskfile_types.ts';
-	import {icon_add, icon_delete, icon_directory, icon_workspace} from '@fuzdev/fuz_ui/icons.ts';
+	import { page } from '$app/state';
+	import { frontend_context } from '$lib/frontend.svelte.ts';
+	import { DiskfileDirectoryPath } from '$lib/diskfile_types.ts';
+	import { icon_add, icon_delete, icon_directory, icon_workspace } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import PageFooter from '$routes/PageFooter.svelte';
 
@@ -23,7 +23,7 @@
 		if (existing) {
 			app.workspaces.activate(existing.id);
 		} else {
-			void app.api.workspace_open({path}).then((result) => {
+			void app.api.workspace_open({ path }).then((result) => {
 				if (result.ok) {
 					const ws = app.workspaces.get_by_path(path);
 					if (ws) app.workspaces.activate(ws.id);
@@ -40,7 +40,7 @@
 		error_message = null;
 
 		const path = DiskfileDirectoryPath.parse(raw.endsWith('/') ? raw : raw + '/');
-		const result = await app.api.workspace_open({path});
+		const result = await app.api.workspace_open({ path });
 
 		if (result.ok) {
 			new_path = '';
@@ -51,7 +51,7 @@
 	};
 
 	const handle_close = async (path: string): Promise<void> => {
-		await app.api.workspace_close({path: DiskfileDirectoryPath.parse(path)});
+		await app.api.workspace_close({ path: DiskfileDirectoryPath.parse(path) });
 	};
 </script>
 

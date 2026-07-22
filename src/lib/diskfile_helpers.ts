@@ -1,9 +1,9 @@
-import {strip_start} from '@fuzdev/fuz_util/string.ts';
-import {create_uuid, Uuid} from '@fuzdev/fuz_util/id.ts';
-import {Datetime, DatetimeNow} from '@fuzdev/fuz_util/datetime.ts';
+import { strip_start } from '@fuzdev/fuz_util/string.ts';
+import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
+import { Datetime, DatetimeNow } from '@fuzdev/fuz_util/datetime.ts';
 
-import {SerializableDisknode, type DiskfileJson} from './diskfile_types.ts';
-import type {Diskfile} from './diskfile.svelte.ts';
+import { SerializableDisknode, type DiskfileJson } from './diskfile_types.ts';
+import type { Diskfile } from './diskfile.svelte.ts';
 
 // TODO probably extract to `@fuzdev/fuz_util/path.ts`
 export const is_path_absolute = (path: string): boolean => path[0] === '/';
@@ -20,10 +20,10 @@ export const to_relative_path = (path: string, parent: string): string =>
  */
 export const disknode_to_diskfile_json = (
 	disknode: SerializableDisknode,
-	existing_id: Uuid = create_uuid(),
+	existing_id: Uuid = create_uuid()
 ): DiskfileJson => {
 	const created = DatetimeNow.parse(
-		disknode.ctime == null ? undefined : new Date(disknode.ctime).toISOString(),
+		disknode.ctime == null ? undefined : new Date(disknode.ctime).toISOString()
 	);
 	return {
 		id: existing_id,
@@ -34,7 +34,7 @@ export const disknode_to_diskfile_json = (
 		updated:
 			disknode.mtime == null ? created : Datetime.parse(new Date(disknode.mtime).toISOString()),
 		dependents: disknode.dependents,
-		dependencies: disknode.dependencies,
+		dependencies: disknode.dependencies
 	};
 };
 

@@ -1,12 +1,12 @@
 <script lang="ts">
 	import Alert from '@fuzdev/fuz_ui/Alert.svelte';
-	import {BROWSER} from 'esm-env';
+	import { BROWSER } from 'esm-env';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 
 	import ProviderDetail from '$lib/ProviderDetail.svelte';
-	import {frontend_context} from '$lib/frontend.svelte.ts';
+	import { frontend_context } from '$lib/frontend.svelte.ts';
 
-	const {params} = $props();
+	const { params } = $props();
 
 	const app = frontend_context.get();
 

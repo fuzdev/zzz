@@ -1,11 +1,11 @@
-import type {ClassConstructor} from '@fuzdev/fuz_util/types.ts';
-import type {z} from 'zod';
-import {DEV} from 'esm-env';
-import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+import type { ClassConstructor } from '@fuzdev/fuz_util/types.ts';
+import type { z } from 'zod';
+import { DEV } from 'esm-env';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import type {Cell} from './cell.svelte.ts';
-import type {Frontend} from './frontend.svelte.ts';
-import type {CellRegistryMap} from './cell_classes.ts';
+import type { Cell } from './cell.svelte.ts';
+import type { Frontend } from './frontend.svelte.ts';
+import type { CellRegistryMap } from './cell_classes.ts';
 
 /**
  * Error thrown when attempting to instantiate an unregistered class.
@@ -74,20 +74,20 @@ export class CellRegistry {
 	maybe_instantiate<K extends keyof CellRegistryMap>(
 		class_name: K,
 		json?: CellRegistryMap[K] extends Cell<infer TSchema> ? z.input<TSchema> : never,
-		options?: object,
+		options?: object
 	): CellRegistryMap[K] | null {
 		const constructor = this.#constructors.get(class_name);
 		if (!constructor) {
 			if (DEV) {
 				console.error(
-					`Class "${class_name}" is not registered. Available classes: ${this.class_names.join(', ')}`,
+					`Class "${class_name}" is not registered. Available classes: ${this.class_names.join(', ')}`
 				);
 			}
 			return null;
 		}
 
 		// Create a new instance with the provided options and cast to the specific type
-		return new constructor({...options, app: this.app, json}) as CellRegistryMap[K];
+		return new constructor({ ...options, app: this.app, json }) as CellRegistryMap[K];
 	}
 
 	/**
@@ -99,7 +99,7 @@ export class CellRegistry {
 	instantiate<K extends keyof CellRegistryMap>(
 		class_name: K,
 		json?: CellRegistryMap[K] extends Cell<infer TSchema> ? z.input<TSchema> : never,
-		options?: object,
+		options?: object
 	): CellRegistryMap[K] {
 		const constructor = this.#constructors.get(class_name);
 		if (!constructor) {
@@ -107,7 +107,7 @@ export class CellRegistry {
 		}
 
 		// Create a new instance with the provided options and cast to the specific type
-		return new constructor({...options, app: this.app, json}) as CellRegistryMap[K];
+		return new constructor({ ...options, app: this.app, json }) as CellRegistryMap[K];
 	}
 
 	add_cell(cell: Cell<any>): void {
@@ -117,7 +117,7 @@ export class CellRegistry {
 					? `registry already has this cell instance: ${cell.id}`
 					: `registry already has a different cell instance with this id: ${cell.id}`,
 				cell.toJSON(),
-				this.all.get(cell.id)?.toJSON(),
+				this.all.get(cell.id)?.toJSON()
 			);
 		}
 		this.all.set(cell.id, cell);

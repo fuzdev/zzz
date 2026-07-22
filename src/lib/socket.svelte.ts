@@ -1,23 +1,23 @@
-import {SvelteMap} from 'svelte/reactivity';
-import type {AsyncStatus} from '@fuzdev/fuz_util/async.ts';
+import { SvelteMap } from 'svelte/reactivity';
+import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
 import {
 	FrontendWebsocketClient,
 	socket_status_to_async_status,
 	type SocketMessageHandler,
-	type SocketErrorHandler,
+	type SocketErrorHandler
 } from '@fuzdev/fuz_app/actions/socket.svelte.ts';
-import type {WebsocketRpcConnection} from '@fuzdev/fuz_app/actions/transports_ws.ts';
-import type {JsonrpcRequestId} from '@fuzdev/fuz_app/http/jsonrpc.ts';
-import {UNKNOWN_ERROR_MESSAGE} from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
-import {create_uuid, type Uuid} from '@fuzdev/fuz_util/id.ts';
+import type { WebsocketRpcConnection } from '@fuzdev/fuz_app/actions/transports_ws.ts';
+import type { JsonrpcRequestId } from '@fuzdev/fuz_app/http/jsonrpc.ts';
+import { UNKNOWN_ERROR_MESSAGE } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import {
 	DEFAULT_HEARTBEAT_INTERVAL,
 	DEFAULT_RECONNECT_DELAY,
 	DEFAULT_RECONNECT_DELAY_MAX,
-	DEFAULT_AUTO_RECONNECT,
+	DEFAULT_AUTO_RECONNECT
 } from './socket_helpers.ts';
-import type {Frontend} from './frontend.svelte.ts';
+import type { Frontend } from './frontend.svelte.ts';
 
 export interface SocketOptions {
 	app: Frontend;
@@ -77,7 +77,7 @@ export class Socket implements WebsocketRpcConnection {
 	}
 	set heartbeat_interval(value: number) {
 		this.#heartbeat_interval = value;
-		this.#client?.set_heartbeat({interval: value});
+		this.#client?.set_heartbeat({ interval: value });
 	}
 
 	/**
@@ -139,10 +139,7 @@ export class Socket implements WebsocketRpcConnection {
 	readonly is_reconnect_pending: boolean = $derived(this.#client?.status === 'reconnecting');
 
 	readonly status: AsyncStatus = $derived(
-		socket_status_to_async_status(
-			this.#client?.status ?? 'initial',
-			this.#client?.revoked ?? false,
-		),
+		socket_status_to_async_status(this.#client?.status ?? 'initial', this.#client?.revoked ?? false)
 	);
 
 	readonly connected: boolean = $derived(this.#client?.connected ?? false);
@@ -155,12 +152,12 @@ export class Socket implements WebsocketRpcConnection {
 	readonly connection_duration: number | null = $derived.by(() =>
 		this.connected && this.last_connect_time
 			? Math.max(0, this.app.time.now_ms - this.last_connect_time)
-			: null,
+			: null
 	);
 	readonly connection_duration_rounded: number | null = $derived.by(() =>
 		this.connection_duration !== null
 			? Math.round(this.connection_duration / this.app.time.interval) * this.app.time.interval
-			: null,
+			: null
 	);
 
 	constructor(options: SocketOptions) {
@@ -183,10 +180,10 @@ export class Socket implements WebsocketRpcConnection {
 			reconnect: this.auto_reconnect
 				? {
 						delay: this.reconnect_delay,
-						delay_max: this.reconnect_delay_max,
+						delay_max: this.reconnect_delay_max
 					}
 				: false,
-			heartbeat: {interval: this.heartbeat_interval},
+			heartbeat: { interval: this.heartbeat_interval }
 		});
 
 		this.#client_message_unsubscribe = client.add_message_handler((event) => {
@@ -228,7 +225,7 @@ export class Socket implements WebsocketRpcConnection {
 	request(
 		method: string,
 		params?: unknown,
-		options?: {signal?: AbortSignal; queue?: boolean; id?: JsonrpcRequestId},
+		options?: { signal?: AbortSignal; queue?: boolean; id?: JsonrpcRequestId }
 	): Promise<unknown> {
 		const client = this.#client;
 		if (!client) {
@@ -293,8 +290,8 @@ export class Socket implements WebsocketRpcConnection {
 	apply_reconnect_policy(): void {
 		this.#client?.set_reconnect(
 			this.auto_reconnect
-				? {delay: this.reconnect_delay, delay_max: this.reconnect_delay_max}
-				: false,
+				? { delay: this.reconnect_delay, delay_max: this.reconnect_delay_max }
+				: false
 		);
 	}
 
@@ -312,7 +309,7 @@ export class Socket implements WebsocketRpcConnection {
 		const message: QueuedMessage = {
 			id: create_uuid(),
 			data,
-			created: Date.now(),
+			created: Date.now()
 		};
 		this.message_queue.push(message);
 
@@ -343,7 +340,7 @@ export class Socket implements WebsocketRpcConnection {
 		this.failed_messages.set(message.id, {
 			...message,
 			failed: Date.now(),
-			reason,
+			reason
 		});
 	}
 }

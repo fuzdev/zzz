@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 
-import {test, vi, beforeEach, assert} from 'vitest';
-import {z} from 'zod';
-import {create_uuid} from '@fuzdev/fuz_util/id.ts';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
+import { test, vi, beforeEach, assert } from 'vitest';
+import { z } from 'zod';
+import { create_uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import {Cell, type CellOptions} from '$lib/cell.svelte.ts';
-import {CellJson, type SchemaKeys} from '$lib/cell_types.ts';
-import {HANDLED} from '$lib/cell_helpers.ts';
-import {Frontend} from '$lib/frontend.svelte.ts';
+import { Cell, type CellOptions } from '$lib/cell.svelte.ts';
+import { CellJson, type SchemaKeys } from '$lib/cell_types.ts';
+import { HANDLED } from '$lib/cell_helpers.ts';
+import { Frontend } from '$lib/frontend.svelte.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Constants for testing
 const TEST_ID = create_uuid();
@@ -33,7 +33,7 @@ const TestSchema = CellJson.extend({
 		.array(z.string())
 		.optional()
 		.default(() => []),
-	flag: z.boolean().default(true),
+	flag: z.boolean().default(true)
 });
 
 test('Cell supports overriding assign_property', () => {
@@ -52,7 +52,7 @@ test('Cell supports overriding assign_property', () => {
 
 		protected override assign_property<K extends SchemaKeys<typeof TestSchema>>(
 			key: K,
-			value: this[K],
+			value: this[K]
 		): void {
 			this.assignment_log.push(`Assigned ${key}: ${String(value)}`);
 
@@ -71,8 +71,8 @@ test('Cell supports overriding assign_property', () => {
 			id: TEST_ID,
 			created: TEST_DATETIME,
 			text: 'original',
-			list: ['item'],
-		},
+			list: ['item']
+		}
 	});
 
 	assert.strictEqual(cell.text, 'modified_original');
@@ -97,7 +97,7 @@ test('Cell assign_property returns after handling property correctly', () => {
 
 		protected override assign_property<K extends SchemaKeys<typeof TestSchema>>(
 			key: K,
-			value: this[K],
+			value: this[K]
 		): void {
 			this.execution_path.push(`begin-${key}`);
 
@@ -118,8 +118,8 @@ test('Cell assign_property returns after handling property correctly', () => {
 			id: TEST_ID,
 			created: TEST_DATETIME,
 			text: 'sample',
-			number: 42,
-		},
+			number: 42
+		}
 	});
 
 	assert.strictEqual(cell.text, 'sample');
@@ -174,8 +174,8 @@ test('Cell handles inherited properties correctly', () => {
 			text: 'base_property',
 			number: 30,
 			list: ['derived_item'],
-			flag: true,
-		},
+			flag: true
+		}
 	});
 
 	assert.strictEqual(cell.id, TEST_ID);
@@ -196,7 +196,7 @@ test('Cell handles inherited properties correctly', () => {
 test('Cell properly handles collections with HANDLED sentinel', () => {
 	const VirtualCollectionSchema = CellJson.extend({
 		collection: z.array(z.string()).default(() => []),
-		text: z.string().default(''),
+		text: z.string().default('')
 	});
 
 	class VirtualCollectionCell extends Cell<typeof VirtualCollectionSchema> {
@@ -213,11 +213,11 @@ test('Cell properly handles collections with HANDLED sentinel', () => {
 				collection: (value) => {
 					if (Array.isArray(value)) {
 						this.stored_items = value.map((item) =>
-							typeof item === 'string' ? item.toUpperCase() : String(item),
+							typeof item === 'string' ? item.toUpperCase() : String(item)
 						);
 					}
 					return HANDLED;
-				},
+				}
 			};
 
 			this.init();
@@ -227,7 +227,7 @@ test('Cell properly handles collections with HANDLED sentinel', () => {
 			const base = super.to_json();
 			return {
 				...base,
-				collection: this.stored_items,
+				collection: this.stored_items
 			};
 		}
 	}
@@ -238,8 +238,8 @@ test('Cell properly handles collections with HANDLED sentinel', () => {
 			id: TEST_ID,
 			created: TEST_DATETIME,
 			collection: ['one', 'two', 'three'],
-			text: 'sample',
-		},
+			text: 'sample'
+		}
 	});
 
 	assert.deepEqual(cell.stored_items, ['ONE', 'TWO', 'THREE']);
@@ -265,8 +265,8 @@ test('Cell registration and unregistration works correctly', () => {
 		app,
 		json: {
 			id: cell_id,
-			created: TEST_DATETIME,
-		},
+			created: TEST_DATETIME
+		}
 	});
 
 	// Cell should be automatically registered

@@ -1,12 +1,12 @@
 <script lang="ts">
-	import type {Model} from './model.svelte.ts';
-	import {frontend_context} from './frontend.svelte.ts';
+	import type { Model } from './model.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 
 	const app = frontend_context.get();
 
 	let {
 		models = app.models.ordered_by_name,
-		selected_model,
+		selected_model
 	}: {
 		selected_model: Model; // TODO get from context?
 		models?: Array<Model> | undefined;

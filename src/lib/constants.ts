@@ -7,13 +7,13 @@ import {
 	PUBLIC_ZZZ_SERVER_API_PATH,
 	PUBLIC_ZZZ_WEBSOCKET_URL,
 	PUBLIC_ZZZ_DIR,
-	PUBLIC_ZZZ_SCOPED_DIRS,
+	PUBLIC_ZZZ_SCOPED_DIRS
 } from '$env/static/public';
 
 import {
 	PathWithLeadingSlash,
 	PathWithTrailingSlash,
-	PathWithoutTrailingSlash,
+	PathWithoutTrailingSlash
 } from './zod_helpers.ts';
 
 // This module re-exports public environment variables with parsed values.

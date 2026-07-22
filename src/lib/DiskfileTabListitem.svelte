@@ -1,16 +1,16 @@
 <script lang="ts">
-	import {swallow} from '@fuzdev/fuz_util/dom.ts';
+	import { swallow } from '@fuzdev/fuz_util/dom.ts';
 
-	import {icon_remove} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_remove } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import type {DiskfileTab} from './diskfile_tab.svelte.ts';
+	import type { DiskfileTab } from './diskfile_tab.svelte.ts';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 
 	const {
 		tab,
 		onselect,
 		onclose,
-		onopen,
+		onopen
 	}: {
 		tab: DiskfileTab;
 		onselect: (tab: DiskfileTab) => void;

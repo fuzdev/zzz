@@ -1,11 +1,11 @@
 <script lang="ts">
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
-	import {logo_zzz} from './logos.ts';
+	import { logo_zzz } from './logos.ts';
 	import CapabilityWebsocket from './CapabilityWebsocket.svelte';
 	import CapabilityFilesystem from './CapabilityFilesystem.svelte';
 	import ProviderLogo from './ProviderLogo.svelte';
-	import {icon_backend, icon_connect, icon_directory} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_backend, icon_connect, icon_directory } from '@fuzdev/fuz_ui/icons.ts';
 	import CapabilityProvider from './CapabilityProvider.svelte';
 	import CapabilityBackend from './CapabilityBackend.svelte';
 	import CapabilitySystem from './CapabilitySystem.svelte';

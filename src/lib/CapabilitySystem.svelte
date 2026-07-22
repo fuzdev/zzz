@@ -1,9 +1,9 @@
 <script lang="ts">
-	import {DEV} from 'esm-env';
-	import {resolve} from '$app/paths';
-	import {format_url} from '@fuzdev/fuz_util/url.ts';
+	import { DEV } from 'esm-env';
+	import { resolve } from '$app/paths';
+	import { format_url } from '@fuzdev/fuz_util/url.ts';
 
-	import {library_context} from './library.ts';
+	import { library_context } from './library.ts';
 	import ExternalLink from './ExternalLink.svelte';
 
 	const library = library_context.get();

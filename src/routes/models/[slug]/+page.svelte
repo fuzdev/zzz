@@ -1,11 +1,11 @@
 <script lang="ts">
 	import Alert from '@fuzdev/fuz_ui/Alert.svelte';
-	import {resolve} from '$app/paths';
+	import { resolve } from '$app/paths';
 
 	import ModelDetail from '$lib/ModelDetail.svelte';
-	import {frontend_context} from '$lib/frontend.svelte.ts';
+	import { frontend_context } from '$lib/frontend.svelte.ts';
 
-	const {params} = $props();
+	const { params } = $props();
 
 	const app = frontend_context.get();
 
@@ -27,7 +27,7 @@
 				class="inline palette_f"
 				onclick={() =>
 					// TODO UI for choosing provider
-					app.models.add({name: model_name, provider_name: 'claude'})}
+					app.models.add({ name: model_name, provider_name: 'claude' })}
 			>
 				create it
 			</button>

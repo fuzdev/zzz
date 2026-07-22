@@ -1,11 +1,11 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
+	import { slide } from 'svelte/transition';
 	import Details from '@fuzdev/fuz_ui/Details.svelte';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import {Chat} from './chat.svelte.ts';
-	import {frontend_context} from './frontend.svelte.ts';
-	import {icon_chat, icon_delete, icon_thread, icon_view} from '@fuzdev/fuz_ui/icons.ts';
+	import { Chat } from './chat.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
+	import { icon_chat, icon_delete, icon_thread, icon_view } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ThreadList from './ThreadList.svelte';
 	import ChatViewSimple from './ChatViewSimple.svelte';
@@ -17,10 +17,10 @@
 	import EditableText from './EditableText.svelte';
 
 	const app = frontend_context.get();
-	const {chats} = app;
+	const { chats } = app;
 
 	const {
-		chat,
+		chat
 	}: {
 		chat: Chat;
 	} = $props();

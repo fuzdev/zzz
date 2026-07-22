@@ -1,16 +1,16 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import { slide } from 'svelte/transition';
+	import type { SvelteHTMLElements } from 'svelte/elements';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
-	import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.ts';
-	import {format_time} from './time_helpers.ts';
+	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
+	import { format_time } from './time_helpers.ts';
 
 	const {
 		editor_state,
 		onselectentry,
-		attrs,
+		attrs
 	}: {
 		editor_state: DiskfileEditorState;
 		onselectentry: (entry_id: Uuid) => void;

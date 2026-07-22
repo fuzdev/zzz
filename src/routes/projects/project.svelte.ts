@@ -1,16 +1,16 @@
 // @slop Claude Opus 4
 
-import {z} from 'zod';
-import type {ArrayElement} from '@fuzdev/fuz_util/types.ts';
-import {Uuid} from '@fuzdev/fuz_util/id.ts';
-import {get_datetime_now} from '@fuzdev/fuz_util/datetime.ts';
+import { z } from 'zod';
+import type { ArrayElement } from '@fuzdev/fuz_util/types.ts';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import {Cell, type CellOptions} from '$lib/cell.svelte.ts';
-import {ProjectJson} from './projects_schema.ts';
-import {Domain} from './domain.svelte.ts';
-import {Page} from './page.svelte.ts';
-import {Repo} from './repo.svelte.ts';
-import {HANDLED} from '$lib/cell_helpers.ts';
+import { Cell, type CellOptions } from '$lib/cell.svelte.ts';
+import { ProjectJson } from './projects_schema.ts';
+import { Domain } from './domain.svelte.ts';
+import { Page } from './page.svelte.ts';
+import { Repo } from './repo.svelte.ts';
+import { HANDLED } from '$lib/cell_helpers.ts';
 
 export const project_sections = ['project', 'pages', 'domains', 'repos', 'settings'] as const;
 export type ProjectSection = ArrayElement<typeof project_sections>;
@@ -33,7 +33,7 @@ export class Project extends Cell<typeof ProjectJson> {
 		this.decoders = {
 			pages: (pages_data) => {
 				if (Array.isArray(pages_data)) {
-					this.pages = pages_data.map((page_data) => new Page({app: this.app, json: page_data}));
+					this.pages = pages_data.map((page_data) => new Page({ app: this.app, json: page_data }));
 					return HANDLED;
 				}
 				return undefined;
@@ -41,7 +41,7 @@ export class Project extends Cell<typeof ProjectJson> {
 			domains: (domains_data) => {
 				if (Array.isArray(domains_data)) {
 					this.domains = domains_data.map(
-						(domain_data) => new Domain({app: this.app, json: domain_data}),
+						(domain_data) => new Domain({ app: this.app, json: domain_data })
 					);
 					return HANDLED;
 				}
@@ -49,11 +49,11 @@ export class Project extends Cell<typeof ProjectJson> {
 			},
 			repos: (repos_data) => {
 				if (Array.isArray(repos_data)) {
-					this.repos = repos_data.map((repo_data) => new Repo({app: this.app, json: repo_data}));
+					this.repos = repos_data.map((repo_data) => new Repo({ app: this.app, json: repo_data }));
 					return HANDLED;
 				}
 				return undefined;
-			},
+			}
 		};
 
 		this.init();

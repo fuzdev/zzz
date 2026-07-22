@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import {test, describe, vi, beforeEach, afterEach, assert} from 'vitest';
+import { test, describe, vi, beforeEach, afterEach, assert } from 'vitest';
 
-import {Poller} from '$lib/poller.svelte.ts';
+import { Poller } from '$lib/poller.svelte.ts';
 
 describe('Poller', () => {
 	beforeEach(() => {
@@ -16,14 +16,14 @@ describe('Poller', () => {
 
 	test('should initialize with correct default values', () => {
 		const poll_fn = vi.fn();
-		const poller = new Poller({poll_fn});
+		const poller = new Poller({ poll_fn });
 
 		assert.ok(!poller.active);
 	});
 
 	test('should start polling with immediate execution by default', () => {
 		const poll_fn = vi.fn();
-		const poller = new Poller({poll_fn});
+		const poller = new Poller({ poll_fn });
 
 		poller.start();
 
@@ -37,7 +37,7 @@ describe('Poller', () => {
 
 	test('should start polling without immediate execution when configured', () => {
 		const poll_fn = vi.fn();
-		const poller = new Poller({poll_fn, immediate: false});
+		const poller = new Poller({ poll_fn, immediate: false });
 
 		poller.start();
 
@@ -51,7 +51,7 @@ describe('Poller', () => {
 
 	test('should use custom interval', () => {
 		const poll_fn = vi.fn();
-		const poller = new Poller({poll_fn, interval: 5_000, immediate: false});
+		const poller = new Poller({ poll_fn, interval: 5_000, immediate: false });
 
 		poller.start();
 
@@ -70,7 +70,7 @@ describe('Poller', () => {
 
 	test('should stop polling', () => {
 		const poll_fn = vi.fn();
-		const poller = new Poller({poll_fn});
+		const poller = new Poller({ poll_fn });
 
 		poller.start();
 		assert.ok(poller.active);
@@ -86,7 +86,7 @@ describe('Poller', () => {
 
 	test('should handle multiple starts safely', () => {
 		const poll_fn = vi.fn();
-		const poller = new Poller({poll_fn});
+		const poller = new Poller({ poll_fn });
 
 		poller.start();
 		poller.start();
@@ -102,7 +102,7 @@ describe('Poller', () => {
 
 	test('should handle multiple stops safely', () => {
 		const poll_fn = vi.fn();
-		const poller = new Poller({poll_fn});
+		const poller = new Poller({ poll_fn });
 
 		poller.start();
 		poller.stop();
@@ -114,7 +114,7 @@ describe('Poller', () => {
 
 	test('should handle async poll functions', () => {
 		const poll_fn = vi.fn().mockResolvedValue('test_result');
-		const poller = new Poller({poll_fn});
+		const poller = new Poller({ poll_fn });
 
 		poller.start();
 
@@ -132,7 +132,7 @@ describe('Poller', () => {
 		const poll_fn = vi.fn().mockImplementation(() => {
 			throw new Error('test_error');
 		});
-		const poller = new Poller({poll_fn});
+		const poller = new Poller({ poll_fn });
 
 		poller.start();
 
@@ -147,7 +147,7 @@ describe('Poller', () => {
 
 	test('should handle async poll function errors gracefully', () => {
 		const poll_fn = vi.fn().mockRejectedValue(new Error('async_test_error'));
-		const poller = new Poller({poll_fn});
+		const poller = new Poller({ poll_fn });
 
 		poller.start();
 
@@ -161,7 +161,7 @@ describe('Poller', () => {
 
 	test('should set interval and restart if active', () => {
 		const poll_fn = vi.fn();
-		const poller = new Poller({poll_fn, interval: Poller.DEFAULT_INTERVAL, immediate: false});
+		const poller = new Poller({ poll_fn, interval: Poller.DEFAULT_INTERVAL, immediate: false });
 
 		poller.start();
 		assert.ok(poller.active);
@@ -180,7 +180,7 @@ describe('Poller', () => {
 
 	test('should set interval without restarting if inactive', () => {
 		const poll_fn = vi.fn();
-		const poller = new Poller({poll_fn, interval: Poller.DEFAULT_INTERVAL});
+		const poller = new Poller({ poll_fn, interval: Poller.DEFAULT_INTERVAL });
 
 		// Set interval while inactive
 		poller.set_interval(5_000);
@@ -194,7 +194,7 @@ describe('Poller', () => {
 
 	test('should be no-op when setting same interval', () => {
 		const poll_fn = vi.fn();
-		const poller = new Poller({poll_fn, interval: Poller.DEFAULT_INTERVAL});
+		const poller = new Poller({ poll_fn, interval: Poller.DEFAULT_INTERVAL });
 
 		poller.start();
 		const initial_call_count = poll_fn.mock.calls.length;
@@ -209,7 +209,7 @@ describe('Poller', () => {
 
 	test('should dispose and stop polling', () => {
 		const poll_fn = vi.fn();
-		const poller = new Poller({poll_fn});
+		const poller = new Poller({ poll_fn });
 
 		poller.start();
 		assert.ok(poller.active);
@@ -224,7 +224,7 @@ describe('Poller', () => {
 
 	test('should handle restart scenario', () => {
 		const poll_fn = vi.fn();
-		const poller = new Poller({poll_fn, immediate: false});
+		const poller = new Poller({ poll_fn, immediate: false });
 
 		// Start, stop, start cycle
 		poller.start();

@@ -1,4 +1,4 @@
-import type {Uuid} from '@fuzdev/fuz_util/id.ts';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
 // TODO @many refactor with db
 

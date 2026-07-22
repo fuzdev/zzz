@@ -1,8 +1,8 @@
 <script lang="ts">
-	import {icon_model} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_model } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ModelSummary from './ModelSummary.svelte';
-	import {frontend_context} from './frontend.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 
 	const app = frontend_context.get();
 

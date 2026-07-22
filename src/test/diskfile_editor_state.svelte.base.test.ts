@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
-import {test, beforeEach, describe, assert} from 'vitest';
+import { test, beforeEach, describe, assert } from 'vitest';
 
-import {DiskfileEditorState} from '$lib/diskfile_editor_state.svelte.ts';
-import {DiskfilePath, SerializableDisknode} from '$lib/diskfile_types.ts';
-import {Frontend} from '$lib/frontend.svelte.ts';
-import {Diskfile} from '$lib/diskfile.svelte.ts';
+import { DiskfileEditorState } from '$lib/diskfile_editor_state.svelte.ts';
+import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
+import { Frontend } from '$lib/frontend.svelte.ts';
+import { Diskfile } from '$lib/diskfile.svelte.ts';
 
-import {monkeypatch_zzz_for_tests} from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Constants for testing
 const TEST_PATH = DiskfilePath.parse('/path/to/test.txt');
@@ -27,13 +27,13 @@ beforeEach(() => {
 	test_diskfile = app.diskfiles.add({
 		path: TEST_PATH,
 		source_dir: TEST_DIR,
-		content: TEST_CONTENT,
+		content: TEST_CONTENT
 	});
 
 	// Create the editor state with real components
 	editor_state = new DiskfileEditorState({
 		app,
-		diskfile: test_diskfile,
+		diskfile: test_diskfile
 	});
 });
 
@@ -71,13 +71,13 @@ describe('initialization', () => {
 		const null_diskfile = app.diskfiles.add({
 			path: DiskfilePath.parse('/null/content.txt'),
 			source_dir: SerializableDisknode.shape.source_dir.parse('/null/'),
-			content: null,
+			content: null
 		});
 
 		// Create editor state
 		const null_editor_state = new DiskfileEditorState({
 			app,
-			diskfile: null_diskfile,
+			diskfile: null_diskfile
 		});
 
 		// Check state properties
@@ -183,7 +183,7 @@ describe('content metrics', () => {
 
 		// Percent change should be negative
 		const expected_percent = Math.round(
-			((new_content.length - TEST_CONTENT.length) / TEST_CONTENT.length) * 100,
+			((new_content.length - TEST_CONTENT.length) / TEST_CONTENT.length) * 100
 		);
 		assert.strictEqual(editor_state.length_diff_percent, expected_percent);
 	});
@@ -198,14 +198,14 @@ describe('content metrics', () => {
 		assert.strictEqual(editor_state.current_token_count, editor_state.current_token_count);
 		assert.strictEqual(
 			editor_state.token_diff,
-			editor_state.current_token_count - editor_state.original_token_count,
+			editor_state.current_token_count - editor_state.original_token_count
 		);
 
 		// Token percent should match calculation
 		const expected_token_percent = Math.round(
 			((editor_state.current_token_count - editor_state.original_token_count) /
 				editor_state.original_token_count) *
-				100,
+				100
 		);
 		assert.strictEqual(editor_state.token_diff_percent, expected_token_percent);
 	});
@@ -231,13 +231,13 @@ describe('content metrics', () => {
 		const empty_diskfile = app.diskfiles.add({
 			path: DiskfilePath.parse('/empty/file.txt'),
 			source_dir: SerializableDisknode.shape.source_dir.parse('/empty/'),
-			content: '',
+			content: ''
 		});
 
 		// Create editor state
 		const empty_editor_state = new DiskfileEditorState({
 			app,
-			diskfile: empty_diskfile,
+			diskfile: empty_diskfile
 		});
 
 		// Now edit to add content
@@ -261,7 +261,7 @@ describe('file management', () => {
 		const another_diskfile = app.diskfiles.add({
 			path: another_path,
 			source_dir: SerializableDisknode.shape.source_dir.parse('/different/'),
-			content: another_content,
+			content: another_content
 		});
 
 		// Make edits to the current file
@@ -306,7 +306,7 @@ describe('file management', () => {
 
 		// Create and select unsaved entry
 		const history = app.get_diskfile_history(TEST_PATH)!;
-		const test_entry = history.add_entry('Test entry', {is_unsaved_edit: true});
+		const test_entry = history.add_entry('Test entry', { is_unsaved_edit: true });
 		editor_state.set_content_from_history(test_entry.id);
 
 		// Reset the editor
