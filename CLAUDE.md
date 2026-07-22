@@ -210,7 +210,7 @@ env-setup orchestration is `cargo xtask` (see `crates/xtask/`), so there's no
 - `npm test` — `gro test` (unit + db; cross-backend projects excluded unless `FUZ_TEST_CROSS_BACKEND=1`)
 - `npm run test:cross` — Rust cross-process suites (rust + rust_proxy; needs rust binary + `zzz_test_rust`/`zzz_test_rust_proxy` Postgres DBs) — flag baked in
 - `gro gen` — Run `*.gen.ts` generators (regenerate their outputs)
-- `gro format` — Format with Prettier
+- `gro format` — Format with tsv
 - `gro build` — Production build
 
 `cargo xtask dev` is the dev command — it builds and runs `zzz_server` plus

@@ -36,7 +36,7 @@ Rust workspace, which must be checked out alongside this repo.
 - `gro test` — Run Vitest tests
 - `gro test -- --watch` — Tests in watch mode
 - `gro gen` — Run `*.gen.ts` generators (regenerate their outputs)
-- `gro format` — Format with Prettier
+- `gro format` — Format with tsv
 - `gro lint` — ESLint checking
 - `gro build` — Production build
 - `gro deploy` — Deploy to production
