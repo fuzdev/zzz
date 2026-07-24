@@ -82,16 +82,16 @@
 					>
 						{thread.model?.name ?? thread.model_name}
 					</button>
-					<small
-						><ProviderLink
+					<small>
+						<ProviderLink
 							{provider}
 							icon="logo"
 							icon_props={{ size: 'var(--font_size_sm)' }}
 							label="name"
-						/>{#if provider_error}<span class="palette_c_50 ml_sm"
-								><Svg data={icon_error} /> {provider_error}</span
-							>{/if}</small
-					>
+						/>{#if provider_error}
+							<span class="palette_c_50 ml_sm"><Svg data={icon_error} /> {provider_error}</span>
+						{/if}
+					</small>
 				</header>
 				<!-- TODO maybe add a button here that opens the contextmenu? -->
 			</div>

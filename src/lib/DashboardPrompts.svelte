@@ -189,8 +189,10 @@
 				select a prompt from the list or <button
 					type="button"
 					class="inline palette_d"
-					onclick={create_prompt}>create one</button
+					onclick={create_prompt}
 				>
+					create one
+				</button>
 				or
 				<button
 					type="button"
@@ -198,16 +200,18 @@
 					onclick={async () => {
 						const prompt = random_item(app.prompts.ordered_items);
 						await app.prompts.navigate_to(prompt.id);
-					}}>go fish</button
-				>?
+					}}
+				>
+					go fish
+				</button>?
 			</p>
 		</div>
 	{:else}
 		<div class="box height:100% flex:1" in:fade={{ duration: DURATION_SM }}>
 			<p>
-				no prompts yet, <button type="button" class="inline palette_d" onclick={create_prompt}
-					>create a new prompt</button
-				>?
+				no prompts yet, <button type="button" class="inline palette_d" onclick={create_prompt}>
+					create a new prompt
+				</button>?
 			</p>
 		</div>
 	{/if}

@@ -93,7 +93,9 @@
 				</ErrorMessage>
 			</div>
 		</div>
-	{:else if capabilities.filesystem_available === null || capabilities.filesystem_available === undefined}
+	{:else if capabilities.filesystem_available === null ||
+		capabilities.filesystem_available === undefined
+	}
 		<div class="box height:100% width:100% display:flex align-items:center justify-content:center">
 			<div class="text-align:center">
 				<p class="mt_md">loading filesystem <PendingAnimation inline /></p>
@@ -154,8 +156,10 @@
 							class="inline"
 							onclick={() => {
 								show_diskfile_picker = true;
-							}}>select</button
+							}}
 						>
+							select
+						</button>
 						a file from the list or
 						<button
 							type="button"
@@ -163,16 +167,18 @@
 							onclick={() => {
 								const diskfile = random_item(app.diskfiles.items.values);
 								diskfiles.select(diskfile.id);
-							}}>go fish</button
-						> to view and edit its content
+							}}
+						>
+							go fish
+						</button> to view and edit its content
 					</p>
 				</div>
 			{:else}
 				<div class="box height:100%">
 					<p>
-						no files yet, <button type="button" class="inline palette_d" onclick={create_file}
-							>create a new file</button
-						>?
+						no files yet, <button type="button" class="inline palette_d" onclick={create_file}>
+							create a new file
+						</button>?
 					</p>
 				</div>
 			{/if}

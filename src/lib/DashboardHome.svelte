@@ -23,8 +23,10 @@
 						app,
 						'chats',
 						resolve('/chats')
-					)}>chats</a
+					)}
 				>
+					chats
+				</a>
 				<button
 					type="button"
 					class="plain icon-button font_size_md"
@@ -62,8 +64,10 @@
 						app,
 						'prompts',
 						resolve('/prompts')
-					)}>prompts</a
+					)}
 				>
+					prompts
+				</a>
 				<button
 					type="button"
 					class="plain icon-button font_size_md"
@@ -94,10 +98,10 @@
 		</div>
 		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
 			<div class="mb_lg">
-				<a href={resolve('/providers')} class="text_80"
-					><Svg data={icon_provider} />
-					<h3 class="display:inline my_0">providers</h3></a
-				>
+				<a href={resolve('/providers')} class="text_80">
+					<Svg data={icon_provider} />
+					<h3 class="display:inline my_0">providers</h3>
+				</a>
 			</div>
 			<div>
 				<ul class="unstyled">
@@ -117,10 +121,10 @@
 		</div>
 		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
 			<div class="mb_lg">
-				<a href={resolve('/models')} class="text_80"
-					><Svg data={icon_model} />
-					<h3 class="display:inline my_0">models</h3></a
-				>
+				<a href={resolve('/models')} class="text_80">
+					<Svg data={icon_model} />
+					<h3 class="display:inline my_0">models</h3>
+				</a>
 			</div>
 			<div>
 				<ul class="unstyled">

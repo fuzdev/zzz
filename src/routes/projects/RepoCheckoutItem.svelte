@@ -58,8 +58,10 @@
 						type="button"
 						class="icon-button plain font_size_xs ml_xs"
 						title="Remove tag"
-						onclick={() => on_remove_tag(index, tag_index)}><Svg data={icon_delete} /></button
+						onclick={() => on_remove_tag(index, tag_index)}
 					>
+						<Svg data={icon_delete} />
+					</button>
 				</span>
 			{/each}
 		</div>

@@ -29,10 +29,10 @@
 
 	<section class="width_atmost_md">
 		<p>
-			When it's ready, Zzz will let you both <a href={resolve('/tabs')}>browse websites</a> and also create
-			them. The goal of this "projects" design is a streamlined extensible UX with one take on building
-			for the web, with integrated CMS and IDE features. This abstraction makes rough sense for my workflows,
-			but it's going to change as it develops.
+			When it's ready, Zzz will let you both <a href={resolve('/tabs')}>browse websites</a> and also
+			create them. The goal of this "projects" design is a streamlined extensible UX with one take
+			on building for the web, with integrated CMS and IDE features. This abstraction makes rough
+			sense for my workflows, but it's going to change as it develops.
 		</p>
 		<p>
 			Websites are just one kind of thing that you can make in a project. A project could be a
@@ -56,8 +56,10 @@
 				class="inline sm palette_g"
 				onclick={() => {
 					projects.previewing = !projects.previewing;
-				}}>what projects could look like</button
-			>.
+				}}
+			>
+				what projects could look like
+			</button>.
 		</p>
 		<p>
 			For developers, Zzz is also an npm library for TypeScript/Svelte/SvelteKit that can be used to

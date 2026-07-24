@@ -104,9 +104,9 @@
 											}
 										}}
 									>
-										<span class="flex:1 font_size_sm text-align:left font_family_mono"
-											>{workspace.path}</span
-										>
+										<span class="flex:1 font_size_sm text-align:left font_family_mono">
+											{workspace.path}
+										</span>
 									</button>
 								</li>
 							{/each}

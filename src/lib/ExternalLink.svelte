@@ -59,12 +59,16 @@
 	target={new_tab ? (rest.target ?? '_blank') : rest.target}
 	{rel}
 	class:color_i_5={true}
-	>{#if children}{@render children()}{:else}{href}{/if}<ExternalLinkIcon
-		>{#snippet children(external_icon)}{#if icon}{@render icon(known_logo)}{:else if known_logo}<Svg
-					data={known_logo}
-					size="var(--font_size_xs)"
-					fill="var(--palette_i_50)"
-					inline
-				/>{:else}<Svg data={external_icon} inline />{/if}{/snippet}</ExternalLinkIcon
-	></a
 >
+	{#if children}{@render children()}{:else}{href}{/if}<ExternalLinkIcon>
+		{#snippet children(external_icon)}
+			{#if icon}
+				{@render icon(known_logo)}
+			{:else if known_logo}
+				<Svg data={known_logo} size="var(--font_size_xs)" fill="var(--palette_i_50)" inline />
+			{:else}
+				<Svg data={external_icon} inline />
+			{/if}
+		{/snippet}
+	</ExternalLinkIcon>
+</a>

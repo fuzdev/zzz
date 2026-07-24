@@ -20,8 +20,9 @@
 			{#if editor_state.original_length !== editor_state.current_length}
 				<span transition:fade={{ duration: 80 }}>
 					<Svg data={icon_arrow_right} />
-					{editor_state.current_length}</span
-				>{/if}
+					{editor_state.current_length}
+				</span>
+			{/if}
 		</div>
 		{#if editor_state.length_diff}
 			<div class="white-space:nowrap" transition:slide={{ axis: 'x' }}>
@@ -37,8 +38,9 @@
 			{#if editor_state.original_token_count !== editor_state.current_token_count}
 				<span transition:fade={{ duration: 80 }}>
 					<Svg data={icon_arrow_right} />
-					{editor_state.current_token_count}</span
-				>{/if}
+					{editor_state.current_token_count}
+				</span>
+			{/if}
 		</div>
 		{#if editor_state.token_diff}
 			<div class="white-space:nowrap" transition:slide={{ axis: 'x' }}>

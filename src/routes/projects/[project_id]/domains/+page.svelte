@@ -76,9 +76,9 @@
 											{domain.status}
 										</span>
 									</td>
-									<td
-										>{#if domain.ssl}<Svg data={icon_checkmark} />{/if}</td
-									>
+									<td>
+										{#if domain.ssl}<Svg data={icon_checkmark} />{/if}
+									</td>
 									<td>{new Date(domain.created).toLocaleString()}</td>
 									<td>{new Date(domain.updated).toLocaleString()}</td>
 								</tr>

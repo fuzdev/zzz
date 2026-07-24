@@ -164,12 +164,12 @@
 			<div class="flex:1">
 				{#if show_info}
 					<div>
-						<ProviderLink {provider}
-							><span class="white-space:nowrap"
-								><Svg data={icon_provider} />
-								{provider.title}</span
-							> provider</ProviderLink
-						>
+						<ProviderLink {provider}>
+							<span class="white-space:nowrap">
+								<Svg data={icon_provider} />
+								{provider.title}
+							</span> provider
+						</ProviderLink>
 					</div>
 					<ul>
 						{#if provider.api_key_url}
@@ -189,9 +189,9 @@
 		</div>
 	{:else}
 		<div class="py_sm">
-			<ErrorMessage
-				><small class="font_family_mono">provider "{provider_name}" not found</small></ErrorMessage
-			>
+			<ErrorMessage>
+				<small class="font_family_mono">provider "{provider_name}" not found</small>
+			</ErrorMessage>
 		</div>
 	{/if}
 </div>

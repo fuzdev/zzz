@@ -45,13 +45,16 @@
 				onclick={() => (browser.browserified = !browser.browserified)}
 				class:palette_i={!browser.browserified}
 				class:palette_h={browser.browserified}
-				class="inline sm">{browser.browserified ? 'un' : ''}browserify!</button
-			> I'm planning to make a native version of Zzz.
+				class="inline sm"
+			>
+				{browser.browserified ? 'un' : ''}browserify!
+			</button>
+			I'm planning to make a native version of Zzz.
 		</p>
 		<p>
-			And users don't have to buy in, either -- the basic browser UX is unchanged. Press <code
-				>[backtick `]</code
-			>
+			And users don't have to buy in, either -- the basic browser UX is unchanged. Press <code>
+				[backtick `]
+			</code>
 			to
 			<button
 				type="button"
@@ -64,9 +67,10 @@
 						browser.browserified = true;
 					}
 				}}
-				>{#if !app.ui.show_sidebar}remember your power{:else}pretend it's all a dream{/if}</button
-			> (that's just the current keybinding, it will probably change, also see the button at the bottom
-			left corner of this window)
+			>
+				{#if !app.ui.show_sidebar}remember your power{:else}pretend it's all a dream{/if}
+			</button> (that's just the current keybinding, it will probably change, also see the button at
+			the bottom left corner of this window)
 		</p>
 		<p>
 			This simple change recontextualizes the web's UX -- instead of the browser being its own silo,
@@ -84,11 +88,16 @@
 			I think that by optimizing for UX, Zzz and a lot of software is converging on similar
 			architectures. I'm not well-read in The Literature or staying current with the design or
 			product communities, but some of my favorite writing is from Ink and Switch: <ExternalLink
-				href="https://www.inkandswitch.com/local-first/">local-first</ExternalLink
-			> and <ExternalLink href="https://www.inkandswitch.com/malleable-software/"
-				>malleable software</ExternalLink
-			>. I think that we can all have software that's really nice to use, not that expensive to
-			produce, that also respects individual rights and is designed for our benefit, that
+				href="https://www.inkandswitch.com/local-first/"
+			>
+				local-first
+			</ExternalLink>
+			and
+			<ExternalLink href="https://www.inkandswitch.com/malleable-software/">
+				malleable software
+			</ExternalLink>. I think that we can all have software that's really nice to use, not that
+			expensive to produce, that also respects individual rights and is designed for our benefit,
+			that
 			<small class="font_size_xs">UNLEASHES THE FULL POWER OF THE WEB</small>, and integrates our
 			experience across the web and our devices how we each prefer.
 		</p>

@@ -21,8 +21,10 @@
 					class="sm"
 					onclick={() => {
 						app.ui.tutorial_for_diskfiles = false;
-					}}>ok</button
+					}}
 				>
+					ok
+				</button>
 			</aside>
 		</div>
 	</div>

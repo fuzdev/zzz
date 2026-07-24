@@ -43,9 +43,9 @@
 					<EditableText bind:value={chat.name} />
 				</div>
 				<div class="row">
-					<small class="flex:1" title={chat.created_formatted_datetime}
-						>created {chat.created_formatted_short_date}</small
-					>
+					<small class="flex:1" title={chat.created_formatted_datetime}>
+						created {chat.created_formatted_short_date}
+					</small>
 					<div class="row gap_xs py_xs">
 						{#if thread_count}
 							<ToggleButton

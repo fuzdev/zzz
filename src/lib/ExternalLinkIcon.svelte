@@ -11,9 +11,10 @@
 	} = $props();
 </script>
 
-<sup class="font_size_xs font_family_mono white-space:nowrap"
-	>[{#if children}{@render children(icon_external_link)}{:else}<Svg
-			data={icon_external_link}
-			inline
-		/>{/if}]</sup
->
+<sup class="font_size_xs font_family_mono white-space:nowrap">
+	[{#if children}
+		{@render children(icon_external_link)}
+	{:else}
+		<Svg data={icon_external_link} inline />
+	{/if}]
+</sup>

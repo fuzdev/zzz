@@ -85,7 +85,7 @@
   },
   "dependencies": {
     "@fuzdev/blake3_wasm": "^0.1.1",
-    "@fuzdev/gro": "^0.207.0",
+    "@fuzdev/gro": "^0.209.0",
     "@xterm/xterm": "^6.0.0",
     "date-fns": "^4.1.0"
   },

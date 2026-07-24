@@ -111,8 +111,9 @@
 								<div class="mb_sm">
 									<h4>SSL Verification</h4>
 									<p>To complete SSL setup, add this TXT record:</p>
-									<code>_zzz-verify → verify-{domains_viewmodel.domain_id || 'your-domain-id'}</code
-									>
+									<code>
+										_zzz-verify → verify-{domains_viewmodel.domain_id || 'your-domain-id'}
+									</code>
 								</div>
 							{/if}
 						</div>

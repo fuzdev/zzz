@@ -100,9 +100,9 @@
 								</button>
 							</div>
 
-							<button type="button" onclick={delete_page} class="palette_c"
-								><Svg data={icon_delete} />&nbsp; delete</button
-							>
+							<button type="button" onclick={delete_page} class="palette_c">
+								<Svg data={icon_delete} />&nbsp; delete
+							</button>
 						</div>
 					</div>
 

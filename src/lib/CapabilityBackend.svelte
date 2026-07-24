@@ -43,12 +43,14 @@
 						<PendingAnimation inline />
 					{/if}
 				</div>
-				<small class="font_family_mono"
-					>{SERVER_URL}
-					{#if capabilities.latest_ping_time !== null}<span
-							><Svg data={icon_arrow_right} />
-							{Math.round(capabilities.latest_ping_time)}ms</span
-						>{/if}
+				<small class="font_family_mono">
+					{SERVER_URL}
+					{#if capabilities.latest_ping_time !== null}
+						<span>
+							<Svg data={icon_arrow_right} />
+							{Math.round(capabilities.latest_ping_time)}ms
+						</span>
+					{/if}
 				</small>
 			</div>
 		</div>
@@ -56,9 +58,9 @@
 
 	{#if capabilities.backend.error_message}
 		<div transition:slide>
-			<ErrorMessage
-				><small class="font_family_mono">{capabilities.backend.error_message}</small></ErrorMessage
-			>
+			<ErrorMessage>
+				<small class="font_family_mono">{capabilities.backend.error_message}</small>
+			</ErrorMessage>
 		</div>
 	{/if}
 
@@ -66,11 +68,11 @@
 		<p>
 			The Zzz backend provides local system access (like to your filesystem), handles API requests
 			to AI providers, and enables other capabilities that would otherwise be unavailable to the app
-			running in the browser. It's made with <ExternalLink href="https://github.com/tokio-rs/axum"
-				>Axum</ExternalLink
-			>, a Rust web framework, and serves the prerendered <ExternalLink
-				href="https://svelte.dev/docs/kit/introduction">SvelteKit</ExternalLink
-			> frontend.
+			running in the browser. It's made with <ExternalLink href="https://github.com/tokio-rs/axum">
+				Axum
+			</ExternalLink>, a Rust web framework, and serves the prerendered
+			<ExternalLink href="https://svelte.dev/docs/kit/introduction">SvelteKit</ExternalLink>
+			frontend.
 		</p>
 	</div>
 

@@ -70,7 +70,9 @@
 					</p>
 				</ErrorMessage>
 			</div>
-		{:else if capabilities.backend_available === null || capabilities.backend_available === undefined}
+		{:else if capabilities.backend_available === null ||
+			capabilities.backend_available === undefined
+		}
 			<div class="box mt_lg">
 				<blockquote>
 					checking backend connection <PendingAnimation inline />
@@ -92,16 +94,20 @@
 						<button
 							type="button"
 							class="inline palette_d"
-							onclick={() => chats.add(undefined, true)}>create a new chat</button
-						>, or
+							onclick={() => chats.add(undefined, true)}
+						>
+							create a new chat
+						</button>, or
 						<button
 							type="button"
 							class="inline palette_f"
 							onclick={() => {
 								const chat = random_item(chats.ordered_items);
 								void chats.navigate_to(chat.id);
-							}}>go fish</button
-						>?
+							}}
+						>
+							go fish
+						</button>?
 					</p>
 				</div>
 			</div>
@@ -109,9 +115,9 @@
 			<div class="box height:100%">
 				<p>
 					no chats yet,
-					<button type="button" class="inline palette_d" onclick={() => chats.add(undefined, true)}
-						>create a new chat</button
-					>?
+					<button type="button" class="inline palette_d" onclick={() => chats.add(undefined, true)}>
+						create a new chat
+					</button>?
 				</p>
 			</div>
 		{/if}

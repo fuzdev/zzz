@@ -51,9 +51,13 @@
 />
 
 {#snippet render_icon(value: Snippet | string | SvgData)}
-	{#if typeof value === 'string'}{value}{:else if typeof value === 'function'}{@render value()}{:else}<Svg
-			data={value}
-		/>{/if}
+	{#if typeof value === 'string'}
+		{value}
+	{:else if typeof value === 'function'}
+		{@render value()}
+	{:else}
+		<Svg data={value} />
+	{/if}
 {/snippet}
 {#snippet clear_content()}{@render render_icon(clear_icon)}{/snippet}
 {#snippet restore_content()}{@render render_icon(restore_icon)}{/snippet}

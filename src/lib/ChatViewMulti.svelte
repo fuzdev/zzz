@@ -73,8 +73,10 @@
 				onconfirm={() => chat.remove_all_threads()}
 				position="right"
 				disabled={!count}
-				class="plain"><Svg data={icon_remove} />&nbsp; remove all</ConfirmButton
+				class="plain"
 			>
+				<Svg data={icon_remove} />&nbsp; remove all
+			</ConfirmButton>
 		</div>
 		<ul class="threads unstyled mt_lg">
 			{#each chat.threads as thread (thread.id)}

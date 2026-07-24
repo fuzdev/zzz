@@ -16,7 +16,9 @@
 			onclick={() => {
 				const project = projects.create_new_project();
 				void goto(resolve(`/projects/${project.id}`));
-			}}>create one</button
-		>?
+			}}
+		>
+			create one
+		</button>?
 	</p>
 </div>

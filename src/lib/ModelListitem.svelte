@@ -22,9 +22,10 @@
 				{model.name}
 			</div>
 			<small class="row justify-content:space-between">
-				<span>{model.provider_name}</span>{#if model.context_window_formatted}<span
-						>{model.context_window_formatted}</span
-					>{/if}
+				<span>{model.provider_name}</span
+				>{#if model.context_window_formatted}
+					<span>{model.context_window_formatted}</span>
+				{/if}
 			</small>
 		</div>
 	</div>

@@ -59,8 +59,10 @@
 <section>
 	<p>
 		The backend's filesystem is scoped for security. Symlinks are not followed. Configure with <code
-			class="font_size_sm">PUBLIC_ZZZ_DIR</code
+			class="font_size_sm"
 		>
+			PUBLIC_ZZZ_DIR
+		</code>
 		and <code class="font_size_sm">PUBLIC_ZZZ_SCOPED_DIRS</code>. Directories added via workspaces
 		are shown separately.
 	</p>

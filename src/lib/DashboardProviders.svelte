@@ -27,12 +27,12 @@
 					{#if provider.available}
 						<span class="palette_b_50 ml_sm"><Svg data={icon_checkmark} /> available</span>
 					{:else}
-						<span class="palette_c_50 ml_sm"
-							><Svg data={icon_error} />
+						<span class="palette_c_50 ml_sm">
+							<Svg data={icon_error} />
 							{provider.status && !provider.status.available
 								? provider.status.error
-								: 'unavailable'}</span
-						>
+								: 'unavailable'}
+						</span>
 					{/if}
 				</p>
 				<p>

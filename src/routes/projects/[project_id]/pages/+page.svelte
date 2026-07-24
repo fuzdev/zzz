@@ -56,9 +56,9 @@
 							{#each project_viewmodel.project.pages as page (page.id)}
 								<tr>
 									<td>
-										<a href={resolve(`/projects/${project_viewmodel.project_id}/pages/${page.id}`)}
-											>{page.title}</a
-										>
+										<a href={resolve(`/projects/${project_viewmodel.project_id}/pages/${page.id}`)}>
+											{page.title}
+										</a>
 									</td>
 									<td>{page.path}</td>
 									<td>{new Date(page.created).toLocaleString()}</td>

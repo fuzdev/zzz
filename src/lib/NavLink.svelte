@@ -42,8 +42,9 @@
 	class="nav-link {rest.class}"
 	class:selected
 	class:selected-descendent={selected_descendent}
-	>{@render children(selected, selected_descendent)}</a
 >
+	{@render children(selected, selected_descendent)}
+</a>
 
 <style>
 	.nav-link {

@@ -87,17 +87,18 @@
 				class:palette_h={capabilities.websocket.status === 'success' && !socket.connected}
 			>
 				<div class="column justify-content:center gap_xs pl_md" style:min-height="80px">
-					<span
-						>websocket {socket.connected
+					<span>
+						websocket {socket.connected
 							? 'connected'
 							: socket.status === 'pending'
 								? 'connecting'
 								: 'disconnected'}{#if socket.status === 'pending'}
-							<PendingAnimation inline class="ml_sm" />{/if}</span
-					>
-					<small class="font_family_mono"
-						>{#if socket.url}{socket.url}{:else}&nbsp;{/if}</small
-					>
+							<PendingAnimation inline class="ml_sm" />
+						{/if}
+					</span>
+					<small class="font_family_mono">
+						{#if socket.url}{socket.url}{:else}&nbsp;{/if}
+					</small>
 				</div>
 			</div>
 

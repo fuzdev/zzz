@@ -37,9 +37,9 @@
 </script>
 
 <!-- TODO this contextmenu appears as a duplicate, I think a de-duped key is the best fix, not manually disabling it -->
-<ModelContextmenu {model}
-	><a {...rest} href={resolve(`/models/${model.name}`)} class="selected-plain" class:selected
-		>{#if children}
+<ModelContextmenu {model}>
+	<a {...rest} href={resolve(`/models/${model.name}`)} class="selected-plain" class:selected>
+		{#if children}
 			{@render children()}
 		{:else}
 			{#if icon === 'logo'}
@@ -47,6 +47,6 @@
 			{:else if icon}
 				<Svg data={icon} inline />&nbsp;
 			{/if}{model.name}
-		{/if}</a
-	></ModelContextmenu
->
+		{/if}
+	</a>
+</ModelContextmenu>

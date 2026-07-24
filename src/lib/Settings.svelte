@@ -11,15 +11,18 @@
 	<ColorSchemeInput />
 </div>
 <p>
-	Learn about <code>color-scheme</code> on <ExternalLink
-		href="https://developer.mozilla.org/en-US/docs/Web/CSS/color-scheme">MDN</ExternalLink
-	>.
+	Learn about <code>color-scheme</code> on
+	<ExternalLink href="https://developer.mozilla.org/en-US/docs/Web/CSS/color-scheme">
+		MDN
+	</ExternalLink>.
 </p>
 <h3>theme</h3>
 <aside>
 	⚠️ Themes are a proof of concept, not ready for production. For technical docs see <ExternalLink
-		href="https://css.fuz.dev/docs/themes">fuz_css</ExternalLink
-	>.
+		href="https://css.fuz.dev/docs/themes"
+	>
+		fuz_css
+	</ExternalLink>.
 </aside>
 <div class="width_atmost_sm box">
 	<div class="width_atmost_xs">

@@ -33,23 +33,29 @@
 								type="button"
 								class="palette_a"
 								onclick={() => project_viewmodel.save_project_details()}
-								disabled={!project_viewmodel.has_changes}>save</button
+								disabled={!project_viewmodel.has_changes}
 							>
+								save
+							</button>
 							<button
 								type="button"
 								class="plain"
 								onclick={() => {
 									project_viewmodel.editing_project = false;
 									project_viewmodel.reset_form();
-								}}>cancel</button
+								}}
 							>
+								cancel
+							</button>
 						</div>
 					{:else}
 						<button
 							type="button"
 							class="plain"
-							onclick={() => (project_viewmodel.editing_project = true)}>edit</button
+							onclick={() => (project_viewmodel.editing_project = true)}
 						>
+							edit
+						</button>
 					{/if}
 				</div>
 
@@ -76,18 +82,18 @@
 				{/if}
 
 				<div class="display:flex gap_md mb_lg">
-					<span class="chip"
-						>{project.pages.length}
-						{project.pages.length === 1 ? 'page' : 'pages'}</span
-					>
-					<span class="chip"
-						>{project.domains.length}
-						{project.domains.length === 1 ? 'domain' : 'domains'}</span
-					>
-					<span class="chip"
-						>{project.repos.length}
-						{project.repos.length === 1 ? 'repo' : 'repos'}</span
-					>
+					<span class="chip">
+						{project.pages.length}
+						{project.pages.length === 1 ? 'page' : 'pages'}
+					</span>
+					<span class="chip">
+						{project.domains.length}
+						{project.domains.length === 1 ? 'domain' : 'domains'}
+					</span>
+					<span class="chip">
+						{project.repos.length}
+						{project.repos.length === 1 ? 'repo' : 'repos'}
+					</span>
 					<span class="chip">created {new Date(project.created).toLocaleDateString()}</span>
 					<span class="chip">updated {new Date(project.updated).toLocaleDateString()}</span>
 				</div>
@@ -113,8 +119,10 @@
 							<button
 								type="button"
 								onclick={() => project_viewmodel.create_new_page()}
-								class="palette_a">+ add page</button
+								class="palette_a"
 							>
+								+ add page
+							</button>
 						</div>
 					</div>
 
@@ -153,8 +161,10 @@
 							<button
 								type="button"
 								onclick={() => project_viewmodel.create_new_domain()}
-								class="palette_a">+ add domain</button
+								class="palette_a"
 							>
+								+ add domain
+							</button>
 						</div>
 					</div>
 
@@ -185,8 +195,10 @@
 							<button
 								type="button"
 								onclick={() => project_viewmodel.create_new_repo()}
-								class="palette_a">+ add repo</button
+								class="palette_a"
 							>
+								+ add repo
+							</button>
 						</div>
 					</div>
 				</div>

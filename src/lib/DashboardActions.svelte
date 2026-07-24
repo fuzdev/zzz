@@ -73,8 +73,10 @@
 							class="inline palette_f"
 							onclick={() => {
 								selected_action = random_item(actions.items.values);
-							}}>go fish</button
-						> to view its details
+							}}
+						>
+							go fish
+						</button> to view its details
 					</p>
 				</div>
 			{:else}
@@ -85,8 +87,10 @@
 							class="inline palette_d"
 							onclick={() => {
 								app.api.toggle_main_menu();
-							}}>do something?</button
-						>?
+							}}
+						>
+							do something?
+						</button>?
 					</p>
 				</div>
 			{/if}

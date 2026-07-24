@@ -53,8 +53,8 @@
 
 <!-- whitespace is tricky here, the icon branches control it with an explicit nbsp -->
 {#if provider}
-	<a {...rest} href={resolve(`/providers/${provider.name}`)} class="selected-plain" class:selected
-		>{#if children}
+	<a {...rest} href={resolve(`/providers/${provider.name}`)} class="selected-plain" class:selected>
+		{#if children}
 			{@render children()}
 		{:else}
 			{#if icon === 'logo'}
@@ -62,8 +62,8 @@
 			{:else if icon}
 				<Svg data={icon} inline {...icon_props} />&nbsp;
 			{/if}{label === 'name' ? provider.name : provider.title}
-		{/if}</a
-	>
+		{/if}
+	</a>
 {:else if fallback}
 	{@render fallback()}
 {:else}

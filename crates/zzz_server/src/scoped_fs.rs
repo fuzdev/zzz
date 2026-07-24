@@ -30,10 +30,21 @@ pub enum ScopedFsError {
 
 // -- ScopedFs -----------------------------------------------------------------
 
-/// Secure wrapper around filesystem operations.
+/// Scoping wrapper around filesystem operations.
 ///
-/// Restricts all operations to specified allowed directories. Rejects
+/// Restricts all operations to the currently-allowed directories. Rejects
 /// relative paths, path traversal, and symlinks.
+///
+/// **Not a confinement boundary against an authenticated caller.** The allowed
+/// set is *mutable at runtime* via [`Self::add_path`], and `workspace_open`
+/// (gated only at `AuthSpec::authenticated()`) calls it with a caller-supplied
+/// directory without consulting the existing allowlist. So any authenticated
+/// caller can widen the scope to an arbitrary existing directory and then write
+/// beneath it. Read this type as a guard against accidental or buggy writes
+/// outside the open workspaces — not as a sandbox. That is consistent with zzz's
+/// posture (an authenticated zzz credential carries local-user authority
+/// regardless — see the `terminal_*` actions), but don't mistake the type for a
+/// stronger guarantee than it makes.
 ///
 /// NOTE: There is an inherent TOCTOU gap between the symlink check (`lstat`)
 /// and the caller's subsequent filesystem operation. A symlink could be

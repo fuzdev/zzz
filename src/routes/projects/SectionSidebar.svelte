@@ -30,9 +30,9 @@
 				</NavLink>
 			</li>
 			<li>
-				<NavLink href={resolve(`/projects/${project.id}/pages`)} selected={section === 'pages'}
-					>pages</NavLink
-				>
+				<NavLink href={resolve(`/projects/${project.id}/pages`)} selected={section === 'pages'}>
+					pages
+				</NavLink>
 			</li>
 			<li>
 				<NavLink href={resolve(`/projects/${project.id}/domains`)} selected={section === 'domains'}>

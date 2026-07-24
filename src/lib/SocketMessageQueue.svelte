@@ -264,7 +264,8 @@
 											</button>
 										</div>
 										<pre
-											class="shade_10 border_radius_xs border_width border_style border_color_20 font_family_mono font_size_xs white-space:pre-wrap word-break:break-word p_md">{message_data_serialized}</pre>
+											class="shade_10 border_radius_xs border_width border_style border_color_20 font_family_mono font_size_xs white-space:pre-wrap word-break:break-word p_md"
+										>{message_data_serialized}</pre>
 										<CopyToClipboard text={message_data_serialized} />
 									</div>
 								{/snippet}

@@ -45,13 +45,14 @@
 				</div>
 				<div class="display:flex gap_xs">
 					{#if turn_count > 0}
-						<small
-							>{turn_count} message{turn_count !== 1 ? 's' : ''}, {thread.token_count} token{thread.token_count !==
-							1
+						<small>
+							{turn_count} message{turn_count !== 1
 								? 's'
-								: ''}</small
-						>
-					{:else}&nbsp;{/if}
+								: ''}, {thread.token_count} token{thread.token_count !== 1 ? 's' : ''}
+						</small>
+					{:else}
+						&nbsp;
+					{/if}
 				</div>
 			</div>
 			<div class="display:flex gap_xs">

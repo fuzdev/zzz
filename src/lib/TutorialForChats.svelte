@@ -15,16 +15,20 @@
 				<p>
 					This currently supports basic text chat with ChatGPT, Claude, and Gemini if you bring your
 					own API key. It's still early, share your ideas in the <ExternalLink
-						href="https://github.com/fuzdev/zzz/discussions">discussions</ExternalLink
-					>.
+						href="https://github.com/fuzdev/zzz/discussions"
+					>
+						discussions
+					</ExternalLink>.
 				</p>
 				<button
 					type="button"
 					class="sm"
 					onclick={() => {
 						app.ui.tutorial_for_chats = false;
-					}}>k</button
+					}}
 				>
+					k
+				</button>
 			</aside>
 		</div>
 	</div>

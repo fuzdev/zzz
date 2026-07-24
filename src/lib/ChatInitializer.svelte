@@ -82,12 +82,11 @@
 						<div class="display:flex flex-wrap:wrap gap_xs2">
 							{#each chat_template.model_names as model_name (model_name)}
 								{@const provider_name = app.models.find_by_name(model_name)?.provider_name}
-								<small class="chip"
-									>{#if provider_name}<ProviderLogo
-											name={provider_name}
-											size="var(--font_size_xs)"
-										/>&nbsp;{/if}{model_name}</small
-								>
+								<small class="chip">
+									{#if provider_name}
+										<ProviderLogo name={provider_name} size="var(--font_size_xs)" />&nbsp;
+									{/if}{model_name}
+								</small>
 							{/each}
 						</div>
 					</div>

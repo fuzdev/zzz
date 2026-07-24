@@ -13,10 +13,10 @@
 		dialog_props,
 		...rest
 	}: // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
-	ComponentProps<typeof Picker<T>> & {
-		show?: boolean | undefined;
-		dialog_props?: OmitStrict<ComponentProps<typeof Dialog>, 'children'> | undefined;
-	} = $props();
+		ComponentProps<typeof Picker<T>> & {
+			show?: boolean | undefined;
+			dialog_props?: OmitStrict<ComponentProps<typeof Dialog>, 'children'> | undefined;
+		} = $props();
 </script>
 
 <!-- TODO API with `bind:show` in Fuz dialog? -->

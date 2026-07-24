@@ -17,17 +17,18 @@
 					The prompt builder UI is very rough. The plan is to experiment with many ideas for making
 					and managing prompts, both simpler and more complex than this first iteration. Zzz will
 					likewise explore variants of the <a href={resolve('/chats')}>chat</a> interface. Share
-					your ideas in the <ExternalLink href="https://github.com/fuzdev/zzz/discussions"
-						>discussions</ExternalLink
-					>.
+					your ideas in the
+					<ExternalLink href="https://github.com/fuzdev/zzz/discussions">discussions</ExternalLink>.
 				</p>
 				<button
 					type="button"
 					class="sm"
 					onclick={() => {
 						app.ui.tutorial_for_prompts = false;
-					}}>okay</button
+					}}
 				>
+					okay
+				</button>
 			</aside>
 		</div>
 	</div>
