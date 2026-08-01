@@ -13,7 +13,7 @@
 	} = $props();
 </script>
 
-<span class="palette_c_50">
+<span class="color_c_50">
 	{#if icon}
 		<Svg data={icon} />
 	{/if}

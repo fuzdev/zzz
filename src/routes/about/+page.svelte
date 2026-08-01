@@ -205,7 +205,7 @@
 		</p>
 		<aside>
 			⚠️ I am not a security professional and Zzz has not been audited; it may be
-			<strong class="palette_c_50">dangerous</strong>
+			<strong class="color_c_50">dangerous</strong>
 			to run
 		</aside>
 		<p>
@@ -238,8 +238,8 @@
 					</li>
 					<li>
 						authentication is cookie sessions and bearer tokens with a one-shot bootstrap flow, plus
-						an origin allowlist -- it's young and <strong class="palette_c_50">unaudited</strong>,
-						so do not use this in production
+						an origin allowlist -- it's young and <strong class="color_c_50">unaudited</strong>, so
+						do not use this in production
 					</li>
 					<li>
 						run interactive terminals -- full shell access as your user, the most powerful

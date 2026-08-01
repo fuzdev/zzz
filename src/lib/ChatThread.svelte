@@ -89,7 +89,7 @@
 							icon_props={{ size: 'var(--font_size_sm)' }}
 							label="name"
 						/>{#if provider_error}
-							<span class="palette_c_50 ml_sm"><Svg data={icon_error} /> {provider_error}</span>
+							<span class="color_c_50 ml_sm"><Svg data={icon_error} /> {provider_error}</span>
 						{/if}
 					</small>
 				</header>
@@ -125,7 +125,7 @@
 							pending={thread.pending}
 							disabled={send_disabled}
 							onclick={send}
-							class="plain {provider_error ? ' palette_c_50' : ''}"
+							class="plain {provider_error ? ' color_c_50' : ''}"
 							title={provider?.available
 								? `send ${input_token_count} tokens to ${thread.model_name}`
 								: (provider_error ?? undefined)}

@@ -48,7 +48,7 @@
 			<div class="ml_sm mb_md">
 				<ProviderLink provider={model.provider} icon="logo" class="font_size_lg" />
 				{#if model.provider && !model.provider.available}
-					<span class="font_size_md palette_c_50 ml_sm">
+					<span class="font_size_md color_c_50 ml_sm">
 						<Svg data={icon_error} />
 						{model.provider.status && !model.provider.status.available
 							? model.provider.status.error
