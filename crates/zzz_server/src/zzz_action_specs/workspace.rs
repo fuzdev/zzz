@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionHandler, ActionSpec};
-use fuz_auth::AuthSpec;
+use fuz_auth::{AuthSpec, CredentialGate};
 use fuz_http::JsonrpcError;
 use serde_json::Value;
 
@@ -43,7 +43,11 @@ fn workspace_list_spec(app: Arc<App>) -> ActionSpec {
         let app = Arc::clone(&app);
         Box::pin(async move { workspace::workspace_list(params, ctx, app).await })
     });
-    ActionSpec::read_only("workspace_list", AuthSpec::authenticated(), handler)
+    ActionSpec::read_only(
+        "workspace_list",
+        AuthSpec::authenticated(CredentialGate::Any),
+        handler,
+    )
 }
 
 fn workspace_open_spec(app: Arc<App>) -> ActionSpec {
@@ -51,7 +55,11 @@ fn workspace_open_spec(app: Arc<App>) -> ActionSpec {
         let app = Arc::clone(&app);
         Box::pin(async move { workspace::workspace_open(params, ctx, app).await })
     });
-    ActionSpec::with_side_effects("workspace_open", AuthSpec::authenticated(), handler)
+    ActionSpec::with_side_effects(
+        "workspace_open",
+        AuthSpec::authenticated(CredentialGate::Any),
+        handler,
+    )
 }
 
 fn workspace_close_spec(app: Arc<App>) -> ActionSpec {
@@ -59,7 +67,11 @@ fn workspace_close_spec(app: Arc<App>) -> ActionSpec {
         let app = Arc::clone(&app);
         Box::pin(async move { workspace::workspace_close(params, ctx, app).await })
     });
-    ActionSpec::with_side_effects("workspace_close", AuthSpec::authenticated(), handler)
+    ActionSpec::with_side_effects(
+        "workspace_close",
+        AuthSpec::authenticated(CredentialGate::Any),
+        handler,
+    )
 }
 
 // Silence unused-import on JsonrpcError until other zzz_action_specs

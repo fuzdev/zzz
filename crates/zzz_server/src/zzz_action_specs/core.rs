@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionHandler, ActionSpec};
-use fuz_auth::AuthSpec;
+use fuz_auth::{AuthSpec, CredentialGate};
 use serde_json::Value;
 
 use crate::handlers::App;
@@ -34,7 +34,11 @@ fn session_load_spec(app: Arc<App>) -> ActionSpec {
         let app = Arc::clone(&app);
         Box::pin(async move { core::session_load(params, ctx, app).await })
     });
-    ActionSpec::read_only("session_load", AuthSpec::authenticated(), handler)
+    ActionSpec::read_only(
+        "session_load",
+        AuthSpec::authenticated(CredentialGate::Any),
+        handler,
+    )
 }
 
 /// Build the test-only action specs (`_testing_emit_notifications`). Caller
@@ -53,7 +57,7 @@ fn testing_emit_notifications_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::read_only(
         "_testing_emit_notifications",
-        AuthSpec::authenticated(),
+        AuthSpec::authenticated(CredentialGate::Any),
         handler,
     )
 }

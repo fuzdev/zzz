@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionHandler, ActionSpec};
-use fuz_auth::AuthSpec;
+use fuz_auth::{AuthSpec, CredentialGate};
 use serde_json::Value;
 
 use crate::handlers::App;
@@ -28,7 +28,11 @@ fn provider_load_status_spec(app: Arc<App>) -> ActionSpec {
         let app = Arc::clone(&app);
         Box::pin(async move { provider::provider_load_status(params, ctx, app).await })
     });
-    ActionSpec::read_only("provider_load_status", AuthSpec::authenticated(), handler)
+    ActionSpec::read_only(
+        "provider_load_status",
+        AuthSpec::authenticated(CredentialGate::Any),
+        handler,
+    )
 }
 
 fn completion_create_spec(app: Arc<App>) -> ActionSpec {
@@ -36,5 +40,9 @@ fn completion_create_spec(app: Arc<App>) -> ActionSpec {
         let app = Arc::clone(&app);
         Box::pin(async move { provider::completion_create(params, ctx, app).await })
     });
-    ActionSpec::with_side_effects("completion_create", AuthSpec::authenticated(), handler)
+    ActionSpec::with_side_effects(
+        "completion_create",
+        AuthSpec::authenticated(CredentialGate::Any),
+        handler,
+    )
 }

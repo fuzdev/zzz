@@ -37,7 +37,8 @@ pub enum ScopedFsError {
 ///
 /// **Not a confinement boundary against an authenticated caller.** The allowed
 /// set is *mutable at runtime* via [`Self::add_path`], and `workspace_open`
-/// (gated only at `AuthSpec::authenticated()`) calls it with a caller-supplied
+/// (gated only at `AuthSpec::authenticated(CredentialGate::Any)` — any
+/// credential, no role) calls it with a caller-supplied
 /// directory without consulting the existing allowlist. So any authenticated
 /// caller can widen the scope to an arbitrary existing directory and then write
 /// beneath it. Read this type as a guard against accidental or buggy writes
