@@ -1,6 +1,10 @@
 //! AI provider handlers.
 //!
-//! `provider_load_status`, `provider_update_api_key`, and `completion_create`.
+//! `provider_load_status` and `completion_create`.
+//!
+//! There is no runtime API-key setter. Provider keys come from the process
+//! environment (`SECRET_ANTHROPIC_API_KEY` / `SECRET_OPENAI_API_KEY` /
+//! `SECRET_GOOGLE_API_KEY`) and nowhere else.
 //! `completion_create` routes streaming progress notifications via
 //! `Arc<fuz_realtime::ConnectionRegistry>::send_to(conn_id, …)` — `ctx.connection_id`
 //! carries the per-socket route on WS, `None` on HTTP. HTTP callers omit the
@@ -55,32 +59,6 @@ pub async fn provider_load_status(
 
     let provider = app.provider_manager.require(provider_name)?;
     let status = provider.load_status(reload).await;
-
-    serde_json::to_value(ProviderStatusResult { status })
-        .map_err(|e| internal_error_with_source("serialization failed", &e))
-}
-
-pub async fn provider_update_api_key(
-    params: Value,
-    _ctx: ActionContext<'_>,
-    app: Arc<App>,
-) -> Result<Value, JsonrpcError> {
-    let name_str = params
-        .get("provider_name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| invalid_params("missing or invalid 'provider_name' parameter", None))?;
-
-    let provider_name = ProviderName::parse(name_str)
-        .ok_or_else(|| invalid_params(&format!("unknown provider: {name_str}"), None))?;
-
-    let api_key = params
-        .get("api_key")
-        .and_then(Value::as_str)
-        .ok_or_else(|| invalid_params("missing or invalid 'api_key' parameter", None))?;
-
-    let provider = app.provider_manager.require(provider_name)?;
-    provider.set_api_key(Some(api_key.to_owned())).await;
-    let status = provider.load_status(true).await;
 
     serde_json::to_value(ProviderStatusResult { status })
         .map_err(|e| internal_error_with_source("serialization failed", &e))

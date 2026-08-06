@@ -1,9 +1,6 @@
 /**
  * Cross-backend integration tests for provider + session_load actions.
  *
- * The keeper-only `provider_update_api_key` action requires daemon-token
- * auth and is not yet ported — see the TODO at the bottom.
- *
  * @module
  */
 
@@ -166,11 +163,6 @@ describe('provider + session cross-backend', () => {
 		}
 	});
 
-	// TODO: provider_update_api_key is keeper-only — it requires the
-	// daemon-token credential type rather than a session cookie. Driving
-	// it cross-process needs `handle.keeper_transport` plus
-	// `fixture.create_daemon_token_headers()`; per-test scoping for
-	// keeper-driven actions is the parent agent's call once the
-	// daemon-token header pattern lands. Skipped intentionally — see
-	// `auth_keeper_forbidden` in the old runner for the negative case.
+	// There is no runtime API-key setter to cover: provider keys come from the
+	// server's environment (`SECRET_ANTHROPIC_API_KEY` &c.) and nowhere else.
 });

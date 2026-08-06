@@ -23,46 +23,21 @@
 	const capability = $derived(capabilities.providers[provider_name]);
 	const provider = $derived(app.providers.find_by_name(provider_name));
 
-	let api_key_input = $state.raw('');
-	let updating = $state.raw(false);
 	let checking = $state.raw(false);
 
-	const api_key_input_normalized = $derived(api_key_input.trim());
+	// Provider keys come from the server's environment, not the browser — see
+	// the `env_var_name` note below. This component reads status only.
+	const env_var_name = $derived(
+		provider_name === 'claude'
+			? 'SECRET_ANTHROPIC_API_KEY'
+			: provider_name === 'chatgpt'
+				? 'SECRET_OPENAI_API_KEY'
+				: 'SECRET_GOOGLE_API_KEY'
+	);
 
 	onMount(() => {
 		void capabilities.providers[provider_name].init_check();
 	});
-
-	const update_api_key = async () => {
-		if (!api_key_input_normalized) return;
-
-		updating = true;
-		try {
-			await app.api.provider_update_api_key({
-				provider_name,
-				api_key: api_key_input_normalized
-			});
-			api_key_input = '';
-		} catch (error) {
-			console.error(`Failed to update ${provider_name} API key:`, error);
-		} finally {
-			updating = false;
-		}
-	};
-
-	const delete_api_key = async () => {
-		updating = true;
-		try {
-			await app.api.provider_update_api_key({
-				provider_name,
-				api_key: ''
-			});
-		} catch (error) {
-			console.error(`Failed to delete ${provider_name} API key:`, error);
-		} finally {
-			updating = false;
-		}
-	};
 
 	const reload_status = async () => {
 		checking = true;
@@ -119,43 +94,17 @@
 				</div>
 				<!-- TODO add actual API connection test (make minimal API call to verify key works) -->
 				<fieldset>
-					<input
-						type="password"
-						bind:value={api_key_input}
-						placeholder="enter new API key"
-						class="mb_sm"
-						disabled={updating || !capabilities.backend_available}
-					/>
+					<p class="font_size_sm">
+						set <code>{env_var_name}</code> in the server's environment and restart
+					</p>
 					<div class="display:flex justify-content:space-between gap_xs">
 						<button
 							type="button"
 							class="flex:1"
-							disabled={!api_key_input_normalized || updating || !capabilities.backend_available}
-							onclick={update_api_key}
-						>
-							{#if updating}
-								updating <PendingAnimation inline />
-							{:else}
-								update key
-							{/if}
-						</button>
-						<button
-							type="button"
-							class="flex:1"
-							disabled={checking || updating || !capabilities.backend_available}
+							disabled={checking || !capabilities.backend_available}
 							onclick={reload_status}
 						>
 							reload
-						</button>
-						<button
-							type="button"
-							class="flex:1"
-							disabled={capability.status !== 'success' ||
-								updating ||
-								!capabilities.backend_available}
-							onclick={delete_api_key}
-						>
-							delete key
 						</button>
 					</div>
 				</fieldset>

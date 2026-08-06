@@ -177,20 +177,6 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'provider_load_status', 'receive_error', 'handling'>
 		) => void | Promise<void>;
 	};
-	provider_update_api_key?: {
-		send_request?: (
-			action_event: TypedActionEvent<'provider_update_api_key', 'send_request', 'handling'>
-		) => void | Promise<void>;
-		receive_response?: (
-			action_event: TypedActionEvent<'provider_update_api_key', 'receive_response', 'handling'>
-		) => void | Promise<void>;
-		send_error?: (
-			action_event: TypedActionEvent<'provider_update_api_key', 'send_error', 'handling'>
-		) => void | Promise<void>;
-		receive_error?: (
-			action_event: TypedActionEvent<'provider_update_api_key', 'receive_error', 'handling'>
-		) => void | Promise<void>;
-	};
 	terminal_create?: {
 		send_request?: (
 			action_event: TypedActionEvent<'terminal_create', 'send_request', 'handling'>

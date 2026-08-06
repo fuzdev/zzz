@@ -176,12 +176,6 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		}
 	},
 
-	provider_update_api_key: {
-		receive_response: ({ data: { output } }) => {
-			frontend.update_provider_status(output.status);
-		}
-	},
-
 	terminal_create: {
 		receive_response: ({ data: { output } }) => {
 			console.log('[frontend_action_handlers] terminal created:', output.terminal_id);

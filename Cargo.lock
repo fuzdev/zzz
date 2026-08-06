@@ -754,6 +754,7 @@ dependencies = [
  "futures",
  "fuz_db",
  "fuz_http",
+ "fuz_sys",
  "getrandom 0.3.4",
  "hmac 0.12.1",
  "lru",
@@ -863,6 +864,7 @@ name = "fuz_testing"
 version = "0.1.0"
 dependencies = [
  "argon2",
+ "base64",
  "deadpool-postgres",
  "futures",
  "fuz_actions",
@@ -872,6 +874,7 @@ dependencies = [
  "fuz_http",
  "fuz_sys",
  "getrandom 0.3.4",
+ "parking_lot",
  "serde_json",
  "tokio",
  "tokio-postgres",

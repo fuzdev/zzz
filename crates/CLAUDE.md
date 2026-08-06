@@ -25,8 +25,8 @@ SSE stream from `fuz_realtime::audit_stream_router`. `handlers/` holds only
 `App` state plus a `broadcast` shim over `App.realtime` (socket revocation
 lives on the spine's `ConnectionRegistry` — see Auth below). RPC methods:
 `ping`, `session_load`, `workspace_*`, `diskfile_*`, `directory_create`,
-`terminal_*`, `provider_load_status`, `provider_update_api_key`,
-`completion_create`, `account_verify`, `account_session_list`,
+`terminal_*`, `provider_load_status`, `completion_create`,
+`account_verify`, `account_session_list`,
 `account_session_revoke`, `account_session_revoke_all`,
 `account_token_create`, `account_token_list`, `account_token_revoke`,
 `admin_session_revoke_all`, `admin_token_revoke_all`.
@@ -155,15 +155,23 @@ orientation; the spine crates are authoritative:
    silently discarded (Origin/Referer headers present → bearer ignored). Token
    `last_used_at` touched fire-and-forget. Sets `CredentialType::ApiToken`.
 
-5. **Daemon token auth** — `X-Daemon-Token` header. Token is a 43-char
-   base64url string (32 random bytes), generated at startup and written to
-   `{zzz_dir}/run/daemon_token`. Rotated every 30 seconds (previous token
-   accepted during rotation race window). Validated with constant-time
-   comparison. Resolves the keeper account for the `RequestContext`. Sets
-   `CredentialType::DaemonToken`. State protected by `tokio::sync::RwLock`.
+5. **Daemon token auth** — `X-Daemon-Token` header. **Not mounted in
+   production.** `zzz_server` cannot construct the credential: its producer
+   (`fuz_testing::init_daemon_token`) lives in `fuz_testing`, which
+   `cargo xtask check-release` forbids in a production binary, and
+   `RunAppOptions::daemon_token_state` is `None` for `zzz_server`'s own
+   `main.rs`. Only `testing_zzz_server` supplies one, so `_testing_reset` can
+   authenticate as keeper; it writes `{zzz_dir}/run/daemon_token` for the
+   cross-process harness to read. Nothing else ever sent the header — a
+   browser request carries `Origin`/`Referer`, which `is_browser_context`
+   refuses for this credential — so production mounted a keeper-grade secret
+   with no caller. The spine keeps the consuming half (constant-time compare,
+   keeper resolution, `CredentialType::DaemonToken`) in `fuz_auth`; state is
+   protected by `parking_lot::RwLock`.
 
 6. **Auth pipeline** — Both transports try: daemon token → cookie → bearer.
-   Daemon token has highest priority (matches fuz_app middleware order).
+   Daemon token has highest priority (matches fuz_app middleware order), but
+   its leg is unreachable in production, where the state is `None`.
    `ResolvedAuth` carries `credential_type` (`Session`, `ApiToken`,
    `DaemonToken`) and optional `token_hash` (session connections only —
    bearer and daemon token connections have `None`).
@@ -174,7 +182,7 @@ credential_types?}` or `null`; see `src/lib/action_specs.ts` and the
    generated `docs/reference.md`):
    - `public` — `auth: null` or `{account: 'none', actor: 'none'}`; no auth required (`ping`)
    - `authenticated` — `{account: 'required', actor: 'none'}`; valid session or bearer token required (workspace_*, session_load, etc.)
-   - `keeper` — `{account: 'required', actor: 'required', roles: ['keeper'], credential_types: ['daemon_token']}`; requires `DaemonToken` credential type AND keeper role grant (`provider_update_api_key`). API tokens and session cookies cannot access keeper actions even if the account has the keeper role grant.
+   - `keeper` — `{account: 'required', actor: 'required', roles: ['keeper'], credential_types: ['daemon_token']}`; requires `DaemonToken` credential type AND keeper role grant. No zzz action uses this shape today — the daemon-token credential is test-binary-only (see Auth §5), so the only keeper-gated specs are `fuz_testing`'s `_testing_*` backdoors. API tokens and session cookies cannot access keeper actions even if the account has the keeper role grant.
 
 8. **Bootstrap** — `POST /bootstrap` creates first admin account with keeper
    - admin role grants. Reads token from `FUZ_BOOTSTRAP_TOKEN_PATH`, timing-safe
@@ -299,13 +307,13 @@ wiped on backend startup (`FUZ_TESTING_RESET_DB_ON_STARTUP`) and
 
 ```
 crates/zzz_server/src/
-├── lib.rs            # `run_app(RunAppOptions)` — full lifecycle: env/config, DB pool + migrations, spine state construction (keyring, daemon token, audit emitter, connection + SSE registries, rate limiters), `ActionRegistry::compile`, file watchers, route composition, graceful shutdown
+├── lib.rs            # `run_app(RunAppOptions)` — full lifecycle: env/config, DB pool + migrations, spine state construction (keyring, audit emitter, connection + SSE registries, rate limiters), `ActionRegistry::compile`, file watchers, route composition, graceful shutdown
 ├── main.rs           # Thin production entry — constructs `Argon2idHasher`, calls `run_app`
 ├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`)
 │   ├── mod.rs        # `App` long-lived state (workspaces, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `ProviderManager`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
 │   ├── core.rs       # ping, session_load, _testing_emit_notifications
 │   ├── filesystem.rs # diskfile_update, diskfile_delete, directory_create
-│   ├── provider.rs   # provider_load_status, provider_update_api_key, completion_create
+│   ├── provider.rs   # provider_load_status, completion_create
 │   ├── terminal.rs   # terminal_create, terminal_data_send, terminal_resize, terminal_close
 │   └── workspace.rs  # workspace_list, workspace_open, workspace_close (+ workspace_changed broadcast)
 ├── zzz_action_specs/ # Per-domain `ActionSpec` builders consumed by `run_app`'s `ActionRegistry::compile`; each captures `Arc<App>` and calls the matching `handlers::*` fn
@@ -409,7 +417,7 @@ metadata contract, the bootstrap success/failure audit rows, and the
 
 ## Known Limitations
 
-- RPC methods: `ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `provider_update_api_key` (keeper-only), `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`, `admin_session_revoke_all` (admin-only), `admin_token_revoke_all` (admin-only) — plus the rest of the spine-registered `fuz_auth` standard bundle and protocol specs (see the workspace-layout section above)
+- RPC methods: `ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`, `admin_session_revoke_all` (admin-only), `admin_token_revoke_all` (admin-only) — plus the rest of the spine-registered `fuz_auth` standard bundle and protocol specs (see the workspace-layout section above)
 - 5 zzz-domain `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debounced broadcasts with immediate index updates, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast), `completion_progress` (streaming completion chunks to requesting WS connection); the spine's role-grant-offer bundle carries its own notification set (`role_grant_offer_received` / `_retracted` / `_accepted` / `_declined` / `_supersede`)
 - AI providers: Anthropic, OpenAI, and Gemini all fully implemented (non-streaming + SSE streaming)
 - No batch request support (JSON arrays)
@@ -474,7 +482,6 @@ from fuz_auth's routers; the admin audit-log SSE stream
 - [x] Provider system: enum-dispatched `Provider` with `ProviderManager`, `ProviderStatus`, `CompletionOptions`
 - [x] Anthropic provider: full implementation with `reqwest` HTTP client, SSE streaming, message format conversion
 - [x] `provider_load_status` handler (all 3 providers report status)
-- [x] `provider_update_api_key` handler (keeper-only, runtime API key updates)
 - [x] `completion_create` handler with `completion_progress` streaming notifications (targeted to requesting WS connection)
 - [x] `session_load` returns real provider status from all providers
 - [x] OpenAI provider: full completion implementation (Chat Completions API, non-streaming + SSE streaming)

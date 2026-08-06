@@ -145,6 +145,23 @@ async fn main() {
         })
     });
 
+    // Daemon-token credential for `_testing_reset`. `fuz_testing` owns the only
+    // producer of this credential — `zzz_server` cannot mint one — so the test
+    // binary constructs it here and injects the handle. `resolve_dir` is
+    // `run_app`'s own resolution, so the file lands exactly where the
+    // cross-process harness looks: `<zzz_dir>/run/daemon_token`.
+    let zzz_dir = zzz_server::resolve_dir(std::path::Path::new(
+        &std::env::var("PUBLIC_ZZZ_DIR").unwrap_or_else(|_| ".zzz/".to_owned()),
+    ));
+    let daemon_token_state =
+        match fuz_testing::init_daemon_token(std::path::Path::new(&zzz_dir)).await {
+            Ok(state) => Some(state),
+            Err(e) => {
+                eprintln!("error: daemon token init failed: {e}");
+                std::process::exit(2);
+            }
+        };
+
     if let Err(e) = zzz_server::run_app(zzz_server::RunAppOptions {
         password_hasher,
         default_addr: TESTING_DEFAULT_ADDR,
@@ -153,6 +170,7 @@ async fn main() {
         disable_login_rate_limit: true,
         extra_action_specs_factory: Some(extra_specs_factory),
         pre_migration_hook: Some(pre_migration_hook),
+        daemon_token_state,
     })
     .await
     {

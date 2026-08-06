@@ -27,7 +27,6 @@ export const ActionSpecs = {
 	completion_progress: specs.completion_progress_action_spec,
 	toggle_main_menu: specs.toggle_main_menu_action_spec,
 	provider_load_status: specs.provider_load_status_action_spec,
-	provider_update_api_key: specs.provider_update_api_key_action_spec,
 	terminal_create: specs.terminal_create_action_spec,
 	terminal_data_send: specs.terminal_data_send_action_spec,
 	terminal_data: specs.terminal_data_action_spec,
@@ -53,7 +52,6 @@ export interface ActionSpecs {
 	completion_progress: typeof specs.completion_progress_action_spec;
 	toggle_main_menu: typeof specs.toggle_main_menu_action_spec;
 	provider_load_status: typeof specs.provider_load_status_action_spec;
-	provider_update_api_key: typeof specs.provider_update_api_key_action_spec;
 	terminal_create: typeof specs.terminal_create_action_spec;
 	terminal_data_send: typeof specs.terminal_data_send_action_spec;
 	terminal_data: typeof specs.terminal_data_action_spec;
@@ -87,7 +85,6 @@ export const ActionInputs = {
 	completion_progress: specs.completion_progress_action_spec.input,
 	toggle_main_menu: specs.toggle_main_menu_action_spec.input,
 	provider_load_status: specs.provider_load_status_action_spec.input,
-	provider_update_api_key: specs.provider_update_api_key_action_spec.input,
 	terminal_create: specs.terminal_create_action_spec.input,
 	terminal_data_send: specs.terminal_data_send_action_spec.input,
 	terminal_data: specs.terminal_data_action_spec.input,
@@ -113,7 +110,6 @@ export interface ActionInputs {
 	completion_progress: z.infer<typeof specs.completion_progress_action_spec.input>;
 	toggle_main_menu: z.infer<typeof specs.toggle_main_menu_action_spec.input>;
 	provider_load_status: z.infer<typeof specs.provider_load_status_action_spec.input>;
-	provider_update_api_key: z.infer<typeof specs.provider_update_api_key_action_spec.input>;
 	terminal_create: z.infer<typeof specs.terminal_create_action_spec.input>;
 	terminal_data_send: z.infer<typeof specs.terminal_data_send_action_spec.input>;
 	terminal_data: z.infer<typeof specs.terminal_data_action_spec.input>;
@@ -145,7 +141,6 @@ export const ActionOutputs = {
 	completion_progress: specs.completion_progress_action_spec.output,
 	toggle_main_menu: specs.toggle_main_menu_action_spec.output,
 	provider_load_status: specs.provider_load_status_action_spec.output,
-	provider_update_api_key: specs.provider_update_api_key_action_spec.output,
 	terminal_create: specs.terminal_create_action_spec.output,
 	terminal_data_send: specs.terminal_data_send_action_spec.output,
 	terminal_data: specs.terminal_data_action_spec.output,
@@ -171,7 +166,6 @@ export interface ActionOutputs {
 	completion_progress: z.infer<typeof specs.completion_progress_action_spec.output>;
 	toggle_main_menu: z.infer<typeof specs.toggle_main_menu_action_spec.output>;
 	provider_load_status: z.infer<typeof specs.provider_load_status_action_spec.output>;
-	provider_update_api_key: z.infer<typeof specs.provider_update_api_key_action_spec.output>;
 	terminal_create: z.infer<typeof specs.terminal_create_action_spec.output>;
 	terminal_data_send: z.infer<typeof specs.terminal_data_send_action_spec.output>;
 	terminal_data: z.infer<typeof specs.terminal_data_action_spec.output>;
@@ -241,11 +235,6 @@ export interface ActionEventDatas {
 		'provider_load_status',
 		ActionInputs['provider_load_status'],
 		ActionOutputs['provider_load_status']
-	>;
-	provider_update_api_key: ActionEventRequestResponseData<
-		'provider_update_api_key',
-		ActionInputs['provider_update_api_key'],
-		ActionOutputs['provider_update_api_key']
 	>;
 	terminal_create: ActionEventRequestResponseData<
 		'terminal_create',

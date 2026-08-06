@@ -23,7 +23,6 @@ export const ActionMethod = z.enum([
 	'completion_progress',
 	'toggle_main_menu',
 	'provider_load_status',
-	'provider_update_api_key',
 	'terminal_create',
 	'terminal_data_send',
 	'terminal_data',
@@ -50,7 +49,6 @@ export const RequestResponseActionMethod = z.enum([
 	'directory_create',
 	'completion_create',
 	'provider_load_status',
-	'provider_update_api_key',
 	'terminal_create',
 	'terminal_data_send',
 	'terminal_resize',
@@ -97,7 +95,6 @@ export const FrontendActionMethod = z.enum([
 	'completion_progress',
 	'toggle_main_menu',
 	'provider_load_status',
-	'provider_update_api_key',
 	'terminal_create',
 	'terminal_data_send',
 	'terminal_data',
@@ -127,7 +124,6 @@ export const BackendActionMethod = z.enum([
 	'completion_create',
 	'completion_progress',
 	'provider_load_status',
-	'provider_update_api_key',
 	'terminal_create',
 	'terminal_data_send',
 	'terminal_data',
@@ -158,7 +154,6 @@ export const BackendRequestResponseMethod = z.enum([
 	'directory_create',
 	'completion_create',
 	'provider_load_status',
-	'provider_update_api_key',
 	'terminal_create',
 	'terminal_data_send',
 	'terminal_resize',
@@ -243,12 +238,6 @@ export interface FrontendActionsApi {
 		options?: RpcClientCallOptions
 	) => Promise<
 		Result<{ value: ActionOutputs['provider_load_status'] }, { error: JsonrpcErrorObject }>
-	>;
-	provider_update_api_key: (
-		input: ActionInputs['provider_update_api_key'],
-		options?: RpcClientCallOptions
-	) => Promise<
-		Result<{ value: ActionOutputs['provider_update_api_key'] }, { error: JsonrpcErrorObject }>
 	>;
 	terminal_create: (
 		input: ActionInputs['terminal_create'],

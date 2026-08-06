@@ -29,6 +29,13 @@ async fn main() {
         disable_login_rate_limit: false,
         extra_action_specs_factory: None,
         pre_migration_hook: None,
+        // No daemon-token credential in production. Nothing sends the header
+        // — the browser UI authenticates with session cookies, and
+        // `fuz_auth::is_browser_context` refuses this credential for any
+        // request carrying `Origin`/`Referer` regardless — so mounting it only
+        // ever wrote a keeper-grade secret to `<zzz_dir>/run/daemon_token` on a
+        // 30-second timer for no caller.
+        daemon_token_state: None,
     })
     .await
     {

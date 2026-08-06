@@ -102,6 +102,18 @@ pub struct RunAppOptions {
     /// startup can wipe the auth-namespace schema and let migrations
     /// replay from nothing.
     pub pre_migration_hook: Option<PreMigrationHook>,
+    /// Daemon-token state for `X-Daemon-Token` auth. Production: `None`.
+    /// Test binary: `Some(_)` so `_testing_reset` resolves the keeper.
+    ///
+    /// zzz mounts **no** daemon-token credential in production. Nothing sends
+    /// the header — the browser UI authenticates with session cookies, and a
+    /// browser request carries `Origin`/`Referer`, which
+    /// `fuz_auth::is_browser_context` refuses for this credential anyway — so
+    /// the only effect of mounting it was writing a keeper-grade secret into
+    /// `<zzz_dir>/run/daemon_token` on a 30-second timer. Its producer
+    /// (`fuz_testing::init_daemon_token`) is confined to `fuz_testing` by dep
+    /// graph, so this crate cannot construct one even by mistake.
+    pub daemon_token_state: Option<fuz_auth::SharedDaemonTokenState>,
 }
 
 /// Run the `zzz_server` lifecycle to completion.
@@ -129,6 +141,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         disable_login_rate_limit,
         extra_action_specs_factory,
         pre_migration_hook,
+        daemon_token_state: spine_daemon_token,
     } = options;
     let mut config = parse_config(default_addr)?;
     if force_test_actions {
@@ -284,19 +297,13 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         Arc::new(std::sync::atomic::AtomicBool::new(bootstrap_available));
     let socket_revoker: Arc<dyn fuz_auth::SocketRevoker> =
         Arc::clone(&realtime).into_socket_revoker();
-    // Spine daemon-token state — sole daemon-token state on `App`. Init
-    // failure degrades to `None` so the server still serves cookie + bearer auth.
-    let spine_daemon_token: Option<fuz_auth::SharedDaemonTokenState> =
-        match fuz_auth::init_daemon_token(Path::new(&config.zzz_dir)).await {
-            Ok(state) => {
-                fuz_auth::resolve_keeper_into(&state, &pool).await;
-                Some(state)
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, "daemon token init failed — running without daemon token auth");
-                None
-            }
-        };
+    // Spine daemon-token state — **injected, never constructed here** (see
+    // `RunAppOptions::daemon_token_state`). Production is `None`, so the
+    // daemon-token leg of `resolve_auth_from_headers` is unreachable and no
+    // credential file is written.
+    if let Some(ref state) = spine_daemon_token {
+        fuz_auth::resolve_keeper_into(state, &pool).await;
+    }
     let account_route_state = fuz_auth::AccountRouteState {
         pool: pool.clone(),
         keyring: Arc::clone(&spine_keyring),
@@ -495,13 +502,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         }
     }
 
-    // Spawn daemon-token rotation task on the spine state (matches
-    // `fuz_app`'s rotation cadence; the spine `spawn_rotation_task` uses
-    // `parking_lot::RwLock` so no async runtime hop per rotation).
-    let rotation_handle = spine_daemon_token
-        .as_ref()
-        .map(|state| fuz_auth::spawn_rotation_task(Arc::clone(state)));
-
     let app_state_for_shutdown = Arc::clone(&app_state);
 
     // -- Spine RPC + WS routes -------------------------------------
@@ -672,17 +672,11 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // Signal handling + graceful drain come from the spine
     // (`fuz_http::lifecycle`) — the SIGINT/SIGTERM → `CancellationToken`
     // → drain dance is shared with the other spine consumers. zzz's own
-    // teardown (rotation-task abort, PTY cleanup) runs after the drain
-    // returns.
+    // teardown (PTY cleanup) runs after the drain returns.
     let shutdown = fuz_http::shutdown_token();
     fuz_http::serve_with_shutdown(listener, app, shutdown, drain_timeout)
         .await
         .map_err(ServerError::Serve)?;
-
-    // Stop daemon token rotation
-    if let Some(handle) = rotation_handle {
-        handle.abort();
-    }
 
     // Clean up spawned terminal processes before exiting
     app_state_for_shutdown.pty_manager.kill_all().await;
@@ -739,7 +733,13 @@ fn parse_stringbool_env(name: &str) -> Result<bool, ServerError> {
 /// Resolve a path to an absolute, canonical, normalized directory string
 /// with trailing `/`. Tries `canonicalize` (resolves symlinks, requires path
 /// to exist), falls back to `absolute` (no I/O), falls back to the raw path.
-fn resolve_dir(path: &Path) -> String {
+///
+/// Public so `testing_zzz_server` can resolve `PUBLIC_ZZZ_DIR` exactly the way
+/// [`run_app`] does before placing its daemon-token file — the cross-process
+/// harness reads `<zzz_dir>/run/daemon_token`, so the two resolutions must not
+/// drift.
+#[must_use]
+pub fn resolve_dir(path: &Path) -> String {
     let mut s = std::fs::canonicalize(path)
         .unwrap_or_else(|_| std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf()))
         .to_string_lossy()

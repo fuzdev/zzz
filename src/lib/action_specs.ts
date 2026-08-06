@@ -11,7 +11,6 @@ import { cancel_action_spec } from '@fuzdev/fuz_app/actions/cancel.ts';
 import { peer_ping_action_spec } from '@fuzdev/fuz_app/actions/peer_ping.ts';
 import { protocol_action_specs } from '@fuzdev/fuz_app/actions/protocol.ts';
 import { Uuid } from '@fuzdev/fuz_util/id.ts';
-import { ActingActor } from '@fuzdev/fuz_app/http/auth_shape.ts';
 
 // Re-export so codegen (which builds `import * as specs from './action_specs'`)
 // resolves `specs.heartbeat_action_spec` / `specs.cancel_action_spec` /
@@ -162,20 +161,6 @@ export const ProviderLoadStatusOutput = z.strictObject({
 	status: ProviderStatus
 });
 export type ProviderLoadStatusOutput = z.infer<typeof ProviderLoadStatusOutput>;
-
-/** Input for `provider_update_api_key`. */
-export const ProviderUpdateApiKeyInput = z.strictObject({
-	provider_name: ProviderName,
-	api_key: z.string(),
-	acting: ActingActor
-});
-export type ProviderUpdateApiKeyInput = z.infer<typeof ProviderUpdateApiKeyInput>;
-
-/** Output for `provider_update_api_key`. */
-export const ProviderUpdateApiKeyOutput = z.strictObject({
-	status: ProviderStatus
-});
-export type ProviderUpdateApiKeyOutput = z.infer<typeof ProviderUpdateApiKeyOutput>;
 
 /** Input for `terminal_create`. */
 export const TerminalCreateInput = z.strictObject({
@@ -391,23 +376,6 @@ export const provider_load_status_action_spec = {
 	description: 'Check the availability and status of an AI provider.'
 } satisfies RequestResponseActionSpec;
 
-export const provider_update_api_key_action_spec = {
-	method: 'provider_update_api_key',
-	kind: 'request_response',
-	initiator: 'frontend',
-	auth: {
-		account: 'required',
-		actor: 'required',
-		roles: ['keeper'],
-		credential_types: ['daemon_token']
-	},
-	side_effects: true,
-	input: ProviderUpdateApiKeyInput,
-	output: ProviderUpdateApiKeyOutput,
-	async: true,
-	description: 'Update the API key for an AI provider.'
-} satisfies RequestResponseActionSpec;
-
 export const terminal_create_action_spec = {
 	method: 'terminal_create',
 	kind: 'request_response',
@@ -553,7 +521,6 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	completion_progress_action_spec,
 	toggle_main_menu_action_spec,
 	provider_load_status_action_spec,
-	provider_update_api_key_action_spec,
 	terminal_create_action_spec,
 	terminal_data_send_action_spec,
 	terminal_data_action_spec,

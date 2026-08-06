@@ -5,7 +5,7 @@
 Generated from `action_specs.ts` and `cell_classes.ts` by `reference.gen.ts`.
 Run `gro gen` to refresh it; `gro check` fails if it drifts. Don't edit by hand.
 
-## Action specs (21)
+## Action specs (20)
 
 The fuz_app protocol actions `heartbeat` and `cancel` are dispatched too but
 omitted here — they belong to the shared runtime, not zzz.
@@ -18,7 +18,6 @@ omitted here — they belong to the shared runtime, not zzz.
 - `filer_change` — Notifies the frontend of a file system change detected by the watcher. Kind: remote_notification. Initiator: backend. Auth: public
 - `ping` — Health check — echoes the request ID back to the caller. Kind: request_response. Initiator: both. Auth: account=none, actor=none
 - `provider_load_status` — Check the availability and status of an AI provider. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
-- `provider_update_api_key` — Update the API key for an AI provider. Kind: request_response. Initiator: frontend. Auth: account=required, actor=required, roles=keeper, creds=daemon_token
 - `session_load` — Load initial session data including filesystem state and provider status. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `terminal_close` — Kill a terminal process and return the exit code. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `terminal_create` — Spawn a PTY process and return the terminal ID. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
