@@ -84,12 +84,12 @@ pub struct RunAppOptions {
     /// Production: `false`. Test binary: `true` so the `_testing_*`
     /// registry branch fires regardless of operator env.
     pub force_test_actions: bool,
-    /// Disable the per-IP + per-account `/login` + `/password` rate limiters.
-    /// Production: `false` — login rate limiting is always on, matching
-    /// `fuz_forge_server` + `mageguild_server` and the fuz defaults. Test
-    /// binary: `true` so the cross-backend auth suite's repeated logins don't
-    /// trip the bucket.
-    pub disable_login_rate_limit: bool,
+    /// Whether the spine's rate limiters are built.
+    /// Production: [`fuz_auth::RateLimiterMode::Enforced`] — always on,
+    /// matching `fuz_forge_server` + `mageguild_server` and the fuz defaults.
+    /// Test binary: `DisabledForTesting` so the cross-backend auth suite's
+    /// repeated logins don't trip the bucket.
+    pub rate_limiters: fuz_auth::RateLimiterMode,
     /// Factory injecting extra action specs after the standard zzz set.
     /// Production: `None`. Test binary: `Some(_)` so
     /// `fuz_testing::create_testing_reset_action_spec` can register
@@ -138,7 +138,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         default_addr,
         drain_timeout,
         force_test_actions,
-        disable_login_rate_limit,
+        rate_limiters,
         extra_action_specs_factory,
         pre_migration_hook,
         daemon_token_state: spine_daemon_token,
@@ -210,23 +210,13 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // Per-IP + per-account rate limiters on `/login` and `/password`, always
     // on in production — matching `fuz_forge_server` + `mageguild_server` and
     // the fuz defaults (`DEFAULT_LOGIN_IP_RATE_LIMIT` 5/15min,
-    // `DEFAULT_LOGIN_ACCOUNT_RATE_LIMIT` 10/30min). The test binary sets
-    // `disable_login_rate_limit` so the cross-backend auth suite's repeated
-    // logins don't trip the bucket. Spine `fuz_auth::RateLimiter`
+    // `DEFAULT_LOGIN_ACCOUNT_RATE_LIMIT` 10/30min). The test binary passes
+    // `RateLimiterMode::DisabledForTesting` so the cross-backend auth suite's
+    // repeated logins don't trip the bucket. Spine `fuz_auth::RateLimiter`
     // (parking_lot, sync).
-    let (login_ip_rate_limiter, login_account_rate_limiter) = if disable_login_rate_limit {
-        (None, None)
-    } else {
-        tracing::info!("login rate limiting enabled (5/15min per-IP, 10/30min per-account)");
-        (
-            Some(Arc::new(fuz_auth::RateLimiter::new(
-                fuz_auth::DEFAULT_LOGIN_IP_RATE_LIMIT,
-            ))),
-            Some(Arc::new(fuz_auth::RateLimiter::new(
-                fuz_auth::DEFAULT_LOGIN_ACCOUNT_RATE_LIMIT,
-            ))),
-        )
-    };
+    let login_ip_rate_limiter = rate_limiters.limiter(fuz_auth::DEFAULT_LOGIN_IP_RATE_LIMIT);
+    let login_account_rate_limiter =
+        rate_limiters.limiter(fuz_auth::DEFAULT_LOGIN_ACCOUNT_RATE_LIMIT);
 
     // Per-account rate limiter shared across admin RPC methods and the
     // role-grant-offer surface. Mirrors fuz_app's
@@ -238,9 +228,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // `role_grant_offer_action_specs.ts:211..228`. Always-on (no env
     // gate); the production cap sits far above the cross-backend test
     // suite's request volume.
-    let action_account_rate_limiter: Option<Arc<fuz_auth::RateLimiter>> = Some(Arc::new(
-        fuz_auth::RateLimiter::new(fuz_auth::DEFAULT_ACTION_ACCOUNT_RATE_LIMIT),
-    ));
+    let action_account_rate_limiter =
+        rate_limiters.limiter(fuz_auth::DEFAULT_ACTION_ACCOUNT_RATE_LIMIT);
     // IP-axis action limiter unwired today — TS shape `rate_limit: 'account'`
     // doesn't gate on IP. Leave `None`; lift to a real limiter when a
     // consumer files a need (e.g. a deployment fronted by a CDN where
@@ -352,8 +341,13 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             pool: pool.clone(),
             password_hasher: Arc::clone(&spine_password_hasher),
             audit: Arc::clone(&spine_audit_emitter),
-            signup_ip_rate_limiter: None,
-            signup_account_rate_limiter: None,
+            // Own instances, not the login buckets: a signup flood must not
+            // spend the budget bounding credential guessing, and vice versa.
+            // The spine has no signup-specific defaults — the login ones are
+            // the right shape and the TS twin reuses them the same way.
+            signup_ip_rate_limiter: rate_limiters.limiter(fuz_auth::DEFAULT_LOGIN_IP_RATE_LIMIT),
+            signup_account_rate_limiter: rate_limiters
+                .limiter(fuz_auth::DEFAULT_LOGIN_ACCOUNT_RATE_LIMIT),
             signup_fail_floor_ms: fuz_auth::DEFAULT_SIGNUP_FAIL_FLOOR_MS,
             signup_fail_jitter_ms: fuz_auth::DEFAULT_SIGNUP_FAIL_JITTER_MS,
         }),

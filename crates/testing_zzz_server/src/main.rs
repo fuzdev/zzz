@@ -167,7 +167,7 @@ async fn main() {
         default_addr: TESTING_DEFAULT_ADDR,
         drain_timeout: fuz_http::DEFAULT_DRAIN_TIMEOUT,
         force_test_actions: true,
-        disable_login_rate_limit: true,
+        rate_limiters: fuz_auth::RateLimiterMode::DisabledForTesting,
         extra_action_specs_factory: Some(extra_specs_factory),
         pre_migration_hook: Some(pre_migration_hook),
         daemon_token_state,

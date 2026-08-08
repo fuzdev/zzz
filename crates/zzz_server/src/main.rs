@@ -26,7 +26,7 @@ async fn main() {
         default_addr: zzz_server::DEFAULT_ADDR,
         drain_timeout: fuz_http::DEFAULT_DRAIN_TIMEOUT,
         force_test_actions: false,
-        disable_login_rate_limit: false,
+        rate_limiters: fuz_auth::RateLimiterMode::Enforced,
         extra_action_specs_factory: None,
         pre_migration_hook: None,
         // No daemon-token credential in production. Nothing sends the header
