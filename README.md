@@ -75,6 +75,10 @@ Zzz builds on a great deal of software.
   being the first over some threshold for me for this project
   - see `⚠️ AI generated` and similar disclaimers
 
+## Contributing
+
+[fuz.dev/contributing](https://www.fuz.dev/contributing)
+
 ## License 🐦
 
 [MIT](LICENSE)
