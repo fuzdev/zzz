@@ -148,7 +148,9 @@ orientation; the spine crates are authoritative:
 
 3. **Session validation** — Cookie → HMAC verify → blake3 hash token →
    `auth_session` table lookup → build `RequestContext` (account, actor,
-   role grants). Sessions touched (last_seen_at updated) fire-and-forget.
+   role grants). Pure read — sessions are never touched or renewed; the
+   30-day lifetime is an absolute cap set at mint, and the row carries no
+   activity signal.
 
 4. **Bearer token auth** — `Authorization: Bearer <token>` header. Token
    hashed with blake3, looked up in `api_token` table. Browser context
@@ -443,8 +445,6 @@ metadata contract, the bootstrap success/failure audit rows, and the
 - **`parking_lot::RwLock`** for sync handlers (workspaces, scoped-fs); no
   poisoning. Async handlers (filer, pty, providers) use `tokio::sync::RwLock`
   where a guard is held across an await — scope sync guards before await points.
-- **Session touch**: fire-and-forget via `tokio::spawn` — doesn't block
-  the request pipeline.
 - **PTY terminals**: `fuz_pty` as a native crate dependency (no FFI
   indirection). `PtyManager` in `App` manages spawned processes with async
   read loops via `tokio::spawn`. Each terminal gets a `CancellationToken` so

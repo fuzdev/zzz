@@ -789,6 +789,7 @@ dependencies = [
 name = "fuz_db"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "deadpool-postgres",
  "thiserror 2.0.18",
  "tokio",
