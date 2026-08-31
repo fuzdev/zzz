@@ -227,14 +227,6 @@ impl Provider {
         }
     }
 
-    pub async fn set_api_key(&self, key: Option<String>) {
-        match self {
-            Self::Anthropic(p) => p.set_api_key(key).await,
-            Self::OpenAi(p) => p.set_api_key(key).await,
-            Self::Gemini(p) => p.set_api_key(key).await,
-        }
-    }
-
     pub async fn complete(
         &self,
         options: &CompletionHandlerOptions,

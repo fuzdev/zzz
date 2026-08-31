@@ -452,10 +452,12 @@ metadata contract, the bootstrap success/failure audit rows, and the
   poll interval, 50ms wait after kill before waitpid, silent returns for
   missing terminal IDs.
 - **Provider system**: Enum-dispatched (`Provider` enum, not trait objects) —
-  3 providers known at compile time, exhaustive matching. Provider state behind
-  `tokio::sync::RwLock` for async `set_api_key`. `complete()` clones the
-  `reqwest::Client` (internally `Arc`'d) and releases the lock before HTTP
-  calls, so `set_api_key` is never blocked by long-running streaming responses.
+  3 providers known at compile time, exhaustive matching. API keys come from
+  the `SECRET_*_API_KEY` env vars at construction and are never mutated at
+  runtime; provider state sits behind `tokio::sync::RwLock` for the
+  `load_status` cache write. `complete()` clones the `reqwest::Client`
+  (internally `Arc`'d) and releases the lock before HTTP calls, so a
+  long-running streaming response doesn't hold it against a status refresh.
   SSE parsing is manual with `\r\n` normalization per RFC 8895.
 - **Dispatcher transaction wrap**: `fuz_actions::perform_action` wraps
   `side_effects: true` actions in a `tokio_postgres` transaction (commit on

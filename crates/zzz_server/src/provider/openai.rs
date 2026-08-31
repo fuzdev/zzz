@@ -58,12 +58,6 @@ impl OpenAiProvider {
         status
     }
 
-    pub async fn set_api_key(&self, key: Option<String>) {
-        let mut state = self.state.write().await;
-        state.client = key.as_deref().map(build_client);
-        state.cached_status = None;
-    }
-
     pub async fn complete(
         &self,
         options: &CompletionHandlerOptions,

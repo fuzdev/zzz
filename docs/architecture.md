@@ -154,7 +154,6 @@ Defined in `src/lib/action_specs.ts`. A representative subset below — the `ter
 - `completion_progress` — Stream completion chunks. Kind: `remote_notification`. Initiator: `backend`
 - `toggle_main_menu` — Toggle main menu UI. Kind: `local_call`. Initiator: `frontend`
 - `provider_load_status` — Check provider availability. Kind: `request_response`. Initiator: `frontend`
-- `provider_update_api_key` — Update provider API key. Kind: `request_response`. Initiator: `frontend`
 
 ## Cell System
 
@@ -616,4 +615,7 @@ Population, per capability:
   gated on backend status
 - `providers` — one `ProviderCapability` per provider, `$derived` off
   `Frontend.provider_status`, populated by `session_load` and refreshed via
-  `provider_load_status` (and after `provider_update_api_key`)
+  `provider_load_status`. Provider keys are env-only
+  (`SECRET_ANTHROPIC_API_KEY` / `SECRET_OPENAI_API_KEY` /
+  `SECRET_GOOGLE_API_KEY`), so a key change lands on daemon restart rather
+  than through an action

@@ -26,9 +26,9 @@ struct AnthropicState {
 /// Anthropic/Claude AI provider.
 ///
 /// Uses the Messages API with optional SSE streaming.
-/// State is behind `tokio::sync::RwLock` because:
-/// - `set_api_key` writes from keeper RPC handlers
-/// - `load_status` reads and caches status
+/// State is behind `tokio::sync::RwLock` because `load_status` reads the
+/// client and writes the cached status. The API key itself is set once at
+/// construction from the environment and never mutated at runtime.
 pub struct AnthropicProvider {
     state: RwLock<AnthropicState>,
 }
@@ -64,12 +64,6 @@ impl AnthropicProvider {
         status
     }
 
-    pub async fn set_api_key(&self, key: Option<String>) {
-        let mut state = self.state.write().await;
-        state.client = key.as_deref().map(build_client);
-        state.cached_status = None;
-    }
-
     pub async fn complete(
         &self,
         options: &CompletionHandlerOptions,
@@ -77,8 +71,8 @@ impl AnthropicProvider {
         signal: &CancellationToken,
     ) -> Result<Value, JsonrpcError> {
         // Clone the client (cheap — internally Arc'd) and release the lock
-        // before the HTTP call. This avoids blocking set_api_key for the
-        // duration of a potentially long-running streaming response.
+        // before the HTTP call, so a long-running streaming response doesn't
+        // hold the lock against a concurrent `load_status` cache write.
         let client = {
             let state = self.state.read().await;
             state

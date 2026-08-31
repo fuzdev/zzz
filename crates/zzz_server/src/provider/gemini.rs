@@ -62,12 +62,6 @@ impl GeminiProvider {
         status
     }
 
-    pub async fn set_api_key(&self, key: Option<String>) {
-        let mut state = self.state.write().await;
-        state.api_key = key;
-        state.cached_status = None;
-    }
-
     pub async fn complete(
         &self,
         options: &CompletionHandlerOptions,

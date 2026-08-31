@@ -32,9 +32,10 @@ alongside it in `chat_template_defaults` (`frontier`, `cheap frontier`,
 Providers live in the Rust backend (`crates/zzz_server/src/provider/`),
 enum-dispatched via the `Provider` enum (`provider/mod.rs`) — the providers
 are known at compile time and matched exhaustively, no trait objects.
-`ProviderManager` owns the set; `set_api_key` recreates the underlying
-`reqwest` client; a provider reports an error status when no key is
-configured. All three providers — Anthropic (`provider/anthropic.rs`), OpenAI
+`ProviderManager` owns the set; each provider builds its `reqwest` client once
+at construction from its `SECRET_*_API_KEY` environment variable, and reports
+an error status when no key is configured. Keys are env-only — there is no
+runtime key-update action, so changing a key means restarting the daemon. All three providers — Anthropic (`provider/anthropic.rs`), OpenAI
 (`provider/openai.rs`), and Gemini (`provider/gemini.rs`) — are fully
 implemented with non-streaming and SSE-streaming completions through the shared
 `provider/sse.rs`. See ../crates/CLAUDE.md for the

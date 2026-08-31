@@ -222,7 +222,7 @@ The Rust `zzz_server` (Axum) is zzz's backend.
 RPC methods: `ping`, `session_load`, `workspace_*`,
 `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`,
 `terminal_data_send`, `terminal_resize`, `terminal_close`,
-`provider_load_status`, `provider_update_api_key` (keeper-only),
+`provider_load_status`,
 `completion_create`, `account_verify`, `account_session_list`,
 `account_session_revoke`, `account_session_revoke_all`,
 `account_token_create`, `account_token_list`, `account_token_revoke`,

@@ -236,6 +236,24 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // per-account scraping flows from one IP).
     let action_ip_rate_limiter: Option<Arc<fuz_auth::RateLimiter>> = None;
 
+    // Transport-grain action limiters, honored by `ActionSpec::with_rate_limit`
+    // on the dispatch path and shared across both transports below, so a
+    // rate-limited action gets one budget rather than one per transport.
+    // Distinct instances from the spec-set limiters above: those bound the
+    // spine's own auth surface, these bound whatever zzz-owned specs declare.
+    //
+    // No zzz spec declares a class today, so these sit ready rather than
+    // active — the point is that a future `.with_rate_limit(...)` gets a real
+    // bucket instead of silently no-op'ing against a `None` axis, which is
+    // exactly how the spine auth surface's declared classes were no-ops in
+    // several consumers. zzz is local-first on a loopback-fixed bind, so the
+    // IP axis carries little signal today; it is wired at the permissive
+    // shared default as a backstop for a zzz that later grows a reverse proxy
+    // or a second account, matching every other spine consumer.
+    let transport_account_rate_limiter =
+        rate_limiters.limiter(fuz_auth::DEFAULT_ACTION_ACCOUNT_RATE_LIMIT);
+    let transport_ip_rate_limiter = rate_limiters.limiter(fuz_auth::DEFAULT_ACTION_IP_RATE_LIMIT);
+
     // Spine connection registry + audit emitter — wired into `App` and
     // mounted into the spine RPC + WS dispatchers below. Listener
     // registration (audit-event → socket revocation) happens after
@@ -414,19 +432,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         Arc::new(fuz_auth::AdminOfferAuthorize),
         Arc::new(fuz_auth::RoleRegistry::default()),
     ));
-    all_specs.extend(zzz_action_specs::build_core_specs(Arc::clone(&app_state)));
-    all_specs.extend(zzz_action_specs::build_workspace_specs(Arc::clone(
-        &app_state,
-    )));
-    all_specs.extend(zzz_action_specs::build_filesystem_specs(Arc::clone(
-        &app_state,
-    )));
-    all_specs.extend(zzz_action_specs::build_terminal_specs(Arc::clone(
-        &app_state,
-    )));
-    all_specs.extend(zzz_action_specs::build_provider_specs(Arc::clone(
-        &app_state,
-    )));
+    all_specs.extend(zzz_action_specs::build_zzz_owned_specs(&app_state));
     if app_state.enable_test_actions {
         all_specs.extend(zzz_action_specs::build_testing_specs(Arc::clone(
             &app_state,
@@ -533,8 +539,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         // live sockets rather than an empty registry.
         notification_sender: Arc::clone(&realtime).into_notification_sender(),
         session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
-        account_rate_limiter: None,
-        ip_rate_limiter: None,
+        account_rate_limiter: transport_account_rate_limiter.clone(),
+        ip_rate_limiter: transport_ip_rate_limiter.clone(),
     };
     let spine_rpc_router = fuz_actions::create_rpc_router(spine_rpc_state)
         .layer(axum::middleware::from_fn_with_state(
@@ -563,8 +569,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         notification_sender: Arc::clone(&realtime).into_notification_sender(),
         connection_registry: Arc::clone(&realtime),
         session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
-        account_rate_limiter: None,
-        ip_rate_limiter: None,
+        account_rate_limiter: transport_account_rate_limiter,
+        ip_rate_limiter: transport_ip_rate_limiter,
     };
     let spine_ws_router = fuz_actions::register_action_ws(spine_ws_state).layer(
         axum::middleware::from_fn_with_state(

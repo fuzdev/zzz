@@ -110,8 +110,12 @@ async fn main() {
                 Ok(())
             })
         });
+        #[allow(
+            clippy::expect_used,
+            reason = "fail loud at startup if the test binary is misconfigured"
+        )]
         let daemon_token_state = runtime.daemon_token_state.expect(
-            "testing_zzz_server requires daemon-token rotation to be wired \
+            "testing_zzz_server requires the daemon-token credential to be wired \
              (it provides keeper credentials for _testing_reset)",
         );
         vec![create_testing_reset_action_spec(TestingResetOptions {
@@ -147,9 +151,20 @@ async fn main() {
 
     // Daemon-token credential for `_testing_reset`. `fuz_testing` owns the only
     // producer of this credential — `zzz_server` cannot mint one — so the test
-    // binary constructs it here and injects the handle. `resolve_dir` is
-    // `run_app`'s own resolution, so the file lands exactly where the
-    // cross-process harness looks: `<zzz_dir>/run/daemon_token`.
+    // binary constructs it here and injects the handle. The token is static for
+    // the process lifetime (the harness reads it once at spawn).
+    //
+    // Deliberately `init_daemon_token` against `resolve_dir` rather than the
+    // sibling `init_daemon_token_from_env` the other testing binaries use.
+    // `resolve_dir` is `run_app`'s own resolution of `PUBLIC_ZZZ_DIR`, so the
+    // file lands exactly where the cross-process harness looks —
+    // `<zzz_dir>/run/daemon_token` — and there is a single source of truth for
+    // the directory. A dedicated `*_DAEMON_TOKEN_DIR` var would be a second one
+    // that has to agree with `PUBLIC_ZZZ_DIR` or the harness silently reads a
+    // token from the wrong tree. The `_from_env` "unset → behave like
+    // production" affordance buys nothing here either: `_testing_reset` always
+    // needs the credential, so a missing one is a hard misconfiguration, which
+    // the `expect` in the specs factory above reports.
     let zzz_dir = zzz_server::resolve_dir(std::path::Path::new(
         &std::env::var("PUBLIC_ZZZ_DIR").unwrap_or_else(|_| ".zzz/".to_owned()),
     ));
