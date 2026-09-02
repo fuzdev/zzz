@@ -419,7 +419,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // constructed because the zzz-specific spec builders capture
     // `Arc::clone(&app_state)` into per-spec handler closures.
     //
-    // Composition order: protocol (heartbeat + cancel), then
+    // Composition order: protocol (heartbeat + peer/ping), then
     // `fuz_auth` placeholder adapters (account + admin self-service),
     // then zzz-specific specs (`core`, `workspace`, `filesystem`,
     // `terminal`, `provider`).
@@ -571,6 +571,22 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
         account_rate_limiter: transport_account_rate_limiter,
         ip_rate_limiter: transport_ip_rate_limiter,
+        // No role gate: zzz is single-operator by configuration
+        // (`open_signup` defaults false, so every account is operator-minted)
+        // and so every authenticated account is that operator. That default is
+        // the weaker half of the argument, though — flip it and the gate still
+        // wouldn't help, because the socket adds no privilege the account
+        // doesn't already hold. The RPC surface is itself wide open by
+        // recorded decision: the `any_credential_surface` census in
+        // `crate::zzz_action_specs` documents that every zzz-owned spec is
+        // `CredentialGate::Any`, mutations included, so any credential that
+        // could open a socket can already `terminal_create` and read the same
+        // stream over RPC. A role gate here would narrow nothing while that
+        // posture stands; it becomes the right move in the same breath as
+        // narrowing that census (a second account, a reverse proxy). Zzz has
+        // no TS server to twin against (Rust-only), so this preserves the
+        // shipped behavior exactly.
+        required_roles: Vec::new(),
     };
     let spine_ws_router = fuz_actions::register_action_ws(spine_ws_state).layer(
         axum::middleware::from_fn_with_state(

@@ -35,7 +35,7 @@ admin-revocation slice; `auth_adapter::build_auth_spec_set` registers the
 rest of `fuz_auth`'s standard bundle too — admin account/audit/invite
 management, `app_settings_*`, and the consent-based `role_grant_*` /
 `role_grant_offer_*` flow with its own notifications — plus
-`fuz_actions::PROTOCOL_ACTION_SPECS` (`heartbeat`, `cancel`, `peer/ping`).
+`fuz_actions::PROTOCOL_ACTION_SPECS` (`heartbeat`, `peer/ping`; `cancel` is a client notification the WS read loop handles, not a spec).
 That spine surface is live on `/api/rpc` + `/api/ws` even though zzz ships
 no UI for most of it; the spine crates are its source of truth.
 `_testing_emit_notifications` is gated behind
