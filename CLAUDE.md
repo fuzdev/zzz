@@ -231,9 +231,9 @@ Those are the zzz-domain methods plus fuz_app's account self-service and
 admin-revocation slice; `run_app` also registers the rest of `fuz_auth`'s
 standard bundle — admin account/audit/invite management, `app_settings_*`,
 and the consent-based `role_grant_*` / `role_grant_offer_*` flow with its own
-notifications — plus the protocol specs (`heartbeat`, `peer/ping`).
-That spine surface is live on `/api/rpc` + `/api/ws` even though zzz ships no
-UI for most of it.
+notifications — plus the protocol specs (`heartbeat`, WS-only; `peer/ping`,
+both transports). That spine surface is live on `/api/rpc` + `/api/ws` even
+though zzz ships no UI for most of it.
 Cookie session auth and bearer token auth (API tokens)
 on HTTP and WebSocket, `ScopedFs` path safety, PTY terminals via `fuz_pty`
 native crate, and WebSocket connection tracking (`broadcast`/`send_to`).

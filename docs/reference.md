@@ -7,8 +7,9 @@ Run `gro gen` to refresh it; `gro check` fails if it drifts. Don't edit by hand.
 
 ## Action specs (20)
 
-The fuz_app protocol actions `heartbeat` and `cancel` are dispatched too but
-omitted here — they belong to the shared runtime, not zzz.
+The fuz_app protocol actions `heartbeat` (WS-only) and `peer/ping` are
+registered too but omitted here — they belong to the shared runtime, not zzz
+(`cancel` is a WS notification the read loop owns, not a spec).
 
 - `completion_create` — Start an AI completion request, optionally with a progress token for streaming. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `completion_progress` — Streams a completion chunk to the frontend during a streaming AI response. Kind: remote_notification. Initiator: backend. Auth: public

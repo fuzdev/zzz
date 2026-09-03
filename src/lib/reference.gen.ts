@@ -7,7 +7,7 @@ import { all_action_specs } from './action_specs.ts';
 
 /**
  * zzz's own action specs, excluding the fuz_app protocol actions
- * (`heartbeat` / `cancel`) that `all_action_specs` folds in for dispatch.
+ * (`heartbeat` / `peer/ping`) that `all_action_specs` folds in for dispatch.
  */
 const domain_specs = all_action_specs.filter((spec) => !is_protocol_action_method(spec.method));
 
@@ -37,8 +37,9 @@ Run \`gro gen\` to refresh it; \`gro check\` fails if it drifts. Don't edit by h
 
 ## Action specs (${domain_specs.length})
 
-The fuz_app protocol actions \`heartbeat\` and \`cancel\` are dispatched too but
-omitted here — they belong to the shared runtime, not zzz.
+The fuz_app protocol actions \`heartbeat\` (WS-only) and \`peer/ping\` are
+registered too but omitted here — they belong to the shared runtime, not zzz
+(\`cancel\` is a WS notification the read loop owns, not a spec).
 
 ${to_action_bullets(domain_specs)}
 
