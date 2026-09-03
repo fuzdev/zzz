@@ -221,38 +221,39 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // Per-account rate limiter shared across admin RPC methods and the
     // role-grant-offer surface. Mirrors fuz_app's
     // `default_action_account_rate_limit` (1200 / 15min per actor) —
-    // bounds paginated admin-side scraping pressure per the TS posture
-    // at `admin_action_specs.ts:262..400` (every admin spec carries
-    // `rate_limit: 'account'`) and offer-spam / account-existence-oracle
-    // pressure on `role_grant_offer_create` per
-    // `role_grant_offer_action_specs.ts:211..228`. Always-on (no env
+    // bounds paginated admin-side scraping pressure per the TS posture in
+    // `admin_action_specs.ts` (every admin spec but the read-only
+    // `app_settings_get` carries `rate_limit: 'account'`) and offer-spam /
+    // account-existence-oracle pressure on `role_grant_offer_create`, whose spec in
+    // `role_grant_offer_action_specs.ts` declares the same. Always-on (no env
     // gate); the production cap sits far above the cross-backend test
     // suite's request volume.
+    //
+    // One pair serves every surface that consults it: the spine's auth spec
+    // set charges these buckets inside its handler closures, and the
+    // dispatcher charges the same ones for protocol + zzz-owned specs via
+    // `ActionSpec::with_rate_limit`, across both the HTTP RPC and WS
+    // transports. Sharing is the contract rather than a convenience — fuz_app
+    // threads one `action_account_rate_limiter` through `create_app_server`
+    // into both transports, so a second instance hands a caller two
+    // independent budgets where the TS spine gives one.
+    //
+    // The IP axis is live: `peer/ping` comes in with `PROTOCOL_ACTION_SPECS`
+    // declaring `RateLimitClass::Ip`, so every anonymous call to it spends the
+    // IP bucket at the shared spine default (600 / 15 min). zzz is local-first
+    // on a loopback-fixed bind, so that budget is per-machine and the axis
+    // carries little signal until a zzz grows a reverse proxy or a second
+    // account. No spine auth entry declares an IP class, so the auth surface
+    // never charges it; passing it there is what makes a future entry that
+    // opts in share this bucket instead of getting its own.
+    //
+    // No zzz-owned spec declares a class, so beyond the auth surface's account
+    // charges these sit ready rather than active — the point is that a future
+    // `.with_rate_limit(...)` gets a real limiter instead of silently
+    // no-op'ing against a `None` axis.
     let action_account_rate_limiter =
         rate_limiters.limiter(fuz_auth::DEFAULT_ACTION_ACCOUNT_RATE_LIMIT);
-    // IP-axis action limiter unwired today — TS shape `rate_limit: 'account'`
-    // doesn't gate on IP. Leave `None`; lift to a real limiter when a
-    // consumer files a need (e.g. a deployment fronted by a CDN where
-    // per-account scraping flows from one IP).
-    let action_ip_rate_limiter: Option<Arc<fuz_auth::RateLimiter>> = None;
-
-    // Transport-grain action limiters, honored by `ActionSpec::with_rate_limit`
-    // on the dispatch path and shared across both transports below, so a
-    // rate-limited action gets one budget rather than one per transport.
-    // Distinct instances from the spec-set limiters above: those bound the
-    // spine's own auth surface, these bound whatever zzz-owned specs declare.
-    //
-    // No zzz spec declares a class today, so these sit ready rather than
-    // active — the point is that a future `.with_rate_limit(...)` gets a real
-    // bucket instead of silently no-op'ing against a `None` axis, which is
-    // exactly how the spine auth surface's declared classes were no-ops in
-    // several consumers. zzz is local-first on a loopback-fixed bind, so the
-    // IP axis carries little signal today; it is wired at the permissive
-    // shared default as a backstop for a zzz that later grows a reverse proxy
-    // or a second account, matching every other spine consumer.
-    let transport_account_rate_limiter =
-        rate_limiters.limiter(fuz_auth::DEFAULT_ACTION_ACCOUNT_RATE_LIMIT);
-    let transport_ip_rate_limiter = rate_limiters.limiter(fuz_auth::DEFAULT_ACTION_IP_RATE_LIMIT);
+    let action_ip_rate_limiter = rate_limiters.limiter(fuz_auth::DEFAULT_ACTION_IP_RATE_LIMIT);
 
     // Spine connection registry + audit emitter — wired into `App` and
     // mounted into the spine RPC + WS dispatchers below. Listener
@@ -539,8 +540,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         // live sockets rather than an empty registry.
         notification_sender: Arc::clone(&realtime).into_notification_sender(),
         session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
-        account_rate_limiter: transport_account_rate_limiter.clone(),
-        ip_rate_limiter: transport_ip_rate_limiter.clone(),
+        account_rate_limiter: action_account_rate_limiter.clone(),
+        ip_rate_limiter: action_ip_rate_limiter.clone(),
     };
     let spine_rpc_router = fuz_actions::create_rpc_router(spine_rpc_state)
         .layer(axum::middleware::from_fn_with_state(
@@ -569,8 +570,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         notification_sender: Arc::clone(&realtime).into_notification_sender(),
         connection_registry: Arc::clone(&realtime),
         session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
-        account_rate_limiter: transport_account_rate_limiter,
-        ip_rate_limiter: transport_ip_rate_limiter,
+        account_rate_limiter: action_account_rate_limiter,
+        ip_rate_limiter: action_ip_rate_limiter,
         // No role gate: zzz is single-operator by configuration
         // (`open_signup` defaults false, so every account is operator-minted)
         // and so every authenticated account is that operator. That default is
