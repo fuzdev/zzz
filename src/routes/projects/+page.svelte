@@ -51,7 +51,8 @@
 			browsers and tools, and vice versa, like magic.
 		</p>
 		<p>
-			Here's a very rough sketch of <button
+			Here's a very rough sketch of
+			<button
 				type="button"
 				class="inline sm palette_g"
 				onclick={() => {

@@ -27,7 +27,8 @@
 >
 	<div class="column justify-content:center gap_xs p_md" style:min-height="80px">
 		<div class="font_size_xl">
-			filesystem {capabilities.filesystem.status === 'success'
+			filesystem
+			{capabilities.filesystem.status === 'success'
 				? 'available'
 				: capabilities.filesystem.status === 'failure'
 					? 'unavailable'
@@ -58,12 +59,9 @@
 
 <section>
 	<p>
-		The backend's filesystem is scoped for security. Symlinks are not followed. Configure with <code
-			class="font_size_sm"
-		>
-			PUBLIC_ZZZ_DIR
-		</code>
-		and <code class="font_size_sm">PUBLIC_ZZZ_SCOPED_DIRS</code>. Directories added via workspaces
-		are shown separately.
+		The backend's filesystem is scoped for security. Symlinks are not followed. Configure with
+		<code class="font_size_sm">PUBLIC_ZZZ_DIR</code> and
+		<code class="font_size_sm">PUBLIC_ZZZ_SCOPED_DIRS</code>. Directories added via workspaces are
+		shown separately.
 	</p>
 </section>

@@ -10,7 +10,8 @@
 <!-- TODO have a contextmenu entry up the tree for a project that isn't found, but the id is present -->
 <div class="p_lg">
 	<p>
-		project not found, <button
+		project not found,
+		<button
 			type="button"
 			class="inline palette_d"
 			onclick={() => {

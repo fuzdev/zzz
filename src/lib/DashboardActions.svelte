@@ -68,7 +68,8 @@
 			{:else if actions.items.size > 0}
 				<div class="box height:100%">
 					<p>
-						select an action from the list or <button
+						select an action from the list or
+						<button
 							type="button"
 							class="inline palette_f"
 							onclick={() => {
@@ -82,7 +83,8 @@
 			{:else}
 				<div class="box height:100%">
 					<p>
-						no actions yet, <button
+						no actions yet,
+						<button
 							type="button"
 							class="inline palette_d"
 							onclick={() => {

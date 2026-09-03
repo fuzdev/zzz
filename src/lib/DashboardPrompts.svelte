@@ -186,13 +186,8 @@
 	{:else if app.prompts.items.size}
 		<div class="box height:100% flex:1" in:fade={{ duration: DURATION_SM }}>
 			<p>
-				select a prompt from the list or <button
-					type="button"
-					class="inline palette_d"
-					onclick={create_prompt}
-				>
-					create one
-				</button>
+				select a prompt from the list or
+				<button type="button" class="inline palette_d" onclick={create_prompt}>create one</button>
 				or
 				<button
 					type="button"
@@ -209,7 +204,8 @@
 	{:else}
 		<div class="box height:100% flex:1" in:fade={{ duration: DURATION_SM }}>
 			<p>
-				no prompts yet, <button type="button" class="inline palette_d" onclick={create_prompt}>
+				no prompts yet,
+				<button type="button" class="inline palette_d" onclick={create_prompt}>
 					create a new prompt
 				</button>?
 			</p>

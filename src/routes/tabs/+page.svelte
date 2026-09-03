@@ -40,7 +40,8 @@
 		<p>
 			Zzz can be used to build installable apps that extend the web browser, using the form factor
 			you already know well -- imagine your current browser, and then add a sidebar on the left like
-			the one on this page, then <button
+			the one on this page, then
+			<button
 				type="button"
 				onclick={() => (browser.browserified = !browser.browserified)}
 				class:palette_i={!browser.browserified}
@@ -52,10 +53,8 @@
 			I'm planning to make a native version of Zzz.
 		</p>
 		<p>
-			And users don't have to buy in, either -- the basic browser UX is unchanged. Press <code>
-				[backtick `]
-			</code>
-			to
+			And users don't have to buy in, either -- the basic browser UX is unchanged. Press
+			<code>[backtick `]</code> to
 			<button
 				type="button"
 				class="inline sm"
@@ -87,19 +86,14 @@
 		<p>
 			I think that by optimizing for UX, Zzz and a lot of software is converging on similar
 			architectures. I'm not well-read in The Literature or staying current with the design or
-			product communities, but some of my favorite writing is from Ink and Switch: <ExternalLink
-				href="https://www.inkandswitch.com/local-first/"
-			>
-				local-first
-			</ExternalLink>
-			and
+			product communities, but some of my favorite writing is from Ink and Switch:
+			<ExternalLink href="https://www.inkandswitch.com/local-first/">local-first</ExternalLink> and
 			<ExternalLink href="https://www.inkandswitch.com/malleable-software/">
 				malleable software
 			</ExternalLink>. I think that we can all have software that's really nice to use, not that
 			expensive to produce, that also respects individual rights and is designed for our benefit,
-			that
-			<small class="font_size_xs">UNLEASHES THE FULL POWER OF THE WEB</small>, and integrates our
-			experience across the web and our devices how we each prefer.
+			that <small class="font_size_xs">UNLEASHES THE FULL POWER OF THE WEB</small>, and integrates
+			our experience across the web and our devices how we each prefer.
 		</p>
 	</section>
 {/snippet}

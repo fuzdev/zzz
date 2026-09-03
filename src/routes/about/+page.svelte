@@ -41,10 +41,8 @@
 		</p>
 		<aside>
 			⚠️ This is an early pre-release, see the
-			<ExternalLink href="https://github.com/fuzdev/zzz">repo</ExternalLink>
-			and
-			<ExternalLink href="https://github.com/fuzdev/zzz/discussions">discussions</ExternalLink>
-			💤
+			<ExternalLink href="https://github.com/fuzdev/zzz">repo</ExternalLink> and
+			<ExternalLink href="https://github.com/fuzdev/zzz/discussions">discussions</ExternalLink> 💤
 		</aside>
 		<p>Some early (rough) integrations include:</p>
 		<ul>
@@ -56,24 +54,20 @@
 			<li>
 				<ExternalLink href="https://svelte.dev/">SvelteKit</ExternalLink> is the frontend framework,
 				prerendered to a static SPA that the backend serves. It uses
-				<ExternalLink href="https://vite.dev/">Vite</ExternalLink>
-				in development.
+				<ExternalLink href="https://vite.dev/">Vite</ExternalLink> in development.
 			</li>
 			<li>
-				AI providers with <ExternalLink href="https://platform.openai.com/docs">
-					ChatGPT
-				</ExternalLink>,
+				AI providers with
+				<ExternalLink href="https://platform.openai.com/docs">ChatGPT</ExternalLink>,
 				<ExternalLink href="https://docs.anthropic.com/">Claude</ExternalLink>, and
-				<ExternalLink href="https://ai.google.dev/">Gemini</ExternalLink>
-				-- bring your own API keys
+				<ExternalLink href="https://ai.google.dev/">Gemini</ExternalLink> -- bring your own API keys
 			</li>
 		</ul>
 		<p>Planned integrations:</p>
 		<ul>
 			<li>
-				local LLM backends like <ExternalLink href="https://github.com/ggml-org/llama.cpp">
-					llama.cpp
-				</ExternalLink>
+				local LLM backends like
+				<ExternalLink href="https://github.com/ggml-org/llama.cpp">llama.cpp</ExternalLink>
 			</li>
 			<li>
 				<!-- TODO @db -->
@@ -101,11 +95,10 @@
 				<ExternalLink href="https://imagemagick.org/">ImageMagick</ExternalLink>
 			</li>
 			<li>
-				when I regain an appetite for social, <ExternalLink href="https://atproto.com/">
-					AT Protocol
-				</ExternalLink>
-				and <ExternalLink href="https://activitypub.rocks/">ActivityPub</ExternalLink> -- probably
-				both but they're not immediate prioritie (I have an initial
+				when I regain an appetite for social,
+				<ExternalLink href="https://atproto.com/">AT Protocol</ExternalLink> and
+				<ExternalLink href="https://activitypub.rocks/">ActivityPub</ExternalLink> -- probably both
+				but they're not immediate prioritie (I have an initial
 				<ExternalLink href="https://github.com/fuzdev/fuz_mastodon">
 					Mastodon integration
 				</ExternalLink> with readonly embedded posts)
@@ -205,17 +198,13 @@
 		</p>
 		<aside>
 			⚠️ I am not a security professional and Zzz has not been audited; it may be
-			<strong class="color_c_50">dangerous</strong>
-			to run
+			<strong class="color_c_50">dangerous</strong> to run
 		</aside>
 		<p>
-			Much of the reusable security framework now exists — Zzz runs on <ExternalLink
-				href="https://github.com/fuzdev/fuz_app"
-			>
-				fuz_app
-			</ExternalLink>'s auth stack (cookie sessions, bearer tokens, a one-shot bootstrap flow) with
-			a Rust backend. It's still early and unaudited: don't run Zzz in production, and use it with
-			caution in development.
+			Much of the reusable security framework now exists — Zzz runs on
+			<ExternalLink href="https://github.com/fuzdev/fuz_app">fuz_app</ExternalLink>'s auth stack
+			(cookie sessions, bearer tokens, a one-shot bootstrap flow) with a Rust backend. It's still
+			early and unaudited: don't run Zzz in production, and use it with caution in development.
 		</p>
 		<p>More thoughts about security:</p>
 		<ul>
@@ -233,8 +222,8 @@
 					</li>
 					<li>
 						use your API keys for calls to Claude, ChatGPT, and Gemini -- loaded from
-						<code>./.env.{DEV ? 'development' : 'production'}</code>
-						or set at runtime (held in memory only)
+						<code>./.env.{DEV ? 'development' : 'production'}</code> or set at runtime (held in
+						memory only)
 					</li>
 					<li>
 						authentication is cookie sessions and bearer tokens with a one-shot bootstrap flow, plus
@@ -248,7 +237,8 @@
 				</ul>
 			</li>
 			<li>
-				The frontend <ExternalLink
+				The frontend
+				<ExternalLink
 					href="https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/ContentSecurityPolicy"
 				>
 					CSP
@@ -278,16 +268,16 @@
 					<li>
 						any modules you install from npm/jsr, or any code you add to the src directory, carry
 						the normal elevated risks associated with development and code execution -- I try to
-						practice good <ExternalLink href="https://github.com/fuzdev/fuz_template/issues/1">
+						practice good
+						<ExternalLink href="https://github.com/fuzdev/fuz_template/issues/1">
 							dependency hygiene
 						</ExternalLink>
 					</li>
 				</ul>
 			</li>
 			<li>
-				In 2025, LLMs have serious vulnerabilities to attacks like <ExternalLink
-					href="https://wikipedia.org/wiki/Prompt_injection"
-				>
+				In 2025, LLMs have serious vulnerabilities to attacks like
+				<ExternalLink href="https://wikipedia.org/wiki/Prompt_injection">
 					prompt injection
 				</ExternalLink>, where they are unable to reliably discern instructions intended by the
 				prompter from adversarial instructions in the data. It's unclear if this is fixable but

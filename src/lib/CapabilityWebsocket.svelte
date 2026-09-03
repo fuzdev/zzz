@@ -162,7 +162,8 @@
 						<span class="font_size_lg font-weight:400 ml_md">
 							{#if !BROWSER}
 								<div class="display:inline-flex align-items:end">
-									loading <div class="position:relative"><PendingAnimation /></div>
+									loading
+									<div class="position:relative"><PendingAnimation /></div>
 								</div>
 							{:else if socket.connected}
 								{socket.url !== socket.url_input && socket.url_input !== ''
@@ -170,7 +171,8 @@
 									: 'disconnect websocket'}
 							{:else if socket.status === 'pending'}
 								<div class="display:inline-flex align-items:end">
-									connecting <div class="position:relative"><PendingAnimation /></div>
+									connecting
+									<div class="position:relative"><PendingAnimation /></div>
 								</div>
 							{:else}
 								connect websocket

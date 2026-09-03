@@ -18,11 +18,8 @@
 </p>
 <h3>theme</h3>
 <aside>
-	⚠️ Themes are a proof of concept, not ready for production. For technical docs see <ExternalLink
-		href="https://css.fuz.dev/docs/themes"
-	>
-		fuz_css
-	</ExternalLink>.
+	⚠️ Themes are a proof of concept, not ready for production. For technical docs see
+	<ExternalLink href="https://css.fuz.dev/docs/themes">fuz_css</ExternalLink>.
 </aside>
 <div class="width_atmost_sm box">
 	<div class="width_atmost_xs">

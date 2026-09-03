@@ -183,8 +183,7 @@
 										</a>
 										<div class="repo-details">
 											<span class="checkout-badge">
-												{repo.checkouts.length}
-												checkout dir{repo.checkouts.length === 1 ? '' : 's'}
+												{repo.checkouts.length} checkout dir{repo.checkouts.length === 1 ? '' : 's'}
 											</span>
 										</div>
 									</li>

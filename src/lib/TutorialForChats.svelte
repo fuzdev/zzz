@@ -14,11 +14,8 @@
 			<aside out:fly={{ duration: DURATION_LG, x: -10, y: -1 }}>
 				<p>
 					This currently supports basic text chat with ChatGPT, Claude, and Gemini if you bring your
-					own API key. It's still early, share your ideas in the <ExternalLink
-						href="https://github.com/fuzdev/zzz/discussions"
-					>
-						discussions
-					</ExternalLink>.
+					own API key. It's still early, share your ideas in the
+					<ExternalLink href="https://github.com/fuzdev/zzz/discussions">discussions</ExternalLink>.
 				</p>
 				<button
 					type="button"

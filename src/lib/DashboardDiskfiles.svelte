@@ -176,7 +176,8 @@
 			{:else}
 				<div class="box height:100%">
 					<p>
-						no files yet, <button type="button" class="inline palette_d" onclick={create_file}>
+						no files yet,
+						<button type="button" class="inline palette_d" onclick={create_file}>
 							create a new file
 						</button>?
 					</p>
