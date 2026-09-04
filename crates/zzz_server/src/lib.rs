@@ -518,12 +518,20 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // `app.broadcast` is shimmed onto `App.realtime`
     // (see `handlers/mod.rs`).
     //
-    // Middleware: each spine router carries its own
-    // `fuz_http::client_ip_middleware` layer over
-    // `spine_trusted_proxies`. The outer router (`/api/account/*` REST
-    // + `/api/account/bootstrap`) also reads `Extension<fuz_http::ClientIp>`;
-    // a separate `fuz_http::client_ip_middleware`
-    // layer below covers the outer scope.
+    // Middleware: every spine router below carries its own
+    // `fuz_http::client_ip_middleware` layer over `spine_trusted_proxies` —
+    // RPC, WS, the three `/api/account/*` REST routers, and the admin audit
+    // stream. The layer is mounted unconditionally, including when
+    // `ZZZ_TRUSTED_PROXIES` is unset and the set is empty: the middleware
+    // always populates `ClientIp`, and an empty set is the *more* conservative
+    // configuration, not a disabled one — every connection then fails
+    // `is_trusted_ip`, so the spoofable `X-Forwarded-For` is ignored and the
+    // real TCP peer is recorded. Omitting the layer is what would degrade
+    // behavior: `ClientIp` would be absent, so the IP-keyed limiters
+    // (`login_ip_rate_limiter`, `signup_ip_rate_limiter`,
+    // `action_ip_rate_limiter`) would bucket every caller under one shared
+    // `fuz_http::UNRESOLVED_CLIENT_IP` key, and each bearer touch of
+    // `api_token` would write a null `last_used_ip`.
     let registry_for_rpc = Arc::clone(app_state.action_registry.get().ok_or_else(|| {
         ServerError::Config("action_registry must be set before mounting /api/rpc".to_owned())
     })?);
@@ -641,14 +649,21 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // `fuz_realtime::audit_stream_router` (admin-gated, account-keyed close on
     // revocation), wired to the `audit_sse` registry the listener above fans
     // rows into. Carries its own `origin_layer` so the origin allowlist gates
-    // it like every other zzz handler; it resolves auth itself and writes no
-    // `audit_log.ip`, so no `client_ip` layer is needed.
+    // it like every other zzz handler, and the same `client_ip_middleware` as
+    // every other spine router: it writes no `audit_log.ip`, but its bearer leg
+    // touches `api_token`, and that touch writes `last_used_ip = $2`
+    // unconditionally — so without the layer every valid bearer read of the
+    // stream would NULL the column rather than leave it alone.
     let spine_audit_stream_router =
         fuz_realtime::audit_stream_router(fuz_realtime::AuditStreamRouteState::new(
             app_state.db_pool.clone(),
             Arc::clone(&spine_keyring),
             spine_daemon_token.clone(),
             Arc::clone(&audit_sse),
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&spine_trusted_proxies),
+            fuz_http::client_ip_middleware,
         ))
         .layer(axum::middleware::from_fn_with_state(
             Arc::clone(&spine_allowed_origins),
@@ -853,4 +868,89 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
         enable_test_actions,
         trusted_proxies,
     })
+}
+
+#[cfg(test)]
+mod client_ip_posture {
+    //! The empty-trusted-proxy posture the spine routers in [`run_app`] rely on.
+    //!
+    //! `ZZZ_TRUSTED_PROXIES` is unset by default, so every spine router layers
+    //! `client_ip_middleware` over an *empty* proxy set. These tests pin what
+    //! that combination does — record the real TCP peer, never believe a forged
+    //! `X-Forwarded-For` — because it is the whole reason the layer is mounted
+    //! unconditionally rather than only when proxies are configured.
+
+    use std::net::SocketAddr;
+    use std::sync::{Arc, Mutex};
+
+    use axum::Router;
+    use axum::body::Body;
+    use axum::extract::{ConnectInfo, Extension};
+    use axum::http::{Request, StatusCode};
+    use axum::middleware::from_fn_with_state;
+    use axum::routing::get;
+    use fuz_http::{ClientIp, ParsedProxy, client_ip_middleware};
+    use tower::ServiceExt;
+
+    /// Drive one request through the composer's empty-set layer shape and
+    /// return the `ClientIp` the middleware resolved.
+    async fn resolved_client_ip(peer: &str, forwarded_for: Option<&str>) -> String {
+        let seen: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+        let sink = Arc::clone(&seen);
+        // The same empty vec `run_app` builds when `ZZZ_TRUSTED_PROXIES` is unset.
+        let proxies: Arc<Vec<ParsedProxy>> = Arc::new(Vec::new());
+        let app = Router::new()
+            .route(
+                "/ip",
+                get(move |Extension(ClientIp(ip)): Extension<ClientIp>| {
+                    let sink = Arc::clone(&sink);
+                    async move {
+                        *sink.lock().expect("sink is uncontended") = Some(ip);
+                        StatusCode::OK
+                    }
+                }),
+            )
+            .layer(from_fn_with_state(proxies, client_ip_middleware));
+
+        let mut builder = Request::builder().uri("/ip").method("GET");
+        if let Some(value) = forwarded_for {
+            builder = builder.header("x-forwarded-for", value);
+        }
+        let mut req = builder.body(Body::empty()).expect("request builds");
+        // `fuz_http::serve_with_shutdown` supplies `ConnectInfo` per connection
+        // via `into_make_service_with_connect_info`; a `oneshot` has no
+        // connection, so plumb the peer by hand.
+        req.extensions_mut().insert(ConnectInfo(
+            peer.parse::<SocketAddr>().expect("peer parses"),
+        ));
+
+        let response = app.oneshot(req).await.expect("router responds");
+        // A 500 here would mean the `ClientIp` extension was missing — i.e. the
+        // middleware was not mounted.
+        assert_eq!(response.status(), StatusCode::OK, "ClientIp was populated");
+
+        seen.lock()
+            .expect("sink is uncontended")
+            .clone()
+            .expect("the middleware always populates ClientIp")
+    }
+
+    #[tokio::test]
+    async fn no_forwarded_for_resolves_to_the_peer() {
+        assert_eq!(
+            resolved_client_ip("203.0.113.7:51234", None).await,
+            "203.0.113.7"
+        );
+    }
+
+    #[tokio::test]
+    async fn forged_forwarded_for_from_an_untrusted_peer_is_ignored() {
+        // With no trusted proxies every peer fails the trust check, so the
+        // spoofable header is never believed — a caller cannot mint a fresh
+        // per-IP rate-limit bucket by inventing an `X-Forwarded-For`.
+        assert_eq!(
+            resolved_client_ip("203.0.113.7:51234", Some("198.51.100.9")).await,
+            "203.0.113.7"
+        );
+    }
 }
