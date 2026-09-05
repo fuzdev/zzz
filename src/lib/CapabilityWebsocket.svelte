@@ -1,35 +1,30 @@
 <script lang="ts">
 	// @slop Claude Sonnet 3.7
 
-	import {slide} from 'svelte/transition';
-	import {formatDuration, intervalToDuration} from 'date-fns';
-	import {BROWSER} from 'esm-env';
+	import { slide } from 'svelte/transition';
+	import { formatDuration, intervalToDuration } from 'date-fns';
+	import { BROWSER } from 'esm-env';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import {frontend_context} from './frontend.svelte.js';
-	import type {Socket} from './socket.svelte.js';
-	import ConfirmButton from './ConfirmButton.svelte';
-	import Glyph from './Glyph.svelte';
-	import {
-		GLYPH_CONNECT,
-		GLYPH_CANCEL,
-		GLYPH_DISCONNECT,
-		GLYPH_RESET,
-		GLYPH_PLACEHOLDER,
-	} from './glyphs.js';
-	import {format_ms_to_readable, format_timestamp} from './time_helpers.js';
+	import { frontend_context } from './frontend.svelte.ts';
+	import type { Socket } from './socket.svelte.ts';
+	import { icon_cancel, icon_connect, icon_disconnect, icon_reset } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import { format_placeholder } from './helpers.ts';
+	import { format_ms_to_readable, format_timestamp } from './time_helpers.ts';
 	import {
 		DEFAULT_HEARTBEAT_INTERVAL,
 		DEFAULT_RECONNECT_DELAY,
-		DEFAULT_RECONNECT_DELAY_MAX,
-	} from './socket_helpers.js';
+		DEFAULT_RECONNECT_DELAY_MAX
+	} from './socket_helpers.ts';
 	import SocketMessageQueue from './SocketMessageQueue.svelte';
-	import {WEBSOCKET_URL} from './constants.js';
+	import { WEBSOCKET_URL } from './constants.ts';
 
 	const pid = $props.id();
 
 	const {
-		socket: socket_prop,
+		socket: socket_prop
 	}: {
 		socket?: Socket | undefined;
 	} = $props();
@@ -37,11 +32,11 @@
 	// Get socket from props or context
 	const app = frontend_context.get();
 	const socket = $derived(socket_prop || app.socket);
-	const {capabilities} = app;
+	const { capabilities } = app;
 
 	// Track URL state for reset/undo functionality
-	let previous_url = $state('');
-	let has_undo_state = $state(false);
+	let previous_url = $state.raw('');
+	let has_undo_state = $state.raw(false);
 
 	// Reset the socket configuration to defaults
 	const reset_to_defaults = () => {
@@ -85,24 +80,25 @@
 				style:display="display:flex !important"
 				style:align-items="flex-start !important"
 				style:font-weight="400 !important"
-				class:color_b={capabilities.websocket.status === 'success' && socket.connected}
-				class:color_c={capabilities.websocket.status === 'failure'}
-				class:color_d={capabilities.websocket.status === 'pending'}
-				class:color_e={capabilities.websocket.status === 'initial'}
-				class:color_h={capabilities.websocket.status === 'success' && !socket.connected}
+				class:palette_b={capabilities.websocket.status === 'success' && socket.connected}
+				class:palette_c={capabilities.websocket.status === 'failure'}
+				class:palette_d={capabilities.websocket.status === 'pending'}
+				class:palette_e={capabilities.websocket.status === 'initial'}
+				class:palette_h={capabilities.websocket.status === 'success' && !socket.connected}
 			>
 				<div class="column justify-content:center gap_xs pl_md" style:min-height="80px">
-					<span
-						>websocket {socket.connected
+					<span>
+						websocket {socket.connected
 							? 'connected'
 							: socket.status === 'pending'
 								? 'connecting'
 								: 'disconnected'}{#if socket.status === 'pending'}
-							<PendingAnimation inline class="ml_sm" />{/if}</span
-					>
-					<small class="font_family_mono"
-						>{#if socket.url}{socket.url}{:else}&nbsp;{/if}</small
-					>
+							<PendingAnimation inline class="ml_sm" />
+						{/if}
+					</span>
+					<small class="font_family_mono">
+						{#if socket.url}{socket.url}{:else}&nbsp;{/if}
+					</small>
 				</div>
 			</div>
 
@@ -111,12 +107,12 @@
 					<input
 						type="text"
 						class="plain flex:1"
-						placeholder="{GLYPH_PLACEHOLDER} websocket url, ws:// or wss://"
+						placeholder={format_placeholder('websocket url, ws:// or wss://')}
 						bind:value={socket.url_input}
 					/>
 					<button
 						type="button"
-						class="icon_button plain"
+						class="icon-button plain"
 						title={has_undo_state ? `undo to ${previous_url}` : 'reset url to default'}
 						disabled={is_default_url && !has_undo_state}
 						onclick={() => {
@@ -128,7 +124,7 @@
 						}}
 					>
 						<div class={has_undo_state ? 'transform:scaleX(-1)' : ''}>
-							<Glyph glyph={GLYPH_RESET} />
+							<Svg data={icon_reset} />
 						</div>
 					</button>
 				</div>
@@ -137,10 +133,10 @@
 					<button
 						type="button"
 						class="flex:1 justify-content:start"
-						class:color_d={socket.connected &&
+						class:palette_d={socket.connected &&
 							socket.url !== socket.url_input &&
 							socket.url_input !== ''}
-						class:color_a={!socket.connected && socket.status !== 'pending'}
+						class:palette_a={!socket.connected && socket.status !== 'pending'}
 						disabled={socket.status === 'pending' || (!socket.connected && !socket.url_input)}
 						onclick={() => {
 							if (socket.connected) {
@@ -157,16 +153,17 @@
 							}
 						}}
 					>
-						<Glyph
-							glyph={socket.connected && socket.url === socket.url_input
-								? GLYPH_DISCONNECT
-								: GLYPH_CONNECT}
+						<Svg
+							data={socket.connected && socket.url === socket.url_input
+								? icon_disconnect
+								: icon_connect}
 							size="var(--font_size_xl)"
 						/>
 						<span class="font_size_lg font-weight:400 ml_md">
 							{#if !BROWSER}
 								<div class="display:inline-flex align-items:end">
-									loading <div class="position:relative"><PendingAnimation /></div>
+									loading
+									<div class="position:relative"><PendingAnimation /></div>
 								</div>
 							{:else if socket.connected}
 								{socket.url !== socket.url_input && socket.url_input !== ''
@@ -174,7 +171,8 @@
 									: 'disconnect websocket'}
 							{:else if socket.status === 'pending'}
 								<div class="display:inline-flex align-items:end">
-									connecting <div class="position:relative"><PendingAnimation /></div>
+									connecting
+									<div class="position:relative"><PendingAnimation /></div>
 								</div>
 							{:else}
 								connect websocket
@@ -192,11 +190,12 @@
 						bind:checked={
 							() => socket.auto_reconnect,
 							(v) => {
-								// If turning off auto-reconnect, cancel any pending reconnects
-								if (!v && socket.reconnect_timeout !== null) {
+								// Turning off during a pending reconnect: cancel it.
+								// Turning on while disconnected: try to connect immediately.
+								// Delay/factor changes propagate live via the $effect below.
+								if (!v && socket.is_reconnect_pending) {
 									socket.cancel_reconnect();
 								} else if (v && !socket.connected && socket.status !== 'pending') {
-									// If turning on auto-reconnect and we're disconnected, try to connect immediately
 									socket.connect();
 								}
 								socket.auto_reconnect = v;
@@ -205,17 +204,17 @@
 					/>
 					<small>auto-reconnect</small>
 				</label>
-				{#if socket.status === 'failure' && socket.reconnect_timeout !== null}
+				{#if socket.is_reconnect_pending}
 					<div class="row flex:1 gap_xs" transition:slide>
 						<button
 							type="button"
-							class="color_d font_size_xl icon_button plain"
+							class="palette_d font_size_xl icon-button plain"
 							title="cancel reconnection attempt"
 							onclick={() => {
 								socket.cancel_reconnect();
 							}}
 						>
-							<Glyph glyph={GLYPH_CANCEL} />
+							<Svg data={icon_cancel} />
 						</button>
 						<div
 							class="bg_d_5 width:100% border_radius_xs position:relative overflow:hidden font-weight:600"
@@ -229,7 +228,7 @@
 							</div>
 							{#key socket.reconnect_attempt}
 								<div
-									class="progress_fill bg_d_6"
+									class="progress-fill bg_d_6"
 									style:animation-duration="{socket.current_reconnect_delay}ms"
 								></div>
 							{/key}
@@ -265,7 +264,7 @@
 					<input
 						id="heartbeat_interval_{pid}"
 						type="text"
-						class="input_xs sm plain"
+						class="input-xs sm plain"
 						bind:value={socket.heartbeat_interval}
 					/>
 				</div>
@@ -293,7 +292,7 @@
 					<input
 						id="reconnect_delay_{pid}"
 						type="text"
-						class="input_xs sm plain"
+						class="input-xs sm plain"
 						bind:value={socket.reconnect_delay}
 					/>
 				</div>
@@ -321,7 +320,7 @@
 					<input
 						id="reconnect_delay_max_{pid}"
 						type="text"
-						class="input_xs sm plain"
+						class="input-xs sm plain"
 						bind:value={socket.reconnect_delay_max}
 					/>
 				</div>
@@ -334,14 +333,14 @@
 					{#snippet popover_content(popover)}
 						<button
 							type="button"
-							class="color_c icon_button"
+							class="palette_c icon-button"
 							title="confirm reset settings"
 							onclick={() => {
 								reset_to_defaults();
 								popover.hide();
 							}}
 						>
-							<Glyph glyph={GLYPH_RESET} />
+							<Svg data={icon_reset} />
 						</button>
 					{/snippet}
 				</ConfirmButton>
@@ -370,7 +369,7 @@
 				<small>
 					{socket.connection_duration_rounded
 						? formatDuration(
-								intervalToDuration({start: 0, end: socket.connection_duration_rounded}),
+								intervalToDuration({ start: 0, end: socket.connection_duration_rounded })
 							)
 						: '-'}
 				</small>
@@ -418,7 +417,7 @@
 		}
 	}
 
-	.progress_fill {
+	.progress-fill {
 		position: absolute;
 		width: 100%;
 		height: 100%;

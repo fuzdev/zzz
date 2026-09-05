@@ -1,6 +1,7 @@
-import {create_uuid} from '$lib/zod_helpers.js';
-import type {Frontend} from '$lib/frontend.svelte.js';
-import {Project} from '$routes/projects/project.svelte.js';
+import { create_uuid } from '@fuzdev/fuz_util/id.ts';
+
+import type { Frontend } from '$lib/frontend.svelte.ts';
+import { Project } from './project.svelte.ts';
 
 export const create_sample_projects = (app: Frontend): Array<Project> => {
 	return [
@@ -19,7 +20,7 @@ export const create_sample_projects = (app: Frontend): Array<Project> => {
 						status: 'active',
 						ssl: true,
 						created: '2023-01-15T12:00:00Z',
-						updated: '2023-04-20T15:30:00Z',
+						updated: '2023-04-20T15:30:00Z'
 					},
 					{
 						id: create_uuid(),
@@ -27,8 +28,8 @@ export const create_sample_projects = (app: Frontend): Array<Project> => {
 						status: 'active',
 						ssl: true,
 						created: '2023-01-15T12:00:00Z',
-						updated: '2023-04-20T15:30:00Z',
-					},
+						updated: '2023-04-20T15:30:00Z'
+					}
 				],
 				pages: [
 					{
@@ -37,7 +38,7 @@ export const create_sample_projects = (app: Frontend): Array<Project> => {
 						title: 'home',
 						content: '# Welcome to Zzz\n\nZzz is both a browser and editor for the read-write web.',
 						created: '2023-01-15T12:05:00Z',
-						updated: '2023-01-16T09:30:00Z',
+						updated: '2023-01-16T09:30:00Z'
 					},
 					{
 						id: create_uuid(),
@@ -46,8 +47,8 @@ export const create_sample_projects = (app: Frontend): Array<Project> => {
 						content:
 							'# About Zzz\n\nZzz is a project that aims to make managing websites routine and easy.',
 						created: '2023-01-15T14:20:00Z',
-						updated: '2023-02-01T11:15:00Z',
-					},
+						updated: '2023-02-01T11:15:00Z'
+					}
 				],
 				repos: [
 					{
@@ -58,14 +59,14 @@ export const create_sample_projects = (app: Frontend): Array<Project> => {
 								id: create_uuid(),
 								path: './zzz/',
 								label: 'development',
-								tags: ['main', 'dev'],
-							},
+								tags: ['main', 'dev']
+							}
 						],
 						created: '2023-01-15T12:05:00Z',
-						updated: '2023-01-16T09:30:00Z',
-					},
-				],
-			},
+						updated: '2023-01-16T09:30:00Z'
+					}
+				]
+			}
 		}),
 		new Project({
 			app,
@@ -82,7 +83,7 @@ export const create_sample_projects = (app: Frontend): Array<Project> => {
 						status: 'active',
 						ssl: true,
 						created: '2023-02-10T09:15:00Z',
-						updated: '2023-03-05T16:45:00Z',
+						updated: '2023-03-05T16:45:00Z'
 					},
 					{
 						id: create_uuid(),
@@ -90,8 +91,8 @@ export const create_sample_projects = (app: Frontend): Array<Project> => {
 						status: 'active',
 						ssl: true,
 						created: '2023-02-10T09:15:00Z',
-						updated: '2023-03-05T16:45:00Z',
-					},
+						updated: '2023-03-05T16:45:00Z'
+					}
 				],
 				pages: [
 					{
@@ -101,7 +102,7 @@ export const create_sample_projects = (app: Frontend): Array<Project> => {
 						content:
 							'# Dealt\n\ntoy 2D web game engine with a focus on topdown action RPGs 🔮 <a href="https://www.dealt.dev/">dealt.dev</a>',
 						created: '2023-02-10T10:00:00Z',
-						updated: '2023-03-01T14:20:00Z',
+						updated: '2023-03-01T14:20:00Z'
 					},
 					{
 						id: create_uuid(),
@@ -110,8 +111,8 @@ export const create_sample_projects = (app: Frontend): Array<Project> => {
 						content:
 							'# Tarot\n\ngiving meaning a chance 🔮 <a href="https://tarot.dealt.dev/">tarot.dealt.dev</a>',
 						created: '2023-02-11T11:30:00Z',
-						updated: '2023-02-15T09:45:00Z',
-					},
+						updated: '2023-02-15T09:45:00Z'
+					}
 				],
 				repos: [
 					{
@@ -122,20 +123,20 @@ export const create_sample_projects = (app: Frontend): Array<Project> => {
 								id: create_uuid(),
 								path: './dealt/',
 								label: 'development',
-								tags: ['main', 'dev'],
+								tags: ['main', 'dev']
 							},
 							{
 								id: create_uuid(),
 								path: './dealt_prod/',
 								label: 'production',
-								tags: ['deploy', 'prod'],
-							},
+								tags: ['deploy', 'prod']
+							}
 						],
 						created: '2023-02-10T10:00:00Z',
-						updated: '2023-03-01T14:20:00Z',
-					},
-				],
-			},
+						updated: '2023-03-01T14:20:00Z'
+					}
+				]
+			}
 		}),
 		new Project({
 			app,
@@ -152,12 +153,12 @@ export const create_sample_projects = (app: Frontend): Array<Project> => {
 						status: 'active',
 						ssl: true,
 						created: '2023-05-15T08:00:00Z',
-						updated: '2023-06-20T14:15:00Z',
-					},
+						updated: '2023-06-20T14:15:00Z'
+					}
 				],
 				pages: [],
-				repos: [],
-			},
-		}),
+				repos: []
+			}
+		})
 	];
 };

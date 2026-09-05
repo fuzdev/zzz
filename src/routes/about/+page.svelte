@@ -2,15 +2,15 @@
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import LibraryDetail from '@fuzdev/fuz_ui/LibraryDetail.svelte';
 	import EcosystemLinksPanel from '@fuzdev/fuz_ui/EcosystemLinksPanel.svelte';
-	import {resolve} from '$app/paths';
+	import { resolve } from '$app/paths';
 	import Details from '@fuzdev/fuz_ui/Details.svelte';
-	import {DEV} from 'esm-env';
+	import { DEV } from 'esm-env';
 
-	import {logo_zzz} from '$lib/logos.js';
-	import {library_context} from '$lib/library.js';
+	import { logo_zzz } from '$lib/logos.ts';
+	import { library_context } from '$lib/library.ts';
 	import ExternalLink from '$lib/ExternalLink.svelte';
 	import PageFooter from '$routes/PageFooter.svelte';
-	import {frontend_context} from '$lib/frontend.svelte.js';
+	import { frontend_context } from '$lib/frontend.svelte.ts';
 
 	const library = library_context.get();
 	const app = frontend_context.get();
@@ -32,85 +32,76 @@
 		</header>
 		<blockquote>nice web things for the tired 💤</blockquote>
 		<p>
-			Zzz, pronounced "zees" like bees, is a local-first forge for power users and developers. The
-			idea is to make an integrated cross-platform environment that adapts to your needs and intent
-			while remaining fully open, aligned, and designed for your autonomy. It's both a customizable
-			web UI and local-first backend for power users, and a flexible tool for crafting UX-maximizing
+			Zzz, pronounced "zees" like bees, is a software garage for power users and devs. The idea is
+			to make an integrated cross-platform environment that adapts to your needs and intent while
+			remaining fully open, aligned, and designed for your autonomy. It's both a customizable web UI
+			and local-first backend for power users, and a flexible tool for crafting UX-maximizing
 			websites with a streamlined developer experience, eventually accessible to non-coders (hence
 			all the AI).
 		</p>
 		<aside>
 			⚠️ This is an early pre-release, see the
-			<ExternalLink href="https://github.com/fuzdev/zzz">repo</ExternalLink>
-			and
+			<ExternalLink href="https://github.com/fuzdev/zzz">repo</ExternalLink> and
 			<ExternalLink href="https://github.com/fuzdev/zzz/discussions">discussions</ExternalLink> 💤
 		</aside>
 		<p>Some early (rough) integrations include:</p>
 		<ul>
 			<li>
-				<ExternalLink href="https://hono.dev/">Hono</ExternalLink> is the backend web server that provides
-				local system access. It's uses web standards and supports all JS server runtimes.
+				<ExternalLink href="https://github.com/tokio-rs/axum">Axum</ExternalLink> is the Rust
+				backend web server that provides local system access — filesystem, terminals, and AI
+				provider requests.
 			</li>
 			<li>
-				<ExternalLink href="https://svelte.dev/">SvelteKit</ExternalLink> is the frontend framework. Hono
-				integrates with its Node adapter, and it uses <ExternalLink href="https://vite.dev/"
-					>Vite</ExternalLink
-				> in development.
+				<ExternalLink href="https://svelte.dev/">SvelteKit</ExternalLink> is the frontend framework,
+				prerendered to a static SPA that the backend serves. It uses
+				<ExternalLink href="https://vite.dev/">Vite</ExternalLink> in development.
 			</li>
 			<li>
-				AI providers with <ExternalLink href="https://github.com/openai/openai-node"
-					>ChatGPT</ExternalLink
-				>,
-				<ExternalLink href="https://github.com/anthropics/anthropic-sdk-typescript"
-					>Claude</ExternalLink
-				>, and <ExternalLink href="https://github.com/google-gemini/generative-ai-js"
-					>Gemini</ExternalLink
-				> -- bring your own API keys
-			</li>
-			<li>
-				<ExternalLink href="https://github.com/ollama/ollama">Ollama</ExternalLink> runs AI models locally
-				with easy installation and onboarding. I plan to support more local LLM backends like
-				<ExternalLink href="https://github.com/ggml-org/llama.cpp">llama.cpp</ExternalLink> which Ollama
-				is based on.
+				AI providers with
+				<ExternalLink href="https://platform.openai.com/docs">ChatGPT</ExternalLink>,
+				<ExternalLink href="https://docs.anthropic.com/">Claude</ExternalLink>, and
+				<ExternalLink href="https://ai.google.dev/">Gemini</ExternalLink> -- bring your own API keys
 			</li>
 		</ul>
 		<p>Planned integrations:</p>
 		<ul>
 			<li>
+				local LLM backends like
+				<ExternalLink href="https://github.com/ggml-org/llama.cpp">llama.cpp</ExternalLink>
+			</li>
+			<li>
 				<!-- TODO @db -->
-				<ExternalLink href="https://github.com/electric-sql/pglite">pglite</ExternalLink>
-				and full <ExternalLink href="https://www.postgresql.org/">Postgres</ExternalLink> when desired,
-				using <ExternalLink href="https://github.com/porsager/postgres">Postgres.js</ExternalLink>
-				and probably <ExternalLink href="https://github.com/drizzle-team/drizzle-orm"
-					>Drizzle</ExternalLink
-				>, see <ExternalLink href="https://github.com/fuzdev/zzz/issues/7">issue #7</ExternalLink>
+				persisting your domain data (chats, workspaces, prompts) --
+				<ExternalLink href="https://www.postgresql.org/">Postgres</ExternalLink> is already
+				integrated for auth (the Rust backend requires it), and your other data is in-memory until
+				this lands, see
+				<ExternalLink href="https://github.com/fuzdev/zzz/issues/7">issue #7</ExternalLink>
 			</li>
 			<li>
 				<ExternalLink href="https://modelcontextprotocol.io/">Model Context Protocol</ExternalLink>,
-				maybe others like <ExternalLink href="https://github.com/google/A2A"
-					>Agent2Agent (A2A) protocol</ExternalLink
-				>
+				maybe others like
+				<ExternalLink href="https://github.com/google/A2A">Agent2Agent (A2A) protocol</ExternalLink>
 			</li>
 			<li>
-				<ExternalLink href="https://wikipedia.org/wiki/RSS">RSS</ExternalLink> and <ExternalLink
-					href="https://wikipedia.org/wiki/Atom_(web_standard)">Atom</ExternalLink
-				> and <ExternalLink href="https://wikipedia.org/wiki/JSON_Feed">JSON Feed</ExternalLink>
+				<ExternalLink href="https://wikipedia.org/wiki/RSS">RSS</ExternalLink> and
+				<ExternalLink href="https://wikipedia.org/wiki/Atom_(web_standard)">Atom</ExternalLink> and
+				<ExternalLink href="https://wikipedia.org/wiki/JSON_Feed">JSON Feed</ExternalLink>
 			</li>
 			<li>git!</li>
 			<li>
 				I think it makes sense to prioritize a few high-utility integrations for manipulating media
 				files, like <ExternalLink href="https://pandoc.org/">Pandoc</ExternalLink>,
-				<ExternalLink href="https://ffmpeg.org/">ffmpeg</ExternalLink>, and <ExternalLink
-					href="https://imagemagick.org/">ImageMagick</ExternalLink
-				>
+				<ExternalLink href="https://ffmpeg.org/">ffmpeg</ExternalLink>, and
+				<ExternalLink href="https://imagemagick.org/">ImageMagick</ExternalLink>
 			</li>
 			<li>
-				when I regain an appetite for social, <ExternalLink href="https://atproto.com/"
-					>AT Protocol</ExternalLink
-				> and <ExternalLink href="https://activitypub.rocks/">ActivityPub</ExternalLink> -- probably both
-				but they're not immediate prioritie (I have an initial <ExternalLink
-					href="https://github.com/fuzdev/fuz_mastodon">Mastodon integration</ExternalLink
-				> with readonly embedded posts)
+				when I regain an appetite for social,
+				<ExternalLink href="https://atproto.com/">AT Protocol</ExternalLink> and
+				<ExternalLink href="https://activitypub.rocks/">ActivityPub</ExternalLink> -- probably both
+				but they're not immediate prioritie (I have an initial
+				<ExternalLink href="https://github.com/fuzdev/fuz_mastodon">
+					Mastodon integration
+				</ExternalLink> with readonly embedded posts)
 			</li>
 			<li>
 				more, input welcome
@@ -157,11 +148,11 @@
 		<p class="mb_md">
 			This project has a big speculative scope and it's early in development. What you're seeing is
 			a small part of the idea -- especially if you're viewing this on the website not natively via
-			Node -- so here's a button for previewing some of what's planned:
+			the local backend -- so here's a button for previewing some of what's planned:
 		</p>
 		<button
 			type="button"
-			class:color_h={app.futuremode}
+			class:palette_h={app.futuremode}
 			onclick={() => {
 				app.futuremode = !app.futuremode;
 			}}
@@ -169,20 +160,20 @@
 			<Svg
 				data={logo_zzz}
 				size="var(--icon_size_sm)"
-				fill={app.futuremode ? 'var(--color_h_50)' : 'var(--text_color)'}
+				fill={app.futuremode ? 'var(--palette_h_50)' : 'var(--text_color)'}
 				class="mr_md {app.futuremode ? ' transform:scaleX(-1)' : ''}"
 				style="transition: transform 200ms ease"
 			/>
-			<span
-				><span class="display:inline-block text-align:right" style:width="6ch"
-					>{app.futuremode ? 'disable' : 'enable'}</span
-				>
-				futuremode</span
-			>
+			<span>
+				<span class="display:inline-block text-align:right" style:width="6ch">
+					{app.futuremode ? 'disable' : 'enable'}
+				</span>
+				futuremode
+			</span>
 			<Svg
 				data={logo_zzz}
 				size="var(--icon_size_sm)"
-				fill={app.futuremode ? 'var(--color_h_50)' : 'var(--text_color)'}
+				fill={app.futuremode ? 'var(--palette_h_50)' : 'var(--text_color)'}
 				class="ml_md {app.futuremode ? '' : ' transform:scaleX(-1)'}"
 				style="transition: transform 200ms ease"
 			/>
@@ -206,96 +197,104 @@
 			we want to make it easy to make good choices, where lazy is secure.
 		</p>
 		<aside>
-			⚠️ I am not a security professional and Zzz has not been audited; it may be <strong
-				class="color_c_50">dangerous</strong
-			> to run and there is no auth yet
+			⚠️ I am not a security professional and Zzz has not been audited; it may be
+			<strong class="color_c_50">dangerous</strong> to run
 		</aside>
 		<p>
-			My current plan is to extract <ExternalLink href="https://github.com/fuzdev/fuz_ui"
-				>a reusable framework</ExternalLink
-			> out of Zzz that prioritizes security from the first commit. More on that soon. For now Zzz is
-			insecure and should definitely not be run in production, and it should be used with caution in development.
+			Much of the reusable security framework now exists — Zzz runs on
+			<ExternalLink href="https://github.com/fuzdev/fuz_app">fuz_app</ExternalLink>'s auth stack
+			(cookie sessions, bearer tokens, a one-shot bootstrap flow) with a Rust backend. It's still
+			early and unaudited: don't run Zzz in production, and use it with caution in development.
 		</p>
 		<p>More thoughts about security:</p>
 		<ul>
 			<li>
-				Zzz's Node server can do things like:
+				Zzz's backend can do things like:
 				<ul>
 					<li>
 						read and write to the Zzz app directory (<code>PUBLIC_ZZZ_DIR</code>, defaults to
 						<code>./.zzz</code>) for app data like completions, plus any additional paths configured
 						in <code>PUBLIC_ZZZ_SCOPED_DIRS</code> for user files -- all filesystem operations are
-						securely scoped via <code>ScopedFs</code> (symlinks rejected, paths validated) -- this opens
-						a significant surface area for both you and attackers to use, and writing untrusted data could
-						lead to arbitrary code execution if, for example, you're running a hot reloading dev server
-						in a scoped directory (configure with care!)
+						securely scoped via <code>ScopedFs</code> (symlinks rejected, paths validated) -- this
+						opens a significant surface area for both you and attackers to use, and writing
+						untrusted data could lead to arbitrary code execution if, for example, you're running a
+						hot reloading dev server in a scoped directory (configure with care!)
 					</li>
 					<li>
-						use your API keys for calls to Claude, ChatGPT, and Gemini, and write them to <code
-							>./.env.{DEV ? 'development' : 'production'}</code
-						>
-					</li>
-					<li>call Ollama's API if available -- low risk</li>
-					<li>
-						<strong class="color_c_50">there is no authentication yet</strong>, only an origin
-						check, so do not use this in production
+						use your API keys for calls to Claude, ChatGPT, and Gemini -- loaded from
+						<code>./.env.{DEV ? 'development' : 'production'}</code> or set at runtime (held in
+						memory only)
 					</li>
 					<li>
-						soon, more integrations including terminal access assuming Bash, but nothing that
-						powerful before auth
+						authentication is cookie sessions and bearer tokens with a one-shot bootstrap flow, plus
+						an origin allowlist -- it's young and <strong class="color_c_50">unaudited</strong>, so
+						do not use this in production
+					</li>
+					<li>
+						run interactive terminals -- full shell access as your user, the most powerful
+						capability here, gated behind the auth
 					</li>
 				</ul>
 			</li>
 			<li>
-				The frontend <ExternalLink
+				The frontend
+				<ExternalLink
 					href="https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/ContentSecurityPolicy"
-					>CSP</ExternalLink
-				> is fairly locked down, including blocking all unknown network connections. For details, see
-				the CSP config in <ExternalLink
-					href="https://github.com/fuzdev/zzz/blob/main/svelte.config.js"
-					>svelte.config.js</ExternalLink
-				> and the <ExternalLink href="https://ui.fuz.dev/docs/csp">Fuz CSP docs</ExternalLink>.
+				>
+					CSP
+				</ExternalLink>
+				is designed to be fairly locked down, including blocking all unknown network connections --
+				it's currently disabled while being reworked (see
+				<ExternalLink href="https://github.com/fuzdev/zzz/blob/main/svelte.config.js">
+					svelte.config.js
+				</ExternalLink>
+				and the <ExternalLink href="https://ui.fuz.dev/docs/csp">Fuz CSP docs</ExternalLink>).
 				Configuration will be needed for many usecases, unlocking shenanigans good and bad, so we'll
 				tread carefully.
 			</li>
 			<li>
 				There are no mechanisms for end-users to load executable code or dangerous config. Of
-				course, developers have full control to shoot their own feet, and Node is currently the only
-				supported way to use Zzz. Deno is planned.
+				course, developers have full control to shoot their own feet, and running the local Rust
+				backend is currently the supported way to use Zzz.
 				<ul>
 					<li>
 						we'll develop a plugin API so people can make reusable integrations, and distribution
 						will be through npm/jsr, decentralized like a typical open source web ecosystem project
 						so the risks assumed by developers are unchanged and I gatekeep nothing -- I plan to
-						publish a number of <code>@fuzdev/zzz_*</code> packages, and if people think it's worth their
-						time to make Zzz things, they can publish according to their taste and devs can vet their
-						code
+						publish a number of <code>@fuzdev/zzz_*</code> packages, and if people think it's worth
+						their time to make Zzz things, they can publish according to their taste and devs can
+						vet their code
 					</li>
 					<li>
 						any modules you install from npm/jsr, or any code you add to the src directory, carry
 						the normal elevated risks associated with development and code execution -- I try to
-						practice good <ExternalLink href="https://github.com/fuzdev/fuz_template/issues/1"
-							>dependency hygiene</ExternalLink
-						>
+						practice good
+						<ExternalLink href="https://github.com/fuzdev/fuz_template/issues/1">
+							dependency hygiene
+						</ExternalLink>
 					</li>
 				</ul>
 			</li>
 			<li>
-				In 2025, LLMs have serious vulnerabilities to attacks like <ExternalLink
-					href="https://wikipedia.org/wiki/Prompt_injection">prompt injection</ExternalLink
-				>, where they are unable to reliably discern instructions intended by the prompter from
-				adversarial instructions in the data. It's unclear if this is fixable but people are
-				definitely building sensitive systems with probabilistic components, and I don't want to see
-				Zzz, an AI UI, make dumb predictable errors with LLMs or be designed to encourage us to make
-				them. MCP's utility is high, but it can be used in <ExternalLink
+				In 2025, LLMs have serious vulnerabilities to attacks like
+				<ExternalLink href="https://wikipedia.org/wiki/Prompt_injection">
+					prompt injection
+				</ExternalLink>, where they are unable to reliably discern instructions intended by the
+				prompter from adversarial instructions in the data. It's unclear if this is fixable but
+				people are definitely building sensitive systems with probabilistic components, and I don't
+				want to see Zzz, an AI UI, make dumb predictable errors with LLMs or be designed to
+				encourage us to make them. MCP's utility is high, but it can be used in
+				<ExternalLink
 					href="https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/"
 					title="Simon Willison's Weblog: The lethal trifecta for AI agents: private data, untrusted content, and external communication"
-					>insecure ways</ExternalLink
-				> that I want to account for before integrating. Zzz will integrate LLMs into its own functionality
-				slowly and carefully -- currently the only in-app LLM integration is using a local model to name
-				new chats. There will be more, and we'll make sure you always have visibility into and control
-				over this behavior. (for example see the
-				<a href={resolve('/providers/ollama')}>Ollama controls</a>)
+				>
+					insecure ways
+				</ExternalLink>
+				that I want to account for before integrating. Zzz will integrate LLMs into its own
+				functionality slowly and carefully -- currently the only in-app LLM integration is using a
+				configured model to name new chats. There will be more, and we'll make sure you always have
+				visibility into and control over this behavior. (for example see the
+				<a href={resolve('/providers')}>providers</a>)
 			</li>
 			<li>
 				Security and privacy should be the expected default, so for example Zzz won't make calls to

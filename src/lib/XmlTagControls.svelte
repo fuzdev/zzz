@@ -1,13 +1,14 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
+	import { slide } from 'svelte/transition';
 
-	import type {PartUnion} from './part.svelte.js';
+	import type { PartUnion } from './part.svelte.ts';
 	import XmlAttributeEditor from './XmlAttributeEditor.svelte';
-	import {GLYPH_ADD, GLYPH_PLACEHOLDER} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import { format_placeholder } from './helpers.ts';
 
 	const {
-		part,
+		part
 	}: {
 		part: PartUnion;
 	} = $props();
@@ -38,9 +39,7 @@
 		<input
 			class="plain flex:1 sm"
 			class:dormant={!part.has_xml_tag}
-			placeholder={part.has_xml_tag
-				? GLYPH_PLACEHOLDER + ' ' + part.xml_tag_name_default
-				: undefined}
+			placeholder={part.has_xml_tag ? format_placeholder(part.xml_tag_name_default) : undefined}
 			bind:value={part.xml_tag_name}
 			bind:this={input_el}
 		/>
@@ -50,7 +49,7 @@
 			title="add xml attribute"
 			onclick={() => part.add_attribute()}
 		>
-			<Glyph glyph={GLYPH_ADD} />
+			<Svg data={icon_add} />
 		</button>
 	</div>
 

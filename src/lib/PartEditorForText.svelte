@@ -1,8 +1,8 @@
 <script lang="ts">
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
-	import type {ComponentProps} from 'svelte';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
+	import type { ComponentProps } from 'svelte';
 
-	import {TextPart} from './part.svelte.js';
+	import { TextPart } from './part.svelte.ts';
 	import ContentEditor from './ContentEditor.svelte';
 
 	const {

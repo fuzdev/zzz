@@ -1,23 +1,24 @@
 <script lang="ts">
 	import PendingButton from '@fuzdev/fuz_ui/PendingButton.svelte';
-	import {slide} from 'svelte/transition';
+	import { slide } from 'svelte/transition';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import ConfirmButton from './ConfirmButton.svelte';
-	import {Chat} from './chat.svelte.js';
+	import { Chat } from './chat.svelte.ts';
 	import ChatThread from './ChatThread.svelte';
-	import {GLYPH_ADD, GLYPH_PLACEHOLDER, GLYPH_REMOVE, GLYPH_SEND} from './glyphs.js';
+	import { icon_add, icon_remove, icon_send } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import { format_placeholder } from './helpers.ts';
 	import ContentEditor from './ContentEditor.svelte';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';
-	import Glyph from './Glyph.svelte';
 
 	const {
-		chat,
+		chat
 	}: {
 		chat: Chat;
 	} = $props();
 
-	let content_input: {focus: () => void} | undefined;
-	let pending = $state(false); // TODO refactor request state
+	let content_input: { focus: () => void } | undefined;
+	let pending = $state.raw(false); // TODO refactor request state
 
 	const send_to_all = async () => {
 		if (!count) return;
@@ -34,16 +35,16 @@
 
 	const count = $derived(chat.enabled_threads.length);
 
-	let show_model_picker = $state(false);
+	let show_model_picker = $state.raw(false);
 </script>
 
-<div class="column_fluid">
-	<div class="column_bg_1 p_sm">
+<div class="column-fluid">
+	<div class="column-bg-1 p_sm">
 		<ContentEditor
 			bind:this={content_input}
 			bind:content={chat.main_input}
 			token_count={chat.main_input_token_count}
-			placeholder="{GLYPH_PLACEHOLDER} to {count}"
+			placeholder={format_placeholder(`to ${count}`)}
 			show_actions
 			show_stats
 			focus_key={chat.id}
@@ -60,20 +61,22 @@
 				disabled={!count ? true : undefined}
 				class="plain"
 			>
-				<Glyph glyph={GLYPH_SEND} /> to {count}
+				<Svg data={icon_send} /> to {count}
 			</PendingButton>
 		</ContentEditor>
 
 		<div class="display:flex mt_lg">
 			<button type="button" class="plain" onclick={() => (show_model_picker = true)}>
-				<Glyph glyph={GLYPH_ADD} />&nbsp; add thread
+				<Svg data={icon_add} />&nbsp; add thread
 			</button>
 			<ConfirmButton
 				onconfirm={() => chat.remove_all_threads()}
 				position="right"
 				disabled={!count}
-				class="plain"><Glyph glyph={GLYPH_REMOVE} />&nbsp; remove all</ConfirmButton
+				class="plain"
 			>
+				<Svg data={icon_remove} />&nbsp; remove all
+			</ConfirmButton>
 		</div>
 		<ul class="threads unstyled mt_lg">
 			{#each chat.threads as thread (thread.id)}
@@ -81,8 +84,8 @@
 					<ChatThread
 						{thread}
 						onsend={(input) => chat.send_to_thread(thread.id, input)}
-						turns_attrs={{class: 'max_height_sm'}}
-						attrs={{class: 'p_md'}}
+						turns_attrs={{ class: 'max-height-sm' }}
+						attrs={{ class: 'p_md' }}
 					/>
 				</li>
 			{/each}

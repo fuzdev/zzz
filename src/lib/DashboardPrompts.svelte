@@ -1,32 +1,32 @@
 <script lang="ts">
-	import {fade} from 'svelte/transition';
+	import { fade } from 'svelte/transition';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
-	import {random_item} from '@fuzdev/fuz_util/random.js';
+	import { random_item } from '@fuzdev/fuz_util/random.ts';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import ConfirmButton from './ConfirmButton.svelte';
-	import Glyph from './Glyph.svelte';
 	import PartView from './PartView.svelte';
 	import {
-		GLYPH_PART,
-		GLYPH_ADD,
-		GLYPH_PROMPT,
-		GLYPH_REMOVE,
-		GLYPH_DELETE,
-		GLYPH_FILE,
-		GLYPH_SORT,
-	} from './glyphs.js';
-	import {frontend_context} from './frontend.svelte.js';
+		icon_add,
+		icon_delete,
+		icon_file,
+		icon_part,
+		icon_prompt,
+		icon_remove,
+		icon_sort
+	} from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import { frontend_context } from './frontend.svelte.ts';
 	import PromptStats from './PromptStats.svelte';
 	import PartList from './PartList.svelte';
 	import ContentPreview from './ContentPreview.svelte';
-	import {Part} from './part.svelte.js';
+	import { Part } from './part.svelte.ts';
 	import PromptContextmenu from './PromptContextmenu.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
 	import PromptList from './PromptList.svelte';
 	import EditableText from './EditableText.svelte';
 	import TutorialForDatabase from './TutorialForDatabase.svelte';
 	import TutorialForPrompts from './TutorialForPrompts.svelte';
-	import {DURATION_SM} from './helpers.js';
+	import { DURATION_SM } from './helpers.ts';
 
 	const app = frontend_context.get();
 
@@ -36,7 +36,7 @@
 
 	// TODO history of prompt states (opt in snapshots? also autosave?) using cell builtins/helpers, like file state but generalized for all cells? the json-based, set_json stuff
 
-	let show_diskfile_picker = $state(false);
+	let show_diskfile_picker = $state.raw(false);
 
 	// Create and add a Text part
 	const add_text_part = () => {
@@ -44,7 +44,7 @@
 
 		const part = Part.create(app, {
 			type: 'text',
-			content: '',
+			content: ''
 		});
 
 		app.prompts.selected.add_part(part);
@@ -66,7 +66,7 @@
 </script>
 
 <div class="display:flex width:100% height:100%">
-	<div class="column_fixed">
+	<div class="column-fixed">
 		<div class="p_sm pl_0">
 			<div class="row gap_xs2 mb_xs pl_xs2">
 				<button
@@ -74,7 +74,7 @@
 					class="plain width:100% justify-content:start"
 					onclick={create_prompt}
 				>
-					<Glyph glyph={GLYPH_ADD} />&nbsp; new prompt
+					<Svg data={icon_add} />&nbsp; new prompt
 				</button>
 				{#if app.prompts.items.size > 1}
 					<button
@@ -84,7 +84,7 @@
 						title="toggle sort controls"
 						onclick={() => app.prompts.toggle_sort_controls()}
 					>
-						<Glyph glyph={GLYPH_SORT} />
+						<Svg data={icon_sort} />
 					</button>
 				{/if}
 			</div>
@@ -96,10 +96,10 @@
 
 	{#if app.prompts.selected}
 		<PromptContextmenu prompt={app.prompts.selected}>
-			<div class="column_fixed pr_sm">
-				<section class="column_section">
+			<div class="column-fixed pr_sm">
+				<section class="column-section">
 					<div class="font_size_lg display:flex align-items:center">
-						<Glyph glyph={GLYPH_PROMPT} />
+						<Svg data={icon_prompt} />
 						<EditableText bind:value={app.prompts.selected.name} />
 					</div>
 					<div class="column">
@@ -117,16 +117,16 @@
 						<ConfirmButton
 							onconfirm={() => app.prompts.selected && app.prompts.remove(app.prompts.selected)}
 							title="delete prompt {'"' + app.prompts.selected.name + '"'}"
-							class="plain icon_button"
+							class="plain icon-button"
 						>
-							<Glyph glyph={GLYPH_DELETE} />
-							{#snippet popover_button_content()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
+							<Svg data={icon_delete} />
+							{#snippet popover_button_content()}<Svg data={icon_delete} />{/snippet}
 						</ConfirmButton>
 					</div>
 					<ContentPreview content={app.prompts.selected.content} />
 				</section>
-				<section class="column_section">
-					<header class="font_size_lg mb_lg"><Glyph glyph={GLYPH_PART} /> parts</header>
+				<section class="column-section">
+					<header class="font_size_lg mb_lg"><Svg data={icon_part} /> parts</header>
 					<PartList
 						parts={app.prompts.selected.parts}
 						prompt={app.prompts.selected}
@@ -137,13 +137,13 @@
 				</section>
 			</div>
 
-			<div class="column_fluid">
-				<div class="column_bg_1 column gap_md p_sm">
+			<div class="column-fluid">
+				<div class="column-bg-1 column gap_md p_sm">
 					<div class="display:flex justify-content:space-between">
 						<div class="display:flex flex-wrap:wrap gap_xs">
 							<button type="button" class="plain font_size_sm" onclick={add_text_part}>
 								<div class="row white-space:nowrap">
-									<Glyph glyph={GLYPH_PART} />&nbsp; add text
+									<Svg data={icon_part} />&nbsp; add text
 								</div>
 							</button>
 							<button
@@ -153,7 +153,7 @@
 								disabled={!app.diskfiles.items.size}
 							>
 								<div class="row white-space:nowrap">
-									<Glyph glyph={GLYPH_FILE} />&nbsp; add file
+									<Svg data={icon_file} />&nbsp; add file
 								</div>
 							</button>
 							<ConfirmButton
@@ -162,7 +162,7 @@
 								class="plain font_size_sm"
 							>
 								<div class="row white-space:nowrap">
-									<Glyph glyph={GLYPH_REMOVE} />&nbsp; remove all
+									<Svg data={icon_remove} />&nbsp; remove all
 								</div>
 							</ConfirmButton>
 						</div>
@@ -172,7 +172,7 @@
 						style:grid-template-columns="repeat(auto-fill, minmax(300px, 1fr))"
 					>
 						{#each app.prompts.selected.parts as part (part.id)}
-							<li in:fade={{duration: DURATION_SM}}>
+							<li in:fade={{ duration: DURATION_SM }}>
 								<!-- the extra wrapper makes the grid items not stretch vertically -->
 								<div class="shade_00 border_radius_xs p_sm">
 									<PartView {part} />
@@ -184,30 +184,30 @@
 			</div>
 		</PromptContextmenu>
 	{:else if app.prompts.items.size}
-		<div class="box height:100% flex:1" in:fade={{duration: DURATION_SM}}>
+		<div class="box height:100% flex:1" in:fade={{ duration: DURATION_SM }}>
 			<p>
-				select a prompt from the list or <button
-					type="button"
-					class="inline color_d"
-					onclick={create_prompt}>create one</button
-				>
+				select a prompt from the list or
+				<button type="button" class="inline palette_d" onclick={create_prompt}>create one</button>
 				or
 				<button
 					type="button"
-					class="inline color_f"
+					class="inline palette_f"
 					onclick={async () => {
 						const prompt = random_item(app.prompts.ordered_items);
 						await app.prompts.navigate_to(prompt.id);
-					}}>go fish</button
-				>?
+					}}
+				>
+					go fish
+				</button>?
 			</p>
 		</div>
 	{:else}
-		<div class="box height:100% flex:1" in:fade={{duration: DURATION_SM}}>
+		<div class="box height:100% flex:1" in:fade={{ duration: DURATION_SM }}>
 			<p>
-				no prompts yet, <button type="button" class="inline color_d" onclick={create_prompt}
-					>create a new prompt</button
-				>?
+				no prompts yet,
+				<button type="button" class="inline palette_d" onclick={create_prompt}>
+					create a new prompt
+				</button>?
 			</p>
 		</div>
 	{/if}
@@ -220,7 +220,7 @@
 
 		const part = Part.create(app, {
 			type: 'diskfile',
-			path: diskfile.path,
+			path: diskfile.path
 		});
 
 		app.prompts.selected.add_part(part);

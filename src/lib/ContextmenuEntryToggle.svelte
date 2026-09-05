@@ -1,11 +1,11 @@
 <script lang="ts">
-	import type {ComponentProps, Snippet} from 'svelte';
+	import type { ComponentProps, Snippet } from 'svelte';
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
-	import {DEV} from 'esm-env';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
+	import { DEV } from 'esm-env';
 
-	import {GLYPH_CHECKMARK} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import { icon_checkmark } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	let {
 		enabled = $bindable(),
@@ -22,7 +22,11 @@
 		children?: Snippet<[enabled: boolean]> | undefined;
 	} = $props();
 
-	if (DEV && label && children) throw new Error('cannot provide both label and children');
+	if (DEV) {
+		$effect.pre(() => {
+			if (label && children) throw new Error('cannot provide both label and children');
+		});
+	}
 
 	const final_children = $derived(children ?? children_default);
 </script>
@@ -37,6 +41,5 @@
 {/snippet}
 
 {#snippet icon_default()}
-	<span class:dormant={enabled} class:font_size_xs={enabled}><Glyph glyph={GLYPH_CHECKMARK} /></span
-	>
+	<span class:dormant={enabled} class:font_size_xs={enabled}><Svg data={icon_checkmark} /></span>
 {/snippet}

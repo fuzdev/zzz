@@ -1,16 +1,16 @@
 <script lang="ts">
-	import {DEV} from 'esm-env';
-	import {resolve} from '$app/paths';
-	import {format_url} from '@fuzdev/fuz_util/url.js';
+	import { DEV } from 'esm-env';
+	import { resolve } from '$app/paths';
+	import { format_url } from '@fuzdev/fuz_util/url.ts';
 
-	import {library_context} from './library.js';
+	import { library_context } from './library.ts';
 	import ExternalLink from './ExternalLink.svelte';
 
 	const library = library_context.get();
 </script>
 
 <div>
-	<p class="font_family_mono">{library.name}@{library.package_json.version}</p>
+	<p class="font_family_mono">{library.name}@{library.pkg_json.version}</p>
 	<p class="font_family_mono">
 		DEV: {DEV + ''}
 	</p>

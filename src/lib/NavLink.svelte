@@ -1,10 +1,10 @@
 <script lang="ts">
-	import {page} from '$app/state';
-	import type {SvelteHTMLElements} from 'svelte/elements';
-	import type {Snippet} from 'svelte';
-	import {resolve} from '$app/paths';
-	import {strip_end} from '@fuzdev/fuz_util/string.js';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import { page } from '$app/state';
+	import type { SvelteHTMLElements } from 'svelte/elements';
+	import type { Snippet } from 'svelte';
+	import { resolve } from '$app/paths';
+	import { strip_end } from '@fuzdev/fuz_util/string.ts';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 
 	const {
 		href,
@@ -27,21 +27,27 @@
 		show_selected_descendent &&
 			(selected || href_normalized === resolve('/')
 				? false
-				: (pathname_normalized + '/').startsWith(href + '/')),
+				: (pathname_normalized + '/').startsWith(href + '/'))
 	);
 
 	// TODO link styles should have focus always be blue, and active should be thicker
 </script>
 
-<!-- 
+<!--
 	transition:slide -->
-<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-<a {...rest} {href} class="nav_link {rest.class}" class:selected class:selected_descendent
-	>{@render children(selected, selected_descendent)}</a
+<a
+	{...rest}
+	// eslint-disable-next-line svelte/no-navigation-without-resolve
+	{href}
+	class="nav-link {rest.class}"
+	class:selected
+	class:selected-descendent={selected_descendent}
 >
+	{@render children(selected, selected_descendent)}
+</a>
 
 <style>
-	.nav_link {
+	.nav-link {
 		display: flex;
 		align-items: center;
 		padding: var(--space_xs2) var(--space_sm);
@@ -51,17 +57,17 @@
 		font-weight: 600;
 		white-space: nowrap;
 	}
-	.nav_link:hover {
+	.nav-link:hover {
 		border-color: var(--border_color_50);
 	}
-	.nav_link:active {
-		border-color: var(--color_a_50);
+	.nav-link:active {
+		border-color: var(--palette_a_50);
 	}
-	.nav_link.selected {
-		border-color: var(--color_a_50);
-		color: var(--color_a_60);
+	.nav-link.selected {
+		border-color: var(--palette_a_50);
+		color: var(--palette_a_60);
 	}
-	.nav_link.selected_descendent {
+	.nav-link.selected-descendent {
 		border-color: var(--border_color_50);
 	}
 </style>

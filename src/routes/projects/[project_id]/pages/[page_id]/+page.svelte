@@ -1,18 +1,19 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {goto} from '$app/navigation';
-	import {resolve} from '$app/paths';
-	import Mdz from '@fuzdev/fuz_ui/Mdz.svelte';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import Mdz from '@fuzdev/mdz/Mdz.svelte';
 
-	import {projects_context} from '$routes/projects/projects.svelte.js';
+	import { projects_context } from '$routes/projects/projects.svelte.ts';
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import PagesSidebar from '$routes/projects/PagesSidebar.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
-	import {GLYPH_DELETE, GLYPH_PREVIEW, GLYPH_PLACEHOLDER} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
-	import {frontend_context} from '$lib/frontend.svelte.js';
+	import { icon_delete, icon_preview } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import { format_placeholder } from '$lib/helpers.ts';
+	import { frontend_context } from '$lib/frontend.svelte.ts';
 
 	const projects = projects_context.get();
 	const app = frontend_context.get();
@@ -20,7 +21,7 @@
 	const page_viewmodel = $derived(projects.current_page_viewmodel);
 
 	// Preview mode state
-	let preview_mode = $state(false);
+	let preview_mode = $state.raw(false);
 
 	// Toggle preview mode
 	const toggle_preview = () => {
@@ -48,24 +49,24 @@
 </script>
 
 {#if preview_mode}
-	<div class="preview_fullscreen" class:offset_for_sidebar={app.ui.show_sidebar}>
-		<div class="markdown_preview p_lg">
+	<div class="preview-fullscreen" class:offset-for-sidebar={app.ui.show_sidebar}>
+		<div class="markdown-preview p_lg">
 			<Mdz content={page_viewmodel?.content ?? ''} />
 		</div>
 
 		<!-- preview toggle button in top-right corner -->
 		<button
 			type="button"
-			class="position:fixed top:0 right:0 icon_button plain border_radius_0"
+			class="position:fixed top:0 right:0 icon-button plain border-radius:0"
 			aria-label="close preview"
 			title="close preview"
 			onclick={toggle_preview}
 		>
-			<Glyph glyph={GLYPH_PREVIEW} />
+			<Svg data={icon_preview} />
 		</button>
 	</div>
 {:else}
-	<div class="editor_layout">
+	<div class="editor-layout">
 		<!-- TODO @many refactor for better component instance stability for e.g. transitions -->
 		<ProjectSidebar />
 		{#if project}
@@ -73,7 +74,7 @@
 			<PagesSidebar />
 		{/if}
 
-		<div class="editor_content">
+		<div class="editor-content">
 			{#if page_viewmodel && project}
 				<div class="height:100% column p_lg">
 					<div>
@@ -88,20 +89,20 @@
 								<button
 									type="button"
 									onclick={() => page_viewmodel.save_page()}
-									class="color_a"
+									class="palette_a"
 									disabled={!page_viewmodel.has_changes}
 								>
 									save
 								</button>
 
 								<button type="button" onclick={toggle_preview} class="plain" title="Preview page">
-									<Glyph glyph={GLYPH_PREVIEW} />&nbsp; preview
+									<Svg data={icon_preview} />&nbsp; preview
 								</button>
 							</div>
 
-							<button type="button" onclick={delete_page} class="color_c"
-								><Glyph glyph={GLYPH_DELETE} />&nbsp; delete</button
-							>
+							<button type="button" onclick={delete_page} class="palette_c">
+								<Svg data={icon_delete} />&nbsp; delete
+							</button>
 						</div>
 					</div>
 
@@ -132,17 +133,16 @@
 						</div>
 					</div>
 
-					<div class="editor_area">
-						<div class="panel p_md content_area">
+					<div class="editor-area">
+						<div class="panel p_md content-area">
 							<textarea
 								bind:value={page_viewmodel.content}
-								class="width:100% height:100% markdown_editor"
-								placeholder="{GLYPH_PLACEHOLDER} markup"
-							></textarea>
+								class="width:100% height:100% markdown-editor"
+								placeholder={format_placeholder('markup')}></textarea>
 						</div>
 
-						<div class="panel p_md preview_area">
-							<div class="markdown_preview"><Mdz content={page_viewmodel.content} /></div>
+						<div class="panel p_md preview-area">
+							<div class="markdown-preview"><Mdz content={page_viewmodel.content} /></div>
 						</div>
 					</div>
 				</div>
@@ -154,31 +154,31 @@
 {/if}
 
 <style>
-	.editor_layout {
+	.editor-layout {
 		display: flex;
 		height: 100%;
 		overflow: hidden;
 	}
 
-	.editor_content {
+	.editor-content {
 		height: 100%;
 		flex: 1;
 		overflow: auto;
 	}
 
-	.editor_area {
+	.editor-area {
 		display: flex;
 		gap: var(--font_size_md);
 		flex: 1;
 	}
 
-	.content_area,
-	.preview_area {
+	.content-area,
+	.preview-area {
 		width: 50%;
 		overflow: auto;
 	}
 
-	.markdown_editor {
+	.markdown-editor {
 		width: 100%;
 		height: 100%;
 		resize: none;
@@ -191,11 +191,11 @@
 		outline: none;
 	}
 
-	.markdown_preview {
+	.markdown-preview {
 		padding: var(--font_size_xs);
 	}
 
-	.preview_fullscreen {
+	.preview-fullscreen {
 		position: fixed;
 		top: 0;
 		left: 0;
@@ -205,7 +205,7 @@
 		z-index: 1000;
 		overflow: auto;
 	}
-	.preview_fullscreen.offset_for_sidebar {
+	.preview-fullscreen.offset-for-sidebar {
 		padding-left: var(--sidebar_width);
 	}
 </style>

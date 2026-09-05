@@ -1,9 +1,9 @@
 <script lang="ts">
-	import type {PartUnion} from './part.svelte.js';
+	import type { PartUnion } from './part.svelte.ts';
 	import ContentStats from './ContentStats.svelte';
 
 	const {
-		part,
+		part
 	}: {
 		part: PartUnion;
 	} = $props();

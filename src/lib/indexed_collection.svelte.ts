@@ -1,12 +1,12 @@
 // @slop Claude Sonnet 3.7
 
-import {SvelteMap} from 'svelte/reactivity';
-import type {z} from 'zod';
-import {DEV} from 'esm-env';
-import {EMPTY_ARRAY} from '@fuzdev/fuz_util/array.js';
+import { SvelteMap } from 'svelte/reactivity';
+import type { z } from 'zod';
+import { DEV } from 'esm-env';
+import { EMPTY_ARRAY } from '@fuzdev/fuz_util/array.ts';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {Uuid} from './zod_helpers.js';
-import type {IndexedItem} from './indexed_collection_helpers.svelte.js';
+import type { IndexedItem } from './indexed_collection_helpers.svelte.ts';
 
 // TODO @many rethink the indexed collection API -
 // particularly type safety, performance, and integration with Svelte patterns -
@@ -53,7 +53,7 @@ export interface IndexedCollectionOptions<
 	TKeySingle extends string = string,
 	TKeyMulti extends string = string,
 	TKeyDerived extends string = string,
-	TKeyDynamic extends string = string,
+	TKeyDynamic extends string = string
 > {
 	indexes?: Array<IndexDefinition<T>>;
 	initial_items?: Array<T>;
@@ -70,18 +70,18 @@ export interface IndexedCollectionOptions<
  * A helper class for managing collections with incremental updates,
  * efficient querying, and automatic index maintenance.
  *
- * @param T - The type of items stored in the collection
- * @param TKeySingle - Type-safe keys for single value indexes
- * @param TKeyMulti - Type-safe keys for multi value indexes
- * @param TKeyDerived - Type-safe keys for derived indexes
- * @param TKeyDynamic - Type-safe keys for dynamic function indexes
+ * @param T - the type of items stored in the collection
+ * @param TKeySingle - type-safe keys for single value indexes
+ * @param TKeyMulti - type-safe keys for multi value indexes
+ * @param TKeyDerived - type-safe keys for derived indexes
+ * @param TKeyDynamic - type-safe keys for dynamic function indexes
  */
 export class IndexedCollection<
 	T extends IndexedItem,
 	TKeySingle extends string = string,
 	TKeyMulti extends string = string,
 	TKeyDerived extends string = string,
-	TKeyDynamic extends string = string,
+	TKeyDynamic extends string = string
 > {
 	/** The main source of truth, the full collection keyed by `Uuid`. */
 	readonly by_id: SvelteMap<Uuid, T> = new SvelteMap();
@@ -97,7 +97,7 @@ export class IndexedCollection<
 	// need to ensure we have the right lazy perf characteristics
 	// and currently we eagerly compute indexes
 	/** Stores all index values in a reactive object. */
-	readonly indexes: Record<string, any> = $state({}); // TODO should this be `$state.raw`? I dont think we want to apply deep reactivity to the index values
+	readonly indexes: Record<string, any> = $state({}); // $state() because index properties are written in place
 
 	// Map of index types for type safety and runtime checks
 	readonly #index_types: Map<string, IndexType> = new Map();
@@ -109,7 +109,7 @@ export class IndexedCollection<
 	readonly #validate: boolean;
 
 	constructor(
-		options?: IndexedCollectionOptions<T, TKeySingle, TKeyMulti, TKeyDerived, TKeyDynamic>,
+		options?: IndexedCollectionOptions<T, TKeySingle, TKeyMulti, TKeyDerived, TKeyDynamic>
 	) {
 		// Set validation flag (default to false)
 		this.#validate = options?.validate ?? false;
@@ -134,7 +134,7 @@ export class IndexedCollection<
 					Array.isArray(
 						[...this.indexes[def.key].values()].length > 0
 							? [...this.indexes[def.key].values()][0]
-							: [],
+							: []
 					)
 				) {
 					this.#index_types.set(def.key, 'multi');
@@ -220,8 +220,8 @@ export class IndexedCollection<
 
 	/**
 	 * Ensures that the index exists and is of the expected type.
-	 * @param key The index key to check
-	 * @param expected_type The expected `IndexType` of the index
+	 * @param key - the index key to check
+	 * @param expected_type - the expected `IndexType` of the index
 	 * @throws Error if index doesn't exist or has wrong type
 	 */
 	#ensure_index(key: string, expected_type: IndexType): void {
@@ -233,7 +233,7 @@ export class IndexedCollection<
 		const actual_type = this.#index_types.get(key);
 		if (actual_type !== expected_type) {
 			throw new Error(
-				`Index type mismatch: ${key} is a ${actual_type || 'unknown'} index, not a ${expected_type} index`,
+				`Index type mismatch: ${key} is a ${actual_type || 'unknown'} index, not a ${expected_type} index`
 			);
 		}
 	}
@@ -245,7 +245,7 @@ export class IndexedCollection<
 	 */
 	query<TResult = any, TQuery = any>(
 		key: TKeySingle | TKeyMulti | TKeyDerived | TKeyDynamic,
-		query: TQuery,
+		query: TQuery
 	): TResult {
 		const index = this.indexes[key];
 		if (!index) return undefined as unknown as TResult;
@@ -277,14 +277,14 @@ export class IndexedCollection<
 	 * Add an item to the collection and update all indexes.
 	 */
 	add(item: T): void {
-		const {by_id} = this;
+		const { by_id } = this;
 
 		if (by_id.has(item.id)) {
 			if (DEV)
 				console.error(
 					'item already exists in collection with id: ' + item.id,
 					item,
-					by_id.get(item.id),
+					by_id.get(item.id)
 				);
 			return;
 		}
@@ -296,18 +296,13 @@ export class IndexedCollection<
 	}
 
 	/**
-	 * Add multiple items to the collection at once with improved performance.
+	 * Add multiple items to the collection at once.
 	 */
 	add_many(items: Array<T>): void {
 		if (!items.length) return;
 
-		// Add all items to the collection
 		for (const item of items) {
-			// Update primary id index
-			this.by_id.set(item.id, item);
-
-			// Update all other indexes
-			this.#update_indexes_for_added_item(item); // TODO update afterwards instead? in a batch?
+			this.add(item);
 		}
 	}
 

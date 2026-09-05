@@ -1,12 +1,13 @@
 // @slop Claude Opus 4
 
-import {z} from 'zod';
-import {goto} from '$app/navigation';
+import { z } from 'zod';
+import { goto } from '$app/navigation';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import {get_datetime_now, type Uuid} from '$lib/zod_helpers.js';
-import {Page} from '$routes/projects/page.svelte.js';
-import type {Projects} from '$routes/projects/projects.svelte.js';
-import {resolve} from '$app/paths';
+import { Page } from './page.svelte.ts';
+import type { Projects } from './projects.svelte.ts';
+import { resolve } from '$app/paths';
 
 export interface PageViewmodelOptions {
 	projects: Projects;
@@ -86,12 +87,12 @@ const render_markdown = (text: string): string => {
 export class PageViewmodel {
 	readonly projects: Projects;
 
-	project_id: Uuid = $state()!;
-	page_id: Uuid = $state()!;
+	project_id: Uuid = $state.raw()!;
+	page_id: Uuid = $state.raw()!;
 
-	title: string = $state()!;
-	path: string = $state()!;
-	content: string = $state()!;
+	title: string = $state.raw()!;
+	path: string = $state.raw()!;
+	content: string = $state.raw()!;
 
 	/** Whether the form has unsaved changes. */
 	readonly has_changes = $derived.by(
@@ -99,7 +100,7 @@ export class PageViewmodel {
 			this.current_page &&
 			(this.title !== this.current_page.title ||
 				this.path !== this.current_page.path ||
-				this.content !== this.current_page.content),
+				this.content !== this.current_page.content)
 	);
 
 	/** The current project. */
@@ -107,7 +108,7 @@ export class PageViewmodel {
 
 	/** The current page. */
 	readonly current_page = $derived.by(() => {
-		const {page_id} = this;
+		const { page_id } = this;
 		return this.project?.pages.find((p) => p.id === page_id) || null;
 	});
 
@@ -166,8 +167,8 @@ export class PageViewmodel {
 					path: formatted_path,
 					content: this.content,
 					created: now,
-					updated: now,
-				},
+					updated: now
+				}
 			});
 
 			this.projects.add_page(this.project_id, page);

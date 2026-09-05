@@ -1,74 +1,48 @@
 <script lang="ts">
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
-	import {onMount} from 'svelte';
+	import { onMount } from 'svelte';
 
-	import {frontend_context} from './frontend.svelte.js';
-	import Glyph from './Glyph.svelte';
+	import { frontend_context } from './frontend.svelte.ts';
 	import ProviderLink from './ProviderLink.svelte';
-	import {GLYPH_PROVIDER} from './glyphs.js';
+	import { icon_provider } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 	import ExternalLink from './ExternalLink.svelte';
 
 	const {
 		provider_name,
-		show_info = true,
+		show_info = true
 	}: {
 		provider_name: 'claude' | 'chatgpt' | 'gemini';
 		show_info?: boolean;
 	} = $props();
 
 	const app = frontend_context.get();
-	const {capabilities} = app;
+	const { capabilities } = app;
 
-	const capability = $derived(capabilities[provider_name]);
+	const capability = $derived(capabilities.providers[provider_name]);
 	const provider = $derived(app.providers.find_by_name(provider_name));
 
-	let api_key_input = $state('');
-	let updating = $state(false);
-	let checking = $state(false);
+	let checking = $state.raw(false);
 
-	const api_key_input_normalized = $derived(api_key_input.trim());
+	// Provider keys come from the server's environment, not the browser — see
+	// the `env_var_name` note below. This component reads status only.
+	const env_var_name = $derived(
+		provider_name === 'claude'
+			? 'SECRET_ANTHROPIC_API_KEY'
+			: provider_name === 'chatgpt'
+				? 'SECRET_OPENAI_API_KEY'
+				: 'SECRET_GOOGLE_API_KEY'
+	);
 
 	onMount(() => {
-		// TODO use a unified method
-		void capabilities[`init_${provider_name}_check` as const]();
+		void capabilities.providers[provider_name].init_check();
 	});
-
-	const update_api_key = async () => {
-		if (!api_key_input_normalized) return;
-
-		updating = true;
-		try {
-			await app.api.provider_update_api_key({
-				provider_name,
-				api_key: api_key_input_normalized,
-			});
-			api_key_input = '';
-		} catch (error) {
-			console.error(`Failed to update ${provider_name} API key:`, error);
-		} finally {
-			updating = false;
-		}
-	};
-
-	const delete_api_key = async () => {
-		updating = true;
-		try {
-			await app.api.provider_update_api_key({
-				provider_name,
-				api_key: '',
-			});
-		} catch (error) {
-			console.error(`Failed to delete ${provider_name} API key:`, error);
-		} finally {
-			updating = false;
-		}
-	};
 
 	const reload_status = async () => {
 		checking = true;
 		try {
-			await app.api.provider_load_status({provider_name});
+			await app.api.provider_load_status({ provider_name });
 		} catch (error) {
 			console.error(`Failed to check ${provider_name} connection:`, error);
 		} finally {
@@ -86,10 +60,10 @@
 					style:display="display:flex !important"
 					style:align-items="flex-start !important"
 					style:font-weight="400 !important"
-					class:color_b={capability.status === 'success'}
-					class:color_c={capability.status === 'failure'}
-					class:color_d={capability.status === 'pending' || checking}
-					class:color_e={capability.status === 'initial'}
+					class:palette_b={capability.status === 'success'}
+					class:palette_c={capability.status === 'failure'}
+					class:palette_d={capability.status === 'pending' || checking}
+					class:palette_e={capability.status === 'initial'}
 				>
 					<div class="column justify-content:center gap_xs pl_md" style:min-height="80px">
 						<div class="font_size_xl">
@@ -120,43 +94,17 @@
 				</div>
 				<!-- TODO add actual API connection test (make minimal API call to verify key works) -->
 				<fieldset>
-					<input
-						type="password"
-						bind:value={api_key_input}
-						placeholder="enter new API key"
-						class="mb_sm"
-						disabled={updating || !capabilities.backend_available}
-					/>
+					<p class="font_size_sm">
+						set <code>{env_var_name}</code> in the server's environment and restart
+					</p>
 					<div class="display:flex justify-content:space-between gap_xs">
 						<button
 							type="button"
 							class="flex:1"
-							disabled={!api_key_input_normalized || updating || !capabilities.backend_available}
-							onclick={update_api_key}
-						>
-							{#if updating}
-								updating <PendingAnimation inline />
-							{:else}
-								update key
-							{/if}
-						</button>
-						<button
-							type="button"
-							class="flex:1"
-							disabled={checking || updating || !capabilities.backend_available}
+							disabled={checking || !capabilities.backend_available}
 							onclick={reload_status}
 						>
 							reload
-						</button>
-						<button
-							type="button"
-							class="flex:1"
-							disabled={capability.status !== 'success' ||
-								updating ||
-								!capabilities.backend_available}
-							onclick={delete_api_key}
-						>
-							delete key
 						</button>
 					</div>
 				</fieldset>
@@ -165,17 +113,19 @@
 			<div class="flex:1">
 				{#if show_info}
 					<div>
-						<ProviderLink {provider}
-							><span class="white-space:nowrap"
-								><Glyph glyph={GLYPH_PROVIDER} />
-								{provider.title}</span
-							> provider</ProviderLink
-						>
+						<ProviderLink {provider}>
+							<span class="white-space:nowrap">
+								<Svg data={icon_provider} />
+								{provider.title}
+							</span> provider
+						</ProviderLink>
 					</div>
 					<ul>
-						<li>
-							<ExternalLink href={provider.api_key_url!}>get API key</ExternalLink>
-						</li>
+						{#if provider.api_key_url}
+							<li>
+								<ExternalLink href={provider.api_key_url}>get API key</ExternalLink>
+							</li>
+						{/if}
 						<li>
 							<ExternalLink href={provider.homepage}>homepage</ExternalLink>
 						</li>
@@ -188,9 +138,9 @@
 		</div>
 	{:else}
 		<div class="py_sm">
-			<ErrorMessage
-				><small class="font_family_mono">provider "{provider_name}" not found</small></ErrorMessage
-			>
+			<ErrorMessage>
+				<small class="font_family_mono">provider "{provider_name}" not found</small>
+			</ErrorMessage>
 		</div>
 	{/if}
 </div>

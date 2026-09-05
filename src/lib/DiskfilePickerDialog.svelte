@@ -1,13 +1,13 @@
 <script lang="ts">
-	import type {ComponentProps} from 'svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type { ComponentProps } from 'svelte';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
 
 	import PickerDialog from './PickerDialog.svelte';
-	import {frontend_context} from './frontend.svelte.js';
-	import type {Diskfile} from './diskfile.svelte.js';
-	import type {Uuid} from './zod_helpers.js';
-	import {sort_by_text, sort_by_numeric} from './sortable.svelte.js';
+	import { frontend_context } from './frontend.svelte.ts';
+	import type { Diskfile } from './diskfile.svelte.ts';
+	import { sort_by_text, sort_by_numeric } from './sortable.svelte.ts';
 	import DiskfileListitem from './DiskfileListitem.svelte';
 
 	let {
@@ -16,7 +16,7 @@
 		filter,
 		exclude_ids,
 		selected_ids,
-		dialog_props,
+		dialog_props
 	}: {
 		onpick: (diskfile: Diskfile | undefined) => boolean | void;
 		show?: boolean | undefined;
@@ -27,7 +27,7 @@
 	} = $props();
 
 	const app = frontend_context.get();
-	const {diskfiles} = app;
+	const { diskfiles } = app;
 </script>
 
 <PickerDialog
@@ -46,7 +46,7 @@
 		sort_by_numeric('updated_recently', 'recently updated', 'updated_date', 'desc'),
 		sort_by_numeric('updated_oldest', 'least recently updated', 'updated_date', 'asc'),
 		sort_by_numeric<Diskfile>('font_size_largest', 'largest first', 'content_length', 'desc'),
-		sort_by_numeric<Diskfile>('font_size_smallest', 'smallest first', 'content_length', 'asc'),
+		sort_by_numeric<Diskfile>('font_size_smallest', 'smallest first', 'content_length', 'asc')
 	]}
 	sort_key_default="path_asc"
 	show_sort_controls

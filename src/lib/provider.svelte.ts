@@ -1,9 +1,9 @@
-import {z} from 'zod';
-import {Cell, type CellOptions} from './cell.svelte.js';
+import { z } from 'zod';
+import { Cell, type CellOptions } from './cell.svelte.ts';
 
-import type {Model} from './model.svelte.js';
-import {ProviderName, type ProviderStatus} from './provider_types.js';
-import {CellJson} from './cell_types.js';
+import type { Model } from './model.svelte.ts';
+import { ProviderName, type ProviderStatus } from './provider_types.ts';
+import { CellJson } from './cell_types.ts';
 
 // TODO optional/defaults?
 export const ProviderJson = CellJson.extend({
@@ -13,20 +13,20 @@ export const ProviderJson = CellJson.extend({
 	url: z.string(),
 	homepage: z.string(), // TODO name? see `url` too
 	company: z.string(),
-	api_key_url: z.string().nullable(),
-}).meta({cell_class_name: 'Provider'});
+	api_key_url: z.string().nullable()
+}).meta({ cell_class_name: 'Provider' });
 export type ProviderJson = z.infer<typeof ProviderJson>;
 export type ProviderJsonInput = z.input<typeof ProviderJson>;
 
-export interface ProviderOptions extends CellOptions<typeof ProviderJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
+export interface ProviderOptions extends CellOptions<typeof ProviderJson> {}
 
 export class Provider extends Cell<typeof ProviderJson> {
-	name: ProviderName = $state()!;
-	title: string = $state()!;
-	url: string = $state()!; // TODO @many should these be optional? or just default to `''`? need init patterns
-	homepage: string = $state()!; // TODO @many should these be optional? or just default to `''`? need init patterns
-	company: string = $state()!;
-	api_key_url: string | null = $state()!;
+	name: ProviderName = $state.raw()!;
+	title: string = $state.raw()!;
+	url: string = $state.raw()!; // TODO @many should these be optional? or just default to `''`? need init patterns
+	homepage: string = $state.raw()!; // TODO @many should these be optional? or just default to `''`? need init patterns
+	company: string = $state.raw()!;
+	api_key_url: string | null = $state.raw()!;
 
 	readonly models: Array<Model> = $derived(this.app.models.items.where('provider_name', this.name));
 

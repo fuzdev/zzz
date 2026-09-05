@@ -1,20 +1,20 @@
 <script lang="ts">
-	import type {SvelteHTMLElements} from 'svelte/elements';
-	import type {Snippet} from 'svelte';
+	import type { SvelteHTMLElements } from 'svelte/elements';
+	import type { Snippet } from 'svelte';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 	import PasteFromClipboard from '@fuzdev/fuz_ui/PasteFromClipboard.svelte';
-	import {swallow} from '@fuzdev/fuz_util/dom.js';
+	import { swallow } from '@fuzdev/fuz_util/dom.ts';
 
-	import {estimate_token_count} from './helpers.js';
+	import { estimate_token_count, format_placeholder } from './helpers.ts';
 	import ContentStats from './ContentStats.svelte';
 	import ClearRestoreButton from './ClearRestoreButton.svelte';
-	import {GLYPH_PASTE, GLYPH_PLACEHOLDER} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import { icon_paste } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	let {
 		content = $bindable(),
 		token_count: token_count_prop,
-		placeholder = GLYPH_PLACEHOLDER,
+		placeholder = format_placeholder(),
 		readonly = false,
 		show_stats = false,
 		show_actions = false,
@@ -24,7 +24,7 @@
 		attrs, // TODO probably extend base props with SvelteHTMLElements['textarea'] and delete this
 		after,
 		children,
-		onsave,
+		onsave
 	}: {
 		content: string; // TODO maybe rename to value? rethink `ContentEditor` in general when we switch to CodeMirror
 		/** Estimated if not provided and `show_stats` is true. */
@@ -43,7 +43,7 @@
 		onsave?: ((value: string) => void) | undefined;
 	} = $props();
 
-	let textarea_el: HTMLTextAreaElement | undefined = $state();
+	let textarea_el: HTMLTextAreaElement | undefined = $state.raw();
 
 	const token_count = $derived(token_count_prop ?? estimate_token_count(content));
 
@@ -84,8 +84,7 @@
 							pending_element_to_focus_key = null;
 							focus();
 						}
-					}}
-		></textarea>
+					}}></textarea>
 		{@render children?.()}
 	</div>
 
@@ -104,10 +103,10 @@
 					content = new_content;
 					focus();
 				}}
-				class="plain icon_button font_size_lg"
+				class="plain icon-button font_size_lg"
 			>
 				<!-- TODO should be default -->
-				<Glyph glyph={GLYPH_PASTE} />
+				<Svg data={icon_paste} />
 			</PasteFromClipboard>
 			<ClearRestoreButton
 				bind:value={

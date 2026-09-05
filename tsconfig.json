@@ -24,6 +24,7 @@
 		"allowJs": true,
 		"erasableSyntaxOnly": true,
 		"allowImportingTsExtensions": true,
+		"rewriteRelativeImportExtensions": false,
 		"checkJs": true
 	},
 	"include": [
@@ -34,6 +35,7 @@
 		".svelte-kit/types/**/$types.d.ts",
 		"src/**/*.js",
 		"src/**/*.ts",
-		"src/**/*.svelte"
+		"src/**/*.svelte",
+		"test/**/*.ts"
 	]
 }

@@ -1,56 +1,52 @@
 <script lang="ts">
-	import type {Snippet} from 'svelte';
-	import {page} from '$app/state';
-	import {resolve} from '$app/paths';
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
+	import type { SvelteHTMLElements } from 'svelte/elements';
+	import { DEV } from 'esm-env';
 
-	import type {Model} from './model.svelte.js';
+	import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+
+	import type { Model } from './model.svelte.ts';
 	import ProviderLogo from './ProviderLogo.svelte';
-	import {GLYPH_MODEL} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 
 	const {
 		model,
 		icon,
-		name,
 		children,
 		...rest
 	}: SvelteHTMLElements['a'] & {
 		model: Model;
 		/**
-		 * `true` is equivalent to `'svg'`
+		 * Icon rendered before the model name. `SvgData` renders via `Svg`;
+		 * `'logo'` renders the provider's brand logo.
 		 */
-		icon?: boolean | 'svg' | 'glyph' | undefined;
-		name?: Snippet | undefined;
+		icon?: SvgData | 'logo' | undefined;
 	} = $props();
+
+	if (DEV) {
+		$effect.pre(() => {
+			if (icon && children) {
+				console.error('icon and children are mutually exclusive');
+			}
+		});
+	}
 
 	const selected = $derived(page.url.pathname === resolve(`/models/${model.name}`));
 </script>
 
 <!-- TODO this contextmenu appears as a duplicate, I think a de-duped key is the best fix, not manually disabling it -->
-<ModelContextmenu {model}
-	><a {...rest} href={resolve(`/models/${model.name}`)} class:selected
-		>{#if children}
+<ModelContextmenu {model}>
+	<a {...rest} href={resolve(`/models/${model.name}`)} class="selected-plain" class:selected>
+		{#if children}
 			{@render children()}
 		{:else}
-			{#if icon === 'svg' || icon === true}
-				<ProviderLogo name={model.provider_name} />
-			{:else if icon === 'glyph'}
-				<Glyph glyph={GLYPH_MODEL} />
-			{/if}
-			{#if name}{@render name()}{:else}{model.name}{/if}
-		{/if}</a
-	></ModelContextmenu
->
-
-<style>
-	a {
-		font-weight: 600;
-	}
-	/* TODO breaks convention, but I think it looks better in a lot of cases, maybe extract a class? `plain_selected_link` or `plain`? */
-	.selected {
-		font-weight: 400;
-		text-decoration: none;
-	}
-</style>
+			{#if icon === 'logo'}
+				<ProviderLogo name={model.provider_name} />&nbsp;
+			{:else if icon}
+				<Svg data={icon} inline />&nbsp;
+			{/if}{model.name}
+		{/if}
+	</a>
+</ModelContextmenu>

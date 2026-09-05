@@ -1,23 +1,23 @@
-import type {Tome} from '@fuzdev/fuz_ui/tome.js';
+import type { Tome } from '@fuzdev/fuz_ui/tome.ts';
 
-import ApiPage from '$routes/docs/api/+page.svelte';
-import LibraryPage from '$routes/docs/library/+page.svelte';
+import ApiPage from './api/+page.svelte';
+import LibraryPage from './library/+page.svelte';
 
 export const tomes: Array<Tome> = [
 	{
-		name: 'api',
+		slug: 'api',
 		category: 'reference',
 		Component: ApiPage,
 		related_tomes: [],
 		related_modules: [],
-		related_declarations: [],
+		related_declarations: []
 	},
 	{
-		name: 'library',
+		slug: 'library',
 		category: 'reference',
 		Component: LibraryPage,
 		related_tomes: [],
 		related_modules: [],
-		related_declarations: [],
-	},
+		related_declarations: []
+	}
 ];

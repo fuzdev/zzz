@@ -1,12 +1,11 @@
 <script lang="ts">
 	import Alert from '@fuzdev/fuz_ui/Alert.svelte';
-	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
-	import {resolve} from '$app/paths';
+	import { resolve } from '$app/paths';
 
 	import ModelDetail from '$lib/ModelDetail.svelte';
-	import {frontend_context} from '$lib/frontend.svelte.js';
+	import { frontend_context } from '$lib/frontend.svelte.ts';
 
-	const {params} = $props();
+	const { params } = $props();
 
 	const app = frontend_context.get();
 
@@ -14,33 +13,21 @@
 
 	const model = $derived(app.models.find_by_name(model_name));
 
-	// TODO probably refactor, kinda messy
-	const {list_status} = $derived(app.ollama);
-	const loading = $derived(!model && (list_status === 'initial' || list_status === 'pending'));
-	const has_error = $derived(!model && list_status === 'failure');
-	const error_message = $derived(app.ollama.list_error);
-
 	// TODO @many consider namespacing under `/llms/`
 </script>
 
 <div class="p_sm">
-	{#if loading}
-		<PendingAnimation />
-	{:else if has_error}
-		<Alert status="error">
-			error loading models: {error_message}
-		</Alert>
-	{:else if model}
+	{#if model}
 		<ModelDetail {model} />
 	{:else}
 		<Alert status="error">
 			no model found with name "{model_name}", maybe
 			<button
 				type="button"
-				class="inline color_f"
+				class="inline palette_f"
 				onclick={() =>
 					// TODO UI for choosing provider
-					app.models.add({name: model_name, provider_name: 'ollama'})}
+					app.models.add({ name: model_name, provider_name: 'claude' })}
 			>
 				create it
 			</button>

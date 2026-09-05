@@ -1,15 +1,15 @@
 <script lang="ts">
 	import ModelPicker from './ModelPicker.svelte';
-	import type {Chat} from './chat.svelte.js';
-	import type {Snippet} from 'svelte';
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import type { Chat } from './chat.svelte.ts';
+	import type { Snippet } from 'svelte';
+	import type { SvelteHTMLElements } from 'svelte/elements';
 
 	// TODO better name? prioritizing clarity/colocation
 
 	const {
 		chat,
 		attrs,
-		children,
+		children
 	}: {
 		chat: Chat;
 		attrs?: SvelteHTMLElements['div'] | undefined;

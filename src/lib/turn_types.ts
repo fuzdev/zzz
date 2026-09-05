@@ -1,9 +1,9 @@
-import {z} from 'zod';
+import { z } from 'zod';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {Cell} from './cell.svelte.js';
-import {Uuid} from './zod_helpers.js';
-import {CellJson} from './cell_types.js';
-import {CompletionRequest, CompletionResponse, CompletionRole} from './completion_types.js';
+import { Cell } from './cell.svelte.ts';
+import { CellJson } from './cell_types.ts';
+import { CompletionRequest, CompletionResponse, CompletionRole } from './completion_types.ts';
 
 /**
  * Turn is a conversation turn (like A2A Message) that references one or more parts (content entities).
@@ -15,8 +15,8 @@ export const TurnJson = CellJson.extend({
 	role: CompletionRole,
 	request: CompletionRequest.optional(),
 	response: CompletionResponse.optional(),
-	error_message: z.string().optional(),
-}).meta({cell_class_name: 'Turn'});
+	error_message: z.string().optional()
+}).meta({ cell_class_name: 'Turn' });
 export type TurnJson = z.infer<typeof TurnJson>;
 export type TurnJsonInput = z.input<typeof TurnJson>;
 

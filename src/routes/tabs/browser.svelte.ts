@@ -1,27 +1,27 @@
 // @slop Claude Opus 4
 
-import {z} from 'zod';
+import { z } from 'zod';
 
-import {Cell, type CellOptions} from '$lib/cell.svelte.js';
-import {CellJson} from '$lib/cell_types.js';
-import {BrowserTabs} from '$routes/tabs/browser_tabs.svelte.js';
-import {BrowserTabJson} from '$routes/tabs/browser_tab.svelte.js';
-import {HANDLED} from '$lib/cell_helpers.js';
+import { Cell, type CellOptions } from '$lib/cell.svelte.ts';
+import { CellJson } from '$lib/cell_types.ts';
+import { BrowserTabs } from './browser_tabs.svelte.ts';
+import { BrowserTabJson } from './browser_tab.svelte.ts';
+import { HANDLED } from '$lib/cell_helpers.ts';
 
 export const BrowserJson = CellJson.extend({
 	tabs: z.array(BrowserTabJson).default(() => []),
 	edited_url: z.string().default(''),
-	browserified: z.boolean().default(false),
-}).meta({cell_class_name: 'Browser'});
+	browserified: z.boolean().default(false)
+}).meta({ cell_class_name: 'Browser' });
 export type BrowserJson = z.infer<typeof BrowserJson>;
 export type BrowserJsonInput = z.input<typeof BrowserJson>;
 
 export type BrowserOptions = CellOptions<typeof BrowserJson>;
 
 export class Browser extends Cell<typeof BrowserJson> {
-	tabs: BrowserTabs = new BrowserTabs({app: this.app});
-	edited_url: string = $state()!;
-	browserified: boolean = $state()!;
+	tabs: BrowserTabs = new BrowserTabs({ app: this.app });
+	edited_url: string = $state.raw()!;
+	browserified: boolean = $state.raw()!;
 
 	/** True when the edited URL differs from the selected tab's URL. */
 	readonly url_edited: boolean = $derived(this.edited_url !== this.tabs.selected_url);
@@ -50,7 +50,7 @@ export class Browser extends Cell<typeof BrowserJson> {
 					this.edited_url = this.tabs.selected_url;
 				}
 				return HANDLED;
-			},
+			}
 		};
 
 		this.init();

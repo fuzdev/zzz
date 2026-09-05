@@ -1,28 +1,33 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
-	import type {Snippet} from 'svelte';
+	import { slide } from 'svelte/transition';
+	import type { Snippet } from 'svelte';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import PendingButton from '@fuzdev/fuz_ui/PendingButton.svelte';
 
-	import {frontend_context} from './frontend.svelte.js';
-	import type {Diskfile} from './diskfile.svelte.js';
+	import { frontend_context } from './frontend.svelte.ts';
+	import type { Diskfile } from './diskfile.svelte.ts';
 	import DiskfileListitem from './DiskfileListitem.svelte';
-	import Glyph from './Glyph.svelte';
-	import {GLYPH_DIRECTORY, GLYPH_CREATE_FILE, GLYPH_CREATE_FOLDER, GLYPH_SORT} from './glyphs.js';
+	import {
+		icon_create_directory,
+		icon_create_file,
+		icon_directory,
+		icon_sort
+	} from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import SortableList from './SortableList.svelte';
-	import {sort_by_text, sort_by_numeric} from './sortable.svelte.js';
+	import { sort_by_text, sort_by_numeric } from './sortable.svelte.ts';
 
 	const {
-		empty,
+		empty
 	}: {
 		empty?: Snippet | undefined;
 	} = $props();
 
 	const app = frontend_context.get();
-	const {diskfiles} = app;
-	const {editor} = diskfiles;
+	const { diskfiles } = app;
+	const { editor } = diskfiles;
 
-	const {zzz_dir} = $derived(app);
+	const { zzz_dir } = $derived(app);
 
 	// TODO need awaitable websocket calls?
 	const TODO_create_file_pending = false;
@@ -69,10 +74,10 @@
 	{#if zzz_dir === undefined}
 		<div>&nbsp;</div>
 	{:else if zzz_dir === null}
-		<div class="row height_input_height"><PendingAnimation /></div>
+		<div class="row height-input-height"><PendingAnimation /></div>
 	{:else}
-		<div class="row height_input_height justify-content:space-between px_xs">
-			<small class="ellipsis"><Glyph glyph={GLYPH_DIRECTORY} /> {zzz_dir}</small>
+		<div class="row height-input-height justify-content:space-between px_xs">
+			<small class="ellipsis"><Svg data={icon_directory} /> {zzz_dir}</small>
 			<div class="display:flex gap_xs2">
 				<PendingButton
 					pending={TODO_create_file_pending}
@@ -80,7 +85,7 @@
 					title="create file in {zzz_dir}"
 					onclick={create_file}
 				>
-					<Glyph glyph={GLYPH_CREATE_FILE} />
+					<Svg data={icon_create_file} />
 				</PendingButton>
 				<PendingButton
 					pending={TODO_create_folder_pending}
@@ -88,7 +93,7 @@
 					title="create folder in {zzz_dir}"
 					onclick={create_folder}
 				>
-					<Glyph glyph={GLYPH_CREATE_FOLDER} />
+					<Svg data={icon_create_directory} />
 				</PendingButton>
 				{#if app.diskfiles.items.size > 1}
 					<button
@@ -98,7 +103,7 @@
 						title="toggle sort controls"
 						onclick={() => editor.toggle_sort_controls()}
 					>
-						<Glyph glyph={GLYPH_SORT} />
+						<Svg data={icon_sort} />
 					</button>
 				{/if}
 			</div>
@@ -115,7 +120,7 @@
 				sort_by_numeric<Diskfile>('updated_newest', 'updated (latest)', 'updated', 'desc'),
 				sort_by_numeric<Diskfile>('updated_oldest', 'updated (past)', 'updated', 'asc'),
 				sort_by_numeric<Diskfile>('created_newest', 'created (newest)', 'created', 'desc'),
-				sort_by_numeric<Diskfile>('created_oldest', 'created (oldest)', 'created', 'asc'),
+				sort_by_numeric<Diskfile>('created_oldest', 'created (oldest)', 'created', 'asc')
 			]}
 			sort_key_default="path_asc"
 			no_items={empty ? undefined : '[no files available]'}
@@ -124,7 +129,7 @@
 			<!-- TODO bug with `selected` -->
 			{#snippet children(diskfile)}
 				{@const selected = diskfiles.selected_file_id === diskfile.id}
-				<div class="diskfile_listitem_wrapper" class:selected transition:slide>
+				<div class="diskfile-listitem-wrapper" class:selected transition:slide>
 					<DiskfileListitem
 						{diskfile}
 						{selected}
@@ -144,7 +149,7 @@
 </div>
 
 <style>
-	.diskfile_listitem_wrapper {
+	.diskfile-listitem-wrapper {
 		position: sticky;
 		top: 0;
 		bottom: 0;

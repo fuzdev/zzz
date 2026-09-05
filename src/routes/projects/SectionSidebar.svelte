@@ -1,12 +1,12 @@
 <script lang="ts">
-	import {resolve} from '$app/paths';
+	import { resolve } from '$app/paths';
 
 	import NavLink from '$lib/NavLink.svelte';
-	import type {Project, ProjectSection} from '$routes/projects/project.svelte.js';
+	import type { Project, ProjectSection } from './project.svelte.ts';
 
 	const {
 		project,
-		section,
+		section
 	}: {
 		project: Project;
 		section: ProjectSection;
@@ -30,9 +30,9 @@
 				</NavLink>
 			</li>
 			<li>
-				<NavLink href={resolve(`/projects/${project.id}/pages`)} selected={section === 'pages'}
-					>pages</NavLink
-				>
+				<NavLink href={resolve(`/projects/${project.id}/pages`)} selected={section === 'pages'}>
+					pages
+				</NavLink>
 			</li>
 			<li>
 				<NavLink href={resolve(`/projects/${project.id}/domains`)} selected={section === 'domains'}>

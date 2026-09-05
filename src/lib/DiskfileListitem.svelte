@@ -1,16 +1,16 @@
 <script lang="ts">
-	import {swallow} from '@fuzdev/fuz_util/dom.js';
+	import { swallow } from '@fuzdev/fuz_util/dom.ts';
 
-	import type {Diskfile} from './diskfile.svelte.js';
+	import type { Diskfile } from './diskfile.svelte.ts';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
-	import Glyph from './Glyph.svelte';
-	import {GLYPH_FILE} from './glyphs.js';
+	import { icon_file } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const {
 		diskfile,
 		selected = false,
 		attrs,
-		onselect,
+		onselect
 	}: {
 		diskfile: Diskfile;
 		selected?: boolean | undefined;
@@ -50,7 +50,7 @@
 		aria-pressed={selected}
 	>
 		<small class="ellipsis">
-			<Glyph glyph={GLYPH_FILE} />
+			<Svg data={icon_file} />
 			<span class="ml_xs">{diskfile.path_relative}</span>
 		</small>
 	</div>

@@ -1,12 +1,11 @@
 <script lang="ts">
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
-	import {logo_zzz} from './logos.js';
+	import { logo_zzz } from './logos.ts';
 	import CapabilityWebsocket from './CapabilityWebsocket.svelte';
 	import CapabilityFilesystem from './CapabilityFilesystem.svelte';
-	import Glyph from './Glyph.svelte';
 	import ProviderLogo from './ProviderLogo.svelte';
-	import {GLYPH_CONNECT, GLYPH_DIRECTORY, GLYPH_BACKEND} from './glyphs.js';
+	import { icon_backend, icon_connect, icon_directory } from '@fuzdev/fuz_ui/icons.ts';
 	import CapabilityProvider from './CapabilityProvider.svelte';
 	import CapabilityBackend from './CapabilityBackend.svelte';
 	import CapabilitySystem from './CapabilitySystem.svelte';
@@ -17,25 +16,21 @@
 <div class="width_atmost_md">
 	<section>
 		<section class="mb_xl12">
-			<h2><Glyph glyph={GLYPH_BACKEND} /> backend</h2>
+			<h2><Svg data={icon_backend} /> backend</h2>
 			<CapabilityBackend />
 		</section>
 		<section class="mb_xl12">
-			<h2><Glyph glyph={GLYPH_DIRECTORY} /> backend filesystem</h2>
+			<h2><Svg data={icon_directory} /> backend filesystem</h2>
 			<CapabilityFilesystem />
 		</section>
 		<section class="mb_xl12">
-			<h2><Glyph glyph={GLYPH_CONNECT} /> backend websocket</h2>
+			<h2><Svg data={icon_connect} /> backend websocket</h2>
 			<p>
 				Websockets are an optional transport that's preferred by default. Zzz currently relies on
 				websockets for pushed updates like filesystem changes -- SSE will be supported as an option
 				in the future.
 			</p>
 			<CapabilityWebsocket />
-		</section>
-		<section class="mb_xl12">
-			<h2><ProviderLogo name="ollama" /> Ollama</h2>
-			<CapabilityProvider provider_name="ollama" />
 		</section>
 		<section class="mb_xl12">
 			<h2><ProviderLogo name="claude" /> Claude</h2>

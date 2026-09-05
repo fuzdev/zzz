@@ -1,11 +1,11 @@
 <script lang="ts">
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import type { SvelteHTMLElements } from 'svelte/elements';
 
-	import type {PartUnion} from './part.svelte.js';
+	import type { PartUnion } from './part.svelte.ts';
 
 	const {
 		part,
-		attrs,
+		attrs
 	}: {
 		part: PartUnion;
 		attrs?: SvelteHTMLElements['input'] | undefined;

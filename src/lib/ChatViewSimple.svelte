@@ -1,13 +1,13 @@
 <script lang="ts">
-	import type {Chat} from './chat.svelte.js';
-	import type {Thread} from './thread.svelte.js';
+	import type { Chat } from './chat.svelte.ts';
+	import type { Thread } from './thread.svelte.ts';
 	import ChatThread from './ChatThread.svelte';
 	import ChatThreadAddByModel from './ChatThreadAddByModel.svelte';
 	import ChatThreadManageByTag from './ChatThreadManageByTag.svelte';
 
 	const {
 		chat,
-		thread,
+		thread
 	}: {
 		chat: Chat;
 		thread: Thread | undefined;
@@ -21,7 +21,7 @@
 <!-- TODO the overflow change is hacky, allows the shadow to overlap the sidebar -->
 {#if thread}
 	<div
-		class="column_fluid column flex:1"
+		class="column-fluid column flex:1"
 		class:pr_xl={empty}
 		style:overflow={empty ? 'visible' : undefined}
 		style:justify-content={empty ? 'center' : undefined}
@@ -35,7 +35,7 @@
 			<ChatThread
 				{thread}
 				onsend={(input) => chat.send_to_thread(thread.id, input)}
-				attrs={{class: empty ? 'floating p_sm' : 'height:100%'}}
+				attrs={{ class: empty ? 'floating p_sm' : 'height:100%' }}
 				focus_key={chat.id}
 				bind:pending_element_to_focus_key={
 					() => chat.app.ui.pending_element_to_focus_key,
@@ -47,10 +47,10 @@
 		</div>
 	</div>
 {:else}
-	<section class="column_section">
+	<section class="column-section">
 		<ChatThreadAddByModel {chat} />
 	</section>
-	<section class="column_section">
+	<section class="column-section">
 		<ChatThreadManageByTag {chat} />
 	</section>
 {/if}

@@ -1,13 +1,14 @@
 <script lang="ts">
 	import LibraryDetail from '@fuzdev/fuz_ui/LibraryDetail.svelte';
 	import TomeContent from '@fuzdev/fuz_ui/TomeContent.svelte';
-	import {get_tome_by_name} from '@fuzdev/fuz_ui/tome.js';
-	import {library_context} from '@fuzdev/fuz_ui/library.svelte.js';
-	import {resolve} from '$app/paths';
+	import { tome_get_by_slug } from '@fuzdev/fuz_ui/tome.ts';
+	import { library_context } from '@fuzdev/fuz_ui/library.svelte.ts';
+	import { resolve } from '$app/paths';
 
-	const tome = get_tome_by_name('library');
+	const tome = tome_get_by_slug('library');
 
-	const library = library_context.get();
+	const get_library = library_context.get();
+	const library = $derived(get_library());
 </script>
 
 <TomeContent {tome}>

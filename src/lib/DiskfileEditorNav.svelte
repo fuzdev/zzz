@@ -1,19 +1,20 @@
 <script lang="ts">
-	import {GLYPH_ARROW_LEFT, GLYPH_ARROW_RIGHT, GLYPH_REFRESH} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
-	import {frontend_context} from './frontend.svelte.js';
-	import type {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
-	import type {Uuid} from './zod_helpers.js';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+
+	import { icon_arrow_left, icon_arrow_right, icon_refresh } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import { frontend_context } from './frontend.svelte.ts';
+	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 
 	const {
-		editor_state,
+		editor_state
 	}: {
 		editor_state: DiskfileEditorState;
 	} = $props();
 
 	const app = frontend_context.get();
-	const {diskfiles} = app;
-	const {editor} = diskfiles;
+	const { diskfiles } = app;
+	const { editor } = diskfiles;
 
 	// Track navigation history
 	let history_stack = $state<Array<Uuid>>([]); // Forward stack (for "back" operations)
@@ -78,7 +79,7 @@
 
 				// Replace previous_id with the new tab id in any history stacks
 				future_stack = future_stack.map((id) =>
-					id === previous_id ? result.resulting_tab_id! : id,
+					id === previous_id ? result.resulting_tab_id! : id
 				);
 			} else {
 				current_id = result.resulting_tab_id;
@@ -120,28 +121,28 @@
 	};
 </script>
 
-<div class="browser_nav display:flex gap_xs">
+<div class="display:flex gap_xs align-items:center">
 	<button
 		type="button"
-		class="icon_button plain p_xs border_radius_lg"
+		class="icon-button plain p_xs border_radius_lg"
 		title="previous diskfile"
 		onclick={go_back}
 		disabled={!can_go_back}
 	>
-		<Glyph glyph={GLYPH_ARROW_LEFT} />
+		<Svg data={icon_arrow_left} />
 	</button>
 	<button
 		type="button"
-		class="icon_button plain p_xs border_radius_lg"
+		class="icon-button plain p_xs border_radius_lg"
 		title="next diskfile"
 		onclick={go_forward}
 		disabled={!can_go_forward}
 	>
-		<Glyph glyph={GLYPH_ARROW_RIGHT} />
+		<Svg data={icon_arrow_right} />
 	</button>
 	<button
 		type="button"
-		class="icon_button plain p_xs border_radius_lg"
+		class="icon-button plain p_xs border_radius_lg"
 		title="refresh from disk"
 		onclick={() => {
 			// TODO need to implement the server action to refresh the content from disk
@@ -149,13 +150,6 @@
 		}}
 		disabled
 	>
-		<Glyph glyph={GLYPH_REFRESH} />
+		<Svg data={icon_refresh} />
 	</button>
 </div>
-
-<style>
-	.browser_nav {
-		display: flex;
-		align-items: center;
-	}
-</style>

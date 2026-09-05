@@ -1,12 +1,13 @@
 <script lang="ts">
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 
-	import Glyph from './Glyph.svelte';
-	import {get_glyph_for_action_kind} from './glyphs.js';
-	import type {Action} from './action.svelte.js';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+
+	import { get_icon_for_action_kind } from './action_icons.ts';
+	import type { Action } from './action.svelte.ts';
 
 	const {
-		action,
+		action
 	}: {
 		action: Action;
 	} = $props();
@@ -16,7 +17,7 @@
 
 <div class="mb_md">
 	<h3 class="mt_md">
-		<Glyph glyph={get_glyph_for_action_kind(action.kind)} />
+		<Svg data={get_icon_for_action_kind(action.kind)} />
 		{action.method}
 	</h3>
 	<table>
@@ -48,7 +49,9 @@
 			{#if action.action_event_data?.error}
 				<tr>
 					<td>error</td>
-					<td class="font_family_mono color_c">{JSON.stringify(action.action_event_data.error)}</td>
+					<td class="font_family_mono palette_c">
+						{JSON.stringify(action.action_event_data.error)}
+					</td>
 				</tr>
 			{/if}
 		</tbody>
@@ -62,5 +65,5 @@
 	class="font_family_mono font_size_sm white-space:pre-wrap word-break:break-word p_sm width:100%">{JSON.stringify(
 		action.json,
 		null,
-		2,
+		2
 	)}</pre>

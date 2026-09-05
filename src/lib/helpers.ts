@@ -1,4 +1,4 @@
-import {CONTENT_PREVIEW_LENGTH} from './constants.js';
+import { CONTENT_PREVIEW_LENGTH } from './constants.ts';
 
 // TODO import from fuz_css (and respect prefers-reduced-motion? maybe optionally)
 export const DURATION_LG = 1000;
@@ -17,15 +17,26 @@ export const ESTIMATED_CHARS_PER_TOKEN = 3;
 export const estimate_token_count = (text: string): number =>
 	Math.ceil(text.length / ESTIMATED_CHARS_PER_TOKEN);
 
+// text, not an `icon_*` SVG from fuz_ui, because an attribute can't host markup
+const PLACEHOLDER_GLYPH = '↳';
+
+/**
+ * Formats input `placeholder` text, prefixed with a `↳` arrow.
+ * The arrow is a text glyph rather than an `icon_*` SVG
+ * because the `placeholder` attribute can't host markup.
+ */
+export const format_placeholder = (text?: string | null): string =>
+	text ? `${PLACEHOLDER_GLYPH} ${text}` : PLACEHOLDER_GLYPH;
+
 /** Creates an id suitable for insecure use on a single client, like for element ids. */
 export const create_client_id = (): string => Math.random().toString(36).substring(2);
 
 export const get_unique_name = (
 	name: string,
-	existing_names: {has: (name: string) => boolean} | {includes: (name: string) => boolean},
+	existing_names: { has: (name: string) => boolean } | { includes: (name: string) => boolean }
 ): string => {
 	const check = (existing_names as any)['has' in existing_names ? 'has' : 'includes'].bind(
-		existing_names,
+		existing_names
 	);
 	let result = name;
 	let i = 2;
@@ -44,6 +55,6 @@ export const defined = <T>(value: T | undefined): T => {
 
 export const to_preview = (
 	content: string | null | undefined,
-	max_length: number = CONTENT_PREVIEW_LENGTH,
+	max_length: number = CONTENT_PREVIEW_LENGTH
 ): string =>
 	content ? (content.length > max_length ? content.substring(0, max_length) + '...' : content) : '';

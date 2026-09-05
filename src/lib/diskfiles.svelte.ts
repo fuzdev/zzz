@@ -1,25 +1,32 @@
-import {z} from 'zod';
+import { z } from 'zod';
+import { strip_start } from '@fuzdev/fuz_util/string.ts';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import {get_datetime_now, PathWithLeadingSlash, Uuid} from './zod_helpers.js';
-import {Diskfile} from './diskfile.svelte.js';
-import {DiskfileJson, DiskfilePath, type DiskfileJsonInput} from './diskfile_types.js';
-import {disknode_to_diskfile_json, to_relative_path} from './diskfile_helpers.js';
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {HANDLED} from './cell_helpers.js';
-import {IndexedCollection} from './indexed_collection.svelte.js';
-import {create_single_index, create_multi_index} from './indexed_collection_helpers.svelte.js';
-import {DiskfilesEditor} from './diskfiles_editor.svelte.js';
-import {CellJson} from './cell_types.js';
-import type {ActionInputs} from './action_collections.js';
+import { Diskfile } from './diskfile.svelte.ts';
+import {
+	DiskfileJson,
+	DiskfilePath,
+	type DiskfileJsonInput,
+	type SerializableDisknode
+} from './diskfile_types.ts';
+import { disknode_to_diskfile_json, to_relative_path } from './diskfile_helpers.ts';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { HANDLED } from './cell_helpers.ts';
+import { IndexedCollection } from './indexed_collection.svelte.ts';
+import { create_single_index, create_multi_index } from './indexed_collection_helpers.svelte.ts';
+import { DiskfilesEditor } from './diskfiles_editor.svelte.ts';
+import { CellJson } from './cell_types.ts';
+import type { ActionInputs } from './action_collections.ts';
 
 export const DiskfilesJson = CellJson.extend({
 	diskfiles: z.array(DiskfileJson).default(() => []),
-	selected_file_id: Uuid.nullable().default(null),
-}).meta({cell_class_name: 'Diskfiles'});
+	selected_file_id: Uuid.nullable().default(null)
+}).meta({ cell_class_name: 'Diskfiles' });
 export type DiskfilesJson = z.infer<typeof DiskfilesJson>;
 export type DiskfilesJsonInput = z.input<typeof DiskfilesJson>;
 
-export interface DiskfilesOptions extends CellOptions<typeof DiskfilesJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
+export interface DiskfilesOptions extends CellOptions<typeof DiskfilesJson> {}
 
 export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	readonly items: IndexedCollection<Diskfile> = new IndexedCollection({
@@ -27,7 +34,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			create_single_index({
 				key: 'by_path',
 				extractor: (file) => file.path,
-				query_schema: z.string(),
+				query_schema: z.string()
 			}),
 
 			create_multi_index({
@@ -36,15 +43,15 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 					const match = /\.([^.]+)$/.exec(file.path);
 					return match ? match[1]!.toLowerCase() : 'no_extension'; // guaranteed by ternary check
 				},
-				query_schema: z.string(),
-			}),
-		],
+				query_schema: z.string()
+			})
+		]
 	});
 
-	selected_file_id: Uuid | null = $state(null);
+	selected_file_id: Uuid | null = $state.raw(null);
 
 	readonly selected_file: Diskfile | null = $derived(
-		this.selected_file_id ? (this.items.by_id.get(this.selected_file_id) ?? null) : null,
+		this.selected_file_id ? (this.items.by_id.get(this.selected_file_id) ?? null) : null
 	);
 
 	/** The editor for managing diskfiles editing state. */
@@ -53,7 +60,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	constructor(options: DiskfilesOptions) {
 		super(DiskfilesJson, options);
 
-		this.editor = new DiskfilesEditor({app: this.app});
+		this.editor = new DiskfilesEditor({ app: this.app });
 
 		this.decoders = {
 			diskfiles: (diskfiles) => {
@@ -64,7 +71,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 					}
 				}
 				return HANDLED;
-			},
+			}
 		};
 
 		this.init();
@@ -88,7 +95,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 						...diskfile_json,
 						// TODO hacky, should be handled more cleanly elsewhere
 						created: existing_diskfile.created, // Preserve original creation date
-						updated: get_datetime_now(), // TODO @many probably rely on the db to bump `updated`
+						updated: get_datetime_now() // TODO @many probably rely on the db to bump `updated`
 					});
 				} else {
 					// If it doesn't exist yet, create a new one
@@ -107,7 +114,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	add(json: DiskfileJsonInput, auto_select: boolean = true): Diskfile {
-		const diskfile = new Diskfile({app: this.app, json});
+		const diskfile = new Diskfile({ app: this.app, json });
 		this.items.add(diskfile);
 
 		if (auto_select && this.selected_file_id === null) {
@@ -117,14 +124,21 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		return diskfile;
 	}
 
+	/** Seed diskfiles from an initial file tree (e.g. session load or workspace open). */
+	add_initial(files: Array<SerializableDisknode>): void {
+		for (const disknode of files) {
+			this.add(disknode_to_diskfile_json(disknode));
+		}
+	}
+
 	async update(path: DiskfilePath, content: string): Promise<void> {
-		const result = await this.app.api.diskfile_update({path, content});
+		const result = await this.app.api.diskfile_update({ path, content });
 		// Handler already updated state on error
 		if (!result.ok) return;
 	}
 
 	async delete(path: DiskfilePath): Promise<void> {
-		const result = await this.app.api.diskfile_delete({path});
+		const result = await this.app.api.diskfile_delete({ path });
 		// Handler already updated state on error
 		if (!result.ok) return;
 	}
@@ -134,8 +148,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			throw new Error('cannot create file: zzz_dir is not set');
 		}
 
-		// TODO @many how to handle paths? need some more structure to the way they're normalized and joined
-		const path = DiskfilePath.parse(`${this.app.zzz_dir}${PathWithLeadingSlash.parse(filename)}`);
+		// zzz_dir already has trailing slash (DiskfileDirectoryPath), strip any leading slash from filename
+		const path = DiskfilePath.parse(`${this.app.zzz_dir}${strip_start(filename, '/')}`);
 
 		// Reuse `update` which creates or updates files
 		await this.update(path, content);
@@ -148,7 +162,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 		const path = DiskfilePath.parse(`${this.app.zzz_dir}${dirname}`);
 
-		const result = await this.app.api.directory_create({path});
+		const result = await this.app.api.directory_create({ path });
 		// Handler already updated state on error
 		if (!result.ok) return;
 	}
@@ -160,7 +174,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	// TODO make this a derived property?
 	/** The value `undefined` means uninitialized, `null` means loading, `''` means none. */
 	to_relative_path(path: string): string | null | undefined {
-		const {zzz_dir} = this.app;
+		const { zzz_dir } = this.app;
 		return zzz_dir && to_relative_path(path, zzz_dir);
 	}
 
@@ -188,7 +202,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	select_next(): void {
-		const {by_id} = this.items;
+		const { by_id } = this.items;
 		const next = by_id.values().next();
 		this.select(next.value?.id ?? null);
 	}

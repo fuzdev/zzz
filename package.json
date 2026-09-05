@@ -1,8 +1,8 @@
 {
   "name": "@fuzdev/zzz",
   "version": "0.0.1",
-  "description": "local-first forge for power users and devs",
-  "motto": "nice web things for the tired",
+  "description": "software garage for power users and devs",
+  "tagline": "nice web things for the tired",
   "glyph": "💤",
   "logo": "logo.svg",
   "logo_alt": "three sleepy z's",
@@ -17,83 +17,77 @@
   "bugs": "https://github.com/fuzdev/zzz/issues",
   "funding": "https://www.ryanatkn.com/funding",
   "scripts": {
-    "start": "gro dev",
-    "dev": "gro dev",
+    "start": "cargo xtask dev",
+    "dev": "cargo xtask dev",
+    "dev:setup": "cargo xtask dev-setup",
+    "prod:setup": "cargo xtask prod-setup",
     "build": "gro build",
     "check": "gro check",
     "typecheck": "gro typecheck",
     "test": "gro test",
+    "test:cross": "FUZ_TEST_CROSS_BACKEND=1 vitest run --project cross_backend_rust --project cross_backend_rust_proxy",
     "preview": "vite preview",
     "deploy": "gro deploy",
-    "serve": "gro build && npm run preview & node dist_server/server/server.js"
+    "serve": "gro build && npm run preview"
   },
   "type": "module",
   "engines": {
-    "node": ">=22.15"
+    "node": ">=24.14"
   },
   "peerDependencies": {
+    "@fuzdev/fuz_app": ">=0.82.0",
+    "@fuzdev/fuz_ui": "^0.205.1",
+    "@fuzdev/fuz_util": ">=0.65.1",
     "@sveltejs/kit": "^2",
-    "svelte": "^5"
+    "esm-env": "^1",
+    "svelte": "^5",
+    "zod": "^4"
+  },
+  "peerDependenciesMeta": {
+    "esm-env": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@changesets/changelog-git": "^0.2.1",
-    "@fuzdev/fuz_code": "^0.45.1",
-    "@fuzdev/fuz_css": "^0.57.0",
-    "@fuzdev/fuz_ui": "^0.191.1",
-    "@fuzdev/fuz_util": "^0.55.0",
-    "@jridgewell/trace-mapping": "^0.3.31",
-    "@ryanatkn/eslint-config": "^0.9.0",
-    "@sveltejs/adapter-node": "^5.4.0",
+    "@fuzdev/fuz_app": "^0.112.0",
+    "@fuzdev/fuz_code": "^0.48.0",
+    "@fuzdev/fuz_css": "^0.63.2",
+    "@fuzdev/fuz_ui": "^0.206.7",
+    "@fuzdev/fuz_util": "^0.68.0",
+    "@fuzdev/mdz": "^0.3.0",
+    "@ryanatkn/eslint-config": "^0.12.2",
+    "@sveltejs/acorn-typescript": "^1.0.9",
     "@sveltejs/adapter-static": "^3.0.10",
-    "@sveltejs/kit": "^2.55.0",
+    "@sveltejs/kit": "^2.61.1",
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "@types/estree": "^1.0.8",
     "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.7",
     "@webref/css": "^8.2.0",
     "eslint": "^9.39.1",
-    "eslint-plugin-svelte": "^3.13.1",
+    "eslint-plugin-svelte": "^3.17.1",
+    "esm-env": "^1.2.2",
     "jsdom": "^27.2.0",
     "magic-string": "^0.30.21",
-    "ollama": "^0.6.3",
-    "prettier": "^3.7.4",
-    "prettier-plugin-svelte": "^3.4.1",
-    "svelte": "^5.54.0",
-    "svelte-check": "^4.4.5",
-    "svelte2tsx": "^0.7.52",
+    "pg": "^8.20.0",
+    "svelte": "^5.56.0",
+    "svelte-check": "^4.4.8",
+    "svelte-docinfo": "^0.5.4",
+    "svelte2tsx": "^0.7.55",
     "tslib": "^2.8.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.48.1",
+    "vite": "^7.3.1",
     "vitest": "^4.0.15",
-    "zimmerframe": "^1.1.4"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.71.2",
-    "@fuzdev/gro": "^0.197.1",
-    "@google/generative-ai": "^0.24.1",
-    "@hono/node-server": "^1.19.6",
-    "@hono/node-ws": "^1.2.0",
-    "date-fns": "^4.1.0",
-    "esm-env": "^1.2.2",
-    "hono": "^4.10.7",
-    "openai": "^6.10.0",
+    "zimmerframe": "^1.1.4",
     "zod": "^4.3.6"
   },
-  "prettier": {
-    "plugins": [
-      "prettier-plugin-svelte"
-    ],
-    "useTabs": true,
-    "printWidth": 100,
-    "singleQuote": true,
-    "bracketSpacing": false,
-    "overrides": [
-      {
-        "files": "package.json",
-        "options": {
-          "useTabs": false
-        }
-      }
-    ]
+  "dependencies": {
+    "@fuzdev/blake3_wasm": "^0.1.1",
+    "@fuzdev/gro": "^0.209.0",
+    "@xterm/xterm": "^6.0.0",
+    "date-fns": "^4.1.0"
   },
   "sideEffects": [
     "**/*.css"

@@ -1,15 +1,15 @@
 <script lang="ts">
-	import {resolve} from '$app/paths';
-	import {page} from '$app/state';
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import type { SvelteHTMLElements } from 'svelte/elements';
 
-	import type {Provider} from './provider.svelte.js';
+	import type { Provider } from './provider.svelte.ts';
 	import ModelSummary from './ModelSummary.svelte';
 	import ExternalLink from './ExternalLink.svelte';
 
 	const {
 		provider,
-		attrs,
+		attrs
 	}: {
 		provider: Provider;
 		attrs?: SvelteHTMLElements['div'] | undefined;

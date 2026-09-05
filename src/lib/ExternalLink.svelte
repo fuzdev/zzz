@@ -7,12 +7,13 @@
 </script>
 
 <script lang="ts">
-	import type {SvelteHTMLElements} from 'svelte/elements';
-	import type {Snippet} from 'svelte';
-	import {logo_github} from '@fuzdev/fuz_ui/logos.js';
-	import Svg, {type SvgData} from '@fuzdev/fuz_ui/Svg.svelte';
+	import type { SvelteHTMLElements } from 'svelte/elements';
+	import type { Snippet } from 'svelte';
+	import { logo_github } from '@fuzdev/fuz_ui/logos.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
 
-	import {logo_chatgpt, logo_claude, logo_gemini} from './logos.js';
+	import { logo_chatgpt, logo_claude, logo_gemini } from './logos.ts';
 	import ExternalLinkIcon from './ExternalLinkIcon.svelte';
 
 	// TODO maybe make this `Link` and infer optional prop `external`?
@@ -39,7 +40,7 @@
 					? logo_claude
 					: google_regex.test(href)
 						? logo_gemini
-						: null,
+						: null
 	);
 
 	const rel: string = $derived.by(() => {
@@ -58,12 +59,16 @@
 	target={new_tab ? (rest.target ?? '_blank') : rest.target}
 	{rel}
 	class:color_i_5={true}
-	>{#if children}{@render children()}{:else}{href}{/if}<ExternalLinkIcon
-		>{#snippet children(text_icon)}{#if icon}{@render icon(known_logo)}{:else if known_logo}<Svg
-					data={known_logo}
-					size="var(--font_size_xs)"
-					fill="var(--color_i_50)"
-					inline
-				/>{:else}{text_icon}{/if}{/snippet}</ExternalLinkIcon
-	></a
 >
+	{#if children}{@render children()}{:else}{href}{/if}<ExternalLinkIcon>
+		{#snippet children(external_icon)}
+			{#if icon}
+				{@render icon(known_logo)}
+			{:else if known_logo}
+				<Svg data={known_logo} size="var(--font_size_xs)" fill="var(--palette_i_50)" inline />
+			{:else}
+				<Svg data={external_icon} inline />
+			{/if}
+		{/snippet}
+	</ExternalLinkIcon>
+</a>

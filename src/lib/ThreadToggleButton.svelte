@@ -1,11 +1,11 @@
 <script lang="ts">
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import type { SvelteHTMLElements } from 'svelte/elements';
 
-	import type {Thread} from './thread.svelte.js';
+	import type { Thread } from './thread.svelte.ts';
 
 	const {
 		thread,
-		attrs,
+		attrs
 	}: {
 		thread: Thread;
 		attrs?: SvelteHTMLElements['input'] | undefined;

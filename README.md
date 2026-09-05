@@ -9,7 +9,7 @@
 **[zzz.software](https://www.zzz.software/)**
 
 Zzz, pronounced "zees" like bees,
-is a local-first forge for power users and developers.
+is a software garage for power users and devs.
 The idea is to make an integrated cross-platform environment that adapts to
 your needs and intent while remaining fully open, aligned, and designed for your autonomy.
 It's both a customizable web UI and local-first backend for power users,
@@ -26,37 +26,47 @@ see the issues and [discussions](https://github.com/fuzdev/zzz/discussions).
 This project is in its early stages, and installing it
 currently requires some basic technical skills.
 Eventually there will be a desktop app but
-for now you'll need Node 22.15+
-(YMMV with Deno/Bun/etc, although Deno will be used for deployment soon)
-and Git to clone the repo.
+for now you'll need Node (>=24.14), a Rust toolchain (for the backend),
+PostgreSQL, and Git to clone the repo.
 
-Running Zzz locally in development with Node is the supported way to use it right now.
+Running Zzz locally in development (`cargo xtask dev`) is the supported way to use it right now.
 It deploys via SvelteKit's static adapter with diminished capabilities
 ([zzz.software](https://www.zzz.software/)),
-and it will have a production build with the Node adapter and Hono server soon.
+and the full app is served by the Rust `zzz_server` backend.
+
+> The Rust backend depends on sibling crates from the fuz workspace via path
+> dependencies (including the native `fuz_pty` terminal crate). They must be
+> checked out alongside this repo for `cargo build` to succeed; until they're
+> published, building from a bare clone isn't yet reproducible.
 
 > Developing on Windows
 > requires something like [WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
 
-To run Zzz, we need an `.env.development` file in your project root.
-
-In your terminal, copy over
-[src/lib/server/.env.development.example](/src/lib/server/.env.development.example):
+After cloning, from the project root:
 
 ```bash
-cp src/lib/server/.env.development.example .env.development --update=none
+# 1. Create the PostgreSQL database the backend connects to
+createdb zzz
+
+# 2. Generate .env.development (idempotent — safe to re-run)
+cargo xtask dev-setup
+
+# 3. Install Node dependencies
+npm install
+
+# 4. Build the Rust backend and start everything (backend + Vite frontend)
+cargo xtask dev
 ```
 
 You can edit `.env.development` with your API keys,
 or update them at runtime on the `/capabilities` page.
 
-Then:
+Browse to the location it says, probably `localhost:5173`.
 
-```bash
-npm run dev
-```
-
-Browse to the location is says, probably `localhost:5173`.
+On first run Zzz has no account yet, so it shows a bootstrap form. Copy the
+one-time token it points to (`cat .zzz/bootstrap_token`), paste it in, and pick a
+username and password to create your admin account — then you're logged in and
+ready.
 
 ## Roadmap
 
@@ -69,11 +79,11 @@ Browse to the location is says, probably `localhost:5173`.
 
 Zzz builds on a great deal of software.
 
-- see the deps in [package.json](package.json)
+- see the deps in `package.json`
 - I started using [Claude](https://claude.ai/) in late 2024 after making the initial prototype,
   and in late 2025 I started doing much of the coding with Claude Code, Opus 4.5
   being the first over some threshold for me for this project
-  - see `⚠️ AI generated` and similar disclaimers
+  - see `NOTE: AI-generated` and similar disclaimers
 
 ## Contributing
 

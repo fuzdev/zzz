@@ -26,15 +26,15 @@ input[type='text'] {
 	font-weight: 400;
 }
 
-.click_effect_scale:hover {
+.click-effect-scale:hover {
 	transform: scale(1.08);
 }
-.click_effect_scale:active {
+.click-effect-scale:active {
 	transform: scale(1.14);
 }
 
 /* TODO refactor with `Glyph`*/
-.icon_xs {
+.icon-xs {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -62,7 +62,7 @@ input[type='checkbox'].plain:not(:hover) {
 }
 
 /* TOOD upstream */
-input.input_xs {
+input.input-xs {
 	--input_width_min: 80px;
 	max-width: 80px;
 }
@@ -87,19 +87,19 @@ input.input_xs {
 }
 
 /* TODO @many upstream to Fuz? (not fuz_css right?) */
-.reorderable_item {
+.reorderable-item {
 	--reorderable_outline_style: dashed;
 	outline: var(--outline_width) var(--reorderable_outline_style) var(--outline_color);
 }
-.reorderable_item:hover {
+.reorderable-item:hover {
 	outline-width: var(--border_width_1);
 	outline-color: var(--border_color_30);
 }
-.reorderable_item:active {
+.reorderable-item:active {
 	outline-width: var(--border_width_1);
 	outline-color: var(--outline_color);
 }
-.reorderable_item.dragging {
+.reorderable-item.dragging {
 	opacity: 40%;
 	outline-width: var(--border_width_2);
 }
@@ -112,17 +112,17 @@ input.input_xs {
 	cursor: grabbing;
 }
 /* Drag indicator base style */
-.drag_over {
+.drag-over {
 	--drag_indicator_size: 4px;
-	--drag_indicator_color: var(--color_a_50);
+	--drag_indicator_color: var(--palette_a_50);
 	--drag_indicator_z_index: 100;
 	position: relative;
 }
 /* Common styles for all indicators */
-.drag_over_top::before,
-.drag_over_bottom::after,
-.drag_over_left::before,
-.drag_over_right::after {
+.drag-over-top::before,
+.drag-over-bottom::after,
+.drag-over-left::before,
+.drag-over-right::after {
 	content: '';
 	position: absolute;
 	background-color: var(--drag_indicator_color);
@@ -130,28 +130,28 @@ input.input_xs {
 	pointer-events: none;
 }
 /* Top drag indicator */
-.drag_over_top::before {
+.drag-over-top::before {
 	top: calc(-1 * var(--drag_indicator_size) / 2);
 	left: 0;
 	right: 0;
 	height: var(--drag_indicator_size);
 }
 /* Bottom drag indicator */
-.drag_over_bottom::after {
+.drag-over-bottom::after {
 	bottom: calc(-1 * var(--drag_indicator_size) / 2);
 	left: 0;
 	right: 0;
 	height: var(--drag_indicator_size);
 }
 /* Left drag indicator */
-.drag_over_left::before {
+.drag-over-left::before {
 	left: calc(-1 * var(--drag_indicator_size) / 2);
 	top: 0;
 	bottom: 0;
 	width: var(--drag_indicator_size);
 }
 /* Right drag indicator */
-.drag_over_right::after {
+.drag-over-right::after {
 	right: calc(-1 * var(--drag_indicator_size) / 2);
 	top: 0;
 	bottom: 0;
@@ -159,19 +159,19 @@ input.input_xs {
 }
 
 /* TODO ? */
-/* .drag_over_invalid::before {
-	background-color: var(--color_c_50);
+/* .drag-over-invalid::before {
+	background-color: var(--palette_c_50);
 } */
 
 /* TODO upstream */
-.column_fixed {
+.column-fixed {
 	width: var(--column_width, var(--distance_sm));
 	min-width: var(--column_width, var(--distance_sm));
 	height: 100%;
 	overflow: auto;
 	scrollbar-width: thin;
 }
-.column_fluid {
+.column-fluid {
 	flex: 1;
 	height: 100%;
 	min-width: var(--column_width, var(--distance_sm));
@@ -179,13 +179,13 @@ input.input_xs {
 	scrollbar-width: thin;
 }
 
-.column_bg_1 {
+.column-bg-1 {
 	background-color: var(--shade_10);
 	min-height: 100%;
 }
 
 /* TODO upstream */
-.max_height_sm {
+.max-height-sm {
 	max-height: var(--distance_sm);
 	overflow: auto;
 	scrollbar-width: thin;
@@ -207,77 +207,77 @@ a.chip {
 	font-weight: 700;
 }
 /* Chip color variants */
-.chip.color_a {
-	color: var(--color_a_50);
-	background-color: color-mix(in hsl, var(--color_a_40) 12%, transparent);
+.chip.palette_a {
+	color: var(--palette_a_50);
+	background-color: color-mix(in hsl, var(--palette_a_40) 12%, transparent);
 }
-.chip.color_b {
-	color: var(--color_b_50);
-	background-color: color-mix(in hsl, var(--color_b_40) 12%, transparent);
+.chip.palette_b {
+	color: var(--palette_b_50);
+	background-color: color-mix(in hsl, var(--palette_b_40) 12%, transparent);
 }
-.chip.color_c {
-	color: var(--color_c_50);
-	background-color: color-mix(in hsl, var(--color_c_40) 12%, transparent);
+.chip.palette_c {
+	color: var(--palette_c_50);
+	background-color: color-mix(in hsl, var(--palette_c_40) 12%, transparent);
 }
-.chip.color_d {
-	color: var(--color_d_50);
-	background-color: color-mix(in hsl, var(--color_d_40) 12%, transparent);
+.chip.palette_d {
+	color: var(--palette_d_50);
+	background-color: color-mix(in hsl, var(--palette_d_40) 12%, transparent);
 }
-.chip.color_e {
-	color: var(--color_e_50);
-	background-color: color-mix(in hsl, var(--color_e_40) 12%, transparent);
+.chip.palette_e {
+	color: var(--palette_e_50);
+	background-color: color-mix(in hsl, var(--palette_e_40) 12%, transparent);
 }
-.chip.color_f {
-	color: var(--color_f_50);
-	background-color: color-mix(in hsl, var(--color_f_40) 12%, transparent);
+.chip.palette_f {
+	color: var(--palette_f_50);
+	background-color: color-mix(in hsl, var(--palette_f_40) 12%, transparent);
 }
-.chip.color_g {
-	color: var(--color_g_50);
-	background-color: color-mix(in hsl, var(--color_g_40) 12%, transparent);
+.chip.palette_g {
+	color: var(--palette_g_50);
+	background-color: color-mix(in hsl, var(--palette_g_40) 12%, transparent);
 }
-.chip.color_h {
-	color: var(--color_h_50);
-	background-color: color-mix(in hsl, var(--color_h_40) 12%, transparent);
+.chip.palette_h {
+	color: var(--palette_h_50);
+	background-color: color-mix(in hsl, var(--palette_h_40) 12%, transparent);
 }
-.chip.color_i {
-	color: var(--color_i_50);
-	background-color: color-mix(in hsl, var(--color_i_40) 12%, transparent);
+.chip.palette_i {
+	color: var(--palette_i_50);
+	background-color: color-mix(in hsl, var(--palette_i_40) 12%, transparent);
 }
-.chip.color_a:not(.plain) {
-	border-color: var(--color_a_50);
+.chip.palette_a:not(.plain) {
+	border-color: var(--palette_a_50);
 }
-.chip.color_b:not(.plain) {
-	border-color: var(--color_b_50);
+.chip.palette_b:not(.plain) {
+	border-color: var(--palette_b_50);
 }
-.chip.color_c:not(.plain) {
-	border-color: var(--color_c_50);
+.chip.palette_c:not(.plain) {
+	border-color: var(--palette_c_50);
 }
-.chip.color_d:not(.plain) {
-	border-color: var(--color_d_50);
+.chip.palette_d:not(.plain) {
+	border-color: var(--palette_d_50);
 }
-.chip.color_e:not(.plain) {
-	border-color: var(--color_e_50);
+.chip.palette_e:not(.plain) {
+	border-color: var(--palette_e_50);
 }
-.chip.color_f:not(.plain) {
-	border-color: var(--color_f_50);
+.chip.palette_f:not(.plain) {
+	border-color: var(--palette_f_50);
 }
-.chip.color_g:not(.plain) {
-	border-color: var(--color_g_50);
+.chip.palette_g:not(.plain) {
+	border-color: var(--palette_g_50);
 }
-.chip.color_h:not(.plain) {
-	border-color: var(--color_h_50);
+.chip.palette_h:not(.plain) {
+	border-color: var(--palette_h_50);
 }
-.chip.color_i:not(.plain) {
-	border-color: var(--color_i_50);
+.chip.palette_i:not(.plain) {
+	border-color: var(--palette_i_50);
 }
 
 /* TODO maybe upstream? is weird but has a consistency  */
-.height_input_height {
+.height-input-height {
 	height: var(--input_height);
 }
 
 /* TODO remove after switching to svg icons */
-.icon_button {
+.icon-button {
 	font-weight: 400;
 }
 
@@ -301,11 +301,11 @@ a.chip {
 	--button_fill: var(--shade_20);
 	--button_fill_hover: var(--shade_10);
 	--button_fill_active: var(--shade_20);
-	--button_border_color: var(--color_a_50);
+	--button_border_color: var(--palette_a_50);
 }
 
 /* Column sections use padding instead of margin so they can transition in/out without layout jank. */
-.column_section {
+.column-section {
 	padding: var(--space_sm) var(--space_sm) var(--space_xl7);
 	margin-bottom: 0;
 }
@@ -389,4 +389,13 @@ pre code {
 /* TODO upstream */
 [role='button'] {
 	outline-color: var(--outline_color);
+}
+
+/* shared link style: bold normally, plain when selected */
+.selected-plain {
+	font-weight: 600;
+}
+.selected-plain.selected {
+	font-weight: 400;
+	text-decoration: none;
 }

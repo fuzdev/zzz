@@ -1,9 +1,10 @@
 <script lang="ts" generics="T extends {id: Uuid}">
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
-	import type {ComponentProps} from 'svelte';
+	import DialogContent from '@fuzdev/fuz_ui/DialogContent.svelte';
+	import type { ComponentProps } from 'svelte';
 
-	import type {Uuid} from './zod_helpers.js';
 	import Picker from './Picker.svelte';
 
 	let {
@@ -12,10 +13,10 @@
 		dialog_props,
 		...rest
 	}: // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
-	ComponentProps<typeof Picker<T>> & {
-		show?: boolean | undefined;
-		dialog_props?: OmitStrict<ComponentProps<typeof Dialog>, 'children'> | undefined;
-	} = $props();
+		ComponentProps<typeof Picker<T>> & {
+			show?: boolean | undefined;
+			dialog_props?: OmitStrict<ComponentProps<typeof Dialog>, 'children'> | undefined;
+		} = $props();
 </script>
 
 <!-- TODO API with `bind:show` in Fuz dialog? -->
@@ -27,7 +28,7 @@
 			show = false;
 		}}
 	>
-		<div class="pane p_lg width_atmost_md mx_auto">
+		<DialogContent>
 			<Picker
 				{...rest}
 				onpick={(item) => {
@@ -38,6 +39,6 @@
 					}
 				}}
 			/>
-		</div>
+		</DialogContent>
 	</Dialog>
 {/if}

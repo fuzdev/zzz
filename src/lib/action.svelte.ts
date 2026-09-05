@@ -1,32 +1,31 @@
 // @slop Claude Opus 4
 
-import {z} from 'zod';
+import { z } from 'zod';
+import { ActionKind, type ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {ActionMethod} from './action_metatypes.js';
-import {ActionKind} from './action_types.js';
-import {ActionSpecs} from './action_collections.js';
-import type {ActionSpecUnion} from './action_spec.js';
-import {CellJson} from './cell_types.js';
-import {ActionEventData} from './action_event_data.js';
-import type {ActionEvent} from './action_event.js';
-import {is_action_complete} from './action_event_helpers.js';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { ActionMethod } from './action_metatypes.ts';
+import { ActionSpecs } from './action_collections.ts';
+import { CellJson } from './cell_types.ts';
+import { ActionEventData } from '@fuzdev/fuz_app/actions/action_event_data.ts';
+import type { ActionEvent } from '@fuzdev/fuz_app/actions/action_event.ts';
+import { is_action_complete } from '@fuzdev/fuz_app/actions/action_event_helpers.ts';
 
 // TODO this isnt in action_types.ts because of circular dependencies, idk what pattern is best yet
 export const ActionJson = CellJson.extend({
 	method: ActionMethod,
-	action_event_data: ActionEventData.optional(),
-}).meta({cell_class_name: 'Action'});
+	action_event_data: ActionEventData.optional()
+}).meta({ cell_class_name: 'Action' });
 export type ActionJson = z.infer<typeof ActionJson>;
 export type ActionJsonInput = z.input<typeof ActionJson>;
 
-export interface ActionOptions extends CellOptions<typeof ActionJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
+export interface ActionOptions extends CellOptions<typeof ActionJson> {}
 
 /**
  * Represents a single action in the system, tracking its full lifecycle through action events.
  */
 export class Action extends Cell<typeof ActionJson> {
-	method: ActionMethod = $state()!;
+	method: ActionMethod = $state.raw()!;
 
 	// TODO maybe use a decoder to make this an `ActionEvent`
 	action_event_data: ActionEventData | undefined = $state.raw();
@@ -66,7 +65,7 @@ export class Action extends Cell<typeof ActionJson> {
 			return false; // no data yet means not successful
 		}
 
-		const {step, error} = this.action_event_data;
+		const { step, error } = this.action_event_data;
 
 		// Action must be complete, step must be 'handled', and there must be no error
 		return is_action_complete(this.action_event_data) && step === 'handled' && !error;

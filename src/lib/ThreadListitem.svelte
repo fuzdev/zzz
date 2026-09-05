@@ -1,16 +1,17 @@
 <script lang="ts">
-	import type {Chat} from './chat.svelte.js';
-	import type {Thread} from './thread.svelte.js';
-	import {GLYPH_REMOVE} from './glyphs.js';
-	import ConfirmButton from './ConfirmButton.svelte';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
+
+	import type { Chat } from './chat.svelte.ts';
+	import type { Thread } from './thread.svelte.ts';
+	import { icon_remove } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ThreadContextmenu from './ThreadContextmenu.svelte';
 	import ProviderLogo from './ProviderLogo.svelte';
 	import ThreadToggleButton from './ThreadToggleButton.svelte';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		thread,
-		chat,
+		chat
 	}: {
 		thread: Thread;
 		chat: Chat;
@@ -26,7 +27,7 @@
 <ThreadContextmenu {thread}>
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<div
-		class="thread_listitem p_xs2"
+		class="thread-listitem p_xs2"
 		class:dormant={!thread.enabled}
 		class:selected
 		onclick={selectable ? () => chat.select_thread(thread.id) : undefined}
@@ -37,28 +38,30 @@
 		<div class="row justify-content:space-between gap_xs">
 			<div class="flex:1">
 				<div class="font-weight:400">
-					<ProviderLogo name={thread.model.provider_name} size="var(--font_size_md)" />
+					{#if thread.model}
+						<ProviderLogo name={thread.model.provider_name} size="var(--font_size_md)" />
+					{/if}
 					{thread.model_name}
 				</div>
 				<div class="display:flex gap_xs">
 					{#if turn_count > 0}
-						<small
-							>{turn_count} message{turn_count !== 1 ? 's' : ''}, {thread.token_count} token{thread.token_count !==
-							1
-								? 's'
-								: ''}</small
-						>
-					{:else}&nbsp;{/if}
+						<small>
+							{turn_count} message{turn_count !== 1 ? 's' : ''}, {thread.token_count}
+							token{thread.token_count !== 1 ? 's' : ''}
+						</small>
+					{:else}
+						&nbsp;
+					{/if}
 				</div>
 			</div>
 			<div class="display:flex gap_xs">
 				<ThreadToggleButton {thread} />
 				<ConfirmButton
 					onconfirm={() => chat.remove_thread(thread.id)}
-					class="icon_button plain"
+					class="icon-button plain"
 					title="delete thread"
 				>
-					<Glyph glyph={GLYPH_REMOVE} />
+					<Svg data={icon_remove} />
 				</ConfirmButton>
 			</div>
 		</div>
@@ -67,14 +70,14 @@
 
 <style>
 	/* TODO hacky styles, see usage, extract reusable parts (classes/components and border variables) */
-	.thread_listitem {
+	.thread-listitem {
 		border-radius: var(--border_radius_xs);
 		border: var(--border_width_2) var(--border_style) transparent;
 	}
-	.thread_listitem.selected {
-		border-color: var(--color_a_50);
+	.thread-listitem.selected {
+		border-color: var(--palette_a_50);
 	}
-	.thread_listitem:hover {
+	.thread-listitem:hover {
 		background-color: var(--shade_10);
 	}
 </style>

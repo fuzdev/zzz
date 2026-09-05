@@ -1,7 +1,7 @@
 <script lang="ts">
-	import {tick} from 'svelte';
-	import {swallow} from '@fuzdev/fuz_util/dom.js';
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import { tick } from 'svelte';
+	import { swallow } from '@fuzdev/fuz_util/dom.ts';
+	import type { SvelteHTMLElements } from 'svelte/elements';
 
 	// TODO either refactor to support Textarea or make that a separate EditableTextarea
 
@@ -11,7 +11,7 @@
 		value = $bindable(),
 		attrs,
 		span_attrs,
-		input_attrs,
+		input_attrs
 	}: {
 		value: string;
 		// TODO maybe support `onsave`, but `bind:` now supports this easily enough
@@ -21,10 +21,10 @@
 		input_attrs?: SvelteHTMLElements['input'];
 	} = $props();
 
-	let is_editing = $state(false);
-	let edited_value = $state('');
-	let input_el: HTMLInputElement | undefined = $state();
-	let span_el: HTMLSpanElement | undefined = $state();
+	let is_editing = $state.raw(false);
+	let edited_value = $state.raw('');
+	let input_el: HTMLInputElement | undefined = $state.raw();
+	let span_el: HTMLSpanElement | undefined = $state.raw();
 
 	export const save = async (): Promise<void> => {
 		const trimmed = edited_value.trim(); // TODO parse with an optional zod schema
@@ -63,7 +63,7 @@
 		bind:value={edited_value}
 		onblur={save}
 		onkeydown={async (event) => {
-			const {key} = event;
+			const { key } = event;
 			if (key === 'Enter' || key === 'F2') {
 				swallow(event);
 				await save();
@@ -84,7 +84,7 @@
 		bind:this={span_el}
 		onclick={edit}
 		onkeydown={async (event) => {
-			const {key} = event;
+			const { key } = event;
 			if (key === 'Enter' || key === ' ' || key === 'F2') {
 				swallow(event);
 				await edit();
@@ -114,6 +114,6 @@
 		overflow: hidden; /* for ellipsis, is there another way to force it to shrink to obscure content? */
 	}
 	span[role='button']:hover {
-		background-color: var(--shade_60);
+		background-color: var(--shade_20);
 	}
 </style>

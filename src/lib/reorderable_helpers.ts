@@ -3,8 +3,8 @@
 import type {
 	ReorderableDirection,
 	ReorderableValidDropPosition,
-	ReorderableItemId,
-} from './reorderable.svelte.js';
+	ReorderableItemId
+} from './reorderable.svelte.ts';
 
 // TODO maybe make this a DOM helper? in fuz_util?
 /**
@@ -38,7 +38,7 @@ export const detect_reorderable_direction = (element: HTMLElement): ReorderableD
 export const get_reorderable_drop_position = (
 	direction: ReorderableDirection,
 	source_index: number,
-	target_index: number,
+	target_index: number
 ): ReorderableValidDropPosition => {
 	if (direction === 'horizontal') {
 		// For horizontal layouts
@@ -55,7 +55,7 @@ export const get_reorderable_drop_position = (
 export const calculate_reorderable_target_index = (
 	source_index: number,
 	current_index: number,
-	position: ReorderableValidDropPosition,
+	position: ReorderableValidDropPosition
 ): number => {
 	let target_index = current_index;
 
@@ -78,7 +78,7 @@ export const calculate_reorderable_target_index = (
 export const is_reorder_allowed = (
 	can_reorder: ((from_index: number, to_index: number) => boolean) | undefined,
 	source_index: number,
-	target_index: number,
+	target_index: number
 ): boolean => !can_reorder || can_reorder(source_index, target_index);
 
 /**
@@ -86,7 +86,7 @@ export const is_reorder_allowed = (
  */
 export const validate_reorderable_target_index = (
 	target_index: number,
-	max_index: number,
+	max_index: number
 ): number => {
 	if (target_index < 0) return 0;
 	if (target_index > max_index + 1) return max_index + 1;
@@ -99,7 +99,7 @@ export const validate_reorderable_target_index = (
  */
 export const set_reorderable_drag_data_transfer = (
 	dataTransfer: DataTransfer,
-	item_id: ReorderableItemId,
+	item_id: ReorderableItemId
 ): void => {
 	dataTransfer.effectAllowed = 'move';
 	dataTransfer.setData('text/plain', item_id);

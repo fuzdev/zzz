@@ -1,13 +1,13 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {projects_context} from '$routes/projects/projects.svelte.js';
+	import { projects_context } from '$routes/projects/projects.svelte.ts';
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import DomainsSidebar from '$routes/projects/DomainsSidebar.svelte';
-	import {GLYPH_DELETE} from '$lib/glyphs.js';
+	import { icon_delete } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ExternalLink from '$lib/ExternalLink.svelte';
-	import Glyph from '$lib/Glyph.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 
 	const projects = projects_context.get();
@@ -17,7 +17,7 @@
 	const project = $derived(projects.current_project);
 </script>
 
-<div class="domain_layout">
+<div class="domain-layout">
 	<!-- TODO @many refactor for better component instance stability for e.g. transitions -->
 	<ProjectSidebar />
 	{#if project}
@@ -25,7 +25,7 @@
 		<DomainsSidebar />
 	{/if}
 
-	<div class="domain_content">
+	<div class="domain-content">
 		{#if project && domains_viewmodel}
 			<div class="p_lg">
 				<h1 class="mb_lg">edit domain</h1>
@@ -111,8 +111,9 @@
 								<div class="mb_sm">
 									<h4>SSL Verification</h4>
 									<p>To complete SSL setup, add this TXT record:</p>
-									<code>_zzz-verify → verify-{domains_viewmodel.domain_id || 'your-domain-id'}</code
-									>
+									<code>
+										_zzz-verify → verify-{domains_viewmodel.domain_id || 'your-domain-id'}
+									</code>
 								</div>
 							{/if}
 						</div>
@@ -121,7 +122,7 @@
 							<div>
 								<button
 									type="submit"
-									class="color_a"
+									class="palette_a"
 									disabled={domains_viewmodel.domain && !domains_viewmodel.has_changes}
 								>
 									{domains_viewmodel.domain ? 'save changes' : 'add domain'}
@@ -131,10 +132,10 @@
 							{#if domains_viewmodel.domain}
 								<button
 									type="button"
-									class="color_c"
+									class="palette_c"
 									onclick={() => domains_viewmodel.remove_domain()}
 								>
-									<Glyph glyph={GLYPH_DELETE} />&nbsp; delete domain
+									<Svg data={icon_delete} />&nbsp; delete domain
 								</button>
 							{/if}
 						</div>
@@ -148,13 +149,13 @@
 </div>
 
 <style>
-	.domain_layout {
+	.domain-layout {
 		display: flex;
 		height: 100%;
 		overflow: hidden;
 	}
 
-	.domain_content {
+	.domain-content {
 		flex: 1;
 		overflow: auto;
 	}

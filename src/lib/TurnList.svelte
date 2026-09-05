@@ -1,14 +1,14 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
+	import { slide } from 'svelte/transition';
 
-	import type {Thread} from './thread.svelte.js';
+	import type { Thread } from './thread.svelte.ts';
 	import TurnListitem from './TurnListitem.svelte';
-	import {Scrollable} from './scrollable.svelte.js';
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import { Scrollable } from './scrollable.svelte.ts';
+	import type { SvelteHTMLElements } from 'svelte/elements';
 
 	const {
 		thread,
-		attrs,
+		attrs
 	}: {
 		thread: Thread;
 		attrs?: SvelteHTMLElements['div'] | undefined;
@@ -21,7 +21,7 @@
 
 <div
 	{...attrs}
-	class="turn_list {attrs?.class}"
+	class="turn-list {attrs?.class}"
 	{@attach scrollable.container}
 	{@attach scrollable.target}
 >
@@ -35,7 +35,7 @@
 </div>
 
 <style>
-	.turn_list {
+	.turn-list {
 		display: flex;
 		flex-direction: column-reverse; /* makes scrolling start at the bottom */
 		overflow: auto;

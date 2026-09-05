@@ -1,9 +1,9 @@
 <script lang="ts">
-	import type {Snippet} from 'svelte';
+	import type { Snippet } from 'svelte';
 
 	const {
 		value,
-		text,
+		text
 	}: {
 		/**
 		 * The percentage value of the progress bar, 0-100.
