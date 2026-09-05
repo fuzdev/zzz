@@ -647,14 +647,17 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         ));
 
     // Spine audit-log SSE stream: `GET /api/admin/audit/stream` — the shared
-    // `fuz_realtime::audit_stream_router` (admin-gated, account-keyed close on
-    // revocation), wired to the `audit_sse` registry the listener above fans
-    // rows into. Carries its own `origin_layer` so the origin allowlist gates
-    // it like every other zzz handler, and the same `client_ip_middleware` as
-    // every other spine router: it writes no `audit_log.ip`, but its bearer leg
-    // touches `api_token`, and that touch writes `last_used_ip = $2`
-    // unconditionally — the statement has no "leave the column alone" form — so
-    // without the layer every valid bearer read of the stream would stamp the
+    // `fuz_realtime::audit_stream_router`, mounted with the spine defaults
+    // (admin role, session-only credential gate, and a close-on-revoke keyed
+    // by each audit event's declared `RevocationScope`), wired to the
+    // `audit_sse` registry the listener above fans rows into. Carries its own
+    // `origin_layer` so the origin allowlist gates it like every other zzz
+    // handler, and the same `client_ip_middleware` as every other spine
+    // router: it writes no `audit_log.ip`, but credential resolution runs the
+    // bearer leg *before* the channel gate refuses it, and that leg's
+    // `api_token` touch writes `last_used_ip = $2` unconditionally — the
+    // statement has no "leave the column alone" form — so without the layer
+    // every bearer attempt on the stream would stamp the
     // `fuz_http::UNRESOLVED_CLIENT_IP` sentinel over the real address.
     let spine_audit_stream_router =
         fuz_realtime::audit_stream_router(fuz_realtime::AuditStreamRouteState::new(
