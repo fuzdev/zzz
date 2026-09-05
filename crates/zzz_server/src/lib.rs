@@ -531,7 +531,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // (`login_ip_rate_limiter`, `signup_ip_rate_limiter`,
     // `action_ip_rate_limiter`) would bucket every caller under one shared
     // `fuz_http::UNRESOLVED_CLIENT_IP` key, and each bearer touch of
-    // `api_token` would write a null `last_used_ip`.
+    // `api_token` would record that same sentinel as `last_used_ip` instead of
+    // the real address.
     let registry_for_rpc = Arc::clone(app_state.action_registry.get().ok_or_else(|| {
         ServerError::Config("action_registry must be set before mounting /api/rpc".to_owned())
     })?);
@@ -652,8 +653,9 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // it like every other zzz handler, and the same `client_ip_middleware` as
     // every other spine router: it writes no `audit_log.ip`, but its bearer leg
     // touches `api_token`, and that touch writes `last_used_ip = $2`
-    // unconditionally — so without the layer every valid bearer read of the
-    // stream would NULL the column rather than leave it alone.
+    // unconditionally — the statement has no "leave the column alone" form — so
+    // without the layer every valid bearer read of the stream would stamp the
+    // `fuz_http::UNRESOLVED_CLIENT_IP` sentinel over the real address.
     let spine_audit_stream_router =
         fuz_realtime::audit_stream_router(fuz_realtime::AuditStreamRouteState::new(
             app_state.db_pool.clone(),
