@@ -88,7 +88,8 @@
 			>
 				<div class="column justify-content:center gap_xs pl_md" style:min-height="80px">
 					<span>
-						websocket {socket.connected
+						websocket
+						{socket.connected
 							? 'connected'
 							: socket.status === 'pending'
 								? 'connecting'
