@@ -1,21 +1,17 @@
-import {z} from 'zod';
+import { z } from 'zod';
+import { zod_get_field_schema, zod_get_schema_keys } from '@fuzdev/fuz_util/zod.ts';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now, type Datetime } from '@fuzdev/fuz_util/datetime.ts';
 
-import {
-	get_field_schema,
-	zod_get_schema_keys,
-	type Uuid,
-	type Datetime,
-	get_datetime_now,
-} from './zod_helpers.js';
-import type {Frontend} from './frontend.svelte.js';
+import type { Frontend } from './frontend.svelte.ts';
 import {
 	get_schema_class_info,
 	type SchemaClassInfo,
 	HANDLED,
-	type CellValueDecoder,
-} from './cell_helpers.js';
-import type {SchemaKeys, CellJson} from './cell_types.js';
-import {format_datetime, format_short_date, format_time} from './time_helpers.js';
+	type CellValueDecoder
+} from './cell_helpers.ts';
+import type { SchemaKeys, CellJson } from './cell_types.ts';
+import { format_datetime, format_short_date, format_time } from './time_helpers.ts';
 
 // TODO improve types, especially casting
 
@@ -72,16 +68,16 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	readonly cid = ++global_cell_count;
 
 	// Base properties from CellJson
-	id: Uuid = $state()!;
-	created: Datetime = $state()!;
-	updated: Datetime = $state()!;
+	id: Uuid = $state.raw()!;
+	created: Datetime = $state.raw()!;
+	updated: Datetime = $state.raw()!;
 
 	// the `!` is needed for `$derived(` to work over `$derived.by(`
 	readonly schema!: TSchema;
 
 	readonly schema_keys: Array<SchemaKeys<TSchema>> = $derived(zod_get_schema_keys(this.schema));
 	readonly field_schemas: Map<SchemaKeys<TSchema>, z.ZodType> = $derived(
-		new Map(this.schema_keys.map((key) => [key, get_field_schema(this.schema, key)])),
+		new Map(this.schema_keys.map((key) => [key, zod_get_field_schema(this.schema, key)]))
 	);
 	readonly field_schema_info: Map<SchemaKeys<TSchema>, SchemaClassInfo | null> = $derived(
 		new Map(
@@ -91,15 +87,15 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 					return [key, null];
 				}
 				return [key, get_schema_class_info(field_schema)];
-			}),
-		),
+			})
+		)
 	);
 
 	readonly json: z.output<TSchema> = $derived(this.to_json());
 	readonly json_serialized: string = $derived(JSON.stringify(this.json));
 	// TODO maybe add a variant `json_serialized_pretty` or `_formatted`
 	readonly json_parsed: z.ZodSafeParseResult<z.output<TSchema>> = $derived.by(() =>
-		this.schema.safeParse(this.json),
+		this.schema.safeParse(this.json)
 	);
 
 	// TODO needs to be generic so users can extend it
@@ -249,12 +245,12 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 			// Prepare the input by ensuring `created`/`updated` are in sync when using defaults
 			let v = value as any;
 			if (!v || !('created' in v) || !v.created) {
-				v = {...v};
+				v = { ...v };
 				v.created = get_datetime_now();
 			}
 			if (!('updated' in v) || !v.updated) {
 				if (v === value) {
-					v = {...v};
+					v = { ...v };
 				}
 				v.updated = v.created;
 			}
@@ -281,14 +277,14 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	 * Preserves current values for any properties not included in the input.
 	 */
 	set_json_partial(partial_value: Partial<z.input<TSchema>>): void {
-		if (!partial_value || typeof partial_value !== 'object') return; // eslint-disable-line @typescript-eslint/no-unnecessary-condition
+		if (!partial_value || typeof partial_value !== 'object') return;
 
 		try {
 			let v = partial_value as any;
 
 			// Special handling for `created`/`updated` synchronization
 			if ('created' in v && !('updated' in v)) {
-				v = {...v};
+				v = { ...v };
 				v.updated = v.created;
 			}
 
@@ -313,7 +309,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 				} catch (field_error) {
 					console.error(
 						`Error parsing property "${key}" for ${this.constructor.name}:`,
-						field_error,
+						field_error
 					);
 					throw field_error;
 				}
@@ -396,7 +392,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 		if (!has_property && !has_decoder) {
 			console.error(
 				`Schema key "${key}" in ${this.constructor.name} has no matching property or decoder. ` +
-					`Consider adding the property or a decoder.`,
+					`Consider adding the property or a decoder.`
 			);
 			return;
 		}
@@ -426,7 +422,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 				if (!has_property) {
 					console.error(
 						`Decoder for schema property "${key}" in ${this.constructor.name} didn't return HANDLED. ` +
-							`Virtual properties (not present on class) must explicitly return HANDLED.`,
+							`Virtual properties (not present on class) must explicitly return HANDLED.`
 					);
 					return;
 				}
@@ -444,13 +440,13 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	clone(json?: z.input<TSchema>, options?: CellOptions<TSchema>): this {
 		const constructor = this.constructor as new (options: CellOptions<TSchema>) => this;
 
-		const {id: _, ...current_json} = this.json as any;
+		const { id: _, ...current_json } = this.json as any;
 
 		try {
 			return new constructor({
 				...options,
 				app: this.app,
-				json: structuredClone(json ? {...current_json, ...json} : current_json),
+				json: structuredClone(json ? { ...current_json, ...json } : current_json)
 			});
 		} catch (error) {
 			console.error(`failed to clone instance of ${constructor.name}:`, error);

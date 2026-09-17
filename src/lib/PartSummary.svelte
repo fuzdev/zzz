@@ -1,15 +1,15 @@
 <script lang="ts">
-	import type {Prompt} from './prompt.svelte.js';
-	import type {PartUnion} from './part.svelte.js';
+	import type { Prompt } from './prompt.svelte.ts';
+	import type { PartUnion } from './part.svelte.ts';
 	import PartToggleButton from './PartToggleButton.svelte';
 	import PartRemoveButton from './PartRemoveButton.svelte';
-	import Glyph from './Glyph.svelte';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import PartContextmenu from './PartContextmenu.svelte';
-	import {get_part_type_glyph} from './part_helpers.js';
+	import { get_part_type_icon } from './part_helpers.ts';
 
 	const {
 		part,
-		prompt,
+		prompt
 	}: {
 		part: PartUnion;
 		prompt?: Prompt | undefined;
@@ -24,12 +24,12 @@
 
 <PartContextmenu {part}>
 	<div
-		class="part_summary display:flex justify-content:space-between gap_xs2 font_size_sm position:relative panel"
+		class="part-summary display:flex justify-content:space-between gap_xs2 font_size_sm position:relative panel"
 		class:dormant={!part.enabled}
 	>
-		<div class="progress_bar" style:width="{percent}%"></div>
+		<div class="progress-bar" style:width="{percent}%"></div>
 		<div class="flex:1 pl_sm py_xs3 ellipsis">
-			<Glyph glyph={get_part_type_glyph(part)} />&nbsp;
+			<Svg data={get_part_type_icon(part)} />&nbsp;
 			{part.name}
 			{part.content_preview}
 		</div>
@@ -41,7 +41,7 @@
 </PartContextmenu>
 
 <style>
-	.progress_bar {
+	.progress-bar {
 		position: absolute;
 		left: 0;
 		top: 0;
@@ -55,7 +55,7 @@
 	.controls {
 		visibility: hidden;
 	}
-	.part_summary:hover .controls {
+	.part-summary:hover .controls {
 		visibility: visible;
 	}
 </style>

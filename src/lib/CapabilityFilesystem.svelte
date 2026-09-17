@@ -1,13 +1,18 @@
 <script lang="ts">
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 
-	import {frontend_context} from './frontend.svelte.js';
+	import { frontend_context } from './frontend.svelte.ts';
 
 	const app = frontend_context.get();
-	const {capabilities} = app;
+	const { capabilities } = app;
 
 	const zzz_dir = $derived(app.zzz_dir);
 	const scoped_dirs = $derived(app.scoped_dirs);
+
+	// workspace paths that aren't in the original scoped_dirs
+	const workspace_paths = $derived(
+		app.workspaces.items.values.map((w) => w.path).filter((p) => !scoped_dirs.includes(p))
+	);
 </script>
 
 <div
@@ -15,14 +20,15 @@
 	style:display="display:flex !important"
 	style:align-items="flex-start !important"
 	style:font-weight="400 !important"
-	class:color_b={capabilities.filesystem.status === 'success'}
-	class:color_c={capabilities.filesystem.status === 'failure'}
-	class:color_d={capabilities.filesystem.status === 'pending'}
-	class:color_e={capabilities.filesystem.status === 'initial'}
+	class:palette_b={capabilities.filesystem.status === 'success'}
+	class:palette_c={capabilities.filesystem.status === 'failure'}
+	class:palette_d={capabilities.filesystem.status === 'pending'}
+	class:palette_e={capabilities.filesystem.status === 'initial'}
 >
 	<div class="column justify-content:center gap_xs p_md" style:min-height="80px">
 		<div class="font_size_xl">
-			filesystem {capabilities.filesystem.status === 'success'
+			filesystem
+			{capabilities.filesystem.status === 'success'
 				? 'available'
 				: capabilities.filesystem.status === 'failure'
 					? 'unavailable'
@@ -44,15 +50,18 @@
 			{#each scoped_dirs as dir (dir)}
 				<small>{dir}</small>
 			{/each}
+			{#each workspace_paths as dir (dir)}
+				<small class="text_50">{dir} <span class="font_size_xs">(workspace)</span></small>
+			{/each}
 		</div>
 	</div>
 </div>
 
 <section>
 	<p>
-		The backend's filesystem is scoped for security. Symlinks are not followed. Configure with <code
-			class="font_size_sm">PUBLIC_ZZZ_DIR</code
-		>
-		and <code class="font_size_sm">PUBLIC_ZZZ_SCOPED_DIRS</code>.
+		The backend's filesystem is scoped for security. Symlinks are not followed. Configure with
+		<code class="font_size_sm">PUBLIC_ZZZ_DIR</code> and
+		<code class="font_size_sm">PUBLIC_ZZZ_SCOPED_DIRS</code>. Directories added via workspaces are
+		shown separately.
 	</p>
 </section>

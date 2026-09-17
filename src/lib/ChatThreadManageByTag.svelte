@@ -1,14 +1,15 @@
 <script lang="ts">
-	import ConfirmButton from './ConfirmButton.svelte';
-	import {Chat} from './chat.svelte.js';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
+
+	import { Chat } from './chat.svelte.ts';
 
 	const {
-		chat,
+		chat
 	}: {
 		chat: Chat;
 	} = $props();
 
-	const {app} = $derived(chat);
+	const { app } = $derived(chat);
 
 	const tags = $derived(Array.from(app.tags)); // TODO refactor, `Tags` may be a class, maybe with an indexed collection
 </script>
@@ -42,7 +43,9 @@
 			<menu class="unstyled column">
 				{#each tags as tag (tag)}
 					<!-- TODO index this -->
-					{@const threads_with_tag = chat.threads.filter((t) => t.model.tags.includes(tag))}
+					{@const threads_with_tag = chat.threads.filter(
+						(t) => t.model?.tags.includes(tag) ?? false
+					)}
 					<ConfirmButton
 						disabled={!threads_with_tag.length}
 						class="width:100% font_size_sm py_xs3 justify-content:space-between plain border_radius_xs font-weight:600"

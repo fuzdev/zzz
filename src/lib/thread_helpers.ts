@@ -1,6 +1,6 @@
-import type {Turn} from './turn.svelte.js';
-import type {CompletionMessage, CompletionRole} from './completion_types.js';
-import {to_completion_response_text} from './response_helpers.js';
+import type { Turn } from './turn.svelte.ts';
+import type { CompletionMessage, CompletionRole } from './completion_types.ts';
+import { to_completion_response_text } from './response_helpers.ts';
 
 // TODO refactor where?
 /**
@@ -9,12 +9,12 @@ import {to_completion_response_text} from './response_helpers.js';
 export const render_message_with_role = (
 	role: CompletionRole,
 	content: string,
-	tag = 'message',
+	tag = 'message'
 ): string => `<${tag} role="${role}">${content}</${tag}>`;
 
 export const render_messages_to_string = (
-	turns: Iterable<{role: CompletionRole; content: string; enabled?: boolean}>,
-	tag = 'message',
+	turns: Iterable<{ role: CompletionRole; content: string; enabled?: boolean }>,
+	tag = 'message'
 ): string => {
 	let s = '';
 
@@ -34,7 +34,7 @@ export const render_messages_to_string = (
  */
 export const render_completion_messages = (
 	turns: Iterable<Turn>,
-	completion_messages: Array<CompletionMessage> = [],
+	completion_messages: Array<CompletionMessage> = []
 ): Array<CompletionMessage> => {
 	for (const turn of turns) {
 		if (!turn.enabled) continue;
@@ -44,7 +44,7 @@ export const render_completion_messages = (
 			content:
 				turn.role === 'assistant' && turn.response
 					? to_completion_response_text(turn.response) || ''
-					: turn.content,
+					: turn.content
 		});
 	}
 

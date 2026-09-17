@@ -1,12 +1,11 @@
 <script lang="ts">
-	import type {ComponentProps, Snippet} from 'svelte';
+	import type { ComponentProps, Snippet } from 'svelte';
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
-	import type {Thunk} from '@fuzdev/fuz_util/function.js';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type { Thunk } from '@fuzdev/fuz_util/function.ts';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 
-	import {GLYPH_COPY} from './glyphs.js';
-	import {to_preview} from './helpers.js';
-	import Glyph from './Glyph.svelte';
+	import { icon_copy } from '@fuzdev/fuz_ui/icons.ts';
+	import { to_preview } from './helpers.ts';
 
 	const {
 		content,
@@ -28,7 +27,7 @@
 	const read_content = () => (typeof content === 'function' ? content() : content);
 
 	const final_preview: string | undefined = $derived(
-		show_preview ? to_preview(preview ?? read_content(), preview_limit) : undefined,
+		show_preview ? to_preview(preview ?? read_content(), preview_limit) : undefined
 	);
 
 	const copy_to_clipboard = async (): Promise<void> => {
@@ -42,8 +41,7 @@
 	};
 </script>
 
-<ContextmenuEntry run={copy_to_clipboard} {...rest}>
-	{#snippet icon()}<Glyph glyph={GLYPH_COPY} />{/snippet}
+<ContextmenuEntry icon={icon_copy} run={copy_to_clipboard} {...rest}>
 	{#if children}
 		{@render children()}
 	{:else}

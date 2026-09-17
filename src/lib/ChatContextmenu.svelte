@@ -1,16 +1,21 @@
 <script lang="ts">
-	import type {ComponentProps, Snippet} from 'svelte';
+	import type { ComponentProps, Snippet } from 'svelte';
 	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 	import ContextmenuSubmenu from '@fuzdev/fuz_ui/ContextmenuSubmenu.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 
-	import type {Chat} from './chat.svelte.js';
-	import {frontend_context} from './frontend.svelte.js';
-	import {GLYPH_CHAT, GLYPH_DELETE, GLYPH_REMOVE, GLYPH_VIEW, GLYPH_ADD} from './glyphs.js';
+	import type { Chat } from './chat.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
+	import {
+		icon_add,
+		icon_chat,
+		icon_delete,
+		icon_remove,
+		icon_view
+	} from '@fuzdev/fuz_ui/icons.ts';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		chat,
@@ -22,31 +27,30 @@
 
 	const app = frontend_context.get();
 
-	let show_model_picker = $state(false);
+	let show_model_picker = $state.raw(false);
 </script>
 
 <Contextmenu {...rest} {entries} />
 
 {#snippet entries()}
-	<ContextmenuSubmenu>
-		{#snippet icon()}<Glyph glyph={GLYPH_CHAT} />{/snippet}
+	<ContextmenuSubmenu icon={icon_chat}>
 		chat
 		{#snippet menu()}
 			<ContextmenuEntry
+				icon={icon_add}
 				run={() => {
 					show_model_picker = true;
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_ADD} />{/snippet}
 				<span>add thread</span>
 			</ContextmenuEntry>
 
 			<ContextmenuEntry
+				icon={icon_view}
 				run={() => {
 					chat.view_mode = chat.view_mode === 'simple' ? 'multi' : 'simple';
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_VIEW} />{/snippet}
 				<span>{chat.view_mode === 'simple' ? 'multi' : 'simple'} view</span>
 			</ContextmenuEntry>
 
@@ -54,8 +58,7 @@
 			<ContextmenuEntryCopyToClipboard content={chat.id} label="copy id" />
 
 			{#if chat.threads.length}
-				<ContextmenuEntry run={() => chat.remove_all_threads()}>
-					{#snippet icon()}<Glyph glyph={GLYPH_REMOVE} />{/snippet}
+				<ContextmenuEntry icon={icon_remove} run={() => chat.remove_all_threads()}>
 					<span>remove all threads</span>
 				</ContextmenuEntry>
 			{/if}
@@ -68,11 +71,11 @@
 				/>
 
 				<ContextmenuEntry
+					icon={icon_remove}
 					run={() => {
 						chat.main_input = '';
 					}}
 				>
-					{#snippet icon()}<Glyph glyph={GLYPH_REMOVE} />{/snippet}
 					<span>clear input</span>
 				</ContextmenuEntry>
 			{/if}
@@ -80,6 +83,7 @@
 			<!-- TODO I think the best UX here is to have a dialog for the chat editor,
 			 focusing the editable input doesn't work outside of the ChatView  -->
 			<!-- <ContextmenuEntry
+				icon={icon_edit}
 				run={() => {
 					// TODO make this focus the `EditableText` if available, somehow
 					const new_name = prompt('Enter new name for chat:', chat.name); // eslint-disable-line no-alert
@@ -88,29 +92,29 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_EDIT} />{/snippet}
 				<span>edit chat</span>
 			</ContextmenuEntry> -->
 
 			<ContextmenuEntry
+				icon={icon_chat}
 				run={async () => {
 					// TODO make it have a unique name, and adding threads looks hacky,
 					// maybe add a `chats.duplicate` method
 					const new_chat = app.chats.add_chat(chat.clone());
 					// TODO hacky
 					for (const thread of chat.threads) {
-						new_chat.add_thread(thread.model);
+						if (thread.model) new_chat.add_thread(thread.model);
 					}
 
 					// Select the new chat
 					await app.chats.navigate_to(new_chat.id);
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_CHAT} />{/snippet}
 				<span>duplicate chat</span>
 			</ContextmenuEntry>
 
 			<ContextmenuEntry
+				icon={icon_delete}
 				run={() => {
 					// TODO @many better confirmation
 					// eslint-disable-next-line no-alert
@@ -119,7 +123,6 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
 				<span>delete chat</span>
 			</ContextmenuEntry>
 		{/snippet}

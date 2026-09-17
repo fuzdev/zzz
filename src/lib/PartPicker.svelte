@@ -1,18 +1,19 @@
 <script lang="ts">
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+
 	import Picker from './Picker.svelte';
 	import PartListitem from './PartListitem.svelte';
-	import {frontend_context} from './frontend.svelte.js';
-	import type {PartUnion} from './part.svelte.js';
-	import type {Uuid} from './zod_helpers.js';
-	import {sort_by_text, sort_by_numeric} from './sortable.svelte.js';
+	import { frontend_context } from './frontend.svelte.ts';
+	import type { PartUnion } from './part.svelte.ts';
+	import { sort_by_text, sort_by_numeric } from './sortable.svelte.ts';
 
 	const app = frontend_context.get();
-	const {parts} = app;
+	const { parts } = app;
 
 	const {
 		onpick,
 		filter,
-		exclude_ids,
+		exclude_ids
 	}: {
 		onpick: (part: PartUnion | undefined) => boolean | void;
 		filter?: ((part: PartUnion) => boolean) | undefined;
@@ -34,7 +35,7 @@
 		sort_by_text<PartUnion>('name_asc', 'name (a-z)', 'name'),
 		sort_by_text<PartUnion>('name_desc', 'name (z-a)', 'name', 'desc'),
 		sort_by_numeric<PartUnion>('token_count_highest', 'tokens (most)', 'token_count', 'desc'),
-		sort_by_numeric<PartUnion>('token_count_lowest', 'tokens (least)', 'token_count', 'asc'),
+		sort_by_numeric<PartUnion>('token_count_lowest', 'tokens (least)', 'token_count', 'asc')
 	]}
 	sort_key_default="created_newest"
 	show_sort_controls

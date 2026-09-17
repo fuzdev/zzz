@@ -1,6 +1,6 @@
-import {test, expect} from 'vitest';
+import { test, assert } from 'vitest';
 
-import {providers_default, models_default, chat_template_defaults} from '$lib/config_defaults.js';
+import { providers_default, models_default, chat_template_defaults } from '$lib/config_defaults.ts';
 
 test('all model provider_names exist in providers_default', () => {
 	// Extract all unique provider names from models
@@ -11,17 +11,17 @@ test('all model provider_names exist in providers_default', () => {
 
 	// Check that each model's provider exists
 	for (const provider_name of model_provider_names) {
-		expect(
+		assert.ok(
 			provider_names.has(provider_name),
-			`Provider "${provider_name}" used in models_default does not exist in providers_default`,
-		).toBe(true);
+			`Provider "${provider_name}" used in models_default does not exist in providers_default`
+		);
 	}
 });
 
 test('all chat template model_names exist in models_default', () => {
 	// Extract all unique model names from chat templates
 	const template_model_names = new Set(
-		chat_template_defaults.flatMap((template) => template.model_names),
+		chat_template_defaults.flatMap((template) => template.model_names)
 	);
 
 	// Extract all model names from models
@@ -35,8 +35,9 @@ test('all chat template model_names exist in models_default', () => {
 		}
 	}
 
-	expect(
+	assert.deepEqual(
 		missing_models,
-		`The following models in chat_template_defaults do not exist in models_default: ${missing_models.join(', ')}`,
-	).toEqual([]);
+		[],
+		`The following models in chat_template_defaults do not exist in models_default: ${missing_models.join(', ')}`
+	);
 });

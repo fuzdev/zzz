@@ -1,0 +1,37 @@
+[package]
+name = "testing_zzz_server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Test-mode zzz_server binary — wires fuz_testing's TestingArgon2idHasher for fast cross-process integration tests. NEVER ship in a release."
+
+[[bin]]
+name = "testing_zzzd"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+# Production zzz_server library — the test binary reuses the whole
+# server lifecycle. The only swap is the password hasher passed into
+# `zzz_server::run_app`.
+zzz_server = { path = "../zzz_server" }
+
+# Spine — same crates the production binary uses, plus fuz_testing for
+# the swap fixture. fuz_testing is `path_dep` only here; it is
+# *deliberately absent* from `zzz_server`'s production dep graph so the
+# `cargo xtask check-release` sanity check holds.
+fuz_actions.workspace = true
+fuz_auth.workspace = true
+# `logging` feature → non-blocking stdout subscriber init.
+fuz_sys = { workspace = true, features = ["logging"] }
+fuz_db.workspace = true
+fuz_http.workspace = true
+fuz_testing.workspace = true
+
+# Async runtime + tracing — same shape as `zzz_server`'s production
+# `main.rs`.
+tokio.workspace = true
+tracing.workspace = true

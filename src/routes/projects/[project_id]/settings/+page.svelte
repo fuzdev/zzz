@@ -1,12 +1,12 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {projects_context} from '$routes/projects/projects.svelte.js';
+	import { projects_context } from '$routes/projects/projects.svelte.ts';
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
-	import {GLYPH_DELETE} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import { icon_delete } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const projects = projects_context.get();
 
@@ -15,14 +15,14 @@
 	const project = $derived(projects.current_project);
 </script>
 
-<div class="project_layout">
+<div class="project-layout">
 	<!-- TODO @many refactor for better component instance stability for e.g. transitions -->
 	<ProjectSidebar />
 	{#if project}
 		<SectionSidebar {project} section="settings" />
 	{/if}
 
-	<div class="project_content">
+	<div class="project-content">
 		{#if project_viewmodel?.project}
 			<div class="p_lg">
 				<h1 class="mb_lg">project settings</h1>
@@ -47,15 +47,14 @@
 								bind:value={project_viewmodel.edited_description}
 								class="width:100%"
 								rows="3"
-								placeholder={project_viewmodel.project.description || 'No description'}
-							></textarea>
+								placeholder={project_viewmodel.project.description || 'No description'}></textarea>
 						</label>
 					</div>
 
 					<button
 						type="button"
 						onclick={() => project_viewmodel.save_project_details()}
-						class="color_a"
+						class="palette_a"
 						disabled={!project_viewmodel.has_changes}
 					>
 						save changes
@@ -68,10 +67,10 @@
 
 					<button
 						type="button"
-						class="color_c"
+						class="palette_c"
 						onclick={() => project_viewmodel.delete_current_project()}
 					>
-						<Glyph glyph={GLYPH_DELETE} />&nbsp; delete project
+						<Svg data={icon_delete} />&nbsp; delete project
 					</button>
 				</div>
 			</div>
@@ -82,13 +81,13 @@
 </div>
 
 <style>
-	.project_layout {
+	.project-layout {
 		display: flex;
 		height: 100%;
 		overflow: hidden;
 	}
 
-	.project_content {
+	.project-content {
 		flex: 1;
 		overflow: auto;
 	}

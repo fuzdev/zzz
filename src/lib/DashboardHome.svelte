@@ -1,14 +1,14 @@
 <script lang="ts">
-	import {resolve} from '$app/paths';
+	import { resolve } from '$app/paths';
 
-	import {frontend_context} from './frontend.svelte.js';
-	import Glyph from './Glyph.svelte';
+	import { frontend_context } from './frontend.svelte.ts';
 	import ProviderLink from './ProviderLink.svelte';
 	import PromptList from './PromptList.svelte';
 	import ChatList from './ChatList.svelte';
 	import ModelLink from './ModelLink.svelte';
-	import {GLYPH_ADD, GLYPH_PROVIDER, GLYPH_MODEL} from './glyphs.js';
-	import {to_nav_link_href} from './nav.js';
+	import { icon_add, icon_model, icon_provider } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import { to_nav_link_href } from './nav.ts';
 
 	const app = frontend_context.get();
 </script>
@@ -22,19 +22,21 @@
 					href={/* eslint-disable-line svelte/no-navigation-without-resolve */ to_nav_link_href(
 						app,
 						'chats',
-						resolve('/chats'),
-					)}>chats</a
+						resolve('/chats')
+					)}
 				>
+					chats
+				</a>
 				<button
 					type="button"
-					class="plain icon_button font_size_md"
+					class="plain icon-button font_size_md"
 					title="create new chat"
 					onclick={() => {
 						const chat = app.chats.add();
 						void app.chats.navigate_to(chat.id);
 					}}
 				>
-					<Glyph glyph={GLYPH_ADD} />
+					<Svg data={icon_add} />
 				</button>
 			</h3>
 			{#if app.chats.ordered_items.length}
@@ -43,7 +45,7 @@
 				<div class="text-align:center p_md">
 					<button
 						type="button"
-						class="color_d"
+						class="palette_d"
 						onclick={() => {
 							const chat = app.chats.add();
 							void app.chats.navigate_to(chat.id);
@@ -61,19 +63,21 @@
 					href={/* eslint-disable-line svelte/no-navigation-without-resolve */ to_nav_link_href(
 						app,
 						'prompts',
-						resolve('/prompts'),
-					)}>prompts</a
+						resolve('/prompts')
+					)}
 				>
+					prompts
+				</a>
 				<button
 					type="button"
-					class="plain icon_button font_size_md"
+					class="plain icon-button font_size_md"
 					title="create new prompt"
 					onclick={() => {
 						const prompt = app.prompts.add();
 						void app.prompts.navigate_to(prompt.id);
 					}}
 				>
-					<Glyph glyph={GLYPH_ADD} />
+					<Svg data={icon_add} />
 				</button>
 			</h3>
 			{#if app.prompts.ordered_items.length}
@@ -94,10 +98,10 @@
 		</div>
 		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
 			<div class="mb_lg">
-				<a href={resolve('/providers')} class="text_80"
-					><Glyph glyph={GLYPH_PROVIDER} />
-					<h3 class="display:inline my_0">providers</h3></a
-				>
+				<a href={resolve('/providers')} class="text_80">
+					<Svg data={icon_provider} />
+					<h3 class="display:inline my_0">providers</h3>
+				</a>
 			</div>
 			<div>
 				<ul class="unstyled">
@@ -105,7 +109,7 @@
 						<li>
 							<ProviderLink
 								{provider}
-								icon="svg"
+								icon="logo"
 								class="menuitem row justify-content:start gap_xs py_xs"
 							/>
 						</li>
@@ -117,16 +121,20 @@
 		</div>
 		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
 			<div class="mb_lg">
-				<a href={resolve('/models')} class="text_80"
-					><Glyph glyph={GLYPH_MODEL} />
-					<h3 class="display:inline my_0">models</h3></a
-				>
+				<a href={resolve('/models')} class="text_80">
+					<Svg data={icon_model} />
+					<h3 class="display:inline my_0">models</h3>
+				</a>
 			</div>
 			<div>
 				<ul class="unstyled">
 					{#each app.models.ordered_by_name as model (model.name)}
 						<li>
-							<ModelLink {model} icon class="menuitem row justify-content:start gap_xs py_xs" />
+							<ModelLink
+								{model}
+								icon="logo"
+								class="menuitem row justify-content:start gap_xs py_xs"
+							/>
 						</li>
 					{:else}
 						<p>no models available yet</p>

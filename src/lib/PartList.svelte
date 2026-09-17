@@ -1,12 +1,12 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
-	import type {Snippet} from 'svelte';
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import { slide } from 'svelte/transition';
+	import type { Snippet } from 'svelte';
+	import type { SvelteHTMLElements } from 'svelte/elements';
 
-	import {Reorderable, type ReorderableOptions} from './reorderable.svelte.js';
+	import { Reorderable, type ReorderableOptions } from './reorderable.svelte.ts';
 	import PartSummary from './PartSummary.svelte';
-	import type {PartUnion} from './part.svelte.js';
-	import type {Prompt} from './prompt.svelte.js';
+	import type { PartUnion } from './part.svelte.ts';
+	import type { Prompt } from './prompt.svelte.ts';
 
 	const {
 		parts,
@@ -15,7 +15,7 @@
 		reorderable_options,
 		item_attrs,
 		attrs,
-		empty = empty_default,
+		empty = empty_default
 	}: {
 		parts: Array<PartUnion>;
 		prompt?: Prompt | undefined;
@@ -45,13 +45,13 @@
 	<ul
 		{...attrs}
 		class="unstyled column gap_xs5 {attrs?.class}"
-		{@attach reorderable.list({onreorder})}
+		{@attach reorderable.list({ onreorder })}
 	>
 		{#each parts as part, i (part.id)}
 			<li
 				{...item_attrs}
 				class="border_radius_xs {item_attrs?.class}"
-				{@attach reorderable.item({index: i})}
+				{@attach reorderable.item({ index: i })}
 				transition:slide
 			>
 				<PartSummary {part} {prompt} />

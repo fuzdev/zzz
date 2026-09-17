@@ -1,6 +1,5 @@
-import {z} from 'zod';
-
-import {Uuid, UuidWithDefault} from './zod_helpers.js';
+import { z } from 'zod';
+import { Uuid, UuidWithDefault } from '@fuzdev/fuz_util/id.ts';
 
 export const XmlAttributeKey = z
 	.string()
@@ -22,7 +21,7 @@ export type XmlAttributeValueWithDefault = z.infer<typeof XmlAttributeValueWithD
 export const XmlAttribute = z.strictObject({
 	id: Uuid,
 	key: XmlAttributeKey,
-	value: XmlAttributeValue,
+	value: XmlAttributeValue
 });
 export type XmlAttribute = z.infer<typeof XmlAttribute>;
 
@@ -31,7 +30,7 @@ export type XmlAttribute = z.infer<typeof XmlAttribute>;
 export const XmlAttributeWithDefaults = z.strictObject({
 	id: UuidWithDefault,
 	key: XmlAttributeKeyWithDefault,
-	value: XmlAttributeValueWithDefault,
+	value: XmlAttributeValueWithDefault
 });
 export type XmlAttributeWithDefaults = z.infer<typeof XmlAttributeWithDefaults>;
 

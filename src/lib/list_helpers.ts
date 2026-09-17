@@ -7,7 +7,7 @@ export const reorder_list = (items: Array<any>, from_index: number, to_index: nu
 	// Validate indices
 	if (from_index < 0 || to_index < 0 || from_index >= items.length || to_index > items.length) {
 		console.error(
-			`Invalid indices: from ${from_index} to ${to_index} in array of length ${items.length}`,
+			`Invalid indices: from ${from_index} to ${to_index} in array of length ${items.length}`
 		);
 		return; // Better to return than throw here
 	}
@@ -23,14 +23,14 @@ export const reorder_list = (items: Array<any>, from_index: number, to_index: nu
 export const to_reordered_list = <T>(
 	items: Array<T>,
 	from_index: number,
-	to_index: number,
+	to_index: number
 ): Array<T> => {
 	if (from_index === to_index) return items;
 
 	// Validate indices
 	if (from_index < 0 || to_index < 0 || from_index >= items.length || to_index > items.length) {
 		console.error(
-			`Invalid indices: from ${from_index} to ${to_index} in array of length ${items.length}`,
+			`Invalid indices: from ${from_index} to ${to_index} in array of length ${items.length}`
 		);
 		return items;
 	}
@@ -48,7 +48,7 @@ export const to_reordered_list = <T>(
 			...items.slice(0, from_index),
 			...items.slice(from_index + 1, to_index + 1),
 			item_moved,
-			...items.slice(to_index + 1),
+			...items.slice(to_index + 1)
 		];
 	} else {
 		// Moving backward: take slices before and after the move, skipping the moved item
@@ -56,7 +56,7 @@ export const to_reordered_list = <T>(
 			...items.slice(0, to_index),
 			item_moved,
 			...items.slice(to_index, from_index),
-			...items.slice(from_index + 1),
+			...items.slice(from_index + 1)
 		];
 	}
 };

@@ -1,13 +1,13 @@
 <script lang="ts">
-	import type {SvelteHTMLElements} from 'svelte/elements';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type { SvelteHTMLElements } from 'svelte/elements';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
-	import type {PartUnion} from './part.svelte.js';
-	import type {Prompt} from './prompt.svelte.js';
-	import type {Prompts} from './prompts.svelte.js';
-	import ConfirmButton from './ConfirmButton.svelte';
-	import {GLYPH_REMOVE} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import type { PartUnion } from './part.svelte.ts';
+	import type { Prompt } from './prompt.svelte.ts';
+	import type { Prompts } from './prompts.svelte.ts';
+	import { icon_remove } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const {
 		part,
@@ -33,5 +33,5 @@
 	class="plain sm"
 	title="remove part {'"' + part.name + '"'}"
 >
-	<Glyph glyph={GLYPH_REMOVE} />
+	<Svg data={icon_remove} />
 </ConfirmButton>

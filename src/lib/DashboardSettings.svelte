@@ -1,22 +1,22 @@
 <script lang="ts">
-	import {GLYPH_SETTINGS} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import { icon_settings } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import Settings from './Settings.svelte';
-	import {frontend_context} from './frontend.svelte.js';
+	import { frontend_context } from './frontend.svelte.ts';
 	import DashboardHeader from './DashboardHeader.svelte';
 	import TimeWidget from './TimeWidget.svelte';
 	import Footer from './Footer.svelte';
 
 	const app = frontend_context.get();
 
-	// TODO display capabilities (like what APIs are available, including remote server (off when deployed statically), local pglite (could be disconnected, websockets?))
+	// TODO display capabilities (like what APIs are available, including remote server (off when deployed statically), local DB (could be disconnected, websockets?))
 	// TODO display database info/explorer
 </script>
 
 <div class="p_lg">
 	<DashboardHeader>
 		{#snippet header()}
-			<h1><Glyph glyph={GLYPH_SETTINGS} /> system settings</h1>
+			<h1><Svg data={icon_settings} /> system settings</h1>
 		{/snippet}
 		<TimeWidget value={app.time.now} />
 	</DashboardHeader>

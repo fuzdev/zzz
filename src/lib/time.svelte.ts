@@ -1,12 +1,17 @@
-import {z} from 'zod';
-import {SvelteDate} from 'svelte/reactivity';
-import {BROWSER} from 'esm-env';
+import { z } from 'zod';
+import { SvelteDate } from 'svelte/reactivity';
+import { BROWSER } from 'esm-env';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {CellJson} from './cell_types.js';
-import {format_datetime, format_short_date, format_time, format_timestamp} from './time_helpers.js';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { CellJson } from './cell_types.ts';
+import {
+	format_datetime,
+	format_short_date,
+	format_time,
+	format_timestamp
+} from './time_helpers.ts';
 
-export const TimeJson = CellJson.extend({}).meta({cell_class_name: 'Time'});
+export const TimeJson = CellJson.extend({}).meta({ cell_class_name: 'Time' });
 export type TimeJson = z.infer<typeof TimeJson>;
 export type TimeJsonInput = z.input<typeof TimeJson>;
 
@@ -54,12 +59,12 @@ export class Time extends Cell<typeof TimeJson> {
 	/**
 	 * The interval in milliseconds between time updates.
 	 */
-	interval: number = $state(Time.DEFAULT_INTERVAL);
+	interval: number = $state.raw(Time.DEFAULT_INTERVAL);
 
 	/**
 	 * Whether the interval timer is currently running.
 	 */
-	running: boolean = $state(false);
+	running: boolean = $state.raw(false);
 
 	#timer?: NodeJS.Timeout;
 
@@ -126,9 +131,10 @@ export class Time extends Cell<typeof TimeJson> {
 	}
 
 	/**
-	 * Override `Cell`'s destroy method to ensure timer cleanup.
+	 * Override `Cell.dispose` to stop the interval timer before unregistering.
 	 */
-	destroy(): void {
+	override dispose(): void {
 		this.stop();
+		super.dispose();
 	}
 }

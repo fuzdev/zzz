@@ -1,21 +1,22 @@
 <script lang="ts">
-	import {untrack} from 'svelte';
-	import {slide} from 'svelte/transition';
+	import { untrack } from 'svelte';
+	import { slide } from 'svelte/transition';
 
-	import {DiskfilePart} from './part.svelte.js';
-	import {frontend_context} from './frontend.svelte.js';
+	import { DiskfilePart } from './part.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
 	import ContentEditor from './ContentEditor.svelte';
 	import DiskfileActions from './DiskfileActions.svelte';
 	import DiskfileMetrics from './DiskfileMetrics.svelte';
-	import {DiskfileEditorState} from './diskfile_editor_state.svelte.js';
+	import { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
-	import Glyph from './Glyph.svelte';
-	import {GLYPH_FILE, GLYPH_PLACEHOLDER} from './glyphs.js';
+	import { icon_file } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import { format_placeholder } from './helpers.ts';
 
 	const {
 		diskfile_part,
-		show_actions = true,
+		show_actions = true
 	}: {
 		diskfile_part: DiskfilePart;
 		show_actions?: boolean | undefined;
@@ -23,17 +24,17 @@
 
 	const app = frontend_context.get();
 
-	const {diskfile} = $derived(diskfile_part);
+	const { diskfile } = $derived(diskfile_part);
 
 	// Create editor state reference - will be initialized in the effect
 	// TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
 	// maybe this instance is created once, and it gets a thunk for the diskfile? `DikfileEditorState.of(() => diskfile)`
-	let editor_state: DiskfileEditorState | undefined = $state();
+	let editor_state: DiskfileEditorState | undefined = $state.raw();
 
 	// Keep track of the content editor for focusing
-	let content_editor: {focus: () => void} | undefined = $state();
+	let content_editor: { focus: () => void } | undefined = $state.raw();
 
-	let show_file_picker = $state(false);
+	let show_file_picker = $state.raw(false);
 
 	// TODO probably refactor to avoid the effect, look also at `TODO @many refactor, maybe move a collection on `app.diskfiles`?`
 	// Effect for managing editor state lifecycle
@@ -51,7 +52,7 @@
 		untrack(() => {
 			// Create new editor state if it doesn't exist
 			if (!editor_state) {
-				editor_state = new DiskfileEditorState({app, diskfile}); // TODO @many refactor, maybe move a collection on `app.diskfiles`?
+				editor_state = new DiskfileEditorState({ app, diskfile }); // TODO @many refactor, maybe move a collection on `app.diskfiles`?
 				diskfile_part.link_editor_state(editor_state); // TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
 				return;
 			}
@@ -84,7 +85,7 @@
 			show_file_picker = true;
 		}}
 	>
-		<Glyph glyph={GLYPH_FILE} />
+		<Svg data={icon_file} />
 		<small class="ml_xs2">pick file</small>
 	</button>
 </div>
@@ -103,7 +104,7 @@
 					}
 				}
 				token_count={editor_state.current_token_count}
-				placeholder={GLYPH_PLACEHOLDER + ' ' + diskfile.path_relative}
+				placeholder={format_placeholder(diskfile.path_relative)}
 				show_stats={false}
 				readonly={false}
 				onsave={async (value) => {
@@ -143,7 +144,7 @@
 		content={diskfile_part.content || ''}
 		readonly
 		placeholder="[no file]"
-		attrs={{disabled: true}}
+		attrs={{ disabled: true }}
 	/>
 {/if}
 

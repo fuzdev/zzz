@@ -1,28 +1,28 @@
-import {z} from 'zod';
-import {page} from '$app/state';
+import { z } from 'zod';
+import { page } from '$app/state';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {Prompt, PromptJson, type PromptJsonInput} from './prompt.svelte.js';
-import type {Uuid} from './zod_helpers.js';
-import {HANDLED} from './cell_helpers.js';
-import {IndexedCollection} from './indexed_collection.svelte.js';
-import {create_single_index, create_derived_index} from './indexed_collection_helpers.svelte.js';
-import {to_reordered_list} from './list_helpers.js';
-import type {PartUnion} from './part.svelte.js';
-import {get_unique_name} from './helpers.js';
-import {to_prompts_url} from './nav_helpers.js';
-import {CellJson} from './cell_types.js';
-import {goto_unless_current} from './navigation_helpers.js';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { Prompt, PromptJson, type PromptJsonInput } from './prompt.svelte.ts';
+import { HANDLED } from './cell_helpers.ts';
+import { IndexedCollection } from './indexed_collection.svelte.ts';
+import { create_single_index, create_derived_index } from './indexed_collection_helpers.svelte.ts';
+import { to_reordered_list } from './list_helpers.ts';
+import type { PartUnion } from './part.svelte.ts';
+import { get_unique_name } from './helpers.ts';
+import { to_prompts_url } from './nav_helpers.ts';
+import { CellJson } from './cell_types.ts';
+import { goto_unless_current } from './navigation_helpers.ts';
 
 export const PromptsJson = CellJson.extend({
 	items: z.array(PromptJson).default(() => []),
 	selected_id: z.string().nullable().default(null),
-	show_sort_controls: z.boolean().default(false),
-}).meta({cell_class_name: 'Prompts'});
+	show_sort_controls: z.boolean().default(false)
+}).meta({ cell_class_name: 'Prompts' });
 export type PromptsJson = z.infer<typeof PromptsJson>;
 export type PromptsJsonInput = z.input<typeof PromptsJson>;
 
-export interface PromptsOptions extends CellOptions<typeof PromptsJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
+export interface PromptsOptions extends CellOptions<typeof PromptsJson> {}
 
 export class Prompts extends Cell<typeof PromptsJson> {
 	// Initialize items with proper typing and unified indexes
@@ -31,7 +31,7 @@ export class Prompts extends Cell<typeof PromptsJson> {
 			create_single_index({
 				key: 'by_name',
 				extractor: (prompt) => prompt.name,
-				query_schema: z.string(),
+				query_schema: z.string()
 			}),
 
 			create_derived_index({
@@ -43,7 +43,7 @@ export class Prompts extends Cell<typeof PromptsJson> {
 				onadd: (items, item) => {
 					// Insert at the right position based on creation date
 					const index = items.findIndex(
-						(p) => new Date(item.created).getTime() > new Date(p.created).getTime(),
+						(p) => new Date(item.created).getTime() > new Date(p.created).getTime()
 					);
 					if (index === -1) {
 						items.push(item);
@@ -51,18 +51,18 @@ export class Prompts extends Cell<typeof PromptsJson> {
 						items.splice(index, 0, item);
 					}
 					return items;
-				},
+				}
 			}),
 
 			create_derived_index({
 				key: 'manual_order',
-				compute: (collection) => collection.values,
-			}),
-		],
+				compute: (collection) => collection.values
+			})
+		]
 	});
 
-	#selected_id: Uuid | null = $state()!;
-	selected_id_last_non_null: Uuid | null = $state()!;
+	#selected_id: Uuid | null = $state.raw()!;
+	selected_id_last_non_null: Uuid | null = $state.raw()!;
 	get selected_id(): Uuid | null {
 		return this.#selected_id;
 	}
@@ -72,11 +72,11 @@ export class Prompts extends Cell<typeof PromptsJson> {
 	}
 
 	readonly selected: Prompt | undefined = $derived(
-		this.selected_id ? this.items.by_id.get(this.selected_id) : undefined,
+		this.selected_id ? this.items.by_id.get(this.selected_id) : undefined
 	);
 
 	/** Controls visibility of sort controls in the prompts list. */
-	show_sort_controls: boolean = $state()!;
+	show_sort_controls: boolean = $state.raw()!;
 
 	/** Ordered array of prompts derived from the `manual_order` index. */
 	readonly ordered_items: Array<Prompt> = $derived(this.items.derived_index('manual_order'));
@@ -94,20 +94,20 @@ export class Prompts extends Cell<typeof PromptsJson> {
 					}
 				}
 				return HANDLED;
-			},
+			}
 		};
 
 		this.init();
 	}
 
 	filter_by_part(part: PartUnion): Array<Prompt> {
-		const {id} = part;
+		const { id } = part;
 		return this.ordered_items.filter((p) => p.parts.some((b) => b.id === id)); // TODO add an index?
 	}
 
 	add(json?: PromptJsonInput): Prompt {
-		const j = !json?.name ? {...json, name: this.generate_unique_name('new prompt')} : json;
-		const prompt = new Prompt({app: this.app, json: j});
+		const j = !json?.name ? { ...json, name: this.generate_unique_name('new prompt') } : json;
+		const prompt = new Prompt({ app: this.app, json: j });
 		this.items.add(prompt);
 		if (this.selected_id === null) {
 			this.selected_id = prompt.id;
@@ -121,7 +121,7 @@ export class Prompts extends Cell<typeof PromptsJson> {
 
 	// TODO @many look into making these more generic, less manual bookkeeping
 	add_many(prompts_json: Array<PromptJsonInput>): Array<Prompt> {
-		const prompts = prompts_json.map((json) => new Prompt({app: this.app, json}));
+		const prompts = prompts_json.map((json) => new Prompt({ app: this.app, json }));
 		this.items.add_many(prompts);
 
 		// Set selected_id to the first prompt if none is selected
@@ -164,7 +164,7 @@ export class Prompts extends Cell<typeof PromptsJson> {
 	}
 
 	select_next(): Promise<void> {
-		const {by_id} = this.items;
+		const { by_id } = this.items;
 		const next = by_id.values().next();
 		return this.navigate_to(next.value?.id ?? null);
 	}

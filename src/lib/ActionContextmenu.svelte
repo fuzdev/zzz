@@ -1,15 +1,14 @@
 <script lang="ts">
-	import type {ComponentProps, Snippet} from 'svelte';
+	import type { ComponentProps, Snippet } from 'svelte';
 	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 	import ContextmenuSubmenu from '@fuzdev/fuz_ui/ContextmenuSubmenu.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 
-	import type {Action} from './action.svelte.js';
-	import {frontend_context} from './frontend.svelte.js';
-	import {GLYPH_LOG, GLYPH_DELETE} from './glyphs.js';
+	import type { Action } from './action.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
+	import { icon_delete, icon_log } from '@fuzdev/fuz_ui/icons.ts';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		action,
@@ -25,8 +24,7 @@
 <Contextmenu {...rest} {entries} />
 
 {#snippet entries()}
-	<ContextmenuSubmenu>
-		{#snippet icon()}<Glyph glyph={GLYPH_LOG} />{/snippet}
+	<ContextmenuSubmenu icon={icon_log}>
 		action
 		{#snippet menu()}
 			<ContextmenuEntryCopyToClipboard content={action.method} label="copy method" />
@@ -42,16 +40,17 @@
 			<!-- TODO implement `action.retry` or `actions.retry` or something -- see `app.api` too
 			{#if action.has_error}
 				<ContextmenuEntry
+					icon={icon_retry}
 					run={() => {
 						console.log('Retry action:', action.method);
 					}}
 				>
-					{#snippet icon()}<Glyph glyph={GLYPH_RETRY} />{/snippet}
 					<span>retry action</span>
 				</ContextmenuEntry>
 			{/if} -->
 
 			<ContextmenuEntry
+				icon={icon_delete}
 				run={() => {
 					// TODO
 					// eslint-disable-next-line no-alert
@@ -60,7 +59,6 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
 				<span>delete from history</span>
 			</ContextmenuEntry>
 		{/snippet}

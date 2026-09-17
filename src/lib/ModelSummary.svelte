@@ -1,19 +1,19 @@
 <script lang="ts">
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import type { SvelteHTMLElements } from 'svelte/elements';
+
+	import { icon_provider } from '@fuzdev/fuz_ui/icons.ts';
 
 	import ModelLink from './ModelLink.svelte';
 	import ModelContextmenu from './ModelContextmenu.svelte';
 	import ProviderLink from './ProviderLink.svelte';
-	import type {Model} from './model.svelte.js';
-	import Glyph from './Glyph.svelte';
+	import type { Model } from './model.svelte.ts';
 	import ProviderLogo from './ProviderLogo.svelte';
-	import {GLYPH_DOWNLOAD} from './glyphs.js';
-	import {format_gigabytes} from './format_helpers.js';
+	import { format_gigabytes } from './format_helpers.ts';
 
 	const {
 		model,
 		omit_provider,
-		attrs,
+		attrs
 	}: {
 		model: Model;
 		omit_provider?: boolean | undefined;
@@ -26,7 +26,7 @@
 <ModelContextmenu {model}>
 	<div {...attrs} class="panel p_lg {attrs?.class}">
 		<div class="font_size_xl mb_lg">
-			<ModelLink {model} icon class="row">
+			<ModelLink {model} class="row">
 				<div class="flex-shrink:0">
 					<ProviderLogo name={model.provider_name} />
 				</div>
@@ -35,7 +35,7 @@
 		</div>
 		{#if !omit_provider}
 			<div class="mb_lg">
-				<ProviderLink provider={model.provider} icon="glyph" show_name />
+				<ProviderLink provider={model.provider} icon={icon_provider} label="name" />
 			</div>
 		{/if}
 
@@ -47,51 +47,25 @@
 			</ul>
 		{/if}
 
-		{#if model.downloaded === false}
-			{#if model.provider_name === 'ollama' && !model.downloaded}
-				<button type="button" class="plain sm" onclick={() => model.navigate_to_download()}>
-					<Glyph glyph={GLYPH_DOWNLOAD} />&nbsp; download
-				</button>
-			{/if}
-		{/if}
-
-		<div class="specs_grid">
+		<div class="column gap_xs">
 			{#if model.context_window}
-				<div class="spec_item">
-					<span class="spec_label">context:</span>
+				<div class="display:flex flex-wrap:wrap gap_xs font_size_sm">
+					<span class="text_50 font-weight:600">context:</span>
 					<span>{model.context_window.toLocaleString()} tokens</span>
 				</div>
 			{/if}
 			{#if model.parameter_count}
-				<div class="spec_item">
-					<span class="spec_label">parameters:</span>
+				<div class="display:flex flex-wrap:wrap gap_xs font_size_sm">
+					<span class="text_50 font-weight:600">parameters:</span>
 					<span>{model.parameter_count.toLocaleString()}B</span>
 				</div>
 			{/if}
 			{#if model.filesize}
-				<div class="spec_item">
-					<span class="spec_label">size:</span>
+				<div class="display:flex flex-wrap:wrap gap_xs font_size_sm">
+					<span class="text_50 font-weight:600">size:</span>
 					<span>{format_gigabytes(model.filesize)}</span>
 				</div>
 			{/if}
 		</div>
 	</div>
 </ModelContextmenu>
-
-<style>
-	.specs_grid {
-		display: grid;
-		grid-template-columns: 1fr;
-		gap: var(--space_xs);
-	}
-	.spec_item {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space_xs);
-		font-size: var(--font_size_sm);
-	}
-	.spec_label {
-		color: var(--color_text_2);
-		font-weight: 600;
-	}
-</style>

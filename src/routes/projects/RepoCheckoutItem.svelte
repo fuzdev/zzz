@@ -1,16 +1,16 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {GLYPH_DELETE} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
-	import type {RepoCheckout} from '$routes/projects/projects_schema.js';
+	import { icon_delete } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import type { RepoCheckout } from './projects_schema.ts';
 
 	const {
 		checkout,
 		index,
 		on_remove,
 		on_add_tag,
-		on_remove_tag,
+		on_remove_tag
 	}: {
 		checkout: RepoCheckout;
 		index: number;
@@ -19,8 +19,8 @@
 		on_remove_tag: (index: number, tag_index: number) => void;
 	} = $props();
 
-	let tag_input = $state('');
-	let tag_el: HTMLInputElement | undefined = $state();
+	let tag_input = $state.raw('');
+	let tag_el: HTMLInputElement | undefined = $state.raw();
 </script>
 
 <div class="panel p_sm mb_md">
@@ -52,14 +52,16 @@
 		<span class="display:block mb_xs">Tags</span>
 		<div class="display:flex flex-wrap:wrap gap_xs mb_xs">
 			{#each checkout.tags as tag, tag_index (tag_index)}
-				<span class="chip color_e display:flex align-items:center">
+				<span class="chip palette_e display:flex align-items:center">
 					{tag}
 					<button
 						type="button"
-						class="icon_button plain font_size_xs ml_xs"
+						class="icon-button plain font_size_xs ml_xs"
 						title="Remove tag"
-						onclick={() => on_remove_tag(index, tag_index)}><Glyph glyph={GLYPH_DELETE} /></button
+						onclick={() => on_remove_tag(index, tag_index)}
 					>
+						<Svg data={icon_delete} />
+					</button>
 				</span>
 			{/each}
 		</div>
@@ -88,8 +90,8 @@
 	</div>
 
 	<div class="display:flex justify-content:end">
-		<button type="button" class="color_c" onclick={() => on_remove(index)}>
-			<Glyph glyph={GLYPH_DELETE} />&nbsp; delete checkout
+		<button type="button" class="palette_c" onclick={() => on_remove(index)}>
+			<Svg data={icon_delete} />&nbsp; delete checkout
 		</button>
 	</div>
 </div>

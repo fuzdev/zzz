@@ -1,0 +1,32 @@
+[package]
+name = "zzz"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "zzz CLI — daemon manager and workspace launcher"
+
+[[bin]]
+name = "zzz"
+path = "src/main.rs"
+
+[dependencies]
+argh.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["process", "time"] }
+reqwest.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+# Shared daemon-lifecycle primitives — PID liveness (`/proc`), signal
+# forwarding, RFC-3339 timestamps, and crash-safe atomic writes. The CLI keeps
+# its own `DaemonInfo` (the fuz_app TS v1 wire shape), but routes the OS-level
+# plumbing through fuz_sys rather than re-deriving it.
+fuz_sys = { workspace = true, features = ["tls"] }
+
+[dev-dependencies]
+# `io-util` for the in-module health-probe test's mock HTTP responder
+# (kept out of the production binary's tokio feature set).
+tokio = { workspace = true, features = ["io-util", "rt-multi-thread", "macros", "net", "time"] }
+
+[lints]
+workspace = true

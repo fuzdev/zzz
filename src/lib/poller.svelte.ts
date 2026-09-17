@@ -1,4 +1,4 @@
-import {BROWSER} from 'esm-env';
+import { BROWSER } from 'esm-env';
 
 export interface PollerOptions {
 	/** Function to call on each poll interval. */
@@ -17,7 +17,7 @@ export class Poller {
 	// I dont normally use this pattern but trying it out
 	static DEFAULT_INTERVAL = 15_000;
 
-	#active: boolean = $state(false);
+	#active: boolean = $state.raw(false);
 
 	/**
 	 * Check if the poller is currently active.
@@ -41,7 +41,7 @@ export class Poller {
 	/**
 	 * Start polling with optional overrides.
 	 */
-	start(options?: {immediate?: boolean; interval?: number}): void {
+	start(options?: { immediate?: boolean; interval?: number }): void {
 		if (!BROWSER || this.#active) return;
 
 		const immediate = options?.immediate ?? this.#immediate;

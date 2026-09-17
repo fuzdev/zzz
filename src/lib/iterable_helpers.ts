@@ -5,7 +5,7 @@
  */
 export const create_map_by_property = <T, K extends keyof T>(
 	items: Iterable<T>,
-	property: K,
+	property: K
 ): Map<T[K], T> => {
 	const map: Map<T[K], T> = new Map();
 	for (const item of items) {

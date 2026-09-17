@@ -1,23 +1,30 @@
 <script lang="ts">
-	import {resolve} from '$app/paths';
-	import type {Snippet} from 'svelte';
-	import {page} from '$app/state';
-	import {onNavigate} from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import type { Snippet } from 'svelte';
+	import { page } from '$app/state';
+	import { onNavigate } from '$app/navigation';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import {is_editable, swallow} from '@fuzdev/fuz_util/dom.js';
-	import {slide} from 'svelte/transition';
+	import { is_editable, swallow } from '@fuzdev/fuz_util/dom.ts';
+	import { slide } from 'svelte/transition';
 
-	import {logo_zzz} from './logos.js';
+	import {
+		icon_arrow_left,
+		icon_arrow_right,
+		icon_desk,
+		icon_project,
+		icon_tab
+	} from '@fuzdev/fuz_ui/icons.ts';
+
+	import { logo_zzz } from './logos.ts';
 	import NavLink from './NavLink.svelte';
-	import Glyph from './Glyph.svelte';
-	import {GLYPH_ARROW_LEFT, GLYPH_ARROW_RIGHT, GLYPH_PROJECT, GLYPH_TAB} from './glyphs.js';
-	import {frontend_context} from './frontend.svelte.js';
-	import {main_nav_items_default, to_nav_link_href} from './nav.js';
+	import { frontend_context } from './frontend.svelte.ts';
+	import { main_nav_items_default, to_nav_link_href } from './nav.ts';
+	import { DESK_WIDTH } from './DeskMenu.svelte';
 
 	// TODO dashboard should be mounted with Markdown
 
 	const {
-		children,
+		children
 	}: {
 		children: Snippet;
 	} = $props();
@@ -26,11 +33,12 @@
 
 	const SIDEBAR_WIDTH_MAX = 180;
 	const sidebar_width = $derived(app.ui.show_sidebar ? SIDEBAR_WIDTH_MAX : 0);
+	const desk_width = $derived(app.ui.show_desk_menu && app.ui.desk_pinned ? DESK_WIDTH : 0);
 
-	let futureclicks = $state(0);
+	let futureclicks = $state.raw(0);
 	const FUTURECLICKS = 3;
 	// Track if futureclicks has been activated at least once
-	let futureclicks_activated = $state(false);
+	let futureclicks_activated = $state.raw(false);
 	onNavigate((navigation) => {
 		// Only reset clicks when navigating away from the root page
 		// and we're not already in activated state
@@ -39,7 +47,6 @@
 			navigation.from?.route.id === '/' &&
 			navigation.to?.route.id !== '/'
 		) {
-			console.log('resetting');
 			futureclicks = 0;
 		}
 	});
@@ -48,19 +55,13 @@
 		const nav_items = structuredClone(main_nav_items_default);
 
 		if (app.futuremode) {
-			// Add tabs to main group
-			const main_group = nav_items.find((l) => l.group === 'main');
-			if (main_group) {
-				main_group.items.unshift({label: 'tabs', href: resolve('/tabs'), icon: GLYPH_TAB});
-			}
-
-			// Add projects to main group
-			const main_section = nav_items.find((section) => section.group === 'main');
+			const main_section = nav_items.find((s) => s.group === 'main');
 			if (main_section) {
+				main_section.items.unshift({ label: 'tabs', href: resolve('/tabs'), icon: icon_tab });
 				main_section.items.push({
 					label: 'projects',
 					href: resolve('/projects'),
-					icon: GLYPH_PROJECT,
+					icon: icon_project
 				});
 			}
 		}
@@ -69,13 +70,24 @@
 	});
 
 	const sidebar_button_title = $derived(
-		(app.ui.show_sidebar ? 'hide sidebar' : 'show sidebar') + ' [backtick `]',
+		(app.ui.show_sidebar ? 'hide sidebar' : 'show sidebar') + ' [backtick `]'
 	);
 </script>
 
 <svelte:window
 	onkeydowncapture={(e) => {
-		if (e.key === '`' && !is_editable(e.target)) {
+		if (
+			e.key === 'Escape' &&
+			app.ui.show_desk_menu &&
+			!app.ui.desk_pinned &&
+			!is_editable(e.target)
+		) {
+			app.ui.toggle_desk_menu(false);
+			swallow(e);
+		} else if (e.key === '~' && !is_editable(e.target)) {
+			app.ui.toggle_desk_menu();
+			swallow(e);
+		} else if (e.key === '`' && !is_editable(e.target)) {
 			app.ui.toggle_sidebar();
 			swallow(e);
 		}
@@ -83,10 +95,15 @@
 />
 
 <!-- TODO drive with data -->
-<div class="dashboard" style:--sidebar_width="{sidebar_width}px">
+<div
+	class="dashboard"
+	style:--sidebar_width="{sidebar_width}px"
+	style:--desk_width="{desk_width}px"
+>
 	<div
 		class="height:100% width:100% position:fixed top:0 left:0"
 		style:padding-left="var(--sidebar_width)"
+		style:padding-right="var(--desk_width)"
 	>
 		{@render children()}
 	</div>
@@ -104,7 +121,7 @@
 							<NavLink
 								href={resolve('/')}
 								title={app.futuremode ? 'futuremode' : 'home'}
-								class="click_effect_scale"
+								class="click-effect-scale"
 								onclick={() => {
 									if (futureclicks_activated) {
 										// If already activated once, toggle immediately when on root
@@ -123,7 +140,7 @@
 								<Svg
 									data={logo_zzz}
 									size="var(--icon_size_md)"
-									fill={app.futuremode ? 'var(--color_h_50)' : undefined}
+									fill={app.futuremode ? 'var(--palette_h_50)' : undefined}
 									style="transition: transform 200ms ease"
 									class={app.futuremode ? 'transform:scaleX(-1)' : ''}
 								/>
@@ -139,18 +156,14 @@
 						<div transition:slide>
 							<NavLink href={to_nav_link_href(app, link.label, link.href)}>
 								{#snippet children(selected)}
-									{#if typeof link.icon === 'string'}
-										<Glyph glyph={link.icon} class="icon_xs" /> {link.label}
-									{:else}
-										<span class="icon_xs">
-											<Svg
-												data={link.icon}
-												fill={selected ? 'var(--link_color)' : 'var(--text_90)'}
-												size="var(--icon_size_xs)"
-											/>
-										</span>
-										{link.label}
-									{/if}
+									<span class="icon-xs">
+										<Svg
+											data={link.icon}
+											fill={selected ? 'var(--link_color)' : 'var(--text_90)'}
+											size="var(--icon_size_xs)"
+										/>
+									</span>
+									{link.label}
 								{/snippet}
 							</NavLink>
 						</div>
@@ -163,11 +176,24 @@
 	<!-- sidebar toggle button -->
 	<button
 		type="button"
-		class="position:fixed bottom:0 left:0 icon_button plain border_radius_0"
+		class="position:fixed bottom:0 left:0 icon-button plain border-radius:0 border_top_right_radius_md"
 		aria-label={sidebar_button_title}
 		title={sidebar_button_title}
 		onclick={() => app.ui.toggle_sidebar()}
 	>
-		<Glyph glyph={app.ui.show_sidebar ? GLYPH_ARROW_LEFT : GLYPH_ARROW_RIGHT} />
+		<Svg data={app.ui.show_sidebar ? icon_arrow_left : icon_arrow_right} />
 	</button>
+
+	<!-- desk menu button -->
+	{#if !app.ui.show_desk_menu}
+		<button
+			type="button"
+			class="position:fixed top:0 right:0 icon-button plain border-radius:0 border_bottom_left_radius_md"
+			aria-label="desk menu"
+			title="desk menu — switch spaces [~]"
+			onclick={() => app.ui.toggle_desk_menu()}
+		>
+			<Svg data={icon_desk} />
+		</button>
+	{/if}
 </div>

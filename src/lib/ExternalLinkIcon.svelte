@@ -1,18 +1,20 @@
 <script lang="ts">
-	import type {Snippet} from 'svelte';
-
-	import {GLYPH_EXTERNAL_LINK} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import type { Snippet } from 'svelte';
+	import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import { icon_external_link } from '@fuzdev/fuz_ui/icons.ts';
 
 	const {
-		children,
+		children
 	}: {
-		children?: Snippet<[text_icon: string]>;
+		children?: Snippet<[icon: SvgData]>;
 	} = $props();
 </script>
 
-<sup class="font_size_xs font_family_mono white-space:nowrap"
-	>[{#if children}{@render children(GLYPH_EXTERNAL_LINK)}{:else}<Glyph
-			glyph={GLYPH_EXTERNAL_LINK}
-		/>{/if}]</sup
->
+<sup class="font_size_xs font_family_mono white-space:nowrap">
+	[{#if children}
+		{@render children(icon_external_link)}
+	{:else}
+		<Svg data={icon_external_link} inline />
+	{/if}]
+</sup>

@@ -1,18 +1,19 @@
 <script lang="ts">
-	import type {ComponentProps, Snippet} from 'svelte';
+	import type { ComponentProps, Snippet } from 'svelte';
 	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 	import ContextmenuSubmenu from '@fuzdev/fuz_ui/ContextmenuSubmenu.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
+	import DialogContent from '@fuzdev/fuz_ui/DialogContent.svelte';
 
-	import type {PartUnion} from './part.svelte.js';
-	import {frontend_context} from './frontend.svelte.js';
-	import {GLYPH_PART, GLYPH_DELETE, GLYPH_EDIT} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import type { PartUnion } from './part.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
+	import { icon_delete, icon_edit, icon_part } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import PartView from './PartView.svelte';
-	import {get_part_type_glyph} from './part_helpers.js';
+	import { get_part_type_icon } from './part_helpers.ts';
 	import ContextmenuEntryToggle from './ContextmenuEntryToggle.svelte';
 
 	const {
@@ -25,14 +26,13 @@
 
 	const app = frontend_context.get();
 
-	let show_editor = $state(false);
+	let show_editor = $state.raw(false);
 </script>
 
 <Contextmenu {...rest} {entries} />
 
 {#snippet entries()}
-	<ContextmenuSubmenu>
-		{#snippet icon()}{get_part_type_glyph(part)}{/snippet}
+	<ContextmenuSubmenu icon={get_part_type_icon(part)}>
 		part
 
 		{#snippet menu()}
@@ -48,15 +48,16 @@
 			<ContextmenuEntryToggle bind:enabled={part.enabled} label="part" />
 
 			<ContextmenuEntry
+				icon={icon_edit}
 				run={() => {
 					show_editor = true;
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_EDIT} />{/snippet}
 				<span>edit part</span>
 			</ContextmenuEntry>
 
 			<ContextmenuEntry
+				icon={icon_delete}
 				run={() => {
 					// TODO @many better confirmation
 					// eslint-disable-next-line no-alert
@@ -65,7 +66,6 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
 				<span>delete part</span>
 			</ContextmenuEntry>
 		{/snippet}
@@ -74,9 +74,9 @@
 
 {#if show_editor}
 	<Dialog onclose={() => (show_editor = false)}>
-		<div class="pane p_md width_atmost_md mx_auto">
-			<h2 class="mt_0 mb_sm"><Glyph glyph={GLYPH_PART} /> edit part</h2>
+		<DialogContent>
+			<h2 class="mt_0 mb_sm"><Svg data={icon_part} /> edit part</h2>
 			<PartView {part} />
-		</div>
+		</DialogContent>
 	</Dialog>
 {/if}

@@ -1,11 +1,11 @@
 <script lang="ts">
-	import {resolve} from '$app/paths';
+	import { resolve } from '$app/paths';
 
-	import {GLYPH_PROJECT} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
-	import ProjectList from '$routes/projects/ProjectList.svelte';
-	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
-	import {projects_context} from '$routes/projects/projects.svelte.js';
+	import { icon_project } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import ProjectList from './ProjectList.svelte';
+	import ProjectSidebar from './ProjectSidebar.svelte';
+	import { projects_context } from './projects.svelte.ts';
 
 	const projects = projects_context.get();
 </script>
@@ -25,14 +25,14 @@
 {/if}
 
 {#snippet content()}
-	<h1><Glyph glyph={GLYPH_PROJECT} /> projects</h1>
+	<h1><Svg data={icon_project} /> projects</h1>
 
 	<section class="width_atmost_md">
 		<p>
-			When it's ready, Zzz will let you both <a href={resolve('/tabs')}>browse websites</a> and also create
-			them. The goal of this "projects" design is a streamlined extensible UX with one take on building
-			for the web, with integrated CMS and IDE features. This abstraction makes rough sense for my workflows,
-			but it's going to change as it develops.
+			When it's ready, Zzz will let you both <a href={resolve('/tabs')}>browse websites</a> and also
+			create them. The goal of this "projects" design is a streamlined extensible UX with one take
+			on building for the web, with integrated CMS and IDE features. This abstraction makes rough
+			sense for my workflows, but it's going to change as it develops.
 		</p>
 		<p>
 			Websites are just one kind of thing that you can make in a project. A project could be a
@@ -51,13 +51,16 @@
 			browsers and tools, and vice versa, like magic.
 		</p>
 		<p>
-			Here's a very rough sketch of <button
+			Here's a very rough sketch of
+			<button
 				type="button"
-				class="inline sm color_g"
+				class="inline sm palette_g"
 				onclick={() => {
 					projects.previewing = !projects.previewing;
-				}}>what projects could look like</button
-			>.
+				}}
+			>
+				what projects could look like
+			</button>.
 		</p>
 		<p>
 			For developers, Zzz is also an npm library for TypeScript/Svelte/SvelteKit that can be used to

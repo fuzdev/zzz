@@ -1,11 +1,11 @@
 <script lang="ts">
-	import {GLYPH_CAPABILITY} from './glyphs.js';
-	import Glyph from './Glyph.svelte';
+	import { icon_capability } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import Footer from './Footer.svelte';
 	import CapabilitiesView from './CapabilitiesView.svelte';
 	import TimeWidget from './TimeWidget.svelte';
 	import DashboardHeader from './DashboardHeader.svelte';
-	import {frontend_context} from './frontend.svelte.js';
+	import { frontend_context } from './frontend.svelte.ts';
 
 	const app = frontend_context.get();
 </script>
@@ -13,7 +13,7 @@
 <div class="p_lg">
 	<DashboardHeader>
 		{#snippet header()}
-			<h1><Glyph glyph={GLYPH_CAPABILITY} /> system capabilities</h1>
+			<h1><Svg data={icon_capability} /> system capabilities</h1>
 		{/snippet}
 		<TimeWidget value={app.time.now} />
 	</DashboardHeader>

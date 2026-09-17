@@ -1,31 +1,32 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {swallow, is_editable} from '@fuzdev/fuz_util/dom.js';
-	import type {Snippet} from 'svelte';
+	import { swallow, is_editable } from '@fuzdev/fuz_util/dom.ts';
+	import type { Snippet } from 'svelte';
 
 	import {
-		GLYPH_PLACEHOLDER,
-		GLYPH_ADD,
-		GLYPH_REFRESH,
-		GLYPH_ARROW_RIGHT,
-		GLYPH_ARROW_LEFT,
-	} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
-	import type {Browser} from '$routes/tabs/browser.svelte.js';
-	import BrowserTabContent from '$routes/tabs/BrowserTabContent.svelte';
-	import BrowserTabListitem from '$routes/tabs/BrowserTabListitem.svelte';
-	import {Reorderable} from '$lib/reorderable.svelte.js';
+		icon_add,
+		icon_arrow_left,
+		icon_arrow_right,
+		icon_drag,
+		icon_refresh
+	} from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import { format_placeholder } from '$lib/helpers.ts';
+	import type { Browser } from './browser.svelte.ts';
+	import BrowserTabContent from './BrowserTabContent.svelte';
+	import BrowserTabListitem from './BrowserTabListitem.svelte';
+	import { Reorderable } from '$lib/reorderable.svelte.ts';
 
 	const {
 		browser,
-		children,
+		children
 	}: {
 		browser: Browser;
 		children: Snippet;
 	} = $props();
 
-	const tabs_reorderable = new Reorderable({item_class: null}); // remove the normal reorderable item styling
+	const tabs_reorderable = new Reorderable({ item_class: null }); // remove the normal reorderable item styling
 </script>
 
 <svelte:window
@@ -62,18 +63,18 @@
 	}}
 />
 
-<div class="browser_container">
+<div class="browser-container">
 	<!-- browser chrome/header -->
-	<div class="browser_chrome">
+	<div class="browser-chrome">
 		<!-- tab bar -->
 		<ul
-			class="browser_tab_bar unstyled display:flex overflow-x:auto overflow-y:hidden scrollbar-width:thin"
+			class="browser-tab-bar unstyled display:flex overflow-x:auto overflow-y:hidden scrollbar-width:thin"
 			{@attach tabs_reorderable.list({
-				onreorder: (from_index, to_index) => browser.reorder_tab(from_index, to_index),
+				onreorder: (from_index, to_index) => browser.reorder_tab(from_index, to_index)
 			})}
 		>
 			{#each browser.tabs.ordered_tabs as tab, index (tab.id)}
-				<li class="display:flex" {@attach tabs_reorderable.item({index})}>
+				<li class="display:flex" {@attach tabs_reorderable.item({ index })}>
 					<BrowserTabListitem
 						{tab}
 						{index}
@@ -93,7 +94,7 @@
 					onclick={() => browser.add_new_tab()}
 					title="new tab"
 				>
-					<Glyph glyph={GLYPH_ADD} />
+					<Svg data={icon_add} />
 				</button>
 			</div>
 		</ul>
@@ -103,45 +104,45 @@
 			<div class="browser_nav_buttons display:flex gap_xs">
 				<button
 					type="button"
-					class="icon_button plain p_xs border_radius_lg"
+					class="icon-button plain p_xs border_radius_lg"
 					title="back"
 					onclick={() => browser.go_back()}
 					disabled
 				>
-					<Glyph glyph={GLYPH_ARROW_LEFT} />
+					<Svg data={icon_arrow_left} />
 				</button>
 				<button
 					type="button"
-					class="icon_button plain p_xs border_radius_lg"
+					class="icon-button plain p_xs border_radius_lg"
 					title="forward"
 					onclick={() => browser.go_forward()}
 					disabled
 				>
-					<Glyph glyph={GLYPH_ARROW_RIGHT} />
+					<Svg data={icon_arrow_right} />
 				</button>
 				<button
 					type="button"
-					class="icon_button plain p_xs border_radius_lg"
+					class="icon-button plain p_xs border_radius_lg"
 					title="refresh"
 					onclick={() => browser.refresh()}
 				>
-					<Glyph glyph={GLYPH_REFRESH} />
+					<Svg data={icon_refresh} />
 				</button>
 			</div>
 
 			<!-- address bar -->
-			<div class="browser_address_bar flex:1">
+			<div class="browser-address-bar flex:1">
 				<input
 					type="text"
 					bind:value={browser.edited_url}
 					class="width:100% plain"
-					class:url_edited={browser.url_edited}
+					class:url-edited={browser.url_edited}
 					onkeypress={(e) => {
 						if (e.key === 'Enter') {
 							browser.submit_edited_url();
 						}
 					}}
-					placeholder={GLYPH_PLACEHOLDER}
+					placeholder={format_placeholder()}
 				/>
 			</div>
 
@@ -149,19 +150,22 @@
 			<div class="display:flex gap_xs">
 				<button
 					type="button"
-					class="icon_button plain p_xs"
+					class="icon-button plain p_xs"
 					title="main menu"
 					onclick={() => {
 						// eslint-disable-next-line no-alert
 						alert('not yet, thanks for clicking');
-					}}>☰</button
+					}}
 				>
+					<!-- TODO fuz_ui has no dedicated menu icon yet, `icon_drag` is the same three lines -->
+					<Svg data={icon_drag} label="main menu" />
+				</button>
 			</div>
 		</div>
 	</div>
 
 	<!-- selected tab content area -->
-	<div class="browser_content">
+	<div class="browser-content">
 		{#if browser.tabs.selected_tab}
 			<BrowserTabContent tab={browser.tabs.selected_tab}>
 				{@render children()}
@@ -171,7 +175,7 @@
 </div>
 
 <style>
-	.browser_container {
+	.browser-container {
 		height: 100%;
 		width: 100%;
 		display: flex;
@@ -179,26 +183,26 @@
 		border-left: 1px solid var(--border_color_10);
 	}
 
-	.browser_chrome {
+	.browser-chrome {
 		border-bottom: 1px solid var(--border_color_10);
 		flex-shrink: 0;
 	}
 
-	.browser_tab_bar {
+	.browser-tab-bar {
 		border-bottom: 1px solid var(--border_color_10);
 	}
 
-	.browser_content {
+	.browser-content {
 		flex: 1;
 		overflow: auto;
 		position: relative;
 	}
 
-	.browser_address_bar input {
+	.browser-address-bar input {
 		background: transparent;
 	}
 
-	.browser_address_bar input.url_edited {
+	.browser-address-bar input.url-edited {
 		box-shadow: var(--shadow_xs)
 			color-mix(
 				in hsl,

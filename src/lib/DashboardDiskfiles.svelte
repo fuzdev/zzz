@@ -1,29 +1,29 @@
 <script lang="ts">
-	import {swallow, is_editable} from '@fuzdev/fuz_util/dom.js';
-	import {random_item} from '@fuzdev/fuz_util/random.js';
+	import { swallow, is_editable } from '@fuzdev/fuz_util/dom.ts';
+	import { random_item } from '@fuzdev/fuz_util/random.ts';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
-	import {onMount} from 'svelte';
+	import { onMount } from 'svelte';
 
-	import {frontend_context} from './frontend.svelte.js';
+	import { frontend_context } from './frontend.svelte.ts';
 	import DiskfileExplorer from './DiskfileExplorer.svelte';
 	import DiskfileEditorView from './DiskfileEditorView.svelte';
 	import DiskfileTabListitem from './DiskfileTabListitem.svelte';
-	import {Reorderable} from './reorderable.svelte.js';
+	import { Reorderable } from './reorderable.svelte.ts';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 
 	const app = frontend_context.get();
-	const {diskfiles, capabilities} = app;
-	const {editor} = diskfiles;
+	const { diskfiles, capabilities } = app;
+	const { editor } = diskfiles;
 
-	const tabs_reorderable = new Reorderable({item_class: null}); // remove the normal reorderable item styling
+	const tabs_reorderable = new Reorderable({ item_class: null }); // remove the normal reorderable item styling
 
 	const selected_tab = $derived(editor.tabs.selected_tab);
 	const selected_diskfile = $derived(
-		selected_tab ? diskfiles.items.by_id.get(selected_tab.diskfile_id) : undefined,
+		selected_tab ? diskfiles.items.by_id.get(selected_tab.diskfile_id) : undefined
 	);
 
-	let show_diskfile_picker = $state(false);
+	let show_diskfile_picker = $state.raw(false);
 
 	onMount(() => {
 		void capabilities.init_backend_check();
@@ -93,7 +93,9 @@
 				</ErrorMessage>
 			</div>
 		</div>
-	{:else if capabilities.filesystem_available === null || capabilities.filesystem_available === undefined}
+	{:else if capabilities.filesystem_available === null ||
+		capabilities.filesystem_available === undefined
+	}
 		<div class="box height:100% width:100% display:flex align-items:center justify-content:center">
 			<div class="text-align:center">
 				<p class="mt_md">loading filesystem <PendingAnimation inline /></p>
@@ -109,12 +111,12 @@
 			<menu
 				class="unstyled display:flex overflow-x:auto scrollbar-width:thin"
 				{@attach tabs_reorderable.list({
-					onreorder: (from_index, to_index) => editor.reorder_tabs(from_index, to_index),
+					onreorder: (from_index, to_index) => editor.reorder_tabs(from_index, to_index)
 				})}
 			>
 				{#each editor.tabs.ordered_tabs as tab, index (tab.id)}
 					<li class="display:flex py_xs3 px_xs4">
-						<div class="display:flex" {@attach tabs_reorderable.item({index})}>
+						<div class="display:flex" {@attach tabs_reorderable.item({ index })}>
 							<!-- TODO notice the different APIs here, needs fixing, diskfiles is higher in the tree -->
 							<DiskfileTabListitem
 								{tab}
@@ -154,25 +156,30 @@
 							class="inline"
 							onclick={() => {
 								show_diskfile_picker = true;
-							}}>select</button
+							}}
 						>
+							select
+						</button>
 						a file from the list or
 						<button
 							type="button"
-							class="inline color_f"
+							class="inline palette_f"
 							onclick={() => {
 								const diskfile = random_item(app.diskfiles.items.values);
 								diskfiles.select(diskfile.id);
-							}}>go fish</button
-						> to view and edit its content
+							}}
+						>
+							go fish
+						</button> to view and edit its content
 					</p>
 				</div>
 			{:else}
 				<div class="box height:100%">
 					<p>
-						no files yet, <button type="button" class="inline color_d" onclick={create_file}
-							>create a new file</button
-						>?
+						no files yet,
+						<button type="button" class="inline palette_d" onclick={create_file}>
+							create a new file
+						</button>?
 					</p>
 				</div>
 			{/if}

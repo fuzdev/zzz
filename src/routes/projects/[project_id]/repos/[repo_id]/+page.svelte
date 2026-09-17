@@ -1,14 +1,14 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {swallow} from '@fuzdev/fuz_util/dom.js';
+	import { swallow } from '@fuzdev/fuz_util/dom.ts';
 
-	import {projects_context} from '$routes/projects/projects.svelte.js';
+	import { projects_context } from '$routes/projects/projects.svelte.ts';
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import ReposSidebar from '$routes/projects/ReposSidebar.svelte';
-	import {GLYPH_DELETE, GLYPH_ADD} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import { icon_add, icon_delete } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 	import RepoCheckoutItem from '$routes/projects/RepoCheckoutItem.svelte';
 
@@ -35,7 +35,7 @@
 	const project = $derived(projects.current_project);
 </script>
 
-<div class="repo_layout">
+<div class="repo-layout">
 	<!-- TODO @many refactor for better component instance stability for e.g. transitions -->
 	<ProjectSidebar />
 	{#if project}
@@ -43,7 +43,7 @@
 		<ReposSidebar />
 	{/if}
 
-	<div class="repo_content">
+	<div class="repo-content">
 		{#if project && repos_viewmodel}
 			<div class="p_lg">
 				<h1 class="mb_lg">edit repo</h1>
@@ -94,10 +94,10 @@
 							<div class="mt_md">
 								<button
 									type="button"
-									class="color_b"
+									class="palette_b"
 									onclick={() => repos_viewmodel.add_checkout_dir()}
 								>
-									<Glyph glyph={GLYPH_ADD} />&nbsp; add checkout
+									<Svg data={icon_add} />&nbsp; add checkout
 								</button>
 							</div>
 						</div>
@@ -106,7 +106,7 @@
 							<div>
 								<button
 									type="submit"
-									class="color_a"
+									class="palette_a"
 									disabled={repos_viewmodel.repo && !repos_viewmodel.has_changes}
 								>
 									{repos_viewmodel.repo ? 'save changes' : 'add repo'}
@@ -114,8 +114,12 @@
 							</div>
 
 							{#if repos_viewmodel.repo}
-								<button type="button" class="color_c" onclick={() => repos_viewmodel.remove_repo()}>
-									<Glyph glyph={GLYPH_DELETE} />&nbsp; delete repo
+								<button
+									type="button"
+									class="palette_c"
+									onclick={() => repos_viewmodel.remove_repo()}
+								>
+									<Svg data={icon_delete} />&nbsp; delete repo
 								</button>
 							{/if}
 						</div>
@@ -129,13 +133,13 @@
 </div>
 
 <style>
-	.repo_layout {
+	.repo-layout {
 		display: flex;
 		height: 100%;
 		overflow: hidden;
 	}
 
-	.repo_content {
+	.repo-content {
 		flex: 1;
 		overflow: auto;
 	}

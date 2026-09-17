@@ -1,11 +1,11 @@
 <script lang="ts">
-	import {format_url} from '@fuzdev/fuz_util/url.js';
+	import { format_url } from '@fuzdev/fuz_util/url.ts';
 
 	import ProviderLink from './ProviderLink.svelte';
 	import ModelLink from './ModelLink.svelte';
-	import Glyph from './Glyph.svelte';
-	import {GLYPH_CHECKMARK, GLYPH_ERROR, GLYPH_PROVIDER} from './glyphs.js';
-	import {frontend_context} from './frontend.svelte.js';
+	import { icon_checkmark, icon_error, icon_provider } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import { frontend_context } from './frontend.svelte.ts';
 	import ExternalLink from './ExternalLink.svelte';
 	import ProviderLogo from './ProviderLogo.svelte';
 
@@ -13,25 +13,26 @@
 </script>
 
 <div class="p_lg">
-	<h1><Glyph glyph={GLYPH_PROVIDER} /> providers</h1>
+	<h1><Svg data={icon_provider} /> providers</h1>
 	<aside>⚠️ This information is incomplete and may be incorrect or outdated.</aside>
-	<div class="providers_grid">
+	<div class="providers-grid">
 		{#each app.providers.items as provider (provider)}
 			<div class="panel p_lg align-self:start">
 				<div class="font_size_xl mb_lg">
-					<ProviderLink {provider} icon="svg" />
+					<ProviderLink {provider} icon="logo" />
 				</div>
 				<p>
-					<Glyph glyph={GLYPH_PROVIDER} />{provider.name}
+					<Svg data={icon_provider} />
+					{provider.name}
 					{#if provider.available}
-						<span class="color_b_50 ml_sm"><Glyph glyph={GLYPH_CHECKMARK} /> available</span>
+						<span class="color_b_50 ml_sm"><Svg data={icon_checkmark} /> available</span>
 					{:else}
-						<span class="color_c_50 ml_sm"
-							><Glyph glyph={GLYPH_ERROR} />
+						<span class="color_c_50 ml_sm">
+							<Svg data={icon_error} />
 							{provider.status && !provider.status.available
 								? provider.status.error
-								: 'unavailable'}</span
-						>
+								: 'unavailable'}
+						</span>
 					{/if}
 				</p>
 				<p>
@@ -57,10 +58,6 @@
 									<ProviderLogo name={model.provider_name} />
 									<span>{model.name}</span>
 								</div>
-								{#if model.provider_name === 'ollama'}<Glyph
-										glyph={model.downloaded ? GLYPH_CHECKMARK : ' '}
-										title={model.downloaded ? 'downloaded' : 'not downloaded'}
-									/>{/if}
 							</ModelLink>
 						</li>
 					{/each}
@@ -71,7 +68,7 @@
 </div>
 
 <style>
-	.providers_grid {
+	.providers-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 		gap: var(--space_lg);

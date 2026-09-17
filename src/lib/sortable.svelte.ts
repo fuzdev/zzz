@@ -1,7 +1,7 @@
 // @slop Claude Sonnet 3.7
 
-import type {Thunk} from '@fuzdev/fuz_util/function.js';
-import type {Cell} from './cell.svelte.js';
+import type { Thunk } from '@fuzdev/fuz_util/function.ts';
+import type { Cell } from './cell.svelte.ts';
 
 export interface Sorter<T> {
 	key: string;
@@ -32,13 +32,13 @@ export class Sortable<T> {
 	readonly default_key: string | undefined = $derived.by(() => this.#key_getter_default?.());
 
 	/** Current active sort key. */
-	active_key: string = $state('');
+	active_key: string = $state.raw('');
 
 	/**
 	 * The currently active sorter.
 	 */
 	readonly active_sorter: Sorter<T> | undefined = $derived(
-		this.sorters.find((s) => s.key === this.active_key),
+		this.sorters.find((s) => s.key === this.active_key)
 	);
 
 	/**
@@ -62,14 +62,14 @@ export class Sortable<T> {
 	/**
 	 * Creates a new `Sortable` instance with reactive sources.
 	 *
-	 * @param items_getter - Function that returns the current items array
-	 * @param sorters_getter - Function that returns the current sorters
-	 * @param key_getter_default - Optional function that returns the current default sort key
+	 * @param items_getter - function that returns the current items array
+	 * @param sorters_getter - function that returns the current sorters
+	 * @param key_getter_default - optional function that returns the current default sort key
 	 */
 	constructor(
 		items_getter: Thunk<Array<T>>,
 		sorters_getter: Thunk<Array<Sorter<T>>>,
-		key_getter_default?: Thunk<string | undefined>,
+		key_getter_default?: Thunk<string | undefined>
 	) {
 		this.#items_getter = items_getter;
 		this.#sorters_getter = sorters_getter;
@@ -122,7 +122,7 @@ export const sort_by_text = <T extends Cell<any>>(
 	key: string,
 	label: string,
 	field: keyof T,
-	direction: 'asc' | 'desc' = 'asc',
+	direction: 'asc' | 'desc' = 'asc'
 ): Sorter<T> => {
 	const multiplier = direction === 'desc' ? -1 : 1;
 	return {
@@ -132,7 +132,7 @@ export const sort_by_text = <T extends Cell<any>>(
 			const result = multiplier * String(a[field]).localeCompare(String(b[field]));
 			// If values are equal, sort by cid for stable ordering
 			return result !== 0 ? result : b.cid - a.cid;
-		},
+		}
 	};
 };
 
@@ -145,7 +145,7 @@ export const sort_by_numeric = <T extends Cell<any>>(
 	key: string,
 	label: string,
 	field: keyof T,
-	direction: 'asc' | 'desc' = 'asc',
+	direction: 'asc' | 'desc' = 'asc'
 ): Sorter<T> => {
 	return {
 		key,
@@ -157,6 +157,6 @@ export const sort_by_numeric = <T extends Cell<any>>(
 				direction === 'asc' ? (a < b ? -1 : a > b ? 1 : 0) : a > b ? -1 : a < b ? 1 : 0;
 			// If values are equal, sort by cid for stable ordering
 			return result !== 0 ? result : item_b.cid - item_a.cid;
-		},
+		}
 	};
 };

@@ -1,11 +1,11 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
-	import {resolve} from '$app/paths';
+	import { slide } from 'svelte/transition';
+	import { resolve } from '$app/paths';
 
 	import NavLink from '$lib/NavLink.svelte';
-	import {projects_context} from '$routes/projects/projects.svelte.js';
-	import {GLYPH_ADD} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import { projects_context } from './projects.svelte.ts';
+	import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const projects = projects_context.get();
 
@@ -20,7 +20,7 @@
 				class="plain justify-content:start flex:1"
 				onclick={() => project_viewmodel.create_new_domain()}
 			>
-				<Glyph glyph={GLYPH_ADD} />&nbsp; new domain
+				<Svg data={icon_add} />&nbsp; new domain
 			</button>
 		</div>
 
@@ -36,11 +36,11 @@
 							>
 								<div class="ellipsis row flex:1 pr_xs">{domain.name || '[new domain]'}</div>
 								<span
-									class="status_dot {domain.status === 'active'
-										? 'status_active'
+									class="status-dot {domain.status === 'active'
+										? 'status-active'
 										: domain.status === 'pending'
-											? 'status_pending'
-											: 'status_inactive'}"
+											? 'status-pending'
+											: 'status-inactive'}"
 								></span>
 							</NavLink>
 						</li>
@@ -52,7 +52,7 @@
 </aside>
 
 <style>
-	.status_dot {
+	.status-dot {
 		display: inline-block;
 		width: 7px;
 		height: 7px;
@@ -60,15 +60,15 @@
 		flex-shrink: 0;
 	}
 
-	.status_active {
-		background-color: var(--color_a_50);
+	.status-active {
+		background-color: var(--palette_a_50);
 	}
 
-	.status_pending {
-		background-color: var(--color_e_50);
+	.status-pending {
+		background-color: var(--palette_e_50);
 	}
 
-	.status_inactive {
+	.status-inactive {
 		background-color: var(--text_50);
 	}
 </style>

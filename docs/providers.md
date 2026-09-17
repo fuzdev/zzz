@@ -4,18 +4,9 @@ Integration guide for AI providers and adding new ones.
 
 ## Supported Providers
 
-| Provider | Type | Class | SDK | API Key Env |
-|----------|------|-------|-----|-------------|
-| Ollama | Local | `BackendProviderOllama` | `ollama` | None required |
-| Claude | Remote (BYOK) | `BackendProviderClaude` | `@anthropic-ai/sdk` | `SECRET_ANTHROPIC_API_KEY` |
-| ChatGPT | Remote (BYOK) | `BackendProviderChatgpt` | `openai` | `SECRET_OPENAI_API_KEY` |
-| Gemini | Remote (BYOK) | `BackendProviderGemini` | `@google/generative-ai` | `SECRET_GOOGLE_API_KEY` |
-
-### Ollama (Local)
-
-No API key. Auto-detects available models. Model management UI at `/providers/ollama`.
-
-Setup: Install Ollama, run `ollama serve`, zzz auto-detects.
+- Claude (`provider/anthropic.rs`) — Full (non-streaming + SSE streaming). Type: Remote (BYOK). API Key Env: `SECRET_ANTHROPIC_API_KEY`
+- ChatGPT (`provider/openai.rs`) — Full (non-streaming + SSE streaming). Type: Remote (BYOK). API Key Env: `SECRET_OPENAI_API_KEY`
+- Gemini (`provider/gemini.rs`) — Full (non-streaming + SSE streaming). Type: Remote (BYOK). API Key Env: `SECRET_GOOGLE_API_KEY`
 
 ### Remote Providers (Claude, ChatGPT, Gemini)
 
@@ -29,121 +20,41 @@ SECRET_GOOGLE_API_KEY=AIza...
 
 ## Default Models
 
-Defined in `src/lib/config_defaults.ts` (`models_default`):
-
-### Ollama
-
-| Model | Tags |
-|-------|------|
-| `gemma3n:e2b`, `gemma3n:e4b` | small |
-| `gemma3:1b`, `gemma3:4b` | small |
-| `qwen3:0.6b`, `qwen3:1.7b`, `qwen3:4b`, `qwen3:8b` | small / (none) |
-| `deepseek-r1:1.5b`, `deepseek-r1:7b`, `deepseek-r1:8b` | reasoning |
-| `llama3.2:1b`, `llama3.2:3b` | small |
-| `phi4-mini:3.8b` | (none) |
-| `smollm2:135m`, `smollm2:360m`, `smollm2:1.7b` | small |
-
-### Claude (Anthropic)
-
-| Model | Tags |
-|-------|------|
-| `claude-sonnet-4-5-20250929` | smart |
-| `claude-opus-4-1-20250805` | smart, smartest |
-| `claude-3-5-haiku-20241022` | cheap |
-
-### ChatGPT (OpenAI)
-
-| Model | Tags |
-|-------|------|
-| `gpt-5-2025-08-07` | smart |
-| `gpt-5-nano-2025-08-07` | cheap, cheaper |
-| `gpt-5-mini-2025-08-07` | cheap |
-| `gpt-4.1-2025-04-14` | smart |
-
-### Gemini (Google)
-
-| Model | Tags |
-|-------|------|
-| `gemini-2.5-pro` | smart |
-| `gemini-2.5-flash` | cheap |
-| `gemini-2.5-flash-lite` | cheap, cheaper |
-
-### Chat Templates
-
-Pre-configured model groups in `config_defaults.ts` (`chat_template_defaults`): `frontier`, `cheap frontier`, `local 3-4b`, `local 1-2b`, `local <1b`, `local gemmas`, `quick test`.
+The default model catalog is the source of truth in `src/lib/config_defaults.ts`
+(`models_default`) — model IDs churn, so it isn't duplicated here. Each entry
+carries a `provider_name` (`claude` / `chatgpt` / `gemini`) and `tags` drawn from
+`smart`, `smartest`, `cheap`, `cheaper`. Pre-configured model groups live
+alongside it in `chat_template_defaults` (`frontier`, `cheap frontier`,
+`quick test`).
 
 ## Provider Architecture
 
-### Class Hierarchy
+Providers live in the Rust backend (`crates/zzz_server/src/provider/`),
+enum-dispatched via the `Provider` enum (`provider/mod.rs`) — the providers
+are known at compile time and matched exhaustively, no trait objects.
+`ProviderManager` owns the set; each provider builds its `reqwest` client once
+at construction from its `SECRET_*_API_KEY` environment variable, and reports
+an error status when no key is configured. Keys are env-only — there is no
+runtime key-update action, so changing a key means restarting the daemon. All three providers — Anthropic (`provider/anthropic.rs`), OpenAI
+(`provider/openai.rs`), and Gemini (`provider/gemini.rs`) — are fully
+implemented with non-streaming and SSE-streaming completions through the shared
+`provider/sse.rs`. See ../crates/CLAUDE.md for the
+backend details.
+
+### CompletionOptions
+
+The per-completion options the backend passes to a provider:
 
 ```
-BackendProvider<TClient>              (backend_provider.ts)
-├── BackendProviderLocal<TClient>     (for locally-installed services)
-│   └── BackendProviderOllama         (backend_provider_ollama.ts)
-└── BackendProviderRemote<TClient>    (for API-based services, manages API keys)
-    ├── BackendProviderClaude         (backend_provider_claude.ts)
-    ├── BackendProviderChatgpt        (backend_provider_chatgpt.ts)
-    └── BackendProviderGemini         (backend_provider_gemini.ts)
-```
-
-### BackendProvider Base
-
-From `server/backend_provider.ts`:
-
-```typescript
-abstract class BackendProvider<TClient = unknown> {
-  abstract readonly name: string;
-  protected client: TClient | null = null;
-  protected provider_status: ProviderStatus | null = null;
-
-  abstract handle_streaming_completion(options: CompletionHandlerOptions): Promise<ActionOutputs['completion_create']>;
-  abstract handle_non_streaming_completion(options: CompletionHandlerOptions): Promise<ActionOutputs['completion_create']>;
-
-  get_handler(streaming: boolean): CompletionHandler {
-    return streaming
-      ? this.handle_streaming_completion.bind(this)
-      : this.handle_non_streaming_completion.bind(this);
-  }
-
-  abstract create_client(): void;
-  abstract get_client(): TClient;
-  abstract load_status(reload?: boolean): Promise<ProviderStatus>;
-
-  protected validate_streaming_requirements(progress_token?: Uuid): asserts progress_token { ... }
-  protected async send_streaming_progress(progress_token: Uuid, chunk: ...): Promise<void> { ... }
-}
-```
-
-### BackendProviderRemote
-
-Adds API key management. `set_api_key()` recreates the client. Returns error status if no key configured.
-
-### BackendProviderLocal
-
-Creates client on construction. `load_status()` checks if the service is available locally.
-
-### CompletionHandlerOptions
-
-```typescript
-interface CompletionHandlerOptions {
-  model: string;
-  completion_options: CompletionOptions;
-  completion_messages: Array<CompletionMessage> | undefined;
-  prompt: string;
-  progress_token?: Uuid;  // Opts into streaming when provided
-}
-
-interface CompletionOptions {
-  frequency_penalty?: number;
-  output_token_max: number;
-  presence_penalty?: number;
-  seed?: number;
-  stop_sequences?: Array<string>;
-  system_message: string;
-  temperature?: number;
-  top_k?: number;
-  top_p?: number;
-}
+frequency_penalty?: number
+output_token_max: number
+presence_penalty?: number
+seed?: number
+stop_sequences?: Array<string>
+system_message: string
+temperature?: number
+top_k?: number
+top_p?: number
 ```
 
 ### CompletionRequest / CompletionResponse
@@ -152,59 +63,31 @@ From `completion_types.ts`:
 
 ```typescript
 const CompletionRequest = z.strictObject({
-  created: DatetimeNow,
-  provider_name: ProviderName,
-  model: z.string(),
-  prompt: z.string(),
-  completion_messages: z.array(CompletionMessage).optional(),
+	created: DatetimeNow,
+	provider_name: ProviderName,
+	model: z.string(),
+	prompt: z.string(),
+	completion_messages: z.array(CompletionMessage).optional()
 });
 
 const CompletionResponse = z.strictObject({
-  created: DatetimeNow,
-  provider_name: ProviderName,
-  model: z.string(),
-  data: ProviderDataSchema,
+	created: DatetimeNow,
+	provider_name: ProviderName,
+	model: z.string(),
+	data: ProviderDataSchema
 });
 ```
 
 ## Real Provider Example
 
-From `server/backend_provider_claude.ts`:
-
-```typescript
-export class BackendProviderClaude extends BackendProviderRemote<Anthropic> {
-  readonly name = 'claude';
-
-  constructor(options: BackendProviderOptions) {
-    super({...options, api_key: options.api_key ?? (SECRET_ANTHROPIC_API_KEY || null)});
-  }
-
-  protected override create_client(): void {
-    this.client = this.api_key ? new Anthropic({apiKey: this.api_key}) : null;
-  }
-
-  async handle_streaming_completion(options: CompletionHandlerOptions): Promise<ActionOutputs['completion_create']> {
-    const {model, completion_options, completion_messages, prompt, progress_token} = options;
-    this.validate_streaming_requirements(progress_token);
-
-    const stream = await this.get_client().messages.create(
-      create_claude_completion_options(model, completion_options, completion_messages, prompt, true),
-    );
-
-    let accumulated_content = '';
-    for await (const event of stream) {
-      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-        accumulated_content += event.delta.text;
-        void this.send_streaming_progress(progress_token, {
-          message: { role: 'assistant', content: event.delta.text },
-        });
-      }
-    }
-
-    return to_completion_result('claude', model, api_response, progress_token);
-  }
-}
-```
+The Anthropic provider (`crates/zzz_server/src/provider/anthropic.rs`) calls
+the Messages API with a `reqwest` client. For streaming completions it sets
+`stream: true`, parses the SSE response (`provider/sse.rs`, manual `\r\n`
+normalization), and forwards each `content_block_delta` text chunk to the
+originating WebSocket connection as a `completion_progress` notification. The
+OpenAI (Chat Completions) and Gemini (Generative Language) providers follow the
+same pattern against their respective APIs, sharing `provider/sse.rs`.
+See ../crates/CLAUDE.md.
 
 ## Completion Flow
 
@@ -213,35 +96,45 @@ User sends message
   → Thread.send_message(content)
     → Build CompletionRequest (provider_name, model, prompt, completion_messages)
     → app.api.completion_create({completion_request, _meta: {progressToken}})
-      → Backend: backend.lookup_provider(provider_name)
-        → provider.get_handler(!!progress_token)
-          → provider.handle_streaming_completion(options)
-            → Call provider SDK with stream: true
-            → For each chunk:
-              → provider.send_streaming_progress(progress_token, chunk)
-                → WebSocket notification to frontend
-                  → Turn content updated incrementally
-            → Return CompletionResult
+      → WS dispatch → backend completion_create handler
+        → ProviderManager looks up the provider by name
+          → provider calls its API (stream: true when a progress token is present)
+            → For each text chunk:
+              → completion_progress notification to the originating WS connection
+                → Turn content updated incrementally
+        → Return the completion result
 ```
+
+Streaming progress is socket-scoped — the chunks go only to the originating
+WebSocket connection, never broadcast. Cancellation is supported:
+`Thread.cancel_pending()` fires from the client side, the frontend WS client
+sends the `cancel` notification and rejects the pending promise with
+`request_cancelled` so the UI can distinguish user-initiated cancels from
+real provider failures; the backend aborts the in-flight request.
 
 ### Provider Status
 
 ```typescript
 const status = await provider.load_status();
 // { name: 'claude', available: true, checked_at: 1234567890 }
-// { name: 'claude', available: false, error: 'API key required', checked_at: ... }
+// { name: 'claude', available: false, error: 'needs API key', checked_at: ... }
 ```
 
-Remote providers: `available` = `true` when API key is set and client created.
-Local providers (Ollama): `available` = `true` when service responds.
+Remote providers: `available` = `true` when an API key is configured.
 
 ## Adding a New Provider
 
-1. Create `src/lib/server/backend_provider_newprovider.ts` extending `BackendProviderRemote<SDKClient>`
-2. Implement `create_client()`, `handle_streaming_completion()`, `handle_non_streaming_completion()`
-3. Register in `src/lib/server/server.ts`: `backend.add_provider(new BackendProviderNewProvider(provider_options))`
-4. Add response helper in `src/lib/response_helpers.ts`
-5. Add env var to `.env.development.example`: `SECRET_NEWPROVIDER_API_KEY=`
-6. Add default models to `src/lib/config_defaults.ts` (`models_default`)
+Providers live in the Rust backend (`crates/zzz_server/src/provider/`), enum-
+dispatched via the `Provider` enum (no trait objects). To add one:
 
-See [src/lib/server/CLAUDE.md](../src/lib/server/CLAUDE.md) for detailed backend architecture.
+1. Add a variant to the `Provider` enum and `ProviderName` in `provider/mod.rs`
+2. Create `crates/zzz_server/src/provider/newprovider.rs` implementing the
+   completion path (status, non-streaming, and SSE streaming via `provider/sse.rs`)
+3. Wire it into `ProviderManager` and the exhaustive match arms — construction
+   and registration happen at boot in `crates/zzz_server/src/lib.rs`
+   (`provider_manager.add(Provider::...)`, reading the key env var)
+4. Add env var to `.env.development.example` and `.env.production.example`:
+   `SECRET_NEWPROVIDER_API_KEY=`
+5. Add default models to `src/lib/config_defaults.ts` (`models_default`)
+
+See ../crates/CLAUDE.md for the backend architecture.

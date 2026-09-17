@@ -1,29 +1,34 @@
-import {Parts} from './parts.svelte.js';
-import {TextPart, DiskfilePart} from './part.svelte.js';
-import {Capabilities} from './capabilities.svelte.js';
-import {Chat} from './chat.svelte.js';
-import {Chats} from './chats.svelte.js';
-import {Diskfile} from './diskfile.svelte.js';
-import {DiskfileTab} from './diskfile_tab.svelte.js';
-import {DiskfileTabs} from './diskfile_tabs.svelte.js';
-import {DiskfileHistory} from './diskfile_history.svelte.js';
-import {Diskfiles} from './diskfiles.svelte.js';
-import {DiskfilesEditor} from './diskfiles_editor.svelte.js';
-import {Model} from './model.svelte.js';
-import {Models} from './models.svelte.js';
-import {Action} from './action.svelte.js';
-import {Actions} from './actions.svelte.js';
-import {Prompt} from './prompt.svelte.js';
-import {Prompts} from './prompts.svelte.js';
-import {Provider} from './provider.svelte.js';
-import {Providers} from './providers.svelte.js';
-import {Socket} from './socket.svelte.js';
-import {Turn} from './turn.svelte.js';
-import {Thread} from './thread.svelte.js';
-import {Threads} from './threads.svelte.js';
-import {Time} from './time.svelte.js';
-import {Ui} from './ui.svelte.js';
-import type {Cell} from './cell.svelte.js';
+import { Parts } from './parts.svelte.ts';
+import { TextPart, DiskfilePart } from './part.svelte.ts';
+import { Capabilities } from './capabilities.svelte.ts';
+import { Chat } from './chat.svelte.ts';
+import { Chats } from './chats.svelte.ts';
+import { Diskfile } from './diskfile.svelte.ts';
+import { DiskfileTab } from './diskfile_tab.svelte.ts';
+import { DiskfileTabs } from './diskfile_tabs.svelte.ts';
+import { DiskfileHistory } from './diskfile_history.svelte.ts';
+import { Diskfiles } from './diskfiles.svelte.ts';
+import { DiskfilesEditor } from './diskfiles_editor.svelte.ts';
+import { Model } from './model.svelte.ts';
+import { Models } from './models.svelte.ts';
+import { Action } from './action.svelte.ts';
+import { Actions } from './actions.svelte.ts';
+import { Prompt } from './prompt.svelte.ts';
+import { Prompts } from './prompts.svelte.ts';
+import { Provider } from './provider.svelte.ts';
+import { Providers } from './providers.svelte.ts';
+import { Turn } from './turn.svelte.ts';
+import { Thread } from './thread.svelte.ts';
+import { Threads } from './threads.svelte.ts';
+import { Time } from './time.svelte.ts';
+import { Space } from './space.svelte.ts';
+import { Spaces } from './spaces.svelte.ts';
+import { Terminal } from './terminal.svelte.ts';
+import { TerminalPreset } from './terminal_preset.svelte.ts';
+import { Ui } from './ui.svelte.ts';
+import { Workspace } from './workspace.svelte.ts';
+import { Workspaces } from './workspaces.svelte.ts';
+import type { Cell } from './cell.svelte.ts';
 
 export const cell_classes = {
 	Parts,
@@ -45,13 +50,18 @@ export const cell_classes = {
 	Prompts,
 	Provider,
 	Providers,
-	Socket,
+	Space,
+	Spaces,
+	Terminal,
+	TerminalPreset,
 	Turn,
 	Thread,
 	Threads,
 	Time,
 	TextPart,
 	Ui,
+	Workspace,
+	Workspaces
 } satisfies Record<string, typeof Cell<any>>;
 
 export type CellClasses = typeof cell_classes;
@@ -67,7 +77,7 @@ export type CellRegistryMap = {
  */
 export const is_cell_type = <K extends CellClassNames>(
 	cell: Cell<any> | null | undefined,
-	class_name: K,
+	class_name: K
 ): cell is CellRegistryMap[K] => cell?.constructor.name === class_name;
 
 /**

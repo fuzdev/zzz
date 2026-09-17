@@ -1,14 +1,14 @@
 <script lang="ts">
 	// @slop Claude Opus 4
 
-	import {resolve} from '$app/paths';
+	import { resolve } from '$app/paths';
 
-	import {projects_context} from '$routes/projects/projects.svelte.js';
+	import { projects_context } from '$routes/projects/projects.svelte.ts';
 	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import DomainsSidebar from '$routes/projects/DomainsSidebar.svelte';
-	import {GLYPH_ADD, GLYPH_CHECKMARK} from '$lib/glyphs.js';
-	import Glyph from '$lib/Glyph.svelte';
+	import { icon_add, icon_checkmark } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 
 	const projects = projects_context.get();
@@ -16,7 +16,7 @@
 	const project_viewmodel = $derived(projects.current_project_viewmodel);
 </script>
 
-<div class="project_layout">
+<div class="project-layout">
 	<!-- TODO @many refactor for better component instance stability for e.g. transitions -->
 	<ProjectSidebar />
 	{#if projects.current_project}
@@ -24,7 +24,7 @@
 		<DomainsSidebar />
 	{/if}
 
-	<div class="project_content">
+	<div class="project-content">
 		{#if project_viewmodel?.project}
 			<div class="p_lg">
 				<h1 class="mb_lg">domains</h1>
@@ -35,10 +35,10 @@
 						<p>
 							<button
 								type="button"
-								class="color_a"
+								class="palette_a"
 								onclick={() => project_viewmodel.create_new_domain()}
 							>
-								<Glyph glyph={GLYPH_ADD} />&nbsp; add your first domain
+								<Svg data={icon_add} />&nbsp; add your first domain
 							</button>
 						</p>
 					</div>
@@ -59,7 +59,7 @@
 									<td>
 										<a
 											href={resolve(
-												`/projects/${project_viewmodel.project_id}/domains/${domain.id}`,
+												`/projects/${project_viewmodel.project_id}/domains/${domain.id}`
 											)}
 										>
 											{domain.name || '[new domain]'}
@@ -67,16 +67,18 @@
 									</td>
 									<td>
 										<span
-											class="status_badge {domain.status === 'active'
-												? 'status_active'
+											class="status-badge {domain.status === 'active'
+												? 'status-active'
 												: domain.status === 'pending'
-													? 'status_pending'
-													: 'status_inactive'}"
+													? 'status-pending'
+													: 'status-inactive'}"
 										>
 											{domain.status}
 										</span>
 									</td>
-									<td>{domain.ssl ? GLYPH_CHECKMARK : ''}</td>
+									<td>
+										{#if domain.ssl}<Svg data={icon_checkmark} />{/if}
+									</td>
 									<td>{new Date(domain.created).toLocaleString()}</td>
 									<td>{new Date(domain.updated).toLocaleString()}</td>
 								</tr>
@@ -88,10 +90,10 @@
 				<div>
 					<button
 						type="button"
-						class="color_a"
+						class="palette_a"
 						onclick={() => project_viewmodel.create_new_domain()}
 					>
-						<Glyph glyph={GLYPH_ADD} />&nbsp; new domain
+						<Svg data={icon_add} />&nbsp; new domain
 					</button>
 				</div>
 			</div>
@@ -102,35 +104,35 @@
 </div>
 
 <style>
-	.project_layout {
+	.project-layout {
 		display: flex;
 		height: 100%;
 		overflow: hidden;
 	}
 
-	.project_content {
+	.project-content {
 		flex: 1;
 		overflow: auto;
 	}
 
-	.status_badge {
+	.status-badge {
 		display: inline-block;
 		padding: 2px 6px;
 		border-radius: 10px;
 		font-size: 0.75em;
 	}
 
-	.status_active {
-		background-color: var(--color_b_20);
-		color: var(--color_b_90);
+	.status-active {
+		background-color: var(--palette_b_20);
+		color: var(--palette_b_90);
 	}
 
-	.status_pending {
-		background-color: var(--color_e_20);
-		color: var(--color_e_90);
+	.status-pending {
+		background-color: var(--palette_e_20);
+		color: var(--palette_e_90);
 	}
 
-	.status_inactive {
+	.status-inactive {
 		background-color: var(--shade_20);
 		color: var(--text_50);
 	}

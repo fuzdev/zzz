@@ -1,30 +1,30 @@
-import {z} from 'zod';
-import {page} from '$app/state';
+import { z } from 'zod';
+import { page } from '$app/state';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {Chat, ChatJson, type ChatJsonInput} from './chat.svelte.js';
-import type {Uuid} from './zod_helpers.js';
-import {HANDLED} from './cell_helpers.js';
-import {IndexedCollection} from './indexed_collection.svelte.js';
-import {create_single_index, create_derived_index} from './indexed_collection_helpers.svelte.js';
-import {to_reordered_list} from './list_helpers.js';
-import {get_unique_name} from './helpers.js';
-import {to_chats_url} from './nav_helpers.js';
-import {chat_template_defaults} from './config_defaults.js';
-import type {ChatTemplate} from './chat_template.js';
-import {CellJson} from './cell_types.js';
-import {goto_unless_current} from './navigation_helpers.js';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { Chat, ChatJson, type ChatJsonInput } from './chat.svelte.ts';
+import { HANDLED } from './cell_helpers.ts';
+import { IndexedCollection } from './indexed_collection.svelte.ts';
+import { create_single_index, create_derived_index } from './indexed_collection_helpers.svelte.ts';
+import { to_reordered_list } from './list_helpers.ts';
+import { get_unique_name } from './helpers.ts';
+import { to_chats_url } from './nav_helpers.ts';
+import { chat_template_defaults } from './config_defaults.ts';
+import type { ChatTemplate } from './chat_template.ts';
+import { CellJson } from './cell_types.ts';
+import { goto_unless_current } from './navigation_helpers.ts';
 
 export const ChatsJson = CellJson.extend({
 	items: z.array(ChatJson).default(() => []),
 	selected_id: z.string().nullable().default(null),
 	selected_id_last_non_null: z.string().nullable().default(null),
-	show_sort_controls: z.boolean().default(false),
-}).meta({cell_class_name: 'Chats'});
+	show_sort_controls: z.boolean().default(false)
+}).meta({ cell_class_name: 'Chats' });
 export type ChatsJson = z.infer<typeof ChatsJson>;
 export type ChatsJsonInput = z.input<typeof ChatsJson>;
 
-export interface ChatsOptions extends CellOptions<typeof ChatsJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
+export interface ChatsOptions extends CellOptions<typeof ChatsJson> {}
 
 export class Chats extends Cell<typeof ChatsJson> {
 	readonly items: IndexedCollection<Chat> = new IndexedCollection({
@@ -32,20 +32,20 @@ export class Chats extends Cell<typeof ChatsJson> {
 			create_single_index({
 				key: 'by_name',
 				extractor: (chat) => chat.name,
-				query_schema: z.string(),
+				query_schema: z.string()
 			}),
 
 			create_derived_index({
 				key: 'manual_order',
-				compute: (collection) => collection.values,
-			}),
-		],
+				compute: (collection) => collection.values
+			})
+		]
 	});
 
 	// TODO would be nice to story a history of selected ids so
 	// e.g. when deleting a chat we can navigate back to where we were
-	#selected_id: Uuid | null = $state()!;
-	selected_id_last_non_null: Uuid | null = $state()!;
+	#selected_id: Uuid | null = $state.raw()!;
+	selected_id_last_non_null: Uuid | null = $state.raw()!;
 	get selected_id(): Uuid | null {
 		return this.#selected_id;
 	}
@@ -55,14 +55,14 @@ export class Chats extends Cell<typeof ChatsJson> {
 	}
 
 	readonly selected: Chat | undefined = $derived(
-		this.#selected_id ? this.items.by_id.get(this.#selected_id) : undefined,
+		this.#selected_id ? this.items.by_id.get(this.#selected_id) : undefined
 	);
 	readonly selected_id_error: boolean = $derived(
-		this.#selected_id !== null && this.selected === undefined,
+		this.#selected_id !== null && this.selected === undefined
 	);
 
 	/** Controls visibility of sort controls in the chats list. */
-	show_sort_controls: boolean = $state()!;
+	show_sort_controls: boolean = $state.raw()!;
 
 	/** Ordered array of chats derived from the `manual_order` index. */
 	readonly ordered_items: Array<Chat> = $derived(this.items.derived_index('manual_order'));
@@ -82,7 +82,7 @@ export class Chats extends Cell<typeof ChatsJson> {
 					}
 				}
 				return HANDLED;
-			},
+			}
 		};
 
 		// Initialize explicitly after all properties are defined
@@ -90,8 +90,8 @@ export class Chats extends Cell<typeof ChatsJson> {
 	}
 
 	add(json?: ChatJsonInput, select?: boolean): Chat {
-		const j = !json?.name ? {...json, name: this.generate_unique_name('new chat')} : json;
-		const chat = new Chat({app: this.app, json: j});
+		const j = !json?.name ? { ...json, name: this.generate_unique_name('new chat') } : json;
+		const chat = new Chat({ app: this.app, json: j });
 		return this.add_chat(chat, select);
 	}
 
@@ -108,7 +108,7 @@ export class Chats extends Cell<typeof ChatsJson> {
 	}
 
 	add_many(chats_json: Array<ChatJsonInput>, select?: boolean | number): Array<Chat> {
-		const chats = chats_json.map((json) => new Chat({app: this.app, json}));
+		const chats = chats_json.map((json) => new Chat({ app: this.app, json }));
 		this.items.add_many(chats);
 
 		// Select the first or the specified chat if none is currently selected
@@ -152,7 +152,7 @@ export class Chats extends Cell<typeof ChatsJson> {
 	}
 
 	select_next(): Promise<void> {
-		const {by_id} = this.items;
+		const { by_id } = this.items;
 		const next = by_id.values().next();
 		return this.navigate_to(next.value?.id ?? null);
 	}

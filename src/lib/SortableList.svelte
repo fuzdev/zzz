@@ -1,11 +1,11 @@
 <script lang="ts" generics="T extends {id: Uuid}">
-	import type {Snippet} from 'svelte';
-	import {EMPTY_ARRAY} from '@fuzdev/fuz_util/array.js';
-	import {slide} from 'svelte/transition';
-	import type {SvelteHTMLElements} from 'svelte/elements';
+	import type { Snippet } from 'svelte';
+	import { EMPTY_ARRAY } from '@fuzdev/fuz_util/array.ts';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+	import { slide } from 'svelte/transition';
+	import type { SvelteHTMLElements } from 'svelte/elements';
 
-	import type {Uuid} from './zod_helpers.js';
-	import {Sortable, type Sorter} from './sortable.svelte.js';
+	import { Sortable, type Sorter } from './sortable.svelte.ts';
 
 	const {
 		items,
@@ -18,7 +18,7 @@
 		item_attrs,
 		list_attrs,
 		label_attrs,
-		children,
+		children
 	}: {
 		items: Array<T>;
 		filter?: ((item: T) => boolean) | undefined;
@@ -37,7 +37,7 @@
 	const sortable = new Sortable(
 		() => items,
 		() => sorters,
-		() => sort_key_default,
+		() => sort_key_default
 	);
 
 	const filtered_items = $derived.by(() => {

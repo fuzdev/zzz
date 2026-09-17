@@ -1,21 +1,21 @@
-import {z} from 'zod';
+import { z } from 'zod';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {Part, PartJson, type PartJsonInput, type PartUnion} from './part.svelte.js';
-import {HANDLED} from './cell_helpers.js';
-import {IndexedCollection} from './indexed_collection.svelte.js';
-import {create_single_index} from './indexed_collection_helpers.svelte.js';
-import {Uuid} from './zod_helpers.js';
-import {get_unique_name} from './helpers.js';
-import {CellJson} from './cell_types.js';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { Part, PartJson, type PartJsonInput, type PartUnion } from './part.svelte.ts';
+import { HANDLED } from './cell_helpers.ts';
+import { IndexedCollection } from './indexed_collection.svelte.ts';
+import { create_single_index } from './indexed_collection_helpers.svelte.ts';
+import { get_unique_name } from './helpers.ts';
+import { CellJson } from './cell_types.ts';
 
 export const PartsJson = CellJson.extend({
-	items: z.array(PartJson).default(() => []),
-}).meta({cell_class_name: 'Parts'});
+	items: z.array(PartJson).default(() => [])
+}).meta({ cell_class_name: 'Parts' });
 export type PartsJson = z.infer<typeof PartsJson>;
 export type PartsJsonInput = z.input<typeof PartsJson>;
 
-export interface PartsOptions extends CellOptions<typeof PartsJson> {} // eslint-disable-line @typescript-eslint/no-empty-object-type
+export interface PartsOptions extends CellOptions<typeof PartsJson> {}
 
 export class Parts extends Cell<typeof PartsJson> {
 	// Initialize items with proper typing and unified indexes
@@ -24,15 +24,15 @@ export class Parts extends Cell<typeof PartsJson> {
 			create_single_index({
 				key: 'by_name',
 				extractor: (part) => part.name,
-				query_schema: z.string(),
+				query_schema: z.string()
 			}),
 			create_single_index({
 				key: 'by_diskfile_path',
 				extractor: (part) => (part.type === 'diskfile' ? part.path : undefined),
-				query_schema: z.string(),
-			}),
+				query_schema: z.string()
+			})
 			// TODO dynamic index with the rendered content? needs to be lazy, ideally just using $derived
-		],
+		]
 	});
 
 	constructor(options: PartsOptions) {
@@ -48,7 +48,7 @@ export class Parts extends Cell<typeof PartsJson> {
 					}
 				}
 				return HANDLED;
-			},
+			}
 		};
 
 		this.init();
@@ -59,7 +59,7 @@ export class Parts extends Cell<typeof PartsJson> {
 	 * Add a part to the collection.
 	 */
 	add(json: PartJsonInput): PartUnion {
-		const j = !json.name ? {...json, name: this.generate_unique_name('new part')} : json;
+		const j = !json.name ? { ...json, name: this.generate_unique_name('new part') } : json;
 		const part = Part.create(this.app, j);
 		this.items.add(part);
 		return part;

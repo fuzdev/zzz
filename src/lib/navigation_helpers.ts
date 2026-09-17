@@ -1,5 +1,5 @@
-import {goto} from '$app/navigation';
-import {page} from '$app/state';
+import { goto } from '$app/navigation';
+import { page } from '$app/state';
 
 /**
  * Navigate to a path only if we're not already on that path.
@@ -7,7 +7,7 @@ import {page} from '$app/state';
  */
 export const goto_unless_current = async (
 	path: string | URL,
-	options?: Parameters<typeof goto>[1],
+	options?: Parameters<typeof goto>[1]
 ): Promise<void> => {
 	if (page.url.pathname === path) return;
 	await goto(path, options);

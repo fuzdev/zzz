@@ -1,17 +1,22 @@
 <script lang="ts">
-	import type {ComponentProps, Snippet} from 'svelte';
+	import type { ComponentProps, Snippet } from 'svelte';
 	import Contextmenu from '@fuzdev/fuz_ui/Contextmenu.svelte';
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 	import ContextmenuSubmenu from '@fuzdev/fuz_ui/ContextmenuSubmenu.svelte';
-	import type {OmitStrict} from '@fuzdev/fuz_util/types.js';
+	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 
-	import {Part} from './part.svelte.js';
-	import type {Prompt} from './prompt.svelte.js';
-	import {frontend_context} from './frontend.svelte.js';
-	import {GLYPH_PART, GLYPH_DELETE, GLYPH_FILE, GLYPH_PROMPT, GLYPH_REMOVE} from './glyphs.js';
+	import { Part } from './part.svelte.ts';
+	import type { Prompt } from './prompt.svelte.ts';
+	import { frontend_context } from './frontend.svelte.ts';
+	import {
+		icon_delete,
+		icon_file,
+		icon_part,
+		icon_prompt,
+		icon_remove
+	} from '@fuzdev/fuz_ui/icons.ts';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
-	import Glyph from './Glyph.svelte';
 
 	const {
 		prompt,
@@ -23,14 +28,13 @@
 
 	const app = frontend_context.get();
 
-	let show_diskfile_picker = $state(false);
+	let show_diskfile_picker = $state.raw(false);
 </script>
 
 <Contextmenu {...rest} {entries} />
 
 {#snippet entries()}
-	<ContextmenuSubmenu>
-		{#snippet icon()}<Glyph glyph={GLYPH_PROMPT} />{/snippet}
+	<ContextmenuSubmenu icon={icon_prompt}>
 		prompt
 		{#snippet menu()}
 			<!-- TODO @many maybe a copy submenu on this item with copy id, name, etc, leverage generic cells -->
@@ -41,19 +45,20 @@
 			/>
 
 			<ContextmenuEntry
+				icon={icon_part}
 				run={() => {
 					prompt.add_part(
 						Part.create(app, {
 							type: 'text',
-							content: '',
-						}),
+							content: ''
+						})
 					);
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_PART} />{/snippet}
 				<span>add text part</span>
 			</ContextmenuEntry>
 			<ContextmenuEntry
+				icon={icon_file}
 				run={() => {
 					if (!app.diskfiles.items.size) {
 						alert('No files available. Add files first.'); // eslint-disable-line no-alert
@@ -63,25 +68,24 @@
 					show_diskfile_picker = true;
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_FILE} />{/snippet}
 				<span>add file part</span>
 			</ContextmenuEntry>
 			{#if prompt.parts.length}
-				<ContextmenuEntry run={() => prompt.remove_all_parts()}>
-					{#snippet icon()}<Glyph glyph={GLYPH_REMOVE} />{/snippet}
+				<ContextmenuEntry icon={icon_remove} run={() => prompt.remove_all_parts()}>
 					<span>remove all parts</span>
 				</ContextmenuEntry>
 			{/if}
 			<!-- <ContextmenuEntry
+				icon={icon_edit}
 				run={() => {
 					// TODO implement
 					// prompt.rename() after part name picker
 				}}
 			>
-				{#snippet icon()}<Glyph text={GLYPH_EDIT} />{/snippet}
 				<span>Rename prompt</span>
 			</ContextmenuEntry> -->
 			<ContextmenuEntry
+				icon={icon_delete}
 				run={() => {
 					// TODO confirm dialog that shows the prompt's summary
 					// TODO @many better confirmation
@@ -91,7 +95,6 @@
 					}
 				}}
 			>
-				{#snippet icon()}<Glyph glyph={GLYPH_DELETE} />{/snippet}
 				<span>delete prompt</span>
 			</ContextmenuEntry>
 		{/snippet}
@@ -106,8 +109,8 @@
 		prompt.add_part(
 			Part.create(app, {
 				type: 'diskfile',
-				path: diskfile.path,
-			}),
+				path: diskfile.path
+			})
 		);
 		return true;
 	}}

@@ -1,8 +1,8 @@
-import {z} from 'zod';
+import { z } from 'zod';
 
-import {CellJson} from './cell_types.js';
-import {is_path_absolute} from './diskfile_helpers.js';
-import {PathWithTrailingSlash} from './zod_helpers.js';
+import { CellJson } from './cell_types.ts';
+import { is_path_absolute } from './diskfile_helpers.ts';
+import { PathWithTrailingSlash } from './zod_helpers.ts';
 
 export const DiskfileChangeType = z.enum(['add', 'change', 'delete']);
 export type DiskfileChangeType = z.infer<typeof DiskfileChangeType>;
@@ -10,7 +10,7 @@ export type DiskfileChangeType = z.infer<typeof DiskfileChangeType>;
 /** An absolute Unix-style file path. */
 export const DiskfilePath = z
 	.string()
-	.refine((p) => is_path_absolute(p), {message: 'path must be absolute'})
+	.refine((p) => is_path_absolute(p), { message: 'path must be absolute' })
 	.brand('DiskfilePath');
 export type DiskfilePath = z.infer<typeof DiskfilePath>;
 
@@ -21,7 +21,7 @@ export type DiskfileDirectoryPath = z.infer<typeof DiskfileDirectoryPath>;
 
 export const DiskfileChange = z.strictObject({
 	type: DiskfileChangeType,
-	path: DiskfilePath,
+	path: DiskfilePath
 });
 export type DiskfileChange = z.infer<typeof DiskfileChange>;
 
@@ -33,7 +33,7 @@ export const SerializableDisknode = z.strictObject({
 	ctime: z.number().nullable(),
 	mtime: z.number().nullable(),
 	dependents: z.array(z.tuple([DiskfilePath, z.any()])), // TODO @many zod4 - these can't be circular refs, how to rewrite?
-	dependencies: z.array(z.tuple([DiskfilePath, z.any()])), // TODO @many zod4 - these can't be circular refs, how to rewrite?
+	dependencies: z.array(z.tuple([DiskfilePath, z.any()])) // TODO @many zod4 - these can't be circular refs, how to rewrite?
 });
 export type SerializableDisknode = z.infer<typeof SerializableDisknode>;
 
@@ -49,7 +49,7 @@ export const DiskfileJson = CellJson.extend({
 	dependencies: z
 		.array(z.tuple([DiskfilePath, SerializableDisknode]))
 		.nullable()
-		.default(null),
-}).meta({cell_class_name: 'Diskfile'});
+		.default(null)
+}).meta({ cell_class_name: 'Diskfile' });
 export type DiskfileJson = z.infer<typeof DiskfileJson>;
 export type DiskfileJsonInput = z.input<typeof DiskfileJson>;

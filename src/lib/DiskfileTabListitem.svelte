@@ -1,16 +1,16 @@
 <script lang="ts">
-	import {swallow} from '@fuzdev/fuz_util/dom.js';
+	import { swallow } from '@fuzdev/fuz_util/dom.ts';
 
-	import {GLYPH_REMOVE} from './glyphs.js';
-	import type {DiskfileTab} from './diskfile_tab.svelte.js';
-	import Glyph from './Glyph.svelte';
+	import { icon_remove } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import type { DiskfileTab } from './diskfile_tab.svelte.ts';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 
 	const {
 		tab,
 		onselect,
 		onclose,
-		onopen,
+		onopen
 	}: {
 		tab: DiskfileTab;
 		onselect: (tab: DiskfileTab) => void;
@@ -25,14 +25,14 @@
 
 <DiskfileContextmenu {diskfile}>
 	<div
-		class="diskfile_tab_container"
+		class="diskfile-tab-container"
 		class:selected={tab.is_selected}
 		class:preview={tab.is_preview}
 	>
 		<div
 			role="button"
 			tabindex="0"
-			class="diskfile_tab_button border_radius_0 plain px_sm py_xs"
+			class="diskfile-tab-button border-radius:0 plain px_sm py_xs"
 			class:selected={tab.is_selected}
 			class:preview={tab.is_preview}
 			onclick={(e) => {
@@ -58,7 +58,7 @@
 			</div>
 			<button
 				type="button"
-				class="tab_close_button plain icon_button sm border_radius_md ml_sm"
+				class="tab-close-button plain icon-button sm border_radius_md ml_sm"
 				onclick={(e) => {
 					swallow(e);
 					onclose(tab);
@@ -66,21 +66,21 @@
 				title="close tab"
 				aria-label={`close tab ${path}`}
 			>
-				<Glyph glyph={GLYPH_REMOVE} />
+				<Svg data={icon_remove} />
 			</button>
 		</div>
 	</div>
 </DiskfileContextmenu>
 
 <style>
-	.diskfile_tab_container {
+	.diskfile-tab-container {
 		display: flex;
 		align-items: center;
 		min-width: 10rem;
 		max-width: 30rem;
 	}
 
-	.diskfile_tab_button {
+	.diskfile-tab-button {
 		--tab_hover_shadow: var(--shadow_inset_bottom_xs)
 			color-mix(
 				in hsl,
@@ -120,29 +120,29 @@
 		cursor: pointer;
 	}
 
-	.diskfile_tab_button:hover {
+	.diskfile-tab-button:hover {
 		box-shadow: var(--tab_hover_shadow);
 	}
 
-	.diskfile_tab_button:active {
+	.diskfile-tab-button:active {
 		box-shadow: var(--tab_active_shadow);
 	}
 
-	.diskfile_tab_button.selected {
+	.diskfile-tab-button.selected {
 		box-shadow: var(--tab_selected_shadow);
 	}
 
-	.diskfile_tab_button.preview {
+	.diskfile-tab-button.preview {
 		font-style: italic;
 		box-shadow: var(--tab_preview_shadow);
 	}
-	.diskfile_tab_button.preview:hover {
+	.diskfile-tab-button.preview:hover {
 		box-shadow: var(--tab_preview_shadow), var(--tab_hover_shadow);
 	}
-	.diskfile_tab_button.preview:active {
+	.diskfile-tab-button.preview:active {
 		box-shadow: var(--tab_preview_shadow), var(--tab_active_shadow);
 	}
-	.diskfile_tab_button.preview.selected {
+	.diskfile-tab-button.preview.selected {
 		box-shadow: var(--tab_preview_shadow), var(--tab_selected_preview_shadow);
 	}
 </style>

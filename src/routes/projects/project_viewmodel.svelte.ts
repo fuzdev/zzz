@@ -1,15 +1,16 @@
 // @slop Claude Opus 4
 
-import {z} from 'zod';
-import {goto} from '$app/navigation';
-import {resolve} from '$app/paths';
+import { z } from 'zod';
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
+import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import {get_datetime_now, create_uuid, type Uuid} from '$lib/zod_helpers.js';
-import {Domain} from '$routes/projects/domain.svelte.js';
-import {Page} from '$routes/projects/page.svelte.js';
-import {Projects} from '$routes/projects/projects.svelte.js';
-import {Repo} from '$routes/projects/repo.svelte.js';
-import {get_unique_name} from '$lib/helpers.js';
+import { Domain } from './domain.svelte.ts';
+import { Page } from './page.svelte.ts';
+import { Projects } from './projects.svelte.ts';
+import { Repo } from './repo.svelte.ts';
+import { get_unique_name } from '$lib/helpers.ts';
 
 export interface ProjectViewmodelOptions {
 	projects: Projects;
@@ -22,19 +23,19 @@ export interface ProjectViewmodelOptions {
 export class ProjectViewmodel {
 	readonly projects: Projects;
 
-	project_id: Uuid = $state()!;
+	project_id: Uuid = $state.raw()!;
 
-	edited_name: string = $state()!;
-	edited_description: string = $state()!;
+	edited_name: string = $state.raw()!;
+	edited_description: string = $state.raw()!;
 
-	editing_project: boolean = $state(false);
+	editing_project: boolean = $state.raw(false);
 
 	/** Whether the form has unsaved changes. */
 	readonly has_changes = $derived.by(
 		() =>
 			this.project &&
 			(this.edited_name !== this.project.name ||
-				this.edited_description !== this.project.description),
+				this.edited_description !== this.project.description)
 	);
 
 	/** The current project. */
@@ -89,7 +90,7 @@ export class ProjectViewmodel {
 
 		// eslint-disable-next-line no-alert
 		const confirmed = confirm(
-			'Are you sure you want to delete this project? This action cannot be undone.',
+			'Are you sure you want to delete this project? This action cannot be undone.'
 		);
 
 		if (confirmed) {
@@ -106,7 +107,7 @@ export class ProjectViewmodel {
 
 		// eslint-disable-next-line no-alert
 		const confirmed = confirm(
-			'Are you sure you want to delete this page? This action cannot be undone.',
+			'Are you sure you want to delete this page? This action cannot be undone.'
 		);
 
 		if (confirmed) {
@@ -136,8 +137,8 @@ export class ProjectViewmodel {
 				path: '/new-page',
 				content: `# ${unique_title}\n\nAdd your **content** here.`,
 				created,
-				updated: created,
-			},
+				updated: created
+			}
 		});
 
 		this.project.add_page(page);
@@ -161,8 +162,8 @@ export class ProjectViewmodel {
 				updated: created,
 				name: '',
 				status: 'pending',
-				ssl: false,
-			},
+				ssl: false
+			}
 		});
 
 		this.project.add_domain(domain);
@@ -184,8 +185,8 @@ export class ProjectViewmodel {
 			json: {
 				id: repo_id,
 				git_url: '',
-				checkouts: [],
-			},
+				checkouts: []
+			}
 		});
 
 		// Add to project

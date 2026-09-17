@@ -1,7 +1,7 @@
-import {z} from 'zod';
+import { z } from 'zod';
 
-import {Cell, type CellOptions} from '$lib/cell.svelte.js';
-import {CellJson} from '$lib/cell_types.js';
+import { Cell, type CellOptions } from '$lib/cell.svelte.ts';
+import { CellJson } from '$lib/cell_types.ts';
 
 // Browser tab schema with discriminated union for tab types
 export const BrowserTabJson = CellJson.extend({
@@ -11,8 +11,8 @@ export const BrowserTabJson = CellJson.extend({
 	refresh_counter: z.number().default(0),
 	type: z.enum(['raw', 'embedded_html', 'external_url']),
 	// Optional content field for embedded HTML tabs
-	content: z.string().optional(),
-}).meta({cell_class_name: 'BrowserTab'});
+	content: z.string().optional()
+}).meta({ cell_class_name: 'BrowserTab' });
 export type BrowserTabJson = z.infer<typeof BrowserTabJson>;
 export type BrowserTabJsonInput = z.input<typeof BrowserTabJson>;
 
@@ -26,12 +26,12 @@ export type BrowserTabOptions = CellOptions<typeof BrowserTabJson>;
  * - "external_url": Loads content from an external URL
  */
 export class BrowserTab extends Cell<typeof BrowserTabJson> {
-	title: string = $state()!;
-	url: string = $state()!;
-	selected: boolean = $state()!;
-	refresh_counter: number = $state()!;
-	type: 'raw' | 'embedded_html' | 'external_url' = $state()!;
-	content?: string = $state();
+	title: string = $state.raw()!;
+	url: string = $state.raw()!;
+	selected: boolean = $state.raw()!;
+	refresh_counter: number = $state.raw()!;
+	type: 'raw' | 'embedded_html' | 'external_url' = $state.raw()!;
+	content?: string = $state.raw();
 
 	constructor(options: BrowserTabOptions) {
 		super(BrowserTabJson, options);

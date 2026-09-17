@@ -1,19 +1,19 @@
-import {z} from 'zod';
+import { z } from 'zod';
 
-import {Cell, type CellOptions} from './cell.svelte.js';
-import {Action, ActionJson, type ActionJsonInput} from './action.svelte.js';
-import {ActionMethod} from './action_metatypes.js';
-import {HANDLED} from './cell_helpers.js';
-import {IndexedCollection} from './indexed_collection.svelte.js';
-import {create_multi_index} from './indexed_collection_helpers.svelte.js';
-import {CellJson} from './cell_types.js';
+import { Cell, type CellOptions } from './cell.svelte.ts';
+import { Action, ActionJson, type ActionJsonInput } from './action.svelte.ts';
+import { ActionMethod } from './action_metatypes.ts';
+import { HANDLED } from './cell_helpers.ts';
+import { IndexedCollection } from './indexed_collection.svelte.ts';
+import { create_multi_index } from './indexed_collection_helpers.svelte.ts';
+import { CellJson } from './cell_types.ts';
 
 export const HISTORY_LIMIT_DEFAULT = 512;
 export const PONG_DISPLAY_LIMIT = 6;
 
 export const ActionsJson = CellJson.extend({
-	items: z.array(ActionJson).default(() => []),
-}).meta({cell_class_name: 'Actions'});
+	items: z.array(ActionJson).default(() => [])
+}).meta({ cell_class_name: 'Actions' });
 export type ActionsJson = z.infer<typeof ActionsJson>;
 export type ActionsJsonInput = z.input<typeof ActionsJson>;
 
@@ -29,13 +29,13 @@ export class Actions extends Cell<typeof ActionsJson> {
 			create_multi_index({
 				key: 'by_method',
 				extractor: (action) => action.method,
-				query_schema: ActionMethod,
-			}),
-		],
+				query_schema: ActionMethod
+			})
+		]
 	});
 
 	// TODO @many refactor this into the IndexedCollection -- if this state remains we can have a setter that forwards the value
-	history_limit: number = $state(HISTORY_LIMIT_DEFAULT);
+	history_limit: number = $state.raw(HISTORY_LIMIT_DEFAULT);
 
 	// TODO think about these - filter/sort by method/kind?
 	// readonly pings: Array<Action> = $derived(this.items.where('by_method', 'ping'));
@@ -61,7 +61,7 @@ export class Actions extends Cell<typeof ActionsJson> {
 					}
 				}
 				return HANDLED;
-			},
+			}
 		};
 
 		this.init();
@@ -85,7 +85,7 @@ export class Actions extends Cell<typeof ActionsJson> {
 	}
 
 	add_from_json(action_json: ActionJsonInput): Action {
-		const action = new Action({app: this.app, json: action_json});
+		const action = new Action({ app: this.app, json: action_json });
 		this.add(action);
 		return action;
 	}

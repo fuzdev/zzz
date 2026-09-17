@@ -1,20 +1,20 @@
 <script lang="ts">
-	import {slide} from 'svelte/transition';
-	import {format} from 'date-fns';
-	import {SvelteMap} from 'svelte/reactivity';
+	import { slide } from 'svelte/transition';
+	import { format } from 'date-fns';
+	import { SvelteMap } from 'svelte/reactivity';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
+	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
+	import PopoverButton from '@fuzdev/fuz_app/ui/PopoverButton.svelte';
 
-	import type {Socket, QueuedMessage, FailedMessage} from './socket.svelte.js';
-	import Glyph from './Glyph.svelte';
-	import {GLYPH_RETRY, GLYPH_REMOVE, GLYPH_INFO} from './glyphs.js';
-	import ConfirmButton from './ConfirmButton.svelte';
-	import PopoverButton from './PopoverButton.svelte';
-	import {format_timestamp} from './time_helpers.js';
-	import {DURATION_SM} from './helpers.js';
+	import type { Socket, QueuedMessage, FailedMessage } from './socket.svelte.ts';
+	import { icon_close, icon_info, icon_remove, icon_retry } from '@fuzdev/fuz_ui/icons.ts';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import { format_timestamp } from './time_helpers.ts';
+	import { DURATION_SM } from './helpers.ts';
 
 	const {
 		socket,
-		type,
+		type
 	}: {
 		socket: Socket;
 		type: 'queued' | 'failed';
@@ -41,7 +41,7 @@
 	const queued_messages_count = $derived(queued_messages.length);
 	const selected_count = $derived(selected_queued_messages.size);
 	const all_selected = $derived(
-		selected_count === queued_messages_count && queued_messages_count > 0,
+		selected_count === queued_messages_count && queued_messages_count > 0
 	);
 
 	// Message selection handlers
@@ -109,7 +109,7 @@
 	const remove_selected = () => {
 		if (type === 'queued') {
 			socket.message_queue = socket.message_queue.filter(
-				(m) => !selected_queued_messages.has(m.id),
+				(m) => !selected_queued_messages.has(m.id)
 			);
 		} else {
 			for (const id of selected_queued_messages.keys()) {
@@ -120,10 +120,10 @@
 	};
 </script>
 
-<div class="message_queue_container">
+<div class="message-queue-container">
 	<!-- Header with message count and action buttons -->
 	<div class="display:flex justify-content:space-between align-items:center mb_sm">
-		<span class="chip {type === 'queued' ? 'color_e' : 'color_c'}">
+		<span class="chip {type === 'queued' ? 'palette_e' : 'palette_c'}">
 			{type}: {queued_messages_count}
 		</span>
 
@@ -135,22 +135,22 @@
 					{#if socket.connected}
 						<button
 							type="button"
-							class="icon_button plain font_size_sm"
+							class="icon-button plain font_size_sm"
 							title="retry selected messages"
 							onclick={retry_selected}
 							transition:slide
 						>
-							<Glyph glyph={GLYPH_RETRY} />
+							<Svg data={icon_retry} />
 						</button>
 					{/if}
 
 					<ConfirmButton
 						onconfirm={remove_selected}
-						popover_button_attrs={{class: 'icon_button color_c font_size_sm'}}
-						class="icon_button plain"
+						popover_button_attrs={{ class: 'icon-button palette_c font_size_sm' }}
+						class="icon-button plain"
 						title="remove selected messages"
 					>
-						<Glyph glyph={GLYPH_REMOVE} />
+						<Svg data={icon_remove} />
 					</ConfirmButton>
 				</div>
 			{/if}
@@ -169,14 +169,14 @@
 
 	<!-- Message list -->
 	{#if queued_messages_count > 0}
-		<div class="message_list shadow_inset_top_sm">
+		<div class="message-list shadow_inset_top_sm">
 			{#each queued_messages as message (message.id)}
 				{@const selected = selected_queued_messages.has(message.id)}
 				{@const message_type = message.data?.type || 'unknown'}
 				{@const message_data_serialized = JSON.stringify(message.data, null, 2)}
 				<div
-					class="message_item p_sm {selected ? 'selected shade_20' : ''} {queued_messages.indexOf(
-						message,
+					class="message-item p_sm {selected ? 'selected shade_20' : ''} {queued_messages.indexOf(
+						message
 					) > 0
 						? 'border_top border-style:solid border_color_30'
 						: ''}"
@@ -207,7 +207,7 @@
 									{#if copied}
 										<div><small class="font_size_xs">{message.id}</small></div>
 									{:else}
-										<div in:slide={{duration: DURATION_SM}}>
+										<div in:slide={{ duration: DURATION_SM }}>
 											<small class="font_size_xs">{message.id}</small>
 										</div>
 									{/if}
@@ -225,7 +225,7 @@
 									{#if copied}
 										<div><small class="font_size_xs">{message.data.id}</small></div>
 									{:else}
-										<div in:slide={{duration: DURATION_SM}}>
+										<div in:slide={{ duration: DURATION_SM }}>
 											<small class="font_size_xs">{message.data.id}</small>
 										</div>
 									{/if}
@@ -239,10 +239,10 @@
 							<!-- Message details in popover -->
 							<PopoverButton
 								position="left"
-								class="icon_button plain font_size_sm"
+								class="icon-button plain font_size_sm"
 								title="view message details"
 							>
-								<Glyph glyph={GLYPH_INFO} size="var(--font_size_lg)" />
+								<Svg data={icon_info} size="var(--font_size_lg)" />
 								{#snippet popover_content(popover)}
 									<div
 										class="p_md overflow:auto shade_00 shadow_bottom_md"
@@ -257,14 +257,15 @@
 											<h3 class="mt_xs">message details</h3>
 											<button
 												type="button"
-												class="icon_button plain font_size_xs"
+												class="icon-button plain font_size_xs"
 												onclick={() => popover.hide()}
 											>
-												✕
+												<Svg data={icon_close} />
 											</button>
 										</div>
 										<pre
-											class="shade_10 border_radius_xs border_width border_style border_color_20 font_family_mono font_size_xs white-space:pre-wrap word-break:break-word p_md">{message_data_serialized}</pre>
+											class="shade_10 border_radius_xs border_width border_style border_color_20 font_family_mono font_size_xs white-space:pre-wrap word-break:break-word p_md"
+										>{message_data_serialized}</pre>
 										<CopyToClipboard text={message_data_serialized} />
 									</div>
 								{/snippet}
@@ -274,22 +275,22 @@
 							{#if type === 'queued' || (type === 'failed' && socket.connected)}
 								<button
 									type="button"
-									class="icon_button plain font_size_sm"
+									class="icon-button plain font_size_sm"
 									title="retry message"
 									onclick={() => retry_queued_message(message)}
 								>
-									<Glyph glyph={GLYPH_RETRY} />
+									<Svg data={icon_retry} />
 								</button>
 							{/if}
 
 							<ConfirmButton
 								onconfirm={() => remove_message(message.id)}
 								position="center"
-								popover_button_attrs={{class: 'icon_button color_c font_size_sm'}}
-								class="icon_button plain font_size_sm"
+								popover_button_attrs={{ class: 'icon-button palette_c font_size_sm' }}
+								class="icon-button plain font_size_sm"
 								title="remove message"
 							>
-								<Glyph glyph={GLYPH_REMOVE} />
+								<Svg data={icon_remove} />
 							</ConfirmButton>
 						</div>
 					</div>
@@ -304,7 +305,7 @@
 							</div>
 							<div class="display:flex justify-content:space-between">
 								<span>Reason:</span>
-								<span class="font_family_mono color_c">{failed_message.reason}</span>
+								<span class="font_family_mono palette_c">{failed_message.reason}</span>
 							</div>
 						</div>
 					{/if}
@@ -321,21 +322,21 @@
 </div>
 
 <style>
-	.message_queue_container {
+	.message-queue-container {
 		margin-bottom: var(--font_size_md);
 	}
 
-	.message_list {
+	.message-list {
 		max-height: 250px;
 		overflow: auto;
 		scrollbar-width: thin;
 	}
 
-	.message_item:hover {
+	.message-item:hover {
 		background-color: var(--shade_10);
 	}
 
-	.message_item.selected {
-		border-left: 2px solid var(--color_a);
+	.message-item.selected {
+		border-left: 2px solid var(--palette_a);
 	}
 </style>

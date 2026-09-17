@@ -1,10 +1,11 @@
 <script lang="ts">
-	import {frontend_context} from './frontend.svelte.js';
-	import type {ChatTemplate} from './chat_template.js';
-	import type {Model} from './model.svelte.js';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+
+	import { frontend_context } from './frontend.svelte.ts';
+	import type { ChatTemplate } from './chat_template.ts';
+	import type { Model } from './model.svelte.ts';
 	import ModelPicker from './ModelPicker.svelte';
-	import type {Uuid} from './zod_helpers.js';
-	import type {Chat} from './chat.svelte.js';
+	import type { Chat } from './chat.svelte.ts';
 	import ProviderLogo from './ProviderLogo.svelte';
 
 	const app = frontend_context.get();
@@ -13,7 +14,7 @@
 		chat: chat_prop,
 		oninit,
 		heading = 'create new chat',
-		items,
+		items
 	}: {
 		chat?: Chat;
 		oninit?: (chat_id: Uuid) => void;
@@ -81,12 +82,11 @@
 						<div class="display:flex flex-wrap:wrap gap_xs2">
 							{#each chat_template.model_names as model_name (model_name)}
 								{@const provider_name = app.models.find_by_name(model_name)?.provider_name}
-								<small class="chip"
-									>{#if provider_name}<ProviderLogo
-											name={provider_name}
-											size="var(--font_size_xs)"
-										/>&nbsp;{/if}{model_name}</small
-								>
+								<small class="chip">
+									{#if provider_name}
+										<ProviderLogo name={provider_name} size="var(--font_size_xs)" />&nbsp;
+									{/if}{model_name}
+								</small>
 							{/each}
 						</div>
 					</div>
