@@ -22,7 +22,9 @@ import {
 	default_cross_process_setup,
 	reconstruct_bootstrapped_handle
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
-import { describe_standard_cross_process_tests } from '@fuzdev/fuz_app/testing/cross_backend/standard.ts';
+import {
+	describe_standard_cross_process_tests
+} from '@fuzdev/fuz_app/testing/cross_backend/standard.ts';
 import { fuz_session_config } from '@fuzdev/fuz_app/auth/session_cookie.ts';
 import { create_role_schema, ROLE_ADMIN } from '@fuzdev/fuz_app/auth/role_schema.ts';
 

@@ -42,7 +42,8 @@
 		<aside>
 			⚠️ This is an early pre-release, see the
 			<ExternalLink href="https://github.com/fuzdev/zzz">repo</ExternalLink> and
-			<ExternalLink href="https://github.com/fuzdev/zzz/discussions">discussions</ExternalLink> 💤
+			<ExternalLink href="https://github.com/fuzdev/zzz/discussions">discussions</ExternalLink>
+			💤
 		</aside>
 		<p>Some early (rough) integrations include:</p>
 		<ul>
@@ -54,13 +55,15 @@
 			<li>
 				<ExternalLink href="https://svelte.dev/">SvelteKit</ExternalLink> is the frontend framework,
 				prerendered to a static SPA that the backend serves. It uses
-				<ExternalLink href="https://vite.dev/">Vite</ExternalLink> in development.
+				<ExternalLink href="https://vite.dev/">Vite</ExternalLink>
+				in development.
 			</li>
 			<li>
 				AI providers with
 				<ExternalLink href="https://platform.openai.com/docs">ChatGPT</ExternalLink>,
 				<ExternalLink href="https://docs.anthropic.com/">Claude</ExternalLink>, and
-				<ExternalLink href="https://ai.google.dev/">Gemini</ExternalLink> -- bring your own API keys
+				<ExternalLink href="https://ai.google.dev/">Gemini</ExternalLink>
+				-- bring your own API keys
 			</li>
 		</ul>
 		<p>Planned integrations:</p>
@@ -198,7 +201,8 @@
 		</p>
 		<aside>
 			⚠️ I am not a security professional and Zzz has not been audited; it may be
-			<strong class="color_c_50">dangerous</strong> to run
+			<strong class="color_c_50">dangerous</strong>
+			to run
 		</aside>
 		<p>
 			Much of the reusable security framework now exists — Zzz runs on
@@ -222,8 +226,8 @@
 					</li>
 					<li>
 						use your API keys for calls to Claude, ChatGPT, and Gemini -- loaded from
-						<code>./.env.{DEV ? 'development' : 'production'}</code> or set at runtime (held in
-						memory only)
+						<code>./.env.{DEV ? 'development' : 'production'}</code>
+						or set at runtime (held in memory only)
 					</li>
 					<li>
 						authentication is cookie sessions and bearer tokens with a one-shot bootstrap flow, plus
