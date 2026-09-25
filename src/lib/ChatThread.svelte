@@ -3,7 +3,7 @@
 	import { tick } from 'svelte';
 	import type { SvelteHTMLElements } from 'svelte/elements';
 
-	import { estimate_token_count, format_placeholder } from './helpers.ts';
+	import { format_placeholder } from './helpers.ts';
 	import type { Thread } from './thread.svelte.ts';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';
 	import TurnList from './TurnList.svelte';
@@ -25,7 +25,7 @@
 		attrs
 	}: {
 		thread: Thread;
-		onsend: (input: string) => Promise<void>;
+		onsend: (input: string) => Promise<unknown>;
 		// TODO @many think about how these two could be refactored, like a single class instance
 		focus_key?: string | number | null | undefined;
 		pending_element_to_focus_key?: string | number | null | undefined;
@@ -33,17 +33,17 @@
 		attrs?: SvelteHTMLElements['div'] | undefined;
 	} = $props();
 
-	let input = $state.raw('');
-	const input_token_count = $derived(estimate_token_count(input));
+	// the draft lives on the thread so it stays with it across chat/thread switches
+	// (this component instance is reused when the displayed thread changes)
 	let content_input: { focus: () => void } | undefined;
 
 	const send = async () => {
-		const parsed = input.trim();
+		const parsed = thread.main_input.trim();
 		if (!parsed) {
 			content_input?.focus();
 			return;
 		}
-		input = '';
+		thread.main_input = '';
 		void tick().then(() => content_input?.focus()); // timeout is maybe unnecessary, lets the input clear first to maybe avoid a frame of jank
 		await onsend(parsed);
 	};
@@ -103,8 +103,8 @@
 			<div>
 				<ContentEditor
 					bind:this={content_input}
-					bind:content={input}
-					token_count={input_token_count}
+					bind:content={thread.main_input}
+					token_count={thread.main_input_token_count}
 					placeholder={format_placeholder()}
 					show_stats
 					show_actions
@@ -127,7 +127,7 @@
 							onclick={send}
 							class="plain {provider_error ? ' color_c_50' : ''}"
 							title={provider?.available
-								? `send ${input_token_count} tokens to ${thread.model_name}`
+								? `send ${thread.main_input_token_count} tokens to ${thread.model_name}`
 								: (provider_error ?? undefined)}
 						>
 							<Svg data={icon_send} />

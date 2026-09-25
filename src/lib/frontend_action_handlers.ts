@@ -92,9 +92,14 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 			const progress_token = input._meta?.progressToken;
 			if (progress_token) {
 				const turn = frontend.cell_registry.all.get(progress_token);
-				if (turn instanceof Turn && !cancelled) {
-					turn.content = `Error: ${error.message}`;
-					turn.error_message = error.message;
+				if (turn instanceof Turn && !turn.settled) {
+					// keep any streamed content — the error renders separately,
+					// and errored turns are excluded from later completion history
+					if (cancelled) {
+						turn.cancelled = true;
+					} else {
+						turn.error_message = error.message;
+					}
 				}
 			}
 		}
@@ -159,6 +164,10 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 				);
 				return;
 			}
+
+			// ignore chunks that arrive after the turn got its final response,
+			// failed, or was cancelled — they'd duplicate or resurrect content
+			if (turn.settled) return;
 
 			turn.content += chunk.message.content;
 		}

@@ -25,8 +25,6 @@
 			<small class="mr_xs font-weight:600" title={turn.created}>@{turn.role}:</small>
 			{#if turn.pending}
 				<PendingAnimation inline />
-			{:else if turn.error_message}
-				<ErrorMessageInline>{turn.error_message}</ErrorMessageInline>
 			{:else if turn.is_content_loaded}
 				{turn.content}
 			{:else if turn.parts.length === 0}
@@ -35,5 +33,10 @@
 				<ErrorMessageInline>{UNKNOWN_ERROR_MESSAGE}</ErrorMessageInline>
 			{/if}
 		</div>
+		{#if turn.error_message}
+			<div><ErrorMessageInline>{turn.error_message}</ErrorMessageInline></div>
+		{:else if turn.cancelled}
+			<div><small class="text_60">stopped</small></div>
+		{/if}
 	</div>
 </TurnContextmenu>

@@ -15,7 +15,16 @@ export const TurnJson = CellJson.extend({
 	role: CompletionRole,
 	request: CompletionRequest.optional(),
 	response: CompletionResponse.optional(),
-	error_message: z.string().optional()
+	/**
+	 * Set when a completion fails. The turn keeps any content that streamed in
+	 * before the failure; errored turns are excluded from later completion history.
+	 */
+	error_message: z.string().optional(),
+	/**
+	 * Set when the user stops a completion before it finished. The turn keeps any
+	 * partial content that streamed in, and stops showing as pending.
+	 */
+	cancelled: z.boolean().default(false)
 }).meta({ cell_class_name: 'Turn' });
 export type TurnJson = z.infer<typeof TurnJson>;
 export type TurnJsonInput = z.input<typeof TurnJson>;

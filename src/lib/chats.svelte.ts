@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { page } from '$app/state';
 import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Chat, ChatJson, type ChatJsonInput } from './chat.svelte.ts';
@@ -107,6 +108,33 @@ export class Chats extends Cell<typeof ChatsJson> {
 		return chat;
 	}
 
+	/**
+	 * Duplicates `chat` with a unique name and fresh, empty threads for the same
+	 * models — no threads or turns are shared with the original. The duplicate's
+	 * selected thread mirrors the original's by position.
+	 * Threads whose model can't be found are skipped.
+	 *
+	 * @param chat - the chat to duplicate
+	 * @returns the new chat, unselected
+	 */
+	duplicate(chat: Chat): Chat {
+		const now = get_datetime_now();
+		const new_chat = this.add_chat(
+			chat.clone({
+				name: this.generate_unique_name(to_duplicate_base_name(chat.name, this.items_by_name)),
+				created: now,
+				updated: now,
+				thread_ids: [],
+				selected_thread_id: null
+			})
+		);
+		const { threads, selected_thread } = chat;
+		for (const thread of threads) {
+			if (thread.model) new_chat.add_thread(thread.model, thread === selected_thread);
+		}
+		return new_chat;
+	}
+
 	add_many(chats_json: Array<ChatJsonInput>, select?: boolean | number): Array<Chat> {
 		const chats = chats_json.map((json) => new Chat({ app: this.app, json }));
 		this.items.add_many(chats);
@@ -190,3 +218,22 @@ export class Chats extends Cell<typeof ChatsJson> {
 }
 
 export const ChatsSchema = z.instanceof(Chats);
+
+/**
+ * Gets the base name to number a duplicate from, so duplicating `my chat 2`
+ * yields `my chat 3` rather than `my chat 2 2`. The numeric suffix is only
+ * stripped when the base name is itself an existing chat, so names that merely
+ * end in a number (like `gpt 4`) are kept whole.
+ *
+ * @param name - the name of the chat being duplicated
+ * @param existing_names - the names of existing chats
+ * @returns the base name for `get_unique_name`
+ */
+export const to_duplicate_base_name = (
+	name: string,
+	existing_names: { has: (name: string) => boolean }
+): string => {
+	if (!name) return 'new chat';
+	const base = name.replace(/ \d+$/, '');
+	return base !== name && existing_names.has(base) ? base : name;
+};

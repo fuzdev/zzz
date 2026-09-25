@@ -32,18 +32,22 @@
 			class:height_100={!empty}
 			class:p_sm={!empty}
 		>
-			<ChatThread
-				{thread}
-				onsend={(input) => chat.send_to_thread(thread.id, input)}
-				attrs={{ class: empty ? 'floating p_sm' : 'height:100%' }}
-				focus_key={chat.id}
-				bind:pending_element_to_focus_key={
-					() => chat.app.ui.pending_element_to_focus_key,
-					(v) => {
-						chat.app.ui.pending_element_to_focus_key = v;
+			<!-- keyed so component-local state (like the editor's clear/restore value)
+			 doesn't carry across threads — the draft itself lives on the thread -->
+			{#key thread.id}
+				<ChatThread
+					{thread}
+					onsend={(input) => chat.send_to_thread(thread.id, input)}
+					attrs={{ class: empty ? 'floating p_sm' : 'height:100%' }}
+					focus_key={chat.id}
+					bind:pending_element_to_focus_key={
+						() => chat.app.ui.pending_element_to_focus_key,
+						(v) => {
+							chat.app.ui.pending_element_to_focus_key = v;
+						}
 					}
-				}
-			/>
+				/>
+			{/key}
 		</div>
 	</div>
 {:else}

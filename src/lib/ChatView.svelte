@@ -56,7 +56,7 @@
 								active_content="simple"
 								inactive_content="multi"
 								class="plain sm"
-								title="toggle chat to ${chat.view_mode === 'multi' ? 'simple' : 'multi'} view"
+								title="toggle chat to {chat.view_mode === 'multi' ? 'simple' : 'multi'} view"
 							>
 								<Svg data={icon_view} class="mr_xs" />
 							</ToggleButton>

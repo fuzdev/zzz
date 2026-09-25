@@ -111,6 +111,9 @@ WebSocket connection, never broadcast. Cancellation is supported:
 sends the `cancel` notification and rejects the pending promise with
 `request_cancelled` so the UI can distinguish user-initiated cancels from
 real provider failures; the backend aborts the in-flight request.
+`cancel_pending()` also marks the in-flight assistant turn `cancelled`, so it
+stops showing as pending even when no content streamed in, and any later
+`completion_progress` chunks for it are ignored.
 
 ### Provider Status
 

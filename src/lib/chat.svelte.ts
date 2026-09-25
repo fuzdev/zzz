@@ -6,6 +6,7 @@ import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 import type { Model } from './model.svelte.ts';
 import { to_completion_response_text } from './response_helpers.ts';
 import { Thread } from './thread.svelte.ts';
+import type { Turn } from './turn.svelte.ts';
 import { reorder_list } from './list_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { CellJson } from './cell_types.ts';
@@ -55,8 +56,17 @@ export class Chat extends Cell<typeof ChatJson> {
 
 	readonly enabled_threads = $derived(this.threads.filter((t) => t.enabled)); // TODO indexed collection, also disabled variant?
 
+	/** Enabled threads with no send in flight — the ones `send_to_all` sends to. */
+	readonly idle_threads: Array<Thread> = $derived(this.enabled_threads.filter((t) => !t.pending));
+
+	/**
+	 * The selected thread, resolved only if it's still part of this chat,
+	 * so a removed thread never keeps rendering or receiving sends.
+	 */
 	readonly selected_thread: Thread | undefined = $derived(
-		this.selected_thread_id ? this.app.threads.items.by_id.get(this.selected_thread_id) : undefined
+		this.selected_thread_id && this.thread_ids.includes(this.selected_thread_id)
+			? this.app.threads.items.by_id.get(this.selected_thread_id)
+			: undefined
 	);
 
 	readonly current_thread: Thread | undefined = $derived(
@@ -87,47 +97,92 @@ export class Chat extends Cell<typeof ChatJson> {
 		}
 	}
 
+	// TODO removing threads only detaches them from this chat — they (and their turns)
+	// stay in `app.threads` as orphans, decide whether removal should delete them
+
+	/**
+	 * Removes a thread from this chat. If it was selected, the selection moves
+	 * to the thread now at its index (or the new last thread), or clears.
+	 */
 	remove_thread(id: Uuid): void {
-		const index = this.thread_ids.findIndex((thread_id) => thread_id === id);
-		if (index !== -1) {
-			this.thread_ids.splice(index, 1);
+		const index = this.thread_ids.indexOf(id);
+		if (index === -1) return;
+		this.thread_ids.splice(index, 1);
+		if (this.selected_thread_id === id) {
+			this.select_thread(this.thread_ids[Math.min(index, this.thread_ids.length - 1)] ?? null);
 		}
 	}
 
+	/**
+	 * Removes threads from this chat. If the selected thread was removed,
+	 * the selection moves to the first remaining thread, or clears.
+	 */
 	remove_threads(ids: Array<Uuid>): void {
 		this.thread_ids = this.thread_ids.filter((t) => !ids.includes(t));
+		this.#reconcile_selection();
 	}
 
 	remove_threads_by_model_tag(tag: string): void {
-		for (const thread of this.threads.filter((t) => t.model?.tags.includes(tag) ?? false)) {
-			this.remove_thread(thread.id);
-		}
+		this.remove_threads(
+			this.threads.filter((t) => t.model?.tags.includes(tag) ?? false).map((t) => t.id)
+		);
 	}
 
 	remove_all_threads(): void {
 		this.thread_ids.length = 0;
+		this.#reconcile_selection();
 	}
 
-	async send_to_all(content: string): Promise<void> {
-		await Promise.all(
+	#reconcile_selection(): void {
+		if (this.selected_thread_id && !this.thread_ids.includes(this.selected_thread_id)) {
+			this.select_thread(this.thread_ids[0] ?? null);
+		}
+	}
+
+	/**
+	 * Sends `content` to every idle thread (enabled with no send already in flight).
+	 *
+	 * @returns the number of threads a message was sent to
+	 */
+	async send_to_all(content: string): Promise<number> {
+		const turns = await Promise.all(
 			// TODO batched endpoint
-			this.enabled_threads.map((thread) => this.send_to_thread(thread.id, content))
+			this.idle_threads.map((thread) => this.send_to_thread(thread.id, content))
 		);
+		return turns.filter((turn) => turn !== null).length;
 	}
 
-	async send_to_thread(thread_id: Uuid, content: string): Promise<void> {
+	/**
+	 * Sends `content` to one thread, and auto-names the chat from the first
+	 * successful exchange.
+	 *
+	 * @returns the assistant turn, or `null` if the send was skipped
+	 */
+	async send_to_thread(thread_id: Uuid, content: string): Promise<Turn | null> {
 		const thread = this.app.threads.items.by_id.get(thread_id);
-		if (!thread) return;
+		if (!thread) return null;
 
-		this.updated = get_datetime_now(); // TODO @many probably rely on the db to bump `updated`
+		if (thread.pending) return null; // a send is already in flight
 
-		const assistant_turn = await thread.send_message(content);
+		const sending = thread.send_message(content);
+		// `send_message` sets `pending` synchronously once it creates the turns, and every
+		// skip path returns before that — so bump at send time, not when the reply finishes
+		if (thread.pending) this.updated = get_datetime_now(); // TODO @many probably rely on the db to bump `updated`
+
+		const assistant_turn = await sending;
+		if (!assistant_turn) return null; // skipped, e.g. unavailable model or provider
 
 		// TODO maybe make the above return a result, so we can get better error handling, or maybe do that through the error handlers for the action?
-		// Only attempt auto-naming if turn was created (not skipped due to unavailable provider)
-		if (assistant_turn) {
+		// don't burn the one naming attempt on a failed, cancelled, or empty reply
+		if (
+			!assistant_turn.error_message &&
+			!assistant_turn.cancelled &&
+			assistant_turn.content.trim()
+		) {
 			void this.init_name_from_turns(content, assistant_turn.content);
 		}
+
+		return assistant_turn;
 	}
 
 	// TODO needs to be reworked (maybe accept an array of messages?), also shouldn't clobber any user-assigned names
@@ -205,13 +260,13 @@ export class Chat extends Cell<typeof ChatJson> {
 		}
 	}
 
-	/**
-	 * Reorder threads by moving from one index to another
-	 */
 	select_thread(thread_id: Uuid | null): void {
 		this.selected_thread_id = thread_id;
 	}
 
+	/**
+	 * Reorder threads by moving from one index to another.
+	 */
 	reorder_threads(from_index: number, to_index: number): void {
 		reorder_list(this.thread_ids, from_index, to_index);
 	}

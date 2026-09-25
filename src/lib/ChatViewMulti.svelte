@@ -29,11 +29,14 @@
 		}
 		chat.main_input = '';
 		pending = true;
-		await chat.send_to_all(parsed);
+		const sent_count = await chat.send_to_all(parsed);
 		pending = false;
+		// nothing was sent (e.g. every provider unavailable), so restore the draft
+		if (!sent_count && !chat.main_input) chat.main_input = parsed;
 	};
 
-	const count = $derived(chat.enabled_threads.length);
+	// threads with a send in flight are skipped, so they're excluded from the count
+	const count = $derived(chat.idle_threads.length);
 
 	let show_model_picker = $state.raw(false);
 </script>

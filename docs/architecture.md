@@ -314,6 +314,8 @@ class Turn extends Cell<typeof TurnJson> {
 	role: CompletionRole = $state.raw()!; // 'user' | 'assistant' | 'system'
 	request: CompletionRequest | undefined = $state.raw();
 	response: CompletionResponse | undefined = $state.raw();
+	error_message: string | undefined = $state.raw(); // set on failure, kept separate from content
+	cancelled: boolean = $state.raw()!; // set when the user stops the completion
 
 	// mutable by design — streaming handlers assign to it;
 	// the getter joins part contents, the setter writes the first part
@@ -329,15 +331,22 @@ class Turn extends Cell<typeof TurnJson> {
 		}
 	}
 
+	// the completion ended — late streaming chunks are ignored after this
+	readonly settled: boolean = $derived(
+		!!this.response || !!this.error_message || this.cancelled
+	);
+
 	readonly pending: boolean = $derived(
-		this.role === 'assistant' &&
-			this.is_content_loaded &&
-			this.is_content_empty &&
-			!this.response &&
-			!this.error_message
+		this.role === 'assistant' && this.is_content_loaded && this.is_content_empty && !this.settled
 	);
 }
 ```
+
+A failed completion keeps whatever content streamed in and records the error in
+`error_message`, which the turn UI renders separately. When rendering a thread's
+history for the next request, `render_completion_messages` skips errored turns and
+turns with empty content (e.g. a completion cancelled before its first token);
+cancelled turns with partial content are kept.
 
 ### Threads
 

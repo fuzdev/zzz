@@ -21,6 +21,7 @@ export class Turn extends Cell<typeof TurnJson> {
 	request: CompletionRequest | undefined = $state.raw();
 	response: CompletionResponse | undefined = $state.raw();
 	error_message: string | undefined = $state.raw();
+	cancelled: boolean = $state.raw()!;
 
 	readonly parts: Array<PartUnion> = $derived(
 		this.part_ids
@@ -60,12 +61,14 @@ export class Turn extends Cell<typeof TurnJson> {
 		this.parts.length === 0 || this.parts.every((part) => !part.content)
 	);
 
+	/**
+	 * True once the completion for this turn has ended — a final response arrived,
+	 * it failed, or it was cancelled. Late streaming chunks are ignored after this.
+	 */
+	readonly settled: boolean = $derived(!!this.response || !!this.error_message || this.cancelled);
+
 	readonly pending: boolean = $derived(
-		this.role === 'assistant' &&
-			this.is_content_loaded &&
-			this.is_content_empty &&
-			!this.response &&
-			!this.error_message
+		this.role === 'assistant' && this.is_content_loaded && this.is_content_empty && !this.settled
 	);
 
 	constructor(options: TurnOptions) {

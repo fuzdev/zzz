@@ -98,15 +98,7 @@
 			<ContextmenuEntry
 				icon={icon_chat}
 				run={async () => {
-					// TODO make it have a unique name, and adding threads looks hacky,
-					// maybe add a `chats.duplicate` method
-					const new_chat = app.chats.add_chat(chat.clone());
-					// TODO hacky
-					for (const thread of chat.threads) {
-						if (thread.model) new_chat.add_thread(thread.model);
-					}
-
-					// Select the new chat
+					const new_chat = app.chats.duplicate(chat);
 					await app.chats.navigate_to(new_chat.id);
 				}}
 			>

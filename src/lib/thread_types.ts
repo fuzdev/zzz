@@ -8,7 +8,9 @@ import { TurnJson } from './turn_types.ts';
 export const ThreadJson = CellJson.extend({
 	model_name: ModelName.default(''),
 	turns: z.array(TurnJson).default(() => []),
-	enabled: z.boolean().default(true)
+	enabled: z.boolean().default(true),
+	/** The unsent draft for this thread's input, preserved across chat and thread switches. */
+	main_input: z.string().default('')
 }).meta({ cell_class_name: 'Thread' });
 export type ThreadJson = z.infer<typeof ThreadJson>;
 export type ThreadJsonInput = z.input<typeof ThreadJson>;

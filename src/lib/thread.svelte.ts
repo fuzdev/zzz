@@ -29,6 +29,10 @@ export class Thread extends Cell<typeof ThreadJson> {
 
 	enabled: boolean = $state.raw()!;
 
+	main_input: string = $state.raw()!;
+	readonly main_input_length: number = $derived(this.main_input.length);
+	readonly main_input_token_count: number = $derived(estimate_token_count(this.main_input));
+
 	readonly content: string = $derived(render_messages_to_string(this.turns.by_id.values()));
 	readonly length: number = $derived(this.content.length);
 	readonly token_count: number = $derived(estimate_token_count(this.content));
@@ -37,6 +41,8 @@ export class Thread extends Cell<typeof ThreadJson> {
 	// Imperative handle for the in-flight completion_create call. Not reactive —
 	// UI state tracks `pending` below, which mirrors this controller's lifecycle.
 	#pending_controller: AbortController | null = null;
+	// The assistant turn receiving the in-flight completion, settled on cancel.
+	#pending_turn: Turn | null = null;
 
 	/**
 	 * Reactive flag: true while `send_message` has an in-flight `completion_create`.
@@ -124,11 +130,17 @@ export class Thread extends Cell<typeof ThreadJson> {
 
 	/**
 	 * Send a message to the AI and create corresponding turns.
-	 * Returns null if provider is unavailable (defensive check - UI should prevent this).
+	 * Returns null if a send is already in flight, or if the model or provider
+	 * is unavailable (defensive checks - UI should prevent these).
 	 */
 	async send_message(content: string): Promise<Turn | null> {
 		// TODO rethink this API with the completion request/response (see OpenAI/MCP/A2A)
 		// TODO maybe do this in the `completion_create: {send_request:` handler?
+
+		if (this.pending) {
+			console.warn('[thread.send_message] a send is already in flight, skipping send');
+			return null;
+		}
 
 		const model = this.model;
 		if (!model) {
@@ -169,6 +181,7 @@ export class Thread extends Cell<typeof ThreadJson> {
 		// into a `request_cancelled` JSON-RPC error.
 		const controller = new AbortController();
 		this.#pending_controller = controller;
+		this.#pending_turn = assistant_turn;
 		this.pending = true;
 		try {
 			await this.app.api.completion_create(
@@ -180,10 +193,10 @@ export class Thread extends Cell<typeof ThreadJson> {
 			);
 		} finally {
 			// Only clear if this is still the active controller — a concurrent
-			// send (shouldn't happen with current UI but cheap insurance) would
-			// have replaced it.
+			// send is guarded against above, but this is cheap insurance.
 			if (this.#pending_controller === controller) {
 				this.#pending_controller = null;
+				this.#pending_turn = null;
 				this.pending = false;
 			}
 		}
@@ -197,10 +210,17 @@ export class Thread extends Cell<typeof ThreadJson> {
 	 * nothing is pending — no-op. The frontend WS client rejects the pending
 	 * promise with `request_cancelled` and fires a `cancel` notification so the
 	 * server can stop its provider stream.
+	 *
+	 * The in-flight assistant turn is marked `cancelled` (unless it already
+	 * settled) so it stops showing as pending even if no content streamed in,
+	 * and any late streaming chunks are ignored.
 	 */
 	cancel_pending(): void {
+		const turn = this.#pending_turn;
+		if (turn && !turn.settled) turn.cancelled = true;
 		this.#pending_controller?.abort();
 		this.#pending_controller = null;
+		this.#pending_turn = null;
 		this.pending = false;
 	}
 
