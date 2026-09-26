@@ -14,7 +14,7 @@ export const monkeypatch_zzz_for_tests = <T extends Frontend>(app: T): T => {
 		if (diskfile) {
 			diskfile.content = content;
 		}
-		return Promise.resolve();
+		return Promise.resolve({ ok: true, value: null });
 	};
 
 	return app;

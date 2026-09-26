@@ -1,12 +1,46 @@
 // @slop Claude Sonnet 3.7
 
 import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { SvelteSet } from 'svelte/reactivity';
 
 import { estimate_token_count } from './helpers.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
 import type { DiskfilePath } from './diskfile_types.ts';
 import type { Frontend } from './frontend.svelte.ts';
 import type { DiskfileHistory, HistoryEntry } from './diskfile_history.svelte.ts';
+
+/**
+ * Rounded percent change `diff` makes to `original`. An empty original has no
+ * meaningful ratio, so any growth from it reads as 100% and no change as 0%.
+ */
+const to_diff_percent = (diff: number, original: number): number => {
+	if (diff === 0) return 0;
+	if (original <= 0) return 100;
+	return Math.round((diff / original) * 100);
+};
+
+/**
+ * Removes the unsaved-edit entry `entry_id` once `saved_content` is written,
+ * if it still holds exactly that content — not if it was edited since, if a
+ * disk-change broadcast already claimed it as the disk state, or if it's
+ * `keep_entry_id`.
+ *
+ * @returns whether the entry was removed
+ * @mutates history - splices the entry out of `entries`
+ */
+const remove_superseded_unsaved_entry = (
+	history: DiskfileHistory,
+	entry_id: Uuid | null,
+	saved_content: string,
+	keep_entry_id: Uuid | null = null
+): boolean => {
+	if (entry_id === null || entry_id === keep_entry_id) return false;
+	const index = history.entries.findIndex((entry) => entry.id === entry_id);
+	const entry = history.entries[index];
+	if (!entry?.is_unsaved_edit || entry.content !== saved_content) return false;
+	history.entries.splice(index, 1);
+	return true;
+};
 
 // TODO maybe should be a cell?
 /**
@@ -27,6 +61,19 @@ export class DiskfileEditorState {
 
 	// Track last seen disk content to detect changes
 	last_seen_disk_content: string | null = $state.raw(null);
+
+	/** Ids of the diskfiles with a `save_changes` write in flight. */
+	readonly #saving_diskfile_ids: SvelteSet<Uuid> = new SvelteSet();
+
+	/**
+	 * Whether a `save_changes` write for the current diskfile is in flight.
+	 * Keyed to the diskfile, so a save still running for a file the editor has
+	 * moved away from doesn't block saving the one it shows now.
+	 */
+	readonly saving: boolean = $derived(this.#saving_diskfile_ids.has(this.diskfile.id));
+
+	/** The error message from the last failed save, cleared when a save starts. */
+	save_error: string | null = $state.raw(null);
 
 	// Basic derived states
 	readonly original_content: string | null = $derived(this.diskfile.content);
@@ -79,9 +126,11 @@ export class DiskfileEditorState {
 	readonly original_length = $derived.by(() => this.original_content?.length ?? 0);
 	readonly current_length = $derived(this.current_content.length);
 	readonly length_diff = $derived(this.current_length - this.original_length);
-	readonly length_diff_percent = $derived(
-		this.original_length > 0 ? Math.round((this.length_diff / this.original_length) * 100) : 100
-	);
+	/**
+	 * Percent change in length from the original. Growth from an empty original
+	 * reads as 100% (no change reads as 0%).
+	 */
+	readonly length_diff_percent = $derived(to_diff_percent(this.length_diff, this.original_length));
 
 	// Token-related calculations
 	readonly original_token_count = $derived.by(() =>
@@ -89,10 +138,11 @@ export class DiskfileEditorState {
 	);
 	readonly current_token_count = $derived(estimate_token_count(this.current_content));
 	readonly token_diff = $derived(this.current_token_count - this.original_token_count);
+	/**
+	 * Percent change in token count from the original — see `length_diff_percent`.
+	 */
 	readonly token_diff_percent = $derived(
-		this.original_token_count > 0
-			? Math.round((this.token_diff / this.original_token_count) * 100)
-			: 100
+		to_diff_percent(this.token_diff, this.original_token_count)
 	);
 
 	// Getter/setter for current_content
@@ -247,6 +297,7 @@ export class DiskfileEditorState {
 	reset(): void {
 		this.last_seen_disk_content = this.diskfile.content;
 		this.content_was_modified_by_user = false;
+		this.save_error = null;
 
 		// Clear state references but don't modify entries
 		this.unsaved_edit_entry_id = null;
@@ -309,42 +360,87 @@ export class DiskfileEditorState {
 	}
 
 	/**
-	 * Save changes to the diskfile.
+	 * Save changes to the diskfile. History, selection, and the modified flag
+	 * change only once the write succeeds; a failure leaves the edit unsaved and
+	 * sets `save_error`. One save per diskfile runs at a time. If the editor or
+	 * the disk moves on while the write is in flight — more typing, another
+	 * history entry picked, an external edit landing after the save's own — the
+	 * saved content is recorded in history without taking over the editor. If
+	 * the editor switched to another diskfile meanwhile, only the saved file's
+	 * history is settled; the editor's state now belongs to the other file.
+	 *
+	 * @returns whether the content was written
 	 */
 	async save_changes(): Promise<boolean> {
-		if (!this.can_save) return false;
+		const { diskfile } = this;
+		if (!this.can_save || this.#saving_diskfile_ids.has(diskfile.id)) return false;
 
 		const history = this.#ensure_history();
-
-		// Store the current content before modifying any state
 		const content_to_save = this.current_content;
+		const unsaved_edit_entry_id = this.unsaved_edit_entry_id;
+		const last_seen_at_start = this.last_seen_disk_content;
+		const started = Date.now();
 
-		// If currently editing an unsaved entry, remove it completely
-		if (this.unsaved_edit_entry_id !== null) {
-			// Find and remove the unsaved entry from history
-			const entry_index = history.entries.findIndex(
-				(entry) => entry.id === this.unsaved_edit_entry_id
-			);
-			if (entry_index !== -1) {
-				history.entries.splice(entry_index, 1);
-			}
+		this.save_error = null;
+		this.#saving_diskfile_ids.add(diskfile.id);
+		let result;
+		try {
+			result = await this.app.diskfiles.update(diskfile.path, content_to_save);
+		} finally {
+			this.#saving_diskfile_ids.delete(diskfile.id);
 		}
 
-		// Add a new entry for the saved content
-		const entry = history.add_entry(content_to_save);
+		if (this.diskfile !== diskfile) {
+			// nothing here shows the saved file anymore, so settle its history alone
+			if (result.ok) {
+				remove_superseded_unsaved_entry(history, unsaved_edit_entry_id, content_to_save);
+				history.add_entry(content_to_save, { is_unsaved_edit: false, created: started });
+			}
+			return result.ok;
+		}
 
-		// Save to the file
-		await this.app.diskfiles.update(this.path, content_to_save);
+		if (!result.ok) {
+			this.save_error = result.error.message;
+			return false;
+		}
+		this.save_error = null;
 
-		// Update last seen content after saving
-		this.last_seen_disk_content = content_to_save;
-		this.content_was_modified_by_user = false;
+		// a disk change other than this save landed while in flight — the disk no
+		// longer holds the saved content, and `check_disk_changes` already recorded it
+		const disk_moved_on =
+			this.last_seen_disk_content !== last_seen_at_start && diskfile.content !== content_to_save;
 
-		// Clear unsaved edit reference
-		this.unsaved_edit_entry_id = null;
+		// nothing moved while in flight, so the editor settles on the saved content
+		const settled = !disk_moved_on && this.current_content === content_to_save;
 
-		// Set selection to the newly saved entry
-		this.selected_history_entry_id = entry.id;
+		// a still-viewed entry stays put when the editor doesn't settle on the save
+		const removed = remove_superseded_unsaved_entry(
+			history,
+			unsaved_edit_entry_id,
+			content_to_save,
+			settled ? null : this.selected_history_entry_id
+		);
+		if (removed && this.unsaved_edit_entry_id === unsaved_edit_entry_id) {
+			this.unsaved_edit_entry_id = null;
+		}
+
+		// dated to when the save was issued, so it sorts below later disk changes;
+		// deduped by `add_entry` when a disk-change entry for it is already newest
+		const saved_entry =
+			disk_moved_on &&
+			history.entries.some((entry) => !entry.is_unsaved_edit && entry.content === content_to_save)
+				? null
+				: history.add_entry(content_to_save, { is_unsaved_edit: false, created: started });
+
+		if (!disk_moved_on) {
+			this.last_seen_disk_content = content_to_save;
+		}
+
+		if (settled && saved_entry) {
+			this.content_was_modified_by_user = false;
+			this.unsaved_edit_entry_id = null;
+			this.selected_history_entry_id = saved_entry.id;
+		}
 
 		return true;
 	}

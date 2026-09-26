@@ -87,7 +87,7 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	}
 
 	/**
-	 * Opens (makes permanent) a tab by id.
+	 * Opens a tab by id — see `DiskfileTabs.open_tab`.
 	 */
 	open_tab(tab_id: Uuid): void {
 		console.log('DiskfilesEditor.open_tab', { tab_id });

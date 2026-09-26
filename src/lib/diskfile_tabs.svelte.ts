@@ -399,13 +399,16 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	}
 
 	/**
-	 * Opens (makes permanent) a tab by id.
+	 * Opens a tab by id: makes it permanent if it's the preview tab, and selects it.
+	 * No-op for an unknown tab.
 	 */
 	open_tab(tab_id: Uuid): void {
 		console.log('DiskfileTabs.open_tab', { tab_id });
+		if (!this.items.by_id.has(tab_id)) return;
 		if (tab_id === this.preview_tab_id) {
 			this.preview_tab_id = null;
 		}
+		this.select_tab(tab_id);
 	}
 
 	/**

@@ -24,7 +24,8 @@
 		attrs, // TODO probably extend base props with SvelteHTMLElements['textarea'] and delete this
 		after,
 		children,
-		onsave
+		onsave,
+		save_shortcut = 'focused'
 	}: {
 		content: string; // TODO maybe rename to value? rethink `ContentEditor` in general when we switch to CodeMirror
 		/** Estimated if not provided and `show_stats` is true. */
@@ -40,7 +41,15 @@
 		attrs?: SvelteHTMLElements['textarea'] | undefined;
 		after?: Snippet | undefined;
 		children?: Snippet | undefined;
+		/** Called with the content on Ctrl+S / Cmd+S — see `save_shortcut`. */
 		onsave?: ((value: string) => void) | undefined;
+		/**
+		 * Where Ctrl+S / Cmd+S triggers `onsave`: `'focused'` only while this
+		 * editor's textarea has focus, `'page'` from anywhere on the page unless a
+		 * focused editor handles it first. Use `'page'` only for the one main
+		 * editor of a page.
+		 */
+		save_shortcut?: 'focused' | 'page' | undefined;
 	} = $props();
 
 	let textarea_el: HTMLTextAreaElement | undefined = $state.raw();
@@ -53,18 +62,26 @@
 	export const focus = (): void => {
 		textarea_el?.focus();
 	};
+
+	/**
+	 * Ctrl+S / Cmd+S calls `onsave`. The textarea's own handler runs first and
+	 * swallows the event, so a page-level listener never saves a different editor
+	 * than the focused one.
+	 */
+	const handle_save_shortcut = (event: KeyboardEvent): void => {
+		if (!onsave || event.defaultPrevented) return;
+		// case-insensitive so Caps Lock doesn't fall through to the browser's save dialog
+		if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
+			swallow(event);
+			// a held key repeats — save once per press
+			if (event.repeat) return;
+			onsave(content);
+		}
+	};
 </script>
 
 <svelte:document
-	onkeydown={onsave
-		? (event) => {
-				// Check for Ctrl+S or Command+S (Mac)
-				if ((event.ctrlKey || event.metaKey) && event.key === 's') {
-					swallow(event);
-					onsave(content);
-				}
-			}
-		: undefined}
+	onkeydown={onsave && save_shortcut === 'page' ? handle_save_shortcut : undefined}
 />
 
 <div class="column width:100% flex:1">
@@ -76,6 +93,10 @@
 			bind:value={content}
 			{placeholder}
 			{readonly}
+			onkeydown={(event) => {
+				attrs?.onkeydown?.(event);
+				handle_save_shortcut(event);
+			}}
 			style="{textarea_height ? `height: ${textarea_height};` : ''} {attrs?.style || ''}"
 			{@attach focus_key == null
 				? null

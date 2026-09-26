@@ -7,6 +7,8 @@ import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
 import { Frontend } from '$lib/frontend.svelte.ts';
 import { Diskfile } from '$lib/diskfile.svelte.ts';
 
+import { create_deferred } from '@fuzdev/fuz_util/async.ts';
+
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Constants for testing
@@ -251,6 +253,26 @@ describe('content metrics', () => {
 		assert.strictEqual(empty_editor_state.original_token_count, 0);
 		assert.strictEqual(empty_editor_state.token_diff_percent, 100);
 	});
+
+	test('diff percents are 0 when an empty original is unchanged', () => {
+		const empty_diskfile = app.diskfiles.add({
+			path: DiskfilePath.parse('/empty/unchanged.txt'),
+			source_dir: SerializableDisknode.shape.source_dir.parse('/empty/'),
+			content: ''
+		});
+		const empty_editor_state = new DiskfileEditorState({ app, diskfile: empty_diskfile });
+
+		assert.strictEqual(empty_editor_state.length_diff, 0);
+		assert.strictEqual(empty_editor_state.length_diff_percent, 0);
+		assert.strictEqual(empty_editor_state.token_diff, 0);
+		assert.strictEqual(empty_editor_state.token_diff_percent, 0);
+
+		// back to empty after an edit
+		empty_editor_state.current_content = 'x';
+		empty_editor_state.current_content = '';
+		assert.strictEqual(empty_editor_state.length_diff_percent, 0);
+		assert.strictEqual(empty_editor_state.token_diff_percent, 0);
+	});
 });
 
 describe('file management', () => {
@@ -430,5 +452,274 @@ describe('saving changes', () => {
 		assert.strictEqual(history.entries[0]!.content, 'Content to be saved');
 		assert.ok(!history.entries[0]!.is_unsaved_edit);
 		assert.ok(!history.entries[0]!.is_disk_change);
+	});
+});
+
+describe('saving failures and concurrent edits', () => {
+	const ERROR = { code: -32603, message: 'disk full' } as const;
+
+	/** Makes `app.diskfiles.update` wait for the returned deferred. */
+	const defer_update = () => {
+		const writes: Array<string> = [];
+		const deferred = create_deferred<Awaited<ReturnType<Frontend['diskfiles']['update']>>>();
+		app.diskfiles.update = (_path, content) => {
+			writes.push(content);
+			return deferred.promise;
+		};
+		return { writes, deferred };
+	};
+
+	test('a failed save leaves the edit unsaved and sets save_error', async () => {
+		editor_state.current_content = 'edited';
+		const history = app.get_diskfile_history(TEST_PATH)!;
+		const entries_before = history.entries.map((entry) => ({ ...entry }));
+		const unsaved_id = editor_state.unsaved_edit_entry_id;
+		assert.isNotNull(unsaved_id);
+		app.diskfiles.update = () => Promise.resolve({ ok: false, error: ERROR });
+
+		const result = await editor_state.save_changes();
+
+		assert.isFalse(result);
+		assert.strictEqual(editor_state.save_error, 'disk full');
+		assert.isFalse(editor_state.saving);
+		assert.deepEqual(history.entries, entries_before);
+		assert.strictEqual(editor_state.unsaved_edit_entry_id, unsaved_id);
+		assert.strictEqual(editor_state.selected_history_entry_id, unsaved_id);
+		assert.isTrue(editor_state.content_was_modified_by_user);
+		assert.strictEqual(editor_state.last_seen_disk_content, TEST_CONTENT);
+		assert.strictEqual(editor_state.current_content, 'edited');
+		assert.isTrue(editor_state.has_unsaved_edits);
+	});
+
+	test('a successful save clears the previous save_error', async () => {
+		editor_state.current_content = 'edited';
+		app.diskfiles.update = () => Promise.resolve({ ok: false, error: ERROR });
+		await editor_state.save_changes();
+		assert.strictEqual(editor_state.save_error, 'disk full');
+
+		monkeypatch_zzz_for_tests(app);
+		assert.isTrue(await editor_state.save_changes());
+
+		assert.isNull(editor_state.save_error);
+	});
+
+	test('saving is true only while the write is in flight', async () => {
+		editor_state.current_content = 'edited';
+		const { deferred } = defer_update();
+
+		const saving = editor_state.save_changes();
+		assert.isTrue(editor_state.saving);
+
+		deferred.resolve({ ok: true, value: null });
+		assert.isTrue(await saving);
+		assert.isFalse(editor_state.saving);
+	});
+
+	test('typing while a save is in flight is not reverted', async () => {
+		editor_state.current_content = 'first';
+		const { writes, deferred } = defer_update();
+
+		const saving = editor_state.save_changes();
+		editor_state.current_content = 'first, then more';
+		deferred.resolve({ ok: true, value: null });
+		assert.isTrue(await saving);
+
+		assert.deepEqual(writes, ['first']);
+		assert.strictEqual(editor_state.current_content, 'first, then more');
+		assert.isTrue(editor_state.content_was_modified_by_user);
+		assert.strictEqual(editor_state.last_seen_disk_content, 'first');
+
+		const history = app.get_diskfile_history(TEST_PATH)!;
+		// the saved content is recorded, the newer edit stays the live unsaved entry
+		const saved = history.entries.find((entry) => entry.content === 'first');
+		assert.ok(saved);
+		assert.isFalse(saved.is_unsaved_edit);
+		const unsaved = history.entries.filter((entry) => entry.is_unsaved_edit);
+		assert.strictEqual(unsaved.length, 1);
+		assert.strictEqual(unsaved[0]!.content, 'first, then more');
+		assert.strictEqual(editor_state.unsaved_edit_entry_id, unsaved[0]!.id);
+		assert.strictEqual(editor_state.selected_history_entry_id, unsaved[0]!.id);
+
+		// further typing keeps updating that entry rather than adding more
+		editor_state.current_content = 'first, then even more';
+		assert.strictEqual(history.entries.filter((entry) => entry.is_unsaved_edit).length, 1);
+	});
+
+	test('a save with no edits while in flight still settles to the saved entry', async () => {
+		editor_state.current_content = 'saved';
+		const { deferred } = defer_update();
+
+		const saving = editor_state.save_changes();
+		deferred.resolve({ ok: true, value: null });
+		assert.isTrue(await saving);
+
+		const history = app.get_diskfile_history(TEST_PATH)!;
+		assert.isFalse(editor_state.has_unsaved_edits);
+		assert.isNull(editor_state.unsaved_edit_entry_id);
+		assert.strictEqual(history.entries[0]!.content, 'saved');
+		assert.strictEqual(editor_state.selected_history_entry_id, history.entries[0]!.id);
+		assert.isFalse(editor_state.content_was_modified_by_user);
+	});
+
+	test('a second save while one is in flight is refused', async () => {
+		editor_state.current_content = 'first';
+		const { writes, deferred } = defer_update();
+
+		const saving = editor_state.save_changes();
+		editor_state.current_content = 'second';
+		assert.isFalse(await editor_state.save_changes());
+		assert.isTrue(editor_state.saving);
+
+		deferred.resolve({ ok: true, value: null });
+		assert.isTrue(await saving);
+		assert.deepEqual(writes, ['first']);
+
+		// once settled, the newer edit saves normally
+		monkeypatch_zzz_for_tests(app);
+		assert.isTrue(await editor_state.save_changes());
+		assert.strictEqual(test_diskfile.content, 'second');
+		assert.isFalse(editor_state.has_unsaved_edits);
+	});
+
+	test('picking another entry while a save is in flight records the save as saved', async () => {
+		const history = app.get_diskfile_history(TEST_PATH)!;
+		const original = history.entries.find((entry) => entry.is_original_state);
+		assert.ok(original);
+		editor_state.current_content = 'saved';
+		const { deferred } = defer_update();
+
+		const saving = editor_state.save_changes();
+		editor_state.set_content_from_history(original.id);
+		deferred.resolve({ ok: true, value: null });
+		assert.isTrue(await saving);
+
+		// the editor stays on the picked entry
+		assert.strictEqual(editor_state.selected_history_entry_id, original.id);
+		assert.strictEqual(editor_state.current_content, TEST_CONTENT);
+		// the saved content is a saved entry, and no unsaved edit lingers
+		const saved = history.entries.filter((entry) => entry.content === 'saved');
+		assert.strictEqual(saved.length, 1);
+		assert.isFalse(saved[0]!.is_unsaved_edit);
+		assert.isFalse(history.has_unsaved_edits);
+		assert.isNull(editor_state.unsaved_edit_entry_id);
+	});
+
+	test('an external edit landing after the save broadcast keeps the disk state', async () => {
+		editor_state.current_content = 'saved';
+		const history = app.get_diskfile_history(TEST_PATH)!;
+		const { deferred } = defer_update();
+
+		const saving = editor_state.save_changes();
+		// the save's own broadcast, then an external edit's, then the response
+		test_diskfile.content = 'saved';
+		editor_state.check_disk_changes();
+		test_diskfile.content = 'external';
+		editor_state.check_disk_changes();
+		const external = history.entries.find((entry) => entry.content === 'external');
+		assert.ok(external);
+		const selected_before = editor_state.selected_history_entry_id;
+		deferred.resolve({ ok: true, value: null });
+		assert.isTrue(await saving);
+
+		assert.strictEqual(editor_state.last_seen_disk_content, 'external');
+		assert.strictEqual(history.entries[0], external);
+		assert.strictEqual(history.entries.filter((entry) => entry.content === 'saved').length, 1);
+		assert.strictEqual(editor_state.selected_history_entry_id, selected_before);
+	});
+
+	describe('switching files while a save is in flight', () => {
+		const OTHER_PATH = DiskfilePath.parse('/path/to/other.txt');
+
+		const setup_switch = () => {
+			const other = app.diskfiles.add({
+				path: OTHER_PATH,
+				source_dir: TEST_DIR,
+				content: 'other'
+			});
+			editor_state.current_content = 'edited';
+			const history = app.get_diskfile_history(TEST_PATH)!;
+			const { writes, deferred } = defer_update();
+			const saving = editor_state.save_changes();
+			editor_state.update_diskfile(other);
+			const other_history = app.get_diskfile_history(OTHER_PATH)!;
+			const other_entries_before = other_history.entries.map((entry) => ({ ...entry }));
+			return { history, other_history, other_entries_before, writes, deferred, saving };
+		};
+
+		test('a successful save settles the saved file only', async () => {
+			const { history, other_history, other_entries_before, deferred, saving } = setup_switch();
+
+			deferred.resolve({ ok: true, value: null });
+			assert.isTrue(await saving);
+
+			// the saved file's history holds the save, with no lingering unsaved edit
+			const saved = history.entries.filter((entry) => entry.content === 'edited');
+			assert.strictEqual(saved.length, 1);
+			assert.isFalse(saved[0]!.is_unsaved_edit);
+			assert.isFalse(history.has_unsaved_edits);
+			// the other file is untouched
+			assert.deepEqual(other_history.entries, other_entries_before);
+			assert.strictEqual(editor_state.current_content, 'other');
+			assert.strictEqual(editor_state.last_seen_disk_content, 'other');
+			assert.isFalse(editor_state.content_was_modified_by_user);
+			assert.isNull(editor_state.save_error);
+		});
+
+		test('a failed save leaves the saved file unsaved and shows nothing on the other', async () => {
+			const { history, other_history, other_entries_before, deferred, saving } = setup_switch();
+
+			deferred.resolve({ ok: false, error: ERROR });
+			assert.isFalse(await saving);
+
+			assert.isTrue(history.has_unsaved_edits);
+			assert.deepEqual(other_history.entries, other_entries_before);
+			assert.isNull(editor_state.save_error);
+		});
+
+		test('the other file can save while the first is in flight', async () => {
+			const { writes, deferred, saving } = setup_switch();
+			assert.isFalse(editor_state.saving);
+
+			editor_state.current_content = 'other edited';
+			const saving_other = editor_state.save_changes();
+			assert.isTrue(editor_state.saving);
+			deferred.resolve({ ok: true, value: null });
+			assert.isTrue(await saving);
+			assert.isTrue(await saving_other);
+
+			assert.deepEqual(writes, ['edited', 'other edited']);
+			assert.isFalse(editor_state.saving);
+			assert.isFalse(app.get_diskfile_history(OTHER_PATH)!.has_unsaved_edits);
+		});
+
+		test('switching files clears a failed save error', async () => {
+			const other = app.diskfiles.add({ path: OTHER_PATH, source_dir: TEST_DIR, content: 'o' });
+			editor_state.current_content = 'edited';
+			app.diskfiles.update = () => Promise.resolve({ ok: false, error: ERROR });
+			await editor_state.save_changes();
+			assert.strictEqual(editor_state.save_error, 'disk full');
+
+			editor_state.update_diskfile(other);
+
+			assert.isNull(editor_state.save_error);
+		});
+	});
+
+	test('a disk-change broadcast landing before the response is not duplicated', async () => {
+		editor_state.current_content = 'saved';
+		const { deferred } = defer_update();
+
+		const saving = editor_state.save_changes();
+		// the filer broadcast wins the race with the RPC response
+		test_diskfile.content = 'saved';
+		editor_state.check_disk_changes();
+		deferred.resolve({ ok: true, value: null });
+		assert.isTrue(await saving);
+
+		const history = app.get_diskfile_history(TEST_PATH)!;
+		assert.strictEqual(history.entries.filter((entry) => entry.content === 'saved').length, 1);
+		assert.isFalse(editor_state.has_unsaved_edits);
+		assert.strictEqual(editor_state.current_content, 'saved');
+		assert.isFalse(editor_state.has_changes);
 	});
 });

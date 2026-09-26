@@ -512,6 +512,26 @@ describe('DiskfileTabs', () => {
 			assert.isNull(tabs.preview_tab_id);
 		});
 
+		test('open_tab selects the tab it promotes', () => {
+			const other = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
+			tabs.select_tab(other.id);
+
+			tabs.open_tab(preview_tab.id);
+
+			assert.isNull(tabs.preview_tab_id);
+			assert.strictEqual(tabs.selected_tab_id, preview_tab.id);
+			assert.strictEqual(tabs.recent_tab_ids[0], preview_tab.id);
+		});
+
+		test('open_tab ignores an unknown tab', () => {
+			const tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+
+			tabs.open_tab(create_uuid());
+
+			assert.strictEqual(tabs.selected_tab_id, tab.id);
+		});
+
 		test('open_tab does nothing for permanent tab', () => {
 			// Create a permanent tab
 			const tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);

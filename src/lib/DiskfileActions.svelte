@@ -7,6 +7,7 @@
 	import { frontend_context } from './frontend.svelte.ts';
 	import type { Diskfile } from './diskfile.svelte.ts';
 	import ClearRestoreButton from './ClearRestoreButton.svelte';
+	import ErrorMessage from './ErrorMessage.svelte';
 	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 	import { icon_delete, icon_paste } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
@@ -58,10 +59,18 @@
 		<button
 			class="flex:1 palette_f"
 			type="button"
-			disabled={!editor_state.can_save}
+			disabled={!editor_state.can_save || editor_state.saving}
 			onclick={() => editor_state.save_changes()}
 		>
 			save changes
 		</button>
+	</div>
+{/if}
+
+{#if editor_state.save_error !== null}
+	<div class="mt_xs" transition:slide>
+		<ErrorMessage>
+			<small class="font_family_mono">save failed: {editor_state.save_error}</small>
+		</ErrorMessage>
 	</div>
 {/if}

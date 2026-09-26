@@ -227,7 +227,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		const writes: Array<[string, string]> = [];
 		app.diskfiles.update = (path, content) => {
 			writes.push([path, content]);
-			return Promise.resolve();
+			return Promise.resolve({ ok: true, value: null });
 		};
 		filer_change('delete', PATH_B);
 
@@ -297,7 +297,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		const writes: Array<[string, string]> = [];
 		app.diskfiles.update = (path, content) => {
 			writes.push([path, content]);
-			return Promise.resolve();
+			return Promise.resolve({ ok: true, value: null });
 		};
 
 		filer_change('delete', PATH_B);

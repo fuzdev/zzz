@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { strip_start } from '@fuzdev/fuz_util/string.ts';
 import { Uuid } from '@fuzdev/fuz_util/id.ts';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
+import type { Result } from '@fuzdev/fuz_util/result.ts';
+import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 
 import { Diskfile } from './diskfile.svelte.ts';
 import {
@@ -17,7 +19,7 @@ import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { create_single_index, create_multi_index } from './indexed_collection_helpers.svelte.ts';
 import { DiskfilesEditor } from './diskfiles_editor.svelte.ts';
 import { CellJson } from './cell_types.ts';
-import type { ActionInputs } from './action_collections.ts';
+import type { ActionInputs, ActionOutputs } from './action_collections.ts';
 
 export const DiskfilesJson = CellJson.extend({
 	diskfiles: z.array(DiskfileJson).default(() => []),
@@ -192,10 +194,17 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		}
 	}
 
-	async update(path: DiskfilePath, content: string): Promise<void> {
-		const result = await this.app.api.diskfile_update({ path, content });
-		// Handler already updated state on error
-		if (!result.ok) return;
+	/**
+	 * Writes `content` to the file at `path`. The local `Diskfile` changes only
+	 * when the resulting `filer_change` broadcast arrives, not from the response.
+	 *
+	 * @returns the RPC result — on failure, callers surface `error` themselves
+	 */
+	update(
+		path: DiskfilePath,
+		content: string
+	): Promise<Result<{ value: ActionOutputs['diskfile_update'] }, { error: JsonrpcErrorObject }>> {
+		return this.app.api.diskfile_update({ path, content });
 	}
 
 	async delete(path: DiskfilePath): Promise<void> {
@@ -204,6 +213,11 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		if (!result.ok) return;
 	}
 
+	/**
+	 * Creates a file under the zzz dir, or overwrites it if it exists.
+	 *
+	 * @throws Error when the zzz dir isn't set or the write fails
+	 */
 	async create_file(filename: string, content: string = ''): Promise<void> {
 		if (!this.app.zzz_dir) {
 			throw new Error('cannot create file: zzz_dir is not set');
@@ -213,7 +227,10 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		const path = DiskfilePath.parse(`${this.app.zzz_dir}${strip_start(filename, '/')}`);
 
 		// Reuse `update` which creates or updates files
-		await this.update(path, content);
+		const result = await this.update(path, content);
+		if (!result.ok) {
+			throw new Error(result.error.message);
+		}
 	}
 
 	async create_directory(dirname: string): Promise<void> {

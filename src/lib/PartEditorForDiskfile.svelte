@@ -6,6 +6,7 @@
 	import { frontend_context } from './frontend.svelte.ts';
 	import ContentEditor from './ContentEditor.svelte';
 	import DiskfileActions from './DiskfileActions.svelte';
+	import ErrorMessage from './ErrorMessage.svelte';
 	import DiskfileMetrics from './DiskfileMetrics.svelte';
 	import { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
@@ -107,14 +108,20 @@
 				placeholder={format_placeholder(diskfile.path_relative)}
 				show_stats={false}
 				readonly={false}
-				onsave={async (value) => {
-					await app.diskfiles.update(diskfile.path, value);
+				onsave={async () => {
+					await editor_state?.save_changes();
 				}}
 			/>
 
 			{#if show_actions}
 				<div class="mt_xs">
 					<DiskfileActions {diskfile} {editor_state} />
+				</div>
+			{:else if editor_state.save_error !== null}
+				<div class="mt_xs" transition:slide>
+					<ErrorMessage>
+						<small class="font_family_mono">save failed: {editor_state.save_error}</small>
+					</ErrorMessage>
 				</div>
 			{/if}
 		</div>

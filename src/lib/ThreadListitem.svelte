@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
+	import { is_interactive } from '@fuzdev/fuz_util/dom.ts';
 
 	import type { Chat } from './chat.svelte.ts';
 	import type { Thread } from './thread.svelte.ts';
@@ -22,6 +23,22 @@
 	// TODO hacky but is the desired UX for now
 	const selectable = $derived(chat.view_mode === 'simple');
 	const selected = $derived(selectable && chat.selected_thread_id === thread.id);
+
+	/**
+	 * Whether `event` came from a control nested in the row (the toggle, the
+	 * delete button, its confirm popover) — those handle their own events, so
+	 * they shouldn't also select the thread.
+	 */
+	const from_nested_control = (event: Event): boolean => {
+		for (
+			let el = event.target instanceof Element ? event.target : null;
+			el && el !== event.currentTarget;
+			el = el.parentElement
+		) {
+			if (is_interactive(el)) return true;
+		}
+		return false;
+	};
 </script>
 
 <ThreadContextmenu {thread}>
@@ -30,8 +47,18 @@
 		class="thread-listitem p_xs2"
 		class:dormant={!thread.enabled}
 		class:selected
-		onclick={selectable ? () => chat.select_thread(thread.id) : undefined}
-		onkeydown={selectable ? (e) => e.key === 'Enter' && chat.select_thread(thread.id) : undefined}
+		onclick={selectable
+			? (e) => {
+					if (from_nested_control(e)) return;
+					chat.select_thread(thread.id);
+				}
+			: undefined}
+		onkeydown={selectable
+			? (e) => {
+					if (e.key !== 'Enter' || from_nested_control(e)) return;
+					chat.select_thread(thread.id);
+				}
+			: undefined}
 		role={selectable ? 'button' : undefined}
 		tabindex={selectable ? 0 : undefined}
 	>

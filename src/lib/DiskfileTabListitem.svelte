@@ -48,6 +48,8 @@
 				}
 			}}
 			onkeydown={(e) => {
+				// leave keys on the nested close button alone — swallowing would cancel its click
+				if (e.target !== e.currentTarget) return;
 				if (e.key === 'Enter' || e.key === ' ') {
 					swallow(e);
 					onselect(tab);

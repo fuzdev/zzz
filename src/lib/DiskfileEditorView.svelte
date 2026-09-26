@@ -78,6 +78,7 @@
 				placeholder={format_placeholder(diskfile.path_relative)}
 				readonly={false}
 				attrs={{ class: 'height:100% border-radius:0' }}
+				save_shortcut="page"
 				onsave={async () => {
 					await editor_state.save_changes();
 				}}
