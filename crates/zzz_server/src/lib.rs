@@ -189,16 +189,20 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     scoped_fs_paths.extend(scoped_dir_strings.iter().map(PathBuf::from));
     let scoped_fs = scoped_fs::ScopedFs::new(scoped_fs_paths);
 
-    // AI providers — read API keys from env, construct ProviderManager
+    // AI providers — read API keys from env (empty counts as unset),
+    // construct ProviderManager
+    let anthropic_key = provider::read_api_key_env("SECRET_ANTHROPIC_API_KEY");
+    let openai_key = provider::read_api_key_env("SECRET_OPENAI_API_KEY");
+    let google_key = provider::read_api_key_env("SECRET_GOOGLE_API_KEY");
     let mut provider_manager = provider::ProviderManager::new();
     provider_manager.add(provider::Provider::Anthropic(
-        provider::anthropic::AnthropicProvider::new(std::env::var("SECRET_ANTHROPIC_API_KEY").ok()),
+        provider::anthropic::AnthropicProvider::new(anthropic_key.as_deref()),
     ));
     provider_manager.add(provider::Provider::OpenAi(
-        provider::openai::OpenAiProvider::new(std::env::var("SECRET_OPENAI_API_KEY").ok()),
+        provider::openai::OpenAiProvider::new(openai_key.as_deref()),
     ));
     provider_manager.add(provider::Provider::Gemini(
-        provider::gemini::GeminiProvider::new(std::env::var("SECRET_GOOGLE_API_KEY").ok()),
+        provider::gemini::GeminiProvider::new(google_key.as_deref()),
     ));
 
     if config.enable_test_actions {

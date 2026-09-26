@@ -296,6 +296,27 @@ pub fn ai_provider_error(provider_name: &str, message: &str) -> JsonrpcError {
 
 // -- Helpers ------------------------------------------------------------------
 
+/// Read a provider API key from the environment variable `name`.
+///
+/// Surrounding whitespace is trimmed, and an empty or whitespace-only value
+/// counts as unset — otherwise `SECRET_*_API_KEY=` would report the provider
+/// available and then fail every request with a 401.
+pub fn read_api_key_env(name: &str) -> Option<String> {
+    normalize_api_key(std::env::var(name).ok())
+}
+
+fn normalize_api_key(value: Option<String>) -> Option<String> {
+    let value = value?;
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else if trimmed.len() == value.len() {
+        Some(value)
+    } else {
+        Some(trimmed.to_owned())
+    }
+}
+
 #[expect(
     clippy::cast_possible_truncation,
     reason = "millis won't exceed u64 for centuries"
@@ -314,6 +335,25 @@ fn now_millis() -> u64 {
 )]
 mod tests {
     use super::*;
+
+    #[test]
+    fn api_key_empty_or_whitespace_is_absent() {
+        assert_eq!(normalize_api_key(None), None);
+        assert_eq!(normalize_api_key(Some(String::new())), None);
+        assert_eq!(normalize_api_key(Some("  \n\t".to_owned())), None);
+    }
+
+    #[test]
+    fn api_key_is_trimmed() {
+        assert_eq!(
+            normalize_api_key(Some(" sk-abc\n".to_owned())).as_deref(),
+            Some("sk-abc"),
+        );
+        assert_eq!(
+            normalize_api_key(Some("sk-abc".to_owned())).as_deref(),
+            Some("sk-abc"),
+        );
+    }
 
     #[test]
     fn available_serializes_to_flat_wire_shape() {

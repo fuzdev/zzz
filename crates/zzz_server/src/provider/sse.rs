@@ -3,113 +3,256 @@
 //! Anthropic, `OpenAI`, and Gemini all stream JSON via Server-Sent
 //! Events. The wire formats differ (Anthropic carries `event:`
 //! discriminators, `OpenAI` uses `data: [DONE]` as a terminator, Gemini
-//! just ends the stream) so the helper hands the callback raw event
-//! records and lets each provider decide how to parse + dispatch.
+//! marks its last chunk with a `finishReason`) so the helper hands the
+//! callback raw event records and lets each provider decide how to parse +
+//! dispatch — and whether the stream actually completed.
+//!
+//! Byte-level decoding lives in `SseDecoder`, which is pure and unit-tested:
+//! UTF-8 sequences split across chunks are reassembled, invalid bytes
+//! become U+FFFD, line endings are normalized (including a `\r\n` split
+//! across chunks), and an unterminated final event is flushed at end of
+//! stream.
 
 use std::ops::ControlFlow;
 
-use futures_util::StreamExt;
+use futures_util::{Stream, StreamExt};
 use fuz_http::JsonrpcError;
 use tokio_util::sync::CancellationToken;
 
 use super::ai_provider_error;
+use super::common::{cancelled_error, reqwest_error_message};
 
 /// One parsed SSE event block.
 ///
 /// `data` is the multi-line `data:` payload joined with `\n`. Callers
 /// JSON-decode it themselves so they can also handle non-JSON
 /// terminators like `OpenAI`'s `[DONE]`.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SseEvent {
     pub event_type: Option<String>,
     pub data: String,
 }
 
 /// Consume an SSE response stream, invoking `on_event` for each event
-/// block. Stops when the stream ends, when `signal` is cancelled, or
-/// when `on_event` returns `ControlFlow::Break`.
+/// block.
+///
+/// Returns `Ok(())` when the stream ends (after flushing a final
+/// unterminated event) or when `on_event` returns
+/// `Ok(ControlFlow::Break(()))`. Whether an ended stream counts as a
+/// *complete* completion is the caller's call — providers track their own
+/// terminal event.
+///
+/// # Errors
+///
+/// Returns `request_cancelled` when `signal` fires, a provider-tagged error
+/// when reading the stream fails, and passes through any error `on_event`
+/// returns (e.g. a provider error event sent mid-stream).
 pub async fn consume_sse_stream<F>(
     response: reqwest::Response,
+    provider_name: &str,
+    signal: &CancellationToken,
+    on_event: F,
+) -> Result<(), JsonrpcError>
+where
+    F: FnMut(SseEvent) -> Result<ControlFlow<()>, JsonrpcError>,
+{
+    consume_byte_stream(response.bytes_stream(), provider_name, signal, on_event).await
+}
+
+/// The transport-independent body of `consume_sse_stream`, generic over the
+/// chunk stream so tests can drive it without a network.
+async fn consume_byte_stream<S, B, F>(
+    stream: S,
     provider_name: &str,
     signal: &CancellationToken,
     mut on_event: F,
 ) -> Result<(), JsonrpcError>
 where
-    F: FnMut(SseEvent) -> ControlFlow<()>,
+    S: Stream<Item = Result<B, reqwest::Error>>,
+    B: AsRef<[u8]>,
+    F: FnMut(SseEvent) -> Result<ControlFlow<()>, JsonrpcError>,
 {
-    let mut stream = response.bytes_stream();
-    // Raw bytes not yet decoded — may end mid-UTF-8-sequence when a chunk
-    // boundary splits a multibyte code point.
-    let mut raw: Vec<u8> = Vec::new();
-    // Decoded, line-ending-normalized text awaiting event boundaries.
-    let mut buffer = String::new();
+    let mut stream = std::pin::pin!(stream);
+    let mut decoder = SseDecoder::default();
 
     loop {
         // Select over cancellation and the next chunk so an idle or hung
         // upstream stream stays cancellable — polling `is_cancelled` only
         // after a chunk arrived would block forever on a stalled stream.
         let chunk = tokio::select! {
-            () = signal.cancelled() => break,
+            biased;
+            () = signal.cancelled() => return Err(cancelled_error()),
             next = stream.next() => match next {
                 Some(chunk) => chunk.map_err(|e| {
-                    ai_provider_error(provider_name, &format!("stream read error: {e}"))
+                    ai_provider_error(
+                        provider_name,
+                        &format!("stream read error: {}", reqwest_error_message(e)),
+                    )
                 })?,
                 None => break,
             },
         };
 
-        raw.extend_from_slice(&chunk);
-        drain_decoded(&mut raw, &mut buffer);
-
-        while let Some(boundary) = buffer.find("\n\n") {
-            // Parse from a borrow of the buffer head; SseEvent owns its
-            // String fields so the borrow is dropped before drain.
-            let parsed = parse_sse_event(&buffer[..boundary]);
-            // Drop event + delimiter without copying the buffer tail —
-            // a stream with N events would otherwise be O(N^2) in the
-            // remaining buffered bytes per event.
-            let _ = buffer.drain(..boundary + 2);
-
-            if let Some(event) = parsed
-                && on_event(event) == ControlFlow::Break(())
-            {
+        for event in decoder.feed(chunk.as_ref()) {
+            if on_event(event)?.is_break() {
                 return Ok(());
             }
         }
     }
 
+    for event in decoder.finish() {
+        if on_event(event)?.is_break() {
+            break;
+        }
+    }
     Ok(())
 }
 
-/// Move the longest complete-UTF-8 prefix of `raw` into `buffer`,
-/// normalizing line endings along the way.
-///
-/// Only bytes that form whole UTF-8 code points are decoded; a multibyte
-/// sequence split across chunk boundaries stays buffered in `raw` until
-/// its continuation bytes arrive, instead of being mangled into
-/// replacement characters by a per-chunk lossy decode.
-fn drain_decoded(raw: &mut Vec<u8>, buffer: &mut String) {
-    let consumed = match std::str::from_utf8(raw) {
-        Ok(text) => {
-            push_normalized(buffer, text);
-            raw.len()
-        }
-        Err(e) => {
-            let valid_up_to = e.valid_up_to();
-            // Bytes `[..valid_up_to]` are valid UTF-8 by `Utf8Error`'s
-            // contract; the `Err` arm is unreachable but keeps us off
-            // `unwrap`/`unsafe`.
-            if let Ok(text) = std::str::from_utf8(&raw[..valid_up_to]) {
-                push_normalized(buffer, text);
-            }
-            valid_up_to
-        }
-    };
-    raw.drain(..consumed);
+/// Incremental SSE byte decoder: raw chunks in, parsed events out.
+#[derive(Debug, Default)]
+struct SseDecoder {
+    /// Raw bytes not yet decoded — a multibyte UTF-8 sequence split by a
+    /// chunk boundary waits here for its continuation bytes.
+    raw: Vec<u8>,
+    /// Decoded text awaiting event boundaries.
+    text: DecodedText,
 }
 
-/// Append `text` to `buffer`, normalizing line endings per the SSE spec
-/// (RFC 8895 §9.2): `\r\n` → `\n`, then a lone `\r` → `\n`.
-fn push_normalized(buffer: &mut String, text: &str) {
+/// Decoded, line-ending-normalized SSE text — split from `SseDecoder` so
+/// decoding can append while borrowing `raw`.
+#[derive(Debug, Default)]
+struct DecodedText {
+    buffer: String,
+    /// The last decoded character was a `\r` (already emitted as `\n`), so a
+    /// `\n` opening the next decoded text completes that `\r\n` and must be
+    /// skipped rather than read as a second line break.
+    after_cr: bool,
+    /// Some text has been decoded — the leading-BOM check is done.
+    started: bool,
+}
+
+impl DecodedText {
+    /// Append decoded `text`, dropping a byte-order mark at the very start
+    /// of the stream (the SSE spec strips one leading U+FEFF) and
+    /// normalizing line endings.
+    fn push(&mut self, text: &str) {
+        let text = if self.started {
+            text
+        } else if text.is_empty() {
+            return;
+        } else {
+            self.started = true;
+            text.strip_prefix('\u{FEFF}').unwrap_or(text)
+        };
+        push_normalized(&mut self.buffer, &mut self.after_cr, text);
+    }
+}
+
+impl SseDecoder {
+    /// Decode `chunk` and return every event it completes.
+    fn feed(&mut self, chunk: &[u8]) -> Vec<SseEvent> {
+        self.raw.extend_from_slice(chunk);
+        self.drain_decoded(false);
+        self.take_complete_events()
+    }
+
+    /// Flush at end of stream: decode any leftover bytes (an incomplete
+    /// UTF-8 tail becomes U+FFFD) and dispatch a final event that wasn't
+    /// followed by a blank line.
+    fn finish(&mut self) -> Vec<SseEvent> {
+        self.drain_decoded(true);
+        let mut events = self.take_complete_events();
+        let rest = std::mem::take(&mut self.text.buffer);
+        if let Some(event) = parse_sse_event(rest.trim_end_matches('\n')) {
+            events.push(event);
+        }
+        events
+    }
+
+    /// Pop every `\n\n`-terminated event block off the buffer.
+    fn take_complete_events(&mut self) -> Vec<SseEvent> {
+        let mut events = Vec::new();
+        let mut consumed = 0;
+        while let Some(offset) = self.text.buffer[consumed..].find("\n\n") {
+            let boundary = consumed + offset;
+            if let Some(event) = parse_sse_event(&self.text.buffer[consumed..boundary]) {
+                events.push(event);
+            }
+            consumed = boundary + 2;
+        }
+        // One drain per chunk — draining per event would be O(N^2) in the
+        // buffered tail for a chunk carrying many events.
+        let _ = self.text.buffer.drain(..consumed);
+        events
+    }
+
+    /// Move the decodable prefix of `raw` into `buffer`, normalizing line
+    /// endings along the way.
+    ///
+    /// Only bytes that form whole UTF-8 code points are decoded; a
+    /// multibyte sequence split across chunk boundaries stays in `raw` until
+    /// its continuation bytes arrive, instead of being mangled into
+    /// replacement characters by a per-chunk lossy decode. Invalid bytes
+    /// (`error_len()` is `Some`) are replaced with U+FFFD so they can't stall
+    /// decoding forever. With `at_eof`, an incomplete trailing sequence is
+    /// replaced too, since no continuation bytes are coming.
+    fn drain_decoded(&mut self, at_eof: bool) {
+        let mut start = 0;
+        while start < self.raw.len() {
+            match std::str::from_utf8(&self.raw[start..]) {
+                Ok(text) => {
+                    self.text.push(text);
+                    start = self.raw.len();
+                }
+                Err(e) => {
+                    let valid_end = start + e.valid_up_to();
+                    // Bytes `[start..valid_end]` are valid UTF-8 by
+                    // `Utf8Error`'s contract; the `Err` arm is unreachable
+                    // but keeps us off `unwrap`/`unsafe`.
+                    if let Ok(text) = std::str::from_utf8(&self.raw[start..valid_end]) {
+                        self.text.push(text);
+                    }
+                    match e.error_len() {
+                        Some(invalid_len) => {
+                            self.text
+                                .push(char::REPLACEMENT_CHARACTER.encode_utf8(&mut [0; 4]));
+                            start = valid_end + invalid_len;
+                        }
+                        None if at_eof => {
+                            self.text
+                                .push(char::REPLACEMENT_CHARACTER.encode_utf8(&mut [0; 4]));
+                            start = self.raw.len();
+                        }
+                        None => {
+                            start = valid_end;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        self.raw.drain(..start);
+    }
+}
+
+/// Append `text` to `buffer`, normalizing line endings per the SSE spec:
+/// `\r\n` → `\n`, then a lone `\r` → `\n`.
+///
+/// A `\r` ending one piece of text is emitted as `\n` immediately and
+/// `after_cr` is set, so a `\n` opening the next piece — the second half of
+/// a `\r\n` split across chunks — is dropped instead of producing a fake
+/// blank line (an event boundary). This is equivalent to holding the `\r`
+/// back until the next chunk, without delaying event dispatch.
+fn push_normalized(buffer: &mut String, after_cr: &mut bool, text: &str) {
+    if text.is_empty() {
+        return;
+    }
+    let text = if *after_cr {
+        text.strip_prefix('\n').unwrap_or(text)
+    } else {
+        text
+    };
+    *after_cr = text.ends_with('\r');
     if text.contains('\r') {
         buffer.push_str(&text.replace("\r\n", "\n").replace('\r', "\n"));
     } else {
@@ -122,10 +265,14 @@ fn parse_sse_event(event_text: &str) -> Option<SseEvent> {
     let mut data_lines: Vec<&str> = Vec::new();
 
     for line in event_text.lines() {
-        if let Some(rest) = strip_field_prefix(line, "event") {
-            event_type = Some(rest.trim().to_owned());
-        } else if let Some(rest) = strip_field_prefix(line, "data") {
-            data_lines.push(rest);
+        match parse_field(line) {
+            Some(("event", value)) => {
+                let value = value.trim();
+                // an empty `event:` resets to the default (message) type
+                event_type = (!value.is_empty()).then(|| value.to_owned());
+            }
+            Some(("data", value)) => data_lines.push(value),
+            _ => {}
         }
     }
 
@@ -139,14 +286,22 @@ fn parse_sse_event(event_text: &str) -> Option<SseEvent> {
     })
 }
 
-/// Strip `"{field}: "` or `"{field}:"` from the start of a line.
+/// Split an SSE line into `(field, value)` per the spec.
 ///
-/// The SSE spec allows a single optional space after the colon; some
-/// servers (notably the Anthropic API) emit `data: ...` while others
-/// emit `data:...`.
-fn strip_field_prefix<'a>(line: &'a str, field: &str) -> Option<&'a str> {
-    let rest = line.strip_prefix(field)?.strip_prefix(':')?;
-    Some(rest.strip_prefix(' ').unwrap_or(rest))
+/// A line starting with `:` is a comment (`None`). Otherwise the field name
+/// runs to the first `:` and the value follows it, minus a single optional
+/// leading space — some servers (notably the Anthropic API) emit
+/// `data: ...` while others emit `data:...`. A line with no `:` at all is a
+/// field name with an empty value (so a bare `data` line is an empty data
+/// line).
+fn parse_field(line: &str) -> Option<(&str, &str)> {
+    if line.starts_with(':') {
+        return None;
+    }
+    Some(match line.split_once(':') {
+        Some((field, value)) => (field, value.strip_prefix(' ').unwrap_or(value)),
+        None => (line, ""),
+    })
 }
 
 #[cfg(test)]
@@ -158,6 +313,24 @@ fn strip_field_prefix<'a>(line: &'a str, field: &str) -> Option<&'a str> {
 )]
 mod tests {
     use super::*;
+
+    fn data_event(data: &str) -> SseEvent {
+        SseEvent {
+            event_type: None,
+            data: data.to_owned(),
+        }
+    }
+
+    /// Feed `chunks` through a fresh decoder, then finish it.
+    fn decode_all(chunks: &[&[u8]]) -> Vec<SseEvent> {
+        let mut decoder = SseDecoder::default();
+        let mut events = Vec::new();
+        for chunk in chunks {
+            events.extend(decoder.feed(chunk));
+        }
+        events.extend(decoder.finish());
+        events
+    }
 
     #[test]
     fn parses_event_and_data() {
@@ -214,31 +387,213 @@ mod tests {
     }
 
     #[test]
+    fn ignores_comment_lines() {
+        let event = parse_sse_event(": keepalive\ndata: x").unwrap();
+        assert_eq!(event.data, "x");
+        assert!(parse_sse_event(": only a comment").is_none());
+    }
+
+    #[test]
+    fn field_without_colon_has_empty_value() {
+        // a bare `data` line is an empty data line
+        let event = parse_sse_event("data: a\ndata\ndata: b").unwrap();
+        assert_eq!(event.data, "a\n\nb");
+        let event = parse_sse_event("data").unwrap();
+        assert_eq!(event.data, "");
+        // a bare `event` line resets the type
+        let event = parse_sse_event("event: foo\nevent\ndata: x").unwrap();
+        assert!(event.event_type.is_none());
+    }
+
+    #[test]
+    fn value_keeps_colons_after_the_first() {
+        let event = parse_sse_event("data: {\"a\":\"b:c\"}").unwrap();
+        assert_eq!(event.data, "{\"a\":\"b:c\"}");
+    }
+
+    #[test]
+    fn leading_bom_is_stripped() {
+        let events = decode_all(&[b"\xEF\xBB\xBFdata: x\n\n"]);
+        assert_eq!(events, vec![data_event("x")]);
+    }
+
+    #[test]
+    fn leading_bom_split_across_chunks_is_stripped() {
+        let events = decode_all(&[b"\xEF", b"\xBB\xBFdata: x\n\n"]);
+        assert_eq!(events, vec![data_event("x")]);
+    }
+
+    #[test]
+    fn bom_after_stream_start_is_kept() {
+        let events = decode_all(&[b"data: a\n\n", b"\xEF\xBB\xBFdata: b\n\n"]);
+        // not at stream start — the line `\u{FEFF}data: b` is an unknown field
+        assert_eq!(events, vec![data_event("a")]);
+    }
+
+    #[test]
     fn drain_decoded_holds_back_split_multibyte() {
         // "é" is 0xC3 0xA9. Feed the lead byte first: it must NOT be
         // decoded yet (a lossy decode would emit U+FFFD and corrupt it).
-        let mut raw = vec![0xC3];
-        let mut buffer = String::new();
-        drain_decoded(&mut raw, &mut buffer);
+        let mut decoder = SseDecoder::default();
+        assert!(decoder.feed(&[0xC3]).is_empty());
         assert!(
-            buffer.is_empty(),
+            decoder.text.buffer.is_empty(),
             "incomplete code point must stay buffered"
         );
-        assert_eq!(raw, vec![0xC3], "lead byte retained for next chunk");
+        assert_eq!(decoder.raw, vec![0xC3], "lead byte retained for next chunk");
 
         // Continuation byte arrives — now the full "é" decodes intact.
-        raw.push(0xA9);
-        drain_decoded(&mut raw, &mut buffer);
-        assert_eq!(buffer, "é");
-        assert!(raw.is_empty());
+        assert!(decoder.feed(&[0xA9]).is_empty());
+        assert_eq!(decoder.text.buffer, "é");
+        assert!(decoder.raw.is_empty());
     }
 
     #[test]
     fn drain_decoded_normalizes_line_endings() {
-        let mut raw = b"a\r\nb\rc\nd".to_vec();
-        let mut buffer = String::new();
-        drain_decoded(&mut raw, &mut buffer);
-        assert_eq!(buffer, "a\nb\nc\nd");
-        assert!(raw.is_empty());
+        let mut decoder = SseDecoder::default();
+        assert!(decoder.feed(b"a\r\nb\rc\nd").is_empty());
+        assert_eq!(decoder.text.buffer, "a\nb\nc\nd");
+        assert!(decoder.raw.is_empty());
+    }
+
+    #[test]
+    fn crlf_split_across_chunks_is_one_line_break() {
+        // `data: a\r` | `\ndata: b\r\n\r\n` — the split `\r\n` must not be
+        // read as `\r` + `\n` (a blank line, i.e. a fake event boundary
+        // between the two data lines).
+        let events = decode_all(&[b"data: a\r", b"\ndata: b\r\n\r\n"]);
+        assert_eq!(events, vec![data_event("a\nb")]);
+    }
+
+    #[test]
+    fn crlf_boundary_split_across_chunks_still_dispatches() {
+        // The event-terminating blank line itself split mid-`\r\n`.
+        let events = decode_all(&[b"data: a\r\n\r", b"\ndata: b\r\n\r\n"]);
+        assert_eq!(events, vec![data_event("a"), data_event("b")]);
+    }
+
+    #[test]
+    fn cr_cr_split_across_chunks_is_two_line_breaks() {
+        // A lone `\r` followed by another `\r` is two line endings — still
+        // an event boundary even when split.
+        let events = decode_all(&[b"data: a\r", b"\rdata: b\r\r"]);
+        assert_eq!(events, vec![data_event("a"), data_event("b")]);
+    }
+
+    #[test]
+    fn invalid_utf8_is_replaced_and_decoding_continues() {
+        // 0xFF is never valid UTF-8 — it must become U+FFFD rather than
+        // stalling the decoder while `raw` grows forever.
+        let events = decode_all(&[b"data: a\xFFb\n\n", b"data: next\n\n"]);
+        assert_eq!(events, vec![data_event("a\u{FFFD}b"), data_event("next")]);
+    }
+
+    #[test]
+    fn invalid_utf8_does_not_accumulate_raw() {
+        let mut decoder = SseDecoder::default();
+        let _ = decoder.feed(b"\xFF\xFEdata: x");
+        assert!(decoder.raw.is_empty());
+        assert_eq!(decoder.text.buffer, "\u{FFFD}\u{FFFD}data: x");
+    }
+
+    #[test]
+    fn final_event_without_blank_line_is_flushed() {
+        let events = decode_all(&[b"data: one\n\n", b"data: two"]);
+        assert_eq!(events, vec![data_event("one"), data_event("two")]);
+    }
+
+    #[test]
+    fn final_event_with_single_newline_is_flushed() {
+        let events = decode_all(&[b"event: done\ndata: two\n"]);
+        assert_eq!(
+            events,
+            vec![SseEvent {
+                event_type: Some("done".to_owned()),
+                data: "two".to_owned(),
+            }],
+        );
+    }
+
+    #[test]
+    fn incomplete_utf8_tail_is_replaced_at_eof() {
+        let events = decode_all(&[b"data: a\xC3"]);
+        assert_eq!(events, vec![data_event("a\u{FFFD}")]);
+    }
+
+    #[test]
+    fn many_events_in_one_chunk() {
+        let events = decode_all(&[b"data: 1\n\ndata: 2\n\ndata: 3\n\n"]);
+        assert_eq!(
+            events,
+            vec![data_event("1"), data_event("2"), data_event("3")]
+        );
+    }
+
+    type Chunk = Result<&'static [u8], reqwest::Error>;
+
+    #[tokio::test]
+    async fn consume_flushes_final_event_at_eof() {
+        let chunks: Vec<Chunk> = vec![Ok(b"data: one\n\n"), Ok(b"data: two")];
+        let mut seen = Vec::new();
+        consume_byte_stream(
+            futures_util::stream::iter(chunks),
+            "test",
+            &CancellationToken::new(),
+            |event| {
+                seen.push(event.data);
+                Ok(ControlFlow::Continue(()))
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(seen, vec!["one", "two"]);
+    }
+
+    #[tokio::test]
+    async fn consume_stops_on_break() {
+        let chunks: Vec<Chunk> = vec![Ok(b"data: one\n\ndata: two\n\n")];
+        let mut seen = Vec::new();
+        consume_byte_stream(
+            futures_util::stream::iter(chunks),
+            "test",
+            &CancellationToken::new(),
+            |event| {
+                seen.push(event.data);
+                Ok(ControlFlow::Break(()))
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(seen, vec!["one"]);
+    }
+
+    #[tokio::test]
+    async fn consume_propagates_callback_error() {
+        let chunks: Vec<Chunk> = vec![Ok(b"data: bad\n\n")];
+        let error = consume_byte_stream(
+            futures_util::stream::iter(chunks),
+            "test",
+            &CancellationToken::new(),
+            |_| Err(ai_provider_error("test", "boom")),
+        )
+        .await
+        .unwrap_err();
+        assert!(error.message.contains("boom"));
+    }
+
+    #[tokio::test]
+    async fn consume_returns_cancelled_when_signal_fires() {
+        let signal = CancellationToken::new();
+        signal.cancel();
+        // A stream that never yields — cancellation must still win.
+        let error = consume_byte_stream(
+            futures_util::stream::pending::<Chunk>(),
+            "test",
+            &signal,
+            |_| Ok(ControlFlow::Continue(())),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code, fuz_http::JsonrpcErrorCode::RequestCancelled);
     }
 }

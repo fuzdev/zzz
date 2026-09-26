@@ -47,9 +47,9 @@ export const render_completion_messages = (
 	completion_messages: Array<CompletionMessage> = []
 ): Array<CompletionMessage> => {
 	for (const turn of turns) {
-		// TODO excluding an errored turn can leave consecutive same-role messages (the user
-		// turn before it, then the next user turn) — if a provider rejects that, merge
-		// adjacent same-role messages server-side in the providers' `build_*` request builders
+		// excluding an errored turn can leave consecutive same-role messages (the user turn
+		// before it, then the next user turn) — the Gemini request builder merges adjacent
+		// same-role messages server-side; Anthropic and OpenAI accept them as-is
 		if (!turn.enabled || turn.error_message) continue;
 
 		const content =

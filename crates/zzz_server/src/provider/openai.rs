@@ -5,9 +5,10 @@ use serde_json::{Value, json};
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
+use super::sse::{self, SseEvent};
 use super::{
-    CompletionHandlerOptions, CompletionMessage, PROVIDER_ERROR_NEEDS_API_KEY, ProgressSender,
-    ProviderName, ProviderStatus, ai_provider_error, common, sse,
+    CompletionHandlerOptions, CompletionMessage, ProgressSender, ProviderName, ProviderStatus,
+    ai_provider_error, common,
 };
 
 const API_URL: &str = "https://api.openai.com/v1/chat/completions";
@@ -17,7 +18,7 @@ const PROVIDER_NAME: &str = PROVIDER.as_str();
 const SSE_DONE_MARKER: &str = "[DONE]";
 
 struct OpenAiState {
-    client: Option<reqwest::Client>,
+    client: common::ProviderClient,
     cached_status: Option<ProviderStatus>,
 }
 
@@ -29,8 +30,8 @@ pub struct OpenAiProvider {
 }
 
 impl OpenAiProvider {
-    pub fn new(api_key: Option<String>) -> Self {
-        let client = api_key.map(|key| build_client(&key));
+    pub fn new(api_key: Option<&str>) -> Self {
+        let client = common::ProviderClient::from_api_key(api_key, build_client);
         Self {
             state: RwLock::new(OpenAiState {
                 client,
@@ -44,14 +45,8 @@ impl OpenAiProvider {
         if !reload && let Some(ref status) = state.cached_status {
             return status.clone();
         }
-        let has_client = state.client.is_some();
+        let status = state.client.status(PROVIDER);
         drop(state);
-
-        let status = if has_client {
-            ProviderStatus::available(PROVIDER)
-        } else {
-            ProviderStatus::unavailable(PROVIDER, PROVIDER_ERROR_NEEDS_API_KEY)
-        };
 
         let mut state = self.state.write().await;
         state.cached_status = Some(status.clone());
@@ -64,75 +59,90 @@ impl OpenAiProvider {
         progress_sender: Option<&ProgressSender>,
         signal: &CancellationToken,
     ) -> Result<Value, JsonrpcError> {
-        let client = {
-            let state = self.state.read().await;
-            state
-                .client
-                .clone()
-                .ok_or_else(|| ai_provider_error(PROVIDER_NAME, PROVIDER_ERROR_NEEDS_API_KEY))?
-        };
+        let client = self.state.read().await.client.require(PROVIDER)?;
 
-        let streaming = progress_sender.is_some();
-        let body = build_request_body(options, streaming);
-
-        let response = client
-            .post(API_URL)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| ai_provider_error(PROVIDER_NAME, &e.to_string()))?;
+        let body = build_request_body(options, progress_sender.is_some());
 
         let response =
-            common::check_response_status(response, PROVIDER_NAME, parse_api_error).await?;
+            common::send_request(client.post(API_URL).json(&body), PROVIDER_NAME, signal).await?;
+        let response =
+            common::check_response_status(response, PROVIDER_NAME, signal, parse_api_error).await?;
 
-        if let (true, Some(sender)) = (streaming, progress_sender) {
-            handle_streaming_response(response, options, sender, signal).await
+        let api_response = if let Some(sender) = progress_sender {
+            let mut stream = OpenAiStream::default();
+            sse::consume_sse_stream(response, PROVIDER_NAME, signal, |event| {
+                stream
+                    .handle_event(&event, |text| {
+                        sender(common::build_text_progress_chunk(text));
+                    })
+                    .map_err(|message| ai_provider_error(PROVIDER_NAME, &message))
+            })
+            .await?;
+            stream
+                .finish(&options.model)
+                .map_err(|message| ai_provider_error(PROVIDER_NAME, &message))?
         } else {
-            handle_non_streaming_response(response, options).await
-        }
+            common::read_json_body(response, PROVIDER_NAME, signal).await?
+        };
+
+        Ok(common::build_completion_response(
+            PROVIDER_NAME,
+            &options.model,
+            &api_response,
+        ))
     }
 }
 
-async fn handle_non_streaming_response(
-    response: reqwest::Response,
-    options: &CompletionHandlerOptions,
-) -> Result<Value, JsonrpcError> {
-    let api_response: Value = response
-        .json::<Value>()
-        .await
-        .map_err(|e| ai_provider_error(PROVIDER_NAME, &format!("failed to parse response: {e}")))?;
-    Ok(common::build_completion_response(
-        PROVIDER_NAME,
-        &options.model,
-        &api_response,
-    ))
+// -- Streaming ----------------------------------------------------------------
+
+/// Accumulated state of one Chat Completions SSE stream.
+///
+/// Pure (no I/O) so the event handling is unit-testable. A stream only
+/// completes on `data: [DONE]`; an `{"error": ...}` chunk or a stream that
+/// ends without `[DONE]` is a failure, not a truncated success.
+#[derive(Debug, Default)]
+struct OpenAiStream {
+    content: String,
+    completion_id: String,
+    finish_reason: Option<String>,
+    /// The final usage chunk — sent (with empty `choices`) just before
+    /// `[DONE]` because the request sets `stream_options.include_usage`.
+    usage: Option<Value>,
+    completed: bool,
 }
 
-async fn handle_streaming_response(
-    response: reqwest::Response,
-    options: &CompletionHandlerOptions,
-    progress_sender: &ProgressSender,
-    signal: &CancellationToken,
-) -> Result<Value, JsonrpcError> {
-    let mut accumulated_content = String::new();
-    let mut completion_id = String::new();
-    let mut finish_reason: Option<String> = None;
-    let mut final_usage: Option<Value> = None;
-
-    sse::consume_sse_stream(response, PROVIDER_NAME, signal, |event| {
+impl OpenAiStream {
+    /// Apply one SSE event, passing each text delta to `on_text`.
+    ///
+    /// Returns `Break` on `[DONE]`, or `Err` with the provider's message on
+    /// an error chunk.
+    fn handle_event(
+        &mut self,
+        event: &SseEvent,
+        mut on_text: impl FnMut(&str),
+    ) -> Result<ControlFlow<()>, String> {
         // OpenAI signals the end of the stream with `data: [DONE]` — not
         // valid JSON, so detect it before parsing.
         if event.data.trim() == SSE_DONE_MARKER {
-            return ControlFlow::Break(());
+            self.completed = true;
+            return Ok(ControlFlow::Break(()));
         }
         let Ok(data) = serde_json::from_str::<Value>(&event.data) else {
-            return ControlFlow::Continue(());
+            return Ok(ControlFlow::Continue(()));
         };
 
-        if completion_id.is_empty()
+        if let Some(error) = data.get("error")
+            && !error.is_null()
+        {
+            return Err(
+                common::parse_error_message(&data).unwrap_or_else(|| String::from("stream error"))
+            );
+        }
+
+        if self.completion_id.is_empty()
             && let Some(id) = data.get("id").and_then(Value::as_str)
         {
-            id.clone_into(&mut completion_id);
+            id.clone_into(&mut self.completion_id);
         }
 
         let choice = data.get("choices").and_then(|c| c.get(0));
@@ -143,48 +153,50 @@ async fn handle_streaming_response(
             .and_then(Value::as_str)
             && !content.is_empty()
         {
-            accumulated_content.push_str(content);
-            progress_sender(common::build_text_progress_chunk(content));
+            self.content.push_str(content);
+            on_text(content);
         }
 
         if let Some(reason) = choice
             .and_then(|c| c.get("finish_reason"))
             .and_then(Value::as_str)
         {
-            finish_reason = Some(reason.to_owned());
+            self.finish_reason = Some(reason.to_owned());
         }
 
         if let Some(usage) = data.get("usage")
             && !usage.is_null()
         {
-            final_usage = Some(usage.clone());
+            self.usage = Some(usage.clone());
         }
 
-        ControlFlow::Continue(())
-    })
-    .await?;
+        Ok(ControlFlow::Continue(()))
+    }
 
-    let api_response = json!({
-        "id": completion_id,
-        "object": "chat.completion",
-        "created": fuz_sys::rfc3339_now(),
-        "model": options.model,
-        "choices": [{
-            "index": 0,
-            "message": {
-                "role": "assistant",
-                "content": accumulated_content,
-            },
-            "finish_reason": finish_reason.unwrap_or_else(|| "stop".to_owned()),
-        }],
-        "usage": final_usage,
-    });
-
-    Ok(common::build_completion_response(
-        PROVIDER_NAME,
-        &options.model,
-        &api_response,
-    ))
+    /// Build the Chat-Completions-shaped response from the accumulated
+    /// stream.
+    ///
+    /// Returns `Err` when the stream ended without `[DONE]`.
+    fn finish(self, model: &str) -> Result<Value, String> {
+        if !self.completed {
+            return Err(String::from("stream ended before [DONE]"));
+        }
+        Ok(json!({
+            "id": self.completion_id,
+            "object": "chat.completion",
+            "created": fuz_sys::rfc3339_now(),
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": self.content,
+                },
+                "finish_reason": self.finish_reason.unwrap_or_else(|| String::from("stop")),
+            }],
+            "usage": self.usage,
+        }))
+    }
 }
 
 // -- Request building ---------------------------------------------------------
@@ -206,6 +218,12 @@ fn build_request_body(options: &CompletionHandlerOptions, stream: bool) -> Value
     });
 
     let obj = body.as_object_mut().unwrap_or_else(|| unreachable!());
+
+    // Streaming responses carry no usage unless asked for; the API rejects
+    // `stream_options` on non-streaming requests.
+    if stream {
+        obj.insert("stream_options".to_owned(), json!({"include_usage": true}));
+    }
 
     if let Some(t) = opts.temperature {
         obj.insert("temperature".to_owned(), json!(t));
@@ -231,6 +249,13 @@ fn build_request_body(options: &CompletionHandlerOptions, stream: bool) -> Value
     body
 }
 
+/// Convert the configured system message + `CompletionMessage[]` + prompt
+/// into the Chat Completions messages format.
+///
+/// The configured system message is sent only when non-blank; `system`-role
+/// history messages pass through in place (the API accepts them anywhere).
+/// Blank history messages are dropped. Appends the prompt as a final user
+/// message.
 fn build_messages(
     system_message: &str,
     completion_messages: Option<&[CompletionMessage]>,
@@ -242,20 +267,21 @@ fn build_messages(
 
     // Some legacy reasoning models (e.g. o1-mini) reject system messages.
     // TS reference handles this with the same gate.
-    if model != "o1-mini" {
+    if model != "o1-mini" && !common::is_blank(system_message) {
         messages.push(json!({
             "role": "system",
             "content": system_message,
         }));
     }
 
-    if let Some(msgs) = completion_messages {
-        for msg in msgs {
-            messages.push(json!({
-                "role": msg.role,
-                "content": msg.content,
-            }));
+    for msg in completion_messages.unwrap_or_default() {
+        if common::is_blank(&msg.content) {
+            continue;
         }
+        messages.push(json!({
+            "role": msg.role,
+            "content": msg.content,
+        }));
     }
 
     messages.push(json!({
@@ -268,12 +294,8 @@ fn build_messages(
 
 // -- HTTP client --------------------------------------------------------------
 
-fn build_client(api_key: &str) -> reqwest::Client {
-    let mut headers = reqwest::header::HeaderMap::new();
-    if let Ok(val) = reqwest::header::HeaderValue::from_str(&format!("Bearer {api_key}")) {
-        headers.insert(reqwest::header::AUTHORIZATION, val);
-    }
-    common::build_client_with_headers(headers)
+fn build_client(api_key: &str) -> Result<reqwest::Client, String> {
+    common::build_auth_client(reqwest::header::AUTHORIZATION, &format!("Bearer {api_key}"))
 }
 
 // -- Error parsing ------------------------------------------------------------
@@ -282,17 +304,24 @@ fn build_client(api_key: &str) -> reqwest::Client {
 ///
 /// `OpenAI` errors look like: `{"error":{"message":"...","type":"...","code":"..."}}`
 fn parse_api_error(body: &str) -> Option<String> {
-    let v: Value = serde_json::from_str(body).ok()?;
-    v.get("error")
-        .and_then(|e| e.get("message"))
-        .and_then(Value::as_str)
-        .map(String::from)
+    common::parse_error_message(&serde_json::from_str(body).ok()?)
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    reason = "tests panic on assertion failure by design"
+)]
 mod tests {
     use super::*;
     use crate::provider::CompletionOptions;
+
+    fn msg(role: &str, content: &str) -> CompletionMessage {
+        CompletionMessage {
+            role: role.to_owned(),
+            content: content.to_owned(),
+        }
+    }
 
     fn opts() -> CompletionHandlerOptions {
         CompletionHandlerOptions {
@@ -377,6 +406,127 @@ mod tests {
         assert_eq!(m[2]["role"], "assistant");
         assert_eq!(m[2]["content"], "prior a");
         assert_eq!(m[3]["content"], "now");
+    }
+
+    #[test]
+    fn request_body_requests_usage_only_when_streaming() {
+        let body = build_request_body(&opts(), true);
+        assert_eq!(body["stream_options"]["include_usage"], true);
+        let body = build_request_body(&opts(), false);
+        assert!(body.get("stream_options").is_none());
+    }
+
+    #[test]
+    fn messages_omit_blank_system_message() {
+        let m = build_messages("", None, "hi", "gpt-4o");
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0]["role"], "user");
+        let m = build_messages("  \n", None, "hi", "gpt-4o");
+        assert_eq!(m.len(), 1);
+    }
+
+    #[test]
+    fn messages_pass_system_history_through() {
+        let history = vec![msg("system", "sys from history"), msg("user", "q")];
+        let m = build_messages("", Some(&history), "now", "gpt-4o");
+        assert_eq!(m.len(), 3);
+        assert_eq!(m[0]["role"], "system");
+        assert_eq!(m[0]["content"], "sys from history");
+    }
+
+    #[test]
+    fn messages_drop_blank_content() {
+        let history = vec![
+            msg("user", "q"),
+            msg("assistant", " "),
+            msg("assistant", "a"),
+        ];
+        let m = build_messages("", Some(&history), "now", "gpt-4o");
+        assert_eq!(m.len(), 3);
+        assert_eq!(m[0]["content"], "q");
+        assert_eq!(m[1]["content"], "a");
+        assert_eq!(m[2]["content"], "now");
+    }
+
+    // -- Streaming --
+
+    fn data(data: &str) -> SseEvent {
+        SseEvent {
+            event_type: None,
+            data: data.to_owned(),
+        }
+    }
+
+    /// Run `events` through a fresh stream, collecting text deltas. Stops at
+    /// the first `Break` or error, like `consume_sse_stream`.
+    fn run(events: &[SseEvent]) -> (OpenAiStream, Vec<String>, Result<(), String>) {
+        let mut stream = OpenAiStream::default();
+        let mut deltas = Vec::new();
+        for e in events {
+            match stream.handle_event(e, |t| deltas.push(t.to_owned())) {
+                Ok(ControlFlow::Continue(())) => {}
+                Ok(ControlFlow::Break(())) => break,
+                Err(message) => return (stream, deltas, Err(message)),
+            }
+        }
+        (stream, deltas, Ok(()))
+    }
+
+    fn full_stream() -> Vec<SseEvent> {
+        vec![
+            data(
+                r#"{"id":"c1","choices":[{"index":0,"delta":{"role":"assistant","content":""}}],"usage":null}"#,
+            ),
+            data(r#"{"id":"c1","choices":[{"index":0,"delta":{"content":"Hel"}}],"usage":null}"#),
+            data(r#"{"id":"c1","choices":[{"index":0,"delta":{"content":"lo"}}],"usage":null}"#),
+            data(
+                r#"{"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"length"}],"usage":null}"#,
+            ),
+            data(
+                r#"{"id":"c1","choices":[],"usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7}}"#,
+            ),
+            data("[DONE]"),
+        ]
+    }
+
+    #[test]
+    fn stream_completes_on_done() {
+        let (stream, deltas, result) = run(&full_stream());
+        result.unwrap();
+        assert_eq!(deltas, vec!["Hel", "lo"]);
+        let response = stream.finish("gpt-x").unwrap();
+        assert_eq!(response["id"], "c1");
+        assert_eq!(response["choices"][0]["message"]["content"], "Hello");
+        assert_eq!(response["choices"][0]["finish_reason"], "length");
+    }
+
+    #[test]
+    fn stream_captures_final_usage_chunk() {
+        let (stream, _, result) = run(&full_stream());
+        result.unwrap();
+        let response = stream.finish("m").unwrap();
+        assert_eq!(response["usage"]["total_tokens"], 7);
+    }
+
+    #[test]
+    fn stream_error_chunk_is_an_error() {
+        let mut events = full_stream();
+        events.insert(
+            2,
+            data(r#"{"error":{"message":"server overloaded","type":"server_error"}}"#),
+        );
+        let (_, deltas, result) = run(&events);
+        assert_eq!(result.unwrap_err(), "server overloaded");
+        assert_eq!(deltas, vec!["Hel"]);
+    }
+
+    #[test]
+    fn stream_without_done_is_an_error() {
+        let mut events = full_stream();
+        events.pop();
+        let (stream, _, result) = run(&events);
+        result.unwrap();
+        assert!(stream.finish("m").is_err());
     }
 
     #[test]

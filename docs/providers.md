@@ -10,7 +10,7 @@ Integration guide for AI providers and adding new ones.
 
 ### Remote Providers (Claude, ChatGPT, Gemini)
 
-Add API key to `.env.development` or via the UI at `/providers`:
+Add the API key to `.env.development` (keys are env-only; restart the daemon after changing one):
 
 ```bash
 SECRET_ANTHROPIC_API_KEY=sk-ant-api03-...
@@ -34,12 +34,56 @@ enum-dispatched via the `Provider` enum (`provider/mod.rs`) — the providers
 are known at compile time and matched exhaustively, no trait objects.
 `ProviderManager` owns the set; each provider builds its `reqwest` client once
 at construction from its `SECRET_*_API_KEY` environment variable, and reports
-an error status when no key is configured. Keys are env-only — there is no
+an error status when no key is configured (an empty or whitespace-only value
+counts as unconfigured) or the key is malformed (anything but visible ASCII,
+e.g. a pasted smart quote). Keys travel only in request headers (`x-api-key`,
+`Authorization: Bearer`, `x-goog-api-key`), marked sensitive, and never in a
+URL. Keys are env-only — there is no
 runtime key-update action, so changing a key means restarting the daemon. All three providers — Anthropic (`provider/anthropic.rs`), OpenAI
 (`provider/openai.rs`), and Gemini (`provider/gemini.rs`) — are fully
 implemented with non-streaming and SSE-streaming completions through the shared
 `provider/sse.rs`. See ../crates/CLAUDE.md for the
 backend details.
+
+### Request Shaping
+
+Each provider's request builder normalizes the conversation history the same
+way: blank (empty or whitespace-only) messages are dropped, and `system`-role
+messages are lifted out of the history — combined with the configured system
+message into Anthropic's top-level `system` field and Gemini's
+`systemInstruction`. OpenAI accepts `system` messages in place, so they pass
+through, and the configured system message is sent only when non-blank.
+Gemini also merges adjacent same-role messages into one multi-part content,
+keeping its user/model alternation intact when the history has gaps.
+`completion_create` refuses a blank prompt with `invalid_params`, and Gemini
+refuses a model name outside `[A-Za-z0-9._-]+`, since it becomes a URL path
+segment.
+
+### Errors and Cancellation
+
+A completion either returns a complete response or an error — never a
+truncated success:
+
+- **Mid-stream provider errors** — Anthropic's `event: error` (e.g.
+  `overloaded_error`) and OpenAI / Gemini `{"error": ...}` data chunks fail
+  the request with the provider's message.
+- **Incomplete streams** — a stream that ends without the provider's terminal
+  signal (Anthropic `message_stop`, OpenAI `data: [DONE]`, Gemini a chunk
+  with a `finishReason` or a prompt `blockReason`) is an error. Reading stops
+  at the terminal signal, so a later cancel or read error can't fail a
+  complete response.
+- **Cancellation** — every upstream await (sending the request, reading a
+  non-streaming body, each stream chunk) is raced against the request's
+  cancellation signal, and a cancelled completion returns `request_cancelled`.
+
+The frontend keeps any text that streamed in before an error and shows the
+error separately. Transport error messages have the request URL stripped.
+The shared HTTP client bounds connection setup at 30 seconds; there is no
+overall request timeout, since streaming completions run long.
+
+Streaming responses carry usage: OpenAI requests it with
+`stream_options.include_usage`, and Anthropic merges `message_start`'s input
+counts with `message_delta`'s output counts.
 
 ### CompletionOptions
 
@@ -123,7 +167,8 @@ const status = await provider.load_status();
 // { name: 'claude', available: false, error: 'needs API key', checked_at: ... }
 ```
 
-Remote providers: `available` = `true` when an API key is configured.
+Remote providers: `available` = `true` when a valid API key is configured
+(set, non-blank, visible ASCII).
 
 ## Adding a New Provider
 
@@ -135,7 +180,9 @@ dispatched via the `Provider` enum (no trait objects). To add one:
    completion path (status, non-streaming, and SSE streaming via `provider/sse.rs`)
 3. Wire it into `ProviderManager` and the exhaustive match arms — construction
    and registration happen at boot in `crates/zzz_server/src/lib.rs`
-   (`provider_manager.add(Provider::...)`, reading the key env var)
+   (`provider_manager.add(Provider::...)`, reading the key with
+   `provider::read_api_key_env`, and building the client through
+   `common::ProviderClient::from_api_key`)
 4. Add env var to `.env.development.example` and `.env.production.example`:
    `SECRET_NEWPROVIDER_API_KEY=`
 5. Add default models to `src/lib/config_defaults.ts` (`models_default`)

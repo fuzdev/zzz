@@ -57,6 +57,33 @@ describe('completion cross-backend', () => {
 		);
 	});
 
+	test('completion_create_blank_prompt_rejected', async () => {
+		// A blank prompt is refused as invalid params before any provider is
+		// consulted, so the missing API key in the cross-process suite doesn't
+		// mask it as a provider error.
+		const fixture = await setup_test();
+		const res = await rpc_call({
+			app: fixture.transport,
+			path: handle.config.rpc_path,
+			method: 'completion_create',
+			params: {
+				completion_request: {
+					created: new Date().toISOString(),
+					provider_name: 'gemini',
+					model: 'nonexistent_model_zzz_cross',
+					prompt: ' \n\t'
+				}
+			},
+			headers: fixture.create_session_headers()
+		});
+		assert.ok(!res.ok, `expected error, got ${JSON.stringify(res)}`);
+		assert.strictEqual(
+			res.error.code,
+			-32602,
+			`unexpected error code: ${res.error.code} (${res.error.message})`
+		);
+	});
+
 	// TODO: completion_create happy-path + cancel coverage needs a mock
 	// provider plumbed into the test binaries (no live keys in the
 	// cross-backend matrix). The old standalone runner skipped the

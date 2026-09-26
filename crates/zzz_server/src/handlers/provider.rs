@@ -52,10 +52,11 @@ pub async fn provider_load_status(
     let provider_name = ProviderName::parse(name_str)
         .ok_or_else(|| invalid_params(&format!("unknown provider: {name_str}"), None))?;
 
+    // Absent `reload` means reload — the TS input schema defaults it to `true`.
     let reload = params
         .get("reload")
         .and_then(Value::as_bool)
-        .unwrap_or(false);
+        .unwrap_or(true);
 
     let provider = app.provider_manager.require(provider_name)?;
     let status = provider.load_status(reload).await;
@@ -78,9 +79,20 @@ pub async fn provider_load_status(
 /// On HTTP: `ctx.connection_id` is `None`, so no streaming. The caller
 /// still receives the full result envelope.
 ///
-/// Cancellation: passes `ctx.signal` through to the provider — per-socket
-/// on WS (cancelled on disconnect or audit-driven revocation), fresh
-/// per-request on HTTP.
+/// Cancellation: passes `ctx.signal` through to the provider. On WS it's a
+/// per-request child of the socket's token — fired alone by a `cancel`
+/// notification naming this request, or with the whole socket on disconnect
+/// or audit-driven revocation. On HTTP it's fresh per request. The provider races every upstream
+/// await (send, body, stream) against it, and a cancelled completion returns
+/// `request_cancelled` rather than a truncated success.
+///
+/// # Errors
+///
+/// `invalid_params` for a malformed request, an unknown provider, or a blank
+/// prompt; `request_cancelled` when cancelled; otherwise the provider's
+/// error — including a provider error sent mid-stream and a stream that ends
+/// without the provider's terminal event (the frontend keeps any text that
+/// already streamed and shows the error alongside it).
 pub async fn completion_create(
     params: Value,
     ctx: ActionContext<'_>,
@@ -99,6 +111,16 @@ pub async fn completion_create(
             None,
         )
     })?;
+
+    // An empty prompt would be sent upstream as an empty user message, which
+    // providers reject (Anthropic 400s on empty text blocks) — refuse it here
+    // with a clear error instead of spending a provider round trip.
+    if provider::common::is_blank(&request.prompt) {
+        return Err(invalid_params(
+            "completion_request.prompt must not be empty",
+            None,
+        ));
+    }
 
     let progress_token = params
         .get("_meta")
