@@ -1,7 +1,7 @@
 import { describe, test, assert } from 'vitest';
 import { z } from 'zod';
 
-import { get_schema_class_info } from '$lib/cell_helpers.ts';
+import { create_collection_decoder, get_schema_class_info, HANDLED } from '$lib/cell_helpers.ts';
 
 describe('get_schema_class_info', () => {
 	test('handles null or undefined schemas', () => {
@@ -224,5 +224,36 @@ describe('cell_class', () => {
 		// Get schema info should report it correctly
 		const info = get_schema_class_info(result);
 		assert.strictEqual(info?.class_name, 'TestCellClass');
+	});
+});
+
+describe('create_collection_decoder', () => {
+	const create_log_decoder = () => {
+		const log: Array<string> = [];
+		const decode = create_collection_decoder(
+			() => log.push('clear'),
+			(json: { name: string }) => log.push('add ' + json.name)
+		);
+		return { log, decode };
+	};
+
+	test('an array clears, then adds each element in order', () => {
+		const { log, decode } = create_log_decoder();
+		assert.strictEqual(decode([{ name: 'a' }, { name: 'b' }]), HANDLED);
+		assert.deepEqual(log, ['clear', 'add a', 'add b']);
+	});
+
+	test('an empty array clears', () => {
+		const { log, decode } = create_log_decoder();
+		assert.strictEqual(decode([]), HANDLED);
+		assert.deepEqual(log, ['clear']);
+	});
+
+	test('a non-array value leaves the collection unchanged but is still handled', () => {
+		const { log, decode } = create_log_decoder();
+		for (const value of [undefined, null, 'a', 1, { name: 'a' }]) {
+			assert.strictEqual(decode(value), HANDLED);
+		}
+		assert.deepEqual(log, []);
 	});
 });

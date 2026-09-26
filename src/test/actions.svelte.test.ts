@@ -36,7 +36,7 @@ describe('history trimming', () => {
 		assert.ok(app.cell_registry.all.has(second.id));
 		assert.ok(app.cell_registry.all.has(newest.id));
 		assert.deepEqual(
-			actions.items.where('by_method', 'ping').map((a) => a.id),
+			actions.items.values.map((a) => a.id),
 			[second.id, newest.id]
 		);
 	});

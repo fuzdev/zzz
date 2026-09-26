@@ -1,6 +1,8 @@
 import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
+import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { page } from '$app/state';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import {
 	icon_capability,
@@ -83,3 +85,30 @@ export const main_nav_items_default: Array<NavItem> = [
 		]
 	}
 ];
+
+export const to_chats_url = (chat_id: Uuid | null): string =>
+	chat_id ? resolve(`/chats/${chat_id}`) : resolve('/chats');
+
+export const to_prompts_url = (prompt_id: Uuid | null): string =>
+	prompt_id ? resolve(`/prompts/${prompt_id}`) : resolve('/prompts');
+
+/**
+ * Navigate to a path only if we're not already on that path.
+ * This avoids unnecessary navigation history changes when already at the destination.
+ */
+export const goto_unless_current = async (
+	path: string | URL,
+	options?: Parameters<typeof goto>[1]
+): Promise<void> => {
+	if (page.url.pathname === path) return;
+	await goto(path, options);
+};
+
+/**
+ * Parse and validate a UUID parameter value from the URL.
+ */
+export const parse_url_param_uuid = (value: unknown): Uuid | null => {
+	if (!value) return null;
+	const parsed = Uuid.safeParse(value);
+	return parsed.success ? parsed.data : null;
+};

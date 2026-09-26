@@ -24,7 +24,7 @@ import {
 	to_relative_path
 } from './diskfile_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { HANDLED } from './cell_helpers.ts';
+import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { create_single_index } from './indexed_collection_helpers.svelte.ts';
 import { DiskfilesEditor } from './diskfiles_editor.svelte.ts';
@@ -66,7 +66,6 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			create_single_index({
 				key: 'by_path',
 				extractor: (file) => file.path,
-				query_schema: z.string(),
 				// a diskfile's path is its disk identity — `upsert` updates in place by path,
 				// and renames arrive as a delete plus an add
 				immutable_key: true
@@ -105,15 +104,10 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		this.editor = new DiskfilesEditor({ app: this.app });
 
 		this.decoders = {
-			diskfiles: (diskfiles) => {
-				if (Array.isArray(diskfiles)) {
-					this.items.clear();
-					for (const diskfile_json of diskfiles) {
-						this.add(diskfile_json);
-					}
-				}
-				return HANDLED;
-			}
+			diskfiles: create_collection_decoder(
+				() => this.items.clear(),
+				(json) => this.add(json)
+			)
 		};
 
 		this.init();

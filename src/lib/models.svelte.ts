@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Model, ModelJson, type ModelJsonInput } from './model.svelte.ts';
-import { HANDLED } from './cell_helpers.ts';
+import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import {
 	create_single_index,
@@ -30,20 +30,17 @@ export class Models extends Cell<typeof ModelsJson> {
 			// although that could potentially work with some rules around overrrides
 			create_single_index({
 				key: 'name',
-				extractor: (model) => model.name,
-				query_schema: z.string()
+				extractor: (model) => model.name
 			}),
 
 			create_multi_index({
 				key: 'provider_name',
-				extractor: (model) => model.provider_name,
-				query_schema: z.string()
+				extractor: (model) => model.provider_name
 			}),
 
 			create_multi_index({
 				key: 'tag',
 				extractor: (model) => model.tags,
-				query_schema: z.string(),
 				matches: (model) => model.tags.length > 0
 			}),
 
@@ -64,16 +61,10 @@ export class Models extends Cell<typeof ModelsJson> {
 		// Add custom decoder for the items property,
 		// which also prevents it from automatically overwriting our collection
 		this.decoders = {
-			// TODO @many improve this API, maybe infer or create a helper, duplicated many places
-			items: (items) => {
-				if (Array.isArray(items)) {
-					this.items.clear();
-					for (const item_json of items) {
-						this.add(item_json);
-					}
-				}
-				return HANDLED;
-			}
+			items: create_collection_decoder(
+				() => this.items.clear(),
+				(json) => this.add(json)
+			)
 		};
 
 		this.init();
@@ -105,7 +96,7 @@ export class Models extends Cell<typeof ModelsJson> {
 		return found;
 	}
 
-	filter_by_tag(tag: string): Array<Model> {
+	filter_by_tag(tag: string): ReadonlyArray<Model> {
 		return this.items.where('tag', tag);
 	}
 }

@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 
 import { test, assert, describe, vi } from 'vitest';
-import { z } from 'zod';
 import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import { IndexedCollection } from '$lib/indexed_collection.svelte.ts';
 import {
 	create_derived_index,
-	create_dynamic_index,
 	create_multi_index
 } from '$lib/indexed_collection_helpers.svelte.ts';
 
@@ -128,7 +126,6 @@ describe('IndexedCollection - Optimization Tests', () => {
 				{
 					key: 'by_string_b',
 					type: 'multi',
-					extractor: (item) => item.string_b,
 					compute: (collection) => {
 						const map = new Map();
 						for (const item of collection.by_id.values()) {
@@ -138,7 +135,6 @@ describe('IndexedCollection - Optimization Tests', () => {
 						}
 						return map;
 					},
-					query_schema: z.string(),
 					onadd: onadd_spy
 				}
 			]
@@ -184,53 +180,12 @@ describe('IndexedCollection - Optimization Tests', () => {
 		console.log(`Batch add: ${batch_time}ms, Individual adds: ${individual_time}ms`);
 	});
 
-	test('dynamic indexes avoid redundant storage', () => {
-		// Create a collection with a dynamic index that computes on-demand
-		const collection: IndexedCollection<TestItem> = new IndexedCollection({
-			indexes: [
-				create_dynamic_index<TestItem, (min_n: string) => Array<TestItem>>({
-					key: 'by_min_number',
-					factory: (collection) => {
-						return (min_n: string) => {
-							const threshold = parseInt(min_n, 10);
-							const result = [];
-							for (const item of collection.by_id.values()) {
-								if (item.number >= threshold) {
-									result.push(item);
-								}
-							}
-							return result;
-						};
-					},
-					query_schema: z.string()
-				})
-			]
-		});
-
-		// Add test data
-		for (let i = 0; i < 20; i++) {
-			collection.add(
-				create_item(`string_a${i}`, `string_b${i % 3}`, [`array_item${i % 5}`], i * 5)
-			);
-		}
-
-		// Verify function index produces different results based on input
-		const number_fn = collection.get_index<(threshold: string) => Array<TestItem>>('by_min_number');
-
-		// These should return different filtered subsets without storing separate copies
-		assert.ok(number_fn('10').length !== number_fn('50').length);
-		assert.strictEqual(number_fn('0').length, 20); // All items
-		assert.strictEqual(number_fn('50').length, 10); // Half the items
-		assert.strictEqual(number_fn('90').length, 2); // Just the highest values
-	});
-
 	test('memory usage with large datasets', () => {
 		// This test creates a large dataset and verifies indexes work efficiently
 		// Create index using the helper function
 		const by_string_b_index = create_multi_index<TestItem, string>({
 			key: 'by_string_b',
-			extractor: (item) => item.string_b,
-			query_schema: z.string()
+			extractor: (item) => item.string_b
 		});
 
 		// Create a collection with the proper index
@@ -248,7 +203,7 @@ describe('IndexedCollection - Optimization Tests', () => {
 		// console.log(`collection.indexes`, $state.snapshot(collection.indexes));
 
 		// Verify the index contains the expected number of categories
-		const b_index = collection.get_index<Map<string, Array<TestItem>>>('by_string_b');
+		const b_index: Map<string, Array<TestItem>> = collection.indexes.by_string_b;
 		// console.log(`b_index`, $state.snapshot(b_index));
 		assert.strictEqual(b_index.size, 10); // 10 unique categories
 

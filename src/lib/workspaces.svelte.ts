@@ -5,7 +5,7 @@ import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { CellJson } from './cell_types.ts';
-import { HANDLED } from './cell_helpers.ts';
+import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { create_single_index } from './indexed_collection_helpers.svelte.ts';
 import {
@@ -50,7 +50,6 @@ export class Workspaces extends Cell<typeof WorkspacesJson> {
 			create_single_index({
 				key: 'by_path',
 				extractor: (workspace) => workspace.path,
-				query_schema: z.string(),
 				immutable_key: true // `add` dedupes by path, and the path is never reassigned
 			})
 		]
@@ -66,15 +65,10 @@ export class Workspaces extends Cell<typeof WorkspacesJson> {
 		super(WorkspacesJson, options);
 
 		this.decoders = {
-			items: (items) => {
-				if (Array.isArray(items)) {
-					this.items.clear();
-					for (const item_json of items) {
-						this.add(item_json);
-					}
-				}
-				return HANDLED;
-			}
+			items: create_collection_decoder(
+				() => this.items.clear(),
+				(json) => this.add(json)
+			)
 		};
 
 		this.init();

@@ -3,7 +3,7 @@ import { Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Part, PartJson, type PartJsonInput, type PartUnion } from './part.svelte.ts';
-import { HANDLED } from './cell_helpers.ts';
+import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { create_single_index } from './indexed_collection_helpers.svelte.ts';
 import { get_unique_name } from './helpers.ts';
@@ -24,15 +24,13 @@ export class Parts extends Cell<typeof PartsJson> {
 		indexes: [
 			create_single_index({
 				key: 'by_name',
-				extractor: (part) => part.name,
-				query_schema: z.string()
+				extractor: (part) => part.name
 			}),
 			create_single_index({
 				key: 'by_diskfile_path',
-				extractor: (part) => (part.type === 'diskfile' ? part.path : undefined),
-				query_schema: z.string()
+				extractor: (part) => (part.type === 'diskfile' ? part.path : undefined)
 			})
-			// TODO dynamic index with the rendered content? needs to be lazy, ideally just using $derived
+			// TODO an index over the rendered content? needs to be lazy, ideally a `reactive` index
 		]
 	});
 
@@ -40,16 +38,10 @@ export class Parts extends Cell<typeof PartsJson> {
 		super(PartsJson, options);
 
 		this.decoders = {
-			// TODO @many improve this API, maybe infer or create a helper, duplicated many places
-			items: (items) => {
-				if (Array.isArray(items)) {
-					this.items.clear();
-					for (const item_json of items) {
-						this.add(item_json);
-					}
-				}
-				return HANDLED;
-			}
+			items: create_collection_decoder(
+				() => this.items.clear(),
+				(json) => this.add(json)
+			)
 		};
 
 		this.init();

@@ -5,16 +5,15 @@ import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Chat, ChatJson, type ChatJsonInput } from './chat.svelte.ts';
-import { HANDLED } from './cell_helpers.ts';
+import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { create_single_index, create_derived_index } from './indexed_collection_helpers.svelte.ts';
 import { to_reordered_list } from './list_helpers.ts';
 import { get_unique_name } from './helpers.ts';
-import { to_chats_url } from './nav_helpers.ts';
+import { goto_unless_current, to_chats_url } from './nav.ts';
 import { chat_template_defaults } from './config_defaults.ts';
 import type { ChatTemplate } from './chat_template.ts';
 import { CellJson } from './cell_types.ts';
-import { goto_unless_current } from './navigation_helpers.ts';
 
 export const ChatsJson = CellJson.extend({
 	items: z.array(ChatJson).default(() => []),
@@ -33,8 +32,7 @@ export class Chats extends Cell<typeof ChatsJson> {
 		indexes: [
 			create_single_index({
 				key: 'by_name',
-				extractor: (chat) => chat.name,
-				query_schema: z.string()
+				extractor: (chat) => chat.name
 			}),
 
 			create_derived_index({
@@ -75,16 +73,10 @@ export class Chats extends Cell<typeof ChatsJson> {
 		super(ChatsJson, options);
 
 		this.decoders = {
-			// TODO @many improve this API, maybe infer or create a helper, duplicated many places
-			items: (items) => {
-				if (Array.isArray(items)) {
-					this.items.clear();
-					for (const item_json of items) {
-						this.add(item_json);
-					}
-				}
-				return HANDLED;
-			}
+			items: create_collection_decoder(
+				() => this.items.clear(),
+				(json) => this.add(json)
+			)
 		};
 
 		// Initialize explicitly after all properties are defined

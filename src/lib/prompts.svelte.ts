@@ -4,15 +4,14 @@ import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Prompt, PromptJson, type PromptJsonInput } from './prompt.svelte.ts';
-import { HANDLED } from './cell_helpers.ts';
+import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { create_single_index, create_derived_index } from './indexed_collection_helpers.svelte.ts';
 import { to_reordered_list } from './list_helpers.ts';
 import type { DiskfilePath } from './diskfile_types.ts';
 import { get_unique_name } from './helpers.ts';
-import { to_prompts_url } from './nav_helpers.ts';
+import { goto_unless_current, to_prompts_url } from './nav.ts';
 import { CellJson } from './cell_types.ts';
-import { goto_unless_current } from './navigation_helpers.ts';
 
 export const PromptsJson = CellJson.extend({
 	items: z.array(PromptJson).default(() => []),
@@ -31,8 +30,7 @@ export class Prompts extends Cell<typeof PromptsJson> {
 		indexes: [
 			create_single_index({
 				key: 'by_name',
-				extractor: (prompt) => prompt.name,
-				query_schema: z.string()
+				extractor: (prompt) => prompt.name
 			}),
 
 			create_derived_index({
@@ -84,16 +82,10 @@ export class Prompts extends Cell<typeof PromptsJson> {
 		super(PromptsJson, options);
 
 		this.decoders = {
-			// TODO @many improve this API, maybe infer or create a helper, duplicated many places
-			items: (items) => {
-				if (Array.isArray(items)) {
-					this.items.clear();
-					for (const item_json of items) {
-						this.add(item_json);
-					}
-				}
-				return HANDLED;
-			}
+			items: create_collection_decoder(
+				() => this.items.clear(),
+				(json) => this.add(json)
+			)
 		};
 
 		this.init();

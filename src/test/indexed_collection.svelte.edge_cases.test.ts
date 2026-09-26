@@ -1,15 +1,13 @@
 // @vitest-environment jsdom
 
 import { test, describe, vi, assert } from 'vitest';
-import { z } from 'zod';
 import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import { IndexedCollection } from '$lib/indexed_collection.svelte.ts';
 import {
 	create_single_index,
 	create_multi_index,
-	create_derived_index,
-	create_dynamic_index
+	create_derived_index
 } from '$lib/indexed_collection_helpers.svelte.ts';
 
 // Mock item type that implements IndexedItem
@@ -43,15 +41,13 @@ describe('IndexedCollection - Edge Cases', () => {
 				// Single index that filters out null values
 				create_single_index({
 					key: 'by_number_a',
-					extractor: (item) => item.number_a, // May return null
-					query_schema: z.number().nullable()
+					extractor: (item) => item.number_a // May return null
 				}),
 
 				// Multi-index that handles undefined values safely
 				create_multi_index({
 					key: 'by_array_a',
-					extractor: (item) => (item.array_a.length > 0 ? item.array_a : undefined),
-					query_schema: z.string()
+					extractor: (item) => (item.array_a.length > 0 ? item.array_a : undefined)
 				})
 			]
 		});
@@ -100,14 +96,12 @@ describe('IndexedCollection - Edge Cases', () => {
 			indexes: [
 				create_single_index({
 					key: 'by_prefix',
-					extractor: (item) => item.string_a.substring(0, 1), // First char
-					query_schema: z.string()
+					extractor: (item) => item.string_a.substring(0, 1) // First char
 				}),
 				// Add explicit text index for easier item retrieval
 				create_single_index({
 					key: 'by_string_a',
-					extractor: (item) => item.string_a,
-					query_schema: z.string()
+					extractor: (item) => item.string_a
 				})
 			]
 		});
@@ -145,14 +139,12 @@ describe('IndexedCollection - Edge Cases', () => {
 			indexes: [
 				create_single_index({
 					key: 'by_string_a',
-					extractor: (item) => item.string_a,
-					query_schema: z.string()
+					extractor: (item) => item.string_a
 				}),
 
 				create_multi_index({
 					key: 'by_array_a',
-					extractor: (item) => item.array_a,
-					query_schema: z.string()
+					extractor: (item) => item.array_a
 				}),
 
 				create_derived_index({
@@ -216,13 +208,11 @@ describe('IndexedCollection - Edge Cases', () => {
 			indexes: [
 				create_single_index({
 					key: 'by_string_a',
-					extractor: (item) => item.string_a,
-					query_schema: z.string()
+					extractor: (item) => item.string_a
 				}),
 				create_multi_index({
 					key: 'by_array_a',
-					extractor: (item) => item.array_a,
-					query_schema: z.string()
+					extractor: (item) => item.array_a
 				})
 			]
 		});
@@ -236,130 +226,26 @@ describe('IndexedCollection - Edge Cases', () => {
 		}); // Should throw error about index type mismatch
 
 		assert.throws(() => {
-			collection.by<string>('by_array_a', 'tag1'); // Using single-index method on multi-index
+			collection.by_optional<string>('by_array_a', 'tag1'); // Using single-index method on multi-index
 		}); // Should throw error about index type mismatch
+
+		assert.throws(() => {
+			collection.derived_index('by_string_a'); // Using derived-index method on single index
+		});
+
+		assert.throws(() => {
+			collection.single_index('missing');
+		});
 	});
 
-	test('handling invalid queries with schema validation', () => {
-		// Create a collection with strict schema validation
-		const console_error_spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
+	test('typed accessors reject an untyped custom index', () => {
 		const collection: IndexedCollection<TestItem> = new IndexedCollection({
-			indexes: [
-				create_single_index({
-					key: 'by_number_a',
-					extractor: (item) => item.number_a,
-					query_schema: z.number().positive() // Must be positive number
-				})
-			],
-			validate: true // Enable validation
+			indexes: [{ key: 'count', compute: (collection) => collection.size }]
 		});
 
-		// Add test items
-		collection.add(create_test_item('a1', 5));
-		collection.add(create_test_item('a2', -1)); // Negative value
-		collection.add(create_test_item('a3', null)); // Null value
-
-		// Test valid query
-		assert.strictEqual(collection.by_optional('by_number_a', 5)?.string_a, 'a1');
-
-		// Test queries that violate schema
-		collection.query('by_number_a', -10); // Negative number, should log validation error
-		assert.ok(console_error_spy.mock.calls.length > 0);
-
-		console_error_spy.mockClear();
-		collection.query('by_number_a', null); // Null, should log validation error
-		assert.ok(console_error_spy.mock.calls.length > 0);
-
-		console_error_spy.mockRestore();
-	});
-
-	test('dynamic indexes with custom handlers', () => {
-		// Test a dynamic index with custom add/remove handlers
-		const compute_fn = vi.fn();
-		const onadd_fn = vi.fn((_fn, item, collection) => {
-			// Return a new function that references the added item
-			return (query: string) => {
-				compute_fn(query);
-				if (query === item.string_a) {
-					return [item];
-				}
-
-				const result = [];
-				for (const i of collection.by_id.values()) {
-					if (i.string_a.includes(query)) {
-						result.push(i);
-					}
-				}
-				return result;
-			};
-		});
-
-		const onremove_fn = vi.fn((_fn, _item, collection) => {
-			// Return a new function that excludes the removed item
-			return (query: string) => {
-				compute_fn(query);
-
-				const result = [];
-				for (const i of collection.by_id.values()) {
-					if (i.string_a.includes(query)) {
-						result.push(i);
-					}
-				}
-				return result;
-			};
-		});
-
-		const collection: IndexedCollection<TestItem> = new IndexedCollection({
-			indexes: [
-				create_dynamic_index<TestItem, (query: string) => Array<TestItem>>({
-					key: 'search',
-					factory: (collection) => {
-						return (query: string) => {
-							compute_fn(query);
-
-							const result = [];
-							for (const i of collection.by_id.values()) {
-								if (i.string_a.includes(query)) {
-									result.push(i);
-								}
-							}
-							return result;
-						};
-					},
-					query_schema: z.string(),
-					onadd: onadd_fn,
-					onremove: onremove_fn
-				})
-			]
-		});
-
-		// Add test items and verify custom handlers
-		const item1 = create_test_item('x1');
-		collection.add(item1);
-		assert.ok(onadd_fn.mock.calls.length > 0);
-
-		const item2 = create_test_item('y2');
-		collection.add(item2);
-
-		// Test the search index
-		const search_fn = collection.get_index<(q: string) => Array<TestItem>>('search');
-
-		// Search functions should work
-		const x_results = search_fn('x');
-		assert.strictEqual(x_results.length, 1);
-		const x_result_0 = x_results[0];
-		assert.isDefined(x_result_0);
-		assert.strictEqual(x_result_0.string_a, 'x1');
-		assert.deepEqual(compute_fn.mock.calls[compute_fn.mock.calls.length - 1], ['x']);
-
-		// Test removing an item triggers onremove
-		collection.remove(item1.id);
-		assert.ok(onremove_fn.mock.calls.length > 0);
-
-		// Search function should be updated
-		const no_results = search_fn('x');
-		assert.strictEqual(no_results.length, 0);
+		assert.strictEqual(collection.indexes.count, 0);
+		assert.throws(() => collection.single_index('count'), /untyped/);
+		assert.throws(() => collection.where('count', 0), /untyped/);
 	});
 
 	test('custom complex index behaviors', () => {
@@ -369,8 +255,7 @@ describe('IndexedCollection - Edge Cases', () => {
 				// Add explicit string_a index for lookup
 				create_single_index({
 					key: 'by_string_a',
-					extractor: (item) => item.string_a,
-					query_schema: z.string()
+					extractor: (item) => item.string_a
 				}),
 				// Custom index that maintains an aggregated stats object
 				{
@@ -432,13 +317,13 @@ describe('IndexedCollection - Edge Cases', () => {
 		collection.add(item3);
 
 		// Check that stats were computed correctly
-		const stats = collection.get_index<{
+		const stats: {
 			count: number;
 			boolean_a_true_count: number;
 			boolean_a_false_count: number;
 			sum_number_a: number;
 			array_a_frequency: Record<string, number>;
-		}>('stats');
+		} = collection.indexes.stats;
 
 		assert.strictEqual(stats.count, 3);
 		assert.strictEqual(stats.boolean_a_true_count, 2);
@@ -480,8 +365,7 @@ describe('IndexedCollection - Edge Cases', () => {
 			indexes: [
 				create_multi_index({
 					key: 'by_boolean_a',
-					extractor: (item) => item.boolean_a,
-					query_schema: z.boolean()
+					extractor: (item) => item.boolean_a
 				})
 			]
 		});
@@ -519,8 +403,7 @@ describe('IndexedCollection - Edge Cases', () => {
 						if (item.number_a < 10) return 'small';
 						if (item.number_a < 50) return 'medium';
 						return 'large';
-					},
-					query_schema: z.string()
+					}
 				})
 			]
 		});
@@ -562,16 +445,14 @@ describe('IndexedCollection - Edge Cases', () => {
 			indexes: [
 				create_multi_index({
 					key: 'by_tags',
-					extractor: (item) => item.array_a,
-					query_schema: z.string()
+					extractor: (item) => item.array_a
 				}),
 				create_multi_index({
 					key: 'by_conditional_tags',
 					extractor: (item) => {
 						// only index if boolean_a is true
 						return item.boolean_a ? item.array_a : undefined;
-					},
-					query_schema: z.string()
+					}
 				})
 			]
 		});
@@ -610,8 +491,7 @@ describe('IndexedCollection - Edge Cases', () => {
 				create_multi_index({
 					key: 'by_boolean_sorted',
 					extractor: (item) => item.boolean_a,
-					sort: (a, b) => (a.number_a || 0) - (b.number_a || 0), // ascending by number
-					query_schema: z.boolean()
+					sort: (a, b) => (a.number_a || 0) - (b.number_a || 0) // ascending by number
 				})
 			]
 		});
@@ -653,8 +533,7 @@ describe('IndexedCollection - Edge Cases', () => {
 			indexes: [
 				create_multi_index({
 					key: 'by_category',
-					extractor: (item) => item.string_a.split('_')[0], // extract prefix before underscore
-					query_schema: z.string()
+					extractor: (item) => item.string_a.split('_')[0] // extract prefix before underscore
 				})
 			]
 		});
@@ -695,8 +574,7 @@ describe('IndexedCollection - Edge Cases', () => {
 			indexes: [
 				create_multi_index({
 					key: 'by_prefix',
-					extractor: (item) => item.string_a.charAt(0),
-					query_schema: z.string()
+					extractor: (item) => item.string_a.charAt(0)
 				})
 			]
 		});
@@ -730,8 +608,7 @@ describe('IndexedCollection - Edge Cases', () => {
 						if (item.number_a === null) return undefined;
 						if (item.number_a % 2 === 0) return 'even';
 						return undefined; // odd numbers not indexed
-					},
-					query_schema: z.string()
+					}
 				})
 			]
 		});
@@ -759,8 +636,7 @@ describe('IndexedCollection - Edge Cases', () => {
 			indexes: [
 				create_multi_index({
 					key: 'by_category',
-					extractor: (item) => item.string_a.split('_')[0],
-					query_schema: z.string()
+					extractor: (item) => item.string_a.split('_')[0]
 				})
 			]
 		});
@@ -806,8 +682,7 @@ describe('IndexedCollection - Edge Cases', () => {
 			indexes: [
 				create_multi_index({
 					key: 'by_boolean_a',
-					extractor: (item) => item.boolean_a,
-					query_schema: z.boolean()
+					extractor: (item) => item.boolean_a
 				})
 			]
 		});
@@ -845,8 +720,7 @@ describe('IndexedCollection - Edge Cases', () => {
 			indexes: [
 				create_multi_index({
 					key: 'by_tags',
-					extractor: (item) => item.array_a,
-					query_schema: z.string()
+					extractor: (item) => item.array_a
 				})
 			]
 		});

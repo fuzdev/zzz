@@ -318,10 +318,10 @@ const chat = app.chats.add({ name: 'New Chat' });
 const chat = app.chats.items.by_id.get(id);
 
 // Get by single index
-const model = app.models.items.by('name', 'gpt-5-2025-08-07');
+const model = app.models.items.by_optional('name', 'gpt-5-2025-08-07'); // Model | undefined
 
 // Query multi-index
-const claude_models = app.models.items.where('provider_name', 'claude');
+const claude_models = app.models.items.where('provider_name', 'claude'); // ReadonlyArray<Model>
 
 // Iterate
 for (const chat of app.chats.items.values) {

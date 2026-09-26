@@ -6,7 +6,7 @@ import { Cell, type CellOptions } from './cell.svelte.ts';
 import { ThreadJson } from './thread_types.ts';
 import { CompletionRequest } from './completion_types.ts';
 import { render_messages_to_string, render_completion_messages } from './thread_helpers.ts';
-import { HANDLED } from './cell_helpers.ts';
+import { create_collection_decoder } from './cell_helpers.ts';
 import { to_preview, estimate_token_count } from './helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import type { TurnJson } from './turn_types.ts';
@@ -67,15 +67,10 @@ export class Thread extends Cell<typeof ThreadJson> {
 		super(ThreadJson, options);
 
 		this.decoders = {
-			turns: (items) => {
-				if (Array.isArray(items)) {
-					this.#clear_turns();
-					for (const item_json of items) {
-						this.add_turn(new Turn({ app: this.app, json: item_json }));
-					}
-				}
-				return HANDLED;
-			}
+			turns: create_collection_decoder(
+				() => this.#clear_turns(),
+				(json) => this.add_turn(new Turn({ app: this.app, json }))
+			)
 		};
 
 		this.init();

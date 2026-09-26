@@ -18,7 +18,7 @@
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
-	import { parse_url_param_uuid } from '$lib/url_params_helpers.ts';
+	import { parse_url_param_uuid } from '$lib/nav.ts';
 	import { App } from '$lib/app.svelte.ts';
 	import FrontendRoot from '$lib/FrontendRoot.svelte';
 	import { library_context } from '$lib/library.ts';

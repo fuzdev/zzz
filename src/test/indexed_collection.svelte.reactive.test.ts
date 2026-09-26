@@ -104,7 +104,7 @@ describe('reactive single and multi indexes', () => {
 		assert.deepEqual(collection.where('by_tag', 'y'), [a]);
 
 		a.tags = [];
-		assert.strictEqual(collection.multi_index('by_tag').size, 0);
+		assert.strictEqual(collection.indexes.by_tag.size, 0);
 	});
 
 	test('a multi index keeps its sort when a sorted field changes', () => {
@@ -200,7 +200,7 @@ describe('immutable_key indexes', () => {
 
 		collection.clear();
 		assert.strictEqual(collection.single_index('by_name').size, 0);
-		assert.strictEqual(collection.multi_index('by_group').size, 0);
+		assert.strictEqual(collection.indexes.by_group.size, 0);
 	});
 
 	test('removing the holder of a shared key falls back to the last remaining match, like a rebuild', () => {
@@ -243,7 +243,7 @@ describe('immutable_key indexes', () => {
 		assert.strictEqual(collection.remove_many([b.id, a.id, b.id]), 2);
 
 		assert.strictEqual(collection.single_index('by_name').size, 0);
-		assert.strictEqual(collection.multi_index('by_group').size, 0);
+		assert.strictEqual(collection.indexes.by_group.size, 0);
 	});
 });
 

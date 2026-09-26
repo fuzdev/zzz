@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import { test, describe, beforeEach, assert } from 'vitest';
-import { z } from 'zod';
 import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import { IndexedCollection } from '$lib/indexed_collection.svelte.ts';
@@ -52,40 +51,33 @@ describe('IndexedCollection - Query Capabilities', () => {
 				// Single value indexes
 				create_single_index({
 					key: 'by_string_a',
-					extractor: (item) => item.string_a.toLowerCase(), // Case insensitive
-					query_schema: z.string()
+					extractor: (item) => item.string_a.toLowerCase() // Case insensitive
 				}),
 				create_single_index({
 					key: 'by_string_b',
-					extractor: (item) => item.string_b, // Case sensitive
-					query_schema: z.string()
+					extractor: (item) => item.string_b // Case sensitive
 				}),
 
 				// Multi value indexes
 				create_multi_index({
 					key: 'by_string_c',
-					extractor: (item) => item.string_c,
-					query_schema: z.string()
+					extractor: (item) => item.string_c
 				}),
 				create_multi_index({
 					key: 'by_array_a',
-					extractor: (item) => item.array_a,
-					query_schema: z.string()
+					extractor: (item) => item.array_a
 				}),
 				create_multi_index({
 					key: 'by_number_a',
-					extractor: (item) => item.number_a,
-					query_schema: z.number()
+					extractor: (item) => item.number_a
 				}),
 				create_multi_index({
 					key: 'by_boolean_a',
-					extractor: (item) => (item.boolean_a ? 'y' : 'n'),
-					query_schema: z.enum(['y', 'n'])
+					extractor: (item) => (item.boolean_a ? 'y' : 'n')
 				}),
 				create_multi_index({
 					key: 'by_year',
-					extractor: (item) => item.date_a.getFullYear(),
-					query_schema: z.number()
+					extractor: (item) => item.date_a.getFullYear()
 				}),
 
 				// Derived indexes
@@ -306,18 +298,15 @@ describe('IndexedCollection - Query Capabilities', () => {
 		assert.deepEqual(high_number_a.map((i) => i.string_a).sort(), ['a1', 'a2', 'b1', 'b2'].sort());
 	});
 
-	test('first/latest with multi-index', () => {
-		// Get first c1 item
-		const first_c1 = collection.first('by_string_c', 'c1', 1);
-		assert.strictEqual(first_c1.length, 1);
-		const first_c1_item = first_c1[0];
-		assert.isDefined(first_c1_item);
+	test('`where` returns the bucket, or a frozen empty array for a missing key', () => {
+		const c1 = collection.where('by_string_c', 'c1');
+		assert.ok(c1.length > 0);
+		assert.strictEqual(collection.where('by_string_c', 'c1'), c1);
 
-		// Get latest c2 item
-		const latest_c2 = collection.latest('by_string_c', 'c2', 1);
-		assert.strictEqual(latest_c2.length, 1);
-		const latest_c2_item = latest_c2[0];
-		assert.isDefined(latest_c2_item);
+		const missing = collection.where('by_string_c', 'missing');
+		assert.strictEqual(missing.length, 0);
+		// the empty result is shared, so `where` types it `ReadonlyArray`
+		assert.ok(Object.isFrozen(missing));
 	});
 
 	test('time-based queries', () => {
@@ -413,8 +402,7 @@ describe('IndexedCollection - Search Patterns', () => {
 				// Word-based index that splits string_a into words for searching
 				create_multi_index({
 					key: 'by_word',
-					extractor: (item) => item.string_a.toLowerCase().split(/\s+/),
-					query_schema: z.string()
+					extractor: (item) => item.string_a.toLowerCase().split(/\s+/)
 				}),
 
 				// Range-based categorization
@@ -424,8 +412,7 @@ describe('IndexedCollection - Search Patterns', () => {
 						if (item.number_a <= 2) return 'low';
 						if (item.number_a <= 4) return 'mid';
 						return 'high';
-					},
-					query_schema: z.enum(['low', 'mid', 'high'])
+					}
 				})
 			]
 		});

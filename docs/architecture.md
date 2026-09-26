@@ -245,22 +245,22 @@ export class Chat extends Cell<typeof ChatJson> {
 
 ### Custom Decoders
 
-For complex field deserialization, override `this.decoders` before `init()`:
+For complex field deserialization, override `this.decoders` before `init()`.
+A decoder returns a value to assign, `undefined` for the default decoding, or
+`HANDLED` when it has fully handled the property. A property holding a
+collection of cells uses `create_collection_decoder` (`cell_helpers.ts`): an
+array value clears the collection, then adds each element, and it always
+returns `HANDLED`:
 
 ```typescript
 constructor(options: ThreadOptions) {
   super(ThreadJson, options);
 
   this.decoders = {
-    turns: (items) => {
-      if (Array.isArray(items)) {
-        this.#clear_turns(); // also cancels a pending completion
-        for (const item_json of items) {
-          this.add_turn(new Turn({app: this.app, json: item_json}));
-        }
-      }
-      return HANDLED;  // Signal decoder fully handled the property
-    },
+    turns: create_collection_decoder(
+      () => this.#clear_turns(), // also cancels a pending completion
+      (json) => this.add_turn(new Turn({app: this.app, json})),
+    ),
   };
 
   this.init();
@@ -559,10 +559,18 @@ class IndexedCollection<T extends IndexedItem> {
 
 ### Index Types
 
-- `single` — One key → one item. Example: `by('name', 'gpt-5')`
-- `multi` — One key → many items. Example: `where('provider_name', 'claude')`
-- `derived` — Computed sorted array. Example: `derived_index('ordered_by_name')`
-- `dynamic` — Runtime-computed. Example: Custom queries
+- `single` — One key → one item (`create_single_index`). Read with
+  `by_optional('name', 'gpt-5')` or `single_index('name')` (the map)
+- `multi` — One key → many items (`create_multi_index`). Read with
+  `where('provider_name', 'claude')`, which returns a `ReadonlyArray` — the
+  index's own bucket, or a shared frozen empty array for a missing key, so copy
+  it before changing it
+- `derived` — Computed array, optionally sorted (`create_derived_index`). Read
+  with `derived_index('ordered_by_name')`
+
+The typed readers throw when the key isn't an index of their type. A custom
+`IndexDefinition` without a `type` (say an aggregate stats object) is read
+through `indexes[key]`.
 
 ### Keeping Indexes Current
 
@@ -584,10 +592,9 @@ An index is maintained one of two ways:
   correct only while an item's indexed values never change. Single and multi
   indexes opt in with `immutable_key: true`; use it for identity-like keys on
   large or busy collections (`Diskfiles.by_path` — seeded with every file,
-  upserting by path in a loop — plus `Workspaces.by_path` and
-  `Actions.by_method`). Derived-array indexes (`create_derived_index`) are
-  incremental and can be replaced by assignment (e.g.
-  `items.indexes.manual_order = reordered`).
+  upserting by path in a loop — plus `Workspaces.by_path`). Derived-array
+  indexes (`create_derived_index`) are incremental and can be replaced by
+  assignment (e.g. `items.indexes.manual_order = reordered`).
 
 `onremove` hooks run after the removed items have left `by_id`, so a single
 index falling back to another holder of a key never picks an item removed in the
@@ -619,11 +626,11 @@ the same dependents:
 ### Index Definition
 
 ```typescript
-interface IndexDefinition<T extends IndexedItem, TResult = any, TQuery = any> {
+interface IndexDefinition<T extends IndexedItem, TResult = any> {
 	key: string;
-	type?: 'single' | 'multi' | 'derived' | 'dynamic';
-	extractor?: (item: T) => any;
+	type?: 'single' | 'multi' | 'derived'; // checked by the typed readers
 	compute: (collection: IndexedCollection<T>) => TResult;
+	matches?: (item: T) => boolean; // skip the hooks for items it rejects
 	reactive?: boolean; // `$derived` of `compute`, the hooks below are unused
 	onadd?: (result: TResult, item: T, collection: IndexedCollection<T>) => TResult;
 	onremove?: (result: TResult, item: T, collection: IndexedCollection<T>) => TResult;
@@ -648,9 +655,8 @@ const items = new IndexedCollection<Model>({
 });
 
 // Query
-items.by('name', 'gpt-5'); // single → Model, throws if missing
 items.by_optional('name', 'gpt-5'); // single → Model | undefined
-items.where('provider_name', 'claude'); // multi → Array<Model>
+items.where('provider_name', 'claude'); // multi → ReadonlyArray<Model>
 items.derived_index('ordered_by_name'); // derived → Array<Model>
 ```
 

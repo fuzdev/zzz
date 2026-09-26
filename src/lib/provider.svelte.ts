@@ -28,7 +28,9 @@ export class Provider extends Cell<typeof ProviderJson> {
 	company: string = $state.raw()!;
 	api_key_url: string | null = $state.raw()!;
 
-	readonly models: Array<Model> = $derived(this.app.models.items.where('provider_name', this.name));
+	readonly models: ReadonlyArray<Model> = $derived(
+		this.app.models.items.where('provider_name', this.name)
+	);
 
 	/**
 	 * Status for this provider (availability, error messages, etc.).

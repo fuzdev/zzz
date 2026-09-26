@@ -12,7 +12,7 @@ import {
 } from '$lib/indexed_collection_helpers.svelte.ts';
 import { CellJson } from '$lib/cell_types.ts';
 import { BrowserTab, BrowserTabJson } from './browser_tab.svelte.ts';
-import { HANDLED } from '$lib/cell_helpers.ts';
+import { create_collection_decoder, HANDLED } from '$lib/cell_helpers.ts';
 import { to_reordered_list } from '$lib/list_helpers.ts';
 import { fake_sites } from './sample_tabs.ts';
 
@@ -30,8 +30,7 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 		indexes: [
 			create_single_index({
 				key: 'url',
-				extractor: (tab) => tab.url,
-				query_schema: z.string()
+				extractor: (tab) => tab.url
 			}),
 			create_derived_index({
 				key: 'manual_order',
@@ -55,22 +54,10 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 		super(BrowserTabsJson, options);
 
 		this.decoders = {
-			tabs: (tabs) => {
-				if (Array.isArray(tabs)) {
-					// Clear existing tabs
-					this.items.clear();
-
-					// Add tabs from JSON
-					for (const tab_json of tabs) {
-						const tab = new BrowserTab({
-							app: this.app,
-							json: tab_json
-						});
-						this.items.add(tab);
-					}
-				}
-				return HANDLED;
-			},
+			tabs: create_collection_decoder(
+				() => this.items.clear(),
+				(json) => this.items.add(new BrowserTab({ app: this.app, json }))
+			),
 			recently_closed_tabs: (tabs) => {
 				if (Array.isArray(tabs)) {
 					this.recently_closed_tabs = tabs.map(

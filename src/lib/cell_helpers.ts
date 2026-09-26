@@ -40,6 +40,30 @@ export type CellValueDecoder<
 };
 
 /**
+ * Creates the decoder for a property that holds a collection of cells. An array
+ * value replaces the collection's contents — `clear`, then `add` for each
+ * element — and any other value leaves the collection unchanged. It always
+ * returns `HANDLED`, so the property is never assigned the raw JSON.
+ *
+ * @param clear - empties the collection, disposing the items it owns
+ * @param add - creates and adds the item for one element's JSON
+ * @returns a decoder for `Cell.decoders`
+ */
+export const create_collection_decoder =
+	// `any`, not a `TJson` generic — an unannotated `(json) => ...` gives `TJson`
+	// no inference site, so it'd be `unknown` and every call site would need annotating
+	(clear: () => void, add: (json: any) => unknown) =>
+	(value: unknown): typeof HANDLED => {
+		if (Array.isArray(value)) {
+			clear();
+			for (const json of value) {
+				add(json);
+			}
+		}
+		return HANDLED;
+	};
+
+/**
  * Get schema class information from a Zod schema.
  * This helps determine how to decode values based on their schema definition.
  */

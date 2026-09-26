@@ -5,7 +5,7 @@
 <script lang="ts">
 	import { projects_context, Projects } from './projects.svelte.ts';
 	import { frontend_context } from '$lib/frontend.svelte.ts';
-	import { parse_url_param_uuid } from '$lib/url_params_helpers.ts';
+	import { parse_url_param_uuid } from '$lib/nav.ts';
 	import { create_detached } from '$lib/reactive_helpers.svelte.ts';
 
 	const { children, params } = $props();

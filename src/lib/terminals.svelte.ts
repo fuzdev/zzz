@@ -3,7 +3,7 @@ import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Terminal, TerminalJson, type TerminalJsonInput } from './terminal.svelte.ts';
-import { HANDLED } from './cell_helpers.ts';
+import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { CellJson } from './cell_types.ts';
 import { TerminalOutputBuffer } from './terminal_helpers.ts';
@@ -69,15 +69,10 @@ export class Terminals extends Cell<typeof TerminalsJson> {
 		super(TerminalsJson, options);
 
 		this.decoders = {
-			items: (items) => {
-				if (Array.isArray(items)) {
-					this.clear();
-					for (const item_json of items) {
-						this.add(item_json);
-					}
-				}
-				return HANDLED;
-			}
+			items: create_collection_decoder(
+				() => this.clear(),
+				(json) => this.add(json)
+			)
 		};
 
 		this.init();

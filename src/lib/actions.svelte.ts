@@ -2,10 +2,8 @@ import { z } from 'zod';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Action, ActionJson, type ActionJsonInput } from './action.svelte.ts';
-import { ActionMethod } from './action_metatypes.ts';
-import { HANDLED } from './cell_helpers.ts';
+import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
-import { create_multi_index } from './indexed_collection_helpers.svelte.ts';
 import { CellJson } from './cell_types.ts';
 
 export const HISTORY_LIMIT_DEFAULT = 512;
@@ -26,25 +24,13 @@ export class Actions extends Cell<typeof ActionsJson> {
 	// TODO maybe rename to `history`, or extract an `ActionHistory` or more generic class
 	readonly items: IndexedCollection<Action> = new IndexedCollection({
 		// trimmed actions stop observing their action event and leave the cell registry
-		dispose_item: (action) => action.dispose(),
-		indexes: [
-			create_multi_index({
-				key: 'by_method',
-				extractor: (action) => action.method,
-				query_schema: ActionMethod,
-				immutable_key: true
-			})
-		]
+		dispose_item: (action) => action.dispose()
 	});
 
 	// TODO @many refactor this into the IndexedCollection -- if this state remains we can have a setter that forwards the value
 	history_limit: number = $state.raw(HISTORY_LIMIT_DEFAULT);
 
-	// TODO think about these - filter/sort by method/kind?
-	// readonly pings: Array<Action> = $derived(this.items.where('by_method', 'ping'));
-	// get_latest_by_method(method: ActionMethod, limit: number = this.history_limit): Array<Action> {
-	// 	return this.items.latest('by_method', method, limit);
-	// }
+	// TODO filter/sort by method/kind? a `create_multi_index` on `method` would serve both
 
 	constructor(options: ActionsOptions) {
 		super(ActionsJson, options);
@@ -55,16 +41,10 @@ export class Actions extends Cell<typeof ActionsJson> {
 		}
 
 		this.decoders = {
-			// TODO @many improve this API, maybe infer or create a helper, duplicated many places
-			items: (items) => {
-				if (Array.isArray(items)) {
-					this.items.clear();
-					for (const item_json of items) {
-						this.add_from_json(item_json);
-					}
-				}
-				return HANDLED;
-			}
+			items: create_collection_decoder(
+				() => this.items.clear(),
+				(json) => this.add_from_json(json)
+			)
 		};
 
 		this.init();

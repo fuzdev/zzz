@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import { test, assert, describe } from 'vitest';
-import { z } from 'zod';
 import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import { IndexedCollection } from '$lib/indexed_collection.svelte.ts';
@@ -9,7 +8,6 @@ import {
 	create_single_index,
 	create_multi_index,
 	create_derived_index,
-	create_dynamic_index,
 	type IndexedItem
 } from '$lib/indexed_collection_helpers.svelte.ts';
 
@@ -79,8 +77,7 @@ describe('IndexedCollection - Base Functionality', () => {
 			indexes: [
 				create_single_index({
 					key: 'by_text',
-					extractor: (item) => item.text,
-					query_schema: z.string()
+					extractor: (item) => item.text
 				})
 			]
 		});
@@ -100,12 +97,8 @@ describe('IndexedCollection - Base Functionality', () => {
 		assert.strictEqual(collection.by_optional<string>('by_text', 'a3')?.id, item3.id);
 		assert.isUndefined(collection.by_optional<string>('by_text', 'missing'));
 
-		// Test the non-optional version that throws
-		assert.throws(() => collection.by<string>('by_text', 'missing'));
-		assert.strictEqual(collection.by<string>('by_text', 'a1').id, item1.id);
-
-		// Test query method
-		assert.strictEqual(collection.query<TestItem, string>('by_text', 'a1').id, item1.id);
+		// Test the index map itself
+		assert.strictEqual(collection.single_index('by_text').get('a1')?.id, item1.id);
 
 		// Test index update on removal
 		collection.remove(item2.id);
@@ -120,8 +113,7 @@ describe('IndexedCollection - Index Types', () => {
 			indexes: [
 				create_multi_index({
 					key: 'by_category',
-					extractor: (item) => item.category,
-					query_schema: z.string()
+					extractor: (item) => item.category
 				})
 			]
 		});
@@ -148,9 +140,8 @@ describe('IndexedCollection - Index Types', () => {
 		assert.ok(c2_items.some((item) => item.id === item3.id));
 		assert.ok(c2_items.some((item) => item.id === item4.id));
 
-		// Test first/latest with limit
-		assert.strictEqual(collection.first<string>('by_category', 'c1', 1).length, 1);
-		assert.strictEqual(collection.latest<string>('by_category', 'c2', 1).length, 1);
+		// A missing key reads as an empty array
+		assert.strictEqual(collection.where<string>('by_category', 'missing').length, 0);
 
 		// Test index update on removal
 		collection.remove(item1.id);
@@ -173,8 +164,7 @@ describe('IndexedCollection - Index Types', () => {
 						return result;
 					},
 					matches: (item) => item.number > 5,
-					sort: (a, b) => b.number - a.number,
-					query_schema: z.void()
+					sort: (a, b) => b.number - a.number
 				})
 			]
 		});
@@ -199,8 +189,8 @@ describe('IndexedCollection - Index Types', () => {
 		assert.strictEqual(high_numbers[2]!.id, threshold_item.id); // Third number (6)
 		assert.ok(!high_numbers.some((item) => item.id === low_item.id)); // Low number excluded (3)
 
-		// Test direct access via get_index
-		const high_numbers_via_index = collection.get_index('high_numbers');
+		// Test direct access via `indexes`
+		const high_numbers_via_index = collection.indexes.high_numbers;
 		assert.deepEqual(high_numbers_via_index, high_numbers);
 
 		// Test incremental update
@@ -220,54 +210,6 @@ describe('IndexedCollection - Index Types', () => {
 		assert.strictEqual(numbers_after_removal.length, 3);
 		assert.strictEqual(numbers_after_removal[0]!.id, new_high_item.id); // Now highest number
 	});
-
-	test('function indexes', () => {
-		// Test a function-based index using the new helper function
-		const collection: IndexedCollection<TestItem> = new IndexedCollection({
-			indexes: [
-				create_dynamic_index<TestItem, (range: string) => Array<TestItem>>({
-					key: 'by_range',
-					factory: (collection) => {
-						return (range: string) => {
-							const result = [];
-							for (const item of collection.by_id.values()) {
-								if (range === 'high' && item.number >= 8) {
-									result.push(item);
-								} else if (range === 'medium' && item.number >= 4 && item.number < 8) {
-									result.push(item);
-								} else if (range === 'low' && item.number < 4) {
-									result.push(item);
-								}
-							}
-							return result;
-						};
-					},
-					query_schema: z.string()
-				})
-			]
-		});
-
-		// Add items with different number values
-		collection.add(create_item('a1', 'c1', [], 10)); // High number
-		collection.add(create_item('a2', 'c1', [], 8)); // High number
-		collection.add(create_item('a3', 'c1', [], 7)); // Medium number
-		collection.add(create_item('a4', 'c1', [], 5)); // Medium number
-		collection.add(create_item('a5', 'c1', [], 3)); // Low number
-		collection.add(create_item('a6', 'c1', [], 1)); // Low number
-
-		// The index is a function that can be queried
-		const range_function = collection.get_index<(range: string) => Array<TestItem>>('by_range');
-
-		// Test function index queries
-		assert.strictEqual(range_function('high').length, 2);
-		assert.strictEqual(range_function('medium').length, 2);
-		assert.strictEqual(range_function('low').length, 2);
-
-		// Test using the query method
-		assert.strictEqual(collection.query<Array<TestItem>, string>('by_range', 'high').length, 2);
-		assert.strictEqual(collection.query<Array<TestItem>, string>('by_range', 'medium').length, 2);
-		assert.strictEqual(collection.query<Array<TestItem>, string>('by_range', 'low').length, 2);
-	});
 });
 
 describe('IndexedCollection - Advanced Features', () => {
@@ -276,18 +218,15 @@ describe('IndexedCollection - Advanced Features', () => {
 			indexes: [
 				create_single_index({
 					key: 'by_text',
-					extractor: (item) => item.text,
-					query_schema: z.string()
+					extractor: (item) => item.text
 				}),
 				create_multi_index({
 					key: 'by_category',
-					extractor: (item) => item.category,
-					query_schema: z.string()
+					extractor: (item) => item.category
 				}),
 				create_multi_index({
 					key: 'by_listitem',
-					extractor: (item) => item.list[0],
-					query_schema: z.string()
+					extractor: (item) => item.list[0]
 				}),
 				create_derived_index({
 					key: 'recent_high_numbers',
@@ -301,8 +240,7 @@ describe('IndexedCollection - Advanced Features', () => {
 						return result.sort((a, b) => b.date.getTime() - a.date.getTime());
 					},
 					matches: (item) => item.number >= 8,
-					sort: (a, b) => b.date.getTime() - a.date.getTime(),
-					query_schema: z.void()
+					sort: (a, b) => b.date.getTime() - a.date.getTime()
 				})
 			]
 		});
@@ -344,7 +282,6 @@ describe('IndexedCollection - Advanced Features', () => {
 					unique_values: new Set(items.map((item: any) => item.category))
 				};
 			},
-			query_schema: z.void(),
 			onadd: (stats: any, item: any) => {
 				stats.count++;
 				stats.average = (stats.average * (stats.count - 1) + item.number) / stats.count;
@@ -381,11 +318,11 @@ describe('IndexedCollection - Advanced Features', () => {
 		collection.add(create_item('a2', 'c2', [], 20));
 
 		// Test complex index structure
-		const stats = collection.get_index<{
+		const stats: {
 			count: number;
 			average: number;
 			unique_values: Set<string>;
-		}>('stats');
+		} = collection.indexes.stats;
 
 		assert.strictEqual(stats.count, 2);
 		assert.strictEqual(stats.average, 15);
@@ -405,8 +342,7 @@ describe('IndexedCollection - Advanced Features', () => {
 			indexes: [
 				create_multi_index({
 					key: 'by_category',
-					extractor: (item) => item.category,
-					query_schema: z.string()
+					extractor: (item) => item.category
 				})
 			]
 		});

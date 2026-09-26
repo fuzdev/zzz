@@ -1,10 +1,7 @@
-// @slop Claude Sonnet 3.7
-
 import { SvelteMap } from 'svelte/reactivity';
-import type { z } from 'zod';
 import { DEV } from 'esm-env';
 import { EMPTY_ARRAY } from '@fuzdev/fuz_util/array.ts';
-import { Uuid } from '@fuzdev/fuz_util/id.ts';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import type { IndexedItem } from './indexed_collection_helpers.svelte.ts';
 
@@ -13,30 +10,25 @@ import type { IndexedItem } from './indexed_collection_helpers.svelte.ts';
 // consider the whole graph's POV, not just individual collections, for relationships/transactions
 
 /**
- * String literals for index types.
+ * The index categories the typed accessors check: `single_index` and
+ * `by_optional` read a `single` index, `where` a `multi` one,
+ * and `derived_index` a `derived` one.
  */
-export type IndexType = 'single' | 'multi' | 'derived' | 'dynamic';
+export type IndexType = 'single' | 'multi' | 'derived';
 
 /**
- * Generic index definition with full flexibility.
+ * An index definition. The `create_*_index` helpers build these;
+ * a custom definition without a `type` is read through `indexes`.
  */
-export interface IndexDefinition<T extends IndexedItem, TResult = any, TQuery = any> {
+export interface IndexDefinition<T extends IndexedItem, TResult = any> {
 	/** Unique identifier for this index. */
 	key: string;
 
-	/** Optional index type for simpler creation. */
+	/** The category the typed accessors check before reading the index. */
 	type?: IndexType;
-
-	/** Optional extractor function for single/multi indexes. */
-	extractor?: (item: T) => any;
 
 	/** Function to compute the index value from scratch. */
 	compute: (collection: IndexedCollection<T>) => TResult;
-
-	/**
-	 * Schema for validating query parameters.
-	 */
-	query_schema?: z.ZodType<TQuery>;
 
 	/** Optional predicate to determine if an item is relevant to this index. */
 	matches?: (item: T) => boolean;
@@ -63,51 +55,30 @@ export interface IndexDefinition<T extends IndexedItem, TResult = any, TQuery = 
 	onremove?: (result: TResult, item: T, collection: IndexedCollection<T>) => TResult;
 }
 
-export interface IndexedCollectionOptions<
-	T extends IndexedItem,
-	TKeySingle extends string = string,
-	TKeyMulti extends string = string,
-	TKeyDerived extends string = string,
-	TKeyDynamic extends string = string
-> {
+export interface IndexedCollectionOptions<T extends IndexedItem> {
 	indexes?: Array<IndexDefinition<T>>;
 	initial_items?: Array<T>;
-	validate?: boolean;
 	/**
 	 * Disposes an item after it leaves the collection through `remove`, `remove_many`,
 	 * or `clear`. Pass it when the collection owns its items, so removed ones
 	 * release their resources (for cells, their `cell_registry` entry).
 	 */
 	dispose_item?: (item: T) => void;
-	index_types?: {
-		single?: Array<TKeySingle>;
-		multi?: Array<TKeyMulti>;
-		derived?: Array<TKeyDerived>;
-		dynamic?: Array<TKeyDynamic>;
-	};
 }
 
 /**
- * A helper class for managing collections with incremental updates,
- * efficient querying, and automatic index maintenance.
+ * A reactive collection of items keyed by `id`, with indexes kept current
+ * as items are added and removed (see `IndexDefinition` for how each index is maintained).
  *
  * @param T - the type of items stored in the collection
- * @param TKeySingle - type-safe keys for single value indexes
- * @param TKeyMulti - type-safe keys for multi value indexes
- * @param TKeyDerived - type-safe keys for derived indexes
- * @param TKeyDynamic - type-safe keys for dynamic function indexes
  */
-export class IndexedCollection<
-	T extends IndexedItem,
-	TKeySingle extends string = string,
-	TKeyMulti extends string = string,
-	TKeyDerived extends string = string,
-	TKeyDynamic extends string = string
-> {
+export class IndexedCollection<T extends IndexedItem> {
 	/** The main source of truth, the full collection keyed by `Uuid`. */
 	readonly by_id: SvelteMap<Uuid, T> = new SvelteMap();
 
 	// TODO change to `ReadonlyArray`s? problem is downstream usage type errors
+	// TODO `derived_index` likewise returns a mutable `Array<T>` — the index's own `$state` proxy,
+	// mutated in place by `onadd`/`onremove` — unlike `where`, which returns a `ReadonlyArray`
 	readonly values: Array<T> = $derived(Array.from(this.by_id.values()));
 	readonly keys: Array<Uuid> = $derived(Array.from(this.by_id.keys()));
 
@@ -121,83 +92,28 @@ export class IndexedCollection<
 	 */
 	readonly indexes: Record<string, any> = {};
 
-	// Map of index types for type safety and runtime checks
+	// the `type` of each index that declares one, checked by the typed accessors
 	readonly #index_types: Map<string, IndexType> = new Map();
 
-	// Store all index configs for reference
-	readonly #index_definitions: ReadonlyArray<IndexDefinition<T>> = [];
-
-	// Whether to validate indexes
-	readonly #validate: boolean;
-
-	// Incrementally maintained index definitions (the ones with `onadd`/`onremove` hooks)
+	// incrementally maintained index definitions (the ones with `onadd`/`onremove` hooks)
 	readonly #incremental_definitions: ReadonlyArray<IndexDefinition<T>> = [];
 
 	readonly #dispose_item: ((item: T) => void) | undefined;
 
-	constructor(
-		options?: IndexedCollectionOptions<T, TKeySingle, TKeyMulti, TKeyDerived, TKeyDynamic>
-	) {
-		// Set validation flag (default to false)
-		this.#validate = options?.validate ?? false;
+	constructor(options?: IndexedCollectionOptions<T>) {
 		this.#dispose_item = options?.dispose_item;
 
-		// Set up indexes based on provided configurations
 		if (options?.indexes) {
-			this.#index_definitions = options.indexes;
 			this.#incremental_definitions = options.indexes.filter((def) => !def.reactive);
 
-			// Initialize each index with its compute function
-			for (const def of this.#index_definitions) {
+			for (const def of options.indexes) {
 				define_index_property(this.indexes, def.key, create_index_holder(def, this));
-
-				// Store the index type for type safety and runtime checks
 				if (def.type) {
 					this.#index_types.set(def.key, def.type);
-				} else if (typeof this.indexes[def.key] === 'function') {
-					this.#index_types.set(def.key, 'dynamic');
-				} else if (this.indexes[def.key] instanceof Array) {
-					this.#index_types.set(def.key, 'derived');
-				} else if (
-					this.indexes[def.key] instanceof Map && // also covers SvelteMap
-					Array.isArray(
-						[...this.indexes[def.key].values()].length > 0
-							? [...this.indexes[def.key].values()][0]
-							: []
-					)
-				) {
-					this.#index_types.set(def.key, 'multi');
-				} else {
-					this.#index_types.set(def.key, 'single');
-				}
-			}
-
-			// Apply explicit type hints if provided
-			if (options.index_types) {
-				if (options.index_types.single) {
-					for (const key of options.index_types.single) {
-						this.#index_types.set(key, 'single');
-					}
-				}
-				if (options.index_types.multi) {
-					for (const key of options.index_types.multi) {
-						this.#index_types.set(key, 'multi');
-					}
-				}
-				if (options.index_types.derived) {
-					for (const key of options.index_types.derived) {
-						this.#index_types.set(key, 'derived');
-					}
-				}
-				if (options.index_types.dynamic) {
-					for (const key of options.index_types.dynamic) {
-						this.#index_types.set(key, 'dynamic');
-					}
 				}
 			}
 		}
 
-		// Add any initial items
 		if (options?.initial_items) {
 			this.add_many(options.initial_items);
 		}
@@ -209,49 +125,31 @@ export class IndexedCollection<
 	}
 
 	/**
-	 * Get a typed index value by key.
+	 * Get a single-value index.
+	 *
+	 * @throws Error if `key` isn't a `single` index
 	 */
-	get_index<TResult = any>(key: TKeySingle | TKeyMulti | TKeyDerived | TKeyDynamic): TResult {
-		return this.indexes[key];
-	}
-
-	/**
-	 * Get a single-value index with proper typing.
-	 */
-	single_index(key: TKeySingle): ReadonlyMap<any, T> {
+	single_index(key: string): ReadonlyMap<any, T> {
 		this.#ensure_index(key, 'single');
 		return this.indexes[key];
 	}
 
 	/**
-	 * Get a multi-value index with proper typing.
+	 * Get a derived index.
+	 *
+	 * @throws Error if `key` isn't a `derived` index
 	 */
-	multi_index(key: TKeyMulti): ReadonlyMap<any, Array<T>> {
-		this.#ensure_index(key, 'multi');
-		return this.indexes[key];
-	}
-
-	/**
-	 * Get a derived index with proper typing.
-	 */
-	derived_index(key: TKeyDerived): Array<T> {
+	derived_index(key: string): Array<T> {
 		this.#ensure_index(key, 'derived');
 		return this.indexes[key];
 	}
 
 	/**
-	 * Get a dynamic (function) index with proper typing.
-	 */
-	dynamic_index<Q = any>(key: TKeyDynamic): (query: Q) => T {
-		this.#ensure_index(key, 'dynamic');
-		return this.indexes[key];
-	}
-
-	/**
 	 * Ensures that the index exists and is of the expected type.
+	 *
 	 * @param key - the index key to check
 	 * @param expected_type - the expected `IndexType` of the index
-	 * @throws Error if index doesn't exist or has wrong type
+	 * @throws Error if the index doesn't exist or has the wrong type
 	 */
 	#ensure_index(key: string, expected_type: IndexType): void {
 		// checks the definition, not the value — reading a `reactive` index outside
@@ -263,44 +161,9 @@ export class IndexedCollection<
 		const actual_type = this.#index_types.get(key);
 		if (actual_type !== expected_type) {
 			throw new Error(
-				`Index type mismatch: ${key} is a ${actual_type || 'unknown'} index, not a ${expected_type} index`
+				`Index type mismatch: ${key} is ${actual_type ? `a ${actual_type}` : 'an untyped'} index, not a ${expected_type} index`
 			);
 		}
-	}
-
-	/**
-	 * Query an index with parameters.
-	 *
-	 * This method is type-aware when the index has a `query_schema` that defines TQuery.
-	 */
-	query<TResult = any, TQuery = any>(
-		key: TKeySingle | TKeyMulti | TKeyDerived | TKeyDynamic,
-		query: TQuery
-	): TResult {
-		const index = this.indexes[key];
-		if (!index) return undefined as unknown as TResult;
-
-		const index_def = this.#index_definitions.find((def) => def.key === key);
-
-		// Validate input if schema exists
-		if (this.#validate && index_def?.query_schema) {
-			try {
-				index_def.query_schema.parse(query);
-			} catch (error) {
-				console.error(`Query validation failed for index ${key}:`, error);
-			}
-		}
-
-		// Handle different common index types
-		if (index instanceof Map) {
-			return index.get(query); // also covers SvelteMap
-		}
-		if (typeof index === 'function') {
-			return index(query);
-		}
-
-		// For array indexes or other types, return the whole index
-		return index;
 	}
 
 	/**
@@ -321,7 +184,6 @@ export class IndexedCollection<
 
 		by_id.set(item.id, item);
 
-		// Update all indexes
 		this.#update_indexes_for_added_item(item);
 	}
 
@@ -329,8 +191,6 @@ export class IndexedCollection<
 	 * Add multiple items to the collection at once.
 	 */
 	add_many(items: Array<T>): void {
-		if (!items.length) return;
-
 		for (const item of items) {
 			this.add(item);
 		}
@@ -342,8 +202,7 @@ export class IndexedCollection<
 	#update_indexes_for_added_item(item: T): void {
 		for (const def of this.#incremental_definitions) {
 			if (def.onadd && (!def.matches || def.matches(item))) {
-				const result = def.onadd(this.indexes[def.key], item, this);
-				this.indexes[def.key] = result;
+				this.indexes[def.key] = def.onadd(this.indexes[def.key], item, this);
 			}
 		}
 	}
@@ -354,8 +213,7 @@ export class IndexedCollection<
 	#update_indexes_for_removed_item(item: T): void {
 		for (const def of this.#incremental_definitions) {
 			if (def.onremove && (!def.matches || def.matches(item))) {
-				const result = def.onremove(this.indexes[def.key], item, this);
-				this.indexes[def.key] = result;
+				this.indexes[def.key] = def.onremove(this.indexes[def.key], item, this);
 			}
 		}
 	}
@@ -432,7 +290,7 @@ export class IndexedCollection<
 
 		this.by_id.clear();
 
-		// Reset the incremental indexes, reactive ones follow `by_id`
+		// reset the incremental indexes, reactive ones follow `by_id`
 		for (const def of this.#incremental_definitions) {
 			this.indexes[def.key] = def.compute(this);
 		}
@@ -447,60 +305,23 @@ export class IndexedCollection<
 	// TODO `V = any` needs to be typesafe to the key/value pair
 
 	/**
-	 * Get all items matching a multi-indexed property value.
-	 * Type-safe version that uses the TKeyMulti generic parameter.
+	 * Get the items a multi index holds for `value`. The result is read-only:
+	 * it's the index's own bucket, or a shared empty array when there's none,
+	 * so copy it before changing it.
+	 *
+	 * @throws Error if `index_key` isn't a `multi` index
 	 */
-	where<V = any>(index_key: TKeyMulti, value: V): Array<T> {
+	where<V = any>(index_key: string, value: V): ReadonlyArray<T> {
 		this.#ensure_index(index_key, 'multi');
-		return this.indexes[index_key].get(value) || EMPTY_ARRAY;
+		return this.indexes[index_key].get(value) ?? EMPTY_ARRAY;
 	}
 
 	/**
-	 * Get the first N items matching a multi-indexed property value.
-	 * Type-safe version that uses the TKeyMulti generic parameter.
+	 * Get the item a single index holds for `value`, or `undefined`.
+	 *
+	 * @throws Error if `index_key` isn't a `single` index
 	 */
-	first<V = any>(index_key: TKeyMulti, value: V, limit: number): Array<T> {
-		// Handle edge cases with limit
-		if (limit <= 0) return EMPTY_ARRAY;
-
-		const items = this.where<V>(index_key, value);
-		return items.slice(0, limit);
-	}
-
-	/**
-	 * Get the latest N items matching a multi-indexed property value.
-	 * Type-safe version that uses the TKeyMulti generic parameter.
-	 */
-	latest<V = any>(index_key: TKeyMulti, value: V, limit: number): Array<T> {
-		// Handle edge cases with limit
-		if (limit <= 0) return EMPTY_ARRAY;
-
-		const items = this.where<V>(index_key, value);
-		return items.slice(-Math.min(limit, items.length));
-	}
-
-	/**
-	 * Get an item by a single-value index.
-	 * Returns the item or throws if no item is found.
-	 * Type-safe version that uses the TKeySingle generic parameter.
-	 */
-	by<V = any>(index_key: TKeySingle, value: V): T {
-		// This will throw if index doesn't exist or has wrong type
-		this.#ensure_index(index_key, 'single');
-
-		const item = this.indexes[index_key].get(value);
-
-		if (!item) {
-			throw new Error(`Item not found for index ${index_key} with value ${String(value)}`);
-		}
-		return item;
-	}
-
-	/**
-	 * Get an item by a single-value index, returning undefined if not found.
-	 * Type-safe version that uses the TKeySingle generic parameter.
-	 */
-	by_optional<V = any>(index_key: TKeySingle, value: V): T | undefined {
+	by_optional<V = any>(index_key: string, value: V): T | undefined {
 		this.#ensure_index(index_key, 'single');
 		return this.indexes[index_key].get(value);
 	}

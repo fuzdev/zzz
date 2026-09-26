@@ -7,7 +7,7 @@ import { reorder_list } from './list_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { CellJson } from './cell_types.ts';
 import { format_prompt_content } from './prompt_helpers.ts';
-import { HANDLED } from './cell_helpers.ts';
+import { create_collection_decoder } from './cell_helpers.ts';
 
 export interface PromptMessage {
 	role: 'user' | 'system'; // TODO assistant? string? eh?
@@ -42,13 +42,10 @@ export class Prompt extends Cell<typeof PromptJson> {
 
 		this.decoders = {
 			// `Part` is abstract, so each part is created as its concrete subclass
-			parts: (parts) => {
-				if (Array.isArray(parts)) {
-					this.remove_all_parts();
-					this.parts = parts.map((part_json) => Part.create(this.app, part_json));
-				}
-				return HANDLED;
-			}
+			parts: create_collection_decoder(
+				() => this.remove_all_parts(),
+				(json) => this.add_part(Part.create(this.app, json))
+			)
 		};
 
 		this.init();

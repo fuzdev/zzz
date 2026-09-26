@@ -7,7 +7,7 @@ import {
 	TerminalPresetJson,
 	type TerminalPresetJsonInput
 } from './terminal_preset.svelte.ts';
-import { HANDLED } from './cell_helpers.ts';
+import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { CellJson } from './cell_types.ts';
 
@@ -42,15 +42,10 @@ export class TerminalPresets extends Cell<typeof TerminalPresetsJson> {
 		super(TerminalPresetsJson, options);
 
 		this.decoders = {
-			items: (items) => {
-				if (Array.isArray(items)) {
-					this.clear();
-					for (const item_json of items) {
-						this.add(item_json);
-					}
-				}
-				return HANDLED;
-			}
+			items: create_collection_decoder(
+				() => this.clear(),
+				(json) => this.add(json)
+			)
 		};
 
 		this.init();

@@ -17,7 +17,7 @@ import { PageViewmodel } from './page_viewmodel.svelte.ts';
 import { DomainViewmodel } from './domain_viewmodel.svelte.ts';
 import { RepoViewmodel } from './repo_viewmodel.svelte.ts';
 import { HANDLED } from '$lib/cell_helpers.ts';
-import { parse_url_param_uuid } from '$lib/url_params_helpers.ts';
+import { parse_url_param_uuid } from '$lib/nav.ts';
 import { get_unique_name } from '$lib/helpers.ts';
 import { create_sample_projects as create_example_projects } from './example_projects.ts';
 
