@@ -188,8 +188,9 @@ pub struct CompletionHandlerOptions {
 
 /// Callback for sending streaming progress notifications.
 ///
-/// Built by the handler from `ctx.notify` + `progress_token` — providers
-/// invoke it with each chunk and never see the underlying transport.
+/// Built by the handler from `ConnectionRegistry::send_to`, the request's
+/// connection id, and its `progress_token` — providers invoke it with each
+/// chunk and never see the underlying transport.
 pub type ProgressSender = Box<dyn Fn(Value) + Send + Sync>;
 
 // -- Provider enum ------------------------------------------------------------

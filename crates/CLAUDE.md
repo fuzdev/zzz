@@ -8,7 +8,7 @@ OpenAI, and Gemini (all full).
 
 - `zzz_server/` — library (`zzz_server`) + production daemon binary (the `[[bin]]` target is named `zzzd`). `pub async fn run_app(options: RunAppOptions)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, drain). `RunAppOptions` carries: `password_hasher` (production-vs-test swap), `default_addr: SocketAddr` (bind address when `--port`/`ZZZ_PORT` don't supply one; host stays loopback, only the port is overridable), `drain_timeout` (graceful-shutdown drain bound), `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag), `rate_limiters` (the `fuz_auth::RateLimiterMode` every spine limiter is built through — `Enforced` in production, `DisabledForTesting` in the test binary only), `extra_action_specs_factory` (lets the test binary inject `_testing_reset` without putting `fuz_testing` in the production dep graph), and `pre_migration_hook` (fires after pool creation, before migrations — the test binary wires `fuz_testing::reset_db_on_startup_if_env_set`). `src/main.rs` is the thin production entry — constructs `Argon2idHasher`, calls `run_app` with `force_test_actions: false, extra_action_specs_factory: None`.
 - `testing_zzz_server/` — separate test-binary package (its `[[bin]]` target is named `testing_zzzd`) wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) AND `fuz_testing::create_testing_reset_action_spec` (auth-table wipe + fresh-keeper re-seed + consumer-supplied `reset_state(ActionDb)` callback; `credential_types: [DaemonToken]` auth gate). zzz's reset closure ignores the in-tx `ActionDb` handle (its domain state is in-memory, not in PG) — it closes every zzz workspace through the production close path (`handlers::workspace::workspace_close_all` — filers stopped, `ScopedFs` roots removed, `workspace_changed` broadcast, restoring the boot-time scope), calls `pty_manager.kill_all()` (non-destructive — manager stays usable across tests), and wipes the optional `ZZZ_TESTING_SCRATCH_DIR`. Default port 4462 (production is 4460). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. It is zzz's test binary, spawned by the cross-process integration tests.
-- `xtask/` — dev automation (`cargo xtask <cmd>`, pure `std` + `fuz_audit`, no extra deps). `dev` loads `.env.development`, builds `zzz_server`, checks port 4461 is free, then runs `zzzd` (port 4461) + the Vite frontend (`node_modules/.bin/vite dev` run directly — `npx` doesn't forward signals; 5173, proxying `/api`), with the inherited env overlaid by `.env.development` — the file's non-blank values win (the opposite of the CLI's rule; a blank `KEY=` line is unset, never clearing an exported value), printing each inherited key it overrides (never the value), holding both children in guards that `SIGTERM` (then `SIGKILL`) and reap the survivor on every exit path; `dev-setup` / `prod-setup` create `.env.development` / `.env.production` from the `.example` templates (mode `0600`, `create_new`) with a freshly generated `SECRET_FUZ_COOKIE_KEYS` — the templates ship the key empty; `check-release` (the dep-graph audit — sanity check #2 of the test-binary pattern) delegates its work to `fuz_audit::run_check_release_cli()`. Dispatch and usage live in xtask itself: bare `cargo xtask` / `help` / `-h` / `--help` print the full subcommand list (exit 0); an unknown subcommand prints an error + usage (exit 1). Marked `[package.metadata.fuz_audit] dev_only = true` so xtask itself is excluded from the production scan. Replaces the former Deno orchestration (`deno.json` + `scripts/*.ts`).
+- `xtask/` — dev automation (`cargo xtask <cmd>`, pure `std` + `fuz_audit`, no extra deps). `dev` loads `.env.development`, builds `zzz_server`, checks port 4461 is free, then runs `zzzd` (port 4461) + the Vite frontend (`node_modules/.bin/vite dev` run directly — `npx` doesn't forward signals; 5173, proxying `/api`), with the inherited env overlaid by `.env.development` — the file's non-blank values win (the opposite of the CLI's rule; a blank `KEY=` line is unset, never clearing an exported value), printing each inherited key it overrides (never the value), holding both children in guards that `SIGTERM` (then `SIGKILL`) and reap the survivor on every exit path; `dev-setup` / `prod-setup` create `.env.development` / `.env.production` from the `.example` templates (mode `0600`, `create_new`) with a freshly generated `SECRET_FUZ_COOKIE_KEYS` — the templates ship the key empty; `check-release` (the dep-graph audit — sanity check #2 of the test-binary pattern) delegates its work to `fuz_audit::run_check_release_cli()`. Dispatch and usage live in xtask itself: bare `cargo xtask` / `help` / `-h` / `--help` print the full subcommand list (exit 0); an unknown subcommand prints an error + usage (exit 1). Marked `[package.metadata.fuz_audit] dev_only = true` so xtask itself is excluded from the production scan.
 - `zzz/` — Rust CLI (argh). `daemon start/stop/status`, `status`, `init`, `open` (the default command — path resolution, daemon discovery, detached auto-start, browser launch), and `version` (+ the `--version`/`-v` switch). Modules: `daemon_launch.rs` (the `zzzd` command: binary, `--port`, `--static-dir`, cwd `~/.zzz`, and the env overlay from `~/.zzz/.env` + defaults, with required-var / static-dir / port validation), `daemon_lifecycle.rs` (`daemon.json` v2 I/O with ownership-checked removal and older-record reporting, the proxy-free `/health` probe on `127.0.0.1`, the serving wait, shutdown-signal handling, `stop_child` SIGTERM → SIGKILL → reap, terminate), `procfs.rs` (Linux `/proc` identity: boot id, pid start time, listening-socket ownership), `env_file.rs` (the dotenv parser — std-only, also compiled into xtask via `#[path]`; its module doc lists where it diverges from `dotenv`). `zzz status` / `zzz daemon status` exit 0 when running, 1 when alive but not responding, 3 when not running. See the root CLAUDE.md § CLI for the launch rules. Tests: unit tests per module, `tests/cli_daemon.rs` (infra-free: status + stale/reused-pid records, launch validation, early child exit, `init` file modes, full foreground + detached lifecycles and signals during startup against a `sh` + `python3` stand-in daemon — a visible SKIPPED line without `python3` — with a drop guard that kills stand-ins on failure), and `tests/cli_e2e.rs` (full `daemon start` ↔ live `testing_zzzd` lifecycle, gated behind `ZZZ_TEST_E2E=1` + Postgres, self-skips otherwise). Build it with `cargo build -p zzz`.
 
 AI provider system feature-complete for all three providers (Anthropic,
@@ -21,8 +21,8 @@ boot-compiled `ActionRegistry` dispatch path. A single canonical
 from fuz_auth's `auth_adapter::build_auth_spec_set`, the zzz-specific
 workspace / filesystem / terminal / provider specs from
 `zzz_action_specs/` (handlers in `handlers/`), and the admin audit-log
-SSE stream from `fuz_realtime::audit_stream_router`. `handlers/` holds only
-`App` state plus a `broadcast` shim over `App.realtime` (socket revocation
+SSE stream from `fuz_realtime::audit_stream_router`. Besides the handlers,
+`handlers/` holds `App` state and a `broadcast` shim over `App.realtime` (socket revocation
 lives on the spine's `ConnectionRegistry` — see Auth below). RPC methods:
 `ping`, `session_load`, `workspace_*`, `diskfile_*`, `directory_create`,
 `terminal_*`, `provider_load_status`, `completion_create`,
@@ -58,7 +58,7 @@ The sibling Rust workspace must be checked out alongside this repo:
 
 ```
 ~/dev/zzz/                  (this repo)
-<sibling Rust workspace>/   (path deps: fuz_sys, fuz_pty, plus the 5 spine crates — fuz_db, fuz_auth, fuz_http, fuz_realtime, fuz_actions)
+<sibling Rust workspace>/   (path deps: fuz_sys, fuz_pty, the 5 spine crates — fuz_db, fuz_auth, fuz_http, fuz_realtime, fuz_actions — plus fuz_testing for the test binary and fuz_audit for xtask)
 ```
 
 If a path dep is missing, `cargo build` will fail with
@@ -80,14 +80,16 @@ cargo build --workspace
 cargo clippy -p zzz_server        # workspace lints: pedantic + nursery
 cargo xtask check-release         # audit: no production binary depends on fuz_testing / fuz_audit
 
-# Run (requires DATABASE_URL and SECRET_FUZ_COOKIE_KEYS)
+# Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS, and FUZ_ALLOWED_ORIGINS)
 DATABASE_URL=postgres://localhost/zzz \
 SECRET_FUZ_COOKIE_KEYS=dev-only-not-for-production-use-000 \
+FUZ_ALLOWED_ORIGINS='http://localhost:*' \
 ./target/debug/zzzd --port 4460
 
 # Test binary (cross-process integration tests — fast argon2)
 DATABASE_URL=postgres://localhost/zzz_test \
 SECRET_FUZ_COOKIE_KEYS=dev-only-not-for-production-use-000 \
+FUZ_ALLOWED_ORIGINS='http://localhost:*' \
 ./target/debug/testing_zzzd
 
 # Quick smoke test
@@ -110,13 +112,15 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 ### Optional Environment Variables
 
 - `FUZ_BOOTSTRAP_TOKEN_PATH` — Path to bootstrap token file
-- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths
+- `PUBLIC_ZZZ_DIR` — App directory (default `.zzz`, relative to the working directory)
+- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (no `~` expansion)
 - `ZZZ_PORT` — Server port (default 4460, CLI overrides)
 - `ZZZ_STATIC_DIR` — Static file directory (must be a directory, or boot fails)
-
-A blank (empty or whitespace) path var reads as unset — `PUBLIC_ZZZ_DIR` falls back to `.zzz`, never `/` (`resolve_dir` errors on an empty or unresolvable path rather than collapsing to `/`).
+- `SECRET_ANTHROPIC_API_KEY` / `SECRET_OPENAI_API_KEY` / `SECRET_GOOGLE_API_KEY` — provider keys, read once at boot
 - `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live dispatchers (mirrors Zod `z.stringbool()`: `true`/`1`/`yes`/`on`/`y`/`enabled` opt in; `false`/`0`/`no`/`off`/`n`/`disabled` or unset opt out; case-insensitive; anything else errors at startup. Integration tests only — production must leave unset)
 - `ZZZ_TRUSTED_PROXIES` — Comma-separated trusted-proxy entries (IPs and CIDR ranges, e.g. `127.0.0.1,10.0.0.0/8,fe80::/10`). Unset/empty → no XFF trust → `client_ip` falls back to the TCP peer IP on every request (direct-bind behavior). Set when deploying behind nginx / a cloud LB so the trusted-proxy middleware walks `X-Forwarded-For` right-to-left and resolves the real client IP for rate limiting + `audit_log.ip`. Parsed eagerly at startup — invalid entries (malformed IPs, non-aligned CIDRs, out-of-range prefixes) fail server boot. Mirrors fuz_app's `http/proxy.ts`.
+
+A blank (empty or whitespace) path var reads as unset — `PUBLIC_ZZZ_DIR` falls back to `.zzz`, never `/` (`resolve_dir` errors on an empty or unresolvable path rather than collapsing to `/`).
 
 ## Endpoints
 
@@ -166,10 +170,9 @@ orientation; the spine crates are authoritative:
    `RunAppOptions::daemon_token_state` is `None` for `zzz_server`'s own
    `main.rs`. Only `testing_zzz_server` supplies one, so `_testing_reset` can
    authenticate as keeper; it writes `{zzz_dir}/run/daemon_token` for the
-   cross-process harness to read. Nothing else ever sent the header — a
-   browser request carries `Origin`/`Referer`, which `is_browser_context`
-   refuses for this credential — so production mounted a keeper-grade secret
-   with no caller. The spine keeps the consuming half (constant-time compare,
+   cross-process harness to read. No production caller exists — a browser
+   request carries `Origin`/`Referer`, which `is_browser_context` refuses for
+   this credential. The spine keeps the consuming half (constant-time compare,
    keeper resolution, `CredentialType::DaemonToken`) in `fuz_auth`; state is
    protected by `parking_lot::RwLock`.
 
@@ -181,16 +184,17 @@ orientation; the spine crates are authoritative:
    bearer and daemon token connections have `None`).
 
 7. **Per-action auth** — these levels are the enforcement shorthand for the
-   four-axis `auth` record on each TS spec (`{account, actor, roles?,
-credential_types?}` or `null`; see `src/lib/action_specs.ts` and the
-   generated `docs/reference.md`):
-   - `public` — `auth: null` or `{account: 'none', actor: 'none'}`; no auth required (`ping`)
+   `auth` record on each TS spec (fuz_app's `RouteAuth`: `{account, actor,
+   roles?, credential_types?, required_scope?}`; see `src/lib/action_specs.ts`
+   and the generated `docs/reference.md`):
+   - `public` — `{account: 'none', actor: 'none'}`; no auth required (`ping`)
    - `authenticated` — `{account: 'required', actor: 'none'}`; valid session or bearer token required (workspace_*, session_load, etc.)
    - `keeper` — `{account: 'required', actor: 'required', roles: ['keeper'], credential_types: ['daemon_token']}`; requires `DaemonToken` credential type AND keeper role grant. No zzz action uses this shape today — the daemon-token credential is test-binary-only (see Auth §5), so the only keeper-gated specs are `fuz_testing`'s `_testing_*` backdoors. API tokens and session cookies cannot access keeper actions even if the account has the keeper role grant.
 
-8. **Bootstrap** — `POST /bootstrap` creates first admin account with keeper
-   - admin role grants. Reads token from `FUZ_BOOTSTRAP_TOKEN_PATH`, timing-safe
-     compare, Argon2 password hashing, all in a transaction with bootstrap_lock.
+8. **Bootstrap** — `POST /api/account/bootstrap` creates the first admin
+   account with keeper + admin role grants. Reads the token from
+   `FUZ_BOOTSTRAP_TOKEN_PATH`, timing-safe compare, Argon2 password hashing,
+   all in a transaction with bootstrap_lock.
 
 9. **Origin verification** — `FUZ_ALLOWED_ORIGINS` patterns checked on requests
    with an `Origin` header. Supports exact match, wildcard port
@@ -219,8 +223,8 @@ credential_types?}` or `null`; see `src/lib/action_specs.ts` and the
     session cookie with enumeration prevention via dummy hash),
     `POST /api/account/logout` (invalidate session + close WS connections),
     `POST /api/account/password` (change password, revoke all sessions + API
-    tokens, close all WS connections). Session listing and revocation moved
-    to JSON-RPC: `account_verify`, `account_session_list`,
+    tokens, close all WS connections). Session listing and revocation are
+    JSON-RPC: `account_verify`, `account_session_list`,
     `account_session_revoke`, `account_session_revoke_all`,
     `account_token_create`, `account_token_list`, `account_token_revoke`
     (all scoped to the authenticated account), plus the admin role-gated
@@ -275,7 +279,7 @@ conform to the shared fuz_app contract. The tests live in
   silent-null for missing terminal IDs.
 - **`provider.cross.test.ts`** — `provider_load_status` (no-key status) plus `session_load`
   (zzz_dir file listing with contents + recursive subdirectory walk).
-- **`completion.cross.test.ts`** — `completion_create` invalid-provider rejection.
+- **`completion.cross.test.ts`** — `completion_create` invalid-provider and blank-prompt rejection.
 - **`peer_ping_ws.cross.test.ts`** — server-initiated `peer/ping` round-trip
   (client invokes, server pings back over the same socket, client responder
   echoes, server validates) plus security negatives. Invokes fuz_app's shared
@@ -325,7 +329,7 @@ crates/zzz_server/src/
 ├── lib.rs            # `run_app(RunAppOptions)` — full lifecycle: env/config, DB pool + migrations, spine state construction (keyring, audit emitter, connection + SSE registries, rate limiters), `ActionRegistry::compile`, file watchers, route composition, graceful shutdown
 ├── main.rs           # Thin production entry — constructs `Argon2idHasher`, calls `run_app`
 ├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`)
-│   ├── mod.rs        # `App` long-lived state (workspaces, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `ProviderManager`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
+│   ├── mod.rs        # `App` long-lived state (workspaces, `workspace_lifecycle`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `ProviderManager`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
 │   ├── core.rs       # ping, session_load, _testing_emit_notifications
 │   ├── filesystem.rs # diskfile_update, diskfile_delete, directory_create
 │   ├── provider.rs   # provider_load_status, completion_create
@@ -353,15 +357,17 @@ crates/zzz_server/src/
 ```
 
 Auth, HTTP / origin / proxy, realtime (WS + SSE), dispatch (`ActionRegistry`
-
-- `perform_action`), and DB pool / migrations all live in the spine crates
-  (`fuz_auth` / `fuz_http` / `fuz_realtime` / `fuz_actions` / `fuz_db`) —
-  `zzz_server` composes them in `run_app`. `handlers/` holds only `App` state
-  plus a `broadcast` shim over `App.realtime`; socket revocation is the
-  spine `ConnectionRegistry`'s `SocketRevoker` (see Auth item 10).
+and `perform_action`), and DB pool / migrations all live in the spine crates
+(`fuz_auth` / `fuz_http` / `fuz_realtime` / `fuz_actions` / `fuz_db`) —
+`zzz_server` composes them in `run_app`. `handlers/` holds `App` state, a
+`broadcast` shim over `App.realtime`, and the per-domain handlers; socket
+revocation is the spine `ConnectionRegistry`'s `SocketRevoker` (see Auth
+item 10).
 
 **App + dispatch**: `App` (in `handlers/mod.rs`) holds zzz's long-lived,
-non-spine state — `workspaces` (`RwLock<HashMap>`), `db_pool`, `ScopedFs`,
+non-spine state — `workspaces` (`RwLock<HashMap>`), `workspace_lifecycle`
+(the `tokio::sync::Mutex` serializing `workspace_open` / `workspace_close`),
+`db_pool`, `ScopedFs`,
 `zzz_dir`, `scoped_dirs`, `FilerManager` (per-watcher ignore config, event
 debouncing, in-memory file index, lifetime tracking — permanent for
 `zzz_dir`/`scoped_dirs`, workspace-scoped for `workspace_open`),
@@ -444,10 +450,10 @@ metadata contract, the bootstrap success/failure audit rows, and the
 - 5 zzz-domain `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, per-path debounced broadcasts (80ms quiet, capped at 500ms) with immediate index updates (delete+create inside the window becomes `change`, create+delete becomes a bare `delete`), every event resolved by `lstat` so late or reordered removes can't drop an existing file, rename-aware (old path `delete`, new path `add`), ignored paths filtered before the bounded event channel with a coalesced root rescan on overflow, per-watcher ignore config, in-memory file index returned by `session_load` and `workspace_open`, symlinks skipped; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast), `completion_progress` (streaming completion chunks to requesting WS connection); the spine's role-grant-offer bundle carries its own notification set (`role_grant_offer_received` / `_retracted` / `_accepted` / `_declined` / `_supersede`)
 - AI providers: Anthropic, OpenAI, and Gemini all fully implemented (non-streaming + SSE streaming)
 - No batch request support (JSON arrays)
-- `/api/account/signup` is mounted via `fuz_auth::signup_routes`. Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting via `app_settings_update` to enable open signup. The cross-process test binary opts into `open_signup: true` at startup via `app_settings_patch` so per-test `mint_account` can sign up without invites. `app_settings` is loaded per-request today; a cached `Arc<RwLock<AppSettings>>` shared with the future admin `app_settings_update` handler is planned.
+- `/api/account/signup` is mounted via `fuz_auth::signup_routes`. Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting via `app_settings_update` to enable open signup. The cross-process test binary opts into `open_signup: true` at startup via `app_settings_patch` so per-test `mint_account` can sign up without invites. `app_settings` is loaded from the DB per signup request (no cache).
 - Token management is JSON-RPC only (`account_token_create` / `account_token_list` / `account_token_revoke`) — no REST token routes
 - Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`, wired to the spine `AuditEmitter` via `fuz_realtime::register_audit_sse_listener` alongside the WS socket-revocation listeners. Wire shape matches fuz_app's `audit_log_sse`; the `sse.cross.test.ts` suite verifies it. Close-on-revoke dispatches on the `RevocationScope` each event declares in `fuz_auth`'s `AUDIT_EVENT_SPECS` — the same column the WS socket-revocation listener reads, so the two halves can't drift: `session_revoke` (session-hash-scoped) / `token_revoke` (token-scoped) / `session_revoke_all` / `token_revoke_all` / `password_change` / `logout` / `account_delete` / `account_purge` (account-wide) / `role_grant_revoke` (role-matched). `role_grant_revoke` is the one deliberate difference from the WS half, which omits it because `perform_action` re-authorizes every message. The route itself is session-only (`AuditStreamRouteState::credential_gate`), so a bearer never opens a stream here in the first place
-- Login/password rate limiting is **always on** (matching `fuz_forge_server` + `mageguild_server` and the fuz defaults): per-IP (5 attempts / 15 min) + per-account (10 / 30 min) sliding windows fire on `/login` and `/password`; 429 carries `{error: 'rate_limit_exceeded', retry_after}` plus a `Retry-After` header. Per-IP key is the resolved client IP from `proxy::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when running behind a reverse proxy so the bucket keys on the originating client rather than the proxy. The `testing_zzz_server` binary disables it via `RunAppOptions::rate_limiters: RateLimiterMode::DisabledForTesting` so the cross-backend auth suite's repeated logins don't trip the bucket; a process that nulls any limiter prints a startup banner saying so
+- Login/password rate limiting is **always on** (matching `fuz_forge_server` + `mageguild_server` and the fuz defaults): per-IP (5 attempts / 15 min) + per-account (10 / 30 min) sliding windows fire on `/login` and `/password`; 429 carries `{error: 'rate_limit_exceeded', retry_after}` plus a `Retry-After` header. Per-IP key is the resolved client IP from `fuz_http::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when running behind a reverse proxy so the bucket keys on the originating client rather than the proxy. The `testing_zzz_server` binary disables it via `RunAppOptions::rate_limiters: RateLimiterMode::DisabledForTesting` so the cross-backend auth suite's repeated logins don't trip the bucket; a process that nulls any limiter prints a startup banner saying so
 - Request bodies are capped at `fuz_http::DEFAULT_BODY_LIMIT_BYTES` (1 MiB) on `/api/rpc` + the account/bootstrap/signup routers (the shared fuz default, same as the other spine consumers). `diskfile_update` content rides the RPC body, so a single write is bounded to 1 MiB; a streaming content-addressed route is the deferred path for larger / binary blobs. The WS upgrade and static fallback are not body-capped
 
 ## Design Decisions
@@ -462,10 +468,14 @@ metadata contract, the bootstrap success/failure audit rows, and the
 - **Password hashing**: Argon2id via `argon2` crate (bootstrap, login, password change),
   offloaded to `tokio::task::spawn_blocking` to avoid blocking the async runtime.
 - **Dispatch is async**: filesystem handlers (`diskfile_update`, etc.) use
-  `tokio::fs` async I/O. Workspace handlers remain sync (no await points).
-- **`parking_lot::RwLock`** for sync handlers (workspaces, scoped-fs); no
-  poisoning. Async handlers (filer, pty, providers) use `tokio::sync::RwLock`
-  where a guard is held across an await — scope sync guards before await points.
+  `tokio::fs` async I/O. `workspace_open` / `workspace_close` canonicalize
+  asynchronously and serialize on `App::workspace_lifecycle` (a
+  `tokio::sync::Mutex`), since each spans the workspaces map, `ScopedFs`, and
+  the workspace filer across await points.
+- **`parking_lot::RwLock`** for short synchronous sections (the workspaces
+  map, `ScopedFs` roots); no poisoning. The async managers (filer index,
+  PTY terminals, providers) use `tokio::sync::RwLock` — scope sync guards
+  before await points.
 - **PTY terminals**: `fuz_pty` as a native crate dependency (no FFI
   indirection). `PtyManager` in `App` runs one task per terminal that
   exclusively owns the PTY master (`tokio::io::unix::AsyncFd` over a
@@ -521,11 +531,14 @@ metadata contract, the bootstrap success/failure audit rows, and the
   `load_status` cache write. `complete()` clones the `reqwest::Client`
   (internally `Arc`'d) and releases the lock before HTTP calls, so a
   long-running streaming response doesn't hold it against a status refresh.
-  SSE parsing is manual with `\r\n` normalization per RFC 8895.
+  SSE parsing is manual (`provider/sse.rs`: line endings normalized, split
+  UTF-8 reassembled, the final event flushed at end of stream).
 - **Dispatcher transaction wrap**: `fuz_actions::perform_action` wraps
   `side_effects: true` actions in a `tokio_postgres` transaction (commit on
   `Ok`, rollback on `Err`) and drains post-commit pending effects, so paired
-  writes commit atomically and read-only actions skip the pool entirely.
+  writes commit atomically; read-only actions get a pooled client with no
+  transaction. Either way the handler holds a pooled connection for its whole
+  run — a long streaming `completion_create` included.
   zzz's `handlers` functions receive the `ActionContext` DB handle and
   stay transaction-agnostic — the wrap is the spine's concern.
 
@@ -539,8 +552,8 @@ boot-compiled `ActionRegistry`; account / bootstrap / signup REST come
 from fuz_auth's routers; the admin audit-log SSE stream
 (`GET /api/admin/audit/stream`) comes from
 `fuz_realtime::audit_stream_router` + `register_audit_sse_listener`.
-`handlers/` holds only `App` state + a `broadcast` shim over
-`App.realtime`.
+Besides the handlers, `handlers/` holds `App` state + a `broadcast` shim
+over `App.realtime`.
 
 **AI providers** (Anthropic, OpenAI, and Gemini all complete):
 

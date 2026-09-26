@@ -17,10 +17,12 @@ cargo xtask dev         # build the Rust backend + run it with the Vite frontend
 
 `cargo xtask dev` rebuilds `zzz_server` (`cargo build -p zzz_server`) on every run,
 binds the backend on `4461`, and serves the Vite frontend on `5173` (proxying
-`/api` → `4461`). Browse to `localhost:5173`.
+`/api` → `4461`; the WebSocket connects to `4461` directly). Browse to
+`localhost:5173`.
 
 Optionally add API keys to `.env.development` for remote providers (Anthropic,
-OpenAI, Google), or set them at runtime on `/capabilities`.
+OpenAI, Google). Keys are read from the environment only — restart the dev
+server after changing one; `/capabilities` shows each provider's status.
 
 ### PTY terminals
 
@@ -86,11 +88,11 @@ production the SPA and API share one origin, so `.env.production` leaves the
 `PUBLIC_ZZZ_SERVER_*` host/port and `PUBLIC_ZZZ_WEBSOCKET_URL` empty: the UI
 derives its API and WebSocket URLs from the page's origin, so one build works
 on whatever port `zzzd` serves it from. `gro build` needs `.env.production` to
-exist — the `PUBLIC_ZZZ_*` names are read at build time. An older
-`.env.production` still carries fixed server URLs: set
+exist — the `PUBLIC_ZZZ_*` names are read at build time. Keep
 `PUBLIC_ZZZ_SERVER_PROTOCOL`, `PUBLIC_ZZZ_SERVER_HOST`,
-`PUBLIC_ZZZ_SERVER_PORT`, and `PUBLIC_ZZZ_WEBSOCKET_URL` to empty values (keep
-the lines) so the build uses the page's origin.
+`PUBLIC_ZZZ_SERVER_PORT`, and `PUBLIC_ZZZ_WEBSOCKET_URL` present but empty:
+a non-empty `PUBLIC_ZZZ_SERVER_PORT` or `PUBLIC_ZZZ_WEBSOCKET_URL` pins the
+build to that fixed server instead of the page's origin.
 
 ### Through the `zzz` CLI
 
@@ -126,12 +128,12 @@ fails if any output is stale.
 
 ## File Naming
 
-- `snake_case.ts` — TypeScript modules. Example: `helpers.ts`, `action_dispatcher.ts`
+- `snake_case.ts` — TypeScript modules. Example: `helpers.ts`, `frontend_action_handlers.ts`
 - `snake_case.svelte.ts` — Svelte 5 reactive state. Example: `chat.svelte.ts`
 - `PascalCase.svelte` — Svelte components. Example: `ChatView.svelte`
 - `snake_case.test.ts` — Test files (in `src/test/`). Example: `cell.svelte.base.test.ts`
-- `*_types.ts` — Type definitions. Example: `action_types.ts`
-- `*_helpers.ts` — Utility functions. Example: `jsonrpc_helpers.ts`
+- `*_types.ts` — Type definitions. Example: `cell_types.ts`
+- `*_helpers.ts` — Utility functions. Example: `diskfile_helpers.ts`
 
 ### Component Naming
 
@@ -193,16 +195,17 @@ export const my_action_action_spec = {
 	method: 'my_action',
 	kind: 'request_response',
 	initiator: 'frontend',
-	auth: null, // public; or {account: 'required', actor: 'none'} to require a session
-	side_effects: true,
+	auth: { account: 'required', actor: 'none' }, // or {account: 'none', actor: 'none'} for public
+	side_effects: true, // false for read-only
 	input: z.strictObject({
 		message: z.string()
 	}),
 	output: z.strictObject({
 		result: z.string()
 	}),
-	async: true
-} satisfies ActionSpecUnion;
+	async: true,
+	description: 'What this action does.'
+} satisfies RequestResponseActionSpec;
 ```
 
 2. Run `gro gen` to regenerate handler types.
@@ -242,28 +245,33 @@ export const my_long_job_action_spec = {
   kind: 'request_response',
   initiator: 'frontend',
   auth: {account: 'required', actor: 'none'},
+  side_effects: true,
   streams: 'my_long_job_progress', // name of the companion notification
   input: z.strictObject({...}),
   output: z.null(),
   async: true,
-} satisfies ActionSpecUnion;
+  description: 'Run a long job, streaming progress.',
+} satisfies RequestResponseActionSpec;
 
 export const my_long_job_progress_action_spec = {
   method: 'my_long_job_progress',
   kind: 'remote_notification',
   initiator: 'backend',
+  auth: null,
+  side_effects: true,
   input: z.strictObject({...}),
-  async: false,
-} satisfies ActionSpecUnion;
+  output: z.void(),
+  async: true,
+  description: 'Streams a progress chunk for `my_long_job`.',
+} satisfies RemoteNotificationActionSpec;
 ```
 
 The backend handler sends progress chunks to the originating socket
-(request-scoped) and terminates early when the socket closes; `completion_create`
-
-- `completion_progress` is the worked example. Broadcasts to all connected
-  sockets (server-wide events like `filer_change` or `workspace_changed`) go
-  through the backend's realtime connection registry. See ../crates/CLAUDE.md
-  for the Rust handler patterns.
+(request-scoped) and terminates early when the socket closes;
+`completion_create` + `completion_progress` is the worked example. Broadcasts
+to all connected sockets (server-wide events like `filer_change` or
+`workspace_changed`) go through the backend's realtime connection registry.
+See ../crates/CLAUDE.md for the Rust handler patterns.
 
 ### Adding a New Route
 
@@ -400,8 +408,7 @@ test('all model provider_names exist in providers_default', () => {
 ### Test File Naming
 
 - `module.test.ts` — `action_event.test.ts`
-- `module.aspect.test.ts` — `cell.svelte.base.test.ts`, `cell.svelte.decoders.test.ts`
-- `module.aspect.test.ts` — `indexed_collection.svelte.queries.test.ts`
+- `module.aspect.test.ts` — `cell.svelte.base.test.ts`, `cell.svelte.decoders.test.ts`, `indexed_collection.svelte.queries.test.ts`
 
 ## Code Style
 

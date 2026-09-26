@@ -19,8 +19,8 @@ serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 # Shared daemon-lifecycle primitives — PID liveness (`/proc`), signal
 # forwarding, RFC-3339 timestamps, and crash-safe atomic writes. The CLI keeps
-# its own `DaemonInfo` (the fuz_app TS v1 wire shape), but routes the OS-level
-# plumbing through fuz_sys rather than re-deriving it.
+# its own `DaemonInfo` (fuz_app's shape plus process identity, v2), but routes
+# the OS-level plumbing through fuz_sys rather than re-deriving it.
 fuz_sys = { workspace = true, features = ["tls"] }
 
 [dev-dependencies]

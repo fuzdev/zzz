@@ -178,10 +178,9 @@ pub async fn workspace_open(
     }
 
     if is_new {
-        // Broadcast the workspace_changed notification. Uses the spine
-        // `notify_to_string` builder + the legacy `App.broadcast` path —
-        // the spine `ConnectionRegistry` broadcast swap lands in a later
-        // batch that retires the legacy `connections` map.
+        // Broadcast the workspace_changed notification (the spine
+        // `notify_to_string` builder + the `App.broadcast` shim over the
+        // spine `ConnectionRegistry`).
         let params_value = serde_json::to_value(WorkspaceChangedParams {
             change_type: "open",
             workspace: &workspace,

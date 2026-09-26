@@ -42,7 +42,7 @@ use fuz_realtime::ConnectionRegistry;
 
 /// Server state shared across all requests.
 ///
-/// Constructed once in `main`, wrapped in `Arc`, passed into the spec
+/// Constructed once in `run_app`, wrapped in `Arc`, passed into the spec
 /// builders + the spine RPC / WS route states.
 pub struct App {
     pub workspaces: RwLock<HashMap<String, WorkspaceInfo>>,
@@ -62,20 +62,22 @@ pub struct App {
     pub pty_manager: PtyManager,
     /// AI provider manager (Anthropic, `OpenAI`, Gemini).
     pub provider_manager: ProviderManager,
-    /// Default completion options.
+    /// Completion options for every request — always
+    /// `CompletionOptions::default()`, since `completion_create` accepts no
+    /// options.
     pub completion_options: CompletionOptions,
     /// Register `_testing_*` actions on live dispatchers. Set by integration
     /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave false.
-    /// Read in `main.rs` at registry-compile time to conditionally
+    /// Read in `run_app` at registry-compile time to conditionally
     /// extend the spec set via `zzz_action_specs::build_testing_specs`.
     pub enable_test_actions: bool,
     /// `Arc<ConnectionRegistry>` — the spine's connection-tracking
-    /// registry. Sole connection store on `App`; drives the
-    /// `broadcast` / `close_sockets_for_*` shims below.
+    /// registry. Sole connection store on `App`; drives the `broadcast`
+    /// shim below.
     pub realtime: Arc<ConnectionRegistry>,
-    /// Compiled spine action registry. Holds protocol +
-    /// `auth_adapter::build_account_specs` + `build_admin_specs` plus the
-    /// zzz-specific specs from `zzz_action_specs::build_*_specs`.
+    /// Compiled spine action registry. Holds the protocol specs +
+    /// `auth_adapter::build_auth_spec_set` plus the zzz-specific specs from
+    /// `zzz_action_specs::build_*_specs`.
     ///
     /// **Wrapped in `OnceLock`** so it can be set after `Arc<App>` is
     /// constructed — the spec builders close over `Arc<App>`, so the

@@ -35,7 +35,7 @@ this repo — make the edits and stop, the user commits.
 
 ## Development Stage
 
-Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, daemon tokens, bootstrap flow); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) is in-memory.
+Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, bootstrap flow; daemon tokens in the test binary only); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) is in-memory.
 
 The Rust backend (`crates/zzz_server`, Axum) provides the full auth stack, filesystem, terminals, PostgreSQL, bootstrap, AI providers with SSE streaming, audit emission with listener fan-out, trusted-proxy `client_ip` resolution, login rate limiting (always on; disabled in the test binary), Origin allowlist on every REST + RPC + WS handler. Auth, HTTP, realtime (WS + SSE), dispatch, and DB all come from the spine crates (`fuz_db`, `fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`); a single `/api/rpc` + `/api/ws` serves the boot-compiled `fuz_actions::ActionRegistry`, with the zzz-specific handlers (workspace, filesystem, terminal, provider, `completion_create`) in `handlers/` and the admin audit-log SSE stream at `GET /api/admin/audit/stream`. AI providers are Anthropic, OpenAI, and Gemini, all with non-streaming and SSE streaming completions.
 
@@ -64,8 +64,8 @@ directory. `zzz init` creates it (mode `0700`) with `config.json` (the port),
 (so `~/.zzz/.zzz/`) — never overwriting an existing file. The CLI spawns
 and discovers the `zzzd` daemon binary (the `[[bin]]` target of the
 `zzz_server` crate) — `ZZZ_SERVER_BIN`, else beside the CLI executable, else
-`~/.zzz/bin/zzzd`, with a dev fallback to `./target/debug/zzzd`
-(`ZZZ_SERVER_BIN` must `exec` the server, not fork it — the listening socket
+`~/.zzz/bin/zzzd`, with a dev fallback to `./target/debug/zzzd`, then
+`zzzd` on `$PATH` (`ZZZ_SERVER_BIN` must `exec` the server, not fork it — the listening socket
 is checked on the spawned pid). Build both
 with `cargo`: `cargo build -p zzz` (CLI) and `cargo build -p zzz_server`
 (daemon → `zzzd`).
@@ -130,10 +130,10 @@ its parent directory.
 crates/                               # Rust workspace
 │   ├── CLAUDE.md                     # Rust backend docs
 │   ├── zzz/                          # Rust CLI (argh) — daemon lifecycle, init, open, version
-│   ├── xtask/                        # Dev automation: `cargo xtask dev` (build + run zzzd + Vite), `dev-setup`/`prod-setup` (env files), `check-release` (dep-graph audit — sanity check #2 of the test-binary pattern). Replaces the former Deno `scripts/*.ts`
+│   ├── xtask/                        # Dev automation: `cargo xtask dev` (build + run zzzd + Vite), `dev-setup`/`prod-setup` (env files), `check-release` (dep-graph audit — sanity check #2 of the test-binary pattern)
 │   ├── testing_zzz_server/           # Test-mode binary — wires `fuz_testing::TestingArgon2idHasher` for fast cross-process integration tests. **Never ships in a release.**
 │   └── zzz_server/                   # Axum JSON-RPC server — full spine consumer (single `/api/rpc` + `/api/ws` on `fuz_actions::ActionRegistry`)
-│       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast` shim + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB (and the JSON-RPC `notification` builder + error constructors + socket revocation) all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
+│       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast` shim + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`, `utf8_stream.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB (and the JSON-RPC `notification` builder + error constructors + socket revocation) all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
 src/
 ├── lib/                          # Published as @fuzdev/zzz
 │   ├── *.svelte.ts               # Cell state classes
@@ -304,14 +304,15 @@ its JSON-RPC responses conform to the shared fuz_app contract. They cover
 the full surface — including the admin role-gated `admin_session_revoke_all` /
 `admin_token_revoke_all` handlers and trusted-proxy `client_ip` resolution
 (the `cross_backend_rust_proxy` project). `zzz_server`'s own `#[cfg(test)]`
-unit tests live in the provider modules (`provider/common.rs`,
-`provider/sse.rs`, etc.); auth, origin, and trusted-proxy pure functions are
-unit-tested in the spine crates (`fuz_auth`, `fuz_http`).
+unit tests sit beside the code they cover (e.g. the provider modules,
+`filer.rs`, `pty_manager.rs`, `scoped_fs.rs`); auth,
+origin, and trusted-proxy pure functions are unit-tested in the spine crates
+(`fuz_auth`, `fuz_http`).
 
 ```bash
 cargo build -p zzz_server                                                 # Build
 cargo clippy -p zzz_server                                                # Lint
-./target/debug/zzzd --port 4460                                           # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS)
+./target/debug/zzzd --port 4460                                           # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS, FUZ_ALLOWED_ORIGINS)
 cargo xtask dev                                                             # Dev server: Rust backend + Vite frontend
 npm run test:cross                                                        # Rust cross-process suites (rust + rust_proxy; needs rust binary + zzz_test_rust/zzz_test_rust_proxy DBs) — flag baked in
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Single project (Rust binary; needs `postgres://localhost/zzz_test_rust`)
@@ -384,7 +385,7 @@ Each action is a plain object with Zod schemas for input/output:
 ```typescript
 export const diskfile_update_action_spec = {
 	method: 'diskfile_update',
-	description: 'Write content to a file on disk',
+	description: 'Write new content to a file on disk.',
 	kind: 'request_response',
 	initiator: 'frontend',
 	auth: { account: 'required', actor: 'none' },
@@ -395,7 +396,7 @@ export const diskfile_update_action_spec = {
 	}),
 	output: z.null(),
 	async: true
-} satisfies ActionSpecUnion;
+} satisfies RequestResponseActionSpec;
 ```
 
 Action kinds:
@@ -415,13 +416,13 @@ export const my_action_spec = {
 	method: 'my_action',
 	kind: 'request_response', // or 'remote_notification', 'local_call'
 	initiator: 'frontend', // or 'backend', 'both'
-	auth: null, // public; or {account: 'required', actor: 'none'} to require a session
-	side_effects: true, // or null for read-only
+	auth: { account: 'required', actor: 'none' }, // or {account: 'none', actor: 'none'} for public
+	side_effects: true, // or false for read-only
 	input: z.strictObject({ foo: z.string() }),
 	output: z.strictObject({ bar: z.number() }),
 	async: true,
 	description: 'What this action does.'
-} satisfies ActionSpecUnion;
+} satisfies RequestResponseActionSpec; // RemoteNotificationActionSpec / LocalCallActionSpec for the other kinds
 ```
 
 Add it to the `all_action_specs` array at the bottom of the file.
@@ -499,8 +500,11 @@ The app directory stores zzz's own files. Configured via `PUBLIC_ZZZ_DIR`
 is the daemon home `~/.zzz/` (see CLI).
 
 - `state/` — Persistent data (reserved — the Rust backend currently keeps domain state in memory)
-- `cache/` — Regenerable data, safe to delete
+- `cache/` — Regenerable data, safe to delete (reserved — nothing writes it yet)
 - `run/` — Runtime ephemeral (the test binary's `daemon_token`)
+
+It's a permanent `ScopedFs` root with its own filer, so the frontend can
+create files there.
 
 The daemon home holds the CLI's files beside it: `config.json`, `.env`,
 `bootstrap_token`, `static/` (the UI build), `bin/`, and `run/`
@@ -514,13 +518,13 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 
 - `ZZZ_PORT` — HTTP server port (default 4460; `cargo xtask dev` uses 4461); the `--port` flag wins. The bind address is always loopback — there is no `HOST` override.
 - `ZZZ_STATIC_DIR` — directory of the built SPA to serve (`--static-dir` wins); must be a directory, or `zzzd` refuses to boot
-- `ZZZ_TRUSTED_PROXIES` — comma-separated trusted proxy IPs for `client_ip` resolution
+- `ZZZ_TRUSTED_PROXIES` — comma-separated trusted proxy IPs / CIDR ranges for `client_ip` resolution
 - `DATABASE_URL` — PostgreSQL connection (`postgres://`)
 - `SECRET_FUZ_COOKIE_KEYS` — HMAC signing keys (min 32 chars)
-- `FUZ_ALLOWED_ORIGINS` — Origin patterns for API verification (required in production)
+- `FUZ_ALLOWED_ORIGINS` — Origin patterns for API verification (required — `zzzd` refuses to boot on an absent or empty list, since an empty allowlist would allow every origin; the CLI defaults it to `http://localhost:<port>,http://127.0.0.1:<port>`)
 - `FUZ_BOOTSTRAP_TOKEN_PATH` — One-shot admin bootstrap token path
 - `PUBLIC_ZZZ_DIR` — Zzz app directory (default `.zzz`)
-- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths
+- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (`zzzd` doesn't expand `~`; the CLI does)
 - `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live dispatchers (integration tests only — must stay unset in prod)
 - `SECRET_ANTHROPIC_API_KEY` — Claude API key
 - `SECRET_OPENAI_API_KEY` — OpenAI API key
@@ -541,8 +545,9 @@ fills gaps; see CLI); `cargo xtask dev` from `.env.development`, where the
 **file wins** — it's dev's source of truth, so a stale exported
 `DATABASE_URL` can't redirect dev migrations, and xtask prints each
 inherited key it overrides. In both, a blank value is unset: a template's
-empty `SECRET_*_API_KEY=` line never clears an exported key. `.env.production` is the template for running
-`zzzd` under a process manager (see ./docs/development.md). The CLI itself also
+empty `SECRET_*_API_KEY=` line never clears an exported key. `.env.production` is what `gro build` reads for
+the `PUBLIC_ZZZ_*` vars, and the template for running `zzzd` under a process
+manager (see ./docs/development.md). The CLI itself also
 reads `ZZZ_SERVER_BIN` (the `zzzd` binary to spawn).
 
 ### SvelteKit frontend vars (PUBLIC_ZZZ_\*)
@@ -555,8 +560,10 @@ the env file the build reads, even if empty.
 - `PUBLIC_ZZZ_SERVER_PORT` — the server the UI calls (dev: the Vite port, which proxies `/api`); empty → the page's own origin, which is how the production build (served by `zzzd` on any port) is configured
 - `PUBLIC_ZZZ_SERVER_API_PATH` — API endpoint path
 - `PUBLIC_ZZZ_WEBSOCKET_URL` — WebSocket URL (dev: `zzzd` directly); empty → `<API path>/ws` on the page's origin
-- `PUBLIC_ZZZ_SERVER_PROXIED_PORT` — Backend port (frontend)
-- `PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY` — Testing delay (ms) — frontend-only; currently parsed but unwired
+
+`PUBLIC_ZZZ_SERVER_PROXIED_PORT` is dev-only and not baked in: `vite.config.ts`
+reads it from the process env as the backend port its dev proxy targets
+(`cargo xtask dev` forces 4461).
 
 ## Avoid
 
@@ -573,7 +580,10 @@ the env file the build reads, even if empty.
 - **WebSocket auth** — Auth is enforced at upgrade time — the spine resolves credentials from the request headers before upgrading (cookie sessions, bearer tokens — bearer silently discarded in browser context via Origin/Referer defense). Per-action auth checks enforce spec-level auth: `keeper` requires `daemon_token` + keeper role; `{role}` requires the named role via `has_role` (matches the HTTP path). Batch JSON-RPC is rejected (not yet supported). Sockets are closed on session/token revocation, logout, and password change via audit events — `token_revoke` closes only the revoked token's sockets (granular), `session_revoke_all` / `token_revoke_all` / `password_change` close all sockets on the account. No per-message session revalidation — event-driven revocation is sufficient. ActionPeer itself has no auth awareness.
 - **Bearer auth soft-fails** — bearer resolution soft-fails for invalid/expired/empty tokens (no early error response). Auth enforcement happens downstream via the per-action auth checks, producing `{code: -32001, message: "unauthenticated"}` JSON-RPC errors. Public actions are not blocked by bad bearer credentials.
 - **Domain state is in-memory** — auth/accounts are in the PostgreSQL DB, but zzz domain state (files, terminals, workspaces) is in-memory, lost on restart.
-- **No undo/history** — file edits are permanent
+- **No persistent undo** — saves overwrite the file on disk; the editor keeps an in-memory per-file history (`DiskfileHistory`) you can restore from, lost on reload
+- **Symlinks are invisible** — the filer never follows or indexes a symlink (file or directory), and `ScopedFs` rejects symlinked paths, so linked files don't appear in the file tree
+- **Workspace scope** — opening a workspace makes its directory a writable `ScopedFs` root with its own filer until it's closed; closing never revokes the permanent roots (`PUBLIC_ZZZ_DIR` and `PUBLIC_ZZZ_SCOPED_DIRS`). Any absolute directory can be opened — `/` makes the whole filesystem writable and scans it
+- **Terminals** — output (`terminal_data`, `terminal_exited`) is broadcast to every connected socket, not just the terminal's owner, and the frontend's terminal list is in-memory, so a page reload loses it while the backend processes keep running
 - **PTY terminals** — terminal spawning uses the `fuz_pty` Rust crate as a native dependency of `zzz_server` (no FFI indirection). `PtyManager` runs one I/O task per terminal (readiness-driven reads, an ordered input queue that writes large pastes in full, reaping with `SIGKILL` escalation so closed terminals leave no zombies). Terminal children inherit zzzd's environment **minus** `SECRET_*`, `FUZ_*`, `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, and `PORT` — this keeps the daemon's API keys, cookie keys, and DB URL out of the child's environment, but it is not isolation (the shell runs as the same user and can read `/proc/<zzzd pid>/environ` or the `.env` files). The prefix match also drops the user's own `FUZ_*` variables from terminals; everything else (`PATH`, `HOME`, `SSH_AUTH_SOCK`, …) passes through. See ./crates/CLAUDE.md for details. Requires the sibling Rust workspace checked out alongside this repo (path dep).
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented

@@ -14,8 +14,7 @@
 //! Dispatch and the usage text live here (not in `fuz_audit`) so bare
 //! `cargo xtask` advertises zzz's own commands, not just `check-release`.
 //!
-//! Replaces the former Deno orchestration (`scripts/*.ts` + `deno.json`): the
-//! workspace builds and runs entirely on `cargo` + `npm`/`npx`, no Deno.
+//! The workspace builds and runs entirely on `cargo` + `npm`, no Deno.
 
 // The CLI's dotenv parser, compiled in here too so both read `.env` files
 // identically (xtask stays std-only; no shared crate needed for one file).

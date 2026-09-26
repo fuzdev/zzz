@@ -17,16 +17,12 @@ export const completion_create_action_spec = {
 	initiator: 'frontend',
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
-	input: z.strictObject({
-		completion_request: CompletionRequest,
-		_meta: z.looseObject({ progressToken: Uuid.optional() }).optional()
-	}),
-	output: z.strictObject({
-		completion_response: CompletionResponse,
-		_meta: z.looseObject({ progressToken: Uuid.optional() }).optional()
-	}),
-	async: true
-} satisfies ActionSpecUnion;
+	input: CompletionCreateInput, // {completion_request, _meta?: {progressToken?}}
+	output: CompletionCreateOutput, // {completion_response, _meta?: {progressToken?}}
+	async: true,
+	streams: 'completion_progress',
+	description: 'Start an AI completion request, optionally with a progress token for streaming.'
+} satisfies RequestResponseActionSpec;
 ```
 
 ### Action Kinds
@@ -37,13 +33,13 @@ export const completion_create_action_spec = {
 
 `remote_notification` actions have two routing paths on the backend:
 
-- **Request-scoped** (`ctx.notify(method, params)` from a handler) — delivered
-  only to the originating socket. Used for progress streams tied to an
-  in-flight request (`completion_progress`). Specs that use
-  this pattern set `streams: '<notification_method>'` to name the companion
-  notification.
-- **Broadcast** (`backend.api.<method>(input)`) — fanned out to all connected
-  sockets. Used for server-wide events that every client needs
+- **Request-scoped** — delivered only to the originating socket, via the
+  connection registry's `send_to(connection_id, …)` (or a handler's
+  `ctx.notify`). Used for progress streams tied to an in-flight request
+  (`completion_progress`). Specs that use this pattern set
+  `streams: '<notification_method>'` to name the companion notification.
+- **Broadcast** (`App::broadcast` in the Rust backend) — fanned out to all
+  connected sockets. Used for server-wide events that every client needs
   (`filer_change`, `workspace_changed`, `terminal_data`, `terminal_exited`).
 
 ### Action Spec Fields
@@ -51,12 +47,14 @@ export const completion_create_action_spec = {
 - `method` (`string`) — Action name (e.g. `'completion_create'`)
 - `kind` (`ActionKind`) — `'request_response'` | `'remote_notification'` | `'local_call'`
 - `initiator` (`ActionInitiator`) — `'frontend'` | `'backend'` | `'both'`
-- `auth` (`RouteAuth | null`) — `{account, actor, roles?, credential_types?}` | `null` (four-axis flat record)
-- `side_effects` (`boolean | null`) — Whether action mutates state
+- `auth` (`RouteAuth | null`) — `{account, actor, roles?, credential_types?, required_scope?}`; required on `request_response` specs, `null` on `remote_notification` / `local_call`
+- `side_effects` (`boolean`) — Whether action mutates state (also keeps it off the cacheable `GET /api/rpc` path)
 - `input` (`z.ZodType`) — Zod schema for request params
 - `output` (`z.ZodType`) — Zod schema for response
 - `async` (`boolean`) — Whether handler is async
-- `streams` (`string` (optional)) — Name of companion `remote_notification` method this action emits via `ctx.notify` (e.g. `'completion_progress'`)
+- `description` (`string`) — What the action does (rendered into ./reference.md)
+- `streams` (`string` (optional)) — Name of the companion request-scoped `remote_notification` method this action emits (e.g. `'completion_progress'`)
+- `error_reasons`, `rate_limit` (optional) — see fuz_app's `ActionSpec`
 
 ### Core Components
 
@@ -65,7 +63,7 @@ export const completion_create_action_spec = {
 - `ActionDispatcher` (`action_dispatcher.ts`) — Send/receive on both sides
 - `ActionRegistry` (`action_registry.ts`) — Type-safe action lookup
 
-These live in `@fuzdev/fuz_app/actions/` — the SAES runtime is extracted to fuz_app; zzz imports them. Cell patterns (the `Cell` base class, `IndexedCollection`) remain in zzz.
+These live in `@fuzdev/fuz_app/actions/` — the SAES runtime lives in fuz_app, and zzz imports it. Cell patterns (the `Cell` base class, `IndexedCollection`) remain in zzz.
 
 ### Action Event Lifecycle
 
@@ -100,8 +98,9 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 				}
 			}
 		},
-		receive_error: ({ data: { error } }) => {
-			console.error('completion failed:', error);
+		receive_error: ({ data: { input, error } }) => {
+			// marks the unsettled turn `cancelled` on `request_cancelled`,
+			// else sets its `error_message` (streamed content is kept)
 		}
 	}
 });
@@ -121,9 +120,14 @@ Actions are transport-agnostic via the `Transport` interface (from `@fuzdev/fuz_
 ```typescript
 interface Transport {
 	transport_name: TransportName;
-	send(message: JsonrpcRequest): Promise<JsonrpcResponseOrError>;
-	send(message: JsonrpcNotification): Promise<JsonrpcErrorMessage | null>;
+	send(message: JsonrpcRequest, options?: TransportSendOptions): Promise<JsonrpcResponseOrError>;
+	send(
+		message: JsonrpcNotification,
+		options?: TransportSendOptions
+	): Promise<JsonrpcErrorResponse | null>;
+	// ...plus a general `JsonrpcMessageFromClientToServer` overload
 	is_ready: () => boolean;
+	dispose?: () => void;
 }
 ```
 
@@ -250,9 +254,9 @@ constructor(options: ThreadOptions) {
   this.decoders = {
     turns: (items) => {
       if (Array.isArray(items)) {
-        this.turns.clear();
-        for (const json of items) {
-          this.add_turn(json);
+        this.#clear_turns(); // also cancels a pending completion
+        for (const item_json of items) {
+          this.add_turn(new Turn({app: this.app, json: item_json}));
         }
       }
       return HANDLED;  // Signal decoder fully handled the property
@@ -275,7 +279,7 @@ export const cell_classes = {
 	Chats,
 	Thread,
 	Threads,
-	Turn /* ... 31 total */
+	Turn /* ... 33 total */
 } satisfies Record<string, typeof Cell<any>>;
 
 // frontend.svelte.ts — auto-registers all classes
@@ -302,7 +306,7 @@ Prompt → parts: Array<Part>  (reusable content templates)
 ### Parts
 
 - Text (`TextPart`) — `content: string` stored directly
-- Diskfile (`DiskfilePart`) — `path: DiskfilePath` → reads from disk or editor state
+- Diskfile (`DiskfilePart`) — `path: DiskfilePath | null` → reads from disk or editor state
 
 ### Turns
 
@@ -311,7 +315,7 @@ Conversation messages with role:
 ```typescript
 class Turn extends Cell<typeof TurnJson> {
 	part_ids: Array<Uuid> = $state()!; // $state because push/splice used
-	role: CompletionRole = $state.raw()!; // 'user' | 'assistant' | 'system'
+	role: CompletionRole = $state.raw()!; // a string — 'user' | 'assistant' | 'system' by convention
 	request: CompletionRequest | undefined = $state.raw();
 	response: CompletionResponse | undefined = $state.raw();
 	error_message: string | undefined = $state.raw(); // set on failure, kept separate from content
@@ -361,12 +365,13 @@ class Thread extends Cell<typeof ThreadJson> {
   enabled: boolean = $state.raw()!;
 
   async send_message(content: string): Promise<Turn | null> {
+    const completion_messages = render_completion_messages(this.turns.by_id.values());
     const user_turn = this.add_user_turn(content);
     const assistant_turn = this.add_assistant_turn('', {request: ...});
-    await this.app.api.completion_create({
-      completion_request,
-      _meta: {progressToken: assistant_turn.id},
-    });
+    await this.app.api.completion_create(
+      {completion_request, _meta: {progressToken: assistant_turn.id}},
+      {signal: controller.signal}, // `cancel_pending()` aborts it
+    );
     return assistant_turn;
   }
 }
@@ -383,16 +388,18 @@ Container for multi-model comparison. Holds `thread_ids`, resolves to Thread ins
 ```
 User types message in Chat UI
   → Thread.send_message(content)
+    → Build CompletionMessage[] from thread history (before the new message,
+      which is sent as `prompt`)
     → Create user Turn with TextPart
-    → Build CompletionMessage[] from thread history
     → Create empty assistant Turn (progressToken = turn.id)
     → app.api.completion_create(request)
       → ActionEvent send_request phase
         → Transport.send(JSON-RPC request)
-          → POST /api/rpc or /api/ws → Rust spine dispatch (spec lookup, auth check, schema validation)
+          → POST /api/rpc or /api/ws → Rust spine dispatch (spec lookup, auth check; the handler deserializes params)
             → handlers::provider::completion_create(params, ctx, app)
               → ProviderManager looks up the provider by name
-              → provider streams the completion (stream = true when a progress token is present)
+              → provider streams the completion (stream = true when a progress token is
+                present and the request came over WebSocket)
                 → For each text chunk:
                   → completion_progress notification to the originating WS connection (ctx.connection_id)
               → Return {completion_response}
@@ -421,9 +428,10 @@ Gemini use their own event shapes)
 
 Streaming progress (`completion_progress`) is
 **socket-scoped** — it routes only to the client that initiated the request,
-never broadcast. On HTTP transport `ctx.notify` is a no-op (with a DEV warn).
-`backend.api.*` is reserved for genuine broadcasts (`filer_change`,
-`terminal_data`, `terminal_exited`, `workspace_changed`).
+never broadcast. Over HTTP there's no socket, so the provider runs without
+streaming and the caller gets only the final response. `App::broadcast` is
+reserved for genuine broadcasts (`filer_change`, `terminal_data`,
+`terminal_exited`, `workspace_changed`).
 
 ## Terminals
 
@@ -609,7 +617,11 @@ const items = new IndexedCollection<Model>({
 	indexes: [
 		create_single_index({ key: 'name', extractor: (m) => m.name }),
 		create_multi_index({ key: 'provider_name', extractor: (m) => m.provider_name }),
-		create_derived_index({ key: 'ordered_by_name', sort: (a, b) => a.name.localeCompare(b.name) })
+		create_derived_index({
+			key: 'ordered_by_name',
+			compute: (collection) => collection.values,
+			sort: (a, b) => a.name.localeCompare(b.name)
+		})
 	]
 });
 
@@ -624,7 +636,7 @@ items.derived_index('ordered_by_name'); // derived → Array<Model>
 
 Two separate concerns:
 
-- App directory (`PUBLIC_ZZZ_DIR`) — Zzz's own data (`.zzz/state/`, `.zzz/cache/`, `.zzz/run/`)
+- App directory (`PUBLIC_ZZZ_DIR`) — Zzz's own files (`state/`, `cache/`, and `run/` are reserved subdirectories)
 - Scoped dirs (`PUBLIC_ZZZ_SCOPED_DIRS`) — User file access (comma-separated paths)
 
 ### ScopedFs
@@ -643,7 +655,7 @@ The allowed roots are the permanent boot-time set (the app directory + scoped di
 
 ## File Editing
 
-The frontend file pipeline is five Cells plus a per-file editor-session class:
+The frontend file pipeline is six Cells plus a per-file editor-session class:
 
 - `Diskfiles` — `IndexedCollection<Diskfile>` (`by_path` single index,
   `immutable_key` since a path is a diskfile's disk identity); its
@@ -723,8 +735,8 @@ separate concerns":
   actions). `active_directory_paths` derives to only the paths that resolve
   to a currently open workspace. `Spaces` auto-creates and protects a
   `scratchpad` space, identified by `Spaces.scratchpad_id` so renaming it
-  keeps it the protected default. Space state is in-memory only today (DB
-  persistence is planned).
+  keeps it the protected default. Space state is in-memory (DB persistence
+  is planned).
 
 The two meet in `DeskMenu.svelte`: toggling a directory into the active Space
 first ensures its workspace is open. Opening brand-new directories happens on
@@ -742,8 +754,8 @@ collection in sync.
 `Capabilities` (`capabilities.svelte.ts`) is a single Cell aggregating
 hardcoded (deliberately non-extensible) `Capability<T>` statuses. The
 `/capabilities` route is zzz's diagnostics + settings page: verify the
-backend is reachable, see filesystem scope, configure and test provider API
-keys, and control the WebSocket transport. In the static-only build (no
+backend is reachable, see filesystem scope, check each provider's API-key
+status, and control the WebSocket transport. In the static-only build (no
 backend) every capability reads as unavailable — the "diminished
 capabilities" deploy.
 

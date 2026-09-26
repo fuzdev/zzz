@@ -213,17 +213,18 @@
 				<ul>
 					<li>
 						read and write to the Zzz app directory (<code>PUBLIC_ZZZ_DIR</code>, defaults to
-						<code>./.zzz</code>) for app data like completions, plus any additional paths configured
-						in <code>PUBLIC_ZZZ_SCOPED_DIRS</code> for user files -- all filesystem operations are
-						securely scoped via <code>ScopedFs</code> (symlinks rejected, paths validated) -- this
-						opens a significant surface area for both you and attackers to use, and writing
-						untrusted data could lead to arbitrary code execution if, for example, you're running a
-						hot reloading dev server in a scoped directory (configure with care!)
+						<code>.zzz</code> in the daemon's working directory) for Zzz's own files, plus any
+						additional paths configured in <code>PUBLIC_ZZZ_SCOPED_DIRS</code> and any directories
+						you open as workspaces for user files -- all filesystem operations are securely scoped
+						via <code>ScopedFs</code> (symlinks rejected, paths validated) -- this opens a
+						significant surface area for both you and attackers to use, and writing untrusted data
+						could lead to arbitrary code execution if, for example, you're running a hot reloading
+						dev server in a scoped directory (configure with care!)
 					</li>
 					<li>
-						use your API keys for calls to Claude, ChatGPT, and Gemini -- loaded from
-						<code>{DEV ? './.env.development' : '~/.zzz/.env'}</code> or set at runtime (held in
-						memory only)
+						use your API keys for calls to Claude, ChatGPT, and Gemini -- read from the backend's
+						environment at startup, e.g. <code>{DEV ? './.env.development' : '~/.zzz/.env'}</code>,
+						and never set or stored through the UI
 					</li>
 					<li>
 						authentication is cookie sessions and bearer tokens with a one-shot bootstrap flow, plus

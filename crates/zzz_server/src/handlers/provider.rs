@@ -24,7 +24,6 @@ use crate::provider::{self, CompletionHandlerOptions, ProviderName};
 /// Strongly-typed view of the `completion_request` param object.
 ///
 /// Deserialized in one pass from `&Value` (zero JSON-tree cloning).
-/// Mirrors the legacy `handlers::provider::CompletionRequestInput`.
 #[derive(Deserialize)]
 struct CompletionRequestInput {
     provider_name: String,

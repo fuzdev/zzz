@@ -10,7 +10,9 @@ Integration guide for AI providers and adding new ones.
 
 ### Remote Providers (Claude, ChatGPT, Gemini)
 
-Add the API key to `.env.development` (keys are env-only; restart the daemon after changing one):
+Add the API key to the env file the backend is launched with — `.env.development`
+for `cargo xtask dev`, `~/.zzz/.env` for the `zzz` CLI's daemon (or export it in
+the environment). Keys are env-only; restart the daemon after changing one:
 
 ```bash
 SECRET_ANTHROPIC_API_KEY=sk-ant-api03-...
@@ -87,7 +89,8 @@ counts with `message_delta`'s output counts.
 
 ### CompletionOptions
 
-The per-completion options the backend passes to a provider:
+The backend's `CompletionOptions` (`provider/mod.rs`) holds the generation
+settings each provider maps onto its API:
 
 ```
 frequency_penalty?: number
@@ -100,6 +103,11 @@ temperature?: number
 top_k?: number
 top_p?: number
 ```
+
+They aren't configurable yet: `CompletionRequest` carries no options, and every
+completion uses `CompletionOptions::default()` — `output_token_max` 8192, an
+empty `system_message`, and the rest unset, so each provider's own defaults
+apply.
 
 ### CompletionRequest / CompletionResponse
 
@@ -142,7 +150,8 @@ User sends message
     → app.api.completion_create({completion_request, _meta: {progressToken}})
       → WS dispatch → backend completion_create handler
         → ProviderManager looks up the provider by name
-          → provider calls its API (stream: true when a progress token is present)
+          → provider calls its API (stream: true when a progress token is present
+            and the request came over WebSocket)
             → For each text chunk:
               → completion_progress notification to the originating WS connection
                 → Turn content updated incrementally
@@ -162,7 +171,8 @@ stops showing as pending even when no content streamed in, and any later
 ### Provider Status
 
 ```typescript
-const status = await provider.load_status();
+const result = await app.api.provider_load_status({provider_name: 'claude'});
+// result.value.status:
 // { name: 'claude', available: true, checked_at: 1234567890 }
 // { name: 'claude', available: false, error: 'needs API key', checked_at: ... }
 ```

@@ -4,7 +4,7 @@
 
 > nice web things for the tired 💤
 
-⚠️ early pre-release, does not persist your data yet
+⚠️ early pre-release, does not persist your chats, prompts, or workspaces yet
 
 **[zzz.software](https://www.zzz.software/)**
 
@@ -29,7 +29,8 @@ Eventually there will be a desktop app but
 for now you'll need Node (>=24.14), a Rust toolchain (for the backend),
 PostgreSQL, and Git to clone the repo.
 
-Running Zzz locally in development (`cargo xtask dev`) is the supported way to use it right now.
+Running Zzz locally — in development with `cargo xtask dev`, or self-hosted through
+the `zzz` CLI (see [docs/development.md](docs/development.md)) — is the supported way to use it right now.
 It deploys via SvelteKit's static adapter with diminished capabilities
 ([zzz.software](https://www.zzz.software/)),
 and the full app is served by the Rust `zzz_server` backend.
@@ -58,8 +59,8 @@ npm install
 cargo xtask dev
 ```
 
-You can edit `.env.development` with your API keys,
-or update them at runtime on the `/capabilities` page.
+You can edit `.env.development` with your API keys
+(restart `cargo xtask dev` to pick them up).
 
 Browse to the location it says, probably `localhost:5173`.
 
@@ -83,7 +84,7 @@ Zzz builds on a great deal of software.
 - I started using [Claude](https://claude.ai/) in late 2024 after making the initial prototype,
   and in late 2025 I started doing much of the coding with Claude Code, Opus 4.5
   being the first over some threshold for me for this project
-  - see `NOTE: AI-generated` and similar disclaimers
+  - see the `// @slop` markers on LLM-generated code
 
 ## Contributing
 

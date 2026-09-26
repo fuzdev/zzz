@@ -186,8 +186,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         .map(|p| resolve_dir(p))
         .collect::<Result<_, _>>()?;
 
-    // Include zzz_dir first (like Deno: `new ScopedFs([this.zzz_dir, ...this.scoped_dirs])`)
-    // Use canonicalized paths, not raw config paths
+    // Permanent roots: zzz_dir first, then scoped_dirs — canonicalized paths,
+    // not raw config paths
     let mut scoped_fs_paths: Vec<PathBuf> = Vec::with_capacity(1 + scoped_dir_strings.len());
     scoped_fs_paths.push(PathBuf::from(&config.zzz_dir));
     scoped_fs_paths.extend(scoped_dir_strings.iter().map(PathBuf::from));
@@ -473,9 +473,9 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         "spine action registry compiled"
     );
 
-    // Start file watchers at startup (matches Deno's Backend constructor
-    // which calls `this.#start_filer(this.zzz_dir)` then iterates scoped_dirs).
-    // zzz_dir uses FilerConfig::zzz_dir() (no .zzz ignore); scoped_dirs use workspace config.
+    // Start the permanent file watchers at startup: zzz_dir, then each of
+    // scoped_dirs. zzz_dir uses FilerConfig::zzz_dir() (no .zzz ignore);
+    // scoped_dirs use workspace config.
     match app_state
         .filer_manager
         .start_filer(
@@ -629,7 +629,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
 
     // Spine bootstrap router: mounts `/bootstrap` at the router root, so
     // nesting under `/api/account` produces `/api/account/bootstrap`.
-    // Replaces the legacy `crate::bootstrap::bootstrap_handler`.
     let spine_bootstrap_router =
         fuz_auth::bootstrap_routes::bootstrap_router(bootstrap_route_state)
             .layer(axum::middleware::from_fn_with_state(

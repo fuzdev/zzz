@@ -7,11 +7,11 @@
 //!
 //! ## Side-effects flag
 //!
-//! `workspace_open` / `workspace_close` carry `side_effects: true`
-//! matching `crate::handlers::method_spec`. They don't touch the DB today
-//! (workspace state is in-memory) — the flag is preserved for parity
-//! with the Deno reference and to keep the eventual transactional-audit
-//! boundary intact when audit emission lands on workspace mutations.
+//! `workspace_open` / `workspace_close` carry `side_effects: true`,
+//! matching their TS specs. They don't touch the DB (workspace state is
+//! in-memory), but they mutate server state, so the flag keeps them off the
+//! cacheable `GET /api/rpc` path and marks the transactional boundary for
+//! audit emission on workspace mutations.
 
 use std::sync::Arc;
 

@@ -41,8 +41,7 @@ struct SessionLoadResult {
 
 /// `ping` — public health check. Echoes the request id back as `ping_id`.
 ///
-/// `ActionContext.request_id` carries the parsed envelope's id; mirrors
-/// the legacy `handle_ping` shape.
+/// `ActionContext.request_id` carries the parsed envelope's id.
 #[allow(
     clippy::unused_async,
     reason = "ActionHandler signature requires async"
@@ -62,8 +61,7 @@ pub async fn ping(
 ///
 /// Returns the cross-domain envelope the frontend needs at boot:
 /// open workspaces, zzz_dir file tree (rescanned for consistency),
-/// scoped_dirs, provider status. Mirrors the legacy
-/// `handle_session_load` body verbatim.
+/// scoped_dirs, provider status.
 pub async fn session_load(
     _params: Value,
     _ctx: ActionContext<'_>,
