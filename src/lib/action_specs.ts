@@ -28,6 +28,7 @@ import {
 	DiskfilePath,
 	SerializableDisknode
 } from './diskfile_types.ts';
+import { is_path_absolute } from './diskfile_helpers.ts';
 import { ProviderStatus, ProviderName } from './provider_types.ts';
 import { CompletionMessage, CompletionRequest, CompletionResponse } from './completion_types.ts';
 import { WorkspaceInfoJson, WorkspaceWatchStatus } from './workspace.svelte.ts';
@@ -189,7 +190,8 @@ export type ProviderLoadStatusOutput = z.infer<typeof ProviderLoadStatusOutput>;
 export const TerminalCreateInput = z.strictObject({
 	command: z.string(),
 	args: z.array(z.string()).default(() => []),
-	cwd: z.string().optional(),
+	/** The working directory — absolute, never resolved against the daemon's own. */
+	cwd: z.string().refine(is_path_absolute, { message: 'cwd must be an absolute path' }).optional(),
 	preset_id: Uuid.optional()
 });
 export type TerminalCreateInput = z.infer<typeof TerminalCreateInput>;
@@ -229,10 +231,14 @@ export const TerminalResizeInput = z.strictObject({
 });
 export type TerminalResizeInput = z.infer<typeof TerminalResizeInput>;
 
+/** A signal `terminal_close` can send. */
+export const TerminalCloseSignal = z.enum(['SIGTERM', 'SIGKILL']);
+export type TerminalCloseSignal = z.infer<typeof TerminalCloseSignal>;
+
 /** Input for `terminal_close`. */
 export const TerminalCloseInput = z.strictObject({
 	terminal_id: Uuid,
-	signal: z.string().default('SIGTERM').optional()
+	signal: TerminalCloseSignal.default('SIGTERM').optional()
 });
 export type TerminalCloseInput = z.infer<typeof TerminalCloseInput>;
 
@@ -431,7 +437,8 @@ export const terminal_create_action_spec = {
 	input: TerminalCreateInput,
 	output: TerminalCreateOutput,
 	async: true,
-	description: 'Spawn a PTY process and return the terminal ID.'
+	description:
+		'Spawn a PTY process and return the terminal ID. A `cwd` must be absolute (`invalid_params` otherwise).'
 } satisfies RequestResponseActionSpec;
 
 export const terminal_data_send_action_spec = {
@@ -481,7 +488,8 @@ export const terminal_close_action_spec = {
 	input: TerminalCloseInput,
 	output: TerminalCloseOutput,
 	async: true,
-	description: 'Kill a terminal process and return the exit code.'
+	description:
+		'Kill a terminal process and return the exit code. Fails with `not_found` when the caller has no live terminal with the id.'
 } satisfies RequestResponseActionSpec;
 
 export const terminal_exited_action_spec = {

@@ -501,7 +501,7 @@ export class DiskfileEditorState {
 		// deduped by `add_entry` when a disk-change entry for it is already newest
 		const saved_entry =
 			disk_moved_on &&
-			history.entries.some((entry) => !entry.is_unsaved_edit && entry.content === content_to_save)
+			history.entries.some((entry) => is_saved_state(entry) && entry.content === content_to_save)
 				? null
 				: history.add_entry(content_to_save, {
 						is_unsaved_edit: false,
@@ -571,16 +571,22 @@ export class DiskfileEditorState {
 
 	/**
 	 * Clears the history down to the unsaved edits and the entry for the disk
-	 * content (the newest saved entry if none matches), which becomes the
-	 * original state. A selection it removes moves to that entry.
+	 * content — the newest saved entry holding it, else a new one, never an
+	 * older state that would show as a change to save — which becomes the
+	 * original state. A selection it removes moves to that entry. For a file
+	 * whose content wasn't loaded, the newest saved entry is kept instead.
 	 */
 	clear_history(): void {
 		const { history } = this;
 		if (history.entries.length <= 1) return;
 
+		const disk_content = this.original_content;
 		const saved = history.entries.filter(is_saved_state);
 		const disk_entry =
-			saved.find((entry) => entry.content === this.original_content) ?? saved[0] ?? null;
+			saved.find((entry) => entry.content === disk_content) ??
+			(disk_content === null
+				? (saved[0] ?? null)
+				: history.add_entry(disk_content, { is_original_state: true }));
 		if (disk_entry) disk_entry.is_original_state = true;
 		// already sorted newest first
 		history.entries = history.entries.filter(

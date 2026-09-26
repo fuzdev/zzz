@@ -529,14 +529,18 @@ keeping keystrokes ordered across sends is the client's job.
 
 On natural process exit the task reaps the child, broadcasts
 `terminal_exited` with the real exit code, and removes its entry. An explicit
-`terminal_close` signals the process (SIGTERM by default), then closes the
+`terminal_close` signals the process (`SIGTERM` by default, or `SIGKILL` —
+any other signal is `invalid_params`), then closes the
 PTY master — the hangup ends a shell that ignores SIGTERM — and returns the
 exit code in the RPC response, or `null` if the process is still running
 after a short grace; the backend keeps reaping it (SIGKILL after 3s), and no
 `terminal_exited` is broadcast for a closed terminal. `terminal_data_send`
 and `terminal_resize` for an id the caller has no live terminal under —
 unknown, ended, lost to a restart, or another account's — fail with the same
-`not_found`, while `terminal_close` stays idempotent (`{exit_code: null}`).
+`not_found`, and so does `terminal_close` (the frontend treats that as
+closed: the process is already gone). A `terminal_create` `cwd` must be
+absolute (`invalid_params` otherwise), so it never resolves against the
+daemon's own working directory.
 Children get the
 server's environment minus its secrets and config (`SECRET_*`, `FUZ_*`,
 `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, `PORT`). Terminals are pure
@@ -754,7 +758,11 @@ editing from another entry picked in the history starts a new draft and sets
 the previous one aside as a _discarded_ entry. A draft itself is only ever
 deleted by saving it, editing it back to the disk content, or the explicit
 "clear unsaved edits"; discarded entries are ordinary history, so the
-history caps and "clear history" can drop them. A file with a draft or
+history caps and "clear history" can drop them. Saving records a saved-state
+entry of its own even when a discarded entry holds the same text, and "clear
+history" always keeps an entry for the disk content (recording one if none
+holds it), so it never leaves the editor on an older state that a save would
+write back. A file with a draft or
 showing something other than the disk is marked ● in its tab and in the
 explorer (the accessible name says "unsaved changes", or "changed on disk").
 
@@ -887,7 +895,10 @@ Two layers of directory scoping on top of the Filesystem section's "two
 separate concerns":
 
 - **Workspace** (backend-tracked) — an open directory the server watches and
-  serves. `workspace_open` validates and canonicalizes the path, starts (or
+  serves. `workspace_open` validates and canonicalizes the path — refusing
+  (`forbidden`, `zzz_home_not_allowed`) a directory named `.zzz`, or one
+  inside it, other than the app directory: that's the CLI's daemon home, whose
+  `.env` and `bootstrap_token` must never be indexed and broadcast — starts (or
   finds) its workspace-lifetime `Filer` — the initial scan runs before the
   workspace lifecycle lock is taken, and concurrent opens of one path share
   it; a root that can't be listed fails the open here, with nothing
@@ -921,7 +932,11 @@ expanded), activate the workspace by the canonical path `workspace_open`
 returns, and the query param is handled once and then stripped from the URL,
 so a reload doesn't reopen a workspace the user has since closed.
 `workspace_changed` broadcasts keep every connected client's `Workspaces`
-collection in sync.
+collection in sync. A workspace opened elsewhere arrives without its files
+(the initial scan broadcasts nothing), so the client adds it — without
+activating it — and resyncs the session to fetch them
+(`Workspaces.receive_remote_open`); the notification for the client's own
+open, which can land before the reply, is recognized and skips the resync.
 
 ## Capabilities
 
@@ -938,7 +953,10 @@ Population, per capability:
 - `backend` — driven by `ping` (the ping action's frontend handlers forward
   to `capabilities.handle_ping_*`); keeps a rolling round-trip-time history.
   Once connected, a new ping keeps the connected status until it answers or
-  fails, so periodic pings don't flicker it
+  fails, so periodic pings don't flicker it. A successful `session_load`
+  re-pings a backend whose last ping failed (say at mount, while the daemon
+  restarted), so it and the filesystem capability don't read unavailable for
+  good
 - `websocket` — `$derived` off the `Socket` wrapper's connection state; its
   panel is also a live control surface (connect/disconnect, heartbeat and
   reconnect tuning — the setters coerce and clamp input, and the heartbeat's

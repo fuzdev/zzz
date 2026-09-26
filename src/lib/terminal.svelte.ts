@@ -265,7 +265,9 @@ export class Terminal extends Cell<typeof TerminalJson> {
 	/**
 	 * Closes the running process with `terminal_close`. The backend broadcasts
 	 * no `terminal_exited` for a closed terminal, so the response settles the
-	 * status — unless a natural exit was recorded first.
+	 * status — unless a natural exit was recorded first. A `not_found` means
+	 * the process is already gone (it just ended, or zzzd restarted), which is
+	 * what closing wanted, so it closes with an unknown exit code and no error.
 	 */
 	async close(): Promise<void> {
 		const { terminal_id } = this;
@@ -274,13 +276,13 @@ export class Terminal extends Cell<typeof TerminalJson> {
 		const result = await this.app.api.terminal_close({ terminal_id });
 		if (terminal_id !== this.terminal_id) return; // restarted meanwhile
 		this.closing = false;
-		if (!result.ok) {
+		if (!result.ok && result.error.code !== JSONRPC_ERROR_CODES.not_found) {
 			this.error_message = `failed to close: ${result.error.message}`;
 			return;
 		}
 		if (this.status === 'running') {
 			this.status = 'closed';
-			this.exit_code = result.value.exit_code;
+			this.exit_code = result.ok ? result.value.exit_code : null;
 			this.#stop_io();
 		}
 	}

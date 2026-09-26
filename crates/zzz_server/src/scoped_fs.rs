@@ -415,7 +415,9 @@ impl ScopedFs {
 /// crash is swept by the filer, see [`is_staged_write_file_name`]), a
 /// concurrent reader or the filer never sees partial content, and concurrent
 /// writers can't interleave. The replacement keeps the old file's permission
-/// bits (including setuid/setgid/sticky) and, best-effort, its owner and
+/// bits — except setuid and setgid, which zzz always drops (the content
+/// changed, so the privilege shouldn't carry over) — and, best-effort, its
+/// owner and
 /// group — `fchown` only succeeds when the daemon may give the file that
 /// ownership. It is a new inode: **hardlinks are broken** (the other names
 /// keep the old content), and extended attributes and ACLs are not carried
@@ -435,7 +437,8 @@ impl ScopedFs {
 /// the handle the permission check opened (`O_NOFOLLOW | O_NONBLOCK`,
 /// re-checked to be a regular file). That's what a plain write always did:
 /// a failure midway leaves the file truncated or partial, a reader can see
-/// it mid-write, but the inode, mode, owner, and hardlinks are kept. A new
+/// it mid-write, but the inode, mode, owner, and hardlinks are kept (though
+/// the kernel may clear setuid/setgid on the write). A new
 /// file in a non-writable directory fails with
 /// [`ScopedFsError::DirectoryNotWritable`].
 ///
@@ -620,7 +623,7 @@ fn remove_temp_file(temp_path: &Path) {
 }
 
 /// Fill the staged temp file: carry over the replaced file's ownership and
-/// mode, write, fsync.
+/// mode (minus setuid/setgid, see [`write_file_atomic_with`]), write, fsync.
 fn stage(
     file: &mut std::fs::File,
     existing: Option<&std::fs::Metadata>,
@@ -628,12 +631,17 @@ fn stage(
 ) -> std::io::Result<()> {
     if let Some(meta) = existing {
         preserve_ownership(file, meta);
-        // after the chown, which can clear setuid/setgid
-        file.set_permissions(std::fs::Permissions::from_mode(meta.mode() & 0o7777))?;
+        file.set_permissions(std::fs::Permissions::from_mode(
+            meta.mode() & PRESERVED_MODE_BITS,
+        ))?;
     }
     write(file)?;
     file.sync_all()
 }
+
+/// The mode bits a replaced file's staged copy keeps: permissions and
+/// sticky, never setuid (`0o4000`) or setgid (`0o2000`).
+const PRESERVED_MODE_BITS: u32 = 0o1777;
 
 /// Give the staged file `meta`'s owner and group, falling back to the group
 /// alone. Best-effort: without the privilege the staged file keeps the
@@ -874,6 +882,27 @@ mod tests {
             );
         }
         assert!(tmp.temp_files().is_empty(), "{:?}", tmp.temp_files());
+    }
+
+    #[tokio::test]
+    async fn write_drops_setuid_and_setgid() {
+        let tmp = TempDir::new();
+        let fs = tmp.fs();
+        for (mode, kept) in [(0o4755, 0o755), (0o2755, 0o755), (0o6750, 0o750)] {
+            let file = tmp.path(&format!("mode_{mode:o}.sh"));
+            std::fs::write(&file, "old").unwrap();
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(mode)).unwrap();
+            if mode_of(&file) != mode {
+                continue; // the filesystem refused the bits (e.g. nosuid)
+            }
+
+            fs.write_file(file.to_str().unwrap(), "new".to_owned())
+                .await
+                .unwrap();
+
+            assert_eq!(std::fs::read_to_string(&file).unwrap(), "new");
+            assert_eq!(mode_of(&file), kept, "mode {mode:o} → {kept:o}");
+        }
     }
 
     #[tokio::test]

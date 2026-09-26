@@ -362,8 +362,39 @@ describe('terminal cross-backend', () => {
 			params: { terminal_id: NIL_UUID },
 			headers: fixture.create_session_headers()
 		});
-		assert.ok(res.ok);
-		assert.deepEqual(res.result, { exit_code: null }, 'result is {exit_code: null}');
+		assert.ok(!res.ok, 'a missing terminal is an error, like data_send and resize');
+		assert.deepEqual(to_json(res.error), TERMINAL_NOT_FOUND);
+	});
+
+	test('terminal_close_rejects_unsupported_signals', async () => {
+		const fixture = await setup_test();
+		for (const signal of ['SIGINT', 'sigkill', '9', '']) {
+			const res = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'terminal_close',
+				params: { terminal_id: NIL_UUID, signal },
+				headers: fixture.create_session_headers()
+			});
+			assert.ok(!res.ok, `signal ${JSON.stringify(signal)} should be refused`);
+			assert.equal(res.error.code, -32602, JSON.stringify(signal));
+		}
+	});
+
+	test('terminal_create_rejects_relative_cwd', async () => {
+		const fixture = await setup_test();
+		for (const cwd of ['', '.', 'tmp', '~/dev']) {
+			const res = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'terminal_create',
+				params: { command: 'pwd', cwd },
+				headers: fixture.create_session_headers()
+			});
+			assert.ok(!res.ok, `cwd ${JSON.stringify(cwd)} should be refused`);
+			assert.equal(res.error.code, -32602, JSON.stringify(cwd));
+			assert.deepEqual(res.error.data, { reason: 'invalid_path' }, JSON.stringify(cwd));
+		}
 	});
 
 	test('terminal_resize_missing', async () => {
@@ -559,13 +590,8 @@ describe('terminal cross-backend', () => {
 					reply_of(unknown),
 					`${method}: a foreign terminal is indistinguishable from an unknown one`
 				);
-				if (method === 'terminal_close') {
-					assert.ok(foreign.ok);
-					assert.deepEqual(foreign.result, { exit_code: null });
-				} else {
-					assert.ok(!foreign.ok);
-					assert.deepEqual(to_json(foreign.error), TERMINAL_NOT_FOUND);
-				}
+				assert.ok(!foreign.ok);
+				assert.deepEqual(to_json(foreign.error), TERMINAL_NOT_FOUND);
 			}
 			// and doesn't see it in its session snapshot
 			const other_session = await rpc_call({

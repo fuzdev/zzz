@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::handlers::filesystem::ERROR_INVALID_PATH;
 use crate::handlers::{App, caller_account_id};
 use crate::pty_manager::{PtyManager, TerminalNotFound, TerminalWriteError};
 
@@ -89,6 +90,32 @@ fn terminal_dimension(value: u64, name: &str) -> Result<u16, JsonrpcError> {
         })
 }
 
+/// The signal a `terminal_close` sends: `SIGTERM` (the default) or
+/// `SIGKILL` — the twin of `TerminalCloseSignal`. Anything else is refused
+/// rather than silently sent as `SIGTERM`.
+fn close_signal(signal: Option<&str>) -> Result<i32, JsonrpcError> {
+    match signal {
+        None | Some("SIGTERM") => Ok(libc::SIGTERM),
+        Some("SIGKILL") => Ok(libc::SIGKILL),
+        Some(other) => Err(invalid_params(
+            &format!("unsupported signal {other:?}: expected \"SIGTERM\" or \"SIGKILL\""),
+            None,
+        )),
+    }
+}
+
+/// Check a `terminal_create` `cwd`: absolute, so it never resolves against
+/// the daemon's own working directory (`~/.zzz` under the CLI).
+fn terminal_cwd(cwd: Option<&str>) -> Result<Option<&str>, JsonrpcError> {
+    match cwd {
+        Some(cwd) if !std::path::Path::new(cwd).is_absolute() => Err(invalid_params(
+            &format!("'cwd' must be an absolute path: {cwd:?}"),
+            Some(ERROR_INVALID_PATH),
+        )),
+        cwd => Ok(cwd),
+    }
+}
+
 /// The reply for a terminal the caller doesn't own — an unknown id, one that
 /// ended, and another account's are all this same `not_found`, so a
 /// terminal's existence isn't observable across accounts.
@@ -143,19 +170,13 @@ pub async fn terminal_create(
     let TerminalCreateInput {
         command, args, cwd, ..
     } = parse_strict_params(params)?;
+    let cwd = terminal_cwd(cwd.as_deref())?;
 
     let terminal_id = Uuid::new_v4().to_string();
 
-    PtyManager::spawn(
-        Arc::clone(&app),
-        owner,
-        &terminal_id,
-        &command,
-        &args,
-        cwd.as_deref(),
-    )
-    .await
-    .map_err(|e| internal_error(&format!("failed to create terminal: {e}")))?;
+    PtyManager::spawn(Arc::clone(&app), owner, &terminal_id, &command, &args, cwd)
+        .await
+        .map_err(|e| internal_error(&format!("failed to create terminal: {e}")))?;
 
     serde_json::to_value(TerminalCreateResult { terminal_id })
         .map_err(|e| internal_error_with_source("serialization failed", &e))
@@ -205,18 +226,13 @@ pub async fn terminal_close(
 ) -> Result<Value, JsonrpcError> {
     let owner = caller_account_id(&ctx)?;
     let input: TerminalCloseInput = parse_strict_params(params)?;
-    let signal_str = input.signal.as_deref().unwrap_or("SIGTERM");
-
-    let signal = match signal_str {
-        "SIGKILL" => libc::SIGKILL,
-        _ => libc::SIGTERM,
-    };
+    let signal = close_signal(input.signal.as_deref())?;
 
     let exit_code = app
         .pty_manager
         .close(owner, &input.terminal_id.to_string(), signal)
         .await
-        .flatten();
+        .map_err(terminal_not_found)?;
 
     serde_json::to_value(TerminalCloseResult { exit_code })
         .map_err(|e| internal_error_with_source("serialization failed", &e))
@@ -251,6 +267,32 @@ mod tests {
         assert_eq!(error.code, JsonrpcErrorCode::NotFound);
         assert_eq!(error.message, "terminal not found");
         assert!(error.data.is_none(), "nothing to tell unknown from foreign");
+    }
+
+    #[test]
+    fn close_signals_are_sigterm_or_sigkill() {
+        assert_eq!(close_signal(None).ok(), Some(libc::SIGTERM));
+        assert_eq!(close_signal(Some("SIGTERM")).ok(), Some(libc::SIGTERM));
+        assert_eq!(close_signal(Some("SIGKILL")).ok(), Some(libc::SIGKILL));
+        for signal in ["SIGINT", "sigkill", "9", "", "SIGHUP"] {
+            let error = close_signal(Some(signal)).expect_err(signal);
+            assert_eq!(error.code, JsonrpcErrorCode::InvalidParams, "{signal}");
+        }
+    }
+
+    #[test]
+    fn terminal_cwd_must_be_absolute() {
+        assert_eq!(terminal_cwd(None).ok(), Some(None));
+        assert_eq!(terminal_cwd(Some("/tmp")).ok(), Some(Some("/tmp")));
+        for cwd in ["", ".", "tmp", "~/dev", "../x"] {
+            let error = terminal_cwd(Some(cwd)).expect_err(cwd);
+            assert_eq!(error.code, JsonrpcErrorCode::InvalidParams, "{cwd:?}");
+            assert_eq!(
+                error.data.as_ref().and_then(|d| d.get("reason")),
+                Some(&json!(ERROR_INVALID_PATH)),
+                "{cwd:?}"
+            );
+        }
     }
 
     #[test]

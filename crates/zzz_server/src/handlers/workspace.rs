@@ -18,7 +18,7 @@ use fuz_realtime::notify_to_string;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::filer::{FilerConfig, FilerLifetime, SerializableDisknode, WatchStatus};
+use crate::filer::{FilerConfig, FilerLifetime, SerializableDisknode, WatchStatus, is_in_zzz_home};
 use crate::handlers::filesystem::{
     ERROR_INVALID_PATH, ERROR_NOT_A_DIRECTORY, ERROR_PATH_NOT_FOUND, ERROR_PERMISSION_DENIED,
 };
@@ -27,6 +27,12 @@ use crate::handlers::{App, WorkspaceInfo, not_found_error};
 /// `workspace_close` of a path that isn't an open workspace (`invalid_params`)
 /// — e.g. one a restart forgot, which a client can then drop locally.
 pub const ERROR_WORKSPACE_NOT_OPEN: &str = "workspace_not_open";
+
+/// `workspace_open` of a `.zzz` directory other than the app dir (`forbidden`).
+///
+/// Covers the directory and every path inside it — the CLI's daemon home
+/// (`~/.zzz/`, with `.env` and `bootstrap_token`) or another daemon's app dir.
+pub const ERROR_ZZZ_HOME_NOT_ALLOWED: &str = "zzz_home_not_allowed";
 
 // -- Inputs -----------------------------------------------------------------
 
@@ -98,13 +104,19 @@ fn require_absolute(path: &str) -> Result<(), JsonrpcError> {
 }
 
 /// Map a failure to resolve a `workspace_open` path: a missing path is
-/// `not_found`, a non-directory ancestor `invalid_params`, an OS refusal
-/// `forbidden`, anything else `internal_error`.
+/// `not_found`; a non-directory ancestor, a NUL byte, a symlink loop, or an
+/// over-long name `invalid_params`; an OS refusal `forbidden`; anything else
+/// `internal_error`.
 fn open_path_error(path: &str, error: &std::io::Error) -> JsonrpcError {
     use std::io::ErrorKind;
 
     let dir = display_dir(path);
+    // `ErrorKind::FilesystemLoop` is unstable, so a loop is matched by errno
+    if error.raw_os_error() == Some(libc::ELOOP) {
+        return invalid_path_error(&dir, error);
+    }
     match error.kind() {
+        ErrorKind::InvalidInput | ErrorKind::InvalidFilename => invalid_path_error(&dir, error),
         ErrorKind::NotFound => not_found_error(
             &format!("failed to open workspace: directory does not exist: {dir}"),
             ERROR_PATH_NOT_FOUND,
@@ -119,6 +131,13 @@ fn open_path_error(path: &str, error: &std::io::Error) -> JsonrpcError {
         ),
         _ => internal_error_with_source(&format!("failed to open workspace: {dir}"), error),
     }
+}
+
+fn invalid_path_error(dir: &str, error: &std::io::Error) -> JsonrpcError {
+    invalid_params(
+        &format!("failed to open workspace: invalid path ({error}): {dir}"),
+        Some(ERROR_INVALID_PATH),
+    )
 }
 
 /// `path` with a trailing `/`, as the workspace is keyed.
@@ -185,6 +204,19 @@ pub async fn workspace_open(
                 display_dir(path)
             ),
             Some(ERROR_NOT_A_DIRECTORY),
+        ));
+    }
+
+    // the daemon home's `.env` and `bootstrap_token` must never be indexed
+    // and broadcast — checked on the canonical path, so no symlink or
+    // `..` spelling gets around it
+    if is_in_zzz_home(&canonical, Path::new(&app.zzz_dir)) {
+        return Err(forbidden(
+            &format!(
+                "failed to open workspace: .zzz directories hold zzz's own files (secrets, tokens) and can't be opened as a workspace: {}",
+                display_dir(&canonical.to_string_lossy())
+            ),
+            Some(ERROR_ZZZ_HOME_NOT_ALLOWED),
         ));
     }
 
@@ -390,4 +422,90 @@ fn broadcast_workspace_closed(app: &App, workspace: &WorkspaceInfo) -> Result<()
     let notification = notify_to_string("workspace_changed", &params_value);
     app.broadcast(&notification);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use fuz_http::JsonrpcErrorCode;
+
+    use super::*;
+
+    fn reason(error: &JsonrpcError) -> Option<&str> {
+        error.data.as_ref()?.get("reason")?.as_str()
+    }
+
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new() -> Self {
+            let dir = std::env::temp_dir().join(format!("zzz_ws_test_{}", uuid::Uuid::new_v4()));
+            std::fs::create_dir_all(&dir).unwrap();
+            Self(dir)
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// The error `workspace_open` returns for `path`'s canonicalize failure.
+    fn open_error(path: &str) -> JsonrpcError {
+        let error = std::fs::canonicalize(path).expect_err("canonicalize fails");
+        open_path_error(path, &error)
+    }
+
+    #[test]
+    fn malformed_paths_are_invalid_params_not_internal_errors() {
+        let tmp = TempDir::new();
+        let a = tmp.0.join("a");
+        let b = tmp.0.join("b");
+        std::os::unix::fs::symlink(&b, &a).unwrap();
+        std::os::unix::fs::symlink(&a, &b).unwrap();
+        let long_name = tmp.0.join("x".repeat(300));
+
+        for path in [
+            "/tmp/nul\0byte".to_owned(),
+            a.to_str().unwrap().to_owned(),
+            long_name.to_str().unwrap().to_owned(),
+        ] {
+            let error = open_error(&path);
+            assert_eq!(error.code, JsonrpcErrorCode::InvalidParams, "{path:?}");
+            assert_eq!(reason(&error), Some(ERROR_INVALID_PATH), "{path:?}");
+            assert!(
+                error
+                    .message
+                    .starts_with("failed to open workspace: invalid path"),
+                "{}",
+                error.message
+            );
+        }
+    }
+
+    #[test]
+    fn open_path_errors_map_by_cause() {
+        let tmp = TempDir::new();
+        let missing = tmp.0.join("missing");
+        let error = open_error(missing.to_str().unwrap());
+        assert_eq!(error.code, JsonrpcErrorCode::NotFound);
+        assert_eq!(reason(&error), Some(ERROR_PATH_NOT_FOUND));
+
+        let file = tmp.0.join("f");
+        std::fs::write(&file, "x").unwrap();
+        let error = open_error(file.join("sub").to_str().unwrap());
+        assert_eq!(error.code, JsonrpcErrorCode::InvalidParams);
+        assert_eq!(reason(&error), Some(ERROR_NOT_A_DIRECTORY));
+
+        let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        let error = open_path_error("/x", &denied);
+        assert_eq!(error.code, JsonrpcErrorCode::Forbidden);
+        assert_eq!(reason(&error), Some(ERROR_PERMISSION_DENIED));
+
+        let other = std::io::Error::other("boom");
+        let error = open_path_error("/x", &other);
+        assert_eq!(error.code, JsonrpcErrorCode::InternalError);
+    }
 }

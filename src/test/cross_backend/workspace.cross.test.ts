@@ -282,6 +282,63 @@ describe('workspace cross-backend', () => {
 		}
 	});
 
+	test('workspace_open_refuses_zzz_homes', async () => {
+		const fixture = await setup_test();
+		const tmp_dir = await create_tmp_workspace('zzz_home');
+		const home = join(tmp_dir, '.zzz');
+		try {
+			await mkdir(join(home, 'run'), { recursive: true });
+			await writeFile(join(home, '.env'), 'SECRET_FUZ_COOKIE_KEYS=not-for-a-workspace', 'utf-8');
+			await symlink(home, join(tmp_dir, 'home_link'));
+
+			// the daemon home, a directory inside it, and a symlink to it
+			for (const path of [home, join(home, 'run'), join(tmp_dir, 'home_link')]) {
+				const res = await call(fixture, 'workspace_open', { path });
+				assert.ok(!res.ok, `expected ${path} to be refused`);
+				assert.equal(res.error.code, -32002, path);
+				assert.deepEqual(res.error.data, { reason: 'zzz_home_not_allowed' }, path);
+			}
+			const list = await call(fixture, 'workspace_list');
+			assert.ok(list.ok);
+			const workspaces = (list.result as Record<string, unknown>).workspaces as Array<
+				Record<string, unknown>
+			>;
+			assert.ok(!workspaces.some((w) => (w.path as string).startsWith(home)), 'nothing opened');
+
+			// its parent opens, with the `.zzz` directory skipped
+			const open = await call(fixture, 'workspace_open', { path: tmp_dir });
+			assert.ok(open.ok, `workspace_open failed: ${JSON.stringify(open)}`);
+			const files = (open.result as Record<string, unknown>).files as Array<
+				Record<string, unknown>
+			>;
+			assert.ok(!files.some((f) => (f.id as string).startsWith(home)), 'home not indexed');
+		} finally {
+			await call(fixture, 'workspace_close', { path: tmp_dir }).catch(() => undefined);
+			await remove_dir(tmp_dir);
+		}
+	});
+
+	test('workspace_open_malformed_paths_are_invalid_params', async () => {
+		const fixture = await setup_test();
+		const tmp_dir = await create_tmp_workspace('malformed');
+		try {
+			await symlink(join(tmp_dir, 'b'), join(tmp_dir, 'a'));
+			await symlink(join(tmp_dir, 'a'), join(tmp_dir, 'b'));
+			for (const path of [
+				`${tmp_dir}/nul\0byte`,
+				join(tmp_dir, 'a'),
+				join(tmp_dir, 'x'.repeat(300))
+			]) {
+				const res = await call(fixture, 'workspace_open', { path });
+				assert.ok(!res.ok, `expected ${JSON.stringify(path)} to fail`);
+				assert.equal(res.error.code, -32602, JSON.stringify(path));
+				assert.deepEqual(res.error.data, { reason: 'invalid_path' }, JSON.stringify(path));
+			}
+		} finally {
+			await remove_dir(tmp_dir);
+		}
+	});
+
 	test('workspace_open_nonexistent', async () => {
 		const fixture = await setup_test();
 		const res = await rpc_call({

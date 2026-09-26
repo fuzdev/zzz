@@ -338,28 +338,35 @@ impl PtyManager {
     /// Close a terminal: send `signal`, hang up the session, and return the
     /// exit code if the process ended within the close grace.
     ///
-    /// Returns `None` if the `terminal_id` doesn't exist or isn't owned by
-    /// `owner`, `Some(None)` if the process was still running at the end of
+    /// Returns `Ok(None)` if the process was still running at the end of
     /// the grace — it's then reaped in the background (`SIGKILL` after
     /// `REAP_KILL_AFTER`), and no `terminal_exited` is sent for it.
-    pub async fn close(&self, owner: Uuid, terminal_id: &str, signal: i32) -> Option<Option<i32>> {
+    ///
+    /// # Errors
+    ///
+    /// `TerminalNotFound` when `owner` has no terminal `terminal_id` —
+    /// including one whose process already exited.
+    pub async fn close(
+        &self,
+        owner: Uuid,
+        terminal_id: &str,
+        signal: i32,
+    ) -> Result<Option<i32>, TerminalNotFound> {
         let (reply_tx, reply_rx) = oneshot::channel();
         {
             let mut terminals = self.terminals.write().await;
-            if terminals.get(terminal_id)?.owner != owner {
-                return None;
-            }
-            let entry = terminals.remove(terminal_id)?;
+            owned_entry(&terminals, owner, terminal_id)?;
+            let entry = terminals.remove(terminal_id).ok_or(TerminalNotFound)?;
             // Sent under the lock: a task finishing on EOF removes its entry
             // under the same lock, so it either sees this request or already
-            // removed the entry (and this returned `None` above).
+            // removed the entry (and this returned `TerminalNotFound` above).
             let _ = entry.close.send(CloseRequest {
                 signal,
                 reply: Some(reply_tx),
                 kill_after: REAP_KILL_AFTER,
             });
         }
-        Some(reply_rx.await.ok().flatten())
+        Ok(reply_rx.await.ok().flatten())
     }
 
     /// Close every terminal owned by `owner` — for an account that was
@@ -1034,7 +1041,7 @@ mod tests {
             );
             assert_eq!(
                 manager.close(account, terminal_id, libc::SIGTERM).await,
-                None
+                Err(TerminalNotFound)
             );
         }
         assert!(

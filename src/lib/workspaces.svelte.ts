@@ -89,10 +89,17 @@ export class Workspaces extends Cell<typeof WorkspacesJson> {
 		return { paths, stop: () => this.#change_trackers.delete(paths) };
 	}
 
+	// not reactive — bookkeeping for `receive_remote_open`
+	#opening = 0;
+	readonly #remote_open_paths: Set<string> = new Set();
+
 	/**
 	 * Add a workspace. If a workspace with the same path already exists, returns it.
+	 *
+	 * @param options.activate - make it the active workspace when none is
+	 *   (default `true`)
 	 */
-	add(json: WorkspaceJsonInput): Workspace {
+	add(json: WorkspaceJsonInput, options?: { activate?: boolean }): Workspace {
 		for (const paths of this.#change_trackers) paths.add(json.path);
 		const existing = this.get_by_path(json.path as DiskfileDirectoryPath);
 		if (existing) return existing;
@@ -100,12 +107,33 @@ export class Workspaces extends Cell<typeof WorkspacesJson> {
 		const workspace = new Workspace({ app: this.app, json });
 		this.items.add(workspace);
 
-		// Auto-activate if no active workspace
-		if (this.active_id === null) {
+		if (this.active_id === null && options?.activate !== false) {
 			this.active_id = workspace.id;
 		}
 
 		return workspace;
+	}
+
+	/**
+	 * Handles a `workspace_changed` open — broadcast for every open, this
+	 * client's own included. A workspace this client doesn't know was opened
+	 * elsewhere (another tab, `zzz <dir>`): it's added without being activated,
+	 * and since the notification carries none of its files (the daemon's
+	 * initial scan broadcasts nothing), the session is resynced to fetch them
+	 * (`Frontend.resync_session`). While this client's own `open` is in flight
+	 * the notification may be its own, landing before the reply that carries
+	 * the files, so the resync waits for the opens to settle and is skipped
+	 * when one of them turns out to be that workspace.
+	 */
+	receive_remote_open(json: WorkspaceInfoJson): void {
+		const known = this.get_by_path(json.path);
+		this.add(json, { activate: false }); // records the open for `track_changes` either way
+		if (known) return;
+		if (this.#opening > 0) {
+			this.#remote_open_paths.add(json.path);
+		} else {
+			this.app.resync_session();
+		}
 	}
 
 	/**
@@ -126,23 +154,44 @@ export class Workspaces extends Cell<typeof WorkspacesJson> {
 		options?: { reconcile_files?: boolean }
 	): Promise<Result<{ value: Workspace }, { error: JsonrpcErrorObject }>> {
 		const changes = this.app.diskfiles.track_changes();
-		let result: Awaited<ReturnType<typeof this.app.api.workspace_open>>;
+		// the path this open added — its own notification needs no resync
+		let opened_path: string | null = null;
+		this.#opening++;
 		try {
-			result = await this.app.api.workspace_open({ path });
-		} finally {
-			changes.stop();
-		}
-		if (!result.ok) return result;
+			let result: Awaited<ReturnType<typeof this.app.api.workspace_open>>;
+			try {
+				result = await this.app.api.workspace_open({ path });
+			} finally {
+				changes.stop();
+			}
+			if (!result.ok) return result;
 
-		const { workspace: workspace_json, watch_status, files } = result.value;
-		const workspace = this.add(workspace_json);
-		workspace.watch_status = watch_status;
-		if (options?.reconcile_files) {
-			this.app.diskfiles.reconcile(files, [workspace.path], { skip_paths: changes.paths });
-		} else {
-			this.app.diskfiles.add_initial(files, changes.paths);
+			const { workspace: workspace_json, watch_status, files } = result.value;
+			const workspace = this.add(workspace_json);
+			opened_path = workspace.path;
+			workspace.watch_status = watch_status;
+			if (options?.reconcile_files) {
+				this.app.diskfiles.reconcile(files, [workspace.path], { skip_paths: changes.paths });
+			} else {
+				this.app.diskfiles.add_initial(files, changes.paths);
+			}
+			return { ok: true, value: workspace };
+		} finally {
+			// on every exit, a throw included, so deferred remote opens always resync
+			this.#opening--;
+			if (opened_path !== null) this.#remote_open_paths.delete(opened_path);
+			this.#flush_remote_opens();
 		}
-		return { ok: true, value: workspace };
+	}
+
+	/**
+	 * Once no open is in flight, resyncs the session for the workspaces
+	 * `receive_remote_open` deferred that no open of this client accounted for.
+	 */
+	#flush_remote_opens(): void {
+		if (this.#opening > 0 || this.#remote_open_paths.size === 0) return;
+		this.#remote_open_paths.clear();
+		this.app.resync_session();
 	}
 
 	remove(id: Uuid): void {

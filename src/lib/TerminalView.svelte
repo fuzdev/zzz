@@ -70,9 +70,11 @@
 
 			if (destroyed) return;
 
+			// no `convertEol`: the output comes from a real PTY, whose line
+			// discipline already turns `\n` into `\r\n` in cooked mode (ONLCR) —
+			// a full-screen program that turns ONLCR off means a bare line feed
 			term = new Xterm({
 				cursorBlink: true,
-				convertEol: true,
 				fontSize: 14,
 				fontFamily: 'monospace',
 				theme: {

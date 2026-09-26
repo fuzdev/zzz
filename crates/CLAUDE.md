@@ -126,8 +126,8 @@ An unset or blank (empty or whitespace) `DATABASE_URL` or
 ### Optional Environment Variables
 
 - `FUZ_BOOTSTRAP_TOKEN_PATH` — Path to bootstrap token file
-- `PUBLIC_ZZZ_DIR` — App directory (default `.zzz`, relative to the working directory); created at boot (with missing parents, mode `0700`) if absent — boot fails, naming the path, if it can't be
-- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (no `~` expansion)
+- `PUBLIC_ZZZ_DIR` — App directory (default `.zzz`, relative to the working directory); created at boot (with missing parents, mode `0700`) if absent — boot fails, naming the path, if it can't be, or if it resolves to the working directory itself (`check_app_dir_is_not_cwd`: the app dir's filer skips `.zzz` only below its root, so `PUBLIC_ZZZ_DIR=.` under the CLI would index the daemon home's `.env` and `bootstrap_token`; any other directory is accepted, the default being the subdirectory `.zzz`). It catches the daemon home only as the working directory — an explicit `PUBLIC_ZZZ_DIR` naming `~/.zzz` for a daemon run elsewhere makes the home the app dir and indexes its `.env`, so don't
+- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (no `~` expansion); an entry that resolves to, or inside, a `.zzz` directory other than the app dir fails boot naming the variable and the path (`check_scoped_dirs`, run with the config parse, before the DB is touched)
 - `ZZZ_PORT` — Server port (default 4460, `--port` overrides); an invalid port (either source — anything but `1..=65535`) refuses to boot rather than falling back to the default
 - `ZZZ_STATIC_DIR` — Static file directory (must be a directory, or boot fails)
 - `SECRET_ANTHROPIC_API_KEY` / `SECRET_OPENAI_API_KEY` / `SECRET_GOOGLE_API_KEY` — provider keys, read once at boot
@@ -296,7 +296,11 @@ conform to the shared fuz_app contract. The tests live in
   and idempotent open; symlinks and link loops skipped; an unreadable
   subdirectory skipped while its siblings are indexed; an unreadable root
   refused with `forbidden` and nothing registered),
-  not-a-directory (`invalid_params`) + nonexistent (`not_found`) errors, and `workspace_changed` broadcast on
+  not-a-directory (`invalid_params`) + nonexistent (`not_found`) errors, a
+  NUL byte / symlink loop / over-long name (`invalid_params` /
+  `invalid_path`), `.zzz` directories refused (`zzz_home_not_allowed` — the
+  directory, a subdirectory, and a symlink to it, while its parent opens with
+  it skipped), and `workspace_changed` broadcast on
   open/close (no broadcast on an idempotent open).
 - **`filesystem.cross.test.ts`** — scoped `diskfile_update` / `diskfile_delete`,
   `directory_create` (missing parents created, a taken name `conflict` /
@@ -316,11 +320,12 @@ conform to the shared fuz_app contract. The tests live in
 - **`terminal.cross.test.ts`** — PTY create / read / write / close lifecycle,
   `terminal_data` / `terminal_exited` notifications over WS, live resize and
   out-of-range resize rejection, explicit cwd and bad-cwd spawn failure,
-  nonexistent-command handling, a ~22KB paste round-trip through `cat`
+  nonexistent-command handling, a relative `cwd` and unsupported close
+  signals refused (`invalid_params`), a ~22KB paste round-trip through `cat`
   (partial writes continued), multibyte output split across reads, env
   scrubbing (no `SECRET_*` / `DATABASE_URL` / … in the child), reaping of a
   child that ignores `SIGTERM` + `SIGHUP` (no zombie after close),
-  `not_found` for a missing terminal ID, ownership scoping (a second
+  `not_found` for a missing terminal ID (close included), ownership scoping (a second
   account gets no output, can't drive or close the terminal, and gets
   replies identical to an unknown id's; the owner's second socket does get
   output), `session_load`'s `terminal_ids` (running listed; exited, closed,
@@ -611,14 +616,24 @@ metadata contract, the bootstrap success/failure audit rows, and the
   `conflict` (-32004; `already_exists`, `replaced_during_save`); any other
   I/O failure → `internal_error` (-32603, no
   reason). Messages keep the `failed to … : …` prefix. `workspace_open` maps
-  the same way (missing → `not_found`, not a directory → `invalid_params`, a
-  directory whose listing is refused → `forbidden` / `permission_denied`).
+  the same way (missing → `not_found`; not a directory → `invalid_params` /
+  `not_a_directory`; a NUL byte, a symlink loop, or an over-long name →
+  `invalid_params` / `invalid_path`; a directory whose listing is refused →
+  `forbidden` / `permission_denied`), and refuses a path that is, or is
+  inside, a directory named `.zzz` other than the app dir — checked on the
+  canonical path, so no symlink gets around it — with `forbidden` /
+  `zzz_home_not_allowed` (`handlers::workspace::ERROR_ZZZ_HOME_NOT_ALLOWED`,
+  `filer::is_in_zzz_home`): the CLI's daemon home holds `.env` and
+  `bootstrap_token`. A filer started on such a root refuses too
+  (`FilerConfig::root_in_zzz_home`); a scoped dir there fails boot before
+  any filer starts (`PUBLIC_ZZZ_SCOPED_DIRS` below).
   `workspace_close` of a path that isn't open → `invalid_params` /
   `workspace_not_open` (`handlers::workspace::ERROR_WORKSPACE_NOT_OPEN`).
 - **Atomic writes**: `ScopedFs::write_file` stages content in a hidden
   `.zzz-tmp-<uuid>` file beside the target (`O_EXCL | O_NOFOLLOW`), gives it
-  the replaced file's mode and (best-effort `fchown`) owner + group, writes,
-  fsyncs, renames it over the target, and fsyncs the directory
+  the replaced file's mode minus setuid/setgid (zzz always drops them — the
+  content changed) and (best-effort `fchown`) owner +
+  group, writes, fsyncs, renames it over the target, and fsyncs the directory
   (best-effort), all on a blocking thread; the temp file is removed on any
   failure. So `ENOSPC` / `EFBIG` / a crash leave the old file intact, and
   concurrent saves to one path never interleave (the last rename wins — no
@@ -693,7 +708,8 @@ metadata contract, the bootstrap success/failure audit rows, and the
     must be `1..=65535` (`invalid_params` otherwise, never truncated).
   - **Exit**: on EOF the task closes the master, reaps the child, and
     sends `terminal_exited` with the real exit code. `terminal_close`
-    sends the signal, waits 50ms, closes the master (the hangup ends an
+    sends the signal (`SIGTERM` by default, or `SIGKILL`; any other is
+    `invalid_params`, never silently a `SIGTERM`), waits 50ms, closes the master (the hangup ends an
     interactive shell that ignores `SIGTERM`), waits 100ms more, and replies
     with the exit code or `null`; a child still alive is reaped in the
     background (`SIGKILL` after 3s) — no zombie outlives its terminal, and no
@@ -715,7 +731,9 @@ metadata contract, the bootstrap success/failure audit rows, and the
     Notifications go to every socket of the account, regardless of which API
     token or session opened it.
   - **Spawn** runs in its own task (so a caller dropped mid-spawn can't
-    abandon a live PTY) around `spawn_blocking`. A bad `cwd` or unexecutable command
+    abandon a live PTY) around `spawn_blocking`. A `cwd` must be absolute
+    (`invalid_params` / `invalid_path` otherwise — a relative one would
+    resolve against zzzd's own working directory). A bad `cwd` or unexecutable command
     fails `terminal_create` (fuz_pty reports the child's `chdir` / `execvpe`
     errno over a close-on-exec pipe). The PTY pair is created close-on-exec
     atomically, so no other child inherits a terminal's master or slave, and
@@ -732,10 +750,11 @@ metadata contract, the bootstrap success/failure audit rows, and the
     prefix match also drops the user's own `FUZ_*` variables (e.g. for the
     `fuz` CLI) from terminals.
   - **Missing terminal IDs** (unknown, ended, lost to a restart, or another
-    account's — one `pty_manager::TerminalNotFound`): `terminal_data_send`
-    and `terminal_resize` fail with `not_found` (`"terminal not found"`, no
-    `data`), so a client notices a terminal it thinks is running is gone;
-    `terminal_close` stays idempotent (`{exit_code: null}`).
+    account's — one `pty_manager::TerminalNotFound`): `terminal_data_send`,
+    `terminal_resize`, and `terminal_close` fail with `not_found`
+    (`"terminal not found"`, no `data`), so a client notices a terminal it
+    thinks is running is gone; the frontend takes a `not_found` close as
+    closed, since the process is already gone.
 - **Provider system**: Enum-dispatched (`Provider` enum, not trait objects) —
   3 providers known at compile time, exhaustive matching. API keys come from
   the `SECRET_*_API_KEY` env vars at construction and are never mutated at

@@ -228,11 +228,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     let bootstrap_available =
         fuz_auth::is_bootstrap_available(&pool, config.bootstrap_token_path.as_deref()).await;
 
-    let scoped_dir_strings: Vec<String> = config
-        .scoped_dirs
-        .iter()
-        .map(|p| resolve_dir(p))
-        .collect::<Result<_, _>>()?;
+    let scoped_dir_strings = std::mem::take(&mut config.scoped_dirs);
 
     // Permanent roots: zzz_dir first, then scoped_dirs — canonicalized paths,
     // not raw config paths
@@ -809,7 +805,9 @@ pub struct Config {
     pub secret_cookie_keys: String,
     pub bootstrap_token_path: Option<String>,
     pub allowed_origins: Option<String>,
-    pub scoped_dirs: Vec<PathBuf>,
+    /// `PUBLIC_ZZZ_SCOPED_DIRS`, resolved (canonical, trailing `/`) and
+    /// checked by [`check_scoped_dirs`].
+    pub scoped_dirs: Vec<String>,
     pub zzz_dir: String,
     /// Register `_testing_*` actions on live dispatchers. Set by integration
     /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave unset.
@@ -922,10 +920,59 @@ fn resolve_dir(path: &Path) -> Result<String, ServerError> {
 /// # Errors
 ///
 /// Returns [`ServerError::Config`] when the directory can't be created or
-/// resolved.
+/// resolved, or is the working directory (see [`check_app_dir_is_not_cwd`]).
 pub fn ensure_zzz_dir_from_env() -> Result<String, ServerError> {
     let raw = env_non_empty("PUBLIC_ZZZ_DIR")?.unwrap_or_else(|| DEFAULT_ZZZ_DIR.to_owned());
-    ensure_app_dir(Path::new(&raw))
+    let zzz_dir = ensure_app_dir(Path::new(&raw))?;
+    // an unreadable working directory can't equal the app dir, which resolved
+    if let Ok(cwd) = std::env::current_dir() {
+        check_app_dir_is_not_cwd(&zzz_dir, &cwd)?;
+    }
+    Ok(zzz_dir)
+}
+
+/// Refuse an app dir that is the daemon's working directory — under the CLI
+/// that's the daemon home `~/.zzz/`, whose `.env` and `bootstrap_token` the
+/// app dir's filer (which skips `.zzz` only below its root) would index and
+/// broadcast. Any other directory is fine, like the default `.zzz`.
+///
+/// This catches the daemon home only when it's the working directory: an
+/// explicit `PUBLIC_ZZZ_DIR` naming `~/.zzz` for a daemon run elsewhere makes
+/// the home the app dir all the same, indexing its `.env` — don't.
+///
+/// # Errors
+///
+/// [`ServerError::Config`] naming both when `zzz_dir` (resolved) is `cwd`.
+fn check_app_dir_is_not_cwd(zzz_dir: &str, cwd: &Path) -> Result<(), ServerError> {
+    let cwd = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
+    if Path::new(zzz_dir) == cwd {
+        return Err(ServerError::Config(format!(
+            "PUBLIC_ZZZ_DIR resolves to the daemon's working directory {zzz_dir}: the app dir must not be the working directory itself (the default `{DEFAULT_ZZZ_DIR}` is a subdirectory of it), since the working directory holds the daemon's own files (the CLI's `.env` and `bootstrap_token`)"
+        )));
+    }
+    Ok(())
+}
+
+/// Refuse a scoped dir that is, or is inside, a `.zzz` directory other than
+/// the app dir ([`filer::is_in_zzz_home`]) — its filer would refuse to start
+/// (so nothing would be indexed) while it stayed a writable `ScopedFs` root,
+/// and `.zzz` directories hold zzz's own files (the CLI's `.env` and
+/// `bootstrap_token`). Paths are the resolved forms.
+///
+/// # Errors
+///
+/// [`ServerError::Config`] naming `PUBLIC_ZZZ_SCOPED_DIRS` and the first
+/// such dir.
+fn check_scoped_dirs(scoped_dirs: &[String], zzz_dir: &str) -> Result<(), ServerError> {
+    let app_dir = Path::new(zzz_dir);
+    scoped_dirs
+        .iter()
+        .find(|dir| filer::is_in_zzz_home(Path::new(dir), app_dir))
+        .map_or(Ok(()), |dir| {
+            Err(ServerError::Config(format!(
+                "PUBLIC_ZZZ_SCOPED_DIRS entry {dir} is in a .zzz directory other than the app dir {zzz_dir}: .zzz directories hold zzz's own files (secrets, tokens) and can't be scoped"
+            )))
+        })
 }
 
 /// Create the app directory `path` if it doesn't exist, then
@@ -1122,15 +1169,18 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
     let bootstrap_token_path = env_non_empty("FUZ_BOOTSTRAP_TOKEN_PATH")?;
     let allowed_origins = env_var_utf8("FUZ_ALLOWED_ORIGINS")?;
 
-    let scoped_dirs = env_var_utf8("PUBLIC_ZZZ_SCOPED_DIRS")?
+    let zzz_dir = ensure_zzz_dir_from_env()?;
+
+    // resolved and checked here, before anything touches the DB, so a bad
+    // entry is reported without one
+    let scoped_dirs: Vec<String> = env_var_utf8("PUBLIC_ZZZ_SCOPED_DIRS")?
         .unwrap_or_default()
         .split(',')
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .map(PathBuf::from)
-        .collect();
-
-    let zzz_dir = ensure_zzz_dir_from_env()?;
+        .map(|dir| resolve_dir(Path::new(dir)))
+        .collect::<Result<_, _>>()?;
+    check_scoped_dirs(&scoped_dirs, &zzz_dir)?;
 
     let enable_test_actions =
         parse_test_actions_flag(env_var_utf8("ZZZ_ENABLE_TEST_ACTIONS")?.as_deref())?;
@@ -1380,6 +1430,44 @@ mod config_paths {
         std::os::unix::fs::symlink(tmp.0.join("real"), tmp.0.join("link")).unwrap();
         let resolved = ensure_app_dir(&tmp.0.join("link/app")).unwrap();
         assert_eq!(resolved, format!("{}/", tmp.0.join("real/app").display()));
+    }
+
+    #[test]
+    fn the_app_dir_must_not_be_the_working_directory() {
+        let tmp = TempDir::new();
+        let home = tmp.0.join(".zzz");
+        let app = ensure_app_dir(&home.join(".zzz")).unwrap();
+        let home_dir = ensure_app_dir(&home).unwrap();
+
+        let Err(ServerError::Config(message)) = check_app_dir_is_not_cwd(&home_dir, &home) else {
+            panic!("expected the daemon home to be refused as the app dir");
+        };
+        assert!(message.contains("PUBLIC_ZZZ_DIR"), "{message}");
+        assert!(message.contains(&home_dir), "{message}");
+        // a subdirectory, the default, is fine
+        assert!(check_app_dir_is_not_cwd(&app, &home).is_ok());
+        // so is an unrelated directory
+        assert!(check_app_dir_is_not_cwd(&app, &tmp.0).is_ok());
+    }
+
+    #[test]
+    fn scoped_dirs_in_a_zzz_home_refuse_to_boot() {
+        let app = "/home/u/.zzz/.zzz/";
+        for dir in ["/home/u/.zzz/", "/home/u/.zzz/run/", "/w/.zzz/"] {
+            let Err(ServerError::Config(message)) =
+                check_scoped_dirs(&["/w/ok/".to_owned(), dir.to_owned()], app)
+            else {
+                panic!("expected {dir} to be refused");
+            };
+            assert!(message.contains("PUBLIC_ZZZ_SCOPED_DIRS"), "{message}");
+            assert!(message.contains(dir), "{message}");
+        }
+        let fine = [
+            "/home/u/".to_owned(),
+            "/home/u/.zzz/.zzz/".to_owned(),
+            "/home/u/.zzz/.zzz/state/".to_owned(),
+        ];
+        assert!(check_scoped_dirs(&fine, app).is_ok());
     }
 
     #[test]

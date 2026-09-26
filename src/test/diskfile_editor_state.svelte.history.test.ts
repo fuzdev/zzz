@@ -365,16 +365,84 @@ describe('history clearing', () => {
 		assert.isNull(editor_state.unsaved_edit_entry_id);
 	});
 
-	test('clear_history falls back to the newest saved entry without one for the disk content', () => {
+	test('clear_history records the disk content when no saved entry holds it', () => {
 		const history = editor_state.history;
 		history.entries = [];
 		history.add_entry('Entry 1');
-		const newest = history.add_entry('Newest entry');
+		history.add_entry('Newest entry');
 
 		editor_state.clear_history();
 
 		assert.strictEqual(history.entries.length, 1);
-		assert.include(history.entries[0], { id: newest.id, is_original_state: true });
+		assert.include(history.entries[0], { content: TEST_CONTENT, is_original_state: true });
+		assert.strictEqual(editor_state.current_content, TEST_CONTENT);
+		assert.isFalse(editor_state.dirty);
+	});
+
+	test('saving a picked discarded edit records a saved state that clear_history keeps', async () => {
+		editor_state.current_content = 'mine';
+		const draft_id = editor_state.unsaved_edit_entry_id!;
+		editor_state.discard_draft(); // "reload from disk"
+		editor_state.set_content_from_history(draft_id); // pick the discarded text back
+		assert.ok(await editor_state.save_changes());
+		assert.strictEqual(test_diskfile.content, 'mine');
+
+		// the save is a real saved state, not the discarded entry
+		const shown = editor_state.selected_history_entry!;
+		assert.notStrictEqual(shown.id, draft_id);
+		assert.include(shown, { content: 'mine', is_unsaved_edit: false, is_discarded_edit: false });
+		assert.include(editor_state.history.find_entry_by_id(draft_id), { is_discarded_edit: true });
+		assert.isFalse(editor_state.dirty);
+
+		editor_state.clear_history();
+
+		assert.strictEqual(editor_state.current_content, 'mine');
+		assert.isFalse(editor_state.dirty);
+		assert.isFalse(editor_state.can_save, 'a save would not revert the disk');
+		assert.deepEqual(
+			editor_state.history.entries.map((entry) => [entry.content, entry.is_original_state]),
+			[['mine', true]]
+		);
+	});
+
+	test('saving a picked discarded edit records a saved state when an external write merges with it', async () => {
+		let finish_write!: (result: { ok: true; value: null }) => void;
+		app.diskfiles.update = () =>
+			new Promise((resolve) => {
+				finish_write = resolve;
+			});
+		editor_state.current_content = 'mine';
+		const draft_id = editor_state.unsaved_edit_entry_id!;
+		editor_state.discard_draft();
+		editor_state.set_content_from_history(draft_id);
+
+		const saving = editor_state.save_changes();
+		// the filer's debounce merged the save's change and an external write into one
+		test_diskfile.content = 'external';
+		editor_state.check_disk_changes();
+		finish_write({ ok: true, value: null });
+		assert.ok(await saving);
+
+		const saved = editor_state.history.entries.filter(
+			(entry) => entry.content === 'mine' && !entry.is_unsaved_edit && !entry.is_discarded_edit
+		);
+		assert.strictEqual(saved.length, 1, 'the save is recorded as a saved state');
+		assert.include(editor_state.history.find_entry_by_id(draft_id), { is_discarded_edit: true });
+	});
+
+	test('clear_history never falls back to a stale saved state', () => {
+		// the disk moved on while its entry was missing from the history
+		const history = editor_state.history;
+		history.entries = [];
+		const stale = history.add_entry('stale');
+		editor_state.set_content_from_history(stale.id);
+		history.add_entry('a discarded edit', { is_discarded_edit: true });
+
+		editor_state.clear_history();
+
+		assert.strictEqual(editor_state.current_content, TEST_CONTENT);
+		assert.isFalse(editor_state.dirty);
+		assert.isUndefined(history.find_entry_by_id(stale.id));
 	});
 
 	test('clear_history preserves the unsaved edits', () => {

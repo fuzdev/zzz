@@ -196,6 +196,8 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 
 	terminal_close: {
 		receive_error: ({ data: { error } }) => {
+			// `not_found`: the process already ended — nothing left to close
+			if (error.code === JSONRPC_ERROR_CODES.not_found) return;
 			console.error('[frontend_action_handlers] terminal_close failed:', error);
 		}
 	},
@@ -236,7 +238,7 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 	workspace_changed: {
 		receive: ({ data: { input } }) => {
 			if (input.type === 'open') {
-				frontend.workspaces.add(input.workspace);
+				frontend.workspaces.receive_remote_open(input.workspace);
 			} else {
 				frontend.workspaces.remove_by_path(input.workspace.path);
 			}

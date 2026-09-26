@@ -546,7 +546,11 @@ read and write files there. A workspace or scoped-dir filer whose root contains 
 app directory skips it by its full path (its own filer covers it), so a
 custom-named app dir (say `data`) doesn't hide other `data/` folders. Every
 filer also skips any directory named `.zzz` — the conventional app dir and the
-CLI's daemon home, which holds `.env` and `bootstrap_token`.
+CLI's daemon home, which holds `.env` and `bootstrap_token` — and
+`workspace_open` refuses a `.zzz` directory, or a path inside one, other than
+the app dir itself (`forbidden` / `zzz_home_not_allowed`), so `zzz ~/.zzz/.env`
+(which opens `~/.zzz/`) can't index and broadcast those secrets. The app dir
+and the paths inside it stay openable.
 
 The daemon home holds the CLI's files beside it: `config.json`, `.env`,
 `bootstrap_token`, `static/` (the UI build), `bin/`, and `run/`
@@ -556,8 +560,9 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 Saves are atomic: `diskfile_update` stages the content in a hidden
 `.zzz-tmp-<uuid>` file beside the target (never indexed or broadcast by the
 filer), fsyncs it, and renames it over the target, so a failed or concurrent
-save never leaves an empty or mixed file. The file's mode is kept and its
-owner best-effort (a file owned by another user becomes the daemon user's when
+save never leaves an empty or mixed file. The file's mode is kept — except
+setuid and setgid, which zzz always drops on a save —
+and its owner best-effort (a file owned by another user becomes the daemon user's when
 zzz can't restore it); being a new inode, a saved file **loses its hardlinks**
 (other names keep the old content) and any xattrs/ACLs. An existing file must
 be writable by the daemon — a read-only file is refused (`permission_denied`)
@@ -594,8 +599,8 @@ prompt XML sent to models.
 - `SECRET_FUZ_COOKIE_KEYS` — HMAC signing keys (min 32 chars; required, like `DATABASE_URL`)
 - `FUZ_ALLOWED_ORIGINS` — Origin patterns for API verification (required — `zzzd` refuses to boot on an absent or empty list, since an empty allowlist would allow every origin; the CLI defaults it to `http://localhost:<port>,http://127.0.0.1:<port>`)
 - `FUZ_BOOTSTRAP_TOKEN_PATH` — One-shot admin bootstrap token path
-- `PUBLIC_ZZZ_DIR` — Zzz app directory (default `.zzz`)
-- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (`zzzd` doesn't expand `~`; the CLI does)
+- `PUBLIC_ZZZ_DIR` — Zzz app directory (default `.zzz`, a subdirectory of the daemon's working directory); must not be the working directory itself (under the CLI that's the daemon home, with `.env` and `bootstrap_token`) — `zzzd` refuses to boot on that. The check catches the daemon home only as the working directory: an explicit `PUBLIC_ZZZ_DIR` naming the absolute path of `~/.zzz` for a daemon run elsewhere (say `cargo xtask dev`) makes the home the app dir, whose filer indexes and broadcasts its `.env` — don't
+- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (`zzzd` doesn't expand `~`; the CLI does); an entry that is, or is inside, a `.zzz` directory other than the app dir refuses to boot
 - `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live dispatchers (integration tests only — must stay unset in prod; blank reads as unset, and the `zzz` CLI never passes it to a daemon it starts)
 - `SECRET_ANTHROPIC_API_KEY` — Claude API key
 - `SECRET_OPENAI_API_KEY` — OpenAI API key
@@ -666,8 +671,9 @@ accounts from each other.
 - Every session and every full-scope API token effectively has the daemon OS
   user's powers (a method-scoped token is limited to its listed methods):
   terminals (a shell as that user), `workspace_open` of any directory
-  including `/` (which makes it writable and scans it), and file writes
-  anywhere in scope.
+  including `/` (which makes it writable and scans it) — except `.zzz`
+  directories other than the app dir (see Zzz App Directory) — and file
+  writes anywhere in scope.
 - Terminal output and control are scoped to the account that created the
   terminal, and a deleted or purged account's terminals are closed — but that
   isn't a security boundary: any account can open its own shell.
@@ -684,8 +690,8 @@ accounts from each other.
 - **No persistent undo** — saves overwrite the file on disk; the editor keeps an in-memory per-file history (`DiskfileHistory`) you can restore from, lost on reload, as are unsaved drafts. A file's editing state is app-level (`Diskfiles.get_editor_state`): disk changes are recorded with no editor open, a draft survives tab switches and keeps a file deleted on disk, closing a draft's last tab asks save / don't save / cancel, and a disk change under a draft pauses saving until you overwrite or reload (see ./docs/architecture.md § File Editing). The conflict check is frontend-only: an external write landing between the backend receiving a save and its broadcast arriving is overwritten silently. Histories of files you've opened stay in memory for the session (each capped by entries and size)
 - **Symlinks are invisible** — the filer never follows or indexes a symlink (file or directory), and `ScopedFs` rejects symlinked paths, so linked files don't appear in the file tree
 - **File watching** — the filer adds one inotify watch per directory it indexes (never inside ignored directories like `node_modules/` or `target/`), and those watches come out of the user's `max_user_watches` budget, shared with every other process. An unreadable subdirectory is skipped (logged once) and picked up if it becomes readable; an unreadable root fails `workspace_open` with `forbidden` (`permission_denied`). When the watch limit is reached (or no watcher can be created), the workspace still opens with every file the scan found, but in **degraded mode**: `workspace_open` returns `watch_status: 'degraded'` (kept on the opening tab's `Workspace` cell; the workspaces page and the desk menu show it — another tab or a reload shows `'full'`), and the directories without a watch are rescanned every 5 seconds or more (retrying their watches each time), so changes there show up late. A workspace that degrades or recovers after it opened isn't re-announced — only the daemon log says so. Rescans re-read only files whose `lstat` changed, trusting a stamp only after the file has been still for 2 seconds
-- **Workspace scope** — opening a workspace makes its directory a writable `ScopedFs` root with its own filer until it's closed; closing never revokes the permanent roots (`PUBLIC_ZZZ_DIR` and `PUBLIC_ZZZ_SCOPED_DIRS`). Any absolute directory can be opened — `/` makes the whole filesystem writable and scans it
-- **Terminals** — any authenticated account can create a terminal, which runs a command as the daemon's OS user (see Security posture). Each terminal belongs to the account that created it: its output (`terminal_data`, `terminal_exited`) reaches only that account's sockets, and other accounts' `terminal_data_send` / `terminal_resize` / `terminal_close` act as if it didn't exist. The frontend's terminal list is in-memory, so a page reload loses it while the backend processes keep running
+- **Workspace scope** — opening a workspace makes its directory a writable `ScopedFs` root with its own filer until it's closed; closing never revokes the permanent roots (`PUBLIC_ZZZ_DIR` and `PUBLIC_ZZZ_SCOPED_DIRS`). Any absolute directory can be opened — `/` makes the whole filesystem writable and scans it — except a `.zzz` directory (or a path inside one) other than the app dir. A workspace opened in another tab (or by `zzz <dir>`) appears here unactivated, and its files arrive with a session resync
+- **Terminals** — any authenticated account can create a terminal, which runs a command as the daemon's OS user (see Security posture). Each terminal belongs to the account that created it: its output (`terminal_data`, `terminal_exited`) reaches only that account's sockets, and other accounts' `terminal_data_send` / `terminal_resize` / `terminal_close` act as if it didn't exist (`not_found`, as for an unknown or ended id). `terminal_create` takes only an absolute `cwd`, and `terminal_close` only `SIGTERM` (the default) or `SIGKILL`. The frontend's terminal list is in-memory, so a page reload loses it while the backend processes keep running
 - **PTY terminals** — terminal spawning uses the `fuz_pty` Rust crate as a native dependency of `zzz_server` (no FFI indirection). `PtyManager` runs one I/O task per terminal (readiness-driven reads, an ordered input queue that writes large pastes in full, reaping with `SIGKILL` escalation so closed terminals leave no zombies). Terminal children inherit zzzd's environment **minus** `SECRET_*`, `FUZ_*`, `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, and `PORT` — this keeps the daemon's API keys, cookie keys, and DB URL out of the child's environment, but it is not isolation (the shell runs as the same user and can read `/proc/<zzzd pid>/environ` or the `.env` files). The prefix match also drops the user's own `FUZ_*` variables from terminals; everything else (`PATH`, `HOME`, `SSH_AUTH_SOCK`, …) passes through. See ./crates/CLAUDE.md for details. Requires the sibling Rust workspace checked out alongside this repo (path dep).
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented

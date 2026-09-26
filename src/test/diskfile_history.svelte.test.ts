@@ -366,6 +366,22 @@ describe('DiskfileHistory', () => {
 			assert.ok(second.is_unsaved_edit);
 		});
 
+		test('add_entry never dedupes a saved state onto a draft or a discarded edit', () => {
+			const discarded = history.add_entry(TEST_CONTENT, { is_discarded_edit: true });
+			const saved = history.add_entry(TEST_CONTENT, { is_unsaved_edit: false });
+			assert.notStrictEqual(saved.id, discarded.id);
+			assert.isFalse(saved.is_discarded_edit);
+
+			const draft = history.add_entry('draft', { is_unsaved_edit: true });
+			const saved_draft = history.add_entry('draft');
+			assert.notStrictEqual(saved_draft.id, draft.id);
+			assert.isFalse(saved_draft.is_unsaved_edit);
+
+			// a saved state still dedupes onto a disk change or the original state
+			const disk = history.add_entry('disk', { is_disk_change: true });
+			assert.strictEqual(history.add_entry('disk', { is_unsaved_edit: false }).id, disk.id);
+		});
+
 		test('complex editing workflow', () => {
 			// Add original state
 			const original = history.add_entry('original content', {

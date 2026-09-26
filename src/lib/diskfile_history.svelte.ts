@@ -95,7 +95,12 @@ export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
 	}
 
 	/**
-	 * Add a new history entry.
+	 * Add a new history entry — or return the current one when it's a duplicate:
+	 * the same content, the same kind (an unsaved edit, a discarded edit, or a
+	 * saved state — each defaulting to a saved state when not given), and the
+	 * same `is_disk_change` / `is_original_state` / `label` wherever `options`
+	 * sets them. So adding a saved state never returns a draft or a discarded
+	 * edit that happens to hold its content.
 	 */
 	add_entry(content: string, options: DiskfileHistoryAddEntryOptions = EMPTY_OBJECT): HistoryEntry {
 		// Don't add duplicate entries with the same content and metadata back-to-back
@@ -180,14 +185,15 @@ export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
 	}
 
 	/**
-	 * Compare entry metadata flags with options
+	 * Whether `entry` matches `options` — the entry's kind always (the kind
+	 * flags default to `false`), the descriptive fields only where given.
 	 */
 	#has_same_metadata(entry: HistoryEntry, options: DiskfileHistoryAddEntryOptions): boolean {
 		return (
+			entry.is_unsaved_edit === (options.is_unsaved_edit ?? false) &&
+			entry.is_discarded_edit === (options.is_discarded_edit ?? false) &&
 			entry.is_disk_change === (options.is_disk_change ?? entry.is_disk_change) &&
-			entry.is_unsaved_edit === (options.is_unsaved_edit ?? entry.is_unsaved_edit) &&
 			entry.is_original_state === (options.is_original_state ?? entry.is_original_state) &&
-			entry.is_discarded_edit === (options.is_discarded_edit ?? entry.is_discarded_edit) &&
 			entry.label === (options.label ?? entry.label)
 		);
 	}

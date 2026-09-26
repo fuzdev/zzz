@@ -230,7 +230,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 	#session_retry_timeout: ReturnType<typeof setTimeout> | null = null;
 	#session_retry_count = 0;
-	/** A reconnect asked for a resync while a `session_load` was in flight. */
+	/** A resync (see `resync_session`) was asked for while a `session_load` was in flight. */
 	#session_resync_queued = false;
 	/**
 	 * Whether the latest `session_load` attempt was sent while the socket was
@@ -379,6 +379,9 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	 * workspaces opened or closed are left as they are, and only terminals
 	 * running when the request was sent can be found lost.
 	 *
+	 * A success also re-pings a backend whose last ping failed (see
+	 * `Capabilities.check_backend`).
+	 *
 	 * @returns whether this attempt succeeded
 	 */
 	async load_session(): Promise<boolean> {
@@ -409,6 +412,12 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 				this.session_status = 'success';
 				this.session_error = null;
 				this.#session_retry_count = 0;
+				// the backend answered, so a failed ping (e.g. at mount, while the
+				// daemon restarted) is stale — re-ping so the backend and filesystem
+				// capabilities recover instead of reading unavailable for good
+				if (this.capabilities.backend.status === 'failure') {
+					void this.capabilities.check_backend();
+				}
 				if (this.#session_resync_queued) {
 					// a reconnect during the request — the snapshot may predate it
 					this.#session_resync_queued = false;
@@ -502,12 +511,23 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		// the latest load already went over this socket
 		if (first && over_socket) return false;
 		if (!first) this.terminals.mark_output_gap();
+		this.resync_session();
+		return true;
+	}
+
+	/**
+	 * Reloads the session snapshot to reconcile state no notification
+	 * carries — after a reconnect, or a workspace opened elsewhere (see
+	 * `Workspaces.receive_remote_open`). With a load in flight, which may
+	 * predate the change, another follows it.
+	 */
+	resync_session(): void {
+		if (this.#disposed) return;
 		if (this.session_status === 'pending') {
 			this.#session_resync_queued = true;
 		} else {
 			void this.load_session();
 		}
-		return true;
 	}
 
 	#clear_session_boot(): void {

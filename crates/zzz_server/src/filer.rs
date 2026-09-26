@@ -204,8 +204,27 @@ const DEFAULT_IGNORED_DIRS: &[&str] = &[
     ".svelte-kit",
     "target",
     "dist",
-    ".zzz",
+    ZZZ_DIR_NAME,
 ];
+
+/// zzz's conventional app-dir and CLI daemon-home name.
+const ZZZ_DIR_NAME: &str = ".zzz";
+
+/// Whether `path` is, or is inside, a `.zzz` directory other than the app dir.
+///
+/// That's the CLI's daemon home (`~/.zzz/`, holding `.env` and
+/// `bootstrap_token`) or another daemon's app dir — any `.zzz` component
+/// that isn't part of `zzz_dir`'s own path.
+///
+/// The app dir and everything inside it pass, unless a `.zzz` sits below the
+/// app dir too (every filer skips those). Both paths are expected in their
+/// canonical form, so a symlink can't spell its way around the check.
+pub fn is_in_zzz_home(path: &Path, zzz_dir: &Path) -> bool {
+    path.strip_prefix(zzz_dir)
+        .unwrap_or(path)
+        .components()
+        .any(|c| c.as_os_str() == ZZZ_DIR_NAME)
+}
 
 /// Check if a single path component is ignored by every watcher: a name in
 /// the default directory ignore list, or a `ScopedFs::write_file` staging
@@ -619,6 +638,10 @@ pub struct FilerConfig {
     /// Shortest interval between degraded-mode rescans of the unwatched
     /// directories.
     pub degraded_rescan_interval: Duration,
+    /// The root is in a `.zzz` directory other than the app dir (see
+    /// [`is_in_zzz_home`]) — [`start_filer`] refuses it rather than index
+    /// the daemon home's secrets.
+    pub root_in_zzz_home: bool,
     /// Test seam: run as if no watcher could be created.
     #[cfg(test)]
     pub no_watcher: bool,
@@ -633,6 +656,7 @@ impl FilerConfig {
             ignored_dirs: vec![],
             watch_limit: None,
             degraded_rescan_interval: DEGRADED_RESCAN_INTERVAL,
+            root_in_zzz_home: false,
             #[cfg(test)]
             no_watcher: false,
         }
@@ -644,6 +668,9 @@ impl FilerConfig {
     /// matched by path, not name, so same-named directories elsewhere (an app
     /// dir named `data` vs a workspace's own `data/`) stay visible; `.zzz`
     /// directories are ignored everywhere by `DEFAULT_IGNORED_DIRS`.
+    ///
+    /// A root in a `.zzz` directory other than the app dir is marked
+    /// [`Self::root_in_zzz_home`], so the filer refuses to start on it.
     ///
     /// Both paths are expected in their canonical form (as `resolve_dir` and
     /// `workspace_open` produce); a trailing `/` is ignored.
@@ -657,6 +684,7 @@ impl FilerConfig {
             } else {
                 vec![]
             },
+            root_in_zzz_home: is_in_zzz_home(root, zzz_dir),
             ..Self::zzz_dir()
         }
     }
@@ -1277,14 +1305,22 @@ fn watcher_factory(
 /// # Errors
 ///
 /// Fails only when the root itself can't be listed — unreadable
-/// (`PermissionDenied`), missing (`NotFound`), or not a directory. Every
-/// other failure is per directory (skipped, or left unwatched in degraded
-/// mode), including failing to create the watcher at all.
+/// (`PermissionDenied`), missing (`NotFound`), or not a directory — or is
+/// refused: a root in a `.zzz` directory other than the app dir
+/// ([`FilerConfig::root_in_zzz_home`], `PermissionDenied`). Every other
+/// failure is per directory (skipped, or left unwatched in degraded mode),
+/// including failing to create the watcher at all.
 pub async fn start_filer(
     path: &str,
     broadcast: FilerBroadcast,
     config: FilerConfig,
 ) -> io::Result<Filer> {
+    if config.root_in_zzz_home {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!("refusing to index a .zzz directory other than the app dir: {path}"),
+        ));
+    }
     let (tx, rx) = mpsc::channel::<notify::Event>(EVENT_CHANNEL_CAPACITY);
     let signal = Arc::new(RescanSignal::default());
     let make_watcher = watcher_factory(path, &config, tx, Arc::clone(&signal));
@@ -2763,6 +2799,78 @@ mod tests {
         let files = scan_with(&root, &config.ignored_dirs).await;
         let keys: Vec<String> = files.keys().cloned().collect();
         assert_eq!(keys, vec![tmp.key("notes.txt")]);
+    }
+
+    #[test]
+    fn zzz_home_paths_are_every_dotzzz_but_the_app_dirs_own() {
+        let app = Path::new("/home/u/.zzz/.zzz");
+        for path in [
+            "/home/u/.zzz",
+            "/home/u/.zzz/run",
+            "/w/.zzz",
+            "/w/.zzz/inner",
+            "/home/u/.zzz/.zzz/sub/.zzz",
+            "/home/u/.zzz/other",
+        ] {
+            assert!(is_in_zzz_home(Path::new(path), app), "{path}");
+        }
+        for path in [
+            "/home/u/.zzz/.zzz",
+            "/home/u/.zzz/.zzz/state",
+            "/home/u",
+            "/w/.zzzz",
+            "/w/zzz",
+            "/",
+        ] {
+            assert!(!is_in_zzz_home(Path::new(path), app), "{path}");
+        }
+        // an app dir with no `.zzz` in its path exempts nothing else
+        assert!(is_in_zzz_home(Path::new("/w/.zzz"), Path::new("/w/data")));
+        assert!(!is_in_zzz_home(Path::new("/w/data"), Path::new("/w/data")));
+    }
+
+    #[test]
+    fn workspace_config_marks_a_root_in_a_zzz_home() {
+        for (root, zzz_dir, marked) in [
+            ("/home/u/.zzz/", "/home/u/.zzz/.zzz/", true),
+            ("/w/.zzz/run/", "/home/u/.zzz/.zzz/", true),
+            ("/home/u/.zzz/.zzz/", "/home/u/.zzz/.zzz/", false),
+            ("/home/u/.zzz/.zzz/state/", "/home/u/.zzz/.zzz/", false),
+            ("/home/u/", "/home/u/.zzz/.zzz/", false),
+        ] {
+            assert_eq!(
+                FilerConfig::workspace(root, zzz_dir).root_in_zzz_home,
+                marked,
+                "{root} {zzz_dir}"
+            );
+        }
+        assert!(!FilerConfig::zzz_dir().root_in_zzz_home);
+    }
+
+    #[tokio::test]
+    async fn a_root_in_a_zzz_home_fails_to_start() {
+        let tmp = TempDir::new();
+        std::fs::create_dir_all(tmp.path(".zzz/.zzz")).unwrap();
+        std::fs::write(tmp.path(".zzz/.env"), "SECRET=x").unwrap();
+        let home = dir_prefix(&tmp.key(".zzz"));
+        let app_dir = dir_prefix(&tmp.key(".zzz/.zzz"));
+        let error = start_filer(
+            &home,
+            Arc::new(|_: &str| {}),
+            FilerConfig::workspace(&home, &app_dir),
+        )
+        .await
+        .err()
+        .expect("the daemon home is refused");
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        // the app dir itself still starts
+        start_filer(
+            &app_dir,
+            Arc::new(|_: &str| {}),
+            FilerConfig::workspace(&app_dir, &app_dir),
+        )
+        .await
+        .expect("the app dir starts");
     }
 
     #[tokio::test]

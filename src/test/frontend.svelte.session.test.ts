@@ -91,6 +91,35 @@ describe('Frontend.load_session', () => {
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_A)?.content, 'a');
 	});
 
+	test('re-pings a backend whose last ping failed, restoring the filesystem capability', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { capabilities } = app;
+		// the mount-time ping failed — the daemon was restarting
+		capabilities.handle_ping_sent('p1');
+		capabilities.handle_ping_error('p1', 'fetch failed');
+		let pings = 0;
+		(app.api as unknown as { ping: () => Promise<unknown> }).ping = () => {
+			const id = `p${++pings + 1}`;
+			capabilities.handle_ping_sent(id);
+			capabilities.handle_ping_received(id);
+			return Promise.resolve({ ok: true, value: { ping_id: id } });
+		};
+
+		const loaded = app.load_session();
+		succeed(0);
+		assert.ok(await loaded);
+
+		assert.strictEqual(pings, 1);
+		assert.strictEqual(capabilities.backend.status, 'success');
+		assert.strictEqual(capabilities.filesystem_available, true);
+
+		// a healthy backend isn't re-pinged on later loads
+		const reloaded = app.load_session();
+		succeed(1);
+		assert.ok(await reloaded);
+		assert.strictEqual(pings, 1);
+	});
+
 	test('retries a failure with backoff and surfaces the error meanwhile', async () => {
 		vi.useFakeTimers();
 		vi.spyOn(console, 'error').mockImplementation(() => {});

@@ -218,6 +218,19 @@ describe('Terminal.close', () => {
 		assert.ok(!terminal.closing);
 	});
 
+	test('closes without an error when the backend no longer has the process', async () => {
+		const { terminal } = await create_running();
+		const closing = terminal.close();
+		last_call('terminal_close').resolve(
+			result_error(JSONRPC_ERROR_CODES.not_found, 'terminal not found')
+		);
+		await closing;
+		assert.strictEqual(terminal.status, 'closed');
+		assert.isNull(terminal.exit_code);
+		assert.isNull(terminal.error_message);
+		assert.ok(!terminal.closing);
+	});
+
 	test('does nothing once the process ended', async () => {
 		const { terminal, terminal_id } = await create_running();
 		app.terminals.receive_exited(terminal_id, 0);
@@ -307,6 +320,19 @@ describe('Terminals.restart', () => {
 });
 
 describe('Terminals.remove', () => {
+	test('removes a terminal whose process the backend no longer has', async () => {
+		const created = app.terminals.create({ command: 'ls' });
+		last_call('terminal_create').resolve(result_ok({ terminal_id: create_uuid() }));
+		const terminal = await created;
+
+		const removing = app.terminals.remove(terminal);
+		last_call('terminal_close').resolve(
+			result_error(JSONRPC_ERROR_CODES.not_found, 'terminal not found')
+		);
+		await removing;
+		assert.strictEqual(app.terminals.items.size, 0);
+	});
+
 	test('closes a running terminal, then removes and disposes it', async () => {
 		const created = app.terminals.create({ command: 'ls' });
 		const terminal_id = create_uuid();
