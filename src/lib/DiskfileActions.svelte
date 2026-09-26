@@ -58,7 +58,7 @@
 		<button
 			class="flex:1 palette_f"
 			type="button"
-			disabled={!editor_state.has_changes}
+			disabled={!editor_state.can_save}
 			onclick={() => editor_state.save_changes()}
 		>
 			save changes

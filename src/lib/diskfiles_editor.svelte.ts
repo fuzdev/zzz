@@ -95,6 +95,13 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	}
 
 	/**
+	 * Forgets a diskfile that no longer exists — see `DiskfileTabs.remove_diskfile`.
+	 */
+	remove_diskfile(diskfile_id: Uuid): void {
+		this.tabs.remove_diskfile(diskfile_id);
+	}
+
+	/**
 	 * Handles when a diskfile's content is modified.
 	 */
 	handle_file_modified(diskfile_id: Uuid): void {

@@ -38,6 +38,11 @@ export class DiskfileEditorState {
 		}
 		return this.current_content !== this.original_content;
 	});
+	/**
+	 * Whether saving would write anything. Always true for a file deleted on
+	 * disk — saving recreates it even when the content matches its last state.
+	 */
+	readonly can_save: boolean = $derived(this.has_changes || this.diskfile.deleted_on_disk);
 
 	// History-related derived states
 	readonly history: DiskfileHistory | undefined = $derived.by(() =>
@@ -307,7 +312,7 @@ export class DiskfileEditorState {
 	 * Save changes to the diskfile.
 	 */
 	async save_changes(): Promise<boolean> {
-		if (!this.has_changes) return false;
+		if (!this.can_save) return false;
 
 		const history = this.#ensure_history();
 

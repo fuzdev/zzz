@@ -21,6 +21,13 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 
 	content: string | null = $state.raw()!;
 
+	/**
+	 * The file is gone from disk, but this diskfile is kept because a tab holds
+	 * unsaved edits for it. Transient client state, not serialized — cleared
+	 * when the path reappears on disk.
+	 */
+	deleted_on_disk: boolean = $state.raw(false);
+
 	readonly part: PartUnion | undefined = $derived(
 		this.app.parts.find_part_by_diskfile_path(this.path)
 	);

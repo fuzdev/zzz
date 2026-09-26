@@ -250,12 +250,15 @@ conform to the shared fuz_app contract. The tests live in
   the `: connected` comment, an audit `data:` frame on
   `admin_session_revoke_all`, and close-on-revoke. Gated on `capabilities.sse`.
 - **`workspace.cross.test.ts`** — workspace open / list / close, idempotency,
+  `workspace_open` returning the workspace's files (first and idempotent
+  open; symlinks and link loops skipped),
   not-a-directory + nonexistent errors, and `workspace_changed` broadcast on
   open/close (no broadcast on an idempotent open).
 - **`filesystem.cross.test.ts`** — scoped `diskfile_update` / `diskfile_delete`,
   idempotent `directory_create`, writes into `zzz_dir` + nested subdirs,
   path-traversal / out-of-scope / relative-path rejection, and `filer_change`
-  broadcast on file create in an open workspace.
+  broadcasts in an open workspace (file create; rename → `delete` of the old
+  path + `add` of the new).
 - **`terminal.cross.test.ts`** — PTY create / read / write / close lifecycle,
   `terminal_data` / `terminal_exited` notifications over WS, live resize,
   explicit cwd, nonexistent-command handling, and silent-null for missing
@@ -332,7 +335,7 @@ crates/zzz_server/src/
 │   ├── sse.rs        # provider SSE parsing
 │   ├── openai.rs     # OpenAiProvider — Chat Completions API with SSE streaming
 │   └── gemini.rs     # GeminiProvider — Generative Language API with SSE streaming
-├── filer.rs          # Filer + FilerManager (notify crate) — immediate file index updates, debounced filer_change broadcasts
+├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered file index (events are hints, `lstat` decides), debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) → terminal_data/exited notifications
 ├── scoped_fs.rs      # Scoped filesystem — path validation, symlink rejection
 └── error.rs          # ServerError (Bind, Serve, Database, Config)
@@ -411,8 +414,15 @@ metadata contract, the bootstrap success/failure audit rows, and the
   unauthenticated callers). The integration test `normalize_error_data`
   function tolerates either shape. Future: env-conditional — include the
   issues in dev, strip in prod.
+- **filer skips symlinks** — the walker and event handling never follow or
+  index a symlink (file or directory), and notify is configured with
+  `follow_symlinks(false)`, consistent with `ScopedFs`'s no-symlink rule.
+  This keeps link loops (`up -> ..`, a Wine prefix's `dosdevices/z: -> /`)
+  from hanging the scan and keeps files outside the watched root out of the
+  index. A symlinked file or directory inside a workspace is invisible in
+  the file tree.
 - **filer file-size cap** — `filer::MAX_INDEXED_FILE_SIZE`
-  (4 MiB, `crates/zzz_server/src/filer.rs:23`) caps the in-memory index: files
+  (4 MiB, in `crates/zzz_server/src/filer.rs`) caps the in-memory index: files
   over 4 MiB carry their metadata but store `contents: None`. This bounds
   memory under workspaces containing large lockfiles or build outputs.
   The cross-backend integration tests don't exercise files >4 MiB.
@@ -420,7 +430,7 @@ metadata contract, the bootstrap success/failure audit rows, and the
 ## Known Limitations
 
 - RPC methods: `ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`, `admin_session_revoke_all` (admin-only), `admin_token_revoke_all` (admin-only) — plus the rest of the spine-registered `fuz_auth` standard bundle and protocol specs (see the workspace-layout section above)
-- 5 zzz-domain `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, 80ms debounced broadcasts with immediate index updates, per-watcher ignore config, in-memory file index; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast), `completion_progress` (streaming completion chunks to requesting WS connection); the spine's role-grant-offer bundle carries its own notification set (`role_grant_offer_received` / `_retracted` / `_accepted` / `_declined` / `_supersede`)
+- 5 zzz-domain `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, per-path debounced broadcasts (80ms quiet, capped at 500ms) with immediate index updates (delete+create inside the window becomes `change`, create+delete becomes a bare `delete`), every event resolved by `lstat` so late or reordered removes can't drop an existing file, rename-aware (old path `delete`, new path `add`), ignored paths filtered before the bounded event channel with a coalesced root rescan on overflow, per-watcher ignore config, in-memory file index returned by `session_load` and `workspace_open`, symlinks skipped; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast), `completion_progress` (streaming completion chunks to requesting WS connection); the spine's role-grant-offer bundle carries its own notification set (`role_grant_offer_received` / `_retracted` / `_accepted` / `_declined` / `_supersede`)
 - AI providers: Anthropic, OpenAI, and Gemini all fully implemented (non-streaming + SSE streaming)
 - No batch request support (JSON arrays)
 - `/api/account/signup` is mounted via `fuz_auth::signup_routes`. Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting via `app_settings_update` to enable open signup. The cross-process test binary opts into `open_signup: true` at startup via `app_settings_patch` so per-test `mint_account` can sign up without invites. `app_settings` is loaded per-request today; a cached `Arc<RwLock<AppSettings>>` shared with the future admin `app_settings_update` handler is planned.

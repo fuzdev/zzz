@@ -5,6 +5,7 @@
 //! `ActionContext` doesn't (`workspaces` map, `FilerManager`, `ScopedFs`,
 //! `ConnectionRegistry`-backed broadcast).
 
+use std::collections::hash_map::Entry;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -14,7 +15,7 @@ use fuz_realtime::notify_to_string;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::filer::{FilerConfig, FilerLifetime};
+use crate::filer::{FilerConfig, FilerLifetime, SerializableDisknode};
 use crate::handlers::{App, WorkspaceInfo};
 
 // -- Notification params -----------------------------------------------------
@@ -36,7 +37,9 @@ struct WorkspaceListResult {
 #[derive(Serialize)]
 struct WorkspaceOpenResult {
     workspace: WorkspaceInfo,
-    files: Vec<Value>,
+    /// The workspace filer's index — the frontend seeds its file tree from
+    /// this, since the filer's initial scan broadcasts nothing.
+    files: Vec<SerializableDisknode>,
 }
 
 // -- Helpers -----------------------------------------------------------------
@@ -83,6 +86,10 @@ pub async fn workspace_list(
 /// Side-effects: registers a filer watcher, adds the path to `ScopedFs`,
 /// inserts a `WorkspaceInfo` into the in-memory map, broadcasts a
 /// `workspace_changed` notification to all connections.
+///
+/// Returns the workspace plus its filer's file index — on the idempotent
+/// path too, so a client re-opening an already-open workspace can seed its
+/// tree the same way.
 pub async fn workspace_open(
     params: Value,
     _ctx: ActionContext<'_>,
@@ -109,20 +116,6 @@ pub async fn workspace_open(
 
     let normalized = to_normalized_dir(&canonical)?;
 
-    let existing = {
-        let workspaces = app.workspaces.read();
-        workspaces.get(&normalized).cloned()
-    };
-
-    if let Some(workspace) = existing {
-        let result = WorkspaceOpenResult {
-            workspace,
-            files: vec![],
-        };
-        return serde_json::to_value(result)
-            .map_err(|e| internal_error_with_source("serialization failed", &e));
-    }
-
     let name = canonical
         .file_name()
         .and_then(|n| n.to_str())
@@ -135,13 +128,24 @@ pub async fn workspace_open(
         opened_at: fuz_sys::rfc3339_now(),
     };
 
-    let workspace = {
+    // Held across the map, scope, and filer steps so a concurrent close can't
+    // interleave (see `App::workspace_lifecycle`). Opens are serialized too,
+    // including a new workspace's initial scan.
+    let _lifecycle = app.workspace_lifecycle.lock().await;
+
+    let (workspace, is_new) = {
         let mut workspaces = app.workspaces.write();
-        workspaces.entry(normalized).or_insert(info).clone()
+        match workspaces.entry(normalized) {
+            Entry::Occupied(entry) => (entry.get().clone(), false),
+            Entry::Vacant(entry) => (entry.insert(info).clone(), true),
+        }
     };
 
+    // Both paths ensure the scope and the filer — an idempotent open also
+    // retries a filer that failed to start. `start_filer` dedups and only
+    // returns once a registered filer has finished its initial scan, so the
+    // returned files always come from a completed scan.
     app.scoped_fs.add_path(Path::new(&workspace.path));
-
     if let Err(e) = app
         .filer_manager
         .start_filer(
@@ -155,22 +159,22 @@ pub async fn workspace_open(
         tracing::warn!(path = %workspace.path, error = %e, "failed to start file watcher");
     }
 
-    // Broadcast the workspace_changed notification. Uses the spine
-    // `notify_to_string` builder + the legacy `App.broadcast` path —
-    // the spine `ConnectionRegistry` broadcast swap lands in a later
-    // batch that retires the legacy `connections` map.
-    let params_value = serde_json::to_value(WorkspaceChangedParams {
-        change_type: "open",
-        workspace: &workspace,
-    })
-    .map_err(|e| internal_error_with_source("notification params serialize failed", &e))?;
-    let notification = notify_to_string("workspace_changed", &params_value);
-    app.broadcast(&notification);
+    if is_new {
+        // Broadcast the workspace_changed notification. Uses the spine
+        // `notify_to_string` builder + the legacy `App.broadcast` path —
+        // the spine `ConnectionRegistry` broadcast swap lands in a later
+        // batch that retires the legacy `connections` map.
+        let params_value = serde_json::to_value(WorkspaceChangedParams {
+            change_type: "open",
+            workspace: &workspace,
+        })
+        .map_err(|e| internal_error_with_source("notification params serialize failed", &e))?;
+        let notification = notify_to_string("workspace_changed", &params_value);
+        app.broadcast(&notification);
+    }
 
-    let result = WorkspaceOpenResult {
-        workspace,
-        files: vec![],
-    };
+    let files = app.filer_manager.files_for(&workspace.path).await;
+    let result = WorkspaceOpenResult { workspace, files };
     serde_json::to_value(result).map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
@@ -189,6 +193,8 @@ pub async fn workspace_close(
     if !key.ends_with('/') {
         key.push('/');
     }
+
+    let _lifecycle = app.workspace_lifecycle.lock().await;
 
     let removed = {
         let mut workspaces = app.workspaces.write();

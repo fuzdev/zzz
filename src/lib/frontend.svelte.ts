@@ -314,6 +314,11 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		return history;
 	}
 
+	// TODO refactor
+	delete_diskfile_history(path: DiskfilePath): boolean {
+		return this.diskfile_histories.delete(path);
+	}
+
 	lookup_action_handler(
 		method: string,
 		phase: ActionEventPhase

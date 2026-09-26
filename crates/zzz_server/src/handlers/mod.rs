@@ -46,6 +46,11 @@ use fuz_realtime::ConnectionRegistry;
 /// builders + the spine RPC / WS route states.
 pub struct App {
     pub workspaces: RwLock<HashMap<String, WorkspaceInfo>>,
+    /// Serializes `workspace_open` / `workspace_close`. Each spans the
+    /// `workspaces` map, `ScopedFs`, and the workspace filer across await
+    /// points; interleaved, an open could re-add scope and a watcher for a
+    /// workspace a concurrent close just removed.
+    pub workspace_lifecycle: tokio::sync::Mutex<()>,
     pub db_pool: Pool,
     pub scoped_fs: ScopedFs,
     pub zzz_dir: String,
@@ -90,6 +95,7 @@ impl App {
     ) -> Self {
         Self {
             workspaces: RwLock::new(HashMap::new()),
+            workspace_lifecycle: tokio::sync::Mutex::new(()),
             db_pool,
             scoped_fs,
             zzz_dir,

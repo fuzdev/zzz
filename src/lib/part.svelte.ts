@@ -232,16 +232,24 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 	// Reference to the editor state for this part
 	#editor_state: { current_content: string } | null = $state(null); // TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
 
-	readonly diskfile: Diskfile | null | undefined = $derived(
-		this.path && this.app.diskfiles.get_by_path(this.path)
-	);
+	/**
+	 * The diskfile at `path`. A diskfile deleted on disk (kept only for a tab
+	 * with unsaved edits) counts as missing, so its stale content never feeds
+	 * into prompts.
+	 */
+	readonly diskfile: Diskfile | null | undefined = $derived.by(() => {
+		if (!this.path) return null;
+		const diskfile = this.app.diskfiles.get_by_path(this.path);
+		return diskfile?.deleted_on_disk ? undefined : diskfile;
+	});
 
 	// The current relative path value for display in the XML path attribute
 	readonly relative_path = $derived(this.diskfile?.path_relative);
 
 	override get content(): string | null | undefined {
 		// Return editor content if available, otherwise fall back to diskfile content
-		return this.#editor_state?.current_content ?? this.diskfile?.content; // TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
+		if (!this.diskfile) return undefined;
+		return this.#editor_state?.current_content ?? this.diskfile.content; // TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
 	}
 
 	set content(value: string | null | undefined) {

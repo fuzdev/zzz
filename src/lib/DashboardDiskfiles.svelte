@@ -148,7 +148,7 @@
 						<p>Something went wrong, this tab has no diskfile</p>
 					</div>
 				{/if}
-			{:else if diskfiles.items.size > 0}
+			{:else if diskfiles.on_disk.length > 0}
 				<div class="box height:100%">
 					<p>
 						<button
@@ -165,7 +165,7 @@
 							type="button"
 							class="inline palette_f"
 							onclick={() => {
-								const diskfile = random_item(app.diskfiles.items.values);
+								const diskfile = random_item(app.diskfiles.on_disk);
 								diskfiles.select(diskfile.id);
 							}}
 						>

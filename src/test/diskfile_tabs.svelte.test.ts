@@ -434,6 +434,46 @@ describe('DiskfileTabs', () => {
 		});
 	});
 
+	describe('removing a diskfile', () => {
+		test('closes every tab for it, including duplicates from reopening', () => {
+			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			tabs.close_tab(tab1.id);
+			tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			tabs.reopen_last_closed_tab(); // a second tab for diskfile 1
+			assert.strictEqual(tabs.items.size, 3);
+
+			tabs.remove_diskfile(TEST_DISKFILE_ID_1);
+
+			assert.strictEqual(tabs.items.size, 1);
+			assert.deepEqual(tabs.tab_order, [tab2.id]);
+			assert.strictEqual(tabs.selected_tab_id, tab2.id);
+			assert.ok(tabs.recently_closed_tabs.every((t) => t.diskfile_id !== TEST_DISKFILE_ID_1));
+			for (const diskfile_id of tabs.closed_tab_diskfiles.values()) {
+				assert.notStrictEqual(diskfile_id, TEST_DISKFILE_ID_1);
+			}
+			assert.isFalse(tabs.recent_tab_ids.includes(tab1.id));
+		});
+
+		test('clears the preview tab when it pointed at the removed diskfile', () => {
+			tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_2);
+			assert.strictEqual(tabs.preview_tab_id, preview.id);
+
+			tabs.remove_diskfile(TEST_DISKFILE_ID_2);
+
+			assert.isNull(tabs.preview_tab_id);
+			assert.strictEqual(tabs.selected_diskfile_id, TEST_DISKFILE_ID_1);
+		});
+
+		test('is a no-op for a diskfile without tabs', () => {
+			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			tabs.remove_diskfile(TEST_DISKFILE_ID_3);
+			assert.strictEqual(tabs.items.size, 1);
+			assert.strictEqual(tabs.selected_tab_id, tab1.id);
+		});
+	});
+
 	describe('tab promotion', () => {
 		test('promote_preview_to_permanent converts preview to permanent', () => {
 			// Create a preview tab

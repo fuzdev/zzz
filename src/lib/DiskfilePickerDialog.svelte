@@ -32,7 +32,7 @@
 
 <PickerDialog
 	bind:show
-	items={diskfiles.items.values}
+	items={diskfiles.on_disk}
 	{onpick}
 	{filter}
 	{exclude_ids}

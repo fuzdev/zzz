@@ -79,7 +79,10 @@ pub async fn session_load(
     // session_load may not yet be in the in-memory index. A fresh walk
     // guarantees a consistent snapshot and removes a flaky race in integration
     // tests (`session_load_returns_nested_files`) where the filer event loop
-    // hadn't yet drained the inotify event.
+    // hadn't yet drained the inotify event. The rescan runs on each filer's
+    // event loop and any differences it finds are broadcast as `filer_change`
+    // to every connection, like any other change; concurrent session_loads
+    // share one rescan per filer.
     app.filer_manager.rescan_all().await;
     let files = app.filer_manager.collect_all_files().await;
 

@@ -8,7 +8,7 @@
 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { access, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { describe, test, inject, assert } from 'vitest';
 import {
@@ -269,6 +269,68 @@ describe('filesystem cross-backend', () => {
 					return typeof change?.path === 'string' && typeof change?.type === 'string';
 				}, 10_000);
 				assert.ok(msg, 'received filer_change notification');
+			} finally {
+				await ws.close();
+			}
+
+			await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'workspace_close',
+				params: { path: tmp_dir },
+				headers: fixture.create_session_headers()
+			}).catch(() => undefined);
+		} finally {
+			await rm(tmp_dir, { recursive: true, force: true });
+		}
+	});
+
+	test('filer_change_on_rename', async () => {
+		const fixture = await setup_test();
+		const tmp_dir = join(tmpdir(), `zzz_cross_filer_rename_${randomUUID()}`);
+		await mkdir(tmp_dir, { recursive: true });
+		const old_path = join(tmp_dir, 'old.txt');
+		const new_path = join(tmp_dir, 'new.txt');
+		await writeFile(old_path, 'renamed', 'utf-8');
+		try {
+			const open = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'workspace_open',
+				params: { path: tmp_dir },
+				headers: fixture.create_session_headers()
+			});
+			assert.ok(open.ok);
+
+			const ws = await create_ws_transport({
+				base_url: handle.config.base_url,
+				ws_path: handle.config.ws_path,
+				cookies: fixture.transport.cookies()
+			});
+			try {
+				await ws.request('_warmup', 'ping', undefined);
+
+				await rename(old_path, new_path);
+
+				const is_filer_change = (type: string, path: string) => (m: unknown) => {
+					if (!m || typeof m !== 'object') return false;
+					const rec = m as Record<string, unknown>;
+					if (rec.method !== 'filer_change') return false;
+					const change = (rec.params as Record<string, unknown> | undefined)?.change as
+						Record<string, unknown> | undefined;
+					return change?.type === type && change.path === path;
+				};
+				// the old path is deleted (not left as a contentless ghost), the new one added
+				await ws.wait_for(is_filer_change('delete', old_path), 10_000);
+				const added = await ws.wait_for<Record<string, unknown>>(
+					is_filer_change('add', new_path),
+					10_000
+				);
+				const disknode = (added.params as Record<string, unknown>).disknode as Record<
+					string,
+					unknown
+				>;
+				assert.equal(disknode.contents, 'renamed');
 			} finally {
 				await ws.close();
 			}

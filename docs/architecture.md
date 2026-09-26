@@ -528,7 +528,7 @@ All filesystem operations go through `ScopedFs` (Rust: `crates/zzz_server/src/sc
 
 ### Filer
 
-`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open workspace dir. File changes are broadcast to clients via `filer_change` notifications over WebSocket.
+`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open workspace dir. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored directories (`.git`, `node_modules`, `target`, …) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rescans its root and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed — matching `ScopedFs`.
 
 ### Daemon Info
 
@@ -571,8 +571,16 @@ Save → save_changes() → app.api.diskfile_update({path, content})
 The confirmation is the broadcast, not the RPC response — a save and an
 external edit look identical to the frontend. The initial file listing comes
 from `session_load` (the backend rescans and flattens every active filer's
-index); `workspace_open` currently returns `files: []`, so a newly opened
-workspace populates only via subsequent `filer_change` events or a reload.
+index), and `workspace_open` returns the opened workspace's index so the new
+tree appears immediately. `Diskfiles` upserts by path — for seeds and for
+both `add` and `change` — so a path never has two `Diskfile`s. A `delete`
+closes the file's tabs, moves selection, and drops its history — unless the
+file is open in a tab and its history holds unsaved edits: then the
+`Diskfile` is kept, flagged `deleted_on_disk` (marked in the tab and the
+editor), so saving writes the path back (always allowed while flagged) and
+the `add` broadcast reattaches it (same id, flag cleared), while closing its
+last tab discards it. A flagged `Diskfile` is hidden from the explorer and
+pickers, and a `DiskfilePart` treats it as missing.
 Tabs, history, and editor state are UI-session-only — a reload restores only
 what `session_load` provides.
 

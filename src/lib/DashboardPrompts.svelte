@@ -150,7 +150,7 @@
 								type="button"
 								class="plain font_size_sm"
 								onclick={add_diskfile_part}
-								disabled={!app.diskfiles.items.size}
+								disabled={!app.diskfiles.on_disk.length}
 							>
 								<div class="row white-space:nowrap">
 									<Svg data={icon_file} />&nbsp; add file

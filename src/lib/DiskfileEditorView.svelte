@@ -62,6 +62,15 @@
 <DiskfileContextmenu {diskfile}>
 	<div class="display:flex height:100%">
 		<div class="flex:1 width_atleast_sm height:100% column">
+			{#if diskfile.deleted_on_disk}
+				<p class="px_md py_xs mb_0 color_c_50">
+					{#if editor_state.has_changes}
+						deleted on disk — save to recreate it with your edits, or close the tab to discard them
+					{:else}
+						deleted on disk — save to recreate it, or close the tab
+					{/if}
+				</p>
+			{/if}
 			<ContentEditor
 				bind:this={content_editor}
 				bind:content={editor_state.current_content}

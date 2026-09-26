@@ -60,7 +60,7 @@
 			<ContextmenuEntry
 				icon={icon_file}
 				run={() => {
-					if (!app.diskfiles.items.size) {
+					if (!app.diskfiles.on_disk.length) {
 						alert('No files available. Add files first.'); // eslint-disable-line no-alert
 						return;
 					}

@@ -54,6 +54,11 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		this.selected_file_id ? (this.items.by_id.get(this.selected_file_id) ?? null) : null
 	);
 
+	/** Diskfiles that exist on disk — excludes ones kept only for a tab with unsaved edits. */
+	readonly on_disk: Array<Diskfile> = $derived(
+		this.items.values.filter((diskfile) => !diskfile.deleted_on_disk)
+	);
+
 	/** The editor for managing diskfiles editing state. */
 	readonly editor: DiskfilesEditor;
 
@@ -77,37 +82,20 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		this.init();
 	}
 
+	/**
+	 * Applies a `filer_change` notification. `add` and `change` both upsert by
+	 * path — the backend's add/change split is advisory, and a re-seed or a
+	 * missed delete must never leave two diskfiles for one path.
+	 */
 	handle_change(params: ActionInputs['filer_change']): void {
-		const validated_disknode = params.disknode;
-
 		switch (params.change.type) {
-			case 'add': {
-				this.add(disknode_to_diskfile_json(validated_disknode));
-				break;
-			}
+			case 'add':
 			case 'change': {
-				const existing_diskfile = this.items.by_optional('by_path', validated_disknode.id);
-
-				if (existing_diskfile) {
-					const diskfile_json = disknode_to_diskfile_json(validated_disknode, existing_diskfile.id);
-
-					existing_diskfile.set_json({
-						...diskfile_json,
-						// TODO hacky, should be handled more cleanly elsewhere
-						created: existing_diskfile.created, // Preserve original creation date
-						updated: get_datetime_now() // TODO @many probably rely on the db to bump `updated`
-					});
-				} else {
-					// If it doesn't exist yet, create a new one
-					this.add(disknode_to_diskfile_json(validated_disknode));
-				}
+				this.upsert(params.disknode);
 				break;
 			}
 			case 'delete': {
-				const existing_diskfile = this.items.by_optional('by_path', validated_disknode.id);
-				if (existing_diskfile) {
-					this.items.remove(existing_diskfile.id);
-				}
+				this.remove_by_path(params.disknode.id);
 				break;
 			}
 		}
@@ -124,10 +112,83 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		return diskfile;
 	}
 
-	/** Seed diskfiles from an initial file tree (e.g. session load or workspace open). */
+	/**
+	 * Adds a diskfile for `disknode`, or updates the existing one at the same
+	 * path in place — keeping its id, so tabs, selection, and parts stay attached.
+	 * A diskfile kept after a delete (see `remove_by_path`) is reattached this
+	 * way when its path reappears on disk.
+	 */
+	upsert(disknode: SerializableDisknode): Diskfile {
+		const existing = this.items.by_optional('by_path', disknode.id);
+		if (!existing) {
+			return this.add(disknode_to_diskfile_json(disknode));
+		}
+		existing.deleted_on_disk = false;
+		existing.set_json({
+			...disknode_to_diskfile_json(disknode, existing.id),
+			// TODO hacky, should be handled more cleanly elsewhere
+			created: existing.created, // Preserve original creation date
+			updated: get_datetime_now() // TODO @many probably rely on the db to bump `updated`
+		});
+		return existing;
+	}
+
+	/**
+	 * Seed diskfiles from an initial file tree (e.g. session load or workspace open).
+	 * Upserts by path, so overlapping seeds don't duplicate.
+	 */
 	add_initial(files: Array<SerializableDisknode>): void {
 		for (const disknode of files) {
-			this.add(disknode_to_diskfile_json(disknode));
+			this.upsert(disknode);
+		}
+	}
+
+	/**
+	 * Handles the diskfile at `path` being gone from disk.
+	 *
+	 * If it's open in a tab and its history holds unsaved edits, it's kept —
+	 * flagged `deleted_on_disk`, tabs and history intact — so the user can save
+	 * it back (recreating the file) or close the tab to discard. Otherwise it's
+	 * removed along with its tabs and history.
+	 */
+	remove_by_path(path: string): void {
+		const diskfile = this.items.by_optional('by_path', path);
+		if (!diskfile) return;
+
+		if (
+			this.editor.tabs.by_diskfile_id.has(diskfile.id) &&
+			this.app.get_diskfile_history(diskfile.path)?.has_unsaved_edits
+		) {
+			diskfile.deleted_on_disk = true;
+			return;
+		}
+
+		this.#forget(diskfile);
+	}
+
+	/**
+	 * Called when a diskfile's last tab closes. A diskfile kept only for its
+	 * tab after a delete is forgotten now — closing the tab discards the edits.
+	 */
+	handle_diskfile_detached(diskfile_id: Uuid): void {
+		const diskfile = this.items.by_id.get(diskfile_id);
+		if (diskfile?.deleted_on_disk) {
+			this.#forget(diskfile);
+		}
+	}
+
+	/**
+	 * Removes a diskfile with its editor tabs and edit history. If it was
+	 * selected, selection follows the editor's newly selected tab, or clears.
+	 */
+	#forget(diskfile: Diskfile): void {
+		// remove first, so closing its tabs re-entering `handle_diskfile_detached` is a no-op
+		this.items.remove(diskfile.id);
+		this.editor.remove_diskfile(diskfile.id);
+		this.app.delete_diskfile_history(diskfile.path);
+
+		if (this.selected_file_id === diskfile.id) {
+			this.selected_file_id = this.editor.tabs.selected_diskfile_id;
 		}
 	}
 
@@ -202,8 +263,6 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	select_next(): void {
-		const { by_id } = this.items;
-		const next = by_id.values().next();
-		this.select(next.value?.id ?? null);
+		this.select(this.on_disk[0]?.id ?? null);
 	}
 }

@@ -227,7 +227,9 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 			}
 
 			// Update the tab content
+			const previous_diskfile_id = current_preview.diskfile_id;
 			current_preview.diskfile_id = diskfile_id;
+			this.#notify_if_detached(previous_diskfile_id);
 
 			return { tab: current_preview, is_new: false };
 		}
@@ -354,6 +356,18 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		if (was_preview) {
 			this.preview_tab_id = null;
 		}
+
+		this.#notify_if_detached(tab_to_close.diskfile_id);
+	}
+
+	/**
+	 * Tells `Diskfiles` when a diskfile has no tab left, so one kept only for its
+	 * tab (deleted on disk with unsaved edits) can be released.
+	 */
+	#notify_if_detached(diskfile_id: Uuid): void {
+		if (!this.by_diskfile_id.has(diskfile_id)) {
+			this.app.diskfiles.handle_diskfile_detached(diskfile_id);
+		}
 	}
 
 	/**
@@ -421,6 +435,32 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	}
 
 	/**
+	 * Removes every trace of a diskfile that no longer exists: closes its tabs
+	 * (selection moves as with `close_tab`) and drops it from the reopen and
+	 * back-navigation history, so neither can resurrect a tab pointing at it.
+	 */
+	remove_diskfile(diskfile_id: Uuid): void {
+		const tab_ids: Array<Uuid> = [];
+		for (const tab of this.items.by_id.values()) {
+			if (tab.diskfile_id === diskfile_id) tab_ids.push(tab.id);
+		}
+		for (const tab_id of tab_ids) {
+			this.close_tab(tab_id);
+		}
+
+		this.recently_closed_tabs = this.recently_closed_tabs.filter(
+			(tab) => tab.diskfile_id !== diskfile_id
+		);
+		const closed_tab_ids: Array<Uuid> = [];
+		for (const [tab_id, closed_diskfile_id] of this.closed_tab_diskfiles) {
+			if (closed_diskfile_id === diskfile_id) closed_tab_ids.push(tab_id);
+		}
+		for (const tab_id of closed_tab_ids) {
+			this.closed_tab_diskfiles.delete(tab_id);
+		}
+	}
+
+	/**
 	 * Closes all tabs.
 	 */
 	close_all_tabs(): void {
@@ -441,7 +481,11 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		this.recent_tab_ids = [];
 
 		// Clear all tabs
+		const diskfile_ids = new Set(this.items.values.map((tab) => tab.diskfile_id));
 		this.items.clear();
+		for (const diskfile_id of diskfile_ids) {
+			this.#notify_if_detached(diskfile_id);
+		}
 	}
 }
 

@@ -50,6 +50,11 @@ export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
 	 */
 	readonly current_entry: HistoryEntry | null = $derived(this.entries[0] ?? null);
 
+	/** Whether any entry holds unsaved user edits. */
+	readonly has_unsaved_edits: boolean = $derived(
+		this.entries.some((entry) => entry.is_unsaved_edit)
+	);
+
 	constructor(options: DiskfileHistoryOptions) {
 		super(DiskfileHistoryJson, options);
 		this.init();

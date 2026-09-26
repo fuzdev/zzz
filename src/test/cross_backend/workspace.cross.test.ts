@@ -11,7 +11,7 @@
 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { describe, test, inject, assert } from 'vitest';
 import {
@@ -105,6 +105,53 @@ describe('workspace cross-backend', () => {
 			assert.equal(w1.opened_at, w2.opened_at, 'same opened_at');
 			assert.equal(w1.path, w2.path, 'same path');
 		} finally {
+			await remove_dir(tmp_dir);
+		}
+	});
+
+	test('workspace_open_returns_files', async () => {
+		const fixture = await setup_test();
+		const tmp_dir = await create_tmp_workspace('files');
+		try {
+			await mkdir(join(tmp_dir, 'sub'), { recursive: true });
+			await writeFile(join(tmp_dir, 'a.txt'), 'alpha', 'utf-8');
+			await writeFile(join(tmp_dir, 'sub', 'b.txt'), 'beta', 'utf-8');
+			// symlinks are skipped entirely — a loop must not hang the scan
+			await symlink('..', join(tmp_dir, 'sub', 'up'));
+			await symlink(join(tmp_dir, 'a.txt'), join(tmp_dir, 'link.txt'));
+
+			const open_files = async (): Promise<Map<string, unknown>> => {
+				const open = await rpc_call({
+					app: fixture.transport,
+					path: handle.config.rpc_path,
+					method: 'workspace_open',
+					params: { path: tmp_dir },
+					headers: fixture.create_session_headers()
+				});
+				assert.ok(open.ok, `workspace_open failed: ${JSON.stringify(open)}`);
+				const files = (open.result as Record<string, unknown>).files as Array<
+					Record<string, unknown>
+				>;
+				return new Map(files.map((f) => [f.id as string, f.contents]));
+			};
+
+			const expected = new Map([
+				[join(tmp_dir, 'a.txt'), 'alpha'],
+				[join(tmp_dir, 'sub', 'b.txt'), 'beta']
+			]);
+			// concurrent opens both get the fully scanned tree
+			const [first, second] = await Promise.all([open_files(), open_files()]);
+			assert.deepEqual(first, expected, 'first open');
+			assert.deepEqual(second, expected, 'concurrent open');
+			assert.deepEqual(await open_files(), expected, 'idempotent open');
+		} finally {
+			await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'workspace_close',
+				params: { path: tmp_dir },
+				headers: fixture.create_session_headers()
+			}).catch(() => undefined);
 			await remove_dir(tmp_dir);
 		}
 	});

@@ -21,6 +21,7 @@
 	const diskfile = $derived(tab.diskfile);
 
 	const path = $derived(diskfile?.path_relative ?? '[no diskfile found]'); // TODO ?
+	const deleted_on_disk = $derived(diskfile?.deleted_on_disk ?? false);
 </script>
 
 <DiskfileContextmenu {diskfile}>
@@ -35,6 +36,8 @@
 			class="diskfile-tab-button border-radius:0 plain px_sm py_xs"
 			class:selected={tab.is_selected}
 			class:preview={tab.is_preview}
+			class:deleted={deleted_on_disk}
+			title={deleted_on_disk ? `${path} — deleted on disk, has unsaved edits` : undefined}
 			onclick={(e) => {
 				swallow(e);
 				// If it's a preview tab and it's double-clicked, promote it to permanent
@@ -50,11 +53,12 @@
 					onselect(tab);
 				}
 			}}
-			aria-label={`Tab ${path}`}
+			aria-label={deleted_on_disk ? `Tab ${path} (deleted on disk)` : `Tab ${path}`}
 			aria-pressed={tab.is_selected}
 		>
 			<div class="ellipsis font-weight:400 flex:1">
 				<small class="ml_xs">{path}</small>
+				{#if deleted_on_disk}<small class="ml_xs color_c_50">(deleted)</small>{/if}
 			</div>
 			<button
 				type="button"
@@ -130,6 +134,10 @@
 
 	.diskfile-tab-button.selected {
 		box-shadow: var(--tab_selected_shadow);
+	}
+
+	.diskfile-tab-button.deleted small:first-child {
+		text-decoration: line-through;
 	}
 
 	.diskfile-tab-button.preview {
