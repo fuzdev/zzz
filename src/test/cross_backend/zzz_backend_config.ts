@@ -5,7 +5,8 @@
  * Two Rust target backends:
  *
  * - {@link rust_backend_config} — Axum/JSON-RPC backend (spawns
- *   `testing_zzz_server`) on the `/api/*` wire shape.
+ *   `testing_zzz_server`) on the `/api/*` wire shape, also serving a
+ *   static fixture dir (`STATIC_FIXTURE_FILES`) as its frontend.
  * - {@link rust_proxy_backend_config} — Rust variant with
  *   `ZZZ_TRUSTED_PROXIES=127.0.0.1` for the proxy suite. Separate
  *   project because flipping that env mid-run isn't supported (Rust
@@ -62,7 +63,8 @@
  * @module
  */
 
-import { join } from 'node:path';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import type { BackendConfig } from '@fuzdev/fuz_app/testing/cross_backend/backend_config.ts';
 import type { BackendCapabilities } from '@fuzdev/fuz_app/testing/cross_backend/capabilities.ts';
 import {
@@ -161,17 +163,53 @@ const make_zzz_rust_backend_config = ({
 };
 
 /**
+ * A miniature adapter-static build — keyed by path relative to the static
+ * dir — served by the `cross_backend_rust` backend (`ZZZ_STATIC_DIR`) so
+ * `static.cross.test.ts` can check the SPA routing through the real router.
+ * `docs.html` sits beside a `docs/` directory with no `index.html`, the shape
+ * adapter-static emits for nested prerendered pages.
+ */
+export const STATIC_FIXTURE_FILES = {
+	'index.html': '<!doctype html>index',
+	'200.html': '<!doctype html>fallback',
+	'chats.html': '<!doctype html>chats',
+	'docs.html': '<!doctype html>docs',
+	'docs/api.html': '<!doctype html>docs api',
+	'_app/immutable/x.js': 'export const x = 1;'
+} as const;
+
+/**
+ * Write `STATIC_FIXTURE_FILES` into a fresh `dir` — a previous run's contents
+ * are removed first, so stale files can't mask a routing miss. Synchronous
+ * because it runs in the backend-config factory, before the harness spawns the
+ * binary (which requires the static dir to exist at boot).
+ */
+const write_static_fixture = (dir: string): void => {
+	rmSync(dir, { recursive: true, force: true });
+	for (const [path, content] of Object.entries(STATIC_FIXTURE_FILES)) {
+		const file = join(dir, path);
+		mkdirSync(dirname(file), { recursive: true });
+		writeFileSync(file, content);
+	}
+};
+
+/**
  * Rust backend. Requires PostgreSQL — `DATABASE_URL` resolves to
  * `zzz_test_rust` (one of the per-project DBs the operator creates
  * once; see the module doc). The test binary self-wipes the
  * auth-namespace schema on every startup, so no manual `DROP TABLE`
- * between vitest sessions is needed.
+ * between vitest sessions is needed. Serves `STATIC_FIXTURE_FILES` as its
+ * frontend (`ZZZ_STATIC_DIR`).
  */
-export const rust_backend_config = (): BackendConfig =>
-	make_zzz_rust_backend_config({
+export const rust_backend_config = (): BackendConfig => {
+	const static_dir = join(build_zzz_paths('rust').root, 'static');
+	write_static_fixture(static_dir);
+	return make_zzz_rust_backend_config({
 		name: 'rust',
-		port: 4462
+		port: 4462,
+		extra_env: { ZZZ_STATIC_DIR: static_dir }
 	});
+};
 
 /**
  * Rust backend variant with trusted-proxy enabled. Used by the proxy

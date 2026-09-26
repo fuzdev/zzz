@@ -19,10 +19,7 @@
 import type { AppServerContext } from '@fuzdev/fuz_app/server/app_server_context.ts';
 import { prefix_route_specs, type RouteSpec } from '@fuzdev/fuz_app/http/route_spec.ts';
 import type { RpcEndpointSpec, AppSurfaceSpec } from '@fuzdev/fuz_app/http/surface.ts';
-import {
-	create_health_route_spec,
-	create_server_status_route_spec
-} from '@fuzdev/fuz_app/http/common_routes.ts';
+import { create_health_route_spec } from '@fuzdev/fuz_app/http/common_routes.ts';
 import {
 	account_status_route_shape,
 	create_account_route_shapes
@@ -74,27 +71,47 @@ export const zzz_rpc_endpoints = (ctx: AppServerContext): Array<RpcEndpointSpec>
 ];
 
 /**
- * Build the zzz route specs (health, account, signup, status) from the
- * hono-free route shapes plus no-op handlers — never importing the live
- * route factories, which statically pull `hono/cookie` (session middleware)
- * and `hono/streaming` (SSE). The surface reads only `method` / `path` /
- * `auth` / schemas, so the no-op handlers are never invoked.
+ * The `create_account_route_shapes` paths `fuz_auth::account_router` mounts
+ * (besides `/status`, which comes from `account_status_route_shape`). An
+ * allowlist: a shape fuz_app renames or drops fails loudly here, and one it
+ * adds stays off the surface instead of passing vacuously as a 404.
  */
-const create_route_specs = (ctx: AppServerContext): Array<RouteSpec> => [
-	create_health_route_spec(),
-	...prefix_route_specs('/api/account', [
-		...create_account_route_shapes({
-			login_account_rate_limited: ctx.login_account_rate_limiter !== null
-		}).map(shape_to_route_spec),
-		shape_to_route_spec(
-			create_signup_route_shape({
-				signup_account_rate_limited: ctx.signup_account_rate_limiter !== null
-			})
+const ACCOUNT_ROUTER_PATHS = ['/login', '/logout', '/password'] as const;
+
+/**
+ * Build the zzz route specs (health, account, signup) from the hono-free route
+ * shapes plus no-op handlers — never importing the live route factories, which
+ * statically pull `hono/cookie` (session middleware) and `hono/streaming`
+ * (SSE). The surface reads only `method` / `path` / `auth` / schemas, so the
+ * no-op handlers are never invoked.
+ *
+ * Declares only routes `zzz_server` serves — fuz_auth's `account_router`
+ * mounts `/status`, `/login`, `/logout`, `/password` (no `/verify`), and there
+ * is no `/api/server/status`.
+ */
+const create_route_specs = (ctx: AppServerContext): Array<RouteSpec> => {
+	const account_shapes = create_account_route_shapes({
+		login_account_rate_limited: ctx.login_account_rate_limiter !== null
+	});
+	const account_router_shapes = ACCOUNT_ROUTER_PATHS.map((path) => {
+		const shape = account_shapes.find((candidate) => candidate.path === path);
+		if (!shape) throw new Error(`fuz_app account route shapes have no '${path}'`);
+		return shape;
+	});
+	return [
+		create_health_route_spec(),
+		...prefix_route_specs(
+			'/api/account',
+			[
+				account_status_route_shape,
+				...account_router_shapes,
+				create_signup_route_shape({
+					signup_account_rate_limited: ctx.signup_account_rate_limiter !== null
+				})
+			].map(shape_to_route_spec)
 		)
-	]),
-	shape_to_route_spec(account_status_route_shape),
-	create_server_status_route_spec({ version: '', get_uptime_ms: () => 0 })
-];
+	];
+};
 
 /**
  * Create the zzz attack-surface spec for the cross-process suites.

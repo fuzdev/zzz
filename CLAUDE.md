@@ -8,7 +8,10 @@ v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PostgreSQL DB. 
 
 zzz has a single **Rust** backend: `crates/zzz_server` (Axum). The frontend
 is a prerendered static SPA served by `zzz_server` — no JS runtime in
-production.
+production. adapter-static prerenders the fixed routes (`chats.html`, …) and
+writes a `200.html` SPA shell; `zzzd --static-dir` serves the exact file, then
+the prerendered `{path}.html`, then the shell, so deep links and dynamic routes
+(`/chats/<id>`) load. See `static_files.rs` in ./crates/CLAUDE.md.
 
 For coding conventions, see Skill(fuz-stack).
 
@@ -521,7 +524,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 ### Server (read by `zzz_server` at boot)
 
 - `ZZZ_PORT` — HTTP server port (default 4460; `cargo xtask dev` uses 4461); the `--port` flag wins. The bind address is always loopback — there is no `HOST` override.
-- `ZZZ_STATIC_DIR` — directory of the built SPA to serve (`--static-dir` wins); must be a directory, or `zzzd` refuses to boot
+- `ZZZ_STATIC_DIR` — directory of the built SPA to serve (`--static-dir` wins); must be a directory, or `zzzd` refuses to boot. Unset, `zzzd` serves no frontend (dev: Vite serves it)
 - `ZZZ_TRUSTED_PROXIES` — comma-separated trusted proxy IPs / CIDR ranges for `client_ip` resolution
 - `DATABASE_URL` — PostgreSQL connection (`postgres://`)
 - `SECRET_FUZ_COOKIE_KEYS` — HMAC signing keys (min 32 chars)

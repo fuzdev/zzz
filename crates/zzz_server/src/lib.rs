@@ -22,6 +22,7 @@ pub mod handlers;
 pub mod provider;
 pub mod pty_manager;
 pub mod scoped_fs;
+pub mod static_files;
 pub mod utf8_stream;
 pub mod zzz_action_specs;
 
@@ -33,7 +34,6 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::Serialize;
 use tokio::net::TcpListener;
-use tower_http::services::ServeDir;
 
 pub use error::ServerError;
 
@@ -684,6 +684,9 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             fuz_http::origin_layer,
         ));
 
+    // A new top-level backend route (beside `/api` and `/health`) must also be
+    // added to `static_files::BACKEND_PATH_PREFIXES`, or its unknown subpaths
+    // get the SPA shell.
     let mut app = Router::new()
         .route("/health", get(health_handler))
         // Spine REST routers — account REST + bootstrap. The order of
@@ -703,9 +706,13 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         // Admin-gated audit-log SSE stream — absolute path, so merge (not nest).
         .merge(spine_audit_stream_router);
 
+    // The built frontend, as the fallback behind every backend route: exact
+    // files, then prerendered pages, then the SPA shell — see `static_files`.
+    // Without a static dir (dev, where Vite serves the frontend) unmatched
+    // paths get axum's empty 404.
     if let Some(ref dir) = config.static_dir {
         tracing::info!(dir = %dir.display(), "serving static files");
-        app = app.fallback_service(ServeDir::new(dir));
+        app = app.fallback_service(static_files::static_router(dir));
     }
 
     let addr = config.bind_addr;

@@ -13,7 +13,10 @@ export default {
 	compilerOptions: { runes: true },
 	vitePlugin: { inspector: true },
 	kit: {
-		adapter: adapter(),
+		// `200.html` is the SPA shell for every route that isn't prerendered
+		// (dynamic routes like `/chats/[chat_id]`); zzzd serves it as the static
+		// fallback (`crates/zzz_server/src/static_files.rs`, which names the file)
+		adapter: adapter({ fallback: '200.html' }),
 		paths: { relative: false }, // use root-absolute paths for SSR path comparison: https://svelte.dev/docs/kit/configuration#paths
 		alias: { $routes: 'src/routes', '@fuzdev/zzz': 'src/lib' },
 		// csp: {
@@ -35,6 +38,8 @@ export default {
 		// 		},
 		// 	}),
 		// },
+		// dynamic routes inherit `prerender = true` from the root layout but have
+		// no crawlable entries — they're served by the fallback shell instead
 		prerender: { handleUnseenRoutes: 'ignore' },
 		version: { name: execSync('git rev-parse HEAD').toString().trim() }
 	}

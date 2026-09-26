@@ -59,7 +59,10 @@ commands.
 There are two production targets:
 
 - **Static-only** — `gro build` prerenders the SPA into `build/`, and `gro deploy`
-  publishes it to a static host (zzz.software). No Rust backend, so the
+  publishes it to a static host (zzz.software). adapter-static prerenders the
+  fixed routes (`chats.html`, `docs/api.html`, …) and writes `200.html`, an SPA
+  shell for everything else (dynamic routes like `/chats/<id>` are never
+  prerendered). No Rust backend, so the
   filesystem, terminals, AI, and auth are unavailable — the "diminished
   capabilities" build.
 - **Full self-hosted** — the same `build/` SPA served by the Rust `zzz_server`
@@ -83,7 +86,10 @@ value, with a line per overridden key — and the `zzz` CLI, which supplies
 `EnvironmentFile`, or, in a shell, `set -a && . ./.env.production && set +a` before
 running. It requires `DATABASE_URL`, `SECRET_FUZ_COOKIE_KEYS`, and a non-empty
 `FUZ_ALLOWED_ORIGINS` (it hard-fails at boot otherwise). `--static-dir` (or
-`ZZZ_STATIC_DIR`) points it at the built frontend; CLI flags win over env. In
+`ZZZ_STATIC_DIR`) points it at the built frontend; CLI flags win over env. It
+serves the exact file, then the prerendered `{path}.html`, then the `200.html`
+shell, so reloads, deep links, and dynamic routes load; `/api` and `/health`
+paths and missing `_app/` assets 404 instead. In
 production the SPA and API share one origin, so `.env.production` leaves the
 `PUBLIC_ZZZ_SERVER_*` host/port and `PUBLIC_ZZZ_WEBSOCKET_URL` empty: the UI
 derives its API and WebSocket URLs from the page's origin, so one build works

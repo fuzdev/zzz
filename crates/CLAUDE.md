@@ -135,7 +135,7 @@ A blank (empty or whitespace) path var reads as unset — `PUBLIC_ZZZ_DIR` falls
 - `/api/ws` (GET) — JSON-RPC 2.0 (WebSocket, cookie/bearer/daemon)
 - `/api/admin/audit/stream` (GET) — Admin-gated audit-log SSE stream (`text/event-stream`)
 - `/health` (GET) — Health check (`{"status":"ok"}`)
-- `/*` (GET) — Static files (if `--static-dir`)
+- `/*` (GET, HEAD) — the built frontend (if `--static-dir` / `ZZZ_STATIC_DIR`), the router's fallback behind every route above. `static_files.rs` resolves the exact file (directories never match), then the prerendered page (`{path}.html`, or `{path}index.html` for a trailing `/`), then the `200.html` SPA shell (`static_files::SPA_FALLBACK_FILE`, matching `fallback` in `svelte.config.js`) — so `/workspaces?workspace=…`, reloads, deep links, and dynamic routes (`/chats/<id>`) all load. `/api`, `/health`, and paths below them never get the shell (an unknown `/api/foo` is an empty 404), nor does a missing `/_app/` asset (404, so a stale tab's chunk load fails instead of executing HTML); other methods get 405. `_app/immutable/` is served `Cache-Control: public, max-age=31536000, immutable`, everything else `no-cache`. Both path probes go through `ServeDir`, which percent-decodes the path and rejects `..` / root / prefix components; the shell is a fixed file (`ServeFile` ignores the request path). `ServeDir` follows symlinks inside the static dir, which is trusted operator content. A static dir without `200.html` logs a boot warning, and non-prerendered routes 404. Without a static dir (dev, where Vite serves the frontend) unmatched paths get axum's empty 404
 
 ## Auth
 
@@ -292,6 +292,14 @@ conform to the shared fuz_app contract. The tests live in
   echoes, server validates) plus security negatives. Invokes fuz_app's shared
   `describe_peer_ping_ws_tests`; gated on `capabilities.peer_request` (runs in
   the `cross_backend_rust` project).
+- **`static.cross.test.ts`** — built-frontend serving through the full
+  router: the `cross_backend_rust` backend serves a miniature adapter-static
+  build (`STATIC_FIXTURE_FILES` in `zzz_backend_config.ts`, via
+  `ZZZ_STATIC_DIR`); covers root / prerendered pages (incl. `docs.html` beside
+  a `docs/` dir), the `200.html` fallback for dynamic routes and
+  `?workspace=` queries, HEAD, cache headers, and the 404s for missing
+  `_app/` assets and backend paths. `static_files.rs` unit tests cover the
+  same resolution plus path traversal.
 - **`proxy.cross.test.ts`** — runs only in the `cross_backend_rust_proxy`
   project (backend booted with `ZZZ_TRUSTED_PROXIES=127.0.0.1`, which can't be
   flipped mid-run). Each test triggers a failed login under a unique username
@@ -359,6 +367,7 @@ crates/zzz_server/src/
 ├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered file index (events are hints, `lstat` decides), debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
 ├── scoped_fs.rs      # Scoped filesystem — permanent (`zzz_dir` + `scoped_dirs`) + per-workspace roots, path validation, symlink rejection
+├── static_files.rs   # Built-frontend fallback router: exact file → prerendered `{path}.html` → `200.html` SPA shell; backend paths + missing `_app/` assets 404; cache headers
 ├── utf8_stream.rs    # Incremental UTF-8 decoder (split sequences held back, invalid bytes → U+FFFD) shared by provider SSE and PTY output
 └── error.rs          # ServerError (Bind, Serve, Database, Config)
 ```
