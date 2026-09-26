@@ -4,7 +4,9 @@
  * Each test mints a fresh per-test account via
  * `default_cross_process_setup` and exercises the terminal RPC +
  * WebSocket data/exit notification path against the spawned test
- * binary.
+ * binary. The ownership test mints a second account to check that a
+ * terminal's notifications and controls stay with the account that
+ * created it.
  *
  * @module
  */
@@ -489,6 +491,123 @@ describe('terminal cross-backend', () => {
 		} finally {
 			await ws.close();
 		}
+	}, 20_000);
+
+	test('terminal_output_and_control_are_scoped_to_the_owner', async () => {
+		const fixture = await setup_test();
+		const owner_ws = await create_ws_transport({
+			base_url: handle.config.base_url,
+			ws_path: handle.config.ws_path,
+			cookies: fixture.transport.cookies()
+		});
+		// the owner's second socket, e.g. another tab
+		const owner_ws_2 = await create_ws_transport({
+			base_url: handle.config.base_url,
+			ws_path: handle.config.ws_path,
+			cookies: fixture.transport.cookies()
+		});
+		const other = await fixture.create_account();
+		const other_ws = await create_ws_transport({
+			base_url: handle.config.base_url,
+			ws_path: handle.config.ws_path,
+			cookies: [`${handle.config.cookie_name}=${other.session_cookie}`]
+		});
+		try {
+			await owner_ws.request('_warmup', 'ping', undefined);
+			await owner_ws_2.request('_warmup', 'ping', undefined);
+			await other_ws.request('_warmup', 'ping', undefined);
+
+			const terminal_id = await create_terminal(owner_ws, 'own-1', { command: 'cat', args: [] });
+			await owner_ws.request('own-2', 'terminal_data_send', { terminal_id, data: 'mine\n' });
+			await wait_for_output(owner_ws, terminal_id, (out) => out.includes('mine'));
+			// every socket of the owning account gets the output
+			await wait_for_output(owner_ws_2, terminal_id, (out) => out.includes('mine'));
+
+			// another account can't drive it: each call acts as for an unknown id
+			assert.equal(
+				await other_ws.request('oth-1', 'terminal_data_send', { terminal_id, data: 'theirs\n' }),
+				null
+			);
+			assert.equal(
+				await other_ws.request('oth-2', 'terminal_resize', { terminal_id, cols: 100, rows: 30 }),
+				null
+			);
+			assert.deepEqual(await other_ws.request('oth-3', 'terminal_close', { terminal_id }), {
+				exit_code: null
+			});
+
+			// still running for its owner, and the other account's input never reached it
+			await owner_ws.request('own-3', 'terminal_data_send', { terminal_id, data: 'still\n' });
+			const output = await wait_for_output(owner_ws, terminal_id, (out) => out.includes('still'));
+			assert.ok(!output.includes('theirs'), 'other account input not written');
+
+			// an exit notification reaches the owner only
+			const exiting_id = await create_terminal(owner_ws, 'own-4', {
+				command: 'echo',
+				args: ['bye']
+			});
+			assert.equal((await wait_for_exited(owner_ws, exiting_id)).exit_code, 0);
+
+			// a round-trip on the other socket flushes anything queued to it before
+			await other_ws.request('oth-4', 'ping', undefined);
+			const leaked = other_ws.messages.filter(
+				(msg) =>
+					is_notification(msg, 'terminal_data', terminal_id) ||
+					is_notification(msg, 'terminal_data', exiting_id) ||
+					is_notification(msg, 'terminal_exited', exiting_id)
+			);
+			assert.deepEqual(leaked, [], 'no terminal notifications reach another account');
+
+			const close = await owner_ws.request<Record<string, unknown>>('own-5', 'terminal_close', {
+				terminal_id
+			});
+			assert.ok(close.exit_code === null || typeof close.exit_code === 'number');
+		} finally {
+			await owner_ws.close();
+			await owner_ws_2.close();
+			await other_ws.close();
+		}
+	});
+
+	test('terminal_processes_end_when_their_account_is_deleted', async () => {
+		const fixture = await setup_test();
+		const doomed = await fixture.create_account();
+		const ws = await create_ws_transport({
+			base_url: handle.config.base_url,
+			ws_path: handle.config.ws_path,
+			cookies: [`${handle.config.cookie_name}=${doomed.session_cookie}`]
+		});
+		let pid: number;
+		try {
+			await ws.request('_warmup', 'ping', undefined);
+			const terminal_id = await create_terminal(ws, 'del-1', {
+				command: 'sh',
+				args: ['-c', 'echo PID=$$; exec sleep 60']
+			});
+			const output = await wait_for_output(ws, terminal_id, (out) => /PID=\d+/.test(out));
+			pid = Number(/PID=(\d+)/.exec(output)![1]);
+			assert.ok(await process_exists(pid), 'terminal process running');
+		} finally {
+			// the delete below closes this socket server-side
+			await ws.close();
+		}
+
+		// self-delete — the spine revokes the account's sessions and sockets,
+		// and zzz's audit listener closes its terminals
+		const res = await rpc_call({
+			app: fixture.fresh_transport(),
+			path: handle.config.rpc_path,
+			method: 'account_delete',
+			params: {},
+			headers: doomed.create_session_headers()
+		});
+		assert.ok(res.ok, JSON.stringify(res));
+
+		const deadline = Date.now() + 10_000;
+		while ((await process_exists(pid)) && Date.now() < deadline) {
+			await new Promise((resolve) => setTimeout(resolve, 100));
+		}
+		assert.ok(!(await process_exists(pid)), `pid ${pid} reaped after the account was deleted`);
 	}, 20_000);
 
 	test('terminal_resize_rejects_out_of_range', async () => {

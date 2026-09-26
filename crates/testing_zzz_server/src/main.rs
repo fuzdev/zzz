@@ -143,7 +143,7 @@ async fn main() {
     // binary constructs it here and injects the handle. The token is static for
     // the process lifetime (the harness reads it once at spawn).
     //
-    // Deliberately `init_daemon_token` against `resolve_zzz_dir_from_env` rather than the
+    // Deliberately `init_daemon_token` against `ensure_zzz_dir_from_env` rather than the
     // sibling `init_daemon_token_from_env` the other testing binaries use.
     // That is `run_app`'s own resolution of `PUBLIC_ZZZ_DIR`, so the
     // file lands exactly where the cross-process harness looks —
@@ -154,7 +154,7 @@ async fn main() {
     // production" affordance buys nothing here either: `_testing_reset` always
     // needs the credential, so a missing one is a hard misconfiguration, which
     // the `expect` in the specs factory above reports.
-    let zzz_dir = match zzz_server::resolve_zzz_dir_from_env() {
+    let zzz_dir = match zzz_server::ensure_zzz_dir_from_env() {
         Ok(dir) => dir,
         Err(e) => {
             eprintln!("error: {e}");

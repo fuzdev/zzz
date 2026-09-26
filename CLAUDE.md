@@ -504,7 +504,11 @@ is the daemon home `~/.zzz/` (see CLI).
 - `run/` — Runtime ephemeral (the test binary's `daemon_token`)
 
 It's a permanent `ScopedFs` root with its own filer, so the frontend can
-create files there.
+create files there. A workspace or scoped-dir filer whose root contains the
+app directory skips it by its full path (its own filer covers it), so a
+custom-named app dir (say `data`) doesn't hide other `data/` folders. Every
+filer also skips any directory named `.zzz` — the conventional app dir and the
+CLI's daemon home, which holds `.env` and `bootstrap_token`.
 
 The daemon home holds the CLI's files beside it: `config.json`, `.env`,
 `bootstrap_token`, `static/` (the UI build), `bin/`, and `run/`
@@ -532,7 +536,9 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 
 `zzzd` reads a blank (empty or whitespace) value of any of its path vars as
 unset — `PUBLIC_ZZZ_DIR` falls back to `.zzz`, never `/` — and fails to boot
-on an empty or unresolvable path (a missing directory is fine).
+on an empty or unresolvable path (a missing scoped dir is fine). It creates
+the app directory (and missing parents, mode `0700`) at boot, and fails to
+boot with the path in the error if it can't.
 
 PTY terminals spawned by the server don't get the `SECRET_*`, `FUZ_*`,
 `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, or `PORT` variables — they're
@@ -575,6 +581,25 @@ reads it from the process env as the backend port its dev proxy targets
 - **Register new Cell classes in `cell_classes.ts`** — the registry must be complete
 - **Don't omit import extensions** — use the real source extension (`.ts` / `.svelte.ts` / `.svelte`)
 
+## Security posture
+
+zzz is a single-operator local app: one person, their own machine, the daemon
+running as their OS user on loopback. Accounts and the auth stack keep other
+OS users' processes and other browser origins out — not same-user processes,
+which can read `~/.zzz/.env` and the bootstrap token — and they don't separate
+accounts from each other.
+
+- Every session and every full-scope API token effectively has the daemon OS
+  user's powers (a method-scoped token is limited to its listed methods):
+  terminals (a shell as that user), `workspace_open` of any directory
+  including `/` (which makes it writable and scans it), and file writes
+  anywhere in scope.
+- Terminal output and control are scoped to the account that created the
+  terminal, and a deleted or purged account's terminals are closed — but that
+  isn't a security boundary: any account can open its own shell.
+- Revisit — role-gating the `terminal_*`, `workspace_*`, and file actions —
+  if multi-account use ever matters.
+
 ## Known Limitations
 
 - **WebSocket auth** — Auth is enforced at upgrade time — the spine resolves credentials from the request headers before upgrading (cookie sessions, bearer tokens — bearer silently discarded in browser context via Origin/Referer defense). Per-action auth checks enforce spec-level auth: `keeper` requires `daemon_token` + keeper role; `{role}` requires the named role via `has_role` (matches the HTTP path). Batch JSON-RPC is rejected (not yet supported). Sockets are closed on session/token revocation, logout, and password change via audit events — `token_revoke` closes only the revoked token's sockets (granular), `session_revoke_all` / `token_revoke_all` / `password_change` close all sockets on the account. No per-message session revalidation — event-driven revocation is sufficient. ActionPeer itself has no auth awareness.
@@ -583,7 +608,7 @@ reads it from the process env as the backend port its dev proxy targets
 - **No persistent undo** — saves overwrite the file on disk; the editor keeps an in-memory per-file history (`DiskfileHistory`) you can restore from, lost on reload
 - **Symlinks are invisible** — the filer never follows or indexes a symlink (file or directory), and `ScopedFs` rejects symlinked paths, so linked files don't appear in the file tree
 - **Workspace scope** — opening a workspace makes its directory a writable `ScopedFs` root with its own filer until it's closed; closing never revokes the permanent roots (`PUBLIC_ZZZ_DIR` and `PUBLIC_ZZZ_SCOPED_DIRS`). Any absolute directory can be opened — `/` makes the whole filesystem writable and scans it
-- **Terminals** — output (`terminal_data`, `terminal_exited`) is broadcast to every connected socket, not just the terminal's owner, and the frontend's terminal list is in-memory, so a page reload loses it while the backend processes keep running
+- **Terminals** — any authenticated account can create a terminal, which runs a command as the daemon's OS user (see Security posture). Each terminal belongs to the account that created it: its output (`terminal_data`, `terminal_exited`) reaches only that account's sockets, and other accounts' `terminal_data_send` / `terminal_resize` / `terminal_close` act as if it didn't exist. The frontend's terminal list is in-memory, so a page reload loses it while the backend processes keep running
 - **PTY terminals** — terminal spawning uses the `fuz_pty` Rust crate as a native dependency of `zzz_server` (no FFI indirection). `PtyManager` runs one I/O task per terminal (readiness-driven reads, an ordered input queue that writes large pastes in full, reaping with `SIGKILL` escalation so closed terminals leave no zombies). Terminal children inherit zzzd's environment **minus** `SECRET_*`, `FUZ_*`, `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, and `PORT` — this keeps the daemon's API keys, cookie keys, and DB URL out of the child's environment, but it is not isolation (the shell runs as the same user and can read `/proc/<zzzd pid>/environ` or the `.env` files). The prefix match also drops the user's own `FUZ_*` variables from terminals; everything else (`PATH`, `HOME`, `SSH_AUTH_SOCK`, …) passes through. See ./crates/CLAUDE.md for details. Requires the sibling Rust workspace checked out alongside this repo (path dep).
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented

@@ -5,7 +5,7 @@
 //!
 //! - **Output** — readiness-driven reads (no polling), decoded with
 //!   `Utf8StreamDecoder` so a multibyte character split across reads survives,
-//!   and broadcast as `terminal_data`. The task spends cooperative budget per
+//!   and sent as `terminal_data`. The task spends cooperative budget per
 //!   chunk, so a flood (`yes`, `cat /dev/urandom`) can't pin a runtime worker.
 //! - **Input** — `terminal_data_send` enqueues onto a bounded per-terminal
 //!   queue; the task writes each chunk fully (looping on partial writes and
@@ -15,7 +15,7 @@
 //!   concurrently, so ordering across sends is the client's job.
 //! - **Resize** — latest-wins through a `watch` channel.
 //! - **Exit** — on EOF the task closes the master, reaps the child (escalating
-//!   to `SIGKILL` if it lingers), and broadcasts `terminal_exited` with the
+//!   to `SIGKILL` if it lingers), and sends `terminal_exited` with the
 //!   real exit code. On `terminal_close` it signals, closes the master (the
 //!   hangup reaches shells that ignore `SIGTERM`), replies with the exit code
 //!   if the child exited within a short grace, and keeps reaping in the
@@ -23,6 +23,11 @@
 //!
 //! Children get zzzd's environment minus its secrets and config (see
 //! `terminal_env`).
+//!
+//! **Ownership.** Each terminal belongs to the account that created it: its
+//! `terminal_data` / `terminal_exited` notifications reach only that account's
+//! sockets, and `write` / `resize` / `close` from any other account act as if
+//! the terminal didn't exist (so its existence isn't observable either).
 
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
@@ -39,6 +44,7 @@ use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{RwLock, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
+use uuid::Uuid;
 
 use crate::handlers::App;
 use crate::utf8_stream::Utf8StreamDecoder;
@@ -123,13 +129,14 @@ struct TerminalExitedParams<'a> {
     exit_code: Option<i32>,
 }
 
-fn broadcast_data(app: &App, terminal_id: &str, data: &str) {
+/// Send `terminal_data` to the owning account's sockets.
+fn send_data(app: &App, owner: Uuid, terminal_id: &str, data: &str) {
     if data.is_empty() {
         return;
     }
     let notification =
         fuz_http::notification("terminal_data", &TerminalDataParams { terminal_id, data });
-    app.broadcast(&notification);
+    app.realtime.send_to_account(owner, &notification);
 }
 
 // -- Per-terminal state -------------------------------------------------------
@@ -152,6 +159,9 @@ struct CloseRequest {
 
 /// Handles to a running terminal's task, held in the manager's map.
 struct TerminalEntry {
+    /// The account that created the terminal — the only one that sees its
+    /// output or can drive it.
+    owner: Uuid,
     input: mpsc::Sender<Vec<u8>>,
     size: watch::Sender<(u16, u16)>,
     close: oneshot::Sender<CloseRequest>,
@@ -205,8 +215,8 @@ impl Drop for PtyHandle {
 /// Manages spawned PTY processes keyed by `terminal_id` (UUID string).
 ///
 /// Held in `App`, shared via `Arc`. Each terminal runs one task (see the
-/// module doc) that broadcasts `terminal_data`, and `terminal_exited` when the
-/// process exits on its own.
+/// module doc) that sends `terminal_data`, and `terminal_exited` when the
+/// process exits on its own, to the owning account's sockets.
 pub struct PtyManager {
     terminals: RwLock<HashMap<String, TerminalEntry>>,
 }
@@ -218,8 +228,8 @@ impl PtyManager {
         }
     }
 
-    /// Spawn a new PTY process, start its I/O task, and register it under
-    /// `terminal_id` in `app.pty_manager`.
+    /// Spawn a new PTY process owned by the account `owner`, start its I/O
+    /// task, and register it under `terminal_id` in `app.pty_manager`.
     ///
     /// The child's environment is zzzd's minus secrets (`terminal_env`).
     ///
@@ -236,6 +246,7 @@ impl PtyManager {
     /// spawn rather than running somewhere else or exiting later.
     pub async fn spawn(
         app: Arc<App>,
+        owner: Uuid,
         terminal_id: &str,
         command: &str,
         args: &[String],
@@ -245,13 +256,13 @@ impl PtyManager {
         let command = command.to_owned();
         let args = args.to_vec();
         let cwd = cwd.map(str::to_owned);
-        tokio::spawn(spawn_terminal(app, terminal_id, command, args, cwd))
+        tokio::spawn(spawn_terminal(app, owner, terminal_id, command, args, cwd))
             .await
             .map_err(|e| format!("spawn task failed: {e}"))?
     }
 
     /// Queue `data` for a terminal's stdin. Silently no-ops if the terminal
-    /// doesn't exist or is exiting.
+    /// doesn't exist, isn't owned by `owner`, or is exiting.
     ///
     /// Chunks are written in queue order, each in full, by the terminal's
     /// task — this returns once `data` is queued, not written.
@@ -259,12 +270,17 @@ impl PtyManager {
     /// # Errors
     ///
     /// `TerminalInputFull` when the input queue is full.
-    pub async fn write(&self, terminal_id: &str, data: &str) -> Result<(), TerminalInputFull> {
+    pub async fn write(
+        &self,
+        owner: Uuid,
+        terminal_id: &str,
+        data: &str,
+    ) -> Result<(), TerminalInputFull> {
         if data.is_empty() {
             return Ok(());
         }
         let terminals = self.terminals.read().await;
-        let Some(entry) = terminals.get(terminal_id) else {
+        let Some(entry) = terminals.get(terminal_id).filter(|e| e.owner == owner) else {
             return Ok(());
         };
         match entry.input.try_send(data.as_bytes().to_vec()) {
@@ -274,10 +290,10 @@ impl PtyManager {
     }
 
     /// Resize a terminal's PTY window. Silently no-ops if the terminal
-    /// doesn't exist.
-    pub async fn resize(&self, terminal_id: &str, cols: u16, rows: u16) {
+    /// doesn't exist or isn't owned by `owner`.
+    pub async fn resize(&self, owner: Uuid, terminal_id: &str, cols: u16, rows: u16) {
         let terminals = self.terminals.read().await;
-        if let Some(entry) = terminals.get(terminal_id) {
+        if let Some(entry) = terminals.get(terminal_id).filter(|e| e.owner == owner) {
             let _ = entry.size.send((cols, rows));
         }
     }
@@ -285,14 +301,17 @@ impl PtyManager {
     /// Close a terminal: send `signal`, hang up the session, and return the
     /// exit code if the process ended within the close grace.
     ///
-    /// Returns `None` if the `terminal_id` doesn't exist, `Some(None)` if the
-    /// process was still running at the end of the grace — it's then reaped
-    /// in the background (`SIGKILL` after `REAP_KILL_AFTER`), and no
-    /// `terminal_exited` is broadcast for it.
-    pub async fn close(&self, terminal_id: &str, signal: i32) -> Option<Option<i32>> {
+    /// Returns `None` if the `terminal_id` doesn't exist or isn't owned by
+    /// `owner`, `Some(None)` if the process was still running at the end of
+    /// the grace — it's then reaped in the background (`SIGKILL` after
+    /// `REAP_KILL_AFTER`), and no `terminal_exited` is sent for it.
+    pub async fn close(&self, owner: Uuid, terminal_id: &str, signal: i32) -> Option<Option<i32>> {
         let (reply_tx, reply_rx) = oneshot::channel();
         {
             let mut terminals = self.terminals.write().await;
+            if terminals.get(terminal_id)?.owner != owner {
+                return None;
+            }
             let entry = terminals.remove(terminal_id)?;
             // Sent under the lock: a task finishing on EOF removes its entry
             // under the same lock, so it either sees this request or already
@@ -304,6 +323,29 @@ impl PtyManager {
             });
         }
         Some(reply_rx.await.ok().flatten())
+    }
+
+    /// Close every terminal owned by `owner` — for an account that was
+    /// deleted or purged. Each gets `SIGTERM` and a hangup, and is reaped in
+    /// the background (`SIGKILL` after `REAP_KILL_AFTER`); no
+    /// `terminal_exited` is sent. Returns how many terminals were closed.
+    pub async fn close_all_for_account(&self, owner: Uuid) -> usize {
+        let entries: Vec<(String, TerminalEntry)> = {
+            let mut terminals = self.terminals.write().await;
+            terminals
+                .extract_if(|_, entry| entry.owner == owner)
+                .collect()
+        };
+        let count = entries.len();
+        for (terminal_id, entry) in entries {
+            tracing::info!(terminal_id = %terminal_id, %owner, "closing a removed account's terminal");
+            let _ = entry.close.send(CloseRequest {
+                signal: libc::SIGTERM,
+                reply: None,
+                kill_after: REAP_KILL_AFTER,
+            });
+        }
+        count
     }
 
     /// Kill every active terminal without destroying the manager.
@@ -356,6 +398,7 @@ impl std::fmt::Debug for PtyManager {
 /// The body of `PtyManager::spawn`, run as its own task.
 async fn spawn_terminal(
     app: Arc<App>,
+    owner: Uuid,
     terminal_id: String,
     command: String,
     args: Vec<String>,
@@ -408,6 +451,7 @@ async fn spawn_terminal(
     // (and try to remove its entry) before the entry exists.
     let mut terminals = app.pty_manager.terminals.write().await;
     let task = tokio::spawn(run_terminal(TerminalIo {
+        owner,
         terminal_id: terminal_id.clone(),
         master,
         input_rx,
@@ -418,6 +462,7 @@ async fn spawn_terminal(
     terminals.insert(
         terminal_id,
         TerminalEntry {
+            owner,
             input: input_tx,
             size: size_tx,
             close: close_tx,
@@ -432,6 +477,8 @@ async fn spawn_terminal(
 
 /// Everything a terminal's task owns.
 struct TerminalIo {
+    /// The account whose sockets receive the terminal's notifications.
+    owner: Uuid,
     terminal_id: String,
     master: AsyncFd<PtyHandle>,
     input_rx: mpsc::Receiver<Vec<u8>>,
@@ -459,6 +506,7 @@ async fn run_terminal(mut io: TerminalIo) {
     let outcome = pump_io(&mut io, &mut decoder).await;
 
     let TerminalIo {
+        owner,
         terminal_id,
         master,
         mut close_rx,
@@ -470,15 +518,15 @@ async fn run_terminal(mut io: TerminalIo) {
     match outcome {
         IoOutcome::Eof => {
             // an incomplete UTF-8 tail can't be completed now — flush it
-            broadcast_data(&app, &terminal_id, &decoder.finish_to_string());
+            send_data(&app, owner, &terminal_id, &decoder.finish_to_string());
             handle.close_master();
             let exit_code = reap(&handle.pty, REAP_KILL_AFTER).await;
             tracing::info!(terminal_id, ?exit_code, "terminal exited");
 
             // Removed under the lock `close` sends under — a close request
             // that won the race is already in `close_rx`. That close gets the
-            // exit code in its reply instead of a `terminal_exited` broadcast
-            // (closed terminals never broadcast one).
+            // exit code in its reply instead of a `terminal_exited` notification
+            // (closed terminals never send one).
             app.pty_manager.terminals.write().await.remove(&terminal_id);
             if let Ok(request) = close_rx.try_recv() {
                 if let Some(reply) = request.reply {
@@ -494,7 +542,7 @@ async fn run_terminal(mut io: TerminalIo) {
                     exit_code,
                 },
             );
-            app.broadcast(&notification);
+            app.realtime.send_to_account(owner, &notification);
         }
         IoOutcome::Close(request) => {
             close_terminal(handle, request, &terminal_id).await;
@@ -531,7 +579,7 @@ async fn pump_io(io: &mut TerminalIo, decoder: &mut Utf8StreamDecoder) -> IoOutc
                     Ok(Ok(0) | Err(_)) => return IoOutcome::Eof,
                     Ok(Ok(n)) => {
                         let text = decoder.feed_to_string(&buf[..n]);
-                        broadcast_data(&io.app, &io.terminal_id, &text);
+                        send_data(&io.app, io.owner, &io.terminal_id, &text);
                         // Readiness futures don't consume coop budget, so a
                         // child that never stops writing would otherwise pin
                         // this worker thread — yield once the budget is spent.

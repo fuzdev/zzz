@@ -1,4 +1,5 @@
-//! Terminal handlers.
+//! Terminal handlers. Each terminal is owned by the account that created it
+//! (see `pty_manager`).
 //!
 //! Spine signature `(Value, ActionContext<'_>, Arc<App>)`; the
 //! closure-captured `Arc<App>` provides the `PtyManager` reach-through.
@@ -6,11 +7,14 @@
 use std::sync::Arc;
 
 use fuz_actions::ActionContext;
+use fuz_auth::{AuditEmitter, AuditEventType, AuditLogEvent};
 use fuz_http::{
     JsonrpcError, internal_error, internal_error_with_source, invalid_params, queue_overflow,
+    unauthenticated,
 };
 use serde::Serialize;
 use serde_json::Value;
+use uuid::Uuid;
 
 use crate::handlers::App;
 use crate::pty_manager::PtyManager;
@@ -44,11 +48,59 @@ fn parse_terminal_dimension(params: &Value, name: &str) -> Result<u16, JsonrpcEr
         })
 }
 
+/// The calling account, which owns the terminals it creates. The terminal
+/// specs require an account, so a missing one is refused rather than trusted.
+fn caller_account_id(ctx: &ActionContext<'_>) -> Result<Uuid, JsonrpcError> {
+    ctx.auth
+        .account()
+        .map(|account| account.id)
+        .ok_or_else(unauthenticated)
+}
+
+/// The account whose terminals a successful `account_delete` /
+/// `account_purge` audit event removes — its `target_account_id`. `None` for
+/// any other event, a failure, or a row without a target.
+fn removed_terminal_owner(event: &AuditLogEvent) -> Option<Uuid> {
+    if event.outcome != "success" {
+        return None;
+    }
+    match AuditEventType::from_wire(&event.event_type)? {
+        AuditEventType::AccountDelete | AuditEventType::AccountPurge => event.target_account_id,
+        _ => None,
+    }
+}
+
+/// Registers the audit listener that closes a deleted or purged account's
+/// terminals.
+///
+/// The spine already revokes the account's sessions, tokens, and sockets;
+/// this ends the processes they were driving. Holds `App` weakly — `App`'s
+/// action registry holds the emitter.
+pub fn register_terminal_account_listener(emitter: &AuditEmitter, app: &Arc<App>) {
+    let app = Arc::downgrade(app);
+    emitter.add_listener(Arc::new(move |event| {
+        let app = std::sync::Weak::clone(&app);
+        Box::pin(async move {
+            let Some(owner) = removed_terminal_owner(&event) else {
+                return;
+            };
+            let Some(app) = app.upgrade() else {
+                return;
+            };
+            let closed = app.pty_manager.close_all_for_account(owner).await;
+            if closed > 0 {
+                tracing::info!(count = closed, event_type = %event.event_type, "audit listener: closed terminals");
+            }
+        })
+    }));
+}
+
 pub async fn terminal_create(
     params: Value,
-    _ctx: ActionContext<'_>,
+    ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
+    let owner = caller_account_id(&ctx)?;
     let command = params
         .get("command")
         .and_then(Value::as_str)
@@ -69,9 +121,9 @@ pub async fn terminal_create(
 
     let cwd = params.get("cwd").and_then(Value::as_str);
 
-    let terminal_id = uuid::Uuid::new_v4().to_string();
+    let terminal_id = Uuid::new_v4().to_string();
 
-    PtyManager::spawn(Arc::clone(&app), &terminal_id, command, &args, cwd)
+    PtyManager::spawn(Arc::clone(&app), owner, &terminal_id, command, &args, cwd)
         .await
         .map_err(|e| internal_error(&format!("failed to create terminal: {e}")))?;
 
@@ -81,9 +133,10 @@ pub async fn terminal_create(
 
 pub async fn terminal_data_send(
     params: Value,
-    _ctx: ActionContext<'_>,
+    ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
+    let owner = caller_account_id(&ctx)?;
     let terminal_id = params
         .get("terminal_id")
         .and_then(Value::as_str)
@@ -95,7 +148,7 @@ pub async fn terminal_data_send(
         .ok_or_else(|| invalid_params("missing or invalid 'data' parameter", None))?;
 
     app.pty_manager
-        .write(terminal_id, data)
+        .write(owner, terminal_id, data)
         .await
         .map_err(|e| queue_overflow(&e.to_string()))?;
 
@@ -104,9 +157,10 @@ pub async fn terminal_data_send(
 
 pub async fn terminal_resize(
     params: Value,
-    _ctx: ActionContext<'_>,
+    ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
+    let owner = caller_account_id(&ctx)?;
     let terminal_id = params
         .get("terminal_id")
         .and_then(Value::as_str)
@@ -115,16 +169,17 @@ pub async fn terminal_resize(
     let cols = parse_terminal_dimension(&params, "cols")?;
     let rows = parse_terminal_dimension(&params, "rows")?;
 
-    app.pty_manager.resize(terminal_id, cols, rows).await;
+    app.pty_manager.resize(owner, terminal_id, cols, rows).await;
 
     Ok(Value::Null)
 }
 
 pub async fn terminal_close(
     params: Value,
-    _ctx: ActionContext<'_>,
+    ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
+    let owner = caller_account_id(&ctx)?;
     let terminal_id = params
         .get("terminal_id")
         .and_then(Value::as_str)
@@ -140,7 +195,11 @@ pub async fn terminal_close(
         _ => libc::SIGTERM,
     };
 
-    let exit_code = app.pty_manager.close(terminal_id, signal).await.flatten();
+    let exit_code = app
+        .pty_manager
+        .close(owner, terminal_id, signal)
+        .await
+        .flatten();
 
     serde_json::to_value(TerminalCloseResult { exit_code })
         .map_err(|e| internal_error_with_source("serialization failed", &e))
@@ -176,6 +235,55 @@ mod tests {
         assert_invalid_params(dimension(&json!(0)));
         assert_invalid_params(dimension(&json!(65_536)));
         assert_invalid_params(dimension(&json!(4_294_967_376_u64)));
+    }
+
+    fn audit_event(event_type: &str, outcome: &str, target: Option<Uuid>) -> AuditLogEvent {
+        AuditLogEvent {
+            id: Uuid::new_v4(),
+            seq: 1,
+            event_type: event_type.to_owned(),
+            outcome: outcome.to_owned(),
+            actor_id: None,
+            account_id: Some(Uuid::new_v4()),
+            target_account_id: target,
+            target_actor_id: None,
+            ip: None,
+            created_at: String::new(),
+            metadata: None,
+        }
+    }
+
+    #[test]
+    fn removed_accounts_lose_their_terminals() {
+        let target = Uuid::new_v4();
+        for event_type in ["account_delete", "account_purge"] {
+            assert_eq!(
+                removed_terminal_owner(&audit_event(event_type, "success", Some(target))),
+                Some(target),
+                "{event_type}"
+            );
+            assert_eq!(
+                removed_terminal_owner(&audit_event(event_type, "failure", Some(target))),
+                None
+            );
+            // never the acting account when the target is missing
+            assert_eq!(
+                removed_terminal_owner(&audit_event(event_type, "success", None)),
+                None
+            );
+        }
+        for event_type in [
+            "account_undelete",
+            "logout",
+            "session_revoke_all",
+            "custom_thing",
+        ] {
+            assert_eq!(
+                removed_terminal_owner(&audit_event(event_type, "success", Some(target))),
+                None,
+                "{event_type}"
+            );
+        }
     }
 
     #[test]

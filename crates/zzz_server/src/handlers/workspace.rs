@@ -169,7 +169,7 @@ pub async fn workspace_open(
         .start_filer(
             &workspace.path,
             Arc::clone(&app),
-            FilerConfig::workspace(&app.zzz_dir),
+            FilerConfig::workspace(&workspace.path, &app.zzz_dir),
             FilerLifetime::Workspace,
         )
         .await

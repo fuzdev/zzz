@@ -238,6 +238,12 @@
 				</ul>
 			</li>
 			<li>
+				Zzz is a single-operator app for your own machine. Every session and every full-scope API
+				token effectively has your OS user's powers: terminals, opening any directory as a workspace
+				(even <code>/</code>), and writing files there -- don't give an account to anyone you
+				wouldn't give a shell.
+			</li>
+			<li>
 				The frontend
 				<ExternalLink
 					href="https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/ContentSecurityPolicy"

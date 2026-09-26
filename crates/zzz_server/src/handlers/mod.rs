@@ -13,8 +13,9 @@
 //! Auth, dispatch, and the JSON-RPC / WS routes come from the spine
 //! (`fuz_actions::perform_action` plus the route states built in `main.rs`).
 //! `App.realtime` is the sole connection-tracking surface; it drives the
-//! `broadcast` / `close_sockets_for_*` shims called from `filer.rs`,
-//! `pty_manager.rs`, and `workspace.rs`. `WorkspaceInfo` is the value type
+//! `broadcast` / `close_sockets_for_*` shims called from `filer.rs` and
+//! `workspace.rs`, and `pty_manager.rs` sends terminal notifications through
+//! it to the owning account only (`send_to_account`). `WorkspaceInfo` is the value type
 //! consumed by `workspace`.
 
 pub mod core;
@@ -116,8 +117,9 @@ impl App {
     ///
     /// Shim over `App.realtime`. The spine WS handler registers
     /// connections in `App.realtime` (`Arc<fuz_realtime::ConnectionRegistry>`);
-    /// call sites (`filer::broadcast_filer_change`, `pty_manager` terminal
-    /// data / exited, `workspace::workspace_*`) broadcast through this shim.
+    /// call sites (`filer::broadcast_filer_change`, `workspace::workspace_*`)
+    /// broadcast through this shim. Terminal output is per-account, so
+    /// `pty_manager` uses `realtime.send_to_account` instead.
     pub fn broadcast(&self, message: &str) {
         let _ = self.realtime.broadcast(message);
     }

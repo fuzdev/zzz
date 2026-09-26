@@ -112,7 +112,7 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 ### Optional Environment Variables
 
 - `FUZ_BOOTSTRAP_TOKEN_PATH` — Path to bootstrap token file
-- `PUBLIC_ZZZ_DIR` — App directory (default `.zzz`, relative to the working directory)
+- `PUBLIC_ZZZ_DIR` — App directory (default `.zzz`, relative to the working directory); created at boot (with missing parents, mode `0700`) if absent — boot fails, naming the path, if it can't be
 - `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (no `~` expansion)
 - `ZZZ_PORT` — Server port (default 4460, CLI overrides)
 - `ZZZ_STATIC_DIR` — Static file directory (must be a directory, or boot fails)
@@ -138,6 +138,10 @@ A blank (empty or whitespace) path var reads as unset — `PUBLIC_ZZZ_DIR` falls
 - `/*` (GET) — Static files (if `--static-dir`)
 
 ## Auth
+
+zzz is single-operator: every session and every full-scope API token
+effectively has the daemon OS user's powers — see the root CLAUDE.md
+§ Security posture.
 
 Cookie-based session auth and bearer token auth. These mechanics are
 spine behaviors (`fuz_auth` / `fuz_http` / `fuz_realtime`) that `run_app`
@@ -275,8 +279,11 @@ conform to the shared fuz_app contract. The tests live in
   nonexistent-command handling, a ~22KB paste round-trip through `cat`
   (partial writes continued), multibyte output split across reads, env
   scrubbing (no `SECRET_*` / `DATABASE_URL` / … in the child), reaping of a
-  child that ignores `SIGTERM` + `SIGHUP` (no zombie after close), and
-  silent-null for missing terminal IDs.
+  child that ignores `SIGTERM` + `SIGHUP` (no zombie after close),
+  silent-null for missing or another account's terminal IDs, ownership
+  scoping (a second account gets no output and can't drive or close the
+  terminal; the owner's second socket does get output), and a self-deleted
+  account's terminal processes being reaped.
 - **`provider.cross.test.ts`** — `provider_load_status` (no-key status) plus `session_load`
   (zzz_dir file listing with contents + recursive subdirectory walk).
 - **`completion.cross.test.ts`** — `completion_create` invalid-provider and blank-prompt rejection.
@@ -447,7 +454,7 @@ metadata contract, the bootstrap success/failure audit rows, and the
 ## Known Limitations
 
 - RPC methods: `ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`, `admin_session_revoke_all` (admin-only), `admin_token_revoke_all` (admin-only) — plus the rest of the spine-registered `fuz_auth` standard bundle and protocol specs (see the workspace-layout section above)
-- 5 zzz-domain `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, per-path debounced broadcasts (80ms quiet, capped at 500ms) with immediate index updates (delete+create inside the window becomes `change`, create+delete becomes a bare `delete`), every event resolved by `lstat` so late or reordered removes can't drop an existing file, rename-aware (old path `delete`, new path `add`), ignored paths filtered before the bounded event channel with a coalesced root rescan on overflow, per-watcher ignore config, in-memory file index returned by `session_load` and `workspace_open`, symlinks skipped; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist` globally plus zzz dir name for workspace/scoped_dir watchers; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY stdout broadcast), `terminal_exited` (process exit broadcast), `completion_progress` (streaming completion chunks to requesting WS connection); the spine's role-grant-offer bundle carries its own notification set (`role_grant_offer_received` / `_retracted` / `_accepted` / `_declined` / `_supersede`)
+- 5 zzz-domain `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, per-path debounced broadcasts (80ms quiet, capped at 500ms) with immediate index updates (delete+create inside the window becomes `change`, create+delete becomes a bare `delete`), every event resolved by `lstat` so late or reordered removes can't drop an existing file, rename-aware (old path `delete`, new path `add`), ignored paths filtered before the bounded event channel with a coalesced root rescan on overflow, per-watcher ignore config, in-memory file index returned by `session_load` and `workspace_open`, symlinks skipped; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz` by name globally (`.zzz` keeps the CLI daemon home's `.env` / `bootstrap_token` out of a `~` workspace), plus `zzz_dir` by its full path for a workspace/scoped_dir watcher whose root contains it; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY output) and `terminal_exited` (process exit), both sent only to the owning account's sockets, `completion_progress` (streaming completion chunks to requesting WS connection); the spine's role-grant-offer bundle carries its own notification set (`role_grant_offer_received` / `_retracted` / `_accepted` / `_declined` / `_supersede`)
 - AI providers: Anthropic, OpenAI, and Gemini all fully implemented (non-streaming + SSE streaming)
 - No batch request support (JSON arrays)
 - `/api/account/signup` is mounted via `fuz_auth::signup_routes`. Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting via `app_settings_update` to enable open signup. The cross-process test binary opts into `open_signup: true` at startup via `app_settings_patch` so per-test `mint_account` can sign up without invites. `app_settings` is loaded from the DB per signup request (no cache).
@@ -497,14 +504,27 @@ metadata contract, the bootstrap success/failure audit rows, and the
   - **Resize** is latest-wins through a `watch` channel; `cols` / `rows`
     must be `1..=65535` (`invalid_params` otherwise, never truncated).
   - **Exit**: on EOF the task closes the master, reaps the child, and
-    broadcasts `terminal_exited` with the real exit code. `terminal_close`
+    sends `terminal_exited` with the real exit code. `terminal_close`
     sends the signal, waits 50ms, closes the master (the hangup ends an
     interactive shell that ignores `SIGTERM`), waits 100ms more, and replies
     with the exit code or `null`; a child still alive is reaped in the
     background (`SIGKILL` after 3s) — no zombie outlives its terminal, and no
-    `terminal_exited` is broadcast for a closed terminal. `kill_all`
+    `terminal_exited` is sent for a closed terminal. `kill_all`
     (shutdown, `_testing_reset`) escalates to `SIGKILL` right after the close
     grace and waits for every reap, bounded at 5s.
+  - **Ownership**: `terminal_create` records the calling account as the
+    terminal's owner. `terminal_data` / `terminal_exited` go to that
+    account's sockets only (`ConnectionRegistry::send_to_account`), and
+    `terminal_data_send` / `terminal_resize` / `terminal_close` from any other
+    account behave exactly as for an unknown id (no effect, same reply), so a
+    terminal's existence isn't observable across accounts. A successful
+    `account_delete` / `account_purge` audit event closes the target account's
+    terminals (`handlers::terminal::register_terminal_account_listener`,
+    beside the spine's socket-revocation listeners). Creation itself is open
+    to any authenticated account (`CredentialGate::Any`) — and a terminal is a
+    shell as the daemon's OS user; see the root CLAUDE.md § Security posture.
+    Notifications go to every socket of the account, regardless of which API
+    token or session opened it.
   - **Spawn** runs in its own task (so a caller dropped mid-spawn can't
     abandon a live PTY) around `spawn_blocking`. A bad `cwd` or unexecutable command
     fails `terminal_create` (fuz_pty reports the child's `chdir` / `execvpe`

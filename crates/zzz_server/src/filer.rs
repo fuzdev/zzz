@@ -124,25 +124,42 @@ type FileIndex = BTreeMap<String, SerializableDisknode>;
 
 // -- Default ignored directories ----------------------------------------------
 
-/// Directories always ignored by all watchers. Individual filers
-/// can add extra ignores on top of these via `FilerConfig`.
-const DEFAULT_IGNORED_DIRS: &[&str] = &[".git", "node_modules", ".svelte-kit", "target", "dist"];
+/// Directory names ignored by all watchers, wherever they appear. Individual
+/// filers can ignore specific directories by full path on top of these via
+/// `FilerConfig`.
+///
+/// `.zzz` is zzz's conventional app-dir and CLI daemon-home name — the daemon
+/// home (`~/.zzz/`) holds `.env`, `bootstrap_token`, and `run/`, which must
+/// never be indexed or broadcast from a workspace like `~`.
+const DEFAULT_IGNORED_DIRS: &[&str] = &[
+    ".git",
+    "node_modules",
+    ".svelte-kit",
+    "target",
+    "dist",
+    ".zzz",
+];
 
-/// Check if a single directory name is in the ignore lists.
-fn is_ignored_name(name: &str, extra_ignores: &[String]) -> bool {
-    DEFAULT_IGNORED_DIRS.contains(&name) || extra_ignores.iter().any(|ig| ig == name)
+/// Check if a single directory name is in the default ignore list.
+fn is_ignored_name(name: &str) -> bool {
+    DEFAULT_IGNORED_DIRS.contains(&name)
 }
 
-/// Check if a path contains any ignored directory component below `source_dir`.
+/// Check if a path is ignored: a default-ignored directory name among its
+/// components below `source_dir`, or at/under one of `ignored_dirs`.
 ///
-/// Only checks components after the `source_dir` prefix — root path segments
+/// Only checks names after the `source_dir` prefix — root path segments
 /// like `/`, `home`, `user` can never match ignored names and are skipped.
-fn is_ignored(path: &Path, source_dir: &Path, extra_ignores: &[String]) -> bool {
+/// `ignored_dirs` match by whole components (`Path::starts_with`), so
+/// `/w/data` doesn't cover `/w/data2`.
+fn is_ignored(path: &Path, source_dir: &Path, ignored_dirs: &[PathBuf]) -> bool {
+    if ignored_dirs.iter().any(|dir| path.starts_with(dir)) {
+        return true;
+    }
     let suffix = path.strip_prefix(source_dir).unwrap_or(path);
-    suffix.components().any(|c| {
-        let s = c.as_os_str().to_str().unwrap_or("");
-        is_ignored_name(s, extra_ignores)
-    })
+    suffix
+        .components()
+        .any(|c| is_ignored_name(c.as_os_str().to_str().unwrap_or("")))
 }
 
 /// `dir` with exactly one trailing slash — the index-key prefix of
@@ -381,35 +398,41 @@ fn apply_subtree(
 
 /// Per-filer configuration controlling which directories to ignore.
 pub struct FilerConfig {
-    /// Extra directory names to ignore beyond the defaults.
-    /// For workspace watchers this includes `.zzz`; for the `zzz_dir`
-    /// watcher this is empty so it can see its own files.
-    pub extra_ignores: Vec<String>,
+    /// Absolute directories to ignore beyond the default names. For a
+    /// workspace watcher whose root contains `zzz_dir`, this is `zzz_dir`
+    /// (which has its own watcher); otherwise empty.
+    pub ignored_dirs: Vec<PathBuf>,
 }
 
 impl FilerConfig {
     /// Config for the `zzz_dir` watcher — no extra ignores, since it needs
-    /// to see files inside the zzz directory.
+    /// to see files inside the zzz directory. (Default names still apply
+    /// below its root, so a `.zzz/` nested inside the app dir is skipped.)
     pub const fn zzz_dir() -> Self {
         Self {
-            extra_ignores: vec![],
+            ignored_dirs: vec![],
         }
     }
 
-    /// Config for workspace and `scoped_dir` watchers — ignores the zzz
-    /// directory name to avoid duplicate events when `zzz_dir` is nested
-    /// under a watched directory.
+    /// Config for a workspace or `scoped_dir` watcher on `root` — ignores
+    /// `zzz_dir` by its full path when it sits strictly inside `root`, so its
+    /// files aren't indexed and broadcast twice. A custom-named app dir is
+    /// matched by path, not name, so same-named directories elsewhere (an app
+    /// dir named `data` vs a workspace's own `data/`) stay visible; `.zzz`
+    /// directories are ignored everywhere by `DEFAULT_IGNORED_DIRS`.
     ///
-    /// Derives the ignore name from the actual `zzz_dir` path (e.g. `.zzz`
-    /// from `/home/user/.zzz/`) so it works with custom `PUBLIC_ZZZ_DIR`.
-    pub fn workspace(zzz_dir: &str) -> Self {
-        let zzz_dir_name = Path::new(zzz_dir.trim_end_matches('/'))
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(".zzz")
-            .to_owned();
+    /// Both paths are expected in their canonical form (as `resolve_dir` and
+    /// `workspace_open` produce); a trailing `/` is ignored.
+    pub fn workspace(root: &str, zzz_dir: &str) -> Self {
+        let root = Path::new(root);
+        let zzz_dir = Path::new(zzz_dir);
+        let nested = zzz_dir.starts_with(root) && zzz_dir != root;
         Self {
-            extra_ignores: vec![zzz_dir_name],
+            ignored_dirs: if nested {
+                vec![zzz_dir.to_path_buf()]
+            } else {
+                vec![]
+            },
         }
     }
 }
@@ -477,7 +500,7 @@ pub async fn start_filer(
     let signal = Arc::new(RescanSignal::default());
 
     let watcher_root = PathBuf::from(path);
-    let watcher_ignores = config.extra_ignores.clone();
+    let watcher_ignores = config.ignored_dirs.clone();
     let watcher_signal = Arc::clone(&signal);
     let mut watcher = RecommendedWatcher::new(
         move |res: Result<notify::Event, notify::Error>| {
@@ -520,7 +543,7 @@ pub async fn start_filer(
     scan_directory(
         &source_dir,
         &source_dir,
-        &config.extra_ignores,
+        &config.ignored_dirs,
         &mut initial_files,
     )
     .await;
@@ -529,7 +552,7 @@ pub async fn start_filer(
     let (rescan_tx, rescan_rx) = mpsc::channel(64);
     let state = FilerState {
         source_dir,
-        extra_ignores: config.extra_ignores,
+        ignored_dirs: config.ignored_dirs,
         files: Arc::clone(&files),
         pending: HashMap::new(),
     };
@@ -561,7 +584,7 @@ struct FileJob {
 struct WalkState {
     dir_stack: Vec<String>,
     current: Option<tokio::fs::ReadDir>,
-    extra_ignores: Vec<String>,
+    ignored_dirs: Vec<PathBuf>,
 }
 
 /// Stream of file jobs discovered by walking `root` recursively.
@@ -579,11 +602,11 @@ struct WalkState {
 /// task — no `mpsc` channel, no extra `tokio::spawn`, and the walker
 /// runs on the same task as the consumer so cancellation propagates
 /// naturally when the consumer drops the stream.
-fn walk_files(root: String, extra_ignores: Vec<String>) -> impl Stream<Item = FileJob> {
+fn walk_files(root: String, ignored_dirs: Vec<PathBuf>) -> impl Stream<Item = FileJob> {
     let state = WalkState {
         dir_stack: vec![root],
         current: None,
-        extra_ignores,
+        ignored_dirs,
     };
     stream::unfold(state, |mut state| async move {
         loop {
@@ -604,8 +627,11 @@ fn walk_files(root: String, extra_ignores: Vec<String>) -> impl Stream<Item = Fi
             match entry_result {
                 Ok(Some(entry)) => {
                     let path = entry.path();
-                    if let Some(name) = path.file_name().and_then(|n| n.to_str())
-                        && is_ignored_name(name, &state.extra_ignores)
+                    if path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(is_ignored_name)
+                        || state.ignored_dirs.contains(&path)
                     {
                         continue;
                     }
@@ -666,11 +692,11 @@ fn walk_files(root: String, extra_ignores: Vec<String>) -> impl Stream<Item = Fi
 async fn scan_directory(
     dir: &str,
     source_dir: &str,
-    extra_ignores: &[String],
+    ignored_dirs: &[PathBuf],
     files: &mut FileIndex,
 ) {
     let source_dir_owned = source_dir.to_owned();
-    let walker = walk_files(dir.to_owned(), extra_ignores.to_owned());
+    let walker = walk_files(dir.to_owned(), ignored_dirs.to_owned());
     let stream = walker
         .map(|job| {
             let source_dir = source_dir_owned.clone();
@@ -707,7 +733,7 @@ async fn scan_directory(
 /// and the pending debounced broadcasts.
 struct FilerState {
     source_dir: String,
-    extra_ignores: Vec<String>,
+    ignored_dirs: Vec<PathBuf>,
     files: Arc<RwLock<FileIndex>>,
     /// Keyed by index path.
     pending: HashMap<String, PendingNotification>,
@@ -717,7 +743,7 @@ impl FilerState {
     /// Apply one notify event to the index and the pending broadcasts.
     async fn handle_event(&mut self, event: notify::Event) {
         for (path, hint) in classify_event(event.kind, event.paths) {
-            if is_ignored(&path, Path::new(&self.source_dir), &self.extra_ignores) {
+            if is_ignored(&path, Path::new(&self.source_dir), &self.ignored_dirs) {
                 continue;
             }
             self.apply_hint(&path, hint).await;
@@ -797,7 +823,7 @@ impl FilerState {
     async fn sync_subtree(&mut self, dir: &str) {
         let prefix = dir_prefix(dir);
         let mut fresh = FileIndex::new();
-        scan_directory(&prefix, &self.source_dir, &self.extra_ignores, &mut fresh).await;
+        scan_directory(&prefix, &self.source_dir, &self.ignored_dirs, &mut fresh).await;
         let changes = {
             let mut index = self.files.write().await;
             apply_subtree(&mut index, &prefix, fresh)
@@ -1267,7 +1293,7 @@ mod tests {
         let files = scan(&root).await;
         FilerState {
             source_dir: root,
-            extra_ignores: vec![],
+            ignored_dirs: vec![],
             files: Arc::new(RwLock::new(files)),
             pending: HashMap::new(),
         }
@@ -1576,6 +1602,121 @@ mod tests {
             .await;
         assert!(state.pending.is_empty());
         assert!(is_ignored(&tmp.path("node_modules/x/y.js"), &tmp.0, &[]));
+    }
+
+    #[test]
+    fn workspace_config_ignores_zzz_dir_only_when_nested() {
+        let nested = FilerConfig::workspace("/w/", "/w/sub/data/");
+        assert_eq!(nested.ignored_dirs, vec![PathBuf::from("/w/sub/data")]);
+        // the root itself, a sibling, an ancestor, and a name-prefix sibling
+        for (root, zzz_dir) in [
+            ("/w/", "/w/"),
+            ("/w/", "/other/.zzz/"),
+            ("/w/sub/data/inner/", "/w/sub/data/"),
+            ("/w/data2/", "/w/data/"),
+        ] {
+            assert!(
+                FilerConfig::workspace(root, zzz_dir)
+                    .ignored_dirs
+                    .is_empty(),
+                "{root} {zzz_dir}"
+            );
+        }
+    }
+
+    #[test]
+    fn ignored_dirs_match_by_full_path_not_name() {
+        let root = Path::new("/w");
+        let ignored = [PathBuf::from("/w/app/data")];
+        assert!(is_ignored(Path::new("/w/app/data"), root, &ignored));
+        assert!(is_ignored(Path::new("/w/app/data/x.txt"), root, &ignored));
+        assert!(!is_ignored(Path::new("/w/data/x.txt"), root, &ignored));
+        assert!(!is_ignored(Path::new("/w/app/data2/x.txt"), root, &ignored));
+        // default names still apply alongside
+        assert!(is_ignored(Path::new("/w/data/.git/HEAD"), root, &ignored));
+    }
+
+    #[test]
+    fn the_cli_daemon_home_is_ignored_in_a_home_workspace() {
+        let home = Path::new("/home/u");
+        let config = FilerConfig::workspace("/home/u/", "/home/u/.zzz/.zzz/");
+        assert_eq!(
+            config.ignored_dirs,
+            vec![PathBuf::from("/home/u/.zzz/.zzz")]
+        );
+        for rel in [
+            ".zzz/.env",
+            ".zzz/bootstrap_token",
+            ".zzz/config.json",
+            ".zzz/run/daemon.json",
+        ] {
+            assert!(
+                is_ignored(&home.join(rel), home, &config.ignored_dirs),
+                "{rel}"
+            );
+        }
+        assert!(!is_ignored(
+            &home.join("notes/.env"),
+            home,
+            &config.ignored_dirs
+        ));
+    }
+
+    #[tokio::test]
+    async fn the_cli_daemon_home_is_skipped_by_the_scan() {
+        let tmp = TempDir::new();
+        std::fs::create_dir_all(tmp.path(".zzz/.zzz")).unwrap();
+        std::fs::create_dir_all(tmp.path(".zzz/run")).unwrap();
+        for rel in [
+            ".zzz/.env",
+            ".zzz/bootstrap_token",
+            ".zzz/run/daemon.json",
+            ".zzz/.zzz/f",
+            "notes.txt",
+        ] {
+            std::fs::write(tmp.path(rel), "x").unwrap();
+        }
+        let root = tmp.root();
+        let config = FilerConfig::workspace(&root, &dir_prefix(&tmp.key(".zzz/.zzz")));
+        let mut files = FileIndex::new();
+        scan_directory(&root, &root, &config.ignored_dirs, &mut files).await;
+        let keys: Vec<String> = files.keys().cloned().collect();
+        assert_eq!(keys, vec![tmp.key("notes.txt")]);
+    }
+
+    #[tokio::test]
+    async fn the_app_dir_is_ignored_by_path_while_same_named_dirs_stay_indexed() {
+        let tmp = TempDir::new();
+        for dir in ["app/data", "data", "src/data"] {
+            std::fs::create_dir_all(tmp.path(dir)).unwrap();
+            std::fs::write(tmp.path(&format!("{dir}/f.txt")), "x").unwrap();
+        }
+        let root = tmp.root();
+        let config = FilerConfig::workspace(&root, &dir_prefix(&tmp.key("app/data")));
+
+        let mut files = FileIndex::new();
+        scan_directory(&root, &root, &config.ignored_dirs, &mut files).await;
+        let keys: Vec<String> = files.keys().cloned().collect();
+        assert_eq!(keys, vec![tmp.key("data/f.txt"), tmp.key("src/data/f.txt")]);
+
+        let mut state = FilerState {
+            source_dir: root,
+            ignored_dirs: config.ignored_dirs,
+            files: Arc::new(RwLock::new(files)),
+            pending: HashMap::new(),
+        };
+        std::fs::write(tmp.path("app/data/g.txt"), "y").unwrap();
+        std::fs::write(tmp.path("data/g.txt"), "y").unwrap();
+        state
+            .handle_event(event(
+                EventKind::Create(CreateKind::File),
+                &[tmp.path("app/data/g.txt"), tmp.path("data/g.txt")],
+            ))
+            .await;
+        assert_eq!(
+            pending_of(&state),
+            vec![(tmp.key("data/g.txt"), ChangeType::Add)]
+        );
     }
 
     #[tokio::test]

@@ -416,6 +416,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // `close_sockets_for_*` a second time; the duplication is
     // intentional defense-in-depth.
     fuz_auth::register_socket_revocation_listeners(&spine_audit_emitter, &socket_revoker);
+    // A deleted or purged account's terminals end with its sockets.
+    handlers::terminal::register_terminal_account_listener(&spine_audit_emitter, &app_state);
 
     // SSE half of the audit fan-out — every audit row becomes one `data:`
     // frame on each open `/api/admin/audit/stream` subscription, and a
@@ -474,8 +476,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     );
 
     // Start the permanent file watchers at startup: zzz_dir, then each of
-    // scoped_dirs. zzz_dir uses FilerConfig::zzz_dir() (no .zzz ignore);
-    // scoped_dirs use workspace config.
+    // scoped_dirs. zzz_dir uses FilerConfig::zzz_dir() (no ignored dirs);
+    // scoped_dirs use workspace config (ignoring zzz_dir when nested inside).
     match app_state
         .filer_manager
         .start_filer(
@@ -501,7 +503,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             .start_filer(
                 dir,
                 Arc::clone(&app_state),
-                filer::FilerConfig::workspace(&app_state.zzz_dir),
+                filer::FilerConfig::workspace(dir, &app_state.zzz_dir),
                 filer::FilerLifetime::Permanent,
             )
             .await
@@ -791,19 +793,15 @@ fn non_empty(value: Option<String>) -> Option<String> {
 
 /// Resolve a path to an absolute, canonical, normalized directory string
 /// with trailing `/`. Tries `canonicalize` (resolves symlinks, requires path
-/// to exist), falls back to `absolute` (no I/O).
-///
-/// Public so `testing_zzz_server` can resolve `PUBLIC_ZZZ_DIR` exactly the way
-/// [`run_app`] does before placing its daemon-token file — the cross-process
-/// harness reads `<zzz_dir>/run/daemon_token`, so the two resolutions must not
-/// drift (see [`resolve_zzz_dir_from_env`]).
+/// to exist), falls back to `absolute` (no I/O). Used for the scoped dirs and,
+/// through [`ensure_app_dir`], the app directory.
 ///
 /// # Errors
 ///
 /// Returns [`ServerError::Config`] for an empty path or one that can't be
 /// made absolute — never a silent fallback, which would collapse to `/` (a
 /// permanent scoped root, and a filer, over the whole filesystem).
-pub fn resolve_dir(path: &Path) -> Result<String, ServerError> {
+fn resolve_dir(path: &Path) -> Result<String, ServerError> {
     if path.as_os_str().is_empty() {
         return Err(ServerError::Config("empty directory path".to_owned()));
     }
@@ -818,14 +816,44 @@ pub fn resolve_dir(path: &Path) -> Result<String, ServerError> {
 }
 
 /// The app directory: `PUBLIC_ZZZ_DIR` (unset or empty → [`DEFAULT_ZZZ_DIR`])
-/// through [`resolve_dir`]. Shared with `testing_zzz_server`.
+/// through [`ensure_app_dir`].
+///
+/// Public so `testing_zzz_server` places its
+/// daemon-token file exactly where [`run_app`] resolves the app dir — the
+/// cross-process harness reads `<zzz_dir>/run/daemon_token`, so the two must
+/// not drift.
 ///
 /// # Errors
 ///
-/// Returns [`ServerError::Config`] when the directory can't be resolved.
-pub fn resolve_zzz_dir_from_env() -> Result<String, ServerError> {
+/// Returns [`ServerError::Config`] when the directory can't be created or
+/// resolved.
+pub fn ensure_zzz_dir_from_env() -> Result<String, ServerError> {
     let raw = env_non_empty("PUBLIC_ZZZ_DIR").unwrap_or_else(|| DEFAULT_ZZZ_DIR.to_owned());
-    resolve_dir(Path::new(&raw))
+    ensure_app_dir(Path::new(&raw))
+}
+
+/// Create the app directory `path` if it doesn't exist, then
+/// [`resolve_dir`] it.
+///
+/// Missing parents are created too, all mode `0700` — the app dir holds
+/// runtime state and tokens. Creating first means the result is always
+/// canonical, never the `absolute` fallback a missing directory gets.
+///
+/// # Errors
+///
+/// Returns [`ServerError::Config`] naming the path when it can't be created
+/// (or exists but isn't a directory) or can't be resolved.
+fn ensure_app_dir(path: &Path) -> Result<String, ServerError> {
+    if path.as_os_str().is_empty() {
+        return Err(ServerError::Config("empty directory path".to_owned()));
+    }
+    fuz_sys::fs::create_dir_all_mode(path, 0o700).map_err(|e| {
+        ServerError::Config(format!(
+            "can't create app directory {}: {e}",
+            path.display()
+        ))
+    })?;
+    resolve_dir(path)
 }
 
 fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
@@ -899,7 +927,7 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
         .map(PathBuf::from)
         .collect();
 
-    let zzz_dir = resolve_zzz_dir_from_env()?;
+    let zzz_dir = ensure_zzz_dir_from_env()?;
 
     let enable_test_actions = parse_stringbool_env("ZZZ_ENABLE_TEST_ACTIONS")?;
     let trusted_proxies = std::env::var("ZZZ_TRUSTED_PROXIES").ok();
@@ -958,6 +986,65 @@ mod config_paths {
         );
         assert_ne!(resolved, "/");
         assert_eq!(resolve_dir(Path::new("/")).unwrap(), "/");
+    }
+
+    /// A unique temp dir removed on drop.
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new() -> Self {
+            let dir =
+                std::env::temp_dir().join(format!("zzz_config_test_{}", uuid::Uuid::new_v4()));
+            std::fs::create_dir_all(&dir).unwrap();
+            Self(dir.canonicalize().unwrap())
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn ensure_app_dir_creates_a_missing_app_dir_with_parents() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = TempDir::new();
+        let dir = tmp.0.join("a/b/app");
+        let resolved = ensure_app_dir(&dir).unwrap();
+        assert_eq!(resolved, format!("{}/", dir.display()));
+        let meta = std::fs::metadata(&dir).unwrap();
+        assert!(meta.is_dir());
+        assert_eq!(meta.permissions().mode() & 0o077, 0);
+        // idempotent on an existing dir
+        assert_eq!(ensure_app_dir(&dir).unwrap(), resolved);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ensure_app_dir_resolves_through_symlinked_parents() {
+        let tmp = TempDir::new();
+        std::fs::create_dir(tmp.0.join("real")).unwrap();
+        std::os::unix::fs::symlink(tmp.0.join("real"), tmp.0.join("link")).unwrap();
+        let resolved = ensure_app_dir(&tmp.0.join("link/app")).unwrap();
+        assert_eq!(resolved, format!("{}/", tmp.0.join("real/app").display()));
+    }
+
+    #[test]
+    fn ensure_app_dir_errors_clearly_when_the_path_is_a_file() {
+        let tmp = TempDir::new();
+        let file = tmp.0.join("file");
+        std::fs::write(&file, "x").unwrap();
+        let Err(ServerError::Config(message)) = ensure_app_dir(&file) else {
+            panic!("expected a config error");
+        };
+        assert!(message.contains("can't create app directory"), "{message}");
+        assert!(message.contains(&file.display().to_string()), "{message}");
+        assert!(matches!(
+            ensure_app_dir(Path::new("")),
+            Err(ServerError::Config(_))
+        ));
     }
 }
 

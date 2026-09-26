@@ -55,8 +55,9 @@ export class Terminals extends Cell<typeof TerminalsJson> {
 
 	/**
 	 * Output and exits for unknown terminal ids, held only while a spawn is in
-	 * flight — the backend can broadcast a new shell's first output before the
-	 * `terminal_create` response arrives.
+	 * flight — the backend can send a new shell's first output before the
+	 * `terminal_create` response arrives. Notifications reach every socket of
+	 * the creating account, so another tab's terminals show up here too.
 	 */
 	readonly #unclaimed: Map<Uuid, UnclaimedTerminal> = new Map();
 
