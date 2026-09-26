@@ -30,11 +30,13 @@ export interface WorkspacesOptions extends CellOptions<typeof WorkspacesJson> {}
  */
 export class Workspaces extends Cell<typeof WorkspacesJson> {
 	readonly items: IndexedCollection<Workspace> = new IndexedCollection({
+		dispose_item: (workspace) => workspace.dispose(),
 		indexes: [
 			create_single_index({
 				key: 'by_path',
 				extractor: (workspace) => workspace.path,
-				query_schema: z.string()
+				query_schema: z.string(),
+				immutable_key: true // `add` dedupes by path, and the path is never reassigned
 			})
 		]
 	});

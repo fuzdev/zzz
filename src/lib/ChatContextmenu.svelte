@@ -58,7 +58,16 @@
 			<ContextmenuEntryCopyToClipboard content={chat.id} label="copy id" />
 
 			{#if chat.threads.length}
-				<ContextmenuEntry icon={icon_remove} run={() => chat.remove_all_threads()}>
+				<ContextmenuEntry
+					icon={icon_remove}
+					run={() => {
+						// TODO @many better confirmation
+						// eslint-disable-next-line no-alert
+						if (confirm(`Remove all threads from the chat "${chat.name}"?`)) {
+							chat.remove_all_threads();
+						}
+					}}
+				>
 					<span>remove all threads</span>
 				</ContextmenuEntry>
 			{/if}

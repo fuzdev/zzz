@@ -155,7 +155,11 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 
 			const turn = progress_token && frontend.cell_registry.all.get(progress_token);
 
-			if (!turn || !(turn instanceof Turn) || !chunk || turn.role !== chunk.message?.role) {
+			// a removed turn leaves the registry and its thread cancels the completion,
+			// but chunks already in flight can still arrive — drop them quietly
+			if (!turn) return;
+
+			if (!(turn instanceof Turn) || !chunk || turn.role !== chunk.message?.role) {
 				console.error(
 					'[frontend_action_handlers] no matching turn found for progress_token:',
 					progress_token,

@@ -43,7 +43,9 @@ interface UnclaimedTerminal {
  * keep running — reattaching needs a backend `terminal_list`.
  */
 export class Terminals extends Cell<typeof TerminalsJson> {
-	readonly items: IndexedCollection<Terminal> = new IndexedCollection();
+	readonly items: IndexedCollection<Terminal> = new IndexedCollection({
+		dispose_item: (terminal) => terminal.dispose()
+	});
 
 	/** Terminals by their current backend `terminal_id`, for routing notifications. */
 	readonly #by_terminal_id: Map<Uuid, Terminal> = new Map();
@@ -132,18 +134,13 @@ export class Terminals extends Cell<typeof TerminalsJson> {
 			if (terminal.status === 'running') return;
 		}
 		this.#unindex(terminal);
-		if (this.items.remove(terminal.id)) {
-			terminal.dispose();
-		}
+		this.items.remove(terminal.id);
 	}
 
 	/**
 	 * Removes and disposes every terminal without closing their processes.
 	 */
 	clear(): void {
-		for (const terminal of this.items.values) {
-			terminal.dispose();
-		}
 		this.items.clear();
 		this.#by_terminal_id.clear();
 	}

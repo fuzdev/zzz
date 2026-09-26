@@ -17,7 +17,9 @@ export type ThreadsJsonInput = z.input<typeof ThreadsJson>;
 export interface ThreadsOptions extends CellOptions<typeof ThreadsJson> {}
 
 export class Threads extends Cell<typeof ThreadsJson> {
-	readonly items: IndexedCollection<Thread> = new IndexedCollection();
+	readonly items: IndexedCollection<Thread> = new IndexedCollection({
+		dispose_item: (thread) => thread.dispose()
+	});
 
 	constructor(options: ThreadsOptions) {
 		super(ThreadsJson, options);
@@ -45,33 +47,55 @@ export class Threads extends Cell<typeof ThreadsJson> {
 		return thread;
 	}
 
+	/**
+	 * Removes a thread — from every chat that has it, and its turns' parts
+	 * unless another turn references them. Disposing the thread cancels its in-flight completion.
+	 */
 	remove(id: Uuid): void {
-		// For a single id, use a direct approach rather than creating an array
-		this.#remove_reference_from_chats(id);
-		this.items.remove(id);
+		this.remove_many([id]);
 	}
 
+	/**
+	 * Removes threads — see `remove`.
+	 *
+	 * @returns the number of threads removed
+	 */
 	remove_many(ids: Array<Uuid>): number {
-		// Remove references to these threads from all chats before removing them
-		this.#remove_references_from_chats(ids);
-		return this.items.remove_many(ids);
+		for (const chat of this.app.chats.items.by_id.values()) {
+			chat.detach_threads(ids);
+		}
+		return this.#remove_detached(ids);
 	}
 
-	// TODO these two methods feel like a code smell, should maintain the collections more automatically
-	#remove_reference_from_chats(thread_id: Uuid): void {
+	/**
+	 * Removes the threads in `ids` that no chat has anymore.
+	 *
+	 * @returns the number of threads removed
+	 */
+	remove_unreferenced(ids: Iterable<Uuid>): number {
+		const referenced: Set<Uuid> = new Set();
 		for (const chat of this.app.chats.items.by_id.values()) {
-			chat.remove_thread(thread_id);
+			for (const id of chat.thread_ids) referenced.add(id);
 		}
+		const unreferenced: Array<Uuid> = [];
+		for (const id of ids) {
+			if (!referenced.has(id)) unreferenced.push(id);
+		}
+		// already in no chat, so there's nothing to detach
+		return unreferenced.length ? this.#remove_detached(unreferenced) : 0;
 	}
-	#remove_references_from_chats(thread_ids: Array<Uuid>): void {
-		// If there's only one item, use the single-item optimized version
-		if (thread_ids.length === 1) {
-			this.#remove_reference_from_chats(thread_ids[0]!); // guaranteed by length === 1
-			return;
-		}
 
-		for (const chat of this.app.chats.items.by_id.values()) {
-			chat.remove_threads(thread_ids);
+	/**
+	 * Removes threads no chat has, with their turns' parts unless another turn references them.
+	 */
+	#remove_detached(ids: Array<Uuid>): number {
+		const part_ids: Array<Uuid> = [];
+		for (const id of ids) {
+			const thread = this.items.by_id.get(id);
+			if (thread) part_ids.push(...thread.part_ids);
 		}
+		const removed_count = this.items.remove_many(ids);
+		this.app.parts.remove_unreferenced(part_ids);
+		return removed_count;
 	}
 }

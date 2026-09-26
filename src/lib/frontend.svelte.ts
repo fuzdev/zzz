@@ -14,6 +14,7 @@ import { Threads } from './threads.svelte.ts';
 import { Providers } from './providers.svelte.ts';
 import { Diskfiles } from './diskfiles.svelte.ts';
 import { Actions } from './actions.svelte.ts';
+import { Action } from './action.svelte.ts';
 import type { ModelJsonInput } from './model.svelte.ts';
 import { CellRegistry } from './cell_registry.svelte.ts';
 import { Prompts } from './prompts.svelte.ts';
@@ -206,11 +207,13 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 			peer: this.peer,
 			environment: this,
 			on_action_event: (event) => {
-				const action = this.actions.add_from_json({
-					method: event.spec.method,
-					action_event_data: event.toJSON()
+				const action = new Action({
+					app: this,
+					json: { method: event.spec.method, action_event_data: event.toJSON() }
 				});
+				// listen before adding, so an action trimmed right away stops listening when disposed
 				action.listen_to_action_event(event);
+				this.actions.add(action);
 			}
 		});
 
@@ -301,15 +304,28 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	}
 
 	// TODO refactor
+	/**
+	 * Creates the edit history for `path`, disposing any it replaces.
+	 */
 	create_diskfile_history(path: DiskfilePath): DiskfileHistory {
+		this.diskfile_histories.get(path)?.dispose();
 		const history = new DiskfileHistory({ app: this, json: { path } });
 		this.diskfile_histories.set(path, history);
 		return history;
 	}
 
 	// TODO refactor
+	/**
+	 * Removes and disposes the edit history for `path`.
+	 *
+	 * @returns whether a history existed
+	 */
 	delete_diskfile_history(path: DiskfilePath): boolean {
-		return this.diskfile_histories.delete(path);
+		const history = this.diskfile_histories.get(path);
+		if (!history) return false;
+		this.diskfile_histories.delete(path);
+		history.dispose();
+		return true;
 	}
 
 	lookup_action_handler(

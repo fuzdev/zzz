@@ -117,6 +117,24 @@ describe('delete cleans up editor state', () => {
 		assert.isUndefined(app.get_diskfile_history(PATH_B));
 	});
 
+	test('disposes the diskfile, its tab, and its history', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A)]);
+		const a = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(a);
+		app.diskfiles.select(a.id, true);
+		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(a.id);
+		assert.ok(tab);
+		const history = app.create_diskfile_history(PATH_A);
+		const { all } = app.cell_registry;
+		assert.ok(all.has(a.id) && all.has(tab.id) && all.has(history.id));
+
+		filer_change('delete', PATH_A);
+
+		assert.ok(!all.has(a.id));
+		assert.ok(!all.has(tab.id));
+		assert.ok(!all.has(history.id));
+	});
+
 	test('clears selection when no tab remains', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		const a = app.diskfiles.get_by_path(PATH_A);

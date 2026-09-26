@@ -25,11 +25,14 @@ export interface ActionsOptions extends CellOptions<typeof ActionsJson> {
 export class Actions extends Cell<typeof ActionsJson> {
 	// TODO maybe rename to `history`, or extract an `ActionHistory` or more generic class
 	readonly items: IndexedCollection<Action> = new IndexedCollection({
+		// trimmed actions stop observing their action event and leave the cell registry
+		dispose_item: (action) => action.dispose(),
 		indexes: [
 			create_multi_index({
 				key: 'by_method',
 				extractor: (action) => action.method,
-				query_schema: ActionMethod
+				query_schema: ActionMethod,
+				immutable_key: true
 			})
 		]
 	});

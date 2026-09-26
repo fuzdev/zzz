@@ -8,7 +8,6 @@
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 	import { icon_add, icon_delete, icon_pin, icon_space } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import { SCRATCHPAD_NAME } from './spaces.svelte.ts';
 	import { click_outside } from './click_outside.svelte.ts';
 
 	const app = frontend_context.get();
@@ -52,7 +51,7 @@
 									{space.directory_count === 1 ? 'dir' : 'dirs'}
 								</span>
 							</button>
-							{#if space.name !== SCRATCHPAD_NAME}
+							{#if space !== app.spaces.scratchpad}
 								<ConfirmButton
 									onconfirm={() => app.spaces.remove(space.id)}
 									class="icon-button compact plain deselectable"

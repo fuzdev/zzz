@@ -16,7 +16,7 @@ import { disknode_to_diskfile_json, to_relative_path } from './diskfile_helpers.
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { HANDLED } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
-import { create_single_index, create_multi_index } from './indexed_collection_helpers.svelte.ts';
+import { create_single_index } from './indexed_collection_helpers.svelte.ts';
 import { DiskfilesEditor } from './diskfiles_editor.svelte.ts';
 import { CellJson } from './cell_types.ts';
 import type { ActionInputs, ActionOutputs } from './action_collections.ts';
@@ -32,20 +32,15 @@ export interface DiskfilesOptions extends CellOptions<typeof DiskfilesJson> {}
 
 export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	readonly items: IndexedCollection<Diskfile> = new IndexedCollection({
+		dispose_item: (diskfile) => diskfile.dispose(),
 		indexes: [
 			create_single_index({
 				key: 'by_path',
 				extractor: (file) => file.path,
-				query_schema: z.string()
-			}),
-
-			create_multi_index({
-				key: 'by_extension',
-				extractor: (file) => {
-					const match = /\.([^.]+)$/.exec(file.path);
-					return match ? match[1]!.toLowerCase() : 'no_extension'; // guaranteed by ternary check
-				},
-				query_schema: z.string()
+				query_schema: z.string(),
+				// a diskfile's path is its disk identity — `upsert` updates in place by path,
+				// and renames arrive as a delete plus an add
+				immutable_key: true
 			})
 		]
 	});

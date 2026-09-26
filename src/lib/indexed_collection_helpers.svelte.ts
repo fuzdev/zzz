@@ -36,50 +36,81 @@ export interface IndexOptions<T extends IndexedItem, TQuery = any> {
 }
 
 /**
+ * Options shared by the key-extracting single-value and multi-value indexes.
+ */
+export interface KeyedIndexOptions<T extends IndexedItem, K> extends IndexOptions<T, K> {
+	/**
+	 * Declares that the extracted key(s) of an item never change while it's in
+	 * the collection, so the index is maintained incrementally on add and remove
+	 * (O(1) per change, reactive per key through a `SvelteMap`).
+	 * If a key does change, lookups go stale — only use it for identity-like fields
+	 * (like a diskfile's `path`).
+	 *
+	 * By default the index is `reactive`: a `$derived` rebuilt in O(n) on the next read
+	 * after the collection or any reactive field the extractor (or `matches`) reads changes,
+	 * so it stays correct when a field like `name` is edited. The costs:
+	 *
+	 * - every rebuild makes a new map, so everything reading the index re-runs
+	 *   on any change to the collection or an indexed field, not just the keys it read
+	 * - reads outside a reactive context (event handlers, plain functions) can't rely on
+	 *   change notifications, so each one checks all O(n) dependencies — fine for occasional
+	 *   lookups, but code that adds an item and then reads the index in a loop is O(n²)
+	 *
+	 * Opt into `immutable_key` for large or busy collections when the key allows it.
+	 */
+	immutable_key?: boolean;
+}
+
+/**
  * Options for single-value indexes.
  */
-export interface SingleIndexOptions<T extends IndexedItem, K> extends IndexOptions<T, K> {
+export interface SingleIndexOptions<T extends IndexedItem, K> extends KeyedIndexOptions<T, K> {
 	/** Function that extracts the key from an item. */
 	extractor: (item: T) => K;
 }
 
 /**
  * Create a single-value index (one key maps to one item).
+ * When several items share a key, the last one added wins.
  */
 export const create_single_index = <T extends IndexedItem, K>(
 	options: SingleIndexOptions<T, K>
-): IndexDefinition<T, SvelteMap<K, T>, K> => {
+): IndexDefinition<T, Map<K, T>, K> => {
+	const { key, extractor, query_schema, matches } = options;
+
+	if (!options.immutable_key) {
+		return {
+			key,
+			type: 'single',
+			extractor,
+			query_schema,
+			matches,
+			reactive: true,
+			compute: (collection) => fill_single_map(new Map<K, T>(), collection.by_id.values(), options)
+		};
+	}
+
 	return {
-		key: options.key,
+		key,
 		type: 'single',
-		extractor: options.extractor,
-		query_schema: options.query_schema,
-		matches: options.matches,
-		compute: (collection) => {
-			const map: SvelteMap<K, T> = new SvelteMap();
-			for (const item of collection.by_id.values()) {
-				if (!should_include_item(item, options.matches)) continue;
-
-				const extract_key = options.extractor(item);
-				if (extract_key !== undefined) {
-					map.set(extract_key, item);
-				}
-			}
-			return map;
-		},
+		extractor,
+		query_schema,
+		matches,
+		compute: (collection) =>
+			fill_single_map(new SvelteMap<K, T>(), collection.by_id.values(), options),
 		onadd: (map, item) => {
-			if (!should_include_item(item, options.matches)) return map;
+			if (!should_include_item(item, matches)) return map;
 
-			const extract_key = options.extractor(item);
+			const extract_key = extractor(item);
 			if (extract_key !== undefined) {
 				map.set(extract_key, item);
 			}
 			return map;
 		},
 		onremove: (map, item, collection) => {
-			if (!should_include_item(item, options.matches)) return map;
+			if (!should_include_item(item, matches)) return map;
 
-			const extract_key = options.extractor(item);
+			const extract_key = extractor(item);
 			if (extract_key === undefined) return map;
 
 			// Check if this item is currently indexed for this key
@@ -89,17 +120,16 @@ export const create_single_index = <T extends IndexedItem, K>(
 				return map;
 			}
 
-			// Find any other items with the same key
+			// Find the last remaining item with the same key, matching `compute` —
+			// `by_id` no longer has any item removed in this call
 			let item_with_same_key;
 			for (const other of collection.by_id.values()) {
-				if (other.id !== item.id && options.extractor(other) === extract_key) {
+				if (should_include_item(other, matches) && extractor(other) === extract_key) {
 					item_with_same_key = other;
-					break;
 				}
 			}
 
 			if (item_with_same_key) {
-				// Found another item with the same key - use the first one
 				map.set(extract_key, item_with_same_key);
 			} else {
 				// No other items with this key - delete the entry
@@ -114,7 +144,7 @@ export const create_single_index = <T extends IndexedItem, K>(
 /**
  * Options for multi-value indexes.
  */
-export interface MultiIndexOptions<T extends IndexedItem, K> extends IndexOptions<T, K> {
+export interface MultiIndexOptions<T extends IndexedItem, K> extends KeyedIndexOptions<T, K> {
 	/** Function that extracts the key(s) from an item. */
 	extractor: (item: T) => K | Array<K> | undefined;
 
@@ -127,60 +157,63 @@ export interface MultiIndexOptions<T extends IndexedItem, K> extends IndexOption
  */
 export const create_multi_index = <T extends IndexedItem, K>(
 	options: MultiIndexOptions<T, K>
-): IndexDefinition<T, SvelteMap<K, Array<T>>, K> => {
+): IndexDefinition<T, Map<K, Array<T>>, K> => {
+	const { key, extractor, query_schema, matches, sort } = options;
+
+	if (!options.immutable_key) {
+		return {
+			key,
+			type: 'multi',
+			extractor,
+			query_schema,
+			matches,
+			reactive: true,
+			compute: (collection) => {
+				const map: Map<K, Array<T>> = new Map();
+				for (const item of collection.by_id.values()) {
+					if (!should_include_item(item, matches)) continue;
+					for_each_key(extractor(item), (k) => {
+						if (k === undefined) return;
+						const items = map.get(k);
+						if (items) {
+							items.push(item);
+						} else {
+							map.set(k, [item]);
+						}
+					});
+				}
+				if (sort) {
+					for (const items of map.values()) {
+						items.sort(sort);
+					}
+				}
+				return map;
+			}
+		};
+	}
+
 	return {
-		key: options.key,
+		key,
 		type: 'multi',
-		extractor: options.extractor,
-		query_schema: options.query_schema,
-		matches: options.matches,
+		extractor,
+		query_schema,
+		matches,
 		compute: (collection) => {
 			const map: SvelteMap<K, Array<T>> = new SvelteMap();
 			for (const item of collection.by_id.values()) {
-				if (!should_include_item(item, options.matches)) continue;
-
-				const keys = options.extractor(item);
-				if (keys === undefined) continue;
-
-				if (Array.isArray(keys)) {
-					for (const k of keys) {
-						add_to_multi_map(map, k, item, options.sort);
-					}
-				} else {
-					add_to_multi_map(map, keys, item, options.sort);
-				}
+				if (!should_include_item(item, matches)) continue;
+				for_each_key(extractor(item), (k) => add_to_multi_map(map, k, item, sort));
 			}
-
 			return map;
 		},
 		onadd: (map, item) => {
-			if (!should_include_item(item, options.matches)) return map;
-
-			const keys = options.extractor(item);
-			if (keys === undefined) return map;
-
-			if (Array.isArray(keys)) {
-				for (const k of keys) {
-					add_to_multi_map(map, k, item, options.sort);
-				}
-			} else {
-				add_to_multi_map(map, keys, item, options.sort);
-			}
+			if (!should_include_item(item, matches)) return map;
+			for_each_key(extractor(item), (k) => add_to_multi_map(map, k, item, sort));
 			return map;
 		},
 		onremove: (map, item) => {
-			if (!should_include_item(item, options.matches)) return map;
-
-			const keys = options.extractor(item);
-			if (keys === undefined) return map;
-
-			if (Array.isArray(keys)) {
-				for (const k of keys) {
-					remove_from_multi_map(map, k, item);
-				}
-			} else {
-				remove_from_multi_map(map, keys, item);
-			}
+			if (!should_include_item(item, matches)) return map;
+			for_each_key(extractor(item), (k) => remove_from_multi_map(map, k, item));
 			return map;
 		}
 	};
@@ -304,10 +337,42 @@ const should_include_item = <T extends IndexedItem>(
 ): boolean => !matches || matches(item);
 
 /**
+ * Fills `map` with the single-index entries of `items`, later items winning.
+ *
+ * @mutates map - sets an entry per included item with a defined key
+ */
+const fill_single_map = <T extends IndexedItem, K, TMap extends Map<K, T>>(
+	map: TMap,
+	items: Iterable<T>,
+	options: SingleIndexOptions<T, K>
+): TMap => {
+	for (const item of items) {
+		if (!should_include_item(item, options.matches)) continue;
+		const extract_key = options.extractor(item);
+		if (extract_key !== undefined) {
+			map.set(extract_key, item);
+		}
+	}
+	return map;
+};
+
+/**
+ * Calls `fn` with each key a multi-index extractor returned.
+ */
+const for_each_key = <K>(keys: K | Array<K> | undefined, fn: (key: K) => void): void => {
+	if (keys === undefined) return;
+	if (Array.isArray(keys)) {
+		for (const k of keys) fn(k);
+	} else {
+		fn(keys);
+	}
+};
+
+/**
  * Helper function to add an item to a multi-value map.
  */
 const add_to_multi_map = <T extends IndexedItem, K>(
-	map: SvelteMap<K, Array<T>>,
+	map: Map<K, Array<T>>,
 	key: K,
 	item: T,
 	sort?: (a: T, b: T) => number
@@ -330,7 +395,7 @@ const add_to_multi_map = <T extends IndexedItem, K>(
  * Helper function to remove an item from a multi-value map.
  */
 const remove_from_multi_map = <T extends IndexedItem, K>(
-	map: SvelteMap<K, Array<T>>,
+	map: Map<K, Array<T>>,
 	key: K,
 	item: T
 ): void => {

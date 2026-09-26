@@ -41,10 +41,25 @@ export interface IndexDefinition<T extends IndexedItem, TResult = any, TQuery = 
 	/** Optional predicate to determine if an item is relevant to this index. */
 	matches?: (item: T) => boolean;
 
+	/**
+	 * When `true`, the index is a `$derived` of `compute` — recomputed on the next
+	 * read after the collection changes or any reactive state `compute` read changes,
+	 * so it follows items whose indexed fields change after they're added.
+	 * `onadd` and `onremove` are unused.
+	 *
+	 * When `false` or omitted, `onadd` and `onremove` maintain the index incrementally,
+	 * which is only correct when the indexed values of an item never change
+	 * while it's in the collection.
+	 */
+	reactive?: boolean;
+
 	/** Optional function to update the index when an item is added. */
 	onadd?: (result: TResult, item: T, collection: IndexedCollection<T>) => TResult;
 
-	/** Optional function to update the index when an item is removed. */
+	/**
+	 * Optional function to update the index when an item is removed.
+	 * Runs after the item (and every other item removed in the same call) has left `by_id`.
+	 */
 	onremove?: (result: TResult, item: T, collection: IndexedCollection<T>) => TResult;
 }
 
@@ -58,6 +73,12 @@ export interface IndexedCollectionOptions<
 	indexes?: Array<IndexDefinition<T>>;
 	initial_items?: Array<T>;
 	validate?: boolean;
+	/**
+	 * Disposes an item after it leaves the collection through `remove`, `remove_many`,
+	 * or `clear`. Pass it when the collection owns its items, so removed ones
+	 * release their resources (for cells, their `cell_registry` entry).
+	 */
+	dispose_item?: (item: T) => void;
 	index_types?: {
 		single?: Array<TKeySingle>;
 		multi?: Array<TKeyMulti>;
@@ -93,11 +114,12 @@ export class IndexedCollection<
 	/** Get the current count of items. */
 	readonly size: number = $derived(this.by_id.size);
 
-	// TODO ideally I think this would leverage derived?
-	// need to ensure we have the right lazy perf characteristics
-	// and currently we eagerly compute indexes
-	/** Stores all index values in a reactive object. */
-	readonly indexes: Record<string, any> = $state({}); // $state() because index properties are written in place
+	/**
+	 * All index values by key. Each property is an accessor over a reactive holder:
+	 * incremental indexes are deeply reactive `$state` (so arrays can be mutated in place,
+	 * and replaced by assignment), while `reactive` indexes are read-only `$derived` values.
+	 */
+	readonly indexes: Record<string, any> = {};
 
 	// Map of index types for type safety and runtime checks
 	readonly #index_types: Map<string, IndexType> = new Map();
@@ -108,19 +130,26 @@ export class IndexedCollection<
 	// Whether to validate indexes
 	readonly #validate: boolean;
 
+	// Incrementally maintained index definitions (the ones with `onadd`/`onremove` hooks)
+	readonly #incremental_definitions: ReadonlyArray<IndexDefinition<T>> = [];
+
+	readonly #dispose_item: ((item: T) => void) | undefined;
+
 	constructor(
 		options?: IndexedCollectionOptions<T, TKeySingle, TKeyMulti, TKeyDerived, TKeyDynamic>
 	) {
 		// Set validation flag (default to false)
 		this.#validate = options?.validate ?? false;
+		this.#dispose_item = options?.dispose_item;
 
 		// Set up indexes based on provided configurations
 		if (options?.indexes) {
 			this.#index_definitions = options.indexes;
+			this.#incremental_definitions = options.indexes.filter((def) => !def.reactive);
 
 			// Initialize each index with its compute function
 			for (const def of this.#index_definitions) {
-				this.indexes[def.key] = def.compute(this);
+				define_index_property(this.indexes, def.key, create_index_holder(def, this));
 
 				// Store the index type for type safety and runtime checks
 				if (def.type) {
@@ -189,7 +218,7 @@ export class IndexedCollection<
 	/**
 	 * Get a single-value index with proper typing.
 	 */
-	single_index(key: TKeySingle): SvelteMap<any, T> {
+	single_index(key: TKeySingle): ReadonlyMap<any, T> {
 		this.#ensure_index(key, 'single');
 		return this.indexes[key];
 	}
@@ -197,7 +226,7 @@ export class IndexedCollection<
 	/**
 	 * Get a multi-value index with proper typing.
 	 */
-	multi_index(key: TKeyMulti): SvelteMap<any, Array<T>> {
+	multi_index(key: TKeyMulti): ReadonlyMap<any, Array<T>> {
 		this.#ensure_index(key, 'multi');
 		return this.indexes[key];
 	}
@@ -225,8 +254,9 @@ export class IndexedCollection<
 	 * @throws Error if index doesn't exist or has wrong type
 	 */
 	#ensure_index(key: string, expected_type: IndexType): void {
-		const index = this.indexes[key];
-		if (index === undefined) {
+		// checks the definition, not the value — reading a `reactive` index outside
+		// a reactive context costs a walk of its dependencies, so callers read it once
+		if (!Object.hasOwn(this.indexes, key)) {
 			throw new Error(`Index not found: ${key}`);
 		}
 
@@ -307,10 +337,10 @@ export class IndexedCollection<
 	}
 
 	/**
-	 * Update all indexes when an item is added.
+	 * Update all incremental indexes when an item is added.
 	 */
 	#update_indexes_for_added_item(item: T): void {
-		for (const def of this.#index_definitions) {
+		for (const def of this.#incremental_definitions) {
 			if (def.onadd && (!def.matches || def.matches(item))) {
 				const result = def.onadd(this.indexes[def.key], item, this);
 				this.indexes[def.key] = result;
@@ -319,10 +349,10 @@ export class IndexedCollection<
 	}
 
 	/**
-	 * Update all indexes when an item is removed.
+	 * Update all incremental indexes when an item is removed.
 	 */
 	#update_indexes_for_removed_item(item: T): void {
-		for (const def of this.#index_definitions) {
+		for (const def of this.#incremental_definitions) {
 			if (def.onremove && (!def.matches || def.matches(item))) {
 				const result = def.onremove(this.indexes[def.key], item, this);
 				this.indexes[def.key] = result;
@@ -332,54 +362,51 @@ export class IndexedCollection<
 
 	/**
 	 * Remove an item by its id and update all indexes.
+	 * Disposes the item when the collection has `dispose_item`.
 	 */
 	remove(id: Uuid): boolean {
 		const item = this.by_id.get(id);
 		if (!item) return false;
 
-		// Update indexes first before removing the item
+		// remove first, so index hooks see the collection without it
+		this.by_id.delete(id);
+
 		this.#update_indexes_for_removed_item(item);
 
-		// Now remove from by_id map
-		this.by_id.delete(id);
+		this.#dispose_item?.(item);
 
 		return true;
 	}
 
 	/**
 	 * Remove multiple items efficiently.
+	 * Disposes the items when the collection has `dispose_item`.
 	 */
 	remove_many(ids: Array<Uuid>): number {
 		if (!ids.length) return 0;
 
-		let removed_count = 0;
-
-		// Build a list of items to remove
-		const items_to_remove: Array<T> = [];
-
-		// Identify items to remove
+		// remove them all first, so index hooks see the collection without any of them
+		// (a single index falling back to another holder of a key must not pick one being removed),
+		// deduping repeated ids
+		const removed: Array<T> = [];
 		for (const id of ids) {
 			const item = this.by_id.get(id);
-			if (item) {
-				items_to_remove.push(item);
-				removed_count++;
+			if (item && this.by_id.delete(id)) {
+				removed.push(item);
 			}
 		}
 
-		// Exit early if nothing to remove
-		if (removed_count === 0) return 0;
-
-		// Clear removed items from indexes first
-		for (const item of items_to_remove) {
+		for (const item of removed) {
 			this.#update_indexes_for_removed_item(item);
 		}
 
-		// Then remove from the main collection
-		for (const item of items_to_remove) {
-			this.by_id.delete(item.id);
+		if (this.#dispose_item) {
+			for (const item of removed) {
+				this.#dispose_item(item);
+			}
 		}
 
-		return removed_count;
+		return removed.length;
 	}
 
 	/**
@@ -398,13 +425,22 @@ export class IndexedCollection<
 
 	/**
 	 * Clear all items and reset indexes.
+	 * Disposes the items when the collection has `dispose_item`.
 	 */
 	clear(): void {
+		const removed = this.#dispose_item ? Array.from(this.by_id.values()) : null;
+
 		this.by_id.clear();
 
-		// Clear all indexes
-		for (const def of this.#index_definitions) {
+		// Reset the incremental indexes, reactive ones follow `by_id`
+		for (const def of this.#incremental_definitions) {
 			this.indexes[def.key] = def.compute(this);
+		}
+
+		if (removed) {
+			for (const item of removed) {
+				this.#dispose_item!(item);
+			}
 		}
 	}
 
@@ -416,8 +452,7 @@ export class IndexedCollection<
 	 */
 	where<V = any>(index_key: TKeyMulti, value: V): Array<T> {
 		this.#ensure_index(index_key, 'multi');
-		const index = this.indexes[index_key];
-		return index.get(value) || EMPTY_ARRAY;
+		return this.indexes[index_key].get(value) || EMPTY_ARRAY;
 	}
 
 	/**
@@ -453,8 +488,7 @@ export class IndexedCollection<
 		// This will throw if index doesn't exist or has wrong type
 		this.#ensure_index(index_key, 'single');
 
-		const index = this.indexes[index_key];
-		const item = index.get(value);
+		const item = this.indexes[index_key].get(value);
 
 		if (!item) {
 			throw new Error(`Item not found for index ${index_key} with value ${String(value)}`);
@@ -471,3 +505,69 @@ export class IndexedCollection<
 		return this.indexes[index_key].get(value);
 	}
 }
+
+/**
+ * A reactive holder for one index value.
+ */
+interface IndexHolder {
+	value: any;
+}
+
+/**
+ * Holds an incrementally maintained index. Deeply reactive,
+ * so arrays assigned to it are proxied and can be mutated in place.
+ */
+class IncrementalIndexHolder implements IndexHolder {
+	value: any = $state();
+
+	constructor(value: unknown) {
+		this.value = value;
+	}
+}
+
+/**
+ * Holds a `reactive` index, recomputed lazily from its definition's `compute`.
+ */
+class ReactiveIndexHolder<T extends IndexedItem> implements IndexHolder {
+	readonly #def: IndexDefinition<T>;
+	readonly #collection: IndexedCollection<T>;
+
+	readonly value: any = $derived.by(() => this.#def.compute(this.#collection));
+
+	constructor(def: IndexDefinition<T>, collection: IndexedCollection<T>) {
+		this.#def = def;
+		this.#collection = collection;
+	}
+}
+
+const create_index_holder = <T extends IndexedItem>(
+	def: IndexDefinition<T>,
+	collection: IndexedCollection<T>
+): IndexHolder =>
+	def.reactive
+		? new ReactiveIndexHolder(def, collection)
+		: new IncrementalIndexHolder(def.compute(collection));
+
+/**
+ * Exposes an index holder's value as the `key` property of `indexes`,
+ * so every index reads (and incremental ones assign) like a plain property.
+ *
+ * @mutates indexes - defines an enumerable accessor for `key`, which throws on assignment to a `reactive` index
+ */
+const define_index_property = (
+	indexes: Record<string, any>,
+	key: string,
+	holder: IndexHolder
+): void => {
+	Object.defineProperty(indexes, key, {
+		enumerable: true,
+		configurable: false,
+		get: () => holder.value,
+		set: (value) => {
+			if (holder instanceof ReactiveIndexHolder) {
+				throw new Error(`Cannot assign to reactive index: ${key}`);
+			}
+			holder.value = value;
+		}
+	});
+};

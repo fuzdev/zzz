@@ -20,6 +20,7 @@ export interface PartsOptions extends CellOptions<typeof PartsJson> {}
 export class Parts extends Cell<typeof PartsJson> {
 	// Initialize items with proper typing and unified indexes
 	readonly items: IndexedCollection<PartUnion> = new IndexedCollection({
+		dispose_item: (part) => part.dispose(),
 		indexes: [
 			create_single_index({
 				key: 'by_name',
@@ -77,6 +78,27 @@ export class Parts extends Cell<typeof PartsJson> {
 	 */
 	remove(id: Uuid): boolean {
 		return this.items.remove(id);
+	}
+
+	/**
+	 * Removes the parts in `ids` that no turn references anymore. Turns are the only
+	 * owners of the parts in this collection — a prompt's parts are its own instances,
+	 * and `Diskfile.part` is a lookup, not a reference.
+	 *
+	 * @returns the number of parts removed
+	 */
+	remove_unreferenced(ids: Iterable<Uuid>): number {
+		const referenced: Set<Uuid> = new Set();
+		for (const thread of this.app.threads.items.by_id.values()) {
+			for (const turn of thread.turns.by_id.values()) {
+				for (const id of turn.part_ids) referenced.add(id);
+			}
+		}
+		const unreferenced: Array<Uuid> = [];
+		for (const id of ids) {
+			if (!referenced.has(id)) unreferenced.push(id);
+		}
+		return this.items.remove_many(unreferenced);
 	}
 
 	/**

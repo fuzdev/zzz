@@ -25,7 +25,9 @@ export class Thread extends Cell<typeof ThreadJson> {
 		this.app.models.find_by_name(this.model_name)
 	);
 
-	readonly turns: IndexedCollection<Turn> = new IndexedCollection();
+	readonly turns: IndexedCollection<Turn> = new IndexedCollection({
+		dispose_item: (turn) => turn.dispose()
+	});
 
 	enabled: boolean = $state.raw()!;
 
@@ -34,9 +36,19 @@ export class Thread extends Cell<typeof ThreadJson> {
 	readonly main_input_token_count: number = $derived(estimate_token_count(this.main_input));
 
 	readonly content: string = $derived(render_messages_to_string(this.turns.by_id.values()));
+
 	readonly length: number = $derived(this.content.length);
 	readonly token_count: number = $derived(estimate_token_count(this.content));
 	readonly content_preview: string = $derived(to_preview(this.content));
+
+	/** The ids of the parts of every turn. */
+	get part_ids(): Array<Uuid> {
+		const part_ids: Array<Uuid> = [];
+		for (const turn of this.turns.by_id.values()) {
+			part_ids.push(...turn.part_ids);
+		}
+		return part_ids;
+	}
 
 	// Imperative handle for the in-flight completion_create call. Not reactive —
 	// UI state tracks `pending` below, which mirrors this controller's lifecycle.
@@ -58,9 +70,9 @@ export class Thread extends Cell<typeof ThreadJson> {
 		this.decoders = {
 			turns: (items) => {
 				if (Array.isArray(items)) {
-					this.turns.clear();
+					this.#clear_turns();
 					for (const item_json of items) {
-						this.add_turn(item_json);
+						this.add_turn(new Turn({ app: this.app, json: item_json }));
 					}
 				}
 				return HANDLED;
@@ -122,9 +134,28 @@ export class Thread extends Cell<typeof ThreadJson> {
 	}
 
 	/**
-	 * Remove all turns from this thread.
+	 * Remove and dispose all turns from this thread, cancelling any in-flight
+	 * completion first since its turn is going away, and remove the turns' parts
+	 * from `app.parts` unless another turn references them.
 	 */
 	remove_all_turns(): void {
+		const { part_ids } = this;
+		this.#clear_turns();
+		this.app.parts.remove_unreferenced(part_ids);
+	}
+
+	/**
+	 * Cancels any in-flight completion and disposes the thread's turns.
+	 * Their parts are left to whoever removes the thread (see `Threads.remove`),
+	 * since disposal also happens when a decoder replaces the collection.
+	 */
+	override dispose(): void {
+		this.#clear_turns();
+		super.dispose();
+	}
+
+	#clear_turns(): void {
+		this.cancel_pending();
 		this.turns.clear();
 	}
 

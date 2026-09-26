@@ -21,6 +21,7 @@ export interface ModelsOptions extends CellOptions<typeof ModelsJson> {}
 
 export class Models extends Cell<typeof ModelsJson> {
 	readonly items: IndexedCollection<Model> = new IndexedCollection({
+		dispose_item: (model) => model.dispose(),
 		indexes: [
 			// TODO this is a mistake to have `name` be unique,
 			// unless we prefix with `${provider_name}/${model_name}` and have some other property -

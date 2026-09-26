@@ -35,7 +35,10 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	recent_tab_ids: Array<Uuid> = $state.raw()!;
 	max_tab_history: number = $state.raw()!;
 
-	items: IndexedCollection<DiskfileTab> = new IndexedCollection();
+	items: IndexedCollection<DiskfileTab> = new IndexedCollection({
+		// closed tabs kept in `recently_closed_tabs` are only read for their `diskfile_id`
+		dispose_item: (tab) => tab.dispose()
+	});
 
 	/**
 	 * Map for looking up tabs by their associated diskfile_id.

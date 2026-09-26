@@ -97,29 +97,23 @@ export class Chat extends Cell<typeof ChatJson> {
 		}
 	}
 
-	// TODO removing threads only detaches them from this chat — they (and their turns)
-	// stay in `app.threads` as orphans, decide whether removal should delete them
-
 	/**
-	 * Removes a thread from this chat. If it was selected, the selection moves
-	 * to the thread now at its index (or the new last thread), or clears.
+	 * Removes a thread from this chat, and from the app unless another chat still has it.
+	 * If it was selected, the selection moves to the thread now at its index
+	 * (or the new last thread), or clears.
 	 */
 	remove_thread(id: Uuid): void {
-		const index = this.thread_ids.indexOf(id);
-		if (index === -1) return;
-		this.thread_ids.splice(index, 1);
-		if (this.selected_thread_id === id) {
-			this.select_thread(this.thread_ids[Math.min(index, this.thread_ids.length - 1)] ?? null);
-		}
+		this.detach_thread(id);
+		this.app.threads.remove_unreferenced([id]);
 	}
 
 	/**
-	 * Removes threads from this chat. If the selected thread was removed,
-	 * the selection moves to the first remaining thread, or clears.
+	 * Removes threads from this chat, and from the app unless another chat still has them.
+	 * If the selected thread was removed, the selection moves to the first remaining thread, or clears.
 	 */
 	remove_threads(ids: Array<Uuid>): void {
-		this.thread_ids = this.thread_ids.filter((t) => !ids.includes(t));
-		this.#reconcile_selection();
+		this.detach_threads(ids);
+		this.app.threads.remove_unreferenced(ids);
 	}
 
 	remove_threads_by_model_tag(tag: string): void {
@@ -129,11 +123,28 @@ export class Chat extends Cell<typeof ChatJson> {
 	}
 
 	remove_all_threads(): void {
-		this.thread_ids.length = 0;
-		this.#reconcile_selection();
+		this.remove_threads([...this.thread_ids]);
 	}
 
-	#reconcile_selection(): void {
+	/**
+	 * Drops a thread from this chat without removing it from the app — see `remove_thread`.
+	 */
+	detach_thread(id: Uuid): void {
+		const index = this.thread_ids.indexOf(id);
+		if (index === -1) return;
+		this.thread_ids.splice(index, 1);
+		if (this.selected_thread_id === id) {
+			this.select_thread(this.thread_ids[Math.min(index, this.thread_ids.length - 1)] ?? null);
+		}
+	}
+
+	/**
+	 * Drops threads from this chat without removing them from the app — see `remove_threads`.
+	 */
+	detach_threads(ids: Array<Uuid>): void {
+		// no reassignment when nothing changes, so `threads` doesn't re-derive
+		if (!this.thread_ids.some((t) => ids.includes(t))) return;
+		this.thread_ids = this.thread_ids.filter((t) => !ids.includes(t));
 		if (this.selected_thread_id && !this.thread_ids.includes(this.selected_thread_id)) {
 			this.select_thread(this.thread_ids[0] ?? null);
 		}
@@ -192,7 +203,7 @@ export class Chat extends Cell<typeof ChatJson> {
 	 */
 	async init_name_from_turns(user_content: string, assistant_content: string): Promise<void> {
 		// TODO better abstraction for this kind of thing including de-duping the request,
-		// returning the current promise, see `RequestTracker/RequestTrackerItem`
+		// returning the current promise
 		if (this.init_name_status !== 'initial') return;
 
 		// Check if namerbot's provider is available before attempting to name

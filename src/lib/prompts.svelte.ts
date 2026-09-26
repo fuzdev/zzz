@@ -27,6 +27,7 @@ export interface PromptsOptions extends CellOptions<typeof PromptsJson> {}
 export class Prompts extends Cell<typeof PromptsJson> {
 	// Initialize items with proper typing and unified indexes
 	readonly items: IndexedCollection<Prompt> = new IndexedCollection({
+		dispose_item: (prompt) => prompt.dispose(),
 		indexes: [
 			create_single_index({
 				key: 'by_name',

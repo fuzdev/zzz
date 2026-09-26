@@ -29,6 +29,7 @@ export interface ChatsOptions extends CellOptions<typeof ChatsJson> {}
 
 export class Chats extends Cell<typeof ChatsJson> {
 	readonly items: IndexedCollection<Chat> = new IndexedCollection({
+		dispose_item: (chat) => chat.dispose(),
 		indexes: [
 			create_single_index({
 				key: 'by_name',
@@ -155,19 +156,31 @@ export class Chats extends Cell<typeof ChatsJson> {
 		return chats;
 	}
 
+	/**
+	 * Removes a chat, along with its threads unless another chat still has them —
+	 * which cancels their in-flight completions and removes their turns' parts.
+	 */
 	remove(id: Uuid): void {
-		const removed = this.items.remove(id);
-		if (removed && id === this.#selected_id) {
-			void this.select_next();
-		}
+		this.remove_many([id]);
 	}
 
+	/**
+	 * Removes chats — see `remove`.
+	 *
+	 * @returns the number of chats removed
+	 */
 	remove_many(ids: Array<Uuid>): number {
-		// Remove the chats
+		const thread_ids: Array<Uuid> = [];
+		for (const id of ids) {
+			const chat = this.items.by_id.get(id);
+			if (chat) thread_ids.push(...chat.thread_ids);
+		}
+
 		const removed_count = this.items.remove_many(ids);
+		this.app.threads.remove_unreferenced(thread_ids);
 
 		// If the selected chat was removed, select a new one
-		if (this.#selected_id !== null && ids.includes(this.#selected_id)) {
+		if (removed_count && this.#selected_id !== null && ids.includes(this.#selected_id)) {
 			void this.select_next();
 		}
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { test, describe, beforeEach, assert } from 'vitest';
+import { test, describe, beforeEach, assert, vi } from 'vitest';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
@@ -179,5 +179,19 @@ describe('completion_progress', () => {
 		receive_error(turn, -32000, 'boom');
 		receive_progress(turn, 'late');
 		assert.strictEqual(turn.content, '');
+	});
+
+	test('drops chunks for a removed turn without logging errors', () => {
+		const turn = thread.add_assistant_turn('');
+		receive_progress(turn, 'a');
+		thread.remove_all_turns();
+		const error_spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			receive_progress(turn, 'late');
+			receive_progress(turn, 'later');
+			assert.strictEqual(error_spy.mock.calls.length, 0);
+		} finally {
+			error_spy.mockRestore();
+		}
 	});
 });

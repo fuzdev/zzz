@@ -34,7 +34,9 @@ export interface TerminalPresetsOptions extends CellOptions<typeof TerminalPrese
  * TODO persist user-created presets — they last only as long as the page
  */
 export class TerminalPresets extends Cell<typeof TerminalPresetsJson> {
-	readonly items: IndexedCollection<TerminalPreset> = new IndexedCollection();
+	readonly items: IndexedCollection<TerminalPreset> = new IndexedCollection({
+		dispose_item: (preset) => preset.dispose()
+	});
 
 	constructor(options: TerminalPresetsOptions) {
 		super(TerminalPresetsJson, options);
@@ -72,20 +74,13 @@ export class TerminalPresets extends Cell<typeof TerminalPresetsJson> {
 	 * @returns whether the preset was found
 	 */
 	remove(id: Uuid): boolean {
-		const preset = this.items.get(id);
-		if (!preset) return false;
-		this.items.remove(id);
-		preset.dispose();
-		return true;
+		return this.items.remove(id);
 	}
 
 	/**
 	 * Removes and disposes every preset.
 	 */
 	clear(): void {
-		for (const preset of this.items.values) {
-			preset.dispose();
-		}
 		this.items.clear();
 	}
 

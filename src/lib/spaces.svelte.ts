@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Space, SpaceJson, type SpaceJsonInput } from './space.svelte.ts';
@@ -13,7 +13,11 @@ export const SCRATCHPAD_NAME = 'scratchpad';
 
 export const SpacesJson = CellJson.extend({
 	items: z.array(SpaceJson).default(() => []),
-	active_id: z.string().nullable().default(null)
+	active_id: z.string().nullable().default(null),
+	scratchpad_id: Uuid.nullable().default(null).meta({
+		description:
+			"The scratchpad, the default space, which can't be removed. Renaming it keeps it the scratchpad."
+	})
 }).meta({ cell_class_name: 'Spaces' });
 export type SpacesJson = z.infer<typeof SpacesJson>;
 export type SpacesJsonInput = z.input<typeof SpacesJson>;
@@ -22,6 +26,7 @@ export interface SpacesOptions extends CellOptions<typeof SpacesJson> {}
 
 export class Spaces extends Cell<typeof SpacesJson> {
 	readonly items: IndexedCollection<Space> = new IndexedCollection({
+		dispose_item: (space) => space.dispose(),
 		indexes: [
 			create_single_index({
 				key: 'by_name',
@@ -37,8 +42,11 @@ export class Spaces extends Cell<typeof SpacesJson> {
 		this.active_id ? this.items.by_id.get(this.active_id) : undefined
 	);
 
+	scratchpad_id: Uuid | null = $state.raw()!;
+
+	/** The default space, identified by id so renaming it doesn't change which space it is. */
 	readonly scratchpad: Space | undefined = $derived(
-		this.items.single_index('by_name').get(SCRATCHPAD_NAME)
+		this.scratchpad_id ? this.items.by_id.get(this.scratchpad_id) : undefined
 	);
 
 	constructor(options: SpacesOptions) {
@@ -57,15 +65,30 @@ export class Spaces extends Cell<typeof SpacesJson> {
 		};
 
 		this.init();
+	}
 
+	/**
+	 * Applies `value`, then ensures the scratchpad — including on construction,
+	 * so replacing the spaces can never leave none.
+	 */
+	override set_json(value?: SpacesJsonInput): void {
+		super.set_json(value);
 		this.ensure_scratchpad();
 	}
 
+	/**
+	 * Returns the scratchpad, adopting a space named `SCRATCHPAD_NAME`
+	 * (e.g. from JSON without a `scratchpad_id`) or creating and activating one if needed.
+	 */
 	ensure_scratchpad(): Space {
 		let scratchpad = this.scratchpad;
 		if (!scratchpad) {
-			scratchpad = this.add({ name: SCRATCHPAD_NAME });
-			this.active_id = scratchpad.id;
+			scratchpad = this.items.single_index('by_name').get(SCRATCHPAD_NAME);
+			if (!scratchpad) {
+				scratchpad = this.add({ name: SCRATCHPAD_NAME });
+				this.active_id = scratchpad.id;
+			}
+			this.scratchpad_id = scratchpad.id;
 		}
 		return scratchpad;
 	}
@@ -81,11 +104,12 @@ export class Spaces extends Cell<typeof SpacesJson> {
 		return get_unique_name(base_name, this.items.single_index('by_name'));
 	}
 
+	/**
+	 * Removes and disposes a space. The scratchpad can't be removed.
+	 */
 	remove(id: Uuid): void {
-		const space = this.items.by_id.get(id);
-		// prevent removing the scratchpad
-		if (space?.name === SCRATCHPAD_NAME) return;
-		this.items.remove(id);
+		if (id === this.scratchpad_id) return;
+		if (!this.items.remove(id)) return;
 		if (id === this.active_id) {
 			this.active_id = this.scratchpad?.id ?? null;
 		}

@@ -355,7 +355,9 @@ Linear conversation with one model. Sends messages via the action system:
 ```typescript
 class Thread extends Cell<typeof ThreadJson> {
   model_name: string = $state.raw()!;
-  readonly turns: IndexedCollection<Turn> = new IndexedCollection();
+  readonly turns: IndexedCollection<Turn> = new IndexedCollection({
+    dispose_item: (turn) => turn.dispose(),
+  });
   enabled: boolean = $state.raw()!;
 
   async send_message(content: string): Promise<Turn | null> {
@@ -532,6 +534,58 @@ class IndexedCollection<T extends IndexedItem> {
 - `derived` — Computed sorted array. Example: `derived_index('ordered_by_name')`
 - `dynamic` — Runtime-computed. Example: Custom queries
 
+### Keeping Indexes Current
+
+An index is maintained one of two ways:
+
+- **Reactive** (`reactive: true`) — the index is a `$derived` of its `compute`,
+  rebuilt in O(n) on the next read after the collection changes or any reactive
+  field `compute` reads changes. `create_single_index` and `create_multi_index`
+  are reactive by default, so a lookup like `by_name` follows an item that's
+  renamed after it was added. Two costs follow:
+  - every rebuild makes a new map, so everything reading the index re-runs on
+    any change to the collection or an indexed field, not only the keys it read
+  - a read outside a reactive context (an event handler, a plain method) can't
+    rely on change notifications, so it checks all O(n) dependencies even when
+    nothing changed — fine for occasional lookups, but code that adds an item
+    and then reads the index in a loop is O(n²)
+- **Incremental** — `onadd`/`onremove` hooks update the index on membership
+  changes only (O(1) per change, per-key reactive via `SvelteMap`), which is
+  correct only while an item's indexed values never change. Single and multi
+  indexes opt in with `immutable_key: true`; use it for identity-like keys on
+  large or busy collections (`Diskfiles.by_path` — seeded with every file,
+  upserting by path in a loop — plus `Workspaces.by_path` and
+  `Actions.by_method`). Derived-array indexes (`create_derived_index`) are
+  incremental and can be replaced by assignment (e.g.
+  `items.indexes.manual_order = reordered`).
+
+`onremove` hooks run after the removed items have left `by_id`, so a single
+index falling back to another holder of a key never picks an item removed in the
+same `remove_many`.
+
+### Ownership and Disposal
+
+A collection that owns its items passes `dispose_item`, which runs for every
+item leaving through `remove`, `remove_many`, or `clear` (including a decoder
+re-populating the collection). Every app collection owns its cells, so removed
+cells leave the cell registry and release their resources — trimmed `Actions`
+stop observing their action events, a disposed `Thread` cancels its in-flight
+completion and disposes its turns, and a disposed `Prompt` disposes its parts
+(a prompt's parts are its own instances, not in `app.parts`).
+
+Removal cascades through the content model; disposal alone doesn't, since a
+decoder replacing a collection disposes cells whose replacements still point at
+the same dependents:
+
+- `Chats.remove` removes the chat's threads unless another chat still lists
+  them, and the `Chat.remove_thread*` methods do the same for the threads they
+  drop (`detach_thread`/`detach_threads` only drop the ids).
+- `Threads.remove` drops the thread from every chat, disposes it (cancelling
+  its completion), and removes its turns' parts from `app.parts`;
+  `Thread.remove_all_turns` removes its turns' parts the same way.
+- A part is only removed when no turn in `app.threads` still references it —
+  turns are the only owners of `app.parts` (`Diskfile.part` is a lookup).
+
 ### Index Definition
 
 ```typescript
@@ -540,6 +594,7 @@ interface IndexDefinition<T extends IndexedItem, TResult = any, TQuery = any> {
 	type?: 'single' | 'multi' | 'derived' | 'dynamic';
 	extractor?: (item: T) => any;
 	compute: (collection: IndexedCollection<T>) => TResult;
+	reactive?: boolean; // `$derived` of `compute`, the hooks below are unused
 	onadd?: (result: TResult, item: T, collection: IndexedCollection<T>) => TResult;
 	onremove?: (result: TResult, item: T, collection: IndexedCollection<T>) => TResult;
 }
@@ -550,6 +605,7 @@ interface IndexDefinition<T extends IndexedItem, TResult = any, TQuery = any> {
 ```typescript
 // Create with indexes
 const items = new IndexedCollection<Model>({
+	dispose_item: (model) => model.dispose(),
 	indexes: [
 		create_single_index({ key: 'name', extractor: (m) => m.name }),
 		create_multi_index({ key: 'provider_name', extractor: (m) => m.provider_name }),
@@ -558,7 +614,8 @@ const items = new IndexedCollection<Model>({
 });
 
 // Query
-items.by('name', 'gpt-5'); // single → Model | undefined
+items.by('name', 'gpt-5'); // single → Model, throws if missing
+items.by_optional('name', 'gpt-5'); // single → Model | undefined
 items.where('provider_name', 'claude'); // multi → Array<Model>
 items.derived_index('ordered_by_name'); // derived → Array<Model>
 ```
@@ -589,8 +646,8 @@ The allowed roots are the permanent boot-time set (the app directory + scoped di
 The frontend file pipeline is five Cells plus a per-file editor-session class:
 
 - `Diskfiles` — `IndexedCollection<Diskfile>` (`by_path` single index,
-  `by_extension` multi index); its `handle_change` is the `filer_change`
-  dispatch point
+  `immutable_key` since a path is a diskfile's disk identity); its
+  `handle_change` is the `filer_change` dispatch point
 - `Diskfile` — one file: `{path, source_dir, content}`; the Cell `id` is
   client-side identity, `path` is the disk identity used for backend
   correlation
@@ -665,8 +722,9 @@ separate concerns":
   (`Space.directory_paths`) with no backend counterpart (no `space_*`
   actions). `active_directory_paths` derives to only the paths that resolve
   to a currently open workspace. `Spaces` auto-creates and protects a
-  `scratchpad` space. Space state is in-memory only today (DB persistence is
-  planned).
+  `scratchpad` space, identified by `Spaces.scratchpad_id` so renaming it
+  keeps it the protected default. Space state is in-memory only today (DB
+  persistence is planned).
 
 The two meet in `DeskMenu.svelte`: toggling a directory into the active Space
 first ensures its workspace is open. Opening brand-new directories happens on

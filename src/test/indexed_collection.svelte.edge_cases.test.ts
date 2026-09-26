@@ -623,39 +623,28 @@ describe('IndexedCollection - Edge Cases', () => {
 
 		collection.add_many([item1, item2, item3]);
 
-		const true_items = collection.where('by_boolean_sorted', true);
+		const where_true = () =>
+			collection.where('by_boolean_sorted', true).map((i: TestItem) => i.string_a);
 
 		// Verify initial sort order
-		assert.deepEqual(
-			true_items.map((i) => i.string_a),
-			['a2', 'a3', 'a1']
-		);
+		assert.deepEqual(where_true(), ['a2', 'a3', 'a1']);
 
 		// Add new item that should be inserted in middle
 		const item4 = create_test_item('a4', 25, [], true);
 		collection.add(item4);
 
-		// Verify array maintains sort order
-		assert.deepEqual(
-			true_items.map((i) => i.string_a),
-			['a2', 'a3', 'a4', 'a1']
-		);
+		// Verify the bucket maintains sort order
+		assert.deepEqual(where_true(), ['a2', 'a3', 'a4', 'a1']);
 
 		// Add item at beginning
 		const item5 = create_test_item('a5', 5, [], true);
 		collection.add(item5);
 
-		assert.deepEqual(
-			true_items.map((i) => i.string_a),
-			['a5', 'a2', 'a3', 'a4', 'a1']
-		);
+		assert.deepEqual(where_true(), ['a5', 'a2', 'a3', 'a4', 'a1']);
 
 		// Remove middle item
 		collection.remove(item3.id);
-		assert.deepEqual(
-			true_items.map((i) => i.string_a),
-			['a5', 'a2', 'a4', 'a1']
-		);
+		assert.deepEqual(where_true(), ['a5', 'a2', 'a4', 'a1']);
 	});
 
 	test('multi-index empty bucket behavior', () => {

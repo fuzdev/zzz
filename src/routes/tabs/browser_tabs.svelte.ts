@@ -26,6 +26,7 @@ export type BrowserTabsOptions = CellOptions<typeof BrowserTabsJson>;
 
 export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 	items: IndexedCollection<BrowserTab> = new IndexedCollection({
+		dispose_item: (tab) => tab.dispose(),
 		indexes: [
 			create_single_index({
 				key: 'url',
