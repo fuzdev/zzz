@@ -3,6 +3,7 @@
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	import type { TerminalPreset } from './terminal_preset.svelte.ts';
+	import { parse_terminal_command } from './terminal_helpers.ts';
 
 	const {
 		presets,
@@ -10,7 +11,7 @@
 		oncreate,
 		ondelete
 	}: {
-		presets: Array<TerminalPreset>;
+		presets: ReadonlyArray<TerminalPreset>;
 		onrun: (preset: TerminalPreset) => void;
 		oncreate?: (name: string, command: string, args: Array<string>) => void;
 		ondelete?: (preset: TerminalPreset) => void;
@@ -21,10 +22,9 @@
 	let new_command = $state.raw('');
 
 	const handle_add_submit = (): void => {
-		const trimmed = new_command.trim();
-		if (!trimmed) return;
-		const [command, ...args] = trimmed.split(/\s+/);
-		if (!command) return;
+		const parsed = parse_terminal_command(new_command);
+		if (!parsed) return;
+		const { command, args } = parsed;
 		oncreate?.(new_name.trim() || command, command, args);
 		new_name = '';
 		new_command = '';

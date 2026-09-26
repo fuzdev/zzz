@@ -1,50 +1,33 @@
 <script lang="ts">
-	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
-
-	import { icon_retry } from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_retry, icon_remove } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	import TerminalView from './TerminalView.svelte';
 	import TerminalContextmenu from './TerminalContextmenu.svelte';
-	import { app_context } from './app.svelte.ts';
+	import type { Terminal } from './terminal.svelte.ts';
 
 	const {
-		terminal_id,
-		command,
-		args,
-		onclose,
-		onrestart
+		terminal,
+		onrestart,
+		onremove
 	}: {
-		terminal_id: Uuid;
-		command: string;
-		args: Array<string>;
-		onclose: (exit_code: number | null) => void;
+		terminal: Terminal;
 		onrestart?: () => void;
+		onremove?: () => void;
 	} = $props();
 
-	const app = app_context.get();
-
-	let exit_code: number | null = $state.raw(null);
-	let exited = $state.raw(false);
 	let text_getter: (() => string) | null = $state.raw(null);
 	let stdin_input: string = $state.raw('');
 
-	const display_command = $derived(args.length > 0 ? `${command} ${args.join(' ')}` : command);
-
-	const handle_close = (code: number | null): void => {
-		if (exited) return; // already handled via terminal_exited notification
-		exit_code = code;
-		exited = true;
-		onclose(code);
-	};
+	const accepts_input = $derived(terminal.status === 'running' || terminal.status === 'starting');
 
 	const handle_get_text = (fn: () => string): void => {
 		text_getter = fn;
 	};
 
 	const send_stdin = (): void => {
-		if (!stdin_input || exited) return;
-		void app.api.terminal_data_send({ terminal_id, data: stdin_input + '\n' });
+		if (!stdin_input || !accepts_input) return;
+		terminal.send_input(stdin_input + '\n');
 		stdin_input = '';
 	};
 
@@ -55,37 +38,70 @@
 	};
 </script>
 
-<TerminalContextmenu get_terminal_text={text_getter} {display_command}>
+<TerminalContextmenu get_terminal_text={text_getter} display_command={terminal.display_command}>
 	<div class="terminal-run-item">
 		<div class="run-header">
-			<span class="run-command">$ {display_command}</span>
+			<span class="run-command">$ {terminal.display_command}</span>
 			<span class="run-status">
-				{#if exited}
-					<span class="exit-code" class:error={exit_code !== 0}>
-						exited {exit_code ?? '?'}
+				{#if terminal.status === 'starting'}
+					<span>starting</span>
+				{:else if terminal.status === 'running'}
+					<span class="running">running</span>
+				{:else if terminal.status === 'exited'}
+					<span class="exit-code" class:error={terminal.exit_code !== 0}>
+						exited {terminal.exit_code ?? '?'}
+					</span>
+				{:else if terminal.status === 'closed'}
+					<span class="exit-code">
+						closed{terminal.exit_code === null ? '' : ` (${terminal.exit_code})`}
 					</span>
 				{:else}
-					<span class="running">running</span>
+					<span class="exit-code error">failed</span>
 				{/if}
 			</span>
 			{#if onrestart}
-				<button type="button" class="restart-button" onclick={onrestart} title="restart">
+				<button
+					type="button"
+					class="restart-button"
+					onclick={onrestart}
+					disabled={terminal.status === 'starting' || terminal.closing}
+					title="restart"
+				>
 					<Svg data={icon_retry} />
 				</button>
 			{/if}
+			{#if onremove}
+				<button
+					type="button"
+					class="remove-button"
+					onclick={onremove}
+					disabled={terminal.closing}
+					title={terminal.running ? 'close and remove' : 'remove'}
+				>
+					<Svg data={icon_remove} />
+				</button>
+			{/if}
 		</div>
+		{#if terminal.error_message}
+			<p class="error-message">{terminal.error_message}</p>
+		{/if}
 		<div class="run-output">
-			<TerminalView {terminal_id} onclose={handle_close} get_text={handle_get_text} />
+			<!-- a restart spawns a new process — remount for a fresh xterm -->
+			{#key terminal.run}
+				<TerminalView {terminal} get_text={handle_get_text} />
+			{/key}
 		</div>
 		<div class="stdin-input">
 			<input
 				type="text"
 				bind:value={stdin_input}
-				placeholder={exited ? 'process exited' : 'send input to terminal...'}
+				placeholder={accepts_input ? 'send input to terminal...' : 'process ended'}
 				onkeydown={handle_stdin_keydown}
-				disabled={exited}
+				disabled={!accepts_input}
 			/>
-			<button type="button" onclick={send_stdin} disabled={exited || !stdin_input}>send</button>
+			<button type="button" onclick={send_stdin} disabled={!accepts_input || !stdin_input}>
+				send
+			</button>
 		</div>
 	</div>
 </TerminalContextmenu>
@@ -121,7 +137,14 @@
 	.exit-code.error {
 		color: var(--palette_c_50, #f88);
 	}
-	.restart-button {
+	.restart-button,
+	.remove-button {
+		font-size: var(--font_size_sm);
+	}
+	.error-message {
+		color: var(--palette_c_50, #f88);
+		padding: var(--space_xs) var(--space_sm);
+		margin: 0;
 		font-size: var(--font_size_sm);
 	}
 	.run-output {

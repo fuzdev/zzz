@@ -161,8 +161,10 @@ not a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 - `Threads` (`threads.svelte.ts`) — Collection of threads
 - `Space` (`space.svelte.ts`) — Named grouping of workspace dirs
 - `Spaces` (`spaces.svelte.ts`) — Collection of spaces
-- `Terminal` (`terminal.svelte.ts`) — PTY terminal process state
+- `Terminal` (`terminal.svelte.ts`) — PTY terminal run: status, buffered output, ordered input
+- `Terminals` (`terminals.svelte.ts`) — App-level terminal runs; routes output/exit notifications
 - `TerminalPreset` (`terminal_preset.svelte.ts`) — Saved terminal command config
+- `TerminalPresets` (`terminal_presets.svelte.ts`) — Collection of terminal presets
 - `Time` (`time.svelte.ts`) — Reactive time state
 - `Ui` (`ui.svelte.ts`) — UI state (menus, layout)
 - `Workspace` (`workspace.svelte.ts`) — Open workspace directory

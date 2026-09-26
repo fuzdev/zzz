@@ -2,28 +2,22 @@
 	import '@xterm/xterm/css/xterm.css';
 	import { onMount } from 'svelte';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
-	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-	import { app_context } from './app.svelte.ts';
+	import type { Terminal } from './terminal.svelte.ts';
 
 	const {
-		terminal_id,
-		onclose,
+		terminal,
 		get_text
 	}: {
-		terminal_id: Uuid;
-		onclose?: (exit_code: number | null) => void;
+		terminal: Terminal;
 		get_text?: (fn: () => string) => void;
 	} = $props();
-
-	const app = app_context.get();
 
 	let container_el: HTMLDivElement | undefined = $state.raw();
 	let container_width: number = $state.raw(0);
 	let container_height: number = $state.raw(0);
 	let xterm_instance: any = $state.raw(null);
-	let data_version: number = $state.raw(0); // incremented on each write to trigger re-derivation
-	let exited = $state.raw(false);
+	let copy_text: string = $state.raw('');
 
 	const get_terminal_text = (): string => {
 		if (!xterm_instance) return '';
@@ -47,11 +41,11 @@
 		return lines.map((l) => l.replace(/\s+$/, '')).join('\n');
 	};
 
-	// re-derives when xterm_instance is set or data_version changes
-	const terminal_text: string = $derived.by(() => {
-		void data_version; // track to re-derive on new data
-		return get_terminal_text();
-	});
+	// read xterm's buffer only when copying — `CopyToClipboard` reads its `text`
+	// prop after calling `onclick`, and props are live, so it copies this fresh value
+	const refresh_copy_text = (): void => {
+		copy_text = get_terminal_text();
+	};
 
 	// reactively resize xterm when container dimensions change
 	$effect(() => {
@@ -69,32 +63,14 @@
 	onMount(() => {
 		let destroyed = false;
 		let term: any = null;
-
-		// buffer data that arrives before xterm is ready
-		const pending_data: Array<string> = [];
-
-		// register writer immediately to capture early data
-		app.terminal_writers.set(terminal_id, (data: string) => {
-			if (term) {
-				term.write(data);
-			} else {
-				pending_data.push(data);
-			}
-			data_version++;
-		});
-
-		// register exit handler for backend-initiated exit notifications
-		app.terminal_exit_handlers.set(terminal_id, (exit_code: number | null) => {
-			exited = true;
-			onclose?.(exit_code);
-		});
+		let detach_output: (() => void) | null = null;
 
 		const setup = async (): Promise<void> => {
-			const { Terminal } = await import('@xterm/xterm');
+			const { Terminal: Xterm } = await import('@xterm/xterm');
 
 			if (destroyed) return;
 
-			term = new Terminal({
+			term = new Xterm({
 				cursorBlink: true,
 				convertEol: true,
 				fontSize: 14,
@@ -114,54 +90,69 @@
 			// expose text getter to parent
 			get_text?.(get_terminal_text);
 
-			// replay any buffered data
-			for (const data of pending_data) {
+			// the terminal cell buffers output whether or not a view is mounted —
+			// replay what's buffered, then stream new output
+			const attachment = terminal.attach_output((data) => {
 				term.write(data);
+			});
+			detach_output = attachment.detach;
+			if (attachment.truncated) {
+				term.write('\x1b[0;2m[earlier output truncated]\x1b[0m\r\n');
 			}
-			pending_data.length = 0;
-
-			// send user input to backend
-			term.onData((data: string) => {
-				void app.api.terminal_data_send({
-					terminal_id,
-					data
+			// the history can contain queries (cursor position, device attributes,
+			// colors) that xterm answers through `onData` — those answers were already
+			// given when the output first arrived, so drop input until the replay is
+			// parsed (xterm parses writes async, and queues live output after it)
+			// this includes output that arrived before the first attach, e.g. a shell's
+			// startup queries — replies to those are suppressed too
+			let replaying = false;
+			if (attachment.buffered) {
+				replaying = true;
+				term.write(attachment.buffered, () => {
+					replaying = false;
 				});
+			}
+
+			// input goes through the terminal's ordered send queue
+			term.onData((data: string) => {
+				if (replaying) return;
+				terminal.send_input(data);
 			});
 
-			// notify backend of resize
 			term.onResize(({ cols, rows }: { cols: number; rows: number }) => {
-				void app.api.terminal_resize({
-					terminal_id,
-					cols,
-					rows
-				});
+				terminal.resize(cols, rows);
 			});
 		};
 
 		void setup();
 
+		// the process keeps running — unmounting only detaches this view
 		return () => {
 			destroyed = true;
-			app.terminal_writers.delete(terminal_id);
-			app.terminal_exit_handlers.delete(terminal_id);
+			detach_output?.();
 			term?.dispose();
 		};
 	});
-
-	const handle_close = async (): Promise<void> => {
-		if (exited) return; // already exited via notification
-		const result = await app.api.terminal_close({ terminal_id });
-		exited = true;
-		onclose?.(result.ok ? result.value.exit_code : null);
-	};
 </script>
 
 <div class="terminal-view">
 	<div class="terminal-header">
-		<span class="terminal-id">terminal {terminal_id.slice(0, 8)}</span>
+		<span class="terminal-id">terminal {terminal.terminal_id?.slice(0, 8) ?? '…'}</span>
 		<div class="terminal-actions">
-			<CopyToClipboard text={terminal_text} class="plain" />
-			<button type="button" onclick={handle_close} disabled={exited}>close</button>
+			<CopyToClipboard
+				text={copy_text}
+				allow_copying_empty_string
+				disabled={!xterm_instance}
+				onclick={refresh_copy_text}
+				class="plain"
+			/>
+			<button
+				type="button"
+				onclick={() => terminal.close()}
+				disabled={!terminal.running || terminal.closing}
+			>
+				{terminal.closing ? 'closing…' : 'close'}
+			</button>
 		</div>
 	</div>
 	<div

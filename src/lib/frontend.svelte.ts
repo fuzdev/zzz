@@ -3,7 +3,6 @@ import { SvelteMap } from 'svelte/reactivity';
 import { z } from 'zod';
 import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
 import type { Assignable, ClassConstructor, OmitStrict } from '@fuzdev/fuz_util/types.ts';
-import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 import { ActionRegistry } from '@fuzdev/fuz_app/actions/action_registry.ts';
 import { ActionEventPhase, type ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';
 
@@ -22,6 +21,8 @@ import { Parts } from './parts.svelte.ts';
 import { Time } from './time.svelte.ts';
 import { Spaces } from './spaces.svelte.ts';
 import { Workspaces } from './workspaces.svelte.ts';
+import { Terminals } from './terminals.svelte.ts';
+import { TerminalPresets } from './terminal_presets.svelte.ts';
 import type { ZzzOptions } from './config_helpers.ts';
 import { BOTS_DEFAULT } from './config_defaults.ts';
 import { DiskfileDirectoryPath, DiskfilePath } from './diskfile_types.ts';
@@ -105,20 +106,10 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly capabilities: Capabilities;
 	readonly spaces: Spaces;
 	readonly workspaces: Workspaces;
+	readonly terminals: Terminals;
+	readonly terminal_presets: TerminalPresets;
 
 	readonly bots: ZzzOptions['bots'];
-
-	/**
-	 * Callback registry for terminal data routing.
-	 * TerminalView components register their write callback on mount.
-	 */
-	readonly terminal_writers: Map<Uuid, (data: string) => void> = new Map();
-
-	/**
-	 * Callback registry for terminal exit notifications.
-	 * TerminalView components register their exit callback on mount.
-	 */
-	readonly terminal_exit_handlers: Map<Uuid, (exit_code: number | null) => void> = new Map();
 
 	// TODO maybe instead of this pattern with getters/setters, using an encoder?
 	#zzz_dir: DiskfileDirectoryPath | null | undefined = $state.raw(null); // TODO should this be undefined?
@@ -204,6 +195,8 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.capabilities = new Capabilities({ app: this });
 		this.spaces = new Spaces({ app: this });
 		this.workspaces = new Workspaces({ app: this });
+		this.terminals = new Terminals({ app: this });
+		this.terminal_presets = new TerminalPresets({ app: this });
 
 		this.bots = options.bots ?? BOTS_DEFAULT;
 

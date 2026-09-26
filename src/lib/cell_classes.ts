@@ -25,6 +25,8 @@ import { Space } from './space.svelte.ts';
 import { Spaces } from './spaces.svelte.ts';
 import { Terminal } from './terminal.svelte.ts';
 import { TerminalPreset } from './terminal_preset.svelte.ts';
+import { TerminalPresets } from './terminal_presets.svelte.ts';
+import { Terminals } from './terminals.svelte.ts';
 import { Ui } from './ui.svelte.ts';
 import { Workspace } from './workspace.svelte.ts';
 import { Workspaces } from './workspaces.svelte.ts';
@@ -54,6 +56,8 @@ export const cell_classes = {
 	Spaces,
 	Terminal,
 	TerminalPreset,
+	TerminalPresets,
+	Terminals,
 	Turn,
 	Thread,
 	Threads,

@@ -185,10 +185,8 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		}
 	},
 
+	// terminal state is settled by `Terminals` / `Terminal` from the call results
 	terminal_create: {
-		receive_response: ({ data: { output } }) => {
-			console.log('[frontend_action_handlers] terminal created:', output.terminal_id);
-		},
 		receive_error: ({ data: { error } }) => {
 			console.error('[frontend_action_handlers] terminal_create failed:', error);
 		}
@@ -198,16 +196,13 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 
 	terminal_data: {
 		receive: ({ data: { input } }) => {
-			frontend.terminal_writers.get(input.terminal_id)?.(input.data);
+			frontend.terminals.receive_output(input.terminal_id, input.data);
 		}
 	},
 
 	terminal_resize: {},
 
 	terminal_close: {
-		receive_response: ({ data: { output } }) => {
-			console.log('[frontend_action_handlers] terminal closed, exit_code:', output.exit_code);
-		},
 		receive_error: ({ data: { error } }) => {
 			console.error('[frontend_action_handlers] terminal_close failed:', error);
 		}
@@ -215,13 +210,7 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 
 	terminal_exited: {
 		receive: ({ data: { input } }) => {
-			console.log(
-				'[frontend_action_handlers] terminal exited:',
-				input.terminal_id,
-				'exit_code:',
-				input.exit_code
-			);
-			frontend.terminal_exit_handlers.get(input.terminal_id)?.(input.exit_code);
+			frontend.terminals.receive_exited(input.terminal_id, input.exit_code);
 		}
 	},
 

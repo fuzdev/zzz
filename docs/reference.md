@@ -32,6 +32,6 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `workspace_list` — List all open workspaces. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `workspace_open` — Open a workspace directory — registers with ScopedFs and starts file watching. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 
-## Cell classes (31)
+## Cell classes (33)
 
-`Action`, `Actions`, `Capabilities`, `Chat`, `Chats`, `Diskfile`, `DiskfileHistory`, `DiskfilePart`, `Diskfiles`, `DiskfilesEditor`, `DiskfileTab`, `DiskfileTabs`, `Model`, `Models`, `Parts`, `Prompt`, `Prompts`, `Provider`, `Providers`, `Space`, `Spaces`, `Terminal`, `TerminalPreset`, `TextPart`, `Thread`, `Threads`, `Time`, `Turn`, `Ui`, `Workspace`, `Workspaces`
+`Action`, `Actions`, `Capabilities`, `Chat`, `Chats`, `Diskfile`, `DiskfileHistory`, `DiskfilePart`, `Diskfiles`, `DiskfilesEditor`, `DiskfileTab`, `DiskfileTabs`, `Model`, `Models`, `Parts`, `Prompt`, `Prompts`, `Provider`, `Providers`, `Space`, `Spaces`, `Terminal`, `TerminalPreset`, `TerminalPresets`, `Terminals`, `TextPart`, `Thread`, `Threads`, `Time`, `Turn`, `Ui`, `Workspace`, `Workspaces`

@@ -437,27 +437,62 @@ connected sockets, not socket-scoped like `completion_progress`.
 
 ```
 User types in xterm.js (TerminalView.svelte)
-  → term.onData → app.api.terminal_data_send({terminal_id, data})
-    → handlers::terminal → PtyManager::write (enqueue on the terminal's input queue)
-      → the terminal's task writes each chunk in full as the PTY accepts it
+  → term.onData → terminal.send_input(data)  (Terminal cell's ordered queue)
+    → app.api.terminal_data_send({terminal_id, data})  (one in flight per terminal)
+      → handlers::terminal → PtyManager::write (enqueue on the terminal's input queue)
+        → the terminal's task writes each chunk in full as the PTY accepts it
   → child process output → the terminal's task (readiness-driven read,
     incremental UTF-8 decode)
     → terminal_data broadcast to all sockets
       → frontend_action_handlers.terminal_data.receive
-        → frontend.terminal_writers.get(terminal_id)?.(data)
-          → the mounted TerminalView writes the chunk into its xterm buffer
+        → frontend.terminals.receive_output(terminal_id, data)
+          → the Terminal cell buffers the chunk and forwards it to any
+            attached TerminalView, which writes it into its xterm buffer
 ```
 
-The live frontend path is callback maps, not Cells: `TerminalView` registers
-write/exit callbacks in `Frontend.terminal_writers` /
-`terminal_exit_handlers`, and the notification handlers dispatch by
-`terminal_id`. (The `Terminal` Cell class is registered but not part of this
-flow today — `TerminalRunner.svelte` tracks runs as plain objects.)
-`TerminalRunner` always spawns a shell (`terminal_create({command: 'sh'})`)
-and sends the actual command line via `terminal_data_send`; presets
-(`TerminalPreset`) are component-local state seeded from defaults, not
-persisted. Restart closes the old terminal (tolerating failure if it already
-exited) and spawns a fresh one with a new `terminal_id`.
+Terminal state lives in app-level Cells, not components: `app.terminals`
+(`Terminals`, a collection of `Terminal` cells) and `app.terminal_presets`
+(`TerminalPresets`, seeded once with the default presets). Views come and
+go — navigating away from the terminals page leaves the processes running
+and their output buffering, and coming back reattaches to them.
+
+- **Output** — each `Terminal` keeps a bounded buffer of its output (about
+  the most recent 1M characters, oldest dropped first, trimmed at a line or
+  chunk boundary) whether or not a view is mounted. `attach_output` streams
+  new output and hands back the buffered history, which a (re)mounted view
+  replays into a fresh xterm — after a dim "earlier output truncated" line if
+  output was dropped — ignoring xterm's input until the replay is parsed, so
+  xterm's answers to terminal queries in the history (cursor position, device
+  attributes) aren't typed into the live process. Output for an unknown
+  `terminal_id` is held (capped at 64K characters) only while a
+  `terminal_create` is in flight, since a new shell's first output can arrive
+  before the create response.
+- **Input** — `Terminal.send_input` keeps at most one `terminal_data_send` in
+  flight per terminal and coalesces data typed meanwhile into the next send,
+  so keystrokes stay ordered even though the backend dispatches one socket's
+  requests concurrently. A `queue_overflow` (the child isn't reading its
+  input) requeues the refused data ahead of newer input and retries with
+  backoff — nothing was enqueued, so a resend can't duplicate — and shows the
+  error until a send succeeds; other failures are shown without a retry,
+  since the data may have been delivered. Pending input is capped.
+  `Terminal.resize` coalesces to the latest size the same way.
+- **Status** — `starting` → `running` → `exited` (natural exit via the
+  `terminal_exited` broadcast, with its code) or `closed` (the user's
+  `terminal_close`, with the code from its response, or `null` if the process
+  outlived the close grace), or `failed` (spawn error). Exits are recorded
+  on the cell whether or not a view is mounted.
+
+`Terminals.create` always spawns a shell (`terminal_create({command: 'sh'})`)
+and types the actual command line into it via the input queue — queued while
+starting, so it goes ahead of anything else sent before the process starts.
+If the process exits before the create response arrives, the queued input is
+discarded. Restart
+closes a running terminal (and gives up if the close fails, rather than
+orphan a live process), then spawns a fresh process into the same cell with
+a new `terminal_id` and cleared output. Removing a terminal closes it if
+running, then disposes the cell. The terminal list is in-memory: a page
+reload loses it while the backend PTYs keep running (reattaching needs a
+backend `terminal_list`).
 
 Each terminal is one backend task that owns the PTY master and the child
 process. Input chunks are written in the order `terminal_data_send` calls
