@@ -1,7 +1,11 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { frontend_context } from '$lib/frontend.svelte.ts';
 	import { DiskfileDirectoryPath } from '$lib/diskfile_types.ts';
+	import { parse_workspace_path } from '$lib/workspace_helpers.ts';
 	import { icon_add, icon_delete, icon_directory, icon_workspace } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import PageFooter from '$routes/PageFooter.svelte';
@@ -12,42 +16,84 @@
 	let opening = $state.raw(false);
 	let error_message: string | null = $state.raw(null);
 
+	/**
+	 * Open the workspace at `path` and activate it. Activates by the path the
+	 * daemon returns — it canonicalizes (`/a/./b/` → `/a/b/`, symlinks
+	 * resolved), so the input path may not match the stored workspace.
+	 *
+	 * @returns an error message, or `null` on success
+	 */
+	const open_and_activate = async (path: DiskfileDirectoryPath): Promise<string | null> => {
+		const result = await app.api.workspace_open({ path });
+		if (!result.ok) return result.error.message;
+		// `add` is idempotent — the response handler has usually added it already
+		const workspace = app.workspaces.add(result.value.workspace);
+		app.workspaces.activate(workspace.id);
+		return null;
+	};
+
 	// Auto-open/activate workspace from query param (e.g. from `zzz <dir>` CLI)
 	const workspace_param = $derived(page.url.searchParams.get('workspace'));
 
+	// Non-reactive: each param value is handled once, then stripped from the URL.
+	// Reset when the param clears so navigating to the same value again reopens.
+	let last_handled_param: string | null = null;
+
 	$effect(() => {
-		if (!workspace_param) return;
-		const normalized = workspace_param.endsWith('/') ? workspace_param : workspace_param + '/';
-		const path = DiskfileDirectoryPath.parse(normalized);
-		const existing = app.workspaces.get_by_path(path);
-		if (existing) {
-			app.workspaces.activate(existing.id);
-		} else {
-			void app.api.workspace_open({ path }).then((result) => {
-				if (result.ok) {
-					const ws = app.workspaces.get_by_path(path);
-					if (ws) app.workspaces.activate(ws.id);
-				}
-			});
+		const param = workspace_param;
+		if (param === null) {
+			last_handled_param = null;
+			return;
 		}
+		if (param === last_handled_param) return;
+		last_handled_param = param;
+		// untracked so workspace collection changes (a close, another open)
+		// never re-run this — which would reopen a just-closed workspace or
+		// steal the user's selection
+		untrack(() => void handle_workspace_param(param));
 	});
 
+	const handle_workspace_param = async (param: string): Promise<void> => {
+		// strip first so a reload never re-opens a workspace the user has since closed
+		void goto(resolve('/workspaces'), { replaceState: true, keepFocus: true, noScroll: true });
+
+		const parsed = parse_workspace_path(param);
+		if (!parsed.ok) {
+			error_message = `can't open workspace from URL: ${parsed.message}`;
+			return;
+		}
+		const existing = app.workspaces.get_by_path(parsed.path);
+		if (existing) {
+			app.workspaces.activate(existing.id);
+			return;
+		}
+		const error = await open_and_activate(parsed.path);
+		if (error !== null) error_message = error;
+	};
+
 	const handle_open = async (): Promise<void> => {
+		if (opening) return;
 		const raw = new_path.trim();
 		if (!raw) return;
 
-		opening = true;
 		error_message = null;
-
-		const path = DiskfileDirectoryPath.parse(raw.endsWith('/') ? raw : raw + '/');
-		const result = await app.api.workspace_open({ path });
-
-		if (result.ok) {
-			new_path = '';
-		} else {
-			error_message = result.error.message;
+		const parsed = parse_workspace_path(raw);
+		if (!parsed.ok) {
+			error_message = parsed.message;
+			return;
 		}
-		opening = false;
+
+		opening = true;
+		try {
+			const error = await open_and_activate(parsed.path);
+			if (error === null) {
+				new_path = '';
+			} else {
+				error_message = error;
+			}
+		} finally {
+			opening = false;
+		}
 	};
 
 	const handle_close = async (path: string): Promise<void> => {

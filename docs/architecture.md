@@ -574,6 +574,8 @@ Two separate concerns:
 
 All filesystem operations go through `ScopedFs` (Rust: `crates/zzz_server/src/scoped_fs.rs`). Security: paths validated against allowed roots, symlinks rejected, absolute paths required, parent directories checked recursively.
 
+The allowed roots are the permanent boot-time set (the app directory + scoped dirs) plus one runtime root per open workspace. A path is allowed when any root covers it, and removing a workspace's root never touches a permanent root — so closing a workspace opened on, nested in, or containing the app directory or a scoped dir leaves the access those roots grant intact.
+
 ### Filer
 
 `FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open workspace dir. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored directories (`.git`, `node_modules`, `target`, …) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rescans its root and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed — matching `ScopedFs`.
@@ -640,11 +642,14 @@ separate concerns":
 - **Workspace** (backend-tracked) — an open directory the server watches and
   serves. `workspace_open` validates the path, adds it to `ScopedFs`, starts
   a workspace-lifetime `Filer`, and broadcasts `workspace_changed`;
-  `workspace_close` reverses that (unless the path is one of the boot-time
-  `PUBLIC_ZZZ_SCOPED_DIRS`, whose permanent filers are never torn down).
+  `workspace_close` reverses that — except that the boot-time app directory
+  and `PUBLIC_ZZZ_SCOPED_DIRS` keep their permanent filers and `ScopedFs`
+  roots, so closing a workspace that overlaps one never revokes its access.
   Backend state is an in-memory map — a restart forgets all workspaces.
-  Scoped dirs never appear as workspaces: they're the operator-configured
-  always-on layer; workspaces are the user-opened runtime layer.
+  Scoped dirs aren't listed as workspaces automatically: they're the
+  operator-configured always-on layer; workspaces are the user-opened runtime
+  layer. A scoped dir (or the app directory) can still be opened as a
+  workspace, and closing it leaves its permanent access in place.
 - **Space** (frontend-only) — a named grouping of directory paths
   (`Space.directory_paths`) with no backend counterpart (no `space_*`
   actions). `active_directory_paths` derives to only the paths that resolve
@@ -656,8 +661,12 @@ The two meet in `DeskMenu.svelte`: toggling a directory into the active Space
 first ensures its workspace is open. Opening brand-new directories happens on
 `/workspaces` (path input → `workspace_open`; the `?workspace=<path>` query
 param auto-opens — this is how the CLI's `zzz <dir>` lands the browser on a
-workspace). `workspace_changed` broadcasts keep every connected client's
-`Workspaces` collection in sync.
+workspace). Both paths require an absolute path (a leading `~` isn't
+expanded), activate the workspace by the canonical path `workspace_open`
+returns, and the query param is handled once and then stripped from the URL,
+so a reload doesn't reopen a workspace the user has since closed.
+`workspace_changed` broadcasts keep every connected client's `Workspaces`
+collection in sync.
 
 ## Capabilities
 

@@ -55,6 +55,20 @@ fn to_normalized_dir(path: &Path) -> Result<String, JsonrpcError> {
     Ok(s)
 }
 
+/// Reject an empty or relative workspace path. Without this, `""` would
+/// become the key `/` on close, and a relative path would canonicalize
+/// against the daemon's working directory on open.
+fn require_absolute(path: &str) -> Result<(), JsonrpcError> {
+    if Path::new(path).is_absolute() {
+        Ok(())
+    } else {
+        Err(invalid_params(
+            &format!("path must be absolute: {path:?}"),
+            None,
+        ))
+    }
+}
+
 // -- Handlers ----------------------------------------------------------------
 
 /// `workspace_list` — read-only snapshot of open workspaces.
@@ -99,15 +113,19 @@ pub async fn workspace_open(
         .get("path")
         .and_then(Value::as_str)
         .ok_or_else(|| invalid_params("missing or invalid 'path' parameter", None))?;
+    require_absolute(path)?;
 
-    let canonical = Path::new(path).canonicalize().map_err(|_| {
+    let canonical = tokio::fs::canonicalize(path).await.map_err(|_| {
         let suffix = if path.ends_with('/') { "" } else { "/" };
         internal_error(&format!(
             "failed to open workspace: directory does not exist: {path}{suffix}"
         ))
     })?;
 
-    if !canonical.is_dir() {
+    let is_dir = tokio::fs::metadata(&canonical)
+        .await
+        .is_ok_and(|meta| meta.is_dir());
+    if !is_dir {
         let suffix = if path.ends_with('/') { "" } else { "/" };
         return Err(internal_error(&format!(
             "failed to open workspace: not a directory: {path}{suffix}"
@@ -179,6 +197,11 @@ pub async fn workspace_open(
 }
 
 /// `workspace_close` — close a workspace directory.
+///
+/// `path` is matched against the open workspaces as given (plus a trailing
+/// `/`), then canonicalized — so a non-canonical spelling of an open
+/// workspace (`/a/./b`, a symlinked path) closes it too, while a workspace
+/// whose directory was deleted can still be closed by its stored path.
 pub async fn workspace_close(
     params: Value,
     _ctx: ActionContext<'_>,
@@ -188,36 +211,91 @@ pub async fn workspace_close(
         .get("path")
         .and_then(Value::as_str)
         .ok_or_else(|| invalid_params("missing or invalid 'path' parameter", None))?;
+    require_absolute(path)?;
 
     let mut key = path.to_owned();
     if !key.ends_with('/') {
         key.push('/');
     }
+    // resolved before the lock — only consulted if `key` itself isn't open
+    let canonical_key = tokio::fs::canonicalize(path)
+        .await
+        .ok()
+        .and_then(|canonical| to_normalized_dir(&canonical).ok());
 
-    let _lifecycle = app.workspace_lifecycle.lock().await;
+    let lifecycle = app.workspace_lifecycle.lock().await;
 
-    let removed = {
-        let mut workspaces = app.workspaces.write();
-        workspaces.remove(&key)
-    };
+    let is_open = app.workspaces.read().contains_key(&key);
+    if !is_open && let Some(canonical_key) = canonical_key {
+        key = canonical_key;
+    }
 
-    let Some(workspace) = removed else {
+    let Some(workspace) = release_workspace(&app, &key, &lifecycle).await else {
         return Err(invalid_params(&format!("workspace not open: {path}"), None));
     };
 
-    let is_initial_scoped_dir = app.scoped_dirs.contains(&key);
-    if !is_initial_scoped_dir {
-        app.filer_manager.stop_filer(&key).await;
-        app.scoped_fs.remove_path(Path::new(&key));
-    }
+    broadcast_workspace_closed(&app, &workspace)?;
 
+    Ok(Value::Null)
+}
+
+/// Close every open workspace through the same path as `workspace_close`.
+///
+/// Each workspace's filer is stopped, its `ScopedFs` root removed, and a
+/// `workspace_changed` close broadcast — restoring the boot-time scope
+/// (`zzz_dir` + `scoped_dirs`). Used by the test binary's `_testing_reset`.
+///
+/// Returns the closed workspaces.
+///
+/// # Errors
+///
+/// Returns a JSON-RPC internal error if a notification fails to serialize;
+/// every workspace is released before any broadcast, so the scope is
+/// restored regardless.
+pub async fn workspace_close_all(app: &App) -> Result<Vec<WorkspaceInfo>, JsonrpcError> {
+    let lifecycle = app.workspace_lifecycle.lock().await;
+    let keys: Vec<String> = app.workspaces.read().keys().cloned().collect();
+    let mut closed = Vec::with_capacity(keys.len());
+    for key in keys {
+        if let Some(workspace) = release_workspace(app, &key, &lifecycle).await {
+            closed.push(workspace);
+        }
+    }
+    drop(lifecycle);
+    for workspace in &closed {
+        broadcast_workspace_closed(app, workspace)?;
+    }
+    Ok(closed)
+}
+
+/// Remove the workspace at `key` (normalized, trailing `/`) from the open
+/// map and release its filer and `ScopedFs` root. `None` if it isn't open.
+///
+/// Unconditional on purpose: `FilerManager::stop_filer` keeps permanent
+/// filers and `ScopedFs::remove_path` never removes a permanent root, so a
+/// workspace opened on `zzz_dir` or a scoped dir — or nested in or containing
+/// one — can't revoke the access that root grants.
+///
+/// The `_lifecycle` guard is proof the caller holds
+/// `App::workspace_lifecycle`, keeping the map, scope, and filer in lockstep.
+async fn release_workspace(
+    app: &App,
+    key: &str,
+    _lifecycle: &tokio::sync::MutexGuard<'_, ()>,
+) -> Option<WorkspaceInfo> {
+    let workspace = app.workspaces.write().remove(key)?;
+    app.filer_manager.stop_filer(key).await;
+    app.scoped_fs.remove_path(Path::new(key));
+    Some(workspace)
+}
+
+fn broadcast_workspace_closed(app: &App, workspace: &WorkspaceInfo) -> Result<(), JsonrpcError> {
     let params_value = serde_json::to_value(WorkspaceChangedParams {
         change_type: "close",
-        workspace: &workspace,
+        workspace,
     })
     .map_err(|e| internal_error_with_source("notification params serialize failed", &e))?;
     let notification = notify_to_string("workspace_changed", &params_value);
     app.broadcast(&notification);
-
-    Ok(Value::Null)
+    Ok(())
 }

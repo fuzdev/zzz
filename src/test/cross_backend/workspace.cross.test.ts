@@ -11,7 +11,7 @@
 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { describe, test, inject, assert } from 'vitest';
 import {
@@ -36,6 +36,53 @@ const create_tmp_workspace = async (label: string): Promise<string> => {
 
 const remove_dir = async (path: string): Promise<void> => {
 	await rm(path, { recursive: true, force: true });
+};
+
+const zzz_dir = handle.config.env.PUBLIC_ZZZ_DIR!;
+const scoped_dir = handle.config.env.PUBLIC_ZZZ_SCOPED_DIRS!;
+
+type CrossFixture = Awaited<ReturnType<typeof setup_test>>;
+
+const call = (fixture: CrossFixture, method: string, params?: Record<string, unknown>) =>
+	rpc_call({
+		app: fixture.transport,
+		path: handle.config.rpc_path,
+		method,
+		params,
+		headers: fixture.create_session_headers()
+	});
+
+/** Open `path` as a workspace and return the daemon's canonical workspace path. */
+const open_workspace = async (fixture: CrossFixture, path: string): Promise<string> => {
+	const open = await call(fixture, 'workspace_open', { path });
+	assert.ok(open.ok, `workspace_open failed: ${JSON.stringify(open)}`);
+	const workspace = (open.result as Record<string, unknown>).workspace as Record<string, unknown>;
+	return workspace.path as string;
+};
+
+const close_workspace = async (fixture: CrossFixture, path: string): Promise<void> => {
+	const close = await call(fixture, 'workspace_close', { path });
+	assert.ok(close.ok, `workspace_close failed: ${JSON.stringify(close)}`);
+};
+
+/** Assert `diskfile_update` can write `file_path` (then remove it). */
+const assert_writable = async (fixture: CrossFixture, file_path: string): Promise<void> => {
+	try {
+		const res = await call(fixture, 'diskfile_update', { path: file_path, content: 'still here' });
+		assert.ok(res.ok, `diskfile_update failed for ${file_path}: ${JSON.stringify(res)}`);
+		assert.equal(await readFile(file_path, 'utf-8'), 'still here');
+	} finally {
+		await rm(file_path, { force: true });
+	}
+};
+
+const assert_not_writable = async (fixture: CrossFixture, file_path: string): Promise<void> => {
+	const res = await call(fixture, 'diskfile_update', { path: file_path, content: 'nope' });
+	assert.ok(!res.ok, `expected out-of-scope write to fail: ${file_path}`);
+	assert.ok(
+		res.error.message.startsWith('failed to write file: Path is not allowed'),
+		`unexpected message: ${res.error.message}`
+	);
 };
 
 describe('workspace cross-backend', () => {
@@ -232,7 +279,6 @@ describe('workspace cross-backend', () => {
 
 	test('workspace_open_not_directory', async () => {
 		const fixture = await setup_test();
-		const scoped_dir = handle.config.env.PUBLIC_ZZZ_SCOPED_DIRS!;
 		const file_path = join(scoped_dir, `not_a_dir_${randomUUID()}.txt`);
 		await mkdir(scoped_dir, { recursive: true });
 		try {
@@ -395,6 +441,93 @@ describe('workspace cross-backend', () => {
 				headers: fixture.create_session_headers()
 			}).catch(() => undefined);
 			await remove_dir(tmp_dir);
+		}
+	});
+
+	test('workspace_close_on_zzz_dir_keeps_write_access', async () => {
+		const fixture = await setup_test();
+		await mkdir(zzz_dir, { recursive: true });
+		const path = await open_workspace(fixture, zzz_dir);
+		await close_workspace(fixture, path);
+		await assert_writable(fixture, join(zzz_dir, `after_close_${randomUUID()}.txt`));
+	});
+
+	test('workspace_close_on_scoped_dir_keeps_write_access', async () => {
+		const fixture = await setup_test();
+		await mkdir(scoped_dir, { recursive: true });
+		// a non-canonical spelling opens and closes the canonical workspace
+		const spelled = `${scoped_dir}/./`;
+		const path = await open_workspace(fixture, spelled);
+		assert.ok(!path.endsWith('/./'), `path is canonical: ${path}`);
+		await close_workspace(fixture, spelled);
+
+		const list = await call(fixture, 'workspace_list');
+		assert.ok(list.ok);
+		const workspaces = (list.result as Record<string, unknown>).workspaces as Array<
+			Record<string, unknown>
+		>;
+		assert.ok(!workspaces.some((w) => w.path === path), 'workspace closed');
+
+		await assert_writable(fixture, join(scoped_dir, `after_close_${randomUUID()}.txt`));
+	});
+
+	test('workspace_close_nested_in_scoped_dir_keeps_write_access', async () => {
+		const fixture = await setup_test();
+		const nested = join(scoped_dir, `nested_ws_${randomUUID()}`);
+		await mkdir(nested, { recursive: true });
+		try {
+			const path = await open_workspace(fixture, nested);
+			await close_workspace(fixture, path);
+			await assert_writable(fixture, join(nested, 'after_close.txt'));
+		} finally {
+			await remove_dir(nested);
+		}
+	});
+
+	test('workspace_close_revokes_its_own_scope', async () => {
+		const fixture = await setup_test();
+		const tmp_dir = await create_tmp_workspace('revoke');
+		try {
+			const path = await open_workspace(fixture, tmp_dir);
+			await assert_writable(fixture, join(tmp_dir, 'while_open.txt'));
+			await close_workspace(fixture, path);
+			await assert_not_writable(fixture, join(tmp_dir, 'after_close.txt'));
+		} finally {
+			await remove_dir(tmp_dir);
+		}
+	});
+
+	test('testing_reset_closes_workspaces_and_restores_scope', async () => {
+		const fixture = await setup_test();
+		const tmp_dir = await create_tmp_workspace('reset');
+		try {
+			// left open on purpose — the next reset must release it
+			await open_workspace(fixture, tmp_dir);
+			await open_workspace(fixture, zzz_dir);
+			await assert_writable(fixture, join(tmp_dir, 'while_open.txt'));
+
+			const after_reset = await setup_test();
+			const list = await call(after_reset, 'workspace_list');
+			assert.ok(list.ok);
+			const workspaces = (list.result as Record<string, unknown>).workspaces as Array<unknown>;
+			assert.equal(workspaces.length, 0, 'reset closes every workspace');
+
+			await assert_not_writable(after_reset, join(tmp_dir, 'after_reset.txt'));
+			await assert_writable(after_reset, join(zzz_dir, `after_reset_${randomUUID()}.txt`));
+			await assert_writable(after_reset, join(scoped_dir, `after_reset_${randomUUID()}.txt`));
+		} finally {
+			await remove_dir(tmp_dir);
+		}
+	});
+
+	test('workspace_open_and_close_reject_non_absolute_paths', async () => {
+		const fixture = await setup_test();
+		for (const method of ['workspace_open', 'workspace_close']) {
+			for (const path of ['', '.', 'relative/dir', '~/dev']) {
+				const res = await call(fixture, method, { path });
+				assert.ok(!res.ok, `${method} should reject ${JSON.stringify(path)}`);
+				assert.equal(res.error.code, -32602, `${method} ${JSON.stringify(path)}`);
+			}
 		}
 	});
 });

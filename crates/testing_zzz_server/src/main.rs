@@ -56,8 +56,8 @@ async fn main() {
     eprintln!("testing_zzzd starting (test-mode argon2 active)");
 
     // The `_testing_reset` factory closes over `Arc<App>` so the
-    // domain-state reset closure can clear zzz workspaces + terminals +
-    // the optional scratch dir.
+    // domain-state reset closure can close zzz workspaces + kill terminals +
+    // wipe the optional scratch dir.
     let extra_specs_factory: zzz_server::ExtraActionSpecsFactory = Box::new(|app, runtime| {
         let app_for_reset = Arc::clone(&app);
         // zzz's domain state is in-memory (workspaces + terminals +
@@ -67,25 +67,14 @@ async fn main() {
         let reset_state: ResetStateFn = Arc::new(move |_db| {
             let app = Arc::clone(&app_for_reset);
             Box::pin(async move {
-                // Clear every open workspace. The Rust App stores workspaces
-                // as a plain HashMap (no per-path close hook like the TS
-                // Backend), so a wholesale clear is the right shape — file
-                // watchers attached at boot for `zzz_dir` + `scoped_dirs`
-                // stay running (Permanent lifetime). `parking_lot::RwLock`
-                // is sync — no await.
-                //
-                // Cross-impl note: the TS reset closure
-                // (`testing_server_core.ts:workspace_close`) fires a
-                // `workspace_changed` notification per path as a
-                // side-effect of borrowing the production close path. This
-                // wholesale `.clear()` does not — cross-process tests
-                // don't share WS clients across resets, so the divergence
-                // isn't observable. Revisit (add a per-path `close_workspace`
-                // hook with notification fanout) when a UI consumer closes
-                // individual workspaces from the client, OR a subsystem
-                // (search index, semantic analysis) needs per-path
-                // cleanup cycles.
-                app.workspaces.write().clear();
+                // Close every open workspace through the production close
+                // path: each workspace's filer is stopped, its `ScopedFs`
+                // root removed, and a `workspace_changed` close broadcast —
+                // so neither scope nor watchers leak into the next test (an
+                // out-of-scope assertion can't pass because an earlier test
+                // left a workspace open). The boot-time `zzz_dir` +
+                // `scoped_dirs` roots and filers are permanent and stay.
+                zzz_server::handlers::workspace::workspace_close_all(&app).await?;
 
                 // Kill every active terminal. `kill_all()` drains the
                 // terminal map and waits (bounded) until each child is
