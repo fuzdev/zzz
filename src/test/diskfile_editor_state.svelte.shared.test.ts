@@ -194,19 +194,6 @@ describe('closing a tab (request_close_tab)', () => {
 		assert.strictEqual(editor_state.current_content, 'draft', 'the draft outlives the tab');
 	});
 
-	test('closes a second tab of the file now', () => {
-		const { a, tab, editor_state } = setup_tab();
-		editor_state.current_content = 'draft';
-		const { editor } = app.diskfiles;
-		editor.tabs.close_tab(tab.id);
-		const first = editor.tabs.open_diskfile(a.id);
-		editor.tabs.reopen_last_closed_tab();
-		assert.strictEqual(editor.tabs.items.size, 2);
-
-		assert.isTrue(editor.request_close_tab(first.id));
-		assert.isNull(editor.pending_close_tab_id);
-	});
-
 	test('closing the selected file moves selection to the next tab', () => {
 		const { a, tab } = setup_tab();
 		const b = upsert(PATH_B, 'b');

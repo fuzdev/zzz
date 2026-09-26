@@ -183,7 +183,9 @@ export class MyThing extends Cell<typeof MyThingJson> {
 }
 ```
 
-3. Register in `src/lib/cell_classes.ts`:
+3. Register in `src/lib/cell_classes.ts`, under the same name as the schema's
+   `cell_class_name` (the registry's key — `constructor.name` is mangled by
+   minification):
 
 ```typescript
 export const cell_classes = {

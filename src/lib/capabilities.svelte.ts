@@ -238,6 +238,7 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 			chatgpt: new ProviderCapability({ app: this.app, name: 'chatgpt' }),
 			gemini: new ProviderCapability({ app: this.app, name: 'gemini' })
 		};
+		this.init();
 	}
 
 	/**

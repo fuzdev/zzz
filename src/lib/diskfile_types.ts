@@ -37,19 +37,17 @@ export const SerializableDisknode = z.strictObject({
 });
 export type SerializableDisknode = z.infer<typeof SerializableDisknode>;
 
-// Directly extend the base schema with Diskfile-specific properties
+/**
+ * A file on disk. `path` and `source_dir` are required — a diskfile is
+ * always for one file. `content` is `null` when it wasn't loaded (see
+ * `Diskfile.content_loaded`).
+ */
 export const DiskfileJson = CellJson.extend({
-	path: DiskfilePath.nullable().default(null),
+	path: DiskfilePath,
 	source_dir: DiskfileDirectoryPath,
 	content: z.string().nullable().default(null),
-	dependents: z
-		.array(z.tuple([DiskfilePath, SerializableDisknode]))
-		.nullable()
-		.default(null),
-	dependencies: z
-		.array(z.tuple([DiskfilePath, SerializableDisknode]))
-		.nullable()
-		.default(null)
+	dependents: SerializableDisknode.shape.dependents.default(() => []),
+	dependencies: SerializableDisknode.shape.dependencies.default(() => [])
 }).meta({ cell_class_name: 'Diskfile' });
 export type DiskfileJson = z.infer<typeof DiskfileJson>;
 export type DiskfileJsonInput = z.input<typeof DiskfileJson>;

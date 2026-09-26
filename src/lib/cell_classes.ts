@@ -32,6 +32,11 @@ import { Workspace } from './workspace.svelte.ts';
 import { Workspaces } from './workspaces.svelte.ts';
 import type { Cell } from './cell.svelte.ts';
 
+/**
+ * The registered cell classes, keyed by the name schemas refer to them by
+ * (their `cell_class_name` meta) — the registry's key, never `constructor.name`,
+ * which a minified build mangles.
+ */
 export const cell_classes = {
 	Parts,
 	Capabilities,
@@ -82,7 +87,7 @@ export type CellRegistryMap = {
 export const is_cell_type = <K extends CellClassNames>(
 	cell: Cell<any> | null | undefined,
 	class_name: K
-): cell is CellRegistryMap[K] => cell?.constructor.name === class_name;
+): cell is CellRegistryMap[K] => cell instanceof cell_classes[class_name];
 
 /**
  * Get a list of all registered cell class names.

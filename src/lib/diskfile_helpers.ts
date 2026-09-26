@@ -28,6 +28,28 @@ export const DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER = `[${DISKFILE_CONTENT_NOT_
 export const is_path_absolute = (path: string): boolean => path[0] === '/';
 
 /**
+ * Normalizes an absolute path the way the backend's `ScopedFs` does before
+ * touching the filesystem, without filesystem access: drops empty and `.`
+ * segments and any trailing `/`, and resolves `..` against the preceding
+ * segment (never above `/`). The filer reports paths in this form.
+ *
+ * @param path - an absolute path
+ * @returns the normalized path, `/` for the root
+ */
+export const normalize_path = (path: string): string => {
+	const segments: Array<string> = [];
+	for (const segment of path.split('/')) {
+		if (segment === '' || segment === '.') continue;
+		if (segment === '..') {
+			segments.pop();
+		} else {
+			segments.push(segment);
+		}
+	}
+	return '/' + segments.join('/');
+};
+
+/**
  * Formats `path` for display relative to the directory `parent`: the part
  * after `parent` when `path` is inside it, else `path` unchanged, so a path
  * outside `parent` stays absolute rather than losing its leading `/`.

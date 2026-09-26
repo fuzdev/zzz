@@ -33,7 +33,7 @@ export type PartJsonBase = z.infer<typeof PartJsonBase>;
 export const TextPartJson = PartJsonBase.extend({
 	type: z.literal('text').default('text'),
 	content: z.string().default('')
-});
+}).meta({ cell_class_name: 'TextPart' });
 export type TextPartJson = z.infer<typeof TextPartJson>;
 export type TextPartJsonInput = z.input<typeof TextPartJson>;
 
@@ -43,14 +43,12 @@ export const DiskfilePartJson = PartJsonBase.extend({
 	path: DiskfilePath.nullable().default(null),
 	has_xml_tag: PartJsonBase.shape.has_xml_tag.default(true) // Override to make true only for diskfiles
 	// `content` is on disk at `path`, not in the serialized representation
-});
+}).meta({ cell_class_name: 'DiskfilePart' });
 export type DiskfilePartJson = z.infer<typeof DiskfilePartJson>;
 export type DiskfilePartJsonInput = z.input<typeof DiskfilePartJson>;
 
 /** Union of all part types for deserialization. */
-export const PartJson = z
-	.discriminatedUnion('type', [TextPartJson, DiskfilePartJson])
-	.meta({ cell_class_name: 'Part' });
+export const PartJson = z.discriminatedUnion('type', [TextPartJson, DiskfilePartJson]);
 export type PartJson = z.infer<typeof PartJson>;
 export type PartJsonInput = z.input<typeof PartJson>;
 

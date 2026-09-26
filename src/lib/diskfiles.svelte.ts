@@ -20,6 +20,7 @@ import {
 	DISKFILE_CONTENT_NOT_LOADED_MESSAGE,
 	ERROR_CONTENT_NOT_LOADED,
 	disknode_to_diskfile_json,
+	normalize_path,
 	to_relative_path
 } from './diskfile_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
@@ -154,16 +155,31 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		}
 	}
 
-	add(json: DiskfileJsonInput, auto_select: boolean = true): Diskfile {
+	/**
+	 * Adds a diskfile. It isn't selected: a file appearing on disk — seeded by
+	 * a snapshot, or created by another tool — never moves the selection or
+	 * opens a tab. Only `create_file` selects the file it creates.
+	 */
+	add(json: DiskfileJsonInput): Diskfile {
 		const diskfile = new Diskfile({ app: this.app, json });
 		this.items.add(diskfile);
-
-		if (auto_select && this.selected_file_id === null) {
-			this.select(diskfile.id);
+		if (diskfile.path === this.#select_on_arrival) {
+			this.#select_on_arrival = null;
+			this.select(diskfile.id, true);
 		}
-
 		return diskfile;
 	}
+
+	/**
+	 * The file `create_file` created whose `filer_change` hasn't arrived yet,
+	 * selected when it does. Not reactive. Dropped when it's selected, when
+	 * the user selects anything else (`select`, or a tab change through
+	 * `DiskfilesEditor` — `follow_selected_tab`), when its workspace is removed
+	 * (`handle_workspace_removed`), or by the next `create_file` — so a file the
+	 * filer never reports (say under `node_modules/`) can't take the selection
+	 * later.
+	 */
+	#select_on_arrival: DiskfilePath | null = null;
 
 	/**
 	 * The app-level editing state of `diskfile` (its draft, history, and save
@@ -384,7 +400,9 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Creates a new file in `new_files_dir` — never overwriting one: the
 	 * backend's `diskfile_create` creates the final name exclusively, so an
-	 * existing file (indexed or not) is left untouched.
+	 * existing file (indexed or not) is left untouched. The new file is
+	 * selected and opened in a permanent tab, like VS Code's new file — now if
+	 * its `filer_change` already arrived, else when it does.
 	 *
 	 * @param filename - the file's path relative to `new_files_dir`
 	 * @param content - the new file's content
@@ -396,6 +414,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		if (!dir) {
 			throw new Error('cannot create file: no workspace is open');
 		}
+		this.#select_on_arrival = null;
 
 		// `dir` has a trailing slash (`DiskfileDirectoryPath`), so strip any leading one from `filename`
 		const path = DiskfilePath.parse(`${dir}${strip_start(filename, '/')}`);
@@ -407,6 +426,34 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 				reason === 'already_exists' ? `${filename} already exists` : result.error.message
 			);
 		}
+
+		// the backend normalizes the path, and the filer reports it that way
+		const created_path = DiskfilePath.parse(normalize_path(path));
+		const created = this.get_by_path(created_path);
+		if (created) {
+			this.select(created.id, true);
+		} else {
+			this.#select_on_arrival = created_path;
+		}
+	}
+
+	/**
+	 * Makes the selected file the editor's selected tab's (or none) after a
+	 * user-driven tab change — selecting, opening, closing the selected tab,
+	 * reopening, or navigating back/forward (the `DiskfilesEditor` methods) —
+	 * and drops a pending `create_file` selection, since the user has moved on.
+	 */
+	follow_selected_tab(): void {
+		this.#select_on_arrival = null;
+		this.selected_file_id = this.editor.tabs.selected_diskfile_id;
+	}
+
+	/**
+	 * Called when the workspace at `path` is removed: a file created there that
+	 * hasn't arrived won't be selected if it arrives later.
+	 */
+	handle_workspace_removed(path: DiskfileDirectoryPath): void {
+		if (this.#select_on_arrival?.startsWith(path)) this.#select_on_arrival = null;
 	}
 
 	/**
@@ -447,6 +494,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * If `open_not_preview` is `true`, opens as a permanent tab, otherwise previews.
 	 */
 	select(id: Uuid | null | undefined, open_not_preview: boolean = false): void {
+		this.#select_on_arrival = null;
 		if (id === undefined) {
 			this.select_next();
 		} else {

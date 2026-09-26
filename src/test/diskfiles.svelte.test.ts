@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, beforeEach, describe, assert } from 'vitest';
+import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import {
 	DiskfilePath,
@@ -164,6 +165,7 @@ describe('delete cleans up editor state', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		const a = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(a);
+		app.diskfiles.select(a.id);
 		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
 
 		filer_change('delete', PATH_A);
@@ -189,10 +191,7 @@ describe('delete cleans up editor state', () => {
 
 		tabs.reopen_last_closed_tab();
 		assert.isUndefined(tabs.by_diskfile_id.get(b.id));
-		assert.deepEqual(tabs.navigate_to_tab(b_tab.id), {
-			resulting_tab_id: null,
-			created_preview: false
-		});
+		assert.isNull(tabs.navigate_to_tab(b_tab.id));
 	});
 
 	test('keeps unrelated selection and tabs', () => {
@@ -396,28 +395,6 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.deepEqual(writes, [[PATH_B, 'b']]);
 	});
 
-	test('a file open in two tabs is kept until its last tab closes', () => {
-		const { b, tabs } = setup_dirty();
-		const first = tabs.by_diskfile_id.get(b.id);
-		assert.ok(first);
-		tabs.close_tab(first.id);
-		tabs.open_diskfile(b.id);
-		tabs.reopen_last_closed_tab(); // a second tab for b
-		const b_tabs = tabs.ordered_tabs.filter((t) => t.diskfile_id === b.id);
-		assert.strictEqual(b_tabs.length, 2);
-
-		filer_change('delete', PATH_B);
-		assert.isTrue(b.deleted_on_disk);
-
-		tabs.close_tab(b_tabs[0]!.id);
-		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
-
-		app.diskfiles.get_editor_state(b).discard_draft();
-		tabs.close_tab(b_tabs[1]!.id);
-		assert.isUndefined(app.diskfiles.get_by_path(PATH_B));
-		assert.isUndefined(app.diskfiles.find_editor_state(b.id));
-	});
-
 	test('reusing a preview tab away from the file keeps its draft', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A, 'a'), create_disknode(PATH_B, 'b')]);
 		const a = app.diskfiles.get_by_path(PATH_A);
@@ -574,6 +551,257 @@ describe('create_file', () => {
 		);
 		assert.instanceOf(error, Error);
 		assert.strictEqual(error.message, 'taken.txt already exists');
+	});
+});
+
+describe('selection on add', () => {
+	test('a file seeded by a snapshot is not selected', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
+
+		assert.isNull(app.diskfiles.selected_file_id);
+		assert.strictEqual(app.diskfiles.editor.tabs.items.size, 0);
+	});
+
+	test('a file another tool creates is not selected, with nothing selected', () => {
+		filer_change('add', PATH_A);
+
+		assert.isNull(app.diskfiles.selected_file_id);
+		assert.strictEqual(app.diskfiles.editor.tabs.items.size, 0);
+	});
+
+	test('a file another tool creates leaves the selection and tabs alone', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A)]);
+		const a = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(a);
+		app.diskfiles.select(a.id);
+		const { tabs } = app.diskfiles.editor;
+		const tab = tabs.selected_tab;
+		assert.ok(tab);
+
+		filer_change('add', PATH_B);
+
+		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		assert.strictEqual(tabs.selected_tab, tab);
+		assert.deepEqual(tabs.ordered_tabs, [tab]);
+	});
+});
+
+describe('reopening a closed tab', () => {
+	test('selects the reopened file', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
+		const a = app.diskfiles.get_by_path(PATH_A);
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(a && b);
+		const { editor } = app.diskfiles;
+		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(b.id, true);
+		const b_tab = editor.tabs.by_diskfile_id.get(b.id);
+		assert.ok(b_tab);
+		editor.close_tab(b_tab.id);
+		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+
+		editor.reopen_last_closed_tab();
+
+		assert.strictEqual(editor.tabs.selected_diskfile_id, b.id);
+		assert.strictEqual(app.diskfiles.selected_file_id, b.id);
+	});
+});
+
+describe('back/forward navigation', () => {
+	test('selects the file of the tab navigated to', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
+		const a = app.diskfiles.get_by_path(PATH_A);
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(a && b);
+		const { editor } = app.diskfiles;
+		app.diskfiles.select(a.id, true);
+		const a_tab = editor.tabs.selected_tab;
+		assert.ok(a_tab);
+		app.diskfiles.select(b.id, true);
+
+		assert.strictEqual(editor.navigate_to_tab(a_tab.id), a_tab.id);
+
+		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+	});
+
+	test('a closed tab navigated to selects its file in a new preview', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
+		const a = app.diskfiles.get_by_path(PATH_A);
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(a && b);
+		const { editor } = app.diskfiles;
+		app.diskfiles.select(a.id, true);
+		const a_tab = editor.tabs.selected_tab;
+		assert.ok(a_tab);
+		app.diskfiles.select(b.id, true);
+		editor.close_tab(a_tab.id);
+
+		const tab_id = editor.navigate_to_tab(a_tab.id);
+
+		assert.ok(tab_id);
+		assert.strictEqual(editor.tabs.items.by_id.get(tab_id)?.diskfile_id, a.id);
+		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+	});
+
+	test('an unknown tab leaves the selection alone', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A)]);
+		const a = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(a);
+		app.diskfiles.select(a.id, true);
+
+		assert.isNull(app.diskfiles.editor.navigate_to_tab(create_uuid()));
+
+		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+	});
+});
+
+describe('create_file selects the new file', () => {
+	const setup = (on_create?: () => void) => {
+		(app as any).api = {
+			diskfile_create: () => {
+				on_create?.();
+				return Promise.resolve({ ok: true, value: null });
+			}
+		};
+		app.workspaces.add({ path: SOURCE_DIR });
+		app.diskfiles.add_initial([create_disknode(PATH_A)]);
+		const a = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(a);
+		app.diskfiles.select(a.id);
+		return a;
+	};
+
+	test('when its `filer_change` arrives after the response', async () => {
+		const a = setup();
+
+		await app.diskfiles.create_file('b.txt');
+		assert.strictEqual(app.diskfiles.selected_file_id, a.id, 'not there yet');
+
+		filer_change('add', PATH_C);
+		assert.strictEqual(app.diskfiles.selected_file_id, a.id, 'an unrelated file');
+
+		filer_change('add', PATH_B);
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(b);
+		assert.strictEqual(app.diskfiles.selected_file_id, b.id);
+		const { tabs } = app.diskfiles.editor;
+		assert.strictEqual(tabs.selected_diskfile_id, b.id);
+		assert.notStrictEqual(tabs.preview_tab_id, tabs.selected_tab_id, 'a permanent tab');
+	});
+
+	test('when its `filer_change` arrived before the response', async () => {
+		setup(() => filer_change('add', PATH_B));
+
+		await app.diskfiles.create_file('b.txt');
+
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(b);
+		assert.strictEqual(app.diskfiles.selected_file_id, b.id);
+		assert.strictEqual(app.diskfiles.editor.tabs.selected_diskfile_id, b.id);
+	});
+
+	test('only once — a later re-add of the path by another tool does not select it', async () => {
+		const a = setup(() => filer_change('add', PATH_B));
+		await app.diskfiles.create_file('b.txt');
+		app.diskfiles.select(a.id);
+
+		filer_change('delete', PATH_B);
+		filer_change('add', PATH_B);
+
+		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+	});
+
+	for (const filename of ['./b.txt', 'sub/../b.txt', '/b.txt', 'sub//../b.txt']) {
+		test(`a name the backend normalizes (${filename}) is selected by its normalized path`, async () => {
+			setup();
+
+			await app.diskfiles.create_file(filename);
+			filer_change('add', PATH_B);
+
+			assert.strictEqual(app.diskfiles.selected_file_id, app.diskfiles.get_by_path(PATH_B)?.id);
+		});
+	}
+
+	test('selecting another file drops the pending selection', async () => {
+		const a = setup();
+		await app.diskfiles.create_file('b.txt');
+
+		app.diskfiles.select(a.id);
+		filer_change('add', PATH_B);
+
+		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+	});
+
+	test('a tab change through the editor drops the pending selection', async () => {
+		const scenarios: Array<[string, (a_tab_id: Uuid, c_tab_id: Uuid) => void]> = [
+			['select', (a_tab_id) => app.diskfiles.editor.select_tab(a_tab_id)],
+			['open', (a_tab_id) => app.diskfiles.editor.open_tab(a_tab_id)],
+			['navigate', (a_tab_id) => app.diskfiles.editor.navigate_to_tab(a_tab_id)],
+			['close the selected tab', (_, c_tab_id) => app.diskfiles.editor.close_tab(c_tab_id)],
+			[
+				'reopen',
+				(_, c_tab_id) => {
+					app.diskfiles.editor.tabs.close_tab(c_tab_id);
+					app.diskfiles.editor.reopen_last_closed_tab();
+				}
+			]
+		];
+		for (const [name, change_tab] of scenarios) {
+			app.dispose();
+			app = monkeypatch_zzz_for_tests(new Frontend());
+			setup();
+			const a_tab = app.diskfiles.editor.tabs.selected_tab;
+			app.diskfiles.add_initial([create_disknode(PATH_C)]);
+			const c = app.diskfiles.get_by_path(PATH_C);
+			assert.ok(a_tab && c);
+			app.diskfiles.select(c.id, true);
+			const c_tab = app.diskfiles.editor.tabs.selected_tab;
+			assert.ok(c_tab);
+			await app.diskfiles.create_file('b.txt');
+
+			change_tab(a_tab.id, c_tab.id);
+			const selected = app.diskfiles.selected_file_id;
+			filer_change('add', PATH_B);
+
+			assert.strictEqual(app.diskfiles.selected_file_id, selected, name);
+			assert.notStrictEqual(selected, app.diskfiles.get_by_path(PATH_B)?.id, name);
+		}
+	});
+
+	test('removing its workspace drops the pending selection', async () => {
+		const a = setup();
+		await app.diskfiles.create_file('b.txt');
+
+		app.workspaces.remove_by_path(SOURCE_DIR);
+		filer_change('add', PATH_B);
+
+		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+	});
+
+	test('the next create replaces the pending selection', async () => {
+		setup();
+		await app.diskfiles.create_file('b.txt');
+		await app.diskfiles.create_file('c.txt');
+
+		filer_change('add', PATH_B);
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.notStrictEqual(app.diskfiles.selected_file_id, b?.id);
+
+		filer_change('add', PATH_C);
+		assert.strictEqual(app.diskfiles.selected_file_id, app.diskfiles.get_by_path(PATH_C)?.id);
+	});
+
+	test('a failed create selects nothing', async () => {
+		const a = setup();
+		(app as any).api = {
+			diskfile_create: () =>
+				Promise.resolve({ ok: false, error: { code: -32603, message: 'nope' } })
+		};
+
+		await app.diskfiles.create_file('b.txt').catch(() => {});
+		filer_change('add', PATH_B);
+
+		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
 	});
 });
 

@@ -156,6 +156,7 @@ export class Workspaces extends Cell<typeof WorkspacesJson> {
 		if (!workspace) return;
 		for (const paths of this.#change_trackers) paths.add(workspace.path);
 		this.items.remove(id);
+		this.app.diskfiles.handle_workspace_removed(workspace.path);
 		if (id === this.active_id) {
 			const next = this.items.by_id.values().next();
 			this.active_id = next.value?.id ?? null;

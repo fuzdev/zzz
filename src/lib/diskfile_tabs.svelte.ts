@@ -33,7 +33,9 @@ export type DiskfileTabsOptions = CellOptions<typeof DiskfileTabsJson>;
 export const DISKFILE_TABS_CLOSED_MAX = 50;
 
 /**
- * Manages tabs for diskfiles in the editor with preview behavior.
+ * Manages tabs for diskfiles in the editor with preview behavior. A diskfile
+ * has at most one tab (`by_diskfile_id`): opening, previewing, reopening, and
+ * navigating back to a file that's open select its tab.
  */
 export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	selected_tab_id: Uuid | null = $state.raw()!;
@@ -403,31 +405,31 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	}
 
 	/**
-	 * Navigates to a tab by id. If the tab doesn't exist but was previously closed,
-	 * creates a preview tab for that diskfile.
+	 * Navigates to a tab by id. If the tab doesn't exist but was previously
+	 * closed, selects its diskfile's tab if the file is open again, else
+	 * previews the diskfile.
 	 *
 	 * @param tab_id - the tab id to navigate to
-	 * @returns object containing the resulting tab id and a boolean indicating if a new tab was created
+	 * @returns the id of the resulting tab, `null` for an unknown tab
 	 */
-	navigate_to_tab(tab_id: Uuid): { resulting_tab_id: Uuid | null; created_preview: boolean } {
+	navigate_to_tab(tab_id: Uuid): Uuid | null {
 		console.log('DiskfileTabs.navigate_to_tab', { tab_id });
 
 		// If the tab still exists, just select it
 		if (this.items.by_id.has(tab_id)) {
 			this.select_tab(tab_id);
-			return { resulting_tab_id: tab_id, created_preview: false };
+			return tab_id;
 		}
 
-		// If the tab was closed but we know what diskfile it pointed to, create a preview
+		// If the tab was closed but we know what diskfile it pointed to, select or preview it
 		const diskfile_id = this.closed_tab_diskfiles.get(tab_id);
-		if (diskfile_id) {
-			// Create a new preview tab for this diskfile
-			const preview_tab = this.preview_diskfile(diskfile_id);
-			return { resulting_tab_id: preview_tab.id, created_preview: true };
+		if (!diskfile_id) return null;
+		const open_tab = this.by_diskfile_id.get(diskfile_id);
+		if (open_tab) {
+			this.select_tab(open_tab.id);
+			return open_tab.id;
 		}
-
-		// Tab doesn't exist and we don't know what diskfile it was for
-		return { resulting_tab_id: null, created_preview: false };
+		return this.preview_diskfile(diskfile_id).id;
 	}
 
 	/**
@@ -452,36 +454,33 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	}
 
 	/**
-	 * Reopens the last closed tab.
+	 * Reopens the most recently closed tab whose file isn't open, as a
+	 * permanent tab, and selects it. Like VS Code's "reopen closed editor", a
+	 * closed tab whose file is open again (in any tab) is skipped and dropped,
+	 * so a reopen never duplicates a tab.
+	 *
+	 * @returns the reopened tab, or `null` when there's none to reopen
 	 */
-	reopen_last_closed_tab(): void {
+	reopen_last_closed_tab(): DiskfileTab | null {
 		console.log('DiskfileTabs.reopen_last_closed_tab');
-		if (this.recently_closed_tabs.length > 0) {
-			const tab_to_reopen = this.recently_closed_tabs.pop();
-			if (tab_to_reopen) {
-				// Recreate the tab with the same properties
-				const new_tab = this.#create_tab(tab_to_reopen.diskfile_id);
-
-				// Always select the reopened tab
-				this.selected_tab_id = new_tab.id;
-				this.#update_tab_history(new_tab.id);
-			}
+		let closed_tab: DiskfileTab | undefined;
+		while ((closed_tab = this.recently_closed_tabs.pop())) {
+			if (this.by_diskfile_id.has(closed_tab.diskfile_id)) continue;
+			const new_tab = this.#create_tab(closed_tab.diskfile_id);
+			this.select_tab(new_tab.id);
+			return new_tab;
 		}
+		return null;
 	}
 
 	/**
-	 * Removes every trace of a diskfile that no longer exists: closes its tabs
+	 * Removes every trace of a diskfile that no longer exists: closes its tab
 	 * (selection moves as with `close_tab`) and drops it from the reopen and
 	 * back-navigation history, so neither can resurrect a tab pointing at it.
 	 */
 	remove_diskfile(diskfile_id: Uuid): void {
-		const tab_ids: Array<Uuid> = [];
-		for (const tab of this.items.by_id.values()) {
-			if (tab.diskfile_id === diskfile_id) tab_ids.push(tab.id);
-		}
-		for (const tab_id of tab_ids) {
-			this.close_tab(tab_id);
-		}
+		const tab = this.by_diskfile_id.get(diskfile_id);
+		if (tab) this.close_tab(tab.id);
 
 		this.recently_closed_tabs = this.recently_closed_tabs.filter(
 			(tab) => tab.diskfile_id !== diskfile_id

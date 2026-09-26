@@ -107,6 +107,7 @@ export interface FrontendOptions extends OmitStrict<CellOptions<typeof FrontendJ
 	models?: Array<ModelJsonInput>;
 	bots?: ZzzOptions['bots'];
 	providers?: Array<ProviderJsonInput>;
+	/** Cell classes to register, keyed by their `cell_class_name` (default `cell_classes`). */
 	cell_classes?: Record<string, ClassConstructor<Cell<any>>>;
 	action_specs?: Array<ActionSpecUnion>;
 	action_handlers?: FrontendActionHandlers;
@@ -270,8 +271,8 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 		// Register cell classes if provided, otherwise use the default
 		const cells_to_register = options.cell_classes || cell_classes;
-		for (const constructor of Object.values(cells_to_register)) {
-			this.cell_registry.register(constructor);
+		for (const [class_name, constructor] of Object.entries(cells_to_register)) {
+			this.cell_registry.register(class_name, constructor);
 		}
 
 		// Initialize cell collections - the frontend is the root cell

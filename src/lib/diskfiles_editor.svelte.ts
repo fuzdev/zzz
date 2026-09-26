@@ -97,11 +97,25 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	}
 
 	/**
-	 * Selects a tab by id.
+	 * Selects a tab by id, and its file.
 	 */
 	select_tab(tab_id: Uuid): void {
 		console.log('DiskfilesEditor.select_tab', { tab_id });
 		this.tabs.select_tab(tab_id);
+		this.app.diskfiles.follow_selected_tab();
+	}
+
+	/**
+	 * Navigates back or forward to a tab (see `DiskfileTabs.navigate_to_tab`),
+	 * and selects its file.
+	 *
+	 * @returns the id of the tab navigated to, `null` if there's none
+	 */
+	navigate_to_tab(tab_id: Uuid): Uuid | null {
+		console.log('DiskfilesEditor.navigate_to_tab', { tab_id });
+		const resulting_tab_id = this.tabs.navigate_to_tab(tab_id);
+		if (resulting_tab_id) this.app.diskfiles.follow_selected_tab();
+		return resulting_tab_id;
 	}
 
 	/**
@@ -121,25 +135,23 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 		}
 		this.tabs.close_tab(tab_id);
 		if (was_selected_file && diskfiles.selected_file_id === tab.diskfile_id) {
-			diskfiles.selected_file_id = this.tabs.selected_diskfile_id;
+			diskfiles.follow_selected_tab();
 		}
 	}
 
 	/**
-	 * Closes a tab as the user asked, like VS Code: the last tab of a file with a
+	 * Closes a tab as the user asked, like VS Code: the tab of a file with a
 	 * draft isn't closed yet — it becomes `pending_close_tab_id`, for the user
-	 * to save, not save (`DiskfileEditorState.discard_draft`), or cancel.
+	 * to save, not save (`DiskfileEditorState.discard_draft`), or cancel. (A
+	 * file has at most one tab — see `DiskfileTabs`.)
 	 *
 	 * @returns whether the tab closed now
 	 */
 	request_close_tab(tab_id: Uuid): boolean {
 		const tab = this.tabs.items.by_id.get(tab_id);
 		if (!tab) return false;
-		const last_tab = this.tabs.ordered_tabs.every(
-			(t) => t.id === tab_id || t.diskfile_id !== tab.diskfile_id
-		);
 		const draft = this.app.diskfiles.find_editor_state(tab.diskfile_id)?.history.draft_entry;
-		if (last_tab && draft) {
+		if (draft) {
 			this.#pending_close = { tab_id, draft_id: draft.id, cancelled: false };
 			return false;
 		}
@@ -154,11 +166,12 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	}
 
 	/**
-	 * Reopens the last closed tab.
+	 * Reopens the last closed tab whose file isn't open (see
+	 * `DiskfileTabs.reopen_last_closed_tab`), and selects its file.
 	 */
 	reopen_last_closed_tab(): void {
 		console.log('DiskfilesEditor.reopen_last_closed_tab');
-		this.tabs.reopen_last_closed_tab();
+		if (this.tabs.reopen_last_closed_tab()) this.app.diskfiles.follow_selected_tab();
 	}
 
 	/**
@@ -170,11 +183,13 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	}
 
 	/**
-	 * Opens a tab by id — see `DiskfileTabs.open_tab`.
+	 * Opens a tab by id — see `DiskfileTabs.open_tab` — and selects its file.
 	 */
 	open_tab(tab_id: Uuid): void {
 		console.log('DiskfilesEditor.open_tab', { tab_id });
+		if (!this.tabs.items.by_id.has(tab_id)) return;
 		this.tabs.open_tab(tab_id);
+		this.app.diskfiles.follow_selected_tab();
 	}
 
 	/**
@@ -193,17 +208,6 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 		const tab = this.tabs.by_diskfile_id.get(diskfile_id);
 		if (tab?.id === this.tabs.preview_tab_id) {
 			this.tabs.preview_tab_id = null; // Convert to permanent by removing preview status
-		}
-	}
-
-	/**
-	 * Syncs the selected diskfile in diskfiles with the selected tab.
-	 */
-	sync_selected_file(): void {
-		console.log('DiskfilesEditor.sync_selected_file');
-		const selected_diskfile_id = this.tabs.selected_diskfile_id;
-		if (selected_diskfile_id) {
-			this.app.diskfiles.selected_file_id = selected_diskfile_id;
 		}
 	}
 

@@ -47,10 +47,11 @@ export class CellRegistry {
 	}
 
 	/**
-	 * Register a cell class with the registry.
+	 * Register a cell class with the registry under `class_name` — the name
+	 * schemas refer to it by (their `cell_class_name` meta). It's explicit, not
+	 * `constructor.name`, which a minified build mangles.
 	 */
-	register(constructor: ClassConstructor<Cell>): void {
-		const class_name = constructor.name;
+	register(class_name: string, constructor: ClassConstructor<Cell>): void {
 		if (DEV && this.#constructors.has(class_name)) {
 			console.error(`Class "${class_name}" is already registered, overwriting.`);
 		}

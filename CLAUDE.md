@@ -505,7 +505,9 @@ connection registry — see the `broadcast` / notification builders in
 
 - Always use `z.strictObject()` (not `z.object()`) for action specs — unknown keys are rejected
 - Cell schemas use `CellJson.extend({...})` with `.meta({cell_class_name: 'ClassName'})`
-- Every schema field must have a `.default()` for Cell instantiation without full JSON
+- Every schema field must have a `.default()` for Cell instantiation without full JSON — except identity fields a cell can't exist without (e.g. `Diskfile.path`/`source_dir`, `DiskfileTab.diskfile_id`, `Workspace.path`, `Model.name`, `Action.method`, `Turn.role`), which stay required rather than defaulting to a value the class type doesn't allow
+- Schema and class types agree: a field typed non-null in the class never defaults to `null` in the schema
+- A registered class's schema names it: `.meta({cell_class_name})` equals its key in `cell_classes.ts` (the registry's key — never `constructor.name`, which minification mangles)
 
 ### State Class Rules
 

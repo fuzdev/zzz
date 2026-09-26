@@ -32,8 +32,8 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 	);
 
 	// TODO @many add UI support for deps for module diskfiles (TS, Svelte, etc)
-	dependents: Array<[DiskfilePath, SerializableDisknode]> = $state.raw()!; // TODO @many these need to be null for unknown file types (support JS modules, etc)
-	dependencies: Array<[DiskfilePath, SerializableDisknode]> = $state.raw()!; // TODO @many these need to be null for unknown file types (support JS modules, etc)
+	dependents: SerializableDisknode['dependents'] = $state.raw()!; // TODO @many these need to be null for unknown file types (support JS modules, etc)
+	dependencies: SerializableDisknode['dependencies'] = $state.raw()!; // TODO @many these need to be null for unknown file types (support JS modules, etc)
 
 	readonly dependencies_count: number = $derived(this.dependencies.length);
 	readonly dependents_count: number = $derived(this.dependents.length);

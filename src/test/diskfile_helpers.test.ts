@@ -1,6 +1,6 @@
 import { test, describe, assert } from 'vitest';
 
-import { to_relative_path } from '$lib/diskfile_helpers.ts';
+import { normalize_path, to_relative_path } from '$lib/diskfile_helpers.ts';
 
 describe('to_relative_path', () => {
 	test('a path inside the parent is relative to it', () => {
@@ -41,4 +41,25 @@ describe('to_relative_path', () => {
 	test('an empty parent leaves the path unchanged', () => {
 		assert.strictEqual(to_relative_path('/home/u/a.ts', ''), '/home/u/a.ts');
 	});
+});
+
+describe('normalize_path', () => {
+	// the backend's `ScopedFs` normalization, which the filer reports paths in
+	const cases: Array<[string, string]> = [
+		['/ws/a.txt', '/ws/a.txt'],
+		['/ws/./a.txt', '/ws/a.txt'],
+		['/ws/sub/../a.txt', '/ws/a.txt'],
+		['/ws//a.txt', '/ws/a.txt'],
+		['/ws/a.txt/', '/ws/a.txt'],
+		['/ws/sub/./deeper/../../a.txt', '/ws/a.txt'],
+		['/ws/../../../a.txt', '/a.txt'],
+		['/..', '/'],
+		['/', '/'],
+		['/ws/..a/b..', '/ws/..a/b..']
+	];
+	for (const [input, expected] of cases) {
+		test(`${input} → ${expected}`, () => {
+			assert.strictEqual(normalize_path(input), expected);
+		});
+	}
 });

@@ -70,19 +70,12 @@
 		history_stack = remaining_history;
 
 		// Navigate to previous tab
-		const result = editor.tabs.navigate_to_tab(previous_id);
-		if (result.resulting_tab_id) {
-			// If we got back a different tab id (preview was created),
-			// update the current_id and replace the id in the future stack
-			if (result.resulting_tab_id !== previous_id) {
-				current_id = result.resulting_tab_id;
-
-				// Replace previous_id with the new tab id in any history stacks
-				future_stack = future_stack.map((id) =>
-					id === previous_id ? result.resulting_tab_id! : id
-				);
-			} else {
-				current_id = result.resulting_tab_id;
+		const resulting_tab_id = editor.navigate_to_tab(previous_id);
+		if (resulting_tab_id) {
+			current_id = resulting_tab_id;
+			// a closed tab resolves to a different tab id — replace it in the future stack
+			if (resulting_tab_id !== previous_id) {
+				future_stack = future_stack.map((id) => (id === previous_id ? resulting_tab_id : id));
 			}
 		}
 	};
@@ -105,17 +98,12 @@
 		future_stack = remaining_future;
 
 		// Navigate to next tab
-		const result = editor.tabs.navigate_to_tab(next_id);
-		if (result.resulting_tab_id) {
-			// If we got back a different tab id (preview was created),
-			// update the current_id and replace the id in the history stack
-			if (result.resulting_tab_id !== next_id) {
-				current_id = result.resulting_tab_id;
-
-				// Replace next_id with the new tab id in any history stacks
-				history_stack = history_stack.map((id) => (id === next_id ? result.resulting_tab_id! : id));
-			} else {
-				current_id = result.resulting_tab_id;
+		const resulting_tab_id = editor.navigate_to_tab(next_id);
+		if (resulting_tab_id) {
+			current_id = resulting_tab_id;
+			// a closed tab resolves to a different tab id — replace it in the history stack
+			if (resulting_tab_id !== next_id) {
+				history_stack = history_stack.map((id) => (id === next_id ? resulting_tab_id : id));
 			}
 		}
 	};

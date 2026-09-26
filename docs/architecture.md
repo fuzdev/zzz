@@ -269,7 +269,12 @@ constructor(options: ThreadOptions) {
 
 ### Cell Registry
 
-All cell classes are registered in `cell_classes.ts`. Frontend iterates and registers them:
+All cell classes are registered in `cell_classes.ts`, keyed by the name
+schemas refer to them by — each class's schema carries it as
+`.meta({cell_class_name})`, and decoding a cell-typed field instantiates the
+class registered under that name. The key is explicit, never
+`constructor.name`, which a minified production build mangles. Frontend
+iterates and registers them:
 
 ```typescript
 // cell_classes.ts — add new classes here
@@ -282,9 +287,9 @@ export const cell_classes = {
 	Turn /* ... 33 total */
 } satisfies Record<string, typeof Cell<any>>;
 
-// frontend.svelte.ts — auto-registers all classes
-for (const constructor of Object.values(cell_classes)) {
-	this.cell_registry.register(constructor);
+// frontend.svelte.ts — auto-registers all classes under their keys
+for (const [class_name, constructor] of Object.entries(cell_classes)) {
+	this.cell_registry.register(class_name, constructor);
 }
 
 // Lookup by ID at runtime
@@ -687,7 +692,15 @@ The frontend file pipeline is six Cells plus a per-file editing-state class:
 - `DiskfilesEditor` → `DiskfileTabs` → `DiskfileTab` — VS-Code-style tabs:
   single-click opens a reusable _preview_ tab, editing or an explicit open
   promotes it to permanent; tab order, recent-tab history, and
-  reopen-closed-tab state live on `DiskfileTabs`
+  reopen-closed-tab state live on `DiskfileTabs`. A file has at most one
+  tab: reopening a closed tab skips (and drops) entries whose file is open
+  again and reopens the next, as a permanent tab, like VS Code's "reopen
+  closed editor". A file appearing on disk — seeded by a snapshot or created
+  by another tool — never moves the selection or opens a tab; only a file
+  created from zzz (`Diskfiles.create_file`) is selected and opened in a
+  permanent tab — at once if its `filer_change` already arrived, else when
+  it arrives (under the path as the backend normalizes it), unless the user
+  selects another file or tab or closes its workspace first
 - `DiskfileHistory` — one file's edit history (disk changes, the draft,
   saved and discarded edits), newest first; capped at 100 entries and 16M
   characters of content, trimming the oldest but never the draft, the
