@@ -27,7 +27,8 @@
 //! **Ownership.** Each terminal belongs to the account that created it: its
 //! `terminal_data` / `terminal_exited` notifications reach only that account's
 //! sockets, and `write` / `resize` / `close` from any other account act as if
-//! the terminal didn't exist (so its existence isn't observable either).
+//! the terminal didn't exist — the same `TerminalNotFound` / no-op reply as an
+//! unknown id — so its existence isn't observable either.
 
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
@@ -141,11 +142,23 @@ fn send_data(app: &App, owner: Uuid, terminal_id: &str, data: &str) {
 
 // -- Per-terminal state -------------------------------------------------------
 
-/// `PtyManager::write` refused input: the terminal's input queue is full
-/// because the child isn't consuming what it's sent.
-#[derive(Debug, thiserror::Error)]
-#[error("terminal input queue is full")]
-pub struct TerminalInputFull;
+/// No terminal with the id is owned by the caller — it never existed, it
+/// ended, the daemon restarted since it was created, or another account owns
+/// it (indistinguishable by design).
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[error("terminal not found")]
+pub struct TerminalNotFound;
+
+/// Why `PtyManager::write` refused input.
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum TerminalWriteError {
+    #[error(transparent)]
+    NotFound(#[from] TerminalNotFound),
+    /// The terminal's input queue is full because the child isn't consuming
+    /// what it's sent.
+    #[error("terminal input queue is full")]
+    InputFull,
+}
 
 /// A request for a terminal's task to shut the child down.
 struct CloseRequest {
@@ -261,41 +274,65 @@ impl PtyManager {
             .map_err(|e| format!("spawn task failed: {e}"))?
     }
 
-    /// Queue `data` for a terminal's stdin. Silently no-ops if the terminal
-    /// doesn't exist, isn't owned by `owner`, or is exiting.
+    /// Queue `data` for a terminal's stdin. A terminal that's exiting accepts
+    /// and drops it (its `terminal_exited` follows).
     ///
     /// Chunks are written in queue order, each in full, by the terminal's
     /// task — this returns once `data` is queued, not written.
     ///
     /// # Errors
     ///
-    /// `TerminalInputFull` when the input queue is full.
+    /// `NotFound` when `owner` has no terminal `terminal_id` (see
+    /// [`TerminalNotFound`]) — checked for empty `data` too; `InputFull` when
+    /// its input queue is full.
     pub async fn write(
         &self,
         owner: Uuid,
         terminal_id: &str,
         data: &str,
-    ) -> Result<(), TerminalInputFull> {
+    ) -> Result<(), TerminalWriteError> {
+        let terminals = self.terminals.read().await;
+        let entry = owned_entry(&terminals, owner, terminal_id)?;
         if data.is_empty() {
             return Ok(());
         }
-        let terminals = self.terminals.read().await;
-        let Some(entry) = terminals.get(terminal_id).filter(|e| e.owner == owner) else {
-            return Ok(());
-        };
         match entry.input.try_send(data.as_bytes().to_vec()) {
             Ok(()) | Err(TrySendError::Closed(_)) => Ok(()),
-            Err(TrySendError::Full(_)) => Err(TerminalInputFull),
+            Err(TrySendError::Full(_)) => Err(TerminalWriteError::InputFull),
         }
     }
 
-    /// Resize a terminal's PTY window. Silently no-ops if the terminal
-    /// doesn't exist or isn't owned by `owner`.
-    pub async fn resize(&self, owner: Uuid, terminal_id: &str, cols: u16, rows: u16) {
+    /// Resize a terminal's PTY window.
+    ///
+    /// # Errors
+    ///
+    /// `TerminalNotFound` when `owner` has no terminal `terminal_id`.
+    pub async fn resize(
+        &self,
+        owner: Uuid,
+        terminal_id: &str,
+        cols: u16,
+        rows: u16,
+    ) -> Result<(), TerminalNotFound> {
         let terminals = self.terminals.read().await;
-        if let Some(entry) = terminals.get(terminal_id).filter(|e| e.owner == owner) {
-            let _ = entry.size.send((cols, rows));
-        }
+        let entry = owned_entry(&terminals, owner, terminal_id)?;
+        let _ = entry.size.send((cols, rows));
+        Ok(())
+    }
+
+    /// The ids of `owner`'s terminals, sorted — including ones whose process
+    /// just exited (their `terminal_exited` is on its way).
+    pub async fn terminal_ids_for_account(&self, owner: Uuid) -> Vec<String> {
+        let mut ids: Vec<String> = self
+            .terminals
+            .read()
+            .await
+            .iter()
+            .filter(|(_, entry)| entry.owner == owner)
+            .map(|(terminal_id, _)| terminal_id.clone())
+            .collect();
+        ids.sort_unstable();
+        ids
     }
 
     /// Close a terminal: send `signal`, hang up the session, and return the
@@ -381,6 +418,19 @@ impl PtyManager {
             tracing::warn!("timed out waiting for terminals to be reaped");
         }
     }
+}
+
+/// The entry for `terminal_id` if `owner` owns it — an unknown id and another
+/// account's are the same `TerminalNotFound`.
+fn owned_entry<'a>(
+    terminals: &'a HashMap<String, TerminalEntry>,
+    owner: Uuid,
+    terminal_id: &str,
+) -> Result<&'a TerminalEntry, TerminalNotFound> {
+    terminals
+        .get(terminal_id)
+        .filter(|entry| entry.owner == owner)
+        .ok_or(TerminalNotFound)
 }
 
 impl Default for PtyManager {
@@ -928,6 +978,112 @@ mod tests {
         assert!(
             matches!(pid_check.waitpid(), WaitResult::Unavailable),
             "child must be reaped, not left a zombie"
+        );
+    }
+
+    /// A terminal's receiving ends, kept alive so its channels stay open.
+    struct FakeTerminal {
+        input: mpsc::Receiver<Vec<u8>>,
+        size: watch::Receiver<(u16, u16)>,
+        _close: oneshot::Receiver<CloseRequest>,
+    }
+
+    /// Register a terminal entry with no process behind it.
+    async fn insert_fake(manager: &PtyManager, terminal_id: &str, owner: Uuid) -> FakeTerminal {
+        let (input_tx, input) = mpsc::channel(INPUT_QUEUE_CAPACITY);
+        let (size_tx, size) = watch::channel((DEFAULT_COLS, DEFAULT_ROWS));
+        let (close_tx, close) = oneshot::channel();
+        manager.terminals.write().await.insert(
+            terminal_id.to_owned(),
+            TerminalEntry {
+                owner,
+                input: input_tx,
+                size: size_tx,
+                close: close_tx,
+                task: tokio::spawn(async {}),
+            },
+        );
+        FakeTerminal {
+            input,
+            size,
+            _close: close,
+        }
+    }
+
+    #[tokio::test]
+    async fn unknown_and_foreign_terminals_are_the_same_not_found() {
+        let manager = PtyManager::new();
+        let owner = Uuid::new_v4();
+        let other = Uuid::new_v4();
+        let mut fake = insert_fake(&manager, "t1", owner).await;
+
+        for (account, terminal_id) in [(other, "t1"), (owner, "missing"), (other, "missing")] {
+            assert_eq!(
+                manager.write(account, terminal_id, "x").await,
+                Err(TerminalWriteError::NotFound(TerminalNotFound)),
+                "{terminal_id}"
+            );
+            // an empty write is checked too
+            assert_eq!(
+                manager.write(account, terminal_id, "").await,
+                Err(TerminalWriteError::NotFound(TerminalNotFound))
+            );
+            assert_eq!(
+                manager.resize(account, terminal_id, 100, 30).await,
+                Err(TerminalNotFound)
+            );
+            assert_eq!(manager.close(account, terminal_id, libc::SIGTERM).await, None);
+        }
+        assert!(fake.input.try_recv().is_err(), "no foreign input reached it");
+        assert!(!fake.size.has_changed().unwrap(), "no foreign resize reached it");
+
+        // the owner drives it
+        assert_eq!(manager.write(owner, "t1", "mine").await, Ok(()));
+        assert_eq!(fake.input.try_recv().unwrap(), b"mine");
+        assert_eq!(manager.write(owner, "t1", "").await, Ok(()));
+        assert!(fake.input.try_recv().is_err(), "empty writes aren't queued");
+        assert_eq!(manager.resize(owner, "t1", 100, 30).await, Ok(()));
+        assert_eq!(*fake.size.borrow_and_update(), (100, 30));
+    }
+
+    #[tokio::test]
+    async fn a_full_input_queue_is_refused() {
+        let manager = PtyManager::new();
+        let owner = Uuid::new_v4();
+        let _fake = insert_fake(&manager, "t1", owner).await;
+        for _ in 0..INPUT_QUEUE_CAPACITY {
+            manager.write(owner, "t1", "x").await.unwrap();
+        }
+        assert_eq!(
+            manager.write(owner, "t1", "x").await,
+            Err(TerminalWriteError::InputFull)
+        );
+    }
+
+    #[tokio::test]
+    async fn an_exiting_terminal_accepts_and_drops_input() {
+        let manager = PtyManager::new();
+        let owner = Uuid::new_v4();
+        let fake = insert_fake(&manager, "t1", owner).await;
+        drop(fake);
+        assert_eq!(manager.write(owner, "t1", "x").await, Ok(()));
+    }
+
+    #[tokio::test]
+    async fn terminal_ids_are_listed_per_account() {
+        let manager = PtyManager::new();
+        let owner = Uuid::new_v4();
+        let other = Uuid::new_v4();
+        let _b = insert_fake(&manager, "b", owner).await;
+        let _a = insert_fake(&manager, "a", owner).await;
+        let _c = insert_fake(&manager, "c", other).await;
+        assert_eq!(manager.terminal_ids_for_account(owner).await, ["a", "b"]);
+        assert_eq!(manager.terminal_ids_for_account(other).await, ["c"]);
+        assert!(
+            manager
+                .terminal_ids_for_account(Uuid::new_v4())
+                .await
+                .is_empty()
         );
     }
 }

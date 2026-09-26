@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, describe, beforeEach, afterEach, assert, vi } from 'vitest';
+import { create_uuid } from '@fuzdev/fuz_util/id.ts';
 
 import {
 	DiskfilePath,
@@ -31,12 +32,17 @@ const create_disknode = (path: DiskfilePath, contents: string | null): Serializa
 	dependencies: []
 });
 
+const SERVER_INSTANCE_ID = create_uuid();
+
 const create_session = (files: Array<SerializableDisknode> = []): SessionLoadData => ({
 	zzz_dir: ZZZ_DIR,
 	scoped_dirs: [],
 	files,
+	file_roots: [ZZZ_DIR],
 	provider_status: [],
-	workspaces: []
+	workspaces: [],
+	terminal_ids: [],
+	server_instance_id: SERVER_INSTANCE_ID
 });
 
 type SessionLoadResult =

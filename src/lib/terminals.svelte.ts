@@ -39,8 +39,12 @@ interface UnclaimedTerminal {
  * Every terminal spawns a shell (`sh`) and types its command line into it,
  * so the session stays alive for follow-up input.
  *
+ * After a reconnect, `reconcile` marks the terminals the backend no longer has
+ * as `lost` (from the `session_load` snapshot's `terminal_ids`).
+ *
  * TODO the list is in-memory, so a page reload loses it while the backend PTYs
- * keep running — reattaching needs a backend `terminal_list`.
+ * keep running — `session_load` lists their ids, but reattaching would also
+ * need their commands and output.
  */
 export class Terminals extends Cell<typeof TerminalsJson> {
 	readonly items: IndexedCollection<Terminal> = new IndexedCollection({
@@ -175,6 +179,54 @@ export class Terminals extends Cell<typeof TerminalsJson> {
 		if (unclaimed) {
 			unclaimed.exited = true;
 			unclaimed.exit_code = exit_code;
+		}
+	}
+
+	/**
+	 * The backend ids of the running terminals.
+	 */
+	running_terminal_ids(): Set<Uuid> {
+		const ids: Set<Uuid> = new Set();
+		for (const terminal of this.items.values) {
+			if (terminal.status === 'running' && terminal.terminal_id) ids.add(terminal.terminal_id);
+		}
+		return ids;
+	}
+
+	/**
+	 * Marks every running terminal as possibly missing output (see
+	 * `Terminal.output_gap`) — called when the socket reconnects.
+	 */
+	mark_output_gap(): void {
+		for (const terminal of this.items.values) terminal.mark_output_gap();
+	}
+
+	/**
+	 * Reconciles with the backend's live terminals from a session snapshot: a
+	 * running terminal it doesn't list is marked `lost`, since its
+	 * `terminal_exited` (if any) was missed.
+	 *
+	 * @param live_terminal_ids - the snapshot's `terminal_ids`
+	 * @param known_terminal_ids - the ids running when the snapshot was
+	 *   requested; only these are judged, since a terminal started after the
+	 *   request may postdate the snapshot
+	 * @param reason - the lost terminals' `error_message`
+	 */
+	reconcile(
+		live_terminal_ids: ReadonlySet<Uuid>,
+		known_terminal_ids: ReadonlySet<Uuid>,
+		reason: string
+	): void {
+		for (const terminal of this.items.values) {
+			const { terminal_id } = terminal;
+			if (
+				terminal.status === 'running' &&
+				terminal_id &&
+				known_terminal_ids.has(terminal_id) &&
+				!live_terminal_ids.has(terminal_id)
+			) {
+				terminal.mark_lost(reason);
+			}
 		}
 	}
 

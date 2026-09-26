@@ -149,7 +149,7 @@ MCP-compatible subset, no batching:
 Defined in `src/lib/action_specs.ts`. A representative subset below — the `terminal_*` and `workspace_*` families are omitted here; see [reference.md](./reference.md) (generated from the specs) for the full list:
 
 - `ping` — Health check. Kind: `request_response`. Initiator: `both`
-- `session_load` — Load initial session data. Kind: `request_response`. Initiator: `frontend`
+- `session_load` — Load the session snapshot, at boot and after each reconnect. Kind: `request_response`. Initiator: `frontend`
 - `filer_change` — File system change notification. Kind: `remote_notification`. Initiator: `backend`
 - `diskfile_update` — Write file content. Kind: `request_response`. Initiator: `frontend`
 - `diskfile_delete` — Delete a file. Kind: `request_response`. Initiator: `frontend`
@@ -501,8 +501,21 @@ closes a running terminal (and gives up if the close fails, rather than
 orphan a live process), then spawns a fresh process into the same cell with
 a new `terminal_id` and cleared output. Removing a terminal closes it if
 running, then disposes the cell. The terminal list is in-memory: a page
-reload loses it while the backend PTYs keep running (reattaching needs a
-backend `terminal_list`).
+reload loses it while the backend PTYs keep running (`session_load` lists
+their ids, but reattaching would also need their commands and output).
+
+A terminal the backend no longer has becomes `lost`, with an
+`error_message` saying why, and its queued input is dropped: when
+`terminal_data_send` or `terminal_resize` answers `not_found`, or when the
+session snapshot loaded after a reconnect doesn't list a terminal that was
+running (the message tells a zzzd restart — a new `server_instance_id` —
+from a process that ended or was closed from another tab while the
+connection was down, whose `terminal_exited` was missed). A lost terminal
+can be restarted. The backend drops a terminal just before sending its
+`terminal_exited`, so one can be marked lost moments before its real exit
+arrives; the exit then wins (`exited` with its code). Output sent while the socket was down is lost too, so a
+reconnect flags each running terminal's `output_gap`, and its view shows a
+dismissible "connection lost — some output may be missing" notice.
 
 Each terminal is one backend task that owns the PTY master and the child
 process. Input chunks are written in the order `terminal_data_send` calls
@@ -515,11 +528,15 @@ On natural process exit the task reaps the child, broadcasts
 PTY master — the hangup ends a shell that ignores SIGTERM — and returns the
 exit code in the RPC response, or `null` if the process is still running
 after a short grace; the backend keeps reaping it (SIGKILL after 3s), and no
-`terminal_exited` is broadcast for a closed terminal. Children get the
+`terminal_exited` is broadcast for a closed terminal. `terminal_data_send`
+and `terminal_resize` for an id the caller has no live terminal under —
+unknown, ended, lost to a restart, or another account's — fail with the same
+`not_found`, while `terminal_close` stays idempotent (`{exit_code: null}`).
+Children get the
 server's environment minus its secrets and config (`SECRET_*`, `FUZ_*`,
 `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, `PORT`). Terminals are pure
-in-memory process state — no persistence, no reconnect-to-running across
-server restarts.
+in-memory process state — no persistence; a server restart ends them, and
+clients find them `lost` when they resync.
 
 ## IndexedCollection
 
@@ -705,15 +722,60 @@ focused editor; the main `/files` editor also takes it from anywhere on the
 page.
 
 The initial file listing comes from `session_load` (the backend rescans and
-flattens every active filer's index), and `workspace_open` returns the opened
-workspace's index so the new tree appears immediately. `Frontend.load_session`
-runs `session_load` and retries a failure with backoff (1s doubling to 30s)
-until it succeeds, tracking progress in `session_status` / `session_error`;
-`Workspaces.open` does the same snapshot handling for `workspace_open`. Both
-record the paths `filer_change` touches while their request is in flight
+flattens every active filer's index, and lists the filers' roots as
+`file_roots`), and `workspace_open` returns the opened workspace's index so
+the new tree appears immediately. `Frontend.load_session` runs `session_load`
+and retries a failure with backoff (1s doubling to 30s) until it succeeds,
+tracking progress in `session_status` / `session_error`; `Workspaces.open`
+does the same snapshot handling for `workspace_open`. Both record the paths
+`filer_change` touches while their request is in flight
 (`Diskfiles.track_changes`) and skip those snapshot entries, since the
 notification is at least as new — a file deleted mid-request isn't
-resurrected, and newer content isn't reverted. `Diskfiles` upserts by
+resurrected, and newer content isn't reverted.
+
+**Reconnect resync.** Notifications sent while the socket is down —
+`filer_change`, `workspace_changed`, `terminal_data`, `terminal_exited`,
+`completion_progress` — are lost, and reconnects are routine (heartbeat
+timeouts, sleep/wake, daemon restarts). So the app root feeds the socket's
+`last_connect_time` to `Frontend.handle_socket_connect`, and any connect
+that follows a session load reloads it (queued behind a load already in
+flight, whose snapshot may predate the connect). The boot load
+(`Frontend.boot_session`) waits for the first connect so its snapshot comes
+over the socket that then carries the notifications; if the socket hasn't
+opened within 2s it loads over HTTP, and the first connect then resyncs —
+as it does after a failed first load, instead of waiting out the retry
+backoff. `receive_session` reconciles rather than adds:
+
+- **Workspaces** are replaced (`Workspaces.reconcile`): listed ones added,
+  the rest removed — another client closed them. After a zzzd restart (a
+  new `server_instance_id`), the runtime workspaces it lost are reopened
+  instead (`Workspaces.open` with the same path, reconciling their files),
+  so their files, tabs, and unsaved edits stay. A reopen the backend
+  refuses because the directory is gone, forbidden, or not a directory
+  drops the workspace and the files only it covered (logged); any other
+  failure keeps it, and the next snapshot retries once — there's no retry
+  loop. Closing a workspace (`Frontend.close_workspace`) cancels a pending
+  reopen, and a `workspace_not_open` reply removes it here too, so a
+  workspace the backend forgot can still be closed. A close while a reopen
+  is in flight sticks: the backend's open scans before registering, so the
+  close finds nothing open and the open lands anyway — the reopen then
+  closes it again.
+- **Files** under a snapshot root, or under a workspace the reconcile just
+  removed, that the snapshot lacks are removed through the same path as a
+  `delete` (`Diskfiles.reconcile`), so a file open with unsaved edits stays,
+  flagged `deleted_on_disk`. Files outside those directories are left
+  alone — the snapshot says nothing about them.
+- **Terminals** running when the request went out that the snapshot's
+  `terminal_ids` lacks become `lost` (`Terminals.reconcile`).
+
+Changes made while the request is in flight win: `filer_change` paths are
+skipped as above, workspaces opened or closed meanwhile
+(`Workspaces.track_changes`) keep their state and their files aren't
+pruned, and terminals started meanwhile aren't judged. A completion whose
+`completion_create` was in flight when the socket closed is rejected by the
+WebSocket client (`service_unavailable` — it can't be correlated after the
+reconnect), which settles its turn as errored; the chunks it had streamed
+stay. `Diskfiles` upserts by
 path — for seeds and for both `add` and `change` — so a path never has two
 `Diskfile`s. A `delete` closes the file's tabs, moves selection, and drops its
 history — unless the file is open in a tab and its history holds unsaved
@@ -741,7 +803,9 @@ separate concerns":
   `workspace_close` reverses that — except that the boot-time app directory
   and `PUBLIC_ZZZ_SCOPED_DIRS` keep their permanent filers and `ScopedFs`
   roots, so closing a workspace that overlaps one never revokes its access.
-  Backend state is an in-memory map — a restart forgets all workspaces.
+  Backend state is an in-memory map — a restart forgets all workspaces, and
+  clients reopen the ones they had when they resync after reconnecting (see
+  **Reconnect resync** under File Editing).
   Scoped dirs aren't listed as workspaces automatically: they're the
   operator-configured always-on layer; workspaces are the user-opened runtime
   layer. A scoped dir (or the app directory) can still be opened as a

@@ -6,7 +6,8 @@
  * WebSocket data/exit notification path against the spawned test
  * binary. The ownership test mints a second account to check that a
  * terminal's notifications and controls stay with the account that
- * created it.
+ * created it, and that another account's terminal gets the same reply as
+ * an unknown id (`not_found` for input and resize).
  *
  * @module
  */
@@ -27,7 +28,21 @@ const setup_test = default_cross_process_setup(handle);
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
+/** The reply to `terminal_data_send` / `terminal_resize` for a terminal the caller doesn't own. */
+const TERMINAL_NOT_FOUND = { code: -32003, message: 'terminal not found' };
+
 type WsClient = Awaited<ReturnType<typeof create_ws_transport>>;
+
+/** `value` as its JSON round-trip — `undefined` fields dropped, for deep comparison. */
+const to_json = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+
+/** An `rpc_call` reply without its headers — for comparing replies. */
+const reply_of = (res: object): unknown => to_json({ ...res, headers: undefined });
+
+/** The `terminal_ids` of a `session_load` result. */
+const session_terminal_ids = (result: unknown): Array<string> =>
+	((result as Record<string, unknown>).data as Record<string, unknown>)
+		.terminal_ids as Array<string>;
 
 const open_ws = async (): Promise<WsClient> => {
 	const fixture = await setup_test();
@@ -334,8 +349,8 @@ describe('terminal cross-backend', () => {
 			params: { terminal_id: NIL_UUID, data: 'hello' },
 			headers: fixture.create_session_headers()
 		});
-		assert.ok(res.ok);
-		assert.equal(res.result, null, 'silent null for missing terminal');
+		assert.ok(!res.ok, 'a missing terminal is an error, not a silent success');
+		assert.deepEqual(to_json(res.error), TERMINAL_NOT_FOUND);
 	});
 
 	test('terminal_close_missing', async () => {
@@ -360,8 +375,8 @@ describe('terminal cross-backend', () => {
 			params: { terminal_id: NIL_UUID, cols: 80, rows: 24 },
 			headers: fixture.create_session_headers()
 		});
-		assert.ok(res.ok);
-		assert.equal(res.result, null, 'silent null for missing terminal');
+		assert.ok(!res.ok);
+		assert.deepEqual(to_json(res.error), TERMINAL_NOT_FOUND);
 	});
 
 	test('terminal_create_bad_cwd_fails', async () => {
@@ -523,18 +538,44 @@ describe('terminal cross-backend', () => {
 			// every socket of the owning account gets the output
 			await wait_for_output(owner_ws_2, terminal_id, (out) => out.includes('mine'));
 
-			// another account can't drive it: each call acts as for an unknown id
-			assert.equal(
-				await other_ws.request('oth-1', 'terminal_data_send', { terminal_id, data: 'theirs\n' }),
-				null
-			);
-			assert.equal(
-				await other_ws.request('oth-2', 'terminal_resize', { terminal_id, cols: 100, rows: 30 }),
-				null
-			);
-			assert.deepEqual(await other_ws.request('oth-3', 'terminal_close', { terminal_id }), {
-				exit_code: null
+			// another account can't drive it: each call gets exactly the reply for an unknown id
+			const as_other = (method: string, params: Record<string, unknown>) =>
+				rpc_call({
+					app: fixture.fresh_transport(),
+					path: handle.config.rpc_path,
+					method,
+					params,
+					headers: other.create_session_headers()
+				});
+			for (const [method, params] of [
+				['terminal_data_send', { data: 'theirs\n' }],
+				['terminal_resize', { cols: 100, rows: 30 }],
+				['terminal_close', {}]
+			] as const) {
+				const foreign = await as_other(method, { terminal_id, ...params });
+				const unknown = await as_other(method, { terminal_id: NIL_UUID, ...params });
+				assert.deepEqual(
+					reply_of(foreign),
+					reply_of(unknown),
+					`${method}: a foreign terminal is indistinguishable from an unknown one`
+				);
+				if (method === 'terminal_close') {
+					assert.ok(foreign.ok);
+					assert.deepEqual(foreign.result, { exit_code: null });
+				} else {
+					assert.ok(!foreign.ok);
+					assert.deepEqual(to_json(foreign.error), TERMINAL_NOT_FOUND);
+				}
+			}
+			// and doesn't see it in its session snapshot
+			const other_session = await rpc_call({
+				app: fixture.fresh_transport(),
+				path: handle.config.rpc_path,
+				method: 'session_load',
+				headers: other.create_session_headers()
 			});
+			assert.ok(other_session.ok);
+			assert.deepEqual(session_terminal_ids(other_session.result), []);
 
 			// still running for its owner, and the other account's input never reached it
 			await owner_ws.request('own-3', 'terminal_data_send', { terminal_id, data: 'still\n' });
@@ -609,6 +650,58 @@ describe('terminal cross-backend', () => {
 		}
 		assert.ok(!(await process_exists(pid)), `pid ${pid} reaped after the account was deleted`);
 	}, 20_000);
+
+	test('session_load lists the live terminals of the caller', async () => {
+		const fixture = await setup_test();
+		const ws = await create_ws_transport({
+			base_url: handle.config.base_url,
+			ws_path: handle.config.ws_path,
+			cookies: fixture.transport.cookies()
+		});
+		const session_ids = async (): Promise<Array<string>> => {
+			const res = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'session_load',
+				headers: fixture.create_session_headers()
+			});
+			assert.ok(res.ok, JSON.stringify(res));
+			return session_terminal_ids(res.result);
+		};
+		try {
+			await ws.request('_warmup', 'ping', undefined);
+			const baseline = await session_ids();
+
+			const cat_id = await create_terminal(ws, 'sl-1', { command: 'cat', args: [] });
+			const echo_id = await create_terminal(ws, 'sl-2', { command: 'echo', args: ['bye'] });
+			await wait_for_exited(ws, echo_id);
+			// the exit notification can beat the entry's removal by the reap
+			let ids = await session_ids();
+			const deadline = Date.now() + 5_000;
+			while (ids.includes(echo_id) && Date.now() < deadline) {
+				await new Promise((resolve) => setTimeout(resolve, 50));
+				ids = await session_ids();
+			}
+			assert.include(ids, cat_id, 'a running terminal is listed');
+			assert.notInclude(ids, echo_id, 'an exited terminal is not');
+
+			await ws.request('sl-3', 'terminal_close', { terminal_id: cat_id });
+			assert.deepEqual(await session_ids(), baseline, 'a closed terminal is not');
+
+			// and its id is now not_found, like any unknown one
+			const res = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'terminal_data_send',
+				params: { terminal_id: cat_id, data: 'late\n' },
+				headers: fixture.create_session_headers()
+			});
+			assert.ok(!res.ok);
+			assert.deepEqual(to_json(res.error), TERMINAL_NOT_FOUND);
+		} finally {
+			await ws.close();
+		}
+	});
 
 	test('terminal_resize_rejects_out_of_range', async () => {
 		const fixture = await setup_test();

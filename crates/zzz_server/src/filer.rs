@@ -1922,7 +1922,7 @@ impl FilerManager {
     /// Rescan every active filer's watched directory, reconciling each index
     /// with the disk (differences are broadcast as `filer_change`).
     ///
-    /// Called by `session_load` before `collect_all_files` to guarantee a
+    /// Called by `session_load` before `snapshot` to guarantee a
     /// consistent snapshot — notify events are eventually consistent, so a
     /// just-written file may not yet be in the index when the event loop is
     /// still draining. A direct filesystem walk sidesteps that race; files
@@ -1968,27 +1968,42 @@ impl FilerManager {
             .map_or(WatchStatus::Full, |e| e.filer.watch_status())
     }
 
-    /// Collect all files from all filers into a single Vec.
-    /// Used by `session_load` to return the complete file listing.
-    pub async fn collect_all_files(&self) -> Vec<SerializableDisknode> {
+    /// Every active filer's root and indexed files, as one snapshot. Used by
+    /// `session_load` to return the complete file listing.
+    ///
+    /// The roots and file indexes are taken under one read of the filer map,
+    /// so `roots` names exactly the filers `files` comes from: a file under a
+    /// root that's missing from `files` isn't on disk (or isn't indexed —
+    /// ignored, a symlink, non-UTF-8).
+    pub async fn snapshot(&self) -> FilerSnapshot {
         // Collect Arc handles under the outer lock, then release it before
         // awaiting the inner per-filer locks — avoids holding the manager
         // lock across await points (which would block start_filer/stop_filer).
-        let file_maps: Vec<Arc<RwLock<FileIndex>>> = {
+        let (mut roots, file_maps): (Vec<String>, Vec<Arc<RwLock<FileIndex>>>) = {
             let filers = self.filers.read().await;
             filers
-                .values()
-                .map(|e| Arc::clone(&e.filer.files))
-                .collect()
+                .iter()
+                .map(|(root, e)| (root.clone(), Arc::clone(&e.filer.files)))
+                .unzip()
         };
+        roots.sort_unstable();
 
-        let mut all_files = Vec::new();
-        for files in &file_maps {
-            let index = files.read().await;
-            all_files.extend(index.values().cloned());
+        let mut files = Vec::new();
+        for index in &file_maps {
+            files.extend(index.read().await.values().cloned());
         }
-        all_files
+        FilerSnapshot { roots, files }
     }
+}
+
+/// Returned by [`FilerManager::snapshot`].
+#[derive(Debug)]
+pub struct FilerSnapshot {
+    /// The root (trailing `/`) of every filer the snapshot covers, sorted.
+    pub roots: Vec<String>,
+    /// The indexed files of those filers — a file under two roots (nested
+    /// filers) appears once per root.
+    pub files: Vec<SerializableDisknode>,
 }
 
 #[cfg(test)]
@@ -3662,5 +3677,43 @@ mod tests {
         assert_eq!(manager.scans.load(Ordering::Relaxed), 1);
         assert!(manager.starting.lock().is_empty());
         assert_eq!(manager.files_for(&root).await.len(), 50);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn snapshot_names_the_roots_its_files_come_from() {
+        let a = TempDir::new();
+        let b = TempDir::new();
+        std::fs::write(a.path("a.txt"), "a").unwrap();
+        std::fs::write(b.path("b.txt"), "b").unwrap();
+        let manager = FilerManager::new();
+        let snapshot = manager.snapshot().await;
+        assert!(snapshot.roots.is_empty() && snapshot.files.is_empty());
+
+        for (tmp, lifetime) in [(&a, FilerLifetime::Permanent), (&b, FilerLifetime::Workspace)] {
+            manager
+                .start_with(
+                    &tmp.root(),
+                    Arc::new(|_: &str| {}),
+                    FilerConfig::zzz_dir(),
+                    lifetime,
+                )
+                .await
+                .unwrap();
+        }
+        let snapshot = manager.snapshot().await;
+        let mut roots = vec![a.root(), b.root()];
+        roots.sort_unstable();
+        assert_eq!(snapshot.roots, roots);
+        let mut files: Vec<String> = snapshot.files.into_iter().map(|f| f.id).collect();
+        files.sort_unstable();
+        let mut expected = vec![a.key("a.txt"), b.key("b.txt")];
+        expected.sort_unstable();
+        assert_eq!(files, expected);
+
+        // a stopped filer leaves both
+        assert!(manager.stop_filer(&b.root()).await);
+        let snapshot = manager.snapshot().await;
+        assert_eq!(snapshot.roots, vec![a.root()]);
+        assert_eq!(snapshot.files.len(), 1);
     }
 }

@@ -7,6 +7,7 @@ import { CellJson } from './cell_types.ts';
 import {
 	format_terminal_command,
 	TERMINAL_INPUT_PENDING_MAX_LENGTH,
+	TERMINAL_NOT_FOUND_MESSAGE,
 	TerminalOutputBuffer
 } from './terminal_helpers.ts';
 
@@ -20,8 +21,10 @@ import {
  *   observed, or `null` if the process outlived the close grace (the backend reaps it and
  *   broadcasts no `terminal_exited`)
  * - `failed` — `terminal_create` failed, see `error_message`
+ * - `lost` — the backend no longer has the process: zzzd restarted, or it ended
+ *   or was closed elsewhere while this client wasn't listening; see `error_message`
  */
-export const TerminalStatus = z.enum(['starting', 'running', 'exited', 'closed', 'failed']);
+export const TerminalStatus = z.enum(['starting', 'running', 'exited', 'closed', 'failed', 'lost']);
 export type TerminalStatus = z.infer<typeof TerminalStatus>;
 
 export const TerminalJson = CellJson.extend({
@@ -79,6 +82,13 @@ export class Terminal extends Cell<typeof TerminalJson> {
 
 	/** Whether a `terminal_close` is in flight. */
 	closing: boolean = $state.raw(false);
+
+	/**
+	 * Whether some output may be missing — set when the socket reconnects while
+	 * the process runs, since `terminal_data` sent while it was down is lost.
+	 * Cleared on `reset` and when dismissed. Transient, not serialized.
+	 */
+	output_gap: boolean = $state.raw(false);
 
 	/**
 	 * Increments on each `reset` — one per spawned process, so views can key on
@@ -167,13 +177,42 @@ export class Terminal extends Cell<typeof TerminalJson> {
 
 	/**
 	 * Records a natural process exit (`terminal_exited`).
-	 * Ignored once the terminal has already exited or been closed.
+	 * Ignored once the terminal has already exited or been closed. A `lost`
+	 * terminal takes it — the backend drops a terminal just before sending its
+	 * exit, so a `not_found` or a session snapshot in between marks it lost
+	 * first — replacing the lost message with the real exit.
 	 */
 	receive_exited(exit_code: number | null): void {
-		if (this.status !== 'running' && this.status !== 'starting') return;
+		if (this.status === 'lost') {
+			this.error_message = null;
+		} else if (this.status !== 'running' && this.status !== 'starting') {
+			return;
+		}
 		this.status = 'exited';
 		this.exit_code = exit_code;
 		this.#stop_io();
+	}
+
+	/**
+	 * Records that the backend no longer has the running process (see the
+	 * `lost` status), discarding queued input. Ignored unless running.
+	 *
+	 * @param reason - why, shown as the terminal's `error_message`
+	 */
+	mark_lost(reason: string): void {
+		if (this.status !== 'running') return;
+		this.status = 'lost';
+		this.error_message = reason;
+		this.output_gap = false;
+		this.#stop_io();
+	}
+
+	/**
+	 * Flags possibly missing output after a reconnect (see `output_gap`).
+	 * Ignored unless running.
+	 */
+	mark_output_gap(): void {
+		if (this.status === 'running') this.output_gap = true;
 	}
 
 	/**
@@ -186,6 +225,7 @@ export class Terminal extends Cell<typeof TerminalJson> {
 		this.exit_code = null;
 		this.error_message = null;
 		this.closing = false;
+		this.output_gap = false;
 		this.output.clear();
 		this.#stop_io();
 		this.run++;
@@ -197,8 +237,10 @@ export class Terminal extends Cell<typeof TerminalJson> {
 	 *
 	 * On `queue_overflow` (the child isn't reading its input) the data is retried
 	 * with backoff — the backend enqueued none of it, so a resend can't duplicate —
-	 * and the error is surfaced until a send succeeds. Any other failure is
-	 * surfaced without a retry, because the data may have been delivered.
+	 * and the error is surfaced until a send succeeds. On `not_found` the
+	 * backend no longer has the process, so the terminal is marked `lost`. Any
+	 * other failure is surfaced without a retry, because the data may have been
+	 * delivered.
 	 */
 	send_input(data: string): void {
 		if (!data) return;
@@ -213,6 +255,7 @@ export class Terminal extends Cell<typeof TerminalJson> {
 
 	/**
 	 * Requests a PTY resize, coalesced to the latest size while one is in flight.
+	 * On `not_found` the terminal is marked `lost`, like `send_input`.
 	 */
 	resize(cols: number, rows: number): void {
 		this.#resize_pending = { cols, rows };
@@ -285,6 +328,8 @@ export class Terminal extends Cell<typeof TerminalJson> {
 						void this.#pump_input();
 					}, this.#input_retry_delay);
 					return;
+				} else if (result.error.code === JSONRPC_ERROR_CODES.not_found) {
+					this.mark_lost(TERMINAL_NOT_FOUND_MESSAGE);
 				} else {
 					this.error_message = `failed to send input: ${result.error.message}`;
 				}
@@ -303,7 +348,10 @@ export class Terminal extends Cell<typeof TerminalJson> {
 				const { cols, rows } = this.#resize_pending;
 				this.#resize_pending = null;
 				const result = await this.app.api.terminal_resize({ terminal_id, cols, rows });
-				if (!result.ok && terminal_id === this.terminal_id) {
+				if (result.ok || terminal_id !== this.terminal_id) continue;
+				if (result.error.code === JSONRPC_ERROR_CODES.not_found) {
+					this.mark_lost(TERMINAL_NOT_FOUND_MESSAGE);
+				} else {
 					this.error_message = `failed to resize: ${result.error.message}`;
 				}
 			}

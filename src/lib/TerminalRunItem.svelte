@@ -55,6 +55,8 @@
 					<span class="exit-code">
 						closed{terminal.exit_code === null ? '' : ` (${terminal.exit_code})`}
 					</span>
+				{:else if terminal.status === 'lost'}
+					<span class="exit-code error">lost</span>
 				{:else}
 					<span class="exit-code error">failed</span>
 				{/if}

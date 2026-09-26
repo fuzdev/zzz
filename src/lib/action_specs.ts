@@ -53,7 +53,10 @@ export type PingOutput = z.infer<typeof PingOutput>;
 
 /**
  * Inner payload of `session_load`. The fields here are the actual session
- * snapshot — files, scoped dirs, provider status, workspaces.
+ * snapshot — files and the roots they cover, scoped dirs, provider status,
+ * workspaces, the caller's terminals, and the server instance. The frontend
+ * loads it at boot and again after every reconnect, reconciling its state to
+ * it (see `Frontend.load_session`).
  *
  * TODO extract to `diskfile_types.ts` (or a session-specific module) once
  * the Rust backend grows its own typed session response and we can move
@@ -63,8 +66,21 @@ export const SessionLoadData = z.strictObject({
 	zzz_dir: DiskfileDirectoryPath,
 	scoped_dirs: z.readonly(z.array(DiskfileDirectoryPath)),
 	files: z.array(SerializableDisknode),
+	/**
+	 * The directories whose complete file trees `files` holds (the backend's
+	 * watched roots) — a known file under one of them that's missing from
+	 * `files` is gone from disk.
+	 */
+	file_roots: z.array(DiskfileDirectoryPath),
 	provider_status: z.array(ProviderStatus),
-	workspaces: z.array(WorkspaceInfoJson)
+	workspaces: z.array(WorkspaceInfoJson),
+	/** Backend ids of the caller's live terminals. */
+	terminal_ids: z.array(Uuid),
+	/**
+	 * Minted each time the backend starts — a different id than the last
+	 * snapshot's means it restarted, losing its terminals and runtime workspaces.
+	 */
+	server_instance_id: Uuid
 });
 export type SessionLoadData = z.infer<typeof SessionLoadData>;
 
@@ -291,7 +307,8 @@ export const session_load_action_spec = {
 	input: z.void(),
 	output: SessionLoadOutput,
 	async: true,
-	description: 'Load initial session data including filesystem state and provider status.'
+	description:
+		'Load the session snapshot (files, workspaces, terminals, provider status) — at boot and after each reconnect, to resync.'
 } satisfies RequestResponseActionSpec;
 
 export const filer_change_action_spec = {
@@ -425,7 +442,8 @@ export const terminal_data_send_action_spec = {
 	input: TerminalDataSendInput,
 	output: z.null(),
 	async: true,
-	description: 'Send stdin bytes to a terminal.'
+	description:
+		'Send stdin bytes to a terminal. Fails with `not_found` when the caller has no live terminal with the id.'
 } satisfies RequestResponseActionSpec;
 
 export const terminal_data_action_spec = {
@@ -449,7 +467,8 @@ export const terminal_resize_action_spec = {
 	input: TerminalResizeInput,
 	output: z.null(),
 	async: true,
-	description: 'Update PTY dimensions for a terminal.'
+	description:
+		'Update PTY dimensions for a terminal. Fails with `not_found` when the caller has no live terminal with the id.'
 } satisfies RequestResponseActionSpec;
 
 export const terminal_close_action_spec = {

@@ -291,12 +291,16 @@ conform to the shared fuz_app contract. The tests live in
   (partial writes continued), multibyte output split across reads, env
   scrubbing (no `SECRET_*` / `DATABASE_URL` / … in the child), reaping of a
   child that ignores `SIGTERM` + `SIGHUP` (no zombie after close),
-  silent-null for missing or another account's terminal IDs, ownership
-  scoping (a second account gets no output and can't drive or close the
-  terminal; the owner's second socket does get output), and a self-deleted
-  account's terminal processes being reaped.
+  `not_found` for a missing terminal ID, ownership scoping (a second
+  account gets no output, can't drive or close the terminal, and gets
+  replies identical to an unknown id's; the owner's second socket does get
+  output), `session_load`'s `terminal_ids` (running listed; exited, closed,
+  and other accounts' not), and a self-deleted account's terminal processes
+  being reaped.
 - **`provider.cross.test.ts`** — `provider_load_status` (no-key status) plus `session_load`
-  (zzz_dir file listing with contents + recursive subdirectory walk).
+  (zzz_dir file listing with contents + recursive subdirectory walk; `file_roots`
+  covering `zzz_dir`, the scoped dirs, and every file; a stable
+  `server_instance_id`).
 - **`completion.cross.test.ts`** — `completion_create` invalid-provider and blank-prompt rejection.
 - **`peer_ping_ws.cross.test.ts`** — server-initiated `peer/ping` round-trip
   (client invokes, server pings back over the same socket, client responder
@@ -392,7 +396,9 @@ revocation is the spine `ConnectionRegistry`'s `SocketRevoker` (see Auth
 item 10).
 
 **App + dispatch**: `App` (in `handlers/mod.rs`) holds zzz's long-lived,
-non-spine state — `workspaces` (`RwLock<HashMap>`), `workspace_lifecycle`
+non-spine state — `instance_id` (a UUID minted at boot, returned by
+`session_load` as `server_instance_id` so clients can tell a restart),
+`workspaces` (`RwLock<HashMap>`), `workspace_lifecycle`
 (the `tokio::sync::Mutex` serializing `workspace_open` / `workspace_close`),
 `db_pool`, `ScopedFs`,
 `zzz_dir`, `scoped_dirs`, `FilerManager` (per-watcher ignore config, event
@@ -576,6 +582,8 @@ metadata contract, the bootstrap success/failure audit rows, and the
   reason). Messages keep the `failed to … : …` prefix. `workspace_open` maps
   the same way (missing → `not_found`, not a directory → `invalid_params`, a
   directory whose listing is refused → `forbidden` / `permission_denied`).
+  `workspace_close` of a path that isn't open → `invalid_params` /
+  `workspace_not_open` (`handlers::workspace::ERROR_WORKSPACE_NOT_OPEN`).
 - **Atomic writes**: `ScopedFs::write_file` stages content in a hidden
   `.zzz-tmp-<uuid>` file beside the target (`O_EXCL | O_NOFOLLOW`), gives it
   the replaced file's mode and (best-effort `fchown`) owner + group, writes,
@@ -661,8 +669,9 @@ metadata contract, the bootstrap success/failure audit rows, and the
     terminal's owner. `terminal_data` / `terminal_exited` go to that
     account's sockets only (`ConnectionRegistry::send_to_account`), and
     `terminal_data_send` / `terminal_resize` / `terminal_close` from any other
-    account behave exactly as for an unknown id (no effect, same reply), so a
-    terminal's existence isn't observable across accounts. A successful
+    account behave exactly as for an unknown id (no effect, same reply — see
+    below), so a terminal's existence isn't observable across accounts.
+    `session_load` lists only the caller's terminal ids. A successful
     `account_delete` / `account_purge` audit event closes the target account's
     terminals (`handlers::terminal::register_terminal_account_listener`,
     beside the spine's socket-revocation listeners). Creation itself is open
@@ -687,8 +696,11 @@ metadata contract, the bootstrap success/failure audit rows, and the
     can still read `/proc/<zzzd pid>/environ` or the `.env` files. The
     prefix match also drops the user's own `FUZ_*` variables (e.g. for the
     `fuz` CLI) from terminals.
-  - Silent returns for missing terminal IDs (`terminal_data_send`,
-    `terminal_resize`; `terminal_close` → `{exit_code: null}`).
+  - **Missing terminal IDs** (unknown, ended, lost to a restart, or another
+    account's — one `pty_manager::TerminalNotFound`): `terminal_data_send`
+    and `terminal_resize` fail with `not_found` (`"terminal not found"`, no
+    `data`), so a client notices a terminal it thinks is running is gone;
+    `terminal_close` stays idempotent (`{exit_code: null}`).
 - **Provider system**: Enum-dispatched (`Provider` enum, not trait objects) —
   3 providers known at compile time, exhaustive matching. API keys come from
   the `SECRET_*_API_KEY` env vars at construction and are never mutated at

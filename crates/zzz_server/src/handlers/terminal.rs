@@ -12,15 +12,15 @@ use fuz_auth::{
     deserialize_wire_uuid,
 };
 use fuz_http::{
-    JsonrpcError, internal_error, internal_error_with_source, invalid_params, parse_strict_params,
-    queue_overflow, unauthenticated,
+    JsonrpcError, internal_error, internal_error_with_source, invalid_params, not_found,
+    parse_strict_params, queue_overflow,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::handlers::App;
-use crate::pty_manager::PtyManager;
+use crate::handlers::{App, caller_account_id};
+use crate::pty_manager::{PtyManager, TerminalNotFound, TerminalWriteError};
 
 #[derive(Serialize)]
 struct TerminalCreateResult {
@@ -89,13 +89,11 @@ fn terminal_dimension(value: u64, name: &str) -> Result<u16, JsonrpcError> {
         })
 }
 
-/// The calling account, which owns the terminals it creates. The terminal
-/// specs require an account, so a missing one is refused rather than trusted.
-fn caller_account_id(ctx: &ActionContext<'_>) -> Result<Uuid, JsonrpcError> {
-    ctx.auth
-        .account()
-        .map(|account| account.id)
-        .ok_or_else(unauthenticated)
+/// The reply for a terminal the caller doesn't own — an unknown id, one that
+/// ended, and another account's are all this same `not_found`, so a
+/// terminal's existence isn't observable across accounts.
+fn terminal_not_found(_: TerminalNotFound) -> JsonrpcError {
+    not_found("terminal", None)
 }
 
 /// The account whose terminals a successful `account_delete` /
@@ -174,7 +172,10 @@ pub async fn terminal_data_send(
     app.pty_manager
         .write(owner, &input.terminal_id.to_string(), &input.data)
         .await
-        .map_err(|e| queue_overflow(&e.to_string()))?;
+        .map_err(|e| match e {
+            TerminalWriteError::NotFound(e) => terminal_not_found(e),
+            TerminalWriteError::InputFull => queue_overflow(&e.to_string()),
+        })?;
 
     Ok(Value::Null)
 }
@@ -191,7 +192,8 @@ pub async fn terminal_resize(
 
     app.pty_manager
         .resize(owner, &input.terminal_id.to_string(), cols, rows)
-        .await;
+        .await
+        .map_err(terminal_not_found)?;
 
     Ok(Value::Null)
 }
@@ -241,6 +243,14 @@ mod tests {
             Err(e) => assert_eq!(e.code, JsonrpcErrorCode::InvalidParams),
             Ok(v) => panic!("expected invalid_params, got Ok({v})"),
         }
+    }
+
+    #[test]
+    fn a_missing_terminal_is_a_plain_not_found() {
+        let error = terminal_not_found(TerminalNotFound);
+        assert_eq!(error.code, JsonrpcErrorCode::NotFound);
+        assert_eq!(error.message, "terminal not found");
+        assert!(error.data.is_none(), "nothing to tell unknown from foreign");
     }
 
     #[test]

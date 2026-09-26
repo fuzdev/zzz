@@ -22,6 +22,8 @@ import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
 import { is_notification } from '@fuzdev/fuz_app/testing/transports/ws_client.ts';
 
+import { ERROR_WORKSPACE_NOT_OPEN } from '$lib/workspace_helpers.ts';
+
 import './cross_test_types.ts';
 
 const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
@@ -350,6 +352,7 @@ describe('workspace cross-backend', () => {
 				close2.error.message.startsWith('workspace not open:'),
 				`unexpected message: ${close2.error.message}`
 			);
+			assert.deepEqual(close2.error.data, { reason: ERROR_WORKSPACE_NOT_OPEN });
 		} finally {
 			await remove_dir(tmp_dir);
 		}

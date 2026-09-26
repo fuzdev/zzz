@@ -11,6 +11,20 @@ export const TERMINAL_OUTPUT_MAX_LENGTH = 1_000_000;
  */
 export const TERMINAL_INPUT_PENDING_MAX_LENGTH = 64 * 1024;
 
+/** Why a terminal is `lost` when the backend answers `not_found` for it. */
+export const TERMINAL_NOT_FOUND_MESSAGE =
+	'lost: the backend no longer has this terminal — zzzd may have restarted';
+
+/** Why a terminal is `lost` when a session snapshot from a restarted backend lacks it. */
+export const TERMINAL_LOST_TO_RESTART_MESSAGE = 'lost: zzzd restarted, ending this terminal';
+
+/**
+ * Why a terminal is `lost` when a session snapshot from the same backend lacks
+ * it — it exited, or was closed from another tab, while the connection was down.
+ */
+export const TERMINAL_LOST_WHILE_DISCONNECTED_MESSAGE =
+	'lost: the terminal ended while the connection was down';
+
 /**
  * Formats a command and its args as the line typed into the terminal's shell.
  */

@@ -3,6 +3,12 @@ import type { Result } from '@fuzdev/fuz_util/result.ts';
 import { DiskfileDirectoryPath } from './diskfile_types.ts';
 
 /**
+ * `data.reason` of the `invalid_params` error `workspace_close` returns for a
+ * path that isn't an open workspace — e.g. one a daemon restart forgot.
+ */
+export const ERROR_WORKSPACE_NOT_OPEN = 'workspace_not_open';
+
+/**
  * What to tell the user about a workspace whose `watch_status` is
  * `degraded`: some of its directories have no file watch, so the daemon
  * rescans them every few seconds instead.

@@ -81,7 +81,7 @@
 
 		if (BROWSER) {
 			(window as any).app = new_app; // no types for this, just for runtime convenience
-			void new_app.load_session();
+			new_app.boot_session();
 		}
 	};
 
@@ -107,6 +107,17 @@
 		if (app.socket.revoked || app.socket.reconnect_count >= 2) {
 			void recheck_session();
 		}
+	});
+
+	// Feed each socket connect to `handle_socket_connect`: it runs the boot
+	// load that `boot_session` deferred to the first connect, and resyncs after
+	// a load the socket didn't carry (an HTTP fallback, or before a reconnect —
+	// notifications sent while the socket was down are lost).
+	$effect(() => {
+		if (!app) return;
+		const current_app = app;
+		const connect_time = current_app.socket.last_connect_time;
+		untrack(() => current_app.handle_socket_connect(connect_time));
 	});
 
 	// TODO refactor, maybe per route?

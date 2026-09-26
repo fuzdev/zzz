@@ -3,8 +3,10 @@
 //!
 //! Spine-backed signature: `(Value, ActionContext<'_>, Arc<App>) ->
 //! Result<Value, JsonrpcError>`. `ping` is public (no auth); `session_load`
-//! is authenticated and returns the initial state envelope (open workspaces,
-//! zzz_dir contents, scoped_dirs, provider status).
+//! is authenticated and returns the session snapshot (open workspaces, the
+//! file trees and their roots, `scoped_dirs`, provider status, the caller's
+//! terminals, and the server instance id) — loaded at boot and again after
+//! every reconnect to resync.
 
 use std::sync::Arc;
 
@@ -14,7 +16,7 @@ use fuz_http::{JsonrpcError, internal_error_with_source, invalid_params, parse_s
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::handlers::{App, WorkspaceInfo};
+use crate::handlers::{App, WorkspaceInfo, caller_account_id};
 
 #[derive(Serialize)]
 struct PingResult {
@@ -34,13 +36,20 @@ struct TestingEmitNotificationsResult {
     count: u64,
 }
 
+/// Twin of `SessionLoadData` in `action_specs.ts`.
 #[derive(Serialize)]
 struct SessionLoadData {
     files: Vec<crate::filer::SerializableDisknode>,
+    /// The filer roots `files` covers, so a client can drop the files it has
+    /// under them that `files` lacks.
+    file_roots: Vec<String>,
     zzz_dir: String,
     scoped_dirs: Vec<String>,
     provider_status: Vec<Value>,
     workspaces: Vec<WorkspaceInfo>,
+    /// The caller's live terminals.
+    terminal_ids: Vec<String>,
+    server_instance_id: String,
 }
 
 #[derive(Serialize)]
@@ -71,15 +80,17 @@ pub async fn ping(
 /// `session_load` — authenticated initial-state load. Takes no input
 /// (`z.void()`), so any `params` is refused.
 ///
-/// Returns the cross-domain envelope the frontend needs at boot:
-/// open workspaces, zzz_dir file tree (rescanned for consistency),
-/// scoped_dirs, provider status.
+/// Returns the cross-domain snapshot the frontend loads at boot and reloads
+/// after a reconnect: open workspaces, every filer's file tree (rescanned for
+/// consistency) with its roots, `scoped_dirs`, provider status, the caller's
+/// live terminal ids, and `App::instance_id`.
 pub async fn session_load(
     params: Value,
-    _ctx: ActionContext<'_>,
+    ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
     require_void_params(&params)?;
+    let owner = caller_account_id(&ctx)?;
     let workspaces: Vec<WorkspaceInfo> = {
         let ws = app.workspaces.read();
         ws.values().cloned().collect()
@@ -95,7 +106,8 @@ pub async fn session_load(
     // to every connection, like any other change; concurrent session_loads
     // share one rescan per filer.
     app.filer_manager.rescan_all().await;
-    let files = app.filer_manager.collect_all_files().await;
+    let files = app.filer_manager.snapshot().await;
+    let terminal_ids = app.pty_manager.terminal_ids_for_account(owner).await;
 
     let mut provider_status = Vec::new();
     for p in app.provider_manager.all() {
@@ -107,11 +119,14 @@ pub async fn session_load(
 
     let result = SessionLoadResult {
         data: SessionLoadData {
-            files,
+            files: files.files,
+            file_roots: files.roots,
             zzz_dir: app.zzz_dir.clone(),
             scoped_dirs: app.scoped_dirs.clone(),
             provider_status,
             workspaces,
+            terminal_ids,
+            server_instance_id: app.instance_id.to_string(),
         },
     };
     serde_json::to_value(result).map_err(|e| internal_error_with_source("serialization failed", &e))

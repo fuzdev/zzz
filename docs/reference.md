@@ -20,13 +20,13 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `filer_change` — Notifies the frontend of a file system change detected by the watcher. Kind: remote_notification. Initiator: backend. Auth: public
 - `ping` — Health check — echoes the request ID back to the caller. Kind: request_response. Initiator: both. Auth: account=none, actor=none
 - `provider_load_status` — Check the availability and status of an AI provider. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
-- `session_load` — Load initial session data including filesystem state and provider status. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `session_load` — Load the session snapshot (files, workspaces, terminals, provider status) — at boot and after each reconnect, to resync. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `terminal_close` — Kill a terminal process and return the exit code. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `terminal_create` — Spawn a PTY process and return the terminal ID. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `terminal_data` — Stream stdout/stderr bytes from a terminal to the frontend. Kind: remote_notification. Initiator: backend. Auth: public
-- `terminal_data_send` — Send stdin bytes to a terminal. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `terminal_data_send` — Send stdin bytes to a terminal. Fails with `not_found` when the caller has no live terminal with the id. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `terminal_exited` — Notify the frontend that a terminal process exited naturally. Kind: remote_notification. Initiator: backend. Auth: public
-- `terminal_resize` — Update PTY dimensions for a terminal. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `terminal_resize` — Update PTY dimensions for a terminal. Fails with `not_found` when the caller has no live terminal with the id. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `toggle_main_menu` — Toggle or set the visibility of the main navigation menu. Kind: local_call. Initiator: frontend. Auth: public
 - `workspace_changed` — Notifies frontends when a workspace is opened or closed. Kind: remote_notification. Initiator: backend. Auth: public
 - `workspace_close` — Close a workspace directory — stops file watching and removes from ScopedFs. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none

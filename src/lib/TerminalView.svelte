@@ -155,6 +155,14 @@
 			</button>
 		</div>
 	</div>
+	{#if terminal.output_gap && terminal.running}
+		<p class="output-gap" role="status">
+			<small>connection lost — some output may be missing</small>
+			<button type="button" class="plain" onclick={() => (terminal.output_gap = false)}>
+				dismiss
+			</button>
+		</p>
+	{/if}
 	<div
 		class="terminal-container"
 		bind:this={container_el}
@@ -185,6 +193,15 @@
 		display: flex;
 		gap: var(--space_xs);
 		align-items: center;
+	}
+	.output-gap {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space_sm);
+		margin: 0;
+		padding: var(--space_xs3) var(--space_xs);
+		background: var(--bg_2, #1a1a2e);
 	}
 	.terminal-container {
 		flex: 1;

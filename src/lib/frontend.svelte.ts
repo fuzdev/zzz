@@ -5,6 +5,7 @@ import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
 import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 import type { Assignable, ClassConstructor, OmitStrict } from '@fuzdev/fuz_util/types.ts';
+import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 import { ActionRegistry } from '@fuzdev/fuz_app/actions/action_registry.ts';
 import { ActionEventPhase, type ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';
 
@@ -24,8 +25,14 @@ import { Parts } from './parts.svelte.ts';
 import { Time } from './time.svelte.ts';
 import { Spaces } from './spaces.svelte.ts';
 import { Workspaces } from './workspaces.svelte.ts';
+import type { Workspace } from './workspace.svelte.ts';
 import { Terminals } from './terminals.svelte.ts';
+import { ERROR_WORKSPACE_NOT_OPEN } from './workspace_helpers.ts';
 import { TerminalPresets } from './terminal_presets.svelte.ts';
+import {
+	TERMINAL_LOST_TO_RESTART_MESSAGE,
+	TERMINAL_LOST_WHILE_DISCONNECTED_MESSAGE
+} from './terminal_helpers.ts';
 import type { ZzzOptions } from './config_helpers.ts';
 import { BOTS_DEFAULT } from './config_defaults.ts';
 import { DiskfileDirectoryPath, DiskfilePath } from './diskfile_types.ts';
@@ -46,6 +53,8 @@ import { FrontendHttpTransport } from '@fuzdev/fuz_app/actions/transports_http.t
 import { FrontendWebsocketTransport } from '@fuzdev/fuz_app/actions/transports_ws.ts';
 import { create_rpc_client } from '@fuzdev/fuz_app/actions/rpc_client.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
+import type { Result } from '@fuzdev/fuz_util/result.ts';
 import type { FrontendActionsApi } from './action_metatypes.ts';
 import type { FrontendActionHandlers } from './frontend_action_types.ts';
 import { ActionOutputs } from './action_collections.ts';
@@ -54,6 +63,32 @@ import { create_frontend_action_handlers } from './frontend_action_handlers.ts';
 
 // TODO this is over-used, see also `app_context` for the user pattern
 export const frontend_context = create_context<Frontend>();
+
+/**
+ * The `workspace_open` errors that mean a lost workspace can't be reopened —
+ * its directory is gone, forbidden, or not a directory.
+ */
+const WORKSPACE_REOPEN_REFUSAL_CODES: ReadonlySet<number> = new Set([
+	JSONRPC_ERROR_CODES.not_found,
+	JSONRPC_ERROR_CODES.forbidden,
+	JSONRPC_ERROR_CODES.invalid_params
+]);
+
+/** What changed while a session snapshot was in flight — see `Frontend.receive_session`. */
+export interface SessionSnapshotChanges {
+	/** Diskfile paths a `filer_change` touched (`Diskfiles.track_changes`). */
+	file_paths: ReadonlySet<string>;
+	/** Workspace paths opened or closed (`Workspaces.track_changes`). */
+	workspace_paths: ReadonlySet<string>;
+	/** Backend ids of the terminals running when the snapshot was requested. */
+	running_terminal_ids: ReadonlySet<Uuid>;
+}
+
+/**
+ * How long `Frontend.boot_session` waits for the socket to open before loading
+ * the session over HTTP instead.
+ */
+export const SESSION_BOOT_FALLBACK_DELAY = 2_000;
 
 /** Delay before the first `session_load` retry, doubling per failure. */
 export const SESSION_LOAD_RETRY_DELAY = 1_000;
@@ -190,8 +225,37 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	/** Why the last `session_load` failed, cleared when one succeeds. */
 	session_error: string | null = $state.raw(null);
 
+	/**
+	 * The backend instance the last session snapshot came from — a snapshot
+	 * with a different one means zzzd restarted. `null` until one loads.
+	 */
+	server_instance_id: Uuid | null = $state.raw(null);
+
 	#session_retry_timeout: ReturnType<typeof setTimeout> | null = null;
 	#session_retry_count = 0;
+	/** A reconnect asked for a resync while a `session_load` was in flight. */
+	#session_resync_queued = false;
+	/**
+	 * Whether the latest `session_load` attempt was sent while the socket was
+	 * connected, `null` before the first — see `handle_socket_connect`.
+	 */
+	#session_load_over_socket: boolean | null = null;
+	#session_boot_timeout: ReturnType<typeof setTimeout> | null = null;
+	/** The socket's `last_connect_time` last seen by `handle_socket_connect`. */
+	#socket_connect_time: number | null = null;
+	/**
+	 * Workspaces a restarted backend lost, to reopen — kept until a reopen
+	 * succeeds or definitively fails (see `receive_session`).
+	 */
+	readonly #workspaces_to_reopen: Set<DiskfileDirectoryPath> = new Set();
+	/** Workspaces with a reopen in flight. */
+	readonly #workspaces_reopening: Set<DiskfileDirectoryPath> = new Set();
+	/**
+	 * Workspaces closed while their reopen was in flight — the backend's open
+	 * scans before registering, so a close meanwhile finds nothing to close and
+	 * the open lands anyway; the reopen closes it again when it succeeds.
+	 */
+	readonly #workspaces_reopen_cancelled: Set<DiskfileDirectoryPath> = new Set();
 	#disposed = false;
 
 	readonly #on_unauthenticated: (() => void) | null;
@@ -302,43 +366,65 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	// TODO think about what the scope of the frontend object's API should be, keep it more minimal than these methods
 
 	/**
-	 * Loads the session snapshot (`session_load`) and applies it, retrying with
-	 * backoff (`SESSION_LOAD_RETRY_DELAY` doubling to `SESSION_LOAD_RETRY_DELAY_MAX`)
-	 * until one succeeds or the app is disposed. Calling it while a retry waits
-	 * retries now.
+	 * Loads the session snapshot (`session_load`) and reconciles the app with it
+	 * (see `receive_session`), retrying with backoff (`SESSION_LOAD_RETRY_DELAY`
+	 * doubling to `SESSION_LOAD_RETRY_DELAY_MAX`) until one succeeds or the app
+	 * is disposed. Calling it while a retry waits retries now. Runs at boot and
+	 * after every reconnect (see `handle_socket_connect`).
 	 *
-	 * Snapshot entries for paths a `filer_change` touched while the request was
-	 * in flight are skipped, since the notification is at least as new.
+	 * Changes that arrive while the request is in flight win over the snapshot,
+	 * since they're at least as new: file paths a `filer_change` touched and
+	 * workspaces opened or closed are left as they are, and only terminals
+	 * running when the request was sent can be found lost.
 	 *
 	 * @returns whether this attempt succeeded
 	 */
 	async load_session(): Promise<boolean> {
 		if (this.#disposed || this.session_status === 'pending') return false;
 		this.#clear_session_retry();
+		this.#clear_session_boot();
 		this.session_status = 'pending';
+		this.#session_load_over_socket = this.socket.connected;
 
 		let error_message: string;
-		const changes = this.diskfiles.track_changes();
+		const file_changes = this.diskfiles.track_changes();
+		const workspace_changes = this.workspaces.track_changes();
+		const running_terminal_ids = this.terminals.running_terminal_ids();
+		const stop_tracking = (): void => {
+			file_changes.stop();
+			workspace_changes.stop();
+		};
 		try {
 			const result = await this.api.session_load();
-			changes.stop();
+			stop_tracking();
 			if (this.#disposed) return false;
 			if (result.ok) {
-				this.receive_session(result.value.data, changes.paths);
+				this.receive_session(result.value.data, {
+					file_paths: file_changes.paths,
+					workspace_paths: workspace_changes.paths,
+					running_terminal_ids
+				});
 				this.session_status = 'success';
 				this.session_error = null;
 				this.#session_retry_count = 0;
+				if (this.#session_resync_queued) {
+					// a reconnect during the request — the snapshot may predate it
+					this.#session_resync_queued = false;
+					void this.load_session();
+				}
 				return true;
 			}
 			error_message = result.error.message;
 		} catch (error) {
 			// a throw sending the request or applying the snapshot is retried like a failed load
-			changes.stop();
+			stop_tracking();
 			if (this.#disposed) return false;
 			console.error('[frontend] session load failed:', error);
 			error_message = to_error_message(error);
 		}
 
+		// the retry loads a fresh snapshot, which covers a queued resync
+		this.#session_resync_queued = false;
 		this.session_status = 'failure';
 		this.session_error = error_message;
 		const delay = Math.min(
@@ -353,6 +439,81 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		return false;
 	}
 
+	/**
+	 * Starts the boot-time session load. It waits for the socket to open, so
+	 * the snapshot comes over the socket that then carries the notifications,
+	 * with no gap between the two (see `handle_socket_connect`); if the socket
+	 * hasn't opened within `fallback_delay`, it loads over HTTP instead. Loads
+	 * right away when the socket is already open or there's none configured.
+	 *
+	 * @param fallback_delay - ms to wait for the socket before loading over HTTP
+	 */
+	boot_session(fallback_delay: number = SESSION_BOOT_FALLBACK_DELAY): void {
+		if (
+			this.#disposed ||
+			this.#session_load_over_socket !== null ||
+			this.#session_boot_timeout !== null
+		) {
+			return;
+		}
+		if (this.socket.connected || !this.socket.url_input) {
+			void this.load_session();
+			return;
+		}
+		this.#session_boot_timeout = setTimeout(() => {
+			this.#session_boot_timeout = null;
+			void this.load_session();
+		}, fallback_delay);
+	}
+
+	/**
+	 * Handles the socket's `last_connect_time` changing — call it with each new
+	 * value (the app root wires this to the socket's reactive state).
+	 *
+	 * Notifications only arrive while the socket is open, so a snapshot loaded
+	 * before this connect may miss changes: those sent while a previous socket
+	 * was down (`filer_change`, `workspace_changed`, `terminal_data`,
+	 * `terminal_exited`), or, on the first connect, those between an HTTP
+	 * boot load and the socket opening. So:
+	 *
+	 * - with no load yet, this is the boot load (see `boot_session`)
+	 * - on the first connect, a load sent while the socket was already open
+	 *   (so over it) needs nothing more
+	 * - otherwise, an earlier load is followed by a resync — the
+	 *   session snapshot is reloaded (after the in-flight load, if any) to
+	 *   reconcile files, workspaces, and terminals, and on a reconnect running
+	 *   terminals are flagged as possibly missing output
+	 *
+	 * @param connect_time - the socket's `last_connect_time`, `null` before it connects
+	 * @returns whether this connect started a resync
+	 */
+	handle_socket_connect(connect_time: number | null): boolean {
+		if (connect_time === null || connect_time === this.#socket_connect_time) return false;
+		const first = this.#socket_connect_time === null;
+		this.#socket_connect_time = connect_time;
+		if (this.#disposed) return false;
+		const over_socket = this.#session_load_over_socket;
+		if (over_socket === null) {
+			void this.load_session();
+			return false;
+		}
+		// the latest load already went over this socket
+		if (first && over_socket) return false;
+		if (!first) this.terminals.mark_output_gap();
+		if (this.session_status === 'pending') {
+			this.#session_resync_queued = true;
+		} else {
+			void this.load_session();
+		}
+		return true;
+	}
+
+	#clear_session_boot(): void {
+		if (this.#session_boot_timeout === null) return;
+		clearTimeout(this.#session_boot_timeout);
+		this.#session_boot_timeout = null;
+	}
+
 	#clear_session_retry(): void {
 		if (this.#session_retry_timeout === null) return;
 		clearTimeout(this.#session_retry_timeout);
@@ -361,28 +522,142 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 	// TODO refactor, probably `app.session`
 	/**
-	 * Applies a session snapshot.
+	 * Reconciles the app with a session snapshot — replacing, not just adding:
+	 *
+	 * - workspaces: adds the listed ones and removes the rest
+	 *   (`Workspaces.reconcile`) — except after a zzzd restart (a new
+	 *   `server_instance_id`), when the ones it lost are reopened instead
+	 *   (`Workspaces.open`), keeping their files and tabs; a reopen refused
+	 *   because the directory is gone or forbidden drops the workspace and its
+	 *   files, while any other failure keeps it for the next snapshot to retry
+	 * - files: upserts the snapshot's, and removes known files it lacks under
+	 *   `file_roots` or a removed workspace, keeping ones with unsaved edits
+	 *   (`Diskfiles.reconcile`) — files elsewhere are left alone
+	 * - terminals: running ones the backend no longer has become `lost`
+	 *   (`Terminals.reconcile`)
 	 *
 	 * @param data - the `session_load` output's snapshot
-	 * @param skip_paths - paths whose file-tree entries are stale (see `Diskfiles.add_initial`)
+	 * @param changes - what changed while the snapshot was in flight, which the
+	 *   snapshot doesn't override (see `load_session`); without it nothing is
+	 *   skipped and every running terminal is judged
 	 */
 	receive_session(
 		data: ActionOutputs['session_load']['data'],
-		skip_paths?: ReadonlySet<string>
+		changes?: SessionSnapshotChanges
 	): void {
+		const restarted =
+			this.server_instance_id !== null && this.server_instance_id !== data.server_instance_id;
+		this.server_instance_id = data.server_instance_id;
 		this.zzz_dir = data.zzz_dir;
 		this.scoped_dirs = data.scoped_dirs;
 		this.provider_status = data.provider_status;
 
-		if (Array.isArray(data.files)) {
-			this.diskfiles.add_initial(data.files, skip_paths);
-		}
-
-		if (Array.isArray(data.workspaces)) {
-			for (const workspace_data of data.workspaces) {
-				this.workspaces.add(workspace_data);
+		// workspaces changed in flight or being reopened are left as they are
+		const skip_workspaces: Set<string> = new Set(changes?.workspace_paths);
+		for (const path of this.#workspaces_reopening) skip_workspaces.add(path);
+		// lost to an earlier restart, their reopen failed without a refusal — retry
+		const listed: Set<string> = new Set(data.workspaces.map((w) => w.path));
+		const retry: Array<DiskfileDirectoryPath> = [];
+		for (const path of this.#workspaces_to_reopen) {
+			if (listed.has(path) || !this.workspaces.get_by_path(path)) {
+				this.#workspaces_to_reopen.delete(path);
+			} else if (!skip_workspaces.has(path)) {
+				retry.push(path);
 			}
 		}
+		const unlisted = this.workspaces.reconcile(data.workspaces, {
+			skip_paths: new Set([...skip_workspaces, ...retry]),
+			keep_unlisted: restarted
+		});
+		const reopen = restarted ? [...unlisted, ...retry] : retry;
+		const removed = restarted ? [] : unlisted;
+
+		// a removed workspace's files are gone from the backend's view unless
+		// another root covers them — then they're in the snapshot or pruned there
+		this.diskfiles.reconcile(data.files, [...data.file_roots, ...removed], {
+			skip_paths: changes?.file_paths,
+			skip_dirs: [...skip_workspaces, ...reopen]
+		});
+
+		this.terminals.reconcile(
+			new Set(data.terminal_ids),
+			changes?.running_terminal_ids ?? this.terminals.running_terminal_ids(),
+			restarted ? TERMINAL_LOST_TO_RESTART_MESSAGE : TERMINAL_LOST_WHILE_DISCONNECTED_MESSAGE
+		);
+
+		for (const path of reopen) void this.#reopen_workspace(path, data.file_roots);
+	}
+
+	/**
+	 * Closes the workspace at `path` (`workspace_close`) and removes it here. A
+	 * reply that it isn't open (`ERROR_WORKSPACE_NOT_OPEN` — e.g. a restart
+	 * forgot it and its reopen hasn't succeeded) removes it here too, and the
+	 * close always cancels a pending reopen — one in flight closes the workspace
+	 * again once it lands — so a closed workspace stays closed.
+	 *
+	 * @returns the RPC result — any failure but "not open" is for the caller to surface
+	 */
+	async close_workspace(
+		path: DiskfileDirectoryPath
+	): Promise<Result<{ value: null }, { error: JsonrpcErrorObject }>> {
+		this.#workspaces_to_reopen.delete(path);
+		if (this.#workspaces_reopening.has(path)) this.#workspaces_reopen_cancelled.add(path);
+		const result = await this.api.workspace_close({ path });
+		if (!result.ok) {
+			const { reason } = (result.error.data ?? {}) as { reason?: unknown };
+			if (reason !== ERROR_WORKSPACE_NOT_OPEN) return result;
+		}
+		this.workspaces.remove_by_path(path);
+		return { ok: true, value: null };
+	}
+
+	/**
+	 * Reopens a workspace a restarted backend lost, reconciling its files. A
+	 * refusal saying the directory is gone or forbidden drops the workspace and
+	 * the files only it covered; any other failure keeps it for the next session
+	 * snapshot to retry, so nothing loops. A `close_workspace` while it's in
+	 * flight wins: a reopen that lands anyway is closed again.
+	 */
+	async #reopen_workspace(
+		path: DiskfileDirectoryPath,
+		file_roots: ReadonlyArray<string>
+	): Promise<void> {
+		this.#workspaces_to_reopen.add(path);
+		this.#workspaces_reopening.add(path);
+		let opened: Workspace | null = null;
+		let error: JsonrpcErrorObject | null = null;
+		let cancelled = false;
+		try {
+			const result = await this.workspaces.open(path, { reconcile_files: true });
+			if (result.ok) {
+				opened = result.value;
+			} else {
+				error = result.error;
+			}
+		} catch (thrown) {
+			error = { code: JSONRPC_ERROR_CODES.internal_error, message: to_error_message(thrown) };
+		} finally {
+			this.#workspaces_reopening.delete(path);
+			cancelled = this.#workspaces_reopen_cancelled.delete(path);
+		}
+		if (opened) {
+			this.#workspaces_to_reopen.delete(path);
+			if (cancelled && !this.#disposed) {
+				// closed while in flight, and the backend opened it anyway — close it again
+				const closed = await this.close_workspace(opened.path);
+				if (!closed.ok) {
+					console.error(`[frontend] failed to close reopened workspace ${path}:`, closed.error);
+				}
+			}
+			return;
+		}
+		if (!error) return;
+		if (this.#disposed) return;
+		console.error(`[frontend] failed to reopen workspace ${path} after zzzd restarted:`, error);
+		if (!WORKSPACE_REOPEN_REFUSAL_CODES.has(error.code)) return;
+		this.#workspaces_to_reopen.delete(path);
+		this.workspaces.remove_by_path(path);
+		this.diskfiles.reconcile([], [path], { skip_dirs: file_roots });
 	}
 
 	add_providers(providers_json: Array<ProviderJsonInput>): void {
@@ -446,6 +721,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	override dispose(): void {
 		this.#disposed = true;
 		this.#clear_session_retry();
+		this.#clear_session_boot();
 		this.socket.disconnect();
 		this.terminals.dispose();
 		this.time.dispose();

@@ -24,6 +24,10 @@ use crate::handlers::filesystem::{
 };
 use crate::handlers::{App, WorkspaceInfo, not_found_error};
 
+/// `workspace_close` of a path that isn't an open workspace (`invalid_params`)
+/// — e.g. one a restart forgot, which a client can then drop locally.
+pub const ERROR_WORKSPACE_NOT_OPEN: &str = "workspace_not_open";
+
 // -- Inputs -----------------------------------------------------------------
 
 /// Input for `workspace_open` / `workspace_close` — twin of
@@ -316,7 +320,10 @@ pub async fn workspace_close(
     }
 
     let Some(workspace) = release_workspace(&app, &key, &lifecycle).await else {
-        return Err(invalid_params(&format!("workspace not open: {path}"), None));
+        return Err(invalid_params(
+            &format!("workspace not open: {path}"),
+            Some(ERROR_WORKSPACE_NOT_OPEN),
+        ));
     };
 
     broadcast_workspace_closed(&app, &workspace)?;

@@ -52,6 +52,30 @@ beforeEach(() => {
 });
 
 describe('upsert by path', () => {
+	test('an unchanged file is left untouched', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A, 'same')]);
+		const diskfile = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(diskfile);
+		diskfile.updated = '2000-01-01T00:00:00.000Z' as typeof diskfile.updated;
+
+		app.diskfiles.add_initial([create_disknode(PATH_A, 'same')]);
+		assert.strictEqual(diskfile.updated, '2000-01-01T00:00:00.000Z', 'not bumped');
+
+		app.diskfiles.add_initial([create_disknode(PATH_A, 'different')]);
+		assert.strictEqual(diskfile.content, 'different');
+		assert.notStrictEqual(diskfile.updated, '2000-01-01T00:00:00.000Z');
+	});
+
+	test('a source_dir change alone still upserts', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A, 'same')]);
+		const diskfile = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(diskfile);
+		const other_dir = SerializableDisknode.shape.source_dir.parse('/');
+		app.diskfiles.add_initial([{ ...create_disknode(PATH_A, 'same'), source_dir: other_dir }]);
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), diskfile, 'same diskfile');
+		assert.strictEqual(diskfile.source_dir, other_dir);
+	});
+
 	test('add for an existing path updates it in place', () => {
 		filer_change('add', PATH_A, 'one');
 		const diskfile = app.diskfiles.get_by_path(PATH_A);

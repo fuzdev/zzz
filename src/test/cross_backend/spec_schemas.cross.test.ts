@@ -201,6 +201,11 @@ describe('zzz spec schemas cross-backend', () => {
 				cols: 100,
 				rows: 30
 			});
+			// the session snapshot lists the live terminal
+			const session = (await call_and_check(fixture, session_load_action_spec)) as z.infer<
+				typeof session_load_action_spec.output
+			>;
+			assert.include(session.data.terminal_ids, cat.terminal_id);
 			await ws_call_and_check(ws, terminal_close_action_spec, { terminal_id: cat.terminal_id });
 		} finally {
 			await ws.close();

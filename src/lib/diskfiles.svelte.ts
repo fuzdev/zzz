@@ -144,12 +144,17 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * Adds a diskfile for `disknode`, or updates the existing one at the same
 	 * path in place — keeping its id, so tabs, selection, and parts stay attached.
 	 * A diskfile kept after a delete (see `remove_by_path`) is reattached this
-	 * way when its path reappears on disk.
+	 * way when its path reappears on disk. An existing diskfile whose content
+	 * and dependency data already match is left untouched, so a resync that
+	 * re-sends every file doesn't churn the unchanged ones.
 	 */
 	upsert(disknode: SerializableDisknode): Diskfile {
 		const existing = this.items.by_optional('by_path', disknode.id);
 		if (!existing) {
 			return this.add(disknode_to_diskfile_json(disknode));
+		}
+		if (!existing.deleted_on_disk && diskfile_matches(existing, disknode)) {
+			return existing;
 		}
 		existing.deleted_on_disk = false;
 		existing.set_json({
@@ -173,6 +178,38 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		for (const disknode of files) {
 			if (skip_paths?.has(disknode.id)) continue;
 			this.upsert(disknode);
+		}
+	}
+
+	/**
+	 * Replaces the file tree under `roots` with a session snapshot's: upserts
+	 * every snapshot file (like `add_initial`), and removes each known file under
+	 * a root that the snapshot lacks, via `remove_by_path` — so a file open with
+	 * unsaved edits is kept, flagged `deleted_on_disk`. Files outside every root
+	 * are left alone, since the snapshot says nothing about them.
+	 *
+	 * @param files - the snapshot's file tree
+	 * @param roots - the directories (trailing `/`) whose complete trees `files` holds
+	 * @param options.skip_paths - paths `filer_change` touched while the snapshot
+	 *   was in flight (see `track_changes`), neither upserted nor removed
+	 * @param options.skip_dirs - directories (trailing `/`) whose files aren't
+	 *   removed, e.g. workspaces opened while the snapshot was in flight
+	 */
+	reconcile(
+		files: Array<SerializableDisknode>,
+		roots: ReadonlyArray<string>,
+		options?: { skip_paths?: ReadonlySet<string>; skip_dirs?: ReadonlyArray<string> }
+	): void {
+		const skip_paths = options?.skip_paths;
+		const skip_dirs = options?.skip_dirs ?? [];
+		this.add_initial(files, skip_paths);
+		if (!roots.length) return;
+		const snapshot_paths: Set<string> = new Set(files.map((disknode) => disknode.id));
+		for (const diskfile of this.items.values) {
+			const { path } = diskfile;
+			if (snapshot_paths.has(path) || skip_paths?.has(path)) continue;
+			if (!is_under_any(path, roots) || is_under_any(path, skip_dirs)) continue;
+			this.remove_by_path(path);
 		}
 	}
 
@@ -334,3 +371,19 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		this.select(this.on_disk[0]?.id ?? null);
 	}
 }
+
+/** Whether `path` is inside one of `dirs` (each with a trailing `/`). */
+const is_under_any = (path: string, dirs: ReadonlyArray<string>): boolean =>
+	dirs.some((dir) => path.startsWith(dir));
+
+/** Whether `diskfile` already holds everything `upsert` would take from `disknode`. */
+const diskfile_matches = (diskfile: Diskfile, disknode: SerializableDisknode): boolean =>
+	diskfile.content === disknode.contents &&
+	diskfile.source_dir === disknode.source_dir &&
+	dependency_lists_match(diskfile.dependents, disknode.dependents) &&
+	dependency_lists_match(diskfile.dependencies, disknode.dependencies);
+
+const dependency_lists_match = (
+	a: ReadonlyArray<readonly [string, unknown]>,
+	b: ReadonlyArray<readonly [string, unknown]>
+): boolean => a.length === b.length && (a.length === 0 || JSON.stringify(a) === JSON.stringify(b));

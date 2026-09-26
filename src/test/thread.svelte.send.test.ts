@@ -9,6 +9,12 @@ import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
 import { create_frontend_action_handlers } from '$lib/frontend_action_handlers.ts';
 import type { FrontendActionHandlers } from '$lib/frontend_action_types.ts';
 
+import {
+	FrontendWebsocketTransport,
+	type WebsocketRpcConnection
+} from '@fuzdev/fuz_app/actions/transports_ws.ts';
+import { JSONRPC_ERROR_CODES, ThrownJsonrpcError } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 /** A stubbed `completion_create` call, resolved manually by the test. */
@@ -168,6 +174,56 @@ describe('Thread.send_message', () => {
 		calls[0]!.resolve();
 		await first;
 		assert.ok(!thread.pending);
+	});
+});
+
+describe('a completion in flight when the socket drops', () => {
+	test('settles its turn as errored through the real rpc path', async () => {
+		// a real `api` over the ws transport, on a connection that's up when the
+		// request goes out and then closes — fuz_app's client rejects in-flight
+		// requests on close (they can't be correlated after a reconnect)
+		const live = monkeypatch_zzz_for_tests(
+			new Frontend({ models: [{ name: 'test-model', provider_name: 'claude' }] })
+		);
+		let reject_request: ((error: unknown) => void) | undefined;
+		const connection: WebsocketRpcConnection = {
+			connected: true,
+			request: () =>
+				new Promise((_resolve, reject) => {
+					reject_request = reject;
+				}),
+			send: () => true,
+			add_message_handler: () => () => {},
+			add_error_handler: () => () => {}
+		} as unknown as WebsocketRpcConnection;
+		live.peer.transports.register_transport(
+			new FrontendWebsocketTransport(connection, (data) => live.peer.receive(data))
+		);
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.spyOn(console, 'log').mockImplementation(() => {});
+
+		const thread = live.threads.add_thread(
+			new Thread({ app: live, json: { model_name: 'test-model' } })
+		);
+		const sent = thread.send_message('hi');
+		const assistant_turn = Array.from(thread.turns.by_id.values()).at(-1)!;
+		for (let i = 0; i < 10; i++) await Promise.resolve();
+		assert.ok(reject_request, 'the request went out');
+		assert.ok(assistant_turn.pending);
+
+		reject_request(
+			new ThrownJsonrpcError(
+				JSONRPC_ERROR_CODES.service_unavailable,
+				'[socket] connection closed (code 1006) (method=completion_create, id=1)'
+			)
+		);
+		assert.strictEqual(await sent, assistant_turn);
+
+		assert.ok(!thread.pending);
+		assert.ok(assistant_turn.settled);
+		assert.ok(!assistant_turn.pending);
+		assert.include(assistant_turn.error_message, 'connection closed');
+		live.dispose();
 	});
 });
 

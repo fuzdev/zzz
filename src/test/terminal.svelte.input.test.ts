@@ -6,7 +6,10 @@ import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 import { Frontend } from '$lib/frontend.svelte.ts';
 import type { Terminal } from '$lib/terminal.svelte.ts';
-import { TERMINAL_INPUT_PENDING_MAX_LENGTH } from '$lib/terminal_helpers.ts';
+import {
+	TERMINAL_INPUT_PENDING_MAX_LENGTH,
+	TERMINAL_NOT_FOUND_MESSAGE
+} from '$lib/terminal_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 import {
@@ -161,6 +164,22 @@ describe('Terminal.send_input queue_overflow', () => {
 		await vi.advanceTimersByTimeAsync(5000);
 		assert.strictEqual(sends().length, 1);
 	});
+
+	test('`not_found` marks the terminal lost and drops the queued input', async () => {
+		const terminal = create_running();
+		terminal.send_input('a');
+		terminal.send_input('b');
+		sends()[0]!.resolve(result_error(JSONRPC_ERROR_CODES.not_found, 'terminal not found'));
+		await flush();
+
+		assert.strictEqual(terminal.status, 'lost');
+		assert.strictEqual(terminal.error_message, TERMINAL_NOT_FOUND_MESSAGE);
+		assert.strictEqual(sends().length, 1, 'stops sending');
+		terminal.send_input('c');
+		terminal.resize(80, 24);
+		assert.strictEqual(sends().length, 1);
+		assert.strictEqual(calls_of(calls, 'terminal_resize').length, 0);
+	});
 });
 
 describe('Terminal.resize', () => {
@@ -178,6 +197,37 @@ describe('Terminal.resize', () => {
 			{ cols: resizes()[1]!.input.cols, rows: resizes()[1]!.input.rows },
 			{ cols: 120, rows: 40 }
 		);
+	});
+
+	test('`not_found` marks the terminal lost and stops resizing', async () => {
+		const terminal = create_running();
+		const resizes = (): Array<StubbedTerminalCall> => calls_of(calls, 'terminal_resize');
+		terminal.resize(80, 24);
+		terminal.resize(100, 30);
+		resizes()[0]!.resolve(result_error(JSONRPC_ERROR_CODES.not_found, 'terminal not found'));
+		await flush();
+
+		assert.strictEqual(terminal.status, 'lost');
+		assert.strictEqual(terminal.error_message, TERMINAL_NOT_FOUND_MESSAGE);
+		assert.strictEqual(resizes().length, 1, 'the coalesced resize is dropped');
+		terminal.send_input('x');
+		assert.strictEqual(sends().length, 0);
+	});
+
+	test('a lost terminal restarts as a fresh process', async () => {
+		const terminal = create_running();
+		terminal.mark_lost('gone');
+		assert.strictEqual(terminal.status, 'lost');
+
+		const restarted = app.terminals.restart(terminal);
+		assert.strictEqual(terminal.status, 'starting');
+		assert.strictEqual(terminal.error_message, null);
+		const create = calls_of(calls, 'terminal_create')[0];
+		assert.ok(create, 'spawned without closing — there is nothing to close');
+		assert.strictEqual(calls_of(calls, 'terminal_close').length, 0);
+		create.resolve(result_ok({ terminal_id: create_uuid() }));
+		await restarted;
+		assert.strictEqual(terminal.status, 'running');
 	});
 
 	test('holds a resize requested while starting until started', () => {

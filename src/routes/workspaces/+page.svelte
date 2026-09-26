@@ -94,8 +94,10 @@
 		}
 	};
 
-	const handle_close = async (path: string): Promise<void> => {
-		await app.api.workspace_close({ path: DiskfileDirectoryPath.parse(path) });
+	const handle_close = async (path: DiskfileDirectoryPath): Promise<void> => {
+		error_message = null;
+		const result = await app.close_workspace(path);
+		if (!result.ok) error_message = `failed to close ${path}: ${result.error.message}`;
 	};
 </script>
 

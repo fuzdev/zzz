@@ -36,8 +36,10 @@ use crate::provider::{CompletionOptions, ProviderManager};
 use crate::pty_manager::PtyManager;
 use crate::scoped_fs::ScopedFs;
 
-use fuz_actions::ActionRegistry;
+use fuz_actions::{ActionContext, ActionRegistry};
+use fuz_http::{JsonrpcError, unauthenticated};
 use fuz_realtime::ConnectionRegistry;
+use uuid::Uuid;
 
 // -- App state (long-lived, shared via Arc) -----------------------------------
 
@@ -46,6 +48,10 @@ use fuz_realtime::ConnectionRegistry;
 /// Constructed once in `run_app`, wrapped in `Arc`, passed into the spec
 /// builders + the spine RPC / WS route states.
 pub struct App {
+    /// Minted when the app starts — `session_load` returns it as
+    /// `server_instance_id`, so a client that sees it change knows the daemon
+    /// restarted (its terminals and runtime workspaces are gone).
+    pub instance_id: Uuid,
     pub workspaces: RwLock<HashMap<String, WorkspaceInfo>>,
     /// Serializes `workspace_open` / `workspace_close`. Each spans the
     /// `workspaces` map, `ScopedFs`, and the workspace filer across await
@@ -99,6 +105,7 @@ impl App {
         realtime: Arc<ConnectionRegistry>,
     ) -> Self {
         Self {
+            instance_id: Uuid::new_v4(),
             workspaces: RwLock::new(HashMap::new()),
             workspace_lifecycle: tokio::sync::Mutex::new(()),
             db_pool,
@@ -129,6 +136,19 @@ impl App {
 
 // -- Errors -------------------------------------------------------------------
 
+/// The calling account. For specs that require an account, so a missing one
+/// is refused rather than trusted.
+///
+/// # Errors
+///
+/// `unauthenticated` when the request carries no account.
+pub fn caller_account_id(ctx: &ActionContext<'_>) -> Result<Uuid, JsonrpcError> {
+    ctx.auth
+        .account()
+        .map(|account| account.id)
+        .ok_or_else(unauthenticated)
+}
+
 /// A `not_found` (-32003) error with a caller-supplied `message` and
 /// `data.reason`.
 ///
@@ -136,8 +156,8 @@ impl App {
 /// filesystem and workspace handlers keep their `failed to …: …` messages
 /// (which name the path) across every code, so they build the error here.
 #[cold]
-pub fn not_found_error(message: &str, reason: &str) -> fuz_http::JsonrpcError {
-    fuz_http::JsonrpcError {
+pub fn not_found_error(message: &str, reason: &str) -> JsonrpcError {
+    JsonrpcError {
         code: fuz_http::JsonrpcErrorCode::NotFound,
         message: message.to_owned(),
         data: Some(serde_json::json!({ "reason": reason })),
