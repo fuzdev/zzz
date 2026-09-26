@@ -23,6 +23,15 @@ export const WorkspaceInfoJson = z.strictObject({
 });
 export type WorkspaceInfoJson = z.infer<typeof WorkspaceInfoJson>;
 
+/**
+ * Whether every directory of an open workspace has a file watch. `degraded`
+ * means the OS ran out of watches (inotify's `max_user_watches`), no watcher
+ * could be created, or the directory went missing: the directories without a
+ * watch are rescanned every few seconds, so their changes show up late.
+ */
+export const WorkspaceWatchStatus = z.enum(['full', 'degraded']);
+export type WorkspaceWatchStatus = z.infer<typeof WorkspaceWatchStatus>;
+
 export const WorkspaceJson = CellJson.extend({
 	path: DiskfileDirectoryPath,
 	name: z.string().default(''),
@@ -43,6 +52,13 @@ export class Workspace extends Cell<typeof WorkspaceJson> {
 	path: DiskfileDirectoryPath = $state.raw()!;
 	name: string = $state.raw()!;
 	opened_at: Datetime = $state.raw()!;
+
+	/**
+	 * Whether the daemon watches every directory of this workspace, as of the
+	 * last `workspace_open` — `degraded` means some are only rescanned
+	 * periodically. Transient client state, not serialized.
+	 */
+	watch_status: WorkspaceWatchStatus = $state.raw('full');
 
 	constructor(options: WorkspaceOptions) {
 		super(WorkspaceJson, options);

@@ -9,6 +9,7 @@
 	import { icon_add, icon_delete, icon_pin, icon_space } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import { click_outside } from './click_outside.svelte.ts';
+	import { WORKSPACE_DEGRADED_NOTICE } from './workspace_helpers.ts';
 
 	const app = frontend_context.get();
 </script>
@@ -106,6 +107,9 @@
 										<span class="flex:1 font_size_sm text-align:left font_family_mono">
 											{workspace.path}
 										</span>
+										{#if workspace.watch_status === 'degraded'}
+											<small class="text_50" title={WORKSPACE_DEGRADED_NOTICE}>polled</small>
+										{/if}
 									</button>
 								</li>
 							{/each}

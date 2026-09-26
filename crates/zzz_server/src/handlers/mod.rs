@@ -50,7 +50,9 @@ pub struct App {
     /// Serializes `workspace_open` / `workspace_close`. Each spans the
     /// `workspaces` map, `ScopedFs`, and the workspace filer across await
     /// points; interleaved, an open could re-add scope and a watcher for a
-    /// workspace a concurrent close just removed.
+    /// workspace a concurrent close just removed. A new workspace's initial
+    /// scan runs before `workspace_open` takes it, so a large tree doesn't
+    /// hold up other opens and closes.
     pub workspace_lifecycle: tokio::sync::Mutex<()>,
     pub db_pool: Pool,
     pub scoped_fs: ScopedFs,

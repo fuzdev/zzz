@@ -5,7 +5,7 @@
 	import { resolve } from '$app/paths';
 	import { frontend_context } from '$lib/frontend.svelte.ts';
 	import { DiskfileDirectoryPath } from '$lib/diskfile_types.ts';
-	import { parse_workspace_path } from '$lib/workspace_helpers.ts';
+	import { parse_workspace_path, WORKSPACE_DEGRADED_NOTICE } from '$lib/workspace_helpers.ts';
 	import { icon_add, icon_delete, icon_directory, icon_workspace } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import PageFooter from '$routes/PageFooter.svelte';
@@ -157,6 +157,9 @@
 							<span class="flex:1">
 								<strong>{workspace.name}</strong>
 								<span class="text_50 font_size_sm font_family_mono ml_sm">{workspace.path}</span>
+								{#if workspace.watch_status === 'degraded'}
+									<small class="text_50 display:block">{WORKSPACE_DEGRADED_NOTICE}</small>
+								{/if}
 							</span>
 						</button>
 						<button

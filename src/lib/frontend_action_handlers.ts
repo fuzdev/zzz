@@ -248,7 +248,8 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 
 	workspace_open: {
 		receive_response: ({ data: { output } }) => {
-			frontend.workspaces.add(output.workspace);
+			const workspace = frontend.workspaces.add(output.workspace);
+			workspace.watch_status = output.watch_status;
 			// populate diskfiles from initial file tree
 			frontend.diskfiles.add_initial(output.files);
 		},

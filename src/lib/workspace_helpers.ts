@@ -3,6 +3,14 @@ import type { Result } from '@fuzdev/fuz_util/result.ts';
 import { DiskfileDirectoryPath } from './diskfile_types.ts';
 
 /**
+ * What to tell the user about a workspace whose `watch_status` is
+ * `degraded`: some of its directories have no file watch, so the daemon
+ * rescans them every few seconds instead.
+ */
+export const WORKSPACE_DEGRADED_NOTICE =
+	"Not every directory has a file watch (likely the system's watch limit) — changes in some show up after a few seconds.";
+
+/**
  * Parse user input (the open-workspace form or the `?workspace=` URL param)
  * into a workspace directory path, without throwing.
  *

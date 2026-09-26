@@ -264,8 +264,10 @@ conform to the shared fuz_app contract. The tests live in
   non-canonical spelling, or nested in a scoped dir keeps write access; closing
   a plain workspace revokes it), `_testing_reset` closing every workspace and
   restoring the boot-time scope,
-  `workspace_open` returning the workspace's files (first and idempotent
-  open; symlinks and link loops skipped),
+  `workspace_open` returning the workspace's files and `watch_status` (first
+  and idempotent open; symlinks and link loops skipped; an unreadable
+  subdirectory skipped while its siblings are indexed; an unreadable root
+  refused with `forbidden` and nothing registered),
   not-a-directory (`invalid_params`) + nonexistent (`not_found`) errors, and `workspace_changed` broadcast on
   open/close (no broadcast on an idempotent open).
 - **`filesystem.cross.test.ts`** — scoped `diskfile_update` / `diskfile_delete`,
@@ -373,7 +375,7 @@ crates/zzz_server/src/
 │   ├── sse.rs        # provider SSE parsing
 │   ├── openai.rs     # OpenAiProvider — Chat Completions API with SSE streaming
 │   └── gemini.rs     # GeminiProvider — Generative Language API with SSE streaming
-├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered file index (events are hints, `lstat` decides), debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped
+├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered file index (events are hints, `lstat` decides), per-directory watches from the filer's own walk (degraded polling past the watch limit), stat-reusing rescans, debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
 ├── scoped_fs.rs      # Scoped filesystem — permanent (`zzz_dir` + `scoped_dirs`) + per-workspace roots, path validation, symlink rejection, atomic writes (temp file + fsync + rename)
 ├── static_files.rs   # Built-frontend fallback router: exact file → prerendered `{path}.html` → `200.html` SPA shell; backend paths + missing `_app/` assets 404; cache headers
@@ -457,8 +459,9 @@ metadata contract, the bootstrap success/failure audit rows, and the
   function tolerates either shape. Future: env-conditional — include the
   issues in dev, strip in prod.
 - **filer skips symlinks** — the walker and event handling never follow or
-  index a symlink (file or directory), and notify is configured with
-  `follow_symlinks(false)`, consistent with `ScopedFs`'s no-symlink rule.
+  index a symlink (file or directory), and no watch is added through one
+  (watches go only on real directories the walker lists), consistent with
+  `ScopedFs`'s no-symlink rule.
   This keeps link loops (`up -> ..`, a Wine prefix's `dosdevices/z: -> /`)
   from hanging the scan and keeps files outside the watched root out of the
   index. A symlinked file or directory inside a workspace is invisible in
@@ -477,11 +480,59 @@ metadata contract, the bootstrap success/failure audit rows, and the
   valid UTF-8 is skipped with its whole subtree, by the walker and in event
   handling (`is_ignored`), rather than indexed under a lossy U+FFFD key no
   client could address.
+- **Filer watches** — each filer adds one non-recursive notify watch per
+  directory it indexes, from its own walk (`filer::DirWatches`), so ignored,
+  symlinked, and non-UTF-8 directories and the app dir get none — the watch
+  budget scales with what's indexed, not with `node_modules/` or `target/`.
+  Each directory is watched before it's listed, so an entry created in
+  between is either listed or reported; a directory that appears (created,
+  renamed in, recreated) gets watches for its subtree during its sync, and
+  one that's removed or renamed away has its watches dropped. The walk and
+  the watch calls (a round trip to notify's watcher thread each) run on
+  blocking threads. Watches are reference-counted by inode: two paths naming
+  one directory (a renamed directory's old and new path before the old is
+  dropped, a bind mount) share one kernel watch, removed only with its last
+  path. Failures are per directory: an unreadable directory is skipped and
+  logged once (its parent's watch reports a chmod that makes it readable,
+  which syncs it; a watched directory chmod'ed unreadable is re-checked on
+  that report and drops out of the index), a vanished one ignored, and one
+  whose listing fails transiently (`EMFILE`, `ENOMEM`, `EIO` — anything but
+  `EACCES` / `ENOENT` / `ENOTDIR`) keeps what's indexed under it and is
+  polled until it lists; only a root that can't be listed fails
+  `start_filer` (`workspace_open` → `forbidden` / `not_found`). A running
+  filer whose root goes missing polls it until it's back. An overflow
+  (dropped events, or inotify's queue overflow) replaces the watcher with a
+  fresh one and re-adds every watch during the rescan, since neither the
+  bookkeeping nor notify's own path map survives lost events. The watcher
+  comes from a factory (`WatcherFactory`) that holds the event channel's
+  sender, so the event loop runs — polling, answering rescans — even with
+  no watcher. **Degraded mode**: past the watch limit (inotify's `ENOSPC`
+  from `max_user_watches`, `FilerConfig::watch_limit`, or no watcher at all
+  — e.g. `max_user_instances`), the remaining directories are listed
+  unwatched and the index still comes from the scan; the topmost unwatched
+  directories are rescanned every `DEGRADED_RESCAN_INTERVAL` (5s, or 10x the
+  last rescan's duration if longer), retrying their watches, and
+  `Filer::watch_status` reports `Degraded` (returned by `workspace_open` as
+  `watch_status`, kept on the opening tab's `Workspace` cell and shown on
+  the workspaces page and in the desk menu). A limit hit stops watch attempts
+  until the next rescan. A filer that degrades or recovers after
+  `workspace_open` returns is only logged — no notification carries the
+  change. Rescans (`session_load`, overflow, degraded polling) reuse a
+  file's indexed node when its `lstat` identity and change stamps
+  (`filer::FileStat`: dev, inode, size, mtime, ctime) are unchanged, so they
+  re-read only changed files; following git's "racily clean" rule, a stamp
+  is only recorded once the file has been still for `RACY_STAT_MARGIN` (2s)
+  and the read saw the stat's size, since same-size writes inside one
+  timestamp tick (coarse on tmpfs) leave every stamp unchanged.
+  `FilerManager::start_filer` gates starts per path, so concurrent opens of
+  one directory share a single initial scan. On macOS `FSEvents` each watch
+  call restarts notify's stream, so per-directory watching is slow there on
+  large trees.
 
 ## Known Limitations
 
 - RPC methods: `ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_create`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`, `admin_session_revoke_all` (admin-only), `admin_token_revoke_all` (admin-only) — plus the rest of the spine-registered `fuz_auth` standard bundle and protocol specs (see the workspace-layout section above)
-- 5 zzz-domain `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, per-path debounced broadcasts (80ms quiet, capped at 500ms) with immediate index updates (delete+create inside the window becomes `change`, create+delete becomes a bare `delete`), every event resolved by `lstat` so late or reordered removes can't drop an existing file, rename-aware (old path `delete`, new path `add`), ignored paths filtered before the bounded event channel with a coalesced root rescan on overflow, per-watcher ignore config, in-memory file index returned by `session_load` and `workspace_open`, symlinks skipped; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz` by name globally (`.zzz` keeps the CLI daemon home's `.env` / `bootstrap_token` out of a `~` workspace), `ScopedFs`'s `.zzz-tmp-*` staging files (the walk also deletes orphaned ones — exact `.zzz-tmp-<uuid>` names, regular files over an hour old), and every non-UTF-8 path, plus `zzz_dir` by its full path for a workspace/scoped_dir watcher whose root contains it; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY output) and `terminal_exited` (process exit), both sent only to the owning account's sockets, `completion_progress` (streaming completion chunks to requesting WS connection); the spine's role-grant-offer bundle carries its own notification set (`role_grant_offer_received` / `_retracted` / `_accepted` / `_declined` / `_supersede`)
+- 5 zzz-domain `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — per-directory watches (see Filer watches below), per-path debounced broadcasts (80ms quiet, capped at 500ms) with immediate index updates (delete+create inside the window becomes `change`, create+delete becomes a bare `delete`), every event resolved by `lstat` so late or reordered removes can't drop an existing file, rename-aware (old path `delete`, new path `add`), ignored paths filtered before the bounded event channel with a coalesced root rescan on overflow, per-watcher ignore config, in-memory file index returned by `session_load` and `workspace_open`, symlinks skipped; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz` by name globally (`.zzz` keeps the CLI daemon home's `.env` / `bootstrap_token` out of a `~` workspace), `ScopedFs`'s `.zzz-tmp-*` staging files (the walk also deletes orphaned ones — exact `.zzz-tmp-<uuid>` names, regular files over an hour old), and every non-UTF-8 path, plus `zzz_dir` by its full path for a workspace/scoped_dir watcher whose root contains it; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY output) and `terminal_exited` (process exit), both sent only to the owning account's sockets, `completion_progress` (streaming completion chunks to requesting WS connection); the spine's role-grant-offer bundle carries its own notification set (`role_grant_offer_received` / `_retracted` / `_accepted` / `_declined` / `_supersede`)
 - AI providers: Anthropic, OpenAI, and Gemini all fully implemented (non-streaming + SSE streaming)
 - No batch request support (JSON arrays)
 - `/api/account/signup` is mounted via `fuz_auth::signup_routes`. Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting via `app_settings_update` to enable open signup. The cross-process test binary opts into `open_signup: true` at startup via `app_settings_patch` so per-test `mint_account` can sign up without invites. `app_settings` is loaded from the DB per signup request (no cache).
@@ -523,7 +574,8 @@ metadata contract, the bootstrap success/failure audit rows, and the
   `conflict` (-32004; `already_exists`, `replaced_during_save`); any other
   I/O failure → `internal_error` (-32603, no
   reason). Messages keep the `failed to … : …` prefix. `workspace_open` maps
-  the same way (missing → `not_found`, not a directory → `invalid_params`).
+  the same way (missing → `not_found`, not a directory → `invalid_params`, a
+  directory whose listing is refused → `forbidden` / `permission_denied`).
 - **Atomic writes**: `ScopedFs::write_file` stages content in a hidden
   `.zzz-tmp-<uuid>` file beside the target (`O_EXCL | O_NOFOLLOW`), gives it
   the replaced file's mode and (best-effort `fchown`) owner + group, writes,
@@ -567,7 +619,11 @@ metadata contract, the bootstrap success/failure audit rows, and the
   `spawn_blocking`). `workspace_open` / `workspace_close` canonicalize
   asynchronously and serialize on `App::workspace_lifecycle` (a
   `tokio::sync::Mutex`), since each spans the workspaces map, `ScopedFs`, and
-  the workspace filer across await points.
+  the workspace filer across await points. `workspace_open` runs in its own
+  task (a dropped caller can't abandon it halfway) and starts the filer —
+  the initial walk, watches, and reads — before taking the lock, then
+  re-ensures it under the lock (a dedup hit, unless a racing close stopped
+  it), so a large tree's scan doesn't hold up other opens and closes.
 - **`parking_lot::RwLock`** for short synchronous sections (the workspaces
   map, `ScopedFs` roots); no poisoning. The async managers (filer index,
   PTY terminals, providers) use `tokio::sync::RwLock` — scope sync guards

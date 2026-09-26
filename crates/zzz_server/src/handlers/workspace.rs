@@ -18,7 +18,7 @@ use fuz_realtime::notify_to_string;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::filer::{FilerConfig, FilerLifetime, SerializableDisknode};
+use crate::filer::{FilerConfig, FilerLifetime, SerializableDisknode, WatchStatus};
 use crate::handlers::filesystem::{
     ERROR_INVALID_PATH, ERROR_NOT_A_DIRECTORY, ERROR_PATH_NOT_FOUND, ERROR_PERMISSION_DENIED,
 };
@@ -56,6 +56,9 @@ struct WorkspaceOpenResult {
     /// The workspace filer's index — the frontend seeds its file tree from
     /// this, since the filer's initial scan broadcasts nothing.
     files: Vec<SerializableDisknode>,
+    /// Whether every directory of the workspace has a file watch —
+    /// `degraded` when the OS watch limit left some to periodic rescans.
+    watch_status: WatchStatus,
 }
 
 // -- Helpers -----------------------------------------------------------------
@@ -151,9 +154,10 @@ pub async fn workspace_list(
 /// inserts a `WorkspaceInfo` into the in-memory map, broadcasts a
 /// `workspace_changed` notification to all connections.
 ///
-/// Returns the workspace plus its filer's file index — on the idempotent
-/// path too, so a client re-opening an already-open workspace can seed its
-/// tree the same way.
+/// Returns the workspace plus its filer's file index and watch status — on
+/// the idempotent path too, so a client re-opening an already-open workspace
+/// can seed its tree the same way. A directory whose listing is refused
+/// fails with `forbidden` (`permission_denied`), leaving nothing open.
 pub async fn workspace_open(
     params: Value,
     _ctx: ActionContext<'_>,
@@ -189,41 +193,59 @@ pub async fn workspace_open(
         .to_owned();
 
     let info = WorkspaceInfo {
-        path: normalized.clone(),
+        path: normalized,
         name,
         opened_at: fuz_sys::rfc3339_now(),
     };
 
+    // Run to completion in its own task, so a caller that goes away mid-open
+    // can't leave a filer running for a workspace that never opened.
+    let requested = path.to_owned();
+    tokio::spawn(open_workspace(app, info, requested))
+        .await
+        .map_err(|e| internal_error_with_source("failed to open workspace", &e))?
+}
+
+/// The body of `workspace_open` once the path is resolved: start the
+/// workspace filer, then register the workspace.
+async fn open_workspace(
+    app: Arc<App>,
+    info: WorkspaceInfo,
+    requested: String,
+) -> Result<Value, JsonrpcError> {
+    let key = info.path.clone();
+
+    // Start (or find) the filer before taking the lifecycle lock: its
+    // initial scan walks, watches, and reads the whole tree, and opens and
+    // closes of other workspaces shouldn't wait on it. A root that can't be
+    // listed fails the open here, before anything is registered.
+    ensure_workspace_filer(&app, &key)
+        .await
+        .map_err(|e| open_path_error(&requested, &e))?;
+
     // Held across the map, scope, and filer steps so a concurrent close can't
-    // interleave (see `App::workspace_lifecycle`). Opens are serialized too,
-    // including a new workspace's initial scan.
+    // interleave (see `App::workspace_lifecycle`).
     let _lifecycle = app.workspace_lifecycle.lock().await;
 
     let (workspace, is_new) = {
         let mut workspaces = app.workspaces.write();
-        match workspaces.entry(normalized) {
+        match workspaces.entry(key) {
             Entry::Occupied(entry) => (entry.get().clone(), false),
             Entry::Vacant(entry) => (entry.insert(info).clone(), true),
         }
     };
 
-    // Both paths ensure the scope and the filer — an idempotent open also
-    // retries a filer that failed to start. `start_filer` dedups and only
-    // returns once a registered filer has finished its initial scan, so the
-    // returned files always come from a completed scan.
-    app.scoped_fs.add_path(Path::new(&workspace.path));
-    if let Err(e) = app
-        .filer_manager
-        .start_filer(
-            &workspace.path,
-            Arc::clone(&app),
-            FilerConfig::workspace(&workspace.path, &app.zzz_dir),
-            FilerLifetime::Workspace,
-        )
-        .await
-    {
-        tracing::warn!(path = %workspace.path, error = %e, "failed to start file watcher");
+    // A close of this workspace that ran between the start above and the
+    // lock stopped the filer, so ensure it again — a dedup hit otherwise.
+    // `start_filer` only returns once a registered filer has finished its
+    // initial scan, so the returned files always come from a completed scan.
+    if let Err(e) = ensure_workspace_filer(&app, &workspace.path).await {
+        if is_new {
+            app.workspaces.write().remove(&workspace.path);
+        }
+        return Err(open_path_error(&requested, &e));
     }
+    app.scoped_fs.add_path(Path::new(&workspace.path));
 
     if is_new {
         // Broadcast the workspace_changed notification (the spine
@@ -239,8 +261,26 @@ pub async fn workspace_open(
     }
 
     let files = app.filer_manager.files_for(&workspace.path).await;
-    let result = WorkspaceOpenResult { workspace, files };
+    let watch_status = app.filer_manager.watch_status_for(&workspace.path).await;
+    let result = WorkspaceOpenResult {
+        workspace,
+        files,
+        watch_status,
+    };
     serde_json::to_value(result).map_err(|e| internal_error_with_source("serialization failed", &e))
+}
+
+/// Start the workspace filer for `path` (normalized, trailing `/`), or find
+/// the one already running.
+async fn ensure_workspace_filer(app: &Arc<App>, path: &str) -> std::io::Result<bool> {
+    app.filer_manager
+        .start_filer(
+            path,
+            Arc::clone(app),
+            FilerConfig::workspace(path, &app.zzz_dir),
+            FilerLifetime::Workspace,
+        )
+        .await
 }
 
 /// `workspace_close` — close a workspace directory.

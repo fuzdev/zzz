@@ -30,7 +30,7 @@ import {
 } from './diskfile_types.ts';
 import { ProviderStatus, ProviderName } from './provider_types.ts';
 import { CompletionMessage, CompletionRequest, CompletionResponse } from './completion_types.ts';
-import { WorkspaceInfoJson } from './workspace.svelte.ts';
+import { WorkspaceInfoJson, WorkspaceWatchStatus } from './workspace.svelte.ts';
 
 // -- Shared sub-schemas -----------------------------------------------------
 
@@ -242,7 +242,8 @@ export type WorkspaceOpenInput = z.infer<typeof WorkspaceOpenInput>;
 /** Output for `workspace_open`. */
 export const WorkspaceOpenOutput = z.strictObject({
 	workspace: WorkspaceInfoJson,
-	files: z.array(SerializableDisknode)
+	files: z.array(SerializableDisknode),
+	watch_status: WorkspaceWatchStatus
 });
 export type WorkspaceOpenOutput = z.infer<typeof WorkspaceOpenOutput>;
 

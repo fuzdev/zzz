@@ -11,7 +11,7 @@
 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { describe, test, inject, assert } from 'vitest';
 import {
@@ -36,6 +36,21 @@ const create_tmp_workspace = async (label: string): Promise<string> => {
 
 const remove_dir = async (path: string): Promise<void> => {
 	await rm(path, { recursive: true, force: true });
+};
+
+/**
+ * `chmod 000` `path`, returning whether the OS enforces it — it doesn't for
+ * root, and the caller then has nothing to check. The caller restores the
+ * mode (`chmod 0o755`) before cleanup.
+ */
+const lock_dir = async (path: string): Promise<boolean> => {
+	await chmod(path, 0o000);
+	try {
+		await readdir(path);
+		return false;
+	} catch {
+		return true;
+	}
 };
 
 const zzz_dir = handle.config.env.PUBLIC_ZZZ_DIR!;
@@ -186,6 +201,9 @@ describe('workspace cross-backend', () => {
 				[join(tmp_dir, 'a.txt'), 'alpha'],
 				[join(tmp_dir, 'sub', 'b.txt'), 'beta']
 			]);
+			const open = await call(fixture, 'workspace_open', { path: tmp_dir });
+			assert.ok(open.ok, `workspace_open failed: ${JSON.stringify(open)}`);
+			assert.equal((open.result as Record<string, unknown>).watch_status, 'full');
 			// concurrent opens both get the fully scanned tree
 			const [first, second] = await Promise.all([open_files(), open_files()]);
 			assert.deepEqual(first, expected, 'first open');
@@ -199,6 +217,65 @@ describe('workspace cross-backend', () => {
 				params: { path: tmp_dir },
 				headers: fixture.create_session_headers()
 			}).catch(() => undefined);
+			await remove_dir(tmp_dir);
+		}
+	});
+
+	test('workspace_open_skips_unreadable_subdirectories', async () => {
+		const fixture = await setup_test();
+		const tmp_dir = await create_tmp_workspace('unreadable_sub');
+		const locked = join(tmp_dir, 'locked');
+		try {
+			await mkdir(join(locked, 'inner'), { recursive: true });
+			await writeFile(join(locked, 'secret.txt'), 'secret', 'utf-8');
+			await mkdir(join(tmp_dir, 'open'), { recursive: true });
+			await writeFile(join(tmp_dir, 'a.txt'), 'alpha', 'utf-8');
+			await writeFile(join(tmp_dir, 'open', 'b.txt'), 'beta', 'utf-8');
+			if (!(await lock_dir(locked))) return;
+
+			const open = await call(fixture, 'workspace_open', { path: tmp_dir });
+			assert.ok(open.ok, `workspace_open failed: ${JSON.stringify(open)}`);
+			const result = open.result as Record<string, unknown>;
+			const files = result.files as Array<Record<string, unknown>>;
+			assert.deepEqual(
+				new Map(files.map((f) => [f.id as string, f.contents])),
+				new Map([
+					[join(tmp_dir, 'a.txt'), 'alpha'],
+					[join(tmp_dir, 'open', 'b.txt'), 'beta']
+				])
+			);
+			assert.equal(result.watch_status, 'full');
+		} finally {
+			await chmod(locked, 0o755).catch(() => undefined);
+			await call(fixture, 'workspace_close', { path: tmp_dir }).catch(() => undefined);
+			await remove_dir(tmp_dir);
+		}
+	});
+
+	test('workspace_open_unreadable_root', async () => {
+		const fixture = await setup_test();
+		const tmp_dir = await create_tmp_workspace('unreadable_root');
+		try {
+			await writeFile(join(tmp_dir, 'a.txt'), 'alpha', 'utf-8');
+			if (!(await lock_dir(tmp_dir))) return;
+
+			const res = await call(fixture, 'workspace_open', { path: tmp_dir });
+			assert.ok(!res.ok, 'expected an unreadable root to fail');
+			assert.equal(res.error.code, -32002);
+			assert.deepEqual(res.error.data, { reason: 'permission_denied' });
+			assert.ok(
+				res.error.message.startsWith('failed to open workspace: permission denied:'),
+				`unexpected message: ${res.error.message}`
+			);
+			// nothing was registered
+			const list = await call(fixture, 'workspace_list');
+			assert.ok(list.ok);
+			const workspaces = (list.result as Record<string, unknown>).workspaces as Array<
+				Record<string, unknown>
+			>;
+			assert.ok(!workspaces.some((w) => w.path === `${tmp_dir}/`));
+		} finally {
+			await chmod(tmp_dir, 0o755).catch(() => undefined);
 			await remove_dir(tmp_dir);
 		}
 	});
