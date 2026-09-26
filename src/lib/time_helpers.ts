@@ -19,7 +19,12 @@ export const format_time = (value: TimeValue | null | undefined, fallback = ''):
 	!value ? fallback : format(value, FILE_TIME_FORMAT);
 
 // TODO replace with `date-fns`?
-export const format_ms_to_readable = (ms: number, decimals = 0): string => {
+/**
+ * Formats a duration for display: milliseconds under a second, else seconds to
+ * at most one decimal place with no trailing zero, like `1 second` or `1.5 seconds`.
+ */
+export const format_ms_to_readable = (ms: number): string => {
 	if (ms < 1000) return `${ms}ms`;
-	return `${(ms / 1000).toFixed(decimals)} seconds`;
+	const seconds = Math.round(ms / 100) / 10;
+	return `${seconds} second${seconds === 1 ? '' : 's'}`;
 };

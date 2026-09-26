@@ -7,7 +7,7 @@
 	import ChatList from './ChatList.svelte';
 	import ModelLink from './ModelLink.svelte';
 	import { icon_add, icon_model, icon_provider } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { to_nav_link_href } from './nav.ts';
 
 	const app = frontend_context.get();
@@ -36,7 +36,7 @@
 						void app.chats.navigate_to(chat.id);
 					}}
 				>
-					<Svg data={icon_add} />
+					<Icon data={icon_add} />
 				</button>
 			</h3>
 			{#if app.chats.ordered_items.length}
@@ -77,7 +77,7 @@
 						void app.prompts.navigate_to(prompt.id);
 					}}
 				>
-					<Svg data={icon_add} />
+					<Icon data={icon_add} />
 				</button>
 			</h3>
 			{#if app.prompts.ordered_items.length}
@@ -99,7 +99,7 @@
 		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
 			<div class="mb_lg">
 				<a href={resolve('/providers')} class="text_80">
-					<Svg data={icon_provider} />
+					<Icon data={icon_provider} />
 					<h3 class="display:inline my_0">providers</h3>
 				</a>
 			</div>
@@ -122,7 +122,7 @@
 		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
 			<div class="mb_lg">
 				<a href={resolve('/models')} class="text_80">
-					<Svg data={icon_model} />
+					<Icon data={icon_model} />
 					<h3 class="display:inline my_0">models</h3>
 				</a>
 			</div>

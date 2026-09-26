@@ -5,7 +5,7 @@
 	import { frontend_context } from './frontend.svelte.ts';
 	import ProviderLink from './ProviderLink.svelte';
 	import { icon_provider } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 	import ExternalLink from './ExternalLink.svelte';
 
@@ -117,7 +117,7 @@
 					<div>
 						<ProviderLink {provider}>
 							<span class="white-space:nowrap">
-								<Svg data={icon_provider} />
+								<Icon data={icon_provider} />
 								{provider.title}
 							</span> provider
 						</ProviderLink>

@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { strip_start } from '@fuzdev/fuz_util/string.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import {
@@ -39,11 +38,7 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 	readonly dependencies_count: number = $derived(this.dependencies.length);
 	readonly dependents_count: number = $derived(this.dependents.length);
 
-	/** e.g. .zzz/foo/bar.json */
-	readonly pathname: string | null | undefined = $derived(
-		this.path && this.app.zzz_dir && strip_start(this.path, this.app.zzz_dir)
-	);
-	/** e.g. bar/foo.json */
+	/** e.g. `bar/foo.json` inside the zzz dir, or an absolute path outside it. */
 	readonly path_relative: string | null | undefined = $derived(
 		this.app.diskfiles.to_relative_path(this.path)
 	);

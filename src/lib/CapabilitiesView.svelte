@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 
 	import { logo_zzz } from './logos.ts';
 	import CapabilityWebsocket from './CapabilityWebsocket.svelte';
@@ -16,15 +17,15 @@
 <div class="width_atmost_md">
 	<section>
 		<section class="mb_xl12">
-			<h2><Svg data={icon_backend} /> backend</h2>
+			<h2><Icon data={icon_backend} /> backend</h2>
 			<CapabilityBackend />
 		</section>
 		<section class="mb_xl12">
-			<h2><Svg data={icon_directory} /> backend filesystem</h2>
+			<h2><Icon data={icon_directory} /> backend filesystem</h2>
 			<CapabilityFilesystem />
 		</section>
 		<section class="mb_xl12">
-			<h2><Svg data={icon_connect} /> backend websocket</h2>
+			<h2><Icon data={icon_connect} /> backend websocket</h2>
 			<p>
 				Websockets are an optional transport that's preferred by default. Zzz currently relies on
 				websockets for pushed updates like filesystem changes -- SSE will be supported as an option

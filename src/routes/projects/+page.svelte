@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 
 	import { icon_project } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import ProjectList from './ProjectList.svelte';
 	import ProjectSidebar from './ProjectSidebar.svelte';
 	import { projects_context } from './projects.svelte.ts';
@@ -25,7 +25,7 @@
 {/if}
 
 {#snippet content()}
-	<h1><Svg data={icon_project} /> projects</h1>
+	<h1><Icon data={icon_project} /> projects</h1>
 
 	<section class="width_atmost_md">
 		<p>

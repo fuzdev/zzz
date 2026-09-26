@@ -8,6 +8,7 @@ import TurnView from '$lib/TurnView.svelte';
 import { Frontend } from '$lib/frontend.svelte.ts';
 import { Part } from '$lib/part.svelte.ts';
 import { Thread } from '$lib/thread.svelte.ts';
+import { DiskfilePath } from '$lib/diskfile_types.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
@@ -98,5 +99,36 @@ describe('part remove controls', () => {
 		const part = app.parts.add({ type: 'text', content: 'x' });
 		const target = render(PartView, { part });
 		assert.strictEqual(find_remove_button(target), null);
+	});
+});
+
+describe('part remove label', () => {
+	test('an unnamed part has no empty quoted name', () => {
+		const prompt = app.prompts.add();
+		const part = prompt.add_part(Part.create(app, { type: 'text', content: 'x' }));
+
+		const target = render(PartView, { part, owner: prompt });
+
+		assert.strictEqual(find_remove_button(target)?.title, 'remove part');
+	});
+
+	test('a named part is labeled by its name', () => {
+		const prompt = app.prompts.add();
+		const part = prompt.add_part(Part.create(app, { type: 'text', content: 'x', name: 'intro' }));
+
+		const target = render(PartView, { part, owner: prompt });
+
+		assert.strictEqual(find_remove_button(target)?.title, 'remove part "intro"');
+	});
+
+	test('an unnamed file part is labeled by its path', () => {
+		const prompt = app.prompts.add();
+		const part = prompt.add_part(
+			Part.create(app, { type: 'diskfile', path: DiskfilePath.parse('/ws/a.txt') })
+		);
+
+		const target = render(PartView, { part, owner: prompt });
+
+		assert.strictEqual(find_remove_button(target)?.title, 'remove part "/ws/a.txt"');
 	});
 });

@@ -1,4 +1,4 @@
-import { strip_start } from '@fuzdev/fuz_util/string.ts';
+import { ensure_end } from '@fuzdev/fuz_util/string.ts';
 import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
 import { Datetime, DatetimeNow } from '@fuzdev/fuz_util/datetime.ts';
 
@@ -27,9 +27,20 @@ export const DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER = `[${DISKFILE_CONTENT_NOT_
 // TODO probably extract to `@fuzdev/fuz_util/path.ts`
 export const is_path_absolute = (path: string): boolean => path[0] === '/';
 
-// TODO hacky, refactor path helpers with `@fuzdev/fuz_util/path.ts`
-export const to_relative_path = (path: string, parent: string): string =>
-	strip_start(strip_start(path, parent), '/');
+/**
+ * Formats `path` for display relative to the directory `parent`: the part
+ * after `parent` when `path` is inside it, else `path` unchanged, so a path
+ * outside `parent` stays absolute rather than losing its leading `/`.
+ *
+ * @param path - the absolute path to format
+ * @param parent - the directory to show `path` relative to, with or without a trailing `/`
+ * @returns `path` relative to `parent` if it's inside it, else `path`
+ */
+export const to_relative_path = (path: string, parent: string): string => {
+	if (!parent) return path;
+	const dir = ensure_end(parent, '/');
+	return path.length > dir.length && path.startsWith(dir) ? path.slice(dir.length) : path;
+};
 
 // TODO @many refactor source/disk files with Gro Disknode too
 /**

@@ -11,7 +11,7 @@
 	import PagesSidebar from '$routes/projects/PagesSidebar.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 	import { icon_delete, icon_preview } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import { format_placeholder } from '$lib/helpers.ts';
 	import { frontend_context } from '$lib/frontend.svelte.ts';
 
@@ -62,7 +62,7 @@
 			title="close preview"
 			onclick={toggle_preview}
 		>
-			<Svg data={icon_preview} />
+			<Icon data={icon_preview} />
 		</button>
 	</div>
 {:else}
@@ -96,12 +96,12 @@
 								</button>
 
 								<button type="button" onclick={toggle_preview} class="plain" title="Preview page">
-									<Svg data={icon_preview} />&nbsp; preview
+									<Icon data={icon_preview} />&nbsp; preview
 								</button>
 							</div>
 
 							<button type="button" onclick={delete_page} class="palette_c">
-								<Svg data={icon_delete} />&nbsp; delete
+								<Icon data={icon_delete} />&nbsp; delete
 							</button>
 						</div>
 					</div>

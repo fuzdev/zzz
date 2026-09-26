@@ -7,7 +7,7 @@
 	import ChatView from './ChatView.svelte';
 	import ChatContextmenu from './ChatContextmenu.svelte';
 	import { icon_add, icon_sort } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { frontend_context } from './frontend.svelte.ts';
 	import ChatsContextmenu from './ChatsContextmenu.svelte';
 	import TutorialForDatabase from './TutorialForDatabase.svelte';
@@ -22,104 +22,111 @@
 	});
 </script>
 
-<ChatsContextmenu attrs={{ class: 'display:flex width:100% height:100%' }}>
-	<div class="column-fixed">
-		<div class="py_sm pr_sm">
-			<div class="row gap_xs2 mb_xs pl_xs2">
-				<button
-					class="plain flex:1 justify-content:start"
-					type="button"
-					onclick={() => chats.add(undefined, true)}
-				>
-					<Svg data={icon_add} />&nbsp; new chat
-				</button>
-				{#if chats.items.size > 1}
+<!-- `Contextmenu`'s element is `display: contents`, so the layout lives on an inner element -->
+<ChatsContextmenu tag="div">
+	<div class="display:flex width:100% height:100%">
+		<div class="column-fixed">
+			<div class="py_sm pr_sm">
+				<div class="row gap_xs2 mb_xs pl_xs2">
 					<button
+						class="plain flex:1 justify-content:start"
 						type="button"
-						class="plain sm selectable deselectable"
-						class:selected={chats.show_sort_controls}
-						title="toggle sort controls"
-						onclick={() => chats.toggle_sort_controls()}
+						onclick={() => chats.add(undefined, true)}
 					>
-						<Svg data={icon_sort} />
+						<Icon data={icon_add} />&nbsp; new chat
 					</button>
-				{/if}
-			</div>
-			{#if chats.items.size}
-				<ChatList />
-			{/if}
-		</div>
-		<TutorialForDatabase />
-		<TutorialForChats />
-
-		{#if capabilities.backend_available === false}
-			<div class="box mt_lg">
-				<ErrorMessage>
-					<p>
-						Server is not available. Chats require a server connection to communicate with AI
-						models.
-					</p>
-					<p class="mt_md">
+					{#if chats.items.size > 1}
 						<button
 							type="button"
-							disabled={capabilities.backend.status === 'pending'}
-							onclick={() => capabilities.check_backend()}
+							class="plain sm selectable deselectable"
+							class:selected={chats.show_sort_controls}
+							title="toggle sort controls"
+							onclick={() => chats.toggle_sort_controls()}
 						>
-							retry connection
+							<Icon data={icon_sort} />
 						</button>
-					</p>
-				</ErrorMessage>
+					{/if}
+				</div>
+				{#if chats.items.size}
+					<ChatList />
+				{/if}
 			</div>
-		{:else if capabilities.backend_available === null ||
-			capabilities.backend_available === undefined
-		}
-			<div class="box mt_lg">
-				<blockquote>
-					checking backend connection <PendingAnimation inline />
-				</blockquote>
-			</div>
-		{/if}
-	</div>
+			<TutorialForDatabase />
+			<TutorialForChats />
 
-	<div class="column-fluid">
-		{#if chats.selected}
-			<ChatContextmenu chat={chats.selected}>
-				<ChatView chat={chats.selected} />
-			</ChatContextmenu>
-		{:else if chats.items.size}
-			<div class="box height:100% flex:1">
-				<div class="p_md text-align:center">
+			{#if capabilities.backend_available === false}
+				<div class="box mt_lg">
+					<ErrorMessage>
+						<p>
+							Server is not available. Chats require a server connection to communicate with AI
+							models.
+						</p>
+						<p class="mt_md">
+							<button
+								type="button"
+								disabled={capabilities.backend.status === 'pending'}
+								onclick={() => capabilities.check_backend()}
+							>
+								retry connection
+							</button>
+						</p>
+					</ErrorMessage>
+				</div>
+			{:else if capabilities.backend_available === null ||
+				capabilities.backend_available === undefined
+			}
+				<div class="box mt_lg">
+					<blockquote>
+						checking backend connection <PendingAnimation inline />
+					</blockquote>
+				</div>
+			{/if}
+		</div>
+
+		<div class="column-fluid">
+			{#if chats.selected}
+				<ChatContextmenu chat={chats.selected}>
+					<ChatView chat={chats.selected} />
+				</ChatContextmenu>
+			{:else if chats.items.size}
+				<div class="box height:100% flex:1">
+					<div class="p_md text-align:center">
+						<p>
+							select a chat from the list,
+							<button
+								type="button"
+								class="inline palette_d"
+								onclick={() => chats.add(undefined, true)}
+							>
+								create a new chat
+							</button>, or
+							<button
+								type="button"
+								class="inline palette_f"
+								onclick={() => {
+									const chat = random_item(chats.ordered_items);
+									void chats.navigate_to(chat.id);
+								}}
+							>
+								go fish
+							</button>?
+						</p>
+					</div>
+				</div>
+			{:else}
+				<div class="box height:100%">
 					<p>
-						select a chat from the list,
+						no chats yet,
 						<button
 							type="button"
 							class="inline palette_d"
 							onclick={() => chats.add(undefined, true)}
 						>
 							create a new chat
-						</button>, or
-						<button
-							type="button"
-							class="inline palette_f"
-							onclick={() => {
-								const chat = random_item(chats.ordered_items);
-								void chats.navigate_to(chat.id);
-							}}
-						>
-							go fish
 						</button>?
 					</p>
 				</div>
-			</div>
-		{:else}
-			<div class="box height:100%">
-				<p>
-					no chats yet,
-					<button type="button" class="inline palette_d" onclick={() => chats.add(undefined, true)}>
-						create a new chat
-					</button>?
-				</p>
-			</div>
-		{/if}
+			{/if}
+		</div>
 	</div>
 </ChatsContextmenu>

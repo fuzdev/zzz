@@ -4,7 +4,7 @@
 	import type { Diskfile } from './diskfile.svelte.ts';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 	import { icon_file } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { frontend_context } from './frontend.svelte.ts';
 
 	const {
@@ -64,7 +64,7 @@
 		aria-pressed={selected}
 	>
 		<small class="ellipsis">
-			<Svg data={icon_file} />
+			<Icon data={icon_file} />
 			<span class="ml_xs" class:deleted={diskfile.deleted_on_disk}>{diskfile.path_relative}</span>
 			{#if diskfile.deleted_on_disk}
 				<span class="color_c_50" aria-hidden="true">(deleted)</span>

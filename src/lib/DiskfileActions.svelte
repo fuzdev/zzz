@@ -10,7 +10,7 @@
 	import ErrorMessage from './ErrorMessage.svelte';
 	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 	import { icon_delete, icon_paste } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 
 	const {
 		diskfile,
@@ -40,7 +40,7 @@
 			}}
 			class="plain icon-button font_size_lg"
 		>
-			<Svg data={icon_paste} />
+			<Icon data={icon_paste} />
 		</PasteFromClipboard>
 
 		<ClearRestoreButton bind:value={editor_state.current_content} />
@@ -52,7 +52,7 @@
 		class="plain icon-button"
 		title="delete file"
 	>
-		<Svg data={icon_delete} />
+		<Icon data={icon_delete} />
 	</ConfirmButton>
 </div>
 

@@ -6,7 +6,7 @@
 	import type { PartUnion } from './part.svelte.ts';
 	import type { PartOwner } from './part_helpers.ts';
 	import { icon_remove } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 
 	const {
 		part,
@@ -16,6 +16,15 @@
 		part: PartUnion;
 		owner: PartOwner;
 	} = $props();
+
+	// parts are often unnamed, so fall back to the file path, else no label
+	const label = $derived(
+		part.name
+			? `"${part.name}"`
+			: part.type === 'diskfile' && part.path
+				? `"${part.diskfile?.path_relative || part.path}"`
+				: null
+	);
 </script>
 
 <ConfirmButton
@@ -24,7 +33,7 @@
 		owner.remove_part(part.id);
 	}}
 	class="plain sm"
-	title="remove part {'"' + part.name + '"'}"
+	title={label ? `remove part ${label}` : 'remove part'}
 >
-	<Svg data={icon_remove} />
+	<Icon data={icon_remove} />
 </ConfirmButton>

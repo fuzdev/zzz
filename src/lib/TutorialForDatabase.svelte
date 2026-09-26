@@ -14,8 +14,8 @@
 		<div out:blur={{ duration: DURATION_LG }}>
 			<aside out:scale={{ duration: DURATION_LG, easing: (t) => sineInOut(t / 3) }}>
 				<p>
-					⚠️ This is an early prototype and your prompts are not saved yet, they are gone when you
-					refresh the page. Soon the backend will persist data to a Postgres database.
+					⚠️ This is an early prototype and your chats and prompts are not saved yet, they are gone
+					when you refresh the page. So far the backend's Postgres database holds only accounts.
 					(<ExternalLink href="https://github.com/fuzdev/zzz/issues/7">issue 7</ExternalLink>)
 				</p>
 				<button

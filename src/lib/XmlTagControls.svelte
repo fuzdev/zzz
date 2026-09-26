@@ -4,7 +4,7 @@
 	import type { PartUnion } from './part.svelte.ts';
 	import XmlAttributeEditor from './XmlAttributeEditor.svelte';
 	import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { format_placeholder } from './helpers.ts';
 
 	const {
@@ -49,7 +49,7 @@
 			title="add xml attribute"
 			onclick={() => part.add_attribute()}
 		>
-			<Svg data={icon_add} />
+			<Icon data={icon_add} />
 		</button>
 	</div>
 

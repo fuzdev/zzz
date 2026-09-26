@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import type { SvelteHTMLElements } from 'svelte/elements';
 	import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { icon_clear, icon_restore } from '@fuzdev/fuz_ui/icons.ts';
 
 	import ToggleButton from './ToggleButton.svelte';
@@ -56,7 +56,7 @@
 	{:else if typeof value === 'function'}
 		{@render value()}
 	{:else}
-		<Svg data={value} />
+		<Icon data={value} />
 	{/if}
 {/snippet}
 {#snippet clear_content()}{@render render_icon(clear_icon)}{/snippet}

@@ -3,7 +3,7 @@
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 
 	import { icon_error } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 
 	import type { Action } from './action.svelte.ts';
 	import { get_icon_for_action_method, get_icon_for_action_kind } from './action_icons.ts';
@@ -33,13 +33,13 @@
 		transition:slide
 	>
 		<div class="font-weight:400 display:flex align-items:center gap_xs width:100%">
-			<Svg data={get_icon_for_action_method(action.method)} />
-			<Svg data={get_icon_for_action_kind(action.kind)} />
+			<Icon data={get_icon_for_action_method(action.method)} />
+			<Icon data={get_icon_for_action_kind(action.kind)} />
 			<span class="font_family_mono flex:1 ellipsis">{action.method}</span>
 			{#if action.pending}
 				<PendingAnimation inline />
 			{:else if action.has_error}
-				<Svg class="palette_c" data={icon_error} />
+				<Icon class="palette_c" data={icon_error} />
 			{/if}
 			<small class="font_family_mono ml_auto">{action.created_formatted_time}</small>
 		</div>

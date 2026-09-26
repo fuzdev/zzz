@@ -9,6 +9,7 @@
 	import type { Socket, QueuedMessage, FailedMessage } from './socket.svelte.ts';
 	import { icon_close, icon_info, icon_remove, icon_retry } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { format_timestamp } from './time_helpers.ts';
 	import { DURATION_SM } from './helpers.ts';
 
@@ -140,7 +141,7 @@
 							onclick={retry_selected}
 							transition:slide
 						>
-							<Svg data={icon_retry} />
+							<Icon data={icon_retry} />
 						</button>
 					{/if}
 
@@ -150,7 +151,7 @@
 						class="icon-button plain"
 						title="remove selected messages"
 					>
-						<Svg data={icon_remove} />
+						<Icon data={icon_remove} />
 					</ConfirmButton>
 				</div>
 			{/if}
@@ -260,7 +261,7 @@
 												class="icon-button plain font_size_xs"
 												onclick={() => popover.hide()}
 											>
-												<Svg data={icon_close} />
+												<Icon data={icon_close} />
 											</button>
 										</div>
 										<pre
@@ -279,7 +280,7 @@
 									title="retry message"
 									onclick={() => retry_queued_message(message)}
 								>
-									<Svg data={icon_retry} />
+									<Icon data={icon_retry} />
 								</button>
 							{/if}
 
@@ -290,7 +291,7 @@
 								class="icon-button plain font_size_sm"
 								title="remove message"
 							>
-								<Svg data={icon_remove} />
+								<Icon data={icon_remove} />
 							</ConfirmButton>
 						</div>
 					</div>

@@ -7,7 +7,7 @@
 	import type { Provider } from './provider.svelte.ts';
 	import ProviderLogo from './ProviderLogo.svelte';
 	import { icon_provider } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import ExternalLink from './ExternalLink.svelte';
 	import ModelSummary from './ModelSummary.svelte';
 	import CapabilityProviderApi from './CapabilityProviderApi.svelte';
@@ -39,7 +39,7 @@
 				{/if}
 				<p class="mb_md">{provider.company}</p>
 				<p class="mb_md">
-					<Svg data={icon_provider} />
+					<Icon data={icon_provider} />
 					{provider.name}
 				</p>
 				<div class="row gap_xl">

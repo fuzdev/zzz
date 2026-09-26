@@ -9,7 +9,7 @@
 
 	import type { Turn } from './turn.svelte.ts';
 	import { icon_edit, icon_turn } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import TurnView from './TurnView.svelte';
 
@@ -69,7 +69,7 @@
 {#if show_editor}
 	<Dialog onclose={() => (show_editor = false)}>
 		<DialogContent>
-			<h2 class="mt_0 mb_sm"><Svg data={icon_turn} /> edit turn</h2>
+			<h2 class="mt_0 mb_sm"><Icon data={icon_turn} /> edit turn</h2>
 			<TurnView {turn} />
 		</DialogContent>
 	</Dialog>

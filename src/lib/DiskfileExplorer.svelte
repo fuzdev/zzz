@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { slide } from 'svelte/transition';
+	import { resolve } from '$app/paths';
+	import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 	import type { Snippet } from 'svelte';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import PendingButton from '@fuzdev/fuz_ui/PendingButton.svelte';
@@ -10,10 +12,10 @@
 	import {
 		icon_create_directory,
 		icon_create_file,
-		icon_directory,
-		icon_sort
+		icon_sort,
+		icon_workspace
 	} from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import SortableList from './SortableList.svelte';
 	import { sort_by_text, sort_by_numeric } from './sortable.svelte.ts';
 
@@ -28,6 +30,7 @@
 	const { editor } = diskfiles;
 
 	const { zzz_dir } = $derived(app);
+	const { new_files_dir } = $derived(diskfiles);
 
 	// TODO need awaitable websocket calls?
 	const TODO_create_file_pending = false;
@@ -36,36 +39,26 @@
 	// TODO @many this is very hacky and duplicated, refactor into cell methods
 	// TODO @many improve UX to not use alert/prompt
 	const create_file = async () => {
-		if (!zzz_dir) {
-			alert('cannot create file: filesystem is not available'); // eslint-disable-line no-alert
-			return;
-		}
-
-		const filename = prompt('new file name:'); // eslint-disable-line no-alert
+		const filename = prompt(`new file name in ${new_files_dir}:`); // eslint-disable-line no-alert
 		if (!filename) return;
 
 		try {
 			await diskfiles.create_file(filename);
 		} catch (error) {
 			console.error('failed to create file:', error);
-			alert(`failed to create file: ${error}`); // eslint-disable-line no-alert
+			alert(`failed to create file: ${to_error_message(error)}`); // eslint-disable-line no-alert
 		}
 	};
 
 	const create_folder = async () => {
-		if (!zzz_dir) {
-			alert('cannot create folder: filesystem is not available'); // eslint-disable-line no-alert
-			return;
-		}
-
-		const dirname = prompt('New folder name:'); // eslint-disable-line no-alert
+		const dirname = prompt(`new folder name in ${new_files_dir}:`); // eslint-disable-line no-alert
 		if (!dirname) return;
 
 		try {
 			await diskfiles.create_directory(dirname);
 		} catch (error) {
 			console.error('failed to create folder:', error);
-			alert(`failed to create folder: ${error}`); // eslint-disable-line no-alert
+			alert(`failed to create folder: ${to_error_message(error)}`); // eslint-disable-line no-alert
 		}
 	};
 </script>
@@ -81,23 +74,38 @@
 		<div class="row height-input-height"><PendingAnimation /></div>
 	{:else}
 		<div class="row height-input-height justify-content:space-between px_xs">
-			<small class="ellipsis"><Svg data={icon_directory} /> {zzz_dir}</small>
+			{#if new_files_dir}
+				<small class="ellipsis" title="new files and folders go in the active workspace">
+					<Icon data={icon_workspace} />
+					{new_files_dir}
+				</small>
+			{:else}
+				<small class="ellipsis">
+					<a href={resolve('/workspaces')}>open a workspace</a> to create files
+				</small>
+			{/if}
 			<div class="display:flex gap_xs2">
 				<PendingButton
 					pending={TODO_create_file_pending}
 					class="plain sm"
-					title="create file in {zzz_dir}"
+					title={new_files_dir
+						? `create file in ${new_files_dir}`
+						: 'open a workspace to create files'}
+					disabled={!new_files_dir}
 					onclick={create_file}
 				>
-					<Svg data={icon_create_file} />
+					<Icon data={icon_create_file} />
 				</PendingButton>
 				<PendingButton
 					pending={TODO_create_folder_pending}
 					class="plain sm"
-					title="create folder in {zzz_dir}"
+					title={new_files_dir
+						? `create folder in ${new_files_dir}`
+						: 'open a workspace to create folders'}
+					disabled={!new_files_dir}
 					onclick={create_folder}
 				>
-					<Svg data={icon_create_directory} />
+					<Icon data={icon_create_directory} />
 				</PendingButton>
 				{#if diskfiles.listed.length > 1}
 					<button
@@ -107,7 +115,7 @@
 						title="toggle sort controls"
 						onclick={() => editor.toggle_sort_controls()}
 					>
-						<Svg data={icon_sort} />
+						<Icon data={icon_sort} />
 					</button>
 				{/if}
 			</div>

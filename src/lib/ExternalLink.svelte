@@ -11,6 +11,7 @@
 	import type { Snippet } from 'svelte';
 	import { logo_github } from '@fuzdev/fuz_ui/logos.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
 
 	import { logo_chatgpt, logo_claude, logo_gemini } from './logos.ts';
@@ -67,7 +68,7 @@
 			{:else if known_logo}
 				<Svg data={known_logo} size="var(--font_size_xs)" fill="var(--palette_i_50)" inline />
 			{:else}
-				<Svg data={external_icon} inline />
+				<Icon data={external_icon} />
 			{/if}
 		{/snippet}
 	</ExternalLinkIcon>

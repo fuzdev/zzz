@@ -12,7 +12,7 @@
 	import ModelContextmenu from './ModelContextmenu.svelte';
 	import ContentEditor from './ContentEditor.svelte';
 	import { icon_error, icon_send, icon_stop } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 
 	// TODO no longer uses `Chat`, maybe rename to `ThreadView` or similar?
 
@@ -63,6 +63,13 @@
 				: 'provider unavailable'
 	);
 	const send_disabled = $derived(thread.pending || !!provider_error);
+
+	// the count is an estimate of the message alone — the request also carries the history
+	const send_title = $derived(
+		thread.main_input.trim()
+			? `send ≈${thread.main_input_token_count} token${thread.main_input_token_count === 1 ? '' : 's'} to ${thread.model_name}`
+			: `type a message to send to ${thread.model_name}`
+	);
 </script>
 
 <ModelContextmenu model={thread.model}>
@@ -89,7 +96,7 @@
 							icon_props={{ size: 'var(--font_size_sm)' }}
 							label="name"
 						/>{#if provider_error}
-							<span class="color_c_50 ml_sm"><Svg data={icon_error} /> {provider_error}</span>
+							<span class="color_c_50 ml_sm"><Icon data={icon_error} /> {provider_error}</span>
 						{/if}
 					</small>
 				</header>
@@ -118,7 +125,7 @@
 							onclick={() => thread.cancel_pending()}
 							title="stop generating"
 						>
-							<Svg data={icon_stop} />
+							<Icon data={icon_stop} />
 						</button>
 					{:else}
 						<PendingButton
@@ -126,11 +133,9 @@
 							disabled={send_disabled}
 							onclick={send}
 							class="plain {provider_error ? ' color_c_50' : ''}"
-							title={provider?.available
-								? `send ${thread.main_input_token_count} tokens to ${thread.model_name}`
-								: (provider_error ?? undefined)}
+							title={provider_error ?? send_title}
 						>
-							<Svg data={icon_send} />
+							<Icon data={icon_send} />
 						</PendingButton>
 					{/if}
 				</ContentEditor>

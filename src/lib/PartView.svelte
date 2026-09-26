@@ -2,7 +2,7 @@
 	import type { PartUnion } from './part.svelte.ts';
 	import XmlTagControls from './XmlTagControls.svelte';
 	import PartStats from './PartStats.svelte';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { get_part_type_icon, type PartOwner } from './part_helpers.ts';
 	import PartEditorForText from './PartEditorForText.svelte';
 	import PartContextmenu from './PartContextmenu.svelte';
@@ -27,7 +27,7 @@
 	<div class="column gap_sm" class:dormant={!part.enabled}>
 		<div class="display:flex mb_0 justify-content:space-between">
 			<div class="font_size_lg m_0">
-				<Svg data={get_part_type_icon(part)} />&nbsp;
+				<Icon data={get_part_type_icon(part)} />&nbsp;
 				{part.name}
 				{#if part.type === 'diskfile'}<DiskfilePartDraftLabel {part} />{/if}
 			</div>

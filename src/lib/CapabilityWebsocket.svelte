@@ -11,6 +11,7 @@
 	import type { Socket } from './socket.svelte.ts';
 	import { icon_cancel, icon_connect, icon_disconnect, icon_reset } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { format_placeholder } from './helpers.ts';
 	import { format_ms_to_readable, format_timestamp } from './time_helpers.ts';
 	import {
@@ -79,9 +80,8 @@
 		<div class="display:flex flex-direction:column gap_sm mb_sm">
 			<div
 				class="chip plain flex:1 font_size_xl px_xl flex-direction:column"
-				style:display="display:flex !important"
-				style:align-items="flex-start !important"
-				style:font-weight="400 !important"
+				style:align-items="start"
+				style:font-weight="400"
 				class:palette_b={capabilities.websocket.status === 'success' && socket.connected}
 				class:palette_c={capabilities.websocket.status === 'failure'}
 				class:palette_d={capabilities.websocket.status === 'pending'}
@@ -127,7 +127,7 @@
 						}}
 					>
 						<div class={has_undo_state ? 'transform:scaleX(-1)' : ''}>
-							<Svg data={icon_reset} />
+							<Icon data={icon_reset} />
 						</div>
 					</button>
 				</div>
@@ -217,7 +217,7 @@
 								socket.cancel_reconnect();
 							}}
 						>
-							<Svg data={icon_cancel} />
+							<Icon data={icon_cancel} />
 						</button>
 						<div
 							class="bg_d_5 width:100% border_radius_xs position:relative overflow:hidden font-weight:600"
@@ -273,7 +273,7 @@
 					style:min-width="170px"
 				>
 					<div>reconnect delay</div>
-					<small>{format_ms_to_readable(socket.reconnect_delay, 1)}</small>
+					<small>{format_ms_to_readable(socket.reconnect_delay)}</small>
 				</label>
 				<MsSettingInput
 					id="reconnect_delay_{pid}"
@@ -320,7 +320,7 @@
 								popover.hide();
 							}}
 						>
-							<Svg data={icon_reset} />
+							<Icon data={icon_reset} />
 						</button>
 					{/snippet}
 				</ConfirmButton>
@@ -340,7 +340,9 @@
 				</div>
 				<div class="display:flex justify-content:space-between" transition:slide>
 					<small>current reconnect delay:</small>
-					<span class="font-weight:600">{socket.current_reconnect_delay}</span>
+					<span class="font-weight:600">
+						{format_ms_to_readable(socket.current_reconnect_delay)}
+					</span>
 				</div>
 			{/if}
 
@@ -351,7 +353,9 @@
 						? formatDuration(
 								intervalToDuration({ start: 0, end: socket.connection_duration_rounded })
 							)
-						: '-'}
+						: socket.connection_duration !== null
+							? 'less than a minute'
+							: '-'}
 				</small>
 			</div>
 			<div class="display:flex justify-content:space-between">

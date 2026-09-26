@@ -2,7 +2,7 @@
 	import { swallow } from '@fuzdev/fuz_util/dom.ts';
 
 	import { icon_remove } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import type { DiskfileTab } from './diskfile_tab.svelte.ts';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 	import { frontend_context } from './frontend.svelte.ts';
@@ -98,7 +98,7 @@
 				title="close tab"
 				aria-label={`close tab ${path}`}
 			>
-				<Svg data={icon_remove} />
+				<Icon data={icon_remove} />
 			</button>
 		</div>
 	</div>

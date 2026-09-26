@@ -5,7 +5,7 @@
 
 	import { frontend_context } from './frontend.svelte.ts';
 	import { icon_action_request_response, icon_ping, icon_xmark } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { PING_HISTORY_MAX, type PingData } from './capabilities.svelte.ts';
 
 	const {
@@ -28,7 +28,7 @@
 <form class="column align-items:start gap_sm">
 	<div>
 		<button type="button" title="ping the server" onclick={() => app.api.ping()} class="flex:1">
-			{#if children}{@render children()}{:else}<Svg data={icon_ping} />{/if}
+			{#if children}{@render children()}{:else}<Icon data={icon_ping} />{/if}
 			<div class="font_size_lg font-weight:400 pl_sm">ping the server</div>
 		</button>
 	</div>
@@ -63,14 +63,14 @@
 </form>
 
 {#snippet ping_item(ping: PingData)}
-	<Svg data={icon_action_request_response} class={ping.completed ? '' : 'opacity_40'} />
+	<Icon data={icon_action_request_response} class={ping.completed ? '' : 'opacity_40'} />
 	{#if !ping.completed}
 		<span class="font_family_mono">
 			<PendingAnimation inline />
 		</span>
 	{:else if ping.round_trip_time === null}
 		<span class="font_family_mono color_c_50">
-			<Svg data={icon_xmark} />
+			<Icon data={icon_xmark} />
 			{ping.received_time ? Math.round(ping.received_time - ping.sent_time) : 0}ms
 		</span>
 	{:else}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { icon_settings } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import Settings from './Settings.svelte';
 	import { frontend_context } from './frontend.svelte.ts';
 	import DashboardHeader from './DashboardHeader.svelte';
@@ -16,7 +16,7 @@
 <div class="p_lg">
 	<DashboardHeader>
 		{#snippet header()}
-			<h1><Svg data={icon_settings} /> system settings</h1>
+			<h1><Icon data={icon_settings} /> system settings</h1>
 		{/snippet}
 		<TimeWidget value={app.time.now} />
 	</DashboardHeader>

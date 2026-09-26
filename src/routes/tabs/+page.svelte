@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { icon_tab } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import { Browser } from './browser.svelte.ts';
 	import { sample_tabs } from './sample_tabs.ts';
 	import BrowserView from './BrowserView.svelte';
@@ -28,7 +28,7 @@
 {/if}
 
 {#snippet content()}
-	<h1><Svg data={icon_tab} /> tabs</h1>
+	<h1><Icon data={icon_tab} /> tabs</h1>
 
 	<section class="width_atmost_md">
 		{#if browser.browserified}

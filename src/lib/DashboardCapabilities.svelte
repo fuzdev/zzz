@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { icon_capability } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import Footer from './Footer.svelte';
 	import CapabilitiesView from './CapabilitiesView.svelte';
 	import TimeWidget from './TimeWidget.svelte';
@@ -13,7 +13,7 @@
 <div class="p_lg">
 	<DashboardHeader>
 		{#snippet header()}
-			<h1><Svg data={icon_capability} /> system capabilities</h1>
+			<h1><Icon data={icon_capability} /> system capabilities</h1>
 		{/snippet}
 		<TimeWidget value={app.time.now} />
 	</DashboardHeader>

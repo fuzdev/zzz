@@ -14,7 +14,7 @@
 		icon_remove,
 		icon_sort
 	} from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { frontend_context } from './frontend.svelte.ts';
 	import PromptStats from './PromptStats.svelte';
 	import PartList from './PartList.svelte';
@@ -74,7 +74,7 @@
 					class="plain width:100% justify-content:start"
 					onclick={create_prompt}
 				>
-					<Svg data={icon_add} />&nbsp; new prompt
+					<Icon data={icon_add} />&nbsp; new prompt
 				</button>
 				{#if app.prompts.items.size > 1}
 					<button
@@ -84,7 +84,7 @@
 						title="toggle sort controls"
 						onclick={() => app.prompts.toggle_sort_controls()}
 					>
-						<Svg data={icon_sort} />
+						<Icon data={icon_sort} />
 					</button>
 				{/if}
 			</div>
@@ -99,7 +99,7 @@
 			<div class="column-fixed pr_sm">
 				<section class="column-section">
 					<div class="font_size_lg display:flex align-items:center">
-						<Svg data={icon_prompt} />
+						<Icon data={icon_prompt} />
 						<EditableText bind:value={app.prompts.selected.name} />
 					</div>
 					<div class="column">
@@ -119,14 +119,14 @@
 							title="delete prompt {'"' + app.prompts.selected.name + '"'}"
 							class="plain icon-button"
 						>
-							<Svg data={icon_delete} />
-							{#snippet popover_button_content()}<Svg data={icon_delete} />{/snippet}
+							<Icon data={icon_delete} />
+							{#snippet popover_button_content()}<Icon data={icon_delete} />{/snippet}
 						</ConfirmButton>
 					</div>
 					<ContentPreview content={app.prompts.selected.content} />
 				</section>
 				<section class="column-section">
-					<header class="font_size_lg mb_lg"><Svg data={icon_part} /> parts</header>
+					<header class="font_size_lg mb_lg"><Icon data={icon_part} /> parts</header>
 					<PartList
 						parts={app.prompts.selected.parts}
 						prompt={app.prompts.selected}
@@ -143,7 +143,7 @@
 						<div class="display:flex flex-wrap:wrap gap_xs">
 							<button type="button" class="plain font_size_sm" onclick={add_text_part}>
 								<div class="row white-space:nowrap">
-									<Svg data={icon_part} />&nbsp; add text
+									<Icon data={icon_part} />&nbsp; add text
 								</div>
 							</button>
 							<button
@@ -153,7 +153,7 @@
 								disabled={!app.diskfiles.on_disk.length}
 							>
 								<div class="row white-space:nowrap">
-									<Svg data={icon_file} />&nbsp; add file
+									<Icon data={icon_file} />&nbsp; add file
 								</div>
 							</button>
 							<ConfirmButton
@@ -162,7 +162,7 @@
 								class="plain font_size_sm"
 							>
 								<div class="row white-space:nowrap">
-									<Svg data={icon_remove} />&nbsp; remove all
+									<Icon data={icon_remove} />&nbsp; remove all
 								</div>
 							</ConfirmButton>
 						</div>

@@ -443,6 +443,34 @@ describe('Socket', () => {
 		});
 	});
 
+	describe('Connection duration', () => {
+		/** Connects at `connected_at`, then reads the duration with `Time` at `now_ms`. */
+		const duration_rounded_at = (connected_at: number, now_ms: number): number | null => {
+			vi.setSystemTime(connected_at);
+			(app as any).time = { now_ms, interval: 60_000 };
+			const socket = new Socket({ app });
+			socket.connect(TEST_URLS.BASE);
+			mock_socket.connect();
+			assert.strictEqual(socket.last_connect_time, connected_at);
+			return socket.connection_duration_rounded;
+		};
+
+		test('under one interval rounds down to 0, not up to a minute', () => {
+			assert.strictEqual(duration_rounded_at(1_000, 1_000 + 59_999), 0);
+		});
+
+		test('rounds down, never overstating the time connected', () => {
+			assert.strictEqual(duration_rounded_at(1_000, 1_000 + 119_999), 60_000);
+			assert.strictEqual(duration_rounded_at(1_000, 1_000 + 120_000), 120_000);
+		});
+
+		test('is null while disconnected', () => {
+			(app as any).time = { now_ms: 10_000, interval: 60_000 };
+			const socket = new Socket({ app });
+			assert.isNull(socket.connection_duration_rounded);
+		});
+	});
+
 	describe('Message size cap', () => {
 		test('an oversized request rejects without being sent', async () => {
 			const socket = new Socket({ app });

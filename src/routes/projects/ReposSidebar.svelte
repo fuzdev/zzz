@@ -5,7 +5,7 @@
 	import NavLink from '$lib/NavLink.svelte';
 	import { projects_context } from './projects.svelte.ts';
 	import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from '$lib/Icon.svelte';
 
 	const projects = projects_context.get();
 
@@ -20,7 +20,7 @@
 				class="plain justify-content:start flex:1"
 				onclick={() => project_viewmodel.create_new_repo()}
 			>
-				<Svg data={icon_add} />&nbsp; new repo
+				<Icon data={icon_add} />&nbsp; new repo
 			</button>
 		</div>
 

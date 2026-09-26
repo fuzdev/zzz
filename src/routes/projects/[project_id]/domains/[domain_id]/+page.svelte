@@ -6,7 +6,7 @@
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import DomainsSidebar from '$routes/projects/DomainsSidebar.svelte';
 	import { icon_delete } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import ExternalLink from '$lib/ExternalLink.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 
@@ -135,7 +135,7 @@
 									class="palette_c"
 									onclick={() => domains_viewmodel.remove_domain()}
 								>
-									<Svg data={icon_delete} />&nbsp; delete domain
+									<Icon data={icon_delete} />&nbsp; delete domain
 								</button>
 							{/if}
 						</div>

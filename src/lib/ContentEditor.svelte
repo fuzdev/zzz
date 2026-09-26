@@ -9,7 +9,7 @@
 	import ContentStats from './ContentStats.svelte';
 	import ClearRestoreButton from './ClearRestoreButton.svelte';
 	import { icon_paste } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 
 	let {
 		content = $bindable(),
@@ -127,7 +127,7 @@
 				class="plain icon-button font_size_lg"
 			>
 				<!-- TODO should be default -->
-				<Svg data={icon_paste} />
+				<Icon data={icon_paste} />
 			</PasteFromClipboard>
 			<ClearRestoreButton
 				bind:value={

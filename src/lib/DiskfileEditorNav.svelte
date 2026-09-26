@@ -2,7 +2,7 @@
 	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
 	import { icon_arrow_left, icon_arrow_right, icon_refresh } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { frontend_context } from './frontend.svelte.ts';
 	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 
@@ -129,7 +129,7 @@
 		onclick={go_back}
 		disabled={!can_go_back}
 	>
-		<Svg data={icon_arrow_left} />
+		<Icon data={icon_arrow_left} />
 	</button>
 	<button
 		type="button"
@@ -138,7 +138,7 @@
 		onclick={go_forward}
 		disabled={!can_go_forward}
 	>
-		<Svg data={icon_arrow_right} />
+		<Icon data={icon_arrow_right} />
 	</button>
 	<button
 		type="button"
@@ -150,6 +150,6 @@
 		}}
 		disabled
 	>
-		<Svg data={icon_refresh} />
+		<Icon data={icon_refresh} />
 	</button>
 </div>

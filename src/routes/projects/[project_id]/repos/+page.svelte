@@ -6,7 +6,7 @@
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import ReposSidebar from '$routes/projects/ReposSidebar.svelte';
 	import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import RepoTableRow from '$routes/projects/RepoTableRow.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 
@@ -38,7 +38,7 @@
 								class="palette_a"
 								onclick={() => project_viewmodel.create_new_repo()}
 							>
-								<Svg data={icon_add} />&nbsp; add your first repo
+								<Icon data={icon_add} />&nbsp; add your first repo
 							</button>
 						</p>
 					</div>
@@ -66,7 +66,7 @@
 						class="palette_a"
 						onclick={() => project_viewmodel.create_new_repo()}
 					>
-						<Svg data={icon_add} />&nbsp; new repo
+						<Icon data={icon_add} />&nbsp; new repo
 					</button>
 				</div>
 			</div>

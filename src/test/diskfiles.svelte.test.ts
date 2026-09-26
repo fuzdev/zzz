@@ -491,10 +491,30 @@ describe('delete with unsaved edits keeps the tab', () => {
 	});
 });
 
-describe('create_file', () => {
+describe('path_relative', () => {
 	const ZZZ_DIR = SerializableDisknode.shape.source_dir.parse('/zzz/');
 
-	test('creates through `diskfile_create`, never `diskfile_update`', async () => {
+	test('is relative inside the zzz dir and absolute outside it', () => {
+		app.zzz_dir = ZZZ_DIR;
+		const inside = DiskfilePath.parse('/zzz/notes/a.md');
+		app.diskfiles.add_initial([create_disknode(inside), create_disknode(PATH_A)]);
+
+		assert.strictEqual(app.diskfiles.get_by_path(inside)?.path_relative, 'notes/a.md');
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_A)?.path_relative, '/ws/a.txt');
+	});
+
+	test('a file part outside the zzz dir gets the absolute path as its `path` attribute', () => {
+		app.zzz_dir = ZZZ_DIR;
+		app.diskfiles.add_initial([create_disknode(PATH_A)]);
+
+		const part = app.parts.add({ type: 'diskfile', path: PATH_A });
+
+		assert.strictEqual(part.attributes.find((a) => a.key === 'path')?.value, '/ws/a.txt');
+	});
+});
+
+describe('create_file', () => {
+	test('creates in the active workspace through `diskfile_create`, never `diskfile_update`', async () => {
 		const calls: Array<[string, unknown]> = [];
 		(app as any).api = {
 			diskfile_create: (input: unknown) => {
@@ -506,11 +526,32 @@ describe('create_file', () => {
 				return Promise.resolve({ ok: true, value: null });
 			}
 		};
-		app.zzz_dir = ZZZ_DIR;
+		app.zzz_dir = SerializableDisknode.shape.source_dir.parse('/zzz/');
+		app.workspaces.add({ path: SOURCE_DIR });
 
-		await app.diskfiles.create_file('new.txt');
+		await app.diskfiles.create_file('/new.txt');
 
-		assert.deepEqual(calls, [['diskfile_create', { path: '/zzz/new.txt', content: '' }]]);
+		assert.deepEqual(calls, [['diskfile_create', { path: '/ws/new.txt', content: '' }]]);
+	});
+
+	test('refuses when no workspace is open', async () => {
+		const calls: Array<unknown> = [];
+		(app as any).api = {
+			diskfile_create: (input: unknown) => {
+				calls.push(input);
+				return Promise.resolve({ ok: true, value: null });
+			}
+		};
+		app.zzz_dir = SerializableDisknode.shape.source_dir.parse('/zzz/');
+		assert.isNull(app.diskfiles.new_files_dir);
+
+		const error = await app.diskfiles.create_file('new.txt').then(
+			() => null,
+			(e: unknown) => e
+		);
+		assert.instanceOf(error, Error);
+		assert.include(error.message, 'no workspace is open');
+		assert.deepEqual(calls, []);
 	});
 
 	test('surfaces an existing file as "already exists"', async () => {
@@ -520,12 +561,12 @@ describe('create_file', () => {
 					ok: false,
 					error: {
 						code: -32004,
-						message: 'failed to create file: Path already exists: /zzz/taken.txt',
+						message: 'failed to create file: Path already exists: /ws/taken.txt',
 						data: { reason: 'already_exists' }
 					}
 				})
 		};
-		app.zzz_dir = ZZZ_DIR;
+		app.workspaces.add({ path: SOURCE_DIR });
 
 		const error = await app.diskfiles.create_file('taken.txt').then(
 			() => null,
@@ -533,5 +574,53 @@ describe('create_file', () => {
 		);
 		assert.instanceOf(error, Error);
 		assert.strictEqual(error.message, 'taken.txt already exists');
+	});
+});
+
+describe('create_directory', () => {
+	test('creates in the active workspace', async () => {
+		const calls: Array<unknown> = [];
+		(app as any).api = {
+			directory_create: (input: unknown) => {
+				calls.push(input);
+				return Promise.resolve({ ok: true, value: null });
+			}
+		};
+		app.workspaces.add({ path: SOURCE_DIR });
+
+		await app.diskfiles.create_directory('sub/dir');
+
+		assert.deepEqual(calls, [{ path: '/ws/sub/dir' }]);
+	});
+
+	test('refuses when no workspace is open', async () => {
+		(app as any).api = {
+			directory_create: () => Promise.resolve({ ok: true, value: null })
+		};
+
+		const error = await app.diskfiles.create_directory('sub').then(
+			() => null,
+			(e: unknown) => e
+		);
+		assert.instanceOf(error, Error);
+		assert.include(error.message, 'no workspace is open');
+	});
+
+	test('throws the backend error instead of swallowing it', async () => {
+		(app as any).api = {
+			directory_create: () =>
+				Promise.resolve({
+					ok: false,
+					error: { code: -32003, message: 'failed to create directory: permission denied' }
+				})
+		};
+		app.workspaces.add({ path: SOURCE_DIR });
+
+		const error = await app.diskfiles.create_directory('sub').then(
+			() => null,
+			(e: unknown) => e
+		);
+		assert.instanceOf(error, Error);
+		assert.strictEqual(error.message, 'failed to create directory: permission denied');
 	});
 });

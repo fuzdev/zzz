@@ -505,6 +505,8 @@ connection registry — see the `broadcast` / notification builders in
 - Prefer pure functions; mark mutations with `@mutates` JSDoc tag
 - Tests in `src/test/`, split by aspect: `cell.svelte.base.test.ts`, `cell.svelte.decoders.test.ts`
 - UI uses `@fuzdev/fuz_css` style variables and semantic classes, not inline styles
+- Icons beside text use `Icon` (`Icon.svelte`: a `1em`, inline, unshrinkable `Svg`); a bare `Svg` is `var(--font_size, auto)`-sized (`auto` outside headings and `font_size_*` classes) and fuz_css makes `svg` a block capped at `max-width: 100%`, so use it only with an explicit `size`
+- A `Contextmenu` wrapper's element is `display: contents` — put layout classes on an inner element, not on the wrapper (it has no `attrs` prop)
 
 ## Zzz App Directory
 
@@ -518,7 +520,7 @@ is the daemon home `~/.zzz/` (see CLI).
 - `run/` — Runtime ephemeral (the test binary's `daemon_token`)
 
 It's a permanent `ScopedFs` root with its own filer, so the frontend can
-create files there. A workspace or scoped-dir filer whose root contains the
+read and write files there. A workspace or scoped-dir filer whose root contains the
 app directory skips it by its full path (its own filer covers it), so a
 custom-named app dir (say `data`) doesn't hide other `data/` folders. Every
 filer also skips any directory named `.zzz` — the conventional app dir and the
@@ -546,9 +548,14 @@ in a non-writable directory fails with `directory_not_writable`. Only regular
 files are written — a directory, FIFO, socket, or device node target is
 refused. A crash mid-save can orphan a staging file; the filer's walk deletes
 exact `.zzz-tmp-<uuid>` regular files older than an hour (ones inside ignored
-directories stay). "New file" uses `diskfile_create`, which creates the final
-name exclusively (`O_EXCL`) and fails with `conflict` / `already_exists`
-instead of overwriting.
+directories stay). The files page's new file and new folder go in the active
+workspace (`Diskfiles.new_files_dir`) and are disabled while no workspace is
+open; a failure (say a non-writable directory) is reported, never silent. "New
+file" uses `diskfile_create`, which creates the final name exclusively
+(`O_EXCL`) and fails with `conflict` / `already_exists` instead of
+overwriting. The UI shows a path inside the app directory relative to it and
+any other path absolute — including a file part's `path` attribute in the
+prompt XML sent to models.
 
 ## Environment Variables
 

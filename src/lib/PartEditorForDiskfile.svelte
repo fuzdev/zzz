@@ -11,7 +11,7 @@
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
 	import { icon_file } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { format_placeholder } from './helpers.ts';
 	import { DISKFILE_CONTENT_NOT_LOADED_MESSAGE } from './diskfile_helpers.ts';
 
@@ -58,7 +58,7 @@
 			show_file_picker = true;
 		}}
 	>
-		<Svg data={icon_file} />
+		<Icon data={icon_file} />
 		<small class="ml_xs2">pick file</small>
 	</button>
 </div>

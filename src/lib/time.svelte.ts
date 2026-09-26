@@ -11,6 +11,10 @@ import {
 	format_timestamp
 } from './time_helpers.ts';
 
+// ticks land this far past each boundary, so a timer firing a hair early
+// (clock adjustments, timer coalescing) still reads the new minute
+const TICK_SLACK_MS = 10;
+
 export const TimeJson = CellJson.extend({}).meta({ cell_class_name: 'Time' });
 export type TimeJson = z.infer<typeof TimeJson>;
 export type TimeJsonInput = z.input<typeof TimeJson>;
@@ -66,7 +70,7 @@ export class Time extends Cell<typeof TimeJson> {
 	 */
 	running: boolean = $state.raw(false);
 
-	#timer?: NodeJS.Timeout;
+	#timer?: ReturnType<typeof setTimeout>;
 
 	constructor(options: TimeOptions) {
 		// Pass schema and options to base constructor
@@ -83,17 +87,32 @@ export class Time extends Cell<typeof TimeJson> {
 	}
 
 	/**
-	 * Starts the interval timer if it's not already running.
+	 * Starts the interval timer if it's not already running. Ticks land on
+	 * wall-clock multiples of `interval` (the top of each minute by default),
+	 * so a displayed `h:mm` changes when the clock does instead of up to a
+	 * full interval late.
 	 */
 	start(): boolean {
 		if (this.running) return false;
 
-		this.#timer = setInterval(() => {
-			this.update_now(Date.now());
-		}, this.interval);
+		this.update_now();
+		this.#schedule();
 
 		this.running = true;
 		return true;
+	}
+
+	// a `setTimeout` chain rather than `setInterval`, so each tick re-aligns
+	// to the boundary after timer drift or background-tab throttling
+	#schedule(): void {
+		const now = Date.now();
+		this.#timer = setTimeout(
+			() => {
+				this.update_now();
+				this.#schedule();
+			},
+			this.interval - (now % this.interval) + TICK_SLACK_MS
+		);
 	}
 
 	/**
@@ -103,7 +122,7 @@ export class Time extends Cell<typeof TimeJson> {
 		if (!this.running) return false;
 
 		if (this.#timer) {
-			clearInterval(this.#timer);
+			clearTimeout(this.#timer);
 			this.#timer = undefined;
 		}
 

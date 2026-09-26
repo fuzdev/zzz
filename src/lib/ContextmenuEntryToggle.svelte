@@ -5,7 +5,7 @@
 	import { DEV } from 'esm-env';
 
 	import { icon_checkmark } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 
 	let {
 		enabled = $bindable(),
@@ -41,5 +41,5 @@
 {/snippet}
 
 {#snippet icon_default()}
-	<span class:dormant={enabled} class:font_size_xs={enabled}><Svg data={icon_checkmark} /></span>
+	<span class:dormant={enabled} class:font_size_xs={enabled}><Icon data={icon_checkmark} /></span>
 {/snippet}

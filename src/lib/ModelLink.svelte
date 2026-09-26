@@ -5,7 +5,7 @@
 	import { DEV } from 'esm-env';
 
 	import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 
 	import type { Model } from './model.svelte.ts';
 	import ProviderLogo from './ProviderLogo.svelte';
@@ -45,7 +45,7 @@
 			{#if icon === 'logo'}
 				<ProviderLogo name={model.provider_name} />&nbsp;
 			{:else if icon}
-				<Svg data={icon} inline />&nbsp;
+				<Icon data={icon} />&nbsp;
 			{/if}{model.name}
 		{/if}
 	</a>

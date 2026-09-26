@@ -11,7 +11,7 @@
 		icon_drag,
 		icon_refresh
 	} from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import { format_placeholder } from '$lib/helpers.ts';
 	import type { Browser } from './browser.svelte.ts';
 	import BrowserTabContent from './BrowserTabContent.svelte';
@@ -94,7 +94,7 @@
 					onclick={() => browser.add_new_tab()}
 					title="new tab"
 				>
-					<Svg data={icon_add} />
+					<Icon data={icon_add} />
 				</button>
 			</div>
 		</ul>
@@ -109,7 +109,7 @@
 					onclick={() => browser.go_back()}
 					disabled
 				>
-					<Svg data={icon_arrow_left} />
+					<Icon data={icon_arrow_left} />
 				</button>
 				<button
 					type="button"
@@ -118,7 +118,7 @@
 					onclick={() => browser.go_forward()}
 					disabled
 				>
-					<Svg data={icon_arrow_right} />
+					<Icon data={icon_arrow_right} />
 				</button>
 				<button
 					type="button"
@@ -126,7 +126,7 @@
 					title="refresh"
 					onclick={() => browser.refresh()}
 				>
-					<Svg data={icon_refresh} />
+					<Icon data={icon_refresh} />
 				</button>
 			</div>
 
@@ -158,7 +158,7 @@
 					}}
 				>
 					<!-- TODO fuz_ui has no dedicated menu icon yet, `icon_drag` is the same three lines -->
-					<Svg data={icon_drag} label="main menu" />
+					<Icon data={icon_drag} label="main menu" />
 				</button>
 			</div>
 		</div>

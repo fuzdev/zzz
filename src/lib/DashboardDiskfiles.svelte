@@ -1,5 +1,8 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { swallow, is_editable } from '@fuzdev/fuz_util/dom.ts';
+	import { to_error_message } from '@fuzdev/fuz_util/error.ts';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 	import { random_item } from '@fuzdev/fuz_util/random.ts';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import { onMount } from 'svelte';
@@ -29,22 +32,29 @@
 		void capabilities.init_backend_check();
 	});
 
+	/**
+	 * Closes a tab — or asks first, for a file with a draft, and the close
+	 * dialog handles focus — then focuses the newly selected tab's editor, since
+	 * the removed tab (and its close button) would otherwise drop focus to `body`.
+	 */
+	const close_tab = (tab_id: Uuid): void => {
+		editor.request_close_tab(tab_id);
+		if (editor.tabs.items.by_id.has(tab_id)) return; // asking first
+		const diskfile_id = editor.tabs.selected_diskfile_id;
+		if (diskfile_id) app.ui.pending_element_to_focus_key = diskfile_id;
+	};
+
 	// TODO @many this is very hacky and duplicated, refactor into cell methods
 	// TODO @many improve UX to not use alert/prompt
 	const create_file = async () => {
-		if (!app.zzz_dir) {
-			alert('cannot create file: filesystem is not available'); // eslint-disable-line no-alert
-			return;
-		}
-
-		const filename = prompt('new file name:'); // eslint-disable-line no-alert
+		const filename = prompt(`new file name in ${diskfiles.new_files_dir}:`); // eslint-disable-line no-alert
 		if (!filename) return;
 
 		try {
 			await diskfiles.create_file(filename);
 		} catch (error) {
 			console.error('failed to create file:', error);
-			alert(`failed to create file: ${error}`); // eslint-disable-line no-alert
+			alert(`failed to create file: ${to_error_message(error)}`); // eslint-disable-line no-alert
 		}
 	};
 </script>
@@ -60,7 +70,7 @@
 			swallow(e);
 			const selected_tab = editor.tabs.selected_tab;
 			if (selected_tab) {
-				editor.request_close_tab(selected_tab.id);
+				close_tab(selected_tab.id);
 			}
 		}
 
@@ -121,7 +131,7 @@
 							<DiskfileTabListitem
 								{tab}
 								onselect={(tab) => diskfiles.select(tab.diskfile_id)}
-								onclose={(tab) => editor.request_close_tab(tab.id)}
+								onclose={(tab) => close_tab(tab.id)}
 								onopen={(tab) => editor.open_tab(tab.id)}
 							/>
 						</div>
@@ -171,9 +181,13 @@
 				<div class="box height:100%">
 					<p>
 						no files yet,
-						<button type="button" class="inline palette_d" onclick={create_file}>
-							create a new file
-						</button>?
+						{#if diskfiles.new_files_dir}
+							<button type="button" class="inline palette_d" onclick={create_file}>
+								create a new file
+							</button>?
+						{:else}
+							<a href={resolve('/workspaces')}>open a workspace</a> to create one
+						{/if}
 					</p>
 				</div>
 			{/if}

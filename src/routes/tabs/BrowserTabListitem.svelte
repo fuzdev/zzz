@@ -2,7 +2,7 @@
 	import { swallow } from '@fuzdev/fuz_util/dom.ts';
 
 	import { icon_remove, icon_tab } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import type { BrowserTab } from './browser_tab.svelte.ts';
 
 	const {
@@ -38,7 +38,7 @@
 		aria-pressed={tab.selected}
 	>
 		<div class="ellipsis font-weight:400 flex:1">
-			<Svg data={icon_tab} />
+			<Icon data={icon_tab} />
 			<small class="ml_xs">{tab.title}</small>
 		</div>
 		<button
@@ -51,7 +51,7 @@
 			title="close tab"
 			aria-label={`close tab ${tab.title}`}
 		>
-			<Svg data={icon_remove} />
+			<Icon data={icon_remove} />
 		</button>
 	</div>
 </div>

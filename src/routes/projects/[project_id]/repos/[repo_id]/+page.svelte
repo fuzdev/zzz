@@ -8,7 +8,7 @@
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import ReposSidebar from '$routes/projects/ReposSidebar.svelte';
 	import { icon_add, icon_delete } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 	import RepoCheckoutItem from '$routes/projects/RepoCheckoutItem.svelte';
 
@@ -97,7 +97,7 @@
 									class="palette_b"
 									onclick={() => repos_viewmodel.add_checkout_dir()}
 								>
-									<Svg data={icon_add} />&nbsp; add checkout
+									<Icon data={icon_add} />&nbsp; add checkout
 								</button>
 							</div>
 						</div>
@@ -119,7 +119,7 @@
 									class="palette_c"
 									onclick={() => repos_viewmodel.remove_repo()}
 								>
-									<Svg data={icon_delete} />&nbsp; delete repo
+									<Icon data={icon_delete} />&nbsp; delete repo
 								</button>
 							{/if}
 						</div>

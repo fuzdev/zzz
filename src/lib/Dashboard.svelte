@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { onNavigate } from '$app/navigation';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { is_editable, swallow } from '@fuzdev/fuz_util/dom.ts';
 	import { slide } from 'svelte/transition';
 
@@ -19,7 +20,7 @@
 	import NavLink from './NavLink.svelte';
 	import { frontend_context } from './frontend.svelte.ts';
 	import { main_nav_items_default, to_nav_link_href } from './nav.ts';
-	import { DESK_WIDTH } from './DeskMenu.svelte';
+	import { DESK_MENU_BUTTON_FOCUS_KEY, DESK_WIDTH } from './DeskMenu.svelte';
 
 	// TODO dashboard should be mounted with Markdown
 
@@ -181,7 +182,7 @@
 		title={sidebar_button_title}
 		onclick={() => app.ui.toggle_sidebar()}
 	>
-		<Svg data={app.ui.show_sidebar ? icon_arrow_left : icon_arrow_right} />
+		<Icon data={app.ui.show_sidebar ? icon_arrow_left : icon_arrow_right} />
 	</button>
 
 	<!-- desk menu button -->
@@ -192,8 +193,14 @@
 			aria-label="desk menu"
 			title="desk menu — switch spaces [~]"
 			onclick={() => app.ui.toggle_desk_menu()}
+			{@attach (el) => {
+				if (app.ui.pending_element_to_focus_key === DESK_MENU_BUTTON_FOCUS_KEY) {
+					app.ui.pending_element_to_focus_key = null;
+					el.focus();
+				}
+			}}
 		>
-			<Svg data={icon_desk} />
+			<Icon data={icon_desk} />
 		</button>
 	{/if}
 </div>

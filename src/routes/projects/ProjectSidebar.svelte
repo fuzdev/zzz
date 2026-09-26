@@ -6,7 +6,7 @@
 	import NavLink from '$lib/NavLink.svelte';
 	import { projects_context } from './projects.svelte.ts';
 	import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from '$lib/Icon.svelte';
 
 	const projects = projects_context.get();
 </script>
@@ -21,7 +21,7 @@
 				void goto(resolve(`/projects/${project.id}`));
 			}}
 		>
-			<Svg data={icon_add} />&nbsp; new project
+			<Icon data={icon_add} />&nbsp; new project
 		</button>
 	</div>
 

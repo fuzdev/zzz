@@ -2,7 +2,7 @@
 	import type { PartUnion } from './part.svelte.ts';
 	import PartToggleButton from './PartToggleButton.svelte';
 	import PartRemoveButton from './PartRemoveButton.svelte';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import PartContextmenu from './PartContextmenu.svelte';
 	import DiskfilePartDraftLabel from './DiskfilePartDraftLabel.svelte';
 	import { get_part_type_icon, type PartOwner } from './part_helpers.ts';
@@ -30,7 +30,7 @@
 	>
 		<div class="progress-bar" style:width="{percent}%"></div>
 		<div class="flex:1 pl_sm py_xs3 ellipsis">
-			<Svg data={get_part_type_icon(part)} />&nbsp;
+			<Icon data={get_part_type_icon(part)} />&nbsp;
 			{part.name}
 			{#if part.type === 'diskfile'}<DiskfilePartDraftLabel {part} />{/if}
 			{part.content_preview}

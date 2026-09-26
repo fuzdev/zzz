@@ -5,7 +5,7 @@
 	import type { Chat } from './chat.svelte.ts';
 	import type { Thread } from './thread.svelte.ts';
 	import { icon_remove } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import ThreadContextmenu from './ThreadContextmenu.svelte';
 	import ProviderLogo from './ProviderLogo.svelte';
 	import ThreadToggleButton from './ThreadToggleButton.svelte';
@@ -88,7 +88,7 @@
 					class="icon-button plain"
 					title="delete thread"
 				>
-					<Svg data={icon_remove} />
+					<Icon data={icon_remove} />
 				</ConfirmButton>
 			</div>
 		</div>

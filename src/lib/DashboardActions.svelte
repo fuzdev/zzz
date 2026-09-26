@@ -3,7 +3,7 @@
 	import ActionDetail from './ActionDetail.svelte';
 	import DashboardHeader from './DashboardHeader.svelte';
 	import { icon_log } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import type { Action } from './action.svelte.ts';
 	import { app_context } from './app.svelte.ts';
 	import TimeWidget from './TimeWidget.svelte';
@@ -25,7 +25,7 @@
 <div class="column p_lg height:100%">
 	<DashboardHeader>
 		{#snippet header()}
-			<h1><Svg data={icon_log} /> system actions</h1>
+			<h1><Icon data={icon_log} /> system actions</h1>
 		{/snippet}
 		<TimeWidget value={app.time.now} />
 	</DashboardHeader>

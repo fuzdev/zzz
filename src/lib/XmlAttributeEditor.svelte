@@ -4,7 +4,7 @@
 
 	import type { XmlAttributeWithDefaults } from './xml.ts';
 	import { icon_remove } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 
 	const {
 		attribute,
@@ -41,6 +41,6 @@
 		title="remove attribute {attribute.key || ''}"
 		class="plain sm"
 	>
-		<Svg data={icon_remove} />
+		<Icon data={icon_remove} />
 	</ConfirmButton>
 </div>

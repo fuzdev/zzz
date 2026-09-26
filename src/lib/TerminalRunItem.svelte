@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { icon_retry, icon_remove } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 
 	import TerminalView from './TerminalView.svelte';
 	import TerminalContextmenu from './TerminalContextmenu.svelte';
@@ -69,7 +69,7 @@
 					disabled={terminal.status === 'starting' || terminal.closing}
 					title="restart"
 				>
-					<Svg data={icon_retry} />
+					<Icon data={icon_retry} />
 				</button>
 			{/if}
 			{#if onremove}
@@ -80,7 +80,7 @@
 					disabled={terminal.closing}
 					title={terminal.running ? 'close and remove' : 'remove'}
 				>
-					<Svg data={icon_remove} />
+					<Icon data={icon_remove} />
 				</button>
 			{/if}
 		</div>

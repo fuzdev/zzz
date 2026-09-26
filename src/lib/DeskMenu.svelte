@@ -1,29 +1,64 @@
 <script module lang="ts">
 	export const DESK_WIDTH = 260;
+
+	/** `Ui.pending_element_to_focus_key` value that hands focus back to the desk menu button. */
+	export const DESK_MENU_BUTTON_FOCUS_KEY = 'desk_menu_button';
 </script>
 
 <script lang="ts">
+	import type { Attachment } from 'svelte/attachments';
+
 	import { frontend_context } from './frontend.svelte.ts';
 	import EditableText from './EditableText.svelte';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 	import { icon_add, icon_delete, icon_pin, icon_space } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { click_outside } from './click_outside.svelte.ts';
 	import { WORKSPACE_DEGRADED_NOTICE } from './workspace_helpers.ts';
 
 	const app = frontend_context.get();
+
+	// the desk menu button is removed while the menu shows, so opening it from
+	// the button would drop focus to `body` — take it instead, and on close
+	// hand it back to the button if it was inside the menu
+	const manage_focus: Attachment<HTMLElement> = (el) => {
+		const focus_dropped = (): boolean =>
+			!document.activeElement || document.activeElement === document.body;
+		if (focus_dropped()) el.focus();
+		// tracked, not checked at teardown, when the menu may already be detached
+		let focused_inside = el.contains(document.activeElement);
+		const onfocusin = () => {
+			focused_inside = true;
+		};
+		const onfocusout = (e: FocusEvent) => {
+			// no `relatedTarget` means focus dropped to `body`, e.g. as the menu is removed
+			if (e.relatedTarget instanceof Node) focused_inside = el.contains(e.relatedTarget);
+		};
+		el.addEventListener('focusin', onfocusin);
+		el.addEventListener('focusout', onfocusout);
+		return () => {
+			el.removeEventListener('focusin', onfocusin);
+			el.removeEventListener('focusout', onfocusout);
+			if (focused_inside && (focus_dropped() || el.contains(document.activeElement))) {
+				app.ui.pending_element_to_focus_key = DESK_MENU_BUTTON_FOCUS_KEY;
+			}
+		};
+	};
 </script>
 
 {#if app.ui.show_desk_menu}
 	<aside
 		class="desk-sidebar unstyled p_md"
+		tabindex="-1"
+		aria-label="desk menu"
+		{@attach manage_focus}
 		{@attach app.ui.desk_pinned ? null : click_outside(() => app.ui.toggle_desk_menu(false))}
 	>
 		<div>
 			<section class="box mb_xl3">
 				<div class="width:100% row gap_sm mb_xl">
 					<h2 class="mt_0 flex:1">
-						<Svg data={icon_space} /> spaces
+						<Icon data={icon_space} /> spaces
 					</h2>
 					<button
 						type="button"
@@ -32,7 +67,7 @@
 						title={app.ui.desk_pinned ? 'unpin desk' : 'pin desk'}
 						onclick={() => app.ui.toggle_desk_pinned()}
 					>
-						<Svg data={icon_pin} />
+						<Icon data={icon_pin} />
 					</button>
 				</div>
 				<ul class="unstyled width:100%">
@@ -58,7 +93,7 @@
 									class="icon-button compact plain deselectable"
 									title="delete space"
 								>
-									<Svg data={icon_delete} />
+									<Icon data={icon_delete} />
 								</ConfirmButton>
 							{/if}
 						</li>
@@ -73,7 +108,7 @@
 						app.spaces.activate(space.id);
 					}}
 				>
-					<Svg data={icon_add} /> new space
+					<Icon data={icon_add} /> new space
 				</button>
 			</section>
 

@@ -4,7 +4,7 @@
 	import NavLink from './NavLink.svelte';
 	import ChatContextmenu from './ChatContextmenu.svelte';
 	import { icon_chat } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import type { Chat } from './chat.svelte.ts';
 
 	const {
@@ -24,7 +24,7 @@
 		style="min-height: 0;"
 	>
 		<div class="ellipsis">
-			<Svg data={icon_chat} />&nbsp;
+			<Icon data={icon_chat} />&nbsp;
 			<span>{chat.name}</span>
 		</div>
 		{#if chat.threads.length}<small>{chat.threads.length}</small>{/if}

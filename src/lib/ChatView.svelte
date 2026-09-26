@@ -6,7 +6,7 @@
 	import { Chat } from './chat.svelte.ts';
 	import { frontend_context } from './frontend.svelte.ts';
 	import { icon_chat, icon_delete, icon_thread, icon_view } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import ThreadList from './ThreadList.svelte';
 	import ChatViewSimple from './ChatViewSimple.svelte';
 	import ChatViewMulti from './ChatViewMulti.svelte';
@@ -44,7 +44,7 @@
 						? `auto-naming failed: ${chat.init_name_error}`
 						: undefined}
 				>
-					<Svg data={icon_chat} />
+					<Icon data={icon_chat} />
 					<EditableText bind:value={() => chat.name, (name) => chat.rename(name)} />
 				</div>
 				<div class="row">
@@ -63,7 +63,7 @@
 								class="plain sm"
 								title="toggle chat to {chat.view_mode === 'multi' ? 'simple' : 'multi'} view"
 							>
-								<Svg data={icon_view} class="mr_xs" />
+								<Icon data={icon_view} class="mr_xs" />
 							</ToggleButton>
 						{/if}
 						<ConfirmButton
@@ -71,8 +71,8 @@
 							title="delete chat {'"' + chat.name + '"'}"
 							class="plain icon-button"
 						>
-							<Svg data={icon_delete} />
-							{#snippet popover_button_content()}<Svg data={icon_delete} />{/snippet}
+							<Icon data={icon_delete} />
+							{#snippet popover_button_content()}<Icon data={icon_delete} />{/snippet}
 						</ConfirmButton>
 					</div>
 				</div>
@@ -85,7 +85,7 @@
 					class="mt_0 mb_lg font_size_lg display:flex justify-content:space-between"
 					title="threads are the individual threads of conversation in a chat -- each chat can have many threads, comprising its history"
 				>
-					<span><Svg data={icon_thread} /> threads</span><span>{thread_count}</span>
+					<span><Icon data={icon_thread} /> threads</span><span>{thread_count}</span>
 				</header>
 				<ThreadList {chat} />
 			</section>

@@ -7,7 +7,7 @@
 	import { DiskfileDirectoryPath } from '$lib/diskfile_types.ts';
 	import { parse_workspace_path, WORKSPACE_DEGRADED_NOTICE } from '$lib/workspace_helpers.ts';
 	import { icon_add, icon_delete, icon_directory, icon_workspace } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import PageFooter from '$routes/PageFooter.svelte';
 
 	const app = frontend_context.get();
@@ -103,7 +103,7 @@
 
 <div class="workspaces_page p_xl">
 	<header class="mb_xl">
-		<h1><Svg data={icon_workspace} /> Workspaces</h1>
+		<h1><Icon data={icon_workspace} /> Workspaces</h1>
 		<p class="text_50">
 			Directories the daemon is watching. Open a workspace to access its files and receive change
 			events.
@@ -112,7 +112,7 @@
 
 	<!-- open a workspace -->
 	<section class="box mb_xl">
-		<h2 class="mt_0"><Svg data={icon_add} /> Open Workspace</h2>
+		<h2 class="mt_0"><Icon data={icon_add} /> Open Workspace</h2>
 		<form
 			class="row gap_sm"
 			onsubmit={(e) => {
@@ -138,7 +138,7 @@
 
 	<!-- list open workspaces -->
 	<section class="box">
-		<h2 class="mt_0"><Svg data={icon_directory} /> Open Workspaces</h2>
+		<h2 class="mt_0"><Icon data={icon_directory} /> Open Workspaces</h2>
 		{#if app.workspaces.items.by_id.size === 0}
 			<p class="text_50">
 				No workspaces open. Use the form above or run <code>zzz &lt;dir&gt;</code> to open one.
@@ -153,7 +153,7 @@
 							class:selected={workspace.id === app.workspaces.active_id}
 							onclick={() => app.workspaces.activate(workspace.id)}
 						>
-							<Svg data={icon_workspace} />
+							<Icon data={icon_workspace} />
 							<span class="flex:1">
 								<strong>{workspace.name}</strong>
 								<span class="text_50 font_size_sm font_family_mono ml_sm">{workspace.path}</span>
@@ -168,7 +168,7 @@
 							title="close workspace"
 							onclick={() => void handle_close(workspace.path)}
 						>
-							<Svg data={icon_delete} />
+							<Icon data={icon_delete} />
 						</button>
 					</li>
 				{/each}

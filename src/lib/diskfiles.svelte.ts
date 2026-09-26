@@ -12,6 +12,7 @@ import { Diskfile } from './diskfile.svelte.ts';
 import {
 	DiskfileJson,
 	DiskfilePath,
+	type DiskfileDirectoryPath,
 	type DiskfileJsonInput,
 	type SerializableDisknode
 } from './diskfile_types.ts';
@@ -373,20 +374,31 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Creates a new file under the zzz dir — never overwriting one: the
+	 * The directory new files and folders are created in: the active
+	 * workspace's, `null` when no workspace is open.
+	 */
+	readonly new_files_dir: DiskfileDirectoryPath | null = $derived(
+		this.app.workspaces.active?.path ?? null
+	);
+
+	/**
+	 * Creates a new file in `new_files_dir` — never overwriting one: the
 	 * backend's `diskfile_create` creates the final name exclusively, so an
 	 * existing file (indexed or not) is left untouched.
 	 *
-	 * @throws Error when the zzz dir isn't set, the file already exists, or
+	 * @param filename - the file's path relative to `new_files_dir`
+	 * @param content - the new file's content
+	 * @throws Error when no workspace is open, the file already exists, or
 	 * the write fails
 	 */
 	async create_file(filename: string, content: string = ''): Promise<void> {
-		if (!this.app.zzz_dir) {
-			throw new Error('cannot create file: zzz_dir is not set');
+		const dir = this.new_files_dir;
+		if (!dir) {
+			throw new Error('cannot create file: no workspace is open');
 		}
 
-		// zzz_dir already has trailing slash (DiskfileDirectoryPath), strip any leading slash from filename
-		const path = DiskfilePath.parse(`${this.app.zzz_dir}${strip_start(filename, '/')}`);
+		// `dir` has a trailing slash (`DiskfileDirectoryPath`), so strip any leading one from `filename`
+		const path = DiskfilePath.parse(`${dir}${strip_start(filename, '/')}`);
 
 		const result = await this.app.api.diskfile_create({ path, content });
 		if (!result.ok) {
@@ -397,16 +409,24 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		}
 	}
 
+	/**
+	 * Creates a new directory in `new_files_dir`.
+	 *
+	 * @param dirname - the directory's path relative to `new_files_dir`
+	 * @throws Error when no workspace is open or the backend refuses
+	 */
 	async create_directory(dirname: string): Promise<void> {
-		if (!this.app.zzz_dir) {
-			throw new Error('cannot create directory: zzz_dir is not set');
+		const dir = this.new_files_dir;
+		if (!dir) {
+			throw new Error('cannot create folder: no workspace is open');
 		}
 
-		const path = DiskfilePath.parse(`${this.app.zzz_dir}${dirname}`);
+		const path = DiskfilePath.parse(`${dir}${strip_start(dirname, '/')}`);
 
 		const result = await this.app.api.directory_create({ path });
-		// Handler already updated state on error
-		if (!result.ok) return;
+		if (!result.ok) {
+			throw new Error(result.error.message);
+		}
 	}
 
 	get_by_path(path: DiskfilePath): Diskfile | undefined {

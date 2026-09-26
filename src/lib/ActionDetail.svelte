@@ -1,7 +1,7 @@
 <script lang="ts">
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 
 	import { get_icon_for_action_kind } from './action_icons.ts';
 	import type { Action } from './action.svelte.ts';
@@ -17,7 +17,7 @@
 
 <div class="mb_md">
 	<h3 class="mt_md">
-		<Svg data={get_icon_for_action_kind(action.kind)} />
+		<Icon data={get_icon_for_action_kind(action.kind)} />
 		{action.method}
 	</h3>
 	<table>

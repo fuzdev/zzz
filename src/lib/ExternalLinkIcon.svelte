@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { icon_external_link } from '@fuzdev/fuz_ui/icons.ts';
 
 	const {
@@ -15,6 +15,6 @@
 	[{#if children}
 		{@render children(icon_external_link)}
 	{:else}
-		<Svg data={icon_external_link} inline />
+		<Icon data={icon_external_link} />
 	{/if}]
 </sup>

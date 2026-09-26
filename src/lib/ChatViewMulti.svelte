@@ -6,7 +6,7 @@
 	import { Chat } from './chat.svelte.ts';
 	import ChatThread from './ChatThread.svelte';
 	import { icon_add, icon_remove, icon_send } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import { format_placeholder } from './helpers.ts';
 	import ContentEditor from './ContentEditor.svelte';
 	import ModelPickerDialog from './ModelPickerDialog.svelte';
@@ -64,13 +64,13 @@
 				disabled={!count ? true : undefined}
 				class="plain"
 			>
-				<Svg data={icon_send} /> to {count}
+				<Icon data={icon_send} /> to {count}
 			</PendingButton>
 		</ContentEditor>
 
 		<div class="display:flex mt_lg">
 			<button type="button" class="plain" onclick={() => (show_model_picker = true)}>
-				<Svg data={icon_add} />&nbsp; add thread
+				<Icon data={icon_add} />&nbsp; add thread
 			</button>
 			<ConfirmButton
 				onconfirm={() => chat.remove_all_threads()}
@@ -78,7 +78,7 @@
 				disabled={!count}
 				class="plain"
 			>
-				<Svg data={icon_remove} />&nbsp; remove all
+				<Icon data={icon_remove} />&nbsp; remove all
 			</ConfirmButton>
 		</div>
 		<ul class="threads unstyled mt_lg">

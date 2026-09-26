@@ -2,7 +2,7 @@
 	// @slop Claude Opus 4
 
 	import { icon_delete } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import type { RepoCheckout } from './projects_schema.ts';
 
 	const {
@@ -60,7 +60,7 @@
 						title="Remove tag"
 						onclick={() => on_remove_tag(index, tag_index)}
 					>
-						<Svg data={icon_delete} />
+						<Icon data={icon_delete} />
 					</button>
 				</span>
 			{/each}
@@ -91,7 +91,7 @@
 
 	<div class="display:flex justify-content:end">
 		<button type="button" class="palette_c" onclick={() => on_remove(index)}>
-			<Svg data={icon_delete} />&nbsp; delete checkout
+			<Icon data={icon_delete} />&nbsp; delete checkout
 		</button>
 	</div>
 </div>

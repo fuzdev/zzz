@@ -8,7 +8,7 @@
 	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
 	import PagesSidebar from '$routes/projects/PagesSidebar.svelte';
 	import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
 
 	const projects = projects_context.get();
@@ -39,7 +39,7 @@
 							class="palette_a"
 							onclick={() => project_viewmodel.create_new_page()}
 						>
-							<Svg data={icon_add} />&nbsp; create your first page
+							<Icon data={icon_add} />&nbsp; create your first page
 						</button>
 					</p>
 				{:else}
@@ -74,7 +74,7 @@
 							class="palette_a"
 							onclick={() => project_viewmodel.create_new_page()}
 						>
-							<Svg data={icon_add} />&nbsp; new page
+							<Icon data={icon_add} />&nbsp; new page
 						</button>
 					</div>
 				{/if}

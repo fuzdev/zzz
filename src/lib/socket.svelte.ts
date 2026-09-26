@@ -183,9 +183,13 @@ export class Socket implements WebsocketRpcConnection {
 			? Math.max(0, this.app.time.now_ms - this.last_connect_time)
 			: null
 	);
+	/**
+	 * `connection_duration` rounded down to the `Time` tick interval (a minute by
+	 * default), so it never overstates the time connected — `0` means less than one interval.
+	 */
 	readonly connection_duration_rounded: number | null = $derived.by(() =>
 		this.connection_duration !== null
-			? Math.round(this.connection_duration / this.app.time.interval) * this.app.time.interval
+			? Math.floor(this.connection_duration / this.app.time.interval) * this.app.time.interval
 			: null
 	);
 

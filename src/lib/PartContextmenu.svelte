@@ -9,7 +9,7 @@
 
 	import type { PartUnion } from './part.svelte.ts';
 	import { icon_delete, icon_edit, icon_part } from '@fuzdev/fuz_ui/icons.ts';
-	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import Icon from './Icon.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import PartView from './PartView.svelte';
 	import { get_part_type_icon, type PartOwner } from './part_helpers.ts';
@@ -77,7 +77,7 @@
 {#if show_editor}
 	<Dialog onclose={() => (show_editor = false)}>
 		<DialogContent>
-			<h2 class="mt_0 mb_sm"><Svg data={icon_part} /> edit part</h2>
+			<h2 class="mt_0 mb_sm"><Icon data={icon_part} /> edit part</h2>
 			<PartView {part} {owner} />
 		</DialogContent>
 	</Dialog>
