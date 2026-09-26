@@ -23,9 +23,7 @@ import {
 	default_cross_process_setup,
 	reconstruct_bootstrapped_handle
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
-import {
-	describe_cross_process_sse_tests
-} from '@fuzdev/fuz_app/testing/cross_backend/sse_round_trip.ts';
+import { describe_cross_process_sse_tests } from '@fuzdev/fuz_app/testing/cross_backend/sse_round_trip.ts';
 import { ROLE_ADMIN } from '@fuzdev/fuz_app/auth/role_schema.ts';
 
 import './cross_test_types.ts';
