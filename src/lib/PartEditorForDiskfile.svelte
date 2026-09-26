@@ -14,6 +14,7 @@
 	import { icon_file } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import { format_placeholder } from './helpers.ts';
+	import { DISKFILE_CONTENT_NOT_LOADED_MESSAGE } from './diskfile_helpers.ts';
 
 	const {
 		diskfile_part,
@@ -93,6 +94,11 @@
 
 {#if diskfile && editor_state}
 	<div>
+		{#if !editor_state.content_loaded}
+			<p class="mb_xs color_c_50">
+				<small>{DISKFILE_CONTENT_NOT_LOADED_MESSAGE} — read-only</small>
+			</p>
+		{/if}
 		<div class="column">
 			<ContentEditor
 				bind:this={content_editor}
@@ -105,9 +111,11 @@
 					}
 				}
 				token_count={editor_state.current_token_count}
-				placeholder={format_placeholder(diskfile.path_relative)}
+				placeholder={editor_state.content_loaded
+					? format_placeholder(diskfile.path_relative)
+					: '[content not loaded]'}
 				show_stats={false}
-				readonly={false}
+				readonly={!editor_state.content_loaded}
 				onsave={async () => {
 					await editor_state?.save_changes();
 				}}
@@ -115,7 +123,7 @@
 
 			{#if show_actions}
 				<div class="mt_xs">
-					<DiskfileActions {diskfile} {editor_state} />
+					<DiskfileActions {diskfile} {editor_state} readonly={!editor_state.content_loaded} />
 				</div>
 			{:else if editor_state.save_error !== null}
 				<div class="mt_xs" transition:slide>

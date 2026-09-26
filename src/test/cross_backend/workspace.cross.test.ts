@@ -213,7 +213,8 @@ describe('workspace cross-backend', () => {
 			headers: fixture.create_session_headers()
 		});
 		assert.ok(!res.ok, 'expected error');
-		assert.equal(res.error.code, -32603);
+		assert.equal(res.error.code, -32003);
+		assert.deepEqual(res.error.data, { reason: 'path_not_found' });
 		assert.ok(
 			res.error.message.startsWith('failed to open workspace: directory does not exist:'),
 			`unexpected message: ${res.error.message}`
@@ -291,7 +292,8 @@ describe('workspace cross-backend', () => {
 				headers: fixture.create_session_headers()
 			});
 			assert.ok(!res.ok, 'expected error opening a file as workspace');
-			assert.equal(res.error.code, -32603);
+			assert.equal(res.error.code, -32602);
+			assert.deepEqual(res.error.data, { reason: 'not_a_directory' });
 		} finally {
 			await rm(file_path, { force: true });
 		}

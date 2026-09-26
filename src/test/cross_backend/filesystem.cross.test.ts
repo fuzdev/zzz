@@ -8,7 +8,20 @@
 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { access, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import {
+	access,
+	chmod,
+	lstat,
+	mkdir,
+	readdir,
+	readFile,
+	rename,
+	rm,
+	stat,
+	writeFile
+} from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { request as http_request } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { describe, test, inject, assert } from 'vitest';
 import {
@@ -17,6 +30,9 @@ import {
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
+import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+
+import { RPC_MESSAGE_MAX_BYTES } from '$lib/rpc_message_limit.ts';
 
 import './cross_test_types.ts';
 
@@ -34,6 +50,29 @@ const file_exists = async (path: string): Promise<boolean> => {
 		return false;
 	}
 };
+
+/**
+ * POST `body` and resolve the response status. Unlike `fetch`, tolerates the
+ * server answering (413) and closing before the upload finishes — the write
+ * then fails with `EPIPE` after the response already arrived.
+ */
+const post_status = (url: string, headers: Record<string, string>, body: string): Promise<number> =>
+	new Promise((resolve, reject) => {
+		let status: number | undefined;
+		const req = http_request(url, { method: 'POST', headers }, (res) => {
+			status = res.statusCode;
+			res.on('error', () => undefined);
+			res.resume();
+			res.on('end', () => resolve(status!));
+		});
+		// the unfinished upload's EPIPE also surfaces on the socket
+		req.on('socket', (socket) => socket.on('error', () => undefined));
+		req.on('error', (error) => {
+			if (status === undefined) reject(error);
+			else resolve(status);
+		});
+		req.end(body);
+	});
 
 describe('filesystem cross-backend', () => {
 	test('diskfile_update_and_read', async () => {
@@ -185,9 +224,10 @@ describe('filesystem cross-backend', () => {
 			headers: fixture.create_session_headers()
 		});
 		assert.ok(!res.ok, 'expected error for out-of-scope write');
-		assert.equal(res.error.code, -32603);
+		assert.equal(res.error.code, JSONRPC_ERROR_CODES.forbidden);
+		assert.deepEqual(res.error.data, { reason: 'path_not_allowed' });
 		assert.ok(
-			res.error.message.startsWith('failed to write file:'),
+			res.error.message.startsWith('failed to write file: Path is not allowed'),
 			`unexpected message: ${res.error.message}`
 		);
 	});
@@ -205,7 +245,8 @@ describe('filesystem cross-backend', () => {
 			headers: fixture.create_session_headers()
 		});
 		assert.ok(!res.ok, 'expected error for traversal');
-		assert.equal(res.error.code, -32603);
+		assert.equal(res.error.code, JSONRPC_ERROR_CODES.forbidden);
+		assert.deepEqual(res.error.data, { reason: 'path_not_allowed' });
 	});
 
 	test('diskfile_update_relative_path', async () => {
@@ -218,7 +259,7 @@ describe('filesystem cross-backend', () => {
 			headers: fixture.create_session_headers()
 		});
 		assert.ok(!res.ok, 'expected invalid_params');
-		assert.equal(res.error.code, -32602);
+		assert.equal(res.error.code, JSONRPC_ERROR_CODES.invalid_params);
 	});
 
 	test('diskfile_delete_nonexistent', async () => {
@@ -232,7 +273,236 @@ describe('filesystem cross-backend', () => {
 			headers: fixture.create_session_headers()
 		});
 		assert.ok(!res.ok, 'expected error');
-		assert.equal(res.error.code, -32603);
+		assert.equal(res.error.code, JSONRPC_ERROR_CODES.not_found);
+		assert.deepEqual(res.error.data, { reason: 'path_not_found' });
+		assert.ok(
+			res.error.message.startsWith('failed to delete file:'),
+			`unexpected message: ${res.error.message}`
+		);
+	});
+
+	test('wrong_file_kinds_are_invalid_params', async () => {
+		const fixture = await setup_test();
+		const dir = join(scoped_dir, `kinds_${randomUUID()}`);
+		await mkdir(dir, { recursive: true });
+		try {
+			const file_path = join(dir, 'file.txt');
+			await writeFile(file_path, 'x', 'utf-8');
+			const fifo_path = join(dir, 'fifo');
+			execFileSync('mkfifo', [fifo_path]);
+
+			const cases: Array<[string, Record<string, unknown>, string]> = [
+				['diskfile_update', { path: dir, content: 'x' }, 'is_a_directory'],
+				// a FIFO is refused, not opened — opening one blocks until a reader appears
+				['diskfile_update', { path: fifo_path, content: 'x' }, 'not_a_regular_file'],
+				['diskfile_delete', { path: dir }, 'is_a_directory'],
+				['directory_create', { path: file_path }, 'not_a_directory'],
+				['directory_create', { path: join(file_path, 'sub') }, 'not_a_directory']
+			];
+			for (const [method, params, reason] of cases) {
+				const res = await rpc_call({
+					app: fixture.transport,
+					path: handle.config.rpc_path,
+					method,
+					params,
+					headers: fixture.create_session_headers()
+				});
+				const label = `${method} ${JSON.stringify(params)}`;
+				assert.ok(!res.ok, `${label} should fail`);
+				assert.equal(res.error.code, JSONRPC_ERROR_CODES.invalid_params, label);
+				assert.deepEqual(res.error.data, { reason }, label);
+			}
+			assert.ok((await lstat(fifo_path)).isFIFO(), 'the FIFO is left in place');
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	test('diskfile_update_replaces_atomically', async () => {
+		const fixture = await setup_test();
+		const dir = join(scoped_dir, `atomic_${randomUUID()}`);
+		await mkdir(dir, { recursive: true });
+		try {
+			const file_path = join(dir, 'script.sh');
+			await writeFile(file_path, 'old', 'utf-8');
+			await chmod(file_path, 0o750);
+			const res = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'diskfile_update',
+				params: { path: file_path, content: 'new' },
+				headers: fixture.create_session_headers()
+			});
+			assert.ok(res.ok, JSON.stringify(res));
+			assert.equal(await readFile(file_path, 'utf-8'), 'new');
+			assert.equal((await stat(file_path)).mode & 0o7777, 0o750, 'mode kept');
+			assert.deepEqual(await readdir(dir), ['script.sh'], 'no staged temp file left');
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	test('diskfile_create_never_overwrites', async () => {
+		const fixture = await setup_test();
+		const dir = join(scoped_dir, `create_${randomUUID()}`);
+		await mkdir(dir, { recursive: true });
+		const create = (params: Record<string, unknown>) =>
+			rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'diskfile_create',
+				params,
+				headers: fixture.create_session_headers()
+			});
+		try {
+			const file_path = join(dir, 'sub', 'new.txt');
+			const first = await create({ path: file_path, content: 'first' });
+			assert.ok(first.ok, JSON.stringify(first));
+			assert.equal(first.result, null);
+			assert.equal(await readFile(file_path, 'utf-8'), 'first');
+
+			const again = await create({ path: file_path, content: '' });
+			assert.ok(!again.ok, 'an existing file is not replaced');
+			assert.equal(again.error.code, JSONRPC_ERROR_CODES.conflict);
+			assert.deepEqual(again.error.data, { reason: 'already_exists' });
+			assert.equal(await readFile(file_path, 'utf-8'), 'first', 'untouched');
+
+			const strict = await create({ path: join(dir, 'x.txt'), content: '', overwrite: true });
+			assert.ok(!strict.ok);
+			assert.equal(strict.error.code, JSONRPC_ERROR_CODES.invalid_params);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	test('permissions_are_respected', async () => {
+		const fixture = await setup_test();
+		const dir = join(scoped_dir, `perms_${randomUUID()}`);
+		const ro_dir = join(dir, 'rodir');
+		await mkdir(ro_dir, { recursive: true });
+		const update = (path: string) =>
+			rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'diskfile_update',
+				params: { path, content: 'NEW' },
+				headers: fixture.create_session_headers()
+			});
+		try {
+			// a rename needs only the directory's permission — the file's is checked too
+			const ro_file = join(dir, 'ro.txt');
+			await writeFile(ro_file, 'orig', 'utf-8');
+			await chmod(ro_file, 0o444);
+			const refused = await update(ro_file);
+			assert.ok(!refused.ok, 'a read-only file is not replaced');
+			assert.equal(refused.error.code, JSONRPC_ERROR_CODES.forbidden);
+			assert.deepEqual(refused.error.data, { reason: 'permission_denied' });
+			assert.equal(await readFile(ro_file, 'utf-8'), 'orig');
+
+			// a writable file in a read-only directory is written in place
+			const w_file = join(ro_dir, 'w.txt');
+			await writeFile(w_file, 'orig', 'utf-8');
+			await chmod(ro_dir, 0o555);
+			const in_place = await update(w_file);
+			assert.ok(in_place.ok, JSON.stringify(in_place));
+			assert.equal(await readFile(w_file, 'utf-8'), 'NEW');
+
+			const created = await update(join(ro_dir, 'new.txt'));
+			assert.ok(!created.ok);
+			assert.equal(created.error.code, JSONRPC_ERROR_CODES.forbidden);
+			assert.deepEqual(created.error.data, { reason: 'directory_not_writable' });
+			assert.ok(!created.error.message.includes('.zzz-tmp-'), created.error.message);
+		} finally {
+			await chmod(ro_dir, 0o755).catch(() => undefined);
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	test('filesystem_inputs_are_strict', async () => {
+		const fixture = await setup_test();
+		const path = join(scoped_dir, `strict_${randomUUID()}.txt`);
+		const cases: Array<[string, Record<string, unknown>]> = [
+			['diskfile_update', { path, content: 'x', extra: true }],
+			['diskfile_update', { path, content: null }],
+			['diskfile_update', { path }],
+			['diskfile_delete', { path, recursive: true }],
+			['directory_create', { path: null }]
+		];
+		for (const [method, params] of cases) {
+			const res = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method,
+				params,
+				headers: fixture.create_session_headers()
+			});
+			const label = `${method} ${JSON.stringify(params)}`;
+			assert.ok(!res.ok, `${label} should fail`);
+			assert.equal(res.error.code, JSONRPC_ERROR_CODES.invalid_params, label);
+		}
+		assert.ok(!(await file_exists(path)), 'nothing written');
+	});
+
+	// the frontend's `RPC_MESSAGE_MAX_BYTES` twins the backend constant of the
+	// same name: building both boundary messages from it pins
+	// the two together (a lower backend cap fails the "under" writes, a higher
+	// one the "over" refusals). Both sides exceed axum's 2 MiB extractor
+	// default, which the backend has to lift.
+	test('rpc_message_cap_on_both_transports', async () => {
+		const fixture = await setup_test();
+		const path = join(scoped_dir, `rpc_cap_${randomUUID()}.txt`);
+		const under = 'u'.repeat(RPC_MESSAGE_MAX_BYTES - 1024);
+		const over = 'o'.repeat(RPC_MESSAGE_MAX_BYTES + 1);
+		const ws = await create_ws_transport({
+			base_url: handle.config.base_url,
+			ws_path: handle.config.ws_path,
+			cookies: fixture.transport.cookies()
+		});
+		try {
+			// HTTP: under the cap is written, over it is a 413
+			const http_under = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'diskfile_update',
+				params: { path, content: under },
+				headers: fixture.create_session_headers()
+			});
+			assert.ok(http_under.ok, JSON.stringify(http_under).slice(0, 500));
+			assert.equal((await stat(path)).size, under.length);
+
+			const http_over = await post_status(
+				`${handle.config.base_url}${handle.config.rpc_path}`,
+				{
+					'Content-Type': 'application/json',
+					origin: 'http://localhost:5173',
+					...fixture.create_session_headers()
+				},
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'over',
+					method: 'diskfile_update',
+					params: { path, content: over }
+				})
+			);
+			assert.equal(http_over, 413);
+
+			// WebSocket: under the cap is written, over it closes the socket
+			await rm(path);
+			await ws.request('under', 'diskfile_update', { path, content: under }, 30_000);
+			assert.equal((await stat(path)).size, under.length);
+
+			await ws.send({
+				jsonrpc: '2.0',
+				id: 'over',
+				method: 'diskfile_update',
+				params: { path, content: over }
+			});
+			assert.ok(await ws.wait_for_close(10_000), 'an oversized message closes the socket');
+			assert.equal((await stat(path)).size, under.length, 'not written');
+		} finally {
+			await ws.close().catch(() => undefined);
+			await rm(path, { force: true });
+		}
 	});
 
 	test('filer_change_on_file_create', async () => {

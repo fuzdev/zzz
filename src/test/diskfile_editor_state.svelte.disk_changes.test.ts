@@ -362,8 +362,9 @@ describe('edge cases', () => {
 		// Check for changes
 		editor_state.check_disk_changes();
 
-		// Should not crash and maintain same state
-		assert.strictEqual(editor_state.current_content, 'User edit');
+		// Should not crash; the unloaded file shows no stale text (the edit stays in history)
+		assert.strictEqual(editor_state.current_content, '');
+		assert.isFalse(editor_state.can_save);
 	});
 
 	test('editing to match disk content is handled properly', () => {

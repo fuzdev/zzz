@@ -4,6 +4,7 @@ import { Uuid } from '@fuzdev/fuz_util/id.ts';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
+import { jsonrpc_error_messages } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 import { Diskfile } from './diskfile.svelte.ts';
 import {
@@ -12,7 +13,12 @@ import {
 	type DiskfileJsonInput,
 	type SerializableDisknode
 } from './diskfile_types.ts';
-import { disknode_to_diskfile_json, to_relative_path } from './diskfile_helpers.ts';
+import {
+	DISKFILE_CONTENT_NOT_LOADED_MESSAGE,
+	ERROR_CONTENT_NOT_LOADED,
+	disknode_to_diskfile_json,
+	to_relative_path
+} from './diskfile_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { HANDLED } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
@@ -193,12 +199,27 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * Writes `content` to the file at `path`. The local `Diskfile` changes only
 	 * when the resulting `filer_change` broadcast arrives, not from the response.
 	 *
+	 * Refuses, without sending, to write over a known file whose content wasn't
+	 * loaded (`Diskfile.content_loaded` — over 4 MiB, not UTF-8 text, or
+	 * unreadable): nobody has seen what it would overwrite. Fails with
+	 * `conflict` (`data.reason` `content_not_loaded`).
+	 *
 	 * @returns the RPC result — on failure, callers surface `error` themselves
 	 */
 	update(
 		path: DiskfilePath,
 		content: string
 	): Promise<Result<{ value: ActionOutputs['diskfile_update'] }, { error: JsonrpcErrorObject }>> {
+		const existing = this.get_by_path(path);
+		if (existing && !existing.content_loaded) {
+			return Promise.resolve({
+				ok: false,
+				error: jsonrpc_error_messages.conflict(
+					`refusing to overwrite ${path}: ${DISKFILE_CONTENT_NOT_LOADED_MESSAGE}`,
+					{ reason: ERROR_CONTENT_NOT_LOADED }
+				)
+			});
+		}
 		return this.app.api.diskfile_update({ path, content });
 	}
 
@@ -209,9 +230,12 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Creates a file under the zzz dir, or overwrites it if it exists.
+	 * Creates a new file under the zzz dir — never overwriting one: the
+	 * backend's `diskfile_create` creates the final name exclusively, so an
+	 * existing file (indexed or not) is left untouched.
 	 *
-	 * @throws Error when the zzz dir isn't set or the write fails
+	 * @throws Error when the zzz dir isn't set, the file already exists, or
+	 * the write fails
 	 */
 	async create_file(filename: string, content: string = ''): Promise<void> {
 		if (!this.app.zzz_dir) {
@@ -221,10 +245,12 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		// zzz_dir already has trailing slash (DiskfileDirectoryPath), strip any leading slash from filename
 		const path = DiskfilePath.parse(`${this.app.zzz_dir}${strip_start(filename, '/')}`);
 
-		// Reuse `update` which creates or updates files
-		const result = await this.update(path, content);
+		const result = await this.app.api.diskfile_create({ path, content });
 		if (!result.ok) {
-			throw new Error(result.error.message);
+			const { reason } = (result.error.data ?? {}) as { reason?: unknown };
+			throw new Error(
+				reason === 'already_exists' ? `${filename} already exists` : result.error.message
+			);
 		}
 	}
 

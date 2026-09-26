@@ -9,8 +9,9 @@
 use std::sync::Arc;
 
 use fuz_actions::ActionContext;
-use fuz_http::{JsonrpcError, internal_error_with_source, invalid_params};
-use serde::Serialize;
+use fuz_auth::require_void_params;
+use fuz_http::{JsonrpcError, internal_error_with_source, invalid_params, parse_strict_params};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::handlers::{App, WorkspaceInfo};
@@ -18,6 +19,14 @@ use crate::handlers::{App, WorkspaceInfo};
 #[derive(Serialize)]
 struct PingResult {
     ping_id: Value,
+}
+
+/// Input for `_testing_emit_notifications` — twin of
+/// `TestingEmitNotificationsInput`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TestingEmitNotificationsInput {
+    count: u64,
 }
 
 #[derive(Serialize)]
@@ -40,6 +49,7 @@ struct SessionLoadResult {
 }
 
 /// `ping` — public health check. Echoes the request id back as `ping_id`.
+/// Takes no input (`z.void()`), so any `params` is refused.
 ///
 /// `ActionContext.request_id` carries the parsed envelope's id.
 #[allow(
@@ -47,26 +57,29 @@ struct SessionLoadResult {
     reason = "ActionHandler signature requires async"
 )]
 pub async fn ping(
-    _params: Value,
+    params: Value,
     ctx: ActionContext<'_>,
     _app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
+    require_void_params(&params)?;
     let result = PingResult {
         ping_id: ctx.request_id.clone(),
     };
     serde_json::to_value(result).map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
-/// `session_load` — authenticated initial-state load.
+/// `session_load` — authenticated initial-state load. Takes no input
+/// (`z.void()`), so any `params` is refused.
 ///
 /// Returns the cross-domain envelope the frontend needs at boot:
 /// open workspaces, zzz_dir file tree (rescanned for consistency),
 /// scoped_dirs, provider status.
 pub async fn session_load(
-    _params: Value,
+    params: Value,
     _ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
+    require_void_params(&params)?;
     let workspaces: Vec<WorkspaceInfo> = {
         let ws = app.workspaces.read();
         ws.values().cloned().collect()
@@ -118,10 +131,7 @@ pub async fn testing_emit_notifications(
     ctx: ActionContext<'_>,
     _app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
-    let count = params
-        .get("count")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| invalid_params("missing or invalid 'count' parameter", None))?;
+    let TestingEmitNotificationsInput { count } = parse_strict_params(params)?;
     if count > 100 {
         return Err(invalid_params("count must be <= 100", None));
     }

@@ -14,23 +14,68 @@
 use std::sync::Arc;
 
 use fuz_actions::ActionContext;
-use fuz_http::{JsonrpcError, internal_error_with_source, invalid_params, notification};
+use fuz_http::{
+    JsonrpcError, internal_error_with_source, invalid_params, notification, parse_strict_params,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::handlers::App;
 use crate::provider::{self, CompletionHandlerOptions, ProviderName};
 
-/// Strongly-typed view of the `completion_request` param object.
-///
-/// Deserialized in one pass from `&Value` (zero JSON-tree cloning).
+// -- Inputs (twins of the input schemas in `action_specs.ts`) -----------------
+
+/// Input for `provider_load_status` — twin of `ProviderLoadStatusInput`.
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProviderLoadStatusInput {
+    provider_name: String,
+    /// Absent means reload — the TS schema defaults it to `true`.
+    #[serde(default)]
+    reload: Option<bool>,
+}
+
+/// Input for `completion_create` — twin of `CompletionCreateInput`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CompletionCreateInput {
+    completion_request: CompletionRequestInput,
+    #[serde(default, rename = "_meta")]
+    meta: Option<ProgressMeta>,
+}
+
+/// Twin of `CompletionRequest` (strict).
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct CompletionRequestInput {
+    /// `DatetimeNow` — defaulted client-side; accepted and unused.
+    #[serde(default, deserialize_with = "present")]
+    #[allow(dead_code, reason = "decoded for input validation only")]
+    created: Option<String>,
     provider_name: String,
     model: String,
     prompt: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "present")]
     completion_messages: Option<Vec<provider::CompletionMessage>>,
+}
+
+/// Twin of `ProgressMeta` — a `z.looseObject`, so unknown keys pass.
+#[derive(Deserialize)]
+struct ProgressMeta {
+    #[serde(default, rename = "progressToken", deserialize_with = "present")]
+    progress_token: Option<String>,
+}
+
+/// Deserialize an optional field that, when present, must not be `null` —
+/// zod's `.optional()`. Pair with `#[serde(default)]` for the absent case.
+/// (`parse_strict_params` refuses a top-level `null`; this covers the
+/// nested fields its walk doesn't reach.)
+fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
 }
 
 #[derive(Serialize)]
@@ -43,19 +88,11 @@ pub async fn provider_load_status(
     _ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
-    let name_str = params
-        .get("provider_name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| invalid_params("missing or invalid 'provider_name' parameter", None))?;
-
-    let provider_name = ProviderName::parse(name_str)
-        .ok_or_else(|| invalid_params(&format!("unknown provider: {name_str}"), None))?;
-
-    // Absent `reload` means reload — the TS input schema defaults it to `true`.
-    let reload = params
-        .get("reload")
-        .and_then(Value::as_bool)
-        .unwrap_or(true);
+    let input: ProviderLoadStatusInput = parse_strict_params(params)?;
+    let provider_name = ProviderName::parse(&input.provider_name).ok_or_else(|| {
+        invalid_params(&format!("unknown provider: {}", input.provider_name), None)
+    })?;
+    let reload = input.reload.unwrap_or(true);
 
     let provider = app.provider_manager.require(provider_name)?;
     let status = provider.load_status(reload).await;
@@ -97,12 +134,10 @@ pub async fn completion_create(
     ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
-    let request_value = params
-        .get("completion_request")
-        .ok_or_else(|| invalid_params("missing 'completion_request' parameter", None))?;
-
-    let request = CompletionRequestInput::deserialize(request_value)
-        .map_err(|e| invalid_params(&format!("invalid completion_request: {e}"), None))?;
+    let CompletionCreateInput {
+        completion_request: request,
+        meta,
+    } = parse_strict_params(params)?;
 
     let provider_name = ProviderName::parse(&request.provider_name).ok_or_else(|| {
         invalid_params(
@@ -121,11 +156,15 @@ pub async fn completion_create(
         ));
     }
 
-    let progress_token = params
-        .get("_meta")
-        .and_then(|m| m.get("progressToken"))
-        .and_then(Value::as_str)
-        .map(String::from);
+    let progress_token = meta.and_then(|m| m.progress_token);
+    if let Some(token) = &progress_token
+        && !fuz_auth::is_valid_uuid(token)
+    {
+        return Err(invalid_params(
+            "invalid params: _meta.progressToken must be a uuid",
+            None,
+        ));
+    }
 
     let completion_options = app.completion_options.clone();
 

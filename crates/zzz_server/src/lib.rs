@@ -44,6 +44,32 @@ pub use error::ServerError;
 pub const DEFAULT_ADDR: SocketAddr =
     SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), 4460);
 
+/// Cap on one JSON-RPC message, in bytes, on both transports.
+///
+/// It's the `/api/rpc` request body limit and the `/api/ws` inbound message
+/// (and frame) limit — one value so the two transports can't drift. The
+/// frontend's twin of the same name
+/// (`src/lib/rpc_message_limit.ts`) refuses a larger request before sending,
+/// since an oversized WebSocket message closes the socket rather than getting
+/// an error reply; the cross-backend filesystem suite pins the two together.
+///
+/// 16 MiB, above the spine's 1 MiB default, so saving a file the filer loads
+/// (at most 4 MiB) fits in all but pathological cases — JSON escapes a
+/// control character to 6 bytes, so a file dense with them can exceed the
+/// cap, and the client guard then refuses the save cleanly — and so a long
+/// `completion_create` history fits.
+///
+/// **Memory.** The larger cap is not confined to authenticated callers on
+/// HTTP: `/api/rpc` buffers and parses the body before auth, and `ping` is
+/// public, so any local process can make zzzd buffer up to 16 MiB per
+/// concurrent request. On the WebSocket (authenticated at upgrade) each
+/// socket can have up to 128 dispatches in flight, a ceiling of about 2 GiB
+/// of buffered messages per authenticated socket. Acceptable only because
+/// the bind is loopback-only and zzz is single-operator (see the root
+/// CLAUDE.md § Security posture); the account, bootstrap, and signup routes
+/// keep the 1 MiB default.
+pub const RPC_MESSAGE_MAX_BYTES: usize = 16 * 1024 * 1024;
+
 /// zzz's concrete instantiation of [`fuz_actions::ExtraActionSpecsFactory`]
 /// over [`handlers::App`] — extra specs folded in after the standard zzz set.
 ///
@@ -567,13 +593,14 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             Arc::clone(&spine_trusted_proxies),
             fuz_http::client_ip_middleware,
         ))
-        // 1 MiB request-body cap — the shared `DEFAULT_BODY_LIMIT_BYTES`, same
-        // as fuz_forge_server + mageguild_server. diskfile content rides the
-        // RPC body, so edits are bounded to 1 MiB over RPC; a streaming
-        // content-addressed route is the deferred path for larger / binary blobs.
-        .layer(fuz_http::body_limit_layer(
-            fuz_http::DEFAULT_BODY_LIMIT_BYTES,
-        ));
+        // `RPC_MESSAGE_MAX_BYTES` (16 MiB) request-body cap, shared with the
+        // `/api/ws` message cap below; a streaming content-addressed route is
+        // the deferred path for larger / binary blobs. The POST handler reads
+        // the body through axum's `Bytes` extractor, which applies axum's own
+        // 2 MiB `DefaultBodyLimit` — raised to the same cap, so the tower
+        // limit is the one that decides.
+        .layer(axum::extract::DefaultBodyLimit::max(RPC_MESSAGE_MAX_BYTES))
+        .layer(fuz_http::body_limit_layer(RPC_MESSAGE_MAX_BYTES));
 
     let registry_for_ws = Arc::clone(app_state.action_registry.get().ok_or_else(|| {
         ServerError::Config("action_registry must be set before mounting /api/ws".to_owned())
@@ -608,12 +635,14 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         // shipped behavior exactly.
         required_roles: Vec::new(),
     };
-    let spine_ws_router = fuz_actions::register_action_ws(spine_ws_state).layer(
-        axum::middleware::from_fn_with_state(
-            Arc::clone(&spine_trusted_proxies),
-            fuz_http::client_ip_middleware,
-        ),
-    );
+    // Same cap as the `/api/rpc` body (`RPC_MESSAGE_MAX_BYTES`); an
+    // oversized message closes the socket.
+    let spine_ws_router =
+        fuz_actions::register_action_ws_with_message_limit(spine_ws_state, RPC_MESSAGE_MAX_BYTES)
+            .layer(axum::middleware::from_fn_with_state(
+                Arc::clone(&spine_trusted_proxies),
+                fuz_http::client_ip_middleware,
+            ));
 
     // Spine account REST router: mounts `/status`, `/login`, `/logout`,
     // `/password` under `/api/account`.
@@ -787,11 +816,51 @@ fn parse_stringbool_env(name: &str) -> Result<bool, ServerError> {
 /// the working directory.
 pub const DEFAULT_ZZZ_DIR: &str = ".zzz/";
 
+/// An env var's value, `None` when unset.
+///
+/// # Errors
+///
+/// [`ServerError::Config`] naming the variable when its value isn't valid
+/// UTF-8 — never read as unset, which would silently drop a configured path
+/// (e.g. every `PUBLIC_ZZZ_SCOPED_DIRS` entry).
+fn env_var_utf8(name: &str) -> Result<Option<String>, ServerError> {
+    match std::env::var(name) {
+        Ok(value) => Ok(Some(value)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            Err(ServerError::Config(format!("{name} is not valid UTF-8")))
+        }
+    }
+}
+
 /// An env var's value, with unset, empty, and whitespace-only all reading as
 /// unset — so an exported-but-empty path var falls back to its default
 /// rather than resolving to the working directory or `/`.
-fn env_non_empty(name: &str) -> Option<String> {
-    non_empty(std::env::var(name).ok())
+///
+/// # Errors
+///
+/// As [`env_var_utf8`].
+fn env_non_empty(name: &str) -> Result<Option<String>, ServerError> {
+    Ok(non_empty(env_var_utf8(name)?))
+}
+
+/// Parse a port from `--port` or `ZZZ_PORT` (named by `source`).
+///
+/// # Errors
+///
+/// [`ServerError::Config`] for anything but an integer in `1..=65535` — an
+/// invalid port refuses to boot rather than falling back to the default.
+fn parse_port(source: &str, value: &str) -> Result<u16, ServerError> {
+    value
+        .trim()
+        .parse::<u16>()
+        .ok()
+        .filter(|&port| port != 0)
+        .ok_or_else(|| {
+            ServerError::Config(format!(
+                "invalid {source} {value:?}: expected a port in 1..=65535"
+            ))
+        })
 }
 
 fn non_empty(value: Option<String>) -> Option<String> {
@@ -815,7 +884,16 @@ fn resolve_dir(path: &Path) -> Result<String, ServerError> {
     let resolved = std::fs::canonicalize(path)
         .or_else(|_| std::path::absolute(path))
         .map_err(|e| ServerError::Config(format!("can't resolve {}: {e}", path.display())))?;
-    let mut s = resolved.to_string_lossy().into_owned();
+    let mut s = resolved
+        .to_str()
+        .ok_or_else(|| {
+            ServerError::Config(format!(
+                "{} resolves to a path that isn't valid UTF-8: {}",
+                path.display(),
+                resolved.display()
+            ))
+        })?
+        .to_owned();
     if !s.ends_with('/') {
         s.push('/');
     }
@@ -835,7 +913,7 @@ fn resolve_dir(path: &Path) -> Result<String, ServerError> {
 /// Returns [`ServerError::Config`] when the directory can't be created or
 /// resolved.
 pub fn ensure_zzz_dir_from_env() -> Result<String, ServerError> {
-    let raw = env_non_empty("PUBLIC_ZZZ_DIR").unwrap_or_else(|| DEFAULT_ZZZ_DIR.to_owned());
+    let raw = env_non_empty("PUBLIC_ZZZ_DIR")?.unwrap_or_else(|| DEFAULT_ZZZ_DIR.to_owned());
     ensure_app_dir(Path::new(&raw))
 }
 
@@ -873,13 +951,10 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
         match args[i].as_str() {
             "--port" => {
                 i += 1;
-                if let Some(val) = args.get(i) {
-                    if let Ok(p) = val.parse() {
-                        port = Some(p);
-                    } else {
-                        tracing::warn!(value = val.as_str(), "invalid --port value, ignoring");
-                    }
-                }
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| ServerError::Config("--port requires a value".to_owned()))?;
+                port = Some(parse_port("--port", val)?);
             }
             "--static-dir" => {
                 i += 1;
@@ -894,16 +969,12 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
 
     // Fall back to env vars for port/static_dir
     if port.is_none()
-        && let Ok(val) = std::env::var("ZZZ_PORT")
+        && let Some(val) = env_non_empty("ZZZ_PORT")?
     {
-        if let Ok(p) = val.parse() {
-            port = Some(p);
-        } else {
-            tracing::warn!(value = val.as_str(), "invalid ZZZ_PORT value, ignoring");
-        }
+        port = Some(parse_port("ZZZ_PORT", &val)?);
     }
     if static_dir.is_none() {
-        static_dir = env_non_empty("ZZZ_STATIC_DIR").map(PathBuf::from);
+        static_dir = env_non_empty("ZZZ_STATIC_DIR")?.map(PathBuf::from);
     }
     // An empty or missing static dir would serve the working directory (or
     // nothing) as the UI — refuse to boot instead.
@@ -923,10 +994,10 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
     let secret_cookie_keys = std::env::var("SECRET_FUZ_COOKIE_KEYS")
         .map_err(|_| ServerError::Config("SECRET_FUZ_COOKIE_KEYS is required".to_owned()))?;
 
-    let bootstrap_token_path = env_non_empty("FUZ_BOOTSTRAP_TOKEN_PATH");
-    let allowed_origins = std::env::var("FUZ_ALLOWED_ORIGINS").ok();
+    let bootstrap_token_path = env_non_empty("FUZ_BOOTSTRAP_TOKEN_PATH")?;
+    let allowed_origins = env_var_utf8("FUZ_ALLOWED_ORIGINS")?;
 
-    let scoped_dirs = std::env::var("PUBLIC_ZZZ_SCOPED_DIRS")
+    let scoped_dirs = env_var_utf8("PUBLIC_ZZZ_SCOPED_DIRS")?
         .unwrap_or_default()
         .split(',')
         .map(str::trim)
@@ -937,7 +1008,7 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
     let zzz_dir = ensure_zzz_dir_from_env()?;
 
     let enable_test_actions = parse_stringbool_env("ZZZ_ENABLE_TEST_ACTIONS")?;
-    let trusted_proxies = std::env::var("ZZZ_TRUSTED_PROXIES").ok();
+    let trusted_proxies = env_var_utf8("ZZZ_TRUSTED_PROXIES")?;
 
     Ok(Config {
         bind_addr: SocketAddr::new(
@@ -973,6 +1044,20 @@ mod config_paths {
         assert_eq!(non_empty(Some(String::new())), None);
         assert_eq!(non_empty(Some(" \t".to_owned())), None);
         assert_eq!(non_empty(Some("x".to_owned())).as_deref(), Some("x"));
+    }
+
+    #[test]
+    fn invalid_ports_refuse_to_boot() {
+        assert_eq!(parse_port("--port", "4460").unwrap(), 4460);
+        assert_eq!(parse_port("ZZZ_PORT", " 65535 ").unwrap(), 65535);
+        for bad in ["", "0", "65536", "-1", "44x60", "4460.0"] {
+            match parse_port("ZZZ_PORT", bad) {
+                Err(ServerError::Config(message)) => {
+                    assert!(message.contains("ZZZ_PORT"), "{message}");
+                }
+                other => panic!("{bad:?} should be refused, got {:?}", other.ok()),
+            }
+        }
     }
 
     #[test]

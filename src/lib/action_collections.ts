@@ -21,6 +21,7 @@ export const ActionSpecs = {
 	session_load: specs.session_load_action_spec,
 	filer_change: specs.filer_change_action_spec,
 	diskfile_update: specs.diskfile_update_action_spec,
+	diskfile_create: specs.diskfile_create_action_spec,
 	diskfile_delete: specs.diskfile_delete_action_spec,
 	directory_create: specs.directory_create_action_spec,
 	completion_create: specs.completion_create_action_spec,
@@ -46,6 +47,7 @@ export interface ActionSpecs {
 	session_load: typeof specs.session_load_action_spec;
 	filer_change: typeof specs.filer_change_action_spec;
 	diskfile_update: typeof specs.diskfile_update_action_spec;
+	diskfile_create: typeof specs.diskfile_create_action_spec;
 	diskfile_delete: typeof specs.diskfile_delete_action_spec;
 	directory_create: typeof specs.directory_create_action_spec;
 	completion_create: typeof specs.completion_create_action_spec;
@@ -79,6 +81,7 @@ export const ActionInputs = {
 	session_load: specs.session_load_action_spec.input,
 	filer_change: specs.filer_change_action_spec.input,
 	diskfile_update: specs.diskfile_update_action_spec.input,
+	diskfile_create: specs.diskfile_create_action_spec.input,
 	diskfile_delete: specs.diskfile_delete_action_spec.input,
 	directory_create: specs.directory_create_action_spec.input,
 	completion_create: specs.completion_create_action_spec.input,
@@ -104,6 +107,7 @@ export interface ActionInputs {
 	session_load: z.infer<typeof specs.session_load_action_spec.input>;
 	filer_change: z.infer<typeof specs.filer_change_action_spec.input>;
 	diskfile_update: z.infer<typeof specs.diskfile_update_action_spec.input>;
+	diskfile_create: z.infer<typeof specs.diskfile_create_action_spec.input>;
 	diskfile_delete: z.infer<typeof specs.diskfile_delete_action_spec.input>;
 	directory_create: z.infer<typeof specs.directory_create_action_spec.input>;
 	completion_create: z.infer<typeof specs.completion_create_action_spec.input>;
@@ -135,6 +139,7 @@ export const ActionOutputs = {
 	session_load: specs.session_load_action_spec.output,
 	filer_change: specs.filer_change_action_spec.output,
 	diskfile_update: specs.diskfile_update_action_spec.output,
+	diskfile_create: specs.diskfile_create_action_spec.output,
 	diskfile_delete: specs.diskfile_delete_action_spec.output,
 	directory_create: specs.directory_create_action_spec.output,
 	completion_create: specs.completion_create_action_spec.output,
@@ -160,6 +165,7 @@ export interface ActionOutputs {
 	session_load: z.infer<typeof specs.session_load_action_spec.output>;
 	filer_change: z.infer<typeof specs.filer_change_action_spec.output>;
 	diskfile_update: z.infer<typeof specs.diskfile_update_action_spec.output>;
+	diskfile_create: z.infer<typeof specs.diskfile_create_action_spec.output>;
 	diskfile_delete: z.infer<typeof specs.diskfile_delete_action_spec.output>;
 	directory_create: z.infer<typeof specs.directory_create_action_spec.output>;
 	completion_create: z.infer<typeof specs.completion_create_action_spec.output>;
@@ -206,6 +212,11 @@ export interface ActionEventDatas {
 		'diskfile_update',
 		ActionInputs['diskfile_update'],
 		ActionOutputs['diskfile_update']
+	>;
+	diskfile_create: ActionEventRequestResponseData<
+		'diskfile_create',
+		ActionInputs['diskfile_create'],
+		ActionOutputs['diskfile_create']
 	>;
 	diskfile_delete: ActionEventRequestResponseData<
 		'diskfile_delete',

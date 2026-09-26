@@ -393,3 +393,48 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.strictEqual(part.content, 'b back');
 	});
 });
+
+describe('create_file', () => {
+	const ZZZ_DIR = SerializableDisknode.shape.source_dir.parse('/zzz/');
+
+	test('creates through `diskfile_create`, never `diskfile_update`', async () => {
+		const calls: Array<[string, unknown]> = [];
+		(app as any).api = {
+			diskfile_create: (input: unknown) => {
+				calls.push(['diskfile_create', input]);
+				return Promise.resolve({ ok: true, value: null });
+			},
+			diskfile_update: (input: unknown) => {
+				calls.push(['diskfile_update', input]);
+				return Promise.resolve({ ok: true, value: null });
+			}
+		};
+		app.zzz_dir = ZZZ_DIR;
+
+		await app.diskfiles.create_file('new.txt');
+
+		assert.deepEqual(calls, [['diskfile_create', { path: '/zzz/new.txt', content: '' }]]);
+	});
+
+	test('surfaces an existing file as "already exists"', async () => {
+		(app as any).api = {
+			diskfile_create: () =>
+				Promise.resolve({
+					ok: false,
+					error: {
+						code: -32004,
+						message: 'failed to create file: Path already exists: /zzz/taken.txt',
+						data: { reason: 'already_exists' }
+					}
+				})
+		};
+		app.zzz_dir = ZZZ_DIR;
+
+		const error = await app.diskfiles.create_file('taken.txt').then(
+			() => null,
+			(e: unknown) => e
+		);
+		assert.instanceOf(error, Error);
+		assert.strictEqual(error.message, 'taken.txt already exists');
+	});
+});

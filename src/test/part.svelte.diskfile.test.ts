@@ -8,6 +8,9 @@ import { Frontend } from '$lib/frontend.svelte.ts';
 import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
 import type { Diskfile } from '$lib/diskfile.svelte.ts';
 
+import { format_prompt_content } from '$lib/prompt_helpers.ts';
+import { DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER } from '$lib/diskfile_helpers.ts';
+
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 const TEST_DIR = SerializableDisknode.shape.source_dir.parse('/test/');
@@ -183,6 +186,23 @@ describe('DiskfilePart content access', () => {
 		assert.deepEqual(update_calls, []);
 		assert.strictEqual(part.content, TEST_CONTENT.EDITABLE.INITIAL);
 		assert.strictEqual(app.diskfiles.get_by_path(path)?.content, TEST_CONTENT.EDITABLE.INITIAL);
+	});
+
+	test('content is null, never the editor text, when the file content was not loaded', () => {
+		const path = TEST_PATHS.BASIC;
+		const diskfile = test_diskfiles.get(path)!;
+		const part = app.cell_registry.instantiate('DiskfilePart', {
+			type: 'diskfile',
+			path
+		});
+		assert.strictEqual(part.content, TEST_CONTENT.BASIC);
+		// a linked editor shows '' for an unloaded file
+		part.link_editor_state({ current_content: '' });
+		diskfile.content = null;
+
+		assert.isNull(part.content);
+		// marked in the formatted prompt, not silently dropped
+		assert.include(format_prompt_content([part]), DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER);
 	});
 
 	test('content is undefined when diskfile not found', () => {

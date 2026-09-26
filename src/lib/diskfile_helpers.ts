@@ -5,6 +5,25 @@ import { Datetime, DatetimeNow } from '@fuzdev/fuz_util/datetime.ts';
 import { SerializableDisknode, type DiskfileJson } from './diskfile_types.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
 
+/**
+ * Why a diskfile's content can be missing: the backend indexes a file's
+ * content only when it's a UTF-8 text file of at most 4 MiB that it could
+ * read, and sends `contents: null` otherwise.
+ */
+export const DISKFILE_CONTENT_NOT_LOADED_MESSAGE =
+	'content not loaded — the file is over 4 MiB, not UTF-8 text, or unreadable';
+
+/** `data.reason` of the error refusing to write over a file whose content wasn't loaded. */
+export const ERROR_CONTENT_NOT_LOADED = 'content_not_loaded';
+
+/**
+ * Stands in for a file part's content in a formatted prompt when the file's
+ * content wasn't loaded, so the omission is visible — to the user in the
+ * preview and copied text, and to a model — instead of the file silently
+ * dropping out.
+ */
+export const DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER = `[${DISKFILE_CONTENT_NOT_LOADED_MESSAGE}]`;
+
 // TODO probably extract to `@fuzdev/fuz_util/path.ts`
 export const is_path_absolute = (path: string): boolean => path[0] === '/';
 

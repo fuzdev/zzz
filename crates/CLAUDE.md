@@ -114,13 +114,13 @@ CLI args (`--port`, `--static-dir`) take precedence over env vars
 - `FUZ_BOOTSTRAP_TOKEN_PATH` — Path to bootstrap token file
 - `PUBLIC_ZZZ_DIR` — App directory (default `.zzz`, relative to the working directory); created at boot (with missing parents, mode `0700`) if absent — boot fails, naming the path, if it can't be
 - `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (no `~` expansion)
-- `ZZZ_PORT` — Server port (default 4460, CLI overrides)
+- `ZZZ_PORT` — Server port (default 4460, `--port` overrides); an invalid port (either source — anything but `1..=65535`) refuses to boot rather than falling back to the default
 - `ZZZ_STATIC_DIR` — Static file directory (must be a directory, or boot fails)
 - `SECRET_ANTHROPIC_API_KEY` / `SECRET_OPENAI_API_KEY` / `SECRET_GOOGLE_API_KEY` — provider keys, read once at boot
 - `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live dispatchers (mirrors Zod `z.stringbool()`: `true`/`1`/`yes`/`on`/`y`/`enabled` opt in; `false`/`0`/`no`/`off`/`n`/`disabled` or unset opt out; case-insensitive; anything else errors at startup. Integration tests only — production must leave unset)
 - `ZZZ_TRUSTED_PROXIES` — Comma-separated trusted-proxy entries (IPs and CIDR ranges, e.g. `127.0.0.1,10.0.0.0/8,fe80::/10`). Unset/empty → no XFF trust → `client_ip` falls back to the TCP peer IP on every request (direct-bind behavior). Set when deploying behind nginx / a cloud LB so the trusted-proxy middleware walks `X-Forwarded-For` right-to-left and resolves the real client IP for rate limiting + `audit_log.ip`. Parsed eagerly at startup — invalid entries (malformed IPs, non-aligned CIDRs, out-of-range prefixes) fail server boot. Mirrors fuz_app's `http/proxy.ts`.
 
-A blank (empty or whitespace) path var reads as unset — `PUBLIC_ZZZ_DIR` falls back to `.zzz`, never `/` (`resolve_dir` errors on an empty or unresolvable path rather than collapsing to `/`).
+A blank (empty or whitespace) path var reads as unset — `PUBLIC_ZZZ_DIR` falls back to `.zzz`, never `/` (`resolve_dir` errors on an empty or unresolvable path rather than collapsing to `/`). A non-UTF-8 value of any of the server's string vars fails boot naming the variable (it would otherwise read as unset — e.g. silently dropping every `PUBLIC_ZZZ_SCOPED_DIRS` entry), as does a dir that resolves to a non-UTF-8 path.
 
 ## Endpoints
 
@@ -266,11 +266,20 @@ conform to the shared fuz_app contract. The tests live in
   restoring the boot-time scope,
   `workspace_open` returning the workspace's files (first and idempotent
   open; symlinks and link loops skipped),
-  not-a-directory + nonexistent errors, and `workspace_changed` broadcast on
+  not-a-directory (`invalid_params`) + nonexistent (`not_found`) errors, and `workspace_changed` broadcast on
   open/close (no broadcast on an idempotent open).
 - **`filesystem.cross.test.ts`** — scoped `diskfile_update` / `diskfile_delete`,
   idempotent `directory_create`, writes into `zzz_dir` + nested subdirs,
-  path-traversal / out-of-scope / relative-path rejection, and `filer_change`
+  path-traversal / out-of-scope / relative-path rejection and the error codes
+  (see Filesystem errors), wrong file kinds (a directory, a FIFO — refused
+  without blocking), atomic replace keeping the mode with no temp file left,
+  permissions (a read-only file refused, a writable file in a read-only
+  directory written in place, a new file there `directory_not_writable`),
+  `diskfile_create` never overwriting (`conflict` / `already_exists`),
+  strict inputs, the 16 MiB RPC message cap on both transports (built from
+  the frontend's `RPC_MESSAGE_MAX_BYTES`, pinning it to the backend's
+  `RPC_MESSAGE_MAX_BYTES`: under it is written, over it is a 413 on HTTP and
+  closes the socket on WS), and `filer_change`
   broadcasts in an open workspace (file create; rename → `delete` of the old
   path + `add` of the new).
 - **`terminal.cross.test.ts`** — PTY create / read / write / close lifecycle,
@@ -346,7 +355,7 @@ crates/zzz_server/src/
 ├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`)
 │   ├── mod.rs        # `App` long-lived state (workspaces, `workspace_lifecycle`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `ProviderManager`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
 │   ├── core.rs       # ping, session_load, _testing_emit_notifications
-│   ├── filesystem.rs # diskfile_update, diskfile_delete, directory_create
+│   ├── filesystem.rs # diskfile_update, diskfile_create, diskfile_delete, directory_create
 │   ├── provider.rs   # provider_load_status, completion_create
 │   ├── terminal.rs   # terminal_create, terminal_data_send, terminal_resize, terminal_close
 │   └── workspace.rs  # workspace_list, workspace_open, workspace_close (+ workspace_changed broadcast)
@@ -366,7 +375,7 @@ crates/zzz_server/src/
 │   └── gemini.rs     # GeminiProvider — Generative Language API with SSE streaming
 ├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered file index (events are hints, `lstat` decides), debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
-├── scoped_fs.rs      # Scoped filesystem — permanent (`zzz_dir` + `scoped_dirs`) + per-workspace roots, path validation, symlink rejection
+├── scoped_fs.rs      # Scoped filesystem — permanent (`zzz_dir` + `scoped_dirs`) + per-workspace roots, path validation, symlink rejection, atomic writes (temp file + fsync + rename)
 ├── static_files.rs   # Built-frontend fallback router: exact file → prerendered `{path}.html` → `200.html` SPA shell; backend paths + missing `_app/` assets 404; cache headers
 ├── utf8_stream.rs    # Incremental UTF-8 decoder (split sequences held back, invalid bytes → U+FFFD) shared by provider SSE and PTY output
 └── error.rs          # ServerError (Bind, Serve, Database, Config)
@@ -458,19 +467,28 @@ metadata contract, the bootstrap success/failure audit rows, and the
   (4 MiB, in `crates/zzz_server/src/filer.rs`) caps the in-memory index: files
   over 4 MiB carry their metadata but store `contents: None`. This bounds
   memory under workspaces containing large lockfiles or build outputs.
-  The cross-backend integration tests don't exercise files >4 MiB.
+  The cross-backend integration tests don't exercise files >4 MiB. The
+  frontend treats such a file (and any other `contents: None` — non-UTF-8 or
+  unreadable) as not loaded: read-only, never saved over (see the root
+  CLAUDE.md § Known Limitations). A loaded file's save fits the 16 MiB RPC
+  message cap except in the worst case (JSON escapes each control character
+  to 6 bytes), where the client guard refuses it cleanly.
+- **filer skips non-UTF-8 paths** — a file or directory whose name isn't
+  valid UTF-8 is skipped with its whole subtree, by the walker and in event
+  handling (`is_ignored`), rather than indexed under a lossy U+FFFD key no
+  client could address.
 
 ## Known Limitations
 
-- RPC methods: `ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`, `admin_session_revoke_all` (admin-only), `admin_token_revoke_all` (admin-only) — plus the rest of the spine-registered `fuz_auth` standard bundle and protocol specs (see the workspace-layout section above)
-- 5 zzz-domain `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, per-path debounced broadcasts (80ms quiet, capped at 500ms) with immediate index updates (delete+create inside the window becomes `change`, create+delete becomes a bare `delete`), every event resolved by `lstat` so late or reordered removes can't drop an existing file, rename-aware (old path `delete`, new path `add`), ignored paths filtered before the bounded event channel with a coalesced root rescan on overflow, per-watcher ignore config, in-memory file index returned by `session_load` and `workspace_open`, symlinks skipped; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz` by name globally (`.zzz` keeps the CLI daemon home's `.env` / `bootstrap_token` out of a `~` workspace), plus `zzz_dir` by its full path for a workspace/scoped_dir watcher whose root contains it; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY output) and `terminal_exited` (process exit), both sent only to the owning account's sockets, `completion_progress` (streaming completion chunks to requesting WS connection); the spine's role-grant-offer bundle carries its own notification set (`role_grant_offer_received` / `_retracted` / `_accepted` / `_declined` / `_supersede`)
+- RPC methods: `ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_create`, `diskfile_delete`, `directory_create`, `terminal_*`, `provider_load_status`, `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`, `admin_session_revoke_all` (admin-only), `admin_token_revoke_all` (admin-only) — plus the rest of the spine-registered `fuz_auth` standard bundle and protocol specs (see the workspace-layout section above)
+- 5 zzz-domain `remote_notification` actions: `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — recursive watching, per-path debounced broadcasts (80ms quiet, capped at 500ms) with immediate index updates (delete+create inside the window becomes `change`, create+delete becomes a bare `delete`), every event resolved by `lstat` so late or reordered removes can't drop an existing file, rename-aware (old path `delete`, new path `add`), ignored paths filtered before the bounded event channel with a coalesced root rescan on overflow, per-watcher ignore config, in-memory file index returned by `session_load` and `workspace_open`, symlinks skipped; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz` by name globally (`.zzz` keeps the CLI daemon home's `.env` / `bootstrap_token` out of a `~` workspace), `ScopedFs`'s `.zzz-tmp-*` staging files (the walk also deletes orphaned ones — exact `.zzz-tmp-<uuid>` names, regular files over an hour old), and every non-UTF-8 path, plus `zzz_dir` by its full path for a workspace/scoped_dir watcher whose root contains it; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY output) and `terminal_exited` (process exit), both sent only to the owning account's sockets, `completion_progress` (streaming completion chunks to requesting WS connection); the spine's role-grant-offer bundle carries its own notification set (`role_grant_offer_received` / `_retracted` / `_accepted` / `_declined` / `_supersede`)
 - AI providers: Anthropic, OpenAI, and Gemini all fully implemented (non-streaming + SSE streaming)
 - No batch request support (JSON arrays)
 - `/api/account/signup` is mounted via `fuz_auth::signup_routes`. Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting via `app_settings_update` to enable open signup. The cross-process test binary opts into `open_signup: true` at startup via `app_settings_patch` so per-test `mint_account` can sign up without invites. `app_settings` is loaded from the DB per signup request (no cache).
 - Token management is JSON-RPC only (`account_token_create` / `account_token_list` / `account_token_revoke`) — no REST token routes
 - Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`, wired to the spine `AuditEmitter` via `fuz_realtime::register_audit_sse_listener` alongside the WS socket-revocation listeners. Wire shape matches fuz_app's `audit_log_sse`; the `sse.cross.test.ts` suite verifies it. Close-on-revoke dispatches on the `RevocationScope` each event declares in `fuz_auth`'s `AUDIT_EVENT_SPECS` — the same column the WS socket-revocation listener reads, so the two halves can't drift: `session_revoke` (session-hash-scoped) / `token_revoke` (token-scoped) / `session_revoke_all` / `token_revoke_all` / `password_change` / `logout` / `account_delete` / `account_purge` (account-wide) / `role_grant_revoke` (role-matched). `role_grant_revoke` is the one deliberate difference from the WS half, which omits it because `perform_action` re-authorizes every message. The route itself is session-only (`AuditStreamRouteState::credential_gate`), so a bearer never opens a stream here in the first place
 - Login/password rate limiting is **always on** (matching `fuz_forge_server` + `mageguild_server` and the fuz defaults): per-IP (5 attempts / 15 min) + per-account (10 / 30 min) sliding windows fire on `/login` and `/password`; 429 carries `{error: 'rate_limit_exceeded', retry_after}` plus a `Retry-After` header. Per-IP key is the resolved client IP from `fuz_http::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when running behind a reverse proxy so the bucket keys on the originating client rather than the proxy. The `testing_zzz_server` binary disables it via `RunAppOptions::rate_limiters: RateLimiterMode::DisabledForTesting` so the cross-backend auth suite's repeated logins don't trip the bucket; a process that nulls any limiter prints a startup banner saying so
-- Request bodies are capped at `fuz_http::DEFAULT_BODY_LIMIT_BYTES` (1 MiB) on `/api/rpc` + the account/bootstrap/signup routers (the shared fuz default, same as the other spine consumers). `diskfile_update` content rides the RPC body, so a single write is bounded to 1 MiB; a streaming content-addressed route is the deferred path for larger / binary blobs. The WS upgrade and static fallback are not body-capped
+- One JSON-RPC message is capped at `zzz_server::RPC_MESSAGE_MAX_BYTES` (16 MiB) on both transports: the `/api/rpc` request body (`fuz_http::body_limit_layer`, plus axum's `DefaultBodyLimit` raised to match — the handler's `Bytes` extractor would otherwise stop at axum's 2 MiB default) and each `/api/ws` inbound message and frame (`fuz_actions::register_action_ws_with_message_limit`; the spine default is 1 MiB, tungstenite's own 64 MiB / 16 MiB). It's above the spine's 1 MiB so saving a file the filer loads (≤ 4 MiB) fits — except in the worst case, where JSON's 6-byte escape of each control character pushes a file dense with them past the cap and the client guard refuses the save cleanly — and so long completion histories fit. **The larger buffer isn't confined to authenticated callers on HTTP**: `fuz_actions::rpc_post_handler` buffers and parses the body before auth, and `ping` is public, so any local process can make zzzd hold up to 16 MiB per concurrent request. On the WebSocket (authenticated at upgrade) up to 128 dispatches can be in flight per socket, a ceiling of about 2 GiB of buffered messages per authenticated socket. Both are acceptable only because the bind is loopback-only and zzz is single-operator (root CLAUDE.md § Security posture). The account/bootstrap/signup routers keep `fuz_http::DEFAULT_BODY_LIMIT_BYTES` (1 MiB). An oversized WebSocket message gets no error reply — the read fails and the socket closes (code 1006), taking its in-flight requests with it — so the frontend `Socket` refuses any request over the cap before sending (`RPC_MESSAGE_MAX_BYTES` in `src/lib/rpc_message_limit.ts`, pinned to the Rust constant by the cross-backend filesystem suite). A streaming content-addressed route is the deferred path for larger / binary blobs. The static fallback takes no body
 
 ## Design Decisions
 
@@ -483,8 +501,70 @@ metadata contract, the bootstrap success/failure audit rows, and the
   Compatible with fuz_app's `hash_blake3` (same hex output).
 - **Password hashing**: Argon2id via `argon2` crate (bootstrap, login, password change),
   offloaded to `tokio::task::spawn_blocking` to avoid blocking the async runtime.
+- **Strict inputs**: every zzz handler decodes `params` through
+  `fuz_http::parse_strict_params` into a `#[serde(deny_unknown_fields)]`
+  struct mirroring its `z.strictObject` TS input (unknown keys and explicit
+  `null`s are `invalid_params`; nested `.optional()` fields refuse `null`
+  through a `present` deserializer; UUID fields use
+  `fuz_auth::deserialize_wire_uuid`), and the `z.void()` methods (`ping`,
+  `session_load`, `workspace_list`) refuse any `params` via
+  `fuz_auth::require_void_params`.
+- **Filesystem errors**: `handlers::filesystem::scoped_fs_error` maps each
+  `ScopedFsError` by cause, with `data.reason` set to an `ERROR_*` constant:
+  a relative / NUL path, a directory or special file where a file was
+  expected, or a non-directory where one was expected → `invalid_params`
+  (-32602; `invalid_path`, `is_a_directory`, `not_a_regular_file`,
+  `not_a_directory`); out of scope, a symlink, an OS permission refusal
+  (including a read-only target file or filesystem), or a new file in a
+  non-writable directory → `forbidden` (-32002; `path_not_allowed`,
+  `symlink_not_allowed`, `permission_denied`, `directory_not_writable`); a
+  missing path → `not_found` (-32003; `path_not_found`); `diskfile_create`
+  over an existing path, or a save whose file was replaced mid-save →
+  `conflict` (-32004; `already_exists`, `replaced_during_save`); any other
+  I/O failure → `internal_error` (-32603, no
+  reason). Messages keep the `failed to … : …` prefix. `workspace_open` maps
+  the same way (missing → `not_found`, not a directory → `invalid_params`).
+- **Atomic writes**: `ScopedFs::write_file` stages content in a hidden
+  `.zzz-tmp-<uuid>` file beside the target (`O_EXCL | O_NOFOLLOW`), gives it
+  the replaced file's mode and (best-effort `fchown`) owner + group, writes,
+  fsyncs, renames it over the target, and fsyncs the directory
+  (best-effort), all on a blocking thread; the temp file is removed on any
+  failure. So `ENOSPC` / `EFBIG` / a crash leave the old file intact, and
+  concurrent saves to one path never interleave (the last rename wins — no
+  per-path lock needed). The filer ignores `.zzz-tmp-*` names
+  (`scoped_fs::is_temp_file_name`), so only the publishing rename is indexed
+  and broadcast. An existing target must be a regular file — a directory,
+  FIFO, socket, or device node is refused before anything is opened (a FIFO
+  would otherwise block the write, holding a pooled DB connection and a
+  blocking thread). Trade-offs: the result is a new inode, so **hardlinks are
+  broken** (other names keep the old content) and xattrs / ACLs aren't
+  carried over; a file owned by another user becomes the daemon user's when
+  `fchown` isn't permitted. An existing target must be writable by the
+  daemon — checked by opening it for writing (no create, no truncate), since
+  a rename needs only the directory's permission and would otherwise replace
+  a read-only file — else `permission_denied`. **In-place fallback (not
+  atomic):** when the rename can't happen but the file is writable — the
+  directory isn't writable (no temp file), or the rename fails `EBUSY` (a
+  bind-mounted file), `EXDEV`, or `EPERM` (a sticky directory) — the content
+  is written through that handle: truncate, write, fsync (inode, mode, owner,
+  and hardlinks kept; a failure midway leaves the file truncated or
+  partial). It first checks the path still names the opened file (`fstat`
+  `(dev, ino)` against a fresh `lstat`); a file replaced or removed
+  externally since the open fails with `conflict` / `replaced_during_save`
+  rather than writing into an unreachable inode. A new file in a non-writable directory is `directory_not_writable`.
+  Errors always name the target, never the temp file. A crash can orphan a
+  staging file: the filer's walk deletes exact `.zzz-tmp-<32 hex>` names
+  that are regular files last modified over an hour ago
+  (`scoped_fs::ORPHANED_TEMP_FILE_MIN_AGE`), and nothing else — staging files
+  inside ignored directories aren't reached. `diskfile_create`
+  (`ScopedFs::create_file`, used by the editor's "new file") creates the
+  final name `O_CREAT | O_EXCL | O_NOFOLLOW` and fails with `already_exists`
+  rather than overwriting; a failed write removes the file it created. `rm`
+  and `mkdir` stay plain `tokio::fs` calls (unlinking a FIFO doesn't open
+  it).
 - **Dispatch is async**: filesystem handlers (`diskfile_update`, etc.) use
-  `tokio::fs` async I/O. `workspace_open` / `workspace_close` canonicalize
+  `tokio::fs` async I/O (the atomic write's blocking I/O runs on
+  `spawn_blocking`). `workspace_open` / `workspace_close` canonicalize
   asynchronously and serialize on `App::workspace_lifecycle` (a
   `tokio::sync::Mutex`), since each spans the workspaces map, `ScopedFs`, and
   the workspace filer across await points.
@@ -557,7 +637,15 @@ metadata contract, the bootstrap success/failure audit rows, and the
   3 providers known at compile time, exhaustive matching. API keys come from
   the `SECRET_*_API_KEY` env vars at construction and are never mutated at
   runtime; provider state sits behind `tokio::sync::RwLock` for the
-  `load_status` cache write. `complete()` clones the `reqwest::Client`
+  `load_status` cache write. The shared client has a 30s connect timeout and
+  a 15-minute read timeout (`provider::common::READ_TIMEOUT`): until the
+  response headers arrive it's one non-resetting deadline over connect +
+  upload + the wait for headers, then it bounds each body read, resetting
+  after every one. So a provider that stalls mid-stream or never answers
+  can't hold a completion and its pooled DB connection forever; it's
+  generous because a non-streaming completion sends no headers until it's
+  done (Anthropic caps those at 10 minutes) and reasoning models can go
+  quiet mid-stream. `complete()` clones the `reqwest::Client`
   (internally `Arc`'d) and releases the lock before HTTP calls, so a
   long-running streaming response doesn't hold it against a status refresh.
   SSE parsing is manual (`provider/sse.rs`: line endings normalized, split

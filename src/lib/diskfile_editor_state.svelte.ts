@@ -8,6 +8,7 @@ import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 import { estimate_token_count } from './helpers.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
 import type { DiskfilePath } from './diskfile_types.ts';
+import { DISKFILE_CONTENT_NOT_LOADED_MESSAGE } from './diskfile_helpers.ts';
 import type { Frontend } from './frontend.svelte.ts';
 import type { DiskfileHistory, HistoryEntry } from './diskfile_history.svelte.ts';
 
@@ -92,18 +93,25 @@ export class DiskfileEditorState {
 	// Basic derived states
 	readonly original_content: string | null = $derived(this.diskfile.content);
 	readonly path: DiskfilePath = $derived.by(() => this.diskfile.path);
+	/**
+	 * Whether the file's content was loaded (see `Diskfile.content_loaded`).
+	 * When it wasn't, the editor is read-only: edits are ignored and nothing
+	 * can be saved, since a save would overwrite a file nobody has seen.
+	 */
+	readonly content_loaded: boolean = $derived(this.original_content !== null);
 	readonly has_changes = $derived.by(() => {
-		// For null content files, empty content is the baseline so we shouldn't show changes
-		if (this.original_content === null) {
-			return this.current_content !== '';
-		}
+		// an unloaded file has no baseline to differ from, and can't be edited
+		if (this.original_content === null) return false;
 		return this.current_content !== this.original_content;
 	});
 	/**
 	 * Whether saving would write anything. Always true for a file deleted on
 	 * disk — saving recreates it even when the content matches its last state.
+	 * Never true when the content wasn't loaded.
 	 */
-	readonly can_save: boolean = $derived(this.has_changes || this.diskfile.deleted_on_disk);
+	readonly can_save: boolean = $derived(
+		this.content_loaded && (this.has_changes || this.diskfile.deleted_on_disk)
+	);
 
 	// History-related derived states
 	readonly history: DiskfileHistory | undefined = $derived.by(() =>
@@ -160,7 +168,15 @@ export class DiskfileEditorState {
 	);
 
 	// Getter/setter for current_content
+	/**
+	 * The editor's text: the selected history entry's, else the original.
+	 * Always `''` when the content isn't loaded — earlier text in history
+	 * (from before the file grew past the index cap, say) isn't what's on
+	 * disk, so the read-only editor never shows or copies it.
+	 */
 	get current_content(): string {
+		if (!this.content_loaded) return '';
+
 		// If we have a selected entry, use its content
 		if (this.selected_history_entry) {
 			return this.selected_history_entry.content;
@@ -171,6 +187,9 @@ export class DiskfileEditorState {
 	}
 
 	set current_content(value: string) {
+		// read-only — see `content_loaded`
+		if (!this.content_loaded) return;
+
 		const content_changed = value !== this.current_content;
 
 		// Mark as modified only if different from original
@@ -414,11 +433,20 @@ export class DiskfileEditorState {
 	 * the editor switched to another diskfile meanwhile, only the saved file's
 	 * history is settled; the editor's state now belongs to the other file.
 	 *
+	 * A file whose content wasn't loaded is never saved: this sets `save_error`
+	 * and returns `false` without writing.
+	 *
 	 * @returns whether the content was written — for a queued follow-up with
 	 * nothing left to write, whether the in-flight save succeeded
 	 */
 	save_changes(): Promise<boolean> {
 		const { diskfile } = this;
+		// never write over a file whose content wasn't loaded
+		// (`Diskfiles.update` refuses it too)
+		if (!this.content_loaded) {
+			this.save_error = DISKFILE_CONTENT_NOT_LOADED_MESSAGE;
+			return Promise.resolve(false);
+		}
 		const in_flight = this.#in_flight_saves.get(diskfile.id);
 		if (in_flight) {
 			let queued = this.#queued_saves.get(diskfile.id);

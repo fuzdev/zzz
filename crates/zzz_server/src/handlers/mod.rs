@@ -125,6 +125,23 @@ impl App {
     }
 }
 
+// -- Errors -------------------------------------------------------------------
+
+/// A `not_found` (-32003) error with a caller-supplied `message` and
+/// `data.reason`.
+///
+/// `fuz_http::not_found` fixes the message to `"{resource} not found"`; the
+/// filesystem and workspace handlers keep their `failed to …: …` messages
+/// (which name the path) across every code, so they build the error here.
+#[cold]
+pub fn not_found_error(message: &str, reason: &str) -> fuz_http::JsonrpcError {
+    fuz_http::JsonrpcError {
+        code: fuz_http::JsonrpcErrorCode::NotFound,
+        message: message.to_owned(),
+        data: Some(serde_json::json!({ "reason": reason })),
+    }
+}
+
 // -- Domain types -------------------------------------------------------------
 
 /// Metadata for an open workspace directory.

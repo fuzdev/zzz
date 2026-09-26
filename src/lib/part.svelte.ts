@@ -248,10 +248,15 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 	/**
 	 * Read-only: the part never writes to disk. Edits go through the file's
 	 * `DiskfileEditorState`, whose `save_changes` reports failures.
+	 *
+	 * `undefined` when there's no file at `path`, `null` when the file's
+	 * content wasn't loaded (`Diskfile.content_loaded`) — never the linked
+	 * editor's empty text, so an unloaded file can't pass for an empty one.
 	 */
 	override get content(): string | null | undefined {
-		// Return editor content if available, otherwise fall back to diskfile content
 		if (!this.diskfile) return undefined;
+		if (!this.diskfile.content_loaded) return null;
+		// Return editor content if available, otherwise fall back to diskfile content
 		return this.#editor_state?.current_content ?? this.diskfile.content; // TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
 	}
 

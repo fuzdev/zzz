@@ -111,6 +111,20 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'diskfile_update', 'receive_error', 'handling'>
 		) => void | Promise<void>;
 	};
+	diskfile_create?: {
+		send_request?: (
+			action_event: TypedActionEvent<'diskfile_create', 'send_request', 'handling'>
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: TypedActionEvent<'diskfile_create', 'receive_response', 'handling'>
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: TypedActionEvent<'diskfile_create', 'send_error', 'handling'>
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: TypedActionEvent<'diskfile_create', 'receive_error', 'handling'>
+		) => void | Promise<void>;
+	};
 	diskfile_delete?: {
 		send_request?: (
 			action_event: TypedActionEvent<'diskfile_delete', 'send_request', 'handling'>

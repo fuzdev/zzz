@@ -86,6 +86,7 @@ describe('initialization', () => {
 		assert.isNull(null_editor_state.original_content);
 		assert.strictEqual(null_editor_state.current_content, '');
 		assert.ok(!null_editor_state.has_changes);
+		assert.ok(!null_editor_state.content_loaded, 'read-only, see the content_not_loaded suite');
 		assert.isNull(null_editor_state.last_seen_disk_content);
 
 		// History should still be created

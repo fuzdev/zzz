@@ -46,9 +46,10 @@ pub fn build_zzz_owned_specs(
 /// `fuz_auth::action_auth::any_credential_surface` and the `fuz_cell_actions`,
 /// visiones, and mageguild censuses).
 ///
-/// The whole set is `CredentialGate::Any` today, deliberately. Ten of these
+/// The whole set is `CredentialGate::Any` today, deliberately. Eleven of these
 /// specs are machine-capability *mutations* — `diskfile_update`,
-/// `diskfile_delete`, `directory_create`, the four `terminal_*` verbs,
+/// `diskfile_create`, `diskfile_delete`, `directory_create`, the four
+/// `terminal_*` verbs,
 /// `workspace_open` / `workspace_close`, and `completion_create` — and they
 /// are the largest permissive surface in the ecosystem. That is a recorded
 /// **open posture**, not an omission: zzz is a local-first garage on a

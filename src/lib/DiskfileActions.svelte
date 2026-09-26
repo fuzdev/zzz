@@ -29,7 +29,9 @@
 
 <!-- Content modification actions (copy, paste, clear) -->
 <div class="display:flex gap_xs">
-	<CopyToClipboard text={editor_state.current_content} class="plain" />
+	{#if editor_state.content_loaded}
+		<CopyToClipboard text={editor_state.current_content} class="plain" />
+	{/if}
 
 	{#if !readonly}
 		<PasteFromClipboard

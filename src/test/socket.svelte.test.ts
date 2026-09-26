@@ -10,7 +10,10 @@ import {
 	WS_CLOSE_SESSION_REVOKED
 } from '@fuzdev/fuz_app/actions/transports.ts';
 
+import { JSONRPC_ERROR_CODES, ThrownJsonrpcError } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+
 import { Socket } from '$lib/socket.svelte.ts';
+import { RPC_MESSAGE_MAX_BYTES } from '$lib/rpc_message_limit.ts';
 import { Frontend } from '$lib/frontend.svelte.ts';
 import { HEARTBEAT_INTERVAL_BOUNDS, RECONNECT_DELAY_BOUNDS } from '$lib/socket_helpers.ts';
 
@@ -437,6 +440,44 @@ describe('Socket', () => {
 			socket.connect(TEST_URLS.BASE);
 			void socket.request('workspace_list', {}, { id: 'req-2' }).catch(() => {});
 			assert.isNull(socket.last_send_time);
+		});
+	});
+
+	describe('Message size cap', () => {
+		test('an oversized request rejects without being sent', async () => {
+			const socket = new Socket({ app });
+			socket.connect(TEST_URLS.BASE);
+			mock_socket.connect();
+
+			const content = 'x'.repeat(RPC_MESSAGE_MAX_BYTES);
+			const error = await socket
+				.request('diskfile_update', { path: '/w/a.txt', content }, { id: 'big' })
+				.then(
+					() => null,
+					(e: unknown) => e
+				);
+
+			assert.instanceOf(error, ThrownJsonrpcError);
+			assert.strictEqual(error.code, JSONRPC_ERROR_CODES.invalid_request);
+			assert.deepEqual(error.data, { reason: 'payload_too_large' });
+			assert.strictEqual(mock_socket.sent_messages.length, 0, 'never sent');
+			assert.ok(socket.connected, 'the socket stays open');
+		});
+
+		test('an oversized fire-and-forget message is dropped, not queued', () => {
+			const socket = new Socket({ app });
+			socket.connect(TEST_URLS.BASE);
+			mock_socket.connect();
+
+			const sent = socket.send({
+				jsonrpc: '2.0',
+				method: 'n',
+				params: 'x'.repeat(RPC_MESSAGE_MAX_BYTES)
+			});
+
+			assert.isFalse(sent);
+			assert.strictEqual(mock_socket.sent_messages.length, 0);
+			assert.strictEqual(socket.queued_message_count, 0);
 		});
 	});
 

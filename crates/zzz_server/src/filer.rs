@@ -140,20 +140,27 @@ const DEFAULT_IGNORED_DIRS: &[&str] = &[
     ".zzz",
 ];
 
-/// Check if a single directory name is in the default ignore list.
+/// Check if a single path component is ignored by every watcher: a name in
+/// the default directory ignore list, or a `ScopedFs::write_file` staging
+/// file (only the rename that publishes a write is indexed and broadcast).
 fn is_ignored_name(name: &str) -> bool {
-    DEFAULT_IGNORED_DIRS.contains(&name)
+    DEFAULT_IGNORED_DIRS.contains(&name) || crate::scoped_fs::is_temp_file_name(name)
 }
 
-/// Check if a path is ignored: a default-ignored directory name among its
-/// components below `source_dir`, or at/under one of `ignored_dirs`.
+/// Check if a path is ignored: not valid UTF-8, a default-ignored name among
+/// its components below `source_dir`, or at/under one of `ignored_dirs`.
+///
+/// Non-UTF-8 paths are skipped entirely rather than indexed under a lossy
+/// (U+FFFD) key no client could address. A path is non-UTF-8 when any
+/// component is, so everything under a non-UTF-8 directory is skipped too —
+/// the walker never descends into one (see [`walk_files`]).
 ///
 /// Only checks names after the `source_dir` prefix — root path segments
 /// like `/`, `home`, `user` can never match ignored names and are skipped.
 /// `ignored_dirs` match by whole components (`Path::starts_with`), so
 /// `/w/data` doesn't cover `/w/data2`.
 fn is_ignored(path: &Path, source_dir: &Path, ignored_dirs: &[PathBuf]) -> bool {
-    if ignored_dirs.iter().any(|dir| path.starts_with(dir)) {
+    if path.to_str().is_none() || ignored_dirs.iter().any(|dir| path.starts_with(dir)) {
         return true;
     }
     let suffix = path.strip_prefix(source_dir).unwrap_or(path);
@@ -589,6 +596,9 @@ struct WalkState {
 
 /// Stream of file jobs discovered by walking `root` recursively.
 ///
+/// Staging files of `ScopedFs::write_file` are never yielded; orphaned ones
+/// are deleted along the way (see [`sweep_orphaned_temp_file`]).
+///
 /// Only regular files are yielded and only real directories are descended
 /// into — entry types come from `DirEntry::file_type`, which does not follow
 /// symlinks, so symlinks (and link loops) are skipped entirely, as are
@@ -627,6 +637,18 @@ fn walk_files(root: String, ignored_dirs: Vec<PathBuf>) -> impl Stream<Item = Fi
             match entry_result {
                 Ok(Some(entry)) => {
                     let path = entry.path();
+                    // a non-UTF-8 name (file or directory — so its whole
+                    // subtree) is skipped, like an ignored one
+                    let Some(path_str) = path.to_str().map(str::to_owned) else {
+                        continue;
+                    };
+                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if crate::scoped_fs::is_temp_file_name(name) {
+                        if crate::scoped_fs::is_staged_write_file_name(name) {
+                            sweep_orphaned_temp_file(&entry).await;
+                        }
+                        continue;
+                    }
                     if path
                         .file_name()
                         .and_then(|n| n.to_str())
@@ -639,7 +661,7 @@ fn walk_files(root: String, ignored_dirs: Vec<PathBuf>) -> impl Stream<Item = Fi
                         continue;
                     };
                     if file_type.is_dir() {
-                        let mut dir_path = path.to_string_lossy().into_owned();
+                        let mut dir_path = path_str;
                         if !dir_path.ends_with('/') {
                             dir_path.push('/');
                         }
@@ -653,7 +675,6 @@ fn walk_files(root: String, ignored_dirs: Vec<PathBuf>) -> impl Stream<Item = Fi
                     let Ok(meta) = entry.metadata().await else {
                         continue;
                     };
-                    let path_str = path.to_string_lossy().into_owned();
                     let ctime = meta.created().ok().and_then(system_time_to_ms);
                     let mtime = meta.modified().ok().and_then(system_time_to_ms);
                     let job = FileJob {
@@ -677,6 +698,36 @@ fn walk_files(root: String, ignored_dirs: Vec<PathBuf>) -> impl Stream<Item = Fi
             }
         }
     })
+}
+
+/// Delete `entry` if it's a staging file orphaned by a crash mid-write: a
+/// regular file (not followed through a symlink) whose exact name
+/// `ScopedFs::write_file` generates (the caller checked
+/// `is_staged_write_file_name`) and last modified at least
+/// `ORPHANED_TEMP_FILE_MIN_AGE` ago — far longer than a live write takes.
+/// Anything else, including a user's own `.zzz-tmp-*` names, is left alone.
+///
+/// Only staging files the walk reaches are swept, so one inside an ignored
+/// directory (`node_modules/`, `.git/`, …) stays until removed by hand.
+async fn sweep_orphaned_temp_file(entry: &tokio::fs::DirEntry) {
+    let Ok(meta) = entry.metadata().await else {
+        return;
+    };
+    let is_old = meta
+        .modified()
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|age| age >= crate::scoped_fs::ORPHANED_TEMP_FILE_MIN_AGE);
+    if !meta.file_type().is_file() || !is_old {
+        return;
+    }
+    let path = entry.path();
+    match tokio::fs::remove_file(&path).await {
+        Ok(()) => tracing::info!(path = %path.display(), "removed an orphaned staged-write file"),
+        Err(e) => {
+            tracing::debug!(path = %path.display(), error = %e, "failed to remove an orphaned staged-write file");
+        }
+    }
 }
 
 /// Recursively scan a directory and populate the file map.
@@ -752,7 +803,10 @@ impl FilerState {
 
     /// Resolve a path hint against the disk (`lstat`, never following links).
     async fn apply_hint(&mut self, path: &Path, hint: PathHint) {
-        let path_str = path.to_string_lossy().into_owned();
+        // `handle_event` filters non-UTF-8 paths through `is_ignored`
+        let Some(path_str) = path.to_str().map(str::to_owned) else {
+            return;
+        };
         // The path's type may have changed since it was indexed (a directory
         // replaced by a file or vice versa), so each branch also clears what
         // the other type would have left behind.
@@ -1375,6 +1429,122 @@ mod tests {
         assert_eq!(
             pending_of(&state),
             vec![(tmp.key("a.txt"), ChangeType::Delete)]
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn non_utf8_paths_are_skipped_with_their_subtrees() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+
+        let bad = OsStr::from_bytes(b"bad\xff");
+        let tmp = TempDir::new();
+        std::fs::write(tmp.path("a.txt"), "a").unwrap();
+        std::fs::write(tmp.0.join(bad), "x").unwrap();
+        let bad_dir = tmp.path("sub").join(bad);
+        std::fs::create_dir_all(bad_dir.join("inner")).unwrap();
+        std::fs::write(bad_dir.join("ok_name.txt"), "x").unwrap();
+        std::fs::write(bad_dir.join("inner/deep.txt"), "x").unwrap();
+
+        let mut state = state_for(&tmp).await;
+        assert_eq!(indexed(&state).await, vec![tmp.key("a.txt")]);
+
+        // events inside the non-UTF-8 directory, or for the entry itself,
+        // are filtered like ignored paths — no lossy keys, no flapping
+        let paths = [
+            tmp.0.join(bad),
+            bad_dir.clone(),
+            bad_dir.join("ok_name.txt"),
+            bad_dir.join("inner/deep.txt"),
+        ];
+        for path in &paths {
+            assert!(is_ignored(path, &tmp.0, &[]), "{}", path.display());
+        }
+        state
+            .handle_event(event(EventKind::Create(CreateKind::Any), &paths))
+            .await;
+        state.rescan().await;
+        assert_eq!(indexed(&state).await, vec![tmp.key("a.txt")]);
+        assert!(state.pending.is_empty(), "{:?}", pending_of(&state));
+    }
+
+    #[tokio::test]
+    async fn the_walk_sweeps_only_old_exact_staging_files() {
+        use crate::scoped_fs::TEMP_FILE_PREFIX;
+
+        let tmp = TempDir::new();
+        let hex = "0123456789abcdef0123456789abcdef";
+        let old = std::time::SystemTime::now() - Duration::from_secs(2 * 60 * 60);
+        let make = |name: &str, age: Option<std::time::SystemTime>| {
+            let path = tmp.path(name);
+            std::fs::write(&path, "x").unwrap();
+            if let Some(time) = age {
+                std::fs::File::options()
+                    .write(true)
+                    .open(&path)
+                    .unwrap()
+                    .set_modified(time)
+                    .unwrap();
+            }
+            path
+        };
+        let orphan = make(&format!("{TEMP_FILE_PREFIX}{hex}"), Some(old));
+        let fresh = make(&format!("{TEMP_FILE_PREFIX}{}", "f".repeat(32)), None);
+        let not_ours = make(&format!("{TEMP_FILE_PREFIX}notes.txt"), Some(old));
+        let uppercase = make(
+            &format!("{TEMP_FILE_PREFIX}{}", hex.to_uppercase()),
+            Some(old),
+        );
+        let dir = tmp.path(&format!("{TEMP_FILE_PREFIX}{}", "e".repeat(32)));
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::File::open(&dir)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        std::fs::write(tmp.path("a.txt"), "a").unwrap();
+
+        let files = scan(&tmp.root()).await;
+
+        assert_eq!(
+            files.keys().cloned().collect::<Vec<_>>(),
+            vec![tmp.key("a.txt")]
+        );
+        assert!(!orphan.exists(), "an old exact staging file is swept");
+        for kept in [&fresh, &not_ours, &uppercase, &dir] {
+            assert!(kept.exists(), "{} must be kept", kept.display());
+        }
+    }
+
+    #[tokio::test]
+    async fn staged_write_temp_files_are_ignored() {
+        let tmp = TempDir::new();
+        let temp_name = format!("{}abc", crate::scoped_fs::TEMP_FILE_PREFIX);
+        std::fs::write(tmp.path(&temp_name), "staged").unwrap();
+        std::fs::write(tmp.path("a.txt"), "a").unwrap();
+        let mut state = state_for(&tmp).await;
+        assert_eq!(indexed(&state).await, vec![tmp.key("a.txt")]);
+
+        assert!(is_ignored(&tmp.path(&temp_name), &tmp.0, &[]));
+        state
+            .handle_event(event(
+                EventKind::Create(CreateKind::File),
+                &[tmp.path(&temp_name)],
+            ))
+            .await;
+        assert!(state.pending.is_empty());
+
+        // the publishing rename reports the target, which is indexed
+        std::fs::rename(tmp.path(&temp_name), tmp.path("a.txt")).unwrap();
+        state
+            .handle_event(event(
+                EventKind::Modify(ModifyKind::Name(RenameMode::To)),
+                &[tmp.path("a.txt")],
+            ))
+            .await;
+        assert_eq!(
+            pending_of(&state),
+            vec![(tmp.key("a.txt"), ChangeType::Change)]
         );
     }
 

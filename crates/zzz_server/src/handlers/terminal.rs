@@ -7,12 +7,15 @@
 use std::sync::Arc;
 
 use fuz_actions::ActionContext;
-use fuz_auth::{AuditEmitter, AuditEventType, AuditLogEvent};
-use fuz_http::{
-    JsonrpcError, internal_error, internal_error_with_source, invalid_params, queue_overflow,
-    unauthenticated,
+use fuz_auth::{
+    AuditEmitter, AuditEventType, AuditLogEvent, deserialize_optional_wire_uuid,
+    deserialize_wire_uuid,
 };
-use serde::Serialize;
+use fuz_http::{
+    JsonrpcError, internal_error, internal_error_with_source, invalid_params, parse_strict_params,
+    queue_overflow, unauthenticated,
+};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -29,14 +32,52 @@ struct TerminalCloseResult {
     exit_code: Option<i32>,
 }
 
-/// Read a terminal dimension (`cols` / `rows`) from `params`: an integer in
-/// `1..=65535` (the `u16` range of a PTY `winsize`). Out-of-range values are
-/// rejected rather than truncated — `65536 as u16` would be `0`.
-fn parse_terminal_dimension(params: &Value, name: &str) -> Result<u16, JsonrpcError> {
-    let value = params
-        .get(name)
-        .and_then(Value::as_u64)
-        .ok_or_else(|| invalid_params(&format!("missing or invalid '{name}' parameter"), None))?;
+// -- Inputs (twins of the `Terminal*Input` schemas in `action_specs.ts`) ------
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TerminalCreateInput {
+    command: String,
+    #[serde(default)]
+    args: Vec<String>,
+    #[serde(default)]
+    cwd: Option<String>,
+    /// Accepted for parity with the TS input; the backend doesn't use it.
+    #[serde(default, deserialize_with = "deserialize_optional_wire_uuid")]
+    #[allow(dead_code, reason = "decoded for input validation only")]
+    preset_id: Option<Uuid>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TerminalDataSendInput {
+    #[serde(deserialize_with = "deserialize_wire_uuid")]
+    terminal_id: Uuid,
+    data: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TerminalResizeInput {
+    #[serde(deserialize_with = "deserialize_wire_uuid")]
+    terminal_id: Uuid,
+    cols: u64,
+    rows: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TerminalCloseInput {
+    #[serde(deserialize_with = "deserialize_wire_uuid")]
+    terminal_id: Uuid,
+    #[serde(default)]
+    signal: Option<String>,
+}
+
+/// Check a terminal dimension (`cols` / `rows`): an integer in `1..=65535`
+/// (the `u16` range of a PTY `winsize`). Out-of-range values are rejected
+/// rather than truncated — `65536 as u16` would be `0`.
+fn terminal_dimension(value: u64, name: &str) -> Result<u16, JsonrpcError> {
     u16::try_from(value)
         .ok()
         .filter(|&dimension| dimension >= 1)
@@ -101,31 +142,22 @@ pub async fn terminal_create(
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
     let owner = caller_account_id(&ctx)?;
-    let command = params
-        .get("command")
-        .and_then(Value::as_str)
-        .ok_or_else(|| invalid_params("missing or invalid 'command' parameter", None))?;
-
-    let args: Vec<String> = match params.get("args") {
-        Some(Value::Array(arr)) => arr
-            .iter()
-            .map(|v| {
-                v.as_str()
-                    .map(String::from)
-                    .ok_or_else(|| invalid_params("args must be an array of strings", None))
-            })
-            .collect::<Result<Vec<_>, _>>()?,
-        Some(Value::Null) | None => vec![],
-        _ => return Err(invalid_params("args must be an array of strings", None)),
-    };
-
-    let cwd = params.get("cwd").and_then(Value::as_str);
+    let TerminalCreateInput {
+        command, args, cwd, ..
+    } = parse_strict_params(params)?;
 
     let terminal_id = Uuid::new_v4().to_string();
 
-    PtyManager::spawn(Arc::clone(&app), owner, &terminal_id, command, &args, cwd)
-        .await
-        .map_err(|e| internal_error(&format!("failed to create terminal: {e}")))?;
+    PtyManager::spawn(
+        Arc::clone(&app),
+        owner,
+        &terminal_id,
+        &command,
+        &args,
+        cwd.as_deref(),
+    )
+    .await
+    .map_err(|e| internal_error(&format!("failed to create terminal: {e}")))?;
 
     serde_json::to_value(TerminalCreateResult { terminal_id })
         .map_err(|e| internal_error_with_source("serialization failed", &e))
@@ -137,18 +169,10 @@ pub async fn terminal_data_send(
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
     let owner = caller_account_id(&ctx)?;
-    let terminal_id = params
-        .get("terminal_id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| invalid_params("missing or invalid 'terminal_id' parameter", None))?;
-
-    let data = params
-        .get("data")
-        .and_then(Value::as_str)
-        .ok_or_else(|| invalid_params("missing or invalid 'data' parameter", None))?;
+    let input: TerminalDataSendInput = parse_strict_params(params)?;
 
     app.pty_manager
-        .write(owner, terminal_id, data)
+        .write(owner, &input.terminal_id.to_string(), &input.data)
         .await
         .map_err(|e| queue_overflow(&e.to_string()))?;
 
@@ -161,15 +185,13 @@ pub async fn terminal_resize(
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
     let owner = caller_account_id(&ctx)?;
-    let terminal_id = params
-        .get("terminal_id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| invalid_params("missing or invalid 'terminal_id' parameter", None))?;
+    let input: TerminalResizeInput = parse_strict_params(params)?;
+    let cols = terminal_dimension(input.cols, "cols")?;
+    let rows = terminal_dimension(input.rows, "rows")?;
 
-    let cols = parse_terminal_dimension(&params, "cols")?;
-    let rows = parse_terminal_dimension(&params, "rows")?;
-
-    app.pty_manager.resize(owner, terminal_id, cols, rows).await;
+    app.pty_manager
+        .resize(owner, &input.terminal_id.to_string(), cols, rows)
+        .await;
 
     Ok(Value::Null)
 }
@@ -180,15 +202,8 @@ pub async fn terminal_close(
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
     let owner = caller_account_id(&ctx)?;
-    let terminal_id = params
-        .get("terminal_id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| invalid_params("missing or invalid 'terminal_id' parameter", None))?;
-
-    let signal_str = params
-        .get("signal")
-        .and_then(Value::as_str)
-        .unwrap_or("SIGTERM");
+    let input: TerminalCloseInput = parse_strict_params(params)?;
+    let signal_str = input.signal.as_deref().unwrap_or("SIGTERM");
 
     let signal = match signal_str {
         "SIGKILL" => libc::SIGKILL,
@@ -197,7 +212,7 @@ pub async fn terminal_close(
 
     let exit_code = app
         .pty_manager
-        .close(owner, terminal_id, signal)
+        .close(owner, &input.terminal_id.to_string(), signal)
         .await
         .flatten();
 
@@ -212,8 +227,13 @@ mod tests {
 
     use super::*;
 
+    const NIL_UUID: &str = "00000000-0000-0000-0000-000000000000";
+
+    /// Decode `cols` through the strict input, then range-check it.
     fn dimension(value: &Value) -> Result<u16, JsonrpcError> {
-        parse_terminal_dimension(&json!({ "cols": value }), "cols")
+        let input: TerminalResizeInput =
+            parse_strict_params(json!({ "terminal_id": NIL_UUID, "cols": value, "rows": 24 }))?;
+        terminal_dimension(input.cols, "cols")
     }
 
     fn assert_invalid_params(result: Result<u16, JsonrpcError>) {
@@ -292,6 +312,52 @@ mod tests {
         assert_invalid_params(dimension(&json!(80.5)));
         assert_invalid_params(dimension(&json!("80")));
         assert_invalid_params(dimension(&Value::Null));
-        assert_invalid_params(parse_terminal_dimension(&json!({}), "rows"));
+        assert_invalid_params(
+            parse_strict_params::<TerminalResizeInput>(json!({ "terminal_id": NIL_UUID }))
+                .map(|_| 0),
+        );
+    }
+
+    #[test]
+    fn inputs_are_strict() {
+        let create: TerminalCreateInput = parse_strict_params(json!({"command": "sh"})).unwrap();
+        assert!(create.args.is_empty() && create.cwd.is_none());
+        let create: TerminalCreateInput = parse_strict_params(json!({
+            "command": "sh", "args": ["-c", "true"], "cwd": "/tmp", "preset_id": NIL_UUID
+        }))
+        .unwrap();
+        assert_eq!(create.args, ["-c", "true"]);
+
+        for params in [
+            json!({"command": "sh", "extra": 1}),
+            json!({"command": "sh", "args": null}),
+            json!({"command": "sh", "cwd": null}),
+            json!({"command": "sh", "preset_id": "not-a-uuid"}),
+            json!({"command": "sh", "args": [1]}),
+        ] {
+            assert!(
+                parse_strict_params::<TerminalCreateInput>(params.clone()).is_err(),
+                "{params}"
+            );
+        }
+        for params in [
+            json!({"terminal_id": "abc", "data": "x"}),
+            json!({"terminal_id": NIL_UUID, "data": "x", "extra": true}),
+            json!({"terminal_id": NIL_UUID}),
+        ] {
+            assert!(
+                parse_strict_params::<TerminalDataSendInput>(params.clone()).is_err(),
+                "{params}"
+            );
+        }
+        let close: TerminalCloseInput =
+            parse_strict_params(json!({ "terminal_id": NIL_UUID })).unwrap();
+        assert!(close.signal.is_none());
+        assert!(
+            parse_strict_params::<TerminalCloseInput>(
+                json!({ "terminal_id": NIL_UUID, "signal": null })
+            )
+            .is_err()
+        );
     }
 }

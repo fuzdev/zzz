@@ -48,6 +48,14 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 		this.app.diskfiles.to_relative_path(this.path)
 	);
 
+	/**
+	 * Whether the file's content was loaded. `false` when the backend sent
+	 * `contents: null` — the file is over the 4 MiB index cap, not UTF-8 text,
+	 * or unreadable — so `content` says nothing about what's on disk: it can't
+	 * be edited or saved over (see `DISKFILE_CONTENT_NOT_LOADED_MESSAGE`).
+	 */
+	readonly content_loaded: boolean = $derived(this.content !== null);
+
 	readonly content_length: number = $derived(this.content?.length ?? 0);
 	readonly content_preview: string = $derived(to_preview(this.content));
 

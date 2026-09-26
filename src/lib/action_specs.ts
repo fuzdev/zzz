@@ -93,6 +93,13 @@ export const DiskfileUpdateInput = z.strictObject({
 });
 export type DiskfileUpdateInput = z.infer<typeof DiskfileUpdateInput>;
 
+/** Input for `diskfile_create`. */
+export const DiskfileCreateInput = z.strictObject({
+	path: DiskfilePath,
+	content: z.string()
+});
+export type DiskfileCreateInput = z.infer<typeof DiskfileCreateInput>;
+
 /** Input for `diskfile_delete`. */
 export const DiskfileDeleteInput = z.strictObject({
 	path: DiskfilePath
@@ -310,6 +317,19 @@ export const diskfile_update_action_spec = {
 	description: 'Write new content to a file on disk.'
 } satisfies RequestResponseActionSpec;
 
+export const diskfile_create_action_spec = {
+	method: 'diskfile_create',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: { account: 'required', actor: 'none' },
+	side_effects: true,
+	input: DiskfileCreateInput,
+	output: z.null(),
+	async: true,
+	description:
+		'Create a new file on disk, failing with `conflict` (`already_exists`) if the path is taken — never overwrites.'
+} satisfies RequestResponseActionSpec;
+
 export const diskfile_delete_action_spec = {
 	method: 'diskfile_delete',
 	kind: 'request_response',
@@ -522,6 +542,7 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	session_load_action_spec,
 	filer_change_action_spec,
 	diskfile_update_action_spec,
+	diskfile_create_action_spec,
 	diskfile_delete_action_spec,
 	directory_create_action_spec,
 	completion_create_action_spec,

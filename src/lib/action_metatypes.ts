@@ -17,6 +17,7 @@ export const ActionMethod = z.enum([
 	'session_load',
 	'filer_change',
 	'diskfile_update',
+	'diskfile_create',
 	'diskfile_delete',
 	'directory_create',
 	'completion_create',
@@ -45,6 +46,7 @@ export const RequestResponseActionMethod = z.enum([
 	'ping',
 	'session_load',
 	'diskfile_update',
+	'diskfile_create',
 	'diskfile_delete',
 	'directory_create',
 	'completion_create',
@@ -89,6 +91,7 @@ export const FrontendActionMethod = z.enum([
 	'session_load',
 	'filer_change',
 	'diskfile_update',
+	'diskfile_create',
 	'diskfile_delete',
 	'directory_create',
 	'completion_create',
@@ -119,6 +122,7 @@ export const BackendActionMethod = z.enum([
 	'session_load',
 	'filer_change',
 	'diskfile_update',
+	'diskfile_create',
 	'diskfile_delete',
 	'directory_create',
 	'completion_create',
@@ -150,6 +154,7 @@ export const BackendRequestResponseMethod = z.enum([
 	'ping',
 	'session_load',
 	'diskfile_update',
+	'diskfile_create',
 	'diskfile_delete',
 	'directory_create',
 	'completion_create',
@@ -212,6 +217,10 @@ export interface FrontendActionsApi {
 		input: ActionInputs['diskfile_update'],
 		options?: RpcClientCallOptions
 	) => Promise<Result<{ value: ActionOutputs['diskfile_update'] }, { error: JsonrpcErrorObject }>>;
+	diskfile_create: (
+		input: ActionInputs['diskfile_create'],
+		options?: RpcClientCallOptions
+	) => Promise<Result<{ value: ActionOutputs['diskfile_create'] }, { error: JsonrpcErrorObject }>>;
 	diskfile_delete: (
 		input: ActionInputs['diskfile_delete'],
 		options?: RpcClientCallOptions

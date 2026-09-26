@@ -5,8 +5,8 @@
 //!   `build_text_progress_chunk` produces the uniform streaming-chunk shape
 //!   `{message: {role, content}}` the text-streaming providers emit on every
 //!   delta.
-//! - HTTP plumbing: the shared `reqwest::Client` builder (with a connect
-//!   timeout), cancellable `send_request` / `read_json_body`, and
+//! - HTTP plumbing: the shared `reqwest::Client` builder (with connect and
+//!   read timeouts), cancellable `send_request` / `read_json_body`, and
 //!   `reqwest_error_message`, which strips the request URL so nothing in a
 //!   query string can leak into a JSON-RPC error message.
 //! - Message shaping: `is_blank` and `join_system_text`, used by each
@@ -27,10 +27,26 @@ use super::{
 
 /// Bound on establishing the TCP + TLS connection to a provider API.
 ///
-/// Only the connect phase is bounded — there is deliberately no overall
-/// request timeout, because streaming completions legitimately run for
-/// minutes. Stalls after connect are covered by cancellation instead.
+/// There is deliberately no overall request timeout, because streaming
+/// completions legitimately run for many minutes; stalls after connect are
+/// bounded by [`READ_TIMEOUT`] instead.
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// `reqwest`'s `read_timeout` for provider requests, in two phases.
+///
+/// Until the response headers arrive, the timer does **not** reset: it spans
+/// connecting, uploading the request, and waiting for the headers as one
+/// deadline. After that it bounds each body read, resetting after every
+/// successful one.
+///
+/// Without it a provider that stops sending mid-stream (or never answers)
+/// would hold the completion — and the pooled DB connection its dispatch
+/// holds — until the caller cancels. It is generous on purpose: a
+/// non-streaming completion sends no headers until the whole response is
+/// ready, so the first phase must outlast Anthropic's 10-minute cap on those
+/// with room to spare, and reasoning models can go quiet mid-stream while
+/// they think.
+pub const READ_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
 /// The message on the `request_cancelled` error a cancelled completion
 /// returns.
@@ -69,7 +85,7 @@ pub fn build_text_progress_chunk(content: &str) -> Value {
 
 /// Build the shared provider `reqwest::Client` with `headers` as defaults.
 ///
-/// Applies `CONNECT_TIMEOUT`.
+/// Applies [`CONNECT_TIMEOUT`] and [`READ_TIMEOUT`].
 ///
 /// # Errors
 ///
@@ -79,11 +95,18 @@ pub fn build_text_progress_chunk(content: &str) -> Value {
 pub fn build_client_with_headers(headers: HeaderMap) -> Result<reqwest::Client, String> {
     // reqwest uses `rustls-no-provider`; install the `ring` provider first.
     fuz_sys::tls::ensure_crypto_provider();
+    client_builder(headers, READ_TIMEOUT)
+        .build()
+        .map_err(|e| format!("failed to build HTTP client: {}", reqwest_error_message(e)))
+}
+
+/// The provider client configuration, with the read timeout injectable so
+/// tests can exercise it without waiting [`READ_TIMEOUT`].
+fn client_builder(headers: HeaderMap, read_timeout: Duration) -> reqwest::ClientBuilder {
     reqwest::Client::builder()
         .default_headers(headers)
         .connect_timeout(CONNECT_TIMEOUT)
-        .build()
-        .map_err(|e| format!("failed to build HTTP client: {}", reqwest_error_message(e)))
+        .read_timeout(read_timeout)
 }
 
 /// Build a header value for a credential, marked sensitive so it's
@@ -347,7 +370,84 @@ pub fn join_system_text(
     reason = "tests panic on assertion failure by design"
 )]
 mod tests {
+    use std::ops::ControlFlow;
+
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
     use super::*;
+
+    /// A local HTTP server that answers one request with `head` (the status
+    /// line + headers + any body bytes), then stalls without closing.
+    async fn stalling_server(head: &'static [u8]) -> (String, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0_u8; 4096];
+            let _ = socket.read(&mut request).await;
+            socket.write_all(head).await.unwrap();
+            tokio::time::sleep(Duration::from_secs(60)).await;
+        });
+        (url, server)
+    }
+
+    fn short_timeout_client() -> reqwest::Client {
+        fuz_sys::tls::ensure_crypto_provider();
+        client_builder(HeaderMap::new(), Duration::from_millis(200))
+            .build()
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_stream_that_stalls_mid_body_times_out() {
+        let (url, server) = stalling_server(
+            b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\n\
+              transfer-encoding: chunked\r\n\r\n9\r\ndata: 1\n\n\r\n",
+        )
+        .await;
+        let response = short_timeout_client().get(&url).send().await.unwrap();
+        let mut events = 0;
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            crate::provider::sse::consume_sse_stream(
+                response,
+                "claude",
+                &CancellationToken::new(),
+                |_| {
+                    events += 1;
+                    Ok(ControlFlow::Continue(()))
+                },
+            ),
+        )
+        .await
+        .expect("the read timeout must end the stream");
+        server.abort();
+
+        assert_eq!(events, 1, "the event before the stall was delivered");
+        let error = result.unwrap_err();
+        assert!(
+            error.message.contains("stream read error"),
+            "{}",
+            error.message
+        );
+    }
+
+    #[tokio::test]
+    async fn a_response_that_never_starts_times_out() {
+        let (url, server) = stalling_server(b"").await;
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            send_request(
+                short_timeout_client().get(&url),
+                "claude",
+                &CancellationToken::new(),
+            ),
+        )
+        .await
+        .expect("the read timeout must fail the request");
+        server.abort();
+        assert!(result.is_err());
+    }
 
     fn msg(role: &str, content: &str) -> CompletionMessage {
         CompletionMessage {

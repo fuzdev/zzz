@@ -122,6 +122,18 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		}
 	},
 
+	diskfile_create: {
+		send_request: ({ data: { input } }) => {
+			console.log('[frontend_action_handlers] creating file:', input.path);
+		},
+		receive_response: ({ data: { input } }) => {
+			console.log('[frontend_action_handlers] created file:', input.path);
+		},
+		receive_error: ({ data: { input, error } }) => {
+			console.error('[frontend_action_handlers] create file failed:', input.path, error);
+		}
+	},
+
 	diskfile_delete: {
 		send_request: ({ data: { input } }) => {
 			console.log('[frontend_action_handlers] deleting file:', input.path);

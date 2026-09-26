@@ -279,7 +279,7 @@ the Vite frontend. (The user manages the dev server; don't start it yourself.)
 
 The Rust `zzz_server` (Axum) is zzz's backend.
 RPC methods: `ping`, `session_load`, `workspace_*`,
-`diskfile_update`, `diskfile_delete`, `directory_create`, `terminal_create`,
+`diskfile_update`, `diskfile_create`, `diskfile_delete`, `directory_create`, `terminal_create`,
 `terminal_data_send`, `terminal_resize`, `terminal_close`,
 `provider_load_status`,
 `completion_create`, `account_verify`, `account_session_list`,
@@ -518,12 +518,32 @@ The daemon home holds the CLI's files beside it: `config.json`, `.env`,
 (`daemon.json` — boot id, pid, start time, port — and `daemon.log`).
 
 All filesystem access goes through `ScopedFs` — path validation, no symlinks, absolute paths only.
+Saves are atomic: `diskfile_update` stages the content in a hidden
+`.zzz-tmp-<uuid>` file beside the target (never indexed or broadcast by the
+filer), fsyncs it, and renames it over the target, so a failed or concurrent
+save never leaves an empty or mixed file. The file's mode is kept and its
+owner best-effort (a file owned by another user becomes the daemon user's when
+zzz can't restore it); being a new inode, a saved file **loses its hardlinks**
+(other names keep the old content) and any xattrs/ACLs. An existing file must
+be writable by the daemon — a read-only file is refused (`permission_denied`)
+even though its directory would allow the rename. When the rename can't
+happen but the file itself is writable — its directory isn't writable, or the
+file is a bind mount (`EBUSY`) or in a sticky directory (`EPERM`) — the save
+falls back to writing in place (truncate + write + fsync), which is **not
+atomic**: a failure midway leaves the file truncated or partial. A new file
+in a non-writable directory fails with `directory_not_writable`. Only regular
+files are written — a directory, FIFO, socket, or device node target is
+refused. A crash mid-save can orphan a staging file; the filer's walk deletes
+exact `.zzz-tmp-<uuid>` regular files older than an hour (ones inside ignored
+directories stay). "New file" uses `diskfile_create`, which creates the final
+name exclusively (`O_EXCL`) and fails with `conflict` / `already_exists`
+instead of overwriting.
 
 ## Environment Variables
 
 ### Server (read by `zzz_server` at boot)
 
-- `ZZZ_PORT` — HTTP server port (default 4460; `cargo xtask dev` uses 4461); the `--port` flag wins. The bind address is always loopback — there is no `HOST` override.
+- `ZZZ_PORT` — HTTP server port (default 4460; `cargo xtask dev` uses 4461); the `--port` flag wins. Anything but a port in `1..=65535` refuses to boot. The bind address is always loopback — there is no `HOST` override.
 - `ZZZ_STATIC_DIR` — directory of the built SPA to serve (`--static-dir` wins); must be a directory, or `zzzd` refuses to boot. Unset, `zzzd` serves no frontend (dev: Vite serves it)
 - `ZZZ_TRUSTED_PROXIES` — comma-separated trusted proxy IPs / CIDR ranges for `client_ip` resolution
 - `DATABASE_URL` — PostgreSQL connection (`postgres://`)
@@ -541,7 +561,8 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 unset — `PUBLIC_ZZZ_DIR` falls back to `.zzz`, never `/` — and fails to boot
 on an empty or unresolvable path (a missing scoped dir is fine). It creates
 the app directory (and missing parents, mode `0700`) at boot, and fails to
-boot with the path in the error if it can't.
+boot with the path in the error if it can't. A value that isn't valid UTF-8
+fails boot too, rather than reading as unset.
 
 PTY terminals spawned by the server don't get the `SECRET_*`, `FUZ_*`,
 `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, or `PORT` variables — they're
@@ -608,6 +629,8 @@ accounts from each other.
 - **WebSocket auth** — Auth is enforced at upgrade time — the spine resolves credentials from the request headers before upgrading (cookie sessions, bearer tokens — bearer silently discarded in browser context via Origin/Referer defense). Per-action auth checks enforce spec-level auth: `keeper` requires `daemon_token` + keeper role; `{role}` requires the named role via `has_role` (matches the HTTP path). Batch JSON-RPC is rejected (not yet supported). Sockets are closed on session/token revocation, logout, and password change via audit events — `token_revoke` closes only the revoked token's sockets (granular), `session_revoke_all` / `token_revoke_all` / `password_change` close all sockets on the account. No per-message session revalidation — event-driven revocation is sufficient. ActionPeer itself has no auth awareness. On the frontend, a revoked socket, an `unauthenticated` RPC error, or repeated failed reconnects (a browser can't see an upgrade's 401) trigger a session recheck (`src/lib/session_recheck.ts`); only a definitive 401 from the account status route drops the App and shows the login gate, so a daemon restart doesn't log anyone out.
 - **Bearer auth soft-fails** — bearer resolution soft-fails for invalid/expired/empty tokens (no early error response). Auth enforcement happens downstream via the per-action auth checks, producing `{code: -32001, message: "unauthenticated"}` JSON-RPC errors. Public actions are not blocked by bad bearer credentials.
 - **Domain state is in-memory** — auth/accounts are in the PostgreSQL DB, but zzz domain state (files, terminals, workspaces) is in-memory, lost on restart.
+- **16 MiB messages** — a JSON-RPC message is capped at 16 MiB on both transports (`RPC_MESSAGE_MAX_BYTES`: the `/api/rpc` body limit and the `/api/ws` message limit). The server closes the socket on an oversized WebSocket message, so the frontend's `Socket` refuses any request over the cap before sending (`invalid_request`, `data.reason` `payload_too_large`; `src/lib/rpc_message_limit.ts`) — a huge save or a very long completion history fails cleanly instead of dropping the socket. Saving any file the filer loads (at most 4 MiB) fits, except in the worst case: JSON escapes a control character to 6 bytes, so a file dense with them can exceed the cap, and that save is refused the same clean way. The cap isn't confined to authenticated callers on HTTP (see ./crates/CLAUDE.md), which is acceptable only because the bind is loopback
+- **Unloaded files are read-only** — the file index holds contents only for UTF-8 files up to 4 MiB it could read; any other file arrives with `contents: null` (`Diskfile.content_loaded` is `false`). The editor shows it read-only and empty with a "content not loaded" notice (no stale earlier text, no copy button) and never saves it (`DiskfileEditorState` ignores edits and refuses `save_changes`; `Diskfiles.update` refuses to write over it too, with `conflict` / `content_not_loaded`), since a save would overwrite a file nobody has seen. A file part for it contributes a `[content not loaded — …]` placeholder to a formatted prompt instead of silently dropping out
 - **No persistent undo** — saves overwrite the file on disk; the editor keeps an in-memory per-file history (`DiskfileHistory`) you can restore from, lost on reload
 - **Symlinks are invisible** — the filer never follows or indexes a symlink (file or directory), and `ScopedFs` rejects symlinked paths, so linked files don't appear in the file tree
 - **Workspace scope** — opening a workspace makes its directory a writable `ScopedFs` root with its own filer until it's closed; closing never revokes the permanent roots (`PUBLIC_ZZZ_DIR` and `PUBLIC_ZZZ_SCOPED_DIRS`). Any absolute directory can be opened — `/` makes the whole filesystem writable and scans it

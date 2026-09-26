@@ -1,8 +1,13 @@
 import type { PartUnion } from './part.svelte.ts';
+import { DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER } from './diskfile_helpers.ts';
 
 /**
  * Formats a collection of parts into a prompt string,
  * applying XML tags and attributes where specified.
+ *
+ * A file part whose file content wasn't loaded (over 4 MiB, not UTF-8 text, or
+ * unreadable) contributes `DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER` in its
+ * place, so the prompt shows the file is missing rather than dropping it.
  */
 export const format_prompt_content = (parts: Array<PartUnion>): string => {
 	const formatted_contents = [];
@@ -10,7 +15,11 @@ export const format_prompt_content = (parts: Array<PartUnion>): string => {
 	for (const part of parts) {
 		if (!part.enabled) continue;
 
-		const content = part.content?.trim();
+		// a file whose content wasn't loaded is marked, never silently dropped
+		const content =
+			part.type === 'diskfile' && part.content === null
+				? DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER
+				: part.content?.trim();
 		if (!content) continue;
 
 		if (!part.has_xml_tag) {

@@ -10,13 +10,29 @@ use std::path::Path;
 use std::sync::Arc;
 
 use fuz_actions::ActionContext;
-use fuz_http::{JsonrpcError, internal_error, internal_error_with_source, invalid_params};
+use fuz_auth::require_void_params;
+use fuz_http::{
+    JsonrpcError, forbidden, internal_error_with_source, invalid_params, parse_strict_params,
+};
 use fuz_realtime::notify_to_string;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::filer::{FilerConfig, FilerLifetime, SerializableDisknode};
-use crate::handlers::{App, WorkspaceInfo};
+use crate::handlers::filesystem::{
+    ERROR_INVALID_PATH, ERROR_NOT_A_DIRECTORY, ERROR_PATH_NOT_FOUND, ERROR_PERMISSION_DENIED,
+};
+use crate::handlers::{App, WorkspaceInfo, not_found_error};
+
+// -- Inputs -----------------------------------------------------------------
+
+/// Input for `workspace_open` / `workspace_close` — twin of
+/// `WorkspaceOpenInput` / `WorkspaceCloseInput`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WorkspacePathInput {
+    path: String,
+}
 
 // -- Notification params -----------------------------------------------------
 
@@ -47,7 +63,12 @@ struct WorkspaceOpenResult {
 fn to_normalized_dir(path: &Path) -> Result<String, JsonrpcError> {
     let mut s = path
         .to_str()
-        .ok_or_else(|| internal_error("path is not valid UTF-8"))?
+        .ok_or_else(|| {
+            invalid_params(
+                &format!("path is not valid UTF-8: {}", path.display()),
+                Some(ERROR_INVALID_PATH),
+            )
+        })?
         .to_owned();
     if !s.ends_with('/') {
         s.push('/');
@@ -64,29 +85,58 @@ fn require_absolute(path: &str) -> Result<(), JsonrpcError> {
     } else {
         Err(invalid_params(
             &format!("path must be absolute: {path:?}"),
-            None,
+            Some(ERROR_INVALID_PATH),
         ))
     }
+}
+
+/// Map a failure to resolve a `workspace_open` path: a missing path is
+/// `not_found`, a non-directory ancestor `invalid_params`, an OS refusal
+/// `forbidden`, anything else `internal_error`.
+fn open_path_error(path: &str, error: &std::io::Error) -> JsonrpcError {
+    use std::io::ErrorKind;
+
+    let dir = display_dir(path);
+    match error.kind() {
+        ErrorKind::NotFound => not_found_error(
+            &format!("failed to open workspace: directory does not exist: {dir}"),
+            ERROR_PATH_NOT_FOUND,
+        ),
+        ErrorKind::NotADirectory => invalid_params(
+            &format!("failed to open workspace: not a directory: {dir}"),
+            Some(ERROR_NOT_A_DIRECTORY),
+        ),
+        ErrorKind::PermissionDenied => forbidden(
+            &format!("failed to open workspace: permission denied: {dir}"),
+            Some(ERROR_PERMISSION_DENIED),
+        ),
+        _ => internal_error_with_source(&format!("failed to open workspace: {dir}"), error),
+    }
+}
+
+/// `path` with a trailing `/`, as the workspace is keyed.
+fn display_dir(path: &str) -> String {
+    let suffix = if path.ends_with('/') { "" } else { "/" };
+    format!("{path}{suffix}")
 }
 
 // -- Handlers ----------------------------------------------------------------
 
 /// `workspace_list` — read-only snapshot of open workspaces.
 ///
-/// Spine signature: `(Value, ActionContext<'_>)`. `params` is unused
-/// (`workspace_list` takes no input); kept in the signature for
-/// `ActionHandler` shape uniformity. `async` is required by the
-/// `ActionHandler` future-returning shape even though the body has
-/// no `.await` points.
+/// Takes no input (`z.void()`), so any `params` is refused. `async` is
+/// required by the `ActionHandler` future-returning shape even though the
+/// body has no `.await` points.
 #[allow(
     clippy::unused_async,
     reason = "ActionHandler signature requires async"
 )]
 pub async fn workspace_list(
-    _params: Value,
+    params: Value,
     _ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
+    require_void_params(&params)?;
     let list: Vec<WorkspaceInfo> = {
         let workspaces = app.workspaces.read();
         workspaces.values().cloned().collect()
@@ -109,27 +159,25 @@ pub async fn workspace_open(
     _ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
-    let path = params
-        .get("path")
-        .and_then(Value::as_str)
-        .ok_or_else(|| invalid_params("missing or invalid 'path' parameter", None))?;
+    let WorkspacePathInput { path } = parse_strict_params(params)?;
+    let path = path.as_str();
     require_absolute(path)?;
 
-    let canonical = tokio::fs::canonicalize(path).await.map_err(|_| {
-        let suffix = if path.ends_with('/') { "" } else { "/" };
-        internal_error(&format!(
-            "failed to open workspace: directory does not exist: {path}{suffix}"
-        ))
-    })?;
-
-    let is_dir = tokio::fs::metadata(&canonical)
+    let canonical = tokio::fs::canonicalize(path)
         .await
-        .is_ok_and(|meta| meta.is_dir());
-    if !is_dir {
-        let suffix = if path.ends_with('/') { "" } else { "/" };
-        return Err(internal_error(&format!(
-            "failed to open workspace: not a directory: {path}{suffix}"
-        )));
+        .map_err(|e| open_path_error(path, &e))?;
+
+    let meta = tokio::fs::metadata(&canonical)
+        .await
+        .map_err(|e| open_path_error(path, &e))?;
+    if !meta.is_dir() {
+        return Err(invalid_params(
+            &format!(
+                "failed to open workspace: not a directory: {}",
+                display_dir(path)
+            ),
+            Some(ERROR_NOT_A_DIRECTORY),
+        ));
     }
 
     let normalized = to_normalized_dir(&canonical)?;
@@ -206,10 +254,8 @@ pub async fn workspace_close(
     _ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
-    let path = params
-        .get("path")
-        .and_then(Value::as_str)
-        .ok_or_else(|| invalid_params("missing or invalid 'path' parameter", None))?;
+    let WorkspacePathInput { path } = parse_strict_params(params)?;
+    let path = path.as_str();
     require_absolute(path)?;
 
     let mut key = path.to_owned();

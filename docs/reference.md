@@ -5,7 +5,7 @@
 Generated from `action_specs.ts` and `cell_classes.ts` by `reference.gen.ts`.
 Run `gro gen` to refresh it; `gro check` fails if it drifts. Don't edit by hand.
 
-## Action specs (20)
+## Action specs (21)
 
 The fuz_app protocol actions `heartbeat` (WS-only) and `peer/ping` are
 registered too but omitted here — they belong to the shared runtime, not zzz
@@ -14,6 +14,7 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `completion_create` — Start an AI completion request, optionally with a progress token for streaming. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `completion_progress` — Streams a completion chunk to the frontend during a streaming AI response. Kind: remote_notification. Initiator: backend. Auth: public
 - `directory_create` — Create a new directory on disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `diskfile_create` — Create a new file on disk, failing with `conflict` (`already_exists`) if the path is taken — never overwrites. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `diskfile_delete` — Delete a file from disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `diskfile_update` — Write new content to a file on disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `filer_change` — Notifies the frontend of a file system change detected by the watcher. Kind: remote_notification. Initiator: backend. Auth: public

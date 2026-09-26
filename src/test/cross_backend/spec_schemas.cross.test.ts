@@ -33,6 +33,7 @@ import type {
 
 import {
 	directory_create_action_spec,
+	diskfile_create_action_spec,
 	diskfile_delete_action_spec,
 	diskfile_update_action_spec,
 	filer_change_action_spec,
@@ -153,6 +154,10 @@ describe('zzz spec schemas cross-backend', () => {
 			);
 			await call_and_check(fixture, directory_create_action_spec, { path: join(dir, 'sub') });
 			await call_and_check(fixture, diskfile_delete_action_spec, { path: file_path });
+			await call_and_check(fixture, diskfile_create_action_spec, {
+				path: join(dir, 'created.txt'),
+				content: 'new'
+			});
 
 			await call_and_check(fixture, workspace_close_action_spec, { path: dir });
 		} finally {

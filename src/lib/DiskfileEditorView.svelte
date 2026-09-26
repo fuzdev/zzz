@@ -15,6 +15,7 @@
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 	import DiskfileEditorNav from './DiskfileEditorNav.svelte';
 	import TutorialForDiskfiles from './TutorialForDiskfiles.svelte';
+	import { DISKFILE_CONTENT_NOT_LOADED_MESSAGE } from './diskfile_helpers.ts';
 
 	const {
 		diskfile,
@@ -62,7 +63,11 @@
 <DiskfileContextmenu {diskfile}>
 	<div class="display:flex height:100%">
 		<div class="flex:1 width_atleast_sm height:100% column">
-			{#if diskfile.deleted_on_disk}
+			{#if !editor_state.content_loaded}
+				<p class="px_md py_xs mb_0 color_c_50">
+					{DISKFILE_CONTENT_NOT_LOADED_MESSAGE} — read-only, it can't be edited or saved
+				</p>
+			{:else if diskfile.deleted_on_disk}
 				<p class="px_md py_xs mb_0 color_c_50">
 					{#if editor_state.has_changes}
 						deleted on disk — save to recreate it with your edits, or close the tab to discard them
@@ -75,8 +80,10 @@
 				bind:this={content_editor}
 				bind:content={editor_state.current_content}
 				token_count={editor_state.current_token_count}
-				placeholder={format_placeholder(diskfile.path_relative)}
-				readonly={false}
+				placeholder={editor_state.content_loaded
+					? format_placeholder(diskfile.path_relative)
+					: '[content not loaded]'}
+				readonly={!editor_state.content_loaded}
 				attrs={{ class: 'height:100% border-radius:0' }}
 				save_shortcut="page"
 				onsave={async () => {
@@ -87,7 +94,7 @@
 
 		<div class="width_atmost_sm width_atleast_sm py_md">
 			<div class="px_md mb_lg">
-				<DiskfileActions {diskfile} {editor_state} />
+				<DiskfileActions {diskfile} {editor_state} readonly={!editor_state.content_loaded} />
 			</div>
 
 			<div class="px_md mb_lg">
