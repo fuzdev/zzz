@@ -162,7 +162,8 @@ export class Socket implements WebsocketRpcConnection {
 
 	/**
 	 * Whether the server closed the socket with `WS_CLOSE_SESSION_REVOKED` —
-	 * terminal for this client, the session is gone.
+	 * terminal for this client. Usually the session is gone, but not always
+	 * (see `reconnect_revoked`).
 	 */
 	readonly revoked: boolean = $derived(this.#client?.revoked ?? false);
 
@@ -232,6 +233,21 @@ export class Socket implements WebsocketRpcConnection {
 
 	disconnect(): void {
 		this.#teardown_client();
+	}
+
+	/**
+	 * Reconnect after the server closed the socket as revoked — a revoked
+	 * client never reconnects on its own, so this replaces it with a fresh
+	 * one. Call only once a session recheck finds the session still valid:
+	 * some revocations close every socket of the account while ending only
+	 * another session (another tab's logout, an API-token revoke-all).
+	 *
+	 * @returns whether a reconnect started (`false` unless revoked)
+	 */
+	reconnect_revoked(): boolean {
+		if (!this.revoked) return false;
+		this.connect();
+		return true;
 	}
 
 	#teardown_client(): void {

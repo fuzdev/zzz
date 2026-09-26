@@ -118,10 +118,12 @@ const create_route_specs = (ctx: AppServerContext): Array<RouteSpec> => {
  *
  * Mirrors production assembly: route specs + host_validation middleware +
  * RPC endpoint with zzz domain actions plus the standard admin bundle.
+ *
+ * @param cookie_name - the backend's session cookie name (zzz's is per-port)
  */
-export const create_zzz_app_surface_spec = (): AppSurfaceSpec =>
+export const create_zzz_app_surface_spec = (cookie_name: string): AppSurfaceSpec =>
 	create_test_app_surface_spec({
-		session_options: fuz_session_config,
+		session_options: { ...fuz_session_config, cookie_name },
 		create_route_specs,
 		rpc_endpoints: zzz_rpc_endpoints,
 		// zzz wires bootstrap in production; the surface must include

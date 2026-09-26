@@ -16,6 +16,7 @@
 	import BootstrapForm from '@fuzdev/fuz_app/ui/BootstrapForm.svelte';
 	import Alert from '@fuzdev/fuz_ui/Alert.svelte';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
+	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	import { parse_url_param_uuid } from '$lib/url_params_helpers.ts';
 	import { App } from '$lib/app.svelte.ts';
@@ -31,33 +32,63 @@
 	import { ModelJson } from '$lib/model.svelte.ts';
 	import { DOCS_PATH } from '@fuzdev/fuz_ui/docs_helpers.svelte.ts';
 	import { create_session_recheck } from '$lib/session_recheck.ts';
+	import {
+		backend_reachable_context,
+		is_public_route,
+		PUBLIC_ROUTE_PATHS,
+		probe_backend,
+		to_auth_gate_state,
+		to_auth_redirect
+	} from '$lib/auth_gate.ts';
 	import { create_detached } from '$lib/reactive_helpers.svelte.ts';
 
 	const { children, params } = $props();
 
 	const library_json = library_json_from_modules(pkg_json, modules);
 
-	// Auth state — gate all content behind authentication
+	// Auth state — gates every route but the public ones (about, docs) behind
+	// a session. Only the first check shows the gate's spinner: a later one
+	// (a login or bootstrap in flight, a recheck) keeps the form mounted.
 	const auth_state = auth_state_context.set(new AuthState());
-	void auth_state.check_session();
-
-	// Gate liveness probe — `check_session` can't distinguish a downed daemon
-	// from a logged-out 401, so probe `/health` to show a recovery hint instead
-	// of a dead login form. Browser-only.
-	let probing = $state.raw(true);
-	let backend_unreachable = $state.raw(false);
+	let session_checked = $state.raw(false);
 	if (BROWSER) {
-		void (async () => {
-			try {
-				const response = await fetch('/health');
-				backend_unreachable = !response.ok;
-			} catch {
-				backend_unreachable = true;
-			} finally {
-				probing = false;
-			}
-		})();
+		void auth_state.check_session().finally(() => {
+			session_checked = true;
+		});
 	}
+
+	// Gate liveness probe — `check_session` can't distinguish a missing daemon
+	// (a static build served on its own, or a stopped daemon) from a
+	// logged-out 401, so probe the backend to say the daemon is needed instead
+	// of showing a dead login form. Browser-only.
+	let backend_checked = $state.raw(false);
+	let backend_reachable = $state.raw(false);
+	if (BROWSER) {
+		void probe_backend().then((reachable) => {
+			backend_reachable = reachable;
+			backend_checked = true;
+		});
+	}
+
+	const public_route = $derived(
+		is_public_route(
+			page.url.pathname,
+			PUBLIC_ROUTE_PATHS.map((path) => resolve(path))
+		)
+	);
+	const gate_state = $derived(
+		to_auth_gate_state({
+			session_checked,
+			backend_checked,
+			backend_reachable,
+			verified: auth_state.verified,
+			needs_bootstrap: auth_state.needs_bootstrap
+		})
+	);
+	// a login or bootstrap returns to the page it replaced, deep link intact
+	const auth_redirect = $derived(to_auth_redirect(page.url, resolve('/')));
+	// public routes read this to say what they're missing (the daemon, or a login)
+	backend_reachable_context.set(() => (backend_checked ? backend_reachable : null));
 
 	// TODO should load granularly when needed (/docs, /about), but currently the capabilities page uses the package json data, how better to get that? generate a more minimal metadata file?
 	library_context.set(new Library(library_json));
@@ -66,7 +97,15 @@
 	// Re-verify the session when the backend hints it's gone; `check_session`
 	// flips `verified` off, which tears the App down and shows the login gate.
 	// Only a definitive 401 counts, so a daemon restart doesn't log anyone out.
-	const recheck_session = create_session_recheck({ on_invalid: () => auth_state.check_session() });
+	// A session still valid after a revoked socket means a revocation ended
+	// another session (another tab's logout, a token revoke-all) but closed
+	// every socket of the account — so reconnect.
+	const recheck_session = create_session_recheck({
+		on_invalid: () => auth_state.check_session(),
+		on_valid: () => {
+			app?.socket.reconnect_revoked();
+		}
+	});
 
 	// Create the frontend's App only after auth is verified
 	let app: App | undefined = $state.raw();
@@ -184,34 +223,69 @@
 			{@render children()}
 		</FrontendRoot>
 	{/if}
+{:else if public_route}
+	<!-- about and docs need neither a session nor the daemon -->
+	{@render children()}
 {:else}
 	<div class="gate">
-		{#if auth_state.verifying || probing}
+		{#if gate_state === 'checking'}
 			<p class="text_50">verifying session...</p>
-		{:else if backend_unreachable}
+		{:else if gate_state === 'daemon_unreachable'}
+			<Svg data={logo_zzz} size="var(--icon_size_xl)" />
+			<h1>zzz</h1>
+			<blockquote>nice web things for the tired 💤</blockquote>
 			<div class="width_atmost_sm">
 				<Alert status="error">
-					<p class="mt_0 mb_sm"><strong>The zzz backend isn't responding.</strong></p>
+					<p class="mt_0 mb_sm"><strong>This page needs the zzz daemon.</strong></p>
 					<p class="mb_sm">Start it, then reload:</p>
+					<p class="row gap_sm mb_sm">
+						<code>zzz daemon start</code>
+						<CopyToClipboard text="zzz daemon start" />
+					</p>
+					<p class="mb_sm">(or run <code>zzz</code> to start it and open a browser)</p>
 					<p class="row gap_sm mb_0">
+						<span>in a zzz checkout:</span>
 						<code>cargo xtask dev</code>
 						<CopyToClipboard text="cargo xtask dev" />
 					</p>
 				</Alert>
 			</div>
-		{:else if auth_state.needs_bootstrap}
+			<p>
+				The <a href={resolve('/about')}>about page</a> and <a href={resolve('/docs')}>docs</a> work
+				without it.
+			</p>
+		{:else if gate_state === 'bootstrap'}
 			<h1>zzz</h1>
 			<p>No accounts exist yet. Create the first admin account.</p>
 			<p>
-				Get the bootstrap token: <code>cat .zzz/bootstrap_token</code>
-				<CopyToClipboard text="cat .zzz/bootstrap_token" />
+				The bootstrap token is in the file the daemon's <code>FUZ_BOOTSTRAP_TOKEN_PATH</code> names:
 			</p>
-			<BootstrapForm />
+			<ul>
+				<li class="row gap_sm">
+					<code>cat ~/.zzz/bootstrap_token</code>
+					<CopyToClipboard text="cat ~/.zzz/bootstrap_token" />
+					<span>(the <code>zzz</code> CLI)</span>
+				</li>
+				<li class="row gap_sm">
+					<code>cat .zzz/bootstrap_token</code>
+					<CopyToClipboard text="cat .zzz/bootstrap_token" />
+					<span>(<code>cargo xtask dev</code>, in the checkout)</span>
+				</li>
+			</ul>
+			<p>
+				Missing? It's deleted once an admin exists — <code>zzz init</code> creates a new one, then
+				restart the daemon.
+			</p>
+			<BootstrapForm redirect_on_bootstrap={auth_redirect} />
 		{:else}
 			<h1>zzz</h1>
 			<div class="width_atmost_sm">
-				<LoginForm />
+				<LoginForm redirect_on_login={auth_redirect} />
 			</div>
+			<p class="text_50">
+				No account yet? <code>zzz init</code> recreates the bootstrap token if it's gone (it's
+				deleted once the first admin exists); then restart the daemon.
+			</p>
 		{/if}
 	</div>
 {/if}

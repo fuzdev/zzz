@@ -493,5 +493,31 @@ describe('Socket', () => {
 			assert.ok(socket.revoked);
 			assert.strictEqual(socket.status, 'failure');
 		});
+
+		test('reconnect_revoked replaces a revoked client with a fresh connection', () => {
+			const socket = new Socket({ app });
+			socket.connect(TEST_URLS.BASE);
+			mock_socket.connect();
+			const constructed = () =>
+				(globalThis.WebSocket as unknown as { mock: { calls: Array<unknown> } }).mock.calls.length;
+			assert.strictEqual(constructed(), 1);
+
+			// not revoked — nothing to do
+			assert.ok(!socket.reconnect_revoked());
+			assert.strictEqual(constructed(), 1);
+
+			mock_socket.dispatchEvent('close', { code: WS_CLOSE_SESSION_REVOKED });
+			assert.ok(socket.revoked);
+			// a revoked client never reconnects on its own
+			vi.advanceTimersByTime(60_000);
+			assert.strictEqual(constructed(), 1);
+
+			assert.ok(socket.reconnect_revoked());
+			assert.strictEqual(constructed(), 2, 'a new WebSocket to the same URL');
+			assert.strictEqual(mock_socket.url, TEST_URLS.BASE);
+			assert.ok(!socket.revoked);
+			mock_socket.connect();
+			assert.ok(socket.connected);
+		});
 	});
 });

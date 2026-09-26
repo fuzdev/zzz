@@ -11,9 +11,13 @@
 	import ExternalLink from '$lib/ExternalLink.svelte';
 	import PageFooter from '$routes/PageFooter.svelte';
 	import { frontend_context } from '$lib/frontend.svelte.ts';
+	import { backend_reachable_context } from '$lib/auth_gate.ts';
 
 	const library = library_context.get();
-	const app = frontend_context.get();
+	// absent on a static build without the daemon (about is a public route)
+	const app = frontend_context.get_maybe();
+	const get_backend_reachable = backend_reachable_context.get_maybe();
+	const backend_reachable = $derived(get_backend_reachable?.() ?? null);
 
 	// TODO probably link to a blog post that's more approachable and less technical
 </script>
@@ -150,34 +154,42 @@
 			a small part of the idea -- especially if you're viewing this on the website not natively via
 			the local backend -- so here's a button for previewing some of what's planned:
 		</p>
-		<button
-			type="button"
-			class:palette_h={app.futuremode}
-			onclick={() => {
-				app.futuremode = !app.futuremode;
-			}}
-		>
-			<Svg
-				data={logo_zzz}
-				size="var(--icon_size_sm)"
-				fill={app.futuremode ? 'var(--palette_h_50)' : 'var(--text_color)'}
-				class="mr_md {app.futuremode ? ' transform:scaleX(-1)' : ''}"
-				style="transition: transform 200ms ease"
-			/>
-			<span>
-				<span class="display:inline-block text-align:right" style:width="6ch">
-					{app.futuremode ? 'disable' : 'enable'}
+		{#if app}
+			<button
+				type="button"
+				class:palette_h={app.futuremode}
+				onclick={() => {
+					app.futuremode = !app.futuremode;
+				}}
+			>
+				<Svg
+					data={logo_zzz}
+					size="var(--icon_size_sm)"
+					fill={app.futuremode ? 'var(--palette_h_50)' : 'var(--text_color)'}
+					class="mr_md {app.futuremode ? ' transform:scaleX(-1)' : ''}"
+					style="transition: transform 200ms ease"
+				/>
+				<span>
+					<span class="display:inline-block text-align:right" style:width="6ch">
+						{app.futuremode ? 'disable' : 'enable'}
+					</span>
+					futuremode
 				</span>
-				futuremode
-			</span>
-			<Svg
-				data={logo_zzz}
-				size="var(--icon_size_sm)"
-				fill={app.futuremode ? 'var(--palette_h_50)' : 'var(--text_color)'}
-				class="ml_md {app.futuremode ? '' : ' transform:scaleX(-1)'}"
-				style="transition: transform 200ms ease"
-			/>
-		</button>
+				<Svg
+					data={logo_zzz}
+					size="var(--icon_size_sm)"
+					fill={app.futuremode ? 'var(--palette_h_50)' : 'var(--text_color)'}
+					class="ml_md {app.futuremode ? '' : ' transform:scaleX(-1)'}"
+					style="transition: transform 200ms ease"
+				/>
+			</button>
+		{:else if backend_reachable === false}
+			<p>Futuremode needs the zzz daemon — run zzz locally to try it.</p>
+		{:else if backend_reachable}
+			<p>Futuremode needs you to be <a href={resolve('/')}>logged in</a>.</p>
+		{:else}
+			<p>Futuremode needs zzz running locally, and you logged in.</p>
+		{/if}
 	</section>
 	<hr />
 	<section>

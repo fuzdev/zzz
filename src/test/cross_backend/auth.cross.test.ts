@@ -38,14 +38,15 @@ const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 // Cost: ~2 RPCs × ~30-50ms per test. Cross-process analog of the in-process
 // `extra_keeper_roles: [ROLE_ADMIN]` wiring on `default_in_process_suite_options`.
 const setup_test = default_cross_process_setup(handle, { extra_keeper_roles: [ROLE_ADMIN] });
-const surface_source = create_zzz_app_surface_spec();
+const surface_source = create_zzz_app_surface_spec(handle.config.cookie_name);
 const { capabilities } = handle.config;
 // Factory form: the suites' setup-time resolution
 // (`resolve_rpc_endpoints_for_setup` against a stub ctx) reads `path` +
 // `spec.method` names. Handler closures are never invoked across the process
 // boundary — live dispatch happens in the spawned Rust binary.
 const rpc_endpoints = zzz_rpc_endpoints;
-const session_options = fuz_session_config;
+// zzz's per-port cookie name (`zzz_session_<port>`) over fuz_app's session shape
+const session_options = { ...fuz_session_config, cookie_name: handle.config.cookie_name };
 // Built-in roles only — zzz registers no additional role specs today.
 // When zzz introduces app-defined roles (e.g. a per-workspace
 // collaborator role), thread the registry through `create_role_schema`

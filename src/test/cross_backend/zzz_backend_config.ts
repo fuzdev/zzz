@@ -16,12 +16,13 @@
  * lifted upstream builder
  * (`make_default_rust_backend_config` in
  * `@fuzdev/fuz_app/testing/cross_backend/default_backend_configs.ts`).
- * The upstream builder owns the common shape — `/api/*` paths, cookie
- * name, bootstrap block keyed off `default_test_*` secrets, the
+ * The upstream builder owns the common shape — `/api/*` paths, the
+ * bootstrap block keyed off `default_test_*` secrets, the
  * `FUZ_TESTING_RESET_DB_ON_STARTUP` gate. Per-backend factories only
  * declare what genuinely differs: zzz-specific env vars (`PUBLIC_ZZZ_*`,
- * `ZZZ_PORT`), the Rust binary's preferred `RUST_LOG` filter, and
- * (proxy variant) `ZZZ_TRUSTED_PROXIES`.
+ * `ZZZ_PORT`), the per-port session cookie name
+ * (`zzz_session_cookie_name`), the Rust binary's preferred `RUST_LOG`
+ * filter, and (proxy variant) `ZZZ_TRUSTED_PROXIES`.
  *
  * **Port assignments** — fixed-but-distinct, no collision with the
  * production daemon (zzz on `4460`, dev on `4461`):
@@ -75,6 +76,13 @@ import {
 	make_default_rust_backend_config,
 	rust_default_capabilities
 } from '@fuzdev/fuz_app/testing/cross_backend/default_backend_configs.ts';
+
+/**
+ * The session cookie name `zzz_server` issues on `port` — twin of the Rust
+ * `session_cookie_name_for_port` (`zzz_session_<port>`, so zzz daemons on
+ * one host don't share a session cookie).
+ */
+export const zzz_session_cookie_name = (port: number): string => `zzz_session_${port}`;
 
 /**
  * Per-project Rust backend database URL prefix — real Postgres (PGlite
@@ -151,6 +159,7 @@ const make_zzz_rust_backend_config = ({
 		start_command: ['cargo', 'run', '--bin', 'testing_zzzd'],
 		database_url: `${RUST_DATABASE_URL_PREFIX}${name}`,
 		port_env_var: 'ZZZ_PORT',
+		cookie_name: zzz_session_cookie_name(port),
 		rust_log: 'info,zzz_server=info,testing_zzzd=info',
 		capabilities: rust_capabilities,
 		paths,

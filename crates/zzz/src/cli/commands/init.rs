@@ -5,7 +5,8 @@
 //! ~/.zzz/                 — daemon home (mode 0700), the daemon's working directory
 //!   config.json           — CLI config (daemon port)
 //!   .env                  — daemon environment (mode 0600), with a generated cookie key
-//!   bootstrap_token       — one-shot admin bootstrap token (mode 0600), deleted once used
+//!   bootstrap_token       — one-shot admin bootstrap token (mode 0600), deleted once used,
+//!                           recreated by the next `zzz init` when missing
 //!   .zzz/                 — the daemon's app directory (`PUBLIC_ZZZ_DIR` default `.zzz`)
 //!   static/               — the built UI (not created — copy a `gro build` here)
 //!   bin/zzzd              — the daemon binary, when installed here
@@ -16,6 +17,12 @@
 //! only when absent (`create_new`), so re-runs never clobber a configured
 //! port, edited env, or key. Files holding secrets are created with mode
 //! `0600` in the same call, so they are never readable by others.
+//!
+//! The bootstrap token is the one file a re-run regularly creates: the
+//! daemon deletes it once the first admin account exists, so a home whose
+//! database was later dropped (or an `.env` written by hand) would otherwise
+//! have no way to create an admin. A token while an admin exists is harmless —
+//! the server refuses a second bootstrap.
 
 use std::fs;
 use std::io::{self, Write as _};
@@ -77,12 +84,9 @@ pub fn cmd_init(args: &Init) -> Result<(), CliError> {
         0o600,
     )?;
     report(&env_path, env_created);
-    // A fresh env gets a fresh bootstrap token; after the first admin
-    // account exists the token is consumed and never recreated here.
-    if env_created {
-        let token_created = create_new(&token_path, &fuz_sys::rand::random_hex(32), 0o600)?;
-        report(&token_path, token_created);
-    }
+    // Recreated whenever missing (see the module doc).
+    let token_created = create_new(&token_path, &fuz_sys::rand::random_hex(32), 0o600)?;
+    report(&token_path, token_created);
 
     println!();
     println!("next steps:");
@@ -98,9 +102,21 @@ pub fn cmd_init(args: &Init) -> Result<(), CliError> {
         );
     }
     println!("  - run `zzz` to start the daemon and open the browser");
-    if token_path.exists() {
+    // The CLI can't tell whether an admin exists (that's in the database), so
+    // a recreated token's hint says when it matters rather than asserting it.
+    if env_created {
         println!(
-            "  - on first run, create the admin account with the token in {}",
+            "  - on first run, create the admin account in the browser with the token in {}",
+            token_path.display()
+        );
+    } else if token_created {
+        println!(
+            "  - only if zzz has no admin account (say its database was dropped): restart a running daemon, which checks for the token at startup (`zzz daemon stop`, then `zzz`), and create the admin in the browser with the token in {}",
+            token_path.display()
+        );
+    } else if token_path.exists() {
+        println!(
+            "  - if zzz has no admin account yet, create one in the browser with the token in {}",
             token_path.display()
         );
     }

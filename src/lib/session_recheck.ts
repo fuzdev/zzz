@@ -8,6 +8,11 @@
  * or 5xx means the backend is unreachable, not that the session is invalid,
  * so a daemon restart never logs the user out.
  *
+ * A valid session after a revoked socket is a real case, not noise: some
+ * revocations close every socket of the account while ending only another
+ * session (another tab's logout, an API-token revoke-all), so the caller
+ * gets `on_valid` to rebuild its socket.
+ *
  * @module
  */
 
@@ -45,6 +50,11 @@ export interface SessionRecheckOptions {
 	probe?: () => Promise<SessionProbe>;
 	/** Called once the probe finds the session invalid — typically `AuthState.check_session`. */
 	on_invalid: () => void | Promise<void>;
+	/**
+	 * Called once the probe finds the session still valid — e.g. to reconnect
+	 * a socket the server closed as revoked (see `Socket.reconnect_revoked`).
+	 */
+	on_valid?: () => void | Promise<void>;
 }
 
 /**
@@ -54,12 +64,14 @@ export interface SessionRecheckOptions {
  * @returns a function that rechecks the session and resolves when done (never rejects)
  */
 export const create_session_recheck = (options: SessionRecheckOptions): (() => Promise<void>) => {
-	const { probe = probe_session, on_invalid } = options;
+	const { probe = probe_session, on_invalid, on_valid } = options;
 	let in_flight: Promise<void> | null = null;
 	return () =>
 		(in_flight ??= (async () => {
 			try {
-				if ((await probe()) === 'invalid') await on_invalid();
+				const result = await probe();
+				if (result === 'invalid') await on_invalid();
+				else if (result === 'valid') await on_valid?.();
 			} catch (error) {
 				console.error('[session_recheck] recheck failed:', error);
 			} finally {

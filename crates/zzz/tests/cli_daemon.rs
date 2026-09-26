@@ -535,6 +535,59 @@ fn init_writes_private_files_once() {
     assert_eq!(mode(&zzz_dir), 0o755);
 }
 
+#[test]
+fn init_recreates_a_missing_bootstrap_token() {
+    let home = temp_home("init_token");
+    let _cleanup = Cleanup::new(&home);
+    let zzz_dir = home.join(".zzz");
+    let token_path = zzz_dir.join("bootstrap_token");
+    let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+
+    let out = run(zzz(&home).arg("init"));
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    let first_token = fs::read_to_string(&token_path).unwrap();
+    assert!(
+        !stdout(&out).contains("zzz daemon stop"),
+        "a fresh home needs no restart hint: {}",
+        stdout(&out)
+    );
+
+    // an existing token is kept
+    let out = run(zzz(&home).arg("init"));
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    assert_eq!(fs::read_to_string(&token_path).unwrap(), first_token);
+
+    // consumed by a bootstrap (the daemon deletes it) — or a hand-written
+    // `.env` with no token — and the next init mints a fresh one, private
+    let env = fs::read_to_string(zzz_dir.join(".env")).unwrap();
+    fs::remove_file(&token_path).unwrap();
+    let out = run(zzz(&home).arg("init"));
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    let token = fs::read_to_string(&token_path).unwrap();
+    assert_eq!(token.len(), 64);
+    assert!(token.chars().all(|c| c.is_ascii_hexdigit()));
+    assert_ne!(token, first_token);
+    assert_eq!(mode(&token_path), 0o600);
+    assert_eq!(
+        fs::read_to_string(zzz_dir.join(".env")).unwrap(),
+        env,
+        ".env untouched"
+    );
+    assert!(
+        stdout(&out).contains(&format!("created {}", token_path.display())),
+        "{}",
+        stdout(&out)
+    );
+    // zzzd reads bootstrap availability once, at boot — but whether that
+    // matters depends on the database, which the CLI can't see
+    assert!(
+        stdout(&out).contains("only if zzz has no admin account")
+            && stdout(&out).contains("`zzz daemon stop`, then `zzz`"),
+        "{}",
+        stdout(&out)
+    );
+}
+
 /// How a stand-in daemon behaves.
 #[derive(Default, Clone, Copy)]
 struct FakeDaemon {

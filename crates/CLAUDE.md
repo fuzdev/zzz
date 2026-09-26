@@ -152,7 +152,10 @@ orientation; the spine crates are authoritative:
    Keys from `SECRET_FUZ_COOKIE_KEYS` env, separated by `__`. First key signs,
    all keys verify.
 
-2. **Cookie format** — `fuz_session` cookie containing signed
+2. **Cookie format** — `zzz_session_<port>` cookie (per port —
+   `session_cookie_name_for_port` — since browsers scope cookies by host, not
+   port, so zzz daemons on one host would otherwise share, and clobber, one
+   session) containing signed
    `{session_token}:{expires_at}.{base64_signature}`. 30-day expiry,
    `Secure; HttpOnly; SameSite=Strict`.
 
@@ -215,8 +218,12 @@ orientation; the spine crates are authoritative:
     Invoked by the spine's revocation-emitting handlers and audit-event
     listeners: `session_revoke` (per-session), `token_revoke` /
     `account_token_revoke` (per-token), and `logout` / `session_revoke_all`
-    / `token_revoke_all` / `password_change` (account-wide). See "Audit
-    emission" under Architecture for the listener chain.
+    / `token_revoke_all` / `password_change` (account-wide). The RPC
+    handlers close only after their transaction commits
+    (`fuz_auth::queue_socket_close`), so a client's recheck on a 4001 never
+    finds the revoked session still in the table; the REST ones close inline
+    on their autocommit client. See "Audit emission" under Architecture for
+    the listener chain.
 
 11. **Account status** — `GET /api/account/status` returns account info +
     role grants (200) when authenticated, or 401 with optional
@@ -255,6 +262,13 @@ conform to the shared fuz_app contract. The tests live in
   admin-gated cases can drive admin RPC. The bundle omits `rate_limiting`,
   `audit_completeness`, and `bootstrap_success` (in-process / FK-structural /
   already consumed by globalSetup — see the bundle's module doc).
+- **`session.cross.test.ts`** — the per-port session cookie
+  (`zzz_session_<port>`: set on login, the shared `fuz_session` name not
+  read, plus fuz_app's hardened-attribute suite under it); another session's
+  logout closing this session's socket while the session stays valid and a
+  fresh socket works (what the frontend's recheck-and-reconnect relies on);
+  an RPC `account_session_revoke_all` already committed when the socket
+  closes.
 - **`sse.cross.test.ts`** — `describe_cross_process_sse_tests` against
   `GET /api/admin/audit/stream` (the shared `fuz_realtime::audit_stream_router`):
   the `: connected` comment, an audit `data:` frame on

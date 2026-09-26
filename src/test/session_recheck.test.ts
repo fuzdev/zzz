@@ -72,6 +72,25 @@ describe('create_session_recheck', () => {
 		}
 	});
 
+	test('calls on_valid only when the probe finds the session valid', async () => {
+		for (const [probe_result, expected] of [
+			['invalid', 0],
+			['valid', 1],
+			['unknown', 0]
+		] as Array<[SessionProbe, number]>) {
+			let valid_count = 0;
+			const recheck = create_session_recheck({
+				probe: async () => probe_result,
+				on_invalid: () => {},
+				on_valid: () => {
+					valid_count++;
+				}
+			});
+			await recheck();
+			assert.strictEqual(valid_count, expected, probe_result);
+		}
+	});
+
 	test('concurrent rechecks share one probe', async () => {
 		let probes = 0;
 		let resolve_probe!: (result: SessionProbe) => void;

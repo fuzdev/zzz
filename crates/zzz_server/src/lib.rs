@@ -44,6 +44,23 @@ pub use error::ServerError;
 pub const DEFAULT_ADDR: SocketAddr =
     SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), 4460);
 
+/// Prefix of zzz's session cookie name; the daemon's port completes it (see
+/// [`session_cookie_name_for_port`]).
+pub const SESSION_COOKIE_NAME_PREFIX: &str = "zzz_session_";
+
+/// The session cookie name for a daemon listening on `port`:
+/// `zzz_session_<port>`.
+///
+/// Browsers scope cookies by host, not port, so with one fixed name every zzz
+/// daemon on `localhost` — the installed one, `cargo xtask dev`, a test
+/// binary — would read and overwrite the same cookie, and logging into one
+/// would log you out of the others. A per-port name keeps each daemon's
+/// session its own.
+#[must_use]
+pub fn session_cookie_name_for_port(port: u16) -> String {
+    format!("{SESSION_COOKIE_NAME_PREFIX}{port}")
+}
+
 /// Cap on one JSON-RPC message, in bytes, on both transports.
 ///
 /// It's the `/api/rpc` request body limit and the `/api/ws` inbound message
@@ -174,6 +191,10 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     if force_test_actions {
         config.enable_test_actions = true;
     }
+    // The spine's route states take the cookie name as `&'static str`; the
+    // name is fixed for the life of the process, so leak its one allocation.
+    let session_cookie_name: &'static str =
+        session_cookie_name_for_port(config.bind_addr.port()).leak();
 
     // Database — required. Spine `fuz_db::create_pool` builds the
     // deadpool-postgres pool; `fuz_db::run_migrations` runs the auth DDL
@@ -357,7 +378,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         login_ip_rate_limiter,
         login_account_rate_limiter,
         daemon_token_state: spine_daemon_token.clone(),
-        session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
+        session_cookie_name,
     };
     let bootstrap_route_state = fuz_auth::BootstrapRouteState {
         options: Arc::new(fuz_auth::BootstrapOptions {
@@ -378,7 +399,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         }),
         keyring: Arc::clone(&spine_keyring),
         allowed_origins: Arc::clone(&spine_allowed_origins),
-        session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
+        session_cookie_name,
     };
 
     // Signup route: mounted on the production server so the
@@ -406,7 +427,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         }),
         keyring: Arc::clone(&spine_keyring),
         allowed_origins: Arc::clone(&spine_allowed_origins),
-        session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
+        session_cookie_name,
     };
 
     let app_state = Arc::new(handlers::App::new(
@@ -430,17 +451,17 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // metadata), so reacting to it would let an authenticated user
     // disconnect another user by guessing a session hash.
     //
-    // ## Layering with eager handler-side close
+    // ## Layering with handler-side close
     //
-    // Revocation-emitting RPC handlers (`account_session_revoke`,
-    // `account_session_revoke_all`, `account_token_revoke`) and REST
-    // handlers (`/api/account/logout`, `/api/account/password`) call
-    // `close_sockets_for_*` synchronously before emitting the audit row.
-    // That eager call is the actual revocation guarantee — it lands on
-    // the live WS even if the audit INSERT later fails. The listeners
-    // run on the materialized row and call the same idempotent
-    // `close_sockets_for_*` a second time; the duplication is
-    // intentional defense-in-depth.
+    // Revocation-emitting handlers close sockets themselves too: the RPC
+    // ones (`account_session_revoke`, `account_session_revoke_all`,
+    // `account_token_revoke`, the admin revoke-alls, account delete/purge)
+    // once their transaction commits — never before, or a client told
+    // "revoked" could recheck its session before the deletion is visible —
+    // and the REST ones (`/api/account/logout`, `/api/account/password`)
+    // inline, on their autocommit client. The listeners run on the
+    // materialized row and call the same idempotent `close_sockets_for_*`
+    // a second time; the duplication is intentional defense-in-depth.
     fuz_auth::register_socket_revocation_listeners(&spine_audit_emitter, &socket_revoker);
     // A deleted or purged account's terminals end with its sockets.
     handlers::terminal::register_terminal_account_listener(&spine_audit_emitter, &app_state);
@@ -480,7 +501,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             password_hasher: Arc::clone(&spine_password_hasher),
             keyring: Arc::clone(&spine_keyring),
             daemon_token_state: spine_daemon_token.clone(),
-            session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
+            session_cookie_name,
         };
         all_specs.extend(factory(Arc::clone(&app_state), runtime));
     }
@@ -584,7 +605,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         // notification emitted on the HTTP dispatch path reaches the
         // live sockets rather than an empty registry.
         notification_sender: Arc::clone(&realtime).into_notification_sender(),
-        session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
+        session_cookie_name,
         account_rate_limiter: action_account_rate_limiter.clone(),
         ip_rate_limiter: action_ip_rate_limiter.clone(),
     };
@@ -615,7 +636,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         socket_revoker: Arc::clone(&socket_revoker),
         notification_sender: Arc::clone(&realtime).into_notification_sender(),
         connection_registry: Arc::clone(&realtime),
-        session_cookie_name: fuz_auth::SESSION_COOKIE_NAME,
+        session_cookie_name,
         account_rate_limiter: action_account_rate_limiter,
         ip_rate_limiter: action_ip_rate_limiter,
         // No role gate: zzz is single-operator by configuration
@@ -697,13 +718,14 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // statement has no "leave the column alone" form — so without the layer
     // every bearer attempt on the stream would stamp the
     // `fuz_http::UNRESOLVED_CLIENT_IP` sentinel over the real address.
-    let spine_audit_stream_router =
-        fuz_realtime::audit_stream_router(fuz_realtime::AuditStreamRouteState::new(
-            app_state.db_pool.clone(),
-            Arc::clone(&spine_keyring),
-            spine_daemon_token.clone(),
-            Arc::clone(&audit_sse),
-        ))
+    let mut audit_stream_state = fuz_realtime::AuditStreamRouteState::new(
+        app_state.db_pool.clone(),
+        Arc::clone(&spine_keyring),
+        spine_daemon_token.clone(),
+        Arc::clone(&audit_sse),
+    );
+    audit_stream_state.session_cookie_name = session_cookie_name;
+    let spine_audit_stream_router = fuz_realtime::audit_stream_router(audit_stream_state)
         .layer(axum::middleware::from_fn_with_state(
             Arc::clone(&spine_trusted_proxies),
             fuz_http::client_ip_middleware,
@@ -1044,6 +1066,15 @@ mod config_paths {
         assert_eq!(non_empty(Some(String::new())), None);
         assert_eq!(non_empty(Some(" \t".to_owned())), None);
         assert_eq!(non_empty(Some("x".to_owned())).as_deref(), Some("x"));
+    }
+
+    #[test]
+    fn session_cookie_name_is_per_port() {
+        assert_eq!(session_cookie_name_for_port(4460), "zzz_session_4460");
+        assert_ne!(
+            session_cookie_name_for_port(4460),
+            session_cookie_name_for_port(4461)
+        );
     }
 
     #[test]
