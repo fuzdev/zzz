@@ -8,10 +8,10 @@
 //! dispatch — and whether the stream actually completed.
 //!
 //! Byte-level decoding lives in `SseDecoder`, which is pure and unit-tested:
-//! UTF-8 sequences split across chunks are reassembled, invalid bytes
-//! become U+FFFD, line endings are normalized (including a `\r\n` split
-//! across chunks), and an unterminated final event is flushed at end of
-//! stream.
+//! UTF-8 sequences split across chunks are reassembled and invalid bytes
+//! become U+FFFD (via the shared `Utf8StreamDecoder`), line endings are
+//! normalized (including a `\r\n` split across chunks), and an unterminated
+//! final event is flushed at end of stream.
 
 use std::ops::ControlFlow;
 
@@ -21,6 +21,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::ai_provider_error;
 use super::common::{cancelled_error, reqwest_error_message};
+use crate::utf8_stream::Utf8StreamDecoder;
 
 /// One parsed SSE event block.
 ///
@@ -111,15 +112,15 @@ where
 /// Incremental SSE byte decoder: raw chunks in, parsed events out.
 #[derive(Debug, Default)]
 struct SseDecoder {
-    /// Raw bytes not yet decoded — a multibyte UTF-8 sequence split by a
-    /// chunk boundary waits here for its continuation bytes.
-    raw: Vec<u8>,
+    /// Byte-level UTF-8 decoding — a multibyte sequence split by a chunk
+    /// boundary waits there for its continuation bytes.
+    utf8: Utf8StreamDecoder,
     /// Decoded text awaiting event boundaries.
     text: DecodedText,
 }
 
 /// Decoded, line-ending-normalized SSE text — split from `SseDecoder` so
-/// decoding can append while borrowing `raw`.
+/// decoding can append while borrowing `utf8`.
 #[derive(Debug, Default)]
 struct DecodedText {
     buffer: String,
@@ -151,8 +152,8 @@ impl DecodedText {
 impl SseDecoder {
     /// Decode `chunk` and return every event it completes.
     fn feed(&mut self, chunk: &[u8]) -> Vec<SseEvent> {
-        self.raw.extend_from_slice(chunk);
-        self.drain_decoded(false);
+        let text = &mut self.text;
+        self.utf8.feed(chunk, |piece| text.push(piece));
         self.take_complete_events()
     }
 
@@ -160,7 +161,8 @@ impl SseDecoder {
     /// UTF-8 tail becomes U+FFFD) and dispatch a final event that wasn't
     /// followed by a blank line.
     fn finish(&mut self) -> Vec<SseEvent> {
-        self.drain_decoded(true);
+        let text = &mut self.text;
+        self.utf8.finish(|piece| text.push(piece));
         let mut events = self.take_complete_events();
         let rest = std::mem::take(&mut self.text.buffer);
         if let Some(event) = parse_sse_event(rest.trim_end_matches('\n')) {
@@ -184,54 +186,6 @@ impl SseDecoder {
         // buffered tail for a chunk carrying many events.
         let _ = self.text.buffer.drain(..consumed);
         events
-    }
-
-    /// Move the decodable prefix of `raw` into `buffer`, normalizing line
-    /// endings along the way.
-    ///
-    /// Only bytes that form whole UTF-8 code points are decoded; a
-    /// multibyte sequence split across chunk boundaries stays in `raw` until
-    /// its continuation bytes arrive, instead of being mangled into
-    /// replacement characters by a per-chunk lossy decode. Invalid bytes
-    /// (`error_len()` is `Some`) are replaced with U+FFFD so they can't stall
-    /// decoding forever. With `at_eof`, an incomplete trailing sequence is
-    /// replaced too, since no continuation bytes are coming.
-    fn drain_decoded(&mut self, at_eof: bool) {
-        let mut start = 0;
-        while start < self.raw.len() {
-            match std::str::from_utf8(&self.raw[start..]) {
-                Ok(text) => {
-                    self.text.push(text);
-                    start = self.raw.len();
-                }
-                Err(e) => {
-                    let valid_end = start + e.valid_up_to();
-                    // Bytes `[start..valid_end]` are valid UTF-8 by
-                    // `Utf8Error`'s contract; the `Err` arm is unreachable
-                    // but keeps us off `unwrap`/`unsafe`.
-                    if let Ok(text) = std::str::from_utf8(&self.raw[start..valid_end]) {
-                        self.text.push(text);
-                    }
-                    match e.error_len() {
-                        Some(invalid_len) => {
-                            self.text
-                                .push(char::REPLACEMENT_CHARACTER.encode_utf8(&mut [0; 4]));
-                            start = valid_end + invalid_len;
-                        }
-                        None if at_eof => {
-                            self.text
-                                .push(char::REPLACEMENT_CHARACTER.encode_utf8(&mut [0; 4]));
-                            start = self.raw.len();
-                        }
-                        None => {
-                            start = valid_end;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        self.raw.drain(..start);
     }
 }
 
@@ -431,7 +385,7 @@ mod tests {
     }
 
     #[test]
-    fn drain_decoded_holds_back_split_multibyte() {
+    fn feed_holds_back_split_multibyte() {
         // "é" is 0xC3 0xA9. Feed the lead byte first: it must NOT be
         // decoded yet (a lossy decode would emit U+FFFD and corrupt it).
         let mut decoder = SseDecoder::default();
@@ -440,20 +394,24 @@ mod tests {
             decoder.text.buffer.is_empty(),
             "incomplete code point must stay buffered"
         );
-        assert_eq!(decoder.raw, vec![0xC3], "lead byte retained for next chunk");
+        assert_eq!(
+            decoder.utf8.pending(),
+            &[0xC3],
+            "lead byte retained for next chunk"
+        );
 
         // Continuation byte arrives — now the full "é" decodes intact.
         assert!(decoder.feed(&[0xA9]).is_empty());
         assert_eq!(decoder.text.buffer, "é");
-        assert!(decoder.raw.is_empty());
+        assert!(decoder.utf8.pending().is_empty());
     }
 
     #[test]
-    fn drain_decoded_normalizes_line_endings() {
+    fn feed_normalizes_line_endings() {
         let mut decoder = SseDecoder::default();
         assert!(decoder.feed(b"a\r\nb\rc\nd").is_empty());
         assert_eq!(decoder.text.buffer, "a\nb\nc\nd");
-        assert!(decoder.raw.is_empty());
+        assert!(decoder.utf8.pending().is_empty());
     }
 
     #[test]
@@ -483,7 +441,7 @@ mod tests {
     #[test]
     fn invalid_utf8_is_replaced_and_decoding_continues() {
         // 0xFF is never valid UTF-8 — it must become U+FFFD rather than
-        // stalling the decoder while `raw` grows forever.
+        // stalling the decoder while held-back bytes grow forever.
         let events = decode_all(&[b"data: a\xFFb\n\n", b"data: next\n\n"]);
         assert_eq!(events, vec![data_event("a\u{FFFD}b"), data_event("next")]);
     }
@@ -492,7 +450,7 @@ mod tests {
     fn invalid_utf8_does_not_accumulate_raw() {
         let mut decoder = SseDecoder::default();
         let _ = decoder.feed(b"\xFF\xFEdata: x");
-        assert!(decoder.raw.is_empty());
+        assert!(decoder.utf8.pending().is_empty());
         assert_eq!(decoder.text.buffer, "\u{FFFD}\u{FFFD}data: x");
     }
 

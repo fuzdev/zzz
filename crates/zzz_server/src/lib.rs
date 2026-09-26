@@ -22,6 +22,7 @@ pub mod handlers;
 pub mod provider;
 pub mod pty_manager;
 pub mod scoped_fs;
+pub mod utf8_stream;
 pub mod zzz_action_specs;
 
 use std::net::SocketAddr;

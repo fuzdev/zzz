@@ -438,8 +438,10 @@ connected sockets, not socket-scoped like `completion_progress`.
 ```
 User types in xterm.js (TerminalView.svelte)
   → term.onData → app.api.terminal_data_send({terminal_id, data})
-    → handlers::terminal → PtyManager::write (raw write to the PTY master)
-  → child process output → PtyManager read_loop (10ms poll)
+    → handlers::terminal → PtyManager::write (enqueue on the terminal's input queue)
+      → the terminal's task writes each chunk in full as the PTY accepts it
+  → child process output → the terminal's task (readiness-driven read,
+    incremental UTF-8 decode)
     → terminal_data broadcast to all sockets
       → frontend_action_handlers.terminal_data.receive
         → frontend.terminal_writers.get(terminal_id)?.(data)
@@ -457,11 +459,22 @@ and sends the actual command line via `terminal_data_send`; presets
 persisted. Restart closes the old terminal (tolerating failure if it already
 exited) and spawns a fresh one with a new `terminal_id`.
 
-On natural process exit the backend's read loop broadcasts `terminal_exited`
-and cleans up its entry; an explicit `terminal_close` cancels the read loop,
-signals the process (SIGTERM by default), and returns the exit code in the
-RPC response. Terminals are pure in-memory process state — no persistence,
-no reconnect-to-running across server restarts.
+Each terminal is one backend task that owns the PTY master and the child
+process. Input chunks are written in the order `terminal_data_send` calls
+reach the handler; sends on one socket are dispatched concurrently, so
+keeping keystrokes ordered across sends is the client's job.
+
+On natural process exit the task reaps the child, broadcasts
+`terminal_exited` with the real exit code, and removes its entry. An explicit
+`terminal_close` signals the process (SIGTERM by default), then closes the
+PTY master — the hangup ends a shell that ignores SIGTERM — and returns the
+exit code in the RPC response, or `null` if the process is still running
+after a short grace; the backend keeps reaping it (SIGKILL after 3s), and no
+`terminal_exited` is broadcast for a closed terminal. Children get the
+server's environment minus its secrets and config (`SECRET_*`, `FUZ_*`,
+`ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, `PORT`). Terminals are pure
+in-memory process state — no persistence, no reconnect-to-running across
+server restarts.
 
 ## IndexedCollection
 

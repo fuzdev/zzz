@@ -88,9 +88,9 @@ async fn main() {
                 app.workspaces.write().clear();
 
                 // Kill every active terminal. `kill_all()` drains the
-                // terminal map and waitpids each entry; the manager
-                // itself stays usable for the next test's
-                // `terminal_create` calls.
+                // terminal map and waits (bounded) until each child is
+                // reaped; the manager itself stays usable for the next
+                // test's `terminal_create` calls.
                 app.pty_manager.kill_all().await;
 
                 // Optional scoped-FS scratch root: tests that allocate

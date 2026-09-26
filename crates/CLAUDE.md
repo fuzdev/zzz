@@ -260,9 +260,13 @@ conform to the shared fuz_app contract. The tests live in
   broadcasts in an open workspace (file create; rename → `delete` of the old
   path + `add` of the new).
 - **`terminal.cross.test.ts`** — PTY create / read / write / close lifecycle,
-  `terminal_data` / `terminal_exited` notifications over WS, live resize,
-  explicit cwd, nonexistent-command handling, and silent-null for missing
-  terminal IDs.
+  `terminal_data` / `terminal_exited` notifications over WS, live resize and
+  out-of-range resize rejection, explicit cwd and bad-cwd spawn failure,
+  nonexistent-command handling, a ~22KB paste round-trip through `cat`
+  (partial writes continued), multibyte output split across reads, env
+  scrubbing (no `SECRET_*` / `DATABASE_URL` / … in the child), reaping of a
+  child that ignores `SIGTERM` + `SIGHUP` (no zombie after close), and
+  silent-null for missing terminal IDs.
 - **`provider.cross.test.ts`** — `provider_load_status` (no-key status) plus `session_load`
   (zzz_dir file listing with contents + recursive subdirectory walk).
 - **`completion.cross.test.ts`** — `completion_create` invalid-provider rejection.
@@ -336,8 +340,9 @@ crates/zzz_server/src/
 │   ├── openai.rs     # OpenAiProvider — Chat Completions API with SSE streaming
 │   └── gemini.rs     # GeminiProvider — Generative Language API with SSE streaming
 ├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered file index (events are hints, `lstat` decides), debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped
-├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) → terminal_data/exited notifications
+├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
 ├── scoped_fs.rs      # Scoped filesystem — path validation, symlink rejection
+├── utf8_stream.rs    # Incremental UTF-8 decoder (split sequences held back, invalid bytes → U+FFFD) shared by provider SSE and PTY output
 └── error.rs          # ServerError (Bind, Serve, Database, Config)
 ```
 
@@ -456,11 +461,53 @@ metadata contract, the bootstrap success/failure audit rows, and the
   poisoning. Async handlers (filer, pty, providers) use `tokio::sync::RwLock`
   where a guard is held across an await — scope sync guards before await points.
 - **PTY terminals**: `fuz_pty` as a native crate dependency (no FFI
-  indirection). `PtyManager` in `App` manages spawned processes with async
-  read loops via `tokio::spawn`. Each terminal gets a `CancellationToken` so
-  `terminal_close` can stop the read loop before killing the process. 10ms
-  poll interval, 50ms wait after kill before waitpid, silent returns for
-  missing terminal IDs.
+  indirection). `PtyManager` in `App` runs one task per terminal that
+  exclusively owns the PTY master (`tokio::io::unix::AsyncFd` over a
+  `PtyHandle` newtype — `AsRawFd` is a safe impl, so no `unsafe` here) and the
+  child pid:
+  - **Output** is readiness-driven (no polling) and decoded with
+    `utf8_stream::Utf8StreamDecoder` so a multibyte character split across
+    reads isn't mangled. `AsyncFd` readiness doesn't spend tokio's coop
+    budget, so the loop calls `tokio::task::coop::consume_budget()` per chunk
+    — a child that never stops writing (`yes`) can't pin a worker thread.
+  - **Input**: `terminal_data_send` enqueues onto a bounded per-terminal queue
+    (256 chunks; full → `queue_overflow`) and returns; the task writes each
+    chunk in full — looping on partial writes, waiting for writability on
+    `EAGAIN` — before the next, so a large paste is never truncated and two
+    chunks never interleave. Chunks are written in the order sends reach the
+    handler: sends on one socket are dispatched concurrently (each through
+    the pool and a `side_effects` transaction), so ordering across sends is
+    the client's job.
+  - **Resize** is latest-wins through a `watch` channel; `cols` / `rows`
+    must be `1..=65535` (`invalid_params` otherwise, never truncated).
+  - **Exit**: on EOF the task closes the master, reaps the child, and
+    broadcasts `terminal_exited` with the real exit code. `terminal_close`
+    sends the signal, waits 50ms, closes the master (the hangup ends an
+    interactive shell that ignores `SIGTERM`), waits 100ms more, and replies
+    with the exit code or `null`; a child still alive is reaped in the
+    background (`SIGKILL` after 3s) — no zombie outlives its terminal, and no
+    `terminal_exited` is broadcast for a closed terminal. `kill_all`
+    (shutdown, `_testing_reset`) escalates to `SIGKILL` right after the close
+    grace and waits for every reap, bounded at 5s.
+  - **Spawn** runs in its own task (so a caller dropped mid-spawn can't
+    abandon a live PTY) around `spawn_blocking`. A bad `cwd` or unexecutable command
+    fails `terminal_create` (fuz_pty reports the child's `chdir` / `execvpe`
+    errno over a close-on-exec pipe). The PTY pair is created close-on-exec
+    atomically, so no other child inherits a terminal's master or slave, and
+    the child starts with default signal dispositions and an empty mask
+    (the Rust runtime's ignored `SIGPIPE` doesn't leak into shells).
+  - **Environment**: children get zzzd's environment minus `SECRET_*`,
+    `FUZ_*`, `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, and `PORT`
+    (`pty_manager::terminal_env`, a pure filter). Everything else — `PATH`,
+    `HOME`, `SSH_AUTH_SOCK`, `WAYLAND_DISPLAY`, `XDG_*` — passes through,
+    since a terminal is the user's shell; fuz_pty forces
+    `TERM=xterm-256color`. This keeps secrets out of the child's
+    environment; it is not isolation — the shell runs as the same user and
+    can still read `/proc/<zzzd pid>/environ` or the `.env` files. The
+    prefix match also drops the user's own `FUZ_*` variables (e.g. for the
+    `fuz` CLI) from terminals.
+  - Silent returns for missing terminal IDs (`terminal_data_send`,
+    `terminal_resize`; `terminal_close` → `{exit_code: null}`).
 - **Provider system**: Enum-dispatched (`Provider` enum, not trait objects) —
   3 providers known at compile time, exhaustive matching. API keys come from
   the `SECRET_*_API_KEY` env vars at construction and are never mutated at

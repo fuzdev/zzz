@@ -466,6 +466,11 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - `SECRET_OPENAI_API_KEY` — OpenAI API key
 - `SECRET_GOOGLE_API_KEY` — Google Gemini API key
 
+PTY terminals spawned by the server don't get the `SECRET_*`, `FUZ_*`,
+`ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, or `PORT` variables — they're
+scrubbed from the child environment, which keeps them out of a shell's env
+but isn't isolation (see Known Limitations → PTY terminals).
+
 `NODE_ENV` and `PORT` belong to the CLI/xtask layer, not the server: the CLI
 picks the env file by `NODE_ENV` (`.env` when `production`, else
 `.env.development`) and reads `PORT` to choose the port it passes to
@@ -497,7 +502,7 @@ picks the env file by `NODE_ENV` (`.env` when `production`, else
 - **Bearer auth soft-fails** — bearer resolution soft-fails for invalid/expired/empty tokens (no early error response). Auth enforcement happens downstream via the per-action auth checks, producing `{code: -32001, message: "unauthenticated"}` JSON-RPC errors. Public actions are not blocked by bad bearer credentials.
 - **Domain state is in-memory** — auth/accounts are in the PostgreSQL DB, but zzz domain state (files, terminals, workspaces) is in-memory, lost on restart.
 - **No undo/history** — file edits are permanent
-- **PTY terminals** — terminal spawning uses the `fuz_pty` Rust crate as a native dependency of `zzz_server` (no FFI indirection). `PtyManager` manages spawned processes with async read loops; `terminal_close` cancels the read loop before killing the process. Requires the sibling Rust workspace checked out alongside this repo (path dep).
+- **PTY terminals** — terminal spawning uses the `fuz_pty` Rust crate as a native dependency of `zzz_server` (no FFI indirection). `PtyManager` runs one I/O task per terminal (readiness-driven reads, an ordered input queue that writes large pastes in full, reaping with `SIGKILL` escalation so closed terminals leave no zombies). Terminal children inherit zzzd's environment **minus** `SECRET_*`, `FUZ_*`, `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, and `PORT` — this keeps the daemon's API keys, cookie keys, and DB URL out of the child's environment, but it is not isolation (the shell runs as the same user and can read `/proc/<zzzd pid>/environ` or the `.env` files). The prefix match also drops the user's own `FUZ_*` variables from terminals; everything else (`PATH`, `HOME`, `SSH_AUTH_SOCK`, …) passes through. See ./crates/CLAUDE.md for details. Requires the sibling Rust workspace checked out alongside this repo (path dep).
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
 - **Backend** — `zzz_server` serves the full RPC surface with the full auth stack. `cargo xtask dev` runs it with the Vite frontend. Anthropic, OpenAI, and Gemini providers fully implemented (non-streaming + SSE streaming). No batch JSON-RPC. A single `/api/rpc` + `/api/ws` serves the boot-compiled `ActionRegistry` (handlers in `handlers/`), plus the admin audit-log SSE stream at `GET /api/admin/audit/stream`.

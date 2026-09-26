@@ -27,7 +27,8 @@ OpenAI, Google), or set them at runtime on `/capabilities`.
 Terminal integration uses the `fuz_pty` Rust crate, a native dependency of
 the `zzz_server` backend (no FFI indirection). Building the backend
 (`cargo build -p zzz_server`) pulls it in. `fuz_pty` lives in a sibling
-Rust workspace, which must be checked out alongside this repo.
+Rust workspace, which must be checked out alongside this repo. It is
+Linux-only (kernel 4.13 or newer), so the backend builds on Linux only.
 
 ## Commands
 

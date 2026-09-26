@@ -9,6 +9,7 @@
  * @module
  */
 
+import { readFile } from 'node:fs/promises';
 import { describe, test, inject, assert } from 'vitest';
 import {
 	default_cross_process_setup,
@@ -23,6 +24,81 @@ const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 const setup_test = default_cross_process_setup(handle);
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+type WsClient = Awaited<ReturnType<typeof create_ws_transport>>;
+
+const open_ws = async (): Promise<WsClient> => {
+	const fixture = await setup_test();
+	const ws = await create_ws_transport({
+		base_url: handle.config.base_url,
+		ws_path: handle.config.ws_path,
+		cookies: fixture.transport.cookies()
+	});
+	await ws.request('_warmup', 'ping', undefined);
+	return ws;
+};
+
+const is_notification = (msg: unknown, method: string, terminal_id: string): boolean => {
+	if (!msg || typeof msg !== 'object') return false;
+	const m = msg as Record<string, unknown>;
+	if (m.method !== method) return false;
+	const params = m.params as Record<string, unknown> | undefined;
+	return params?.terminal_id === terminal_id;
+};
+
+/** Concatenate every `terminal_data` payload received so far for `terminal_id`, in order. */
+const terminal_output = (ws: WsClient, terminal_id: string): string =>
+	ws.messages
+		.filter((msg) => is_notification(msg, 'terminal_data', terminal_id))
+		.map((msg) => String(((msg as Record<string, unknown>).params as Record<string, unknown>).data))
+		.join('');
+
+/** Wait until the accumulated output of `terminal_id` satisfies `done`. */
+const wait_for_output = async (
+	ws: WsClient,
+	terminal_id: string,
+	done: (output: string) => boolean,
+	timeout_ms = 10_000
+): Promise<string> => {
+	await ws.wait_for(
+		(msg) =>
+			is_notification(msg, 'terminal_data', terminal_id) && done(terminal_output(ws, terminal_id)),
+		timeout_ms
+	);
+	return terminal_output(ws, terminal_id);
+};
+
+const wait_for_exited = async (
+	ws: WsClient,
+	terminal_id: string,
+	timeout_ms = 10_000
+): Promise<Record<string, unknown>> => {
+	const msg = await ws.wait_for(
+		(m) => is_notification(m, 'terminal_exited', terminal_id),
+		timeout_ms
+	);
+	return (msg as Record<string, unknown>).params as Record<string, unknown>;
+};
+
+const create_terminal = async (
+	ws: WsClient,
+	id: string,
+	params: Record<string, unknown>
+): Promise<string> => {
+	const result = await ws.request<Record<string, unknown>>(id, 'terminal_create', params);
+	const terminal_id = result.terminal_id as string;
+	assert.equal(typeof terminal_id, 'string');
+	return terminal_id;
+};
+
+const process_exists = async (pid: number): Promise<boolean> => {
+	try {
+		await readFile(`/proc/${pid}/stat`, 'utf8');
+		return true; // running or a zombie — either way not reaped
+	} catch {
+		return false;
+	}
+};
 
 describe('terminal cross-backend', () => {
 	test('terminal_create_echo', async () => {
@@ -284,5 +360,154 @@ describe('terminal cross-backend', () => {
 		});
 		assert.ok(res.ok);
 		assert.equal(res.result, null, 'silent null for missing terminal');
+	});
+
+	test('terminal_create_bad_cwd_fails', async () => {
+		const ws = await open_ws();
+		try {
+			let create_error: Error | undefined;
+			try {
+				await ws.request('tbc-1', 'terminal_create', {
+					command: 'pwd',
+					args: [],
+					cwd: '/nonexistent/zzz_cross_test_cwd'
+				});
+			} catch (e) {
+				create_error = e as Error;
+			}
+			// a bad cwd must fail the spawn, not run the command in the daemon's cwd
+			assert.ok(create_error, 'terminal_create should fail for a nonexistent cwd');
+			assert.match(create_error.message, /-32603/);
+			assert.match(create_error.message, /cwd/);
+		} finally {
+			await ws.close();
+		}
+	});
+
+	test('terminal_large_paste_roundtrip', async () => {
+		const ws = await open_ws();
+		try {
+			// echo off so the output is cat's copy alone
+			const terminal_id = await create_terminal(ws, 'tlp-1', {
+				command: 'sh',
+				args: ['-c', 'stty -echo; echo READY; exec cat']
+			});
+			await wait_for_output(ws, terminal_id, (out) => out.includes('READY'));
+
+			// ~22KB in one send — far past the PTY input buffer, so it only
+			// arrives intact if partial writes are continued
+			const lines = Array.from(
+				{ length: 2000 },
+				(_, i) => `line-${String(i + 1).padStart(5, '0')}`
+			);
+			await ws.request('tlp-2', 'terminal_data_send', {
+				terminal_id,
+				data: lines.join('\n') + '\n'
+			});
+
+			const output = await wait_for_output(ws, terminal_id, (out) =>
+				out.includes(lines[lines.length - 1]!)
+			);
+			const echoed = output
+				.split(/\r?\n/)
+				.map((line) => line.trim())
+				.filter((line) => line.startsWith('line-'));
+			assert.deepEqual(echoed, lines, 'every pasted line arrives once, in order');
+
+			await ws.request('tlp-3', 'terminal_close', { terminal_id }).catch(() => undefined);
+		} finally {
+			await ws.close();
+		}
+	});
+
+	test('terminal_multibyte_output_split_across_reads', async () => {
+		const ws = await open_ws();
+		try {
+			// 20000 3-byte characters: 60KB of output, so PTY reads split
+			// characters at their boundaries
+			const count = 20_000;
+			const terminal_id = await create_terminal(ws, 'tmb-1', {
+				command: 'awk',
+				args: [`BEGIN { for (i = 0; i < ${count}; i++) printf "€" }`]
+			});
+			const exited = await wait_for_exited(ws, terminal_id);
+			assert.equal(exited.exit_code, 0);
+			const output = terminal_output(ws, terminal_id);
+			assert.notInclude(output, '\uFFFD', 'no character mangled by a read boundary');
+			assert.equal(output, '€'.repeat(count));
+		} finally {
+			await ws.close();
+		}
+	});
+
+	test('terminal_env_scrubs_daemon_secrets', async () => {
+		const ws = await open_ws();
+		try {
+			const terminal_id = await create_terminal(ws, 'tes-1', { command: 'env', args: [] });
+			await wait_for_exited(ws, terminal_id);
+			const names = terminal_output(ws, terminal_id)
+				.split(/\r?\n/)
+				.map((line) => line.split('=')[0]!)
+				.filter(Boolean);
+			assert.include(names, 'PATH', 'the user environment passes through');
+			const leaked = names.filter(
+				(name) =>
+					/^(SECRET_|FUZ_|ZZZ_|PUBLIC_ZZZ_)/.test(name) ||
+					name === 'DATABASE_URL' ||
+					name === 'PORT'
+			);
+			assert.deepEqual(leaked, [], 'daemon secrets and config are withheld');
+		} finally {
+			await ws.close();
+		}
+	});
+
+	test('terminal_close_reaps_child_ignoring_term_and_hup', async () => {
+		const ws = await open_ws();
+		try {
+			// `exec` keeps the pid; the ignored dispositions survive it, so
+			// neither the SIGTERM nor the hangup from closing ends the process
+			const terminal_id = await create_terminal(ws, 'trp-1', {
+				command: 'sh',
+				args: ['-c', `trap '' TERM HUP; echo PID=$$; exec sleep 30`]
+			});
+			const output = await wait_for_output(ws, terminal_id, (out) => /PID=\d+/.test(out));
+			const pid = Number(/PID=(\d+)/.exec(output)![1]);
+			assert.ok(await process_exists(pid), 'child is running');
+
+			const close_result = await ws.request<Record<string, unknown>>('trp-2', 'terminal_close', {
+				terminal_id
+			});
+			assert.equal(close_result.exit_code, null, 'still running when close returns');
+
+			// escalated to SIGKILL and reaped in the background — no zombie left
+			const deadline = Date.now() + 10_000;
+			while ((await process_exists(pid)) && Date.now() < deadline) {
+				await new Promise((resolve) => setTimeout(resolve, 100));
+			}
+			assert.ok(!(await process_exists(pid)), `pid ${pid} reaped (not running, not a zombie)`);
+		} finally {
+			await ws.close();
+		}
+	}, 20_000);
+
+	test('terminal_resize_rejects_out_of_range', async () => {
+		const fixture = await setup_test();
+		for (const [cols, rows] of [
+			[0, 24],
+			[80, 0],
+			[65_536, 24],
+			[80, 65_536]
+		] as const) {
+			const res = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'terminal_resize',
+				params: { terminal_id: NIL_UUID, cols, rows },
+				headers: fixture.create_session_headers()
+			});
+			assert.ok(!res.ok, `cols=${cols} rows=${rows} rejected`);
+			assert.equal(res.error.code, -32602);
+		}
 	});
 });

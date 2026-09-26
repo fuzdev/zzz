@@ -191,11 +191,18 @@ export const TerminalDataInput = z.strictObject({
 });
 export type TerminalDataInput = z.infer<typeof TerminalDataInput>;
 
+/**
+ * A terminal dimension (`cols` / `rows`) — the `u16` range of a PTY
+ * `winsize`, minus zero.
+ */
+export const TerminalDimension = z.number().int().min(1).max(65_535);
+export type TerminalDimension = z.infer<typeof TerminalDimension>;
+
 /** Input for `terminal_resize`. */
 export const TerminalResizeInput = z.strictObject({
 	terminal_id: Uuid,
-	cols: z.number().int(),
-	rows: z.number().int()
+	cols: TerminalDimension,
+	rows: TerminalDimension
 });
 export type TerminalResizeInput = z.infer<typeof TerminalResizeInput>;
 
