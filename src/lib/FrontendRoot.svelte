@@ -7,6 +7,7 @@
 	import Dashboard from './Dashboard.svelte';
 	import MainDialog from './MainDialog.svelte';
 	import DeskMenu from './DeskMenu.svelte';
+	import DiskfileCloseDialog from './DiskfileCloseDialog.svelte';
 
 	// TODO maybe just make this `Zzz`?
 
@@ -32,6 +33,7 @@
 	<ContextmenuRoot>
 		<MainDialog />
 		<DeskMenu />
+		<DiskfileCloseDialog />
 		<!-- TODO user-defined pages should be able to control the full page at runtime -->
 		<Dashboard>
 			<div class="height:100% overflow:auto">

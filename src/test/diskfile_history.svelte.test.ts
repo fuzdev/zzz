@@ -172,6 +172,74 @@ describe('DiskfileHistory', () => {
 			assert.strictEqual(history.entries[0]!.content, 'newest entry');
 			assert.strictEqual(history.entries[1]!.content, 'middle entry');
 		});
+
+		test('trimming never drops unsaved edits, the newest saved state, or keep_id', () => {
+			history.max_entries = 3;
+			const draft = history.add_entry('draft', { is_unsaved_edit: true, created: 1 });
+			const kept = history.add_entry('kept', { created: 2 });
+			for (let i = 0; i < 10; i++) {
+				history.add_entry(`disk ${i}`, { created: 10 + i, keep_id: kept.id });
+			}
+
+			assert.strictEqual(history.entries.length, 3);
+			assert.deepEqual(
+				history.entries.map((entry) => entry.content),
+				['disk 9', 'kept', 'draft']
+			);
+			assert.strictEqual(history.draft_entry?.id, draft.id);
+		});
+
+		test('max_content_length drops the oldest entries past it', () => {
+			history.max_content_length = 10;
+			history.add_entry('aaaa', { created: 1 });
+			history.add_entry('bbbb', { created: 2 });
+			history.add_entry('cccc', { created: 3 });
+
+			assert.deepEqual(
+				history.entries.map((entry) => entry.content),
+				['cccc', 'bbbb']
+			);
+		});
+
+		test('max_content_length can be exceeded only by protected entries', () => {
+			history.max_content_length = 5;
+			history.add_entry('unsaved edit', { is_unsaved_edit: true, created: 1 });
+			history.add_entry('older', { created: 2 });
+			history.add_entry('newest saved', { created: 3 });
+
+			assert.deepEqual(
+				history.entries.map((entry) => entry.content),
+				['newest saved', 'unsaved edit']
+			);
+		});
+
+		test('growing an entry trims others to fit', () => {
+			history.max_content_length = 10;
+			history.add_entry('old', { created: 1 });
+			history.add_entry('new', { created: 2 });
+			const draft = history.add_entry('d', { is_unsaved_edit: true, created: 3 });
+
+			const updated = history.update_entry_content(draft.id, 'draft!');
+
+			assert.strictEqual(updated?.content, 'draft!');
+			assert.deepEqual(
+				history.entries.map((entry) => entry.content),
+				['draft!', 'new']
+			);
+		});
+
+		test('update_entry_content re-dates the entry to the front', () => {
+			const first = history.add_entry('first', { created: 1 });
+			history.add_entry('second', { created: 2 });
+
+			history.update_entry_content(first.id, 'first, edited');
+
+			const current = history.current_entry;
+			assert.ok(current);
+			assert.strictEqual(current.id, first.id);
+			assert.strictEqual(current.content, 'first, edited');
+			assert.isAbove(current.created, 2);
+		});
 	});
 
 	describe('entry lookup', () => {

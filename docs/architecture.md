@@ -676,7 +676,7 @@ When the OS runs out of watches (inotify's `max_user_watches`), or no watcher ca
 
 ## File Editing
 
-The frontend file pipeline is six Cells plus a per-file editor-session class:
+The frontend file pipeline is six Cells plus a per-file editing-state class:
 
 - `Diskfiles` — `IndexedCollection<Diskfile>` (`by_path` single index,
   `immutable_key` since a path is a diskfile's disk identity); its
@@ -688,24 +688,31 @@ The frontend file pipeline is six Cells plus a per-file editor-session class:
   single-click opens a reusable _preview_ tab, editing or an explicit open
   promotes it to permanent; tab order, recent-tab history, and
   reopen-closed-tab state live on `DiskfileTabs`
-- `DiskfileHistory` — per-path edit history (disk changes, unsaved edits,
-  original state; max 100 entries), held in `Frontend.diskfile_histories` —
-  in-memory only, lost on reload
-- `DiskfileEditorState` (plain class, not a Cell) — one open file's editing
-  session; routes `current_content` writes through the history and owns
-  `save_changes()`
+- `DiskfileHistory` — one file's edit history (disk changes, the draft,
+  saved and discarded edits), newest first; capped at 100 entries and 16M
+  characters of content, trimming the oldest but never the draft, the
+  newest saved state, or the entry an editor shows — in-memory only, lost
+  on reload
+- `DiskfileEditorState` (plain class, not a Cell) — one file's editing
+  state, like a VS Code text model: the selected history entry
+  (`current_content`), the draft, the conflict flag, and `save_changes()`.
+  `Diskfiles.get_editor_state` creates it on first use, detached from the
+  calling component (see below), and keeps it until the diskfile is removed.
+  The `/files` editor, file-part editors, and tabs are views over it, so a
+  tab switch or remount shows the same draft, selection, and save state; a
+  file part sends its draft (see "What gets saved and sent")
 
 Save round trip:
 
 ```
 User edits → DiskfileEditorState.current_content setter
-  → unsaved-edit entry in DiskfileHistory
+  → the file's draft (one unsaved-edit entry in its DiskfileHistory)
 Save → save_changes() → app.api.diskfile_update({path, content})
   → ScopedFs::write_file (response is null — no content echo)
 → notify watcher fires → Filer updates its index immediately
   → debounced (80ms) filer_change broadcast to all sockets
-    → Diskfiles.handle_change → existing Diskfile.set_json(...)
-      → editor sees diskfile.content change → disk-change history entry
+    → Diskfiles.handle_change → upsert → existing Diskfile.set_json(...)
+      → DiskfileEditorState.check_disk_changes → disk-change history entry
 ```
 
 The confirmation is the broadcast, not the RPC response — a save and an
@@ -716,10 +723,76 @@ failure keeps the edit unsaved and sets `save_error`. If anything moves while
 the write is in flight — more typing, another history entry picked, or an
 external edit landing after the save's own broadcast — the saved content is
 recorded in history but the editor keeps its content and selection, and an
-external edit stays the last-seen disk state. An editor that switched to
-another file mid-save only settles the saved file's history. Ctrl+S saves the
-focused editor; the main `/files` editor also takes it from anywhere on the
-page.
+external edit stays the last-seen disk state. Ctrl+S saves the focused
+editor; the main `/files` editor also takes it from anywhere on the page.
+
+**Disk changes and drafts.** `Diskfiles.upsert` records every content change
+in the file's editing state, if it has one — whether or not an editor is
+mounted — so a file reopens on the disk content, never text a save would
+write back over an external change. A clean editor follows the disk. Editing
+keeps one draft per file, updated in place and dated to the latest edit;
+editing from another entry picked in the history starts a new draft and sets
+the previous one aside as a _discarded_ entry. A draft itself is only ever
+deleted by saving it, editing it back to the disk content, or the explicit
+"clear unsaved edits"; discarded entries are ordinary history, so the
+history caps and "clear history" can drop them. A file with a draft or
+showing something other than the disk is marked ● in its tab and in the
+explorer (the accessible name says "unsaved changes", or "changed on disk").
+
+**Closing tabs.** Like VS Code: closing the last tab of a file with a draft
+(the close button, Ctrl+Q, or the contextmenu) asks **save**, **don't
+save**, or **cancel** (`DiskfilesEditor.request_close_tab`,
+`DiskfileCloseDialog`). "Don't save" discards the draft into the history
+(`discard_draft`) — for a file deleted on disk, the file is forgotten with
+it. The question lapses if the draft goes away meanwhile (saved or
+discarded elsewhere), and a cancel during the save keeps the tab. A reopen shows the draft if there is one, else the disk
+content. Unlike VS Code a draft doesn't depend on its tab — it's app-level —
+so programmatic closes (`close_tab`, `close_all_tabs`, a preview tab reused
+for another file) close without asking and keep the draft, reachable from
+the explorer's ● and file parts.
+
+**What gets saved and sent.** Saving writes what the editor shows
+(`current_content`) — the draft, or an older entry picked to restore it. A
+file part (`DiskfilePart.content`) sends the draft if there is one, else the
+disk content — never merely an entry an editor is viewing — and its XML tag
+says so with `unsaved="true"` (plus `changed_on_disk="true"` or
+`deleted_on_disk="true"`, replacing user attributes with those keys only
+while they're added); the part view labels it "unsaved draft" too. The close
+dialog's "save" and the conflict notice's "overwrite with your draft" save
+the draft (`save_draft`), showing it first, even when the editor showed an
+older entry; with no draft, "overwrite with this version" saves what's
+shown. VS
+Code's AI features likewise read the dirty buffer; zzz marks it, since a
+model otherwise can't tell a draft from the file.
+
+**Conflicts.** A disk change under the user's content (the draft, or a
+picked older entry) keeps that content and sets `disk_conflict`. While the
+editor shows content that differs from the disk (`has_conflict`), saving is
+paused: Ctrl+S (which moves focus to the notice) and the save button write
+nothing, and a notice offers **overwrite with your draft**
+(`save_draft({overwrite: true})`) or **reload from disk**
+(`discard_draft`); either returns focus to the editor, and both versions
+are in the history to compare. A disk change equal to the draft settles it,
+the content of our own save in flight landing on disk (our broadcast, with
+typing continuing past it) resolves rather than raises a conflict, and a
+new draft typed on the new disk content starts clean. VS Code keeps a dirty
+buffer on an external change too, but only reports the conflict when saving
+("the content of the file is newer", with Compare / Overwrite); zzz shows it
+as soon as it lands, since agents and tools write files while you edit, and
+keeps both versions in its history instead of opening a diff view (zzz has
+none yet). The check is frontend-only: an external write that lands after
+the backend received our save, but before our broadcast arrives, is
+overwritten without a conflict — closing that window needs the backend to
+compare against the version the save was based on.
+
+**Cells outlive components.** Svelte owns a `$derived` by the effect running
+when it was created and can stop recomputing it once that effect is
+destroyed, so app-level state constructed during component init silently
+freezes when the component unmounts (and code in `onMount` or an `$effect`
+runs inside an effect too). Such state is created with `create_detached`
+(`reactive_helpers.svelte.ts`): editing states
+(`Diskfiles.get_editor_state`), the `Action` cells `app.api` calls create, the
+`App` itself, and the route-cached `Projects` / `Browser`.
 
 The initial file listing comes from `session_load` (the backend rescans and
 flattens every active filer's index, and lists the filers' roots as
@@ -778,14 +851,16 @@ reconnect), which settles its turn as errored; the chunks it had streamed
 stay. `Diskfiles` upserts by
 path — for seeds and for both `add` and `change` — so a path never has two
 `Diskfile`s. A `delete` closes the file's tabs, moves selection, and drops its
-history — unless the file is open in a tab and its history holds unsaved
-edits: then the `Diskfile` is kept, flagged `deleted_on_disk` (marked in the
-tab and the editor), so saving writes the path back (always allowed while
-flagged) and the `add` broadcast reattaches it (same id, flag cleared), while
-closing its last tab discards it. A flagged `Diskfile` is hidden from the
-explorer and pickers, and a `DiskfilePart` treats it as missing. Tabs,
-history, and editor state are UI-session-only — a reload restores only what
-`session_load` provides.
+editing state and history — unless the file has a draft (edited in a tab, a
+file part, anywhere): then the `Diskfile` is kept, flagged `deleted_on_disk`
+(marked in its tab, the explorer, and the editors), so saving writes the path
+back (always allowed while flagged; a successful save clears the flag right
+away) and the `add` broadcast reattaches it (same id). It's forgotten once nothing holds it — no draft
+(discarded from the editor's notice or a "don't save") and no tab
+(`Diskfiles.release_if_unneeded`). The explorer lists it for its draft
+(`Diskfiles.listed`); pickers don't (`on_disk`); a `DiskfilePart` shows and
+sends the draft, marked deleted. Tabs, history, and editor state are
+UI-session-only — a reload restores only what `session_load` provides.
 
 ## Spaces and Workspaces
 

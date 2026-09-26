@@ -2,7 +2,6 @@
 
 import { test, beforeEach, describe, assert, vi } from 'vitest';
 
-import { DiskfileEditorState } from '$lib/diskfile_editor_state.svelte.ts';
 import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
 import { Frontend } from '$lib/frontend.svelte.ts';
 import type { Diskfile } from '$lib/diskfile.svelte.ts';
@@ -36,7 +35,7 @@ beforeEach(() => {
 describe('a file whose content was not loaded', () => {
 	test('is read-only: edits are ignored and nothing can be saved', async () => {
 		const diskfile = add_diskfile(null);
-		const editor_state = new DiskfileEditorState({ app, diskfile });
+		const editor_state = app.diskfiles.get_editor_state(diskfile);
 
 		assert.isFalse(diskfile.content_loaded);
 		assert.isFalse(editor_state.content_loaded);
@@ -55,7 +54,7 @@ describe('a file whose content was not loaded', () => {
 
 	test('a loaded file that becomes unloaded stops being savable', async () => {
 		const diskfile = add_diskfile('small');
-		const editor_state = new DiskfileEditorState({ app, diskfile });
+		const editor_state = app.diskfiles.get_editor_state(diskfile);
 		editor_state.current_content = 'edited';
 		assert.isTrue(editor_state.can_save);
 
@@ -68,7 +67,7 @@ describe('a file whose content was not loaded', () => {
 		assert.strictEqual(update.mock.calls.length, 0);
 		// the stale edit stays in history, but the editor shows (and copies) nothing
 		assert.strictEqual(editor_state.current_content, '');
-		assert.ok(editor_state.history?.entries.some((entry) => entry.content === 'edited'));
+		assert.ok(editor_state.history.entries.some((entry) => entry.content === 'edited'));
 	});
 
 	test('`Diskfiles.update` refuses to write over it', async () => {
@@ -89,7 +88,7 @@ describe('a file whose content was not loaded', () => {
 
 	test('an empty file is loaded, not unloaded', () => {
 		const diskfile = add_diskfile('');
-		const editor_state = new DiskfileEditorState({ app, diskfile });
+		const editor_state = app.diskfiles.get_editor_state(diskfile);
 		assert.isTrue(diskfile.content_loaded);
 		editor_state.current_content = 'now has text';
 		assert.isTrue(editor_state.can_save);

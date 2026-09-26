@@ -2,7 +2,7 @@
 
 import { test, beforeEach, describe, assert, vi } from 'vitest';
 
-import { DiskfileEditorState } from '$lib/diskfile_editor_state.svelte.ts';
+import type { DiskfileEditorState } from '$lib/diskfile_editor_state.svelte.ts';
 import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
 import { Frontend } from '$lib/frontend.svelte.ts';
 import { Diskfile } from '$lib/diskfile.svelte.ts';
@@ -33,10 +33,7 @@ beforeEach(() => {
 	});
 
 	// Create the editor state with real components
-	editor_state = new DiskfileEditorState({
-		app,
-		diskfile: test_diskfile
-	});
+	editor_state = app.diskfiles.get_editor_state(test_diskfile);
 });
 
 describe('initialization', () => {
@@ -49,7 +46,7 @@ describe('initialization', () => {
 		assert.strictEqual(editor_state.last_seen_disk_content, TEST_CONTENT);
 
 		// Selected history entry should be initialized to the current entry
-		const history = app.get_diskfile_history(TEST_PATH);
+		const history = editor_state.history;
 		assert.isDefined(history);
 		assert.strictEqual(history.entries.length, 1);
 		assert.strictEqual(editor_state.selected_history_entry_id, history.entries[0]!.id);
@@ -57,7 +54,7 @@ describe('initialization', () => {
 	});
 
 	test('editor_state initializes with correct history entry', () => {
-		const history = app.get_diskfile_history(TEST_PATH);
+		const history = editor_state.history;
 		assert.isDefined(history);
 		assert.strictEqual(history.entries.length, 1);
 
@@ -77,10 +74,7 @@ describe('initialization', () => {
 		});
 
 		// Create editor state
-		const null_editor_state = new DiskfileEditorState({
-			app,
-			diskfile: null_diskfile
-		});
+		const null_editor_state = app.diskfiles.get_editor_state(null_diskfile);
 
 		// Check state properties
 		assert.isNull(null_editor_state.original_content);
@@ -90,7 +84,7 @@ describe('initialization', () => {
 		assert.isNull(null_editor_state.last_seen_disk_content);
 
 		// History should still be created
-		const history = app.get_diskfile_history(null_diskfile.path);
+		const { history } = null_editor_state;
 		assert.isDefined(history);
 		assert.strictEqual(history.entries.length, 0); // No entries for null content
 	});
@@ -135,7 +129,7 @@ describe('content editing', () => {
 	test('editing content preserves selection state', () => {
 		// First make an edit to create history entries
 		editor_state.current_content = 'First edit';
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 
 		// Get the selected entry id
 		const selected_id = editor_state.selected_history_entry_id;
@@ -238,10 +232,7 @@ describe('content metrics', () => {
 		});
 
 		// Create editor state
-		const empty_editor_state = new DiskfileEditorState({
-			app,
-			diskfile: empty_diskfile
-		});
+		const empty_editor_state = app.diskfiles.get_editor_state(empty_diskfile);
 
 		// Now edit to add content
 		empty_editor_state.current_content = 'New content';
@@ -261,7 +252,7 @@ describe('content metrics', () => {
 			source_dir: SerializableDisknode.shape.source_dir.parse('/empty/'),
 			content: ''
 		});
-		const empty_editor_state = new DiskfileEditorState({ app, diskfile: empty_diskfile });
+		const empty_editor_state = app.diskfiles.get_editor_state(empty_diskfile);
 
 		assert.strictEqual(empty_editor_state.length_diff, 0);
 		assert.strictEqual(empty_editor_state.length_diff_percent, 0);
@@ -277,8 +268,7 @@ describe('content metrics', () => {
 });
 
 describe('file management', () => {
-	test('update_diskfile handles switching to different file', () => {
-		// Create another diskfile
+	test('each file has its own editing state, kept while another is shown', () => {
 		const another_path = DiskfilePath.parse('/different/file.txt');
 		const another_content = 'Different file content';
 		const another_diskfile = app.diskfiles.add({
@@ -287,60 +277,74 @@ describe('file management', () => {
 			content: another_content
 		});
 
-		// Make edits to the current file
 		editor_state.current_content = 'Edited original file';
 
-		// Switch to the new file
-		editor_state.update_diskfile(another_diskfile);
+		const another_state = app.diskfiles.get_editor_state(another_diskfile);
+		assert.notStrictEqual(another_state, editor_state);
+		assert.strictEqual(another_state.diskfile, another_diskfile);
+		assert.strictEqual(another_state.current_content, another_content);
+		assert.isFalse(another_state.has_changes);
+		assert.strictEqual(another_state.history.entries.length, 1);
+		assert.strictEqual(another_state.history.entries[0]!.content, another_content);
 
-		// Verify state was properly updated
-		assert.strictEqual(editor_state.diskfile, another_diskfile);
-		assert.strictEqual(editor_state.original_content, another_content);
-		assert.strictEqual(editor_state.current_content, another_content);
-		assert.ok(!editor_state.has_changes);
-		assert.ok(!editor_state.content_was_modified_by_user);
-
-		// History should be initialized for the new file
-		const new_history = app.get_diskfile_history(another_path);
-		assert.isDefined(new_history);
-		assert.strictEqual(new_history.entries.length, 1);
-		assert.strictEqual(new_history.entries[0]!.content, another_content);
+		// the first file's draft is untouched
+		assert.strictEqual(editor_state.current_content, 'Edited original file');
+		assert.isTrue(editor_state.content_was_modified_by_user);
+		assert.isTrue(editor_state.has_unsaved_edits);
 	});
 
-	test('update_diskfile does nothing when same diskfile is provided', () => {
-		// Make some edits
+	test('get_editor_state returns the same state for a file', () => {
 		editor_state.current_content = 'Edited content';
-
-		// Track current state
-		const current_content = editor_state.current_content;
-		const current_modified = editor_state.content_was_modified_by_user;
-
-		// Call update with the same diskfile
-		editor_state.update_diskfile(test_diskfile);
-
-		// State should remain unchanged
-		assert.strictEqual(editor_state.current_content, current_content);
-		assert.strictEqual(editor_state.content_was_modified_by_user, current_modified);
+		const again = app.diskfiles.get_editor_state(test_diskfile);
+		assert.strictEqual(again, editor_state);
+		assert.strictEqual(app.diskfiles.find_editor_state(test_diskfile.id), editor_state);
+		assert.strictEqual(again.current_content, 'Edited content');
 	});
 
-	test('reset clears editor state and reverts to original content', () => {
-		// Make edits
+	test('discard_draft shows the disk content and sets the draft aside', () => {
 		editor_state.current_content = 'Edited content';
+		const draft_id = editor_state.unsaved_edit_entry_id;
+		assert.ok(draft_id);
 
-		// Create and select unsaved entry
-		const history = app.get_diskfile_history(TEST_PATH)!;
-		const test_entry = history.add_entry('Test entry', { is_unsaved_edit: true });
-		editor_state.set_content_from_history(test_entry.id);
+		editor_state.discard_draft();
 
-		// Reset the editor
-		editor_state.reset();
-
-		// Verify state is reset
 		assert.strictEqual(editor_state.current_content, TEST_CONTENT);
-		assert.ok(!editor_state.has_changes);
-		assert.ok(!editor_state.content_was_modified_by_user);
+		assert.isFalse(editor_state.has_changes);
+		assert.isFalse(editor_state.content_was_modified_by_user);
+		assert.isFalse(editor_state.has_unsaved_edits);
 		assert.isNull(editor_state.unsaved_edit_entry_id);
-		assert.isNull(editor_state.selected_history_entry_id);
+		// the draft's text stays restorable
+		const set_aside = editor_state.history.find_entry_by_id(draft_id);
+		assert.ok(set_aside);
+		assert.include(set_aside, {
+			content: 'Edited content',
+			is_unsaved_edit: false,
+			is_discarded_edit: true
+		});
+	});
+
+	test('reset_view shows the draft if there is one, else the disk content', () => {
+		const history = editor_state.history;
+		const older = history.add_entry('older', { created: 1 });
+		editor_state.set_content_from_history(older.id);
+		assert.isTrue(editor_state.has_changes);
+		editor_state.save_error = 'stale';
+
+		editor_state.reset_view();
+
+		assert.strictEqual(editor_state.current_content, TEST_CONTENT);
+		assert.isFalse(editor_state.content_was_modified_by_user);
+		assert.isNull(editor_state.save_error);
+
+		editor_state.current_content = 'draft';
+		const original = history.entries.find((entry) => entry.is_original_state);
+		assert.ok(original);
+		editor_state.set_content_from_history(original.id);
+
+		editor_state.reset_view();
+
+		assert.strictEqual(editor_state.current_content, 'draft');
+		assert.isTrue(editor_state.content_was_modified_by_user);
 	});
 });
 
@@ -379,7 +383,7 @@ describe('derived state', () => {
 		assert.ok(!editor_state.can_clear_unsaved_edits);
 
 		// Add a saved entry
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		history.add_entry('Saved entry 1');
 		history.add_entry('Saved entry 2');
 
@@ -395,7 +399,7 @@ describe('derived state', () => {
 
 	test('content_matching_entry_ids tracks entries with matching content', () => {
 		// Create entries with duplicate content
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		const entry1 = history.add_entry('Unique content');
 		const entry2 = history.add_entry('Duplicate content');
 		const entry3 = history.add_entry('Duplicate content');
@@ -449,7 +453,7 @@ describe('saving changes', () => {
 		await editor_state.save_changes();
 
 		// Check history entry
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		assert.strictEqual(history.entries[0]!.content, 'Content to be saved');
 		assert.ok(!history.entries[0]!.is_unsaved_edit);
 		assert.ok(!history.entries[0]!.is_disk_change);
@@ -472,7 +476,7 @@ describe('saving failures and concurrent edits', () => {
 
 	test('a failed save leaves the edit unsaved and sets save_error', async () => {
 		editor_state.current_content = 'edited';
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		const entries_before = history.entries.map((entry) => ({ ...entry }));
 		const unsaved_id = editor_state.unsaved_edit_entry_id;
 		assert.isNotNull(unsaved_id);
@@ -494,7 +498,7 @@ describe('saving failures and concurrent edits', () => {
 
 	test('a thrown write reports save_error and leaves the edit unsaved', async () => {
 		editor_state.current_content = 'edited';
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		const entries_before = history.entries.map((entry) => ({ ...entry }));
 		const unsaved_id = editor_state.unsaved_edit_entry_id;
 		app.diskfiles.update = () => Promise.reject(new Error('socket closed'));
@@ -580,7 +584,7 @@ describe('saving failures and concurrent edits', () => {
 		assert.isTrue(editor_state.content_was_modified_by_user);
 		assert.strictEqual(editor_state.last_seen_disk_content, 'first');
 
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		// the saved content is recorded, the newer edit stays the live unsaved entry
 		const saved = history.entries.find((entry) => entry.content === 'first');
 		assert.ok(saved);
@@ -604,7 +608,7 @@ describe('saving failures and concurrent edits', () => {
 		deferred.resolve({ ok: true, value: null });
 		assert.isTrue(await saving);
 
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		assert.isFalse(editor_state.has_unsaved_edits);
 		assert.isNull(editor_state.unsaved_edit_entry_id);
 		assert.strictEqual(history.entries[0]!.content, 'saved');
@@ -706,7 +710,7 @@ describe('saving failures and concurrent edits', () => {
 	});
 
 	test('picking another entry while a save is in flight records the save as saved', async () => {
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		const original = history.entries.find((entry) => entry.is_original_state);
 		assert.ok(original);
 		editor_state.current_content = 'saved';
@@ -730,7 +734,7 @@ describe('saving failures and concurrent edits', () => {
 
 	test('an external edit landing after the save broadcast keeps the disk state', async () => {
 		editor_state.current_content = 'saved';
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		const { deferred } = defer_update();
 
 		const saving = editor_state.save_changes();
@@ -753,7 +757,7 @@ describe('saving failures and concurrent edits', () => {
 
 	test('an external edit landing mid-save, then the save broadcast after the response, settles', async () => {
 		editor_state.current_content = 'saved';
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		const { deferred } = defer_update();
 
 		const saving = editor_state.save_changes();
@@ -811,82 +815,87 @@ describe('saving failures and concurrent edits', () => {
 		assert.strictEqual(editor_state.current_content, 'mine');
 	});
 
-	describe('switching files while a save is in flight', () => {
+	describe('another file while a save is in flight', () => {
 		const OTHER_PATH = DiskfilePath.parse('/path/to/other.txt');
 
-		const setup_switch = () => {
+		const setup_other = () => {
 			const other = app.diskfiles.add({
 				path: OTHER_PATH,
 				source_dir: TEST_DIR,
 				content: 'other'
 			});
 			editor_state.current_content = 'edited';
-			const history = app.get_diskfile_history(TEST_PATH)!;
 			const { writes, deferred } = defer_update();
 			const saving = editor_state.save_changes();
-			editor_state.update_diskfile(other);
-			const other_history = app.get_diskfile_history(OTHER_PATH)!;
-			const other_entries_before = other_history.entries.map((entry) => ({ ...entry }));
-			return { history, other_history, other_entries_before, writes, deferred, saving };
+			const other_state = app.diskfiles.get_editor_state(other);
+			const other_entries_before = other_state.history.entries.map((entry) => ({ ...entry }));
+			return { other_state, other_entries_before, writes, deferred, saving };
 		};
 
 		test('a successful save settles the saved file only', async () => {
-			const { history, other_history, other_entries_before, deferred, saving } = setup_switch();
+			const { other_state, other_entries_before, deferred, saving } = setup_other();
 
 			deferred.resolve({ ok: true, value: null });
 			assert.isTrue(await saving);
 
 			// the saved file's history holds the save, with no lingering unsaved edit
-			const saved = history.entries.filter((entry) => entry.content === 'edited');
+			const saved = editor_state.history.entries.filter((entry) => entry.content === 'edited');
 			assert.strictEqual(saved.length, 1);
 			assert.isFalse(saved[0]!.is_unsaved_edit);
-			assert.isFalse(history.has_unsaved_edits);
+			assert.isFalse(editor_state.has_unsaved_edits);
+			assert.strictEqual(editor_state.current_content, 'edited');
 			// the other file is untouched
-			assert.deepEqual(other_history.entries, other_entries_before);
-			assert.strictEqual(editor_state.current_content, 'other');
-			assert.strictEqual(editor_state.last_seen_disk_content, 'other');
-			assert.isFalse(editor_state.content_was_modified_by_user);
-			assert.isNull(editor_state.save_error);
+			assert.deepEqual(other_state.history.entries, other_entries_before);
+			assert.strictEqual(other_state.current_content, 'other');
+			assert.isFalse(other_state.content_was_modified_by_user);
+			assert.isNull(other_state.save_error);
 		});
 
 		test('a failed save leaves the saved file unsaved and shows nothing on the other', async () => {
-			const { history, other_history, other_entries_before, deferred, saving } = setup_switch();
+			const { other_state, other_entries_before, deferred, saving } = setup_other();
 
 			deferred.resolve({ ok: false, error: ERROR });
 			assert.isFalse(await saving);
 
-			assert.isTrue(history.has_unsaved_edits);
-			assert.deepEqual(other_history.entries, other_entries_before);
-			assert.isNull(editor_state.save_error);
+			assert.isTrue(editor_state.has_unsaved_edits);
+			assert.strictEqual(editor_state.save_error, 'disk full');
+			assert.deepEqual(other_state.history.entries, other_entries_before);
+			assert.isNull(other_state.save_error);
 		});
 
 		test('the other file can save while the first is in flight', async () => {
-			const { writes, deferred, saving } = setup_switch();
-			assert.isFalse(editor_state.saving);
-
-			editor_state.current_content = 'other edited';
-			const saving_other = editor_state.save_changes();
+			const { other_state, writes, deferred, saving } = setup_other();
 			assert.isTrue(editor_state.saving);
+			assert.isFalse(other_state.saving);
+
+			other_state.current_content = 'other edited';
+			const saving_other = other_state.save_changes();
+			assert.isTrue(other_state.saving);
 			deferred.resolve({ ok: true, value: null });
 			assert.isTrue(await saving);
 			assert.isTrue(await saving_other);
 
 			assert.deepEqual(writes, ['edited', 'other edited']);
 			assert.isFalse(editor_state.saving);
-			assert.isFalse(app.get_diskfile_history(OTHER_PATH)!.has_unsaved_edits);
+			assert.isFalse(other_state.saving);
+			assert.isFalse(other_state.has_unsaved_edits);
 		});
+	});
 
-		test('switching files clears a failed save error', async () => {
-			const other = app.diskfiles.add({ path: OTHER_PATH, source_dir: TEST_DIR, content: 'o' });
-			editor_state.current_content = 'edited';
-			app.diskfiles.update = () => Promise.resolve({ ok: false, error: ERROR });
-			await editor_state.save_changes();
-			assert.strictEqual(editor_state.save_error, 'disk full');
+	test('closing the last tab clears a failed save error', async () => {
+		app.diskfiles.select(test_diskfile.id, true);
+		editor_state.current_content = 'edited';
+		app.diskfiles.update = () => Promise.resolve({ ok: false, error: ERROR });
+		await editor_state.save_changes();
+		assert.strictEqual(editor_state.save_error, 'disk full');
 
-			editor_state.update_diskfile(other);
+		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(test_diskfile.id);
+		assert.ok(tab);
+		app.diskfiles.editor.close_tab(tab.id);
 
-			assert.isNull(editor_state.save_error);
-		});
+		assert.isNull(editor_state.save_error);
+		// the draft is kept for the next time it's opened
+		assert.strictEqual(editor_state.current_content, 'edited');
 	});
 
 	test('a disk-change broadcast landing before the response is not duplicated', async () => {
@@ -900,7 +909,7 @@ describe('saving failures and concurrent edits', () => {
 		deferred.resolve({ ok: true, value: null });
 		assert.isTrue(await saving);
 
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		assert.strictEqual(history.entries.filter((entry) => entry.content === 'saved').length, 1);
 		assert.isFalse(editor_state.has_unsaved_edits);
 		assert.strictEqual(editor_state.current_content, 'saved');

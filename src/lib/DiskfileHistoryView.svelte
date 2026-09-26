@@ -40,7 +40,7 @@
 			class="plain sm"
 			disabled={!editor_state.can_clear_unsaved_edits}
 			title={editor_state.can_clear_unsaved_edits
-				? 'Remove all unsaved edit entries from history'
+				? 'Delete the unsaved edit from history'
 				: 'No unsaved edits to clear'}
 		>
 			clear unsaved edits
@@ -67,6 +67,8 @@
 						<span class="ml_xl">from disk</span>
 					{:else if entry.is_unsaved_edit}
 						<span class="ml_xl">unsaved</span>
+					{:else if entry.is_discarded_edit}
+						<span class="ml_xl">discarded</span>
 					{/if}
 				</span>
 				<span>{entry.content.length} chars</span>

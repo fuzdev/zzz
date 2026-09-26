@@ -99,7 +99,7 @@
 				>
 					<Svg data={icon_create_directory} />
 				</PendingButton>
-				{#if diskfiles.on_disk.length > 1}
+				{#if diskfiles.listed.length > 1}
 					<button
 						type="button"
 						class="plain sm selectable deselectable"
@@ -115,7 +115,7 @@
 
 		<!-- TODO @many improve efficiency - maybe add `all` back to the base IndexedCollection, or add an incremental index for this case? -->
 		<SortableList
-			items={diskfiles.on_disk}
+			items={diskfiles.listed}
 			show_sort_controls={editor.show_sort_controls}
 			sorters={[
 				// TODO @many rework API to avoid casting
@@ -146,7 +146,7 @@
 			{/snippet}
 		</SortableList>
 
-		{#if empty && diskfiles.on_disk.length === 0}
+		{#if empty && diskfiles.listed.length === 0}
 			{@render empty()}
 		{/if}
 	{/if}

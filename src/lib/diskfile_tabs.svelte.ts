@@ -26,6 +26,13 @@ export type DiskfileTabsJsonInput = z.input<typeof DiskfileTabsJson>;
 export type DiskfileTabsOptions = CellOptions<typeof DiskfileTabsJson>;
 
 /**
+ * How many closed tabs `DiskfileTabs` remembers, both for reopening
+ * (`recently_closed_tabs`) and for back/forward navigation to them
+ * (`closed_tab_diskfiles`) — the oldest are forgotten first.
+ */
+export const DISKFILE_TABS_CLOSED_MAX = 50;
+
+/**
  * Manages tabs for diskfiles in the editor with preview behavior.
  */
 export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
@@ -98,10 +105,13 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		return result;
 	});
 
-	/** Recently closed tabs for potential reopening. */
+	/** Recently closed tabs for potential reopening, oldest first, at most `DISKFILE_TABS_CLOSED_MAX`. */
 	recently_closed_tabs: Array<DiskfileTab> = $state([]);
 
-	/** Map of closed tab ids to their diskfile ids - used for browser navigation. */
+	/**
+	 * Map of closed tab ids to their diskfile ids - used for browser navigation.
+	 * Holds the `DISKFILE_TABS_CLOSED_MAX` most recently closed.
+	 */
 	readonly closed_tab_diskfiles: SvelteMap<Uuid, Uuid> = new SvelteMap();
 
 	constructor(options: DiskfileTabsOptions) {
@@ -315,7 +325,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		if (!tab_to_close) return;
 
 		// Remember the diskfile id for this tab in case we navigate back to it
-		this.closed_tab_diskfiles.set(tab_id, tab_to_close.diskfile_id);
+		this.#remember_closed_tab(tab_id, tab_to_close.diskfile_id);
 
 		const was_selected = tab_id === this.selected_tab_id;
 		const was_preview = tab_id === this.preview_tab_id;
@@ -347,6 +357,12 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 
 		// Store a copy for reopening later
 		this.recently_closed_tabs.push(tab_to_close);
+		if (this.recently_closed_tabs.length > DISKFILE_TABS_CLOSED_MAX) {
+			this.recently_closed_tabs.splice(
+				0,
+				this.recently_closed_tabs.length - DISKFILE_TABS_CLOSED_MAX
+			);
+		}
 
 		// Remove tab from collections and state
 		this.tab_order = this.tab_order.filter((id) => id !== tab_id);
@@ -361,6 +377,19 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		}
 
 		this.#notify_if_detached(tab_to_close.diskfile_id);
+	}
+
+	/** Records a closed tab for back/forward navigation, forgetting the oldest past the cap. */
+	#remember_closed_tab(tab_id: Uuid, diskfile_id: Uuid): void {
+		const map = this.closed_tab_diskfiles;
+		// re-inserted so the map stays in closing order
+		map.delete(tab_id);
+		map.set(tab_id, diskfile_id);
+		while (map.size > DISKFILE_TABS_CLOSED_MAX) {
+			const oldest = map.keys().next();
+			if (oldest.done) break;
+			map.delete(oldest.value);
+		}
 	}
 
 	/**
@@ -474,11 +503,11 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 
 		// Remember diskfile ids for all tabs before clearing
 		for (const tab of this.ordered_tabs) {
-			this.closed_tab_diskfiles.set(tab.id, tab.diskfile_id);
+			this.#remember_closed_tab(tab.id, tab.diskfile_id);
 		}
 
 		// Store all tabs for potential reopening
-		this.recently_closed_tabs = [...this.ordered_tabs];
+		this.recently_closed_tabs = this.ordered_tabs.slice(-DISKFILE_TABS_CLOSED_MAX);
 
 		// Clear all state
 		this.selected_tab_id = null;

@@ -8,7 +8,6 @@ import {
 	type DiskfileChangeType
 } from '$lib/diskfile_types.ts';
 import { Frontend } from '$lib/frontend.svelte.ts';
-import { DiskfileEditorState } from '$lib/diskfile_editor_state.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
@@ -129,7 +128,8 @@ describe('delete cleans up editor state', () => {
 		app.diskfiles.select(a.id, true);
 		app.diskfiles.select(b.id, true);
 		assert.strictEqual(app.diskfiles.selected_file_id, b.id);
-		app.create_diskfile_history(PATH_B).add_entry('edited');
+		const b_state = app.diskfiles.get_editor_state(b);
+		b_state.history.add_entry('edited');
 
 		filer_change('delete', PATH_B);
 
@@ -138,7 +138,8 @@ describe('delete cleans up editor state', () => {
 		assert.strictEqual(tabs.selected_diskfile_id, a.id);
 		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
 		assert.strictEqual(app.diskfiles.selected_file, a);
-		assert.isUndefined(app.get_diskfile_history(PATH_B));
+		assert.isUndefined(app.diskfiles.find_editor_state(b.id));
+		assert.ok(!app.cell_registry.all.has(b_state.history.id));
 	});
 
 	test('disposes the diskfile, its tab, and its history', () => {
@@ -148,7 +149,7 @@ describe('delete cleans up editor state', () => {
 		app.diskfiles.select(a.id, true);
 		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(a.id);
 		assert.ok(tab);
-		const history = app.create_diskfile_history(PATH_A);
+		const { history } = app.diskfiles.get_editor_state(a);
 		const { all } = app.cell_registry;
 		assert.ok(all.has(a.id) && all.has(tab.id) && all.has(history.id));
 
@@ -226,9 +227,9 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.ok(a && b);
 		app.diskfiles.select(a.id, true);
 		app.diskfiles.select(b.id, true);
-		const editor_state = new DiskfileEditorState({ app, diskfile: b });
+		const editor_state = app.diskfiles.get_editor_state(b);
 		editor_state.current_content = 'b edited';
-		assert.ok(app.get_diskfile_history(PATH_B)?.has_unsaved_edits);
+		assert.ok(editor_state.has_unsaved_edits);
 		return { a, b, editor_state, tabs: app.diskfiles.editor.tabs };
 	};
 
@@ -242,7 +243,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.ok(tabs.by_diskfile_id.get(b.id));
 		assert.strictEqual(tabs.selected_diskfile_id, b.id);
 		assert.strictEqual(app.diskfiles.selected_file_id, b.id);
-		assert.ok(app.get_diskfile_history(PATH_B)?.has_unsaved_edits);
+		assert.ok(app.diskfiles.find_editor_state(b.id)?.has_unsaved_edits);
 		assert.notInclude(app.diskfiles.on_disk, b);
 		assert.strictEqual(app.diskfiles.on_disk.length, 1);
 	});
@@ -278,32 +279,46 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.deepEqual(writes, [[PATH_B, 'b edited']]);
 	});
 
-	test('closing the tab discards the diskfile and its history', () => {
-		const { a, b, tabs } = setup_dirty();
+	test('closing the tab after discarding the draft forgets the diskfile ("don\'t save")', () => {
+		const { a, b, tabs, editor_state } = setup_dirty();
+		filer_change('delete', PATH_B);
+		const tab = tabs.by_diskfile_id.get(b.id);
+		assert.ok(tab);
+
+		editor_state.discard_draft();
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b, 'kept while its tab is open');
+		app.diskfiles.editor.close_tab(tab.id);
+
+		assert.isUndefined(app.diskfiles.get_by_path(PATH_B));
+		assert.isUndefined(app.diskfiles.find_editor_state(b.id));
+		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		tabs.reopen_last_closed_tab();
+		assert.isUndefined(tabs.by_diskfile_id.get(b.id));
+	});
+
+	test('closing the tab with the draft kept keeps the diskfile, listed for the draft', () => {
+		const { b, tabs } = setup_dirty();
 		filer_change('delete', PATH_B);
 		const tab = tabs.by_diskfile_id.get(b.id);
 		assert.ok(tab);
 
 		app.diskfiles.editor.close_tab(tab.id);
 
-		assert.isUndefined(app.diskfiles.get_by_path(PATH_B));
-		assert.isUndefined(app.get_diskfile_history(PATH_B));
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
-		tabs.reopen_last_closed_tab();
-		assert.isUndefined(tabs.by_diskfile_id.get(b.id));
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
+		assert.include(app.diskfiles.listed, b);
+		assert.notInclude(app.diskfiles.on_disk, b);
+		assert.strictEqual(app.diskfiles.find_editor_state(b.id)?.current_content, 'b edited');
 	});
-
-	test('closing all tabs discards it too', () => {
+	test('closing all tabs keeps the draft too', () => {
 		const { b, tabs } = setup_dirty();
 		filer_change('delete', PATH_B);
 
 		tabs.close_all_tabs();
 
-		assert.isUndefined(app.diskfiles.get_by_path(PATH_B));
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
 		assert.ok(app.diskfiles.get_by_path(PATH_A));
-		assert.ok(tabs.recently_closed_tabs.every((t) => t.diskfile_id !== b.id));
+		assert.isTrue(app.diskfiles.find_editor_state(b.id)?.has_unsaved_edits);
 	});
-
 	test('closing a tab of a file still on disk keeps it', () => {
 		const { a, tabs } = setup_dirty();
 		const tab = tabs.by_diskfile_id.get(a.id);
@@ -314,7 +329,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), a);
 	});
 
-	test('unsaved edits without an open tab do not keep a deleted file', () => {
+	test('unsaved edits without an open tab keep a deleted file too', () => {
 		const { b, tabs } = setup_dirty();
 		const tab = tabs.by_diskfile_id.get(b.id);
 		assert.ok(tab);
@@ -322,20 +337,51 @@ describe('delete with unsaved edits keeps the tab', () => {
 
 		filer_change('delete', PATH_B);
 
-		assert.isUndefined(app.diskfiles.get_by_path(PATH_B));
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
+		assert.isTrue(b.deleted_on_disk);
 	});
 
+	test('a draft from a file part (never in a tab) keeps a deleted or pruned file', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A, 'a'), create_disknode(PATH_B, 'b')]);
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(b);
+		const part = app.cell_registry.instantiate('DiskfilePart', { type: 'diskfile', path: PATH_B });
+		app.diskfiles.get_editor_state(b).current_content = 'part draft';
+		assert.isFalse(app.diskfiles.editor.tabs.by_diskfile_id.has(b.id));
+
+		app.diskfiles.reconcile([create_disknode(PATH_A, 'a')], ['/ws/']);
+
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
+		assert.isTrue(b.deleted_on_disk);
+		assert.strictEqual(part.diskfile, b);
+		assert.strictEqual(part.content, 'part draft');
+		assert.strictEqual(part.draft_status, 'deleted');
+
+		// discarding the draft lets it go
+		app.diskfiles.get_editor_state(b).discard_draft();
+		assert.isUndefined(app.diskfiles.get_by_path(PATH_B));
+		assert.isUndefined(part.diskfile);
+	});
+
+	test('a file without a draft is not kept', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_B, 'b')]);
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(b);
+		app.diskfiles.get_editor_state(b);
+
+		filer_change('delete', PATH_B);
+
+		assert.isUndefined(app.diskfiles.get_by_path(PATH_B));
+	});
 	test('saving recreates the file even with nothing left to save', async () => {
 		const { b, editor_state } = setup_dirty();
 		// back to the original entry: history keeps the unsaved alternate while
 		// the editor matches disk
-		const original = app
-			.get_diskfile_history(PATH_B)
-			?.entries.find((entry) => entry.is_original_state);
+		const original = editor_state.history.entries.find((entry) => entry.is_original_state);
 		assert.ok(original);
 		editor_state.set_content_from_history(original.id);
 		assert.isFalse(editor_state.has_changes);
-		assert.ok(app.get_diskfile_history(PATH_B)?.has_unsaved_edits);
+		assert.ok(editor_state.has_unsaved_edits);
 		const writes: Array<[string, string]> = [];
 		app.diskfiles.update = (path, content) => {
 			writes.push([path, content]);
@@ -366,19 +412,20 @@ describe('delete with unsaved edits keeps the tab', () => {
 		tabs.close_tab(b_tabs[0]!.id);
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
 
+		app.diskfiles.get_editor_state(b).discard_draft();
 		tabs.close_tab(b_tabs[1]!.id);
 		assert.isUndefined(app.diskfiles.get_by_path(PATH_B));
-		assert.isUndefined(app.get_diskfile_history(PATH_B));
+		assert.isUndefined(app.diskfiles.find_editor_state(b.id));
 	});
 
-	test('reusing a preview tab away from the file forgets it', () => {
+	test('reusing a preview tab away from the file keeps its draft', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A, 'a'), create_disknode(PATH_B, 'b')]);
 		const a = app.diskfiles.get_by_path(PATH_A);
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(a && b);
 		const { tabs } = app.diskfiles.editor;
 		const preview = tabs.preview_diskfile(b.id);
-		new DiskfileEditorState({ app, diskfile: b }).current_content = 'b edited';
+		app.diskfiles.get_editor_state(b).current_content = 'b edited';
 
 		filer_change('delete', PATH_B);
 		assert.isTrue(b.deleted_on_disk);
@@ -387,9 +434,9 @@ describe('delete with unsaved edits keeps the tab', () => {
 		tabs.preview_diskfile(a.id);
 
 		assert.strictEqual(preview.diskfile_id, a.id);
-		assert.isUndefined(app.diskfiles.get_by_path(PATH_B));
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
+		assert.include(app.diskfiles.listed, b);
 	});
-
 	test('a repeated delete keeps it flagged', () => {
 		const { b, tabs } = setup_dirty();
 		filer_change('delete', PATH_B);
@@ -401,20 +448,46 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.strictEqual(count_by_path(PATH_B), 1);
 	});
 
-	test('a diskfile part treats a flagged file as missing', () => {
-		const { b } = setup_dirty();
+	test('a diskfile part shows a flagged file for its draft', () => {
+		const { b, editor_state } = setup_dirty();
 		const part = app.cell_registry.instantiate('DiskfilePart', { type: 'diskfile', path: PATH_B });
 		assert.strictEqual(part.diskfile, b);
-		assert.strictEqual(part.content, 'b');
+		// the part sends the draft, marked
+		assert.strictEqual(part.content, 'b edited');
+		assert.strictEqual(part.draft_status, 'unsaved');
 
 		filer_change('delete', PATH_B);
 
-		assert.isUndefined(part.diskfile);
-		assert.isUndefined(part.content);
+		assert.strictEqual(part.diskfile, b);
+		assert.strictEqual(part.content, 'b edited');
+		assert.strictEqual(part.draft_status, 'deleted');
 
 		filer_change('add', PATH_B, 'b back');
 		assert.strictEqual(part.diskfile, b);
+		// the draft is kept over the recreated file, as a conflict
+		assert.strictEqual(part.content, 'b edited');
+		assert.strictEqual(part.draft_status, 'conflict');
+		assert.isTrue(editor_state.has_conflict);
+
+		editor_state.discard_draft();
 		assert.strictEqual(part.content, 'b back');
+		assert.isNull(part.draft_status);
+	});
+
+	test('a diskfile part sends the draft, not an older entry an editor views', () => {
+		const { editor_state } = setup_dirty();
+		const part = app.cell_registry.instantiate('DiskfilePart', { type: 'diskfile', path: PATH_B });
+		const original = editor_state.history.entries.find((entry) => entry.is_original_state);
+		assert.ok(original);
+		const older = editor_state.history.add_entry('older', { created: 1 });
+
+		editor_state.set_content_from_history(older.id);
+		assert.strictEqual(part.content, 'b edited');
+
+		editor_state.clear_unsaved_edits();
+		editor_state.set_content_from_history(older.id);
+		assert.strictEqual(part.content, 'b');
+		assert.isNull(part.draft_status);
 	});
 });
 

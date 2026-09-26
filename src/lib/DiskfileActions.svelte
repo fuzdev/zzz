@@ -61,7 +61,10 @@
 		<button
 			class="flex:1 palette_f"
 			type="button"
-			disabled={!editor_state.can_save || editor_state.saving}
+			disabled={!editor_state.can_save || editor_state.saving || editor_state.has_conflict}
+			title={editor_state.has_conflict
+				? 'changed on disk since you edited it — overwrite or reload above'
+				: undefined}
 			onclick={() => editor_state.save_changes()}
 		>
 			save changes

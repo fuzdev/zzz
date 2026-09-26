@@ -228,49 +228,61 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 		}
 	}
 
-	// Reference to the editor state for this part
-	#editor_state: { current_content: string } | null = $state(null); // TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
-
 	/**
-	 * The diskfile at `path`. A diskfile deleted on disk (kept only for a tab
-	 * with unsaved edits) counts as missing, so its stale content never feeds
-	 * into prompts.
+	 * The diskfile at `path`. One deleted on disk counts as missing unless it
+	 * has a draft — then it's kept for the draft (see `Diskfiles.remove_by_path`),
+	 * which the part shows and sends.
 	 */
 	readonly diskfile: Diskfile | null | undefined = $derived.by(() => {
 		if (!this.path) return null;
 		const diskfile = this.app.diskfiles.get_by_path(this.path);
-		return diskfile?.deleted_on_disk ? undefined : diskfile;
+		if (!diskfile?.deleted_on_disk) return diskfile;
+		return this.app.diskfiles.find_editor_state(diskfile.id)?.has_unsaved_edits
+			? diskfile
+			: undefined;
+	});
+
+	/**
+	 * How `content` relates to the disk: `'unsaved'` when it's the file's
+	 * draft, `'conflict'` when that draft predates a change on disk,
+	 * `'deleted'` when the file is gone from disk and only the draft remains,
+	 * else `null` (the disk content).
+	 */
+	readonly draft_status: 'unsaved' | 'conflict' | 'deleted' | null = $derived.by(() => {
+		const { diskfile } = this;
+		if (!diskfile) return null;
+		const editor_state = this.app.diskfiles.find_editor_state(diskfile.id);
+		if (!editor_state?.has_unsaved_edits) return null;
+		if (diskfile.deleted_on_disk) return 'deleted';
+		return editor_state.disk_conflict ? 'conflict' : 'unsaved';
 	});
 
 	// The current relative path value for display in the XML path attribute
 	readonly relative_path = $derived(this.diskfile?.path_relative);
 
 	/**
+	 * The file's draft if it has one (`draft_status` says so), else its disk
+	 * content — never merely an older history entry an editor is viewing.
 	 * Read-only: the part never writes to disk. Edits go through the file's
 	 * `DiskfileEditorState`, whose `save_changes` reports failures.
 	 *
 	 * `undefined` when there's no file at `path`, `null` when the file's
-	 * content wasn't loaded (`Diskfile.content_loaded`) — never the linked
-	 * editor's empty text, so an unloaded file can't pass for an empty one.
+	 * content wasn't loaded (`Diskfile.content_loaded`) — never an editor's
+	 * empty text, so an unloaded file can't pass for an empty one.
 	 */
 	override get content(): string | null | undefined {
-		if (!this.diskfile) return undefined;
-		if (!this.diskfile.content_loaded) return null;
-		// Return editor content if available, otherwise fall back to diskfile content
-		return this.#editor_state?.current_content ?? this.diskfile.content; // TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
+		const { diskfile } = this;
+		if (!diskfile) return undefined;
+		if (!diskfile.content_loaded) return null;
+		return (
+			this.app.diskfiles.find_editor_state(diskfile.id)?.history.draft_entry?.content ??
+			diskfile.content
+		);
 	}
 
 	constructor(options: DiskfilePartOptions) {
 		super(DiskfilePartJson, options);
 		this.init();
-	}
-
-	// TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
-	/**
-	 * Links this part to an editor state.
-	 */
-	link_editor_state(editor_state: { current_content: string } | null): void {
-		this.#editor_state = editor_state;
 	}
 }
 

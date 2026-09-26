@@ -6,14 +6,15 @@
 	import BrowserView from './BrowserView.svelte';
 	import { frontend_context } from '$lib/frontend.svelte.ts';
 	import ExternalLink from '$lib/ExternalLink.svelte';
+	import { create_detached } from '$lib/reactive_helpers.svelte.ts';
 
 	const app = frontend_context.get();
 
 	// TODO super hacky but w/e, inits app.browser to the global
-	const browser: Browser = ((app as any).browser ??= new Browser({
-		app,
-		json: { tabs: sample_tabs }
-	}));
+	// detached — it outlives this page (see `create_detached`)
+	const browser: Browser = ((app as any).browser ??= create_detached(
+		() => new Browser({ app, json: { tabs: sample_tabs } })
+	));
 </script>
 
 {#if browser.browserified}

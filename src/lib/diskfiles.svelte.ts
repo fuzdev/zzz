@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { untrack } from 'svelte';
+import { SvelteMap } from 'svelte/reactivity';
 import { strip_start } from '@fuzdev/fuz_util/string.ts';
 import { Uuid } from '@fuzdev/fuz_util/id.ts';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
@@ -24,6 +26,8 @@ import { HANDLED } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { create_single_index } from './indexed_collection_helpers.svelte.ts';
 import { DiskfilesEditor } from './diskfiles_editor.svelte.ts';
+import { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
+import { create_detached } from './reactive_helpers.svelte.ts';
 import { CellJson } from './cell_types.ts';
 import type { ActionInputs, ActionOutputs } from './action_collections.ts';
 
@@ -45,8 +49,17 @@ export interface DiskfileChangeTracker {
 }
 
 export class Diskfiles extends Cell<typeof DiskfilesJson> {
+	// TODO bound memory across files: every file opened keeps its state and history
+	// (each capped) until the diskfile goes away — maybe drop clean ones when their
+	// last view and tab close, or keep an app-wide history budget
+	/** The files' app-level editing states, by diskfile id — see `get_editor_state`. */
+	readonly #editor_states: SvelteMap<Uuid, DiskfileEditorState> = new SvelteMap();
+
 	readonly items: IndexedCollection<Diskfile> = new IndexedCollection({
-		dispose_item: (diskfile) => diskfile.dispose(),
+		dispose_item: (diskfile) => {
+			this.#remove_editor_state(diskfile.id);
+			diskfile.dispose();
+		},
 		indexes: [
 			create_single_index({
 				key: 'by_path',
@@ -65,9 +78,20 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		this.selected_file_id ? (this.items.by_id.get(this.selected_file_id) ?? null) : null
 	);
 
-	/** Diskfiles that exist on disk — excludes ones kept only for a tab with unsaved edits. */
+	/** Diskfiles that exist on disk — excludes ones kept only for unsaved edits. */
 	readonly on_disk: Array<Diskfile> = $derived(
 		this.items.values.filter((diskfile) => !diskfile.deleted_on_disk)
+	);
+
+	/**
+	 * The diskfiles the explorer lists: those on disk, plus ones deleted on disk
+	 * but kept for a draft, so every draft stays reachable.
+	 */
+	readonly listed: Array<Diskfile> = $derived(
+		this.items.values.filter(
+			(diskfile) =>
+				!diskfile.deleted_on_disk || !!this.#editor_states.get(diskfile.id)?.has_unsaved_edits
+		)
 	);
 
 	/** The editor for managing diskfiles editing state. */
@@ -141,12 +165,49 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
+	 * The app-level editing state of `diskfile` (its draft, history, and save
+	 * state), created on first use and kept until the diskfile is removed —
+	 * views read it, they don't own it. Safe to call from component init or a
+	 * `$derived`: it's created detached from the calling effect, and reading it
+	 * doesn't track the lookup. A diskfile no longer in the collection gets a
+	 * throwaway state.
+	 */
+	get_editor_state(diskfile: Diskfile): DiskfileEditorState {
+		const existing = untrack(() => this.#editor_states.get(diskfile.id));
+		if (existing) return existing;
+		return create_detached(() => {
+			const editor_state = new DiskfileEditorState({ app: this.app, diskfile });
+			if (this.items.by_id.get(diskfile.id) === diskfile) {
+				this.#editor_states.set(diskfile.id, editor_state);
+			} else {
+				// unmanaged, so nothing would dispose it — keep it out of the cell registry
+				editor_state.dispose();
+			}
+			return editor_state;
+		});
+	}
+
+	/** The editing state of diskfile `id` if one was created — see `get_editor_state`. */
+	find_editor_state(id: Uuid): DiskfileEditorState | undefined {
+		return this.#editor_states.get(id);
+	}
+
+	#remove_editor_state(id: Uuid): void {
+		const editor_state = this.#editor_states.get(id);
+		if (!editor_state) return;
+		this.#editor_states.delete(id);
+		editor_state.dispose();
+	}
+
+	/**
 	 * Adds a diskfile for `disknode`, or updates the existing one at the same
 	 * path in place — keeping its id, so tabs, selection, and parts stay attached.
 	 * A diskfile kept after a delete (see `remove_by_path`) is reattached this
 	 * way when its path reappears on disk. An existing diskfile whose content
 	 * and dependency data already match is left untouched, so a resync that
-	 * re-sends every file doesn't churn the unchanged ones.
+	 * re-sends every file doesn't churn the unchanged ones. A content change is
+	 * recorded in the file's editing state, if it has one
+	 * (`DiskfileEditorState.check_disk_changes`).
 	 */
 	upsert(disknode: SerializableDisknode): Diskfile {
 		const existing = this.items.by_optional('by_path', disknode.id);
@@ -163,6 +224,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			created: existing.created, // Preserve original creation date
 			updated: get_datetime_now() // TODO @many probably rely on the db to bump `updated`
 		});
+		untrack(() => this.#editor_states.get(existing.id))?.check_disk_changes();
 		return existing;
 	}
 
@@ -216,19 +278,17 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Handles the diskfile at `path` being gone from disk.
 	 *
-	 * If it's open in a tab and its history holds unsaved edits, it's kept —
-	 * flagged `deleted_on_disk`, tabs and history intact — so the user can save
-	 * it back (recreating the file) or close the tab to discard. Otherwise it's
-	 * removed along with its tabs and history.
+	 * If it has a draft — edited in a tab, a file part, anywhere — it's kept,
+	 * flagged `deleted_on_disk` with its tabs and editing state intact, so the
+	 * user can save it back (recreating the file) or discard the draft (see
+	 * `release_if_unneeded`). Otherwise it's removed along with its tabs and
+	 * editing state.
 	 */
 	remove_by_path(path: string): void {
 		const diskfile = this.items.by_optional('by_path', path);
 		if (!diskfile) return;
 
-		if (
-			this.editor.tabs.by_diskfile_id.has(diskfile.id) &&
-			this.app.get_diskfile_history(diskfile.path)?.has_unsaved_edits
-		) {
+		if (this.#editor_states.get(diskfile.id)?.has_unsaved_edits) {
 			diskfile.deleted_on_disk = true;
 			return;
 		}
@@ -237,25 +297,41 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Called when a diskfile's last tab closes. A diskfile kept only for its
-	 * tab after a delete is forgotten now — closing the tab discards the edits.
+	 * Forgets diskfile `id` if it's deleted on disk and nothing holds it anymore
+	 * — no draft and no tab. Called when its draft is discarded and when its
+	 * last tab closes.
 	 */
-	handle_diskfile_detached(diskfile_id: Uuid): void {
-		const diskfile = this.items.by_id.get(diskfile_id);
-		if (diskfile?.deleted_on_disk) {
+	release_if_unneeded(id: Uuid): void {
+		const diskfile = this.items.by_id.get(id);
+		if (
+			diskfile?.deleted_on_disk &&
+			!this.#editor_states.get(id)?.has_unsaved_edits &&
+			!this.editor.tabs.by_diskfile_id.has(id)
+		) {
 			this.#forget(diskfile);
 		}
 	}
 
 	/**
-	 * Removes a diskfile with its editor tabs and edit history. If it was
-	 * selected, selection follows the editor's newly selected tab, or clears.
+	 * Called when a diskfile's last tab closes. A diskfile deleted on disk with
+	 * no draft left is forgotten now (see `release_if_unneeded`). Otherwise its
+	 * editing state resets what it shows (`DiskfileEditorState.reset_view`), so
+	 * a reopen shows the draft if there is one, else the disk content.
+	 */
+	handle_diskfile_detached(diskfile_id: Uuid): void {
+		this.release_if_unneeded(diskfile_id);
+		this.#editor_states.get(diskfile_id)?.reset_view();
+	}
+
+	/**
+	 * Removes a diskfile with its editor tabs and editing state (disposed with
+	 * the diskfile). If it was selected, selection follows the editor's newly
+	 * selected tab, or clears.
 	 */
 	#forget(diskfile: Diskfile): void {
 		// remove first, so closing its tabs re-entering `handle_diskfile_detached` is a no-op
 		this.items.remove(diskfile.id);
 		this.editor.remove_diskfile(diskfile.id);
-		this.app.delete_diskfile_history(diskfile.path);
 
 		if (this.selected_file_id === diskfile.id) {
 			this.selected_file_id = this.editor.tabs.selected_diskfile_id;

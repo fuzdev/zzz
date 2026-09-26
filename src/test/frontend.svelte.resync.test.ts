@@ -15,7 +15,6 @@ import type { SessionLoadData } from '$lib/action_specs.ts';
 import type { WorkspaceInfoJson } from '$lib/workspace.svelte.ts';
 import { ERROR_WORKSPACE_NOT_OPEN } from '$lib/workspace_helpers.ts';
 import type { Terminal } from '$lib/terminal.svelte.ts';
-import { DiskfileEditorState } from '$lib/diskfile_editor_state.svelte.ts';
 import {
 	TERMINAL_LOST_TO_RESTART_MESSAGE,
 	TERMINAL_LOST_WHILE_DISCONNECTED_MESSAGE
@@ -327,7 +326,7 @@ describe('file reconcile', () => {
 		const a = app.diskfiles.get_by_path(ZZZ_A);
 		assert.ok(a);
 		app.diskfiles.select(a.id, true);
-		const editor_state = new DiskfileEditorState({ app, diskfile: a });
+		const editor_state = app.diskfiles.get_editor_state(a);
 		editor_state.current_content = 'a edited';
 
 		await load({ files: [] });
@@ -428,7 +427,7 @@ describe('workspaces after a restart', () => {
 		});
 		const b = app.diskfiles.get_by_path(WS_B)!;
 		app.diskfiles.select(b.id, true);
-		new DiskfileEditorState({ app, diskfile: b }).current_content = 'b edited';
+		app.diskfiles.get_editor_state(b).current_content = 'b edited';
 	};
 
 	/** The backend restarted without the runtime workspace. */

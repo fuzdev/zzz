@@ -5,7 +5,20 @@ import { Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { DiskfileTabs } from './diskfile_tabs.svelte.ts';
+import type { DiskfileTab } from './diskfile_tab.svelte.ts';
 import { CellJson } from './cell_types.ts';
+
+/**
+ * A tab close waiting on the user — see `DiskfilesEditor.request_close_tab`.
+ * Whoever acts on it (e.g. saving first) holds the request and checks
+ * `cancelled` before closing, since saving the draft lapses the request.
+ */
+export interface DiskfileTabCloseRequest {
+	readonly tab_id: Uuid;
+	readonly draft_id: Uuid;
+	/** Set by `cancel_close_tab` — the user chose to keep the tab. */
+	cancelled: boolean;
+}
 
 export const DiskfilesEditorJson = CellJson.extend({
 	show_sort_controls: z.boolean().default(false)
@@ -24,6 +37,35 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 
 	/** Tabs for managing the open diskfiles. */
 	readonly tabs: DiskfileTabs = new DiskfileTabs({ app: this.app });
+
+	/** The latest tab close asked about — see `pending_close_request`. */
+	#pending_close: DiskfileTabCloseRequest | null = $state.raw(null);
+
+	/**
+	 * A tab close waiting on the user's choice — save, don't save, or cancel —
+	 * because it's the last tab of a file with a draft (see `request_close_tab`).
+	 * Lapses on its own once that tab closes or that draft is gone (saved,
+	 * discarded, …), so a later draft never revives it; a lapsed request is
+	 * dropped by the next close or request.
+	 */
+	readonly pending_close_request: DiskfileTabCloseRequest | null = $derived.by(() => {
+		const request = this.#pending_close;
+		if (!request) return null;
+		const tab = this.tabs.items.by_id.get(request.tab_id);
+		if (!tab) return null;
+		const draft = this.app.diskfiles.find_editor_state(tab.diskfile_id)?.history.draft_entry;
+		return draft?.id === request.draft_id ? request : null;
+	});
+
+	/** The tab `pending_close_request` asks about. */
+	readonly pending_close_tab: DiskfileTab | undefined = $derived(
+		this.pending_close_request
+			? this.tabs.items.by_id.get(this.pending_close_request.tab_id)
+			: undefined
+	);
+
+	/** The id of `pending_close_tab`. */
+	readonly pending_close_tab_id: Uuid | null = $derived(this.pending_close_tab?.id ?? null);
 
 	constructor(options: DiskfilesEditorOptions) {
 		super(DiskfilesEditorJson, options);
@@ -63,11 +105,52 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	}
 
 	/**
-	 * Closes a tab by id.
+	 * Closes a tab by id, now — see `request_close_tab` for the user-facing
+	 * close. If its file was the selected one, selection follows the newly
+	 * selected tab. A draft isn't lost either way: it's app-level, and the file
+	 * reopens on it.
 	 */
 	close_tab(tab_id: Uuid): void {
 		console.log('DiskfilesEditor.close_tab', { tab_id });
+		const tab = this.tabs.items.by_id.get(tab_id);
+		if (!tab) return;
+		const { diskfiles } = this.app;
+		const was_selected_file = diskfiles.selected_file_id === tab.diskfile_id;
+		if (this.#pending_close?.tab_id === tab_id || !this.pending_close_request) {
+			this.#pending_close = null;
+		}
 		this.tabs.close_tab(tab_id);
+		if (was_selected_file && diskfiles.selected_file_id === tab.diskfile_id) {
+			diskfiles.selected_file_id = this.tabs.selected_diskfile_id;
+		}
+	}
+
+	/**
+	 * Closes a tab as the user asked, like VS Code: the last tab of a file with a
+	 * draft isn't closed yet — it becomes `pending_close_tab_id`, for the user
+	 * to save, not save (`DiskfileEditorState.discard_draft`), or cancel.
+	 *
+	 * @returns whether the tab closed now
+	 */
+	request_close_tab(tab_id: Uuid): boolean {
+		const tab = this.tabs.items.by_id.get(tab_id);
+		if (!tab) return false;
+		const last_tab = this.tabs.ordered_tabs.every(
+			(t) => t.id === tab_id || t.diskfile_id !== tab.diskfile_id
+		);
+		const draft = this.app.diskfiles.find_editor_state(tab.diskfile_id)?.history.draft_entry;
+		if (last_tab && draft) {
+			this.#pending_close = { tab_id, draft_id: draft.id, cancelled: false };
+			return false;
+		}
+		this.close_tab(tab_id);
+		return true;
+	}
+
+	/** Cancels a pending tab close, marking its request `cancelled` — see `request_close_tab`. */
+	cancel_close_tab(): void {
+		if (this.#pending_close) this.#pending_close.cancelled = true;
+		this.#pending_close = null;
 	}
 
 	/**

@@ -196,9 +196,10 @@ describe('DiskfilePart content access', () => {
 			path
 		});
 		assert.strictEqual(part.content, TEST_CONTENT.BASIC);
-		// a linked editor shows '' for an unloaded file
-		part.link_editor_state({ current_content: '' });
+		// the file's editor shows '' for an unloaded file
+		const editor_state = app.diskfiles.get_editor_state(diskfile);
 		diskfile.content = null;
+		assert.strictEqual(editor_state.current_content, '');
 
 		assert.isNull(part.content);
 		// marked in the formatted prompt, not silently dropped

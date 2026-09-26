@@ -1,5 +1,4 @@
 import { create_context } from '@fuzdev/fuz_ui/context_helpers.ts';
-import { SvelteMap } from 'svelte/reactivity';
 import { z } from 'zod';
 import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
 import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
@@ -35,14 +34,13 @@ import {
 } from './terminal_helpers.ts';
 import type { ZzzOptions } from './config_helpers.ts';
 import { BOTS_DEFAULT } from './config_defaults.ts';
-import { DiskfileDirectoryPath, DiskfilePath } from './diskfile_types.ts';
+import { DiskfileDirectoryPath } from './diskfile_types.ts';
 import { cell_classes } from './cell_classes.ts';
 import { CellJson } from './cell_types.ts';
 import { Ui, UiJson } from './ui.svelte.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Socket } from './socket.svelte.ts';
 import { Capabilities } from './capabilities.svelte.ts';
-import { DiskfileHistory } from './diskfile_history.svelte.ts';
 import { HANDLED } from './cell_helpers.ts';
 import { ActionDispatcher } from '@fuzdev/fuz_app/actions/action_dispatcher.ts';
 import {
@@ -60,6 +58,7 @@ import type { FrontendActionHandlers } from './frontend_action_types.ts';
 import { ActionOutputs } from './action_collections.ts';
 import { all_action_specs } from './action_specs.ts';
 import { create_frontend_action_handlers } from './frontend_action_handlers.ts';
+import { create_detached } from './reactive_helpers.svelte.ts';
 
 // TODO this is over-used, see also `app_context` for the user pattern
 export const frontend_context = create_context<Frontend>();
@@ -210,9 +209,6 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		return tag_set;
 	});
 
-	// Store DiskfileHistory objects by file path
-	readonly diskfile_histories: SvelteMap<DiskfilePath, DiskfileHistory> = new SvelteMap();
-
 	/** See into Zzz's future. */
 	futuremode = $state.raw(false);
 
@@ -305,10 +301,15 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 			peer: this.peer,
 			environment: this,
 			on_action_event: (event) => {
-				const action = new Action({
-					app: this,
-					json: { method: event.spec.method, action_event_data: event.toJSON() }
-				});
+				// `app.api` calls can come from component init, `onMount`, or an `$effect`,
+				// and the action outlives them (see `create_detached`)
+				const action = create_detached(
+					() =>
+						new Action({
+							app: this,
+							json: { method: event.spec.method, action_event_data: event.toJSON() }
+						})
+				);
 				// listen before adding, so an action trimmed right away stops listening when disposed
 				action.listen_to_action_event(event);
 				this.actions.add(action);
@@ -682,36 +683,6 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		} else {
 			this.provider_status.push(status);
 		}
-	}
-
-	// TODO refactor
-	get_diskfile_history(path: DiskfilePath): DiskfileHistory | undefined {
-		return this.diskfile_histories.get(path);
-	}
-
-	// TODO refactor
-	/**
-	 * Creates the edit history for `path`, disposing any it replaces.
-	 */
-	create_diskfile_history(path: DiskfilePath): DiskfileHistory {
-		this.diskfile_histories.get(path)?.dispose();
-		const history = new DiskfileHistory({ app: this, json: { path } });
-		this.diskfile_histories.set(path, history);
-		return history;
-	}
-
-	// TODO refactor
-	/**
-	 * Removes and disposes the edit history for `path`.
-	 *
-	 * @returns whether a history existed
-	 */
-	delete_diskfile_history(path: DiskfilePath): boolean {
-		const history = this.diskfile_histories.get(path);
-		if (!history) return false;
-		this.diskfile_histories.delete(path);
-		history.dispose();
-		return true;
 	}
 
 	/**

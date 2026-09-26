@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { slide } from 'svelte/transition';
 
 	import { DiskfilePart } from './part.svelte.ts';
@@ -8,7 +7,7 @@
 	import DiskfileActions from './DiskfileActions.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 	import DiskfileMetrics from './DiskfileMetrics.svelte';
-	import { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
+	import DiskfileConflictNotice from './DiskfileConflictNotice.svelte';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
 	import { icon_file } from '@fuzdev/fuz_ui/icons.ts';
@@ -28,50 +27,22 @@
 
 	const { diskfile } = $derived(diskfile_part);
 
-	// Create editor state reference - will be initialized in the effect
-	// TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
-	// maybe this instance is created once, and it gets a thunk for the diskfile? `DikfileEditorState.of(() => diskfile)`
-	let editor_state: DiskfileEditorState | undefined = $state.raw();
+	// the file's app-level editing state, shared with its other views — disk changes
+	// reach it while this is unmounted, and the part reads its content from it
+	const editor_state = $derived(diskfile ? app.diskfiles.get_editor_state(diskfile) : undefined);
 
 	// Keep track of the content editor for focusing
 	let content_editor: { focus: () => void } | undefined = $state.raw();
+	let conflict_notice: { focus: () => boolean } | undefined = $state.raw();
+
+	const save = async (): Promise<void> => {
+		if (!editor_state) return;
+		// a blocked save points at the conflict notice rather than doing nothing silently
+		if (editor_state.has_conflict && conflict_notice?.focus()) return;
+		await editor_state.save_changes();
+	};
 
 	let show_file_picker = $state.raw(false);
-
-	// TODO probably refactor to avoid the effect, look also at `TODO @many refactor, maybe move a collection on `app.diskfiles`?`
-	// Effect for managing editor state lifecycle
-	$effect.pre(() => {
-		// Track the diskfile from the part
-		if (!diskfile) {
-			// Clear editor state if no diskfile is available
-			editor_state = undefined;
-			diskfile_part.link_editor_state(null); // TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
-			return;
-		}
-
-		// Here's the important part: we use untrack to avoid re-creating
-		// the editor state on every render while still updating it when needed
-		untrack(() => {
-			// Create new editor state if it doesn't exist
-			if (!editor_state) {
-				editor_state = new DiskfileEditorState({ app, diskfile }); // TODO @many refactor, maybe move a collection on `app.diskfiles`?
-				diskfile_part.link_editor_state(editor_state); // TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
-				return;
-			}
-
-			// If diskfile id changed, update the editor state with the new diskfile
-			if (editor_state.diskfile.id !== diskfile.id) {
-				editor_state.update_diskfile(diskfile);
-				diskfile_part.link_editor_state(editor_state); // TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
-				return;
-			}
-
-			// Check for external disk changes
-			if (diskfile.content !== editor_state.last_seen_disk_content) {
-				editor_state.check_disk_changes();
-			}
-		});
-	});
 </script>
 
 <div class="mb_xs">
@@ -98,16 +69,34 @@
 			<p class="mb_xs color_c_50">
 				<small>{DISKFILE_CONTENT_NOT_LOADED_MESSAGE} — read-only</small>
 			</p>
+		{:else if diskfile.deleted_on_disk}
+			<p class="mb_xs color_c_50">
+				<small>
+					deleted on disk — save to recreate it with your edits, or
+					<button
+						type="button"
+						class="inline sm"
+						onclick={() => editor_state?.discard_draft()}
+						title="discard the unsaved edits and forget the file"
+					>
+						discard them
+					</button>
+				</small>
+			</p>
 		{/if}
+		<DiskfileConflictNotice
+			bind:this={conflict_notice}
+			{editor_state}
+			onresolve={() => content_editor?.focus()}
+			attrs={{ class: 'mb_xs' }}
+		/>
 		<div class="column">
 			<ContentEditor
 				bind:this={content_editor}
 				bind:content={
-					() => editor_state!.current_content,
+					() => editor_state?.current_content ?? '',
 					(content) => {
-						if (editor_state) {
-							editor_state.current_content = content;
-						}
+						if (editor_state) editor_state.current_content = content;
 					}
 				}
 				token_count={editor_state.current_token_count}
@@ -116,9 +105,7 @@
 					: '[content not loaded]'}
 				show_stats={false}
 				readonly={!editor_state.content_loaded}
-				onsave={async () => {
-					await editor_state?.save_changes();
-				}}
+				onsave={save}
 			/>
 
 			{#if show_actions}

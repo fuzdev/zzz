@@ -6,6 +6,7 @@
 	import { get_part_type_icon, type PartOwner } from './part_helpers.ts';
 	import PartEditorForText from './PartEditorForText.svelte';
 	import PartContextmenu from './PartContextmenu.svelte';
+	import DiskfilePartDraftLabel from './DiskfilePartDraftLabel.svelte';
 	import PartEditorForDiskfile from './PartEditorForDiskfile.svelte';
 	import PartToggleButton from './PartToggleButton.svelte';
 	import PartRemoveButton from './PartRemoveButton.svelte';
@@ -28,6 +29,7 @@
 			<div class="font_size_lg m_0">
 				<Svg data={get_part_type_icon(part)} />&nbsp;
 				{part.name}
+				{#if part.type === 'diskfile'}<DiskfilePartDraftLabel {part} />{/if}
 			</div>
 			<div class="display:flex gap_xs">
 				<PartToggleButton {part} />

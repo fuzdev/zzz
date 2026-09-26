@@ -6,6 +6,7 @@
 	import { projects_context, Projects } from './projects.svelte.ts';
 	import { frontend_context } from '$lib/frontend.svelte.ts';
 	import { parse_url_param_uuid } from '$lib/url_params_helpers.ts';
+	import { create_detached } from '$lib/reactive_helpers.svelte.ts';
 
 	const { children, params } = $props();
 
@@ -13,7 +14,8 @@
 
 	// Initialize the Projects instance and set it in context
 
-	projects ??= new Projects({ app });
+	// detached — it outlives this layout (see `create_detached`)
+	projects ??= create_detached(() => new Projects({ app }));
 	projects_context.set(projects);
 
 	// Synchronize URL params to project state

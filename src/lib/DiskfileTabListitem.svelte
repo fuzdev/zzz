@@ -5,6 +5,7 @@
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import type { DiskfileTab } from './diskfile_tab.svelte.ts';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
+	import { frontend_context } from './frontend.svelte.ts';
 
 	const {
 		tab,
@@ -18,10 +19,24 @@
 		onopen: (tab: DiskfileTab) => void;
 	} = $props();
 
+	const app = frontend_context.get();
+
 	const diskfile = $derived(tab.diskfile);
+	const editor_state = $derived(diskfile ? app.diskfiles.get_editor_state(diskfile) : null);
+	const dirty = $derived(editor_state?.dirty ?? false);
+	const conflict = $derived(editor_state?.has_conflict ?? false);
 
 	const path = $derived(diskfile?.path_relative ?? '[no diskfile found]'); // TODO ?
 	const deleted_on_disk = $derived(diskfile?.deleted_on_disk ?? false);
+	// the accessible name carries the status the ● and strikethrough show
+	const status = $derived(
+		[
+			deleted_on_disk && 'deleted on disk',
+			conflict ? 'unsaved changes, changed on disk' : dirty && 'unsaved changes'
+		]
+			.filter(Boolean)
+			.join(', ')
+	);
 </script>
 
 <DiskfileContextmenu {diskfile}>
@@ -37,7 +52,13 @@
 			class:selected={tab.is_selected}
 			class:preview={tab.is_preview}
 			class:deleted={deleted_on_disk}
-			title={deleted_on_disk ? `${path} — deleted on disk, has unsaved edits` : undefined}
+			title={deleted_on_disk
+				? `${path} — deleted on disk, has unsaved edits`
+				: conflict
+					? `${path} — changed on disk since you edited it`
+					: dirty
+						? `${path} — unsaved changes`
+						: undefined}
 			onclick={(e) => {
 				swallow(e);
 				// If it's a preview tab and it's double-clicked, promote it to permanent
@@ -55,12 +76,17 @@
 					onselect(tab);
 				}
 			}}
-			aria-label={deleted_on_disk ? `Tab ${path} (deleted on disk)` : `Tab ${path}`}
+			aria-label={status ? `Tab ${path} (${status})` : `Tab ${path}`}
 			aria-pressed={tab.is_selected}
 		>
 			<div class="ellipsis font-weight:400 flex:1">
 				<small class="ml_xs">{path}</small>
-				{#if deleted_on_disk}<small class="ml_xs color_c_50">(deleted)</small>{/if}
+				{#if deleted_on_disk}
+					<small class="ml_xs color_c_50" aria-hidden="true">(deleted)</small>
+				{/if}
+				{#if dirty}
+					<small class="ml_xs" class:color_c_50={conflict} aria-hidden="true">●</small>
+				{/if}
 			</div>
 			<button
 				type="button"

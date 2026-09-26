@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
 import { test, beforeEach, describe, assert } from 'vitest';
-import { create_uuid, UuidWithDefault } from '@fuzdev/fuz_util/id.ts';
+import { create_uuid, UuidWithDefault, type Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import { DiskfileTabs } from '$lib/diskfile_tabs.svelte.ts';
+import { DISKFILE_TABS_CLOSED_MAX, DiskfileTabs } from '$lib/diskfile_tabs.svelte.ts';
 import { DiskfileTab } from '$lib/diskfile_tab.svelte.ts';
 import { Frontend } from '$lib/frontend.svelte.ts';
 
@@ -431,6 +431,37 @@ describe('DiskfileTabs', () => {
 			assert.isNull(tabs.preview_tab_id);
 			assert.isNull(tabs.selected_tab_id);
 			assert.strictEqual(tabs.recently_closed_tabs.length, 3);
+		});
+	});
+
+	describe('closed-tab memory is bounded', () => {
+		test('closing many tabs keeps only the most recent', () => {
+			let last_tab_id: Uuid | null = null;
+			for (let i = 0; i < DISKFILE_TABS_CLOSED_MAX * 3; i++) {
+				const tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+				tabs.close_tab(tab.id);
+				last_tab_id = tab.id;
+			}
+
+			assert.strictEqual(tabs.recently_closed_tabs.length, DISKFILE_TABS_CLOSED_MAX);
+			assert.strictEqual(tabs.closed_tab_diskfiles.size, DISKFILE_TABS_CLOSED_MAX);
+			// the newest are the ones kept
+			assert.strictEqual(tabs.recently_closed_tabs.at(-1)?.id, last_tab_id);
+			assert.ok(last_tab_id && tabs.closed_tab_diskfiles.has(last_tab_id));
+		});
+
+		test('close_all_tabs stays within the bound', () => {
+			const ids = [TEST_DISKFILE_ID_1, TEST_DISKFILE_ID_2, TEST_DISKFILE_ID_3];
+			for (let i = 0; i < DISKFILE_TABS_CLOSED_MAX; i++) {
+				const tab = tabs.open_diskfile(ids[i % ids.length]!);
+				tabs.close_tab(tab.id);
+			}
+			for (const id of ids) tabs.open_diskfile(id);
+
+			tabs.close_all_tabs();
+
+			assert.isAtMost(tabs.recently_closed_tabs.length, DISKFILE_TABS_CLOSED_MAX);
+			assert.strictEqual(tabs.closed_tab_diskfiles.size, DISKFILE_TABS_CLOSED_MAX);
 		});
 	});
 

@@ -60,7 +60,7 @@
 			swallow(e);
 			const selected_tab = editor.tabs.selected_tab;
 			if (selected_tab) {
-				editor.close_tab(selected_tab.id);
+				editor.request_close_tab(selected_tab.id);
 			}
 		}
 
@@ -121,13 +121,7 @@
 							<DiskfileTabListitem
 								{tab}
 								onselect={(tab) => diskfiles.select(tab.diskfile_id)}
-								onclose={(tab) => {
-									// TODO does this logic belong in a `diskfiles` method that wraps editor.close_tab?
-									if (tab.diskfile_id === selected_diskfile?.id) {
-										diskfiles.select(null);
-									}
-									editor.close_tab(tab.id);
-								}}
+								onclose={(tab) => editor.request_close_tab(tab.id)}
 								onopen={(tab) => editor.open_tab(tab.id)}
 							/>
 						</div>

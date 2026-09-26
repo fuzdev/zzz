@@ -470,6 +470,12 @@ readonly complex = $derived.by(() => expensiveCalculation(this.count));
 
 No `$effect` in Cell classes — effects belong in Svelte components only.
 
+A Cell's `$derived` fields are owned by the effect running when it's
+constructed, so a Cell that outlives a component is never constructed in its
+init, `onMount`, or an `$effect` directly: wrap the construction in `create_detached`
+(`reactive_helpers.svelte.ts`) — or its deriveds can freeze when the component
+unmounts. Event handlers and async code are safe.
+
 ### Error Handling
 
 ```typescript

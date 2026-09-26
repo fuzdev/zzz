@@ -2,7 +2,7 @@
 
 import { test, beforeEach, describe, assert } from 'vitest';
 
-import { DiskfileEditorState } from '$lib/diskfile_editor_state.svelte.ts';
+import type { DiskfileEditorState } from '$lib/diskfile_editor_state.svelte.ts';
 import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
 import { Frontend } from '$lib/frontend.svelte.ts';
 import { Diskfile } from '$lib/diskfile.svelte.ts';
@@ -31,10 +31,7 @@ beforeEach(() => {
 	});
 
 	// Create the editor state with real components
-	editor_state = new DiskfileEditorState({
-		app,
-		diskfile: test_diskfile
-	});
+	editor_state = app.diskfiles.get_editor_state(test_diskfile);
 });
 
 describe('disk change detection', () => {
@@ -67,7 +64,7 @@ describe('disk change detection', () => {
 		assert.strictEqual(editor_state.last_seen_disk_content, disk_content);
 
 		// History should have a new entry with disk change flag
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		const disk_entry = history.entries.find(
 			(entry) => entry.is_disk_change && entry.content === disk_content
 		);
@@ -113,10 +110,7 @@ describe('disk change detection', () => {
 			content: 'Initial content'
 		});
 
-		const new_editor_state = new DiskfileEditorState({
-			app,
-			diskfile: new_diskfile
-		});
+		const new_editor_state = app.diskfiles.get_editor_state(new_diskfile);
 
 		// Artificially set last_seen_disk_content to null to simulate first check
 		new_editor_state.last_seen_disk_content = null;
@@ -145,7 +139,7 @@ describe('disk change detection', () => {
 		assert.strictEqual(editor_state.last_seen_disk_content, 'Changed on disk');
 
 		// Find the disk change entry
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		const disk_entry = history.entries.find(
 			(entry) => entry.is_disk_change && entry.content === 'Changed on disk'
 		);
@@ -164,7 +158,7 @@ describe('disk change detection', () => {
 		test_diskfile.content = 'First disk change';
 		editor_state.check_disk_changes();
 
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		const count_after_first = history.entries.length;
 
 		// Now make the same disk change again
@@ -176,7 +170,7 @@ describe('disk change detection', () => {
 
 	test('marks existing entry as disk change when content matches', () => {
 		// Add an entry to history that isn't initially marked as a disk change
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		const entry = history.add_entry('New content on disk', {
 			is_disk_change: false,
 			is_unsaved_edit: true // Initially mark as unsaved
@@ -202,7 +196,7 @@ describe('disk change detection', () => {
 describe('file history management', () => {
 	test('creates history entries for disk changes', () => {
 		// Initial state
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 
 		// Make a sequence of disk changes
 		test_diskfile.content = 'First disk change';
@@ -246,7 +240,7 @@ describe('file history management', () => {
 
 	test('with user selection of older history maintains that selection during disk change', () => {
 		// Add entries to history
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		const older_entry = history.add_entry('Older entry');
 
 		// Select the older entry
@@ -280,22 +274,25 @@ describe('save changes behavior', () => {
 		assert.ok(!editor_state.content_was_modified_by_user);
 	});
 
-	test('saving during disk changes preserves selected content', async () => {
-		// Make user edit
+	test('a disk change under an edit pauses saving until the user overwrites', async () => {
 		editor_state.current_content = 'User edit';
 
-		// Simulate disk change
+		// changed on disk under the edit
 		test_diskfile.content = 'Disk change';
 		editor_state.check_disk_changes();
+		assert.isTrue(editor_state.has_conflict);
 
-		// Save user changes (should overwrite disk change)
-		await editor_state.save_changes();
+		// a plain save never overwrites it silently
+		assert.isFalse(await editor_state.save_changes());
+		assert.strictEqual(test_diskfile.content, 'Disk change');
+		assert.strictEqual(editor_state.current_content, 'User edit');
 
-		// Disk should have user content
+		// the user chose to overwrite
+		assert.isTrue(await editor_state.save_changes({ overwrite: true }));
 		assert.strictEqual(test_diskfile.content, 'User edit');
-
-		// Last seen content should be updated
 		assert.strictEqual(editor_state.last_seen_disk_content, 'User edit');
+		assert.isFalse(editor_state.has_conflict);
+		assert.isFalse(editor_state.disk_conflict);
 	});
 });
 
@@ -310,7 +307,7 @@ describe('edge cases', () => {
 		assert.strictEqual(editor_state.last_seen_disk_content, '');
 
 		// History should include empty content entry
-		const history = app.get_diskfile_history(TEST_PATH)!;
+		const history = editor_state.history;
 		const empty_entry = history.entries.find((e) => e.content === '' && e.is_disk_change);
 
 		assert.include(empty_entry, {
@@ -329,13 +326,10 @@ describe('edge cases', () => {
 		});
 
 		// Create editor state but clear the history manually
-		const empty_history_editor = new DiskfileEditorState({
-			app,
-			diskfile: empty_history_diskfile
-		});
+		const empty_history_editor = app.diskfiles.get_editor_state(empty_history_diskfile);
 
 		// Manually clear history entries
-		const history = app.get_diskfile_history(empty_history_path)!;
+		const history = empty_history_editor.history;
 		history.entries = [];
 
 		// Simulate disk change

@@ -64,7 +64,7 @@
 					<ContextmenuEntry
 						icon={icon_remove}
 						run={() => {
-							diskfiles.editor.close_tab(tab.id);
+							diskfiles.editor.request_close_tab(tab.id);
 						}}
 					>
 						<span>close tab</span>

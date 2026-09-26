@@ -31,6 +31,7 @@
 	import { ModelJson } from '$lib/model.svelte.ts';
 	import { DOCS_PATH } from '@fuzdev/fuz_ui/docs_helpers.svelte.ts';
 	import { create_session_recheck } from '$lib/session_recheck.ts';
+	import { create_detached } from '$lib/reactive_helpers.svelte.ts';
 
 	const { children, params } = $props();
 
@@ -73,9 +74,13 @@
 	// TODO init properly from data
 	const init_app = (): void => {
 		const zzz_config = create_zzz_config();
-		const new_app = new App({ on_unauthenticated: () => void recheck_session() });
-		new_app.add_providers(zzz_config.providers.map((p) => ProviderJson.parse(p))); // TODO handle errors
-		new_app.models.add_many(zzz_config.models.map((m) => ModelJson.parse(m))); // TODO handle errors
+		// detached from the effect that runs this — the app outlives it (see `create_detached`)
+		const new_app = create_detached(() => {
+			const created = new App({ on_unauthenticated: () => void recheck_session() });
+			created.add_providers(zzz_config.providers.map((p) => ProviderJson.parse(p))); // TODO handle errors
+			created.models.add_many(zzz_config.models.map((m) => ModelJson.parse(m))); // TODO handle errors
+			return created;
+		});
 
 		app = new_app;
 

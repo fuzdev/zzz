@@ -5,6 +5,7 @@
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 	import { icon_file } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
+	import { frontend_context } from './frontend.svelte.ts';
 
 	const {
 		diskfile,
@@ -21,6 +22,13 @@
 		 */
 		onselect?: (diskfile: Diskfile, open_not_preview: boolean) => void;
 	} = $props();
+
+	const app = frontend_context.get();
+
+	// only files already opened have an editing state — listing never creates one
+	const editor_state = $derived(app.diskfiles.find_editor_state(diskfile.id));
+	const dirty = $derived(editor_state?.dirty ?? false);
+	const conflict = $derived(editor_state?.has_conflict ?? false);
 
 	// TODO add a visible status when open in a tab
 </script>
@@ -46,12 +54,30 @@
 					}
 				}
 			: undefined}
-		aria-label={diskfile.path_relative ?? undefined}
+		aria-label={[
+			diskfile.path_relative,
+			diskfile.deleted_on_disk && 'deleted on disk',
+			conflict ? 'unsaved changes, changed on disk' : dirty && 'unsaved changes'
+		]
+			.filter(Boolean)
+			.join(', ') || undefined}
 		aria-pressed={selected}
 	>
 		<small class="ellipsis">
 			<Svg data={icon_file} />
-			<span class="ml_xs">{diskfile.path_relative}</span>
+			<span class="ml_xs" class:deleted={diskfile.deleted_on_disk}>{diskfile.path_relative}</span>
+			{#if diskfile.deleted_on_disk}
+				<span class="color_c_50" aria-hidden="true">(deleted)</span>
+			{/if}
+			{#if dirty}
+				<span class:color_c_50={conflict} aria-hidden="true">●</span>
+			{/if}
 		</small>
 	</div>
 </DiskfileContextmenu>
+
+<style>
+	.deleted {
+		text-decoration: line-through;
+	}
+</style>

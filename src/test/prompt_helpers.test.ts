@@ -12,6 +12,7 @@ interface SimplePart {
 	type: string;
 	xml_tag_name_default: string;
 	relative_path?: string; // Add this property for diskfile tests
+	draft_status?: 'unsaved' | 'conflict' | 'deleted' | null;
 	attributes: Array<{
 		id: string;
 		key: string;
@@ -363,5 +364,69 @@ test('format_prompt_content - combines path attribute with other attributes for 
 	assert.strictEqual(
 		result,
 		'<code path="src/utils.js" language="javascript" highlight>\nFile with multiple attributes\n</code>'
+	);
+});
+
+test('format_prompt_content - marks a diskfile part that sends an unsaved draft', () => {
+	const create_draft_part = (draft_status: SimplePart['draft_status']) =>
+		create_part({
+			type: 'diskfile',
+			content: 'draft',
+			has_xml_tag: true,
+			attributes: [{ id: '1', key: 'path', value: 'a.txt' }],
+			draft_status
+		});
+
+	assert.strictEqual(
+		format_prompt_content([create_draft_part(null)] as any),
+		'<File path="a.txt">\ndraft\n</File>'
+	);
+	assert.strictEqual(
+		format_prompt_content([create_draft_part('unsaved')] as any),
+		'<File path="a.txt" unsaved="true">\ndraft\n</File>'
+	);
+	assert.strictEqual(
+		format_prompt_content([create_draft_part('conflict')] as any),
+		'<File path="a.txt" unsaved="true" changed_on_disk="true">\ndraft\n</File>'
+	);
+	assert.strictEqual(
+		format_prompt_content([create_draft_part('deleted')] as any),
+		'<File path="a.txt" unsaved="true" deleted_on_disk="true">\ndraft\n</File>'
+	);
+});
+
+test('format_prompt_content - draft status attributes replace user ones only when added', () => {
+	const attributes = [
+		{ id: '1', key: 'path', value: 'a.txt' },
+		{ id: '2', key: 'unsaved', value: 'no' },
+		{ id: '3', key: ' changed_on_disk ', value: '' }
+	];
+	const draft_part = create_part({
+		type: 'diskfile',
+		content: 'draft',
+		has_xml_tag: true,
+		attributes,
+		draft_status: 'unsaved'
+	});
+	assert.strictEqual(
+		format_prompt_content([draft_part] as any),
+		'<File path="a.txt" unsaved="true">\ndraft\n</File>'
+	);
+	const clean_part = create_part({
+		type: 'diskfile',
+		content: 'disk',
+		has_xml_tag: true,
+		attributes,
+		draft_status: null
+	});
+	assert.strictEqual(
+		format_prompt_content([clean_part] as any),
+		'<File path="a.txt" unsaved="no" changed_on_disk>\ndisk\n</File>'
+	);
+	// text parts are free to use them
+	const text_part = create_part({ content: 'x', has_xml_tag: true, attributes });
+	assert.strictEqual(
+		format_prompt_content([text_part] as any),
+		'<Fragment path="a.txt" unsaved="no" changed_on_disk>\nx\n</Fragment>'
 	);
 });
