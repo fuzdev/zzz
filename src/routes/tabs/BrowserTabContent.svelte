@@ -24,9 +24,8 @@
 			if (title?.trim() && title !== tab.title) {
 				tab.title = title.trim();
 			}
-		} catch (error) {
-			// Will fail for cross-origin content
-			console.log('Unable to access iframe content:', error);
+		} catch {
+			// expected for cross-origin content, which keeps its title
 		}
 	}
 

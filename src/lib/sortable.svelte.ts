@@ -81,7 +81,8 @@ export class Sortable<T> {
 
 	/**
 	 * Updates the active key based on sorters and default key.
-	 * Called automatically on initialization and when sorters change.
+	 * Called on initialization only — nothing re-runs it when the sorters or
+	 * the default key change, so call it again after they do.
 	 */
 	update_active_key(): void {
 		const sorters = this.sorters;

@@ -86,7 +86,7 @@ describe('Thread.cancel_pending_turn', () => {
 		const sent = thread.send_message('hi');
 		const assistant_turn = Array.from(thread.turns.by_id.values()).at(-1)!;
 		app.diskfiles.add({ path: FILE_PATH, source_dir: SOURCE_DIR, content: 'file' });
-		assistant_turn.set_part(app.parts.add({ type: 'diskfile', path: FILE_PATH }));
+		assistant_turn.part_ids = [app.parts.add({ type: 'diskfile', path: FILE_PATH }).id];
 
 		const error_spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		try {

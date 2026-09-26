@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionHandler, ActionSpec};
 use fuz_auth::{AuthSpec, CredentialGate};
-use fuz_http::JsonrpcError;
 use serde_json::Value;
 
 use crate::handlers::App;
@@ -73,8 +72,3 @@ fn workspace_close_spec(app: Arc<App>) -> ActionSpec {
         handler,
     )
 }
-
-// Silence unused-import on JsonrpcError until other zzz_action_specs
-// modules land that propagate it through their builder signatures.
-#[doc(hidden)]
-const _: fn() -> Option<JsonrpcError> = || None;

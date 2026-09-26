@@ -31,16 +31,20 @@ export const format_placeholder = (text?: string | null): string =>
 /** Creates an id suitable for insecure use on a single client, like for element ids. */
 export const create_client_id = (): string => Math.random().toString(36).substring(2);
 
+/**
+ * Returns `name`, or `name` suffixed with the lowest number from 2 up that
+ * makes it unique among `existing_names`.
+ *
+ * @param name - the preferred name
+ * @param existing_names - the taken names, like a `Set` or a `Map` keyed by name
+ */
 export const get_unique_name = (
 	name: string,
-	existing_names: { has: (name: string) => boolean } | { includes: (name: string) => boolean }
+	existing_names: { has: (name: string) => boolean }
 ): string => {
-	const check = (existing_names as any)['has' in existing_names ? 'has' : 'includes'].bind(
-		existing_names
-	);
 	let result = name;
 	let i = 2;
-	while (check(result)) {
+	while (existing_names.has(result)) {
 		result = `${name} ${i++}`;
 	}
 	return result;

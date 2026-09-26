@@ -170,7 +170,6 @@ export class Projects extends Cell<typeof ProjectsJson> {
 	 * Sets the current project id.
 	 */
 	set_current_project(project_id: Uuid | null): void {
-		console.log(`set_current_project`, project_id);
 		this.current_project_id = project_id;
 	}
 
@@ -178,7 +177,6 @@ export class Projects extends Cell<typeof ProjectsJson> {
 	 * Sets the current page id.
 	 */
 	set_current_page(page_id: Uuid | null): void {
-		console.log(`set_current_page`, page_id);
 		this.current_page_id = page_id;
 	}
 
@@ -186,7 +184,6 @@ export class Projects extends Cell<typeof ProjectsJson> {
 	 * Sets the current domain id.
 	 */
 	set_current_domain(domain_id: Uuid | null): void {
-		console.log(`set_current_domain`, domain_id);
 		this.current_domain_id = domain_id;
 	}
 

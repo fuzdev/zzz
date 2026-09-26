@@ -76,7 +76,6 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	 * Opens a diskfile in preview mode.
 	 */
 	preview_diskfile(diskfile_id: Uuid): void {
-		console.log('DiskfilesEditor.preview_diskfile', { diskfile_id });
 		this.tabs.preview_diskfile(diskfile_id);
 	}
 
@@ -84,7 +83,6 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	 * Opens a diskfile in permanent mode.
 	 */
 	open_diskfile(diskfile_id: Uuid): void {
-		console.log('DiskfilesEditor.open_diskfile', { diskfile_id });
 		this.tabs.open_diskfile(diskfile_id);
 	}
 
@@ -92,17 +90,7 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	 * Reorders tabs.
 	 */
 	reorder_tabs(from_index: number, to_index: number): void {
-		console.log('DiskfilesEditor.reorder_tabs', { from_index, to_index });
 		this.tabs.reorder_tabs(from_index, to_index);
-	}
-
-	/**
-	 * Selects a tab by id, and its file.
-	 */
-	select_tab(tab_id: Uuid): void {
-		console.log('DiskfilesEditor.select_tab', { tab_id });
-		this.tabs.select_tab(tab_id);
-		this.app.diskfiles.follow_selected_tab();
 	}
 
 	/**
@@ -112,7 +100,6 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	 * @returns the id of the tab navigated to, `null` if there's none
 	 */
 	navigate_to_tab(tab_id: Uuid): Uuid | null {
-		console.log('DiskfilesEditor.navigate_to_tab', { tab_id });
 		const resulting_tab_id = this.tabs.navigate_to_tab(tab_id);
 		if (resulting_tab_id) this.app.diskfiles.follow_selected_tab();
 		return resulting_tab_id;
@@ -125,7 +112,6 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	 * reopens on it.
 	 */
 	close_tab(tab_id: Uuid): void {
-		console.log('DiskfilesEditor.close_tab', { tab_id });
 		const tab = this.tabs.items.by_id.get(tab_id);
 		if (!tab) return;
 		const { diskfiles } = this.app;
@@ -170,23 +156,13 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	 * `DiskfileTabs.reopen_last_closed_tab`), and selects its file.
 	 */
 	reopen_last_closed_tab(): void {
-		console.log('DiskfilesEditor.reopen_last_closed_tab');
 		if (this.tabs.reopen_last_closed_tab()) this.app.diskfiles.follow_selected_tab();
-	}
-
-	/**
-	 * Promotes the current preview tab to permanent.
-	 */
-	promote_preview_tab(): void {
-		console.log('DiskfilesEditor.promote_preview_tab');
-		this.tabs.promote_preview_to_permanent();
 	}
 
 	/**
 	 * Opens a tab by id — see `DiskfileTabs.open_tab` — and selects its file.
 	 */
 	open_tab(tab_id: Uuid): void {
-		console.log('DiskfilesEditor.open_tab', { tab_id });
 		if (!this.tabs.items.by_id.has(tab_id)) return;
 		this.tabs.open_tab(tab_id);
 		this.app.diskfiles.follow_selected_tab();
@@ -203,11 +179,10 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	 * Handles when a diskfile's content is modified.
 	 */
 	handle_file_modified(diskfile_id: Uuid): void {
-		console.log('DiskfilesEditor.handle_file_modified', { diskfile_id });
-		// If the modified file is in a preview tab, promote it to permanent
+		// a modified file's preview tab becomes permanent
 		const tab = this.tabs.by_diskfile_id.get(diskfile_id);
-		if (tab?.id === this.tabs.preview_tab_id) {
-			this.tabs.preview_tab_id = null; // Convert to permanent by removing preview status
+		if (tab && tab.id === this.tabs.preview_tab_id) {
+			this.tabs.promote_preview_to_permanent();
 		}
 	}
 

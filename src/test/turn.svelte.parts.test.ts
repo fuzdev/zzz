@@ -4,7 +4,7 @@ import { test, describe, beforeEach, assert } from 'vitest';
 
 import { Frontend } from '$lib/frontend.svelte.ts';
 import { Thread } from '$lib/thread.svelte.ts';
-import { create_turn_from_part } from '$lib/turn.svelte.ts';
+import { Turn } from '$lib/turn.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
@@ -42,7 +42,7 @@ describe('Turn.remove_part', () => {
 	test('keeps a part another turn still references', () => {
 		const turn = thread.add_user_turn('hello');
 		const part = turn.parts[0]!;
-		const other = create_turn_from_part(part, 'user', {});
+		const other = new Turn({ app, json: { role: 'user', part_ids: [part.id] } });
 		thread.add_turn(other);
 
 		turn.remove_part(part.id);

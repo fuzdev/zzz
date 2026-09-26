@@ -121,16 +121,6 @@ export class Turn extends Cell<typeof TurnJson> {
 		return true;
 	}
 
-	set_part(part: PartUnion): void {
-		this.part_ids = [part.id];
-	}
-
-	add_part(part: PartUnion): void {
-		if (!this.part_ids.includes(part.id)) {
-			this.part_ids.push(part.id);
-		}
-	}
-
 	/**
 	 * Removes a part from this turn, and from `app.parts` unless another turn
 	 * still references it. Removing the `completion_part` while its thread's
@@ -172,21 +162,6 @@ export class Turn extends Cell<typeof TurnJson> {
 	// }
 }
 
-export const create_turn_from_part = (
-	part: PartUnion,
-	role: CompletionRole,
-	json: Partial<OmitStrict<TurnJson, 'role' | 'part_ids'>>
-): Turn => {
-	return new Turn({
-		app: part.app,
-		json: {
-			...json,
-			role,
-			part_ids: [part.id]
-		}
-	});
-};
-
 export const create_turn_from_text = (
 	content: string,
 	role: CompletionRole,
@@ -200,22 +175,6 @@ export const create_turn_from_text = (
 			...json,
 			role,
 			part_ids: [part.id]
-		}
-	});
-};
-
-export const create_turn_from_parts = (
-	parts: Array<PartUnion>,
-	role: CompletionRole,
-	json: Partial<OmitStrict<TurnJson, 'role' | 'part_ids'>>
-): Turn => {
-	if (parts.length === 0) throw new Error('create_turn_from_parts requires at least one part');
-	return new Turn({
-		app: parts[0]!.app, // guaranteed by length check above
-		json: {
-			...json,
-			role,
-			part_ids: parts.map((b) => b.id)
 		}
 	});
 };

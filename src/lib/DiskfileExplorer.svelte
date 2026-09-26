@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { slide } from 'svelte/transition';
 	import { resolve } from '$app/paths';
-	import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 	import type { Snippet } from 'svelte';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import PendingButton from '@fuzdev/fuz_ui/PendingButton.svelte';
@@ -18,6 +17,7 @@
 	import Icon from './Icon.svelte';
 	import SortableList from './SortableList.svelte';
 	import { sort_by_text, sort_by_numeric } from './sortable.svelte.ts';
+	import { prompt_create_diskfile } from './diskfile_helpers.ts';
 
 	const {
 		empty
@@ -35,32 +35,6 @@
 	// TODO need awaitable websocket calls?
 	const TODO_create_file_pending = false;
 	const TODO_create_folder_pending = false;
-
-	// TODO @many this is very hacky and duplicated, refactor into cell methods
-	// TODO @many improve UX to not use alert/prompt
-	const create_file = async () => {
-		const filename = prompt(`new file name in ${new_files_dir}:`); // eslint-disable-line no-alert
-		if (!filename) return;
-
-		try {
-			await diskfiles.create_file(filename);
-		} catch (error) {
-			console.error('failed to create file:', error);
-			alert(`failed to create file: ${to_error_message(error)}`); // eslint-disable-line no-alert
-		}
-	};
-
-	const create_folder = async () => {
-		const dirname = prompt(`new folder name in ${new_files_dir}:`); // eslint-disable-line no-alert
-		if (!dirname) return;
-
-		try {
-			await diskfiles.create_directory(dirname);
-		} catch (error) {
-			console.error('failed to create folder:', error);
-			alert(`failed to create folder: ${to_error_message(error)}`); // eslint-disable-line no-alert
-		}
-	};
 </script>
 
 <div class="height:100% overflow:auto scrollbar-width:thin">
@@ -92,7 +66,7 @@
 						? `create file in ${new_files_dir}`
 						: 'open a workspace to create files'}
 					disabled={!new_files_dir}
-					onclick={create_file}
+					onclick={() => prompt_create_diskfile(diskfiles, 'file')}
 				>
 					<Icon data={icon_create_file} />
 				</PendingButton>
@@ -103,7 +77,7 @@
 						? `create folder in ${new_files_dir}`
 						: 'open a workspace to create folders'}
 					disabled={!new_files_dir}
-					onclick={create_folder}
+					onclick={() => prompt_create_diskfile(diskfiles, 'folder')}
 				>
 					<Icon data={icon_create_directory} />
 				</PendingButton>

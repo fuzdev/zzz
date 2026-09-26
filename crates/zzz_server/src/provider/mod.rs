@@ -27,9 +27,6 @@ pub enum ProviderName {
 }
 
 impl ProviderName {
-    #[allow(dead_code)]
-    pub const ALL: [Self; 3] = [Self::Claude, Self::Chatgpt, Self::Gemini];
-
     /// Parse a wire-format provider name (lowercase) without going through
     /// `serde_json` — avoids allocating a `Value::String` per request.
     pub fn parse(s: &str) -> Option<Self> {
@@ -136,7 +133,6 @@ impl Serialize for ProviderStatus {
 /// Server-level defaults (stored on `App`, cloned per-request). An unset
 /// field means the provider's default applies.
 #[derive(Debug, Clone, Default)]
-#[allow(dead_code)]
 pub struct CompletionOptions {
     pub frequency_penalty: Option<f64>,
     /// Cap on generated tokens, counting any hidden reasoning/thinking
@@ -281,7 +277,6 @@ impl ProviderManager {
 // -- Error helpers ------------------------------------------------------------
 
 pub const PROVIDER_ERROR_NEEDS_API_KEY: &str = "needs API key";
-pub const PROVIDER_ERROR_NOT_INSTALLED: &str = "not installed";
 
 pub fn ai_provider_error(provider_name: &str, message: &str) -> JsonrpcError {
     internal_error(&format!("{provider_name}: {message}"))

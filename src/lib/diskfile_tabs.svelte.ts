@@ -160,7 +160,6 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * Sets the selected tab.
 	 */
 	select_tab(tab_id: Uuid): void {
-		console.log('DiskfileTabs.select_tab', { tab_id });
 		this.selected_tab_id = tab_id;
 		this.#update_tab_history(tab_id);
 	}
@@ -265,8 +264,6 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * If a preview tab for this file already exists, it just selects it.
 	 */
 	preview_diskfile(diskfile_id: Uuid): DiskfileTab {
-		console.log('DiskfileTabs.preview_diskfile', { diskfile_id });
-
 		const previously_selected_id = this.selected_tab_id;
 		const previous_preview_diskfile_id = this.preview_tab?.diskfile_id;
 		const { tab, is_new } = this.#get_or_create_tab(diskfile_id, 'preview');
@@ -294,8 +291,6 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * If the file is already in a preview tab, promotes it to permanent.
 	 */
 	open_diskfile(diskfile_id: Uuid): DiskfileTab {
-		console.log('DiskfileTabs.open_diskfile', { diskfile_id });
-
 		const { tab } = this.#get_or_create_tab(diskfile_id, 'permanent');
 
 		// Select the tab
@@ -310,7 +305,6 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * @returns true if a tab was promoted, false otherwise
 	 */
 	promote_preview_to_permanent(): boolean {
-		console.log('DiskfileTabs.promote_preview_to_permanent');
 		if (this.preview_tab_id) {
 			this.preview_tab_id = null;
 			return true;
@@ -322,7 +316,6 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * Closes a tab by id.
 	 */
 	close_tab(tab_id: Uuid): void {
-		console.log('DiskfileTabs.close_tab', { tab_id });
 		const tab_to_close = this.items.by_id.get(tab_id);
 		if (!tab_to_close) return;
 
@@ -413,8 +406,6 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * @returns the id of the resulting tab, `null` for an unknown tab
 	 */
 	navigate_to_tab(tab_id: Uuid): Uuid | null {
-		console.log('DiskfileTabs.navigate_to_tab', { tab_id });
-
 		// If the tab still exists, just select it
 		if (this.items.by_id.has(tab_id)) {
 			this.select_tab(tab_id);
@@ -437,7 +428,6 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * No-op for an unknown tab.
 	 */
 	open_tab(tab_id: Uuid): void {
-		console.log('DiskfileTabs.open_tab', { tab_id });
 		if (!this.items.by_id.has(tab_id)) return;
 		if (tab_id === this.preview_tab_id) {
 			this.preview_tab_id = null;
@@ -449,7 +439,6 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * Reorders tabs by dragging.
 	 */
 	reorder_tabs(from_index: number, to_index: number): void {
-		console.log('DiskfileTabs.reorder_tabs', { from_index, to_index });
 		this.tab_order = to_reordered_list(this.tab_order, from_index, to_index);
 	}
 
@@ -462,7 +451,6 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * @returns the reopened tab, or `null` when there's none to reopen
 	 */
 	reopen_last_closed_tab(): DiskfileTab | null {
-		console.log('DiskfileTabs.reopen_last_closed_tab');
 		let closed_tab: DiskfileTab | undefined;
 		while ((closed_tab = this.recently_closed_tabs.pop())) {
 			if (this.by_diskfile_id.has(closed_tab.diskfile_id)) continue;
@@ -498,8 +486,6 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 * Closes all tabs.
 	 */
 	close_all_tabs(): void {
-		console.log('DiskfileTabs.close_all_tabs');
-
 		// Remember diskfile ids for all tabs before clearing
 		for (const tab of this.ordered_tabs) {
 			this.#remember_closed_tab(tab.id, tab.diskfile_id);

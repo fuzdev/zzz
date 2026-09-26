@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { swallow, is_editable } from '@fuzdev/fuz_util/dom.ts';
-	import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 	import { random_item } from '@fuzdev/fuz_util/random.ts';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
@@ -14,6 +13,7 @@
 	import { Reorderable } from './reorderable.svelte.ts';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
+	import { prompt_create_diskfile } from './diskfile_helpers.ts';
 
 	const app = frontend_context.get();
 	const { diskfiles, capabilities } = app;
@@ -42,20 +42,6 @@
 		if (editor.tabs.items.by_id.has(tab_id)) return; // asking first
 		const diskfile_id = editor.tabs.selected_diskfile_id;
 		if (diskfile_id) app.ui.pending_element_to_focus_key = diskfile_id;
-	};
-
-	// TODO @many this is very hacky and duplicated, refactor into cell methods
-	// TODO @many improve UX to not use alert/prompt
-	const create_file = async () => {
-		const filename = prompt(`new file name in ${diskfiles.new_files_dir}:`); // eslint-disable-line no-alert
-		if (!filename) return;
-
-		try {
-			await diskfiles.create_file(filename);
-		} catch (error) {
-			console.error('failed to create file:', error);
-			alert(`failed to create file: ${to_error_message(error)}`); // eslint-disable-line no-alert
-		}
 	};
 </script>
 
@@ -182,7 +168,11 @@
 					<p>
 						no files yet,
 						{#if diskfiles.new_files_dir}
-							<button type="button" class="inline palette_d" onclick={create_file}>
+							<button
+								type="button"
+								class="inline palette_d"
+								onclick={() => prompt_create_diskfile(diskfiles, 'file')}
+							>
 								create a new file
 							</button>?
 						{:else}

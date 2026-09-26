@@ -13,7 +13,7 @@ export const SCRATCHPAD_NAME = 'scratchpad';
 
 export const SpacesJson = CellJson.extend({
 	items: z.array(SpaceJson).default(() => []),
-	active_id: z.string().nullable().default(null),
+	active_id: Uuid.nullable().default(null),
 	scratchpad_id: Uuid.nullable().default(null).meta({
 		description:
 			"The scratchpad, the default space, which can't be removed. Renaming it keeps it the scratchpad."

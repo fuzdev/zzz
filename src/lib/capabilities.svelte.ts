@@ -261,7 +261,6 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 
 	// TODO refactor maybe to a `Pings` class
 	handle_ping_sent(request_id: JsonrpcRequestId): void {
-		console.log(`[capabilities] [handle_ping_sent] request_id`, request_id);
 		// Create a new pending ping
 		const new_ping: PingData = {
 			ping_id: request_id,
@@ -293,7 +292,6 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 
 	// TODO @many refactor mutations
 	handle_ping_received(ping_id: JsonrpcRequestId): void {
-		console.log(`[capabilities] [handle_ping_received] ping_id`, ping_id);
 		const ping = this.pings.find((p) => p.ping_id === ping_id);
 		// If we can't find the ping, we can safely ignore it
 		if (!ping) {

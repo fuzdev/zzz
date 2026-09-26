@@ -8,7 +8,6 @@ import {
 	XmlAttributeKeyWithDefault,
 	XmlAttributeValue,
 	XmlAttributeValueWithDefault,
-	XmlAttribute,
 	XmlAttributeWithDefaults
 } from '$lib/xml.ts';
 
@@ -118,43 +117,6 @@ describe('XmlAttributeValueWithDefault', () => {
 
 	test('accepts valid strings', () => {
 		assert_parse_success(XmlAttributeValueWithDefault, 'test', 'test');
-	});
-});
-
-describe('XmlAttribute', () => {
-	const valid_base_attr = {
-		id: test_uuid_a,
-		key: 'class',
-		value: 'container'
-	};
-
-	test('accepts complete valid attributes', () => {
-		assert_parse_success(XmlAttribute, valid_base_attr);
-	});
-
-	test('requires all properties', () => {
-		assert_parse_failure(XmlAttribute, { id: test_uuid_a, key: 'class' });
-		assert_parse_failure(XmlAttribute, { id: test_uuid_a, value: 'test' });
-		assert_parse_failure(XmlAttribute, { key: 'class', value: 'test' });
-	});
-
-	test('validates uuid format', () => {
-		assert_parse_failure(XmlAttribute, { ...valid_base_attr, id: 'invalid-uuid' });
-		assert_parse_failure(XmlAttribute, { ...valid_base_attr, id: '' });
-	});
-
-	test('validates key constraints', () => {
-		assert_parse_failure(XmlAttribute, { ...valid_base_attr, key: '' });
-		assert_parse_failure(XmlAttribute, { ...valid_base_attr, key: '   ' });
-	});
-
-	test('strict mode rejects extra properties', () => {
-		const attr_with_extra = { ...valid_base_attr, extra: 'property' };
-		assert_parse_failure(XmlAttribute, attr_with_extra);
-	});
-
-	test('accepts empty values', () => {
-		assert_parse_success(XmlAttribute, { ...valid_base_attr, value: '' });
 	});
 });
 

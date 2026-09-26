@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { Uuid } from '@fuzdev/fuz_util/id.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 
@@ -22,7 +22,7 @@ import type { DiskfileDirectoryPath } from './diskfile_types.ts';
 
 export const WorkspacesJson = CellJson.extend({
 	items: z.array(WorkspaceJson).default(() => []),
-	active_id: z.string().nullable().default(null)
+	active_id: Uuid.nullable().default(null)
 }).meta({ cell_class_name: 'Workspaces' });
 export type WorkspacesJson = z.infer<typeof WorkspacesJson>;
 export type WorkspacesJsonInput = z.input<typeof WorkspacesJson>;

@@ -22,9 +22,6 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 	},
 
 	session_load: {
-		send_request: () => {
-			console.log('[frontend_action_handlers] loading session...');
-		},
 		// `Frontend.load_session` applies the snapshot and retries failures
 		receive_response: ({ data: { output } }) => {
 			// counts only — the full snapshot (every file's contents) would be
@@ -42,22 +39,7 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 	},
 
 	completion_create: {
-		send_request: (action_event) => {
-			const {
-				data: { input }
-			} = action_event;
-			console.log('[frontend_action_handlers] sending prompt:', input.completion_request.prompt);
-		},
-		receive_response: (action_event) => {
-			const {
-				data: { input, output }
-			} = action_event;
-			console.log(
-				'[frontend_action_handlers] received completion:',
-				input.completion_request,
-				output
-			);
-
+		receive_response: ({ data: { input, output } }) => {
 			// TODO hacky
 			const progress_token = input._meta?.progressToken;
 			if (progress_token) {
@@ -78,7 +60,7 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 						turn.response = output.completion_response;
 					} else {
 						console.error(
-							'[frontend_action_handlers] unknown cell type for for completion progress_token:',
+							'[frontend_action_handlers] unknown cell type for completion progress_token:',
 							progress_token
 						);
 					}
@@ -117,48 +99,24 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 	},
 
 	diskfile_update: {
-		send_request: ({ data: { input } }) => {
-			console.log('[frontend_action_handlers] updating file:', input.path);
-		},
-		receive_response: ({ data: { input, output } }) => {
-			console.log('[frontend_action_handlers] updated file:', input.path, output);
-		},
 		receive_error: ({ data: { input, error } }) => {
 			console.error('[frontend_action_handlers] update file failed:', input.path, error);
 		}
 	},
 
 	diskfile_create: {
-		send_request: ({ data: { input } }) => {
-			console.log('[frontend_action_handlers] creating file:', input.path);
-		},
-		receive_response: ({ data: { input } }) => {
-			console.log('[frontend_action_handlers] created file:', input.path);
-		},
 		receive_error: ({ data: { input, error } }) => {
 			console.error('[frontend_action_handlers] create file failed:', input.path, error);
 		}
 	},
 
 	diskfile_delete: {
-		send_request: ({ data: { input } }) => {
-			console.log('[frontend_action_handlers] deleting file:', input.path);
-		},
-		receive_response: ({ data: { input } }) => {
-			console.log('[frontend_action_handlers] deleted file:', input.path);
-		},
 		receive_error: ({ data: { input, error } }) => {
 			console.error('[frontend_action_handlers] delete file failed:', input.path, error);
 		}
 	},
 
 	directory_create: {
-		send_request: ({ data: { input } }) => {
-			console.log('[frontend_action_handlers] creating directory:', input.path);
-		},
-		receive_response: (ctx) => {
-			console.log('[frontend_action_handlers] created directory:', ctx);
-		},
 		receive_error: ({ data: { input, error } }) => {
 			console.error('[frontend_action_handlers] create directory failed:', input.path, error);
 		}
@@ -172,7 +130,6 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 
 	completion_progress: {
 		receive: ({ data: { input } }) => {
-			// console.log('[frontend_action_handlers] received completion streaming progress:', input);
 			const { chunk } = input;
 			const progress_token = input._meta?.progressToken;
 

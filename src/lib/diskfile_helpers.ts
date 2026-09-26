@@ -1,9 +1,11 @@
 import { ensure_end } from '@fuzdev/fuz_util/string.ts';
 import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
 import { Datetime, DatetimeNow } from '@fuzdev/fuz_util/datetime.ts';
+import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 
 import { SerializableDisknode, type DiskfileJson } from './diskfile_types.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
+import type { Diskfiles } from './diskfiles.svelte.ts';
 
 /**
  * Why a diskfile's content can be missing: the backend indexes a file's
@@ -96,3 +98,28 @@ export const has_dependencies = (diskfile: Diskfile): boolean =>
 	diskfile.dependencies_count > 0 ||
 	diskfile.dependents_count > 0 ||
 	SUPPORTED_CODE_FILETYPE_MATCHER.test(diskfile.path);
+
+// TODO improve UX to not use alert/prompt
+/**
+ * Asks for a name and creates a file or folder of that name in
+ * `Diskfiles.new_files_dir` (see `Diskfiles.create_file` and
+ * `Diskfiles.create_directory`), alerting on failure. Cancelling or
+ * entering an empty name does nothing.
+ *
+ * @param diskfiles - the diskfiles to create in
+ * @param kind - whether to create a file or a folder
+ */
+export const prompt_create_diskfile = async (
+	diskfiles: Diskfiles,
+	kind: 'file' | 'folder'
+): Promise<void> => {
+	const name = prompt(`new ${kind} name in ${diskfiles.new_files_dir}:`); // eslint-disable-line no-alert
+	if (!name) return;
+
+	try {
+		await (kind === 'file' ? diskfiles.create_file(name) : diskfiles.create_directory(name));
+	} catch (error) {
+		console.error(`failed to create ${kind}:`, error);
+		alert(`failed to create ${kind}: ${to_error_message(error)}`); // eslint-disable-line no-alert
+	}
+};

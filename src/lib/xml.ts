@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Uuid, UuidWithDefault } from '@fuzdev/fuz_util/id.ts';
+import { UuidWithDefault } from '@fuzdev/fuz_util/id.ts';
 
 export const XmlAttributeKey = z
 	.string()
@@ -15,15 +15,6 @@ export type XmlAttributeValue = z.infer<typeof XmlAttributeValue>;
 
 export const XmlAttributeValueWithDefault = XmlAttributeValue.default('');
 export type XmlAttributeValueWithDefault = z.infer<typeof XmlAttributeValueWithDefault>;
-
-// TODO is strict desired?
-// Base attribute requires all fields with no defaults
-export const XmlAttribute = z.strictObject({
-	id: Uuid,
-	key: XmlAttributeKey,
-	value: XmlAttributeValue
-});
-export type XmlAttribute = z.infer<typeof XmlAttribute>;
 
 // TODO is strict desired?
 // Default attribute applies defaults and includes id with default

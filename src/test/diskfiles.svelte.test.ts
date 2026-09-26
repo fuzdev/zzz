@@ -655,6 +655,27 @@ describe('back/forward navigation', () => {
 	});
 });
 
+describe('DiskfilesEditor.handle_file_modified', () => {
+	test("promotes the modified file's preview tab and leaves others alone", () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
+		const a = app.diskfiles.get_by_path(PATH_A);
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(a && b);
+		const { editor } = app.diskfiles;
+		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(b.id);
+		const b_tab = editor.tabs.preview_tab;
+		assert.strictEqual(b_tab?.diskfile_id, b.id);
+
+		editor.handle_file_modified(a.id);
+		assert.strictEqual(editor.tabs.preview_tab, b_tab, 'another file leaves the preview');
+
+		editor.handle_file_modified(b.id);
+		assert.isNull(editor.tabs.preview_tab_id);
+		assert.strictEqual(editor.tabs.by_diskfile_id.get(b.id), b_tab, 'the same tab, now permanent');
+	});
+});
+
 describe('create_file selects the new file', () => {
 	const setup = (on_create?: () => void) => {
 		(app as any).api = {
@@ -734,7 +755,6 @@ describe('create_file selects the new file', () => {
 
 	test('a tab change through the editor drops the pending selection', async () => {
 		const scenarios: Array<[string, (a_tab_id: Uuid, c_tab_id: Uuid) => void]> = [
-			['select', (a_tab_id) => app.diskfiles.editor.select_tab(a_tab_id)],
 			['open', (a_tab_id) => app.diskfiles.editor.open_tab(a_tab_id)],
 			['navigate', (a_tab_id) => app.diskfiles.editor.navigate_to_tab(a_tab_id)],
 			['close the selected tab', (_, c_tab_id) => app.diskfiles.editor.close_tab(c_tab_id)],

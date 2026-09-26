@@ -1,12 +1,11 @@
 import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import type { Model } from './model.svelte.ts';
-import { Turn, create_turn_from_text, create_turn_from_part } from './turn.svelte.ts';
+import { Turn, create_turn_from_text } from './turn.svelte.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { ThreadJson } from './thread_types.ts';
-import { CompletionRequest, CompletionRole } from './completion_types.ts';
+import { CompletionRequest } from './completion_types.ts';
 import { render_messages_to_string, render_completion_messages } from './thread_helpers.ts';
-import type { PartUnion } from './part.svelte.ts';
 import { HANDLED } from './cell_helpers.ts';
 import { to_preview, estimate_token_count } from './helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
@@ -109,26 +108,6 @@ export class Thread extends Cell<typeof ThreadJson> {
 			{ ...json, thread_id: this.id },
 			this.app
 		);
-		this.add_turn(turn);
-		return turn;
-	}
-
-	/**
-	 * Create and add a system turn with the given content.
-	 */
-	add_system_turn(content: string): Turn {
-		const turn = create_turn_from_text(content, 'system', { thread_id: this.id }, this.app);
-		this.add_turn(turn);
-		return turn;
-	}
-
-	/**
-	 * Create and add a turn from a part.
-	 */
-	add_turn_from_part(part: PartUnion, role: CompletionRole): Turn {
-		const turn = create_turn_from_part(part, role, {
-			thread_id: this.id
-		});
 		this.add_turn(turn);
 		return turn;
 	}
