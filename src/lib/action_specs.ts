@@ -369,7 +369,8 @@ export const directory_create_action_spec = {
 	input: DirectoryCreateInput,
 	output: z.null(),
 	async: true,
-	description: 'Create a new directory on disk.'
+	description:
+		'Create a new directory on disk, and any missing parents, failing with `conflict` (`already_exists`) if the path is taken — never reuses an existing one.'
 } satisfies RequestResponseActionSpec;
 
 export const completion_create_action_spec = {

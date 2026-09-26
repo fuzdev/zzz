@@ -31,9 +31,9 @@ pub const ERROR_SYMLINK_NOT_ALLOWED: &str = "symlink_not_allowed";
 /// The OS refused access, e.g. a write to a file the daemon can't write, or
 /// a read-only filesystem (`forbidden`).
 pub const ERROR_PERMISSION_DENIED: &str = "permission_denied";
-/// A new file's directory isn't writable (`forbidden`).
+/// A new file's or directory's parent directory isn't writable (`forbidden`).
 pub const ERROR_DIRECTORY_NOT_WRITABLE: &str = "directory_not_writable";
-/// `diskfile_create` found the path taken (`conflict`).
+/// `diskfile_create` or `directory_create` found the path taken (`conflict`).
 pub const ERROR_ALREADY_EXISTS: &str = "already_exists";
 /// A save's in-place fallback found the file replaced or removed externally
 /// since it was opened, and wrote nothing (`conflict`).
@@ -43,7 +43,7 @@ pub const ERROR_PATH_NOT_FOUND: &str = "path_not_found";
 /// The path is a directory where a file was expected (`invalid_params`).
 pub const ERROR_IS_A_DIRECTORY: &str = "is_a_directory";
 /// The path, or an ancestor, is not a directory where one was expected
-/// (`invalid_params`) — including `directory_create` over an existing file.
+/// (`invalid_params`).
 pub const ERROR_NOT_A_DIRECTORY: &str = "not_a_directory";
 /// A FIFO, socket, or device node where a regular file was expected
 /// (`invalid_params`).
@@ -54,10 +54,10 @@ pub const ERROR_NOT_A_REGULAR_FILE: &str = "not_a_regular_file";
 ///
 /// - malformed paths and wrong file kinds → `invalid_params` (-32602)
 /// - out-of-scope paths, symlinks, OS permission refusals, and a
-///   non-writable directory for a new file → `forbidden` (-32002)
+///   non-writable directory for a new file or directory → `forbidden` (-32002)
 /// - a missing path → `not_found` (-32003)
-/// - `diskfile_create` over an existing path, or a save whose file was
-///   replaced mid-save → `conflict` (-32004)
+/// - `diskfile_create` / `directory_create` over an existing path, or a save
+///   whose file was replaced mid-save → `conflict` (-32004)
 /// - any other I/O failure → `internal_error` (-32603)
 ///
 /// Each carries its `ERROR_*` constant as `data.reason`, except
@@ -88,7 +88,7 @@ pub fn scoped_fs_error(action: &str, error: &ScopedFsError) -> JsonrpcError {
             }
             ErrorKind::IsADirectory => invalid_params(&message, Some(ERROR_IS_A_DIRECTORY)),
             // `AlreadyExists` is `create_dir_all` over an existing
-            // non-directory
+            // non-directory ancestor
             ErrorKind::NotADirectory | ErrorKind::AlreadyExists => {
                 invalid_params(&message, Some(ERROR_NOT_A_DIRECTORY))
             }
@@ -195,11 +195,13 @@ pub async fn diskfile_delete(
     Ok(Value::Null)
 }
 
-/// `directory_create` — create a directory and any missing parents.
+/// `directory_create` — create a new directory and any missing parents,
+/// never reusing an existing one.
 ///
 /// # Errors
 ///
-/// `invalid_params` for a malformed input; otherwise [`scoped_fs_error`].
+/// `invalid_params` for a malformed input; `conflict` (`already_exists`)
+/// when the path is taken; otherwise [`scoped_fs_error`].
 pub async fn directory_create(
     params: Value,
     _ctx: ActionContext<'_>,
@@ -209,7 +211,7 @@ pub async fn directory_create(
     require_absolute(&input.path)?;
 
     app.scoped_fs
-        .mkdir(&input.path)
+        .create_dir(&input.path)
         .await
         .map_err(|e| scoped_fs_error("failed to create directory", &e))?;
 

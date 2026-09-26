@@ -9,7 +9,14 @@
 //! - `check-release` — the dep-graph audit (sanity check #2 of the test-binary
 //!   pattern); its work is delegated to [`fuz_audit::run_check_release_cli`].
 //! - no args / `help` / `-h` / `--help` — print the full subcommand list.
-//! - any other subcommand — error to stderr + usage, non-zero exit.
+//! - any other subcommand, or any argument after one — error to stderr +
+//!   usage, non-zero exit.
+//!
+//! Every subcommand runs from the workspace root (see [`workspace_root`]), so
+//! `cargo xtask` works the same from any directory in the checkout: the env
+//! files, `node_modules/.bin/vite`, `target/debug/zzzd`, and the relative
+//! paths inside `.env.development` (which the children resolve against their
+//! working directory) all mean the workspace's.
 //!
 //! Dispatch and the usage text live here (not in `fuz_audit`) so bare
 //! `cargo xtask` advertises zzz's own commands, not just `check-release`.
@@ -29,7 +36,7 @@ use std::fs;
 use std::io::{self, Read as _, Write as _};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::os::unix::fs::OpenOptionsExt as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitCode};
 use std::time::{Duration, Instant};
 
@@ -44,24 +51,93 @@ const VITE_BIN: &str = "node_modules/.bin/vite";
 fn main() -> ExitCode {
     // `args_os`, so a non-UTF-8 argument is an unknown subcommand, not a panic
     let args: Vec<String> = std::env::args_os()
+        .skip(1)
         .map(|arg| arg.to_string_lossy().into_owned())
         .collect();
-    match args.get(1).map(String::as_str) {
-        Some("dev") => finish(run_dev()),
-        Some("dev-setup") => finish(setup_env(DEV_ENV_FILE, ".env.development.example")),
-        Some("prod-setup") => finish(setup_env(".env.production", ".env.production.example")),
-        // The dep-graph audit is fuz_audit's; everything else (dispatch, help) is ours.
-        Some("check-release") => fuz_audit::run_check_release_cli(),
-        None | Some("help" | "-h" | "--help") => {
+    let subcommand = match parse_args(&args) {
+        Ok(Subcommand::Help) => {
             print_usage();
-            ExitCode::SUCCESS
+            return ExitCode::SUCCESS;
         }
-        Some(other) => {
-            eprintln!("[xtask] error: unknown subcommand `{other}`\n");
+        Ok(subcommand) => subcommand,
+        Err(message) => {
+            eprintln!("[xtask] error: {message}\n");
             print_usage();
-            ExitCode::FAILURE
+            return ExitCode::FAILURE;
         }
+    };
+    let root = workspace_root();
+    if let Err(e) = std::env::set_current_dir(&root) {
+        eprintln!(
+            "[xtask] error: can't enter the workspace root {}: {e}",
+            root.display()
+        );
+        return ExitCode::FAILURE;
     }
+    match subcommand {
+        Subcommand::Dev => finish(run_dev()),
+        Subcommand::DevSetup => finish(setup_env(DEV_ENV_FILE, ".env.development.example")),
+        Subcommand::ProdSetup => finish(setup_env(".env.production", ".env.production.example")),
+        // The dep-graph audit is fuz_audit's; everything else (dispatch, help) is ours.
+        Subcommand::CheckRelease => fuz_audit::run_check_release_cli(),
+        Subcommand::Help => ExitCode::SUCCESS,
+    }
+}
+
+/// An `xtask` subcommand.
+#[derive(Debug, PartialEq, Eq)]
+enum Subcommand {
+    Dev,
+    DevSetup,
+    ProdSetup,
+    CheckRelease,
+    Help,
+}
+
+/// Parse the arguments after the program name: one subcommand, nothing
+/// after it (none takes arguments — a stray one is refused rather than
+/// silently ignored). No arguments is [`Subcommand::Help`].
+fn parse_args(args: &[String]) -> std::result::Result<Subcommand, String> {
+    let Some((name, rest)) = args.split_first() else {
+        return Ok(Subcommand::Help);
+    };
+    let subcommand = match name.as_str() {
+        "dev" => Subcommand::Dev,
+        "dev-setup" => Subcommand::DevSetup,
+        "prod-setup" => Subcommand::ProdSetup,
+        "check-release" => Subcommand::CheckRelease,
+        "help" | "-h" | "--help" => Subcommand::Help,
+        other => return Err(format!("unknown subcommand `{other}`")),
+    };
+    if let Some(extra) = rest.first() {
+        return Err(format!(
+            "`{name}` takes no arguments, got `{extra}`{}",
+            if rest.len() > 1 { " …" } else { "" }
+        ));
+    }
+    Ok(subcommand)
+}
+
+/// The workspace root: two levels above this crate's manifest directory
+/// (`crates/xtask`). See [`workspace_root_from`].
+fn workspace_root() -> PathBuf {
+    workspace_root_from(std::env::var_os("CARGO_MANIFEST_DIR"))
+}
+
+/// The workspace root from `runtime_manifest_dir` — the `CARGO_MANIFEST_DIR`
+/// that `cargo run` (so `cargo xtask`) sets for the process — falling back to
+/// the one baked in at build time when it's unset (the binary run directly).
+/// The runtime value wins because the baked one goes stale: in a copied
+/// checkout whose `target/` came along, it still names the original, and
+/// xtask would build and write files there.
+fn workspace_root_from(runtime_manifest_dir: Option<OsString>) -> PathBuf {
+    let manifest_dir = runtime_manifest_dir
+        .filter(|dir| !dir.is_empty())
+        .map_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")), PathBuf::from);
+    manifest_dir
+        .ancestors()
+        .nth(2)
+        .map_or_else(|| manifest_dir.clone(), Path::to_path_buf)
 }
 
 /// Collapse a subcommand's [`Result`] into a process exit code, printing the
@@ -273,7 +349,7 @@ fn run_dev() -> Result<()> {
     println!("[xtask] starting zzz_server on port {DEV_BACKEND_PORT}...");
     let mut server = ChildGuard::new(
         "zzz_server",
-        Command::new("./target/debug/zzzd")
+        Command::new("target/debug/zzzd")
             .args(["--port", &port])
             .envs(&child_env)
             .spawn()?,
@@ -428,15 +504,73 @@ mod tests {
         );
     }
 
+    fn args(args: &[&str]) -> Vec<String> {
+        args.iter().map(|&arg| arg.to_owned()).collect()
+    }
+
+    #[test]
+    fn parse_args_takes_one_subcommand_and_nothing_after_it() {
+        assert_eq!(parse_args(&[]), Ok(Subcommand::Help));
+        for (arg, expected) in [
+            ("dev", Subcommand::Dev),
+            ("dev-setup", Subcommand::DevSetup),
+            ("prod-setup", Subcommand::ProdSetup),
+            ("check-release", Subcommand::CheckRelease),
+            ("help", Subcommand::Help),
+            ("-h", Subcommand::Help),
+            ("--help", Subcommand::Help),
+        ] {
+            assert_eq!(parse_args(&args(&[arg])), Ok(expected), "{arg}");
+        }
+        assert_eq!(
+            parse_args(&args(&["dev", "--port", "5000"])),
+            Err("`dev` takes no arguments, got `--port` …".to_owned())
+        );
+        assert_eq!(
+            parse_args(&args(&["check-release", "x"])),
+            Err("`check-release` takes no arguments, got `x`".to_owned())
+        );
+        assert_eq!(
+            parse_args(&args(&["deploy", "x"])),
+            Err("unknown subcommand `deploy`".to_owned())
+        );
+    }
+
+    #[test]
+    fn workspace_root_prefers_the_runtime_manifest_dir() {
+        assert_eq!(
+            workspace_root_from(Some(OsString::from("/copy/zzz/crates/xtask"))),
+            Path::new("/copy/zzz")
+        );
+        let built = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(2)
+            .unwrap();
+        assert_eq!(
+            workspace_root_from(None),
+            built,
+            "falls back to the build's"
+        );
+        assert_eq!(
+            workspace_root_from(Some(OsString::new())),
+            built,
+            "blank is unset"
+        );
+    }
+
+    #[test]
+    fn workspace_root_is_the_cargo_workspace() {
+        let root = workspace_root();
+        let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
+        assert!(manifest.contains("[workspace]"), "{}", root.display());
+        assert!(root.join("package.json").is_file(), "{}", root.display());
+        assert!(root.join(".env.development.example").is_file());
+    }
+
     #[test]
     fn templates_get_a_generated_key() {
         for template in [".env.development.example", ".env.production.example"] {
-            let content = fs::read_to_string(
-                Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("../..")
-                    .join(template),
-            )
-            .unwrap();
+            let content = fs::read_to_string(workspace_root().join(template)).unwrap();
             let before = env_file::parse_env(&content).vars;
             let key_before = before.iter().find(|(k, _)| k == COOKIE_KEYS_VAR);
             // the template itself ships no usable key

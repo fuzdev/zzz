@@ -72,10 +72,11 @@ pub enum ScopedFsError {
     /// opened (a FIFO would block the write forever) and never replaced.
     #[error("Path is not a regular file: {0}")]
     NotARegularFile(String),
-    /// A new file can't be created because its directory isn't writable.
+    /// A new file or directory can't be created because its parent directory
+    /// isn't writable.
     #[error("Directory is not writable, can't create: {0}")]
     DirectoryNotWritable(String),
-    /// A create-only write found the path taken.
+    /// A create-only operation (a new file or directory) found the path taken.
     #[error("Path already exists: {0}")]
     AlreadyExists(String),
     /// The in-place fallback found the path no longer names the file it
@@ -257,7 +258,7 @@ impl ScopedFs {
                 }
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                // File doesn't exist yet — that's fine for write/mkdir
+                // File doesn't exist yet — that's fine for a write or create
             }
             Err(e) => return Err(ScopedFsError::io(&normalized, e)),
         }
@@ -320,17 +321,21 @@ impl ScopedFs {
     /// needed — never replacing an existing one.
     ///
     /// The final name is created `O_CREAT | O_EXCL | O_NOFOLLOW`, so the check
-    /// and the create are one step: an existing file (or symlink, or anything
-    /// else at the path) fails with [`ScopedFsError::AlreadyExists`] and is
-    /// left untouched. Not staged like [`Self::write_file`] — a failed write
-    /// removes the file it just created, and there's no old content to lose.
-    /// A new file gets `0o666` minus the umask.
+    /// and the create are one step: an existing file, directory, or anything
+    /// else at the path fails with [`ScopedFsError::AlreadyExists`] and is
+    /// left untouched — except a symlink, which path validation refuses first
+    /// ([`ScopedFsError::SymlinkNotAllowed`]; the `O_EXCL` still covers one
+    /// appearing after that check). Not staged like [`Self::write_file`] — a
+    /// failed write removes the file it just created, and there's no old
+    /// content to lose. A new file gets `0o666` minus the umask.
     ///
     /// # Errors
     ///
     /// The path-validation errors of every `ScopedFs` operation;
-    /// [`ScopedFsError::AlreadyExists`]; [`ScopedFsError::DirectoryNotWritable`];
-    /// otherwise [`ScopedFsError::Io`].
+    /// [`ScopedFsError::AlreadyExists`]; [`ScopedFsError::DirectoryNotWritable`]
+    /// when the file's own directory isn't writable; otherwise
+    /// [`ScopedFsError::Io`] — including `PermissionDenied` when a missing
+    /// parent directory can't be created under a non-writable ancestor.
     pub async fn create_file(&self, path: &str, content: String) -> Result<(), ScopedFsError> {
         let safe_path = self.ensure_safe_path(path).await?;
         if let Some(parent) = safe_path.parent() {
@@ -357,18 +362,43 @@ impl ScopedFs {
             .map_err(|e| ScopedFsError::io(&safe_path, e))
     }
 
-    /// Create a directory (recursive). Succeeds if it already exists.
+    /// Create a new directory, creating missing parent directories — never
+    /// reusing an existing one.
+    ///
+    /// Like [`Self::create_file`], the final name must be free: an existing
+    /// directory, file, or anything else there fails with
+    /// [`ScopedFsError::AlreadyExists`] — except a symlink, which path
+    /// validation refuses first ([`ScopedFsError::SymlinkNotAllowed`];
+    /// `mkdir(2)` never follows one appearing after that check). `mkdir(2)`
+    /// checks and creates in one step. A new directory gets `0o777` minus the
+    /// umask.
     ///
     /// # Errors
     ///
-    /// The path-validation errors of every `ScopedFs` operation, otherwise
-    /// [`ScopedFsError::Io`] (e.g. `AlreadyExists` when the path is a file,
-    /// `NotADirectory` when an ancestor is).
-    pub async fn mkdir(&self, path: &str) -> Result<(), ScopedFsError> {
+    /// The path-validation errors of every `ScopedFs` operation;
+    /// [`ScopedFsError::AlreadyExists`]; [`ScopedFsError::DirectoryNotWritable`]
+    /// when the new directory's parent isn't writable; otherwise
+    /// [`ScopedFsError::Io`] (e.g. `NotADirectory` when an ancestor is a file,
+    /// or `PermissionDenied` when a missing parent can't be created under a
+    /// non-writable ancestor).
+    pub async fn create_dir(&self, path: &str) -> Result<(), ScopedFsError> {
         let safe_path = self.ensure_safe_path(path).await?;
-        tokio::fs::create_dir_all(&safe_path)
+        if let Some(parent) = safe_path.parent() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| ScopedFsError::io(parent, e))?;
+        }
+        tokio::fs::create_dir(&safe_path)
             .await
-            .map_err(|e| ScopedFsError::io(&safe_path, e))
+            .map_err(|e| match e.kind() {
+                std::io::ErrorKind::AlreadyExists => {
+                    ScopedFsError::AlreadyExists(ScopedFsError::display(&safe_path))
+                }
+                _ if is_not_writable(&e) => {
+                    ScopedFsError::DirectoryNotWritable(ScopedFsError::display(&safe_path))
+                }
+                _ => ScopedFsError::io(&safe_path, e),
+            })
     }
 }
 
@@ -1014,11 +1044,16 @@ mod tests {
         }
         let file = tmp.path("file.txt");
         std::fs::write(&file, "").unwrap();
-        match fs.mkdir(file.to_str().unwrap()).await {
-            Err(ScopedFsError::Io { source, .. }) => {
-                assert_eq!(source.kind(), std::io::ErrorKind::AlreadyExists);
-            }
+        match fs.create_dir(file.to_str().unwrap()).await {
+            Err(ScopedFsError::AlreadyExists(_)) => {}
             other => panic!("expected AlreadyExists, got {other:?}"),
+        }
+        // an ancestor that's a file
+        match fs.create_dir(file.join("sub").to_str().unwrap()).await {
+            Err(ScopedFsError::Io { source, .. }) => {
+                assert_eq!(source.kind(), std::io::ErrorKind::NotADirectory);
+            }
+            other => panic!("expected NotADirectory, got {other:?}"),
         }
     }
 
@@ -1184,6 +1219,53 @@ mod tests {
             matches!(result, Err(ScopedFsError::AlreadyExists(_))),
             "{result:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn create_dir_never_reuses_anything() {
+        let tmp = TempDir::new();
+        let fs = tmp.fs();
+        let dir = tmp.path("a/b/new");
+        fs.create_dir(dir.to_str().unwrap()).await.unwrap();
+        assert!(dir.is_dir(), "created with its missing parents");
+        std::fs::write(dir.join("kept.txt"), "x").unwrap();
+
+        let again = fs.create_dir(dir.to_str().unwrap()).await;
+        assert!(
+            matches!(&again, Err(ScopedFsError::AlreadyExists(path)) if path == dir.to_str().unwrap()),
+            "{again:?}"
+        );
+        assert!(dir.join("kept.txt").exists(), "untouched");
+
+        // a symlink at the name is refused by path validation, not followed
+        let link = tmp.path("a/b/link");
+        std::os::unix::fs::symlink(tmp.path("nowhere"), &link).unwrap();
+        let result = fs.create_dir(link.to_str().unwrap()).await;
+        assert!(
+            matches!(result, Err(ScopedFsError::SymlinkNotAllowed(_))),
+            "{result:?}"
+        );
+        assert!(!tmp.path("nowhere").exists());
+
+        // an existing parent is fine — only the final name must be free
+        let sibling = tmp.path("a/b/sibling");
+        fs.create_dir(sibling.to_str().unwrap()).await.unwrap();
+        assert!(sibling.is_dir());
+
+        let ro = tmp.path("ro");
+        std::fs::create_dir(&ro).unwrap();
+        set_mode(&ro, 0o555);
+        let in_ro = ro.join("sub");
+        let result = fs.create_dir(in_ro.to_str().unwrap()).await;
+        let ro_writable_anyway = writable_anyway(&ro.join(".probe"));
+        set_mode(&ro, 0o755);
+        if !ro_writable_anyway {
+            assert!(
+                matches!(result, Err(ScopedFsError::DirectoryNotWritable(_))),
+                "{result:?}"
+            );
+            assert!(!in_ro.exists());
+        }
     }
 
     /// `create_file_exclusive` below the symlink-refusing path validation.

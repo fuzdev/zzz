@@ -153,7 +153,7 @@ Defined in `src/lib/action_specs.ts`. A representative subset below — the `ter
 - `filer_change` — File system change notification. Kind: `remote_notification`. Initiator: `backend`
 - `diskfile_update` — Write file content. Kind: `request_response`. Initiator: `frontend`
 - `diskfile_delete` — Delete a file. Kind: `request_response`. Initiator: `frontend`
-- `directory_create` — Create a directory. Kind: `request_response`. Initiator: `frontend`
+- `directory_create` — Create a new directory (and missing parents); a taken name is `conflict`. Kind: `request_response`. Initiator: `frontend`
 - `completion_create` — Start AI completion. Kind: `request_response`. Initiator: `frontend`
 - `completion_progress` — Stream completion chunks. Kind: `remote_notification`. Initiator: `backend`
 - `toggle_main_menu` — Toggle main menu UI. Kind: `local_call`. Initiator: `frontend`

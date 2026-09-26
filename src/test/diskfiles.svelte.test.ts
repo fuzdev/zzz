@@ -871,4 +871,26 @@ describe('create_directory', () => {
 		assert.instanceOf(error, Error);
 		assert.strictEqual(error.message, 'failed to create directory: permission denied');
 	});
+
+	test('surfaces a taken name as "already exists"', async () => {
+		(app as any).api = {
+			directory_create: () =>
+				Promise.resolve({
+					ok: false,
+					error: {
+						code: -32004,
+						message: 'failed to create directory: Path already exists: /ws/taken',
+						data: { reason: 'already_exists' }
+					}
+				})
+		};
+		app.workspaces.add({ path: SOURCE_DIR });
+
+		const error = await app.diskfiles.create_directory('taken').then(
+			() => null,
+			(e: unknown) => e
+		);
+		assert.instanceOf(error, Error);
+		assert.strictEqual(error.message, 'taken already exists');
+	});
 });

@@ -454,7 +454,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * Creates a new directory in `new_files_dir`.
 	 *
 	 * @param dirname - the directory's path relative to `new_files_dir`
-	 * @throws Error when no workspace is open or the backend refuses
+	 * @throws Error when no workspace is open, the name is already taken, or
+	 * the backend refuses
 	 */
 	async create_directory(dirname: string): Promise<void> {
 		const dir = this.new_files_dir;
@@ -466,7 +467,10 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 		const result = await this.app.api.directory_create({ path });
 		if (!result.ok) {
-			throw new Error(result.error.message);
+			const { reason } = (result.error.data ?? {}) as { reason?: unknown };
+			throw new Error(
+				reason === 'already_exists' ? `${dirname} already exists` : result.error.message
+			);
 		}
 	}
 

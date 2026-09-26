@@ -575,7 +575,11 @@ workspace (`Diskfiles.new_files_dir`) and are disabled while no workspace is
 open; a failure (say a non-writable directory) is reported, never silent. "New
 file" uses `diskfile_create`, which creates the final name exclusively
 (`O_EXCL`) and fails with `conflict` / `already_exists` instead of
-overwriting. The UI shows a path inside the app directory relative to it and
+overwriting; "new folder" (`directory_create`) fails the same way when the
+name is taken, directory or not. For both, a symlink at the name is refused
+as `forbidden` / `symlink_not_allowed` (zzz never follows symlinks), and a
+missing parent folder that can't be created under a read-only ancestor
+reports `permission_denied` rather than `directory_not_writable`. The UI shows a path inside the app directory relative to it and
 any other path absolute — including a file part's `path` attribute in the
 prompt XML sent to models.
 

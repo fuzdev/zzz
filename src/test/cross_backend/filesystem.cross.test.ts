@@ -1,6 +1,6 @@
 /**
  * Cross-backend integration tests for filesystem actions
- * (`diskfile_update`, `diskfile_delete`, `directory_create`) plus the
+ * (`diskfile_update`, `diskfile_create`, `diskfile_delete`, `directory_create`) plus the
  * `filer_change` notification path.
  *
  * @module
@@ -186,31 +186,45 @@ describe('filesystem cross-backend', () => {
 		}
 	});
 
-	test('directory_create_already_exists', async () => {
+	test('directory_create_never_reuses_an_existing_name', async () => {
 		const fixture = await setup_test();
-		await mkdir(scoped_dir, { recursive: true });
-		const dir_path = join(scoped_dir, `idempotent_dir_${randomUUID()}`);
+		const dir = join(scoped_dir, `existing_dir_${randomUUID()}`);
+		await mkdir(dir, { recursive: true });
+		const create = (path: string) =>
+			rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'directory_create',
+				params: { path },
+				headers: fixture.create_session_headers()
+			});
 		try {
-			const r1 = await rpc_call({
-				app: fixture.transport,
-				path: handle.config.rpc_path,
-				method: 'directory_create',
-				params: { path: dir_path },
-				headers: fixture.create_session_headers()
-			});
-			assert.ok(r1.ok);
+			const dir_path = join(dir, 'new');
+			const first = await create(dir_path);
+			assert.ok(first.ok, JSON.stringify(first));
+			await writeFile(join(dir_path, 'kept.txt'), 'x', 'utf-8');
 
-			const r2 = await rpc_call({
-				app: fixture.transport,
-				path: handle.config.rpc_path,
-				method: 'directory_create',
-				params: { path: dir_path },
-				headers: fixture.create_session_headers()
-			});
-			assert.ok(r2.ok);
-			assert.equal(r2.result, null);
+			// a taken name fails like `diskfile_create`, whatever holds it
+			const file_path = join(dir, 'file.txt');
+			await writeFile(file_path, 'x', 'utf-8');
+			for (const path of [dir_path, file_path]) {
+				const again = await create(path);
+				assert.ok(!again.ok, `${path} should fail`);
+				assert.equal(again.error.code, JSONRPC_ERROR_CODES.conflict, path);
+				assert.deepEqual(again.error.data, { reason: 'already_exists' }, path);
+				assert.ok(
+					again.error.message.startsWith('failed to create directory: Path already exists'),
+					`unexpected message: ${again.error.message}`
+				);
+			}
+			assert.deepEqual(await readdir(dir_path), ['kept.txt'], 'untouched');
+			assert.equal(await readFile(file_path, 'utf-8'), 'x', 'untouched');
+
+			// only the final name must be free — existing parents are fine
+			const sibling = await create(join(dir, 'new_sibling'));
+			assert.ok(sibling.ok, JSON.stringify(sibling));
 		} finally {
-			await rm(dir_path, { recursive: true, force: true });
+			await rm(dir, { recursive: true, force: true });
 		}
 	});
 
@@ -296,7 +310,6 @@ describe('filesystem cross-backend', () => {
 				// a FIFO is refused, not opened — opening one blocks until a reader appears
 				['diskfile_update', { path: fifo_path, content: 'x' }, 'not_a_regular_file'],
 				['diskfile_delete', { path: dir }, 'is_a_directory'],
-				['directory_create', { path: file_path }, 'not_a_directory'],
 				['directory_create', { path: join(file_path, 'sub') }, 'not_a_directory']
 			];
 			for (const [method, params, reason] of cases) {
@@ -412,6 +425,17 @@ describe('filesystem cross-backend', () => {
 			assert.equal(created.error.code, JSONRPC_ERROR_CODES.forbidden);
 			assert.deepEqual(created.error.data, { reason: 'directory_not_writable' });
 			assert.ok(!created.error.message.includes('.zzz-tmp-'), created.error.message);
+
+			const created_dir = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'directory_create',
+				params: { path: join(ro_dir, 'sub') },
+				headers: fixture.create_session_headers()
+			});
+			assert.ok(!created_dir.ok);
+			assert.equal(created_dir.error.code, JSONRPC_ERROR_CODES.forbidden);
+			assert.deepEqual(created_dir.error.data, { reason: 'directory_not_writable' });
 		} finally {
 			await chmod(ro_dir, 0o755).catch(() => undefined);
 			await rm(dir, { recursive: true, force: true });
