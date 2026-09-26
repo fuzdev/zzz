@@ -232,7 +232,11 @@ export interface DerivedIndexOptions<
 	/** Function that computes the derived collection from the full collection. */
 	compute: (collection: IndexedCollection<T>) => TResult;
 
-	/** Optional sort function for the derived array. */
+	/**
+	 * Optional sort function for the derived array. `compute`'s result is
+	 * copied before sorting, so `compute` can return an array it doesn't own
+	 * (like `collection.values`).
+	 */
 	sort?: (a: T, b: T) => number;
 
 	/** Optional custom add handler. */
@@ -256,7 +260,8 @@ export const create_derived_index = <T extends IndexedItem, TResult extends Arra
 		compute: (collection) => {
 			const result = options.compute(collection);
 			if (options.sort) {
-				return result.sort(options.sort);
+				// sort a copy — never reorder the array `compute` returned
+				return result.slice().sort(options.sort) as TResult;
 			}
 			return result;
 		},

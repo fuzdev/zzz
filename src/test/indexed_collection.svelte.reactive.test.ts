@@ -264,6 +264,47 @@ describe('incremental derived indexes', () => {
 		collection.add(c);
 		assert.deepEqual(collection.derived_index('order'), [b, a, c]);
 	});
+
+	test('`sort` never reorders the array `compute` returns', () => {
+		const c = new Item('c');
+		const a = new Item('a');
+		const b = new Item('b');
+		const source = [c, a, b];
+		const collection: IndexedCollection<Item> = new IndexedCollection({
+			indexes: [
+				create_derived_index({
+					key: 'sorted',
+					compute: () => source,
+					sort: (x, y) => x.name.localeCompare(y.name)
+				})
+			]
+		});
+		assert.deepEqual(collection.derived_index('sorted'), [a, b, c]);
+		assert.deepEqual(source, [c, a, b]);
+	});
+
+	test('a sorted index over `collection.values` leaves `values` in insertion order', () => {
+		const collection: IndexedCollection<Item> = new IndexedCollection({
+			indexes: [
+				create_derived_index({
+					key: 'ordered_by_name',
+					compute: (c) => c.values,
+					sort: (x, y) => x.name.localeCompare(y.name)
+				})
+			]
+		});
+		const c = new Item('c');
+		const a = new Item('a');
+		const b = new Item('b');
+		collection.add_many([c, a, b]);
+		assert.deepEqual(collection.derived_index('ordered_by_name'), [a, b, c]);
+		assert.deepEqual(collection.values, [c, a, b]);
+
+		collection.clear();
+		collection.add_many([b, c, a]);
+		assert.deepEqual(collection.derived_index('ordered_by_name'), [a, b, c]);
+		assert.deepEqual(collection.values, [b, c, a]);
+	});
 });
 
 describe('dispose_item', () => {

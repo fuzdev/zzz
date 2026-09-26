@@ -37,10 +37,8 @@ export class Prompts extends Cell<typeof PromptsJson> {
 
 			create_derived_index({
 				key: 'recent_prompts',
-				compute: (collection) =>
-					collection.values
-						.slice()
-						.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime()),
+				compute: (collection) => collection.values,
+				sort: (a, b) => new Date(b.created).getTime() - new Date(a.created).getTime(),
 				onadd: (items, item) => {
 					// Insert at the right position based on creation date
 					const index = items.findIndex(

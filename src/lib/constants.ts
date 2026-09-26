@@ -2,19 +2,11 @@ import {
 	PUBLIC_ZZZ_SERVER_HOST,
 	PUBLIC_ZZZ_SERVER_PORT,
 	PUBLIC_ZZZ_SERVER_PROTOCOL,
-	PUBLIC_ZZZ_SERVER_PROXIED_PORT,
-	PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY,
 	PUBLIC_ZZZ_SERVER_API_PATH,
-	PUBLIC_ZZZ_WEBSOCKET_URL,
-	PUBLIC_ZZZ_DIR,
-	PUBLIC_ZZZ_SCOPED_DIRS
+	PUBLIC_ZZZ_WEBSOCKET_URL
 } from '$env/static/public';
 
-import {
-	PathWithLeadingSlash,
-	PathWithTrailingSlash,
-	PathWithoutTrailingSlash
-} from './zod_helpers.ts';
+import { PathWithLeadingSlash, PathWithoutTrailingSlash } from './zod_helpers.ts';
 
 // This module re-exports public environment variables with parsed values.
 // It should generally be preferred to using the variables directly.
@@ -53,32 +45,6 @@ export const SERVER_HOST: string = PUBLIC_ZZZ_SERVER_HOST || 'localhost';
 export const SERVER_URL: string = PUBLIC_ZZZ_SERVER_PORT
 	? `${SERVER_PROTOCOL}://${SERVER_HOST}:${PUBLIC_ZZZ_SERVER_PORT}`
 	: (PAGE_ORIGIN ?? '');
-
-export const SERVER_PROXIED_PORT: number = parseInt(PUBLIC_ZZZ_SERVER_PROXIED_PORT, 10) || 4461;
-
-export const BACKEND_ARTIFICIAL_RESPONSE_DELAY =
-	parseInt(PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY, 10) || 0;
-
-/**
- * @trailing_slash
- */
-export const ZZZ_DIR = PathWithTrailingSlash.parse(PUBLIC_ZZZ_DIR || '.zzz');
-
-// Zzz directory subdirectories
-export const ZZZ_DIR_STATE = 'state';
-export const ZZZ_DIR_STATE_COMPLETIONS = 'completions';
-export const ZZZ_DIR_RUN = 'run';
-export const ZZZ_DIR_CACHE = 'cache'; // TODO implement
-
-/**
- * Comma-separated list of filesystem paths that Zzz can access.
- * Empty array means no scoped filesystem access.
- */
-export const ZZZ_SCOPED_DIRS: Array<string> = PUBLIC_ZZZ_SCOPED_DIRS
-	? PUBLIC_ZZZ_SCOPED_DIRS.split(',')
-			.map((p) => p.trim())
-			.filter(Boolean)
-	: [];
 
 export const CONTENT_PREVIEW_LENGTH = 100;
 
