@@ -12,7 +12,8 @@
 //!      error, before any daemon work.
 //!   3. Daemon discovery — read `~/.zzz/run/daemon.json`, verify the process
 //!      is still the recorded one and `/health` responds; a stale record is
-//!      removed, an unresponsive daemon is stopped.
+//!      removed, an unresponsive daemon is stopped, and a record this zzz
+//!      can't verify (an older zzz's) is an error, never replaced.
 //!   4. Auto-start if not running — spawn `zzzd` **detached** (new process
 //!      group, log-file stdio), wait until it serves, record `daemon.json`.
 //!      This differs from `daemon start`, which runs the server in the
@@ -133,6 +134,7 @@ async fn discover_running_daemon() -> Result<Option<DaemonInfo>, CliError> {
     match dl::get_daemon_state().await {
         DaemonState::Running(info) => Ok(Some(info)),
         DaemonState::Stopped => Ok(None),
+        DaemonState::Foreign(record) => Err(record.refuse("start a daemon")),
         DaemonState::Stale(info) => {
             dl::remove_daemon_info_if(&info)?;
             Ok(None)
@@ -179,7 +181,8 @@ async fn start_daemon_detached() -> Result<DaemonInfo, CliError> {
 
     let launch = DaemonLaunch::prepare(None)?;
     let port = launch.port;
-    dl::require_free_port(port)?;
+    dl::require_free_port(port, false)?;
+    let bin = dl::resolve_server_bin()?;
 
     let run_dir = launch.cwd.join("run");
     fs::create_dir_all(&run_dir)?;
@@ -203,13 +206,13 @@ async fn start_daemon_detached() -> Result<DaemonInfo, CliError> {
     println!("starting daemon on port {port}...");
 
     let mut child = launch
-        .command()
+        .command(&bin)
         .stdin(Stdio::null())
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(log_err))
         .process_group(0)
         .spawn()
-        .map_err(|e| CliError::Daemon(format!("failed to spawn {}: {e}", launch.bin.display())))?;
+        .map_err(|e| CliError::Daemon(format!("failed to spawn {}: {e}", bin.display())))?;
     let pid = child.id();
     // Unreaped until this CLI exits, so the pid can't be reused meanwhile.
     let start_ticks = match dl::child_start_ticks(pid) {

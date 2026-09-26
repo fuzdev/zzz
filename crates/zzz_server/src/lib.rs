@@ -26,6 +26,7 @@ pub mod static_files;
 pub mod utf8_stream;
 pub mod zzz_action_specs;
 
+use std::ffi::OsString;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -822,18 +823,6 @@ pub struct Config {
     pub trusted_proxies: Option<String>,
 }
 
-/// Read a Zod-`stringbool()`-shaped env var via the spine parser
-/// ([`fuz_sys::env::parse_stringbool`]): case-insensitive truthy
-/// (`true`/`1`/`yes`/`on`/`y`/`enabled`) / falsy
-/// (`false`/`0`/`no`/`off`/`n`/`disabled`). Unset → `false`; unknown
-/// values error so a typo doesn't silently disable the feature.
-fn parse_stringbool_env(name: &str) -> Result<bool, ServerError> {
-    let Ok(v) = std::env::var(name) else {
-        return Ok(false);
-    };
-    fuz_sys::env::parse_stringbool(&v).map_err(|e| ServerError::Config(format!("{name}: {e}")))
-}
-
 /// The app directory when `PUBLIC_ZZZ_DIR` is unset or empty, relative to
 /// the working directory.
 pub const DEFAULT_ZZZ_DIR: &str = ".zzz/";
@@ -963,31 +952,148 @@ fn ensure_app_dir(path: &Path) -> Result<String, ServerError> {
     resolve_dir(path)
 }
 
-fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
-    let mut port: Option<u16> = None;
-    let mut static_dir: Option<PathBuf> = None;
+/// The daemon's options, printed after the binary's name for `-h` /
+/// `--help` ([`report_run_result`]) and quoted by every argument error —
+/// shared by `zzzd` and `testing_zzzd`, so it names neither.
+pub const OPTIONS: &str = "[--port <port>] [--static-dir <dir>]";
 
-    let args: Vec<String> = std::env::args().collect();
-    let mut i = 1;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--port" => {
-                i += 1;
-                let val = args
-                    .get(i)
-                    .ok_or_else(|| ServerError::Config("--port requires a value".to_owned()))?;
-                port = Some(parse_port("--port", val)?);
-            }
-            "--static-dir" => {
-                i += 1;
-                if let Some(val) = args.get(i).filter(|v| !v.trim().is_empty()) {
-                    static_dir = Some(PathBuf::from(val));
-                }
-            }
-            _ => {}
+/// Validate the process's command line without acting on it — for a binary
+/// that has side effects to do before [`run_app`] (which parses it again), so
+/// `--help` or a bad argument exits before any of them.
+///
+/// # Errors
+///
+/// As [`parse_args`], including [`ServerError::HelpRequested`].
+pub fn check_cli_args() -> Result<(), ServerError> {
+    parse_args(std::env::args_os().skip(1)).map(|_| ())
+}
+
+/// The process exit for a [`run_app`] (or [`check_cli_args`]) result of the
+/// binary named `program`.
+///
+/// [`ServerError::HelpRequested`] prints `usage: <program> <OPTIONS>` to
+/// stdout and exits 0; any other error prints `<program>: <error>` to stderr
+/// (e.g. `zzzd: configuration error: …` — the variant names the kind) and
+/// exits 1 — synchronously, not through the non-blocking logger, whose
+/// buffered lines a `std::process::exit` would drop.
+#[must_use]
+pub fn report_run_result(result: Result<(), ServerError>, program: &str) -> std::process::ExitCode {
+    match result {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(ServerError::HelpRequested) => {
+            println!("usage: {program} {OPTIONS}");
+            std::process::ExitCode::SUCCESS
         }
-        i += 1;
+        Err(e) => {
+            eprintln!("{program}: {e}");
+            std::process::ExitCode::FAILURE
+        }
     }
+}
+
+/// Flags parsed from the command line; unset ones fall back to env vars.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct CliArgs {
+    port: Option<u16>,
+    static_dir: Option<PathBuf>,
+}
+
+/// Parse `zzzd`'s arguments (without the program name). Each flag takes its
+/// value as the next argument or after `=` (`--port 4460`, `--port=4460`);
+/// a repeated flag's last value wins.
+///
+/// Read as `OsString`s, so a non-UTF-8 argument never panics: a
+/// `--static-dir` path may be any bytes, and anything else that isn't UTF-8
+/// is an error.
+///
+/// # Errors
+///
+/// [`ServerError::HelpRequested`] for `-h` / `--help`; [`ServerError::Config`]
+/// for an unknown flag or stray positional argument, a flag missing its
+/// value, an empty `--static-dir`, or an invalid port — never ignored, so a
+/// typo can't silently boot with defaults.
+fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<CliArgs, ServerError> {
+    use std::os::unix::ffi::{OsStrExt as _, OsStringExt as _};
+
+    let mut parsed = CliArgs::default();
+    let mut args = args.into_iter();
+    while let Some(arg) = args.next() {
+        // split `--flag=value` on the bytes, so the value may be any path
+        let bytes = arg.as_bytes();
+        let (flag_bytes, inline) = match bytes.iter().position(|&b| b == b'=') {
+            Some(eq) if bytes.starts_with(b"--") => (
+                &bytes[..eq],
+                Some(OsString::from_vec(bytes[eq + 1..].to_vec())),
+            ),
+            _ => (bytes, None),
+        };
+        let flag = match std::str::from_utf8(flag_bytes) {
+            Ok("-h" | "--help") if inline.is_none() => return Err(ServerError::HelpRequested),
+            Ok(flag @ ("--port" | "--static-dir")) => flag,
+            Ok(_) => {
+                return Err(ServerError::Config(format!(
+                    "unknown argument {:?} (options: {OPTIONS})",
+                    arg.to_string_lossy()
+                )));
+            }
+            Err(_) => {
+                return Err(ServerError::Config(format!(
+                    "argument {:?} is not valid UTF-8 (options: {OPTIONS})",
+                    arg.to_string_lossy()
+                )));
+            }
+        };
+        let value = inline.or_else(|| args.next()).ok_or_else(|| {
+            ServerError::Config(format!("{flag} requires a value (options: {OPTIONS})"))
+        })?;
+        if flag == "--port" {
+            let value = value
+                .to_str()
+                .ok_or_else(|| ServerError::Config("--port is not valid UTF-8".to_owned()))?;
+            parsed.port = Some(parse_port("--port", value)?);
+        } else {
+            if value.is_empty() {
+                return Err(ServerError::Config(
+                    "--static-dir requires a non-empty value".to_owned(),
+                ));
+            }
+            parsed.static_dir = Some(PathBuf::from(value));
+        }
+    }
+    Ok(parsed)
+}
+
+/// A required env var's value.
+///
+/// # Errors
+///
+/// [`ServerError::Config`] naming the variable when it's unset or blank
+/// (empty or whitespace — the same "unset" every other var uses), or not
+/// valid UTF-8.
+fn env_required(name: &str) -> Result<String, ServerError> {
+    env_non_empty(name)?
+        .ok_or_else(|| ServerError::Config(format!("{name} is unset or blank (it is required)")))
+}
+
+/// Parse the `ZZZ_ENABLE_TEST_ACTIONS` flag from its env value: unset or
+/// blank → `false`, else [`fuz_sys::env::parse_stringbool`].
+///
+/// # Errors
+///
+/// [`ServerError::Config`] naming the variable for an unrecognized value.
+fn parse_test_actions_flag(value: Option<&str>) -> Result<bool, ServerError> {
+    let Some(value) = value.filter(|v| !v.trim().is_empty()) else {
+        return Ok(false);
+    };
+    fuz_sys::env::parse_stringbool(value)
+        .map_err(|e| ServerError::Config(format!("ZZZ_ENABLE_TEST_ACTIONS: {e}")))
+}
+
+fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
+    let CliArgs {
+        mut port,
+        mut static_dir,
+    } = parse_args(std::env::args_os().skip(1))?;
 
     // Fall back to env vars for port/static_dir
     if port.is_none()
@@ -1010,11 +1116,8 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
     }
 
     // Required env vars
-    let database_url = std::env::var("DATABASE_URL")
-        .map_err(|_| ServerError::Config("DATABASE_URL is required".to_owned()))?;
-
-    let secret_cookie_keys = std::env::var("SECRET_FUZ_COOKIE_KEYS")
-        .map_err(|_| ServerError::Config("SECRET_FUZ_COOKIE_KEYS is required".to_owned()))?;
+    let database_url = env_required("DATABASE_URL")?;
+    let secret_cookie_keys = env_required("SECRET_FUZ_COOKIE_KEYS")?;
 
     let bootstrap_token_path = env_non_empty("FUZ_BOOTSTRAP_TOKEN_PATH")?;
     let allowed_origins = env_var_utf8("FUZ_ALLOWED_ORIGINS")?;
@@ -1029,7 +1132,8 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
 
     let zzz_dir = ensure_zzz_dir_from_env()?;
 
-    let enable_test_actions = parse_stringbool_env("ZZZ_ENABLE_TEST_ACTIONS")?;
+    let enable_test_actions =
+        parse_test_actions_flag(env_var_utf8("ZZZ_ENABLE_TEST_ACTIONS")?.as_deref())?;
     let trusted_proxies = env_var_utf8("ZZZ_TRUSTED_PROXIES")?;
 
     Ok(Config {
@@ -1052,6 +1156,7 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,
+    clippy::panic,
     reason = "tests panic on assertion failure by design"
 )]
 mod config_paths {
@@ -1089,6 +1194,129 @@ mod config_paths {
                 other => panic!("{bad:?} should be refused, got {:?}", other.ok()),
             }
         }
+    }
+
+    fn args(list: &[&str]) -> Vec<OsString> {
+        list.iter().map(OsString::from).collect()
+    }
+
+    fn config_error(result: Result<CliArgs, ServerError>) -> String {
+        match result {
+            Err(ServerError::Config(message)) => message,
+            other => panic!("expected a config error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn args_take_separate_and_inline_values() {
+        assert_eq!(parse_args(args(&[])).unwrap(), CliArgs::default());
+        let expected = CliArgs {
+            port: Some(5000),
+            static_dir: Some(PathBuf::from("/ui")),
+        };
+        assert_eq!(
+            parse_args(args(&["--port", "5000", "--static-dir", "/ui"])).unwrap(),
+            expected
+        );
+        assert_eq!(
+            parse_args(args(&["--port=5000", "--static-dir=/ui"])).unwrap(),
+            expected
+        );
+        // the last of a repeated flag wins; `=` inside a value is kept
+        assert_eq!(
+            parse_args(args(&["--port", "1", "--port=2", "--static-dir=a=b"])).unwrap(),
+            CliArgs {
+                port: Some(2),
+                static_dir: Some(PathBuf::from("a=b")),
+            }
+        );
+    }
+
+    #[test]
+    fn unknown_and_malformed_args_are_refused() {
+        for (list, needle) in [
+            (&["--prot", "5000"][..], "unknown argument \"--prot\""),
+            (&["--prot=5000"][..], "unknown argument \"--prot=5000\""),
+            (&["serve"][..], "unknown argument \"serve\""),
+            (&["-p", "5000"][..], "unknown argument \"-p\""),
+            (&["--help=x"][..], "unknown argument \"--help=x\""),
+            (
+                &["--bogus"][..],
+                "(options: [--port <port>] [--static-dir <dir>])",
+            ),
+            (&["--port"][..], "--port requires a value"),
+            (&["--static-dir"][..], "--static-dir requires a value"),
+            (
+                &["--static-dir", ""][..],
+                "--static-dir requires a non-empty value",
+            ),
+            (
+                &["--static-dir="][..],
+                "--static-dir requires a non-empty value",
+            ),
+            (&["--port=0"][..], "expected a port in 1..=65535"),
+            (&["--port", "65536"][..], "expected a port in 1..=65535"),
+            (&["--port="][..], "expected a port in 1..=65535"),
+        ] {
+            let message = config_error(parse_args(args(list)));
+            assert!(message.contains(needle), "{list:?}: {message}");
+        }
+    }
+
+    #[test]
+    fn help_is_requested_not_an_error() {
+        for list in [&["--help"][..], &["-h"], &["--port", "5000", "-h"]] {
+            assert!(
+                matches!(parse_args(args(list)), Err(ServerError::HelpRequested)),
+                "{list:?}"
+            );
+        }
+        assert_eq!(ServerError::HelpRequested.to_string(), "help requested");
+        // a flag's value is never taken for help
+        assert_eq!(
+            parse_args(args(&["--static-dir", "--help"]))
+                .unwrap()
+                .static_dir,
+            Some(PathBuf::from("--help"))
+        );
+    }
+
+    #[test]
+    fn non_utf8_args_never_panic() {
+        use std::os::unix::ffi::OsStringExt as _;
+        let bad = || OsString::from_vec(vec![b'x', 0xff]);
+
+        // a static dir may be any bytes, in either form
+        let mut inline = b"--static-dir=".to_vec();
+        inline.extend([b'x', 0xff]);
+        for list in [
+            vec![OsString::from("--static-dir"), bad()],
+            vec![OsString::from_vec(inline)],
+        ] {
+            assert_eq!(
+                parse_args(list).unwrap().static_dir,
+                Some(PathBuf::from(bad()))
+            );
+        }
+        // anything else is a clear error
+        let message = config_error(parse_args([bad()]));
+        assert!(message.contains("not valid UTF-8"), "{message}");
+        let message = config_error(parse_args([OsString::from("--port"), bad()]));
+        assert!(message.contains("--port is not valid UTF-8"), "{message}");
+    }
+
+    #[test]
+    fn blank_test_actions_flag_reads_as_unset() {
+        for unset in [None, Some(""), Some("  ")] {
+            assert!(!parse_test_actions_flag(unset).unwrap(), "{unset:?}");
+        }
+        assert!(parse_test_actions_flag(Some("1")).unwrap());
+        assert!(parse_test_actions_flag(Some("TRUE")).unwrap());
+        assert!(!parse_test_actions_flag(Some("off")).unwrap());
+        let Err(ServerError::Config(message)) = parse_test_actions_flag(Some("maybe")) else {
+            panic!("an unknown value errors");
+        };
+        assert!(message.contains("ZZZ_ENABLE_TEST_ACTIONS"), "{message}");
     }
 
     #[test]

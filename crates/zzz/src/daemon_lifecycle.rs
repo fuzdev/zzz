@@ -19,16 +19,17 @@
 //! The on-disk record follows the shape of `fuz_app`'s `DaemonInfo`
 //! (`{version, pid, port, started, app_version}`) plus `boot_id` and
 //! `pid_start_ticks`, which is why `version` is `2`. A record in any other
-//! shape (an older zzz's, or a corrupt one) is reported and left alone. The
+//! shape (an older zzz's, or a corrupt one) is reported and left alone —
+//! never signalled, removed, or overwritten, so a start refuses to run. The
 //! OS-level plumbing — signals, RFC-3339 timestamps, crash-safe atomic
 //! writes — routes through `fuz_sys`.
 
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
 use std::net::{Ipv4Addr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use fuz_sys::Signal;
@@ -48,6 +49,19 @@ pub const DAEMON_BIN: &str = "zzzd";
 /// Default daemon port when neither `--port`, `ZZZ_PORT`, nor config
 /// supplies one. Matches `zzzd`'s own default.
 pub const DEFAULT_PORT: u16 = 4460;
+
+/// Parse a daemon port: an integer in `1..=65535` (surrounding whitespace
+/// allowed). The one rule for every port source — `--port`, `ZZZ_PORT`, and
+/// `zzz_config_port` — matching `zzzd`'s own; the `Err` is argh's
+/// `from_str_fn` message.
+pub fn parse_port(value: &str) -> Result<u16, String> {
+    value
+        .trim()
+        .parse::<u16>()
+        .ok()
+        .filter(|&port| port != 0)
+        .ok_or_else(|| format!("expected a port in 1..=65535, got `{value}`"))
+}
 
 /// Schema version of `daemon.json` — `2` adds `boot_id` and
 /// `pid_start_ticks` to the v1 `fuz_app` shape. A record with any other
@@ -179,7 +193,7 @@ pub enum DaemonRecord {
     Current(DaemonInfo),
     /// A record it can't — an older zzz's, another version's, or corrupt.
     /// Reported, never acted on: its pid can't be verified, so it's never
-    /// signalled, and the file is never removed.
+    /// signalled, and the file is never removed or overwritten.
     Foreign(ForeignRecord),
 }
 
@@ -188,22 +202,61 @@ pub enum DaemonRecord {
 pub struct ForeignRecord {
     /// The pid it names, when it names one.
     pub pid: Option<u32>,
-    /// What it is — "from an older zzz", "unreadable (…)".
-    pub what: String,
+    /// Why it can't be used.
+    pub kind: ForeignKind,
+}
+
+/// Why a `daemon.json` is a [`ForeignRecord`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ForeignKind {
+    /// An older schema version — an older zzz's.
+    Older,
+    /// A newer schema version — a newer zzz's.
+    Newer,
+    /// Unreadable, or not a record at all (the error).
+    Unreadable(String),
+}
+
+impl ForeignKind {
+    /// The machine-readable name: `older`, `newer`, or `unreadable`.
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Older => "older",
+            Self::Newer => "newer",
+            Self::Unreadable(_) => "unreadable",
+        }
+    }
 }
 
 impl ForeignRecord {
+    /// What it is — "from an older zzz", "is unreadable (…)".
+    #[must_use]
+    pub fn what(&self) -> String {
+        match &self.kind {
+            ForeignKind::Older => "from an older zzz".to_owned(),
+            ForeignKind::Newer => "from a newer zzz".to_owned(),
+            ForeignKind::Unreadable(error) => format!("is unreadable ({error})"),
+        }
+    }
+
+    /// The error refusing `action` ("start a daemon", …) because of this
+    /// record.
+    #[must_use]
+    pub fn refuse(&self, action: &'static str) -> CliError {
+        CliError::ForeignRecord {
+            action,
+            description: self.describe(),
+        }
+    }
+
     /// One-line description naming the pid, for warnings and errors.
     #[must_use]
     pub fn describe(&self) -> String {
+        let what = self.what();
         self.pid.map_or_else(
-            || {
-                format!(
-                    "daemon.json {} — remove it once no daemon is running",
-                    self.what
-                )
-            },
-            |pid| format!("daemon.json {} (pid {pid}) — stop it manually", self.what),
+            || format!("daemon.json {what} — remove it once no daemon is running"),
+            |pid| format!("daemon.json {what} (pid {pid}) — stop it manually"),
         )
     }
 }
@@ -222,12 +275,12 @@ fn classify_daemon_record(content: &str) -> DaemonRecord {
             .and_then(serde_json::Value::as_u64)
     };
     let pid = field("pid").and_then(|pid| u32::try_from(pid).ok());
-    let what = match field("version") {
-        Some(version) if version < u64::from(DAEMON_INFO_VERSION) => "from an older zzz".to_owned(),
-        Some(version) if version > u64::from(DAEMON_INFO_VERSION) => "from a newer zzz".to_owned(),
-        _ => format!("is unreadable ({error})"),
+    let kind = match field("version") {
+        Some(version) if version < u64::from(DAEMON_INFO_VERSION) => ForeignKind::Older,
+        Some(version) if version > u64::from(DAEMON_INFO_VERSION) => ForeignKind::Newer,
+        _ => ForeignKind::Unreadable(error),
     };
-    DaemonRecord::Foreign(ForeignRecord { pid, what })
+    DaemonRecord::Foreign(ForeignRecord { pid, kind })
 }
 
 /// Read and classify `daemon.json`. An unreadable file (other than missing)
@@ -242,38 +295,23 @@ pub fn read_daemon_record() -> DaemonRecord {
         Err(e) if e.kind() == io::ErrorKind::NotFound => DaemonRecord::Absent,
         Err(e) => DaemonRecord::Foreign(ForeignRecord {
             pid: None,
-            what: format!("is unreadable ({e})"),
+            kind: ForeignKind::Unreadable(e.to_string()),
         }),
-    }
-}
-
-/// Print a foreign record's warning, at most once per process.
-fn warn_foreign_record(record: &ForeignRecord) {
-    static WARNED: AtomicBool = AtomicBool::new(false);
-    if !WARNED.swap(true, Ordering::Relaxed) {
-        eprintln!("warning: ignoring {}", record.describe());
-    }
-}
-
-/// The recorded daemon, if `daemon.json` holds a usable record. A foreign
-/// record reads as none, with a warning (once per process).
-#[must_use]
-pub fn read_daemon_info() -> Option<DaemonInfo> {
-    match read_daemon_record() {
-        DaemonRecord::Absent => None,
-        DaemonRecord::Current(info) => Some(info),
-        DaemonRecord::Foreign(record) => {
-            warn_foreign_record(&record);
-            None
-        }
     }
 }
 
 /// Atomically write `daemon.json`, creating `run/`. Crash-safe temp → fsync →
 /// rename → parent fsync via [`fuz_sys::fs::write_atomic`]; mode `0o644`
 /// (the record — pid / port / version — is not secret).
+///
+/// Never replaces a [`DaemonRecord::Foreign`] record: the start paths refuse
+/// one up front ([`CliError::ForeignRecord`]); this is the backstop for one
+/// that appeared since.
 pub fn write_daemon_info(info: &DaemonInfo) -> Result<(), CliError> {
     let path = daemon_info_path()?;
+    if let DaemonRecord::Foreign(record) = read_daemon_record() {
+        return Err(record.refuse("start a daemon"));
+    }
     if let Some(run_dir) = path.parent() {
         fs::create_dir_all(run_dir)?;
     }
@@ -308,30 +346,70 @@ pub fn remove_daemon_info_if(info: &DaemonInfo) -> Result<bool, CliError> {
 /// with `~/.zzz` as its working directory, so a relative path would resolve
 /// against the wrong directory).
 ///
-/// `ZZZ_SERVER_BIN` override > beside the CLI exe > `~/.zzz/bin/` >
-/// `./target/debug/` (dev) > bare name on `$PATH`.
-#[must_use]
-pub fn resolve_server_bin() -> PathBuf {
-    if let Some(p) = std::env::var_os("ZZZ_SERVER_BIN") {
-        let p = PathBuf::from(p);
-        return std::path::absolute(&p).unwrap_or(p);
+/// `ZZZ_SERVER_BIN` (blank reads as unset; a relative value resolves against
+/// the directory `zzz` runs in, where it was written) > beside the resolved
+/// CLI executable (`current_exe`, which follows symlinks — so it also covers
+/// a dev build, `target/debug/zzz` beside `target/debug/zzzd`) >
+/// `~/.zzz/bin/` > `$PATH`. A candidate must be an executable regular file;
+/// one that isn't is skipped. Never the current directory — running `zzz`
+/// inside an untrusted checkout must not execute its `target/debug/zzzd`
+/// with the user's database URL and cookie key — so relative `$PATH`
+/// entries (`.`, or an empty one) are skipped too.
+///
+/// # Errors
+///
+/// [`CliError::ServerBinOverrideInvalid`] when `ZZZ_SERVER_BIN` doesn't name
+/// an executable file; [`CliError::ServerBinNotFound`] when no candidate
+/// exists.
+pub fn resolve_server_bin() -> Result<PathBuf, CliError> {
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf));
+    find_server_bin(
+        std::env::var_os("ZZZ_SERVER_BIN"),
+        exe_dir.as_deref(),
+        zzz_dir().ok().as_deref(),
+        std::env::var_os("PATH").as_deref(),
+        is_executable_file,
+    )
+}
+
+/// Whether `path` is a regular file (following symlinks) with an execute bit.
+fn is_executable_file(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt as _;
+    fs::metadata(path).is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+}
+
+/// The search behind [`resolve_server_bin`], with its inputs injected.
+/// `is_executable` is only ever asked about absolute paths.
+fn find_server_bin(
+    override_bin: Option<OsString>,
+    exe_dir: Option<&Path>,
+    zzz_dir: Option<&Path>,
+    path_var: Option<&OsStr>,
+    is_executable: impl Fn(&Path) -> bool,
+) -> Result<PathBuf, CliError> {
+    if let Some(bin) = override_bin.filter(|bin| !bin.to_string_lossy().trim().is_empty()) {
+        let bin = PathBuf::from(bin);
+        let bin = std::path::absolute(&bin).unwrap_or(bin);
+        return if bin.is_absolute() && is_executable(&bin) {
+            Ok(bin)
+        } else {
+            Err(CliError::ServerBinOverrideInvalid {
+                path: bin.display().to_string(),
+            })
+        };
     }
-    let mut candidates: Vec<PathBuf> = Vec::new();
-    if let Ok(exe) = std::env::current_exe()
-        && let Some(dir) = exe.parent()
-    {
-        candidates.push(dir.join(DAEMON_BIN));
-    }
-    if let Ok(dir) = zzz_dir() {
-        candidates.push(dir.join("bin").join(DAEMON_BIN));
-    }
-    if let Ok(cwd) = std::env::current_dir() {
-        candidates.push(cwd.join("target").join("debug").join(DAEMON_BIN));
-    }
-    candidates
+    let path_dirs = path_var.map(std::env::split_paths).into_iter().flatten();
+    exe_dir
+        .map(Path::to_path_buf)
         .into_iter()
-        .find(|c| c.is_file())
-        .unwrap_or_else(|| PathBuf::from(DAEMON_BIN))
+        .chain(zzz_dir.map(|dir| dir.join("bin")))
+        .chain(path_dirs)
+        .filter(|dir| dir.is_absolute())
+        .map(|dir| dir.join(DAEMON_BIN))
+        .find(|candidate| is_executable(candidate))
+        .ok_or(CliError::ServerBinNotFound)
 }
 
 /// Send `SIGTERM` to `pid` via [`fuz_sys::send_signal`].
@@ -553,17 +631,14 @@ pub fn port_is_free(port: u16) -> bool {
     TcpListener::bind((Ipv4Addr::LOCALHOST, port)).is_ok()
 }
 
-/// Error unless `port` is free. The error names the pid a foreign
-/// `daemon.json` records, the likely holder (never signalled).
-pub fn require_free_port(port: u16) -> Result<(), CliError> {
+/// Error unless `port` is free. `port_flag` says whether the command
+/// accepts `--port`, for the error's hint.
+pub fn require_free_port(port: u16, port_flag: bool) -> Result<(), CliError> {
     if port_is_free(port) {
-        return Ok(());
+        Ok(())
+    } else {
+        Err(CliError::PortInUse { port, port_flag })
     }
-    let note = match read_daemon_record() {
-        DaemonRecord::Foreign(record) if record.pid.is_some() => format!("; {}", record.describe()),
-        DaemonRecord::Absent | DaemonRecord::Current(_) | DaemonRecord::Foreign(_) => String::new(),
-    };
-    Err(CliError::PortInUse { port, note })
 }
 
 /// How a start attempt ended.
@@ -622,8 +697,12 @@ pub fn child_start_ticks(pid: u32) -> Result<u64, CliError> {
 /// carries the `DaemonInfo` for the cases that have one.
 #[derive(Debug)]
 pub enum DaemonState {
-    /// No usable `daemon.json` — nothing is recorded as running.
+    /// No `daemon.json` — nothing is recorded as running.
     Stopped,
+    /// A `daemon.json` this CLI can't identify a process from (an older or
+    /// newer zzz's, or corrupt): whether a daemon runs is unknown. Never
+    /// signalled, removed, or overwritten.
+    Foreign(ForeignRecord),
     /// `daemon.json` records a process that is gone (its pid is dead, a
     /// zombie, or reused by another process).
     Stale(DaemonInfo),
@@ -637,8 +716,10 @@ pub enum DaemonState {
 /// Classify the recorded daemon's liveness. Probes `/health` only when the
 /// recorded process is alive, so a stale record costs no network round-trip.
 pub async fn get_daemon_state() -> DaemonState {
-    let Some(info) = read_daemon_info() else {
-        return DaemonState::Stopped;
+    let info = match read_daemon_record() {
+        DaemonRecord::Absent => return DaemonState::Stopped,
+        DaemonRecord::Foreign(record) => return DaemonState::Foreign(record),
+        DaemonRecord::Current(info) => info,
     };
     if !info.is_alive() {
         return DaemonState::Stale(info);
@@ -723,14 +804,17 @@ mod tests {
             v1.describe(),
             "daemon.json from an older zzz (pid 77) — stop it manually"
         );
+        assert_eq!(v1.kind.name(), "older");
         let v3 = foreign(r#"{"version":3,"pid":78}"#);
-        assert_eq!(v3.what, "from a newer zzz");
+        assert_eq!(v3.what(), "from a newer zzz");
+        assert_eq!(v3.kind.name(), "newer");
         let corrupt = foreign("{nope");
         assert_eq!(corrupt.pid, None);
+        assert_eq!(corrupt.kind.name(), "unreadable");
         assert!(
-            corrupt.what.starts_with("is unreadable"),
+            corrupt.what().starts_with("is unreadable"),
             "{}",
-            corrupt.what
+            corrupt.what()
         );
 
         let current = serde_json::to_string(&info(1, 2)).unwrap();
@@ -771,6 +855,97 @@ mod tests {
         assert!(record.matches(None, Some(7)));
         assert!(!record.matches(None, Some(8)));
         assert!(!record.matches(None, None));
+    }
+
+    #[test]
+    fn parse_port_accepts_only_1_to_65535() {
+        assert_eq!(parse_port("4460"), Ok(4460));
+        assert_eq!(parse_port(" 65535 "), Ok(65535));
+        assert_eq!(parse_port("1"), Ok(1));
+        for bad in ["0", "65536", "-1", "", "http", "44.6"] {
+            let err = parse_port(bad).unwrap_err();
+            assert!(
+                err.contains("expected a port in 1..=65535"),
+                "{bad:?}: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn server_bin_search_order_never_uses_the_current_directory() {
+        use std::cell::RefCell;
+
+        let exe = Path::new("/opt/zzz/bin");
+        let home = Path::new("/home/u/.zzz");
+        // relative entries (`.`, empty, `target/debug`) would resolve against
+        // the current directory: never even asked about
+        let path_var = OsString::from(".::target/debug:/usr/local/bin:/usr/bin");
+        let asked: RefCell<Vec<PathBuf>> = RefCell::new(Vec::new());
+        let find = |present: &[&str]| {
+            asked.borrow_mut().clear();
+            find_server_bin(None, Some(exe), Some(home), Some(&path_var), |path| {
+                assert!(path.is_absolute(), "asked about {}", path.display());
+                asked.borrow_mut().push(path.to_path_buf());
+                present.iter().any(|p| path == Path::new(p))
+            })
+        };
+
+        let all = [
+            "/opt/zzz/bin/zzzd",
+            "/home/u/.zzz/bin/zzzd",
+            "/usr/local/bin/zzzd",
+            "/usr/bin/zzzd",
+        ];
+        assert_eq!(find(&all).unwrap(), Path::new("/opt/zzz/bin/zzzd"));
+        assert_eq!(find(&all[1..]).unwrap(), Path::new("/home/u/.zzz/bin/zzzd"));
+        assert_eq!(find(&all[2..]).unwrap(), Path::new("/usr/local/bin/zzzd"));
+        // a candidate that isn't executable is skipped, not the end of the search
+        assert_eq!(find(&all[3..]).unwrap(), Path::new("/usr/bin/zzzd"));
+        assert!(matches!(find(&[]), Err(CliError::ServerBinNotFound)));
+        assert_eq!(*asked.borrow(), all.map(PathBuf::from));
+    }
+
+    #[test]
+    fn server_bin_override_wins_but_must_be_executable() {
+        let exe = Path::new("/opt/zzz/bin");
+        let with_override = |value: &str, executable: bool| {
+            find_server_bin(Some(OsString::from(value)), Some(exe), None, None, |path| {
+                executable || path == Path::new("/opt/zzz/bin/zzzd")
+            })
+        };
+        assert_eq!(
+            with_override("/x/zzzd", true).unwrap(),
+            Path::new("/x/zzzd")
+        );
+        // relative: against the current directory, made absolute
+        let relative = with_override("rel/zzzd", true).unwrap();
+        assert_eq!(relative, std::env::current_dir().unwrap().join("rel/zzzd"));
+        // missing or not executable: an error naming it, no fallback
+        match with_override("/x/zzzd", false) {
+            Err(CliError::ServerBinOverrideInvalid { path }) => assert_eq!(path, "/x/zzzd"),
+            other => panic!("expected ServerBinOverrideInvalid, got {other:?}"),
+        }
+        // blank reads as unset
+        assert_eq!(
+            with_override(" ", false).unwrap(),
+            Path::new("/opt/zzz/bin/zzzd")
+        );
+    }
+
+    #[test]
+    fn is_executable_file_needs_a_regular_file_with_an_exec_bit() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = std::env::temp_dir().join(format!("zzz_exec_{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("zzzd");
+        fs::write(&file, "#!/bin/sh\n").unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(!is_executable_file(&file));
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(is_executable_file(&file));
+        assert!(!is_executable_file(&dir), "a directory");
+        assert!(!is_executable_file(&dir.join("missing")));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

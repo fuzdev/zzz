@@ -39,6 +39,7 @@ const CLI_ENV: &[&str] = &[
     "FUZ_BOOTSTRAP_TOKEN_PATH",
     "PUBLIC_ZZZ_DIR",
     "PUBLIC_ZZZ_SCOPED_DIRS",
+    "ZZZ_ENABLE_TEST_ACTIONS",
 ];
 
 /// A unique temp dir to use as `$HOME` (no `tempfile` dep in this crate).
@@ -241,10 +242,16 @@ fn status_reports_not_running_with_exit_3() {
         assert_eq!(out.status.code(), Some(3), "stderr: {}", stderr(&out));
     }
     let out = run(zzz(&home).args(["daemon", "status", "--json"]));
-    assert!(
-        stdout(&out).contains("\"running\":false"),
-        "{}",
-        stdout(&out)
+    let json: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(
+        json,
+        serde_json::json!({
+            "state": "not_running",
+            "running": false,
+            "healthy": false,
+            "daemon": null,
+            "foreign_record": null,
+        })
     );
 }
 
@@ -301,43 +308,65 @@ fn an_older_zzz_record_is_reported_never_signalled_or_deleted() {
     let err = stderr(&out);
     assert!(
         err.contains(&format!(
-            "daemon.json from an older zzz (pid {}) — stop it manually",
+            "refusing to signal the daemon: daemon.json from an older zzz (pid {}) — stop it manually",
             std::process::id()
         )),
         "{err}"
     );
+    assert!(err.contains("remove ~/.zzz/run/daemon.json"), "{err}");
     assert_eq!(fs::read_to_string(daemon_json(&home)).unwrap(), v1);
 
-    // status: one warning, not running
+    // status: unknown (exit 4), said once, record untouched
     let out = run(zzz(&home).args(["daemon", "status"]));
-    assert_eq!(out.status.code(), Some(3));
-    assert_eq!(
-        stderr(&out).matches("older zzz").count(),
-        1,
+    assert_eq!(out.status.code(), Some(4));
+    assert!(
+        stdout(&out).starts_with("daemon status unknown: daemon.json from an older zzz"),
         "{}",
-        stderr(&out)
+        stdout(&out)
     );
+    assert!(!stderr(&out).contains("older zzz"), "{}", stderr(&out));
+    let out = run(zzz(&home).args(["status", "--json"]));
+    assert_eq!(out.status.code(), Some(4));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(json["state"], "unknown");
+    assert_eq!(json["foreign_record"]["pid"], std::process::id());
+    assert_eq!(json["foreign_record"]["kind"], "older");
     assert_eq!(fs::read_to_string(daemon_json(&home)).unwrap(), v1);
 }
 
 #[test]
-fn a_busy_port_names_the_older_zzz_pid() {
-    let home = launchable_home("v1port");
-    let _cleanup = Cleanup::new(&home);
-    write_v1_daemon_json(&home, 424_242);
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-
-    let out = run(zzz(&home).args(["daemon", "start", "--port", &port.to_string()]));
-    assert_eq!(out.status.code(), Some(1));
-    let err = stderr(&out);
-    assert!(
-        err.contains(&format!("port {port} is already in use")),
-        "{err}"
+fn a_start_never_overwrites_an_older_zzz_record() {
+    let home = launchable_home("v1start");
+    let cleanup = Cleanup::new(&home);
+    let v1 = write_v1_daemon_json(&home, 424_242);
+    // a daemon that would serve, if it were ever spawned
+    let bin = home.join("fake_zzzd");
+    write_script(
+        &bin,
+        &format!("touch '{}'", cleanup.ready_marker().display()),
     );
-    assert!(err.contains("older zzz (pid 424242)"), "{err}");
-    // the warning and the error don't repeat each other more than once
-    assert!(err.matches("pid 424242").count() <= 2, "{err}");
+
+    for args in [&["daemon", "start"][..], &["open"][..]] {
+        let out = run(zzz(&home)
+            .args(args)
+            .env("PATH", fake_browser_path(&home))
+            .env("ZZZ_PORT", free_port().to_string())
+            .env("ZZZ_SERVER_BIN", &bin));
+        assert_eq!(out.status.code(), Some(1), "{args:?}");
+        let err = stderr(&out);
+        assert!(
+            err.contains(
+                "refusing to start a daemon: daemon.json from an older zzz (pid 424242) — stop it manually"
+            ),
+            "{args:?}: {err}"
+        );
+        assert!(err.contains("remove ~/.zzz/run/daemon.json"), "{err}");
+        assert_eq!(fs::read_to_string(daemon_json(&home)).unwrap(), v1);
+        assert!(
+            !cleanup.ready_marker().exists(),
+            "{args:?}: nothing spawned"
+        );
+    }
 }
 
 #[test]
@@ -419,19 +448,183 @@ fn skipped_env_lines_warn_by_number_without_echoing() {
 }
 
 #[test]
-fn start_refuses_a_port_in_use() {
+fn a_port_in_use_hints_only_at_flags_the_command_has() {
     let home = launchable_home("busy");
     let _cleanup = Cleanup::new(&home);
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     let out = run(zzz(&home).args(["daemon", "start", "--port", &port.to_string()]));
     assert_eq!(out.status.code(), Some(1));
+    let err = stderr(&out);
     assert!(
-        stderr(&out).contains(&format!("port {port} is already in use")),
+        err.contains(&format!("port {port} is already in use")),
+        "{err}"
+    );
+    assert!(err.contains("`--port`"), "{err}");
+    assert!(!daemon_json(&home).exists());
+
+    // `zzz` has no --port: the hint doesn't offer one
+    let out = run(zzz(&home).arg("open").env("ZZZ_PORT", port.to_string()));
+    assert_eq!(out.status.code(), Some(1));
+    let err = stderr(&out);
+    assert!(
+        err.contains(&format!("port {port} is already in use")),
+        "{err}"
+    );
+    assert!(err.contains("ZZZ_PORT"), "{err}");
+    assert!(!err.contains("--port"), "{err}");
+}
+
+#[test]
+fn invalid_ports_are_errors_at_every_source() {
+    let home = launchable_home("badport");
+    let _cleanup = Cleanup::new(&home);
+
+    // the flag (argh rejects it before anything runs)
+    for args in [
+        &["daemon", "start", "--port", "0"][..],
+        &["daemon", "start", "--port", "65536"][..],
+        &["init", "--port", "0"][..],
+    ] {
+        let out = run(zzz(&home).args(args));
+        assert_eq!(out.status.code(), Some(2), "{args:?}");
+        assert!(
+            stderr(&out).contains("expected a port in 1..=65535"),
+            "{args:?}: {}",
+            stderr(&out)
+        );
+    }
+
+    // ZZZ_PORT
+    let out = run(zzz(&home).args(["daemon", "start"]).env("ZZZ_PORT", "0"));
+    assert_eq!(out.status.code(), Some(2));
+    assert!(
+        stderr(&out).contains("ZZZ_PORT: expected a port"),
         "{}",
         stderr(&out)
     );
+
+    // config.json: an invalid port, or a file that doesn't parse, names the file
+    let config = home.join(".zzz/config.json");
+    for content in [r#"{"zzz_config_port": 0}"#, "{\"zzz_config_port\": 4460,}"] {
+        fs::write(&config, content).unwrap();
+        let out = run(zzz(&home).args(["daemon", "start"]));
+        assert_eq!(out.status.code(), Some(2), "{content}");
+        let err = stderr(&out);
+        assert!(err.contains(&config.display().to_string()), "{err}");
+    }
     assert!(!daemon_json(&home).exists());
+}
+
+#[test]
+fn the_launch_reports_env_overrides_and_strips_test_actions() {
+    let home = launchable_home("envnote");
+    let _cleanup = Cleanup::new(&home);
+    fs::write(
+        home.join(".zzz/.env"),
+        "DATABASE_URL=postgres://file-value\nSECRET_FUZ_COOKIE_KEYS=file-keys-0123456789abcdef0123\nZZZ_ENABLE_TEST_ACTIONS=true\n",
+    )
+    .unwrap();
+    let bin = home.join("fake_zzzd");
+    write_script(
+        &bin,
+        "echo \"fake zzzd: test_actions=${ZZZ_ENABLE_TEST_ACTIONS-unset}\" >&2\nexit 3",
+    );
+    for process_value in [None, Some("1")] {
+        let mut command = zzz(&home);
+        command
+            .args(["daemon", "start", "--port", &free_port().to_string()])
+            .env("ZZZ_SERVER_BIN", &bin)
+            .env("DATABASE_URL", "postgres://process-value")
+            // the same value as the file's isn't an override
+            .env("SECRET_FUZ_COOKIE_KEYS", "file-keys-0123456789abcdef0123");
+        if let Some(value) = process_value {
+            command.env("ZZZ_ENABLE_TEST_ACTIONS", value);
+        }
+        let out = run(&mut command);
+        let err = stderr(&out);
+        assert!(
+            err.contains(&format!(
+                "note: the environment overrides DATABASE_URL from {}",
+                home.join(".zzz/.env").display()
+            )),
+            "{err}"
+        );
+        // names only, never values
+        assert!(
+            !err.contains("process-value") && !err.contains("file-value"),
+            "{err}"
+        );
+        assert!(
+            err.contains("warning: ignoring ZZZ_ENABLE_TEST_ACTIONS"),
+            "{err}"
+        );
+        assert!(err.contains("fake zzzd: test_actions=unset"), "{err}");
+    }
+}
+
+#[test]
+fn the_daemon_binary_is_never_taken_from_the_current_directory() {
+    let home = launchable_home("cwdbin");
+    let _cleanup = Cleanup::new(&home);
+    // `zzz` alone in a directory, so there's no `zzzd` beside it whatever
+    // the build state (a hard link where possible: the same inode, cheap)
+    let bin_dir = home.join("cli");
+    fs::create_dir_all(&bin_dir).unwrap();
+    let lone_zzz = bin_dir.join("zzz");
+    if fs::hard_link(zzz_bin(), &lone_zzz).is_err() {
+        fs::copy(zzz_bin(), &lone_zzz).unwrap();
+    }
+    // an untrusted checkout, with its own `target/debug/zzzd` — and `.` on
+    // the PATH
+    let checkout = home.join("checkout");
+    fs::create_dir_all(checkout.join("target/debug")).unwrap();
+    let marker = home.join("untrusted_ran");
+    let untrusted = format!("touch '{}'", marker.display());
+    write_script(&checkout.join("target/debug/zzzd"), &untrusted);
+    write_script(&checkout.join("zzzd"), &untrusted);
+
+    let mut command = Command::new(&lone_zzz);
+    command.env("HOME", &home);
+    for key in CLI_ENV {
+        command.env_remove(key);
+    }
+    let out = run(command
+        .args(["daemon", "start", "--port", &free_port().to_string()])
+        .current_dir(&checkout)
+        .env(
+            "PATH",
+            format!(".::target/debug:{}", home.join("empty").display()),
+        ));
+    assert_eq!(out.status.code(), Some(2), "stderr: {}", stderr(&out));
+    assert!(
+        stderr(&out).contains("can't find the zzzd daemon binary"),
+        "{}",
+        stderr(&out)
+    );
+    assert!(!marker.exists(), "ran the checkout's zzzd");
+}
+
+#[test]
+fn a_bad_server_bin_override_is_a_clear_error() {
+    let home = launchable_home("badbin");
+    let _cleanup = Cleanup::new(&home);
+    let not_executable = home.join("zzzd.txt");
+    fs::write(&not_executable, "").unwrap();
+    for bin in [home.join("missing_zzzd"), not_executable] {
+        let out = run(zzz(&home)
+            .args(["daemon", "start", "--port", &free_port().to_string()])
+            .env("ZZZ_SERVER_BIN", &bin));
+        assert_eq!(out.status.code(), Some(2), "stderr: {}", stderr(&out));
+        assert!(
+            stderr(&out).contains(&format!(
+                "ZZZ_SERVER_BIN is not an executable file: {}",
+                bin.display()
+            )),
+            "{}",
+            stderr(&out)
+        );
+    }
 }
 
 #[test]

@@ -27,6 +27,7 @@
 //! exactly as the production binary supports.
 
 use std::net::SocketAddr;
+use std::process::ExitCode;
 use std::sync::Arc;
 
 use fuz_auth::PasswordHasher;
@@ -42,9 +43,17 @@ const TESTING_DEFAULT_ADDR: SocketAddr =
     SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), 4462);
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
+    // `--help` or a bad argument exits before the side effects below (app
+    // dir, daemon token); `run_app` parses the args again.
+    if let Err(e) = zzz_server::check_cli_args() {
+        return zzz_server::report_run_result(Err(e), "testing_zzzd");
+    }
+
     // Non-blocking stdout logging so a stalled stdout consumer can't starve
-    // the async runtime. `_log_guard` must stay live for the whole process.
+    // the async runtime. `_log_guard` must stay live for the whole process —
+    // `main` returns (rather than `std::process::exit`s) so it drops, flushing
+    // buffered lines.
     let _log_guard =
         fuz_sys::logging::init_non_blocking_stdout("info,zzz_server=info,testing_zzzd=info");
 
@@ -158,7 +167,7 @@ async fn main() {
         Ok(dir) => dir,
         Err(e) => {
             eprintln!("error: {e}");
-            std::process::exit(2);
+            return ExitCode::from(2);
         }
     };
     let daemon_token_state =
@@ -166,11 +175,11 @@ async fn main() {
             Ok(state) => Some(state),
             Err(e) => {
                 eprintln!("error: daemon token init failed: {e}");
-                std::process::exit(2);
+                return ExitCode::from(2);
             }
         };
 
-    if let Err(e) = zzz_server::run_app(zzz_server::RunAppOptions {
+    let result = zzz_server::run_app(zzz_server::RunAppOptions {
         password_hasher,
         default_addr: TESTING_DEFAULT_ADDR,
         drain_timeout: fuz_http::DEFAULT_DRAIN_TIMEOUT,
@@ -180,10 +189,6 @@ async fn main() {
         pre_migration_hook: Some(pre_migration_hook),
         daemon_token_state,
     })
-    .await
-    {
-        tracing::error!(error = %e, "fatal");
-        eprintln!("error: {e}");
-        std::process::exit(1);
-    }
+    .await;
+    zzz_server::report_run_result(result, "testing_zzzd")
 }

@@ -672,7 +672,7 @@ When the OS runs out of watches (inotify's `max_user_watches`), or no watcher ca
 
 ### Daemon Info
 
-`~/.zzz/run/daemon.json` tracks the running daemon (boot id, pid, kernel start time, port, version). The Rust CLI (`crates/zzz/src/daemon_lifecycle.rs`) writes it atomically once the spawned `zzzd` holds the listening socket and answers `/health`, reads it back for discovery and `status`, and identifies the daemon by boot id, pid, and start time — a dead or reused pid reads as stale and is never signalled; a record from an older zzz is reported, never acted on. The file is removed on `daemon stop`, when the foreground `daemon start` exits, and when found stale, each time only if it still records that same process.
+`~/.zzz/run/daemon.json` tracks the running daemon (boot id, pid, kernel start time, port, version). The Rust CLI (`crates/zzz/src/daemon_lifecycle.rs`) writes it atomically once the spawned `zzzd` holds the listening socket and answers `/health`, reads it back for discovery and `status`, and identifies the daemon by boot id, pid, and start time — a dead or reused pid reads as stale and is never signalled; a record it can't read (an older or newer zzz's, or a corrupt one) is reported and never signalled, removed, or overwritten, so `zzz` and `zzz daemon start` refuse to start a daemon while it's there. The file is removed on `daemon stop`, when the foreground `daemon start` exits, and when found stale, each time only if it still records that same process.
 
 ## File Editing
 

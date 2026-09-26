@@ -63,7 +63,7 @@ zzz                          # start daemon if needed, open browser
 zzz ~/dev/                   # open workspace at ~/dev/ (a file opens its directory)
 zzz daemon start             # start daemon (foreground)
 zzz daemon stop              # stop the recorded daemon
-zzz daemon status            # show daemon info (exit 0 running, 1 not responding, 3 not running)
+zzz daemon status            # show daemon info (exit 0 running, 1 not responding, 3 not running, 4 unknown)
 zzz init                     # initialize ~/.zzz/
 ```
 
@@ -76,9 +76,16 @@ the token once the first admin exists; a later `zzz init` recreates it when
 missing (say the database was dropped), and a running daemon picks it up on
 restart, since it checks bootstrap availability once at boot. The CLI spawns
 and discovers the `zzzd` daemon binary (the `[[bin]]` target of the
-`zzz_server` crate) — `ZZZ_SERVER_BIN`, else beside the CLI executable, else
-`~/.zzz/bin/zzzd`, with a dev fallback to `./target/debug/zzzd`, then
-`zzzd` on `$PATH` (`ZZZ_SERVER_BIN` must `exec` the server, not fork it — the listening socket
+`zzz_server` crate) — `ZZZ_SERVER_BIN` (a relative value resolves against
+the directory `zzz` runs in; one that isn't an executable file is an error,
+not a fallback), else beside the resolved CLI executable (symlinks followed,
+so a symlinked `zzz` finds the `zzzd` beside its target; this covers a dev
+build: `target/debug/zzz` runs `target/debug/zzzd`), else `~/.zzz/bin/zzzd`,
+then `zzzd` on `$PATH` — a candidate that isn't an executable file is skipped.
+Never from the current directory (relative `$PATH` entries are skipped), so
+running `zzz` inside an untrusted checkout can't execute its
+`target/debug/zzzd` with your database URL and cookie key; finding none is an
+error (`ZZZ_SERVER_BIN` must `exec` the server, not fork it — the listening socket
 is checked on the spawned pid). Build both
 with `cargo`: `cargo build -p zzz` (CLI) and `cargo build -p zzz_server`
 (daemon → `zzzd`).
@@ -94,14 +101,21 @@ When the CLI starts `zzzd` it:
   `http://localhost:<port>,http://127.0.0.1:<port>`. `DATABASE_URL` and
   `SECRET_FUZ_COOKIE_KEYS` must be set in one or the other. `.env` lines
   that aren't assignments are skipped with a warning naming their line
-  numbers.
+  numbers. When the environment overrides a `.env` key with a different
+  value, a note names the key (never the value).
+  `ZZZ_ENABLE_TEST_ACTIONS` is never passed on, from either source (a
+  warning says so when it's set).
 - **cwd** — runs it in `~/.zzz`. For the path-valued vars (`PUBLIC_ZZZ_DIR`,
   `PUBLIC_ZZZ_SCOPED_DIRS`, `FUZ_BOOTSTRAP_TOKEN_PATH`, `ZZZ_STATIC_DIR`) the
   CLI expands `~`; a relative value from `~/.zzz/.env` resolves against
   `~/.zzz`, and one from the CLI's own environment against the directory
   `zzz` runs in.
-- **port** — `--port` > `ZZZ_PORT` > `zzz_config_port` in
+- **port** — `--port` (only `zzz daemon start` takes it: `zzz` reuses
+  whatever daemon is recorded) > `ZZZ_PORT` > `zzz_config_port` in
   `~/.zzz/config.json` > 4460, passed as `--port`; the port must be free.
+  Every source must be a port in `1..=65535`, and a `config.json` that
+  exists must parse as a JSON object — otherwise it's an error naming the
+  source (the file, for `config.json`), never a fallback.
 - **UI** — `ZZZ_STATIC_DIR` if set (must be a directory), else
   `~/.zzz/static`, passed as `--static-dir`; neither is an error.
 
@@ -118,11 +132,17 @@ gone — never signalled — and the file is removed only while it still
 records the same process: by `zzz daemon start` when its foreground daemon
 exits, by `stop` (after stopping it, or once it's stale), by `zzz` (once it's
 stale, or after stopping an unresponsive one), or by `status` once it's
-stale. A `daemon.json` from an older zzz is reported with its pid ("stop it
-manually"), never signalled or removed. Once serving, foreground
+stale. A `daemon.json` this zzz can't read — an older or newer zzz's, or a
+corrupt one — is reported (with its pid, "stop it manually", when it names
+one; a corrupt one usually doesn't, so "remove it once no daemon is running")
+and never signalled, removed, or overwritten: `zzz` and `zzz daemon start`
+refuse to start a daemon while it's there, `zzz daemon stop` refuses to
+signal, and `status` reports the state unknown (exit 4). Once serving, foreground
 `zzz daemon start` exits with zzzd's own status (0 on a clean stop, 128 + the
 signal if one killed it); a signal during startup exits 128 + that signal, and
-a startup failure exits 1.
+a startup failure exits 1. A usage or config error — a bad argument, a
+non-UTF-8 one, an invalid port, a bad `config.json`, missing env, no `zzzd` —
+exits 2 before anything runs; `--help` exits 0.
 
 `zzz <path>` expands `~`, resolves the path against the current directory,
 and canonicalizes it (the form the daemon stores for workspaces) before
@@ -564,13 +584,13 @@ prompt XML sent to models.
 - `ZZZ_PORT` — HTTP server port (default 4460; `cargo xtask dev` uses 4461); the `--port` flag wins. Anything but a port in `1..=65535` refuses to boot. The bind address is always loopback — there is no `HOST` override.
 - `ZZZ_STATIC_DIR` — directory of the built SPA to serve (`--static-dir` wins); must be a directory, or `zzzd` refuses to boot. Unset, `zzzd` serves no frontend (dev: Vite serves it)
 - `ZZZ_TRUSTED_PROXIES` — comma-separated trusted proxy IPs / CIDR ranges for `client_ip` resolution
-- `DATABASE_URL` — PostgreSQL connection (`postgres://`)
-- `SECRET_FUZ_COOKIE_KEYS` — HMAC signing keys (min 32 chars)
+- `DATABASE_URL` — PostgreSQL connection (`postgres://`; required — unset or blank refuses to boot, naming it)
+- `SECRET_FUZ_COOKIE_KEYS` — HMAC signing keys (min 32 chars; required, like `DATABASE_URL`)
 - `FUZ_ALLOWED_ORIGINS` — Origin patterns for API verification (required — `zzzd` refuses to boot on an absent or empty list, since an empty allowlist would allow every origin; the CLI defaults it to `http://localhost:<port>,http://127.0.0.1:<port>`)
 - `FUZ_BOOTSTRAP_TOKEN_PATH` — One-shot admin bootstrap token path
 - `PUBLIC_ZZZ_DIR` — Zzz app directory (default `.zzz`)
 - `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (`zzzd` doesn't expand `~`; the CLI does)
-- `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live dispatchers (integration tests only — must stay unset in prod)
+- `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live dispatchers (integration tests only — must stay unset in prod; blank reads as unset, and the `zzz` CLI never passes it to a daemon it starts)
 - `SECRET_ANTHROPIC_API_KEY` — Claude API key
 - `SECRET_OPENAI_API_KEY` — OpenAI API key
 - `SECRET_GOOGLE_API_KEY` — Google Gemini API key
@@ -581,6 +601,12 @@ on an empty or unresolvable path (a missing scoped dir is fine). It creates
 the app directory (and missing parents, mode `0700`) at boot, and fails to
 boot with the path in the error if it can't. A value that isn't valid UTF-8
 fails boot too, rather than reading as unset.
+
+Its command line is `zzzd [--port <port>] [--static-dir <dir>]` (each value
+also as `--flag=value`); `-h` / `--help` prints that usage (exit 0), and an
+unknown or malformed argument refuses to boot rather than being ignored. A
+`--static-dir` may be any path, UTF-8 or not. A boot failure prints
+`zzzd: <error>` to stderr and exits 1.
 
 PTY terminals spawned by the server don't get the `SECRET_*`, `FUZ_*`,
 `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, or `PORT` variables — they're

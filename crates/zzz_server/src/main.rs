@@ -9,19 +9,22 @@
 //! swapped in for ~1-5 ms argon2 during cross-process integration
 //! tests.
 
+use std::process::ExitCode;
 use std::sync::Arc;
 
 use fuz_auth::PasswordHasher;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     // Non-blocking stdout logging so a stalled stdout consumer can't starve
-    // the async runtime. `_log_guard` must stay live for the whole process.
+    // the async runtime. `_log_guard` must stay live for the whole process —
+    // `main` returns (rather than `std::process::exit`s) so it drops, flushing
+    // buffered lines.
     let _log_guard = fuz_sys::logging::init_non_blocking_stdout("info");
 
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(fuz_auth::Argon2idHasher::new());
 
-    if let Err(e) = zzz_server::run_app(zzz_server::RunAppOptions {
+    let result = zzz_server::run_app(zzz_server::RunAppOptions {
         password_hasher,
         default_addr: zzz_server::DEFAULT_ADDR,
         drain_timeout: fuz_http::DEFAULT_DRAIN_TIMEOUT,
@@ -37,9 +40,6 @@ async fn main() {
         // 30-second timer for no caller.
         daemon_token_state: None,
     })
-    .await
-    {
-        tracing::error!(error = %e, "fatal");
-        std::process::exit(1);
-    }
+    .await;
+    zzz_server::report_run_result(result, "zzzd")
 }

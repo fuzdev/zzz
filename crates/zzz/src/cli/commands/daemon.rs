@@ -33,8 +33,8 @@ pub enum DaemonSub {
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "start")]
 pub struct DaemonStart {
-    /// daemon port (overrides `ZZZ_PORT` and config; default 4460)
-    #[argh(option)]
+    /// daemon port, 1-65535 (overrides `ZZZ_PORT` and config; default 4460)
+    #[argh(option, from_str_fn(dl::parse_port))]
     pub port: Option<u16>,
 }
 
@@ -43,7 +43,7 @@ pub struct DaemonStart {
 #[argh(subcommand, name = "stop")]
 pub struct DaemonStop {}
 
-/// Show daemon status (exit 0 running, 1 not responding, 3 not running).
+/// Show daemon status (exit 0 running, 1 not responding, 3 not running, 4 unknown).
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "status")]
 pub struct DaemonStatus {
@@ -80,12 +80,16 @@ async fn cmd_daemon_start(args: &DaemonStart) -> Result<ExitCode, CliError> {
                 info.pid
             );
         }
+        DaemonState::Foreign(record) => {
+            return Err(record.refuse("start a daemon"));
+        }
         DaemonState::Stopped => {}
     }
 
     let launch = DaemonLaunch::prepare(args.port)?;
     let port = launch.port;
-    dl::require_free_port(port)?;
+    dl::require_free_port(port, true)?;
+    let bin = dl::resolve_server_bin()?;
 
     // Read before the spawn, so an unreadable boot id fails with no child.
     let boot_id = dl::current_boot_id()?;
@@ -93,7 +97,7 @@ async fn cmd_daemon_start(args: &DaemonStart) -> Result<ExitCode, CliError> {
     // child instead of killing this process and orphaning it.
     let mut signals = dl::ShutdownSignals::register()?;
 
-    let mut command = tokio::process::Command::from(launch.command());
+    let mut command = tokio::process::Command::from(launch.command(&bin));
     // `kill_on_drop`: an early return below never leaves the daemon running
     // without a record (the normal paths reap it first).
     command
@@ -102,7 +106,7 @@ async fn cmd_daemon_start(args: &DaemonStart) -> Result<ExitCode, CliError> {
         .kill_on_drop(true);
     let mut child = command
         .spawn()
-        .map_err(|e| CliError::Daemon(format!("failed to spawn {}: {e}", launch.bin.display())))?;
+        .map_err(|e| CliError::Daemon(format!("failed to spawn {}: {e}", bin.display())))?;
     let pid = child
         .id()
         .ok_or_else(|| CliError::Daemon("spawned child has no pid".to_owned()))?;
@@ -182,12 +186,7 @@ async fn cmd_daemon_stop(_args: &DaemonStop) -> Result<(), CliError> {
             println!("no daemon running (no daemon.json)");
             return Ok(());
         }
-        DaemonRecord::Foreign(record) => {
-            return Err(CliError::Daemon(format!(
-                "{}; not signalled",
-                record.describe()
-            )));
-        }
+        DaemonRecord::Foreign(record) => return Err(record.refuse("signal the daemon")),
         DaemonRecord::Current(info) => info,
     };
     if !info.is_alive() {

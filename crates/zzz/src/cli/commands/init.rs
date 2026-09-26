@@ -38,8 +38,8 @@ use crate::daemon_lifecycle as dl;
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "init")]
 pub struct Init {
-    /// daemon port to record in `config.json` (default 4460)
-    #[argh(option)]
+    /// daemon port to record in `config.json`, 1-65535 (default 4460)
+    #[argh(option, from_str_fn(dl::parse_port))]
     pub port: Option<u16>,
 }
 

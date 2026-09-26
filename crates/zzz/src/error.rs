@@ -31,6 +31,18 @@ pub enum CliError {
     /// A daemon config value is malformed (e.g. a non-numeric `ZZZ_PORT`).
     #[error("invalid config: {0}")]
     InvalidConfig(String),
+    /// `~/.zzz/config.json` can't be read, isn't a JSON object, or holds an
+    /// invalid port.
+    #[error("invalid {path}: {reason}")]
+    ConfigFile {
+        /// The config file's path.
+        path: String,
+        /// What's wrong with it.
+        reason: String,
+    },
+    /// The command line didn't parse (argh's message).
+    #[error("{0}")]
+    Usage(String),
     /// Neither `ZZZ_STATIC_DIR` nor `~/.zzz/static` names a UI build.
     #[error("no UI build found: {default_dir} does not exist and ZZZ_STATIC_DIR is not set")]
     NoStaticDir {
@@ -53,13 +65,41 @@ pub enum CliError {
         reason: String,
     },
     /// The daemon port is already taken by another listener.
-    #[error("port {port} is already in use by another process{note}")]
+    #[error("port {port} is already in use by another process")]
     PortInUse {
         /// The port the daemon would bind.
         port: u16,
-        /// Empty, or `; <foreign daemon.json description>` naming the pid of
-        /// an older zzz's daemon, the likely holder.
-        note: String,
+        /// Whether the command accepts `--port` (`zzz daemon start` does;
+        /// `zzz` / `zzz open` reuse the recorded daemon, so they don't).
+        port_flag: bool,
+    },
+    /// `daemon.json` holds a record this zzz can't identify a process from
+    /// (an older or newer zzz's, or corrupt), so zzz won't act on it: a start
+    /// won't replace it, a stop won't signal it.
+    #[error("refusing to {action}: {description}")]
+    ForeignRecord {
+        /// What was refused — "start a daemon", "signal the daemon".
+        action: &'static str,
+        /// The record's description, naming its pid when it has one.
+        description: String,
+    },
+    /// No executable `zzzd` in any of the places the CLI looks.
+    #[error(
+        "can't find the {} daemon binary (not beside the resolved zzz executable, in ~/.zzz/bin, or on $PATH)",
+        crate::daemon_lifecycle::DAEMON_BIN
+    )]
+    ServerBinNotFound,
+    /// `ZZZ_SERVER_BIN` doesn't name an executable file.
+    #[error("ZZZ_SERVER_BIN is not an executable file: {path}")]
+    ServerBinOverrideInvalid {
+        /// The resolved `ZZZ_SERVER_BIN` path.
+        path: String,
+    },
+    /// A command-line argument isn't valid UTF-8.
+    #[error("argument is not valid UTF-8: {arg}")]
+    NonUtf8Arg {
+        /// The argument, lossily decoded.
+        arg: String,
     },
     /// A signal arrived while the daemon was starting; the child was stopped.
     #[error("interrupted by {} while zzzd was starting; stopped it", signal.name())]
@@ -119,12 +159,18 @@ impl CliError {
             | Self::MissingEnv { .. }
             | Self::InvalidConfig(_)
             | Self::NoStaticDir { .. }
-            | Self::StaticDirNotFound { .. } => 2,
+            | Self::StaticDirNotFound { .. }
+            | Self::ConfigFile { .. }
+            | Self::Usage(_)
+            | Self::ServerBinNotFound
+            | Self::ServerBinOverrideInvalid { .. }
+            | Self::NonUtf8Arg { .. } => 2,
             // the shell convention: 128 + the signal number
             Self::Interrupted { signal } => signal.exit_code(),
             Self::Io(_)
             | Self::BadPath { .. }
             | Self::PortInUse { .. }
+            | Self::ForeignRecord { .. }
             | Self::AlreadyRunning { .. }
             | Self::ServerNotHealthy { .. }
             | Self::DaemonExited { .. }
@@ -148,9 +194,32 @@ impl CliError {
             Self::StaticDirNotFound { .. } => Some(
                 "point ZZZ_STATIC_DIR at a built UI (`gro build` output), or unset it to use ~/.zzz/static",
             ),
-            Self::PortInUse { .. } => Some(
-                "stop the other process, or pick another port (`--port`, ZZZ_PORT in ~/.zzz/.env, or `zzz_config_port` in ~/.zzz/config.json)",
+            Self::PortInUse {
+                port_flag: true, ..
+            } => Some(
+                "stop the other process, or pick another port (`--port`, ZZZ_PORT in the environment or ~/.zzz/.env, or `zzz_config_port` in ~/.zzz/config.json)",
             ),
+            Self::PortInUse {
+                port_flag: false, ..
+            } => Some(
+                "stop the other process, or pick another port (ZZZ_PORT in the environment or ~/.zzz/.env, or `zzz_config_port` in ~/.zzz/config.json)",
+            ),
+            Self::ForeignRecord { .. } => Some(
+                "zzz never signals or replaces a record it can't verify: stop that daemon yourself, then remove ~/.zzz/run/daemon.json",
+            ),
+            Self::ServerBinNotFound => Some(
+                "build it (`cargo build -p zzz_server`) and put `zzzd` beside `zzz` (the real file, not a symlink to it), in ~/.zzz/bin, or on $PATH, or set ZZZ_SERVER_BIN",
+            ),
+            Self::ServerBinOverrideInvalid { .. } => Some(
+                "point ZZZ_SERVER_BIN at a built `zzzd` (a relative path resolves against the directory zzz runs in), or unset it",
+            ),
+            Self::ConfigFile { .. } => Some(
+                "edit or delete ~/.zzz/config.json (without it the port defaults to 4460; `zzz init` writes a fresh one)",
+            ),
+            Self::Usage(_) => Some("`--help` after a command lists its usage"),
+            Self::NonUtf8Arg { .. } => {
+                Some("zzz takes UTF-8 arguments only (the UI addresses files by UTF-8 path)")
+            }
             Self::AlreadyRunning { .. } => Some("stop it first with `zzz daemon stop`"),
             Self::ServerNotHealthy { .. } | Self::DaemonExited { .. } => {
                 Some("check the daemon output above and the settings in ~/.zzz/.env")

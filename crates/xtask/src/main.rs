@@ -42,7 +42,10 @@ const DEV_ENV_FILE: &str = ".env.development";
 const VITE_BIN: &str = "node_modules/.bin/vite";
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().collect();
+    // `args_os`, so a non-UTF-8 argument is an unknown subcommand, not a panic
+    let args: Vec<String> = std::env::args_os()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect();
     match args.get(1).map(String::as_str) {
         Some("dev") => finish(run_dev()),
         Some("dev-setup") => finish(setup_env(DEV_ENV_FILE, ".env.development.example")),

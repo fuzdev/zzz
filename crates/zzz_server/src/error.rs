@@ -15,4 +15,8 @@ pub enum ServerError {
     Database(String),
     #[error("configuration error: {0}")]
     Config(String),
+    /// `-h` / `--help` was passed: not a failure — the binary prints its
+    /// usage and exits 0 ([`crate::report_run_result`]).
+    #[error("help requested")]
+    HelpRequested,
 }
