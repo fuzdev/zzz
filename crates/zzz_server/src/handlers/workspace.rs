@@ -131,9 +131,9 @@ fn display_dir(path: &str) -> String {
 
 /// `workspace_list` — read-only snapshot of open workspaces.
 ///
-/// Takes no input (`z.void()`), so any `params` is refused. `async` is
-/// required by the `ActionHandler` future-returning shape even though the
-/// body has no `.await` points.
+/// Takes no input (`z.void()`): an absent `params` or a `{}` is the call, and
+/// any declared key is refused. `async` is required by the `ActionHandler`
+/// future-returning shape even though the body has no `.await` points.
 #[allow(
     clippy::unused_async,
     reason = "ActionHandler signature requires async"

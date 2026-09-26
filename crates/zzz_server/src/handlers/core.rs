@@ -58,7 +58,8 @@ struct SessionLoadResult {
 }
 
 /// `ping` — public health check. Echoes the request id back as `ping_id`.
-/// Takes no input (`z.void()`), so any `params` is refused.
+/// Takes no input (`z.void()`): an absent `params` or a `{}` is the call, and
+/// any declared key is refused.
 ///
 /// `ActionContext.request_id` carries the parsed envelope's id.
 #[allow(
@@ -78,7 +79,8 @@ pub async fn ping(
 }
 
 /// `session_load` — authenticated initial-state load. Takes no input
-/// (`z.void()`), so any `params` is refused.
+/// (`z.void()`): an absent `params` or a `{}` is the call, and any declared key
+/// is refused.
 ///
 /// Returns the cross-domain snapshot the frontend loads at boot and reloads
 /// after a reconnect: open workspaces, every filer's file tree (rescanned for

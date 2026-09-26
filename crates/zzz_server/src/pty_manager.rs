@@ -1032,10 +1032,19 @@ mod tests {
                 manager.resize(account, terminal_id, 100, 30).await,
                 Err(TerminalNotFound)
             );
-            assert_eq!(manager.close(account, terminal_id, libc::SIGTERM).await, None);
+            assert_eq!(
+                manager.close(account, terminal_id, libc::SIGTERM).await,
+                None
+            );
         }
-        assert!(fake.input.try_recv().is_err(), "no foreign input reached it");
-        assert!(!fake.size.has_changed().unwrap(), "no foreign resize reached it");
+        assert!(
+            fake.input.try_recv().is_err(),
+            "no foreign input reached it"
+        );
+        assert!(
+            !fake.size.has_changed().unwrap(),
+            "no foreign resize reached it"
+        );
 
         // the owner drives it
         assert_eq!(manager.write(owner, "t1", "mine").await, Ok(()));

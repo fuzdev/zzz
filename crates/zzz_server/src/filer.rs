@@ -3689,7 +3689,10 @@ mod tests {
         let snapshot = manager.snapshot().await;
         assert!(snapshot.roots.is_empty() && snapshot.files.is_empty());
 
-        for (tmp, lifetime) in [(&a, FilerLifetime::Permanent), (&b, FilerLifetime::Workspace)] {
+        for (tmp, lifetime) in [
+            (&a, FilerLifetime::Permanent),
+            (&b, FilerLifetime::Workspace),
+        ] {
             manager
                 .start_with(
                     &tmp.root(),

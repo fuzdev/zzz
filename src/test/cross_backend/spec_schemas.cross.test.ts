@@ -11,6 +11,11 @@
  * and aren't exercised. fuz_app's standard specs are covered by its own
  * conformance suite.
  *
+ * Every `z.void()` method is also sent over a real WebSocket with `params`
+ * both omitted and `{}` — the shape fuz_app's socket client sends for a
+ * parameterless request — since HTTP callers omit `params` and so can't
+ * catch a backend that refuses `{}`.
+ *
  * @module
  */
 
@@ -30,6 +35,8 @@ import type {
 	RemoteNotificationActionSpec,
 	RequestResponseActionSpec
 } from '@fuzdev/fuz_app/actions/action_spec.ts';
+import { all_account_action_specs } from '@fuzdev/fuz_app/auth/account_action_specs.ts';
+import { is_void_schema } from '@fuzdev/fuz_app/http/schema_helpers.ts';
 
 import {
 	directory_create_action_spec,
@@ -113,6 +120,18 @@ const wait_for_checked_notification = async (
 	assert_parses(spec.input, msg.params, `${spec.method} params`);
 };
 
+/**
+ * Every `z.void()` request the frontend can send: zzz's own, plus the
+ * read-only account specs the spine serves on the same endpoints.
+ */
+const void_specs: Array<RequestResponseActionSpec> = [
+	...all_action_specs.filter(
+		(spec): spec is RequestResponseActionSpec =>
+			spec.kind === 'request_response' && spec.initiator !== 'backend' && is_void_schema(spec.input)
+	),
+	...all_account_action_specs.filter((spec) => is_void_schema(spec.input) && !spec.side_effects)
+];
+
 const open_ws = (fixture: CrossFixture): Promise<WsClient> =>
 	create_ws_transport({
 		base_url: handle.config.base_url,
@@ -126,6 +145,43 @@ describe('zzz spec schemas cross-backend', () => {
 		await call_and_check(fixture, ping_action_spec);
 		await call_and_check(fixture, session_load_action_spec);
 		await call_and_check(fixture, provider_load_status_action_spec, { provider_name: 'gemini' });
+	});
+
+	test('void-input methods answer with params omitted or {}, over WS and HTTP', async () => {
+		assert.includeMembers(
+			void_specs.map((spec) => spec.method),
+			[
+				'ping',
+				'session_load',
+				'workspace_list',
+				'account_verify',
+				'account_session_list',
+				'account_token_list'
+			],
+			'the void-spec enumeration lost a method'
+		);
+		const fixture = await setup_test();
+		const ws = await open_ws(fixture);
+		try {
+			for (const spec of void_specs) {
+				for (const params of [undefined, {}]) {
+					const label = `${spec.method} params=${params ? '{}' : '<omitted>'}`;
+					const result = await ws.request(randomUUID(), spec.method, params).catch((e: unknown) => {
+						assert.fail(`${label} over ws: ${e instanceof Error ? e.message : String(e)}`);
+					});
+					assert_parses(spec.output, result, `${label} result (ws)`);
+					await call_and_check(fixture, spec, params);
+				}
+				// a declared key is still refused
+				const refused = await ws.request(randomUUID(), spec.method, { nope: 1 }).then(
+					() => null,
+					(e: unknown) => (e instanceof Error ? e.message : String(e))
+				);
+				assert.include(refused, '[-32602]', `${spec.method} must refuse a declared key`);
+			}
+		} finally {
+			await ws.close();
+		}
 	});
 
 	test('workspace and filesystem responses and notifications match their schemas', async () => {
@@ -247,8 +303,12 @@ describe('zzz spec schemas cross-backend', () => {
 			globalThis.WebSocket = original_websocket;
 		});
 
-		test('null-output actions resolve ok', async () => {
-			const fixture = await setup_test();
+		/**
+		 * Open the published client stack against the backend: a
+		 * `FrontendWebsocketClient` behind `FrontendWebsocketTransport`, driven
+		 * by `create_frontend_rpc_client` — the frontend's own request path.
+		 */
+		const open_client = async (fixture: CrossFixture) => {
 			// a browser sends the session cookie + Origin on the upgrade; Node's
 			// WebSocket (undici) takes them as a non-standard `headers` init option
 			const init = {
@@ -271,18 +331,41 @@ describe('zzz spec schemas cross-backend', () => {
 				specs: all_action_specs,
 				transports: [new FrontendWebsocketTransport(client, async () => null)]
 			});
+			client.connect();
+			// the transport reports ready only once the socket is open
+			for (let i = 0; i < 40 && !client.connected; i++) {
+				await new Promise((r) => setTimeout(r, 50));
+			}
+			assert.ok(
+				client.connected,
+				`socket did not open (status ${client.status}, close ${client.last_close_code})`
+			);
+			return { client, api_result };
+		};
+
+		test('void-input actions resolve ok', async () => {
+			// the socket client sends a parameterless request's `params` as the
+			// client version dictates — omitted, or `{}` — and both must be the call
+			const fixture = await setup_test();
+			const { client, api_result } = await open_client(fixture);
+			try {
+				const ping = await api_result.ping();
+				assert.ok(ping.ok, `ping over ws: ${JSON.stringify(ping)}`);
+				const session = await api_result.session_load();
+				assert.ok(session.ok, `session_load over ws: ${JSON.stringify(session)}`);
+				const list = await api_result.workspace_list();
+				assert.ok(list.ok, `workspace_list over ws: ${JSON.stringify(list)}`);
+			} finally {
+				client.disconnect();
+			}
+		});
+
+		test('null-output actions resolve ok', async () => {
+			const fixture = await setup_test();
+			const { client, api_result } = await open_client(fixture);
 			const dir = join(tmpdir(), `zzz_cross_schemas_ws_${randomUUID()}`);
 			await mkdir(dir, { recursive: true });
 			try {
-				client.connect();
-				// the transport reports ready only once the socket is open
-				for (let i = 0; i < 40 && !client.connected; i++) {
-					await new Promise((r) => setTimeout(r, 50));
-				}
-				assert.ok(
-					client.connected,
-					`socket did not open (status ${client.status}, close ${client.last_close_code})`
-				);
 				await call_and_check(fixture, workspace_open_action_spec, { path: dir });
 
 				const file_path = join(dir, 'via_ws.txt');

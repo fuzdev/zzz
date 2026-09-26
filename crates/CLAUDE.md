@@ -564,8 +564,10 @@ metadata contract, the bootstrap success/failure audit rows, and the
   `null`s are `invalid_params`; nested `.optional()` fields refuse `null`
   through a `present` deserializer; UUID fields use
   `fuz_auth::deserialize_wire_uuid`), and the `z.void()` methods (`ping`,
-  `session_load`, `workspace_list`) refuse any `params` via
-  `fuz_auth::require_void_params`.
+  `session_load`, `workspace_list`) refuse any declared key via
+  `fuz_auth::require_void_params` — an absent `params` and a `{}` are both
+  the no-arg call, since fuz_app's WebSocket client sends `{}` for a
+  parameterless request.
 - **Filesystem errors**: `handlers::filesystem::scoped_fs_error` maps each
   `ScopedFsError` by cause, with `data.reason` set to an `ERROR_*` constant:
   a relative / NUL path, a directory or special file where a file was
