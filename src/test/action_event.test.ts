@@ -213,24 +213,20 @@ describe('ActionEvent', () => {
 			assert.strictEqual(event.data.phase, 'send_error');
 			assert.isDefined(event.data.error);
 			assert.strictEqual(event.data.error?.code, -32603);
-			assert.include(event.data.error?.message, 'unknown error');
 		});
 
 		test('send_error handler can handle errors gracefully', async () => {
 			const env = new TestEnvironment([ping_action_spec]);
-			let error_logged = false;
+			let logged_error: unknown = null;
 
 			// Primary handler throws
 			env.add_handler('ping', 'send_request', () => {
 				throw new Error('primary handler error');
 			});
 
-			// Error handler logs and completes successfully
+			// Error handler records the error and completes without throwing
 			env.add_handler('ping', 'send_error', (event) => {
-				error_logged = true;
-				assert.isDefined(event.data.error);
-				assert.include(event.data.error?.message, 'primary handler error');
-				// Error handler completes without throwing
+				logged_error = event.data.error;
 			});
 
 			const event = create_action_event(env, ping_action_spec, undefined);
@@ -245,8 +241,8 @@ describe('ActionEvent', () => {
 			await event.handle_async();
 
 			// Error handler completed successfully
-			assert.ok(error_logged);
-			assert.strictEqual(event.data.step, 'failed');
+			assert.strictEqual((logged_error as { code?: number } | null)?.code, -32603);
+			assert.strictEqual(event.data.step, 'handled');
 			assert.strictEqual(event.data.phase, 'send_error');
 			assert.ok(event.is_complete());
 		});

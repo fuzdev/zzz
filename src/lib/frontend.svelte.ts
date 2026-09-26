@@ -43,6 +43,7 @@ import {
 import { FrontendHttpTransport } from '@fuzdev/fuz_app/actions/transports_http.ts';
 import { FrontendWebsocketTransport } from '@fuzdev/fuz_app/actions/transports_ws.ts';
 import { create_rpc_client } from '@fuzdev/fuz_app/actions/rpc_client.ts';
+import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 import type { FrontendActionsApi } from './action_metatypes.ts';
 import type { FrontendActionHandlers } from './frontend_action_types.ts';
 import { ActionOutputs } from './action_collections.ts';
@@ -73,6 +74,13 @@ export interface FrontendOptions extends OmitStrict<CellOptions<typeof FrontendJ
 	http_headers?: Record<string, string>;
 
 	socket_url?: string | null;
+
+	/**
+	 * Called when an action fails with `unauthenticated` — the backend no longer
+	 * accepts this session (revoked, expired, logged out elsewhere). Typically
+	 * wired to a session recheck (see `create_session_recheck`).
+	 */
+	on_unauthenticated?: (() => void) | null;
 }
 
 /**
@@ -81,6 +89,9 @@ export interface FrontendOptions extends OmitStrict<CellOptions<typeof FrontendJ
  */
 export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEnvironment {
 	readonly executor: ActionExecutor = 'frontend';
+	// TODO give this a `log` (fuz_util `Logger`) once `log.ts` loads in the browser —
+	// today it imports `node:util` and reads `process` at module load. Until then
+	// fuz_app's dispatcher falls back to console for warnings and errors.
 
 	/**
 	 * App-wide cell registry, maps class names to constructor and tracks registered instances.
@@ -163,6 +174,8 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	/** See into Zzz's future. */
 	futuremode = $state.raw(false);
 
+	readonly #on_unauthenticated: (() => void) | null;
+
 	constructor(options: FrontendOptions = EMPTY_OBJECT) {
 		// Pass this instance as its own zzz reference - casting hacks around the circular reference
 		super(FrontendJson, options as FrontendOptions & { app: Frontend });
@@ -200,6 +213,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.terminal_presets = new TerminalPresets({ app: this });
 
 		this.bots = options.bots ?? BOTS_DEFAULT;
+		this.#on_unauthenticated = options.on_unauthenticated ?? null;
 
 		this.peer = new ActionDispatcher({ environment: this });
 
@@ -214,6 +228,16 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 				// listen before adding, so an action trimmed right away stops listening when disposed
 				action.listen_to_action_event(event);
 				this.actions.add(action);
+				if (this.#on_unauthenticated) {
+					event.observe((data, old_data) => {
+						if (
+							data.error !== old_data.error &&
+							data.error?.code === JSONRPC_ERROR_CODES.unauthenticated
+						) {
+							this.#on_unauthenticated?.();
+						}
+					});
+				}
 			}
 		});
 
@@ -326,6 +350,17 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.diskfile_histories.delete(path);
 		history.dispose();
 		return true;
+	}
+
+	/**
+	 * Tear the app down: closes the socket (no reconnect loop is left behind)
+	 * and stops the cells that own timers, then unregisters.
+	 */
+	override dispose(): void {
+		this.socket.disconnect();
+		this.terminals.dispose();
+		this.time.dispose();
+		super.dispose();
 	}
 
 	lookup_action_handler(

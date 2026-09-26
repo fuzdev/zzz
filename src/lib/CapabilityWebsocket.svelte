@@ -17,8 +17,10 @@
 		DEFAULT_HEARTBEAT_INTERVAL,
 		DEFAULT_RECONNECT_DELAY,
 		DEFAULT_RECONNECT_DELAY_MAX
-	} from './socket_helpers.ts';
+	} from '@fuzdev/fuz_app/actions/socket.svelte.ts';
+	import { HEARTBEAT_INTERVAL_BOUNDS, RECONNECT_DELAY_BOUNDS } from './socket_helpers.ts';
 	import SocketMessageQueue from './SocketMessageQueue.svelte';
+	import MsSettingInput from './MsSettingInput.svelte';
 	import { WEBSOCKET_URL } from './constants.ts';
 
 	const pid = $props.id();
@@ -253,22 +255,14 @@
 					<div>heartbeat interval</div>
 					<small>{format_ms_to_readable(socket.heartbeat_interval)}</small>
 				</label>
-				<div class="display:flex gap_xs">
-					<input
-						type="range"
-						min="10000"
-						max="600000"
-						step="10000"
-						class="flex:1 sm plain"
-						bind:value={socket.heartbeat_interval}
-					/>
-					<input
-						id="heartbeat_interval_{pid}"
-						type="text"
-						class="input-xs sm plain"
-						bind:value={socket.heartbeat_interval}
-					/>
-				</div>
+				<MsSettingInput
+					id="heartbeat_interval_{pid}"
+					label="heartbeat interval"
+					value={socket.heartbeat_interval}
+					bounds={HEARTBEAT_INTERVAL_BOUNDS}
+					step={1000}
+					onvalue={(v) => (socket.heartbeat_interval = v)}
+				/>
 			</div>
 
 			<div class="row">
@@ -281,22 +275,15 @@
 					<div>reconnect delay</div>
 					<small>{format_ms_to_readable(socket.reconnect_delay, 1)}</small>
 				</label>
-				<div class="display:flex gap_xs">
-					<input
-						type="range"
-						min="100"
-						max="10000"
-						step="100"
-						class="flex:1 sm plain"
-						bind:value={socket.reconnect_delay}
-					/>
-					<input
-						id="reconnect_delay_{pid}"
-						type="text"
-						class="input-xs sm plain"
-						bind:value={socket.reconnect_delay}
-					/>
-				</div>
+				<MsSettingInput
+					id="reconnect_delay_{pid}"
+					label="reconnect delay"
+					value={socket.reconnect_delay}
+					bounds={RECONNECT_DELAY_BOUNDS}
+					range_max={10_000}
+					step={100}
+					onvalue={(v) => (socket.reconnect_delay = v)}
+				/>
 			</div>
 
 			<div class="row">
@@ -309,22 +296,14 @@
 					<div>max reconnect delay</div>
 					<small>{format_ms_to_readable(socket.reconnect_delay_max)}</small>
 				</label>
-				<div class="display:flex gap_xs">
-					<input
-						type="range"
-						min="1000"
-						max="300000"
-						step="1000"
-						class="flex:1 sm plain"
-						bind:value={socket.reconnect_delay_max}
-					/>
-					<input
-						id="reconnect_delay_max_{pid}"
-						type="text"
-						class="input-xs sm plain"
-						bind:value={socket.reconnect_delay_max}
-					/>
-				</div>
+				<MsSettingInput
+					id="reconnect_delay_max_{pid}"
+					label="max reconnect delay"
+					value={socket.reconnect_delay_max}
+					bounds={RECONNECT_DELAY_BOUNDS}
+					step={100}
+					onvalue={(v) => (socket.reconnect_delay_max = v)}
+				/>
 			</div>
 
 			<div class="display:flex justify-content:end">

@@ -30,6 +30,7 @@
 	import create_zzz_config from '$lib/config.ts';
 	import { ModelJson } from '$lib/model.svelte.ts';
 	import { DOCS_PATH } from '@fuzdev/fuz_ui/docs_helpers.svelte.ts';
+	import { create_session_recheck } from '$lib/session_recheck.ts';
 
 	const { children, params } = $props();
 
@@ -61,13 +62,18 @@
 	library_context.set(new Library(library_json));
 	site_context.set(new SiteState({ icon: logo_zzz, pkg_json }));
 
+	// Re-verify the session when the backend hints it's gone; `check_session`
+	// flips `verified` off, which tears the App down and shows the login gate.
+	// Only a definitive 401 counts, so a daemon restart doesn't log anyone out.
+	const recheck_session = create_session_recheck({ on_invalid: () => auth_state.check_session() });
+
 	// Create the frontend's App only after auth is verified
 	let app: App | undefined = $state.raw();
 
 	// TODO init properly from data
 	const init_app = (): void => {
 		const zzz_config = create_zzz_config();
-		const new_app = new App();
+		const new_app = new App({ on_unauthenticated: () => void recheck_session() });
 		new_app.add_providers(zzz_config.providers.map((p) => ProviderJson.parse(p))); // TODO handle errors
 		new_app.models.add_many(zzz_config.models.map((m) => ModelJson.parse(m))); // TODO handle errors
 
@@ -82,6 +88,25 @@
 	$effect.pre(() => {
 		if (!auth_state.verified || app) return;
 		untrack(init_app);
+	});
+
+	// Session gone (logout, or a recheck found it revoked/expired) — drop the
+	// App so its socket stops reconnecting and a fresh one starts after login.
+	$effect.pre(() => {
+		if (auth_state.verified || !app) return;
+		const old_app = app;
+		app = undefined;
+		untrack(() => old_app.dispose());
+		if (BROWSER && (window as any).app === old_app) (window as any).app = undefined;
+	});
+
+	// The server closed the socket as revoked, or reconnects keep failing (a
+	// browser can't tell an expired session's 401 upgrade from a downed daemon).
+	$effect(() => {
+		if (!app) return;
+		if (app.socket.revoked || app.socket.reconnect_count >= 2) {
+			void recheck_session();
+		}
 	});
 
 	// TODO refactor, maybe per route?

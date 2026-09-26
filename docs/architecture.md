@@ -765,7 +765,8 @@ Population, per capability:
   to `capabilities.handle_ping_*`); keeps a rolling round-trip-time history
 - `websocket` — `$derived` off the `Socket` wrapper's connection state; its
   panel is also a live control surface (connect/disconnect, heartbeat and
-  reconnect tuning)
+  reconnect tuning — the setters coerce and clamp input, and the heartbeat's
+  receive timeout scales with its interval so an idle socket isn't closed)
 - `filesystem` — `$derived` off `zzz_dir`/`scoped_dirs` from `session_load`,
   gated on backend status
 - `providers` — one `ProviderCapability` per provider, `$derived` off

@@ -1,8 +1,12 @@
 import { SvelteMap } from 'svelte/reactivity';
 import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
 import {
+	DEFAULT_HEARTBEAT_INTERVAL,
+	DEFAULT_RECONNECT_DELAY,
+	DEFAULT_RECONNECT_DELAY_MAX,
 	FrontendWebsocketClient,
 	socket_status_to_async_status,
+	type FrontendWebsocketHeartbeatOptions,
 	type SocketMessageHandler,
 	type SocketErrorHandler
 } from '@fuzdev/fuz_app/actions/socket.svelte.ts';
@@ -12,10 +16,11 @@ import { UNKNOWN_ERROR_MESSAGE } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import {
-	DEFAULT_HEARTBEAT_INTERVAL,
-	DEFAULT_RECONNECT_DELAY,
-	DEFAULT_RECONNECT_DELAY_MAX,
-	DEFAULT_AUTO_RECONNECT
+	DEFAULT_AUTO_RECONNECT,
+	HEARTBEAT_INTERVAL_BOUNDS,
+	RECONNECT_DELAY_BOUNDS,
+	to_bounded_ms,
+	to_heartbeat_receive_timeout
 } from './socket_helpers.ts';
 import type { Frontend } from './frontend.svelte.ts';
 
@@ -46,9 +51,9 @@ export interface FailedMessage extends QueuedMessage {
  * delegate to the underlying `FrontendWebsocketClient`, keeping the
  * pending-request map in one canonical place.
  *
- * The bespoke heartbeat timer has been retired — fuz_app's
- * `FrontendWebsocketClient` now ships an activity-aware heartbeat that
- * sends the shared `heartbeat_action` at `heartbeat_interval` idle.
+ * fuz_app's `FrontendWebsocketClient` owns the activity-aware heartbeat,
+ * sending the shared `heartbeat_action` at `heartbeat_interval` idle, with a
+ * receive timeout scaled to the interval (`to_heartbeat_receive_timeout`).
  * Assigning `heartbeat_interval` pushes the new policy into the live
  * client immediately (the timer is restarted in place when connected).
  *
@@ -56,6 +61,10 @@ export interface FailedMessage extends QueuedMessage {
  * `auto_reconnect`) propagate to the underlying client on assignment
  * via `apply_reconnect_policy()` — in-flight waits are monotonically
  * shortened (never extended).
+ *
+ * The millisecond settings coerce and clamp on assignment
+ * (`HEARTBEAT_INTERVAL_BOUNDS`, `RECONNECT_DELAY_BOUNDS`) since form inputs
+ * can hand over strings or empty values; a non-numeric write is ignored.
  */
 export class Socket implements WebsocketRpcConnection {
 	readonly app: Frontend;
@@ -67,17 +76,19 @@ export class Socket implements WebsocketRpcConnection {
 	#auto_reconnect: boolean = $state.raw(DEFAULT_AUTO_RECONNECT);
 
 	/**
-	 * Heartbeat idle interval in ms. Writing pushes the new policy into the
-	 * underlying client immediately — when connected, the live timer is
-	 * restarted in place; when disconnected, the policy is stashed for the
-	 * next `connect()`.
+	 * Heartbeat idle interval in ms, clamped to `HEARTBEAT_INTERVAL_BOUNDS`.
+	 * Writing pushes the new policy into the underlying client immediately —
+	 * when connected, the live timer is restarted in place; when
+	 * disconnected, the policy is stashed for the next `connect()`.
 	 */
 	get heartbeat_interval(): number {
 		return this.#heartbeat_interval;
 	}
 	set heartbeat_interval(value: number) {
-		this.#heartbeat_interval = value;
-		this.#client?.set_heartbeat({ interval: value });
+		const interval = to_bounded_ms(value, HEARTBEAT_INTERVAL_BOUNDS);
+		if (interval === null) return;
+		this.#heartbeat_interval = interval;
+		this.#client?.set_heartbeat(this.#heartbeat_policy());
 	}
 
 	/**
@@ -89,14 +100,18 @@ export class Socket implements WebsocketRpcConnection {
 		return this.#reconnect_delay;
 	}
 	set reconnect_delay(value: number) {
-		this.#reconnect_delay = value;
+		const delay = to_bounded_ms(value, RECONNECT_DELAY_BOUNDS);
+		if (delay === null) return;
+		this.#reconnect_delay = delay;
 		this.apply_reconnect_policy();
 	}
 	get reconnect_delay_max(): number {
 		return this.#reconnect_delay_max;
 	}
 	set reconnect_delay_max(value: number) {
-		this.#reconnect_delay_max = value;
+		const delay_max = to_bounded_ms(value, RECONNECT_DELAY_BOUNDS);
+		if (delay_max === null) return;
+		this.#reconnect_delay_max = delay_max;
 		this.apply_reconnect_policy();
 	}
 	get auto_reconnect(): boolean {
@@ -111,9 +126,11 @@ export class Socket implements WebsocketRpcConnection {
 
 	/**
 	 * UI timestamps for the "last send" / "last receive" diagnostics in
-	 * `CapabilityWebsocket`. Not used for heartbeat scheduling —
-	 * fuz_app's client owns that.
+	 * `CapabilityWebsocket` — stamped by `send`, `request`, and inbound
+	 * messages. Not used for heartbeat scheduling — fuz_app's client owns that.
 	 */
+	// TODO read these from the client's own `last_send_time` / `last_receive_time`
+	// once fuz_app ships them — those also count heartbeats and error responses
 	last_send_time: number | null = $state.raw(null);
 	last_receive_time: number | null = $state.raw(null);
 
@@ -138,8 +155,14 @@ export class Socket implements WebsocketRpcConnection {
 	readonly reconnect_attempt: number = $derived(this.#client?.last_close_time ?? 0);
 	readonly is_reconnect_pending: boolean = $derived(this.#client?.status === 'reconnecting');
 
+	/**
+	 * Whether the server closed the socket with `WS_CLOSE_SESSION_REVOKED` —
+	 * terminal for this client, the session is gone.
+	 */
+	readonly revoked: boolean = $derived(this.#client?.revoked ?? false);
+
 	readonly status: AsyncStatus = $derived(
-		socket_status_to_async_status(this.#client?.status ?? 'initial', this.#client?.revoked ?? false)
+		socket_status_to_async_status(this.#client?.status ?? 'initial', this.revoked)
 	);
 
 	readonly connected: boolean = $derived(this.#client?.connected ?? false);
@@ -183,7 +206,7 @@ export class Socket implements WebsocketRpcConnection {
 						delay_max: this.reconnect_delay_max
 					}
 				: false,
-			heartbeat: { interval: this.heartbeat_interval }
+			heartbeat: this.#heartbeat_policy()
 		});
 
 		this.#client_message_unsubscribe = client.add_message_handler((event) => {
@@ -221,6 +244,8 @@ export class Socket implements WebsocketRpcConnection {
 	 * Delegate to the underlying `FrontendWebsocketClient.request` — keeps the
 	 * pending-request map, durable queue, and `AbortSignal` cancel in one
 	 * canonical place. Rejects when there is no client (call `connect()` first).
+	 * Stamps `last_send_time` when the frame goes out immediately (a queued one
+	 * goes out on reconnect) and `last_receive_time` when a result arrives.
 	 */
 	request(
 		method: string,
@@ -231,7 +256,13 @@ export class Socket implements WebsocketRpcConnection {
 		if (!client) {
 			return Promise.reject(new Error('[socket] cannot request: no client (call connect first)'));
 		}
-		return client.request(method, params, options);
+		const sending = client.connected;
+		const result = client.request(method, params, options);
+		if (sending) this.last_send_time = Date.now();
+		return result.then((value) => {
+			this.last_receive_time = Date.now();
+			return value;
+		});
 	}
 
 	send(data: object): boolean {
@@ -280,6 +311,13 @@ export class Socket implements WebsocketRpcConnection {
 
 	cancel_reconnect(): void {
 		this.#client?.cancel_reconnect();
+	}
+
+	#heartbeat_policy(): FrontendWebsocketHeartbeatOptions {
+		return {
+			interval: this.#heartbeat_interval,
+			receive_timeout: to_heartbeat_receive_timeout(this.#heartbeat_interval)
+		};
 	}
 
 	/**
