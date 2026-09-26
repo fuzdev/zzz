@@ -9,7 +9,7 @@ import type { ChatTemplate } from './chat_template.ts';
 // TODO @many refactor with db
 
 export const BOTS_DEFAULT = {
-	namerbot: 'claude-3-5-haiku-20241022'
+	namerbot: 'claude-haiku-4-5'
 };
 
 // TODO needs work, hardcoding a bunch of stuff for now, and needs more support for different providers
@@ -44,10 +44,11 @@ export const providers_default: Array<ProviderJsonInput> = [
 // TODO any data here beyond name/provider_name/tags (and probably some future ones) should be fetched from the provider API
 // TODO @db refactor with db
 export const models_default: Array<z.input<typeof ModelJson>> = [
-	// https://docs.claude.com/en/docs/about-claude/models/overview
-	{ name: 'claude-sonnet-4-5-20250929', provider_name: 'claude', tags: ['smart'] }, // name: 'claude-sonnet-4-0'
-	{ name: 'claude-opus-4-1-20250805', provider_name: 'claude', tags: ['smart', 'smartest'] }, // name: 'claude-opus-4-0'
-	{ name: 'claude-3-5-haiku-20241022', provider_name: 'claude', tags: ['cheap'] }, // name: 'claude-3-5-haiku-latest'
+	// https://platform.claude.com/docs/en/about-claude/models/overview
+	{ name: 'claude-fable-5-1', provider_name: 'claude', tags: ['smart', 'smartest'] },
+	{ name: 'claude-opus-5', provider_name: 'claude', tags: ['smart'] },
+	{ name: 'claude-sonnet-5', provider_name: 'claude', tags: ['smart'] },
+	{ name: 'claude-haiku-4-5', provider_name: 'claude', tags: ['cheap'] },
 
 	// https://platform.openai.com/docs/models
 	{ name: 'gpt-5-2025-08-07', provider_name: 'chatgpt', tags: ['smart'] },
@@ -68,16 +69,16 @@ export const chat_template_defaults: Array<ChatTemplate> = [
 	{
 		id: create_uuid(),
 		name: 'frontier',
-		model_names: ['claude-sonnet-4-5-20250929', 'gpt-5-2025-08-07', 'gemini-2.5-pro']
+		model_names: ['claude-opus-5', 'gpt-5-2025-08-07', 'gemini-2.5-pro']
 	},
 	{
 		id: create_uuid(),
 		name: 'cheap frontier',
-		model_names: ['claude-3-5-haiku-20241022', 'gpt-5-nano-2025-08-07', 'gemini-2.5-flash-lite']
+		model_names: ['claude-haiku-4-5', 'gpt-5-nano-2025-08-07', 'gemini-2.5-flash-lite']
 	},
 	{
 		id: create_uuid(),
 		name: 'quick test',
-		model_names: ['claude-3-5-haiku-20241022', 'gpt-5-nano-2025-08-07', 'gemini-2.5-flash-lite']
+		model_names: ['claude-haiku-4-5', 'gpt-5-nano-2025-08-07', 'gemini-2.5-flash-lite']
 	}
 ];

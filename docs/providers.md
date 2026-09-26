@@ -27,7 +27,25 @@ The default model catalog is the source of truth in `src/lib/config_defaults.ts`
 carries a `provider_name` (`claude` / `chatgpt` / `gemini`) and `tags` drawn from
 `smart`, `smartest`, `cheap`, `cheaper`. Pre-configured model groups live
 alongside it in `chat_template_defaults` (`frontier`, `cheap frontier`,
-`quick test`).
+`quick test`), and the utility models in `BOTS_DEFAULT` — `namerbot`, the cheap
+model that names chats. Tests keep every template and bot model in the catalog
+and keep retired Claude IDs out of it; the API rejects a retired ID with a 404
+on every request.
+
+### Chat Auto-Naming
+
+After a chat's first successful reply, `Chat.init_name_from_turns` asks the
+`namerbot` model for a title. It only runs while the chat's `autoname` flag is
+set — true for a chat created with a default name, cleared once auto-naming
+succeeds or the user renames the chat (`Chat.rename`), and inherited by a
+duplicate — so it never replaces a name the user chose. A failed attempt is
+retried on a later send — at most one attempt per send, even across a
+multi-thread send — up to `CHAT_AUTONAME_ATTEMPTS_MAX` (3) attempts, except a
+failure that can't change on retry, which ends it at once: a JSON-RPC
+`invalid_params`, `not_found`, `unauthenticated`, `forbidden`, …, or a provider
+API status of 400, 401, 403, or 404 (from the error's `data.status`). The last
+failure is logged and, while auto-naming still applies, shown as a tooltip on
+the chat's name; renaming the chat clears it.
 
 ## Provider Architecture
 
@@ -55,8 +73,15 @@ messages are lifted out of the history — combined with the configured system
 message into Anthropic's top-level `system` field and Gemini's
 `systemInstruction`. OpenAI accepts `system` messages in place, so they pass
 through, and the configured system message is sent only when non-blank.
-Gemini also merges adjacent same-role messages into one multi-part content,
-keeping its user/model alternation intact when the history has gaps.
+Anthropic and Gemini also drop any history before the first `user` message,
+since both require the conversation to open with one. Gemini also merges
+adjacent same-role messages into one multi-part content, keeping its
+user/model alternation intact when the history has gaps.
+
+The frontend builds the history (`render_completion_messages`) from each turn's
+current content, so an edited assistant reply is what later requests send. It
+skips disabled, errored, and blank turns, and drops assistant turns before the
+first user turn — e.g. when the first user turn is disabled.
 `completion_create` refuses a blank prompt with `invalid_params`, and Gemini
 refuses a model name outside `[A-Za-z0-9._-]+`, since it becomes a URL path
 segment.
@@ -83,9 +108,44 @@ error separately. Transport error messages have the request URL stripped.
 The shared HTTP client bounds connection setup at 30 seconds; there is no
 overall request timeout, since streaming completions run long.
 
+Every provider failure is an `internal_error` (-32603) whose message is
+prefixed with the provider name. When the provider's API answered with a
+non-2xx status, the error's `data` is
+`{reason: 'provider_http_error', status}` with the upstream HTTP status
+(`ai_provider_http_error`), so a client can tell a request that can't succeed
+(400, 401, 403, 404 — e.g. a retired model) from one worth retrying (408,
+429, 5xx).
+
 Streaming responses carry usage: OpenAI requests it with
 `stream_options.include_usage`, and Anthropic merges `message_start`'s input
 counts with `message_delta`'s output counts.
+
+### Stop Reasons
+
+A response that arrives complete is still checked for why it stopped — the
+same check runs on the streaming and non-streaming paths:
+
+- **Refusals and blocks are errors** naming the provider's reason:
+  Anthropic's `stop_reason: "refusal"` (with the `stop_details` category and
+  explanation when present), OpenAI's `refusal` text (`message.refusal`, or
+  `delta.refusal` when streaming — it never streams as reply text) and
+  `finish_reason: "content_filter"`, and Gemini's `promptFeedback.blockReason`
+  or any candidate `finishReason` other than `STOP` / `MAX_TOKENS` (`SAFETY`,
+  `RECITATION`, `PROHIBITED_CONTENT`, `BLOCKLIST`, `SPII`, `OTHER`, …). As with
+  mid-stream errors, text that streamed in first stays on the turn.
+- **Truncated replies pass through** with the provider's reason in the
+  response data (`stop_reason: "max_tokens"` or
+  `"model_context_window_exceeded"`, `finish_reason: "length"`,
+  `finishReason: "MAX_TOKENS"`); the turn shows a "truncated (max tokens)"
+  note, or "truncated (context window)" for Claude's
+  `model_context_window_exceeded` (`Turn.truncation`, from
+  `response_helpers.ts`).
+- **A truncated reply with no text is an error**, since there is nothing to
+  show — typically a reasoning model that spent its whole output budget
+  thinking.
+
+Every other stop reason is a normal success. The frontend reads Claude text
+from every `text` content block, skipping `thinking` blocks.
 
 ### CompletionOptions
 
@@ -94,7 +154,7 @@ settings each provider maps onto its API:
 
 ```
 frequency_penalty?: number
-output_token_max: number
+output_token_max?: number
 presence_penalty?: number
 seed?: number
 stop_sequences?: Array<string>
@@ -105,9 +165,19 @@ top_p?: number
 ```
 
 They aren't configurable yet: `CompletionRequest` carries no options, and every
-completion uses `CompletionOptions::default()` — `output_token_max` 8192, an
-empty `system_message`, and the rest unset, so each provider's own defaults
-apply.
+completion uses `CompletionOptions::default()` — everything unset and an empty
+`system_message`, so each provider's own defaults apply.
+
+`output_token_max` counts hidden reasoning/thinking tokens as well as the reply,
+so a fixed cap sized for a chat model can starve a reasoning model. Unset, each
+provider picks its own:
+
+- **Anthropic** requires `max_tokens`, so the provider sends 64,000 when
+  streaming (`OUTPUT_TOKEN_MAX_STREAMING`, within every current Claude model's
+  output limit) and 16,000 otherwise (`OUTPUT_TOKEN_MAX_NON_STREAMING`, keeping
+  a non-streaming request well inside the API's time limit).
+- **OpenAI** and **Gemini** omit `max_completion_tokens` / `maxOutputTokens`,
+  so the model's own output limit applies.
 
 ### CompletionRequest / CompletionResponse
 

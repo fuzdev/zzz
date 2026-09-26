@@ -7,6 +7,7 @@ import type { PartUnion, TextPart } from './part.svelte.ts';
 import type { Frontend } from './frontend.svelte.ts';
 import type { Thread } from './thread.svelte.ts';
 import { TurnJson } from './turn_types.ts';
+import { to_completion_truncation, type CompletionTruncation } from './response_helpers.ts';
 import type { CompletionRequest, CompletionResponse, CompletionRole } from './completion_types.ts';
 
 export interface TurnOptions extends CellOptions<typeof TurnJson> {}
@@ -75,6 +76,17 @@ export class Turn extends Cell<typeof TurnJson> {
 	 * it failed, or it was cancelled. Late streaming chunks are ignored after this.
 	 */
 	readonly settled: boolean = $derived(!!this.response || !!this.error_message || this.cancelled);
+
+	/**
+	 * Why the final response was cut off — the output token limit or the
+	 * context window — or `null` when it finished. A truncated turn's content is
+	 * a partial reply.
+	 */
+	readonly truncation: CompletionTruncation | null = $derived(
+		to_completion_truncation(this.response)
+	);
+
+	readonly truncated: boolean = $derived(this.truncation !== null);
 
 	readonly pending: boolean = $derived(
 		this.role === 'assistant' && this.is_content_loaded && this.is_content_empty && !this.settled

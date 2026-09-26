@@ -96,9 +96,7 @@
 				run={() => {
 					// TODO make this focus the `EditableText` if available, somehow
 					const new_name = prompt('Enter new name for chat:', chat.name); // eslint-disable-line no-alert
-					if (new_name && new_name !== chat.name) {
-						chat.name = new_name;
-					}
+					if (new_name) chat.rename(new_name);
 				}}
 			>
 				<span>edit chat</span>

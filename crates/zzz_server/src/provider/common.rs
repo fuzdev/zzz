@@ -9,9 +9,12 @@
 //!   read timeouts), cancellable `send_request` / `read_json_body`, and
 //!   `reqwest_error_message`, which strips the request URL so nothing in a
 //!   query string can leak into a JSON-RPC error message.
-//! - Message shaping: `is_blank` and `join_system_text`, used by each
-//!   provider's request builder to drop empty messages and to lift `system`
-//!   messages out of the conversation history.
+//! - Message shaping: `is_blank`, `join_system_text`, and
+//!   `conversation_history`, used by each provider's request builder to drop
+//!   empty messages, lift `system` messages out of the conversation history,
+//!   and start the conversation at its first user message.
+//! - Stop handling: `truncated_without_text_message`, the shared error for a
+//!   reply cut off by the output token limit before any text.
 
 use std::time::Duration;
 
@@ -22,7 +25,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::{
     CompletionMessage, PROVIDER_ERROR_NEEDS_API_KEY, ProviderName, ProviderStatus,
-    ai_provider_error,
+    ai_provider_error, ai_provider_http_error,
 };
 
 /// Bound on establishing the TCP + TLS connection to a provider API.
@@ -291,8 +294,9 @@ pub async fn read_json_body(
 ///
 /// # Errors
 ///
-/// Returns the provider-tagged error for a non-2xx status, or
-/// `request_cancelled` when `signal` fires while the error body is read.
+/// Returns the provider-tagged error for a non-2xx status, carrying the
+/// status in `data` (see `ai_provider_http_error`), or `request_cancelled`
+/// when `signal` fires while the error body is read.
 pub async fn check_response_status<F>(
     response: reqwest::Response,
     provider_name: &str,
@@ -302,7 +306,8 @@ pub async fn check_response_status<F>(
 where
     F: FnOnce(&str) -> Option<String>,
 {
-    if response.status().is_success() {
+    let status = response.status();
+    if status.is_success() {
         return Ok(response);
     }
     let error_body = tokio::select! {
@@ -311,7 +316,11 @@ where
         text = response.text() => text.unwrap_or_else(|_| String::from("unknown error")),
     };
     let error_msg = parse_api_error(&error_body).unwrap_or(error_body);
-    Err(ai_provider_error(provider_name, &error_msg))
+    Err(ai_provider_http_error(
+        provider_name,
+        &error_msg,
+        status.as_u16(),
+    ))
 }
 
 /// Extract `error.message` from a provider JSON payload — the error shape
@@ -336,6 +345,35 @@ pub fn is_blank(text: &str) -> bool {
 /// Whether a history message is a system message.
 pub fn is_system_message(message: &CompletionMessage) -> bool {
     message.role == "system"
+}
+
+/// The history messages Anthropic and Gemini send as conversation turns.
+///
+/// `system`-role messages (lifted into the provider's system field) and
+/// blank messages are removed, then everything before the first `user`
+/// message is dropped.
+///
+/// Both APIs require the conversation to open with a user turn, and the
+/// frontend's history can start with an assistant reply when the first user
+/// turn is disabled or removed.
+pub fn conversation_history(
+    completion_messages: Option<&[CompletionMessage]>,
+) -> impl Iterator<Item = &CompletionMessage> {
+    completion_messages
+        .unwrap_or_default()
+        .iter()
+        .filter(|m| !is_system_message(m) && !is_blank(&m.content))
+        .skip_while(|m| m.role != "user")
+}
+
+/// The error message for a reply that hit the output token limit before
+/// producing any text — `reason` is the provider's own stop/finish reason,
+/// e.g. `stop_reason: max_tokens`.
+pub fn truncated_without_text_message(reason: &str) -> String {
+    format!(
+        "reached the output token limit before producing any text ({reason}); \
+         reasoning models can spend the whole budget thinking"
+    )
 }
 
 /// Combine the configured system message with any `system`-role history
@@ -430,6 +468,47 @@ mod tests {
             "{}",
             error.message
         );
+    }
+
+    /// A local HTTP server that answers one request with `response` and
+    /// closes the connection.
+    async fn one_shot_server(response: String) -> (String, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0_u8; 4096];
+            let _ = socket.read(&mut request).await;
+            socket.write_all(response.as_bytes()).await.unwrap();
+            let _ = socket.shutdown().await;
+        });
+        (url, server)
+    }
+
+    #[tokio::test]
+    async fn a_non_2xx_response_carries_the_upstream_status() {
+        for (status, reason) in [(404, "Not Found"), (429, "Too Many Requests")] {
+            let body = r#"{"type":"error","error":{"type":"x","message":"model: gone"}}"#;
+            let (url, server) = one_shot_server(format!(
+                "HTTP/1.1 {status} {reason}\r\ncontent-type: application/json\r\n\
+                 content-length: {}\r\nconnection: close\r\n\r\n{body}",
+                body.len()
+            ))
+            .await;
+            let response = short_timeout_client().get(&url).send().await.unwrap();
+            let error = check_response_status(response, "claude", &CancellationToken::new(), |b| {
+                parse_error_message(&serde_json::from_str(b).ok()?)
+            })
+            .await
+            .unwrap_err();
+            server.abort();
+
+            assert_eq!(error.message, "claude: model: gone");
+            assert_eq!(
+                error.data,
+                Some(json!({"reason": "provider_http_error", "status": status})),
+            );
+        }
     }
 
     #[tokio::test]
@@ -611,5 +690,49 @@ mod tests {
     fn join_system_text_history_only() {
         let joined = join_system_text("", Some(&[msg("system", "only")])).unwrap();
         assert_eq!(joined, "only");
+    }
+
+    fn roles_and_texts<'a>(
+        messages: impl Iterator<Item = &'a CompletionMessage>,
+    ) -> Vec<(&'a str, &'a str)> {
+        messages
+            .map(|m| (m.role.as_str(), m.content.as_str()))
+            .collect()
+    }
+
+    #[test]
+    fn conversation_history_drops_leading_non_user_messages() {
+        let history = vec![
+            msg("assistant", "orphaned reply"),
+            msg("system", "lifted"),
+            msg("assistant", "another"),
+            msg("user", "q"),
+            msg("assistant", "a"),
+        ];
+        assert_eq!(
+            roles_and_texts(conversation_history(Some(&history))),
+            vec![("user", "q"), ("assistant", "a")],
+        );
+    }
+
+    #[test]
+    fn conversation_history_drops_system_and_blank_messages() {
+        let history = vec![
+            msg("user", "q"),
+            msg("system", "lifted"),
+            msg("assistant", "  "),
+            msg("user", "again"),
+        ];
+        assert_eq!(
+            roles_and_texts(conversation_history(Some(&history))),
+            vec![("user", "q"), ("user", "again")],
+        );
+    }
+
+    #[test]
+    fn conversation_history_without_user_messages_is_empty() {
+        let history = vec![msg("assistant", "a"), msg("assistant", "b")];
+        assert_eq!(conversation_history(Some(&history)).count(), 0);
+        assert_eq!(conversation_history(None).count(), 0);
     }
 }

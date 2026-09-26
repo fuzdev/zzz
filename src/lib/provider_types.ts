@@ -38,6 +38,24 @@ export type ProviderData = z.infer<typeof ProviderDataSchema>;
 
 export const PROVIDER_ERROR_NEEDS_API_KEY = 'needs API key';
 
+/**
+ * `data.reason` on a completion error caused by a non-2xx response from the
+ * provider's API — `data.status` carries the upstream HTTP status.
+ */
+export const PROVIDER_ERROR_REASON_HTTP = 'provider_http_error';
+
+/**
+ * Reads the upstream HTTP status from a completion error's `data`.
+ *
+ * @param data - the JSON-RPC error's `data`
+ * @returns the provider API's HTTP status, or `null` when the error wasn't a non-2xx response
+ */
+export const to_provider_http_status = (data: unknown): number | null => {
+	if (typeof data !== 'object' || data === null) return null;
+	const { reason, status } = data as { reason?: unknown; status?: unknown };
+	return reason === PROVIDER_ERROR_REASON_HTTP && typeof status === 'number' ? status : null;
+};
+
 export const ProviderStatus = z.discriminatedUnion('available', [
 	z.strictObject({
 		name: z.string(),

@@ -151,6 +151,89 @@ describe('completion_create receive_error', () => {
 	});
 });
 
+describe('completion_create stop reasons', () => {
+	const create_response = (data: CompletionResponse['data']): CompletionResponse => ({
+		created: get_datetime_now(),
+		provider_name: data.type,
+		model: 'test-model',
+		data
+	});
+
+	test('a reply cut off by the token limit is kept and marked truncated', () => {
+		const responses = [
+			create_response({
+				type: 'claude',
+				value: { content: [{ type: 'text', text: 'partial' }], stop_reason: 'max_tokens' }
+			}),
+			create_response({
+				type: 'chatgpt',
+				value: { choices: [{ message: { content: 'partial' }, finish_reason: 'length' }] }
+			}),
+			create_response({
+				type: 'gemini',
+				value: { text: 'partial', candidates: [{ finishReason: 'MAX_TOKENS' }] }
+			})
+		];
+		for (const response of responses) {
+			const turn = thread.add_assistant_turn('');
+			receive_progress(turn, 'partial');
+			receive_response(turn, response);
+
+			assert.strictEqual(turn.content, 'partial');
+			assert.ok(turn.truncated, response.provider_name);
+			assert.strictEqual(turn.error_message, undefined);
+			assert.ok(turn.settled);
+		}
+	});
+
+	test('a finished reply is not marked truncated', () => {
+		const turn = thread.add_assistant_turn('');
+		receive_response(
+			turn,
+			create_response({
+				type: 'claude',
+				value: { content: [{ type: 'text', text: 'done' }], stop_reason: 'end_turn' }
+			})
+		);
+		assert.ok(!turn.truncated);
+	});
+
+	test('a refusal after partial text keeps the text and shows the error, not a truncation', () => {
+		const turn = thread.add_assistant_turn('');
+		receive_progress(turn, 'Sure, here');
+		receive_error(
+			turn,
+			JSONRPC_ERROR_CODES.internal_error,
+			'claude: the model declined to respond (stop_reason: refusal)'
+		);
+
+		assert.strictEqual(turn.content, 'Sure, here');
+		assert.strictEqual(
+			turn.error_message,
+			'claude: the model declined to respond (stop_reason: refusal)'
+		);
+		assert.ok(!turn.truncated);
+	});
+
+	test('the final response replaces thinking-only content with the text blocks', () => {
+		const turn = thread.add_assistant_turn('');
+		receive_response(
+			turn,
+			create_response({
+				type: 'claude',
+				value: {
+					content: [
+						{ type: 'thinking', thinking: '', signature: 'sig' },
+						{ type: 'text', text: 'answer' }
+					],
+					stop_reason: 'end_turn'
+				}
+			})
+		);
+		assert.strictEqual(turn.content, 'answer');
+	});
+});
+
 describe('completion_progress', () => {
 	test('appends chunks while the turn is in flight', () => {
 		const turn = thread.add_assistant_turn('');

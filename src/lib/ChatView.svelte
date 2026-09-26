@@ -38,9 +38,14 @@
 		{#if chat}
 			<section class="column-section" transition:slide>
 				<!-- TODO needs work -->
-				<div class="font_size_lg display:flex align-items:center">
+				<div
+					class="font_size_lg display:flex align-items:center"
+					title={chat.autoname && chat.init_name_error
+						? `auto-naming failed: ${chat.init_name_error}`
+						: undefined}
+				>
 					<Svg data={icon_chat} />
-					<EditableText bind:value={chat.name} />
+					<EditableText bind:value={() => chat.name, (name) => chat.rename(name)} />
 				</div>
 				<div class="row">
 					<small class="flex:1" title={chat.created_formatted_datetime}>

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
+import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 import { Uuid } from '@fuzdev/fuz_util/id.ts';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
@@ -13,12 +14,53 @@ import { CellJson } from './cell_types.ts';
 import { get_unique_name, estimate_token_count } from './helpers.ts';
 import { CompletionRequest } from './completion_types.ts';
 import { render_message_with_role } from './thread_helpers.ts';
+import { to_provider_http_status } from './provider_types.ts';
 
 const ChatViewMode = z.enum(['simple', 'multi']).default('simple');
 export type ChatViewMode = z.infer<typeof ChatViewMode>;
 
+/** How many failed auto-naming attempts a chat makes before giving up. */
+export const CHAT_AUTONAME_ATTEMPTS_MAX = 3;
+
+/**
+ * JSON-RPC error codes that won't change on retry, so auto-naming stops after
+ * one — a bad request, missing method or resource, or an auth failure.
+ * Provider failures are all `internal_error`; see `AUTONAME_PERMANENT_HTTP_STATUSES`.
+ */
+const AUTONAME_PERMANENT_ERROR_CODES: ReadonlySet<number> = new Set([
+	JSONRPC_ERROR_CODES.parse_error,
+	JSONRPC_ERROR_CODES.invalid_request,
+	JSONRPC_ERROR_CODES.method_not_found,
+	JSONRPC_ERROR_CODES.invalid_params,
+	JSONRPC_ERROR_CODES.unauthenticated,
+	JSONRPC_ERROR_CODES.forbidden,
+	JSONRPC_ERROR_CODES.not_found,
+	JSONRPC_ERROR_CODES.validation_error
+]);
+
+/**
+ * Upstream HTTP statuses from the provider's API that won't change on retry —
+ * a bad request, a bad key, or an unknown (e.g. retired) model. Others, like
+ * 408, 429, and 5xx, are retried.
+ */
+const AUTONAME_PERMANENT_HTTP_STATUSES: ReadonlySet<number> = new Set([400, 401, 403, 404]);
+
+/**
+ * Whether a failed naming request can't succeed on retry.
+ */
+const is_permanent_autoname_error = (error: { code: number; data?: unknown }): boolean => {
+	if (AUTONAME_PERMANENT_ERROR_CODES.has(error.code)) return true;
+	const status = to_provider_http_status(error.data);
+	return status !== null && AUTONAME_PERMANENT_HTTP_STATUSES.has(status);
+};
+
 export const ChatJson = CellJson.extend({
 	name: z.string().default(''),
+	/**
+	 * Whether auto-naming may still set `name` — true while it's a default
+	 * name, cleared once auto-naming succeeds or the user renames the chat.
+	 */
+	autoname: z.boolean().default(true),
 	thread_ids: z.array(Uuid).default(() => []),
 	main_input: z.string().default(''),
 	view_mode: ChatViewMode,
@@ -31,6 +73,7 @@ export interface ChatOptions extends CellOptions<typeof ChatJson> {}
 
 export class Chat extends Cell<typeof ChatJson> {
 	name: string = $state.raw()!;
+	autoname: boolean = $state.raw()!;
 	thread_ids: Array<Uuid> = $state()!;
 	main_input: string = $state.raw()!;
 	view_mode: ChatViewMode = $state.raw()!;
@@ -74,7 +117,20 @@ export class Chat extends Cell<typeof ChatJson> {
 	);
 
 	// TODO refactor
+	/**
+	 * Auto-naming progress: `initial` while it may still run, `failure` once it
+	 * gives up (see `init_name_error`), `success` once it named the chat.
+	 */
 	init_name_status: AsyncStatus = $state.raw('initial');
+	/** Failed auto-naming attempts so far. */
+	init_name_attempts: number = $state.raw(0);
+	/** The last auto-naming failure, shown as a hint on the chat name. */
+	init_name_error: string | null = $state.raw(null);
+
+	/** Counts user sends — one `send_to_all` is one send across its threads. */
+	#send_count = 0;
+	/** The send that last triggered auto-naming, so each send triggers it at most once. */
+	#init_name_send: number | null = null;
 
 	constructor(options: ChatOptions) {
 		super(ChatJson, options);
@@ -156,9 +212,10 @@ export class Chat extends Cell<typeof ChatJson> {
 	 * @returns the number of threads a message was sent to
 	 */
 	async send_to_all(content: string): Promise<number> {
+		const send = ++this.#send_count;
 		const turns = await Promise.all(
 			// TODO batched endpoint
-			this.idle_threads.map((thread) => this.send_to_thread(thread.id, content))
+			this.idle_threads.map((thread) => this.#send_to_thread(thread.id, content, send))
 		);
 		return turns.filter((turn) => turn !== null).length;
 	}
@@ -169,7 +226,16 @@ export class Chat extends Cell<typeof ChatJson> {
 	 *
 	 * @returns the assistant turn, or `null` if the send was skipped
 	 */
-	async send_to_thread(thread_id: Uuid, content: string): Promise<Turn | null> {
+	send_to_thread(thread_id: Uuid, content: string): Promise<Turn | null> {
+		return this.#send_to_thread(thread_id, content, ++this.#send_count);
+	}
+
+	/**
+	 * Sends to one thread as part of user send `send`. Only the first successful
+	 * reply of a send triggers auto-naming, so a multi-thread send makes at most
+	 * one naming attempt and a failure is retried on a later send.
+	 */
+	async #send_to_thread(thread_id: Uuid, content: string, send: number): Promise<Turn | null> {
 		const thread = this.app.threads.items.by_id.get(thread_id);
 		if (!thread) return null;
 
@@ -188,23 +254,40 @@ export class Chat extends Cell<typeof ChatJson> {
 		if (
 			!assistant_turn.error_message &&
 			!assistant_turn.cancelled &&
-			assistant_turn.content.trim()
+			assistant_turn.content.trim() &&
+			this.#init_name_send !== send
 		) {
+			this.#init_name_send = send;
 			void this.init_name_from_turns(content, assistant_turn.content);
 		}
 
 		return assistant_turn;
 	}
 
-	// TODO needs to be reworked (maybe accept an array of messages?), also shouldn't clobber any user-assigned names
+	/**
+	 * Renames the chat as the user, which stops auto-naming from replacing the name.
+	 * A no-op when `name` is unchanged.
+	 */
+	rename(name: string): void {
+		if (name === this.name) return;
+		this.name = name;
+		this.autoname = false;
+		this.init_name_error = null;
+	}
+
+	// TODO needs to be reworked (maybe accept an array of messages?)
 	/**
 	 * Uses an LLM to name the chat based on the user input and AI response.
-	 * Ignores failures and retries on next intention.
+	 * Only runs while `autoname` is set, so it never replaces a name the user
+	 * chose. A failure is retried on a later send, up to
+	 * `CHAT_AUTONAME_ATTEMPTS_MAX` attempts, except one that can't change on
+	 * retry (e.g. an unknown model or an auth error), which ends it at once;
+	 * the last failure is kept in `init_name_error`.
 	 */
 	async init_name_from_turns(user_content: string, assistant_content: string): Promise<void> {
 		// TODO better abstraction for this kind of thing including de-duping the request,
 		// returning the current promise
-		if (this.init_name_status !== 'initial') return;
+		if (!this.autoname || this.init_name_status !== 'initial') return;
 
 		// Check if namerbot's provider is available before attempting to name
 		const namerbot_model = this.app.models.find_by_name(this.app.bots.namerbot);
@@ -246,29 +329,51 @@ export class Chat extends Cell<typeof ChatJson> {
 			});
 
 			if (!name_response.ok) {
-				this.init_name_status = 'initial'; // ignore failures
-				console.error('failed to infer a name for a chat', name_response.error);
+				const { error } = name_response;
+				this.#fail_init_name(error.message, is_permanent_autoname_error(error));
 				return;
 			}
 
 			const { completion_response } = name_response.value;
 
-			const response_text = to_completion_response_text(completion_response) || '';
+			const response_text = (to_completion_response_text(completion_response) || '').trim();
 
 			if (!response_text) {
-				console.error('unknown inference failure', name_response);
-				this.init_name_status = 'initial'; // ignore failures
+				this.#fail_init_name('the naming model returned no text', false);
 				return;
 			}
 
 			this.init_name_status = 'success';
+			this.init_name_error = null;
+			// the user may have renamed the chat while the request was in flight
+			if (!this.autoname) return;
+			this.autoname = false;
 			if (response_text !== this.name) {
 				this.name = get_unique_name(response_text, this.app.chats.items_by_name);
 			}
 		} catch (error) {
-			this.init_name_status = 'initial'; // ignore failures
-			console.error('failed to infer a name for a chat', error);
+			this.#fail_init_name(error instanceof Error ? error.message : String(error), false);
 		}
+	}
+
+	/**
+	 * Records a failed auto-naming attempt, allowing a retry on a later send
+	 * unless the failure is permanent or the attempts are used up.
+	 */
+	#fail_init_name(message: string, permanent: boolean): void {
+		// renamed while the request was in flight — auto-naming no longer applies
+		if (!this.autoname) {
+			this.init_name_status = 'initial';
+			return;
+		}
+		this.init_name_attempts++;
+		this.init_name_error = message;
+		const done = permanent || this.init_name_attempts >= CHAT_AUTONAME_ATTEMPTS_MAX;
+		this.init_name_status = done ? 'failure' : 'initial';
+		console.error(
+			`[chat.init_name_from_turns] failed to name the chat (attempt ${this.init_name_attempts}${done ? ', giving up' : ''}):`,
+			message
+		);
 	}
 
 	select_thread(thread_id: Uuid | null): void {

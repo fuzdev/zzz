@@ -1,6 +1,5 @@
 import type { Turn } from './turn.svelte.ts';
 import type { CompletionMessage, CompletionRole } from './completion_types.ts';
-import { to_completion_response_text } from './response_helpers.ts';
 
 // TODO refactor where?
 /**
@@ -30,12 +29,16 @@ export const render_messages_to_string = (
 
 /**
  * Creates a thread history array for model consumption from a collection of turns.
- * Normalizes content for assistant turns with responses.
  *
- * Skips disabled turns, errored turns (their partial content isn't a valid reply),
- * and turns with empty or whitespace-only content (e.g. a completion cancelled
- * before the first token), because providers like Anthropic reject empty messages.
- * Cancelled turns with partial content are kept.
+ * Every turn contributes its current `content`, so edits to a completed
+ * assistant turn are what later requests see. Skips disabled turns, errored
+ * turns (their partial content isn't a valid reply), and turns with empty or
+ * whitespace-only content (e.g. a completion cancelled before the first token),
+ * because providers like Anthropic reject empty messages. Cancelled turns with
+ * partial content are kept. Assistant turns before the first user turn are
+ * dropped (e.g. when the first user turn is disabled or removed), since
+ * Anthropic and Gemini require the conversation to open with a user message;
+ * `system` turns are kept wherever they are.
  *
  * @param turns - the thread's turns in order
  * @param completion_messages - array to append to
@@ -43,22 +46,26 @@ export const render_messages_to_string = (
  * @mutates completion_messages - appends one message per included turn
  */
 export const render_completion_messages = (
-	turns: Iterable<Pick<Turn, 'enabled' | 'role' | 'content' | 'response' | 'error_message'>>,
+	turns: Iterable<Pick<Turn, 'enabled' | 'role' | 'content' | 'error_message'>>,
 	completion_messages: Array<CompletionMessage> = []
 ): Array<CompletionMessage> => {
+	let seen_user = completion_messages.some((m) => m.role === 'user');
 	for (const turn of turns) {
 		// excluding an errored turn can leave consecutive same-role messages (the user turn
 		// before it, then the next user turn) — the Gemini request builder merges adjacent
 		// same-role messages server-side; Anthropic and OpenAI accept them as-is
 		if (!turn.enabled || turn.error_message) continue;
 
-		const content =
-			turn.role === 'assistant' && turn.response
-				? to_completion_response_text(turn.response) || ''
-				: turn.content;
+		const { role, content } = turn;
 		if (!content.trim()) continue;
 
-		completion_messages.push({ role: turn.role, content });
+		if (role === 'user') {
+			seen_user = true;
+		} else if (role !== 'system' && !seen_user) {
+			continue;
+		}
+
+		completion_messages.push({ role, content });
 	}
 
 	return completion_messages;

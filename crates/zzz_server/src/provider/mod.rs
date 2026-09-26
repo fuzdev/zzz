@@ -133,12 +133,20 @@ impl Serialize for ProviderStatus {
 
 /// Options controlling completion generation.
 ///
-/// Server-level defaults (stored on `App`, cloned per-request).
-#[derive(Debug, Clone)]
+/// Server-level defaults (stored on `App`, cloned per-request). An unset
+/// field means the provider's default applies.
+#[derive(Debug, Clone, Default)]
 #[allow(dead_code)]
 pub struct CompletionOptions {
     pub frequency_penalty: Option<f64>,
-    pub output_token_max: u32,
+    /// Cap on generated tokens, counting any hidden reasoning/thinking
+    /// tokens. `None` uses each provider's default: Anthropic requires a
+    /// value, so it sends `anthropic::OUTPUT_TOKEN_MAX_STREAMING` or
+    /// `anthropic::OUTPUT_TOKEN_MAX_NON_STREAMING`; `OpenAI` and Gemini omit
+    /// the field so the model's own output limit applies — a fixed cap sized
+    /// for one model is too small for reasoning models, which can spend it
+    /// all thinking and return no text.
+    pub output_token_max: Option<u32>,
     pub presence_penalty: Option<f64>,
     pub seed: Option<u64>,
     pub stop_sequences: Option<Vec<String>>,
@@ -146,22 +154,6 @@ pub struct CompletionOptions {
     pub temperature: Option<f64>,
     pub top_k: Option<u32>,
     pub top_p: Option<f64>,
-}
-
-impl Default for CompletionOptions {
-    fn default() -> Self {
-        Self {
-            output_token_max: 8192,
-            system_message: String::new(),
-            frequency_penalty: None,
-            presence_penalty: None,
-            seed: None,
-            stop_sequences: None,
-            temperature: None,
-            top_k: None,
-            top_p: None,
-        }
-    }
 }
 
 /// A single message in a completion conversation.
@@ -293,6 +285,25 @@ pub const PROVIDER_ERROR_NOT_INSTALLED: &str = "not installed";
 
 pub fn ai_provider_error(provider_name: &str, message: &str) -> JsonrpcError {
     internal_error(&format!("{provider_name}: {message}"))
+}
+
+/// `data.reason` on an error for a non-2xx response from the provider's API,
+/// alongside the upstream `status`.
+pub const ERROR_REASON_PROVIDER_HTTP_ERROR: &str = "provider_http_error";
+
+/// An `ai_provider_error` for a non-2xx response from the provider's API,
+/// with `data: {reason: "provider_http_error", status}`.
+///
+/// The JSON-RPC code stays `internal_error`; `status` lets a client tell a
+/// request that can't succeed (400, 401, 403, 404) from one worth retrying
+/// (408, 429, 5xx).
+pub fn ai_provider_http_error(provider_name: &str, message: &str, status: u16) -> JsonrpcError {
+    let mut error = ai_provider_error(provider_name, message);
+    error.data = Some(serde_json::json!({
+        "reason": ERROR_REASON_PROVIDER_HTTP_ERROR,
+        "status": status,
+    }));
+    error
 }
 
 // -- Helpers ------------------------------------------------------------------

@@ -17,6 +17,24 @@ const PROVIDER: ProviderName = ProviderName::Claude;
 /// The `&str` form (derived from `PROVIDER`) for the error/SSE plumbing.
 const PROVIDER_NAME: &str = PROVIDER.as_str();
 
+/// Default `max_tokens` for a streaming request.
+///
+/// Used when `CompletionOptions` sets no `output_token_max`. The Messages API
+/// requires the field, and it counts thinking tokens, which current models
+/// spend by default. 64K fits every current model's output limit (Claude
+/// Haiku 4.5's is 64K).
+pub const OUTPUT_TOKEN_MAX_STREAMING: u32 = 64_000;
+
+/// Default `max_tokens` for a non-streaming request.
+///
+/// Used when `CompletionOptions` sets no `output_token_max`; lower than the
+/// streaming default so the response stays well inside the time the API
+/// allows a non-streaming request.
+pub const OUTPUT_TOKEN_MAX_NON_STREAMING: u32 = 16_000;
+
+/// Stop reasons that mean the reply was cut off rather than finished.
+const TRUNCATED_STOP_REASONS: [&str; 2] = ["max_tokens", "model_context_window_exceeded"];
+
 // -- Provider state -----------------------------------------------------------
 
 struct AnthropicState {
@@ -93,6 +111,7 @@ impl AnthropicProvider {
         } else {
             common::read_json_body(response, PROVIDER_NAME, signal).await?
         };
+        check_stop(&api_response).map_err(|message| ai_provider_error(PROVIDER_NAME, &message))?;
 
         Ok(common::build_completion_response(
             PROVIDER_NAME,
@@ -114,6 +133,9 @@ struct AnthropicStream {
     content: String,
     message_id: String,
     stop_reason: Option<String>,
+    /// `message_delta`'s `stop_details` — set alongside a `refusal` stop
+    /// reason with its category and explanation.
+    stop_details: Option<Value>,
     /// Usage merged across events — `message_start` carries the input-side
     /// counts, `message_delta` the (cumulative) output-side ones.
     usage: Map<String, Value>,
@@ -171,12 +193,17 @@ impl AnthropicStream {
                 }
             }
             "message_delta" => {
-                if let Some(sr) = data
-                    .get("delta")
+                let delta = data.get("delta");
+                if let Some(sr) = delta
                     .and_then(|d| d.get("stop_reason"))
                     .and_then(Value::as_str)
                 {
                     self.stop_reason = Some(sr.to_owned());
+                }
+                if let Some(details) = delta.and_then(|d| d.get("stop_details"))
+                    && !details.is_null()
+                {
+                    self.stop_details = Some(details.clone());
                 }
                 if let Some(usage) = data.get("usage") {
                     self.merge_usage(usage);
@@ -218,10 +245,75 @@ impl AnthropicStream {
             "content": [{"type": "text", "text": self.content}],
             "model": model,
             "stop_reason": self.stop_reason.unwrap_or_else(|| String::from("end_turn")),
+            "stop_details": self.stop_details,
             "stop_sequence": null,
             "usage": usage,
         }))
     }
+}
+
+// -- Stop reasons -------------------------------------------------------------
+
+/// Check a finished Messages response's `stop_reason`, from either path.
+///
+/// A `refusal` is an error naming the reason, with the `stop_details`
+/// category and explanation when present — the frontend keeps any text that
+/// streamed in before it. A truncated reply (`max_tokens`,
+/// `model_context_window_exceeded`) with no text is an error too, since
+/// there is nothing to show; one with text passes, and the frontend reads
+/// `stop_reason` to mark it truncated. Every other stop reason passes.
+fn check_stop(response: &Value) -> Result<(), String> {
+    let Some(stop_reason) = response.get("stop_reason").and_then(Value::as_str) else {
+        return Ok(());
+    };
+    if stop_reason == "refusal" {
+        return Err(refusal_message(response.get("stop_details")));
+    }
+    if TRUNCATED_STOP_REASONS.contains(&stop_reason) && common::is_blank(&response_text(response)) {
+        return Err(common::truncated_without_text_message(&format!(
+            "stop_reason: {stop_reason}"
+        )));
+    }
+    Ok(())
+}
+
+fn refusal_message(stop_details: Option<&Value>) -> String {
+    let mut message = String::from("the model declined to respond (stop_reason: refusal");
+    let field = |key: &str| {
+        stop_details
+            .and_then(|d| d.get(key))
+            .and_then(Value::as_str)
+            .filter(|v| !common::is_blank(v))
+    };
+    if let Some(category) = field("category") {
+        message.push_str(", category: ");
+        message.push_str(category);
+    }
+    message.push(')');
+    if let Some(explanation) = field("explanation") {
+        message.push_str(": ");
+        message.push_str(explanation);
+    }
+    message
+}
+
+/// The concatenated text of a Messages response's `text` content blocks —
+/// thinking blocks, which current models return by default, are skipped.
+fn response_text(response: &Value) -> String {
+    let mut text = String::new();
+    for block in response
+        .get("content")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        if block.get("type").and_then(Value::as_str) == Some("text")
+            && let Some(t) = block.get("text").and_then(Value::as_str)
+        {
+            text.push_str(t);
+        }
+    }
+    text
 }
 
 // -- Request building ---------------------------------------------------------
@@ -229,10 +321,15 @@ impl AnthropicStream {
 fn build_request_body(options: &CompletionHandlerOptions, stream: bool) -> Value {
     let messages = build_messages(options.completion_messages.as_deref(), &options.prompt);
     let opts = &options.completion_options;
+    let max_tokens = opts.output_token_max.unwrap_or(if stream {
+        OUTPUT_TOKEN_MAX_STREAMING
+    } else {
+        OUTPUT_TOKEN_MAX_NON_STREAMING
+    });
 
     let mut body = json!({
         "model": options.model,
-        "max_tokens": opts.output_token_max,
+        "max_tokens": max_tokens,
         "stream": stream,
         "messages": messages,
     });
@@ -267,17 +364,16 @@ fn build_request_body(options: &CompletionHandlerOptions, stream: bool) -> Value
 
 /// Convert `CompletionMessage[]` + prompt into the Anthropic messages format.
 ///
-/// Skips `system`-role messages (`build_request_body` lifts them into the
-/// top-level `system` field) and blank messages (Anthropic rejects empty
-/// text blocks). Appends the prompt as a final user message.
+/// Sends `common::conversation_history`: `system`-role messages are skipped
+/// (`build_request_body` lifts them into the top-level `system` field), as
+/// are blank messages (Anthropic rejects empty text blocks) and any before
+/// the first user message (the API requires a user turn first). Appends the
+/// prompt as a final user message.
 fn build_messages(completion_messages: Option<&[CompletionMessage]>, prompt: &str) -> Vec<Value> {
     let capacity = completion_messages.map_or(0, <[_]>::len) + 1; // +1 for prompt
     let mut messages: Vec<Value> = Vec::with_capacity(capacity);
 
-    for msg in completion_messages.unwrap_or_default() {
-        if common::is_system_message(msg) || common::is_blank(&msg.content) {
-            continue;
-        }
+    for msg in common::conversation_history(completion_messages) {
         messages.push(json!({
             "role": msg.role,
             "content": [{"type": "text", "text": msg.content}],
@@ -392,14 +488,48 @@ mod tests {
 
     #[test]
     fn messages_filters_system_role() {
-        let history = vec![msg("system", "lifted"), msg("assistant", "prior")];
+        let history = vec![
+            msg("user", "q"),
+            msg("system", "lifted"),
+            msg("assistant", "prior"),
+        ];
         let m = build_messages(Some(&history), "now");
-        // assistant kept + prompt appended; system moved to the top level
-        assert_eq!(m.len(), 2);
-        assert_eq!(m[0]["role"], "assistant");
-        assert_eq!(m[0]["content"][0]["text"], "prior");
-        assert_eq!(m[1]["role"], "user");
-        assert_eq!(m[1]["content"][0]["text"], "now");
+        // user + assistant kept + prompt appended; system moved to the top level
+        assert_eq!(m.len(), 3);
+        assert_eq!(m[0]["role"], "user");
+        assert_eq!(m[1]["role"], "assistant");
+        assert_eq!(m[1]["content"][0]["text"], "prior");
+        assert_eq!(m[2]["role"], "user");
+        assert_eq!(m[2]["content"][0]["text"], "now");
+    }
+
+    #[test]
+    fn messages_start_with_a_user_message() {
+        // the first user turn was disabled, leaving its reply at the front
+        let history = vec![
+            msg("assistant", "orphaned"),
+            msg("user", "q"),
+            msg("assistant", "a"),
+        ];
+        let m = build_messages(Some(&history), "now");
+        let roles: Vec<_> = m.iter().map(|m| m["role"].as_str().unwrap()).collect();
+        assert_eq!(roles, vec!["user", "assistant", "user"]);
+        assert_eq!(m[0]["content"][0]["text"], "q");
+
+        let m = build_messages(Some(&[msg("assistant", "only a reply")]), "now");
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0]["role"], "user");
+    }
+
+    #[test]
+    fn request_body_max_tokens_defaults_by_streaming() {
+        let body = build_request_body(&opts(), true);
+        assert_eq!(body["max_tokens"], OUTPUT_TOKEN_MAX_STREAMING);
+        let body = build_request_body(&opts(), false);
+        assert_eq!(body["max_tokens"], OUTPUT_TOKEN_MAX_NON_STREAMING);
+        let mut o = opts();
+        o.completion_options.output_token_max = Some(100);
+        assert_eq!(build_request_body(&o, true)["max_tokens"], 100);
     }
 
     #[test]
@@ -533,6 +663,131 @@ mod tests {
         let (stream, _, result) = run(&events);
         result.unwrap();
         assert!(stream.finish("m").is_err());
+    }
+
+    // -- Stop reasons --
+
+    /// A stream with `text` deltas that ends with `stop_reason`, plus
+    /// `stop_details` when given.
+    fn stream_ending_with(text: &[&str], stop_reason: &str, stop_details: &str) -> Vec<SseEvent> {
+        let mut events = vec![event(
+            "message_start",
+            r#"{"type":"message_start","message":{"id":"msg_1","usage":{"input_tokens":3}}}"#,
+        )];
+        for t in text {
+            events.push(event(
+                "content_block_delta",
+                &json!({"type": "content_block_delta", "delta": {"type": "text_delta", "text": t}})
+                    .to_string(),
+            ));
+        }
+        events.push(event(
+            "message_delta",
+            &format!(
+                r#"{{"type":"message_delta","delta":{{"stop_reason":"{stop_reason}","stop_details":{stop_details}}},"usage":{{"output_tokens":5}}}}"#
+            ),
+        ));
+        events.push(event("message_stop", r#"{"type":"message_stop"}"#));
+        events
+    }
+
+    /// Stream `events` to completion and run the stop check over the result.
+    fn streamed_stop_check(events: &[SseEvent]) -> Result<Value, String> {
+        let (stream, _, result) = run(events);
+        result.unwrap();
+        let response = stream.finish("m").unwrap();
+        check_stop(&response).map(|()| response)
+    }
+
+    #[test]
+    fn stream_refusal_is_an_error_naming_the_reason() {
+        let error = streamed_stop_check(&stream_ending_with(
+            &[],
+            "refusal",
+            r#"{"type":"refusal","category":"cyber","explanation":"This request was declined."}"#,
+        ))
+        .unwrap_err();
+        assert_eq!(
+            error,
+            "the model declined to respond (stop_reason: refusal, category: cyber): \
+             This request was declined."
+        );
+    }
+
+    #[test]
+    fn stream_refusal_after_partial_text_is_an_error() {
+        let events = stream_ending_with(&["Sure, here"], "refusal", "null");
+        let (_, deltas, _) = run(&events);
+        // the partial text still streamed to the client
+        assert_eq!(deltas, vec!["Sure, here"]);
+        let error = streamed_stop_check(&events).unwrap_err();
+        assert_eq!(
+            error,
+            "the model declined to respond (stop_reason: refusal)"
+        );
+    }
+
+    #[test]
+    fn non_streaming_refusal_is_an_error() {
+        let response = json!({
+            "content": [],
+            "stop_reason": "refusal",
+            "stop_details": {"type": "refusal", "category": null, "explanation": null},
+        });
+        assert_eq!(
+            check_stop(&response).unwrap_err(),
+            "the model declined to respond (stop_reason: refusal)"
+        );
+    }
+
+    #[test]
+    fn truncated_reply_with_text_passes_with_its_stop_reason() {
+        let response =
+            streamed_stop_check(&stream_ending_with(&["partial"], "max_tokens", "null")).unwrap();
+        assert_eq!(response["stop_reason"], "max_tokens");
+        assert_eq!(response["content"][0]["text"], "partial");
+
+        let response = json!({
+            "content": [{"type": "text", "text": "long answer"}],
+            "stop_reason": "model_context_window_exceeded",
+        });
+        check_stop(&response).unwrap();
+    }
+
+    #[test]
+    fn truncated_reply_without_text_is_an_error() {
+        let error =
+            streamed_stop_check(&stream_ending_with(&[], "max_tokens", "null")).unwrap_err();
+        assert!(error.contains("stop_reason: max_tokens"), "{error}");
+
+        // non-streaming: the whole budget went to a thinking block
+        let response = json!({
+            "content": [{"type": "thinking", "thinking": "", "signature": "sig"}],
+            "stop_reason": "max_tokens",
+        });
+        let error = check_stop(&response).unwrap_err();
+        assert!(error.contains("before producing any text"), "{error}");
+    }
+
+    #[test]
+    fn finished_replies_pass() {
+        streamed_stop_check(&stream_ending_with(&["hi"], "end_turn", "null")).unwrap();
+        check_stop(&json!({"content": [], "stop_reason": "end_turn"})).unwrap();
+        check_stop(
+            &json!({"content": [{"type": "text", "text": "x"}], "stop_reason": "stop_sequence"}),
+        )
+        .unwrap();
+        check_stop(&json!({})).unwrap();
+    }
+
+    #[test]
+    fn response_text_skips_non_text_blocks() {
+        let response = json!({"content": [
+            {"type": "thinking", "thinking": "hmm"},
+            {"type": "text", "text": "a"},
+            {"type": "text", "text": "b"},
+        ]});
+        assert_eq!(response_text(&response), "ab");
     }
 
     #[test]

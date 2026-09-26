@@ -73,20 +73,60 @@ describe('render_completion_messages', () => {
 		assert.deepEqual(messages, [{ role: 'user', content: 'there' }]);
 	});
 
-	test('uses the response text for assistant turns with a response', () => {
+	test('uses the current content of an edited assistant turn, not its response text', () => {
 		const messages = render_completion_messages([
-			create_test_turn('assistant', 'streamed', {
-				response: create_claude_response('final')
+			create_test_turn('user', 'hi'),
+			create_test_turn('assistant', 'edited answer', {
+				response: create_claude_response('original answer')
 			})
 		]);
-		assert.deepEqual(messages, [{ role: 'assistant', content: 'final' }]);
+		assert.deepEqual(messages, [
+			{ role: 'user', content: 'hi' },
+			{ role: 'assistant', content: 'edited answer' }
+		]);
 	});
 
-	test('skips assistant turns whose response text is empty', () => {
+	test('skips an assistant turn whose content was edited to empty', () => {
 		const messages = render_completion_messages([
-			create_test_turn('assistant', '', { response: create_claude_response('') })
+			create_test_turn('user', 'hi'),
+			create_test_turn('assistant', '', { response: create_claude_response('original') })
+		]);
+		assert.deepEqual(messages, [{ role: 'user', content: 'hi' }]);
+	});
+
+	test('drops assistant turns before the first user turn', () => {
+		const messages = render_completion_messages([
+			create_test_turn('user', 'first', { enabled: false }),
+			create_test_turn('assistant', 'orphaned reply'),
+			create_test_turn('system', 'be brief'),
+			create_test_turn('user', 'second'),
+			create_test_turn('assistant', 'answer')
+		]);
+		assert.deepEqual(messages, [
+			{ role: 'system', content: 'be brief' },
+			{ role: 'user', content: 'second' },
+			{ role: 'assistant', content: 'answer' }
+		]);
+	});
+
+	test('drops every assistant turn when no user turn remains', () => {
+		const messages = render_completion_messages([
+			create_test_turn('user', 'first', { error_message: 'x' }),
+			create_test_turn('assistant', 'a1'),
+			create_test_turn('assistant', 'a2')
 		]);
 		assert.deepEqual(messages, []);
+	});
+
+	test('keeps assistant turns when the provided array already has a user message', () => {
+		const messages = render_completion_messages(
+			[create_test_turn('assistant', 'a')],
+			[{ role: 'user', content: 'q' }]
+		);
+		assert.deepEqual(messages, [
+			{ role: 'user', content: 'q' },
+			{ role: 'assistant', content: 'a' }
+		]);
 	});
 
 	test('appends to the provided array', () => {

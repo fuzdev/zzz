@@ -37,6 +37,21 @@
 			<div><ErrorMessageInline>{turn.error_message}</ErrorMessageInline></div>
 		{:else if turn.cancelled}
 			<div><small class="text_60">stopped</small></div>
+		{:else if turn.truncation === 'context_window'}
+			<div>
+				<small
+					class="text_60"
+					title="the reply filled the model's context window and is incomplete"
+				>
+					truncated (context window)
+				</small>
+			</div>
+		{:else if turn.truncation}
+			<div>
+				<small class="text_60" title="the reply hit the output token limit and is incomplete">
+					truncated (max tokens)
+				</small>
+			</div>
 		{/if}
 	</div>
 </TurnContextmenu>

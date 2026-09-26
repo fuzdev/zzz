@@ -84,6 +84,7 @@ impl OpenAiProvider {
         } else {
             common::read_json_body(response, PROVIDER_NAME, signal).await?
         };
+        check_stop(&api_response).map_err(|message| ai_provider_error(PROVIDER_NAME, &message))?;
 
         Ok(common::build_completion_response(
             PROVIDER_NAME,
@@ -103,6 +104,9 @@ impl OpenAiProvider {
 #[derive(Debug, Default)]
 struct OpenAiStream {
     content: String,
+    /// The model's refusal text, streamed in `delta.refusal` instead of
+    /// `delta.content` — surfaced as the error, never as reply text.
+    refusal: String,
     completion_id: String,
     finish_reason: Option<String>,
     /// The final usage chunk — sent (with empty `choices`) just before
@@ -157,6 +161,14 @@ impl OpenAiStream {
             on_text(content);
         }
 
+        if let Some(refusal) = choice
+            .and_then(|c| c.get("delta"))
+            .and_then(|d| d.get("refusal"))
+            .and_then(Value::as_str)
+        {
+            self.refusal.push_str(refusal);
+        }
+
         if let Some(reason) = choice
             .and_then(|c| c.get("finish_reason"))
             .and_then(Value::as_str)
@@ -191,11 +203,49 @@ impl OpenAiStream {
                 "message": {
                     "role": "assistant",
                     "content": self.content,
+                    "refusal": (!self.refusal.is_empty()).then_some(self.refusal),
                 },
                 "finish_reason": self.finish_reason.unwrap_or_else(|| String::from("stop")),
             }],
             "usage": self.usage,
         }))
+    }
+}
+
+// -- Stop reasons -------------------------------------------------------------
+
+/// Check a finished Chat Completions response, from either path.
+///
+/// A refusal (`message.refusal`) is an error carrying the model's refusal
+/// text, and `finish_reason: content_filter` an error naming the filter —
+/// the frontend keeps any text that streamed in before either. A reply cut
+/// off by `finish_reason: length` with no text is an error too, since there
+/// is nothing to show; one with text passes, and the frontend reads
+/// `finish_reason` to mark it truncated.
+fn check_stop(response: &Value) -> Result<(), String> {
+    let Some(choice) = response.get("choices").and_then(|c| c.get(0)) else {
+        return Ok(());
+    };
+    let message = choice.get("message");
+    if let Some(refusal) = message
+        .and_then(|m| m.get("refusal"))
+        .and_then(Value::as_str)
+        .filter(|r| !common::is_blank(r))
+    {
+        return Err(format!("the model declined to respond: {refusal}"));
+    }
+    let content = message
+        .and_then(|m| m.get("content"))
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    match choice.get("finish_reason").and_then(Value::as_str) {
+        Some("content_filter") => Err(String::from(
+            "the response was blocked by a content filter (finish_reason: content_filter)",
+        )),
+        Some("length") if common::is_blank(content) => Err(common::truncated_without_text_message(
+            "finish_reason: length",
+        )),
+        _ => Ok(()),
     }
 }
 
@@ -213,11 +263,16 @@ fn build_request_body(options: &CompletionHandlerOptions, stream: bool) -> Value
     let mut body = json!({
         "model": options.model,
         "stream": stream,
-        "max_completion_tokens": opts.output_token_max,
         "messages": messages,
     });
 
     let obj = body.as_object_mut().unwrap_or_else(|| unreachable!());
+
+    // Unset, the model's own output limit applies — reasoning models spend
+    // part of it on hidden reasoning, so a small fixed cap can leave no text.
+    if let Some(max) = opts.output_token_max {
+        obj.insert("max_completion_tokens".to_owned(), json!(max));
+    }
 
     // Streaming responses carry no usage unless asked for; the API rejects
     // `stream_options` on non-streaming requests.
@@ -409,6 +464,18 @@ mod tests {
     }
 
     #[test]
+    fn request_body_omits_max_completion_tokens_by_default() {
+        assert!(
+            build_request_body(&opts(), true)
+                .get("max_completion_tokens")
+                .is_none()
+        );
+        let mut o = opts();
+        o.completion_options.output_token_max = Some(100);
+        assert_eq!(build_request_body(&o, false)["max_completion_tokens"], 100);
+    }
+
+    #[test]
     fn request_body_requests_usage_only_when_streaming() {
         let body = build_request_body(&opts(), true);
         assert_eq!(body["stream_options"]["include_usage"], true);
@@ -527,6 +594,104 @@ mod tests {
         let (stream, _, result) = run(&events);
         result.unwrap();
         assert!(stream.finish("m").is_err());
+    }
+
+    // -- Stop reasons --
+
+    /// Stream `events` to completion and run the stop check over the result.
+    fn streamed_stop_check(events: &[SseEvent]) -> Result<Value, String> {
+        let (stream, _, result) = run(events);
+        result.unwrap();
+        let response = stream.finish("m").unwrap();
+        check_stop(&response).map(|()| response)
+    }
+
+    fn stream_with_delta_and_finish(delta: &str, finish_reason: &str) -> Vec<SseEvent> {
+        vec![
+            data(&format!(
+                r#"{{"id":"c","choices":[{{"index":0,"delta":{delta}}}]}}"#
+            )),
+            data(&format!(
+                r#"{{"id":"c","choices":[{{"index":0,"delta":{{}},"finish_reason":"{finish_reason}"}}]}}"#
+            )),
+            data("[DONE]"),
+        ]
+    }
+
+    #[test]
+    fn stream_refusal_is_an_error_with_the_refusal_text() {
+        let events = vec![
+            data(
+                r#"{"id":"c","choices":[{"index":0,"delta":{"role":"assistant","content":null,"refusal":""}}]}"#,
+            ),
+            data(r#"{"id":"c","choices":[{"index":0,"delta":{"refusal":"I can't "}}]}"#),
+            data(r#"{"id":"c","choices":[{"index":0,"delta":{"refusal":"help with that."}}]}"#),
+            data(r#"{"id":"c","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#),
+            data("[DONE]"),
+        ];
+        let (_, deltas, _) = run(&events);
+        // refusal text never streams as reply text
+        assert!(deltas.is_empty());
+        assert_eq!(
+            streamed_stop_check(&events).unwrap_err(),
+            "the model declined to respond: I can't help with that."
+        );
+    }
+
+    #[test]
+    fn non_streaming_refusal_is_an_error() {
+        let response = json!({"choices": [{
+            "message": {"role": "assistant", "content": null, "refusal": "No."},
+            "finish_reason": "stop",
+        }]});
+        assert_eq!(
+            check_stop(&response).unwrap_err(),
+            "the model declined to respond: No."
+        );
+    }
+
+    #[test]
+    fn content_filter_is_an_error() {
+        let events = stream_with_delta_and_finish(r#"{"content":"partial"}"#, "content_filter");
+        let error = streamed_stop_check(&events).unwrap_err();
+        assert!(error.contains("finish_reason: content_filter"), "{error}");
+
+        let response = json!({"choices": [{
+            "message": {"role": "assistant", "content": ""},
+            "finish_reason": "content_filter",
+        }]});
+        assert!(check_stop(&response).is_err());
+    }
+
+    #[test]
+    fn length_with_text_passes_with_its_finish_reason() {
+        let response = streamed_stop_check(&full_stream()).unwrap();
+        assert_eq!(response["choices"][0]["finish_reason"], "length");
+        assert!(response["choices"][0]["message"]["refusal"].is_null());
+    }
+
+    #[test]
+    fn length_without_text_is_an_error() {
+        let events = stream_with_delta_and_finish("{}", "length");
+        let error = streamed_stop_check(&events).unwrap_err();
+        assert!(error.contains("finish_reason: length"), "{error}");
+
+        let response = json!({"choices": [{
+            "message": {"role": "assistant", "content": null},
+            "finish_reason": "length",
+        }]});
+        assert!(check_stop(&response).is_err());
+    }
+
+    #[test]
+    fn finished_replies_pass() {
+        streamed_stop_check(&stream_with_delta_and_finish(r#"{"content":"hi"}"#, "stop")).unwrap();
+        check_stop(&json!({"choices": [{
+            "message": {"role": "assistant", "content": "", "refusal": null},
+            "finish_reason": "stop",
+        }]}))
+        .unwrap();
+        check_stop(&json!({"choices": []})).unwrap();
     }
 
     #[test]

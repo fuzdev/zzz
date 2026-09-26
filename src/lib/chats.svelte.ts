@@ -91,8 +91,15 @@ export class Chats extends Cell<typeof ChatsJson> {
 		this.init();
 	}
 
+	/**
+	 * Adds a chat. Without a `name` it gets a unique default one that
+	 * auto-naming may replace; a given `name` is kept unless `json.autoname`
+	 * says otherwise.
+	 */
 	add(json?: ChatJsonInput, select?: boolean): Chat {
-		const j = !json?.name ? { ...json, name: this.generate_unique_name('new chat') } : json;
+		const j = !json?.name
+			? { ...json, name: this.generate_unique_name('new chat') }
+			: { autoname: false, ...json };
 		const chat = new Chat({ app: this.app, json: j });
 		return this.add_chat(chat, select);
 	}
@@ -112,7 +119,9 @@ export class Chats extends Cell<typeof ChatsJson> {
 	/**
 	 * Duplicates `chat` with a unique name and fresh, empty threads for the same
 	 * models — no threads or turns are shared with the original. The duplicate's
-	 * selected thread mirrors the original's by position.
+	 * selected thread mirrors the original's by position, and it inherits
+	 * `autoname`, so auto-naming leaves its name alone unless the original's
+	 * was still a default one.
 	 * Threads whose model can't be found are skipped.
 	 *
 	 * @param chat - the chat to duplicate

@@ -93,6 +93,7 @@ impl GeminiProvider {
             let api_response = common::read_json_body(response, PROVIDER_NAME, signal).await?;
             build_gemini_value(&api_response)
         };
+        check_stop(&value).map_err(|message| ai_provider_error(PROVIDER_NAME, &message))?;
 
         Ok(common::build_completion_response(
             PROVIDER_NAME,
@@ -211,6 +212,62 @@ fn is_final_chunk(data: &Value) -> bool {
     finished || blocked
 }
 
+// -- Stop reasons -------------------------------------------------------------
+
+/// Check a finished Gemini `value` payload, from either path.
+///
+/// A blocked prompt (`promptFeedback.blockReason`) is an error naming the
+/// reason, as is any candidate `finishReason` other than `STOP` and
+/// `MAX_TOKENS` — `SAFETY`, `RECITATION`, `PROHIBITED_CONTENT`, `BLOCKLIST`,
+/// `SPII`, `OTHER`, … — keeping any text that streamed in before it on the
+/// frontend. A `MAX_TOKENS` reply with no text is an error too, since there
+/// is nothing to show; one with text passes, and the frontend reads
+/// `finishReason` to mark it truncated.
+fn check_stop(value: &Value) -> Result<(), String> {
+    if let Some(block_reason) = value
+        .get("prompt_feedback")
+        .and_then(|f| f.get("blockReason"))
+        .and_then(Value::as_str)
+    {
+        return Err(format!(
+            "the prompt was blocked (blockReason: {block_reason})"
+        ));
+    }
+    let candidate = value.get("candidates").and_then(|c| c.get(0));
+    match candidate
+        .and_then(|c| c.get("finishReason"))
+        .and_then(Value::as_str)
+    {
+        None | Some("STOP") => Ok(()),
+        Some("MAX_TOKENS") => {
+            let text = value
+                .get("text")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if common::is_blank(text) {
+                Err(common::truncated_without_text_message(
+                    "finishReason: MAX_TOKENS",
+                ))
+            } else {
+                Ok(())
+            }
+        }
+        Some(reason) => {
+            let mut message =
+                format!("the response was blocked or stopped (finishReason: {reason})");
+            if let Some(detail) = candidate
+                .and_then(|c| c.get("finishMessage"))
+                .and_then(Value::as_str)
+                .filter(|m| !common::is_blank(m))
+            {
+                message.push_str(": ");
+                message.push_str(detail);
+            }
+            Err(message)
+        }
+    }
+}
+
 // -- Response extraction ------------------------------------------------------
 
 /// Build the `value` payload for the discriminated union — Gemini is the
@@ -323,7 +380,12 @@ fn build_request_body(options: &CompletionHandlerOptions) -> Value {
     let opts = &options.completion_options;
 
     let mut generation_config = serde_json::Map::new();
-    generation_config.insert("maxOutputTokens".to_owned(), json!(opts.output_token_max));
+    // Unset, the model's own output limit applies — the 2.5 models think by
+    // default and count those tokens here, so a small fixed cap can leave no
+    // text.
+    if let Some(max) = opts.output_token_max {
+        generation_config.insert("maxOutputTokens".to_owned(), json!(max));
+    }
     if let Some(t) = opts.temperature {
         generation_config.insert("temperature".to_owned(), json!(t));
     }
@@ -369,21 +431,19 @@ fn build_request_body(options: &CompletionHandlerOptions) -> Value {
 
 /// Convert `CompletionMessage[]` + prompt into Gemini `contents`.
 ///
-/// Skips `system`-role messages (`build_request_body` lifts them into
-/// `systemInstruction`) and blank messages. Non-user roles map to Gemini's
-/// `model`. Appends the prompt as a final user turn. Adjacent same-role
-/// messages merge into one content with multiple parts, so gaps in the
-/// history (e.g. an excluded errored assistant turn leaving two user
-/// messages in a row) can't break Gemini's user/model alternation.
+/// Sends `common::conversation_history`: `system`-role messages are skipped
+/// (`build_request_body` lifts them into `systemInstruction`), as are blank
+/// messages and any before the first user message (the conversation must
+/// open with a user turn). Non-user roles map to Gemini's `model`. Appends
+/// the prompt as a final user turn. Adjacent same-role messages merge into
+/// one content with multiple parts, so gaps in the history (e.g. an excluded
+/// errored assistant turn leaving two user messages in a row) can't break
+/// Gemini's user/model alternation.
 fn build_contents(completion_messages: Option<&[CompletionMessage]>, prompt: &str) -> Vec<Value> {
-    let history = completion_messages
-        .unwrap_or_default()
-        .iter()
-        .filter(|m| !common::is_system_message(m) && !common::is_blank(&m.content))
-        .map(|m| {
-            let role = if m.role == "user" { "user" } else { "model" };
-            (role, m.content.as_str())
-        });
+    let history = common::conversation_history(completion_messages).map(|m| {
+        let role = if m.role == "user" { "user" } else { "model" };
+        (role, m.content.as_str())
+    });
 
     let mut contents: Vec<Value> = Vec::new();
     for (role, text) in history.chain(std::iter::once(("user", prompt))) {
@@ -663,15 +723,149 @@ mod tests {
         o.completion_options.frequency_penalty = Some(0.1);
         o.completion_options.presence_penalty = Some(0.2);
         o.completion_options.stop_sequences = Some(vec!["X".to_owned()]);
+        o.completion_options.output_token_max = Some(100);
         let body = build_request_body(&o);
         let cfg = &body["generationConfig"];
-        assert!(cfg["maxOutputTokens"].is_number());
+        assert_eq!(cfg["maxOutputTokens"], 100);
         assert_eq!(cfg["temperature"], 0.5);
         assert_eq!(cfg["topK"], 20);
         assert_eq!(cfg["topP"], 0.9);
         assert_eq!(cfg["frequencyPenalty"], 0.1);
         assert_eq!(cfg["presencePenalty"], 0.2);
         assert_eq!(cfg["stopSequences"], json!(["X"]));
+    }
+
+    #[test]
+    fn request_body_omits_max_output_tokens_by_default() {
+        let body = build_request_body(&opts());
+        assert!(body["generationConfig"].get("maxOutputTokens").is_none());
+    }
+
+    #[test]
+    fn contents_start_with_a_user_message() {
+        // the first user turn was disabled, leaving its reply at the front
+        let history = vec![
+            msg("assistant", "orphaned"),
+            msg("user", "q"),
+            msg("assistant", "a"),
+        ];
+        let c = build_contents(Some(&history), "now");
+        let roles: Vec<_> = c.iter().map(|c| c["role"].as_str().unwrap()).collect();
+        assert_eq!(roles, vec!["user", "model", "user"]);
+        assert_eq!(c[0]["parts"], json!([{"text": "q"}]));
+
+        let c = build_contents(Some(&[msg("assistant", "only a reply")]), "now");
+        assert_eq!(c, vec![json!({"role": "user", "parts": [{"text": "now"}]})]);
+    }
+
+    // -- Stop reasons --
+
+    /// Stream `events` to completion and run the stop check over the result.
+    fn streamed_stop_check(events: &[SseEvent]) -> Result<Value, String> {
+        let (stream, _, result) = run(events);
+        result.unwrap();
+        let value = stream.finish().unwrap();
+        check_stop(&value).map(|()| value)
+    }
+
+    /// The non-streaming path: build the `value` from a full API response.
+    fn non_streaming_stop_check(api_response: &Value) -> Result<(), String> {
+        check_stop(&build_gemini_value(api_response))
+    }
+
+    #[test]
+    fn blocked_prompt_is_an_error_naming_the_reason() {
+        let error = streamed_stop_check(&[data(r#"{"promptFeedback":{"blockReason":"SAFETY"}}"#)])
+            .unwrap_err();
+        assert_eq!(error, "the prompt was blocked (blockReason: SAFETY)");
+
+        let error = non_streaming_stop_check(
+            &json!({"promptFeedback": {"blockReason": "PROHIBITED_CONTENT"}}),
+        )
+        .unwrap_err();
+        assert_eq!(
+            error,
+            "the prompt was blocked (blockReason: PROHIBITED_CONTENT)"
+        );
+    }
+
+    #[test]
+    fn blocking_finish_reasons_are_errors() {
+        for reason in [
+            "SAFETY",
+            "RECITATION",
+            "PROHIBITED_CONTENT",
+            "BLOCKLIST",
+            "SPII",
+            "OTHER",
+        ] {
+            let events = [
+                data(
+                    r#"{"candidates":[{"content":{"parts":[{"text":"partial"}],"role":"model"}}]}"#,
+                ),
+                data(&format!(
+                    r#"{{"candidates":[{{"finishReason":"{reason}","safetyRatings":[]}}]}}"#
+                )),
+            ];
+            let (_, deltas, _) = run(&events);
+            assert_eq!(deltas, vec!["partial"], "partial text still streams");
+            let error = streamed_stop_check(&events).unwrap_err();
+            assert_eq!(
+                error,
+                format!("the response was blocked or stopped (finishReason: {reason})")
+            );
+
+            let error = non_streaming_stop_check(
+                &json!({"candidates": [{"content": {"parts": [], "role": "model"}, "finishReason": reason}]}),
+            )
+            .unwrap_err();
+            assert!(error.contains(reason), "{error}");
+        }
+    }
+
+    #[test]
+    fn finish_message_is_appended() {
+        let error = non_streaming_stop_check(&json!({"candidates": [{
+            "finishReason": "OTHER",
+            "finishMessage": "Unexpected tool call.",
+        }]}))
+        .unwrap_err();
+        assert_eq!(
+            error,
+            "the response was blocked or stopped (finishReason: OTHER): Unexpected tool call."
+        );
+    }
+
+    #[test]
+    fn max_tokens_with_text_passes_with_its_finish_reason() {
+        let value = streamed_stop_check(&[data(
+            r#"{"candidates":[{"content":{"parts":[{"text":"cut"}],"role":"model"},"finishReason":"MAX_TOKENS"}]}"#,
+        )])
+        .unwrap();
+        assert_eq!(value["candidates"][0]["finishReason"], "MAX_TOKENS");
+    }
+
+    #[test]
+    fn max_tokens_without_text_is_an_error() {
+        // every token went to thinking
+        let error = streamed_stop_check(&[data(
+            r#"{"candidates":[{"content":{"role":"model"},"finishReason":"MAX_TOKENS"}],"usageMetadata":{"thoughtsTokenCount":8190}}"#,
+        )])
+        .unwrap_err();
+        assert!(error.contains("finishReason: MAX_TOKENS"), "{error}");
+
+        let error = non_streaming_stop_check(
+            &json!({"candidates": [{"content": {"role": "model"}, "finishReason": "MAX_TOKENS"}]}),
+        )
+        .unwrap_err();
+        assert!(error.contains("before producing any text"), "{error}");
+    }
+
+    #[test]
+    fn finished_replies_pass() {
+        streamed_stop_check(&full_stream()).unwrap();
+        non_streaming_stop_check(&json!({"candidates": [{"finishReason": "STOP"}]})).unwrap();
+        non_streaming_stop_check(&json!({})).unwrap();
     }
 
     #[test]
