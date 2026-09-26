@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { create_context } from '@fuzdev/fuz_ui/context_helpers.ts';
 import { page } from '$app/state';
-import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
+import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
 import { Cell, type CellOptions } from '$lib/cell.svelte.ts';
@@ -17,6 +17,7 @@ import { PageViewmodel } from './page_viewmodel.svelte.ts';
 import { DomainViewmodel } from './domain_viewmodel.svelte.ts';
 import { RepoViewmodel } from './repo_viewmodel.svelte.ts';
 import { HANDLED } from '$lib/cell_helpers.ts';
+import { parse_url_param_uuid } from '$lib/url_params_helpers.ts';
 import { get_unique_name } from '$lib/helpers.ts';
 import { create_sample_projects as create_example_projects } from './example_projects.ts';
 
@@ -62,10 +63,8 @@ export class Projects extends Cell<typeof ProjectsJson> {
 		this.current_project?.domains.find((d) => d.id === this.current_domain_id) || null
 	);
 
-	readonly current_repo_id = $derived.by(() => {
-		const repo_id = this.page_matches.params.repo_id;
-		return repo_id ? Uuid.parse(repo_id) : null;
-	});
+	// an invalid `repo_id` param means no repo, not a throw inside `$derived`
+	readonly current_repo_id = $derived(parse_url_param_uuid(this.page_matches.params.repo_id));
 
 	readonly current_repo = $derived.by(() => {
 		return this.current_project?.repos.find((r) => r.id === this.current_repo_id) || null;

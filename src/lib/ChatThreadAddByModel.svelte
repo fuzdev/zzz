@@ -17,7 +17,7 @@
 	} = $props();
 </script>
 
-<div {...attrs} class="p_sm ${attrs?.class}">
+<div {...attrs} class="p_sm {attrs?.class}">
 	<header class="mb_md font_size_lg">add by model</header>
 	<ModelPicker
 		onpick={(model) => {

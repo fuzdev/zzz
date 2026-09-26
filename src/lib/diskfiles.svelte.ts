@@ -36,6 +36,14 @@ export type DiskfilesJsonInput = z.input<typeof DiskfilesJson>;
 
 export interface DiskfilesOptions extends CellOptions<typeof DiskfilesJson> {}
 
+/** Records the paths `filer_change` touches while a file-tree snapshot is in flight. */
+export interface DiskfileChangeTracker {
+	/** Paths `Diskfiles.handle_change` touched since tracking started. */
+	readonly paths: ReadonlySet<string>;
+	/** Stops recording. */
+	stop: () => void;
+}
+
 export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	readonly items: IndexedCollection<Diskfile> = new IndexedCollection({
 		dispose_item: (diskfile) => diskfile.dispose(),
@@ -85,12 +93,29 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		this.init();
 	}
 
+	// not reactive — bookkeeping for snapshot requests in flight
+	readonly #change_trackers: Set<Set<string>> = new Set();
+
+	/**
+	 * Starts recording the paths `handle_change` touches. Start it before
+	 * requesting a file-tree snapshot and pass its `paths` to `add_initial`, so
+	 * the snapshot doesn't overwrite what `filer_change` reported while the
+	 * request was in flight — a notification is at least as new as the snapshot,
+	 * so a file it deleted isn't resurrected and newer content isn't reverted.
+	 */
+	track_changes(): DiskfileChangeTracker {
+		const paths: Set<string> = new Set();
+		this.#change_trackers.add(paths);
+		return { paths, stop: () => this.#change_trackers.delete(paths) };
+	}
+
 	/**
 	 * Applies a `filer_change` notification. `add` and `change` both upsert by
 	 * path — the backend's add/change split is advisory, and a re-seed or a
 	 * missed delete must never leave two diskfiles for one path.
 	 */
 	handle_change(params: ActionInputs['filer_change']): void {
+		for (const paths of this.#change_trackers) paths.add(params.disknode.id);
 		switch (params.change.type) {
 			case 'add':
 			case 'change': {
@@ -139,9 +164,14 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Seed diskfiles from an initial file tree (e.g. session load or workspace open).
 	 * Upserts by path, so overlapping seeds don't duplicate.
+	 *
+	 * @param files - the snapshot's file tree
+	 * @param skip_paths - paths `filer_change` touched while the snapshot was in
+	 * flight (see `track_changes`), whose snapshot entries are stale
 	 */
-	add_initial(files: Array<SerializableDisknode>): void {
+	add_initial(files: Array<SerializableDisknode>, skip_paths?: ReadonlySet<string>): void {
 		for (const disknode of files) {
+			if (skip_paths?.has(disknode.id)) continue;
 			this.upsert(disknode);
 		}
 	}

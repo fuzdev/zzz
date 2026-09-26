@@ -1,7 +1,9 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { page } from '$app/state';
 
 	import type { BrowserTab } from './browser_tab.svelte.ts';
+	import { to_browser_tab_iframe_src } from './browser_helpers.ts';
 
 	const {
 		tab,
@@ -12,6 +14,8 @@
 	} = $props();
 
 	// Function to extract title from iframe content
+	// TODO both iframes are sandboxed without `allow-same-origin`, so they're
+	// opaque-origin and `contentDocument` is always null — find another way to get titles
 	function handle_iframe_load(event: Event): void {
 		const iframe = event.target as HTMLIFrameElement;
 		try {
@@ -25,6 +29,12 @@
 			console.log('Unable to access iframe content:', error);
 		}
 	}
+
+	// untrusted pages load in an opaque origin (no `allow-same-origin`), and
+	// URLs that could reach the app are refused outright
+	const iframe_src = $derived(
+		tab.type === 'external_url' ? to_browser_tab_iframe_src(tab.url, page.url.origin) : null
+	);
 
 	// Wrap HTML content with proper background styling
 	const wrapped_content = $derived(
@@ -64,14 +74,23 @@ ${tab.content}
 			></iframe>
 		</div>
 	{:else if tab.type === 'external_url'}
-		<div class="iframe-container">
-			<iframe
-				title={tab.title}
-				src={tab.url}
-				sandbox="allow-scripts allow-same-origin"
-				onload={handle_iframe_load}
-			></iframe>
-		</div>
+		{#if iframe_src}
+			<div class="iframe-container">
+				<iframe
+					title={tab.title}
+					src={iframe_src}
+					sandbox="allow-scripts"
+					onload={handle_iframe_load}
+				></iframe>
+			</div>
+		{:else}
+			<div class="p_lg">
+				<p>
+					can't open <code class="overflow-wrap:anywhere">{tab.url}</code> — tabs load only
+					<code>http</code> and <code>https</code> URLs from other sites
+				</p>
+			</div>
+		{/if}
 	{:else}
 		<!-- Raw tab content -->
 		<div class="p_lg">

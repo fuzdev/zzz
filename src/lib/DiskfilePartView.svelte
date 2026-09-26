@@ -14,20 +14,24 @@
 
 	const app = frontend_context.get();
 
+	// a turn part in `app.parts` — shown without an owner, since several turns may share it
 	const part = $derived(diskfile.part);
 
-	const referenced_by_prompts = $derived(part ? app.prompts.filter_by_part(part) : null);
+	// prompts own their part instances, so they're matched by path
+	const referenced_by_prompts = $derived(app.prompts.filter_by_diskfile_path(diskfile.path));
 </script>
 
-{#if part}
+{#if part || referenced_by_prompts.length}
 	<div class="panel p_md" transition:slide>
-		<h3 class="mt_0 mb_sm">Referenced by part</h3>
+		<h3 class="mt_0 mb_sm">Referenced by</h3>
 
 		<div class="column gap_xs">
 			<div class="part-reference">
-				<PartSummary {part} />
+				{#if part}
+					<PartSummary {part} />
+				{/if}
 
-				{#if referenced_by_prompts?.length}
+				{#if referenced_by_prompts.length}
 					<div class="prompt-refs font_size_xs mt_xs2">
 						<span class="text_50">In prompt{referenced_by_prompts.length !== 1 ? 's' : ''}:</span>
 						{#each referenced_by_prompts as prompt (prompt.id)}

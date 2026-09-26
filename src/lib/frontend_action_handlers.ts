@@ -25,10 +25,9 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		send_request: () => {
 			console.log('[frontend_action_handlers] loading session...');
 		},
-		receive_response: ({ data: { output, response } }) => {
+		// `Frontend.load_session` applies the snapshot and retries failures
+		receive_response: ({ data: { response } }) => {
 			console.log('[frontend_action_handlers] session loaded:', response);
-
-			frontend.receive_session(output.data);
 		},
 		receive_error: ({ data: { error } }) => {
 			console.error('[frontend_action_handlers] session load failed:', error);
@@ -197,10 +196,7 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 					'[frontend_action_handlers] completion turn has no assistant text part, cancelling:',
 					progress_token
 				);
-				const thread = turn.thread_id
-					? frontend.threads.items.by_id.get(turn.thread_id)
-					: undefined;
-				if (!thread?.cancel_pending_turn(turn)) turn.cancelled = true;
+				turn.cancel_completion();
 			}
 		}
 	},
@@ -246,13 +242,8 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		}
 	},
 
+	// `Workspaces.open` adds the workspace and its file tree
 	workspace_open: {
-		receive_response: ({ data: { output } }) => {
-			const workspace = frontend.workspaces.add(output.workspace);
-			workspace.watch_status = output.watch_status;
-			// populate diskfiles from initial file tree
-			frontend.diskfiles.add_initial(output.files);
-		},
 		receive_error: ({ data: { error } }) => {
 			console.error('[frontend_action_handlers] workspace_open failed:', error);
 		}

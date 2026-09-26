@@ -73,6 +73,10 @@
 <div class="height:100% overflow:auto scrollbar-width:thin">
 	{#if zzz_dir === undefined}
 		<div>&nbsp;</div>
+	{:else if zzz_dir === null && app.session_status === 'failure'}
+		<div class="row height-input-height px_xs">
+			<small class="ellipsis" title={app.session_error}>session failed to load, retrying</small>
+		</div>
 	{:else if zzz_dir === null}
 		<div class="row height-input-height"><PendingAnimation /></div>
 	{:else}

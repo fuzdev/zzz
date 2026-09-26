@@ -13,7 +13,7 @@
 		run = () => {
 			enabled = !enabled;
 		},
-		label = 'item',
+		label,
 		children,
 		...rest
 	}: OmitStrict<Partial<ComponentProps<typeof ContextmenuEntry>>, 'children'> & {
@@ -37,7 +37,7 @@
 
 {#snippet children_default(enabled: boolean)}
 	{#if enabled}disable{:else}enable{/if}
-	{label}
+	{label ?? 'item'}
 {/snippet}
 
 {#snippet icon_default()}

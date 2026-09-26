@@ -2,6 +2,8 @@ import { create_context } from '@fuzdev/fuz_ui/context_helpers.ts';
 import { SvelteMap } from 'svelte/reactivity';
 import { z } from 'zod';
 import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
+import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
+import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 import type { Assignable, ClassConstructor, OmitStrict } from '@fuzdev/fuz_util/types.ts';
 import { ActionRegistry } from '@fuzdev/fuz_app/actions/action_registry.ts';
 import { ActionEventPhase, type ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';
@@ -52,6 +54,11 @@ import { create_frontend_action_handlers } from './frontend_action_handlers.ts';
 
 // TODO this is over-used, see also `app_context` for the user pattern
 export const frontend_context = create_context<Frontend>();
+
+/** Delay before the first `session_load` retry, doubling per failure. */
+export const SESSION_LOAD_RETRY_DELAY = 1_000;
+/** Cap on the `session_load` retry delay. */
+export const SESSION_LOAD_RETRY_DELAY_MAX = 30_000;
 
 export const FrontendJson = CellJson.extend({
 	ui: UiJson.default(() => UiJson.parse({}))
@@ -174,6 +181,19 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	/** See into Zzz's future. */
 	futuremode = $state.raw(false);
 
+	/**
+	 * Status of loading the session snapshot with `load_session` — `'failure'`
+	 * while waiting to retry.
+	 */
+	session_status: AsyncStatus = $state.raw('initial');
+
+	/** Why the last `session_load` failed, cleared when one succeeds. */
+	session_error: string | null = $state.raw(null);
+
+	#session_retry_timeout: ReturnType<typeof setTimeout> | null = null;
+	#session_retry_count = 0;
+	#disposed = false;
+
 	readonly #on_unauthenticated: (() => void) | null;
 
 	constructor(options: FrontendOptions = EMPTY_OBJECT) {
@@ -281,14 +301,81 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 	// TODO think about what the scope of the frontend object's API should be, keep it more minimal than these methods
 
+	/**
+	 * Loads the session snapshot (`session_load`) and applies it, retrying with
+	 * backoff (`SESSION_LOAD_RETRY_DELAY` doubling to `SESSION_LOAD_RETRY_DELAY_MAX`)
+	 * until one succeeds or the app is disposed. Calling it while a retry waits
+	 * retries now.
+	 *
+	 * Snapshot entries for paths a `filer_change` touched while the request was
+	 * in flight are skipped, since the notification is at least as new.
+	 *
+	 * @returns whether this attempt succeeded
+	 */
+	async load_session(): Promise<boolean> {
+		if (this.#disposed || this.session_status === 'pending') return false;
+		this.#clear_session_retry();
+		this.session_status = 'pending';
+
+		let error_message: string;
+		const changes = this.diskfiles.track_changes();
+		try {
+			const result = await this.api.session_load();
+			changes.stop();
+			if (this.#disposed) return false;
+			if (result.ok) {
+				this.receive_session(result.value.data, changes.paths);
+				this.session_status = 'success';
+				this.session_error = null;
+				this.#session_retry_count = 0;
+				return true;
+			}
+			error_message = result.error.message;
+		} catch (error) {
+			// a throw sending the request or applying the snapshot is retried like a failed load
+			changes.stop();
+			if (this.#disposed) return false;
+			console.error('[frontend] session load failed:', error);
+			error_message = to_error_message(error);
+		}
+
+		this.session_status = 'failure';
+		this.session_error = error_message;
+		const delay = Math.min(
+			SESSION_LOAD_RETRY_DELAY * 2 ** this.#session_retry_count,
+			SESSION_LOAD_RETRY_DELAY_MAX
+		);
+		this.#session_retry_count++;
+		this.#session_retry_timeout = setTimeout(() => {
+			this.#session_retry_timeout = null;
+			void this.load_session();
+		}, delay);
+		return false;
+	}
+
+	#clear_session_retry(): void {
+		if (this.#session_retry_timeout === null) return;
+		clearTimeout(this.#session_retry_timeout);
+		this.#session_retry_timeout = null;
+	}
+
 	// TODO refactor, probably `app.session`
-	receive_session(data: ActionOutputs['session_load']['data']): void {
+	/**
+	 * Applies a session snapshot.
+	 *
+	 * @param data - the `session_load` output's snapshot
+	 * @param skip_paths - paths whose file-tree entries are stale (see `Diskfiles.add_initial`)
+	 */
+	receive_session(
+		data: ActionOutputs['session_load']['data'],
+		skip_paths?: ReadonlySet<string>
+	): void {
 		this.zzz_dir = data.zzz_dir;
 		this.scoped_dirs = data.scoped_dirs;
 		this.provider_status = data.provider_status;
 
 		if (Array.isArray(data.files)) {
-			this.diskfiles.add_initial(data.files);
+			this.diskfiles.add_initial(data.files, skip_paths);
 		}
 
 		if (Array.isArray(data.workspaces)) {
@@ -353,10 +440,12 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	}
 
 	/**
-	 * Tear the app down: closes the socket (no reconnect loop is left behind)
-	 * and stops the cells that own timers, then unregisters.
+	 * Tear the app down: closes the socket (no reconnect loop is left behind),
+	 * stops `session_load` retries and the cells that own timers, then unregisters.
 	 */
 	override dispose(): void {
+		this.#disposed = true;
+		this.#clear_session_retry();
 		this.socket.disconnect();
 		this.terminals.dispose();
 		this.time.dispose();

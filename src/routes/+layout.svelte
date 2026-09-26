@@ -81,7 +81,7 @@
 
 		if (BROWSER) {
 			(window as any).app = new_app; // no types for this, just for runtime convenience
-			void new_app.api.session_load();
+			void new_app.load_session();
 		}
 	};
 

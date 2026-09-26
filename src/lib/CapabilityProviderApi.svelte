@@ -35,19 +35,24 @@
 				: 'SECRET_GOOGLE_API_KEY'
 	);
 
-	onMount(() => {
-		void capabilities.providers[provider_name].init_check();
+	// the provider check is skipped until a ping has shown the backend is up
+	onMount(async () => {
+		await capabilities.init_backend_check();
+		await capabilities.providers[provider_name].init_check();
 	});
+
+	// a failed reload, shown until the provider status refreshes some other way
+	let reload_failure: { message: string; updated: number | null } | null = $state.raw(null);
+	const reload_error = $derived.by(() =>
+		reload_failure?.updated === capability.updated ? reload_failure.message : null
+	);
 
 	const reload_status = async () => {
 		checking = true;
-		try {
-			await app.api.provider_load_status({ provider_name });
-		} catch (error) {
-			console.error(`Failed to check ${provider_name} connection:`, error);
-		} finally {
-			checking = false;
-		}
+		reload_failure = null;
+		const result = await app.api.provider_load_status({ provider_name });
+		checking = false;
+		if (!result.ok) reload_failure = { message: result.error.message, updated: capability.updated };
 	};
 </script>
 
@@ -80,7 +85,9 @@
 							{/if}
 						</div>
 						<span class="font_family_mono font_size_sm">
-							{#if capability.error_message}
+							{#if reload_error}
+								failed to reload: {reload_error}
+							{:else if capability.error_message}
 								{capability.error_message}
 							{:else if capability.status === 'success'}
 								available
@@ -98,12 +105,7 @@
 						set <code>{env_var_name}</code> in the server's environment and restart
 					</p>
 					<div class="display:flex justify-content:space-between gap_xs">
-						<button
-							type="button"
-							class="flex:1"
-							disabled={checking || !capabilities.backend_available}
-							onclick={reload_status}
-						>
+						<button type="button" class="flex:1" disabled={checking} onclick={reload_status}>
 							reload
 						</button>
 					</div>

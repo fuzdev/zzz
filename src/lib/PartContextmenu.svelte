@@ -8,23 +8,23 @@
 	import DialogContent from '@fuzdev/fuz_ui/DialogContent.svelte';
 
 	import type { PartUnion } from './part.svelte.ts';
-	import { frontend_context } from './frontend.svelte.ts';
 	import { icon_delete, icon_edit, icon_part } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import PartView from './PartView.svelte';
-	import { get_part_type_icon } from './part_helpers.ts';
+	import { get_part_type_icon, type PartOwner } from './part_helpers.ts';
 	import ContextmenuEntryToggle from './ContextmenuEntryToggle.svelte';
 
 	const {
 		part,
+		owner,
 		...rest
 	}: OmitStrict<ComponentProps<typeof Contextmenu>, 'entries'> & {
 		part: PartUnion;
+		/** What the part belongs to — without one, there's no delete entry. */
+		owner?: PartOwner | undefined;
 		children: Snippet;
 	} = $props();
-
-	const app = frontend_context.get();
 
 	let show_editor = $state.raw(false);
 </script>
@@ -56,18 +56,20 @@
 				<span>edit part</span>
 			</ContextmenuEntry>
 
-			<ContextmenuEntry
-				icon={icon_delete}
-				run={() => {
-					// TODO @many better confirmation
-					// eslint-disable-next-line no-alert
-					if (confirm(`Are you sure you want to delete this part "${part.name || 'unnamed'}"?`)) {
-						app.parts.remove(part.id);
-					}
-				}}
-			>
-				<span>delete part</span>
-			</ContextmenuEntry>
+			{#if owner}
+				<ContextmenuEntry
+					icon={icon_delete}
+					run={() => {
+						// TODO @many better confirmation
+						// eslint-disable-next-line no-alert
+						if (confirm(`Are you sure you want to delete this part "${part.name || 'unnamed'}"?`)) {
+							owner.remove_part(part.id);
+						}
+					}}
+				>
+					<span>delete part</span>
+				</ContextmenuEntry>
+			{/if}
 		{/snippet}
 	</ContextmenuSubmenu>
 {/snippet}
@@ -76,7 +78,7 @@
 	<Dialog onclose={() => (show_editor = false)}>
 		<DialogContent>
 			<h2 class="mt_0 mb_sm"><Svg data={icon_part} /> edit part</h2>
-			<PartView {part} />
+			<PartView {part} {owner} />
 		</DialogContent>
 	</Dialog>
 {/if}

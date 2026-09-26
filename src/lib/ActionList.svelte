@@ -28,8 +28,9 @@
 	// Count total actions for the "showing X of Y" action
 	const total_actions = $derived(actions.items.size);
 
+	// the newest `limit` actions — `values` is in insertion order, oldest first
 	// TODO inefficient, query collection better probably
-	const items = $derived(actions.items.values.slice(0, limit));
+	const items = $derived(limit > 0 ? actions.items.values.slice(-limit) : []);
 </script>
 
 <div {...attrs} class="flex:1 unstyled overflow:auto scrollbar-width:thin {attrs?.class}">

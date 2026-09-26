@@ -8,14 +8,18 @@
 	import { app_context } from './app.svelte.ts';
 	import TimeWidget from './TimeWidget.svelte';
 	import { random_item } from '@fuzdev/fuz_util/random.ts';
+	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
 	const app = app_context.get();
 
 	const { actions } = $derived(app);
 
-	// TODO could potentially be removed from the collection by some external process,
-	// so having this state be component-local solves some problems but not all
-	let selected_action: Action | null = $state.raw(null);
+	// looked up by id, so an action deleted from history or trimmed past the
+	// history limit deselects instead of lingering disposed
+	let selected_action_id: Uuid | null = $state.raw(null);
+	const selected_action: Action | null = $derived(
+		selected_action_id === null ? null : (actions.items.by_id.get(selected_action_id) ?? null)
+	);
 </script>
 
 <div class="column p_lg height:100%">
@@ -35,7 +39,6 @@
 			class="sm"
 			onclick={() => {
 				actions.items.clear();
-				selected_action = null;
 			}}
 			disabled={!actions.items.size}
 		>
@@ -55,9 +58,9 @@
 		>
 			<ActionList
 				limit={100}
-				selected_action_id={selected_action?.id}
+				{selected_action_id}
 				onselect={(action) => {
-					selected_action = action;
+					selected_action_id = action.id;
 				}}
 			/>
 		</div>
@@ -73,7 +76,7 @@
 							type="button"
 							class="inline palette_f"
 							onclick={() => {
-								selected_action = random_item(actions.items.values);
+								selected_action_id = random_item(actions.items.values).id;
 							}}
 						>
 							go fish

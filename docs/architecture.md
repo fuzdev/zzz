@@ -706,7 +706,14 @@ page.
 
 The initial file listing comes from `session_load` (the backend rescans and
 flattens every active filer's index), and `workspace_open` returns the opened
-workspace's index so the new tree appears immediately. `Diskfiles` upserts by
+workspace's index so the new tree appears immediately. `Frontend.load_session`
+runs `session_load` and retries a failure with backoff (1s doubling to 30s)
+until it succeeds, tracking progress in `session_status` / `session_error`;
+`Workspaces.open` does the same snapshot handling for `workspace_open`. Both
+record the paths `filer_change` touches while their request is in flight
+(`Diskfiles.track_changes`) and skip those snapshot entries, since the
+notification is at least as new — a file deleted mid-request isn't
+resurrected, and newer content isn't reverted. `Diskfiles` upserts by
 path — for seeds and for both `add` and `change` — so a path never has two
 `Diskfile`s. A `delete` closes the file's tabs, moves selection, and drops its
 history — unless the file is open in a tab and its history holds unsaved
@@ -747,8 +754,8 @@ separate concerns":
   keeps it the protected default. Space state is in-memory (DB persistence
   is planned).
 
-The two meet in `DeskMenu.svelte`: toggling a directory into the active Space
-first ensures its workspace is open. Opening brand-new directories happens on
+The two meet in `DeskMenu.svelte`, which lists the open workspaces to toggle
+into the active Space. Opening brand-new directories happens on
 `/workspaces` (path input → `workspace_open`; the `?workspace=<path>` query
 param auto-opens — this is how the CLI's `zzz <dir>` lands the browser on a
 workspace). Both paths require an absolute path (a leading `~` isn't
@@ -771,13 +778,17 @@ capabilities" deploy.
 Population, per capability:
 
 - `backend` — driven by `ping` (the ping action's frontend handlers forward
-  to `capabilities.handle_ping_*`); keeps a rolling round-trip-time history
+  to `capabilities.handle_ping_*`); keeps a rolling round-trip-time history.
+  Once connected, a new ping keeps the connected status until it answers or
+  fails, so periodic pings don't flicker it
 - `websocket` — `$derived` off the `Socket` wrapper's connection state; its
   panel is also a live control surface (connect/disconnect, heartbeat and
   reconnect tuning — the setters coerce and clamp input, and the heartbeat's
   receive timeout scales with its interval so an idle socket isn't closed)
 - `filesystem` — `$derived` off `zzz_dir`/`scoped_dirs` from `session_load`,
-  gated on backend status
+  gated on backend status; after a `session_load` fails (to load or to
+  apply) it reads as failed with the error, and until a load succeeds its
+  panel offers "retry now" (`load_session`) ahead of the next scheduled retry
 - `providers` — one `ProviderCapability` per provider, `$derived` off
   `Frontend.provider_status`, populated by `session_load` and refreshed via
   `provider_load_status`. Provider keys are env-only

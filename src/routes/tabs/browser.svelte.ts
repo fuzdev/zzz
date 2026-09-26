@@ -7,6 +7,7 @@ import { CellJson } from '$lib/cell_types.ts';
 import { BrowserTabs } from './browser_tabs.svelte.ts';
 import { BrowserTabJson } from './browser_tab.svelte.ts';
 import { HANDLED } from '$lib/cell_helpers.ts';
+import { to_browser_tab_url } from './browser_helpers.ts';
 
 export const BrowserJson = CellJson.extend({
 	tabs: z.array(BrowserTabJson).default(() => []),
@@ -96,8 +97,11 @@ export class Browser extends Cell<typeof BrowserJson> {
 		this.edited_url = this.tabs.selected_url;
 	}
 
+	/**
+	 * Navigates to the address bar's URL, adding `https://` when it has no scheme.
+	 */
 	submit_edited_url(): void {
-		this.navigate_to(this.edited_url);
+		this.navigate_to(to_browser_tab_url(this.edited_url));
 	}
 
 	reorder_tab(from_index: number, to_index: number): void {

@@ -175,7 +175,7 @@
 							<li in:fade={{ duration: DURATION_SM }}>
 								<!-- the extra wrapper makes the grid items not stretch vertically -->
 								<div class="shade_00 border_radius_xs p_sm">
-									<PartView {part} />
+									<PartView {part} owner={app.prompts.selected} />
 								</div>
 							</li>
 						{/each}

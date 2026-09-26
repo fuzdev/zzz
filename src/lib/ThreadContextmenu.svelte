@@ -52,7 +52,11 @@
 				<ContextmenuEntry
 					icon={icon_remove}
 					run={() => {
-						thread.remove_all_turns();
+						// TODO @many better confirmation
+						// eslint-disable-next-line no-alert
+						if (confirm(`Clear this conversation with ${thread.model_name}?`)) {
+							thread.remove_all_turns();
+						}
 					}}
 				>
 					<span>clear conversation</span>

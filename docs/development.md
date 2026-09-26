@@ -149,7 +149,7 @@ Components use `PascalCase` with domain prefixes:
 - `Diskfile` — File editor. Examples: `DiskfileEditorView`, `DiskfileExplorer`
 - `Model` — Model management. Examples: `ModelListitem`, `ModelPickerDialog`
 - `Part` — Content parts. Examples: `PartView`, `PartEditorForText`
-- `Prompt` — Prompts. Examples: `PromptList`, `PromptPickerDialog`
+- `Prompt` — Prompts. Examples: `PromptList`, `PromptListitem`
 - `Terminal` — Terminals. Examples: `TerminalRunner`, `TerminalView`, `TerminalContextmenu`
 - `Thread` — Threads. Examples: `ThreadList`, `ThreadContextmenu`
 - `Turn` — Turns. Examples: `TurnView`, `TurnListitem`

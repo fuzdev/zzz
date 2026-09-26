@@ -179,3 +179,31 @@ describe('removing threads from a chat', () => {
 		assert.strictEqual(app.parts.items.size, 0);
 	});
 });
+
+describe('removing the last selected chat off its route', () => {
+	/** Selects `chat` then leaves the chats route, as navigating elsewhere does. */
+	const select_then_leave = (chat: Chat): void => {
+		app.chats.selected_id = chat.id;
+		app.chats.selected_id = null;
+	};
+
+	test('forgets it, so nav links stop pointing at it', () => {
+		const chat = create_chat('a');
+		select_then_leave(chat);
+		assert.strictEqual(app.chats.selected_id_last_non_null, chat.id);
+
+		app.chats.remove(chat.id);
+
+		assert.strictEqual(app.chats.selected_id_last_non_null, null);
+	});
+
+	test('keeps it when another chat is removed', () => {
+		const chat = create_chat('a');
+		const other = create_chat('b');
+		select_then_leave(chat);
+
+		app.chats.remove_many([other.id]);
+
+		assert.strictEqual(app.chats.selected_id_last_non_null, chat.id);
+	});
+});

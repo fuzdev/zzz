@@ -5,6 +5,7 @@ import { estimate_token_count } from './helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import type { PartUnion, TextPart } from './part.svelte.ts';
 import type { Frontend } from './frontend.svelte.ts';
+import type { Thread } from './thread.svelte.ts';
 import { TurnJson } from './turn_types.ts';
 import type { CompletionRequest, CompletionResponse, CompletionRole } from './completion_types.ts';
 
@@ -118,13 +119,36 @@ export class Turn extends Cell<typeof TurnJson> {
 		}
 	}
 
+	/**
+	 * Removes a part from this turn, and from `app.parts` unless another turn
+	 * still references it. Removing the `completion_part` while its thread's
+	 * in-flight completion streams into this turn cancels that completion
+	 * first — its output has nowhere to go. An idle turn is left as is.
+	 *
+	 * @returns whether the turn had the part
+	 */
 	remove_part(part_id: Uuid): boolean {
 		const index = this.part_ids.indexOf(part_id);
-		if (index !== -1) {
-			this.part_ids.splice(index, 1);
-			return true;
+		if (index === -1) return false;
+		if (this.completion_part?.id === part_id) {
+			this.#get_thread()?.cancel_pending_turn(this);
 		}
-		return false;
+		this.part_ids.splice(index, 1);
+		this.app.parts.remove_unreferenced([part_id]);
+		return true;
+	}
+
+	/**
+	 * Cancels the completion streaming into this turn — through its thread when
+	 * it's the thread's pending turn, so the request is aborted too — settling
+	 * the turn so late chunks are ignored.
+	 */
+	cancel_completion(): void {
+		if (!this.#get_thread()?.cancel_pending_turn(this)) this.cancelled = true;
+	}
+
+	#get_thread(): Thread | undefined {
+		return this.thread_id ? this.app.threads.items.by_id.get(this.thread_id) : undefined;
 	}
 
 	// // A2A protocol serialization (commented out for now)

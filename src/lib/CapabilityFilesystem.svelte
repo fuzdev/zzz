@@ -40,7 +40,25 @@
 			{/if}
 		</div>
 		<div class="column gap_xs3 font_family_mono">
-			{#if zzz_dir === undefined || zzz_dir === null}
+			{#if app.session_error !== null}
+				<!-- shown from a failed load until one succeeds (retries run meanwhile), and the
+				button stays enabled while a retry runs so it keeps focus (`disabled` would
+				blur it) — `load_session` ignores clicks while pending -->
+				<small role="status">session failed to load: {app.session_error}</small>
+				<div class="row gap_xs">
+					<button
+						type="button"
+						class="sm"
+						aria-disabled={app.session_status === 'pending'}
+						onclick={() => app.load_session()}
+					>
+						retry now
+					</button>
+					{#if app.session_status === 'pending'}
+						<PendingAnimation inline />
+					{/if}
+				</div>
+			{:else if zzz_dir === undefined || zzz_dir === null}
 				<small>&nbsp;</small>
 			{:else if zzz_dir === ''}
 				<small>no zzz directory configured</small>

@@ -195,7 +195,7 @@
 							(v) => {
 								// Turning off during a pending reconnect: cancel it.
 								// Turning on while disconnected: try to connect immediately.
-								// Delay/factor changes propagate live via the $effect below.
+								// Delay changes propagate live through the socket's setters.
 								if (!v && socket.is_reconnect_pending) {
 									socket.cancel_reconnect();
 								} else if (v && !socket.connected && socket.status !== 'pending') {

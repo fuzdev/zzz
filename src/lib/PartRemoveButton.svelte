@@ -4,31 +4,24 @@
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 
 	import type { PartUnion } from './part.svelte.ts';
-	import type { Prompt } from './prompt.svelte.ts';
-	import type { Prompts } from './prompts.svelte.ts';
+	import type { PartOwner } from './part_helpers.ts';
 	import { icon_remove } from '@fuzdev/fuz_ui/icons.ts';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
 	const {
 		part,
-		prompt,
-		prompts,
+		owner,
 		...rest
 	}: OmitStrict<SvelteHTMLElements['button'], 'part'> & {
 		part: PartUnion;
-		prompt?: Prompt | undefined;
-		prompts?: Prompts | undefined;
+		owner: PartOwner;
 	} = $props();
 </script>
 
 <ConfirmButton
 	{...rest}
 	onconfirm={() => {
-		if (prompt) {
-			prompt.remove_part(part.id);
-		} else if (prompts) {
-			prompts.remove_part(part.id);
-		}
+		owner.remove_part(part.id);
 	}}
 	class="plain sm"
 	title="remove part {'"' + part.name + '"'}"

@@ -179,6 +179,11 @@ export class Chats extends Cell<typeof ChatsJson> {
 		const removed_count = this.items.remove_many(ids);
 		this.app.threads.remove_unreferenced(thread_ids);
 
+		// nav links fall back to the last selected chat, which may be gone now
+		if (this.selected_id_last_non_null !== null && ids.includes(this.selected_id_last_non_null)) {
+			this.selected_id_last_non_null = null;
+		}
+
 		// If the selected chat was removed, select a new one
 		if (removed_count && this.#selected_id !== null && ids.includes(this.#selected_id)) {
 			void this.select_next();

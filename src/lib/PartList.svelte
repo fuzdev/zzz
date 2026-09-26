@@ -54,7 +54,7 @@
 				{@attach reorderable.item({ index: i })}
 				transition:slide
 			>
-				<PartSummary {part} {prompt} />
+				<PartSummary {part} owner={prompt} />
 			</li>
 		{/each}
 	</ul>
@@ -62,7 +62,7 @@
 	<ul {...attrs} class="unstyled column gap_xs5 {attrs?.class}">
 		{#each parts as part (part.id)}
 			<li {...item_attrs} class="border_radius_xs {item_attrs?.class}" transition:slide>
-				<PartSummary {part} {prompt} />
+				<PartSummary {part} owner={prompt} />
 			</li>
 		{/each}
 	</ul>

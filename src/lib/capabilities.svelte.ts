@@ -121,13 +121,19 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 	});
 
 	/**
-	 * The filesystem capability derives its state from the backend and `zzz_dir`.
+	 * The filesystem capability derives its state from the backend, `zzz_dir`,
+	 * and the session load that sets `zzz_dir`.
 	 */
 	readonly filesystem: Capability<FilesystemCapabilityData | null | undefined> = $derived.by(() => {
-		const { zzz_dir, scoped_dirs } = this.app;
+		const { zzz_dir, scoped_dirs, session_status, session_error } = this.app;
 		let status: AsyncStatus;
+		let error_message: string | null = null;
 
-		if (this.backend.status !== 'success') {
+		if (session_status === 'failure') {
+			// the session hasn't loaded (or failed to apply) — `load_session` is retrying
+			status = 'failure';
+			error_message = `session failed to load: ${session_error ?? 'unknown error'}`;
+		} else if (this.backend.status !== 'success') {
 			// Server is not available, so mirror its status
 			status = this.backend.status;
 		} else {
@@ -148,7 +154,7 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 			data: status === 'success' ? { zzz_dir, scoped_dirs } : undefined,
 			status,
 			message_id: null,
-			error_message: null,
+			error_message,
 			updated: Date.now()
 		};
 	});
@@ -268,7 +274,12 @@ export class Capabilities extends Cell<typeof CapabilitiesJson> {
 		this.pings = [new_ping, ...this.pings.slice(0, PING_HISTORY_MAX - 1)];
 
 		// TODO @many maybe refactor to middleware or more sophisticated hooks? is spread across 3 methods called from 2 mutations
-		// Reset the backend state only if it hasn't connected yet, to avoid flickering
+		// Once connected, keep showing the last result while re-pinging, to avoid
+		// flickering — just track the new ping so its response updates the status
+		if (this.backend.status === 'success') {
+			this.backend = { ...this.backend, message_id: request_id };
+			return;
+		}
 		this.backend = {
 			name: 'backend',
 			data: null,

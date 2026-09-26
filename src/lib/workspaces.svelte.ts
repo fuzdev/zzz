@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import type { Result } from '@fuzdev/fuz_util/result.ts';
+import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { CellJson } from './cell_types.ts';
@@ -81,6 +83,35 @@ export class Workspaces extends Cell<typeof WorkspacesJson> {
 		}
 
 		return workspace;
+	}
+
+	/**
+	 * Opens the workspace at `path` on the backend (`workspace_open`), then adds it
+	 * with its file tree. Tree entries for paths a `filer_change` touched while the
+	 * request was in flight are skipped, since the notification is at least as new
+	 * (see `Diskfiles.track_changes`).
+	 *
+	 * @param path - the directory to open; the daemon canonicalizes it, so the
+	 * returned workspace's path may differ
+	 * @returns the opened workspace, or the RPC error
+	 */
+	async open(
+		path: DiskfileDirectoryPath
+	): Promise<Result<{ value: Workspace }, { error: JsonrpcErrorObject }>> {
+		const changes = this.app.diskfiles.track_changes();
+		let result: Awaited<ReturnType<typeof this.app.api.workspace_open>>;
+		try {
+			result = await this.app.api.workspace_open({ path });
+		} finally {
+			changes.stop();
+		}
+		if (!result.ok) return result;
+
+		const { workspace: workspace_json, watch_status, files } = result.value;
+		const workspace = this.add(workspace_json);
+		workspace.watch_status = watch_status;
+		this.app.diskfiles.add_initial(files, changes.paths);
+		return { ok: true, value: workspace };
 	}
 
 	remove(id: Uuid): void {

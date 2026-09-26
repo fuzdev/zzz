@@ -92,14 +92,11 @@
 										type="button"
 										class="width:100% gap_sm"
 										class:selected={included}
-										onclick={async () => {
+										onclick={() => {
+											// the list is open workspaces, so each is already open on the backend
 											if (included) {
 												app.spaces.active!.remove_directory(workspace.path);
 											} else {
-												// ensure workspace is open on the backend before adding to space
-												if (!app.workspaces.get_by_path(workspace.path)) {
-													await app.api.workspace_open({ path: workspace.path });
-												}
 												app.spaces.active!.add_directory(workspace.path);
 											}
 										}}

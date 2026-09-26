@@ -24,11 +24,9 @@
 	 * @returns an error message, or `null` on success
 	 */
 	const open_and_activate = async (path: DiskfileDirectoryPath): Promise<string | null> => {
-		const result = await app.api.workspace_open({ path });
+		const result = await app.workspaces.open(path);
 		if (!result.ok) return result.error.message;
-		// `add` is idempotent — the response handler has usually added it already
-		const workspace = app.workspaces.add(result.value.workspace);
-		app.workspaces.activate(workspace.id);
+		app.workspaces.activate(result.value.id);
 		return null;
 	};
 
