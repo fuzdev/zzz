@@ -257,12 +257,9 @@ describe('DiskfilePart specific behavior', () => {
 		assert.deepEqual(part.diskfile, diskfile);
 		assert.strictEqual(part.content, TEST_CONTENT.BASIC);
 
-		// Update content through part
-		part.content = TEST_CONTENT.SECONDARY;
-
-		// Verify both part and diskfile were updated
+		// the part reads through to the diskfile
+		diskfile.content = TEST_CONTENT.SECONDARY;
 		assert.strictEqual(part.content, TEST_CONTENT.SECONDARY);
-		assert.strictEqual(part.diskfile?.content, TEST_CONTENT.SECONDARY);
 	});
 
 	test('DiskfilePart handles null path properly', () => {

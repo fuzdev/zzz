@@ -62,8 +62,13 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 						// Get the final response text
 						const response_text = to_completion_response_text(output.completion_response) || '';
 
-						// Update the assistant turn with the final response content and metadata
-						turn.content = response_text;
+						// Update the assistant turn's text part with the final response content and metadata
+						if (!turn.set_completion_text(response_text)) {
+							console.error(
+								'[frontend_action_handlers] completion turn has no assistant text part:',
+								progress_token
+							);
+						}
 						turn.response = output.completion_response;
 					} else {
 						console.error(
@@ -173,7 +178,18 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 			// failed, or was cancelled — they'd duplicate or resurrect content
 			if (turn.settled) return;
 
-			turn.content += chunk.message.content;
+			if (!turn.append_completion_text(chunk.message.content)) {
+				// nothing can take the output — stop the completion, which settles
+				// the turn so later chunks are dropped above instead of re-logging
+				console.error(
+					'[frontend_action_handlers] completion turn has no assistant text part, cancelling:',
+					progress_token
+				);
+				const thread = turn.thread_id
+					? frontend.threads.items.by_id.get(turn.thread_id)
+					: undefined;
+				if (!thread?.cancel_pending_turn(turn)) turn.cancelled = true;
+			}
 		}
 	},
 

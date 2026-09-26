@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 
-import { test, describe, beforeEach, assert } from 'vitest';
+import { test, describe, beforeEach, assert, vi } from 'vitest';
 
 import { Frontend } from '$lib/frontend.svelte.ts';
 import { Thread } from '$lib/thread.svelte.ts';
 import type { CompletionRequest } from '$lib/completion_types.ts';
+import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
+import { create_frontend_action_handlers } from '$lib/frontend_action_handlers.ts';
+import type { FrontendActionHandlers } from '$lib/frontend_action_types.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
@@ -17,6 +20,9 @@ interface StubbedCall {
 
 let app: Frontend;
 let calls: Array<StubbedCall>;
+
+const SOURCE_DIR = SerializableDisknode.shape.source_dir.parse('/test/');
+const FILE_PATH = DiskfilePath.parse('/test/notes.txt');
 
 /**
  * Replaces `app.api` with a stub whose `completion_create` stays in flight until
@@ -49,6 +55,57 @@ beforeEach(() => {
 
 const create_thread = (): Thread =>
 	app.threads.add_thread(new Thread({ app, json: { model_name: 'test-model' } }));
+
+describe('Thread.cancel_pending_turn', () => {
+	test('cancels only the completion streaming into the given turn', async () => {
+		const thread = create_thread();
+		const earlier_turn = thread.add_assistant_turn('earlier');
+		const sent = thread.send_message('hi');
+		const assistant_turn = Array.from(thread.turns.by_id.values()).at(-1)!;
+
+		assert.ok(!thread.cancel_pending_turn(earlier_turn));
+		assert.ok(thread.pending);
+		assert.ok(!calls[0]!.signal?.aborted);
+
+		assert.ok(thread.cancel_pending_turn(assistant_turn));
+		assert.ok(!thread.pending);
+		assert.ok(assistant_turn.cancelled);
+		assert.ok(calls[0]!.signal?.aborted);
+		assert.strictEqual(await sent, assistant_turn);
+	});
+
+	test('a chunk for a pending turn without a text part cancels its completion', async () => {
+		const handlers = create_frontend_action_handlers(app);
+		const thread = create_thread();
+		const sent = thread.send_message('hi');
+		const assistant_turn = Array.from(thread.turns.by_id.values()).at(-1)!;
+		app.diskfiles.add({ path: FILE_PATH, source_dir: SOURCE_DIR, content: 'file' });
+		assistant_turn.set_part(app.parts.add({ type: 'diskfile', path: FILE_PATH }));
+
+		const error_spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			void handlers.completion_progress!.receive!({
+				data: {
+					input: {
+						chunk: { message: { role: 'assistant', content: 'x' } },
+						_meta: { progressToken: assistant_turn.id }
+					}
+				}
+			} as unknown as Parameters<
+				NonNullable<NonNullable<FrontendActionHandlers['completion_progress']>['receive']>
+			>[0]);
+			assert.strictEqual(error_spy.mock.calls.length, 1);
+		} finally {
+			error_spy.mockRestore();
+		}
+
+		assert.ok(calls[0]!.signal?.aborted);
+		assert.ok(assistant_turn.cancelled);
+		assert.ok(!thread.pending);
+		assert.strictEqual(app.diskfiles.get_by_path(FILE_PATH)?.content, 'file');
+		await sent;
+	});
+});
 
 describe('Thread.cancel_pending', () => {
 	test('cancelling before the first chunk settles the assistant turn', async () => {

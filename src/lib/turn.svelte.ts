@@ -3,7 +3,7 @@ import { Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import { estimate_token_count } from './helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import type { PartUnion } from './part.svelte.ts';
+import type { PartUnion, TextPart } from './part.svelte.ts';
 import type { Frontend } from './frontend.svelte.ts';
 import { TurnJson } from './turn_types.ts';
 import type { CompletionRequest, CompletionResponse, CompletionRole } from './completion_types.ts';
@@ -44,11 +44,19 @@ export class Turn extends Cell<typeof TurnJson> {
 			.filter((c) => c != null)
 			.join('\n\n');
 	}
-	set content(value: string | null | undefined) {
-		if (value != null && this.parts[0]) {
-			this.parts[0].content = value;
+
+	/**
+	 * The part completion output is written to — the first `TextPart` of an
+	 * assistant turn. `null` for other roles and for turns without a text part,
+	 * so completion output never writes through a `DiskfilePart` to disk.
+	 */
+	readonly completion_part: TextPart | null = $derived.by(() => {
+		if (this.role !== 'assistant') return null;
+		for (const part of this.parts) {
+			if (part.type === 'text') return part;
 		}
-	}
+		return null;
+	});
 
 	readonly length: number = $derived(this.content.length);
 	readonly token_count: number = $derived(estimate_token_count(this.content));
@@ -74,6 +82,30 @@ export class Turn extends Cell<typeof TurnJson> {
 	constructor(options: TurnOptions) {
 		super(TurnJson, options);
 		this.init();
+	}
+
+	/**
+	 * Appends streamed completion text to `completion_part`.
+	 * @param text - the chunk to append
+	 * @returns `false` if the turn has no `completion_part`, leaving it unchanged
+	 */
+	append_completion_text(text: string): boolean {
+		const part = this.completion_part;
+		if (!part) return false;
+		part.content += text;
+		return true;
+	}
+
+	/**
+	 * Replaces the text of `completion_part` with a final completion response.
+	 * @param text - the full response text
+	 * @returns `false` if the turn has no `completion_part`, leaving it unchanged
+	 */
+	set_completion_text(text: string): boolean {
+		const part = this.completion_part;
+		if (!part) return false;
+		part.content = text;
+		return true;
 	}
 
 	set_part(part: PartUnion): void {

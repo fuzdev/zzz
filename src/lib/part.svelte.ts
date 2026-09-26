@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
-import { DEV } from 'esm-env';
 import { UnreachableError } from '@fuzdev/fuz_util/error.ts';
 import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 import { Uuid } from '@fuzdev/fuz_util/id.ts';
@@ -246,21 +245,14 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 	// The current relative path value for display in the XML path attribute
 	readonly relative_path = $derived(this.diskfile?.path_relative);
 
+	/**
+	 * Read-only: the part never writes to disk. Edits go through the file's
+	 * `DiskfileEditorState`, whose `save_changes` reports failures.
+	 */
 	override get content(): string | null | undefined {
 		// Return editor content if available, otherwise fall back to diskfile content
 		if (!this.diskfile) return undefined;
 		return this.#editor_state?.current_content ?? this.diskfile.content; // TODO @many this initialization is awkward, ideally becomes refactored to mostly derived
-	}
-
-	set content(value: string | null | undefined) {
-		if (value == null) {
-			if (DEV) console.error(`Cannot set diskfile content to ${value}`);
-			return;
-		}
-
-		if (this.path) {
-			void this.app.diskfiles.update(this.path, value);
-		}
 	}
 
 	constructor(options: DiskfilePartOptions) {

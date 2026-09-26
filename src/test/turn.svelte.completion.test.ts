@@ -6,7 +6,8 @@ import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 import { Frontend } from '$lib/frontend.svelte.ts';
 import { Thread } from '$lib/thread.svelte.ts';
-import type { Turn } from '$lib/turn.svelte.ts';
+import { Turn } from '$lib/turn.svelte.ts';
+import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
 import type { CompletionResponse } from '$lib/completion_types.ts';
 import { create_frontend_action_handlers } from '$lib/frontend_action_handlers.ts';
 import type { FrontendActionHandlers } from '$lib/frontend_action_types.ts';
@@ -193,5 +194,79 @@ describe('completion_progress', () => {
 		} finally {
 			error_spy.mockRestore();
 		}
+	});
+});
+
+describe('completion output with file parts', () => {
+	const SOURCE_DIR = SerializableDisknode.shape.source_dir.parse('/test/');
+	const FILE_PATH = DiskfilePath.parse('/test/notes.txt');
+	const FILE_CONTENT = 'file content';
+
+	let update_calls: Array<string>;
+
+	beforeEach(() => {
+		app.diskfiles.add({ path: FILE_PATH, source_dir: SOURCE_DIR, content: FILE_CONTENT });
+		update_calls = [];
+		app.diskfiles.update = (_path, content) => {
+			update_calls.push(content);
+			return Promise.resolve({ ok: true, value: null });
+		};
+	});
+
+	const add_turn_with_parts = (types: Array<'text' | 'diskfile'>): Turn => {
+		const parts = types.map((type) =>
+			type === 'text'
+				? app.parts.add({ type: 'text', content: '' })
+				: app.parts.add({ type: 'diskfile', path: FILE_PATH })
+		);
+		const turn = new Turn({
+			app,
+			json: { role: 'assistant', part_ids: parts.map((p) => p.id) }
+		});
+		thread.add_turn(turn);
+		return turn;
+	};
+
+	test('streams and final response land in the text part, not the leading file part', () => {
+		const turn = add_turn_with_parts(['diskfile', 'text']);
+		receive_progress(turn, 'par');
+		receive_progress(turn, 'tial');
+		assert.strictEqual(turn.completion_part?.content, 'partial');
+		receive_response(turn, create_claude_response('final'));
+
+		assert.strictEqual(turn.completion_part?.content, 'final');
+		assert.deepEqual(update_calls, []);
+		assert.strictEqual(app.diskfiles.get_by_path(FILE_PATH)?.content, FILE_CONTENT);
+	});
+
+	test('a turn with only a file part rejects completion output', () => {
+		const turn = add_turn_with_parts(['diskfile']);
+		assert.strictEqual(turn.completion_part, null);
+		const error_spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			// the first chunk logs once and settles the turn, later chunks are dropped
+			receive_progress(turn, 'chunk');
+			receive_progress(turn, 'more');
+			receive_progress(turn, 'and more');
+			assert.strictEqual(error_spy.mock.calls.length, 1);
+			assert.ok(turn.cancelled);
+			receive_response(turn, create_claude_response('final'));
+			assert.strictEqual(error_spy.mock.calls.length, 2);
+		} finally {
+			error_spy.mockRestore();
+		}
+
+		assert.deepEqual(update_calls, []);
+		assert.strictEqual(app.diskfiles.get_by_path(FILE_PATH)?.content, FILE_CONTENT);
+		assert.strictEqual(turn.content, FILE_CONTENT);
+		assert.ok(turn.response); // the response metadata still settles the turn
+	});
+
+	test('only assistant turns accept completion text', () => {
+		const turn = thread.add_user_turn('question');
+		assert.strictEqual(turn.completion_part, null);
+		assert.ok(!turn.append_completion_text('x'));
+		assert.ok(!turn.set_completion_text('x'));
+		assert.strictEqual(turn.content, 'question');
 	});
 });

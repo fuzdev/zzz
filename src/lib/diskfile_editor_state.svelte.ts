@@ -3,6 +3,8 @@
 import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 import { SvelteSet } from 'svelte/reactivity';
 
+import { to_error_message } from '@fuzdev/fuz_util/error.ts';
+
 import { estimate_token_count } from './helpers.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
 import type { DiskfilePath } from './diskfile_types.ts';
@@ -42,6 +44,12 @@ const remove_superseded_unsaved_entry = (
 	return true;
 };
 
+/** A `save_changes` write in flight: the content it writes, and its result. */
+interface InFlightSave {
+	readonly content: string;
+	saving: Promise<boolean>;
+}
+
 // TODO maybe should be a cell?
 /**
  * Manages the editor state for a diskfile.
@@ -64,6 +72,12 @@ export class DiskfileEditorState {
 
 	/** Ids of the diskfiles with a `save_changes` write in flight. */
 	readonly #saving_diskfile_ids: SvelteSet<Uuid> = new SvelteSet();
+
+	/** The in-flight `save_changes` writes and the content each is writing, by diskfile id. */
+	readonly #in_flight_saves: Map<Uuid, InFlightSave> = new Map();
+
+	/** The follow-up saves queued behind an in-flight write, by diskfile id. */
+	readonly #queued_saves: Map<Uuid, Promise<boolean>> = new Map();
 
 	/**
 	 * Whether a `save_changes` write for the current diskfile is in flight.
@@ -357,50 +371,120 @@ export class DiskfileEditorState {
 
 		// Always update last seen content
 		this.last_seen_disk_content = this.diskfile.content;
+
+		// the editor already shows what's now on disk — e.g. a save's own write whose
+		// broadcast lands after the response, behind an external write's — so
+		// nothing is unsaved anymore
+		if (this.diskfile.content === this.current_content) {
+			this.#settle_on_disk_content(history, this.diskfile.content);
+		}
+	}
+
+	/**
+	 * Settles the editor on `disk_content` when it already shows it: drops the
+	 * unsaved-edit entry holding that content, selects the newest saved entry
+	 * for it if the selection was an unsaved edit, and clears the modified flag.
+	 *
+	 * @mutates history - splices the superseded unsaved entry out of `entries`
+	 */
+	#settle_on_disk_content(history: DiskfileHistory, disk_content: string): void {
+		const selected_unsaved = this.selected_history_entry?.is_unsaved_edit ?? false;
+		remove_superseded_unsaved_entry(history, this.unsaved_edit_entry_id, disk_content);
+		this.unsaved_edit_entry_id = null;
+		this.content_was_modified_by_user = false;
+		if (selected_unsaved || !this.selected_history_entry) {
+			const disk_entry = history.entries.find(
+				(entry) => !entry.is_unsaved_edit && entry.content === disk_content
+			);
+			if (disk_entry) this.selected_history_entry_id = disk_entry.id;
+		}
 	}
 
 	/**
 	 * Save changes to the diskfile. History, selection, and the modified flag
 	 * change only once the write succeeds; a failure leaves the edit unsaved and
-	 * sets `save_error`. One save per diskfile runs at a time. If the editor or
+	 * sets `save_error` — including a write that throws, so this never rejects.
+	 * One save per diskfile runs at a time: saving while a
+	 * write is in flight queues a single follow-up save (repeat calls share it)
+	 * that writes whatever the editor holds once the first settles — skipped if
+	 * that write failed or the editor moved to another diskfile. If the editor or
 	 * the disk moves on while the write is in flight — more typing, another
 	 * history entry picked, an external edit landing after the save's own — the
 	 * saved content is recorded in history without taking over the editor. If
 	 * the editor switched to another diskfile meanwhile, only the saved file's
 	 * history is settled; the editor's state now belongs to the other file.
 	 *
-	 * @returns whether the content was written
+	 * @returns whether the content was written — for a queued follow-up with
+	 * nothing left to write, whether the in-flight save succeeded
 	 */
-	async save_changes(): Promise<boolean> {
+	save_changes(): Promise<boolean> {
 		const { diskfile } = this;
-		if (!this.can_save || this.#saving_diskfile_ids.has(diskfile.id)) return false;
+		const in_flight = this.#in_flight_saves.get(diskfile.id);
+		if (in_flight) {
+			let queued = this.#queued_saves.get(diskfile.id);
+			if (!queued) {
+				// cleared as soon as the in-flight save settles (it never rejects),
+				// so a save issued during the follow-up queues a fresh one
+				queued = in_flight.saving.then((ok) => {
+					this.#queued_saves.delete(diskfile.id);
+					if (!ok || this.diskfile !== diskfile) return false;
+					// nothing typed since — the in-flight save already wrote it
+					if (this.current_content === in_flight.content || !this.can_save) return true;
+					return this.save_changes();
+				});
+				this.#queued_saves.set(diskfile.id, queued);
+			}
+			return queued;
+		}
+		if (!this.can_save) return Promise.resolve(false);
 
+		// registered before the write starts — a write that throws synchronously
+		// settles `#save` before it returns, and its cleanup must find the entry
+		const in_flight_save: InFlightSave = {
+			content: this.current_content,
+			saving: Promise.resolve(false)
+		};
+		this.#in_flight_saves.set(diskfile.id, in_flight_save);
+		in_flight_save.saving = this.#save(diskfile, in_flight_save);
+		return in_flight_save.saving;
+	}
+
+	async #save(diskfile: Diskfile, in_flight_save: InFlightSave): Promise<boolean> {
+		const content_to_save = in_flight_save.content;
 		const history = this.#ensure_history();
-		const content_to_save = this.current_content;
 		const unsaved_edit_entry_id = this.unsaved_edit_entry_id;
 		const last_seen_at_start = this.last_seen_disk_content;
 		const started = Date.now();
 
 		this.save_error = null;
 		this.#saving_diskfile_ids.add(diskfile.id);
-		let result;
+		// a thrown write (e.g. the transport failing) is a failed save like any
+		// other — reported through `save_error`, never a rejection
+		let error_message: string | null = null;
 		try {
-			result = await this.app.diskfiles.update(diskfile.path, content_to_save);
+			const result = await this.app.diskfiles.update(diskfile.path, content_to_save);
+			if (!result.ok) error_message = result.error.message;
+		} catch (error) {
+			console.error('[DiskfileEditorState] save threw:', error);
+			error_message = to_error_message(error, 'save failed');
 		} finally {
 			this.#saving_diskfile_ids.delete(diskfile.id);
+			if (this.#in_flight_saves.get(diskfile.id) === in_flight_save) {
+				this.#in_flight_saves.delete(diskfile.id);
+			}
 		}
 
 		if (this.diskfile !== diskfile) {
 			// nothing here shows the saved file anymore, so settle its history alone
-			if (result.ok) {
+			if (error_message === null) {
 				remove_superseded_unsaved_entry(history, unsaved_edit_entry_id, content_to_save);
 				history.add_entry(content_to_save, { is_unsaved_edit: false, created: started });
 			}
-			return result.ok;
+			return error_message === null;
 		}
 
-		if (!result.ok) {
-			this.save_error = result.error.message;
+		if (error_message !== null) {
+			this.save_error = error_message;
 			return false;
 		}
 		this.save_error = null;

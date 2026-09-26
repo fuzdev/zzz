@@ -255,6 +255,18 @@ export class Thread extends Cell<typeof ThreadJson> {
 		this.pending = false;
 	}
 
+	/**
+	 * Cancels the in-flight completion if it's the one streaming into `turn`
+	 * (see `cancel_pending`).
+	 *
+	 * @returns whether `turn` was the pending turn
+	 */
+	cancel_pending_turn(turn: Turn): boolean {
+		if (this.#pending_turn !== turn) return false;
+		this.cancel_pending();
+		return true;
+	}
+
 	switch_model(model_id: Uuid): void {
 		const model = this.app.models.items.by_id.get(model_id);
 		if (model) {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { test, beforeEach, describe, assert } from 'vitest';
+import { test, beforeEach, describe, assert, vi } from 'vitest';
 
 import { DiskfileEditorState } from '$lib/diskfile_editor_state.svelte.ts';
 import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
@@ -491,6 +491,56 @@ describe('saving failures and concurrent edits', () => {
 		assert.isTrue(editor_state.has_unsaved_edits);
 	});
 
+	test('a thrown write reports save_error and leaves the edit unsaved', async () => {
+		editor_state.current_content = 'edited';
+		const history = app.get_diskfile_history(TEST_PATH)!;
+		const entries_before = history.entries.map((entry) => ({ ...entry }));
+		const unsaved_id = editor_state.unsaved_edit_entry_id;
+		app.diskfiles.update = () => Promise.reject(new Error('socket closed'));
+
+		const error_spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			assert.isFalse(await editor_state.save_changes());
+			assert.strictEqual(error_spy.mock.calls.length, 1);
+		} finally {
+			error_spy.mockRestore();
+		}
+
+		assert.strictEqual(editor_state.save_error, 'socket closed');
+		assert.isFalse(editor_state.saving);
+		assert.deepEqual(history.entries, entries_before);
+		assert.strictEqual(editor_state.unsaved_edit_entry_id, unsaved_id);
+		assert.isTrue(editor_state.content_was_modified_by_user);
+		assert.strictEqual(editor_state.last_seen_disk_content, TEST_CONTENT);
+
+		monkeypatch_zzz_for_tests(app);
+		assert.isTrue(await editor_state.save_changes());
+		assert.isNull(editor_state.save_error);
+	});
+
+	test('a synchronously thrown write does not lock saving', async () => {
+		editor_state.current_content = 'edited';
+		app.diskfiles.update = () => {
+			throw new Error('not connected');
+		};
+		const error_spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			assert.isFalse(await editor_state.save_changes());
+			assert.strictEqual(error_spy.mock.calls.length, 1);
+		} finally {
+			error_spy.mockRestore();
+		}
+		assert.strictEqual(editor_state.save_error, 'not connected');
+		assert.isFalse(editor_state.saving);
+
+		// the next save runs rather than queueing behind a phantom write
+		monkeypatch_zzz_for_tests(app);
+		assert.isTrue(await editor_state.save_changes());
+		assert.strictEqual(test_diskfile.content, 'edited');
+		assert.isNull(editor_state.save_error);
+		assert.isFalse(editor_state.has_unsaved_edits);
+	});
+
 	test('a successful save clears the previous save_error', async () => {
 		editor_state.current_content = 'edited';
 		app.diskfiles.update = () => Promise.resolve({ ok: false, error: ERROR });
@@ -561,24 +611,97 @@ describe('saving failures and concurrent edits', () => {
 		assert.isFalse(editor_state.content_was_modified_by_user);
 	});
 
-	test('a second save while one is in flight is refused', async () => {
+	test('saving while a save is in flight queues one follow-up save', async () => {
 		editor_state.current_content = 'first';
 		const { writes, deferred } = defer_update();
 
 		const saving = editor_state.save_changes();
 		editor_state.current_content = 'second';
-		assert.isFalse(await editor_state.save_changes());
+		const queued = editor_state.save_changes();
+		editor_state.current_content = 'third';
+		// repeat saves share the one follow-up
+		const queued_again = editor_state.save_changes();
 		assert.isTrue(editor_state.saving);
-
-		deferred.resolve({ ok: true, value: null });
-		assert.isTrue(await saving);
 		assert.deepEqual(writes, ['first']);
 
-		// once settled, the newer edit saves normally
 		monkeypatch_zzz_for_tests(app);
-		assert.isTrue(await editor_state.save_changes());
-		assert.strictEqual(test_diskfile.content, 'second');
+		deferred.resolve({ ok: true, value: null });
+		assert.isTrue(await saving);
+		assert.isTrue(await queued);
+		assert.isTrue(await queued_again);
+
+		// the follow-up writes what the editor holds once the first settles
+		assert.deepEqual(writes, ['first']);
+		assert.strictEqual(test_diskfile.content, 'third');
 		assert.isFalse(editor_state.has_unsaved_edits);
+		assert.isFalse(editor_state.saving);
+	});
+
+	test('a queued follow-up save is skipped when the in-flight save fails', async () => {
+		editor_state.current_content = 'first';
+		const { writes, deferred } = defer_update();
+
+		const saving = editor_state.save_changes();
+		editor_state.current_content = 'second';
+		const queued = editor_state.save_changes();
+		deferred.resolve({ ok: false, error: ERROR });
+
+		assert.isFalse(await saving);
+		assert.isFalse(await queued);
+		assert.deepEqual(writes, ['first']);
+		assert.strictEqual(editor_state.save_error, 'disk full');
+		assert.strictEqual(test_diskfile.content, TEST_CONTENT);
+	});
+
+	test('a thrown write sets save_error, skips the queued follow-up, and later saves work', async () => {
+		editor_state.current_content = 'first';
+		const { writes, deferred } = defer_update();
+
+		const saving = editor_state.save_changes();
+		editor_state.current_content = 'second';
+		const queued = editor_state.save_changes();
+		const error_spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			deferred.reject(new Error('transport closed'));
+
+			// a thrown write is a failed save, not a rejection
+			assert.isFalse(await saving);
+			assert.isFalse(await queued);
+		} finally {
+			error_spy.mockRestore();
+		}
+		assert.isFalse(editor_state.saving);
+		assert.strictEqual(editor_state.save_error, 'transport closed');
+		assert.deepEqual(writes, ['first']);
+		// the edit stays unsaved
+		assert.isTrue(editor_state.has_unsaved_edits);
+		assert.strictEqual(editor_state.current_content, 'second');
+
+		// later saves run normally, and queue again behind an in-flight one
+		const next = defer_update();
+		const retry = editor_state.save_changes();
+		editor_state.current_content = 'third';
+		const queued_again = editor_state.save_changes();
+		monkeypatch_zzz_for_tests(app);
+		next.deferred.resolve({ ok: true, value: null });
+		assert.isTrue(await retry);
+		assert.isTrue(await queued_again);
+		assert.deepEqual(next.writes, ['second']);
+		assert.strictEqual(test_diskfile.content, 'third');
+		assert.isFalse(editor_state.has_unsaved_edits);
+	});
+
+	test('a queued follow-up with nothing new to write reports the in-flight save', async () => {
+		editor_state.current_content = 'first';
+		const { writes, deferred } = defer_update();
+
+		const saving = editor_state.save_changes();
+		const queued = editor_state.save_changes();
+		deferred.resolve({ ok: true, value: null });
+
+		assert.isTrue(await saving);
+		assert.isTrue(await queued);
+		assert.deepEqual(writes, ['first']);
 	});
 
 	test('picking another entry while a save is in flight records the save as saved', async () => {
@@ -625,6 +748,66 @@ describe('saving failures and concurrent edits', () => {
 		assert.strictEqual(history.entries[0], external);
 		assert.strictEqual(history.entries.filter((entry) => entry.content === 'saved').length, 1);
 		assert.strictEqual(editor_state.selected_history_entry_id, selected_before);
+	});
+
+	test('an external edit landing mid-save, then the save broadcast after the response, settles', async () => {
+		editor_state.current_content = 'saved';
+		const history = app.get_diskfile_history(TEST_PATH)!;
+		const { deferred } = defer_update();
+
+		const saving = editor_state.save_changes();
+		// an external write lands just before ours, its broadcast arrives mid-save
+		test_diskfile.content = 'external';
+		editor_state.check_disk_changes();
+		deferred.resolve({ ok: true, value: null });
+		assert.isTrue(await saving);
+		// the editor still shows the edit — the disk holds the external write
+		assert.isTrue(editor_state.has_changes);
+		assert.isTrue(editor_state.content_was_modified_by_user);
+
+		// our write's broadcast lands after the response
+		test_diskfile.content = 'saved';
+		editor_state.check_disk_changes();
+
+		assert.isFalse(editor_state.has_changes);
+		assert.isFalse(editor_state.content_was_modified_by_user);
+		assert.isFalse(editor_state.has_unsaved_edits);
+		assert.isNull(editor_state.unsaved_edit_entry_id);
+		assert.strictEqual(editor_state.last_seen_disk_content, 'saved');
+		assert.strictEqual(editor_state.current_content, 'saved');
+		const selected = editor_state.selected_history_entry;
+		assert.ok(selected);
+		assert.isFalse(selected.is_unsaved_edit);
+		assert.strictEqual(selected.content, 'saved');
+		assert.ok(history.entries.some((entry) => entry.content === 'external'));
+	});
+
+	test('a disk change matching an unsaved edit settles the editor', () => {
+		editor_state.current_content = 'same';
+		assert.isTrue(editor_state.has_unsaved_edits);
+
+		// another client writes the same content
+		test_diskfile.content = 'same';
+		editor_state.check_disk_changes();
+
+		assert.isFalse(editor_state.has_changes);
+		assert.isFalse(editor_state.content_was_modified_by_user);
+		assert.isFalse(editor_state.has_unsaved_edits);
+		assert.isNull(editor_state.unsaved_edit_entry_id);
+		assert.strictEqual(editor_state.selected_history_entry?.content, 'same');
+	});
+
+	test('a disk change that differs from the edit leaves it unsaved', () => {
+		editor_state.current_content = 'mine';
+		const unsaved_id = editor_state.unsaved_edit_entry_id;
+
+		test_diskfile.content = 'theirs';
+		editor_state.check_disk_changes();
+
+		assert.isTrue(editor_state.content_was_modified_by_user);
+		assert.strictEqual(editor_state.unsaved_edit_entry_id, unsaved_id);
+		assert.strictEqual(editor_state.selected_history_entry_id, unsaved_id);
+		assert.strictEqual(editor_state.current_content, 'mine');
 	});
 
 	describe('switching files while a save is in flight', () => {

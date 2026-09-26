@@ -241,14 +241,14 @@ describe('Chat.send_to_thread auto-naming', () => {
 
 	test('names the chat after a successful reply', async () => {
 		const attempts = await send_and_settle((turn) => {
-			turn.content = 'hello there';
+			turn.set_completion_text('hello there');
 		});
 		assert.deepEqual(attempts, ['hello there']);
 	});
 
 	test('does not name the chat after an errored reply', async () => {
 		const attempts = await send_and_settle((turn) => {
-			turn.content = 'partial';
+			turn.set_completion_text('partial');
 			turn.error_message = 'boom';
 		});
 		assert.deepEqual(attempts, []);
@@ -256,7 +256,7 @@ describe('Chat.send_to_thread auto-naming', () => {
 
 	test('does not name the chat after a cancelled reply', async () => {
 		const attempts = await send_and_settle((turn) => {
-			turn.content = 'partial';
+			turn.set_completion_text('partial');
 			turn.cancelled = true;
 		});
 		assert.deepEqual(attempts, []);
