@@ -180,8 +180,11 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     let bootstrap_available =
         fuz_auth::is_bootstrap_available(&pool, config.bootstrap_token_path.as_deref()).await;
 
-    let scoped_dir_strings: Vec<String> =
-        config.scoped_dirs.iter().map(|p| resolve_dir(p)).collect();
+    let scoped_dir_strings: Vec<String> = config
+        .scoped_dirs
+        .iter()
+        .map(|p| resolve_dir(p))
+        .collect::<Result<_, _>>()?;
 
     // Include zzz_dir first (like Deno: `new ScopedFs([this.zzz_dir, ...this.scoped_dirs])`)
     // Use canonicalized paths, not raw config paths
@@ -772,24 +775,58 @@ fn parse_stringbool_env(name: &str) -> Result<bool, ServerError> {
     fuz_sys::env::parse_stringbool(&v).map_err(|e| ServerError::Config(format!("{name}: {e}")))
 }
 
+/// The app directory when `PUBLIC_ZZZ_DIR` is unset or empty, relative to
+/// the working directory.
+pub const DEFAULT_ZZZ_DIR: &str = ".zzz/";
+
+/// An env var's value, with unset, empty, and whitespace-only all reading as
+/// unset — so an exported-but-empty path var falls back to its default
+/// rather than resolving to the working directory or `/`.
+fn env_non_empty(name: &str) -> Option<String> {
+    non_empty(std::env::var(name).ok())
+}
+
+fn non_empty(value: Option<String>) -> Option<String> {
+    value.filter(|v| !v.trim().is_empty())
+}
+
 /// Resolve a path to an absolute, canonical, normalized directory string
 /// with trailing `/`. Tries `canonicalize` (resolves symlinks, requires path
-/// to exist), falls back to `absolute` (no I/O), falls back to the raw path.
+/// to exist), falls back to `absolute` (no I/O).
 ///
 /// Public so `testing_zzz_server` can resolve `PUBLIC_ZZZ_DIR` exactly the way
 /// [`run_app`] does before placing its daemon-token file — the cross-process
 /// harness reads `<zzz_dir>/run/daemon_token`, so the two resolutions must not
-/// drift.
-#[must_use]
-pub fn resolve_dir(path: &Path) -> String {
-    let mut s = std::fs::canonicalize(path)
-        .unwrap_or_else(|_| std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf()))
-        .to_string_lossy()
-        .into_owned();
+/// drift (see [`resolve_zzz_dir_from_env`]).
+///
+/// # Errors
+///
+/// Returns [`ServerError::Config`] for an empty path or one that can't be
+/// made absolute — never a silent fallback, which would collapse to `/` (a
+/// permanent scoped root, and a filer, over the whole filesystem).
+pub fn resolve_dir(path: &Path) -> Result<String, ServerError> {
+    if path.as_os_str().is_empty() {
+        return Err(ServerError::Config("empty directory path".to_owned()));
+    }
+    let resolved = std::fs::canonicalize(path)
+        .or_else(|_| std::path::absolute(path))
+        .map_err(|e| ServerError::Config(format!("can't resolve {}: {e}", path.display())))?;
+    let mut s = resolved.to_string_lossy().into_owned();
     if !s.ends_with('/') {
         s.push('/');
     }
-    s
+    Ok(s)
+}
+
+/// The app directory: `PUBLIC_ZZZ_DIR` (unset or empty → [`DEFAULT_ZZZ_DIR`])
+/// through [`resolve_dir`]. Shared with `testing_zzz_server`.
+///
+/// # Errors
+///
+/// Returns [`ServerError::Config`] when the directory can't be resolved.
+pub fn resolve_zzz_dir_from_env() -> Result<String, ServerError> {
+    let raw = env_non_empty("PUBLIC_ZZZ_DIR").unwrap_or_else(|| DEFAULT_ZZZ_DIR.to_owned());
+    resolve_dir(Path::new(&raw))
 }
 
 fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
@@ -812,7 +849,7 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
             }
             "--static-dir" => {
                 i += 1;
-                if let Some(val) = args.get(i) {
+                if let Some(val) = args.get(i).filter(|v| !v.trim().is_empty()) {
                     static_dir = Some(PathBuf::from(val));
                 }
             }
@@ -831,10 +868,18 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
             tracing::warn!(value = val.as_str(), "invalid ZZZ_PORT value, ignoring");
         }
     }
-    if static_dir.is_none()
-        && let Ok(val) = std::env::var("ZZZ_STATIC_DIR")
+    if static_dir.is_none() {
+        static_dir = env_non_empty("ZZZ_STATIC_DIR").map(PathBuf::from);
+    }
+    // An empty or missing static dir would serve the working directory (or
+    // nothing) as the UI — refuse to boot instead.
+    if let Some(dir) = &static_dir
+        && !dir.is_dir()
     {
-        static_dir = Some(PathBuf::from(val));
+        return Err(ServerError::Config(format!(
+            "static dir is not a directory: {}",
+            dir.display()
+        )));
     }
 
     // Required env vars
@@ -844,7 +889,7 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
     let secret_cookie_keys = std::env::var("SECRET_FUZ_COOKIE_KEYS")
         .map_err(|_| ServerError::Config("SECRET_FUZ_COOKIE_KEYS is required".to_owned()))?;
 
-    let bootstrap_token_path = std::env::var("FUZ_BOOTSTRAP_TOKEN_PATH").ok();
+    let bootstrap_token_path = env_non_empty("FUZ_BOOTSTRAP_TOKEN_PATH");
     let allowed_origins = std::env::var("FUZ_ALLOWED_ORIGINS").ok();
 
     let scoped_dirs = std::env::var("PUBLIC_ZZZ_SCOPED_DIRS")
@@ -855,10 +900,7 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
         .map(PathBuf::from)
         .collect();
 
-    let zzz_dir = {
-        let raw = std::env::var("PUBLIC_ZZZ_DIR").unwrap_or_else(|_| ".zzz/".to_owned());
-        resolve_dir(Path::new(&raw))
-    };
+    let zzz_dir = resolve_zzz_dir_from_env()?;
 
     let enable_test_actions = parse_stringbool_env("ZZZ_ENABLE_TEST_ACTIONS")?;
     let trusted_proxies = std::env::var("ZZZ_TRUSTED_PROXIES").ok();
@@ -878,6 +920,46 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
         enable_test_actions,
         trusted_proxies,
     })
+}
+
+#[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    reason = "tests panic on assertion failure by design"
+)]
+mod config_paths {
+    //! Path config never collapses to `/`: empty values read as unset, and
+    //! `resolve_dir` errors rather than falling back to an empty string.
+
+    use super::*;
+
+    #[test]
+    fn empty_and_whitespace_values_read_as_unset() {
+        assert_eq!(non_empty(None), None);
+        assert_eq!(non_empty(Some(String::new())), None);
+        assert_eq!(non_empty(Some(" \t".to_owned())), None);
+        assert_eq!(non_empty(Some("x".to_owned())).as_deref(), Some("x"));
+    }
+
+    #[test]
+    fn resolve_dir_rejects_an_empty_path() {
+        assert!(matches!(
+            resolve_dir(Path::new("")),
+            Err(ServerError::Config(_))
+        ));
+    }
+
+    #[test]
+    fn resolve_dir_makes_paths_absolute_with_a_trailing_slash() {
+        let cwd = std::env::current_dir().unwrap();
+        let resolved = resolve_dir(Path::new("no_such_dir_for_resolve_dir")).unwrap();
+        assert_eq!(
+            resolved,
+            format!("{}/no_such_dir_for_resolve_dir/", cwd.display())
+        );
+        assert_ne!(resolved, "/");
+        assert_eq!(resolve_dir(Path::new("/")).unwrap(), "/");
+    }
 }
 
 #[cfg(test)]

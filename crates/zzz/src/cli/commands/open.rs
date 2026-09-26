@@ -1,31 +1,36 @@
 //! `zzz open` — default command.
 //!
 //! Opens the zzz browser UI, auto-starting the daemon if needed.
-//! Handles `zzz`, `zzz <file>`, `zzz <dir>`.
+//! Handles `zzz`, `zzz <dir>`, and `zzz <file>`.
 //!
 //! The flow:
 //!   1. Require init — `~/.zzz` must exist (`zzz init`).
-//!   2. Daemon discovery — read `~/.zzz/run/daemon.json`, verify the pid is
-//!      alive and `/health` responds; clean up a stale record otherwise.
-//!   3. Auto-start if not running — spawn `zzzd` **detached** (new process
-//!      group, log-file stdio), poll `/health`, record `daemon.json`. This
-//!      differs from `daemon start`, which runs the server in the foreground
-//!      and forwards signals to it.
-//!   4. For a directory arg, a best-effort `workspace_open` JSON-RPC call.
-//!      `workspace_open` requires an authenticated account, which the CLI
-//!      can't supply (the daemon token is a different credential axis), so
-//!      this call warn-fails under auth — the authenticated browser does the
-//!      real open via the `?workspace=` query param below.
-//!   5. Browser launch (`xdg-open` / `open` / `start`), with the
-//!      `?workspace=<path>` param when a path was given.
+//!   2. Resolve the path argument, if any: `~` expanded, joined onto the
+//!      current directory, canonicalized (so it matches the canonical path
+//!      the daemon stores for the workspace). A directory is the workspace;
+//!      a file opens its parent directory. A path that doesn't exist is an
+//!      error, before any daemon work.
+//!   3. Daemon discovery — read `~/.zzz/run/daemon.json`, verify the process
+//!      is still the recorded one and `/health` responds; a stale record is
+//!      removed, an unresponsive daemon is stopped.
+//!   4. Auto-start if not running — spawn `zzzd` **detached** (new process
+//!      group, log-file stdio), wait until it serves, record `daemon.json`.
+//!      This differs from `daemon start`, which runs the server in the
+//!      foreground and forwards signals to it.
+//!   5. Browser launch (`xdg-open` / `open` / `start`) with a
+//!      `?workspace=<dir>` param; the authenticated browser opens the
+//!      workspace (the CLI holds no credential for `workspace_open`).
 
+use std::fs;
+use std::os::unix::fs::OpenOptionsExt as _;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::time::{Duration, Instant};
 
 use argh::FromArgs;
 
 use crate::CliError;
-use crate::daemon_lifecycle::{self as dl, DaemonInfo, DaemonState};
+use crate::daemon_launch::DaemonLaunch;
+use crate::daemon_lifecycle::{self as dl, DaemonInfo, DaemonState, StartOutcome};
 
 /// Open file or directory in browser (default command).
 ///
@@ -33,224 +38,243 @@ use crate::daemon_lifecycle::{self as dl, DaemonInfo, DaemonState};
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "open")]
 pub struct Open {
-    /// path to open (file or directory)
+    /// path to open — a directory, or a file (opens its directory)
     #[argh(positional)]
     pub path: Option<String>,
 }
 
 /// Handle `zzz open` (and the implicit no-subcommand default).
 pub async fn cmd_open(args: &Open) -> Result<(), CliError> {
-    let zzz_dir = dl::zzz_dir()?;
-    if !zzz_dir.exists() {
-        return Err(CliError::NotInitialized);
+    dl::require_zzz_dir()?;
+
+    let target = match args.path.as_deref() {
+        Some(raw) => Some(resolve_target(raw, &std::env::current_dir()?)?),
+        None => None,
+    };
+    if let Some(OpenTarget {
+        file: Some(file),
+        workspace,
+    }) = &target
+    {
+        println!(
+            "{} is a file; opening its directory {workspace}",
+            file.display()
+        );
     }
 
-    let info = match discover_running_daemon().await {
+    let info = match discover_running_daemon().await? {
         Some(info) => info,
         None => start_daemon_detached().await?,
     };
-    let port = info.port;
 
-    let target = resolve_path(args.path.as_deref());
-
-    if let Some(target) = target.as_deref() {
-        let workspace_path = if target.ends_with('/') {
-            target.to_string()
-        } else {
-            format!("{target}/")
-        };
-        open_workspace_best_effort(port, &workspace_path).await;
-    }
-
-    let mut url = format!("http://localhost:{port}");
-    if let Some(target) = target.as_deref() {
-        url.push_str("/workspaces?workspace=");
-        url.push_str(&encode_uri_component(target));
-    }
-
+    let url = build_url(info.port, target.as_ref().map(|t| t.workspace.as_str()));
     println!("opening {url}");
     open_browser(&url).await;
     Ok(())
 }
 
-/// Read `daemon.json` and return it only when the daemon is actually
-/// running and answering `/health`. A stale or unresponsive record is
-/// cleaned up so the caller can auto-start a fresh daemon.
-async fn discover_running_daemon() -> Option<DaemonInfo> {
+/// A resolved `zzz open` argument.
+#[derive(Debug, PartialEq, Eq)]
+struct OpenTarget {
+    /// Canonical workspace directory, with a trailing `/`.
+    workspace: String,
+    /// The canonical file, when the argument named one.
+    file: Option<PathBuf>,
+}
+
+/// Resolve a path argument: expand `~`, join onto `cwd`, canonicalize, and
+/// take a file's parent directory as the workspace.
+fn resolve_target(raw: &str, cwd: &Path) -> Result<OpenTarget, CliError> {
+    let absolute = cwd.join(fuz_sys::expand_tilde(raw));
+    let bad_path = |reason: String| CliError::BadPath {
+        path: absolute.display().to_string(),
+        reason,
+    };
+    let canonical = fs::canonicalize(&absolute).map_err(|e| {
+        bad_path(if e.kind() == std::io::ErrorKind::NotFound {
+            "no such file or directory".to_owned()
+        } else {
+            e.to_string()
+        })
+    })?;
+    let (dir, file) = if canonical.is_dir() {
+        (canonical, None)
+    } else {
+        let parent = canonical
+            .parent()
+            .ok_or_else(|| bad_path("has no parent directory".to_owned()))?
+            .to_path_buf();
+        (parent, Some(canonical))
+    };
+    let mut workspace = dir
+        .to_str()
+        .ok_or_else(|| bad_path("path is not valid UTF-8".to_owned()))?
+        .to_owned();
+    if !workspace.ends_with('/') {
+        workspace.push('/');
+    }
+    Ok(OpenTarget { workspace, file })
+}
+
+/// The browser URL, with the workspace param when a path was given.
+fn build_url(port: u16, workspace: Option<&str>) -> String {
+    let mut url = format!("http://localhost:{port}");
+    if let Some(workspace) = workspace {
+        url.push_str("/workspaces?workspace=");
+        url.push_str(&encode_uri_component(workspace));
+    }
+    url
+}
+
+/// Return the recorded daemon only when it's running and answering
+/// `/health`. A stale record is removed; an alive-but-unresponsive daemon
+/// is stopped so the auto-start can take the port.
+async fn discover_running_daemon() -> Result<Option<DaemonInfo>, CliError> {
     match dl::get_daemon_state().await {
-        DaemonState::Running(info) => Some(info),
-        DaemonState::Stopped => None,
-        DaemonState::Stale(_) => {
-            let _ = dl::remove_daemon_info();
-            None
+        DaemonState::Running(info) => Ok(Some(info)),
+        DaemonState::Stopped => Ok(None),
+        DaemonState::Stale(info) => {
+            dl::remove_daemon_info_if(&info)?;
+            Ok(None)
         }
         DaemonState::Wedged(info) => {
-            // Alive but not answering `/health` — terminate it (mirroring
-            // `daemon stop`) so the auto-start below can rebind the port, then
-            // drop the stale record. Without this, the restart would collide
-            // with the old process still holding the port.
             eprintln!(
                 "warning: daemon pid {} on port {} is not responding; restarting",
                 info.pid, info.port
             );
-            let _ = dl::send_sigterm(info.pid);
-            let deadline = Instant::now() + Duration::from_secs(5);
-            while Instant::now() < deadline && dl::is_pid_alive(info.pid) {
-                tokio::time::sleep(Duration::from_millis(100)).await;
+            if !dl::terminate(&info).await? {
+                return Err(CliError::Daemon(format!(
+                    "unresponsive daemon pid {} did not exit within {}s of SIGTERM; stop it manually",
+                    info.pid,
+                    dl::STOP_TIMEOUT.as_secs()
+                )));
             }
-            let _ = dl::remove_daemon_info();
-            None
+            dl::remove_daemon_info_if(&info)?;
+            Ok(None)
         }
     }
 }
 
-/// Spawn `zzzd` detached and wait for it to report healthy, then record
-/// `daemon.json`.
+/// Spawn `zzzd` detached, wait until it serves, then record `daemon.json`.
 ///
 /// Detached = a new process group (`process_group(0)`, so the daemon ignores
 /// the launching terminal's Ctrl-C) with its stdio captured to
-/// `~/.zzz/run/daemon.log`, and the child is never awaited (a dropped
-/// `std::process::Child` is not killed) — so the daemon outlives this CLI
-/// invocation. It is process-group-detached, not session-detached: a true
-/// `setsid` needs `unsafe`, which the workspace forbids, so the daemon relies
-/// on orphaning-to-init plus the separate process group to survive. Contrast
-/// `daemon start`, which keeps the server in the foreground with inherited
-/// stdio.
+/// `~/.zzz/run/daemon.log` (mode `0600`, truncated per start), and the child
+/// is never awaited (a dropped `std::process::Child` is not killed) — so the
+/// daemon outlives this CLI invocation. It is process-group-detached, not
+/// session-detached: a true `setsid` needs `unsafe`, which the workspace
+/// forbids, so the daemon relies on orphaning-to-init plus the separate
+/// process group to survive.
 ///
-/// The poll loop also watches for an early child exit (e.g. a bind failure
-/// when a wedged old daemon still holds the port) so a failed start surfaces
-/// in seconds — pointing at the log — instead of blocking the full health
-/// timeout, and the captured log makes the cause diagnosable after exit.
+/// A daemon that exits early (bad config, unreachable database) fails the
+/// start at once, with its exit status and the log's tail. Until it serves,
+/// the child is this CLI's to clean up: a timeout, an error, or
+/// SIGINT/SIGTERM/SIGHUP stops it (`SIGTERM`, then `SIGKILL`) rather than
+/// leaving an unrecorded daemon behind. `daemon.json` is written only once
+/// it serves, so a concurrent `zzz` never takes a starting daemon for a
+/// wedged one.
 async fn start_daemon_detached() -> Result<DaemonInfo, CliError> {
+    use std::os::unix::fs::PermissionsExt as _;
     use std::os::unix::process::CommandExt as _;
 
-    let port = dl::resolve_port(None);
-    let child_env = dl::build_child_env();
-    let bin = dl::resolve_server_bin();
+    let launch = DaemonLaunch::prepare(None)?;
+    let port = launch.port;
+    dl::require_free_port(port)?;
 
-    // Capture the detached daemon's stdout/stderr to a log file — it has no
-    // terminal once this CLI exits, so this is what makes a boot failure
-    // diagnosable. Truncated on each fresh start.
-    let run_dir = dl::zzz_dir()?.join("run");
-    std::fs::create_dir_all(&run_dir)?;
+    let run_dir = launch.cwd.join("run");
+    fs::create_dir_all(&run_dir)?;
     let log_path = run_dir.join("daemon.log");
-    let log = std::fs::File::create(&log_path)?;
+    let log = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&log_path)?;
+    // `mode` applies only on create; an existing log is tightened too
+    log.set_permissions(fs::Permissions::from_mode(0o600))?;
     let log_err = log.try_clone()?;
+
+    // Read before the spawn, so an unreadable boot id fails with no child.
+    let boot_id = dl::current_boot_id()?;
+    // Registered before the spawn: the child is in its own process group, so
+    // the terminal's Ctrl-C reaches only this process, which must stop it.
+    let mut signals = dl::ShutdownSignals::register()?;
 
     println!("starting daemon on port {port}...");
 
-    let mut child = std::process::Command::new(&bin)
-        .args(["--port", &port.to_string()])
-        .envs(&child_env)
+    let mut child = launch
+        .command()
         .stdin(Stdio::null())
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(log_err))
         .process_group(0)
         .spawn()
-        .map_err(|e| CliError::Daemon(format!("failed to spawn {}: {e}", bin.display())))?;
+        .map_err(|e| CliError::Daemon(format!("failed to spawn {}: {e}", launch.bin.display())))?;
     let pid = child.id();
-
-    let startup_failed = || CliError::DaemonStartupFailed {
-        port,
-        log_path: log_path.display().to_string(),
+    // Unreaped until this CLI exits, so the pid can't be reused meanwhile.
+    let start_ticks = match dl::child_start_ticks(pid) {
+        Ok(ticks) => ticks,
+        Err(e) => {
+            dl::stop_child(pid, dl::STOP_TIMEOUT, Some(&mut signals), || {
+                child.try_wait()
+            })
+            .await;
+            return Err(e);
+        }
     };
 
-    let deadline = Instant::now() + Duration::from_millis(dl::HEALTH_TIMEOUT_MS);
-    let mut healthy = false;
-    while Instant::now() < deadline {
-        if dl::check_health(port).await {
-            healthy = true;
-            break;
+    let failed = |reason: String| {
+        let tail = dl::tail_lines(&log_path, 20);
+        if !tail.is_empty() {
+            eprintln!("{tail}");
         }
-        // Bail out the moment the daemon exits (e.g. a bind failure) rather
-        // than waiting out the whole health timeout.
-        if child.try_wait()?.is_some() {
-            return Err(startup_failed());
+        CliError::DaemonStartupFailed {
+            port,
+            reason,
+            log_path: log_path.display().to_string(),
         }
-        tokio::time::sleep(Duration::from_millis(dl::HEALTH_POLL_INTERVAL_MS)).await;
-    }
-    if !healthy {
-        let _ = dl::send_sigterm(pid);
-        return Err(startup_failed());
+    };
+    let raced = tokio::select! {
+        outcome = dl::wait_until_serving(pid, port, || child.try_wait()) => Ok(outcome),
+        signal = signals.recv() => Err(signal),
+    };
+    let error = match raced {
+        Ok(Ok(StartOutcome::Serving)) => None,
+        Ok(Ok(StartOutcome::Exited(status))) => return Err(failed(status.to_string())),
+        Ok(Ok(StartOutcome::TimedOut)) => Some(failed(format!(
+            "not serving after {}ms",
+            dl::HEALTH_TIMEOUT_MS
+        ))),
+        Ok(Err(e)) => Some(e),
+        Err(signal) => Some(CliError::Interrupted { signal }),
+    };
+    if let Some(error) = error {
+        // don't leave an unrecorded daemon behind
+        dl::stop_child(pid, dl::STOP_TIMEOUT, Some(&mut signals), || {
+            child.try_wait()
+        })
+        .await;
+        return Err(error);
     }
 
-    // Healthy — release the child handle (std does not kill on drop) so the
+    // Serving — record it while the child handle is still held, so a failed
+    // write stops the daemon instead of leaving it running unrecorded.
+    let info = DaemonInfo::new(pid, boot_id, start_ticks, port);
+    if let Err(e) = dl::write_daemon_info(&info) {
+        dl::stop_child(pid, dl::STOP_TIMEOUT, Some(&mut signals), || {
+            child.try_wait()
+        })
+        .await;
+        return Err(e);
+    }
+    // Recorded — release the child handle (std does not kill on drop) so the
     // daemon keeps running after this CLI process exits.
     drop(child);
-
-    let info = DaemonInfo {
-        version: 1,
-        pid,
-        port,
-        started: fuz_sys::rfc3339_now(),
-        app_version: env!("CARGO_PKG_VERSION").to_string(),
-    };
-    dl::write_daemon_info(&info)?;
     println!(
         "daemon running on http://localhost:{port} (logs: {})",
         log_path.display()
     );
     Ok(info)
-}
-
-/// Best-effort `workspace_open` JSON-RPC call. Failures (including the
-/// `-32001 unauthenticated` the auth-gated handler returns to the
-/// credential-less CLI) only warn — the browser opens the workspace via the
-/// `?workspace=` query param.
-async fn open_workspace_best_effort(port: u16, workspace_path: &str) {
-    // reqwest uses `rustls-no-provider`; install the `ring` provider first.
-    fuz_sys::tls::ensure_crypto_provider();
-    let client = match reqwest::Client::builder()
-        .timeout(Duration::from_millis(dl::HEALTH_REQUEST_TIMEOUT_MS))
-        .build()
-    {
-        Ok(client) => client,
-        Err(e) => {
-            eprintln!("warning: could not build http client: {e}");
-            return;
-        }
-    };
-    let body = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "workspace_open",
-        "params": { "path": workspace_path },
-    });
-    let url = format!("http://localhost:{port}/api/rpc");
-    match client.post(&url).json(&body).send().await {
-        Ok(resp) if !resp.status().is_success() => {
-            eprintln!("warning: workspace_open request failed: {}", resp.status());
-        }
-        Ok(resp) => match resp.json::<serde_json::Value>().await {
-            Ok(value) => {
-                if let Some(error) = value.get("error") {
-                    let message = error
-                        .get("message")
-                        .and_then(serde_json::Value::as_str)
-                        .unwrap_or("unknown error");
-                    eprintln!("warning: workspace_open error: {message}");
-                } else {
-                    println!("workspace opened: {workspace_path}");
-                }
-            }
-            Err(e) => eprintln!("warning: could not parse workspace_open response: {e}"),
-        },
-        Err(e) => eprintln!("warning: failed to contact daemon: {e}"),
-    }
-}
-
-/// Resolve the target path to an absolute path. Absolute (`/…`) and
-/// home-relative (`~/…`) paths pass through unchanged — the daemon expands
-/// `~` — and everything else is joined onto the current directory.
-fn resolve_path(path: Option<&str>) -> Option<String> {
-    let path = path?;
-    if path.starts_with('/') || path.starts_with('~') {
-        return Some(path.to_string());
-    }
-    Some(std::env::current_dir().map_or_else(
-        |_| path.to_string(),
-        |cwd| format!("{}/{path}", cwd.display()),
-    ))
 }
 
 /// Percent-encode a string the way JavaScript's `encodeURIComponent` does:
@@ -309,25 +333,92 @@ async fn open_browser(url: &str) {
 mod tests {
     use super::*;
 
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "zzz_open_{}_{tag}_{}",
+            std::process::id(),
+            fuz_sys::rand::random_hex_suffix()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        fs::canonicalize(dir).unwrap()
+    }
+
+    fn dir_string(path: &Path) -> String {
+        format!("{}/", path.display())
+    }
+
     #[test]
-    fn resolve_path_passes_through_absolute_and_home() {
+    fn resolves_relative_and_absolute_directories() {
+        let root = temp_dir("dirs");
+        fs::create_dir_all(root.join("a/b")).unwrap();
+        let expected = OpenTarget {
+            workspace: dir_string(&root.join("a/b")),
+            file: None,
+        };
+        assert_eq!(resolve_target("a/b", &root).unwrap(), expected);
+        assert_eq!(resolve_target("a/b/", &root).unwrap(), expected);
+        assert_eq!(resolve_target("./a/./b/../b", &root).unwrap(), expected);
+        let absolute = root.join("a/b");
         assert_eq!(
-            resolve_path(Some("/abs/path")).as_deref(),
-            Some("/abs/path")
+            resolve_target(absolute.to_str().unwrap(), Path::new("/elsewhere")).unwrap(),
+            expected
         );
-        assert_eq!(resolve_path(Some("~/dev")).as_deref(), Some("~/dev"));
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn resolve_path_none_is_none() {
-        assert_eq!(resolve_path(None), None);
+    fn resolves_symlinks_to_the_canonical_directory() {
+        let root = temp_dir("links");
+        fs::create_dir_all(root.join("real")).unwrap();
+        std::os::unix::fs::symlink(root.join("real"), root.join("link")).unwrap();
+        assert_eq!(
+            resolve_target("link", &root).unwrap().workspace,
+            dir_string(&root.join("real"))
+        );
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn resolve_path_relative_is_joined_onto_cwd() {
-        let cwd = std::env::current_dir().unwrap();
-        let resolved = resolve_path(Some("foo")).unwrap();
-        assert_eq!(resolved, format!("{}/foo", cwd.display()));
+    fn a_file_opens_its_parent_directory() {
+        let root = temp_dir("file");
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/main.ts"), "").unwrap();
+        assert_eq!(
+            resolve_target("src/main.ts", &root).unwrap(),
+            OpenTarget {
+                workspace: dir_string(&root.join("src")),
+                file: Some(root.join("src/main.ts")),
+            }
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_missing_path_is_an_error_naming_the_resolved_path() {
+        let root = temp_dir("missing");
+        let err = resolve_target("nope", &root).unwrap_err();
+        assert!(matches!(err, CliError::BadPath { .. }), "{err}");
+        let message = err.to_string();
+        assert!(
+            message.contains(&root.join("nope").display().to_string()),
+            "{message}"
+        );
+        assert!(message.contains("no such file or directory"), "{message}");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn root_keeps_a_single_slash() {
+        assert_eq!(resolve_target("/", Path::new("/")).unwrap().workspace, "/");
+    }
+
+    #[test]
+    fn build_url_encodes_the_workspace() {
+        assert_eq!(build_url(4460, None), "http://localhost:4460");
+        assert_eq!(
+            build_url(4460, Some("/home/a b/")),
+            "http://localhost:4460/workspaces?workspace=%2Fhome%2Fa%20b%2F"
+        );
     }
 
     #[test]

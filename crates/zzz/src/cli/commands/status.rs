@@ -1,11 +1,13 @@
 //! `zzz status` — show current system state.
 
+use std::process::ExitCode;
+
 use argh::FromArgs;
 
 use crate::CliError;
 use crate::daemon_lifecycle::{self as dl, DaemonInfo, DaemonState};
 
-/// Show current system state (daemon, loaded workspaces, watched repos).
+/// Show current system state (exit 0 running, 1 not responding, 3 not running).
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "status")]
 pub struct Status {
@@ -14,21 +16,37 @@ pub struct Status {
     pub json: bool,
 }
 
+/// Exit code when the recorded daemon is alive but not answering `/health`.
+const EXIT_NOT_RESPONDING: u8 = 1;
+
+/// Exit code when no daemon is running (the LSB `status` convention).
+const EXIT_NOT_RUNNING: u8 = 3;
+
 /// Handle `zzz status`.
 ///
 /// Reports daemon status (the same report as `zzz daemon status`). A
 /// fuller summary (open workspaces, watcher state) is follow-on work.
-pub async fn cmd_status(args: &Status) -> Result<(), CliError> {
+pub async fn cmd_status(args: &Status) -> Result<ExitCode, CliError> {
     report_status(args.json).await
 }
 
-/// Read `daemon.json`, probe PID liveness + `/health`, and print a summary.
-/// Cleans up a stale `daemon.json` when the recorded pid is gone.
-pub async fn report_status(json: bool) -> Result<(), CliError> {
+/// Classify the recorded daemon, print a summary, and return the exit code:
+/// 0 running, 1 alive but not responding, 3 not running. Removes a stale
+/// `daemon.json` (only if it still records the stale process), in both the
+/// text and JSON forms.
+pub async fn report_status(json: bool) -> Result<ExitCode, CliError> {
     let state = dl::get_daemon_state().await;
+    let code = match &state {
+        DaemonState::Running(_) => ExitCode::SUCCESS,
+        DaemonState::Wedged(_) => ExitCode::from(EXIT_NOT_RESPONDING),
+        DaemonState::Stopped | DaemonState::Stale(_) => ExitCode::from(EXIT_NOT_RUNNING),
+    };
+    if let DaemonState::Stale(info) = &state {
+        dl::remove_daemon_info_if(info)?;
+    }
     if json {
         println!("{}", status_json(&state));
-        return Ok(());
+        return Ok(code);
     }
     match state {
         DaemonState::Stopped => println!("no daemon running"),
@@ -46,23 +64,21 @@ pub async fn report_status(json: bool) -> Result<(), CliError> {
                 info.port
             );
             println!("  pid:     {}", info.pid);
-            println!("  port:    {} (not listening)", info.port);
+            println!("  port:    {} (not answering /health)", info.port);
         }
         DaemonState::Stale(info) => {
             println!(
-                "stale daemon.json (pid {} not running) — cleaning up",
+                "no daemon running (removed stale daemon.json: pid {} is gone)",
                 info.pid
             );
-            dl::remove_daemon_info()?;
         }
     }
-    Ok(())
+    Ok(code)
 }
 
 /// The machine-readable status snapshot. `Stopped` is the bare `{running:
 /// false}`; the others carry the recorded `DaemonInfo` plus the
-/// `running`/`healthy` pair derived from the variant (the wire shape
-/// `fuz_app`'s CLI expects).
+/// `running`/`healthy` pair derived from the variant.
 fn status_json(state: &DaemonState) -> serde_json::Value {
     match state {
         DaemonState::Stopped => serde_json::json!({ "running": false }),
@@ -78,6 +94,8 @@ fn status_json_info(info: &DaemonInfo, running: bool, healthy: bool) -> serde_js
         "healthy": healthy,
         "version": info.version,
         "pid": info.pid,
+        "boot_id": info.boot_id,
+        "pid_start_ticks": info.pid_start_ticks,
         "port": info.port,
         "started": info.started,
         "app_version": info.app_version,

@@ -67,7 +67,7 @@ There are two production targets:
 Build and run the full self-hosted server:
 
 ```bash
-cargo xtask prod-setup                      # writes .env.production — edit its secrets
+cargo xtask prod-setup                      # writes .env.production (fresh cookie key) — edit its other secrets
 gro build                                 # frontend → build/
 cargo build -p zzz_server --release       # backend  → target/release/zzzd
 ./target/release/zzzd --static-dir build  # serve SPA + /api (port 4460; --port/ZZZ_PORT overrides)
@@ -75,13 +75,40 @@ cargo build -p zzz_server --release       # backend  → target/release/zzzd
 
 `zzzd` reads its config from the **process environment** — it does _not_ load
 `.env.production` itself (unlike `cargo xtask dev`, which loads `.env.development`
-and injects it into the child processes). Supply the env via your process manager, a systemd
+and injects it into the child processes — the file winning over any exported
+value, with a line per overridden key — and the `zzz` CLI, which supplies
+`~/.zzz/.env` with the exported values winning — see below). Supply the env via your process manager, a systemd
 `EnvironmentFile`, or, in a shell, `set -a && . ./.env.production && set +a` before
 running. It requires `DATABASE_URL`, `SECRET_FUZ_COOKIE_KEYS`, and a non-empty
 `FUZ_ALLOWED_ORIGINS` (it hard-fails at boot otherwise). `--static-dir` (or
 `ZZZ_STATIC_DIR`) points it at the built frontend; CLI flags win over env. In
-production the SPA and API share one origin, so `.env.production` sets every
-`PUBLIC_ZZZ_SERVER_*` port to the backend port (4460).
+production the SPA and API share one origin, so `.env.production` leaves the
+`PUBLIC_ZZZ_SERVER_*` host/port and `PUBLIC_ZZZ_WEBSOCKET_URL` empty: the UI
+derives its API and WebSocket URLs from the page's origin, so one build works
+on whatever port `zzzd` serves it from. `gro build` needs `.env.production` to
+exist — the `PUBLIC_ZZZ_*` names are read at build time. An older
+`.env.production` still carries fixed server URLs: set
+`PUBLIC_ZZZ_SERVER_PROTOCOL`, `PUBLIC_ZZZ_SERVER_HOST`,
+`PUBLIC_ZZZ_SERVER_PORT`, and `PUBLIC_ZZZ_WEBSOCKET_URL` to empty values (keep
+the lines) so the build uses the page's origin.
+
+### Through the `zzz` CLI
+
+The `zzz` CLI runs the same daemon from its home, `~/.zzz/`:
+
+```bash
+cargo build -p zzz -p zzz_server --release   # put target/release on PATH — zzz finds zzzd beside itself
+zzz init                                  # ~/.zzz/: config.json, .env (fresh cookie key), bootstrap_token
+cargo xtask prod-setup                    # .env.production, which `gro build` reads (idempotent)
+gro build && rm -rf ~/.zzz/static && cp -r build ~/.zzz/static   # the UI the daemon serves
+zzz                                       # start the daemon (detached) and open the browser
+```
+
+The CLI passes `zzzd` its own environment with `~/.zzz/.env` filling the
+gaps, runs it in `~/.zzz` (relative paths in `~/.zzz/.env` resolve there;
+relative paths in the CLI's own environment resolve against where `zzz` runs), and
+serves the UI from `ZZZ_STATIC_DIR` if set, else `~/.zzz/static` — see the
+CLI section of ../CLAUDE.md for the full rules.
 
 ## Code Generation
 

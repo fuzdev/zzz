@@ -75,6 +75,9 @@ fn daemon_start_status_stop_against_live_server() {
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://localhost/zzz_test".to_string());
     let home = temp_home("lifecycle");
+    // `daemon start` needs an initialized home and a UI build to serve; an
+    // empty `~/.zzz/static` stands in for one.
+    fs::create_dir_all(home.join(".zzz").join("static")).unwrap();
     // Take a free port from the OS (bind :0, read it, release) so concurrent
     // runs don't collide on a pid-derived guess. A small TOCTOU window remains
     // before the daemon rebinds it, which is acceptable for a gated e2e.
@@ -95,7 +98,8 @@ fn daemon_start_status_stop_against_live_server() {
             "dev-only-not-for-production-use-000",
         )
         .env("FUZ_ALLOWED_ORIGINS", "http://localhost:*")
-        .env_remove("PORT") // ensure --port wins over any inherited PORT
+        .env_remove("ZZZ_PORT") // ensure --port wins over any inherited ZZZ_PORT
+        .env_remove("ZZZ_STATIC_DIR")
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn()
@@ -135,7 +139,7 @@ fn daemon_start_status_stop_against_live_server() {
     );
     let stop_stdout = String::from_utf8_lossy(&stop.stdout);
     assert!(
-        stop_stdout.contains("stopped") || stop_stdout.contains("SIGTERM"),
+        stop_stdout.contains("stopped"),
         "unexpected stop output: {stop_stdout}"
     );
 

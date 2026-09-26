@@ -12,8 +12,11 @@
 //! (`zzz ~/dev/` ⇒ `zzz open ~/dev/`).
 
 mod cli;
+mod daemon_launch;
 mod daemon_lifecycle;
+mod env_file;
 mod error;
+mod procfs;
 
 use argh::FromArgs;
 use std::process::ExitCode;
@@ -59,35 +62,40 @@ enum Subcommand {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let Err(e) = run().await else {
-        return ExitCode::SUCCESS;
-    };
-    eprintln!("error: {e}");
-    if let Some(hint) = e.hint() {
-        eprintln!("{hint}");
+    match run().await {
+        Ok(code) => code,
+        Err(e) => {
+            eprintln!("error: {e}");
+            if let Some(hint) = e.hint() {
+                eprintln!("{hint}");
+            }
+            ExitCode::from(e.exit_code())
+        }
     }
-    ExitCode::from(e.exit_code())
 }
 
-async fn run() -> Result<(), CliError> {
+/// Dispatch the parsed command. Most commands succeed with exit 0; the
+/// status commands report the daemon's state through their exit code.
+async fn run() -> Result<ExitCode, CliError> {
     let argv: Vec<String> = std::env::args().collect();
     let cmd = parse_argv(argv);
     // `--version` / `-v` short-circuits before any subcommand dispatch (and
     // before the no-subcommand `open` default).
     if cmd.version {
         print_version();
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
-    // No subcommand → default to `open` with no path, matching the Deno CLI.
+    let success = |()| ExitCode::SUCCESS;
+    // No subcommand → default to `open` with no path.
     let Some(sub) = cmd.nested else {
-        return cmd_open(&Open { path: None }).await;
+        return cmd_open(&Open { path: None }).await.map(success);
     };
     match sub {
-        Subcommand::Open(args) => cmd_open(&args).await,
-        Subcommand::Init(args) => cmd_init(&args),
+        Subcommand::Open(args) => cmd_open(&args).await.map(success),
+        Subcommand::Init(args) => cmd_init(&args).map(success),
         Subcommand::Daemon(args) => cmd_daemon(args).await,
         Subcommand::Status(args) => cmd_status(&args).await,
-        Subcommand::Version(args) => cmd_version(&args),
+        Subcommand::Version(args) => cmd_version(&args).map(success),
     }
 }
 

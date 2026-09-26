@@ -639,7 +639,7 @@ The allowed roots are the permanent boot-time set (the app directory + scoped di
 
 ### Daemon Info
 
-`~/.zzz/run/daemon.json` tracks the running daemon (PID, port, version). The Rust CLI (`crates/zzz/src/daemon_lifecycle.rs`) writes it atomically when spawning `zzzd`, reads it back for discovery and `status`, removes it on `daemon stop`, and cleans it up when the recorded PID turns out dead (stale detection via PID liveness).
+`~/.zzz/run/daemon.json` tracks the running daemon (boot id, pid, kernel start time, port, version). The Rust CLI (`crates/zzz/src/daemon_lifecycle.rs`) writes it atomically once the spawned `zzzd` holds the listening socket and answers `/health`, reads it back for discovery and `status`, and identifies the daemon by boot id, pid, and start time — a dead or reused pid reads as stale and is never signalled; a record from an older zzz is reported, never acted on. The file is removed on `daemon stop`, when the foreground `daemon start` exits, and when found stale, each time only if it still records that same process.
 
 ## File Editing
 

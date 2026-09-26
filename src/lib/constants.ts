@@ -30,15 +30,29 @@ import {
 
 // TODO maybe remove the SERVER_ prefixes
 
+/**
+ * The page's own origin in the browser, `null` during SSR/prerender.
+ * Server URLs default to it, so a UI served by `zzzd` talks to the daemon
+ * that served it, on whatever host and port that is.
+ */
+const PAGE_ORIGIN: string | null = typeof location === 'undefined' ? null : location.origin;
+
 export const SERVER_PROTOCOL: string = PUBLIC_ZZZ_SERVER_PROTOCOL || 'http';
 
 export const SERVER_HOST: string = PUBLIC_ZZZ_SERVER_HOST || 'localhost';
 
 /**
+ * The server the UI talks to: `PUBLIC_ZZZ_SERVER_*` when
+ * `PUBLIC_ZZZ_SERVER_PORT` is set (dev: the Vite server, which proxies
+ * `/api`), else the page's origin (the UI served by `zzzd`). Empty during
+ * SSR/prerender when unset, making the API URLs root-relative there.
+ *
  * @with_protocol
  * @no_trailing_slash
  */
-export const SERVER_URL: string = `${SERVER_PROTOCOL}://${SERVER_HOST}:${PUBLIC_ZZZ_SERVER_PORT}`;
+export const SERVER_URL: string = PUBLIC_ZZZ_SERVER_PORT
+	? `${SERVER_PROTOCOL}://${SERVER_HOST}:${PUBLIC_ZZZ_SERVER_PORT}`
+	: (PAGE_ORIGIN ?? '');
 
 export const SERVER_PROXIED_PORT: number = parseInt(PUBLIC_ZZZ_SERVER_PROXIED_PORT, 10) || 4461;
 
@@ -95,14 +109,19 @@ export const API_PATH_FOR_HTTP_RPC: string = API_PATH + '/rpc';
  */
 export const API_URL_FOR_HTTP_RPC: string = SERVER_URL + API_PATH_FOR_HTTP_RPC;
 
-// TODO for production does this need to use the host? compute from the other env variables?
 /**
+ * `PUBLIC_ZZZ_WEBSOCKET_URL` when set (dev: `zzzd` directly, the Vite proxy
+ * doesn't carry WebSockets), else `API_PATH + '/ws'` on the page's origin.
+ * Empty during SSR/prerender when unset.
+ *
  * @with_protocol
  * @no_trailing_slash
  * */
 export const WEBSOCKET_URL: string = PUBLIC_ZZZ_WEBSOCKET_URL
 	? PathWithoutTrailingSlash.parse(PUBLIC_ZZZ_WEBSOCKET_URL)
-	: 'ws://localhost:4461/api/ws';
+	: PAGE_ORIGIN
+		? PAGE_ORIGIN.replace(/^http/, 'ws') + API_PATH + '/ws'
+		: '';
 
 export const WEBSOCKET_URL_OBJECT: URL | null = WEBSOCKET_URL ? new URL(WEBSOCKET_URL) : null;
 

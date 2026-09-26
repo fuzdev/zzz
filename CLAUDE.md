@@ -50,17 +50,71 @@ launching. See ./crates/CLAUDE.md for the crate layout.
 
 ```bash
 zzz                          # start daemon if needed, open browser
-zzz ~/dev/                   # open workspace at ~/dev/
+zzz ~/dev/                   # open workspace at ~/dev/ (a file opens its directory)
 zzz daemon start             # start daemon (foreground)
-zzz daemon status            # show daemon info
+zzz daemon stop              # stop the recorded daemon
+zzz daemon status            # show daemon info (exit 0 running, 1 not responding, 3 not running)
 zzz init                     # initialize ~/.zzz/
 ```
 
-The global daemon runs on port 4460 with state at `~/.zzz/`. The CLI spawns
+The global daemon runs on port 4460 with `~/.zzz/` as its home and working
+directory. `zzz init` creates it (mode `0700`) with `config.json` (the port),
+`.env` (the daemon's environment, mode `0600`, with a generated cookie key),
+`bootstrap_token` (the one-shot admin token), and the app directory `.zzz/`
+(so `~/.zzz/.zzz/`) — never overwriting an existing file. The CLI spawns
 and discovers the `zzzd` daemon binary (the `[[bin]]` target of the
-`zzz_server` crate) — found beside the CLI executable (e.g. `~/.zzz/bin/zzzd`),
-with a dev fallback to `./target/debug/zzzd`. Build both with `cargo`:
-`cargo build -p zzz` (CLI) and `cargo build -p zzz_server` (daemon → `zzzd`).
+`zzz_server` crate) — `ZZZ_SERVER_BIN`, else beside the CLI executable, else
+`~/.zzz/bin/zzzd`, with a dev fallback to `./target/debug/zzzd`
+(`ZZZ_SERVER_BIN` must `exec` the server, not fork it — the listening socket
+is checked on the spawned pid). Build both
+with `cargo`: `cargo build -p zzz` (CLI) and `cargo build -p zzz_server`
+(daemon → `zzzd`).
+
+When the CLI starts `zzzd` it:
+
+- **env** — passes its own environment, with `~/.zzz/.env` filling any
+  variable that environment doesn't set (or sets blank — a blank value is
+  never passed on: the CLI removes it from the child's env; so to disable a
+  key `~/.zzz/.env` sets, comment it out there — an empty exported value
+  doesn't override it), and
+  `FUZ_ALLOWED_ORIGINS` defaulting to
+  `http://localhost:<port>,http://127.0.0.1:<port>`. `DATABASE_URL` and
+  `SECRET_FUZ_COOKIE_KEYS` must be set in one or the other. `.env` lines
+  that aren't assignments are skipped with a warning naming their line
+  numbers.
+- **cwd** — runs it in `~/.zzz`. For the path-valued vars (`PUBLIC_ZZZ_DIR`,
+  `PUBLIC_ZZZ_SCOPED_DIRS`, `FUZ_BOOTSTRAP_TOKEN_PATH`, `ZZZ_STATIC_DIR`) the
+  CLI expands `~`; a relative value from `~/.zzz/.env` resolves against
+  `~/.zzz`, and one from the CLI's own environment against the directory
+  `zzz` runs in.
+- **port** — `--port` > `ZZZ_PORT` > `zzz_config_port` in
+  `~/.zzz/config.json` > 4460, passed as `--port`; the port must be free.
+- **UI** — `ZZZ_STATIC_DIR` if set (must be a directory), else
+  `~/.zzz/static`, passed as `--static-dir`; neither is an error.
+
+A daemon counts as started once the spawned process itself holds the
+listening socket and answers `/health` (probed on `127.0.0.1`, bypassing any
+`HTTP(S)_PROXY`); one that exits first fails the start at once (the detached
+`zzz` start shows the tail of `~/.zzz/run/daemon.log`, mode `0600`). Until it
+serves, a timeout or SIGINT/SIGTERM/SIGHUP stops the child (`SIGTERM`, then
+`SIGKILL` after 10s) — no unrecorded daemon is left behind — and
+`daemon.json` is written only once it serves. `~/.zzz/run/daemon.json`
+identifies the daemon by boot id, pid, **and** kernel start time, so a pid
+reused by another process (or a record from before a reboot) is treated as
+gone — never signalled — and the file is removed only while it still
+records the same process: by `zzz daemon start` when its foreground daemon
+exits, by `stop` (after stopping it, or once it's stale), by `zzz` (once it's
+stale, or after stopping an unresponsive one), or by `status` once it's
+stale. A `daemon.json` from an older zzz is reported with its pid ("stop it
+manually"), never signalled or removed. Once serving, foreground
+`zzz daemon start` exits with zzzd's own status (0 on a clean stop, 128 + the
+signal if one killed it); a signal during startup exits 128 + that signal, and
+a startup failure exits 1.
+
+`zzz <path>` expands `~`, resolves the path against the current directory,
+and canonicalizes it (the form the daemon stores for workspaces) before
+building the `?workspace=` URL; a missing path is an error, and a file opens
+its parent directory.
 
 ## Docs
 
@@ -439,14 +493,18 @@ connection registry — see the `broadcast` / notification builders in
 
 ## Zzz App Directory
 
-The `.zzz/` directory stores app data. Configured via `PUBLIC_ZZZ_DIR`
-(default `.zzz`, cwd-relative). The CLI's global daemon home `~/.zzz/` is a
-distinct directory that shares the name — the two coincide only when the
-daemon runs with `~` as its working directory.
+The app directory stores zzz's own files. Configured via `PUBLIC_ZZZ_DIR`
+(default `.zzz`, relative to the daemon's working directory): `./.zzz` under
+`cargo xtask dev`, `~/.zzz/.zzz` for the CLI's daemon, whose working directory
+is the daemon home `~/.zzz/` (see CLI).
 
 - `state/` — Persistent data (reserved — the Rust backend currently keeps domain state in memory)
 - `cache/` — Regenerable data, safe to delete
-- `run/` — Runtime ephemeral (daemon.json: PID, port — written by the CLI)
+- `run/` — Runtime ephemeral (the test binary's `daemon_token`)
+
+The daemon home holds the CLI's files beside it: `config.json`, `.env`,
+`bootstrap_token`, `static/` (the UI build), `bin/`, and `run/`
+(`daemon.json` — boot id, pid, start time, port — and `daemon.log`).
 
 All filesystem access goes through `ScopedFs` — path validation, no symlinks, absolute paths only.
 
@@ -455,7 +513,7 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 ### Server (read by `zzz_server` at boot)
 
 - `ZZZ_PORT` — HTTP server port (default 4460; `cargo xtask dev` uses 4461); the `--port` flag wins. The bind address is always loopback — there is no `HOST` override.
-- `ZZZ_STATIC_DIR` — directory of the built SPA to serve (`--static-dir` wins)
+- `ZZZ_STATIC_DIR` — directory of the built SPA to serve (`--static-dir` wins); must be a directory, or `zzzd` refuses to boot
 - `ZZZ_TRUSTED_PROXIES` — comma-separated trusted proxy IPs for `client_ip` resolution
 - `DATABASE_URL` — PostgreSQL connection (`postgres://`)
 - `SECRET_FUZ_COOKIE_KEYS` — HMAC signing keys (min 32 chars)
@@ -468,23 +526,35 @@ All filesystem access goes through `ScopedFs` — path validation, no symlinks, 
 - `SECRET_OPENAI_API_KEY` — OpenAI API key
 - `SECRET_GOOGLE_API_KEY` — Google Gemini API key
 
+`zzzd` reads a blank (empty or whitespace) value of any of its path vars as
+unset — `PUBLIC_ZZZ_DIR` falls back to `.zzz`, never `/` — and fails to boot
+on an empty or unresolvable path (a missing directory is fine).
+
 PTY terminals spawned by the server don't get the `SECRET_*`, `FUZ_*`,
 `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, or `PORT` variables — they're
 scrubbed from the child environment, which keeps them out of a shell's env
 but isn't isolation (see Known Limitations → PTY terminals).
 
-`NODE_ENV` and `PORT` belong to the CLI/xtask layer, not the server: the CLI
-picks the env file by `NODE_ENV` (`.env` when `production`, else
-`.env.development`) and reads `PORT` to choose the port it passes to
-`zzzd --port`.
+`zzzd` reads only its process environment — it loads no env file. The `zzz`
+CLI supplies it from `~/.zzz/.env`, where the **process env wins** (the file
+fills gaps; see CLI); `cargo xtask dev` from `.env.development`, where the
+**file wins** — it's dev's source of truth, so a stale exported
+`DATABASE_URL` can't redirect dev migrations, and xtask prints each
+inherited key it overrides. In both, a blank value is unset: a template's
+empty `SECRET_*_API_KEY=` line never clears an exported key. `.env.production` is the template for running
+`zzzd` under a process manager (see ./docs/development.md). The CLI itself also
+reads `ZZZ_SERVER_BIN` (the `zzzd` binary to spawn).
 
 ### SvelteKit frontend vars (PUBLIC_ZZZ_\*)
 
+Baked in at build time (`$env/static/public`), so each must be present in
+the env file the build reads, even if empty.
+
 - `PUBLIC_ZZZ_SERVER_PROTOCOL` — `http` or `https`
 - `PUBLIC_ZZZ_SERVER_HOST` — Server hostname (frontend)
-- `PUBLIC_ZZZ_SERVER_PORT` — SvelteKit dev server port
+- `PUBLIC_ZZZ_SERVER_PORT` — the server the UI calls (dev: the Vite port, which proxies `/api`); empty → the page's own origin, which is how the production build (served by `zzzd` on any port) is configured
 - `PUBLIC_ZZZ_SERVER_API_PATH` — API endpoint path
-- `PUBLIC_ZZZ_WEBSOCKET_URL` — WebSocket URL
+- `PUBLIC_ZZZ_WEBSOCKET_URL` — WebSocket URL (dev: `zzzd` directly); empty → `<API path>/ws` on the page's origin
 - `PUBLIC_ZZZ_SERVER_PROXIED_PORT` — Backend port (frontend)
 - `PUBLIC_ZZZ_BACKEND_ARTIFICIAL_DELAY` — Testing delay (ms) — frontend-only; currently parsed but unwired
 
@@ -521,7 +591,9 @@ for typed input/output in handlers. `Uuid` and `create_uuid` come from
 `@fuzdev/fuz_util/id.ts`, imported directly.
 
 Daemon lifecycle is owned by the Rust CLI (`crates/zzz/src/daemon_lifecycle.rs`)
-— it atomically writes `~/.zzz/run/daemon.json` (`{version, pid, port, started,
-app_version}`) when spawning `zzzd`, reads it back for discovery/`status`, and
-checks PID liveness. The shape follows fuz_app's `DaemonInfo` by convention —
-patterns only, no code reuse.
+— it atomically writes `~/.zzz/run/daemon.json` (`{version, pid, boot_id,
+pid_start_ticks, port, started, app_version}`) once the spawned `zzzd`
+serves, reads it back for discovery/`status`, and checks the process
+identity (boot id + pid + start time). The shape follows fuz_app's
+`DaemonInfo` by convention, plus `boot_id` and `pid_start_ticks` (hence
+`version: 2`) — patterns only, no code reuse.

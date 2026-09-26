@@ -143,9 +143,9 @@ async fn main() {
     // binary constructs it here and injects the handle. The token is static for
     // the process lifetime (the harness reads it once at spawn).
     //
-    // Deliberately `init_daemon_token` against `resolve_dir` rather than the
+    // Deliberately `init_daemon_token` against `resolve_zzz_dir_from_env` rather than the
     // sibling `init_daemon_token_from_env` the other testing binaries use.
-    // `resolve_dir` is `run_app`'s own resolution of `PUBLIC_ZZZ_DIR`, so the
+    // That is `run_app`'s own resolution of `PUBLIC_ZZZ_DIR`, so the
     // file lands exactly where the cross-process harness looks —
     // `<zzz_dir>/run/daemon_token` — and there is a single source of truth for
     // the directory. A dedicated `*_DAEMON_TOKEN_DIR` var would be a second one
@@ -154,9 +154,13 @@ async fn main() {
     // production" affordance buys nothing here either: `_testing_reset` always
     // needs the credential, so a missing one is a hard misconfiguration, which
     // the `expect` in the specs factory above reports.
-    let zzz_dir = zzz_server::resolve_dir(std::path::Path::new(
-        &std::env::var("PUBLIC_ZZZ_DIR").unwrap_or_else(|_| ".zzz/".to_owned()),
-    ));
+    let zzz_dir = match zzz_server::resolve_zzz_dir_from_env() {
+        Ok(dir) => dir,
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(2);
+        }
+    };
     let daemon_token_state =
         match fuz_testing::init_daemon_token(std::path::Path::new(&zzz_dir)).await {
             Ok(state) => Some(state),
