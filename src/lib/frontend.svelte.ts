@@ -40,6 +40,7 @@ import { CellJson } from './cell_types.ts';
 import { Ui, UiJson } from './ui.svelte.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Socket } from './socket.svelte.ts';
+import { RPC_MESSAGE_MAX_BYTES } from './rpc_message_limit.ts';
 import { Capabilities } from './capabilities.svelte.ts';
 import { HANDLED } from './cell_helpers.ts';
 import { ActionDispatcher } from '@fuzdev/fuz_app/actions/action_dispatcher.ts';
@@ -331,7 +332,10 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		if (options.socket_url) {
 			this.socket.connect(options.socket_url);
 			this.peer.transports.register_transport(
-				new FrontendWebsocketTransport(this.socket, (data) => this.peer.receive(data))
+				// the backend's WS cap is raised to 16 MiB — refuse only what it would
+				new FrontendWebsocketTransport(this.socket, (data) => this.peer.receive(data), {
+					max_message_bytes: RPC_MESSAGE_MAX_BYTES
+				})
 			);
 		}
 		if (options.http_rpc_url) {

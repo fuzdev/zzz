@@ -374,9 +374,7 @@ describe('zzz spec schemas cross-backend', () => {
 					content: 'over ws'
 				});
 				assert.ok(update.ok, `diskfile_update over ws: ${JSON.stringify(update)}`);
-				// TODO tighten to `assert.isNull(update.value)` once fuz_app passes
-				// non-object results through (older versions rewrap `null` as `{}`)
-				assert.include(['null', '{}'], JSON.stringify(update.value));
+				assert.isNull(update.value);
 				assert.strictEqual(await readFile(file_path, 'utf-8'), 'over ws');
 
 				const close = await api_result.workspace_close({ path: `${dir}/` as never });

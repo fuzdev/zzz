@@ -12,7 +12,7 @@ import {
 } from '@fuzdev/fuz_app/actions/socket.svelte.ts';
 import type { WebsocketRpcConnection } from '@fuzdev/fuz_app/actions/transports_ws.ts';
 import type { JsonrpcRequestId } from '@fuzdev/fuz_app/http/jsonrpc.ts';
-import { ThrownJsonrpcError, UNKNOWN_ERROR_MESSAGE } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+import { UNKNOWN_ERROR_MESSAGE } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import {
@@ -23,11 +23,6 @@ import {
 	to_heartbeat_receive_timeout
 } from './socket_helpers.ts';
 import type { Frontend } from './frontend.svelte.ts';
-import {
-	RPC_MESSAGE_MAX_BYTES,
-	create_rpc_message_too_large_error,
-	to_rpc_message_size
-} from './rpc_message_limit.ts';
 
 export interface SocketOptions {
 	app: Frontend;
@@ -271,11 +266,6 @@ export class Socket implements WebsocketRpcConnection {
 	 * canonical place. Rejects when there is no client (call `connect()` first).
 	 * Stamps `last_send_time` when the frame goes out immediately (a queued one
 	 * goes out on reconnect) and `last_receive_time` when a result arrives.
-	 *
-	 * A request larger than `RPC_MESSAGE_MAX_BYTES` rejects with
-	 * `invalid_request` (`payload_too_large`) without being sent — the backend
-	 * closes the socket on an oversized message, which would fail every
-	 * request in flight on it.
 	 */
 	request(
 		method: string,
@@ -286,13 +276,6 @@ export class Socket implements WebsocketRpcConnection {
 		if (!client) {
 			return Promise.reject(new Error('[socket] cannot request: no client (call connect first)'));
 		}
-		// TODO replace with `FrontendWebsocketTransport`'s `max_message_bytes`
-		// option once the fuz_app release that has it lands in zzz
-		const size = to_rpc_message_size({ jsonrpc: '2.0', id: options?.id ?? 0, method, params });
-		if (size > RPC_MESSAGE_MAX_BYTES) {
-			const error = create_rpc_message_too_large_error(size);
-			return Promise.reject(new ThrownJsonrpcError(error.code, error.message, error.data));
-		}
 		const sending = client.connected;
 		const result = client.request(method, params, options);
 		if (sending) this.last_send_time = Date.now();
@@ -302,17 +285,8 @@ export class Socket implements WebsocketRpcConnection {
 		});
 	}
 
-	/**
-	 * Fire-and-forget send, queued for retry when it can't go out now. A
-	 * message larger than `RPC_MESSAGE_MAX_BYTES` is dropped (logged, returns
-	 * `false`) rather than sent or queued — it would close the socket.
-	 */
+	/** Fire-and-forget send, queued for retry when it can't go out now. */
 	send(data: object): boolean {
-		const size = to_rpc_message_size(data);
-		if (size > RPC_MESSAGE_MAX_BYTES) {
-			console.error('[socket] message dropped:', create_rpc_message_too_large_error(size).message);
-			return false;
-		}
 		if (this.can_send && this.#client) {
 			try {
 				const sent = this.#client.send(data);

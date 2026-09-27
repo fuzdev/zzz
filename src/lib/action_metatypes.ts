@@ -190,7 +190,7 @@ export type BroadcastActionMethod = z.infer<typeof BroadcastActionMethod>;
  */
 export interface FrontendActionsApi {
 	heartbeat: (
-		input?: ActionInputs['heartbeat'],
+		input?: void,
 		options?: RpcClientCallOptions
 	) => Promise<Result<{ value: ActionOutputs['heartbeat'] }, { error: JsonrpcErrorObject }>>;
 	cancel: (
