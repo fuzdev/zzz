@@ -156,11 +156,15 @@ enum ChangeType {
 ///
 /// Simplified — `dependents` and `dependencies` are always empty (no
 /// dependency tracking in the Rust backend).
+///
+/// `contents` is shared, so cloning a node out of the index (a snapshot for
+/// `session_load`, a queued broadcast) doesn't copy the file's text.
 #[derive(Serialize, Clone, Debug)]
 pub struct SerializableDisknode {
     pub id: String,
     pub source_dir: String,
-    pub contents: Option<String>,
+    #[serde(serialize_with = "serialize_contents")]
+    pub contents: Option<Arc<String>>,
     pub ctime: Option<f64>,
     pub mtime: Option<f64>,
     pub dependents: Vec<Value>,
@@ -169,6 +173,48 @@ pub struct SerializableDisknode {
     /// while the file is unchanged. Not part of the wire shape.
     #[serde(skip)]
     stat: Option<FileStat>,
+}
+
+#[allow(clippy::ref_option, reason = "the signature `serialize_with` calls")]
+fn serialize_contents<S: serde::Serializer>(
+    contents: &Option<Arc<String>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    contents.as_deref().serialize(serializer)
+}
+
+/// An estimate of the serialized size in bytes of `nodes` as a JSON array.
+///
+/// Counts every node's text plus its keys, for sizing a response buffer up
+/// front (`session_load`, `workspace_open`). Text JSON escapes (quotes,
+/// backslashes, control characters) renders longer, and the buffer grows past
+/// the estimate as needed.
+pub fn disknodes_json_size_hint(nodes: &[SerializableDisknode]) -> usize {
+    /// The keys, punctuation, two timestamps, and empty arrays of a node.
+    const NODE_OVERHEAD: usize = 128;
+    nodes.iter().fold(2, |total, node| {
+        total
+            + NODE_OVERHEAD
+            + node.id.len()
+            + node.source_dir.len()
+            + node.contents.as_deref().map_or(0, String::len)
+    })
+}
+
+#[cfg(test)]
+impl SerializableDisknode {
+    /// A node with the given identity, contents, and timestamps — for tests
+    /// outside this module, which can't name `stat`.
+    pub(crate) fn for_test(id: &str, contents: Option<&str>, mtime: Option<f64>) -> Self {
+        make_disknode(
+            id.to_owned(),
+            "/w/",
+            contents.map(|c| Arc::new(c.to_owned())),
+            mtime,
+            mtime,
+            None,
+        )
+    }
 }
 
 /// A filer's in-memory index, keyed by absolute file path. Ordered so a
@@ -363,7 +409,7 @@ fn reusable_stat(stat: FileStat, bytes_read: Option<usize>, now: SystemTime) -> 
 fn make_disknode(
     id: String,
     source_dir: &str,
-    contents: Option<String>,
+    contents: Option<Arc<String>>,
     ctime: Option<f64>,
     mtime: Option<f64>,
     stat: Option<FileStat>,
@@ -392,7 +438,7 @@ fn deleted_disknode(node: SerializableDisknode) -> SerializableDisknode {
 /// between, so the open itself refuses to follow a symlink (`O_NOFOLLOW`) or
 /// block on a FIFO (`O_NONBLOCK`), the opened handle is re-checked to be a
 /// regular file, and the read is bounded regardless of the earlier size.
-async fn read_indexable_contents(path: PathBuf) -> Option<String> {
+async fn read_indexable_contents(path: PathBuf) -> Option<Arc<String>> {
     tokio::task::spawn_blocking(move || {
         use std::io::Read;
         use std::os::unix::fs::OpenOptionsExt;
@@ -402,17 +448,22 @@ async fn read_indexable_contents(path: PathBuf) -> Option<String> {
             .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
             .open(&path)
             .ok()?;
-        if !file.metadata().ok()?.is_file() {
+        let meta = file.metadata().ok()?;
+        if !meta.is_file() {
             return None;
         }
-        let mut bytes = Vec::new();
+        // sized from the metadata (one past it, to see the end) so the read
+        // doesn't grow the buffer by doubling; the bound below still holds
+        // if the file grew
+        let expected = usize::try_from(meta.len().min(MAX_INDEXED_FILE_SIZE)).ok()?;
+        let mut bytes = Vec::with_capacity(expected + 1);
         file.take(MAX_INDEXED_FILE_SIZE + 1)
             .read_to_end(&mut bytes)
             .ok()?;
         if bytes.len() as u64 > MAX_INDEXED_FILE_SIZE {
             return None;
         }
-        String::from_utf8(bytes).ok()
+        String::from_utf8(bytes).ok().map(Arc::new)
     })
     .await
     .ok()
@@ -439,7 +490,7 @@ async fn read_disknode(
     };
     let stat = reusable_stat(
         FileStat::of(meta),
-        contents.as_ref().map(String::len),
+        contents.as_deref().map(String::len),
         SystemTime::now(),
     );
     make_disknode(path_str, source_dir, contents, ctime, mtime, stat)
@@ -1469,7 +1520,7 @@ async fn scan_file(
     };
     let stat = reusable_stat(
         job.stat,
-        contents.as_ref().map(String::len),
+        contents.as_deref().map(String::len),
         SystemTime::now(),
     );
     let node = make_disknode(
@@ -2132,7 +2183,7 @@ mod tests {
         make_disknode(
             path.to_owned(),
             "/w/",
-            Some(contents.to_owned()),
+            Some(Arc::new(contents.to_owned())),
             None,
             Some(mtime),
             None,
@@ -2184,7 +2235,10 @@ mod tests {
                 "/w/top"
             ]
         );
-        assert_eq!(index["/w/d/edited"].contents.as_deref(), Some("new"));
+        assert_eq!(
+            index["/w/d/edited"].contents.as_deref().map(String::as_str),
+            Some("new")
+        );
     }
 
     // -- filesystem: walker + event loop state --------------------------------
@@ -2621,7 +2675,8 @@ mod tests {
         assert_eq!(
             state.files.read().await[&tmp.key("f.txt")]
                 .contents
-                .as_deref(),
+                .as_deref()
+                .map(String::as_str),
             Some("two")
         );
     }
@@ -3073,7 +3128,10 @@ mod tests {
                 read_indexable_contents(tmp.path(rel)),
             )
         };
-        assert_eq!(read("ok.txt").await.unwrap().as_deref(), Some("ok"));
+        assert_eq!(
+            read("ok.txt").await.unwrap().as_deref().map(String::as_str),
+            Some("ok")
+        );
         assert_eq!(read("link.txt").await.unwrap(), None);
         assert_eq!(read("big.txt").await.unwrap(), None);
         assert_eq!(read("bin").await.unwrap(), None);
@@ -3160,11 +3218,15 @@ mod tests {
         assert!(state.files.read().await[&key].stat.is_some());
 
         // an unchanged stat keeps the indexed node — the file isn't re-read
-        state.files.write().await.get_mut(&key).unwrap().contents = Some("sentinel".to_owned());
+        state.files.write().await.get_mut(&key).unwrap().contents =
+            Some(Arc::new("sentinel".to_owned()));
         state.rescan(false).await;
         assert!(state.pending.is_empty());
         assert_eq!(
-            state.files.read().await[&key].contents.as_deref(),
+            state.files.read().await[&key]
+                .contents
+                .as_deref()
+                .map(String::as_str),
             Some("sentinel")
         );
 
@@ -3184,7 +3246,10 @@ mod tests {
         state.rescan(false).await;
         assert_eq!(pending_of(&state), vec![(key.clone(), ChangeType::Change)]);
         assert_eq!(
-            state.files.read().await[&key].contents.as_deref(),
+            state.files.read().await[&key]
+                .contents
+                .as_deref()
+                .map(String::as_str),
             Some("two")
         );
     }
@@ -3589,7 +3654,10 @@ mod tests {
             drop(file);
             state.rescan(false).await;
             assert_eq!(
-                state.files.read().await[&key].contents.as_deref(),
+                state.files.read().await[&key]
+                    .contents
+                    .as_deref()
+                    .map(String::as_str),
                 Some(b.as_str()),
                 "iteration {i}"
             );
@@ -3826,5 +3894,68 @@ mod tests {
         let snapshot = manager.snapshot().await;
         assert_eq!(snapshot.roots, vec![a.root()]);
         assert_eq!(snapshot.files.len(), 1);
+    }
+
+    // -- response serialization -----------------------------------------------
+
+    #[test]
+    fn disknode_serializes_to_its_wire_shape() {
+        let node = SerializableDisknode::for_test("/w/a.txt", Some("say \"hi\"\n"), Some(2.5));
+        assert_eq!(
+            serde_json::to_value(&node).unwrap(),
+            serde_json::json!({
+                "id": "/w/a.txt",
+                "source_dir": "/w/",
+                "contents": "say \"hi\"\n",
+                "ctime": 2.5,
+                "mtime": 2.5,
+                "dependents": [],
+                "dependencies": [],
+            })
+        );
+        let unloaded = SerializableDisknode::for_test("/w/big.bin", None, None);
+        assert_eq!(
+            serde_json::to_value(&unloaded).unwrap(),
+            serde_json::json!({
+                "id": "/w/big.bin",
+                "source_dir": "/w/",
+                "contents": null,
+                "ctime": null,
+                "mtime": null,
+                "dependents": [],
+                "dependencies": [],
+            })
+        );
+    }
+
+    #[test]
+    fn disknodes_size_hint_tracks_the_rendered_size() {
+        let plain = "x".repeat(10_000);
+        let nodes: Vec<SerializableDisknode> = (0..10)
+            .map(|i| {
+                SerializableDisknode::for_test(
+                    &format!("/w/dir/file_{i}.txt"),
+                    Some(&plain),
+                    Some(1_700_000_000_000.25),
+                )
+            })
+            .collect();
+        let rendered = serde_json::to_string(&nodes).unwrap().len();
+        let hint = disknodes_json_size_hint(&nodes);
+        assert!(
+            hint.abs_diff(rendered) * 100 <= rendered,
+            "hint {hint} off rendered {rendered} by over 1%"
+        );
+        assert_eq!(disknodes_json_size_hint(&[]), "[]".len());
+    }
+
+    #[test]
+    fn a_cloned_node_shares_its_contents() {
+        let node = SerializableDisknode::for_test("/w/a.txt", Some("text"), None);
+        let clone = node.clone();
+        assert!(Arc::ptr_eq(
+            node.contents.as_ref().unwrap(),
+            clone.contents.as_ref().unwrap()
+        ));
     }
 }

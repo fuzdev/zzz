@@ -2,20 +2,22 @@
 //! (authenticated initial-state load).
 //!
 //! Spine-backed signature: `(Value, ActionContext<'_>, Arc<App>) ->
-//! Result<Value, JsonrpcError>`. `ping` is public (no auth); `session_load`
-//! is authenticated and returns the session snapshot (open workspaces, the
-//! file trees and their roots, `scoped_dirs`, provider status, the caller's
-//! terminals, and the server instance id) — loaded at boot and again after
-//! every reconnect to resync.
+//! Result<Value, JsonrpcError>` — `Result<ActionOutput, JsonrpcError>` for
+//! `session_load`, whose large output is serialized once by the transport.
+//! `ping` is public (no auth); `session_load` is authenticated and returns the
+//! session snapshot (open workspaces, the file trees and their roots,
+//! `scoped_dirs`, provider status, the caller's terminals, and the server
+//! instance id) — loaded at boot and again after every reconnect to resync.
 
 use std::sync::Arc;
 
-use fuz_actions::ActionContext;
+use fuz_actions::{ActionContext, ActionOutput};
 use fuz_auth::require_void_params;
 use fuz_http::{JsonrpcError, internal_error_with_source, invalid_params, parse_strict_params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::filer::{FilerSnapshot, SerializableDisknode, disknodes_json_size_hint};
 use crate::handlers::{App, WorkspaceInfo, caller_account_id};
 
 #[derive(Serialize)]
@@ -39,7 +41,7 @@ struct TestingEmitNotificationsResult {
 /// Twin of `SessionLoadData` in `action_specs.ts`.
 #[derive(Serialize)]
 struct SessionLoadData {
-    files: Vec<crate::filer::SerializableDisknode>,
+    files: Vec<SerializableDisknode>,
     /// The filer roots `files` covers, so a client can drop the files it has
     /// under them that `files` lacks.
     file_roots: Vec<String>,
@@ -51,6 +53,10 @@ struct SessionLoadData {
     terminal_ids: Vec<String>,
     server_instance_id: String,
 }
+
+/// The non-file part of a `session_load` response, budgeted on top of the
+/// files' size hint (roots, dirs, workspaces, provider status, terminal ids).
+const SESSION_LOAD_OVERHEAD: usize = 4096;
 
 #[derive(Serialize)]
 struct SessionLoadResult {
@@ -86,11 +92,15 @@ pub async fn ping(
 /// after a reconnect: open workspaces, every filer's file tree (rescanned for
 /// consistency) with its roots, `scoped_dirs`, provider status, the caller's
 /// live terminal ids, and `App::instance_id`.
+///
+/// The response carries every indexed file's contents, so it's handed to the
+/// transport to serialize once: the snapshot shares the index's contents, and
+/// no intermediate `Value` copy is made.
 pub async fn session_load(
     params: Value,
     ctx: ActionContext<'_>,
     app: Arc<App>,
-) -> Result<Value, JsonrpcError> {
+) -> Result<ActionOutput, JsonrpcError> {
     require_void_params(&params)?;
     let owner = caller_account_id(&ctx)?;
     let workspaces: Vec<WorkspaceInfo> = {
@@ -108,7 +118,7 @@ pub async fn session_load(
     // to every connection, like any other change; concurrent session_loads
     // share one rescan per filer.
     app.filer_manager.rescan_all().await;
-    let files = app.filer_manager.snapshot().await;
+    let FilerSnapshot { roots, files } = app.filer_manager.snapshot().await;
     let terminal_ids = app.pty_manager.terminal_ids_for_account(owner).await;
 
     let mut provider_status = Vec::new();
@@ -119,10 +129,11 @@ pub async fn session_load(
         }
     }
 
+    let size_hint = disknodes_json_size_hint(&files) + SESSION_LOAD_OVERHEAD;
     let result = SessionLoadResult {
         data: SessionLoadData {
-            files: files.files,
-            file_roots: files.roots,
+            files,
+            file_roots: roots,
             zzz_dir: app.zzz_dir.clone(),
             scoped_dirs: app.scoped_dirs.clone(),
             provider_status,
@@ -131,7 +142,7 @@ pub async fn session_load(
             server_instance_id: app.instance_id.to_string(),
         },
     };
-    serde_json::to_value(result).map_err(|e| internal_error_with_source("serialization failed", &e))
+    Ok(ActionOutput::serialize(result).with_size_hint(size_hint))
 }
 
 /// `_testing_emit_notifications` — test-only action used by the integration
@@ -157,4 +168,62 @@ pub async fn testing_emit_notifications(
     }
     serde_json::to_value(TestingEmitNotificationsResult { count })
         .map_err(|e| internal_error_with_source("serialization failed", &e))
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    /// A `session_load` result, serialized straight from the structs, has the
+    /// shape `SessionLoadData` declares.
+    #[test]
+    fn session_load_result_serializes_to_its_wire_shape() {
+        let result = SessionLoadResult {
+            data: SessionLoadData {
+                files: vec![SerializableDisknode::for_test(
+                    "/s/a.txt",
+                    Some("a"),
+                    Some(1.5),
+                )],
+                file_roots: vec!["/s/".to_owned()],
+                zzz_dir: "/z".to_owned(),
+                scoped_dirs: vec!["/s".to_owned()],
+                provider_status: vec![json!({"name": "claude", "available": false})],
+                workspaces: vec![WorkspaceInfo {
+                    path: "/w/".to_owned(),
+                    name: "w".to_owned(),
+                    opened_at: "2026-01-01T00:00:00Z".to_owned(),
+                }],
+                terminal_ids: vec!["t1".to_owned()],
+                server_instance_id: "00000000-0000-4000-8000-000000000000".to_owned(),
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&result).unwrap(),
+            json!({"data": {
+                "files": [{
+                    "id": "/s/a.txt",
+                    "source_dir": "/w/",
+                    "contents": "a",
+                    "ctime": 1.5,
+                    "mtime": 1.5,
+                    "dependents": [],
+                    "dependencies": [],
+                }],
+                "file_roots": ["/s/"],
+                "zzz_dir": "/z",
+                "scoped_dirs": ["/s"],
+                "provider_status": [{"name": "claude", "available": false}],
+                "workspaces": [{
+                    "path": "/w/",
+                    "name": "w",
+                    "opened_at": "2026-01-01T00:00:00Z",
+                }],
+                "terminal_ids": ["t1"],
+                "server_instance_id": "00000000-0000-4000-8000-000000000000",
+            }})
+        );
+    }
 }

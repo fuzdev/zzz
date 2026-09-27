@@ -392,7 +392,7 @@ wiped on backend startup (`FUZ_TESTING_RESET_DB_ON_STARTUP`) and
 crates/zzz_server/src/
 ├── lib.rs            # `run_app(RunAppOptions)` — full lifecycle: env/config, DB pool + migrations, spine state construction (keyring, audit emitter, connection + SSE registries, rate limiters), `ActionRegistry::compile`, file watchers, route composition, graceful shutdown
 ├── main.rs           # Thin production entry — constructs `Argon2idHasher`, calls `run_app`
-├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`)
+├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`; `session_load` and `workspace_open` return a `fuz_actions::ActionOutput` — see Large responses below)
 │   ├── mod.rs        # `App` long-lived state (workspaces, `workspace_lifecycle`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `ProviderManager`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
 │   ├── core.rs       # ping, session_load, _testing_emit_notifications
 │   ├── filesystem.rs # diskfile_update, diskfile_create, diskfile_delete, directory_create
@@ -428,6 +428,19 @@ and `perform_action`), and DB pool / migrations all live in the spine crates
 `broadcast` shim over `App.realtime`, and the per-domain handlers; socket
 revocation is the spine `ConnectionRegistry`'s `SocketRevoker` (see Auth
 item 10).
+
+**Large responses**: `session_load` and `workspace_open` carry every
+indexed file's contents, so they skip the `serde_json::Value` round trip: the
+filer index holds contents as `Arc<String>` (a snapshot clones pointers, not
+text), the handler returns its typed result as a `fuz_actions::ActionOutput`
+(registered with `ActionSpec::new_output`, sized up front from the contents),
+and the spine serializes it once, straight into the response body — so an
+HTTP response costs about its own size in memory, and a WebSocket one about
+twice that (tungstenite copies each outgoing frame into its write buffer).
+Keys come out in struct declaration order rather than the sorted order of a
+`Value` rendering — the same JSON, which no client may depend on the key
+order of. Responses aren't capped: a workspace of many large files is a large
+response.
 
 **App + dispatch**: `App` (in `handlers/mod.rs`) holds zzz's long-lived,
 non-spine state — `instance_id` (a UUID minted at boot, returned by
@@ -697,7 +710,11 @@ metadata contract, the bootstrap success/failure audit rows, and the
     budget, so the loop calls `tokio::task::coop::consume_budget()` per chunk
     — a child that never stops writing (`yes`) can't pin a worker thread.
   - **Input**: `terminal_data_send` enqueues onto a bounded per-terminal queue
-    (256 chunks; full → `queue_overflow`) and returns; the task writes each
+    (at most 256 chunks and 4 MiB held — queued or being written; past
+    either → `queue_overflow`, nothing enqueued) and returns. A single chunk
+    over 4 MiB is accepted only while nothing is held, so any send the
+    16 MiB message cap admits still goes through, and a terminal holds at
+    most one such chunk. The task writes each
     chunk in full — looping on partial writes, waiting for writability on
     `EAGAIN` — before the next, so a large paste is never truncated and two
     chunks never interleave. Chunks are written in the order sends reach the

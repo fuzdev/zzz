@@ -7,8 +7,9 @@
 //!   `Utf8StreamDecoder` so a multibyte character split across reads survives,
 //!   and sent as `terminal_data`. The task spends cooperative budget per
 //!   chunk, so a flood (`yes`, `cat /dev/urandom`) can't pin a runtime worker.
-//! - **Input** — `terminal_data_send` enqueues onto a bounded per-terminal
-//!   queue; the task writes each chunk fully (looping on partial writes and
+//! - **Input** — `terminal_data_send` enqueues onto a per-terminal queue
+//!   bounded in chunks and bytes (`INPUT_QUEUE_CAPACITY`,
+//!   `INPUT_QUEUE_MAX_BYTES`); the task writes each chunk fully (looping on partial writes and
 //!   waiting for writability) before the next, so input is never silently
 //!   truncated and chunks never interleave. Chunks are written in the order
 //!   sends reach the handler — sends on one socket are dispatched
@@ -36,6 +37,7 @@ use std::io;
 use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use fuz_pty::{Pty, PtyError, ReadResult, WaitResult};
@@ -58,8 +60,15 @@ const DEFAULT_ROWS: u16 = 24;
 const READ_BUFFER_SIZE: usize = 8192;
 
 /// Max `terminal_data_send` chunks queued per terminal before input is
-/// refused with `queue_overflow` (the child isn't reading its input).
+/// refused with `queue_overflow` (the child isn't reading its input) —
+/// bounds the per-chunk overhead of many small sends.
 const INPUT_QUEUE_CAPACITY: usize = 256;
+
+/// Max bytes of input held per terminal — queued, or being written — before
+/// input is refused with `queue_overflow`. A single chunk larger than this is
+/// accepted when nothing is held, so any send the message cap admits is still
+/// written in full; a terminal holds at most one such chunk.
+const INPUT_QUEUE_MAX_BYTES: usize = 4 * 1024 * 1024;
 
 /// How long `terminal_close` waits for the requested signal to end the child
 /// before closing the master.
@@ -160,6 +169,61 @@ pub enum TerminalWriteError {
     InputFull,
 }
 
+/// A terminal's input byte budget ([`INPUT_QUEUE_MAX_BYTES`]), shared by the
+/// manager (which reserves on send) and the terminal's task (whose chunks
+/// release on drop — written, failed, or discarded with the task).
+#[derive(Debug)]
+struct InputBudget {
+    held: AtomicUsize,
+    max: usize,
+}
+
+impl InputBudget {
+    const fn new(max: usize) -> Self {
+        Self {
+            held: AtomicUsize::new(0),
+            max,
+        }
+    }
+
+    /// Reserve `len` bytes, or `None` if they'd take the terminal past its
+    /// budget. A chunk over the whole budget is admitted only when nothing is
+    /// held, so it can't stall forever behind the cap.
+    fn try_reserve(self: &Arc<Self>, len: usize) -> Option<InputReservation> {
+        self.held
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |held| {
+                let total = held.checked_add(len)?;
+                (held == 0 || total <= self.max).then_some(total)
+            })
+            .ok()?;
+        Some(InputReservation {
+            budget: Arc::clone(self),
+            len,
+        })
+    }
+}
+
+/// Bytes reserved from an [`InputBudget`], released when dropped.
+#[derive(Debug)]
+struct InputReservation {
+    budget: Arc<InputBudget>,
+    len: usize,
+}
+
+impl Drop for InputReservation {
+    fn drop(&mut self) {
+        self.budget.held.fetch_sub(self.len, Ordering::AcqRel);
+    }
+}
+
+/// An input chunk on a terminal's queue, holding its bytes' reservation until
+/// it's dropped.
+#[derive(Debug)]
+struct QueuedInput {
+    data: Vec<u8>,
+    _reservation: InputReservation,
+}
+
 /// A request for a terminal's task to shut the child down.
 struct CloseRequest {
     signal: i32,
@@ -175,7 +239,8 @@ struct TerminalEntry {
     /// The account that created the terminal — the only one that sees its
     /// output or can drive it.
     owner: Uuid,
-    input: mpsc::Sender<Vec<u8>>,
+    input: mpsc::Sender<QueuedInput>,
+    input_budget: Arc<InputBudget>,
     size: watch::Sender<(u16, u16)>,
     close: oneshot::Sender<CloseRequest>,
     task: JoinHandle<()>,
@@ -284,7 +349,9 @@ impl PtyManager {
     ///
     /// `NotFound` when `owner` has no terminal `terminal_id` (see
     /// [`TerminalNotFound`]) — checked for empty `data` too; `InputFull` when
-    /// its input queue is full.
+    /// its input queue is full — [`INPUT_QUEUE_CAPACITY`] chunks, or
+    /// [`INPUT_QUEUE_MAX_BYTES`] bytes (a larger chunk only once nothing is
+    /// held).
     pub async fn write(
         &self,
         owner: Uuid,
@@ -296,7 +363,16 @@ impl PtyManager {
         if data.is_empty() {
             return Ok(());
         }
-        match entry.input.try_send(data.as_bytes().to_vec()) {
+        let reservation = entry
+            .input_budget
+            .try_reserve(data.len())
+            .ok_or(TerminalWriteError::InputFull)?;
+        // a refused chunk is dropped here, releasing its reservation
+        let chunk = QueuedInput {
+            data: data.as_bytes().to_vec(),
+            _reservation: reservation,
+        };
+        match entry.input.try_send(chunk) {
             Ok(()) | Err(TrySendError::Closed(_)) => Ok(()),
             Err(TrySendError::Full(_)) => Err(TerminalWriteError::InputFull),
         }
@@ -501,6 +577,7 @@ async fn spawn_terminal(
     };
 
     let (input_tx, input_rx) = mpsc::channel(INPUT_QUEUE_CAPACITY);
+    let input_budget = Arc::new(InputBudget::new(INPUT_QUEUE_MAX_BYTES));
     let (size_tx, size_rx) = watch::channel((DEFAULT_COLS, DEFAULT_ROWS));
     let (close_tx, close_rx) = oneshot::channel();
 
@@ -521,6 +598,7 @@ async fn spawn_terminal(
         TerminalEntry {
             owner,
             input: input_tx,
+            input_budget,
             size: size_tx,
             close: close_tx,
             task,
@@ -538,7 +616,7 @@ struct TerminalIo {
     owner: Uuid,
     terminal_id: String,
     master: AsyncFd<PtyHandle>,
-    input_rx: mpsc::Receiver<Vec<u8>>,
+    input_rx: mpsc::Receiver<QueuedInput>,
     size_rx: watch::Receiver<(u16, u16)>,
     close_rx: oneshot::Receiver<CloseRequest>,
     app: Arc<App>,
@@ -552,9 +630,10 @@ enum IoOutcome {
     Close(CloseRequest),
 }
 
-/// A queued input chunk being written, possibly across several writes.
+/// A queued input chunk being written, possibly across several writes. Its
+/// bytes stay reserved until it's dropped — written in full, or abandoned.
 struct PendingWrite {
-    data: Vec<u8>,
+    input: QueuedInput,
     written: usize,
 }
 
@@ -654,14 +733,14 @@ async fn pump_io(io: &mut TerminalIo, decoder: &mut Utf8StreamDecoder) -> IoOutc
                 let Some(write) = pending.as_mut() else {
                     continue;
                 };
-                let unwritten = &write.data[write.written..];
+                let unwritten = &write.input.data[write.written..];
                 let result =
                     guard.try_io(|master| write_master(&master.get_ref().pty, unwritten));
                 drop(guard);
                 match result {
                     Ok(Ok(n)) if n > 0 => {
                         write.written += n;
-                        if write.written >= write.data.len() {
+                        if write.written >= write.input.data.len() {
                             pending = None;
                         }
                     }
@@ -679,7 +758,7 @@ async fn pump_io(io: &mut TerminalIo, decoder: &mut Utf8StreamDecoder) -> IoOutc
             }
             chunk = io.input_rx.recv(), if input_open && pending.is_none() => {
                 match chunk {
-                    Some(data) => pending = Some(PendingWrite { data, written: 0 }),
+                    Some(input) => pending = Some(PendingWrite { input, written: 0 }),
                     None => input_open = false,
                 }
             }
@@ -990,7 +1069,7 @@ mod tests {
 
     /// A terminal's receiving ends, kept alive so its channels stay open.
     struct FakeTerminal {
-        input: mpsc::Receiver<Vec<u8>>,
+        input: mpsc::Receiver<QueuedInput>,
         size: watch::Receiver<(u16, u16)>,
         _close: oneshot::Receiver<CloseRequest>,
     }
@@ -1005,6 +1084,7 @@ mod tests {
             TerminalEntry {
                 owner,
                 input: input_tx,
+                input_budget: Arc::new(InputBudget::new(INPUT_QUEUE_MAX_BYTES)),
                 size: size_tx,
                 close: close_tx,
                 task: tokio::spawn(async {}),
@@ -1055,7 +1135,7 @@ mod tests {
 
         // the owner drives it
         assert_eq!(manager.write(owner, "t1", "mine").await, Ok(()));
-        assert_eq!(fake.input.try_recv().unwrap(), b"mine");
+        assert_eq!(fake.input.try_recv().unwrap().data, b"mine");
         assert_eq!(manager.write(owner, "t1", "").await, Ok(()));
         assert!(fake.input.try_recv().is_err(), "empty writes aren't queued");
         assert_eq!(manager.resize(owner, "t1", 100, 30).await, Ok(()));
@@ -1073,6 +1153,90 @@ mod tests {
         assert_eq!(
             manager.write(owner, "t1", "x").await,
             Err(TerminalWriteError::InputFull)
+        );
+    }
+
+    #[tokio::test]
+    async fn input_is_capped_by_bytes_held() {
+        let manager = PtyManager::new();
+        let owner = Uuid::new_v4();
+        let mut fake = insert_fake(&manager, "t1", owner).await;
+        let quarter = "x".repeat(INPUT_QUEUE_MAX_BYTES / 4);
+        for _ in 0..4 {
+            manager.write(owner, "t1", &quarter).await.unwrap();
+        }
+        // the budget is spent, though far fewer chunks than the count cap
+        assert_eq!(
+            manager.write(owner, "t1", "x").await,
+            Err(TerminalWriteError::InputFull)
+        );
+        // a chunk written (dropped by the task) frees its bytes
+        drop(fake.input.try_recv().unwrap());
+        manager.write(owner, "t1", &quarter).await.unwrap();
+        assert_eq!(
+            manager.write(owner, "t1", "x").await,
+            Err(TerminalWriteError::InputFull)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_chunk_over_the_byte_cap_waits_for_an_empty_queue() {
+        let manager = PtyManager::new();
+        let owner = Uuid::new_v4();
+        let mut fake = insert_fake(&manager, "t1", owner).await;
+        let big = "x".repeat(INPUT_QUEUE_MAX_BYTES + 1);
+        manager.write(owner, "t1", "a").await.unwrap();
+        // refused while anything is held
+        assert_eq!(
+            manager.write(owner, "t1", &big).await,
+            Err(TerminalWriteError::InputFull)
+        );
+        drop(fake.input.try_recv().unwrap());
+        // accepted once nothing is — and written in full
+        manager.write(owner, "t1", &big).await.unwrap();
+        // it holds the whole budget until it's written
+        assert_eq!(
+            manager.write(owner, "t1", "b").await,
+            Err(TerminalWriteError::InputFull)
+        );
+        assert_eq!(fake.input.try_recv().unwrap().data.len(), big.len());
+        manager.write(owner, "t1", "b").await.unwrap();
+    }
+
+    #[test]
+    fn a_reservation_releases_on_drop() {
+        let budget = Arc::new(InputBudget::new(10));
+        let a = budget.try_reserve(6).unwrap();
+        assert!(budget.try_reserve(5).is_none(), "6 + 5 is over 10");
+        let b = budget.try_reserve(4).unwrap();
+        drop(a);
+        assert_eq!(budget.held.load(Ordering::Acquire), 4);
+        drop(b);
+        assert_eq!(budget.held.load(Ordering::Acquire), 0);
+        // over the whole budget: only when nothing is held
+        let big = budget.try_reserve(11).unwrap();
+        assert!(budget.try_reserve(1).is_none());
+        drop(big);
+        assert!(budget.try_reserve(1).is_some());
+    }
+
+    #[tokio::test]
+    async fn a_refused_chunk_releases_its_bytes() {
+        let manager = PtyManager::new();
+        let owner = Uuid::new_v4();
+        let _fake = insert_fake(&manager, "t1", owner).await;
+        for _ in 0..INPUT_QUEUE_CAPACITY {
+            manager.write(owner, "t1", "x").await.unwrap();
+        }
+        // refused by the chunk count, after its bytes were reserved
+        assert_eq!(
+            manager.write(owner, "t1", "y").await,
+            Err(TerminalWriteError::InputFull)
+        );
+        let terminals = manager.terminals.read().await;
+        assert_eq!(
+            terminals["t1"].input_budget.held.load(Ordering::Acquire),
+            INPUT_QUEUE_CAPACITY
         );
     }
 

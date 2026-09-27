@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use fuz_actions::{ActionContext, ActionHandler, ActionSpec};
+use fuz_actions::{ActionContext, ActionHandler, ActionOutputHandler, ActionSpec};
 use fuz_auth::{AuthSpec, CredentialGate};
 use serde_json::Value;
 
@@ -50,13 +50,14 @@ fn workspace_list_spec(app: Arc<App>) -> ActionSpec {
 }
 
 fn workspace_open_spec(app: Arc<App>) -> ActionSpec {
-    let handler: ActionHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
+    let handler: ActionOutputHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
         let app = Arc::clone(&app);
         Box::pin(async move { workspace::workspace_open(params, ctx, app).await })
     });
-    ActionSpec::with_side_effects(
+    ActionSpec::new_output(
         "workspace_open",
         AuthSpec::authenticated(CredentialGate::Any),
+        true,
         handler,
     )
 }

@@ -9,7 +9,7 @@ use std::collections::hash_map::Entry;
 use std::path::Path;
 use std::sync::Arc;
 
-use fuz_actions::ActionContext;
+use fuz_actions::{ActionContext, ActionOutput};
 use fuz_auth::require_void_params;
 use fuz_http::{
     JsonrpcError, forbidden, internal_error_with_source, invalid_params, parse_strict_params,
@@ -18,7 +18,10 @@ use fuz_realtime::notify_to_string;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::filer::{FilerConfig, FilerLifetime, SerializableDisknode, WatchStatus, is_in_zzz_home};
+use crate::filer::{
+    FilerConfig, FilerLifetime, SerializableDisknode, WatchStatus, disknodes_json_size_hint,
+    is_in_zzz_home,
+};
 use crate::handlers::filesystem::{
     ERROR_INVALID_PATH, ERROR_NOT_A_DIRECTORY, ERROR_PATH_NOT_FOUND, ERROR_PERMISSION_DENIED,
 };
@@ -180,12 +183,14 @@ pub async fn workspace_list(
 /// Returns the workspace plus its filer's file index and watch status — on
 /// the idempotent path too, so a client re-opening an already-open workspace
 /// can seed its tree the same way. A directory whose listing is refused
-/// fails with `forbidden` (`permission_denied`), leaving nothing open.
+/// fails with `forbidden` (`permission_denied`), leaving nothing open. The
+/// file index — contents included — is handed to the transport to serialize
+/// once, sharing the index's contents.
 pub async fn workspace_open(
     params: Value,
     _ctx: ActionContext<'_>,
     app: Arc<App>,
-) -> Result<Value, JsonrpcError> {
+) -> Result<ActionOutput, JsonrpcError> {
     let WorkspacePathInput { path } = parse_strict_params(params)?;
     let path = path.as_str();
     require_absolute(path)?;
@@ -248,7 +253,7 @@ async fn open_workspace(
     app: Arc<App>,
     info: WorkspaceInfo,
     requested: String,
-) -> Result<Value, JsonrpcError> {
+) -> Result<ActionOutput, JsonrpcError> {
     let key = info.path.clone();
 
     // Start (or find) the filer before taking the lifecycle lock: its
@@ -298,13 +303,18 @@ async fn open_workspace(
 
     let files = app.filer_manager.files_for(&workspace.path).await;
     let watch_status = app.filer_manager.watch_status_for(&workspace.path).await;
+    let size_hint = disknodes_json_size_hint(&files) + WORKSPACE_OPEN_OVERHEAD;
     let result = WorkspaceOpenResult {
         workspace,
         files,
         watch_status,
     };
-    serde_json::to_value(result).map_err(|e| internal_error_with_source("serialization failed", &e))
+    Ok(ActionOutput::serialize(result).with_size_hint(size_hint))
 }
+
+/// The non-file part of a `workspace_open` response, budgeted on top of the
+/// files' size hint.
+const WORKSPACE_OPEN_OVERHEAD: usize = 1024;
 
 /// Start the workspace filer for `path` (normalized, trailing `/`), or find
 /// the one already running.
@@ -431,6 +441,45 @@ mod tests {
     use fuz_http::JsonrpcErrorCode;
 
     use super::*;
+    /// A `workspace_open` result, serialized straight from the structs, has
+    /// the shape `WorkspaceOpenOutput` declares.
+    #[test]
+    fn workspace_open_result_serializes_to_its_wire_shape() {
+        for (watch_status, wire) in [
+            (WatchStatus::Full, "full"),
+            (WatchStatus::Degraded, "degraded"),
+        ] {
+            let result = WorkspaceOpenResult {
+                workspace: WorkspaceInfo {
+                    path: "/w/".to_owned(),
+                    name: "w".to_owned(),
+                    opened_at: "2026-01-01T00:00:00Z".to_owned(),
+                },
+                files: vec![SerializableDisknode::for_test("/w/b.bin", None, None)],
+                watch_status,
+            };
+            assert_eq!(
+                serde_json::to_value(&result).unwrap(),
+                serde_json::json!({
+                    "workspace": {
+                        "path": "/w/",
+                        "name": "w",
+                        "opened_at": "2026-01-01T00:00:00Z",
+                    },
+                    "files": [{
+                        "id": "/w/b.bin",
+                        "source_dir": "/w/",
+                        "contents": null,
+                        "ctime": null,
+                        "mtime": null,
+                        "dependents": [],
+                        "dependencies": [],
+                    }],
+                    "watch_status": wire,
+                })
+            );
+        }
+    }
 
     fn reason(error: &JsonrpcError) -> Option<&str> {
         error.data.as_ref()?.get("reason")?.as_str()

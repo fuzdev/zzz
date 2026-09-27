@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use fuz_actions::{ActionContext, ActionHandler, ActionSpec};
+use fuz_actions::{ActionContext, ActionHandler, ActionOutputHandler, ActionSpec};
 use fuz_auth::{AuthSpec, CredentialGate};
 use serde_json::Value;
 
@@ -29,13 +29,14 @@ fn ping_spec(app: Arc<App>) -> ActionSpec {
 }
 
 fn session_load_spec(app: Arc<App>) -> ActionSpec {
-    let handler: ActionHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
+    let handler: ActionOutputHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
         let app = Arc::clone(&app);
         Box::pin(async move { core::session_load(params, ctx, app).await })
     });
-    ActionSpec::read_only(
+    ActionSpec::new_output(
         "session_load",
         AuthSpec::authenticated(CredentialGate::Any),
+        false,
         handler,
     )
 }

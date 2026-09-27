@@ -37,6 +37,7 @@ import type {
 } from '@fuzdev/fuz_app/actions/action_spec.ts';
 import { all_account_action_specs } from '@fuzdev/fuz_app/auth/account_action_specs.ts';
 import { is_void_schema } from '@fuzdev/fuz_app/http/schema_helpers.ts';
+import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 import {
 	directory_create_action_spec,
@@ -44,6 +45,7 @@ import {
 	diskfile_delete_action_spec,
 	diskfile_update_action_spec,
 	filer_change_action_spec,
+	heartbeat_action_spec,
 	ping_action_spec,
 	provider_load_status_action_spec,
 	session_load_action_spec,
@@ -170,7 +172,22 @@ describe('zzz spec schemas cross-backend', () => {
 						assert.fail(`${label} over ws: ${e instanceof Error ? e.message : String(e)}`);
 					});
 					assert_parses(spec.output, result, `${label} result (ws)`);
-					await call_and_check(fixture, spec, params);
+					if (spec.method === heartbeat_action_spec.method) {
+						// served over the WebSocket only — over HTTP it's an unknown method
+						const res = await rpc_call({
+							app: fixture.transport,
+							path: handle.config.rpc_path,
+							method: spec.method,
+							params,
+							headers: fixture.create_session_headers()
+						});
+						assert.ok(
+							!res.ok && res.error.code === JSONRPC_ERROR_CODES.method_not_found,
+							`${label} over http: ${JSON.stringify(res)}`
+						);
+					} else {
+						await call_and_check(fixture, spec, params);
+					}
 				}
 				// a declared key is still refused
 				const refused = await ws.request(randomUUID(), spec.method, { nope: 1 }).then(
