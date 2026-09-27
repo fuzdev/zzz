@@ -22,11 +22,6 @@ it replaced (path, query, and hash).
 
 For coding conventions, see Skill(fuz-stack).
 
-## Committing
-
-`git add` and `git commit` are denied by `.claude/settings.local.json` in
-this repo — make the edits and stop, the user commits.
-
 ## What zzz Does
 
 1. **Chat** with AI models — multi-thread, multi-model comparison, streaming responses
