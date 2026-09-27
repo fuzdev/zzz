@@ -1,7 +1,15 @@
 import { test, describe, assert, vi, afterEach } from 'vitest';
 
-import { normalize_path, prompt_create_diskfile, to_relative_path } from '$lib/diskfile_helpers.ts';
+import {
+	delete_diskfile,
+	normalize_path,
+	parse_new_diskfile_name,
+	prompt_create_diskfile,
+	to_relative_path
+} from '$lib/diskfile_helpers.ts';
 import type { Diskfiles } from '$lib/diskfiles.svelte.ts';
+import { DiskfilePath } from '$lib/diskfile_types.ts';
+import type { Diskfile } from '$lib/diskfile.svelte.ts';
 
 describe('to_relative_path', () => {
 	test('a path inside the parent is relative to it', () => {
@@ -65,6 +73,65 @@ describe('normalize_path', () => {
 	}
 });
 
+describe('parse_new_diskfile_name', () => {
+	const accepted: Array<[string, 'file' | 'folder', string]> = [
+		['a.txt', 'file', 'a.txt'],
+		['  a.txt \n', 'file', 'a.txt'],
+		['/a.txt', 'file', 'a.txt'],
+		['//sub/a.txt', 'file', 'sub/a.txt'],
+		['my file.txt', 'file', 'my file.txt'],
+		['sub dir/a b.txt', 'file', 'sub dir/a b.txt'],
+		['..a/b..', 'file', '..a/b..'],
+		['.env', 'file', '.env'],
+		['   /b.txt', 'file', 'b.txt'],
+		['  /  a.txt', 'file', 'a.txt'],
+		[' / / a.txt ', 'file', 'a.txt'],
+		// left for the backend to normalize
+		['./a.txt', 'file', './a.txt'],
+		['sub/../a.txt', 'file', 'sub/../a.txt'],
+		['sub//a.txt', 'file', 'sub//a.txt'],
+		['src', 'folder', 'src'],
+		['src/', 'folder', 'src/'],
+		['a/b/..', 'folder', 'a/b/..'],
+		['a/.', 'folder', 'a/.'],
+		[' src/lib/ ', 'folder', 'src/lib/']
+	];
+	for (const [name, kind, expected] of accepted) {
+		test(`accepts ${JSON.stringify(name)} as a ${kind} → ${JSON.stringify(expected)}`, () => {
+			const result = parse_new_diskfile_name(name, kind);
+			assert.ok(result.ok);
+			assert.strictEqual(result.value, expected);
+		});
+	}
+
+	const refused: Array<[string, 'file' | 'folder', string]> = [
+		['', 'file', 'must not be blank'],
+		['   ', 'file', 'must not be blank'],
+		['\t\n', 'folder', 'must not be blank'],
+		['/', 'file', 'must not be blank'],
+		[' / ', 'folder', 'must not be blank'],
+		['.', 'folder', 'names the directory itself'],
+		['sub/..', 'folder', 'names the directory itself'],
+		['a/', 'file', 'not "/"'],
+		['sub/ \t', 'file', 'not "/"'],
+		['x/.', 'file', 'not "."'],
+		['x/y/..', 'file', 'not ".."'],
+		['.', 'file', 'not "."'],
+		['a/   /b', 'folder', 'whitespace-only segment'],
+		['sub/ \t/a.txt', 'file', 'whitespace-only segment'],
+		['..', 'folder', 'inside the directory'],
+		['../a.txt', 'file', 'inside the directory'],
+		['sub/../../a.txt', 'file', 'inside the directory']
+	];
+	for (const [name, kind, message] of refused) {
+		test(`refuses ${JSON.stringify(name)} as a ${kind}`, () => {
+			const result = parse_new_diskfile_name(name, kind);
+			assert.ok(!result.ok);
+			assert.include(result.message, message);
+		});
+	}
+});
+
 describe('prompt_create_diskfile', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
@@ -116,11 +183,62 @@ describe('prompt_create_diskfile', () => {
 		vi.stubGlobal('prompt', () => 'a.txt');
 		const alerts: Array<string> = [];
 		vi.stubGlobal('alert', (message: string) => alerts.push(message));
-		vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const console_error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const { diskfiles } = create_diskfiles(new Error('already exists'));
 
 		await prompt_create_diskfile(diskfiles, 'folder');
 
-		assert.deepEqual(alerts, ['failed to create folder: already exists']);
+		assert.deepEqual(alerts, ["couldn't create folder a.txt: already exists"]);
+		assert.strictEqual(console_error.mock.calls.length, 0, 'the action handler logs it');
+	});
+
+	test('quotes a blank name in the alert', async () => {
+		vi.stubGlobal('prompt', () => '   ');
+		const alerts: Array<string> = [];
+		vi.stubGlobal('alert', (message: string) => alerts.push(message));
+		const { diskfiles } = create_diskfiles(new Error('file name must not be blank'));
+
+		await prompt_create_diskfile(diskfiles, 'file');
+
+		assert.deepEqual(alerts, ['couldn\'t create file "   ": file name must not be blank']);
+	});
+});
+
+describe('delete_diskfile', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.restoreAllMocks();
+	});
+
+	const path = DiskfilePath.parse('/ws/a.txt');
+	const diskfile = { path, path_relative: 'ws/a.txt' } as unknown as Diskfile;
+
+	test('deletes the file', async () => {
+		const deleted: Array<string> = [];
+		const diskfiles = {
+			delete: (p: string) => {
+				deleted.push(p);
+				return Promise.resolve();
+			}
+		} as unknown as Diskfiles;
+		vi.stubGlobal('alert', () => assert.fail('no alert expected'));
+
+		assert.ok(await delete_diskfile(diskfiles, diskfile));
+		assert.deepEqual(deleted, [path]);
+	});
+
+	test('alerts the error after the path, without logging it again', async () => {
+		const alerts: Array<string> = [];
+		vi.stubGlobal('alert', (message: string) => alerts.push(message));
+		const console_error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const diskfiles = {
+			delete: () => Promise.reject(new Error('failed to delete file: Permission denied: /ws/a.txt'))
+		} as unknown as Diskfiles;
+
+		assert.ok(!(await delete_diskfile(diskfiles, diskfile)));
+		assert.deepEqual(alerts, [
+			"couldn't delete ws/a.txt: failed to delete file: Permission denied: /ws/a.txt"
+		]);
+		assert.strictEqual(console_error.mock.calls.length, 0);
 	});
 });

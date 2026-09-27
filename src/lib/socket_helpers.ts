@@ -1,5 +1,3 @@
-import { DEFAULT_HEARTBEAT_RECEIVE_TIMEOUT } from '@fuzdev/fuz_app/actions/socket.svelte.ts';
-
 // The heartbeat and reconnect defaults are fuz_app's
 // (`DEFAULT_HEARTBEAT_INTERVAL`, `DEFAULT_RECONNECT_DELAY`,
 // `DEFAULT_RECONNECT_DELAY_MAX` in `@fuzdev/fuz_app/actions/socket.svelte.ts`).
@@ -11,7 +9,11 @@ export interface MsSettingBounds {
 	max: number;
 }
 
-/** Allowed heartbeat idle intervals — the receive timeout scales with it (see `to_heartbeat_receive_timeout`). */
+/**
+ * Allowed heartbeat idle intervals — fuz_app's client scales the receive
+ * timeout with it (`resolve_heartbeat_receive_timeout` in
+ * `@fuzdev/fuz_app/actions/socket.svelte.ts`).
+ */
 export const HEARTBEAT_INTERVAL_BOUNDS: MsSettingBounds = { min: 1_000, max: 600_000 };
 
 /**
@@ -34,16 +36,3 @@ export const to_bounded_ms = (value: unknown, bounds: MsSettingBounds): number |
 	if (!Number.isFinite(n)) return null;
 	return Math.min(bounds.max, Math.max(bounds.min, Math.round(n)));
 };
-
-/**
- * The client heartbeat's receive timeout for `interval`: fuz_app's default,
- * raised to 2 × `interval` so an idle socket is never closed before its
- * heartbeat can be answered (the check runs every `interval / 2`, so a
- * heartbeat can leave up to 1.5 × `interval` after the last receive).
- *
- * @param interval - the heartbeat idle interval in ms
- * @returns the receive timeout in ms
- */
-// TODO drop once fuz_app's client derives this itself (`resolve_heartbeat_receive_timeout`)
-export const to_heartbeat_receive_timeout = (interval: number): number =>
-	Math.max(DEFAULT_HEARTBEAT_RECEIVE_TIMEOUT, interval * 2);

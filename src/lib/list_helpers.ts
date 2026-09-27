@@ -61,6 +61,17 @@ export const to_reordered_list = <T>(
 	}
 };
 
+/**
+ * Creates a new array with `item` first, followed by `items`, keeping at most
+ * `max` — the oldest (last) entries fall off. For bounded most-recent-first
+ * stacks, like back/forward navigation.
+ */
+export const to_prepended_list = <T>(items: Array<T>, item: T, max: number): Array<T> => {
+	const result = [item, ...items];
+	if (result.length > max) result.length = Math.max(0, max);
+	return result;
+};
+
 /** A half-open `[start, end)` range of list indexes. */
 export interface ListWindow {
 	start: number;

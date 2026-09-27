@@ -351,13 +351,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		}
 
 		// Store a copy for reopening later
-		this.recently_closed_tabs.push(tab_to_close);
-		if (this.recently_closed_tabs.length > DISKFILE_TABS_CLOSED_MAX) {
-			this.recently_closed_tabs.splice(
-				0,
-				this.recently_closed_tabs.length - DISKFILE_TABS_CLOSED_MAX
-			);
-		}
+		this.#push_recently_closed([tab_to_close]);
 
 		// Remove tab from collections and state
 		this.tab_order = this.tab_order.filter((id) => id !== tab_id);
@@ -372,6 +366,16 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		}
 
 		this.#notify_if_detached(tab_to_close.diskfile_id);
+	}
+
+	/**
+	 * Adds closed tabs to the reopen stack (`recently_closed_tabs`, the last
+	 * reopened first), forgetting the oldest past `DISKFILE_TABS_CLOSED_MAX`.
+	 */
+	#push_recently_closed(closed: Array<DiskfileTab>): void {
+		this.recently_closed_tabs.push(...closed);
+		const excess = this.recently_closed_tabs.length - DISKFILE_TABS_CLOSED_MAX;
+		if (excess > 0) this.recently_closed_tabs.splice(0, excess);
 	}
 
 	/** Records a closed tab for back/forward navigation, forgetting the oldest past the cap. */
@@ -483,16 +487,20 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	}
 
 	/**
-	 * Closes all tabs.
+	 * Closes all tabs. Like VS Code's "close all editors", they join the
+	 * reopen stack on top of the earlier closed tabs — pushed last-to-first,
+	 * so reopening them one by one restores their order.
 	 */
 	close_all_tabs(): void {
+		const closed = this.ordered_tabs;
+
 		// Remember diskfile ids for all tabs before clearing
-		for (const tab of this.ordered_tabs) {
+		for (const tab of closed) {
 			this.#remember_closed_tab(tab.id, tab.diskfile_id);
 		}
 
 		// Store all tabs for potential reopening
-		this.recently_closed_tabs = this.ordered_tabs.slice(-DISKFILE_TABS_CLOSED_MAX);
+		this.#push_recently_closed([...closed].reverse());
 
 		// Clear all state
 		this.selected_tab_id = null;

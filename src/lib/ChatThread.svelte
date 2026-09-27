@@ -55,14 +55,16 @@
 	let show_model_picker = $state.raw(false);
 
 	const provider = $derived(thread.model?.provider);
+	// why the thread can't send, beyond a send in flight — the same checks as
+	// `Thread.can_send`, which also drives the chat's "to N" count
 	const provider_error = $derived(
-		provider?.available
-			? null
+		!thread.model
+			? `model ${thread.model_name} not found`
 			: provider?.status && !provider.status.available
 				? provider.status.error
-				: 'provider unavailable'
+				: null
 	);
-	const send_disabled = $derived(thread.pending || !!provider_error);
+	const send_disabled = $derived(!thread.can_send);
 
 	// the count is an estimate of the message alone — the request also carries the history
 	const send_title = $derived(

@@ -8,6 +8,7 @@
 	import type { Diskfile } from './diskfile.svelte.ts';
 	import { icon_delete, icon_file, icon_remove } from '@fuzdev/fuz_ui/icons.ts';
 	import { frontend_context } from './frontend.svelte.ts';
+	import { delete_diskfile } from './diskfile_helpers.ts';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 
 	const {
@@ -91,7 +92,7 @@
 						// TODO @many better confirmation
 						// eslint-disable-next-line no-alert
 						if (confirm(`Are you sure you want to delete ${diskfile.path_relative}?`)) {
-							await app.diskfiles.delete(diskfile.path);
+							await delete_diskfile(app.diskfiles, diskfile);
 						}
 					}}
 				>

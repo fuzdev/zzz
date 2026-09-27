@@ -522,6 +522,11 @@ and their output buffering, and coming back reattaches to them.
 `Terminals.create` always spawns a shell (`terminal_create({command: 'sh'})`)
 and types the actual command line into it via the input queue — queued while
 starting, so it goes ahead of anything else sent before the process starts.
+A typed line reaches the shell verbatim (trimmed): `parse_terminal_command`
+only splits off its first word as `command` (for display and a preset's
+default name) and keeps the rest of the line, separator included, as the one
+arg, which `format_terminal_command` rejoins byte for byte — quoting,
+comments, and continuation lines are the shell's to interpret.
 If the process exits before the create response arrives, the queued input is
 discarded. Restart
 closes a running terminal (and gives up if the close fails, rather than
@@ -728,7 +733,9 @@ The frontend file pipeline is six Cells plus a per-file editing-state class:
   reopen-closed-tab state live on `DiskfileTabs`. A file has at most one
   tab: reopening a closed tab skips (and drops) entries whose file is open
   again and reopens the next, as a permanent tab, like VS Code's "reopen
-  closed editor". A file appearing on disk — seeded by a snapshot or created
+  closed editor". Closing all tabs pushes them onto the reopen stack above
+  the earlier closed ones (reopening one by one restores their order); the
+  stack, and the back/forward navigation stacks, keep the 50 most recent. A file appearing on disk — seeded by a snapshot or created
   by another tool — never moves the selection or opens a tab; only a file
   created from zzz (`Diskfiles.create_file`) is selected and opened in a
   permanent tab — at once if its `filer_change` already arrived, else when

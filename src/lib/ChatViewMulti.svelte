@@ -35,8 +35,9 @@
 		if (!sent_count && !chat.main_input) chat.main_input = parsed;
 	};
 
-	// threads with a send in flight are skipped, so they're excluded from the count
-	const count = $derived(chat.idle_threads.length);
+	// threads that can't send (busy, unknown model, unavailable provider) are skipped,
+	// so they're excluded from the count
+	const count = $derived(chat.sendable_threads.length);
 
 	let show_model_picker = $state.raw(false);
 </script>
@@ -75,7 +76,7 @@
 			<ConfirmButton
 				onconfirm={() => chat.remove_all_threads()}
 				position="right"
-				disabled={!count}
+				disabled={!chat.thread_ids.length}
 				class="plain"
 			>
 				<Icon data={icon_remove} />&nbsp; remove all

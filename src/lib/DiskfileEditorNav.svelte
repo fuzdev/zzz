@@ -5,6 +5,8 @@
 	import Icon from './Icon.svelte';
 	import { frontend_context } from './frontend.svelte.ts';
 	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
+	import { DISKFILE_TABS_CLOSED_MAX } from './diskfile_tabs.svelte.ts';
+	import { to_prepended_list } from './list_helpers.ts';
 
 	const {
 		editor_state
@@ -16,7 +18,10 @@
 	const { diskfiles } = app;
 	const { editor } = diskfiles;
 
-	// Track navigation history
+	// Track navigation history, each stack capped at the closed tabs `DiskfileTabs`
+	// remembers — an older closed tab couldn't be navigated back to anyway
+	const push = (stack: Array<Uuid>, id: Uuid): Array<Uuid> =>
+		to_prepended_list(stack, id, DISKFILE_TABS_CLOSED_MAX);
 	let history_stack = $state<Array<Uuid>>([]); // Forward stack (for "back" operations)
 	let future_stack = $state<Array<Uuid>>([]); // Future stack (for "forward" operations)
 	let current_id = $state<Uuid | null>(null); // Currently displayed tab id
@@ -36,7 +41,7 @@
 		if (selected_id && selected_id !== current_id) {
 			// If we have a current id, push it to history stack
 			if (current_id) {
-				history_stack = [current_id, ...history_stack];
+				history_stack = push(history_stack, current_id);
 			}
 
 			// Clear forward navigation
@@ -63,7 +68,7 @@
 
 		// Push current tab to future stack
 		if (current_id) {
-			future_stack = [current_id, ...future_stack];
+			future_stack = push(future_stack, current_id);
 		}
 
 		// Update stacks
@@ -91,7 +96,7 @@
 
 		// Push current tab to history stack
 		if (current_id) {
-			history_stack = [current_id, ...history_stack];
+			history_stack = push(history_stack, current_id);
 		}
 
 		// Update stacks

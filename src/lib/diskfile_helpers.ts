@@ -2,6 +2,7 @@ import { ensure_end } from '@fuzdev/fuz_util/string.ts';
 import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
 import { Datetime, DatetimeNow } from '@fuzdev/fuz_util/datetime.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
+import type { Result } from '@fuzdev/fuz_util/result.ts';
 
 import { SerializableDisknode, type DiskfileJson } from './diskfile_types.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
@@ -99,12 +100,78 @@ export const has_dependencies = (diskfile: Diskfile): boolean =>
 	diskfile.dependents_count > 0 ||
 	SUPPORTED_CODE_FILETYPE_MATCHER.test(diskfile.path);
 
+/**
+ * Parses a name entered for a new file or folder, a path relative to
+ * `Diskfiles.new_files_dir` (`sub/name.ts` creates any missing folders).
+ * Leading whitespace and slashes are dropped, as is trailing whitespace —
+ * like a pasted name's stray space or newline, they're almost never meant.
+ * Whitespace inside the name is kept, including around an inner `/`. Empty,
+ * `.`, and `..` segments are left for the backend to normalize
+ * (`sub/../a.txt` creates `a.txt`). Refused: a blank or whitespace-only name;
+ * one that normalizes to the directory itself (`sub/..`); a whitespace-only
+ * segment (it would create a folder named by whitespace); a `..` that climbs
+ * out of the directory; and for a file, a last segment that's empty, `.`, or
+ * `..` (`x/`, `x/.`, `x/y/..`), which names a folder, not a file.
+ *
+ * @param name - the entered name
+ * @param kind - whether the name is for a file or a folder
+ * @returns the name to create, or a message saying why it's refused
+ */
+export const parse_new_diskfile_name = (
+	name: string,
+	kind: 'file' | 'folder'
+): Result<{ value: string }, { message: string }> => {
+	let value = name;
+	for (let previous = ''; value !== previous;) {
+		previous = value;
+		value = value.trim().replace(/^\/+/, '');
+	}
+	if (!value) return { ok: false, message: `${kind} name must not be blank` };
+	const segments = value.split('/');
+	if (kind === 'file') {
+		const last = segments.at(-1);
+		if (last === '' || last === '.' || last === '..') {
+			return {
+				ok: false,
+				message: `file name must end with a file name, not ${last ? `"${last}"` : '"/"'}`
+			};
+		}
+	}
+	let depth = 0;
+	for (const segment of segments) {
+		if (segment === '' || segment === '.') continue;
+		if (segment === '..') {
+			if (--depth < 0) {
+				return {
+					ok: false,
+					message: `${kind} name must stay inside the directory`
+				};
+			}
+			continue;
+		}
+		if (!segment.trim()) {
+			return {
+				ok: false,
+				message: `${kind} name has a whitespace-only segment`
+			};
+		}
+		depth++;
+	}
+	if (depth === 0) {
+		return { ok: false, message: `${kind} name names the directory itself` };
+	}
+	return { ok: true, value };
+};
+
 // TODO improve UX to not use alert/prompt
 /**
  * Asks for a name and creates a file or folder of that name in
  * `Diskfiles.new_files_dir` (see `Diskfiles.create_file` and
- * `Diskfiles.create_directory`), alerting on failure. Cancelling or
- * entering an empty name does nothing.
+ * `Diskfiles.create_directory`), alerting on failure — including a name
+ * `parse_new_diskfile_name` refuses, such as a whitespace-only one — with
+ * the name first (`couldn't create file a.txt: <reason>`). A backend failure
+ * is already logged by its action handler. Cancelling or entering an empty
+ * name does nothing.
  *
  * @param diskfiles - the diskfiles to create in
  * @param kind - whether to create a file or a folder
@@ -119,7 +186,49 @@ export const prompt_create_diskfile = async (
 	try {
 		await (kind === 'file' ? diskfiles.create_file(name) : diskfiles.create_directory(name));
 	} catch (error) {
-		console.error(`failed to create ${kind}:`, error);
-		alert(`failed to create ${kind}: ${to_error_message(error)}`); // eslint-disable-line no-alert
+		const display_name = name.trim() || JSON.stringify(name);
+		alert(`couldn't create ${kind} ${display_name}: ${to_error_message(error)}`); // eslint-disable-line no-alert
 	}
+};
+
+/**
+ * Deletes `diskfile` on disk (see `Diskfiles.delete`), alerting on failure
+ * with its path first (`couldn't delete a.txt: <backend message>`), like
+ * `prompt_create_diskfile`. The failure is already logged by the action handler.
+ *
+ * @param diskfiles - the diskfiles to delete from
+ * @param diskfile - the file to delete
+ * @returns whether the file was deleted
+ */
+export const delete_diskfile = async (
+	diskfiles: Diskfiles,
+	diskfile: Diskfile
+): Promise<boolean> => {
+	try {
+		await diskfiles.delete(diskfile.path);
+		return true;
+	} catch (error) {
+		const display_path = diskfile.path_relative || diskfile.path;
+		alert(`couldn't delete ${display_path}: ${to_error_message(error)}`); // eslint-disable-line no-alert
+		return false;
+	}
+};
+
+/**
+ * Handles `beforeunload`: while any file has unsaved changes
+ * (`Diskfiles.has_unsaved_changes`), asks the browser to confirm leaving the
+ * page, since drafts live only in memory.
+ *
+ * @param event - the `beforeunload` event
+ * @param diskfiles - the app's diskfiles, if there's an app
+ * @mutates event - cancels it (`preventDefault` plus the legacy `returnValue`) to ask for confirmation
+ */
+export const confirm_unload_with_unsaved_changes = (
+	event: BeforeUnloadEvent,
+	diskfiles: Diskfiles | undefined
+): void => {
+	if (!diskfiles?.has_unsaved_changes) return;
+	event.preventDefault();
+	// older browsers need a set `returnValue` to show the prompt
+	event.returnValue = ''; // eslint-disable-line @typescript-eslint/no-deprecated
 };

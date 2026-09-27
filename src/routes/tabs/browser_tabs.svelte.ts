@@ -24,6 +24,9 @@ export type BrowserTabsJsonInput = z.input<typeof BrowserTabsJson>;
 
 export type BrowserTabsOptions = CellOptions<typeof BrowserTabsJson>;
 
+/** How many closed tabs `BrowserTabs` keeps for reopening — the oldest are forgotten first. */
+export const BROWSER_TABS_CLOSED_MAX = 50;
+
 export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 	items: IndexedCollection<BrowserTab> = new IndexedCollection({
 		dispose_item: (tab) => tab.dispose(),
@@ -42,7 +45,12 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 	/** Ordered array of tabs derived from the `manual_order` index. */
 	readonly ordered_tabs: Array<BrowserTab> = $derived(this.items.derived_index('manual_order'));
 
-	recently_closed_tabs: Array<BrowserTab> = $state([]);
+	/**
+	 * Snapshots of closed tabs for reopening, oldest first, at most
+	 * `BROWSER_TABS_CLOSED_MAX`. Kept as JSON, not cells: a closed tab's cell
+	 * is disposed, so a reopen creates a fresh one.
+	 */
+	recently_closed_tabs: Array<BrowserTabJson> = $state.raw([]);
 
 	readonly selected_tab: BrowserTab | undefined = $derived(
 		this.ordered_tabs.find((t) => t.selected)
@@ -60,13 +68,9 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 			),
 			recently_closed_tabs: (tabs) => {
 				if (Array.isArray(tabs)) {
-					this.recently_closed_tabs = tabs.map(
-						(tab_json) =>
-							new BrowserTab({
-								app: this.app,
-								json: tab_json
-							})
-					);
+					this.recently_closed_tabs = tabs
+						.map((tab_json) => BrowserTabJson.parse(tab_json))
+						.slice(-BROWSER_TABS_CLOSED_MAX);
 				}
 				return HANDLED;
 			}
@@ -113,8 +117,11 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 
 			const was_selected = tab_to_close.selected;
 
-			// Store a copy of the tab before removing it
-			this.recently_closed_tabs.push(tab_to_close);
+			// snapshot the tab before removing it, since removing disposes it
+			this.recently_closed_tabs = [
+				...this.recently_closed_tabs.slice(1 - BROWSER_TABS_CLOSED_MAX),
+				tab_to_close.to_json()
+			];
 
 			this.items.remove(tab_to_close.id);
 
@@ -131,19 +138,21 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 		}
 	}
 
+	/**
+	 * Reopens the most recently closed tab as a new cell from its snapshot,
+	 * selected if it was selected when closed.
+	 */
 	reopen_last_closed_tab(): void {
-		if (this.recently_closed_tabs.length > 0) {
-			const tab_to_reopen = this.recently_closed_tabs.pop();
-			if (tab_to_reopen) {
-				// If the tab was previously selected, deselect all current tabs
-				if (tab_to_reopen.selected) {
-					for (const tab of this.items.by_id.values()) {
-						tab.selected = false;
-					}
-				}
-				this.items.add(tab_to_reopen);
+		const tab_to_reopen = this.recently_closed_tabs.at(-1);
+		if (!tab_to_reopen) return;
+		this.recently_closed_tabs = this.recently_closed_tabs.slice(0, -1);
+		// If the tab was previously selected, deselect all current tabs
+		if (tab_to_reopen.selected) {
+			for (const tab of this.items.by_id.values()) {
+				tab.selected = false;
 			}
 		}
+		this.add(tab_to_reopen);
 	}
 
 	select(index: number): void {

@@ -19,8 +19,7 @@ import {
 	DEFAULT_AUTO_RECONNECT,
 	HEARTBEAT_INTERVAL_BOUNDS,
 	RECONNECT_DELAY_BOUNDS,
-	to_bounded_ms,
-	to_heartbeat_receive_timeout
+	to_bounded_ms
 } from './socket_helpers.ts';
 import type { Frontend } from './frontend.svelte.ts';
 
@@ -53,7 +52,7 @@ export interface FailedMessage extends QueuedMessage {
  *
  * fuz_app's `FrontendWebsocketClient` owns the activity-aware heartbeat,
  * sending the shared `heartbeat_action` at `heartbeat_interval` idle, with a
- * receive timeout scaled to the interval (`to_heartbeat_receive_timeout`).
+ * receive timeout it scales to the interval (`resolve_heartbeat_receive_timeout`).
  * Assigning `heartbeat_interval` pushes the new policy into the live
  * client immediately (the timer is restarted in place when connected).
  *
@@ -124,16 +123,6 @@ export class Socket implements WebsocketRpcConnection {
 
 	#client: FrontendWebsocketClient | null = $state.raw(null);
 
-	/**
-	 * UI timestamps for the "last send" / "last receive" diagnostics in
-	 * `CapabilityWebsocket` — stamped by `send`, `request`, and inbound
-	 * messages. Not used for heartbeat scheduling — fuz_app's client owns that.
-	 */
-	// TODO read these from the client's own `last_send_time` / `last_receive_time`
-	// once fuz_app ships them — those also count heartbeats and error responses
-	last_send_time: number | null = $state.raw(null);
-	last_receive_time: number | null = $state.raw(null);
-
 	#client_message_unsubscribe: (() => void) | null = null;
 	#client_error_unsubscribe: (() => void) | null = null;
 
@@ -148,6 +137,20 @@ export class Socket implements WebsocketRpcConnection {
 	readonly reconnect_count: number = $derived(this.#client?.reconnect_count ?? 0);
 	readonly current_reconnect_delay: number = $derived(this.#client?.current_reconnect_delay ?? 0);
 	readonly last_connect_time: number | null = $derived(this.#client?.last_connect_time ?? null);
+	/**
+	 * Epoch ms of the current client's last frame sent — requests,
+	 * notifications, heartbeats, and cancels alike — for the "last send"
+	 * diagnostic in `CapabilityWebsocket`. `null` until the first send, and
+	 * again after `connect` replaces the client.
+	 */
+	readonly last_send_time: number | null = $derived(this.#client?.last_send_time ?? null);
+	/**
+	 * Epoch ms of the current client's last frame received — responses (error
+	 * responses and heartbeat replies included), notifications, and requests —
+	 * for the "last receive" diagnostic. `null` until the first receive, and
+	 * again after `connect` replaces the client.
+	 */
+	readonly last_receive_time: number | null = $derived(this.#client?.last_receive_time ?? null);
 	/**
 	 * Changes each time a close fires — used by the UI as an animation key so
 	 * each reconnect wait restarts the progress bar.
@@ -215,7 +218,6 @@ export class Socket implements WebsocketRpcConnection {
 		});
 
 		this.#client_message_unsubscribe = client.add_message_handler((event) => {
-			this.last_receive_time = Date.now();
 			for (const handler of this.#message_handlers) {
 				handler(event);
 			}
@@ -264,8 +266,6 @@ export class Socket implements WebsocketRpcConnection {
 	 * Delegate to the underlying `FrontendWebsocketClient.request` — keeps the
 	 * pending-request map, durable queue, and `AbortSignal` cancel in one
 	 * canonical place. Rejects when there is no client (call `connect()` first).
-	 * Stamps `last_send_time` when the frame goes out immediately (a queued one
-	 * goes out on reconnect) and `last_receive_time` when a result arrives.
 	 */
 	request(
 		method: string,
@@ -276,24 +276,14 @@ export class Socket implements WebsocketRpcConnection {
 		if (!client) {
 			return Promise.reject(new Error('[socket] cannot request: no client (call connect first)'));
 		}
-		const sending = client.connected;
-		const result = client.request(method, params, options);
-		if (sending) this.last_send_time = Date.now();
-		return result.then((value) => {
-			this.last_receive_time = Date.now();
-			return value;
-		});
+		return client.request(method, params, options);
 	}
 
 	/** Fire-and-forget send, queued for retry when it can't go out now. */
 	send(data: object): boolean {
 		if (this.can_send && this.#client) {
 			try {
-				const sent = this.#client.send(data);
-				if (sent) {
-					this.last_send_time = Date.now();
-					return true;
-				}
+				if (this.#client.send(data)) return true;
 				this.#queue_message(data);
 				return false;
 			} catch (error) {
@@ -335,10 +325,8 @@ export class Socket implements WebsocketRpcConnection {
 	}
 
 	#heartbeat_policy(): FrontendWebsocketHeartbeatOptions {
-		return {
-			interval: this.#heartbeat_interval,
-			receive_timeout: to_heartbeat_receive_timeout(this.#heartbeat_interval)
-		};
+		// the client raises its default receive timeout to fit the interval
+		return { interval: this.#heartbeat_interval };
 	}
 
 	/**
@@ -384,10 +372,7 @@ export class Socket implements WebsocketRpcConnection {
 		}
 
 		try {
-			const sent = this.#client.send(message.data);
-			if (sent) {
-				this.last_send_time = Date.now();
-			} else {
+			if (!this.#client.send(message.data)) {
 				this.#fail_message(message, this.#client.last_send_error?.message ?? 'send returned false');
 			}
 		} catch (error) {

@@ -9,6 +9,7 @@ import {
 	type DiskfileChangeType
 } from '$lib/diskfile_types.ts';
 import { Frontend } from '$lib/frontend.svelte.ts';
+import { confirm_unload_with_unsaved_changes } from '$lib/diskfile_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
@@ -215,6 +216,46 @@ describe('delete cleans up editor state', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		filer_change('delete', PATH_B);
 		assert.strictEqual(app.diskfiles.items.size, 1);
+	});
+});
+
+describe('has_unsaved_changes and the unload guard', () => {
+	const create_unload_event = () => {
+		const event = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent;
+		return event;
+	};
+
+	test('is false with no drafts, true with one, false again once discarded', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A, 'a')]);
+		const a = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(a);
+		const editor_state = app.diskfiles.get_editor_state(a);
+		assert.ok(!app.diskfiles.has_unsaved_changes);
+
+		editor_state.current_content = 'a edited';
+		assert.ok(app.diskfiles.has_unsaved_changes);
+
+		editor_state.discard_draft();
+		assert.ok(!app.diskfiles.has_unsaved_changes);
+	});
+
+	test('confirm_unload_with_unsaved_changes cancels the unload only with unsaved changes', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A, 'a')]);
+		const a = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(a);
+
+		const clean = create_unload_event();
+		confirm_unload_with_unsaved_changes(clean, app.diskfiles);
+		assert.ok(!clean.defaultPrevented);
+
+		const no_app = create_unload_event();
+		confirm_unload_with_unsaved_changes(no_app, undefined);
+		assert.ok(!no_app.defaultPrevented);
+
+		app.diskfiles.get_editor_state(a).current_content = 'a edited';
+		const dirty = create_unload_event();
+		confirm_unload_with_unsaved_changes(dirty, app.diskfiles);
+		assert.ok(dirty.defaultPrevented);
 	});
 });
 
@@ -531,6 +572,54 @@ describe('create_file', () => {
 		assert.deepEqual(calls, []);
 	});
 
+	test('refuses a whitespace-only name without calling the backend', async () => {
+		const calls: Array<unknown> = [];
+		(app as any).api = {
+			diskfile_create: (input: unknown) => {
+				calls.push(input);
+				return Promise.resolve({ ok: true, value: null });
+			},
+			directory_create: (input: unknown) => {
+				calls.push(input);
+				return Promise.resolve({ ok: true, value: null });
+			}
+		};
+		app.workspaces.add({ path: SOURCE_DIR });
+
+		for (const create of [
+			() => app.diskfiles.create_file('   '),
+			() => app.diskfiles.create_directory(' \t '),
+			() => app.diskfiles.create_file('sub/ /a.txt')
+		]) {
+			const error = await create().then(
+				() => null,
+				(e: unknown) => e
+			);
+			assert.instanceOf(error, Error);
+		}
+		assert.deepEqual(calls, []);
+	});
+
+	test('trims the name', async () => {
+		const calls: Array<unknown> = [];
+		(app as any).api = {
+			diskfile_create: (input: unknown) => {
+				calls.push(input);
+				return Promise.resolve({ ok: true, value: null });
+			},
+			directory_create: (input: unknown) => {
+				calls.push(input);
+				return Promise.resolve({ ok: true, value: null });
+			}
+		};
+		app.workspaces.add({ path: SOURCE_DIR });
+
+		await app.diskfiles.create_file(' new.txt\n');
+		await app.diskfiles.create_directory(' sub/ ');
+
+		assert.deepEqual(calls, [{ path: '/ws/new.txt', content: '' }, { path: '/ws/sub/' }]);
+	});
+
 	test('surfaces an existing file as "already exists"', async () => {
 		(app as any).api = {
 			diskfile_create: () =>
@@ -550,7 +639,39 @@ describe('create_file', () => {
 			(e: unknown) => e
 		);
 		assert.instanceOf(error, Error);
-		assert.strictEqual(error.message, 'taken.txt already exists');
+		assert.strictEqual(error.message, 'already exists');
+	});
+});
+
+describe('delete', () => {
+	test('throws the backend error when the delete fails', async () => {
+		(app as any).api = {
+			diskfile_delete: () =>
+				Promise.resolve({
+					ok: false,
+					error: { code: -32003, message: 'permission denied: /ws/a.txt' }
+				})
+		};
+
+		const error = await app.diskfiles.delete(PATH_A).then(
+			() => null,
+			(e: unknown) => e
+		);
+		assert.instanceOf(error, Error);
+		assert.strictEqual(error.message, 'permission denied: /ws/a.txt');
+	});
+
+	test('resolves when the delete succeeds', async () => {
+		const calls: Array<unknown> = [];
+		(app as any).api = {
+			diskfile_delete: (input: unknown) => {
+				calls.push(input);
+				return Promise.resolve({ ok: true, value: null });
+			}
+		};
+
+		await app.diskfiles.delete(PATH_A);
+		assert.deepEqual(calls, [{ path: PATH_A }]);
 	});
 });
 
@@ -891,6 +1012,6 @@ describe('create_directory', () => {
 			(e: unknown) => e
 		);
 		assert.instanceOf(error, Error);
-		assert.strictEqual(error.message, 'taken already exists');
+		assert.strictEqual(error.message, 'already exists');
 	});
 });

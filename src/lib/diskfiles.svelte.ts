@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { untrack } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
-import { strip_start } from '@fuzdev/fuz_util/string.ts';
 import { Uuid } from '@fuzdev/fuz_util/id.ts';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
@@ -21,6 +20,7 @@ import {
 	ERROR_CONTENT_NOT_LOADED,
 	disknode_to_diskfile_json,
 	normalize_path,
+	parse_new_diskfile_name,
 	to_relative_path
 } from './diskfile_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
@@ -94,6 +94,18 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 				!diskfile.deleted_on_disk || !!this.#editor_states.get(diskfile.id)?.has_unsaved_edits
 		)
 	);
+
+	/**
+	 * Whether any file is `dirty` (see `DiskfileEditorState.dirty`: it has a
+	 * draft, or its editor shows other content than the disk's) — edits that
+	 * live only in memory, lost on a reload.
+	 */
+	readonly has_unsaved_changes: boolean = $derived.by(() => {
+		for (const editor_state of this.#editor_states.values()) {
+			if (editor_state.dirty) return true;
+		}
+		return false;
+	});
 
 	/** The editor for managing diskfiles editing state. */
 	readonly editor: DiskfilesEditor;
@@ -377,10 +389,15 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		return this.app.api.diskfile_update({ path, content });
 	}
 
+	/**
+	 * Deletes the file at `path` on disk. The file leaves the index when its
+	 * `filer_change` arrives.
+	 *
+	 * @throws Error with the backend's message when the delete fails
+	 */
 	async delete(path: DiskfilePath): Promise<void> {
 		const result = await this.app.api.diskfile_delete({ path });
-		// Handler already updated state on error
-		if (!result.ok) return;
+		if (!result.ok) throw new Error(result.error.message);
 	}
 
 	/**
@@ -398,27 +415,30 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * selected and opened in a permanent tab, like VS Code's new file — now if
 	 * its `filer_change` already arrived, else when it does.
 	 *
-	 * @param filename - the file's path relative to `new_files_dir`
+	 * @param filename - the file's path relative to `new_files_dir`, parsed by
+	 * `parse_new_diskfile_name`: trimmed, with leading slashes dropped; refused
+	 * when blank, naming the directory itself, with a whitespace-only segment,
+	 * climbing out with `..`, or ending in an empty, `.`, or `..` segment
 	 * @param content - the new file's content
-	 * @throws Error when no workspace is open, the file already exists, or
-	 * the write fails
+	 * @throws Error when no workspace is open, the name is refused, the file
+	 * already exists, or the write fails
 	 */
 	async create_file(filename: string, content: string = ''): Promise<void> {
 		const dir = this.new_files_dir;
 		if (!dir) {
 			throw new Error('cannot create file: no workspace is open');
 		}
+		const parsed = parse_new_diskfile_name(filename, 'file');
+		if (!parsed.ok) throw new Error(parsed.message);
 		this.#select_on_arrival = null;
 
-		// `dir` has a trailing slash (`DiskfileDirectoryPath`), so strip any leading one from `filename`
-		const path = DiskfilePath.parse(`${dir}${strip_start(filename, '/')}`);
+		// `dir` has a trailing slash (`DiskfileDirectoryPath`), and the parsed name has no leading one
+		const path = DiskfilePath.parse(`${dir}${parsed.value}`);
 
 		const result = await this.app.api.diskfile_create({ path, content });
 		if (!result.ok) {
 			const { reason } = (result.error.data ?? {}) as { reason?: unknown };
-			throw new Error(
-				reason === 'already_exists' ? `${filename} already exists` : result.error.message
-			);
+			throw new Error(reason === 'already_exists' ? 'already exists' : result.error.message);
 		}
 
 		// the backend normalizes the path, and the filer reports it that way
@@ -453,9 +473,11 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Creates a new directory in `new_files_dir`.
 	 *
-	 * @param dirname - the directory's path relative to `new_files_dir`
-	 * @throws Error when no workspace is open, the name is already taken, or
-	 * the backend refuses
+	 * @param dirname - the directory's path relative to `new_files_dir`, parsed
+	 * by `parse_new_diskfile_name` as for `create_file`, except that its last
+	 * segment may be empty, `.`, or `..` (`src/`, `a/b/..`)
+	 * @throws Error when no workspace is open, the name is refused or already
+	 * taken, or the backend refuses
 	 */
 	async create_directory(dirname: string): Promise<void> {
 		const dir = this.new_files_dir;
@@ -463,14 +485,15 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			throw new Error('cannot create folder: no workspace is open');
 		}
 
-		const path = DiskfilePath.parse(`${dir}${strip_start(dirname, '/')}`);
+		const parsed = parse_new_diskfile_name(dirname, 'folder');
+		if (!parsed.ok) throw new Error(parsed.message);
+
+		const path = DiskfilePath.parse(`${dir}${parsed.value}`);
 
 		const result = await this.app.api.directory_create({ path });
 		if (!result.ok) {
 			const { reason } = (result.error.data ?? {}) as { reason?: unknown };
-			throw new Error(
-				reason === 'already_exists' ? `${dirname} already exists` : result.error.message
-			);
+			throw new Error(reason === 'already_exists' ? 'already exists' : result.error.message);
 		}
 	}
 

@@ -434,6 +434,34 @@ describe('DiskfileTabs', () => {
 		});
 	});
 
+	describe('close_all_tabs and the reopen stack', () => {
+		test('keeps the tabs closed before it, below the ones it closed', () => {
+			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			tabs.close_tab(tab1.id);
+
+			tabs.close_all_tabs();
+
+			assert.strictEqual(tabs.reopen_last_closed_tab()?.diskfile_id, TEST_DISKFILE_ID_2);
+			assert.strictEqual(tabs.reopen_last_closed_tab()?.diskfile_id, TEST_DISKFILE_ID_1);
+			assert.isNull(tabs.reopen_last_closed_tab());
+		});
+
+		test('reopening one by one restores the closed tabs in order', () => {
+			for (const id of [TEST_DISKFILE_ID_1, TEST_DISKFILE_ID_2, TEST_DISKFILE_ID_3]) {
+				tabs.open_diskfile(id);
+			}
+
+			tabs.close_all_tabs();
+			while (tabs.reopen_last_closed_tab());
+
+			assert.deepEqual(
+				tabs.ordered_tabs.map((t) => t.diskfile_id),
+				[TEST_DISKFILE_ID_1, TEST_DISKFILE_ID_2, TEST_DISKFILE_ID_3]
+			);
+		});
+	});
+
 	describe('closed-tab memory is bounded', () => {
 		test('closing many tabs keeps only the most recent', () => {
 			let last_tab_id: Uuid | null = null;

@@ -138,7 +138,7 @@ describe('Chat.send_to_all', () => {
 		assert.ok(thread_a!.pending);
 		assert.strictEqual(calls.length, 1);
 		assert.deepEqual(
-			chat.idle_threads.map((t) => t.id),
+			chat.sendable_threads.map((t) => t.id),
 			[thread_b!.id]
 		);
 
@@ -165,12 +165,55 @@ describe('Chat.send_to_all', () => {
 		const chat = create_chat(['model_a']);
 		const first = chat.send_to_thread(chat.thread_ids[0]!, 'one');
 
-		assert.deepEqual(chat.idle_threads, []);
+		assert.deepEqual(chat.sendable_threads, []);
 		assert.strictEqual(await chat.send_to_all('two'), 0);
 		assert.strictEqual(calls.length, 1);
 
 		calls[0]!.resolve();
 		await first;
+	});
+
+	test('skips threads whose provider is unavailable, and counts only what it sends', async () => {
+		const chat = create_chat(['model_a', 'model_b']);
+		const [, thread_b] = chat.threads;
+		app.update_provider_status({
+			name: 'claude',
+			available: false,
+			error: 'no key',
+			checked_at: Date.now()
+		});
+
+		assert.deepEqual(
+			chat.sendable_threads.map((t) => t.id),
+			[thread_b!.id]
+		);
+		const all = chat.send_to_all('hi');
+		for (const call of calls) call.resolve();
+		assert.strictEqual(await all, chat.sendable_threads.length);
+		assert.deepEqual(
+			calls.map((c) => c.model),
+			['model_b']
+		);
+	});
+
+	test('treats an unchecked provider as available', () => {
+		const chat = create_chat(['model_a']);
+		assert.isNull(app.lookup_provider_status('claude'));
+		assert.strictEqual(chat.sendable_threads.length, 1);
+	});
+
+	test('skips threads whose model is unknown', async () => {
+		const chat = create_chat(['model_a', 'model_b']);
+		chat.threads[0]!.model_name = 'model_missing';
+
+		assert.strictEqual(chat.sendable_threads.length, 1);
+		const all = chat.send_to_all('hi');
+		for (const call of calls) call.resolve();
+		assert.strictEqual(await all, 1);
+		assert.deepEqual(
+			calls.map((c) => c.model),
+			['model_b']
+		);
 	});
 
 	test('excludes disabled threads', async () => {

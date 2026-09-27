@@ -11,6 +11,7 @@
 	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 	import { icon_delete, icon_paste } from '@fuzdev/fuz_ui/icons.ts';
 	import Icon from './Icon.svelte';
+	import { delete_diskfile } from './diskfile_helpers.ts';
 
 	const {
 		diskfile,
@@ -48,7 +49,7 @@
 
 	<!-- Delete button is always available -->
 	<ConfirmButton
-		onconfirm={() => app.diskfiles.delete(diskfile.path)}
+		onconfirm={() => delete_diskfile(app.diskfiles, diskfile)}
 		class="plain icon-button"
 		title="delete file"
 	>

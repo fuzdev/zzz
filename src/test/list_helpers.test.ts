@@ -1,5 +1,5 @@
 import { test, describe, assert } from 'vitest';
-import { reorder_list, to_reordered_list } from '$lib/list_helpers.ts';
+import { reorder_list, to_prepended_list, to_reordered_list } from '$lib/list_helpers.ts';
 
 // Test constants
 const SAMPLE_ARRAY = ['a', 'b', 'c', 'd', 'e'];
@@ -214,5 +214,26 @@ describe('to_reordered_list', () => {
 		const result = to_reordered_list(original, 2, 1);
 		assert.deepEqual(result, ['a', 'c', 'b', 'd', 'e']);
 		assert.deepEqual(original, SAMPLE_ARRAY); // Original unchanged
+	});
+});
+
+describe('to_prepended_list', () => {
+	test('puts the item first without mutating the input', () => {
+		const items = ['b', 'c'];
+		assert.deepEqual(to_prepended_list(items, 'a', 5), ['a', 'b', 'c']);
+		assert.deepEqual(items, ['b', 'c']);
+	});
+
+	test('drops the oldest entries past the cap', () => {
+		assert.deepEqual(to_prepended_list(['b', 'c', 'd'], 'a', 3), ['a', 'b', 'c']);
+		assert.deepEqual(to_prepended_list([], 'a', 1), ['a']);
+	});
+
+	test('stays bounded however many times it is pushed', () => {
+		let stack: Array<number> = [];
+		for (let i = 0; i < 1000; i++) stack = to_prepended_list(stack, i, 50);
+		assert.strictEqual(stack.length, 50);
+		assert.strictEqual(stack[0], 999);
+		assert.strictEqual(stack.at(-1), 950);
 	});
 });

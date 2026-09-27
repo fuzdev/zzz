@@ -41,6 +41,7 @@
 		to_auth_redirect
 	} from '$lib/auth_gate.ts';
 	import { create_detached } from '$lib/reactive_helpers.svelte.ts';
+	import { confirm_unload_with_unsaved_changes } from '$lib/diskfile_helpers.ts';
 
 	const { children, params } = $props();
 
@@ -188,6 +189,9 @@
 <svelte:head>
 	<title>Zzz</title>
 </svelte:head>
+
+<!-- drafts live only in memory, so leaving with unsaved changes asks first -->
+<svelte:window onbeforeunload={(e) => confirm_unload_with_unsaved_changes(e, app?.diskfiles)} />
 
 <svelte:body
 	{@attach contextmenu_attachment([

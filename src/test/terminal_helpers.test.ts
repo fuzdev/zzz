@@ -95,11 +95,44 @@ describe('terminal commands', () => {
 		assert.strictEqual(format_terminal_command('ls', []), 'ls');
 	});
 
-	test('parse_terminal_command splits on whitespace', () => {
+	test('format_terminal_command joins word args with spaces', () => {
+		assert.strictEqual(format_terminal_command('echo', ['a', 'b']), 'echo a b');
+	});
+
+	test('format_terminal_command keeps the leading whitespace of an arg', () => {
+		assert.strictEqual(format_terminal_command('echo', ['\t a']), 'echo\t a');
+	});
+
+	test('parse_terminal_command splits off the first word, keeping the rest verbatim', () => {
 		assert.deepEqual(parse_terminal_command('  echo  hello world '), {
 			command: 'echo',
-			args: ['hello', 'world']
+			args: ['  hello world']
 		});
+		assert.deepEqual(parse_terminal_command('ls'), { command: 'ls', args: [] });
 		assert.isNull(parse_terminal_command('   '));
+		assert.isNull(parse_terminal_command(''));
 	});
+
+	// the line the shell is typed is the trimmed line, byte for byte
+	const verbatim_cases: Array<[string, string]> = [
+		["echo ok # don't", 'echo'],
+		['echo "$(printf "%s" "a  b")"', 'echo'],
+		['echo "a  b"', 'echo'],
+		["echo 'a  b'", 'echo'],
+		['echo "say \\"hi  there\\""', 'echo'],
+		['echo "unterminated  quote', 'echo'],
+		['echo\t"a\tb"\t\tc', 'echo'],
+		['"my  cmd"  x', '"my'],
+		['"my\tcmd"', '"my'],
+		['ls | grep  $HOME', 'ls'],
+		['  gro check \n', 'gro']
+	];
+	for (const [line, command] of verbatim_cases) {
+		test(`parse_terminal_command round-trips ${JSON.stringify(line)}`, () => {
+			const parsed = parse_terminal_command(line);
+			assert.ok(parsed);
+			assert.strictEqual(parsed.command, command);
+			assert.strictEqual(format_terminal_command(parsed.command, parsed.args), line.trim());
+		});
+	}
 });

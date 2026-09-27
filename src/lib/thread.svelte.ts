@@ -72,6 +72,18 @@ export class Thread extends Cell<typeof ThreadJson> {
 	 */
 	pending: boolean = $state.raw(false);
 
+	/**
+	 * Whether `send_message` would send now: no send in flight, the model is
+	 * known, and its provider isn't reported unavailable (an unchecked provider
+	 * counts as available, as in `send_message`).
+	 */
+	readonly can_send: boolean = $derived.by(() => {
+		if (this.pending) return false;
+		const model = this.model;
+		if (!model) return false;
+		return this.app.lookup_provider_status(model.provider_name)?.available !== false;
+	});
+
 	constructor(options: ThreadOptions) {
 		super(ThreadJson, options);
 

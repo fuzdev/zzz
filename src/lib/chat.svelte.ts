@@ -99,8 +99,13 @@ export class Chat extends Cell<typeof ChatJson> {
 
 	readonly enabled_threads = $derived(this.threads.filter((t) => t.enabled)); // TODO indexed collection, also disabled variant?
 
-	/** Enabled threads with no send in flight — the ones `send_to_all` sends to. */
-	readonly idle_threads: Array<Thread> = $derived(this.enabled_threads.filter((t) => !t.pending));
+	/**
+	 * Enabled threads that can send now (see `Thread.can_send`: no send in
+	 * flight, a known model, an available provider) — the ones `send_to_all` sends to.
+	 */
+	readonly sendable_threads: Array<Thread> = $derived(
+		this.enabled_threads.filter((t) => t.can_send)
+	);
 
 	/**
 	 * The selected thread, resolved only if it's still part of this chat,
@@ -207,7 +212,7 @@ export class Chat extends Cell<typeof ChatJson> {
 	}
 
 	/**
-	 * Sends `content` to every idle thread (enabled with no send already in flight).
+	 * Sends `content` to every thread in `sendable_threads`.
 	 *
 	 * @returns the number of threads a message was sent to
 	 */
@@ -215,7 +220,7 @@ export class Chat extends Cell<typeof ChatJson> {
 		const send = ++this.#send_count;
 		const turns = await Promise.all(
 			// TODO batched endpoint
-			this.idle_threads.map((thread) => this.#send_to_thread(thread.id, content, send))
+			this.sendable_threads.map((thread) => this.#send_to_thread(thread.id, content, send))
 		);
 		return turns.filter((turn) => turn !== null).length;
 	}

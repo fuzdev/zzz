@@ -27,21 +27,35 @@ export const TERMINAL_LOST_WHILE_DISCONNECTED_MESSAGE =
 
 /**
  * Formats a command and its args as the line typed into the terminal's shell.
+ * Each arg follows a space, except one that starts with whitespace, which
+ * carries its own separator — how `parse_terminal_command` keeps a typed line
+ * verbatim.
  */
-export const format_terminal_command = (command: string, args: ReadonlyArray<string>): string =>
-	args.length ? `${command} ${args.join(' ')}` : command;
+export const format_terminal_command = (command: string, args: ReadonlyArray<string>): string => {
+	let line = command;
+	for (const arg of args) line += /^\s/.test(arg) ? arg : ' ' + arg;
+	return line;
+};
 
 /**
- * Splits a typed command line on whitespace into a command and its args.
+ * Splits a typed command line, trimmed, into its first whitespace-delimited
+ * word — the `command`, used for display and a preset's default name — and
+ * the rest of the line verbatim, whitespace separator included, as the one
+ * arg. The terminal types the line into `sh` (see `format_terminal_command`),
+ * so nothing is parsed here: quotes, comments, and unterminated lines are
+ * the shell's to interpret, and the line it gets is exactly the trimmed line
+ * that was typed.
  *
  * @returns the command and args, or `null` for a blank line
  */
 export const parse_terminal_command = (
 	text: string
 ): { command: string; args: Array<string> } | null => {
-	const [command, ...args] = text.trim().split(/\s+/);
-	if (!command) return null;
-	return { command, args };
+	const line = text.trim();
+	if (!line) return null;
+	const end = line.search(/\s/);
+	if (end === -1) return { command: line, args: [] };
+	return { command: line.slice(0, end), args: [line.slice(end)] };
 };
 
 /**

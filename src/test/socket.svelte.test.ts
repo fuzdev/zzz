@@ -432,6 +432,47 @@ describe('Socket', () => {
 			assert.strictEqual(socket.last_receive_time, 2_000);
 		});
 
+		test('a heartbeat stamps last send, and a notification last receive', () => {
+			vi.setSystemTime(1_000);
+			const socket = new Socket({ app });
+			socket.connect(TEST_URLS.BASE);
+			mock_socket.connect();
+
+			vi.setSystemTime(1_000 + DEFAULT_HEARTBEAT_INTERVAL);
+			vi.advanceTimersByTime(DEFAULT_HEARTBEAT_INTERVAL);
+			assert.ok(
+				mock_socket.sent_messages.some((m) => JSON.parse(m).method === 'heartbeat'),
+				'a heartbeat went out'
+			);
+			assert.isNotNull(socket.last_send_time);
+			assert.isAtLeast(socket.last_send_time, 1_000 + DEFAULT_HEARTBEAT_INTERVAL);
+
+			vi.setSystemTime(500_000);
+			mock_socket.dispatchEvent('message', {
+				data: JSON.stringify({ jsonrpc: '2.0', method: 'filer_change', params: {} })
+			});
+			assert.strictEqual(socket.last_receive_time, 500_000);
+		});
+
+		test('an error response stamps last receive', async () => {
+			vi.setSystemTime(1_000);
+			const socket = new Socket({ app });
+			socket.connect(TEST_URLS.BASE);
+			mock_socket.connect();
+			const pending = socket.request('workspace_list', {}, { id: 'req-err' });
+
+			vi.setSystemTime(3_000);
+			mock_socket.dispatchEvent('message', {
+				data: JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'req-err',
+					error: { code: -32603, message: 'boom' }
+				})
+			});
+			await pending.catch(() => {});
+			assert.strictEqual(socket.last_receive_time, 3_000);
+		});
+
 		test('a request queued while disconnected does not stamp last send', () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
