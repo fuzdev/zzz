@@ -5,9 +5,13 @@ import { Turn, create_turn_from_text } from './turn.svelte.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { ThreadJson } from './thread_types.ts';
 import { CompletionRequest } from './completion_types.ts';
-import { render_messages_to_string, render_completion_messages } from './thread_helpers.ts';
+import {
+	render_messages_to_string,
+	render_messages_length,
+	render_completion_messages
+} from './thread_helpers.ts';
 import { create_collection_decoder } from './cell_helpers.ts';
-import { to_preview, estimate_token_count } from './helpers.ts';
+import { to_preview, estimate_token_count, estimate_token_count_from_length } from './helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import type { TurnJson } from './turn_types.ts';
 
@@ -34,10 +38,15 @@ export class Thread extends Cell<typeof ThreadJson> {
 	readonly main_input_length: number = $derived(this.main_input.length);
 	readonly main_input_token_count: number = $derived(estimate_token_count(this.main_input));
 
+	/** The rendered conversation — built only when read (copying it, say), not per streamed chunk. */
 	readonly content: string = $derived(render_messages_to_string(this.turns.by_id.values()));
 
-	readonly length: number = $derived(this.content.length);
-	readonly token_count: number = $derived(estimate_token_count(this.content));
+	/**
+	 * `content.length`, summed from the turns' lengths so a streaming reply
+	 * recomputes only its own turn, not the whole thread's text.
+	 */
+	readonly length: number = $derived(render_messages_length(this.turns.by_id.values()));
+	readonly token_count: number = $derived(estimate_token_count_from_length(this.length));
 	readonly content_preview: string = $derived(to_preview(this.content));
 
 	/** The ids of the parts of every turn. */

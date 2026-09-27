@@ -238,7 +238,7 @@ not a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 - `Model` (`model.svelte.ts`) — AI model definition
 - `Models` (`models.svelte.ts`) — Model catalog with indexes
 - `Action` (`action.svelte.ts`) — Single action event state
-- `Actions` (`actions.svelte.ts`) — Action history
+- `Actions` (`actions.svelte.ts`) — Action history: the newest 512 calls, payloads over 8192 characters of JSON replaced by markers (./docs/architecture.md § Actions Log)
 - `Prompt` (`prompt.svelte.ts`) — Reusable prompt template
 - `Prompts` (`prompts.svelte.ts`) — Collection of prompts
 - `Provider` (`provider.svelte.ts`) — AI provider config

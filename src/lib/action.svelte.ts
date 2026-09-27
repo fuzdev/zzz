@@ -11,6 +11,8 @@ import { ActionEventData } from '@fuzdev/fuz_app/actions/action_event_data.ts';
 import type { ActionEvent } from '@fuzdev/fuz_app/actions/action_event.ts';
 import { is_action_complete } from '@fuzdev/fuz_app/actions/action_event_helpers.ts';
 
+import { bound_action_event_data } from './action_helpers.ts';
+
 // TODO this isnt in action_types.ts because of circular dependencies, idk what pattern is best yet
 export const ActionJson = CellJson.extend({
 	method: ActionMethod,
@@ -23,11 +25,17 @@ export interface ActionOptions extends CellOptions<typeof ActionJson> {}
 
 /**
  * Represents a single action in the system, tracking its full lifecycle through action events.
+ *
+ * The actions log keeps many of these, so an action holds only a bounded copy
+ * of its event's data — payloads over `ACTION_PAYLOAD_BUDGET` become markers
+ * (see `bound_action_event_data`) — and lets go of the event itself once it
+ * completes.
  */
 export class Action extends Cell<typeof ActionJson> {
 	method: ActionMethod = $state.raw()!;
 
 	// TODO maybe use a decoder to make this an `ActionEvent`
+	/** The event's data, with payloads over `ACTION_PAYLOAD_BUDGET` replaced by markers. */
 	action_event_data: ActionEventData | undefined = $state.raw();
 
 	readonly spec: ActionSpecUnion = $derived.by(() => {
@@ -79,11 +87,17 @@ export class Action extends Cell<typeof ActionJson> {
 	// TODO @api temporary hacking this, rethink the reactivity/action_event usage with this class
 	unlisten_to_action_event: (() => void) | undefined;
 	action_event: ActionEvent | undefined;
+	/**
+	 * Mirrors `action_event`'s data (bounded, see `bound_action_event_data`) into
+	 * `action_event_data` until the event completes, then stops listening and
+	 * drops the event, so the full payloads it holds can be collected.
+	 */
 	listen_to_action_event(action_event: ActionEvent): () => void {
 		this.unlisten_to_action_event?.();
 		this.action_event = action_event;
 		const unobserve = action_event.observe((new_data) => {
-			this.action_event_data = new_data;
+			this.action_event_data = bound_action_event_data(new_data);
+			if (is_action_complete(new_data)) this.unlisten_to_action_event?.();
 		});
 		this.unlisten_to_action_event = () => {
 			unobserve();

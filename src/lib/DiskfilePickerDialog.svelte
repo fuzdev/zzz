@@ -51,6 +51,9 @@
 	sort_key_default="path_asc"
 	show_sort_controls
 	heading="Pick a file"
+	search_text={(diskfile) => diskfile.path}
+	search_placeholder="filter by path"
+	windowed
 >
 	{#snippet children(diskfile, pick)}
 		<DiskfileListitem

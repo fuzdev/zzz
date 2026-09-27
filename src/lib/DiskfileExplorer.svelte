@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { slide } from 'svelte/transition';
 	import { resolve } from '$app/paths';
 	import type { Snippet } from 'svelte';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
@@ -95,9 +94,10 @@
 			</div>
 		</div>
 
-		<!-- TODO @many improve efficiency - maybe add `all` back to the base IndexedCollection, or add an incremental index for this case? -->
+		<!-- windowed: only the rows near the viewport render, so a workspace of thousands of files stays cheap -->
 		<SortableList
 			items={diskfiles.listed}
+			windowed
 			show_sort_controls={editor.show_sort_controls}
 			sorters={[
 				// TODO @many rework API to avoid casting
@@ -115,16 +115,14 @@
 			<!-- TODO bug with `selected` -->
 			{#snippet children(diskfile)}
 				{@const selected = diskfiles.selected_file_id === diskfile.id}
-				<div class="diskfile-listitem-wrapper" class:selected transition:slide>
-					<DiskfileListitem
-						{diskfile}
-						{selected}
-						onselect={(diskfile, open_not_preview) => {
-							// TODO this needs to navigate to the path of the file (so should be a link, not this onselect callback)
-							diskfiles.select(diskfile.id, open_not_preview);
-						}}
-					/>
-				</div>
+				<DiskfileListitem
+					{diskfile}
+					{selected}
+					onselect={(diskfile, open_not_preview) => {
+						// TODO this needs to navigate to the path of the file (so should be a link, not this onselect callback)
+						diskfiles.select(diskfile.id, open_not_preview);
+					}}
+				/>
 			{/snippet}
 		</SortableList>
 
@@ -133,12 +131,3 @@
 		{/if}
 	{/if}
 </div>
-
-<style>
-	.diskfile-listitem-wrapper {
-		position: sticky;
-		top: 0;
-		bottom: 0;
-		background-color: var(--shade_00);
-	}
-</style>

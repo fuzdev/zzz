@@ -11,6 +11,53 @@ export const render_message_with_role = (
 	tag = 'message'
 ): string => `<${tag} role="${role}">${content}</${tag}>`;
 
+/**
+ * The length of `render_message_with_role(role, content, tag)` for a content of
+ * `content_length` characters, without building the string.
+ */
+export const render_message_with_role_length = (
+	role: CompletionRole,
+	content_length: number,
+	tag = 'message'
+): number => render_message_with_role(role, '', tag).length + content_length;
+
+/**
+ * The length of `render_messages_to_string(turns, tag)`, from each turn's
+ * content `length` rather than its content — so a streaming reply updates the
+ * total without re-concatenating the whole thread.
+ */
+export const render_messages_length = (
+	turns: Iterable<{ role: CompletionRole; length: number; enabled?: boolean }>,
+	tag = 'message'
+): number => {
+	let length = 0;
+	let first = true;
+	for (const turn of turns) {
+		if (turn.enabled === false) continue;
+		if (first) first = false;
+		else length += 2; // the '\n\n' separator
+		length += render_message_with_role_length(turn.role, turn.length, tag);
+	}
+	return length;
+};
+
+/**
+ * The length of contents joined with `'\n\n'`, skipping null ones, as a turn
+ * joins its parts' content — from the contents' lengths, without building the string.
+ */
+export const joined_content_length = (
+	content_lengths: Iterable<number | null | undefined>
+): number => {
+	let length = 0;
+	let count = 0;
+	for (const content_length of content_lengths) {
+		if (content_length == null) continue;
+		length += content_length;
+		count++;
+	}
+	return count > 1 ? length + 2 * (count - 1) : length;
+};
+
 export const render_messages_to_string = (
 	turns: Iterable<{ role: CompletionRole; content: string; enabled?: boolean }>,
 	tag = 'message'

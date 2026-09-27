@@ -10,15 +10,10 @@ export interface Sorter<T> {
 }
 
 /**
- * Manages the sortable state for a collection of items with reactive data sources.
+ * Manages which of a reactive set of sorters is active. Sorting itself is the
+ * consumer's (see `SortableList` and `sort_with_hint`).
  */
 export class Sortable<T> {
-	/**
-	 * Thunk to get the current items array reactively.
-	 */
-	#items_getter: Thunk<Array<T>>;
-	readonly items: Array<T> = $derived.by(() => this.#items_getter());
-
 	/**
 	 * Thunk to get the current sorters reactively.
 	 */
@@ -47,31 +42,15 @@ export class Sortable<T> {
 	readonly active_sort_fn: ((a: T, b: T) => number) | undefined = $derived(this.active_sorter?.fn);
 
 	/**
-	 * Sorted items based on the current active sorter.
-	 */
-	readonly sorted_items: Array<T> = $derived.by(() => {
-		const items = [...this.items];
-
-		// Return unsorted if no sort function
-		if (!this.active_sort_fn) return items;
-
-		// Apply sorting
-		return items.sort(this.active_sort_fn);
-	});
-
-	/**
 	 * Creates a new `Sortable` instance with reactive sources.
 	 *
-	 * @param items_getter - function that returns the current items array
 	 * @param sorters_getter - function that returns the current sorters
 	 * @param key_getter_default - optional function that returns the current default sort key
 	 */
 	constructor(
-		items_getter: Thunk<Array<T>>,
 		sorters_getter: Thunk<Array<Sorter<T>>>,
 		key_getter_default?: Thunk<string | undefined>
 	) {
-		this.#items_getter = items_getter;
 		this.#sorters_getter = sorters_getter;
 		this.#key_getter_default = key_getter_default;
 
@@ -113,6 +92,38 @@ export class Sortable<T> {
 		}
 	}
 }
+
+/**
+ * Sorts a copy of `items`, starting from the order of `hint` — typically the
+ * previous sorted result. The items still present keep their hinted order and
+ * new ones are appended, so after a small change the input is nearly sorted,
+ * which the engine's sort (TimSort in V8) handles in close to linear time
+ * instead of a full `n log n` re-sort. With a comparator that orders every
+ * pair (the cell sorters break ties by `cid`) the result doesn't depend on
+ * `hint`, only the cost does: a stale or unrelated hint just sorts slower.
+ *
+ * @param items - the items to sort, left unmodified
+ * @param compare - the sort comparator
+ * @param hint - an earlier ordering of (some of) the items, or `null` for none
+ * @returns a new sorted array
+ */
+export const sort_with_hint = <T>(
+	items: ReadonlyArray<T>,
+	compare: (a: T, b: T) => number,
+	hint: ReadonlyArray<T> | null | undefined
+): Array<T> => {
+	if (!hint?.length) return items.slice().sort(compare);
+	const remaining = new Set(items);
+	// duplicate items would collapse in the set, so they sort without the hint
+	if (remaining.size !== items.length) return items.slice().sort(compare);
+	const result: Array<T> = [];
+	for (const item of hint) {
+		if (remaining.delete(item)) result.push(item);
+	}
+	// a set iterates in insertion order, so new items keep their order in `items`
+	for (const item of remaining) result.push(item);
+	return result.sort(compare);
+};
 
 // TODO @many these arent used in a typesafe way, asserting cell subtypes, maybe require the cell?
 /**

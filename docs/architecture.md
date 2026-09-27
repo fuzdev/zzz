@@ -159,6 +159,22 @@ Defined in `src/lib/action_specs.ts`. A representative subset below — the `ter
 - `toggle_main_menu` — Toggle main menu UI. Kind: `local_call`. Initiator: `frontend`
 - `provider_load_status` — Check provider availability. Kind: `request_response`. Initiator: `frontend`
 
+### Actions Log
+
+Every `app.api` call is recorded as an `Action` cell in `app.actions` (shown on
+the actions page), which keeps the newest 512 (`HISTORY_LIMIT_DEFAULT`). The
+log keeps each call's method, lifecycle (kind, phase, step), timing, and error,
+but only a bounded copy of its payloads: an `input`, `output`, `progress`,
+request `params`, response `result`, notification `params`, or error `data`
+whose JSON is over `ACTION_PAYLOAD_BUDGET` (8192 characters) is replaced by a
+`{zzz_payload_omitted: '…'}` marker, and a longer error `message` is truncated
+and flagged with `zzz_message_truncated_from` (`bound_action_event_data` in
+`action_helpers.ts`). So a `session_load` snapshot or a file save doesn't keep
+every file's contents per call, and `completion_create` requests, each carrying
+the chat history so far, don't add up quadratically. An `Action` stops observing
+its `ActionEvent` and drops it once the call completes, so the event's full
+payloads can be collected.
+
 ## Cell System
 
 Schema-driven reactive data models using Svelte 5 runes.
@@ -438,6 +454,12 @@ streaming and the caller gets only the final response. `App::broadcast` is
 reserved for genuine broadcasts (`filer_change`, `terminal_data`,
 `terminal_exited`, `workspace_changed`).
 
+A chunk updates only its own turn: `Turn.length` / `token_count` and
+`Thread.length` / `token_count` are summed from the parts' and turns' lengths
+(`joined_content_length`, `render_messages_length`), so a thread's token count
+doesn't re-concatenate the conversation per chunk. `Thread.content` builds the
+full text only when something reads it, like "copy conversation".
+
 ## Terminals
 
 PTY terminals rendered by xterm.js, spawned and managed by the Rust backend's
@@ -610,9 +632,10 @@ A collection that owns its items passes `dispose_item`, which runs for every
 item leaving through `remove`, `remove_many`, or `clear` (including a decoder
 re-populating the collection). Every app collection owns its cells, so removed
 cells leave the cell registry and release their resources — trimmed `Actions`
-stop observing their action events, a disposed `Thread` cancels its in-flight
-completion and disposes its turns, and a disposed `Prompt` disposes its parts
-(a prompt's parts are its own instances, not in `app.parts`).
+still in flight stop observing their action events, a disposed `Thread`
+cancels its in-flight completion and disposes its turns, and a disposed
+`Prompt` disposes its parts (a prompt's parts are its own instances, not in
+`app.parts`).
 
 Removal cascades through the content model; disposal alone doesn't, since a
 decoder replacing a collection disposes cells whose replacements still point at
@@ -888,6 +911,14 @@ away) and the `add` broadcast reattaches it (same id). It's forgotten once nothi
 (`Diskfiles.listed`); pickers don't (`on_disk`); a `DiskfilePart` shows and
 sends the draft, marked deleted. Tabs, history, and editor state are
 UI-session-only — a reload restores only what `session_load` provides.
+
+The explorer and the file picker stay responsive with tens of thousands of
+files: their `SortableList`s are `windowed`, rendering only the rows in or near
+the scroll viewport (every row the same, measured height) with padding standing
+in for the rest, and re-sorting from the previous order (`sort_with_hint`), so
+a file added or removed doesn't pay for a full sort. The picker also filters by
+path (case-insensitive substring). Rows scrolled out of range unmount, so focus
+on one is lost when it scrolls away.
 
 ## Spaces and Workspaces
 

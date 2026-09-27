@@ -1,7 +1,8 @@
 import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 import { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import { estimate_token_count } from './helpers.ts';
+import { estimate_token_count_from_length } from './helpers.ts';
+import { joined_content_length } from './thread_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import type { PartUnion, TextPart } from './part.svelte.ts';
 import type { Frontend } from './frontend.svelte.ts';
@@ -60,8 +61,9 @@ export class Turn extends Cell<typeof TurnJson> {
 		return null;
 	});
 
-	readonly length: number = $derived(this.content.length);
-	readonly token_count: number = $derived(estimate_token_count(this.content));
+	/** `content.length`, summed from the parts' lengths rather than by joining their content. */
+	readonly length: number = $derived(joined_content_length(this.parts.map((part) => part.length)));
+	readonly token_count: number = $derived(estimate_token_count_from_length(this.length));
 
 	readonly raw_content: string | null | undefined = $derived(this.parts[0]?.content);
 	readonly is_content_loaded: boolean = $derived(

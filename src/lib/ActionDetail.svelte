@@ -5,6 +5,11 @@
 
 	import { get_icon_for_action_kind } from './action_icons.ts';
 	import type { Action } from './action.svelte.ts';
+	import {
+		ACTION_ERROR_MESSAGE_TRUNCATED_KEY,
+		ACTION_PAYLOAD_BUDGET,
+		action_event_data_has_omitted_payload
+	} from './action_helpers.ts';
 
 	const {
 		action
@@ -13,6 +18,10 @@
 	} = $props();
 
 	// TODO this is all hacky, just proof of concept stuff
+
+	const payload_omitted = $derived(
+		!!action.action_event_data && action_event_data_has_omitted_payload(action.action_event_data)
+	);
 </script>
 
 <div class="mb_md">
@@ -46,6 +55,16 @@
 				<td>kind</td>
 				<td>{action.kind}</td>
 			</tr>
+			{#if payload_omitted}
+				<tr>
+					<td>payloads</td>
+					<td>
+						payloads over {ACTION_PAYLOAD_BUDGET} characters of JSON aren't kept (marked
+						<code>zzz_payload_omitted</code> below), and longer error messages are truncated (marked
+						<code>{ACTION_ERROR_MESSAGE_TRUNCATED_KEY}</code>)
+					</td>
+				</tr>
+			{/if}
 			{#if action.action_event_data?.error}
 				<tr>
 					<td>error</td>

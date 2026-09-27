@@ -15,7 +15,14 @@ export const ESTIMATED_CHARS_PER_TOKEN = 3;
  * especially because each LLM may tokenize differently.
  */
 export const estimate_token_count = (text: string): number =>
-	Math.ceil(text.length / ESTIMATED_CHARS_PER_TOKEN);
+	estimate_token_count_from_length(text.length);
+
+/**
+ * `estimate_token_count` for a text of `length` characters, for callers that
+ * know the length without building the text.
+ */
+export const estimate_token_count_from_length = (length: number): number =>
+	Math.ceil(length / ESTIMATED_CHARS_PER_TOKEN);
 
 // text, not an `icon_*` SVG from fuz_ui, because an attribute can't host markup
 const PLACEHOLDER_GLYPH = '↳';

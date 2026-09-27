@@ -60,6 +60,7 @@ import { ActionOutputs } from './action_collections.ts';
 import { all_action_specs } from './action_specs.ts';
 import { create_frontend_action_handlers } from './frontend_action_handlers.ts';
 import { create_detached } from './reactive_helpers.svelte.ts';
+import { bound_action_event_data } from './action_helpers.ts';
 
 // TODO this is over-used, see also `app_context` for the user pattern
 export const frontend_context = create_context<Frontend>();
@@ -309,7 +310,10 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 					() =>
 						new Action({
 							app: this,
-							json: { method: event.spec.method, action_event_data: event.toJSON() }
+							json: {
+								method: event.spec.method,
+								action_event_data: bound_action_event_data(event.data)
+							}
 						})
 				);
 				// listen before adding, so an action trimmed right away stops listening when disposed
