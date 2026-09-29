@@ -35,7 +35,7 @@
     "node": ">=24.14"
   },
   "peerDependencies": {
-    "@fuzdev/fuz_app": ">=0.114.0",
+    "@fuzdev/fuz_app": ">=0.115.0",
     "@fuzdev/fuz_ui": ">=0.205.1",
     "@fuzdev/fuz_util": ">=0.65.1",
     "@sveltejs/kit": "^2",
@@ -50,7 +50,7 @@
   },
   "devDependencies": {
     "@changesets/changelog-git": "^0.2.1",
-    "@fuzdev/fuz_app": "^0.114.0",
+    "@fuzdev/fuz_app": "^0.115.0",
     "@fuzdev/fuz_code": "^0.48.0",
     "@fuzdev/fuz_css": "^0.64.0",
     "@fuzdev/fuz_ui": "^0.208.0",
