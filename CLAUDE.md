@@ -298,7 +298,7 @@ env-setup orchestration is `cargo xtask` (see `crates/xtask/`), so there's no
 - `gro build` — Production build
 
 `cargo xtask dev` is the dev command — it builds and runs `zzz_server` plus
-the Vite frontend. (The user manages the dev server; don't start it yourself.)
+the Vite frontend.
 
 ### Rust Backend
 
@@ -652,7 +652,6 @@ reads it from the process env as the backend port its dev proxy targets
 
 ## Avoid
 
-- **Don't start the dev server yourself** — the user manages `cargo xtask dev`
 - **Never edit generated outputs** (`action_collections.ts`, `action_metatypes.ts`, `frontend_action_types.ts`, `docs/reference.md`) — edit the `*.gen.ts` generators and run `gro gen`
 - **Use `z.strictObject()`** in action specs, not `z.object()` — unknown keys must be rejected
 - **No `$effect` in Cell classes** — effects belong in Svelte components only
