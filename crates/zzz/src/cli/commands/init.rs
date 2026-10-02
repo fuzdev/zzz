@@ -3,7 +3,7 @@
 //! Layout:
 //! ```text
 //! ~/.zzz/                 — daemon home (mode 0700), the daemon's working directory
-//!   config.json           — CLI config (daemon port)
+//!   config.json           — CLI config (daemon port, optional opener)
 //!   .env                  — daemon environment (mode 0600), with a generated cookie key
 //!   bootstrap_token       — one-shot admin bootstrap token (mode 0600), deleted once used,
 //!                           recreated by the next `zzz init` when missing
@@ -12,6 +12,7 @@
 //!   bin/zzzd              — the daemon binary, when installed here
 //!   run/daemon.json       — pid, start time, port (ephemeral)
 //!   run/daemon.log        — output of an auto-started daemon
+//!   run/opener.log        — output of a configured opener
 //! ```
 //! Idempotent: directories are created if missing, and each file is written
 //! only when absent (`create_new`), so re-runs never clobber a configured
@@ -101,22 +102,22 @@ pub fn cmd_init(args: &Init) -> Result<(), CliError> {
             static_dir.display()
         );
     }
-    println!("  - run `zzz` to start the daemon and open the browser");
+    println!("  - run `zzz` to start the daemon and open zzz");
     // The CLI can't tell whether an admin exists (that's in the database), so
     // a recreated token's hint says when it matters rather than asserting it.
     if env_created {
         println!(
-            "  - on first run, create the admin account in the browser with the token in {}",
+            "  - on first run, create the admin account in zzz with the token in {}",
             token_path.display()
         );
     } else if token_created {
         println!(
-            "  - only if zzz has no admin account (say its database was dropped): restart a running daemon, which checks for the token at startup (`zzz daemon stop`, then `zzz`), and create the admin in the browser with the token in {}",
+            "  - only if zzz has no admin account (say its database was dropped): restart a running daemon, which checks for the token at startup (`zzz daemon stop`, then `zzz`), and create the admin in zzz with the token in {}",
             token_path.display()
         );
     } else if token_path.exists() {
         println!(
-            "  - if zzz has no admin account yet, create one in the browser with the token in {}",
+            "  - if zzz has no admin account yet, create one in zzz with the token in {}",
             token_path.display()
         );
     }

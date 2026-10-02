@@ -60,8 +60,8 @@ const ZZZD_ENV: &[&str] = &[
 ];
 
 /// Registers `zzzd`'s test-only actions — never passed to a daemon the CLI
-/// starts, from either source.
-const TEST_ACTIONS_ENV: &str = "ZZZ_ENABLE_TEST_ACTIONS";
+/// starts, from either source, nor to an opener.
+pub const TEST_ACTIONS_ENV: &str = "ZZZ_ENABLE_TEST_ACTIONS";
 
 /// Path-valued env vars the CLI resolves, with whether each is a
 /// comma-separated list.
@@ -92,8 +92,9 @@ pub struct DaemonLaunch {
 
 impl DaemonLaunch {
     /// Resolve the launch from `~/.zzz` (which must exist), its `.env`, the
-    /// process environment, and `port_flag`.
-    pub fn prepare(port_flag: Option<u16>) -> Result<Self, CliError> {
+    /// process environment, `port_flag`, and `config` (the caller's
+    /// [`CliConfig::read`] of `~/.zzz`, `None` when there is no file).
+    pub fn prepare(port_flag: Option<u16>, config: Option<&CliConfig>) -> Result<Self, CliError> {
         let cwd = dl::require_zzz_dir()?;
         let env_path = cwd.join(".env");
         let file_env = read_env_file(&env_path)?;
@@ -121,7 +122,7 @@ impl DaemonLaunch {
         }
         let get = |key: &str| lookup(key, process_get, &env_overlay);
 
-        let config_port = config_port(&cwd)?;
+        let config_port = config_port(config)?;
         let port = resolve_port(port_flag, get("ZZZ_PORT").as_deref(), config_port)?;
         let static_dir = resolve_static_dir(get("ZZZ_STATIC_DIR").as_deref(), &cwd)?;
 
@@ -392,31 +393,64 @@ fn resolve_port(
     Ok(config.unwrap_or(DEFAULT_PORT))
 }
 
-/// `zzz_config_port` from the CLI config, `~/.zzz/config.json` — only the
-/// daemon port today; other keys are ignored. `None` when the file or the
-/// key is absent (or `null`).
+/// The CLI config, `~/.zzz/config.json`: a JSON object holding
+/// `zzz_config_port` (the daemon port) and `opener` (see `crate::opener`);
+/// other keys are ignored.
+#[derive(Debug)]
+pub struct CliConfig {
+    /// The file's path, for errors.
+    pub path: PathBuf,
+    /// Its top-level object.
+    pub object: serde_json::Map<String, serde_json::Value>,
+}
+
+impl CliConfig {
+    /// Read `zzz_dir/config.json`; `None` when there is no file.
+    ///
+    /// # Errors
+    ///
+    /// [`CliError::ConfigFile`] when it can't be read or isn't a JSON object.
+    pub fn read(zzz_dir: &Path) -> Result<Option<Self>, CliError> {
+        let mut config = Self {
+            path: zzz_dir.join("config.json"),
+            object: serde_json::Map::new(),
+        };
+        let content = match fs::read_to_string(&config.path) {
+            Ok(content) => content,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(config.invalid(e.to_string())),
+        };
+        match serde_json::from_str(&content) {
+            Ok(serde_json::Value::Object(object)) => config.object = object,
+            Ok(_) => return Err(config.invalid("expected a JSON object".to_owned())),
+            Err(e) => return Err(config.invalid(e.to_string())),
+        }
+        Ok(Some(config))
+    }
+
+    /// The error for an invalid value in this file.
+    #[must_use]
+    pub fn invalid(&self, reason: String) -> CliError {
+        CliError::ConfigFile {
+            path: self.path.display().to_string(),
+            reason,
+        }
+    }
+}
+
+/// `zzz_config_port` from the CLI config. `None` when the file or the key
+/// is absent (or `null`).
 ///
 /// # Errors
 ///
-/// [`CliError::ConfigFile`] when it can't be read, isn't a JSON object, or
-/// holds anything but a port in `1..=65535`.
-fn config_port(zzz_dir: &Path) -> Result<Option<u16>, CliError> {
-    let path = zzz_dir.join("config.json");
-    let invalid = |reason: String| CliError::ConfigFile {
-        path: path.display().to_string(),
-        reason,
+/// [`CliError::ConfigFile`] when it holds anything but a port in
+/// `1..=65535`.
+fn config_port(config: Option<&CliConfig>) -> Result<Option<u16>, CliError> {
+    let Some(config) = config else {
+        return Ok(None);
     };
-    let content = match fs::read_to_string(&path) {
-        Ok(content) => content,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(invalid(e.to_string())),
-    };
-    let config: serde_json::Value =
-        serde_json::from_str(&content).map_err(|e| invalid(e.to_string()))?;
-    let object = config
-        .as_object()
-        .ok_or_else(|| invalid("expected a JSON object".to_owned()))?;
-    let Some(value) = object
+    let Some(value) = config
+        .object
         .get("zzz_config_port")
         .filter(|value| !value.is_null())
     else {
@@ -428,7 +462,7 @@ fn config_port(zzz_dir: &Path) -> Result<Option<u16>, CliError> {
         .filter(|&port| port != 0)
         .map(Some)
         .ok_or_else(|| {
-            invalid(format!(
+            config.invalid(format!(
                 "zzz_config_port: expected a port in 1..=65535, got `{value}`"
             ))
         })
@@ -480,6 +514,11 @@ mod tests {
         ));
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    /// `zzz_config_port` of the `config.json` in `dir`.
+    fn config_port_in(dir: &Path) -> Result<Option<u16>, CliError> {
+        config_port(CliConfig::read(dir)?.as_ref())
     }
 
     fn pairs(list: &[(&str, &str)]) -> Vec<(String, String)> {
@@ -621,12 +660,12 @@ mod tests {
     fn config_port_reads_config_json() {
         let dir = temp_dir("config");
         let path = dir.join("config.json");
-        assert_eq!(config_port(&dir).unwrap(), None);
+        assert_eq!(config_port_in(&dir).unwrap(), None);
         fs::write(&path, r#"{"zzz_config_port": 4999}"#).unwrap();
-        assert_eq!(config_port(&dir).unwrap(), Some(4999));
+        assert_eq!(config_port_in(&dir).unwrap(), Some(4999));
         for absent in ["{}", r#"{"zzz_config_port": null}"#, r#"{"other": 1}"#] {
             fs::write(&path, absent).unwrap();
-            assert_eq!(config_port(&dir).unwrap(), None, "{absent}");
+            assert_eq!(config_port_in(&dir).unwrap(), None, "{absent}");
         }
         let _ = fs::remove_dir_all(&dir);
     }
@@ -647,7 +686,7 @@ mod tests {
             (r#"{"zzz_config_port": "4460"}"#, "got `\"4460\"`"),
         ] {
             fs::write(&path, content).unwrap();
-            let err = config_port(&dir).unwrap_err();
+            let err = config_port_in(&dir).unwrap_err();
             assert!(
                 matches!(err, CliError::ConfigFile { .. }),
                 "{content}: {err}"

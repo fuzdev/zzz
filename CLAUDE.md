@@ -50,11 +50,11 @@ See [GitHub issues](https://github.com/fuzdev/zzz/issues) for planned work.
 
 ## CLI
 
-zzz has a Rust CLI (`crates/zzz`, argh) for daemon management and browser
-launching. See ./crates/CLAUDE.md for the crate layout.
+zzz has a Rust CLI (`crates/zzz`, argh) for daemon management and opening
+the UI. See ./crates/CLAUDE.md for the crate layout.
 
 ```bash
-zzz                          # start daemon if needed, open browser
+zzz                          # start daemon if needed, open zzz (the browser, or a configured opener)
 zzz ~/dev/                   # open workspace at ~/dev/ (a file opens its directory)
 zzz daemon start             # start daemon (foreground)
 zzz daemon stop              # stop the recorded daemon
@@ -143,6 +143,42 @@ exits 2 before anything runs; `--help` exits 0.
 and canonicalizes it (the form the daemon stores for workspaces) before
 building the `?workspace=` URL; a missing path is an error, and a file opens
 its parent directory.
+
+`zzz` opens that URL in the browser (`xdg-open` / `open` / `start`) unless an
+**opener** — an open command to run instead — is configured:
+
+- **sources** — `opener` in `~/.zzz/config.json`, then `ZZZ_OPENER` in the
+  CLI's own environment (`~/.zzz/.env` is the daemon's and isn't read for
+  it). A blank value (or a config `null`) reads as unset and falls through to
+  the next source, then to the browser.
+- **shape** — in `config.json`, a string is the program alone (never split)
+  and an array of strings is the program followed by its arguments, so flags
+  need no shell parsing: `"opener": ["~/bin/my-opener", "--new-window"]`.
+  Any other JSON type, an empty array, a non-string element, or a blank
+  program (the array's first element) is an error naming the file.
+  `ZZZ_OPENER` is the program alone.
+- **program** — surrounding whitespace is trimmed and `~` expands; a relative
+  path resolves against `~/.zzz` from `config.json` and against the directory
+  `zzz` runs in from `ZZZ_OPENER`. A bare name (no `/` — `~name` included, as
+  only `~` and `~/…` expand) is refused from both sources: `$PATH` isn't
+  searched, and `zzz` never runs a same-named executable from whatever
+  directory it's in — write `./name` for a file in that directory, or an
+  absolute path. A bare name, or a program that isn't an executable file, is
+  an error (exit 2), checked before any daemon is started — never a fallback
+  to the browser, and a bad `config.json` opener doesn't fall back to
+  `ZZZ_OPENER`.
+- **launch** — the URL is the final argument, after the configured ones, and
+  the program is executed directly: no shell sees the URL or the arguments.
+  The URL is always its own argument, so a `--flag=<url>` form needs a
+  wrapper script. It runs detached (its own process group, output in
+  `~/.zzz/run/opener.log`, mode `0600`, emptied at each launch) in the
+  directory `zzz` runs in, with the CLI's environment
+  minus `ZZZ_ENABLE_TEST_ACTIONS`; the daemon's `~/.zzz/.env` values aren't
+  added. `zzz` doesn't wait for it, so the opener's own exit status isn't
+  checked; only a failure to start it is an error (exit 1).
+
+`zzz` reads `config.json` for the opener on every run, so a file that isn't a
+JSON object is an error (exit 2) even when a daemon is already running.
 
 ## Docs
 
@@ -549,7 +585,8 @@ and the paths inside it stay openable.
 
 The daemon home holds the CLI's files beside it: `config.json`, `.env`,
 `bootstrap_token`, `static/` (the UI build), `bin/`, and `run/`
-(`daemon.json` — boot id, pid, start time, port — and `daemon.log`).
+(`daemon.json` — boot id, pid, start time, port — `daemon.log`, and an
+opener's `opener.log`).
 
 All filesystem access goes through `ScopedFs` — path validation, no symlinks, absolute paths only.
 Saves are atomic: `diskfile_update` stages the content in a hidden
@@ -633,7 +670,8 @@ inherited key it overrides. In both, a blank value is unset: a template's
 empty `SECRET_*_API_KEY=` line never clears an exported key. `.env.production` is what `gro build` reads for
 the `PUBLIC_ZZZ_*` vars, and the template for running `zzzd` under a process
 manager (see ./docs/development.md). The CLI itself also
-reads `ZZZ_SERVER_BIN` (the `zzzd` binary to spawn).
+reads `ZZZ_SERVER_BIN` (the `zzzd` binary to spawn) and `ZZZ_OPENER` (an
+open command to run instead of the browser — see CLI).
 
 ### SvelteKit frontend vars (PUBLIC_ZZZ_\*)
 

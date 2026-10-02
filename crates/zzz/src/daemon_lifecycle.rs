@@ -375,7 +375,8 @@ pub fn resolve_server_bin() -> Result<PathBuf, CliError> {
 }
 
 /// Whether `path` is a regular file (following symlinks) with an execute bit.
-fn is_executable_file(path: &Path) -> bool {
+#[must_use]
+pub fn is_executable_file(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt as _;
     fs::metadata(path).is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
 }
@@ -410,6 +411,63 @@ fn find_server_bin(
         .map(|dir| dir.join(DAEMON_BIN))
         .find(|candidate| is_executable(candidate))
         .ok_or(CliError::ServerBinNotFound)
+}
+
+/// Open a log file under `~/.zzz/run` for a detached child's output:
+/// created or emptied, mode `0600` (an existing file is tightened too).
+///
+/// Opened for appending, so every write lands at the file's current end. A
+/// still-running earlier child holding the same log (a long-lived opener,
+/// when a second one is launched) keeps writing after whatever the newer
+/// one wrote, rather than at its own stale offset over the newer lines.
+///
+/// # Errors
+///
+/// [`CliError::LogFile`], naming the path.
+pub fn create_private_log(path: &Path) -> Result<fs::File, CliError> {
+    use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
+
+    let open = || {
+        // `append` with `truncate` is an invalid combination, so empty it after
+        let log = fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .mode(0o600)
+            .open(path)?;
+        log.set_len(0)?;
+        // `mode` applies only on create; an existing log is tightened too
+        log.set_permissions(fs::Permissions::from_mode(0o600))?;
+        Ok(log)
+    };
+    open().map_err(|e: io::Error| CliError::LogFile {
+        path: path.display().to_string(),
+        reason: e.to_string(),
+    })
+}
+
+/// Spawn `command` detached, its output captured to `log`.
+///
+/// Detached = a new process group (`process_group(0)`, so the child ignores
+/// the launching terminal's Ctrl-C), no stdin, and stdout + stderr in `log`.
+/// A dropped [`std::process::Child`] is not killed, so a child the caller
+/// never awaits outlives this CLI invocation. It is process-group-detached,
+/// not session-detached: a true `setsid` needs `unsafe`, which the workspace
+/// forbids, so the child relies on orphaning-to-init plus the separate
+/// process group to survive.
+pub fn spawn_detached(
+    command: &mut std::process::Command,
+    log: fs::File,
+) -> io::Result<std::process::Child> {
+    use std::os::unix::process::CommandExt as _;
+    use std::process::Stdio;
+
+    let log_err = log.try_clone()?;
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(log))
+        .stderr(Stdio::from(log_err))
+        .process_group(0)
+        .spawn()
 }
 
 /// Send `SIGTERM` to `pid` via [`fuz_sys::send_signal`].
@@ -972,6 +1030,46 @@ mod tests {
         assert!(!port_is_free(port));
         drop(listener);
         assert!(port_is_free(port));
+    }
+
+    #[test]
+    fn a_private_log_is_emptied_tightened_and_appended_to() {
+        use std::io::Write as _;
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = std::env::temp_dir().join(format!("zzz_log_{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("opener.log");
+        fs::write(&path, "old\n").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+
+        let mut first = create_private_log(&path).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "");
+        let mode = fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+        first.write_all(b"first: a long line\n").unwrap();
+
+        // a second launch while the first child still holds the log: emptied,
+        // and the first's later output goes after the second's, not over it
+        let mut second = create_private_log(&path).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "");
+        second.write_all(b"second\n").unwrap();
+        first.write_all(b"first again\n").unwrap();
+        second.write_all(b"second again\n").unwrap();
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "second\nfirst again\nsecond again\n"
+        );
+
+        // a log that can't be opened is an error naming it
+        let err = create_private_log(&dir).unwrap_err();
+        assert!(matches!(err, CliError::LogFile { .. }), "{err}");
+        let message = err.to_string();
+        assert!(
+            message.starts_with(&format!("can't open the log {}: ", dir.display())),
+            "{message}"
+        );
+        assert_eq!(err.exit_code(), 1);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

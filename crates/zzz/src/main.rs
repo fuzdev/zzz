@@ -1,7 +1,8 @@
 //! zzz CLI
 //!
 //! Command-line client for the zzz daemon: starts/discovers it, opens the
-//! browser UI, and manages its lifecycle.
+//! UI (with a configured opener, else in the browser), and manages its
+//! lifecycle.
 //!
 //! Runs on a `tokio` runtime: the daemon-lifecycle and status handlers do
 //! network I/O (spawn `zzzd`, poll `/health`) and signal handling, so
@@ -16,6 +17,7 @@ mod daemon_launch;
 mod daemon_lifecycle;
 mod env_file;
 mod error;
+mod opener;
 mod procfs;
 
 use argh::FromArgs;

@@ -32,7 +32,7 @@ pub enum CliError {
     #[error("invalid config: {0}")]
     InvalidConfig(String),
     /// `~/.zzz/config.json` can't be read, isn't a JSON object, or holds an
-    /// invalid port.
+    /// invalid port or opener.
     #[error("invalid {path}: {reason}")]
     ConfigFile {
         /// The config file's path.
@@ -94,6 +94,33 @@ pub enum CliError {
     ServerBinOverrideInvalid {
         /// The resolved `ZZZ_SERVER_BIN` path.
         path: String,
+    },
+    /// A configured opener (`opener` in `config.json`, or `ZZZ_OPENER`)
+    /// doesn't name an executable file, or is a bare name (no `/`), which is
+    /// refused. Never a fallback to the browser.
+    #[error("{origin} is not an executable file: {path}")]
+    OpenerNotExecutable {
+        /// Where the opener was configured — `ZZZ_OPENER`, or `opener` in
+        /// the config file (named by path).
+        origin: String,
+        /// The resolved program path — or the bare name, as written.
+        path: String,
+    },
+    /// The opener couldn't be spawned.
+    #[error("failed to run the opener {path}: {reason}")]
+    OpenerSpawnFailed {
+        /// The resolved program path.
+        path: String,
+        /// The spawn error.
+        reason: String,
+    },
+    /// A log under `~/.zzz/run` (`daemon.log`, `opener.log`) can't be opened.
+    #[error("can't open the log {path}: {reason}")]
+    LogFile {
+        /// The log's path.
+        path: String,
+        /// The I/O error.
+        reason: String,
     },
     /// A command-line argument isn't valid UTF-8.
     #[error("argument is not valid UTF-8: {arg}")]
@@ -164,6 +191,7 @@ impl CliError {
             | Self::Usage(_)
             | Self::ServerBinNotFound
             | Self::ServerBinOverrideInvalid { .. }
+            | Self::OpenerNotExecutable { .. }
             | Self::NonUtf8Arg { .. } => 2,
             // the shell convention: 128 + the signal number
             Self::Interrupted { signal } => signal.exit_code(),
@@ -171,6 +199,8 @@ impl CliError {
             | Self::BadPath { .. }
             | Self::PortInUse { .. }
             | Self::ForeignRecord { .. }
+            | Self::OpenerSpawnFailed { .. }
+            | Self::LogFile { .. }
             | Self::AlreadyRunning { .. }
             | Self::ServerNotHealthy { .. }
             | Self::DaemonExited { .. }
@@ -214,7 +244,13 @@ impl CliError {
                 "point ZZZ_SERVER_BIN at a built `zzzd` (a relative path resolves against the directory zzz runs in), or unset it",
             ),
             Self::ConfigFile { .. } => Some(
-                "edit or delete ~/.zzz/config.json (without it the port defaults to 4460; `zzz init` writes a fresh one)",
+                "edit or delete ~/.zzz/config.json (without it the port is ZZZ_PORT or 4460, and zzz opens with ZZZ_OPENER or in the browser; `opener` is a program path, or an array of the program and its arguments; `zzz init` writes a fresh one)",
+            ),
+            Self::OpenerNotExecutable { .. } => Some(
+                "name an executable file by path — absolute, `~/…`, or relative (against ~/.zzz from config.json, the directory zzz runs in from ZZZ_OPENER). A bare name is refused, as $PATH is not searched: write `./name` for a file in the directory a relative path resolves against. Or remove the setting to open in the browser",
+            ),
+            Self::OpenerSpawnFailed { .. } => Some(
+                "check the opener is runnable by you (a script needs a `#!` line naming an interpreter that exists)",
             ),
             Self::Usage(_) => Some("`--help` after a command lists its usage"),
             Self::NonUtf8Arg { .. } => {
@@ -231,6 +267,7 @@ impl CliError {
             | Self::Interrupted { .. }
             | Self::InvalidConfig(_)
             | Self::BadPath { .. }
+            | Self::LogFile { .. }
             | Self::Daemon(_) => None,
         }
     }

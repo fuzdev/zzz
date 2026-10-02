@@ -1,39 +1,43 @@
 //! `zzz open` — default command.
 //!
-//! Opens the zzz browser UI, auto-starting the daemon if needed.
+//! Opens the zzz UI, auto-starting the daemon if needed.
 //! Handles `zzz`, `zzz <dir>`, and `zzz <file>`.
 //!
 //! The flow:
 //!   1. Require init — `~/.zzz` must exist (`zzz init`).
-//!   2. Resolve the path argument, if any: `~` expanded, joined onto the
+//!   2. Resolve the opener, if one is configured (`crate::opener`): a bad
+//!      one is a config error here, before any daemon work.
+//!   3. Resolve the path argument, if any: `~` expanded, joined onto the
 //!      current directory, canonicalized (so it matches the canonical path
 //!      the daemon stores for the workspace). A directory is the workspace;
 //!      a file opens its parent directory. A path that doesn't exist is an
 //!      error, before any daemon work.
-//!   3. Daemon discovery — read `~/.zzz/run/daemon.json`, verify the process
+//!   4. Daemon discovery — read `~/.zzz/run/daemon.json`, verify the process
 //!      is still the recorded one and `/health` responds; a stale record is
 //!      removed, an unresponsive daemon is stopped, and a record this zzz
 //!      can't verify (an older zzz's) is an error, never replaced.
-//!   4. Auto-start if not running — spawn `zzzd` **detached** (new process
+//!   5. Auto-start if not running — spawn `zzzd` **detached** (new process
 //!      group, log-file stdio), wait until it serves, record `daemon.json`.
 //!      This differs from `daemon start`, which runs the server in the
 //!      foreground and forwards signals to it.
-//!   5. Browser launch (`xdg-open` / `open` / `start`) with a
-//!      `?workspace=<dir>` param; the authenticated browser opens the
-//!      workspace (the CLI holds no credential for `workspace_open`).
+//!   6. Open the daemon's URL, with a `?workspace=<dir>` param when a path
+//!      was given: the configured opener (the URL as its final argument),
+//!      else the browser (`xdg-open` / `open` / `start`). Whatever opens it
+//!      authenticates and opens the workspace (the CLI holds no credential
+//!      for `workspace_open`).
 
 use std::fs;
-use std::os::unix::fs::OpenOptionsExt as _;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use argh::FromArgs;
 
 use crate::CliError;
-use crate::daemon_launch::DaemonLaunch;
+use crate::daemon_launch::{CliConfig, DaemonLaunch};
 use crate::daemon_lifecycle::{self as dl, DaemonInfo, DaemonState, StartOutcome};
+use crate::opener::Opener;
 
-/// Open file or directory in browser (default command).
+/// Open zzz, at a file or directory if given (default command).
 ///
 /// Accepts at most one positional path.
 #[derive(FromArgs, Debug)]
@@ -46,7 +50,10 @@ pub struct Open {
 
 /// Handle `zzz open` (and the implicit no-subcommand default).
 pub async fn cmd_open(args: &Open) -> Result<(), CliError> {
-    dl::require_zzz_dir()?;
+    let zzz_dir = dl::require_zzz_dir()?;
+    // a config error, so before anything runs
+    let config = CliConfig::read(&zzz_dir)?;
+    let opener = Opener::resolve(config.as_ref(), &zzz_dir)?;
 
     let target = match args.path.as_deref() {
         Some(raw) => Some(resolve_target(raw, &std::env::current_dir()?)?),
@@ -65,12 +72,15 @@ pub async fn cmd_open(args: &Open) -> Result<(), CliError> {
 
     let info = match discover_running_daemon().await? {
         Some(info) => info,
-        None => start_daemon_detached().await?,
+        None => start_daemon_detached(config.as_ref()).await?,
     };
 
     let url = build_url(info.port, target.as_ref().map(|t| t.workspace.as_str()));
     println!("opening {url}");
-    open_browser(&url).await;
+    match opener {
+        Some(opener) => opener.launch(&url, &zzz_dir)?,
+        None => open_browser(&url).await,
+    }
     Ok(())
 }
 
@@ -117,7 +127,7 @@ fn resolve_target(raw: &str, cwd: &Path) -> Result<OpenTarget, CliError> {
     Ok(OpenTarget { workspace, file })
 }
 
-/// The browser URL, with the workspace param when a path was given.
+/// The daemon's URL, with the workspace param when a path was given.
 fn build_url(port: u16, workspace: Option<&str>) -> String {
     let mut url = format!("http://localhost:{port}");
     if let Some(workspace) = workspace {
@@ -157,16 +167,10 @@ async fn discover_running_daemon() -> Result<Option<DaemonInfo>, CliError> {
     }
 }
 
-/// Spawn `zzzd` detached, wait until it serves, then record `daemon.json`.
-///
-/// Detached = a new process group (`process_group(0)`, so the daemon ignores
-/// the launching terminal's Ctrl-C) with its stdio captured to
-/// `~/.zzz/run/daemon.log` (mode `0600`, truncated per start), and the child
-/// is never awaited (a dropped `std::process::Child` is not killed) — so the
-/// daemon outlives this CLI invocation. It is process-group-detached, not
-/// session-detached: a true `setsid` needs `unsafe`, which the workspace
-/// forbids, so the daemon relies on orphaning-to-init plus the separate
-/// process group to survive.
+/// Spawn `zzzd` detached ([`dl::spawn_detached`]), its output captured to
+/// `~/.zzz/run/daemon.log` (mode `0600`, emptied per start), wait until it
+/// serves, then record `daemon.json`. The child is never awaited, so the
+/// daemon outlives this CLI invocation.
 ///
 /// A daemon that exits early (bad config, unreachable database) fails the
 /// start at once, with its exit status and the log's tail. Until it serves,
@@ -175,11 +179,8 @@ async fn discover_running_daemon() -> Result<Option<DaemonInfo>, CliError> {
 /// leaving an unrecorded daemon behind. `daemon.json` is written only once
 /// it serves, so a concurrent `zzz` never takes a starting daemon for a
 /// wedged one.
-async fn start_daemon_detached() -> Result<DaemonInfo, CliError> {
-    use std::os::unix::fs::PermissionsExt as _;
-    use std::os::unix::process::CommandExt as _;
-
-    let launch = DaemonLaunch::prepare(None)?;
+async fn start_daemon_detached(config: Option<&CliConfig>) -> Result<DaemonInfo, CliError> {
+    let launch = DaemonLaunch::prepare(None, config)?;
     let port = launch.port;
     dl::require_free_port(port, false)?;
     let bin = dl::resolve_server_bin()?;
@@ -187,15 +188,7 @@ async fn start_daemon_detached() -> Result<DaemonInfo, CliError> {
     let run_dir = launch.cwd.join("run");
     fs::create_dir_all(&run_dir)?;
     let log_path = run_dir.join("daemon.log");
-    let log = fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&log_path)?;
-    // `mode` applies only on create; an existing log is tightened too
-    log.set_permissions(fs::Permissions::from_mode(0o600))?;
-    let log_err = log.try_clone()?;
+    let log = dl::create_private_log(&log_path)?;
 
     // Read before the spawn, so an unreadable boot id fails with no child.
     let boot_id = dl::current_boot_id()?;
@@ -205,13 +198,7 @@ async fn start_daemon_detached() -> Result<DaemonInfo, CliError> {
 
     println!("starting daemon on port {port}...");
 
-    let mut child = launch
-        .command(&bin)
-        .stdin(Stdio::null())
-        .stdout(Stdio::from(log))
-        .stderr(Stdio::from(log_err))
-        .process_group(0)
-        .spawn()
+    let mut child = dl::spawn_detached(&mut launch.command(&bin), log)
         .map_err(|e| CliError::Daemon(format!("failed to spawn {}: {e}", bin.display())))?;
     let pid = child.id();
     // Unreaped until this CLI exits, so the pid can't be reused meanwhile.

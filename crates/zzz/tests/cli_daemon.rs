@@ -8,7 +8,8 @@
 //! exit, `init`, and — with a stand-in daemon script (`sh` + `python3`;
 //! without `python3` those tests print a visible SKIPPED line and pass) —
 //! the full start → status → stop lifecycle in the foreground and detached
-//! flows, plus signals during startup.
+//! flows, plus signals during startup, and the opener (a stand-in script
+//! recording its arguments; a stub `xdg-open` stands in for the browser).
 
 #![allow(
     clippy::unwrap_used,
@@ -33,6 +34,7 @@ const CLI_ENV: &[&str] = &[
     "ZZZ_PORT",
     "ZZZ_STATIC_DIR",
     "ZZZ_SERVER_BIN",
+    "ZZZ_OPENER",
     "DATABASE_URL",
     "SECRET_FUZ_COOKIE_KEYS",
     "FUZ_ALLOWED_ORIGINS",
@@ -1036,6 +1038,380 @@ fn open_auto_starts_a_detached_daemon() {
     for pid in cleanup.daemon_pids() {
         assert!(!is_running(pid), "daemon {pid} stopped");
     }
+}
+
+/// A stand-in opener (or browser stub): records its argument count, each
+/// argument on its own line, and whether it was given
+/// `ZZZ_ENABLE_TEST_ACTIONS`, in `record` — written whole, then renamed into
+/// place, so a reader never sees half of it.
+fn write_recording_opener(path: &Path, record: &Path) {
+    write_script(
+        path,
+        &format!(
+            r#"{{ echo "argc=$#"; for arg in "$@"; do printf 'arg=%s\n' "$arg"; done; echo "test_actions=${{ZZZ_ENABLE_TEST_ACTIONS-unset}}"; }} > '{record}.tmp'
+mv '{record}.tmp' '{record}'"#,
+            record = record.display(),
+        ),
+    );
+}
+
+/// Wait for a recording opener to run, and take what it recorded.
+fn take_record(record: &Path) -> Vec<String> {
+    wait_for(|| record.exists(), "the opener to run");
+    let lines = fs::read_to_string(record)
+        .unwrap()
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    fs::remove_file(record).unwrap();
+    lines
+}
+
+/// `encodeURIComponent`, as the CLI encodes the workspace param.
+fn encode_uri_component(input: &str) -> String {
+    input
+        .bytes()
+        .map(|byte| match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' => (byte as char).to_string(),
+            _ if b"-_.!~*'()".contains(&byte) => (byte as char).to_string(),
+            _ => format!("%{byte:02X}"),
+        })
+        .collect()
+}
+
+#[test]
+fn open_runs_the_configured_opener_with_the_url_as_its_final_argument() {
+    const TEST: &str = "open_runs_the_configured_opener_with_the_url_as_its_final_argument";
+    let home = launchable_home("opener");
+    let cleanup = Cleanup::new(&home);
+    let Some((bin, _record)) = write_fake_daemon(TEST, &cleanup, FakeDaemon::default()) else {
+        return;
+    };
+    let config = home.join(".zzz/config.json");
+
+    // the browser stub records too, so a fallback to it shows
+    let path = fake_browser_path(&home);
+    let browser_record = home.join("browser.record");
+    write_recording_opener(&home.join("fake_path/xdg-open"), &browser_record);
+    let env_record = home.join("env_opener.record");
+    write_recording_opener(&home.join("env_opener"), &env_record);
+    let config_record = home.join("config_opener.record");
+    fs::create_dir_all(home.join(".zzz/bin")).unwrap();
+    write_recording_opener(&home.join(".zzz/bin/config_opener"), &config_record);
+    let others_are_quiet = |records: &[&PathBuf]| {
+        // give a wrongly launched (detached) opener time to record
+        std::thread::sleep(Duration::from_millis(300));
+        for record in records {
+            assert!(!record.exists(), "{} also ran", record.display());
+        }
+    };
+
+    // a workspace whose URL a shell would mangle, reached through a symlink
+    let workspace = home.join("a b's (x) *!$HOME;&");
+    fs::create_dir_all(&workspace).unwrap();
+    std::os::unix::fs::symlink(&workspace, home.join("link")).unwrap();
+
+    // `ZZZ_OPENER` (relative to where zzz runs): the URL is its one argument
+    let mut attempt = 0;
+    let (out, port) = loop {
+        let port = free_port();
+        let out = run(zzz(&home)
+            .arg("link")
+            .current_dir(&home)
+            .env("PATH", &path)
+            .env("ZZZ_PORT", port.to_string())
+            .env("ZZZ_SERVER_BIN", &bin)
+            .env("ZZZ_OPENER", "./env_opener")
+            .env("ZZZ_ENABLE_TEST_ACTIONS", "1")
+            .envs(DEAD_PROXY.iter().copied()));
+        attempt += 1;
+        if out.status.success() || attempt > 3 || !stderr(&out).contains("already in use") {
+            break (out, port);
+        }
+    };
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    // the canonical directory, not the symlink
+    let workspace_url = format!(
+        "http://localhost:{port}/workspaces?workspace={}",
+        encode_uri_component(&format!("{}/", workspace.display()))
+    );
+    assert!(workspace_url.contains("a%20b's%20(x)%20*!%24HOME%3B%26"));
+    assert_eq!(
+        take_record(&env_record),
+        [
+            "argc=1".to_owned(),
+            format!("arg={workspace_url}"),
+            "test_actions=unset".to_owned()
+        ]
+    );
+    others_are_quiet(&[&browser_record, &config_record]);
+    let log_mode = fs::metadata(home.join(".zzz/run/opener.log"))
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(log_mode & 0o777, 0o600);
+
+    // the daemon is running now: every later `zzz` reuses it
+    let url = format!("http://localhost:{port}");
+    let open = |config_json: Option<&str>, env_opener: Option<&str>| {
+        match config_json {
+            Some(content) => fs::write(&config, content).unwrap(),
+            None => {
+                let _ = fs::remove_file(&config);
+            }
+        }
+        let mut command = zzz(&home);
+        command
+            .current_dir(&home)
+            .env("PATH", &path)
+            .env("ZZZ_ENABLE_TEST_ACTIONS", "1")
+            .envs(DEAD_PROXY.iter().copied());
+        if let Some(value) = env_opener {
+            command.env("ZZZ_OPENER", value);
+        }
+        let out = run(&mut command);
+        assert!(
+            out.status.success(),
+            "{config_json:?} {env_opener:?}: {}",
+            stderr(&out)
+        );
+        assert!(stdout(&out).contains(&format!("opening {url}")));
+    };
+    let bare = [
+        "argc=1".to_owned(),
+        format!("arg={url}"),
+        "test_actions=unset".to_owned(),
+    ];
+
+    // an array is the program (relative to ~/.zzz) and its arguments, passed
+    // through verbatim, with the URL last; the config beats the environment
+    open(
+        Some(r#"{"opener": ["bin/config_opener", "--flag", "two words", "$HOME;*", ""]}"#),
+        Some("./env_opener"),
+    );
+    assert_eq!(
+        take_record(&config_record),
+        [
+            "argc=5",
+            "arg=--flag",
+            "arg=two words",
+            "arg=$HOME;*",
+            "arg=",
+            &format!("arg={url}"),
+            "test_actions=unset"
+        ]
+    );
+    others_are_quiet(&[&browser_record, &env_record]);
+
+    // a string is the program alone; `~` expands
+    open(Some(r#"{"opener": "~/.zzz/bin/config_opener"}"#), None);
+    assert_eq!(take_record(&config_record), bare);
+    open(None, Some("~/env_opener"));
+    assert_eq!(take_record(&env_record), bare);
+
+    // a blank config value reads as unset: the environment's opener runs
+    for blank in [r#"{"opener": "  "}"#, r#"{"opener": null}"#] {
+        open(Some(blank), Some("./env_opener"));
+        assert_eq!(take_record(&env_record), bare, "{blank}");
+        others_are_quiet(&[&browser_record, &config_record]);
+    }
+
+    // both blank (or absent): the browser, as without an opener
+    for (config_json, env_opener) in [(Some(r#"{"opener": ""}"#), Some(" ")), (None, None)] {
+        open(config_json, env_opener);
+        assert_eq!(take_record(&browser_record)[..2], bare[..2]);
+        others_are_quiet(&[&env_record, &config_record]);
+    }
+
+    // an opener that passes validation but can't be executed (no `#!` line):
+    // a spawn failure, exit 1, and no fallback to the browser
+    let no_shebang = home.join("no_shebang_opener");
+    fs::write(&no_shebang, "echo not a program\n").unwrap();
+    fs::set_permissions(&no_shebang, fs::Permissions::from_mode(0o755)).unwrap();
+    let failing_open = |needle: &str| {
+        let out = run(zzz(&home)
+            .current_dir(&home)
+            .env("PATH", &path)
+            .env("ZZZ_OPENER", "./no_shebang_opener")
+            .envs(DEAD_PROXY.iter().copied()));
+        let err = stderr(&out);
+        assert_eq!(out.status.code(), Some(1), "{needle}: {err}");
+        assert!(err.contains(needle), "{needle}: {err}");
+    };
+    failing_open(&format!(
+        "failed to run the opener {}: ",
+        home.join("./no_shebang_opener").display()
+    ));
+
+    // a log that can't be opened is an error naming it
+    let log_path = home.join(".zzz/run/opener.log");
+    fs::remove_file(&log_path).unwrap();
+    fs::create_dir(&log_path).unwrap();
+    failing_open(&format!("can't open the log {}: ", log_path.display()));
+    others_are_quiet(&[&browser_record, &env_record, &config_record]);
+
+    let out = run(zzz(&home).args(["daemon", "stop"]));
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+}
+
+#[test]
+fn a_bad_opener_exits_2_without_launching_anything() {
+    let home = launchable_home("badopener");
+    let cleanup = Cleanup::new(&home);
+    let config = home.join(".zzz/config.json");
+    // a daemon and a browser that would leave a mark, if either were run
+    let bin = home.join("fake_zzzd");
+    write_script(
+        &bin,
+        &format!("touch '{}'", cleanup.ready_marker().display()),
+    );
+    let path = fake_browser_path(&home);
+    let browser_record = home.join("browser.record");
+    write_recording_opener(&home.join("fake_path/xdg-open"), &browser_record);
+    let good_record = home.join("good_opener.record");
+    write_recording_opener(&home.join("good_opener"), &good_record);
+    let not_executable = home.join("opener.txt");
+    fs::write(&not_executable, "#!/bin/sh\n").unwrap();
+    fs::create_dir_all(home.join("project")).unwrap();
+
+    let check = |config_json: Option<&str>, env_opener: Option<&str>, needle: &str| {
+        match config_json {
+            Some(content) => fs::write(&config, content).unwrap(),
+            None => {
+                let _ = fs::remove_file(&config);
+            }
+        }
+        for args in [&[][..], &["open", "project"][..]] {
+            let mut command = zzz(&home);
+            command
+                .args(args)
+                .current_dir(&home)
+                .env("PATH", &path)
+                .env("ZZZ_PORT", free_port().to_string())
+                .env("ZZZ_SERVER_BIN", &bin);
+            if let Some(value) = env_opener {
+                command.env("ZZZ_OPENER", value);
+            }
+            let out = run(&mut command);
+            let err = stderr(&out);
+            assert_eq!(out.status.code(), Some(2), "{needle}: {err}");
+            assert!(err.contains(needle), "{needle}: {err}");
+        }
+    };
+    let config_path = config.display().to_string();
+    let in_config = format!("`opener` in {config_path} is not an executable file: ");
+    let bad_config = format!("invalid {config_path}: opener: ");
+
+    // a missing program, a file that isn't executable, a directory — from
+    // either source
+    let missing = home.join("./missing_opener").display().to_string();
+    check(
+        None,
+        Some("./missing_opener"),
+        &format!("ZZZ_OPENER is not an executable file: {missing}"),
+    );
+    check(
+        None,
+        Some(not_executable.to_str().unwrap()),
+        &format!(
+            "ZZZ_OPENER is not an executable file: {}",
+            not_executable.display()
+        ),
+    );
+    check(
+        None,
+        Some("./project"),
+        "ZZZ_OPENER is not an executable file",
+    );
+    check(
+        Some(r#"{"opener": "bin/missing_opener"}"#),
+        None,
+        &format!(
+            "{in_config}{}",
+            home.join(".zzz/bin/missing_opener").display()
+        ),
+    );
+    // a bare name is refused from either source: never searched for on
+    // $PATH (`xdg-open` is there), and never run from the directory zzz runs
+    // in or from ~/.zzz, though an executable of that name sits in each
+    // (`~good_opener` too: only `~` and `~/…` expand)
+    write_recording_opener(&home.join(".zzz/good_opener"), &good_record);
+    write_recording_opener(&home.join("~good_opener"), &good_record);
+    write_recording_opener(&home.join(".zzz/~good_opener"), &good_record);
+    for bare in ["xdg-open", "good_opener", "~good_opener"] {
+        check(
+            None,
+            Some(bare),
+            &format!("ZZZ_OPENER is not an executable file: {bare}\n"),
+        );
+        check(
+            Some(&format!(r#"{{"opener": ["{bare}", "--flag"]}}"#)),
+            None,
+            &format!("{in_config}{bare}\n"),
+        );
+    }
+    check(None, Some("good_opener"), "write `./name`");
+    check(
+        Some(&format!(
+            r#"{{"opener": ["{}", "--flag"]}}"#,
+            not_executable.display()
+        )),
+        None,
+        &format!("{in_config}{}", not_executable.display()),
+    );
+    // a bad config opener is no reason to use the environment's good one
+    check(
+        Some(r#"{"opener": "bin/missing_opener"}"#),
+        Some("./good_opener"),
+        &in_config,
+    );
+
+    // a malformed `opener` names the file
+    for (content, reason) in [
+        (
+            r#"{"opener": 5}"#,
+            "expected a program path or an array of strings, got `5`",
+        ),
+        (
+            r#"{"opener": {"program": "good_opener"}}"#,
+            "expected a program path",
+        ),
+        (
+            r#"{"opener": []}"#,
+            "expected a program, got an empty array",
+        ),
+        (
+            r#"{"opener": ["good_opener", 5]}"#,
+            "expected an array of strings, got the element `5`",
+        ),
+        (
+            r#"{"opener": ["", "--flag"]}"#,
+            "the program (the array's first element) is blank",
+        ),
+    ] {
+        check(
+            Some(content),
+            Some("./good_opener"),
+            &format!("{bad_config}{reason}"),
+        );
+    }
+    // as does a config that isn't a JSON object
+    check(
+        Some("[]"),
+        Some("./good_opener"),
+        &format!("invalid {config_path}: expected a JSON object"),
+    );
+
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(!cleanup.ready_marker().exists(), "no daemon spawned");
+    assert!(!daemon_json(&home).exists(), "no daemon recorded");
+    assert!(
+        !home.join(".zzz/run/daemon.log").exists(),
+        "no spawn attempted"
+    );
+    assert!(!home.join(".zzz/run/opener.log").exists(), "no opener run");
+    assert!(!browser_record.exists(), "no browser fallback");
+    assert!(!good_record.exists(), "no opener run");
 }
 
 /// Start `zzz <args>` against a slow stand-in daemon, signal the CLI while

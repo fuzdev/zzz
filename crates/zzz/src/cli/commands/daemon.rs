@@ -10,7 +10,7 @@ use std::process::{ExitCode, Stdio};
 use argh::FromArgs;
 
 use crate::CliError;
-use crate::daemon_launch::DaemonLaunch;
+use crate::daemon_launch::{CliConfig, DaemonLaunch};
 use crate::daemon_lifecycle::{self as dl, DaemonInfo, DaemonRecord, DaemonState, StartOutcome};
 
 /// Manage the zzz daemon.
@@ -86,7 +86,8 @@ async fn cmd_daemon_start(args: &DaemonStart) -> Result<ExitCode, CliError> {
         DaemonState::Stopped => {}
     }
 
-    let launch = DaemonLaunch::prepare(args.port)?;
+    let config = CliConfig::read(&dl::require_zzz_dir()?)?;
+    let launch = DaemonLaunch::prepare(args.port, config.as_ref())?;
     let port = launch.port;
     dl::require_free_port(port, true)?;
     let bin = dl::resolve_server_bin()?;

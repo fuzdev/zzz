@@ -109,7 +109,7 @@ cargo build -p zzz -p zzz_server --release   # put target/release on PATH — zz
 zzz init                                  # ~/.zzz/: config.json, .env (fresh cookie key), bootstrap_token
 cargo xtask prod-setup                    # .env.production, which `gro build` reads (idempotent)
 gro build && rm -rf ~/.zzz/static && cp -r build ~/.zzz/static   # the UI the daemon serves
-zzz                                       # start the daemon (detached) and open the browser
+zzz                                       # start the daemon (detached) and open zzz (the browser, or a configured opener)
 ```
 
 The CLI passes `zzzd` its own environment with `~/.zzz/.env` filling the
