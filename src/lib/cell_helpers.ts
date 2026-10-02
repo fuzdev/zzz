@@ -53,15 +53,15 @@ export const create_collection_decoder =
 	// `any`, not a `TJson` generic — an unannotated `(json) => ...` gives `TJson`
 	// no inference site, so it'd be `unknown` and every call site would need annotating
 	(clear: () => void, add: (json: any) => unknown) =>
-	(value: unknown): typeof HANDLED => {
-		if (Array.isArray(value)) {
-			clear();
-			for (const json of value) {
-				add(json);
+		(value: unknown): typeof HANDLED => {
+			if (Array.isArray(value)) {
+				clear();
+				for (const json of value) {
+					add(json);
+				}
 			}
-		}
-		return HANDLED;
-	};
+			return HANDLED;
+		};
 
 /**
  * Get schema class information from a Zod schema.
