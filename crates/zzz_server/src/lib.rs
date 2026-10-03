@@ -161,6 +161,17 @@ pub struct RunAppOptions {
     pub daemon_token_state: Option<fuz_auth::SharedDaemonTokenState>,
 }
 
+impl std::fmt::Debug for RunAppOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RunAppOptions")
+            .field("default_addr", &self.default_addr)
+            .field("drain_timeout", &self.drain_timeout)
+            .field("force_test_actions", &self.force_test_actions)
+            .field("rate_limiters", &self.rate_limiters)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Run the `zzz_server` lifecycle to completion.
 ///
 /// Parses CLI args + env, opens the DB pool, runs migrations, builds
@@ -819,6 +830,25 @@ pub struct Config {
     /// originating client. Parsed eagerly in `run()`; invalid entries
     /// fail startup.
     pub trusted_proxies: Option<String>,
+}
+
+/// Hand-written so the secrets never reach a log line: `database_url` (which
+/// can carry a password) and `secret_cookie_keys` print as `[redacted]`.
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Config")
+            .field("bind_addr", &self.bind_addr)
+            .field("static_dir", &self.static_dir)
+            .field("database_url", &"[redacted]")
+            .field("secret_cookie_keys", &"[redacted]")
+            .field("bootstrap_token_path", &self.bootstrap_token_path)
+            .field("allowed_origins", &self.allowed_origins)
+            .field("scoped_dirs", &self.scoped_dirs)
+            .field("zzz_dir", &self.zzz_dir)
+            .field("enable_test_actions", &self.enable_test_actions)
+            .field("trusted_proxies", &self.trusted_proxies)
+            .finish()
+    }
 }
 
 /// The app directory when `PUBLIC_ZZZ_DIR` is unset or empty, relative to

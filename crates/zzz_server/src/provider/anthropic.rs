@@ -52,6 +52,13 @@ pub struct AnthropicProvider {
     state: RwLock<AnthropicState>,
 }
 
+/// Hand-written so the client (and its API key) stays out of `Debug` output.
+impl std::fmt::Debug for AnthropicProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AnthropicProvider").finish_non_exhaustive()
+    }
+}
+
 impl AnthropicProvider {
     pub fn new(api_key: Option<&str>) -> Self {
         let client = common::ProviderClient::from_api_key(api_key, build_client);

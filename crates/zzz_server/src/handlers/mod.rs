@@ -94,6 +94,17 @@ pub struct App {
     pub action_registry: std::sync::OnceLock<Arc<ActionRegistry>>,
 }
 
+impl std::fmt::Debug for App {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("App")
+            .field("instance_id", &self.instance_id)
+            .field("zzz_dir", &self.zzz_dir)
+            .field("scoped_dirs", &self.scoped_dirs)
+            .field("enable_test_actions", &self.enable_test_actions)
+            .finish_non_exhaustive()
+    }
+}
+
 impl App {
     pub fn new(
         db_pool: Pool,

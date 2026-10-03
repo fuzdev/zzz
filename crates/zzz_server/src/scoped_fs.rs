@@ -133,6 +133,7 @@ impl ScopedFsError {
 /// NOTE: There is an inherent TOCTOU gap between the symlink check (`lstat`)
 /// and the caller's subsequent filesystem operation. A symlink could be
 /// created after validation.
+#[derive(Debug)]
 pub struct ScopedFs {
     /// Roots fixed at construction (`zzz_dir` + `scoped_dirs`), each
     /// normalized with a trailing `/`. Never removed —

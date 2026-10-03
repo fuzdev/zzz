@@ -29,6 +29,13 @@ pub struct OpenAiProvider {
     state: RwLock<OpenAiState>,
 }
 
+/// Hand-written so the client (and its API key) stays out of `Debug` output.
+impl std::fmt::Debug for OpenAiProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpenAiProvider").finish_non_exhaustive()
+    }
+}
+
 impl OpenAiProvider {
     pub fn new(api_key: Option<&str>) -> Self {
         let client = common::ProviderClient::from_api_key(api_key, build_client);

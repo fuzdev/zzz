@@ -677,6 +677,7 @@ fn apply_subtree(
 
 /// Per-filer configuration: which directories to ignore, and the watch
 /// budget.
+#[derive(Debug)]
 pub struct FilerConfig {
     /// Absolute directories to ignore beyond the default names. For a
     /// workspace watcher whose root contains `zzz_dir`, this is `zzz_dir`
@@ -1261,6 +1262,14 @@ pub struct Filer {
     unwatched_count: Arc<AtomicUsize>,
     #[cfg(test)]
     watches: Arc<Mutex<DirWatches>>,
+}
+
+impl std::fmt::Debug for Filer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Filer")
+            .field("unwatched_count", &self.unwatched_count)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Drop for Filer {
@@ -1853,7 +1862,7 @@ async fn filer_event_loop(
 
 /// Whether a filer was started at server startup (permanent) or via
 /// `workspace_open` (can be stopped on `workspace_close`).
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FilerLifetime {
     /// Started at server startup for `zzz_dir` or `scoped_dirs` — never stopped.
     Permanent,
@@ -1862,6 +1871,7 @@ pub enum FilerLifetime {
 }
 
 /// Entry in the filer manager.
+#[derive(Debug)]
 pub struct FilerEntry {
     pub filer: Filer,
     pub lifetime: FilerLifetime,
@@ -1880,6 +1890,12 @@ pub struct FilerManager {
     /// Test seam: how many initial scans ran.
     #[cfg(test)]
     scans: AtomicUsize,
+}
+
+impl std::fmt::Debug for FilerManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FilerManager").finish_non_exhaustive()
+    }
 }
 
 /// A [`FilerBroadcast`] through `App::broadcast`. Holds the app weakly — the
