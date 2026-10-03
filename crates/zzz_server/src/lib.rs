@@ -366,8 +366,10 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     );
     let bootstrap_available_atomic =
         Arc::new(std::sync::atomic::AtomicBool::new(bootstrap_available));
-    let socket_revoker: Arc<dyn fuz_auth::SocketRevoker> =
-        Arc::clone(&realtime).into_socket_revoker();
+    // Both transports: a revocation handler's direct close must reach the
+    // audit streams too, since the SSE listener only fires on a written audit
+    // row and the REST `/logout` / `/password` audit write is fail-open.
+    let socket_revoker = fuz_realtime::RealtimeRevoker::socket_revoker(&realtime, &audit_sse);
     // Spine daemon-token state — **injected, never constructed here** (see
     // `RunAppOptions::daemon_token_state`). Production is `None`, so the
     // daemon-token leg of `resolve_auth_from_headers` is unreachable and no
@@ -478,7 +480,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // frame on each open `/api/admin/audit/stream` subscription, and a
     // successful account-wide revocation drops that account's streams. Mirrors
     // `fuz_app`'s `create_audit_log_sse`; the socket-revocation listeners above
-    // are the WS half.
+    // close through the same fan-out revoker, so they reach these streams too.
     fuz_realtime::register_audit_sse_listener(&spine_audit_emitter, &audit_sse);
 
     // Compile the spine action registry — must run after `Arc<App>` is

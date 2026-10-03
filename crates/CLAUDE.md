@@ -223,12 +223,14 @@ orientation; the spine crates are authoritative:
 
 10. **Socket revocation** — `close_sockets_for_session(token_hash)`,
     `close_sockets_for_token(api_token_id)`, and
-    `close_sockets_for_account(account_id)` live on the spine's
-    `fuz_realtime::ConnectionRegistry` (its `SocketRevoker` impl — `App`
-    itself carries only a `broadcast` shim). They close matching WebSocket
-    connections by dropping the channel sender; the ws loop breaks on
-    `recv()` returning `None` and sends a 4001 (`WS_CLOSE_SESSION_REVOKED`)
-    Close frame so clients can distinguish revocation from normal close.
+    `close_sockets_for_account(account_id)` are the spine's `SocketRevoker`
+    methods; `run_app` binds `fuz_realtime::RealtimeRevoker`, which fans each
+    close to the WS `ConnectionRegistry` and the audit-stream `SseRegistry`
+    (`App` itself carries only a `broadcast` shim). They close matching
+    WebSocket connections by dropping the channel sender — the ws loop breaks
+    on `recv()` returning `None` and sends a 4001 (`WS_CLOSE_SESSION_REVOKED`)
+    Close frame so clients can distinguish revocation from normal close — and
+    end matching audit streams the same way.
     Invoked by the spine's revocation-emitting handlers and audit-event
     listeners: `session_revoke` (per-session), `token_revoke` /
     `account_token_revoke` (per-token), and `logout` / `session_revoke_all`
@@ -426,8 +428,8 @@ and `perform_action`), and DB pool / migrations all live in the spine crates
 (`fuz_auth` / `fuz_http` / `fuz_realtime` / `fuz_actions` / `fuz_db`) —
 `zzz_server` composes them in `run_app`. `handlers/` holds `App` state, a
 `broadcast` shim over `App.realtime`, and the per-domain handlers; socket
-revocation is the spine `ConnectionRegistry`'s `SocketRevoker` (see Auth
-item 10).
+revocation is the spine `RealtimeRevoker` over the WS and SSE registries
+(see Auth item 10).
 
 **Large responses**: `session_load` and `workspace_open` carry every
 indexed file's contents, so they skip the `serde_json::Value` round trip: the
@@ -480,12 +482,14 @@ shared by the account / bootstrap / signup routers and the RPC dispatch
 path. Two listener sets hang off its event chain, both registered in
 `run_app` after `Arc<App>` exists:
 
-- `fuz_auth::register_socket_revocation_listeners` — the WS half: closes
-  matching WebSocket connections on `session_revoke` / `token_revoke`
-  (granular) and `session_revoke_all` / `token_revoke_all` /
-  `password_change` / `logout` (account-wide). Revocation-emitting handlers
-  also call the `SocketRevoker` methods synchronously before emitting, so
-  revocation lands even if the audit INSERT later fails.
+- `fuz_auth::register_socket_revocation_listeners` — closes
+  matching connections through the bound `RealtimeRevoker` (WS sockets and audit
+  streams) on `session_revoke` / `token_revoke` (granular) and
+  `session_revoke_all` / `token_revoke_all` / `password_change` / `logout`
+  (account-wide). Revocation-emitting handlers also close directly — the RPC
+  ones on the post-commit queue, the REST `/logout` / `/password` inline before
+  their audit write — so revocation lands on sockets and audit streams alike
+  even if a pool-routed audit INSERT later fails.
 - `fuz_realtime::register_audit_sse_listener` — the SSE half: fans every
   audit row to the open `GET /api/admin/audit/stream` subscriptions as one
   `data:` frame and closes an account's streams on the account-wide
