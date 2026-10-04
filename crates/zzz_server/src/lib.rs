@@ -3,7 +3,8 @@
 //! The library entry point [`run_app`] owns the full server lifecycle:
 //! env loading, DB pool + migrations, spine state construction,
 //! `ActionRegistry` compile, file watchers, daemon-token rotation,
-//! route composition, signal handling, and graceful shutdown.
+//! route composition, signal handling, the auth cleanup task, and
+//! graceful shutdown.
 //!
 //! The `password_hasher` parameter is the swap point for the
 //! test-binary pattern (fast argon2 via a pluggable hasher):
@@ -178,6 +179,12 @@ impl std::fmt::Debug for RunAppOptions {
 /// every spine subsystem, mounts the routes, binds the listener, and
 /// blocks on graceful shutdown (Ctrl-C / SIGTERM). Returns once all
 /// connections have drained and PTYs are torn down.
+///
+/// The spine's auth cleanup ([`fuz_auth::spawn_auth_cleanup`]) runs beside
+/// the server — expired sessions deleted, expired role-grant offers audited
+/// once — a pass once the listener is bound, then one every
+/// [`fuz_auth::DEFAULT_AUTH_CLEANUP_INTERVAL`]. It stops when shutdown begins
+/// and is joined before this returns.
 ///
 /// Every configuration knob lives on [`RunAppOptions`]; everything
 /// not explicitly named there flows from CLI args or the process
@@ -786,14 +793,35 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // Signal handling + graceful drain come from the spine
     // (`fuz_http::lifecycle`) — the SIGINT/SIGTERM → `CancellationToken`
     // → drain dance is shared with the other spine consumers. zzz's own
-    // teardown (PTY cleanup) runs after the drain returns.
+    // teardown (the cleanup task, PTY cleanup) runs after the drain returns.
     let shutdown = fuz_http::shutdown_token();
-    fuz_http::serve_with_shutdown(listener, app, shutdown, drain_timeout)
-        .await
-        .map_err(ServerError::Serve)?;
 
-    // Clean up spawned terminal processes before exiting
+    // Migrations have run, so the cleanup's startup pass can start now. It
+    // audits through the spine emitter, so expiry events reach the admin
+    // audit streams.
+    let auth_cleanup = fuz_auth::spawn_auth_cleanup(
+        fuz_auth::AuthCleanupOptions {
+            pool: app_state_for_shutdown.db_pool.clone(),
+            audit: spine_audit_emitter,
+        },
+        fuz_auth::DEFAULT_AUTH_CLEANUP_INTERVAL,
+        shutdown.clone(),
+    );
+
+    let served =
+        fuz_http::serve_with_shutdown(listener, app, shutdown.clone(), drain_timeout).await;
+
+    // A serve error returns without the signal, so cancel for the cleanup
+    // task's sake; it stops at once either way.
+    shutdown.cancel();
+    if let Err(e) = auth_cleanup.await {
+        tracing::warn!(error = %e, "the auth cleanup task failed");
+    }
+
+    // Clean up spawned terminal processes before exiting, on a serve error
+    // too
     app_state_for_shutdown.pty_manager.kill_all().await;
+    served.map_err(ServerError::Serve)?;
 
     tracing::info!("server shutdown complete");
     Ok(())
