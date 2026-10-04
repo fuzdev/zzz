@@ -181,10 +181,11 @@ impl std::fmt::Debug for RunAppOptions {
 /// connections have drained and PTYs are torn down.
 ///
 /// The spine's auth cleanup ([`fuz_auth::spawn_auth_cleanup`]) runs beside
-/// the server — expired sessions deleted, expired role-grant offers audited
-/// once — a pass once the listener is bound, then one every
-/// [`fuz_auth::DEFAULT_AUTH_CLEANUP_INTERVAL`]. It stops when shutdown begins
-/// and is joined before this returns.
+/// the server — expired sessions deleted and the connections they opened
+/// closed, expired role-grant offers audited once — a pass once the listener
+/// is bound, then one every [`fuz_auth::DEFAULT_AUTH_CLEANUP_INTERVAL`], so a
+/// socket or audit stream outlives its session's expiry by at most one
+/// interval. It stops when shutdown begins and is joined before this returns.
 ///
 /// Every configuration knob lives on [`RunAppOptions`]; everything
 /// not explicitly named there flows from CLI args or the process
@@ -798,11 +799,13 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
 
     // Migrations have run, so the cleanup's startup pass can start now. It
     // audits through the spine emitter, so expiry events reach the admin
-    // audit streams.
+    // audit streams, and closes each swept session's connections through the
+    // revoker the revocation handlers hold (WS sockets and audit streams).
     let auth_cleanup = fuz_auth::spawn_auth_cleanup(
         fuz_auth::AuthCleanupOptions {
             pool: app_state_for_shutdown.db_pool.clone(),
             audit: spine_audit_emitter,
+            socket_revoker,
         },
         fuz_auth::DEFAULT_AUTH_CLEANUP_INTERVAL,
         shutdown.clone(),

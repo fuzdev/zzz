@@ -505,7 +505,11 @@ metadata contract, the bootstrap success/failure audit rows, and the
 
 **Auth cleanup**: `run_app` schedules the spine's `fuz_auth::spawn_auth_cleanup`
 on the same emitter — a pass once the listener is bound, then one per
-`DEFAULT_AUTH_CLEANUP_INTERVAL`. Expired sessions are deleted and each expired
+`DEFAULT_AUTH_CLEANUP_INTERVAL`. Expired sessions are deleted and the
+connections they opened closed through the bound `RealtimeRevoker` (WS sockets
+get the revocation close, audit streams end) — no audit row, so this direct
+close is the only one, and a connection outlives its session's expiry by at
+most one interval. Each expired
 role-grant offer is audited once (`role_grant_offer_expire`, fanned out to the
 audit streams like any other row). The task stops on the shutdown token and is
 joined after the drain, before PTY teardown.
