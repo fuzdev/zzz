@@ -289,7 +289,9 @@ conform to the shared fuz_app contract. The tests live in
 - **`sse.cross.test.ts`** — `describe_cross_process_sse_tests` against
   `GET /api/admin/audit/stream` (the shared `fuz_realtime::audit_stream_router`):
   the `: connected` comment, an audit `data:` frame on
-  `admin_session_revoke_all`, and close-on-revoke. Gated on `capabilities.sse`.
+  `admin_session_revoke_all`, close-on-revoke, close on account delete (the
+  deleted account's stream), and the per-session stream cap (one stream past
+  it ends the session's oldest and no other). Gated on `capabilities.sse`.
 - **`workspace.cross.test.ts`** — workspace open / list / close, idempotency,
   scope on close (closing a workspace on `zzz_dir`, on a scoped dir via a
   non-canonical spelling, or nested in a scoped dir keeps write access; closing

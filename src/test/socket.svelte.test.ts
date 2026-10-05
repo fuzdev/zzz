@@ -7,6 +7,7 @@ import {
 } from '@fuzdev/fuz_app/actions/socket.svelte.ts';
 import {
 	WS_CLOSE_CLIENT_HEARTBEAT_TIMEOUT,
+	WS_CLOSE_CONNECTION_LIMIT,
 	WS_CLOSE_SESSION_REVOKED
 } from '@fuzdev/fuz_app/actions/transports.ts';
 
@@ -544,6 +545,77 @@ describe('Socket', () => {
 			assert.strictEqual(constructed(), 2, 'a new WebSocket to the same URL');
 			assert.strictEqual(mock_socket.url, TEST_URLS.BASE);
 			assert.ok(!socket.revoked);
+			mock_socket.connect();
+			assert.ok(socket.connected);
+		});
+	});
+
+	describe('Connection limit', () => {
+		const constructed = (): number =>
+			(globalThis.WebSocket as unknown as { mock: { calls: Array<unknown> } }).mock.calls.length;
+
+		test('superseded reflects a connection-limit close', () => {
+			const socket = new Socket({ app });
+			socket.connect(TEST_URLS.BASE);
+			mock_socket.connect();
+			assert.ok(!socket.superseded);
+
+			mock_socket.dispatchEvent('close', { code: WS_CLOSE_CONNECTION_LIMIT });
+
+			assert.ok(socket.superseded);
+			assert.ok(!socket.revoked);
+			assert.ok(!socket.connected);
+			assert.ok(!socket.is_reconnect_pending);
+			// reads like a socket that was never connected — hence the `superseded` check
+			assert.strictEqual(socket.status, 'initial');
+		});
+
+		test('a superseded socket does not auto-reconnect', () => {
+			const socket = new Socket({ app });
+			socket.connect(TEST_URLS.BASE);
+			mock_socket.connect();
+			assert.ok(socket.auto_reconnect);
+			assert.strictEqual(constructed(), 1);
+
+			mock_socket.dispatchEvent('close', { code: WS_CLOSE_CONNECTION_LIMIT });
+			assert.ok(socket.superseded);
+
+			// no reconnect is scheduled
+			vi.advanceTimersByTime(60_000);
+			assert.strictEqual(constructed(), 1);
+
+			// and a fire-and-forget send queues without reopening the socket
+			assert.ok(!socket.send(TEST_MESSAGE.BASIC));
+			assert.strictEqual(socket.queued_message_count, 1);
+			assert.strictEqual(constructed(), 1);
+			assert.ok(socket.superseded);
+		});
+
+		test('a send still connects a disconnected socket that was not superseded', () => {
+			const socket = new Socket({ app });
+			socket.connect(TEST_URLS.BASE);
+			mock_socket.connect();
+			socket.disconnect();
+			assert.strictEqual(socket.status, 'initial');
+			assert.ok(!socket.superseded);
+			assert.strictEqual(constructed(), 1);
+
+			assert.ok(!socket.send(TEST_MESSAGE.BASIC));
+			assert.strictEqual(constructed(), 2);
+		});
+
+		test('connect reopens a superseded socket', () => {
+			const socket = new Socket({ app });
+			socket.connect(TEST_URLS.BASE);
+			mock_socket.connect();
+			mock_socket.dispatchEvent('close', { code: WS_CLOSE_CONNECTION_LIMIT });
+			assert.ok(socket.superseded);
+
+			socket.connect();
+
+			assert.strictEqual(constructed(), 2, 'a new WebSocket to the same URL');
+			assert.strictEqual(mock_socket.url, TEST_URLS.BASE);
+			assert.ok(!socket.superseded);
 			mock_socket.connect();
 			assert.ok(socket.connected);
 		});

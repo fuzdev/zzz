@@ -3,10 +3,11 @@
  *
  * Calls `describe_cross_process_sse_tests` against the spawned backend's
  * `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`
- * on the Rust backend. Three cases (the `: connected` comment, an audit `data:`
- * frame on `admin_session_revoke_all`, and close-on-revoke on
- * `account_session_revoke_all`) assert the audit-log SSE wire contract against
- * the fuz_app standard.
+ * on the Rust backend. Its cases (the `: connected` comment, an audit `data:`
+ * frame on `admin_session_revoke_all`, close-on-revoke on
+ * `account_session_revoke_all` and `account_session_revoke`, close on account
+ * delete, and the per-session stream cap) assert the audit-log SSE wire
+ * contract against the fuz_app standard.
  *
  * Gated on `capabilities.sse` (set on the zzz backend config — the backend
  * serves the route). The keeper holds `ROLE_ADMIN` (via `extra_keeper_roles`) so

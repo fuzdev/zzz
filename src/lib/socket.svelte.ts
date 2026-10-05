@@ -165,6 +165,16 @@ export class Socket implements WebsocketRpcConnection {
 	 */
 	readonly revoked: boolean = $derived(this.#client?.revoked ?? false);
 
+	/**
+	 * Whether the server closed the socket with `WS_CLOSE_CONNECTION_LIMIT`,
+	 * to admit a newer connection on the account. Closed until the next
+	 * `connect()` (`disconnect()` drops the client and the flag with it);
+	 * anything that reconnects on `initial` must check this first —
+	 * `status` reads `initial` here, and reconnecting unasked would close a
+	 * newer socket in turn.
+	 */
+	readonly superseded: boolean = $derived(this.#client?.superseded ?? false);
+
 	readonly status: AsyncStatus = $derived(
 		socket_status_to_async_status(this.#client?.status ?? 'initial', this.revoked)
 	);
@@ -279,7 +289,11 @@ export class Socket implements WebsocketRpcConnection {
 		return client.request(method, params, options);
 	}
 
-	/** Fire-and-forget send, queued for retry when it can't go out now. */
+	/**
+	 * Fire-and-forget send, queued for retry when it can't go out now. With
+	 * `auto_reconnect` on, queueing connects an idle socket (`status` `initial`)
+	 * — except a `superseded` one.
+	 */
 	send(data: object): boolean {
 		if (this.can_send && this.#client) {
 			try {
@@ -360,7 +374,8 @@ export class Socket implements WebsocketRpcConnection {
 		};
 		this.message_queue.push(message);
 
-		if (this.status === 'initial' && this.auto_reconnect && this.url_input) {
+		// a superseded socket reads `initial` too, and only the user reopens it
+		if (this.status === 'initial' && !this.superseded && this.auto_reconnect && this.url_input) {
 			this.connect();
 		}
 	}

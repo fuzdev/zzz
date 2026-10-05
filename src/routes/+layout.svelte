@@ -219,6 +219,20 @@
 />
 
 {#if auth_state.verified && app}
+	{#if app.socket.superseded}
+		<!-- never reopened automatically: a reconnect can close another of the account's sockets -->
+		<div class="socket-notice shade_10 border_radius_xs">
+			<Alert status="error">
+				<p class="mt_0 mb_sm"><strong>Connection closed.</strong></p>
+				<p class="mb_sm">
+					This account has too many connections open, so the server closed this one, the oldest.
+					Live updates are paused until you reconnect, which closes the account's oldest connection
+					if it is still at the limit.
+				</p>
+				<button type="button" onclick={() => app?.socket.connect()}>reconnect</button>
+			</Alert>
+		</div>
+	{/if}
 	<!-- TODO hacky, docs need to nest gracefully with abosolute positioning, or at least support offset vars -->
 	{#if page.url.pathname === DOCS_PATH || page.url.pathname.startsWith(DOCS_PATH + '/')}
 		{@render children()}
@@ -301,5 +315,15 @@
 		align-items: center;
 		margin: 0 auto;
 		padding: var(--space_xl5) var(--space_lg);
+	}
+	/* over the dashboard's fixed panes */
+	.socket-notice {
+		position: fixed;
+		bottom: var(--space_lg);
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 2;
+		width: calc(100% - 2 * var(--space_lg));
+		max-width: var(--distance_sm);
 	}
 </style>
