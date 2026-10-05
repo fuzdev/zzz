@@ -91,8 +91,7 @@ mod any_credential_surface {
             .collect();
         assert!(
             gated.is_empty(),
-            "zzz-owned specs are all Any by decision — record a narrowing of {gated:?} here and \
-             in the grimoire S1 census notes",
+            "zzz-owned specs are all Any by decision — record a narrowing of {gated:?} here",
         );
     }
 }
