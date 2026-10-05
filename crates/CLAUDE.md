@@ -234,12 +234,13 @@ orientation; the spine crates are authoritative:
     Invoked by the spine's revocation-emitting handlers and audit-event
     listeners: `session_revoke` (per-session), `token_revoke` /
     `account_token_revoke` (per-token), and `logout` / `session_revoke_all`
-    / `token_revoke_all` / `password_change` (account-wide). The RPC
-    handlers close only after their transaction commits
-    (`fuz_auth::queue_socket_close`), so a client's recheck on a 4001 never
-    finds the revoked session still in the table; the REST ones close inline
-    on their autocommit client. See "Audit emission" under Architecture for
-    the listener chain.
+    / `token_revoke_all` / `password_change` (account-wide). The auth
+    cleanup invokes the per-session close too, for each expired session it
+    deletes (see "Auth cleanup" under Architecture). The RPC handlers close
+    only after their transaction commits (`fuz_auth::queue_socket_close`), so
+    a client's recheck on a 4001 never finds the revoked session still in the
+    table; the REST ones close inline on their autocommit client. See "Audit
+    emission" under Architecture for the listener chain.
 
 11. **Account status** — `GET /api/account/status` returns account info +
     role grants (200) when authenticated, or 401 with optional
@@ -516,11 +517,14 @@ joined after the drain, before PTY teardown.
 
 ## Known Issues
 
-- **No per-message WS session revalidation** — upgrade-time auth only. Event-
-  driven revocation covers logout and password change (closes matching WS
-  connections via `close_sockets_for_session`/`close_sockets_for_account`).
-  Per-message session recheck is not done — the event-driven approach is
-  sufficient for current needs.
+- **No per-message WS session revalidation** — a socket is authorized at
+  upgrade, where the spine re-reads its credential once more at admission
+  (`fuz_actions::admit_upgrade`: registered pending → re-read → admitted; a
+  credential revoked mid-upgrade closes with 4001, a failed re-read with 1011).
+  After that, closes are event-driven: every revocation closes the matching
+  connections (`close_sockets_for_session` / `_token` / `_account`), and the
+  auth cleanup closes an expired session's within one interval. A message on
+  an open socket never re-checks its session.
 - **error.data omits Zod validation details** — for -32602 (invalid params)
   errors, `error.data` omits the Zod issues for security (no schema leak to
   unauthenticated callers). The integration test `normalize_error_data`
@@ -605,7 +609,7 @@ joined after the drain, before PTY teardown.
 - No batch request support (JSON arrays)
 - `/api/account/signup` is mounted via `fuz_auth::signup_routes`. Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting via `app_settings_update` to enable open signup. The cross-process test binary opts into `open_signup: true` at startup via `app_settings_patch` so per-test `mint_account` can sign up without invites. `app_settings` is loaded from the DB per signup request (no cache).
 - Token management is JSON-RPC only (`account_token_create` / `account_token_list` / `account_token_revoke`) — no REST token routes
-- Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`, wired to the spine `AuditEmitter` via `fuz_realtime::register_audit_sse_listener` alongside the socket-revocation listeners (which close through the `RealtimeRevoker` fan-out, so they reach these streams too). Wire shape matches fuz_app's `audit_log_sse`; the `sse.cross.test.ts` suite verifies it. Close-on-revoke dispatches on the `RevocationScope` each event declares in `fuz_auth`'s `AUDIT_EVENT_SPECS` — the same column the socket-revocation listener reads, so the two can't drift: `session_revoke` (session-hash-scoped) / `token_revoke` (token-scoped) / `session_revoke_all` / `token_revoke_all` / `password_change` / `logout` / `account_delete` / `account_purge` (account-wide) / `role_grant_revoke` (role-matched). `role_grant_revoke` is the one deliberate difference from the socket-revocation listener, which omits it because `perform_action` re-authorizes every message. The route itself is session-only (`AuditStreamRouteState::credential_gate`), so a bearer never opens a stream here in the first place
+- Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`, wired to the spine `AuditEmitter` via `fuz_realtime::register_audit_sse_listener` alongside the socket-revocation listeners (which close through the `RealtimeRevoker` fan-out, so they reach these streams too). Wire shape matches fuz_app's `audit_log_sse`; the `sse.cross.test.ts` suite verifies it. Close-on-revoke dispatches on the `RevocationScope` each event declares in `fuz_auth`'s `AUDIT_EVENT_SPECS` — the same column the socket-revocation listener reads, so the two can't drift: `session_revoke` (session-hash-scoped) / `token_revoke` (token-scoped) / `session_revoke_all` / `token_revoke_all` / `password_change` / `logout` / `account_delete` / `account_purge` (account-wide) / `role_grant_revoke` (role-matched). `role_grant_revoke` is the one deliberate difference from the socket-revocation listener, which omits it because `perform_action` re-authorizes every message. The route itself is session-only (`AuditStreamRouteState::credential_gate`), so a bearer never opens a stream here in the first place. A session holds at most `AUDIT_LOG_SSE_MAX_PER_SCOPE` (10) streams — one more ends its oldest — and a stream registers pending before the role read, with the credential re-read before it is admitted (a credential revoked meanwhile gets a 401, or a stream that ends right after its connect comment, never a live one)
 - Login/password rate limiting is **always on** (matching `fuz_forge_server` + `mageguild_server` and the fuz defaults): per-IP (5 attempts / 15 min) + per-account (10 / 30 min) sliding windows fire on `/login` and `/password`; 429 carries `{error: 'rate_limit_exceeded', retry_after}` plus a `Retry-After` header. Per-IP key is the resolved client IP from `fuz_http::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when running behind a reverse proxy so the bucket keys on the originating client rather than the proxy. The `testing_zzz_server` binary disables it via `RunAppOptions::rate_limiters: RateLimiterMode::DisabledForTesting` so the cross-backend auth suite's repeated logins don't trip the bucket; a process that nulls any limiter prints a startup banner saying so
 - One JSON-RPC message is capped at `zzz_server::RPC_MESSAGE_MAX_BYTES` (16 MiB) on both transports: the `/api/rpc` request body (`fuz_http::body_limit_layer`, plus axum's `DefaultBodyLimit` raised to match — the handler's `Bytes` extractor would otherwise stop at axum's 2 MiB default) and each `/api/ws` inbound message and frame (`fuz_actions::register_action_ws_with_message_limit`; the spine default is 1 MiB, tungstenite's own 64 MiB / 16 MiB). It's above the spine's 1 MiB so saving a file the filer loads (≤ 4 MiB) fits — except in the worst case, where JSON's 6-byte escape of each control character pushes a file dense with them past the cap and the client guard refuses the save cleanly — and so long completion histories fit. **The larger buffer isn't confined to authenticated callers on HTTP**: `fuz_actions::rpc_post_handler` buffers and parses the body before auth, and `ping` is public, so any local process can make zzzd hold up to 16 MiB per concurrent request. On the WebSocket (authenticated at upgrade) up to 128 dispatches can be in flight per socket, a ceiling of about 2 GiB of buffered messages per authenticated socket. Both are acceptable only because the bind is loopback-only and zzz is single-operator (root CLAUDE.md § Security posture). The account/bootstrap/signup routers keep `fuz_http::DEFAULT_BODY_LIMIT_BYTES` (1 MiB). An oversized WebSocket message gets no error reply — the read fails and the socket closes (code 1006), taking its in-flight requests with it — so the frontend `Socket` refuses any request over the cap before sending (`RPC_MESSAGE_MAX_BYTES` in `src/lib/rpc_message_limit.ts`, pinned to the Rust constant by the cross-backend filesystem suite). A streaming content-addressed route is the deferred path for larger / binary blobs. The static fallback takes no body
 
