@@ -49,33 +49,25 @@ struct CompletionCreateInput {
 #[serde(deny_unknown_fields)]
 struct CompletionRequestInput {
     /// `DatetimeNow` — defaulted client-side; accepted and unused.
-    #[serde(default, deserialize_with = "present")]
+    #[serde(default, deserialize_with = "crate::handlers::present")]
     #[allow(dead_code, reason = "decoded for input validation only")]
     created: Option<String>,
     provider_name: String,
     model: String,
     prompt: String,
-    #[serde(default, deserialize_with = "present")]
+    #[serde(default, deserialize_with = "crate::handlers::present")]
     completion_messages: Option<Vec<provider::CompletionMessage>>,
 }
 
 /// Twin of `ProgressMeta` — a `z.looseObject`, so unknown keys pass.
 #[derive(Deserialize)]
 struct ProgressMeta {
-    #[serde(default, rename = "progressToken", deserialize_with = "present")]
+    #[serde(
+        default,
+        rename = "progressToken",
+        deserialize_with = "crate::handlers::present"
+    )]
     progress_token: Option<String>,
-}
-
-/// Deserialize an optional field that, when present, must not be `null` —
-/// zod's `.optional()`. Pair with `#[serde(default)]` for the absent case.
-/// (`parse_strict_params` refuses a top-level `null`; this covers the
-/// nested fields its walk doesn't reach.)
-fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    T::deserialize(deserializer).map(Some)
 }
 
 #[derive(Serialize)]

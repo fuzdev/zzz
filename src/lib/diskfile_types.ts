@@ -46,6 +46,12 @@ export const DiskfileJson = CellJson.extend({
 	path: DiskfilePath,
 	source_dir: DiskfileDirectoryPath,
 	content: z.string().nullable().default(null),
+	/**
+	 * When the file was last modified on disk, in milliseconds since the
+	 * epoch — `null` when the backend couldn't say. It moves whenever the
+	 * file's bytes do, including for a file whose content isn't loaded.
+	 */
+	mtime: z.number().nullable().default(null),
 	dependents: SerializableDisknode.shape.dependents.default(() => []),
 	dependencies: SerializableDisknode.shape.dependencies.default(() => [])
 }).meta({ cell_class_name: 'Diskfile' });

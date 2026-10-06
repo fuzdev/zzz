@@ -6,17 +6,22 @@
 //! the `ActionRegistry::compile(...)` input.
 //!
 //! Each builder registers the zzz-specific handlers in `crate::handlers::*`
-//! (`core`, `workspace`, `filesystem`, `terminal`, `provider`) into the
+//! (`core`, `workspace`, `filesystem`, `media`, `job`, `terminal`, `provider`)
+//! into the
 //! `ActionRegistry`.
 
 pub mod core;
 pub mod filesystem;
+pub mod job;
+pub mod media;
 pub mod provider;
 pub mod terminal;
 pub mod workspace;
 
 pub use core::{build_core_specs, build_testing_specs};
 pub use filesystem::build_filesystem_specs;
+pub use job::build_job_specs;
+pub use media::build_media_specs;
 pub use provider::build_provider_specs;
 pub use terminal::build_terminal_specs;
 pub use workspace::build_workspace_specs;
@@ -36,6 +41,8 @@ pub fn build_zzz_owned_specs(
     let mut specs = build_core_specs(std::sync::Arc::clone(app));
     specs.extend(build_workspace_specs(std::sync::Arc::clone(app)));
     specs.extend(build_filesystem_specs(std::sync::Arc::clone(app)));
+    specs.extend(build_media_specs(std::sync::Arc::clone(app)));
+    specs.extend(build_job_specs(std::sync::Arc::clone(app)));
     specs.extend(build_terminal_specs(std::sync::Arc::clone(app)));
     specs.extend(build_provider_specs(std::sync::Arc::clone(app)));
     specs

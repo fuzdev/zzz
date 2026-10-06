@@ -6,8 +6,8 @@
 //! `session_load`, whose large output is serialized once by the transport.
 //! `ping` is public (no auth); `session_load` is authenticated and returns the
 //! session snapshot (open workspaces, the file trees and their roots,
-//! `scoped_dirs`, provider status, the caller's terminals, and the server
-//! instance id) — loaded at boot and again after every reconnect to resync.
+//! `scoped_dirs`, provider status, the caller's terminals and jobs, and the
+//! server instance id) — loaded at boot and again after every reconnect to resync.
 
 use std::sync::Arc;
 
@@ -19,6 +19,7 @@ use serde_json::Value;
 
 use crate::filer::{FilerSnapshot, SerializableDisknode, disknodes_json_size_hint};
 use crate::handlers::{App, WorkspaceInfo, caller_account_id};
+use crate::job_manager::JobSnapshot;
 
 #[derive(Serialize)]
 struct PingResult {
@@ -51,6 +52,8 @@ struct SessionLoadData {
     workspaces: Vec<WorkspaceInfo>,
     /// The caller's live terminals.
     terminal_ids: Vec<String>,
+    /// The caller's jobs, oldest first.
+    jobs: Vec<JobSnapshot>,
     server_instance_id: String,
 }
 
@@ -120,6 +123,7 @@ pub async fn session_load(
     app.filer_manager.rescan_all().await;
     let FilerSnapshot { roots, files } = app.filer_manager.snapshot().await;
     let terminal_ids = app.pty_manager.terminal_ids_for_account(owner).await;
+    let jobs = app.job_manager.jobs_for_account(owner);
 
     let mut provider_status = Vec::new();
     for p in app.provider_manager.all() {
@@ -139,6 +143,7 @@ pub async fn session_load(
             provider_status,
             workspaces,
             terminal_ids,
+            jobs,
             server_instance_id: app.instance_id.to_string(),
         },
     };
@@ -197,6 +202,7 @@ mod tests {
                     opened_at: "2026-01-01T00:00:00Z".to_owned(),
                 }],
                 terminal_ids: vec!["t1".to_owned()],
+                jobs: vec![],
                 server_instance_id: "00000000-0000-4000-8000-000000000000".to_owned(),
             },
         };
@@ -222,6 +228,7 @@ mod tests {
                     "opened_at": "2026-01-01T00:00:00Z",
                 }],
                 "terminal_ids": ["t1"],
+                "jobs": [],
                 "server_instance_id": "00000000-0000-4000-8000-000000000000",
             }})
         );

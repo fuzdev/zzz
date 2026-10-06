@@ -5,7 +5,8 @@
 //!
 //! **Paths.** For the path-valued vars — `PUBLIC_ZZZ_DIR` (default `.zzz`,
 //! i.e. `~/.zzz/.zzz`), `PUBLIC_ZZZ_SCOPED_DIRS`, `FUZ_BOOTSTRAP_TOKEN_PATH`,
-//! `ZZZ_STATIC_DIR` — the CLI expands a leading `~`; a relative value from
+//! `ZZZ_STATIC_DIR`, `ZZZ_FFMPEG_BIN`, `ZZZ_WHISPER_CPP_BIN`,
+//! `ZZZ_WHISPER_CPP_MODEL` — the CLI expands a leading `~`; a relative value from
 //! `~/.zzz/.env` stays relative to `~/.zzz`, and a relative value from the
 //! CLI's own environment is made absolute against the directory `zzz` runs
 //! in, where it was written.
@@ -69,6 +70,9 @@ const PATH_VARS: &[(&str, bool)] = &[
     ("ZZZ_STATIC_DIR", false),
     ("PUBLIC_ZZZ_DIR", false),
     ("FUZ_BOOTSTRAP_TOKEN_PATH", false),
+    ("ZZZ_FFMPEG_BIN", false),
+    ("ZZZ_WHISPER_CPP_BIN", false),
+    ("ZZZ_WHISPER_CPP_MODEL", false),
     ("PUBLIC_ZZZ_SCOPED_DIRS", true),
 ];
 

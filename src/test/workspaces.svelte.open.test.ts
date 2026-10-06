@@ -56,6 +56,7 @@ beforeEach(() => {
 		provider_status: [],
 		workspaces: [],
 		terminal_ids: [],
+		jobs: [],
 		server_instance_id: create_uuid()
 	};
 	(app as unknown as { api: unknown }).api = {

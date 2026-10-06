@@ -15,10 +15,12 @@ import {
 	icon_provider,
 	icon_settings,
 	icon_terminal,
+	icon_list,
 	icon_workspace
 } from '@fuzdev/fuz_ui/icons.ts';
 
 import { logo_zzz } from './logos.ts';
+import { icon_microphone } from './media_icons.ts';
 import type { Frontend } from './frontend.svelte.ts';
 
 export interface NavLinkItem {
@@ -64,7 +66,9 @@ export const main_nav_items_default: Array<NavItem> = [
 			{ label: 'prompts', href: resolve('/prompts'), icon: icon_prompt },
 			{ label: 'files', href: resolve('/files'), icon: icon_file },
 			{ label: 'workspaces', href: resolve('/workspaces'), icon: icon_workspace },
-			{ label: 'terminals', href: resolve('/terminals'), icon: icon_terminal }
+			{ label: 'terminals', href: resolve('/terminals'), icon: icon_terminal },
+			{ label: 'recordings', href: resolve('/recordings'), icon: icon_microphone },
+			{ label: 'jobs', href: resolve('/jobs'), icon: icon_list }
 		]
 	},
 	{

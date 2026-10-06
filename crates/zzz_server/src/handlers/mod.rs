@@ -20,6 +20,8 @@
 
 pub mod core;
 pub mod filesystem;
+pub mod job;
+pub mod media;
 pub mod provider;
 pub mod terminal;
 pub mod workspace;
@@ -32,9 +34,11 @@ use parking_lot::RwLock;
 use serde::Serialize;
 
 use crate::filer::FilerManager;
+use crate::job_manager::JobManager;
 use crate::provider::{CompletionOptions, ProviderManager};
 use crate::pty_manager::PtyManager;
 use crate::scoped_fs::ScopedFs;
+use crate::tool::Tools;
 
 use fuz_actions::{ActionContext, ActionRegistry};
 use fuz_http::{JsonrpcError, unauthenticated};
@@ -69,6 +73,8 @@ pub struct App {
     pub filer_manager: FilerManager,
     /// PTY terminal manager.
     pub pty_manager: PtyManager,
+    /// Long-running tool work (transcriptions), in memory like terminals.
+    pub job_manager: JobManager,
     /// AI provider manager (Anthropic, `OpenAI`, Gemini).
     pub provider_manager: ProviderManager,
     /// Completion options for every request — always
@@ -92,6 +98,9 @@ pub struct App {
     /// constructed — the spec builders close over `Arc<App>`, so the
     /// registry can't be built until the App `Arc` exists.
     pub action_registry: std::sync::OnceLock<Arc<ActionRegistry>>,
+    /// The local tools found at boot (`ffmpeg`). [`Self::new`] starts with
+    /// none; `run_app` sets them from the config.
+    pub tools: Tools,
 }
 
 impl std::fmt::Debug for App {
@@ -125,11 +134,13 @@ impl App {
             scoped_dirs,
             filer_manager: FilerManager::new(),
             pty_manager: PtyManager::new(),
+            job_manager: JobManager::new(),
             provider_manager,
             completion_options: CompletionOptions::default(),
             enable_test_actions,
             realtime,
             action_registry: std::sync::OnceLock::new(),
+            tools: Tools::default(),
         }
     }
 
@@ -166,6 +177,18 @@ pub fn caller_account_id(ctx: &ActionContext<'_>) -> Result<Uuid, JsonrpcError> 
 /// `fuz_http::not_found` fixes the message to `"{resource} not found"`; the
 /// filesystem and workspace handlers keep their `failed to …: …` messages
 /// (which name the path) across every code, so they build the error here.
+/// Deserialize an optional field that, when present, must not be `null` —
+/// zod's `.optional()`. Pair with `#[serde(default)]` for the absent case.
+/// (`parse_strict_params` refuses a top-level `null`; this covers the
+/// nested fields its walk doesn't reach.)
+pub(crate) fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
+}
+
 #[cold]
 pub fn not_found_error(message: &str, reason: &str) -> JsonrpcError {
     JsonrpcError {

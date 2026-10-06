@@ -137,12 +137,12 @@ fn removed_terminal_owner(event: &AuditLogEvent) -> Option<Uuid> {
 }
 
 /// Registers the audit listener that closes a deleted or purged account's
-/// terminals.
+/// terminals and cancels its jobs.
 ///
 /// The spine already revokes the account's sessions, tokens, and sockets;
 /// this ends the processes they were driving. Holds `App` weakly — `App`'s
 /// action registry holds the emitter.
-pub fn register_terminal_account_listener(emitter: &AuditEmitter, app: &Arc<App>) {
+pub fn register_account_removal_listener(emitter: &AuditEmitter, app: &Arc<App>) {
     let app = Arc::downgrade(app);
     emitter.add_listener(Arc::new(move |event| {
         let app = std::sync::Weak::clone(&app);
@@ -156,6 +156,10 @@ pub fn register_terminal_account_listener(emitter: &AuditEmitter, app: &Arc<App>
             let closed = app.pty_manager.close_all_for_account(owner).await;
             if closed > 0 {
                 tracing::info!(count = closed, event_type = %event.event_type, "audit listener: closed terminals");
+            }
+            let cancelled = app.job_manager.cancel_all_for_account(&app, owner);
+            if cancelled > 0 {
+                tracing::info!(count = cancelled, event_type = %event.event_type, "audit listener: cancelled jobs");
             }
         })
     }));

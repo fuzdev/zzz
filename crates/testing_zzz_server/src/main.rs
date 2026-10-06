@@ -91,6 +91,9 @@ async fn main() -> ExitCode {
                 // test's `terminal_create` calls.
                 app.pty_manager.kill_all().await;
 
+                // Stop and forget every job, so none runs into the next test.
+                app.job_manager.cancel_all().await;
+
                 // Optional scoped-FS scratch root: tests that allocate
                 // per-case scratch dirs under `ZZZ_TESTING_SCRATCH_DIR`
                 // get a clean slate. Unset → no-op. I/O failures here

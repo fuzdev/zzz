@@ -11,12 +11,15 @@ import { Diskfiles } from './diskfiles.svelte.ts';
 import { DiskfilesEditor } from './diskfiles_editor.svelte.ts';
 import { Model } from './model.svelte.ts';
 import { Models } from './models.svelte.ts';
+import { Job } from './job.svelte.ts';
+import { Jobs } from './jobs.svelte.ts';
 import { Action } from './action.svelte.ts';
 import { Actions } from './actions.svelte.ts';
 import { Prompt } from './prompt.svelte.ts';
 import { Prompts } from './prompts.svelte.ts';
 import { Provider } from './provider.svelte.ts';
 import { Providers } from './providers.svelte.ts';
+import { Recorder } from './recorder.svelte.ts';
 import { Turn } from './turn.svelte.ts';
 import { Thread } from './thread.svelte.ts';
 import { Threads } from './threads.svelte.ts';
@@ -49,6 +52,8 @@ export const cell_classes = {
 	DiskfileHistory,
 	Diskfiles,
 	DiskfilesEditor,
+	Job,
+	Jobs,
 	Model,
 	Models,
 	Action,
@@ -57,6 +62,7 @@ export const cell_classes = {
 	Prompts,
 	Provider,
 	Providers,
+	Recorder,
 	Space,
 	Spaces,
 	Terminal,

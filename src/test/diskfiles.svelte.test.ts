@@ -67,6 +67,33 @@ describe('upsert by path', () => {
 		assert.notStrictEqual(diskfile.updated, '2000-01-01T00:00:00.000Z');
 	});
 
+	test('a rewrite to the same content moves only the mtime', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A, 'same')]);
+		const diskfile = app.diskfiles.get_by_path(PATH_A)!;
+		assert.strictEqual(diskfile.mtime, 1);
+		diskfile.updated = '2000-01-01T00:00:00.000Z' as typeof diskfile.updated;
+
+		app.diskfiles.upsert({ ...create_disknode(PATH_A, 'same'), mtime: 2 });
+		assert.strictEqual(diskfile.mtime, 2);
+		assert.strictEqual(diskfile.updated, '2000-01-01T00:00:00.000Z', 'otherwise untouched');
+	});
+
+	test('a file whose content is not loaded still shows that its bytes changed', () => {
+		// a recording grows, or is finalized: `contents` is `null` before and after
+		app.diskfiles.add_initial([create_disknode(PATH_A, null)]);
+		const diskfile = app.diskfiles.get_by_path(PATH_A)!;
+		assert.ok(!diskfile.content_loaded);
+		assert.strictEqual(diskfile.mtime, 1);
+
+		app.diskfiles.handle_change({
+			change: { type: 'change', path: PATH_A },
+			disknode: { ...create_disknode(PATH_A, null), mtime: 5 }
+		});
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), diskfile);
+		assert.strictEqual(diskfile.mtime, 5);
+		assert.strictEqual(count_by_path(PATH_A), 1);
+	});
+
 	test('a source_dir change alone still upserts', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A, 'same')]);
 		const diskfile = app.diskfiles.get_by_path(PATH_A);

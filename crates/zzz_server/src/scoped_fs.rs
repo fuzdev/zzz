@@ -1,8 +1,9 @@
-use std::io::Write;
+use std::io::{Seek, Write};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 
 /// Name prefix of the temp files [`ScopedFs::write_file`] stages writes in.
 ///
@@ -84,6 +85,10 @@ pub enum ScopedFsError {
     /// nothing rather than into an unlinked inode.
     #[error("Path was replaced during the save: {0}")]
     ReplacedDuringSave(String),
+    /// An append found the file at a different size than the offset the
+    /// caller expected, and wrote nothing. `size` is the file's current size.
+    #[error("File size {size} differs from the expected offset: {path}")]
+    OffsetMismatch { path: String, size: u64 },
     #[error("{source}: {path}")]
     Io {
         path: String,
@@ -152,6 +157,10 @@ pub struct ScopedFs {
     /// overlapping roots are separate entries, and removing one leaves any
     /// other root that covers the same paths in place.
     dynamic_paths: RwLock<Vec<String>>,
+    /// Serializes [`Self::append_file`]'s size check and write, so two
+    /// appends can't both pass the check and interleave. One lock for every
+    /// file: an append is a short write.
+    append_lock: Arc<Mutex<()>>,
 }
 
 impl ScopedFs {
@@ -169,6 +178,7 @@ impl ScopedFs {
         Self {
             permanent_paths,
             dynamic_paths: RwLock::new(Vec::new()),
+            append_lock: Arc::new(Mutex::new(())),
         }
     }
 
@@ -318,6 +328,33 @@ impl ScopedFs {
         .map_err(|e| ScopedFsError::io(Path::new(path), std::io::Error::other(e)))?
     }
 
+    /// Replace an existing file's content with `source`'s, from its start —
+    /// atomically, exactly as [`Self::write_file`] does (same staging, mode
+    /// and ownership handling, and in-place fallback). For content that was
+    /// produced into a file, like a tool's output.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::write_file`].
+    pub async fn write_file_from(
+        &self,
+        path: &str,
+        source: std::fs::File,
+    ) -> Result<(), ScopedFsError> {
+        let safe_path = self.ensure_safe_path(path).await?;
+        tokio::task::spawn_blocking(move || {
+            write_file_atomic_with(&safe_path, |file| {
+                // `&File` reads and seeks, so the closure can run again for
+                // the in-place fallback
+                let mut source = &source;
+                source.seek(std::io::SeekFrom::Start(0))?;
+                std::io::copy(&mut source, file).map(|_| ())
+            })
+        })
+        .await
+        .map_err(|e| ScopedFsError::io(Path::new(path), std::io::Error::other(e)))?
+    }
+
     /// Create a new file holding `content`, creating parent directories if
     /// needed — never replacing an existing one.
     ///
@@ -337,14 +374,75 @@ impl ScopedFs {
     /// when the file's own directory isn't writable; otherwise
     /// [`ScopedFsError::Io`] — including `PermissionDenied` when a missing
     /// parent directory can't be created under a non-writable ancestor.
-    pub async fn create_file(&self, path: &str, content: String) -> Result<(), ScopedFsError> {
+    pub async fn create_file(
+        &self,
+        path: &str,
+        content: impl AsRef<[u8]> + Send + 'static,
+    ) -> Result<(), ScopedFsError> {
         let safe_path = self.ensure_safe_path(path).await?;
         if let Some(parent) = safe_path.parent() {
             tokio::fs::create_dir_all(parent)
                 .await
                 .map_err(|e| ScopedFsError::io(parent, e))?;
         }
-        tokio::task::spawn_blocking(move || create_file_exclusive(&safe_path, content.as_bytes()))
+        tokio::task::spawn_blocking(move || create_file_exclusive(&safe_path, content.as_ref()))
+            .await
+            .map_err(|e| ScopedFsError::io(Path::new(path), std::io::Error::other(e)))?
+    }
+
+    /// Append `content` to an existing file, only if the file is currently
+    /// `expected_size` bytes long. Returns the new size.
+    ///
+    /// The size check makes a chunked upload safe to retry and impossible to
+    /// interleave: a chunk that already landed, or one sent out of order,
+    /// finds a different size and fails with
+    /// [`ScopedFsError::OffsetMismatch`] (which carries the current size)
+    /// having written nothing. The check and the write happen under one lock,
+    /// and the data is fsynced before returning. A write that fails midway
+    /// truncates the file back to `expected_size` (best-effort).
+    ///
+    /// The file is never created — see [`Self::create_file`].
+    ///
+    /// # Errors
+    ///
+    /// The path-validation errors of every `ScopedFs` operation;
+    /// [`ScopedFsError::OffsetMismatch`]; [`ScopedFsError::IsADirectory`] /
+    /// [`ScopedFsError::NotARegularFile`] for a target that isn't a regular
+    /// file; otherwise [`ScopedFsError::Io`] (e.g. `NotFound`).
+    pub async fn append_file(
+        &self,
+        path: &str,
+        expected_size: u64,
+        content: impl AsRef<[u8]> + Send + 'static,
+    ) -> Result<u64, ScopedFsError> {
+        let safe_path = self.ensure_safe_path(path).await?;
+        let append_lock = Arc::clone(&self.append_lock);
+        tokio::task::spawn_blocking(move || {
+            let _guard = append_lock.lock();
+            append_at(&safe_path, expected_size, content.as_ref())
+        })
+        .await
+        .map_err(|e| ScopedFsError::io(Path::new(path), std::io::Error::other(e)))?
+    }
+
+    /// Open an existing regular file for reading, returning the handle and
+    /// its metadata (`fstat` of the handle, so the two always agree).
+    ///
+    /// Opened `O_NOFOLLOW | O_NONBLOCK`: a symlink swapped in after path
+    /// validation is refused, and a FIFO can't block the open.
+    ///
+    /// # Errors
+    ///
+    /// The path-validation errors of every `ScopedFs` operation;
+    /// [`ScopedFsError::IsADirectory`] / [`ScopedFsError::NotARegularFile`]
+    /// for a target that isn't a regular file; otherwise
+    /// [`ScopedFsError::Io`] (e.g. `NotFound`, `PermissionDenied`).
+    pub async fn open_file(
+        &self,
+        path: &str,
+    ) -> Result<(std::fs::File, std::fs::Metadata), ScopedFsError> {
+        let safe_path = self.ensure_safe_path(path).await?;
+        tokio::task::spawn_blocking(move || open_regular_file(&safe_path, false))
             .await
             .map_err(|e| ScopedFsError::io(Path::new(path), std::io::Error::other(e)))?
     }
@@ -691,6 +789,62 @@ fn create_file_exclusive(path: &Path, content: &[u8]) -> Result<(), ScopedFsErro
     Ok(())
 }
 
+/// Open an existing regular file `O_NOFOLLOW | O_NONBLOCK` — for reading, or
+/// for appending when `append` — and `fstat` it. A directory, FIFO, socket,
+/// or device node is refused; `O_NONBLOCK` keeps a FIFO from blocking the
+/// open, and has no effect on a regular file.
+fn open_regular_file(
+    path: &Path,
+    append: bool,
+) -> Result<(std::fs::File, std::fs::Metadata), ScopedFsError> {
+    let mut options = std::fs::OpenOptions::new();
+    if append {
+        options.append(true);
+    } else {
+        options.read(true);
+    }
+    let file = options
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+        .map_err(|e| {
+            if e.raw_os_error() == Some(libc::ELOOP) {
+                ScopedFsError::SymlinkNotAllowed(ScopedFsError::display(path))
+            } else {
+                ScopedFsError::io(path, e)
+            }
+        })?;
+    let meta = file.metadata().map_err(|e| ScopedFsError::io(path, e))?;
+    if meta.is_dir() {
+        return Err(ScopedFsError::IsADirectory(ScopedFsError::display(path)));
+    }
+    if !meta.is_file() {
+        return Err(ScopedFsError::NotARegularFile(ScopedFsError::display(path)));
+    }
+    Ok((file, meta))
+}
+
+/// Append `content` to the regular file at `path` if it is `expected_size`
+/// bytes long, fsyncing the data. See [`ScopedFs::append_file`], which holds
+/// the lock that makes the check and the write one step.
+fn append_at(path: &Path, expected_size: u64, content: &[u8]) -> Result<u64, ScopedFsError> {
+    let (mut file, meta) = open_regular_file(path, true)?;
+    let size = meta.len();
+    if size != expected_size {
+        return Err(ScopedFsError::OffsetMismatch {
+            path: ScopedFsError::display(path),
+            size,
+        });
+    }
+    if let Err(e) = file.write_all(content).and_then(|()| file.sync_data()) {
+        // drop the partial chunk, so a retry at the same offset can succeed
+        if let Err(cleanup) = file.set_len(expected_size) {
+            tracing::warn!(path = %path.display(), error = %cleanup, "failed to truncate a partly appended file");
+        }
+        return Err(ScopedFsError::io(path, e));
+    }
+    Ok(size + content.len() as u64)
+}
+
 /// Whether `path` is `root` itself or beneath it.
 ///
 /// `root` always ends in `/` (normalized at insert): `starts_with` covers
@@ -854,6 +1008,14 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.0);
         }
+    }
+
+    fn make_fifo(path: &Path) {
+        let status = std::process::Command::new("mkfifo")
+            .arg(path)
+            .status()
+            .unwrap();
+        assert!(status.success());
     }
 
     fn mode_of(path: &Path) -> u32 {
@@ -1024,14 +1186,14 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn concurrent_writes_never_interleave() {
         let tmp = TempDir::new();
-        let fs = std::sync::Arc::new(tmp.fs());
+        let fs = Arc::new(tmp.fs());
         let file = tmp.path("f.txt");
         let path = file.to_str().unwrap().to_owned();
         let long = "L".repeat(64 * 1024);
         let short = "S".repeat(10);
         for _ in 0..200 {
             let writes = [long.clone(), short.clone()].map(|content| {
-                let fs = std::sync::Arc::clone(&fs);
+                let fs = Arc::clone(&fs);
                 let path = path.clone();
                 tokio::spawn(async move { fs.write_file(&path, content).await })
             });
@@ -1248,6 +1410,182 @@ mod tests {
         assert!(
             matches!(result, Err(ScopedFsError::AlreadyExists(_))),
             "{result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_file_takes_bytes_that_are_not_utf8() {
+        let tmp = TempDir::new();
+        let fs = tmp.fs();
+        let file = tmp.path("clip.webm");
+        let bytes = vec![0x1a, 0x45, 0xdf, 0xa3, 0xff, 0x00];
+        fs.create_file(file.to_str().unwrap(), bytes.clone())
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(&file).unwrap(), bytes);
+    }
+
+    #[tokio::test]
+    async fn append_writes_only_at_the_expected_size() {
+        let tmp = TempDir::new();
+        let fs = tmp.fs();
+        let file = tmp.path("grow.bin");
+        let path = file.to_str().unwrap();
+        fs.create_file(path, Vec::new()).await.unwrap();
+
+        assert_eq!(fs.append_file(path, 0, b"abc".to_vec()).await.unwrap(), 3);
+        assert_eq!(fs.append_file(path, 3, b"de".to_vec()).await.unwrap(), 5);
+        // an empty chunk is a size check
+        assert_eq!(fs.append_file(path, 5, Vec::new()).await.unwrap(), 5);
+
+        // a retried chunk, a skipped one, and one behind all write nothing
+        for stale in [3, 9, 0] {
+            let result = fs.append_file(path, stale, b"zz".to_vec()).await;
+            assert!(
+                matches!(result, Err(ScopedFsError::OffsetMismatch { size: 5, .. })),
+                "{stale}: {result:?}"
+            );
+        }
+        assert_eq!(std::fs::read(&file).unwrap(), b"abcde");
+    }
+
+    #[tokio::test]
+    async fn append_never_creates_and_refuses_what_is_not_a_regular_file() {
+        let tmp = TempDir::new();
+        let fs = tmp.fs();
+
+        let missing = tmp.path("missing.bin");
+        let result = fs
+            .append_file(missing.to_str().unwrap(), 0, b"x".to_vec())
+            .await;
+        assert!(
+            matches!(&result, Err(ScopedFsError::Io { source, .. })
+                if source.kind() == std::io::ErrorKind::NotFound),
+            "{result:?}"
+        );
+        assert!(!missing.exists());
+
+        let dir = tmp.path("dir");
+        std::fs::create_dir(&dir).unwrap();
+        let result = fs
+            .append_file(dir.to_str().unwrap(), 0, b"x".to_vec())
+            .await;
+        assert!(
+            matches!(&result, Err(ScopedFsError::Io { source, .. })
+                if source.kind() == std::io::ErrorKind::IsADirectory),
+            "{result:?}"
+        );
+
+        // a FIFO with no reader would block a plain open for writing
+        let fifo = tmp.path("fifo");
+        make_fifo(&fifo);
+        let result = fs
+            .append_file(fifo.to_str().unwrap(), 0, b"x".to_vec())
+            .await;
+        assert!(result.is_err(), "{result:?}");
+
+        let target = tmp.path("target.bin");
+        std::fs::write(&target, b"keep").unwrap();
+        let link = tmp.path("link.bin");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let result = fs
+            .append_file(link.to_str().unwrap(), 4, b"x".to_vec())
+            .await;
+        assert!(
+            matches!(result, Err(ScopedFsError::SymlinkNotAllowed(_))),
+            "{result:?}"
+        );
+        assert_eq!(std::fs::read(&target).unwrap(), b"keep");
+
+        let outside = fs.append_file("/etc/hostname", 0, b"x".to_vec()).await;
+        assert!(
+            matches!(outside, Err(ScopedFsError::PathNotAllowed(_))),
+            "{outside:?}"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_appends_at_one_offset_land_exactly_once() {
+        let tmp = TempDir::new();
+        let fs = Arc::new(tmp.fs());
+        let file = tmp.path("race.bin");
+        let path = file.to_str().unwrap().to_owned();
+        fs.create_file(&path, Vec::new()).await.unwrap();
+
+        let chunk = vec![7_u8; 64 * 1024];
+        let tasks: Vec<_> = (0..16)
+            .map(|_| {
+                let fs = Arc::clone(&fs);
+                let path = path.clone();
+                let chunk = chunk.clone();
+                tokio::spawn(async move { fs.append_file(&path, 0, chunk).await })
+            })
+            .collect();
+        let mut landed = 0;
+        for task in tasks {
+            match task.await.unwrap() {
+                Ok(size) => {
+                    assert_eq!(size, chunk.len() as u64);
+                    landed += 1;
+                }
+                Err(ScopedFsError::OffsetMismatch { size, .. }) => {
+                    assert_eq!(size, chunk.len() as u64);
+                }
+                Err(e) => panic!("unexpected error: {e:?}"),
+            }
+        }
+        assert_eq!(landed, 1);
+        assert_eq!(std::fs::read(&file).unwrap(), chunk);
+    }
+
+    #[tokio::test]
+    async fn open_file_returns_regular_files_only() {
+        let tmp = TempDir::new();
+        let fs = tmp.fs();
+
+        let file = tmp.path("data.bin");
+        std::fs::write(&file, b"hello").unwrap();
+        let (mut opened, meta) = fs.open_file(file.to_str().unwrap()).await.unwrap();
+        assert_eq!(meta.len(), 5);
+        let mut content = Vec::new();
+        std::io::Read::read_to_end(&mut opened, &mut content).unwrap();
+        assert_eq!(content, b"hello");
+
+        let dir = tmp.path("dir");
+        std::fs::create_dir(&dir).unwrap();
+        let result = fs.open_file(dir.to_str().unwrap()).await;
+        assert!(
+            matches!(result, Err(ScopedFsError::IsADirectory(_))),
+            "{result:?}"
+        );
+
+        let fifo = tmp.path("fifo");
+        make_fifo(&fifo);
+        let result = fs.open_file(fifo.to_str().unwrap()).await;
+        assert!(
+            matches!(result, Err(ScopedFsError::NotARegularFile(_))),
+            "{result:?}"
+        );
+
+        let link = tmp.path("link.bin");
+        std::os::unix::fs::symlink(&file, &link).unwrap();
+        let result = fs.open_file(link.to_str().unwrap()).await;
+        assert!(
+            matches!(result, Err(ScopedFsError::SymlinkNotAllowed(_))),
+            "{result:?}"
+        );
+
+        let result = fs.open_file(tmp.path("missing").to_str().unwrap()).await;
+        assert!(
+            matches!(&result, Err(ScopedFsError::Io { source, .. })
+                if source.kind() == std::io::ErrorKind::NotFound),
+            "{result:?}"
+        );
+
+        let outside = fs.open_file("/etc/hostname").await;
+        assert!(
+            matches!(outside, Err(ScopedFsError::PathNotAllowed(_))),
+            "{outside:?}"
         );
     }
 

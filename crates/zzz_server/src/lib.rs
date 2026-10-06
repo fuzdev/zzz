@@ -18,12 +18,17 @@
 //! `main.rs` to the hasher selection plus `run_app(...)`.
 
 pub mod error;
+pub mod file_bytes;
 pub mod filer;
 pub mod handlers;
+pub mod job_manager;
+pub mod media;
 pub mod provider;
 pub mod pty_manager;
 pub mod scoped_fs;
 pub mod static_files;
+pub mod tool;
+pub mod transcription;
 pub mod utf8_stream;
 pub mod zzz_action_specs;
 
@@ -448,7 +453,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         session_cookie_name,
     };
 
-    let app_state = Arc::new(handlers::App::new(
+    let mut app = handlers::App::new(
         pool,
         scoped_fs,
         config.zzz_dir,
@@ -456,7 +461,9 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         provider_manager,
         config.enable_test_actions,
         Arc::clone(&realtime),
-    ));
+    );
+    app.tools = config.tools;
+    let app_state = Arc::new(app);
 
     // Register audit-event → WebSocket socket-revocation listeners on
     // the spine `AuditEmitter`. Mirrors `fuz_app`'s
@@ -482,7 +489,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // a second time; the duplication is intentional defense-in-depth.
     fuz_auth::register_socket_revocation_listeners(&spine_audit_emitter, &socket_revoker);
     // A deleted or purged account's terminals end with its sockets.
-    handlers::terminal::register_terminal_account_listener(&spine_audit_emitter, &app_state);
+    handlers::terminal::register_account_removal_listener(&spine_audit_emitter, &app_state);
 
     // SSE half of the audit fan-out — every audit row becomes one `data:`
     // frame on each open `/api/admin/audit/stream` subscription, and a
@@ -753,6 +760,29 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             fuz_http::origin_layer,
         ));
 
+    // File byte routes (`file_bytes::FILE_BYTES_PATH`): hand-written, outside
+    // the action system, so they carry the gates the RPC router gets from the
+    // spine — the Origin allowlist, the client-IP middleware (the bearer
+    // leg's `api_token` touch records it), and a body cap. The handlers
+    // authenticate before they read a body.
+    let file_bytes_router = file_bytes::file_bytes_router(file_bytes::FileBytesRouteState {
+        app: Arc::clone(&app_state),
+        keyring: Arc::clone(&spine_keyring),
+        daemon_token_state: spine_daemon_token.clone(),
+        session_cookie_name,
+    })
+    .layer(axum::middleware::from_fn_with_state(
+        Arc::clone(&spine_trusted_proxies),
+        fuz_http::client_ip_middleware,
+    ))
+    .layer(axum::middleware::from_fn_with_state(
+        Arc::clone(&spine_allowed_origins),
+        fuz_http::origin_layer,
+    ))
+    .layer(fuz_http::body_limit_layer(
+        file_bytes::FILE_BYTES_MAX_BODY_BYTES,
+    ));
+
     // A new top-level backend route (beside `/api` and `/health`) must also be
     // added to `static_files::BACKEND_PATH_PREFIXES`, or its unknown subpaths
     // get the SPA shell.
@@ -773,7 +803,9 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         .nest("/api", spine_rpc_router)
         .nest("/api", spine_ws_router)
         // Admin-gated audit-log SSE stream — absolute path, so merge (not nest).
-        .merge(spine_audit_stream_router);
+        .merge(spine_audit_stream_router)
+        // File byte routes — absolute path too.
+        .merge(file_bytes_router);
 
     // The built frontend, as the fallback behind every backend route: exact
     // files, then prerendered pages, then the SPA shell — see `static_files`.
@@ -821,8 +853,9 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         tracing::warn!(error = %e, "the auth cleanup task failed");
     }
 
-    // Clean up spawned terminal processes before exiting, on a serve error
-    // too
+    // Stop jobs (killing their tool processes) and clean up spawned terminal
+    // processes before exiting, on a serve error too
+    app_state_for_shutdown.job_manager.cancel_all().await;
     app_state_for_shutdown.pty_manager.kill_all().await;
     served.map_err(ServerError::Serve)?;
 
@@ -863,6 +896,8 @@ pub struct Config {
     /// originating client. Parsed eagerly in `run()`; invalid entries
     /// fail startup.
     pub trusted_proxies: Option<String>,
+    /// The local tools found at boot (`ffmpeg`).
+    pub tools: tool::Tools,
 }
 
 /// Hand-written so the secrets never reach a log line: `database_url` (which
@@ -880,6 +915,7 @@ impl std::fmt::Debug for Config {
             .field("zzz_dir", &self.zzz_dir)
             .field("enable_test_actions", &self.enable_test_actions)
             .field("trusted_proxies", &self.trusted_proxies)
+            .field("tools", &self.tools)
             .finish()
     }
 }
@@ -1248,6 +1284,8 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
     let enable_test_actions =
         parse_test_actions_flag(env_var_utf8("ZZZ_ENABLE_TEST_ACTIONS")?.as_deref())?;
     let trusted_proxies = env_var_utf8("ZZZ_TRUSTED_PROXIES")?;
+    // a bad override refuses to boot; a tool that's simply absent doesn't
+    let tools = tool::Tools::from_env().map_err(ServerError::Config)?;
 
     Ok(Config {
         bind_addr: SocketAddr::new(
@@ -1263,6 +1301,7 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
         zzz_dir,
         enable_test_actions,
         trusted_proxies,
+        tools,
     })
 }
 

@@ -30,6 +30,8 @@ import {
 } from './diskfile_types.ts';
 import { is_path_absolute } from './diskfile_helpers.ts';
 import { ProviderStatus, ProviderName } from './provider_types.ts';
+import { JobSnapshot } from './job_types.ts';
+import { TranscriptSegment } from './transcript_types.ts';
 import { CompletionMessage, CompletionRequest, CompletionResponse } from './completion_types.ts';
 import { WorkspaceInfoJson, WorkspaceWatchStatus } from './workspace.svelte.ts';
 
@@ -77,6 +79,8 @@ export const SessionLoadData = z.strictObject({
 	workspaces: z.array(WorkspaceInfoJson),
 	/** Backend ids of the caller's live terminals. */
 	terminal_ids: z.array(Uuid),
+	/** The caller's jobs, oldest first — running, queued, and recent finished ones. */
+	jobs: z.array(JobSnapshot),
 	/**
 	 * Minted each time the backend starts — a different id than the last
 	 * snapshot's means it restarted, losing its terminals and runtime workspaces.
@@ -116,6 +120,52 @@ export const DiskfileCreateInput = z.strictObject({
 	content: z.string()
 });
 export type DiskfileCreateInput = z.infer<typeof DiskfileCreateInput>;
+
+/** Input for `media_finalize`. */
+export const MediaFinalizeInput = z.strictObject({
+	path: DiskfilePath
+});
+export type MediaFinalizeInput = z.infer<typeof MediaFinalizeInput>;
+
+/** Output for `media_finalize`: the rewritten file's size in bytes. */
+export const MediaFinalizeOutput = z.strictObject({
+	size: z.number()
+});
+export type MediaFinalizeOutput = z.infer<typeof MediaFinalizeOutput>;
+
+/** Input for `transcription_create`. */
+export const TranscriptionCreateInput = z.strictObject({
+	path: DiskfilePath,
+	/** A language code like `en`, or `auto` (the default) to detect it. */
+	language: z.string().optional()
+});
+export type TranscriptionCreateInput = z.infer<typeof TranscriptionCreateInput>;
+
+/** Output for `transcription_create`: the job that will do it. */
+export const TranscriptionCreateOutput = z.strictObject({
+	job_id: Uuid
+});
+export type TranscriptionCreateOutput = z.infer<typeof TranscriptionCreateOutput>;
+
+/** Input for the `transcription_progress` notification. */
+export const TranscriptionProgressInput = z.strictObject({
+	job_id: Uuid,
+	/** The segments decoded since the last notification. */
+	segments: z.array(TranscriptSegment)
+});
+export type TranscriptionProgressInput = z.infer<typeof TranscriptionProgressInput>;
+
+/** Input for `job_cancel`. */
+export const JobCancelInput = z.strictObject({
+	job_id: Uuid
+});
+export type JobCancelInput = z.infer<typeof JobCancelInput>;
+
+/** Input for the `job_changed` notification. */
+export const JobChangedInput = z.strictObject({
+	job: JobSnapshot
+});
+export type JobChangedInput = z.infer<typeof JobChangedInput>;
 
 /** Input for `diskfile_delete`. */
 export const DiskfileDeleteInput = z.strictObject({
@@ -379,6 +429,70 @@ export const directory_create_action_spec = {
 		'Create a new directory on disk, and any missing parents, failing with `conflict` (`already_exists`) if the path is taken — never reuses an existing one.'
 } satisfies RequestResponseActionSpec;
 
+export const media_finalize_action_spec = {
+	method: 'media_finalize',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: { account: 'required', actor: 'none' },
+	side_effects: true,
+	input: MediaFinalizeInput,
+	output: MediaFinalizeOutput,
+	async: true,
+	description:
+		'Rewrite a recorded media file in place so its header has a duration and a seek index (an `ffmpeg` stream copy, nothing re-encoded). The container comes from the extension: `.webm`, `.mkv`, `.ogg`, `.mp4`, and their audio-only spellings.'
+} satisfies RequestResponseActionSpec;
+
+export const transcription_create_action_spec = {
+	method: 'transcription_create',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: { account: 'required', actor: 'none' },
+	side_effects: true,
+	input: TranscriptionCreateInput,
+	output: TranscriptionCreateOutput,
+	async: true,
+	description:
+		"Queue a transcription of an audio file by the local speech model, and return its job. The transcript is written beside the file as `<name>.<model>.transcript.json`; fails with `conflict` (`already_exists`) if that model's transcript is already there."
+} satisfies RequestResponseActionSpec;
+
+export const transcription_progress_action_spec = {
+	method: 'transcription_progress',
+	kind: 'remote_notification',
+	initiator: 'backend',
+	auth: null,
+	side_effects: true,
+	input: TranscriptionProgressInput,
+	output: z.void(),
+	async: true,
+	description:
+		'Segments a running transcription just decoded — a preview; the transcript file is written when the job succeeds.'
+} satisfies RemoteNotificationActionSpec;
+
+export const job_cancel_action_spec = {
+	method: 'job_cancel',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: { account: 'required', actor: 'none' },
+	side_effects: true,
+	input: JobCancelInput,
+	output: z.null(),
+	async: true,
+	description:
+		'Cancel a job: a queued one never starts, the running one is stopped. A job that is already over is left as it is.'
+} satisfies RequestResponseActionSpec;
+
+export const job_changed_action_spec = {
+	method: 'job_changed',
+	kind: 'remote_notification',
+	initiator: 'backend',
+	auth: null,
+	side_effects: true,
+	input: JobChangedInput,
+	output: z.void(),
+	async: true,
+	description: 'A job was queued, started, progressed, or finished — its full current state.'
+} satisfies RemoteNotificationActionSpec;
+
 export const completion_create_action_spec = {
 	method: 'completion_create',
 	kind: 'request_response',
@@ -574,6 +688,11 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	diskfile_create_action_spec,
 	diskfile_delete_action_spec,
 	directory_create_action_spec,
+	media_finalize_action_spec,
+	transcription_create_action_spec,
+	transcription_progress_action_spec,
+	job_cancel_action_spec,
+	job_changed_action_spec,
 	completion_create_action_spec,
 	completion_progress_action_spec,
 	toggle_main_menu_action_spec,

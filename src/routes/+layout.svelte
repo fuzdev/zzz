@@ -42,6 +42,8 @@
 	} from '$lib/auth_gate.ts';
 	import { create_detached } from '$lib/reactive_helpers.svelte.ts';
 	import { confirm_unload_with_unsaved_changes } from '$lib/diskfile_helpers.ts';
+	import { confirm_unload_while_recording } from '$lib/recording_helpers.ts';
+	import RecorderIndicator from '$lib/RecorderIndicator.svelte';
 
 	const { children, params } = $props();
 
@@ -190,8 +192,13 @@
 	<title>Zzz</title>
 </svelte:head>
 
-<!-- drafts live only in memory, so leaving with unsaved changes asks first -->
-<svelte:window onbeforeunload={(e) => confirm_unload_with_unsaved_changes(e, app?.diskfiles)} />
+<!-- drafts live only in memory, and leaving ends a recording, so either asks first -->
+<svelte:window
+	onbeforeunload={(e) => {
+		confirm_unload_with_unsaved_changes(e, app?.diskfiles);
+		confirm_unload_while_recording(e, app?.recorder);
+	}}
+/>
 
 <svelte:body
 	{@attach contextmenu_attachment([
@@ -233,6 +240,8 @@
 			</Alert>
 		</div>
 	{/if}
+	<!-- on every page while the microphone is live -->
+	<RecorderIndicator recorder={app.recorder} />
 	<!-- TODO hacky, docs need to nest gracefully with abosolute positioning, or at least support offset vars -->
 	{#if page.url.pathname === DOCS_PATH || page.url.pathname.startsWith(DOCS_PATH + '/')}
 		{@render children()}
