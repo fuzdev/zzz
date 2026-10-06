@@ -191,9 +191,10 @@ export class Recorder extends Cell<typeof RecorderJson> {
 	 * time. Must be called from a user gesture (a click handler).
 	 *
 	 * @param dir - the directory to create the recording in
-	 * @throws Error when one is already under way, there's no user gesture,
-	 * the browser can't record, the microphone can't be opened, or the file
-	 * can't be created — also left in `error`
+	 * @throws Error when one is already under way (leaving it and `error`
+	 * untouched), or when there's no user gesture, the browser can't record,
+	 * the microphone can't be opened, or the file can't be created — each of
+	 * those also left in `error`
 	 */
 	async start(dir: DiskfileDirectoryPath): Promise<void> {
 		if (this.status !== 'idle') throw new Error('already recording');
@@ -350,7 +351,11 @@ export class Recorder extends Cell<typeof RecorderJson> {
 		return uploaded ? path : null;
 	}
 
-	/** Ends the recording without uploading more or finalizing — the session is gone. */
+	/**
+	 * Ends the recording without finalizing — the session is gone. Chunks the
+	 * uploader already holds, and the last one the browser hands over as it
+	 * stops, are still sent.
+	 */
 	override dispose(): void {
 		this.#generation++;
 		this.#end();

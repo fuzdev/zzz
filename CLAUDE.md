@@ -41,9 +41,9 @@ For coding conventions, see Skill(fuz-stack).
 
 ## Development Stage
 
-Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, bootstrap flow; daemon tokens in the test binary only); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals) is in-memory.
+Early development, v0.0.1. Breaking changes are expected and welcome. fuz_app auth stack on both RPC and WebSocket endpoints (cookie sessions, bearer tokens, bootstrap flow; daemon tokens in the test binary only); WebSocket upgrade requires authentication with event-driven session revocation. PostgreSQL DB for auth; domain state (files, terminals, workspaces, jobs) is in-memory.
 
-The Rust backend (`crates/zzz_server`, Axum) provides the full auth stack, filesystem, terminals, PostgreSQL, bootstrap, AI providers with SSE streaming, audit emission with listener fan-out, trusted-proxy `client_ip` resolution, login rate limiting (always on; disabled in the test binary), Origin allowlist on every REST + RPC + WS handler. Auth, HTTP, realtime (WS + SSE), dispatch, and DB all come from the spine crates (`fuz_db`, `fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`); a single `/api/rpc` + `/api/ws` serves the boot-compiled `fuz_actions::ActionRegistry`, with the zzz-specific handlers (workspace, filesystem, terminal, provider, `completion_create`) in `handlers/` and the admin audit-log SSE stream at `GET /api/admin/audit/stream`. AI providers are Anthropic, OpenAI, and Gemini, all with non-streaming and SSE streaming completions. Refused, blocked, or filtered replies fail with the provider's reason, and truncated replies are marked on the turn (./docs/providers.md § Stop Reasons).
+The Rust backend (`crates/zzz_server`, Axum) provides the full auth stack, filesystem, terminals, PostgreSQL, bootstrap, AI providers with SSE streaming, audit emission with listener fan-out, trusted-proxy `client_ip` resolution, login rate limiting (always on; disabled in the test binary), Origin allowlist on every REST + RPC + WS handler. Auth, HTTP, realtime (WS + SSE), dispatch, and DB all come from the spine crates (`fuz_db`, `fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`); a single `/api/rpc` + `/api/ws` serves the boot-compiled `fuz_actions::ActionRegistry`, with the zzz-specific handlers (workspace, filesystem, media, job, terminal, provider, `completion_create`) in `handlers/`, the admin audit-log SSE stream at `GET /api/admin/audit/stream`, and the file byte routes at `/api/files/bytes` (hand-written, outside the registry — see File bytes). It runs `ffmpeg` and whisper.cpp as subprocesses for media work and holds jobs in memory. AI providers are Anthropic, OpenAI, and Gemini, all with non-streaming and SSE streaming completions. Refused, blocked, or filtered replies fail with the provider's reason, and truncated replies are marked on the turn (./docs/providers.md § Stop Reasons).
 
 The `cross_backend_*` vitest projects (gated behind `FUZ_TEST_CROSS_BACKEND=1`) are the Rust backend's integration tests — they run fuz_app's standard suites against `zzz_server` over real HTTP, verifying wire-shape conformance to the shared fuz_app contract. (A schema-parity snapshot gate exists as a fuz_app capability — `query_schema_snapshot` + `assert_schema_snapshots_equal` — but is not currently wired into zzz's cross-backend projects.) Long-term the CLI and daemon migrate to Rust fuz/fuzd.
 
@@ -106,7 +106,10 @@ When the CLI starts `zzzd` it:
   `ZZZ_FFMPEG_BIN`, `ZZZ_WHISPER_CPP_BIN`, `ZZZ_WHISPER_CPP_MODEL`) the
   CLI expands `~`; a relative value from `~/.zzz/.env` resolves against
   `~/.zzz`, and one from the CLI's own environment against the directory
-  `zzz` runs in.
+  `zzz` runs in. The three tool vars are the exception to the first half:
+  `zzzd` requires them absolute, so a relative one in `~/.zzz/.env` (which
+  the CLI passes through as written) refuses to boot — write `~/…` or a full
+  path there.
 - **port** — `--port` (only `zzz daemon start` takes it: `zzz` reuses
   whatever daemon is recorded) > `ZZZ_PORT` > `zzz_config_port` in
   `~/.zzz/config.json` > 4460, passed as `--port`; the port must be free.
@@ -199,7 +202,7 @@ crates/                               # Rust workspace
 │   ├── xtask/                        # Dev automation: `cargo xtask dev` (build + run zzzd + Vite), `dev-setup`/`prod-setup` (env files), `check-release` (dep-graph audit — sanity check #2 of the test-binary pattern)
 │   ├── testing_zzz_server/           # Test-mode binary — wires `fuz_testing::TestingArgon2idHasher` for fast cross-process integration tests. **Never ships in a release.**
 │   └── zzz_server/                   # Axum JSON-RPC server — full spine consumer (single `/api/rpc` + `/api/ws` on `fuz_actions::ActionRegistry`)
-│       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast` shim + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `file_bytes.rs` (byte routes), `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`, `utf8_stream.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB (and the JSON-RPC `notification` builder + error constructors + socket revocation) all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
+│       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast` shim + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `file_bytes.rs` (byte routes), `filer.rs`, `job_manager.rs`, `media.rs` + `tool.rs` (`ffmpeg` runs, local tools), `transcription/`, `pty_manager.rs`, `scoped_fs.rs`, `utf8_stream.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB (and the JSON-RPC `notification` builder + error constructors + socket revocation) all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
 src/
 ├── lib/                          # Published as @fuzdev/zzz
 │   ├── *.svelte.ts               # Cell state classes
@@ -577,7 +580,8 @@ The app directory stores zzz's own files. Configured via `PUBLIC_ZZZ_DIR`
 is the daemon home `~/.zzz/` (see CLI).
 
 - `state/` — Persistent data (reserved — the Rust backend currently keeps domain state in memory)
-- `cache/` — Regenerable data, safe to delete (reserved — nothing writes it yet)
+- `cache/` — Regenerable data, safe to delete: scratch for tool runs — unnamed temp files (unlinked as soon as they're created) and, during a transcription, a `.zzz-tmp-<uuid>/` directory removed when it ends
+- `recordings/` — where the recordings page records: audio files and their transcript sidecars
 - `run/` — Runtime ephemeral (the test binary's `daemon_token`)
 
 It's a permanent `ScopedFs` root with its own filer, so the frontend can
@@ -655,10 +659,21 @@ full-scope API token (a method-scoped token is refused). **Serving bytes never
 executes them**: only allowlisted raster image, audio, and video extensions
 get their media type; anything else — HTML, SVG, XML, scripts, text — is sent
 as `application/octet-stream` with `Content-Disposition: attachment`, and
-every response carries `nosniff`, a sandboxing `Content-Security-Policy`, and
-`Cross-Origin-Resource-Policy: same-origin`. The routes are hand-written,
+every response that serves or describes a file (a read, a write's reply, a
+file error) carries `nosniff`, a sandboxing `Content-Security-Policy`, and
+`Cross-Origin-Resource-Policy: same-origin`. A refusal at a gate — a bad
+query, no credential, a scoped token, an oversized body, a foreign origin —
+is the spine's plain JSON error, without them. The routes are hand-written,
 outside the action system: no audit row, no actions-log entry, no generated
-client. See ./crates/CLAUDE.md § Design Decisions.
+client.
+
+`ScopedFs` is the only path check here, and it knows roots, not secrets: with
+a workspace open on a directory that contains a `.zzz` directory — `~`, or
+`/` — these routes can read the files inside it (the CLI daemon home's `.env`
+and `bootstrap_token`), which the file index never loads. That's within what
+a session can already do (see Security posture), and it is the one place a
+`.zzz` directory's contents are served. See ./crates/CLAUDE.md § Design
+Decisions.
 
 ### Local tools
 
@@ -677,10 +692,20 @@ other protocol (it can't open another file or a URL, whatever the file says),
 is told the input's format from the extension, and runs with the scrubbed
 environment terminals get, a timeout, and no shell.
 
-`media_finalize` is the first use: a browser recording is streamed to disk,
-so its header has no duration and players seek it poorly; finalizing rewrites
-the file in place (a stream copy, nothing re-encoded) with both, replacing it
-atomically like a save.
+`media_finalize` rewrites a media file's header: a browser recording is
+streamed to disk, so its header has no duration and players seek it poorly;
+finalizing rewrites the file in place (a stream copy, nothing re-encoded) with
+both, replacing it atomically like a save. The container comes from the
+extension — WebM, Matroska, Ogg, MP4, MP3, WAV, FLAC, or AAC — and the same
+set is what `ffmpeg` will decode for a transcription.
+
+There is no switch that turns media off. Transcription is off while
+`ZZZ_WHISPER_CPP_MODEL` is unset; recording, the byte routes, and finalize are
+always there. Tools are found once at boot, so installing one, or setting a
+model, takes a daemon restart. The `ffmpeg` must have the `fd` protocol
+(`ffmpeg -protocols` lists it; current builds have it) — one without it fails
+every run as `media_invalid`. ./docs/development.md § Local tools has the
+install steps.
 
 ### Transcription and jobs
 
@@ -824,11 +849,11 @@ accounts from each other.
 - **Terminals** — any authenticated account can create a terminal, which runs a command as the daemon's OS user (see Security posture). Each terminal belongs to the account that created it: its output (`terminal_data`, `terminal_exited`) reaches only that account's sockets, and other accounts' `terminal_data_send` / `terminal_resize` / `terminal_close` act as if it didn't exist (`not_found`, as for an unknown or ended id). `terminal_create` takes only an absolute `cwd`, and `terminal_close` only `SIGTERM` (the default) or `SIGKILL`. The frontend's terminal list is in-memory, so a page reload loses it while the backend processes keep running
 - **PTY terminals** — terminal spawning uses the `fuz_pty` Rust crate as a native dependency of `zzz_server` (no FFI indirection). `PtyManager` runs one I/O task per terminal (readiness-driven reads, an ordered input queue — at most 256 chunks and 4 MiB per terminal, beyond which input is refused with `queue_overflow` — that writes large pastes in full, reaping with `SIGKILL` escalation so closed terminals leave no zombies). Terminal children inherit zzzd's environment **minus** `SECRET_*`, `FUZ_*`, `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, and `PORT` — this keeps the daemon's API keys, cookie keys, and DB URL out of the child's environment, but it is not isolation (the shell runs as the same user and can read `/proc/<zzzd pid>/environ` or the `.env` files). The prefix match also drops the user's own `FUZ_*` variables from terminals; everything else (`PATH`, `HOME`, `SSH_AUTH_SOCK`, …) passes through. See ./crates/CLAUDE.md for details. Requires the sibling Rust workspace checked out alongside this repo (path dep).
 - **Recording** — two places record, over the same `Recorder`: the files page's record button (beside new file and new folder; disabled without an open workspace) records to the active workspace, and the recordings page (`/recordings`: a record button, a level meter, and the recordings with their transcripts) records to `recordings/` in the app directory, which needs no workspace and keeps voice notes out of a repository. Deleting on the recordings page removes a recording with its transcripts; on the files page, exactly the file selected. A recording is a new file named for the local time (`2026-01-31_09-05-07.webm`) — Opus in WebM where the browser records it, else Ogg, else MP4. The file is created under its final name and grows as chunks upload every few seconds (the byte routes), so a crashed or closed tab loses at most the last chunk and leaves a file that still plays but has no duration; `media_finalize` on it later fixes that. Stopping uploads the rest and finalizes, then queues a transcription when the recorder's "transcribe" toggle is on (the default; with no speech model set up it quietly doesn't). The microphone opens only from a click or key press in the UI — `Recorder.start` refuses without a user gesture, and no action the backend can send starts capture. While it may be open an indicator with pause and stop shows on every page (`RecorderIndicator` in the root layout), leaving the page asks first, and a session that ends (logout, or a recheck finding it revoked) closes it with the App. One recording at a time, per tab. The filer sees the file grow: it re-reads and broadcasts it on each chunk while it's under the index's size limit. An upload that fails for good — the session ended, the file changed on disk — ends the recording and says why; the file keeps what landed. See ./docs/architecture.md § Recording
-- **Transcription** — batch, not live: the transcript is made from the finished file, and text fills in while the job runs (whisper.cpp decodes in windows of about thirty seconds), not while you speak. It needs `ffmpeg`, whisper.cpp, and a model the operator placed and pointed `ZZZ_WHISPER_CPP_MODEL` at; without them recording still works and transcribing says what's missing. Audio extensions only (`.webm`, `.ogg`, `.mp3`, `.wav`, `.flac`, `.m4a`, …), and the format is taken from the extension, so a mislabeled file fails to decode. The language is detected unless given. The model loads on every job. Word timings are whisper.cpp's own estimates. A transcript isn't checked against its audio afterward — if the audio's bytes change, the sidecar still shows (its recorded hash no longer matches). A sidecar over the file index's 4 MiB limit wouldn't load in the UI. One job runs at a time; jobs and their history are lost on a daemon restart, and a crash mid-transcription can leave a `.zzz-tmp-*` scratch directory in the app directory's `cache/` (hidden from the file index). A transcript's text is whatever was said near the microphone — it's shown as text, and nothing sends it to a chat, a prompt, or a terminal on its own
+- **Transcription** — batch, not live: the transcript is made from the finished file, and text fills in while the job runs (whisper.cpp decodes in windows of about thirty seconds), not while you speak. It needs `ffmpeg`, whisper.cpp, and a model the operator placed and pointed `ZZZ_WHISPER_CPP_MODEL` at; without whisper.cpp or a model, recording still works and transcribing says what's missing. Without `ffmpeg`, recording still saves the audio, but every stop reports that it couldn't finalize, and the file has no duration. The UI offers transcription on audio extensions (`.webm`, `.ogg`, `.mp3`, `.wav`, `.flac`, `.m4a`, …); the action itself takes any container `ffmpeg` is told how to read here, a `.mkv` or `.mp4` included, and transcribes its first audio stream. The format is taken from the extension, so a mislabeled file fails to decode. The language is detected unless given. The model loads on every job. Word timings are whisper.cpp's own estimates. A transcript isn't checked against its audio afterward — if the audio's bytes change, the sidecar still shows (its recorded hash no longer matches). A sidecar over the file index's 4 MiB limit wouldn't load in the UI. One job runs at a time; jobs and their history are lost on a daemon restart, and a crash mid-transcription can leave a `.zzz-tmp-*` scratch directory in the app directory's `cache/` (hidden from the file index). A transcript's text is whatever was said near the microphone — it's shown as text, and nothing sends it to a chat, a prompt, or a terminal on its own
 - **Audio files** — the files page shows a file with an audio extension (`diskfile_content_kind.ts`: `.webm`, `.ogg`, `.mp3`, `.wav`, `.flac`, `.m4a`, …) in a player instead of the text editor (`DiskfileView` picks; `DiskfileAudioView` plays it from the byte route, with finalize, download, and delete), with its transcript beside it — click a segment to play from there — or a transcribe button when it has none. A transcript sidecar (`*.transcript.json`) opens read-only in `DiskfileTranscriptView`, with the audio's player when the audio is beside it. The kind comes from the extension alone — the file index carries no type — so a `.webm` holding video plays as its audio, and a text file named `.ogg` gets a player that can't play it. The player reloads when the file's `mtime` moves (`Diskfile.mtime`, from the index's disk node), and the file being recorded shows as recording, with no player, until it's saved. Images and video have no viewer yet
 - **No git integration** — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
-- **Backend** — `zzz_server` serves the full RPC surface with the full auth stack. `cargo xtask dev` runs it with the Vite frontend. Anthropic, OpenAI, and Gemini providers fully implemented (non-streaming + SSE streaming). No batch JSON-RPC. A single `/api/rpc` + `/api/ws` serves the boot-compiled `ActionRegistry` (handlers in `handlers/`), plus the admin audit-log SSE stream at `GET /api/admin/audit/stream`.
+- **Backend** — `zzz_server` serves the full RPC surface with the full auth stack. `cargo xtask dev` runs it with the Vite frontend. Anthropic, OpenAI, and Gemini providers fully implemented (non-streaming + SSE streaming). No batch JSON-RPC. A single `/api/rpc` + `/api/ws` serves the boot-compiled `ActionRegistry` (handlers in `handlers/`), plus the admin audit-log SSE stream at `GET /api/admin/audit/stream` and the file byte routes at `/api/files/bytes`.
 
 ## fuz_app
 

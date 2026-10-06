@@ -63,6 +63,28 @@ describe('parse_transcript', () => {
 		const bad_segment = { ...create_transcript('a.webm', 'm'), segments: [{ text: 5 }] };
 		assert.strictEqual(parse_transcript(JSON.stringify(bad_segment)), null);
 	});
+
+	// a sidecar is a file anyone can write, and its source name becomes a path
+	// the app plays from and creates the editable copy beside
+	test('refuses a source name that is a path', () => {
+		for (const name of [
+			'../../other/.claude/commands/ship',
+			'sub/a.webm',
+			'/etc/passwd',
+			'..',
+			'.',
+			'',
+			'a\\b.webm',
+			'a\0.webm'
+		]) {
+			const transcript = create_transcript(name, 'base.en');
+			assert.strictEqual(parse_transcript(JSON.stringify(transcript)), null, JSON.stringify(name));
+		}
+		// dots and spaces in a plain name are fine
+		for (const name of ['a.webm', '..a.webm', 'my recording (2).ogg', '.hidden.wav']) {
+			assert.ok(parse_transcript(JSON.stringify(create_transcript(name, 'm'))), name);
+		}
+	});
 });
 
 describe('to_transcript_source_path', () => {

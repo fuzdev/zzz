@@ -42,7 +42,9 @@ const to_name = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
 /**
  * The path of the audio a sidecar was made from: the file its `source.name`
  * names, beside it. The sidecar's own name can't say — a model's name has
- * dots in it too.
+ * dots in it too. `source.name` is always a single path component (the
+ * `Transcript` schema refuses anything else), so this never leaves the
+ * sidecar's directory.
  *
  * @param sidecar_path - the sidecar's absolute path
  * @param transcript - the sidecar, parsed

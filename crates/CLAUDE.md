@@ -19,9 +19,10 @@ boot-compiled `ActionRegistry` dispatch path. A single canonical
 `/api/rpc` + `/api/ws` (mounted via `fuz_actions::create_rpc_router` /
 `register_action_ws`) serves all dispatch; admin + account specs come
 from fuz_auth's `auth_adapter::build_auth_spec_set`, the zzz-specific
-workspace / filesystem / terminal / provider specs from
-`zzz_action_specs/` (handlers in `handlers/`), and the admin audit-log
-SSE stream from `fuz_realtime::audit_stream_router`. Besides the handlers,
+workspace / filesystem / media / job / terminal / provider specs from
+`zzz_action_specs/` (handlers in `handlers/`), the admin audit-log
+SSE stream from `fuz_realtime::audit_stream_router`, and zzz's own
+hand-written file byte routes (`file_bytes.rs`, outside the registry). Besides the handlers,
 `handlers/` holds `App` state and a `broadcast` shim over `App.realtime` (socket revocation
 lives on the spine's `ConnectionRegistry` — see Auth below). RPC methods:
 `ping`, `session_load`, `workspace_*`, `diskfile_*`, `directory_create`,
@@ -45,7 +46,9 @@ leaves it unset, dispatch returns `method_not_found`). Full auth stack (cookie s
 tokens), account management routes, filesystem actions with `ScopedFs`,
 terminal actions via `fuz_pty`, `session_load` returns real provider status
 from all registered providers, `workspace_changed`/`filer_change`/
-`terminal_data`/`terminal_exited` notifications, file watching via `notify`
+`terminal_data`/`terminal_exited`/`job_changed`/`transcription_progress`
+notifications, local tools (`ffmpeg`, whisper.cpp) run as subprocesses with an
+in-memory job queue, file watching via `notify`
 crate with debounced broadcasts and immediate index updates, WebSocket
 connection tracking with targeted `completion_progress` streaming
 notifications, event-driven socket revocation. Database (PostgreSQL via
@@ -446,7 +449,7 @@ crates/zzz_server/src/
 ├── lib.rs            # `run_app(RunAppOptions)` — full lifecycle: env/config, DB pool + migrations, spine state construction (keyring, audit emitter, connection + SSE registries, rate limiters), `ActionRegistry::compile`, file watchers, route composition, the auth cleanup task (`fuz_auth::spawn_auth_cleanup`, started after the bind, joined after the drain), graceful shutdown
 ├── main.rs           # Thin production entry — constructs `Argon2idHasher`, calls `run_app`
 ├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`; `session_load` and `workspace_open` return a `fuz_actions::ActionOutput` — see Large responses below)
-│   ├── mod.rs        # `App` long-lived state (workspaces, `workspace_lifecycle`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `ProviderManager`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
+│   ├── mod.rs        # `App` long-lived state (workspaces, `workspace_lifecycle`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `JobManager`, `ProviderManager`, `tools`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
 │   ├── core.rs       # ping, session_load, _testing_emit_notifications
 │   ├── filesystem.rs # diskfile_update, diskfile_create, diskfile_delete, directory_create
 │   ├── job.rs        # job_cancel
@@ -515,7 +518,8 @@ non-spine state — `instance_id` (a UUID minted at boot, returned by
 `zzz_dir`, `scoped_dirs`, `FilerManager` (per-watcher ignore config, event
 debouncing, in-memory file index, lifetime tracking — permanent for
 `zzz_dir`/`scoped_dirs`, workspace-scoped for `workspace_open`),
-`PtyManager`, `ProviderManager`, `completion_options`, `enable_test_actions`,
+`PtyManager`, `JobManager`, `ProviderManager`, `tools` (the local tools
+found at boot), `completion_options`, `enable_test_actions`,
 the spine `realtime: Arc<fuz_realtime::ConnectionRegistry>`, and the
 boot-compiled `action_registry: OnceLock<Arc<fuz_actions::ActionRegistry>>`
 (OnceLock because the spec builders capture `Arc<App>`). Constructed once
@@ -672,7 +676,7 @@ joined after the drain, before PTY teardown.
 - Token management is JSON-RPC only (`account_token_create` / `account_token_list` / `account_token_revoke`) — no REST token routes
 - Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`, wired to the spine `AuditEmitter` via `fuz_realtime::register_audit_sse_listener` alongside the socket-revocation listeners (which close through the `RealtimeRevoker` fan-out, so they reach these streams too). Wire shape matches fuz_app's `audit_log_sse`; the `sse.cross.test.ts` suite verifies it. Close-on-revoke dispatches on the `RevocationScope` each event declares in `fuz_auth`'s `AUDIT_EVENT_SPECS` — the same column the socket-revocation listener reads, so the two can't drift: `session_revoke` (session-hash-scoped) / `token_revoke` (token-scoped) / `session_revoke_all` / `token_revoke_all` / `password_change` / `logout` / `account_delete` / `account_purge` (account-wide) / `role_grant_revoke` (role-matched). `role_grant_revoke` is the one deliberate difference from the socket-revocation listener, which omits it because `perform_action` re-authorizes every message. The route itself is session-only (`AuditStreamRouteState::credential_gate`), so a bearer never opens a stream here in the first place. A session holds at most `AUDIT_LOG_SSE_MAX_PER_SCOPE` (10) streams — one more ends its oldest — and a stream registers pending before the role read, with the credential re-read before it is admitted (a credential revoked meanwhile gets a 401, or a stream that ends right after its connect comment, never a live one)
 - Login/password rate limiting is **always on** (matching `fuz_forge_server` + `mageguild_server` and the fuz defaults): per-IP (5 attempts / 15 min) + per-account (10 / 30 min) sliding windows fire on `/login` and `/password`; 429 carries `{error: 'rate_limit_exceeded', retry_after}` plus a `Retry-After` header. Per-IP key is the resolved client IP from `fuz_http::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when running behind a reverse proxy so the bucket keys on the originating client rather than the proxy. The `testing_zzz_server` binary disables it via `RunAppOptions::rate_limiters: RateLimiterMode::DisabledForTesting` so the cross-backend auth suite's repeated logins don't trip the bucket; a process that nulls any limiter prints a startup banner saying so
-- One JSON-RPC message is capped at `zzz_server::RPC_MESSAGE_MAX_BYTES` (16 MiB) on both transports: the `/api/rpc` request body (`fuz_http::body_limit_layer`, plus axum's `DefaultBodyLimit` raised to match — the handler's `Bytes` extractor would otherwise stop at axum's 2 MiB default) and each `/api/ws` inbound message and frame (`fuz_actions::register_action_ws_with_message_limit`; the spine default is 1 MiB, tungstenite's own 64 MiB / 16 MiB). It's above the spine's 1 MiB so saving a file the filer loads (≤ 4 MiB) fits — except in the worst case, where JSON's 6-byte escape of each control character pushes a file dense with them past the cap and the client guard refuses the save cleanly — and so long completion histories fit. **The larger buffer isn't confined to authenticated callers on HTTP**: `fuz_actions::rpc_post_handler` buffers and parses the body before auth, and `ping` is public, so any local process can make zzzd hold up to 16 MiB per concurrent request. On the WebSocket (authenticated at upgrade) up to 128 dispatches can be in flight per socket, a ceiling of about 2 GiB of buffered messages per authenticated socket. Both are acceptable only because the bind is loopback-only and zzz is single-operator (root CLAUDE.md § Security posture). The account/bootstrap/signup routers keep `fuz_http::DEFAULT_BODY_LIMIT_BYTES` (1 MiB). An oversized WebSocket message gets no error reply — the read fails and the socket closes (code 1006), taking its in-flight requests with it — so the frontend `Socket` refuses any request over the cap before sending (`RPC_MESSAGE_MAX_BYTES` in `src/lib/rpc_message_limit.ts`, pinned to the Rust constant by the cross-backend filesystem suite). A streaming content-addressed route is the deferred path for larger / binary blobs. The static fallback takes no body
+- One JSON-RPC message is capped at `zzz_server::RPC_MESSAGE_MAX_BYTES` (16 MiB) on both transports: the `/api/rpc` request body (`fuz_http::body_limit_layer`, plus axum's `DefaultBodyLimit` raised to match — the handler's `Bytes` extractor would otherwise stop at axum's 2 MiB default) and each `/api/ws` inbound message and frame (`fuz_actions::register_action_ws_with_message_limit`; the spine default is 1 MiB, tungstenite's own 64 MiB / 16 MiB). It's above the spine's 1 MiB so saving a file the filer loads (≤ 4 MiB) fits — except in the worst case, where JSON's 6-byte escape of each control character pushes a file dense with them past the cap and the client guard refuses the save cleanly — and so long completion histories fit. **The larger buffer isn't confined to authenticated callers on HTTP**: `fuz_actions::rpc_post_handler` buffers and parses the body before auth, and `ping` is public, so any local process can make zzzd hold up to 16 MiB per concurrent request. On the WebSocket (authenticated at upgrade) up to 128 dispatches can be in flight per socket, a ceiling of about 2 GiB of buffered messages per authenticated socket. Both are acceptable only because the bind is loopback-only and zzz is single-operator (root CLAUDE.md § Security posture). The account/bootstrap/signup routers keep `fuz_http::DEFAULT_BODY_LIMIT_BYTES` (1 MiB). An oversized WebSocket message gets no error reply — the read fails and the socket closes (code 1006), taking its in-flight requests with it — so the frontend `Socket` refuses any request over the cap before sending (`RPC_MESSAGE_MAX_BYTES` in `src/lib/rpc_message_limit.ts`, pinned to the Rust constant by the cross-backend filesystem suite). Larger and binary content goes over the file byte routes instead (File byte routes below), a chunk of at most the same size per request. The static fallback takes no body
 
 ## Design Decisions
 
@@ -800,11 +804,19 @@ joined after the drain, before PTY teardown.
     (`file_bytes::media_content_type` — raster images, audio, video; never
     HTML, SVG, XML, PDF, or text) and never from the bytes; everything else is
     `application/octet-stream` with `Content-Disposition: attachment` (the
-    name percent-encoded). Every response — errors included — carries
+    name percent-encoded). Every response a handler builds — a read (200,
+    206, 416), a write's reply, a `ScopedFs` error — carries
     `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src
     'none'; sandbox`, `Cross-Origin-Resource-Policy: same-origin`, and
     `Cache-Control: no-store` (a path's bytes change under it, and no
-    validators are sent).
+    validators are sent). A refusal at a gate does not: the 400 for a bad
+    query, the 401, the scope 403, the 413, and the Origin layer's 403 are the
+    spine's plain JSON errors, returned as they come.
+  - **`.zzz` directories**: `ScopedFs` checks roots only, so a path inside a
+    `.zzz` directory that an open root covers (a workspace on `~` covers
+    `~/.zzz/.env`) is readable here, though the filer never indexes it and
+    `workspace_open` refuses such a directory as a root. The file actions
+    could already write there; this is the one read path.
   - **Create** (`POST`) is `ScopedFs::create_file` — the `diskfile_create`
     path, taking bytes: exclusive, parents created, 201 `{"size"}`.
   - **Append** (`PATCH`, `ScopedFs::append_file`) writes only when the file
@@ -863,9 +875,11 @@ joined after the drain, before PTY teardown.
   scratch file — created under a `.zzz-tmp-` name in `{zzz_dir}/cache/` and
   unlinked at once, so nothing can be orphaned — then replaces the original
   through `ScopedFs::write_file_from`, the atomic-save path (mode kept, new
-  inode). Containers by extension: `.webm` / `.weba`, `.mkv` / `.mka`,
-  `.ogg` / `.oga` / `.opus`, `.mp4` / `.m4a`; anything else is
-  `invalid_params` / `unsupported_media_type`, before the file is opened. If
+  inode). Containers by extension (`MediaContainer::from_path`): `.webm` /
+  `.weba`, `.mkv` / `.mka`, `.ogg` / `.oga` / `.opus`, `.mp4` / `.m4a`,
+  `.mp3`, `.wav`, `.flac`, `.aac`; anything else is `invalid_params` /
+  `unsupported_media_type`, before the file is opened. The same set gates
+  `transcription_create`. If
   the file's size changed while `ffmpeg` ran (a recording still being
   appended to), nothing is replaced: `conflict` /
   `changed_during_finalize`. It holds its pooled DB connection for the run,
@@ -915,8 +929,9 @@ joined after the drain, before PTY teardown.
     sidecar.
   - **The backend** is an enum-dispatched seam (`TranscriptionBackend`,
     like `Provider`) with one variant, whisper.cpp. Its contract is timed
-    segments, with timing optional per segment. One `whisper-cli` run per
-    job — no server, no port, so the audio can't leave the machine by
+    segments, with timing optional per segment. One `whisper-cli`
+    transcription run per job (after a `--version` probe, which isn't among
+    the job's recorded commands) — no server, no port, so the audio can't leave the machine by
     construction; the model loads every time. It reads the PCM from
     **stdin** (`-f -`), prints each segment to stdout as it's decoded
     (parsed and sent as `transcription_progress` — a preview) and progress
@@ -997,7 +1012,7 @@ joined after the drain, before PTY teardown.
     below), so a terminal's existence isn't observable across accounts.
     `session_load` lists only the caller's terminal ids. A successful
     `account_delete` / `account_purge` audit event closes the target account's
-    terminals (`handlers::terminal::register_terminal_account_listener`,
+    terminals (`handlers::terminal::register_account_removal_listener`,
     beside the spine's socket-revocation listeners). Creation itself is open
     to any authenticated account (`CredentialGate::Any`) — and a terminal is a
     shell as the daemon's OS user; see the root CLAUDE.md § Security posture.

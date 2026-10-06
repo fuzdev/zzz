@@ -364,7 +364,7 @@ export const session_load_action_spec = {
 	output: SessionLoadOutput,
 	async: true,
 	description:
-		'Load the session snapshot (files, workspaces, terminals, provider status) — at boot and after each reconnect, to resync.'
+		'Load the session snapshot (files, workspaces, terminals, jobs, provider status) — at boot and after each reconnect, to resync.'
 } satisfies RequestResponseActionSpec;
 
 export const filer_change_action_spec = {
@@ -439,7 +439,7 @@ export const media_finalize_action_spec = {
 	output: MediaFinalizeOutput,
 	async: true,
 	description:
-		'Rewrite a recorded media file in place so its header has a duration and a seek index (an `ffmpeg` stream copy, nothing re-encoded). The container comes from the extension: `.webm`, `.mkv`, `.ogg`, `.mp4`, and their audio-only spellings.'
+		'Rewrite a recorded media file in place so its header has a duration and a seek index (an `ffmpeg` stream copy, nothing re-encoded). The container comes from the extension: WebM, Matroska, Ogg, MP4, MP3, WAV, FLAC, or AAC.'
 } satisfies RequestResponseActionSpec;
 
 export const transcription_create_action_spec = {

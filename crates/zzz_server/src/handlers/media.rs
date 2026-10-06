@@ -28,7 +28,8 @@ use crate::transcription::{
 
 // -- Error reasons (`error.data.reason`) --------------------------------------
 
-/// The file's extension isn't a container zzz finalizes (`invalid_params`).
+/// The file's extension isn't a container `ffmpeg` is told how to read here —
+/// see `MediaContainer::from_path` (`invalid_params`).
 pub const ERROR_UNSUPPORTED_MEDIA_TYPE: &str = "unsupported_media_type";
 /// The tool read the file and refused it — it isn't the media its extension
 /// says (`invalid_params`). Carries the tool's last words as `data.stderr`.
@@ -69,7 +70,7 @@ pub fn tool_error(action: &str, error: &ToolError) -> JsonrpcError {
         data: Some(data),
     };
     match error {
-        ToolError::Unavailable { .. } => with_data(
+        ToolError::Unavailable { .. } | ToolError::Unconfigured { .. } => with_data(
             JsonrpcErrorCode::ServiceUnavailable,
             serde_json::json!({ "reason": ERROR_TOOL_UNAVAILABLE }),
         ),

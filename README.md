@@ -62,6 +62,11 @@ cargo xtask dev
 You can edit `.env.development` with your API keys
 (restart `cargo xtask dev` to pick them up).
 
+Recording and transcribing audio use `ffmpeg` and
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp), both optional and
+neither bundled — [docs/development.md](docs/development.md) § Local tools has
+the setup.
+
 Browse to the location it says, probably `localhost:5173`.
 
 On first run Zzz has no account yet, so it shows a bootstrap form. Copy the

@@ -31,16 +31,21 @@ export const completion_create_action_spec = {
 - `remote_notification` — Backend → frontend push (progress, broadcast). Phases: `send` → `receive`. Transport: WebSocket only
 - `local_call` — Frontend-only UI actions. Phases: `execute`. Transport: None
 
-`remote_notification` actions have two routing paths on the backend:
+`remote_notification` actions have three routing paths on the backend:
 
 - **Request-scoped** — delivered only to the originating socket, via the
   connection registry's `send_to(connection_id, …)` (or a handler's
   `ctx.notify`). Used for progress streams tied to an in-flight request
   (`completion_progress`). Specs that use this pattern set
   `streams: '<notification_method>'` to name the companion notification.
+- **Account-scoped** — delivered to every socket of one account, via the
+  connection registry's `send_to_account(account_id, …)`. Used for what
+  belongs to the account that created it: a terminal's output and exit
+  (`terminal_data`, `terminal_exited`) and a job's state and preview
+  (`job_changed`, `transcription_progress`).
 - **Broadcast** (`App::broadcast` in the Rust backend) — fanned out to all
   connected sockets. Used for server-wide events that every client needs
-  (`filer_change`, `workspace_changed`, `terminal_data`, `terminal_exited`).
+  (`filer_change`, `workspace_changed`).
 
 ### Action Spec Fields
 
@@ -451,8 +456,7 @@ Streaming progress (`completion_progress`) is
 **socket-scoped** — it routes only to the client that initiated the request,
 never broadcast. Over HTTP there's no socket, so the provider runs without
 streaming and the caller gets only the final response. `App::broadcast` is
-reserved for genuine broadcasts (`filer_change`, `terminal_data`,
-`terminal_exited`, `workspace_changed`).
+reserved for genuine broadcasts (`filer_change`, `workspace_changed`).
 
 A chunk updates only its own turn: `Turn.length` / `token_count` and
 `Thread.length` / `token_count` are summed from the parts' and turns' lengths
@@ -469,8 +473,9 @@ PTY terminals rendered by xterm.js, spawned and managed by the Rust backend's
 Actions: `terminal_create` (→ `{terminal_id}`), `terminal_data_send` (stdin),
 `terminal_resize`, and `terminal_close` (→ `{exit_code}`) are
 `request_response`; `terminal_data` (output chunks) and `terminal_exited` are
-**broadcast** `remote_notification`s — like `filer_change`, fanned out to all
-connected sockets, not socket-scoped like `completion_progress`.
+**account-scoped** `remote_notification`s — sent to every socket of the
+account that created the terminal, not to all sockets like `filer_change`
+nor to one socket like `completion_progress`.
 
 ```
 User types in xterm.js (TerminalView.svelte)
@@ -599,7 +604,7 @@ Recorder.stop()                                                        status: s
 
 **Stopping finalizes.** A browser's `MediaRecorder` streams its output, so the file's header has no duration or seek index. Once every chunk has landed, `media_finalize` has the daemon rewrite the file in place with both (an `ffmpeg` stream copy — nothing is re-encoded). If finalizing fails the recording is kept as it is, and `Recorder.error` says so.
 
-**The microphone.** Capture starts in exactly one place, `Recorder.start`, which refuses unless a user gesture is in effect (`navigator.userActivation`) — so it follows a click or a key press, and nothing the backend sends can open the microphone. `Recorder.active` is true from the permission prompt until the recording is saved; while it is, the indicator shows on every page and leaving the page asks first (`confirm_unload_while_recording`). Disposing the app — a logout, a session found revoked — closes the microphone without uploading more. A track that ends on its own (the device unplugged, the permission revoked) stops the recording normally.
+**The microphone.** Capture starts in exactly one place, `Recorder.start`, which refuses unless a user gesture is in effect (`navigator.userActivation`; a browser without that API can't be asked, and is let through) — so it follows a click or a key press, and nothing the backend sends can open the microphone. `Recorder.active` is true from the permission prompt until the recording is saved; while it is, the indicator shows on every page and leaving the page asks first (`confirm_unload_while_recording`). Disposing the app — a logout, a session found revoked — closes the microphone and doesn't finalize; the chunks the uploader already holds, and the last one the browser hands over as it stops, are still sent. A track that ends on its own (the device unplugged, the permission revoked) stops the recording normally.
 
 The browser's side of all this — `getUserMedia`, `MediaRecorder`, `fetch`, the clock — is behind `RecorderDeps`, so tests stand in for the microphone and the network.
 
@@ -772,7 +777,7 @@ items.derived_index('ordered_by_name'); // derived → Array<Model>
 
 Two separate concerns:
 
-- App directory (`PUBLIC_ZZZ_DIR`) — Zzz's own files (`state/`, `cache/`, and `run/` are reserved subdirectories)
+- App directory (`PUBLIC_ZZZ_DIR`) — Zzz's own files: `cache/` holds scratch for tool runs, `recordings/` what the recordings page records, and `state/` and `run/` are reserved
 - Scoped dirs (`PUBLIC_ZZZ_SCOPED_DIRS`) — User file access (comma-separated paths)
 
 ### ScopedFs
@@ -791,7 +796,7 @@ The file actions (`diskfile_update`, `diskfile_create`) carry contents as UTF-8 
 
 Paths go through `ScopedFs`, and errors carry the same reasons as the file actions' (`path_not_allowed`, `already_exists`, …) in a flat `{error}` body. The routes need a session or a full-scope API token.
 
-A file in a workspace is untrusted content, so a read never hands the browser something to run: only allowlisted raster image, audio, and video extensions are served with their media type, and everything else — HTML, SVG, XML, scripts, text — is an `application/octet-stream` download. Every response carries `X-Content-Type-Options: nosniff`, a sandboxing `Content-Security-Policy`, and `Cross-Origin-Resource-Policy: same-origin`, and is never cached (`no-store`).
+A file in a workspace is untrusted content, so a read never hands the browser something to run: only allowlisted raster image, audio, and video extensions are served with their media type, and everything else — HTML, SVG, XML, scripts, text — is an `application/octet-stream` download. Every response that serves or describes a file — a read, a write's reply, a file error — carries `X-Content-Type-Options: nosniff`, a sandboxing `Content-Security-Policy`, and `Cross-Origin-Resource-Policy: same-origin`, and is never cached (`no-store`); a refusal at a gate (a bad query, no credential, an oversized body, a foreign origin) is a plain JSON error without them.
 
 These routes are outside the action system — they don't appear in the actions log or in ./reference.md.
 
@@ -987,6 +992,10 @@ backoff. `receive_session` reconciles rather than adds:
   alone — the snapshot says nothing about them.
 - **Terminals** running when the request went out that the snapshot's
   `terminal_ids` lacks become `lost` (`Terminals.reconcile`).
+- **Jobs** are replaced with the snapshot's `jobs` (`Jobs.reconcile`): they
+  live on the backend, so its list is the truth, and after a restart it's
+  empty. A running transcription's preview segments aren't in the snapshot —
+  a reload shows the job without them until more arrive.
 
 Changes made while the request is in flight win: `filer_change` paths are
 skipped as above, workspaces opened or closed meanwhile

@@ -640,8 +640,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             fuz_http::client_ip_middleware,
         ))
         // `RPC_MESSAGE_MAX_BYTES` (16 MiB) request-body cap, shared with the
-        // `/api/ws` message cap below; a streaming content-addressed route is
-        // the deferred path for larger / binary blobs. The POST handler reads
+        // `/api/ws` message cap below; larger and binary content goes over
+        // the file byte routes (`file_bytes`). The POST handler reads
         // the body through axum's `Bytes` extractor, which applies axum's own
         // 2 MiB `DefaultBodyLimit` — raised to the same cap, so the tower
         // limit is the one that decides.
@@ -896,7 +896,7 @@ pub struct Config {
     /// originating client. Parsed eagerly in `run()`; invalid entries
     /// fail startup.
     pub trusted_proxies: Option<String>,
-    /// The local tools found at boot (`ffmpeg`).
+    /// The local tools found at boot (`ffmpeg`, whisper.cpp and its model).
     pub tools: tool::Tools,
 }
 

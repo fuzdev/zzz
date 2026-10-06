@@ -38,10 +38,16 @@
 //! and video, never anything a browser renders as a document (no HTML, SVG, or
 //! XML) and never by sniffing — and anything else is
 //! `application/octet-stream` with `Content-Disposition: attachment`. Every
-//! response carries `X-Content-Type-Options: nosniff`, a sandboxing
-//! `Content-Security-Policy`, and `Cross-Origin-Resource-Policy: same-origin`.
-//! Responses are `Cache-Control: no-store`: a path's bytes change under it (a
-//! recording grows, a save replaces it), and no validators are sent.
+//! response a handler here builds — a read, a write's reply, a file error —
+//! carries `X-Content-Type-Options: nosniff`, a sandboxing
+//! `Content-Security-Policy`, and `Cross-Origin-Resource-Policy: same-origin`,
+//! and is `Cache-Control: no-store`: a path's bytes change under it (a
+//! recording grows, a save replaces it), and no validators are sent. A gate's
+//! refusal is the spine's JSON error as it comes, without them.
+//!
+//! `ScopedFs` is the only path check, and it knows roots, not `.zzz`
+//! directories: a file inside one that an open root covers is readable here,
+//! though the filer never indexes it.
 
 use std::fmt::Write as _;
 use std::sync::Arc;
@@ -332,7 +338,8 @@ fn scoped_fs_error_response(action: &str, error: &ScopedFsError) -> Response {
     response
 }
 
-/// The headers every response here carries, whatever its body.
+/// The headers every response built here carries, whatever its body. Gate
+/// refusals come from spine helpers and don't pass through this.
 fn apply_security_headers(response: &mut Response) {
     let headers = response.headers_mut();
     headers.insert(

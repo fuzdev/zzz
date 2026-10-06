@@ -61,9 +61,10 @@
 
 	// the transcripts on disk, one per model, and the job writing another
 	const transcripts = $derived(find_transcripts(diskfiles.items.values, diskfile.path));
-	let selected_model: string | null = $state.raw(null);
+	// picked by the sidecar's path: two files can claim the same model
+	let selected_path: string | null = $state.raw(null);
 	const selected = $derived(
-		transcripts.find((t) => t.transcript.tool.model === selected_model) ?? transcripts[0]
+		transcripts.find((t) => t.file.path === selected_path) ?? transcripts[0]
 	);
 	const job = $derived(jobs.latest_for_input(diskfile.path));
 	const job_unfinished = $derived(job !== undefined && !job.finished);
@@ -161,13 +162,13 @@
 								{#if transcripts.length > 1}
 									<select
 										class="inline sm"
-										value={selected.transcript.tool.model}
+										value={selected.file.path}
 										onchange={(e) => {
-											selected_model = e.currentTarget.value;
+											selected_path = e.currentTarget.value;
 										}}
 									>
-										{#each transcripts as { transcript } (transcript.tool.model)}
-											<option value={transcript.tool.model}>{transcript.tool.model}</option>
+										{#each transcripts as { file, transcript } (file.path)}
+											<option value={file.path}>{transcript.tool.model}</option>
 										{/each}
 									</select>
 								{:else}

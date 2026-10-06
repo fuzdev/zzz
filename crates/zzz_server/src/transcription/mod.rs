@@ -144,8 +144,8 @@ impl TranscriptionBackend {
     ///
     /// # Errors
     ///
-    /// [`ToolError::Unavailable`] when the recognizer or its model wasn't
-    /// found at boot.
+    /// [`ToolError::Unavailable`] when the recognizer wasn't found at boot,
+    /// or [`ToolError::Unconfigured`] when it has no model.
     pub fn from_tools(tools: &Tools) -> Result<Self, ToolError> {
         let (bin, model) = tools.whisper_cpp()?;
         Ok(Self::WhisperCpp(WhisperCpp {
@@ -509,7 +509,9 @@ fn tool_failure(action: &str, error: ToolError) -> JobFailure {
     let message = format!("{action}: {error}");
     let stderr = match error {
         ToolError::Failed { stderr, .. } | ToolError::TimedOut { stderr, .. } => stderr,
-        ToolError::Unavailable { .. } | ToolError::Spawn { .. } => String::new(),
+        ToolError::Unavailable { .. }
+        | ToolError::Unconfigured { .. }
+        | ToolError::Spawn { .. } => String::new(),
     };
     JobFailure { message, stderr }
 }

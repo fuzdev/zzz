@@ -406,9 +406,10 @@ impl ScopedFs {
     /// # Errors
     ///
     /// The path-validation errors of every `ScopedFs` operation;
-    /// [`ScopedFsError::OffsetMismatch`]; [`ScopedFsError::IsADirectory`] /
-    /// [`ScopedFsError::NotARegularFile`] for a target that isn't a regular
-    /// file; otherwise [`ScopedFsError::Io`] (e.g. `NotFound`).
+    /// [`ScopedFsError::OffsetMismatch`]; [`ScopedFsError::NotARegularFile`]
+    /// for a FIFO, socket, or device node; otherwise [`ScopedFsError::Io`] —
+    /// `NotFound` for a missing file, and `IsADirectory` for a directory,
+    /// which the open itself refuses.
     pub async fn append_file(
         &self,
         path: &str,

@@ -22,6 +22,13 @@ export const TranscriptSegment = z.strictObject({
 });
 export type TranscriptSegment = z.infer<typeof TranscriptSegment>;
 
+/**
+ * Whether `name` is one path component: not empty, not `.` or `..`, and with
+ * no separator in it.
+ */
+export const is_plain_file_name = (name: string): boolean =>
+	name !== '' && name !== '.' && name !== '..' && !/[/\\\0]/.test(name);
+
 /** What every transcript sidecar's name ends with. */
 export const TRANSCRIPT_SIDECAR_SUFFIX = '.transcript.json';
 
@@ -36,8 +43,13 @@ export const TRANSCRIPT_SIDECAR_SUFFIX = '.transcript.json';
 export const Transcript = z.looseObject({
 	version: z.number(),
 	source: z.looseObject({
-		/** The source's file name — it sits beside the sidecar. */
-		name: z.string(),
+		/**
+		 * The source's file name — it sits beside the sidecar. A sidecar is a
+		 * file anyone can write, and this name becomes a path the app reads and
+		 * creates files at, so anything but a single path component is refused:
+		 * a transcript can't point outside its own directory.
+		 */
+		name: z.string().refine(is_plain_file_name, { message: 'must be a file name, not a path' }),
 		/** `blake3:<hex>` of the source's bytes when it was transcribed. */
 		blake3: z.string(),
 		size: z.number(),

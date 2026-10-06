@@ -32,6 +32,57 @@ the `zzz_server` backend (no FFI indirection). Building the backend
 Rust workspace, which must be checked out alongside this repo. It is
 Linux-only (kernel 4.13 or newer), so the backend builds on Linux only.
 
+### Local tools
+
+Recording and transcription use two programs the daemon runs as subprocesses.
+Neither is bundled, and zzz builds and runs without them — each feature says
+what's missing when it's used. `zzzd` looks for them once, at boot, so
+restart it after installing one or changing a variable.
+
+**`ffmpeg`** — for finalizing a recording (so it has a duration and seeks) and
+for decoding audio before it's transcribed. Any build with the `fd` protocol
+works (`ffmpeg -protocols` lists `fd`; current builds have it), and it
+needs the muxers and decoders for what you record — Opus in WebM, for a
+browser. A distribution's package is fine:
+
+```bash
+sudo apt install ffmpeg   # Debian / Ubuntu
+```
+
+`zzzd` uses the `ffmpeg` on its `PATH`; set `ZZZ_FFMPEG_BIN` (an absolute
+path) to use another.
+
+**whisper.cpp and a model** — for transcription, which runs entirely on your
+machine. Build [whisper.cpp](https://github.com/ggml-org/whisper.cpp)'s
+`whisper-cli` and download a Whisper model in its `ggml` format; zzz
+downloads neither.
+
+```bash
+git clone https://github.com/ggml-org/whisper.cpp
+cd whisper.cpp
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF   # add -DGGML_VULKAN=1 or -DGGML_CUDA=1 for a GPU
+cmake --build build --target whisper-cli
+./models/download-ggml-model.sh base.en    # → models/ggml-base.en.bin
+```
+
+Then point the daemon at them — in `.env.development` for `cargo xtask dev`,
+or `~/.zzz/.env` for the `zzz` CLI's daemon. Both must be absolute paths
+(`zzzd` refuses to boot on a relative one; in `~/.zzz/.env`, `~/…` works):
+
+```bash
+ZZZ_WHISPER_CPP_BIN=/path/to/whisper.cpp/build/bin/whisper-cli   # or put whisper-cli on PATH
+ZZZ_WHISPER_CPP_MODEL=/path/to/whisper.cpp/models/ggml-base.en.bin
+```
+
+There is no default model and no search for one: transcription is off until
+`ZZZ_WHISPER_CPP_MODEL` names a file. The model's name (the file name without
+`ggml-` and `.bin`) becomes part of each transcript's file name, so a
+recording can hold one transcript per model. Larger models are slower and
+more accurate; the `.en` ones are English-only.
+
+The Vulkan build needs the Vulkan headers, a GLSL compiler, and the SPIR-V
+headers (`libvulkan-dev`, `glslc`, and `spirv-headers` on Debian).
+
 ## Commands
 
 - `gro check` — All checks (typecheck, test, gen, format, lint)
@@ -389,6 +440,19 @@ Tests live in `src/test/` (not co-located). Split large suites by aspect with do
 gro test                                    # all tests
 gro test -- --watch                         # watch mode
 gro test -- src/test/cell.svelte.base.test.ts  # specific file
+```
+
+The cross-backend suites (`npm run test:cross`, see ../crates/CLAUDE.md) run
+against a real daemon, which inherits the environment they're started in. The
+media tests there use whatever tools that environment has and skip the rest,
+visibly: without `ffmpeg` on `PATH` the finalize tests skip, and without
+whisper.cpp plus `ZZZ_WHISPER_CPP_MODEL` the transcription tests do. To run
+them all:
+
+```bash
+ZZZ_WHISPER_CPP_BIN=/path/to/whisper-cli \
+ZZZ_WHISPER_CPP_MODEL=/path/to/ggml-base.en.bin \
+npm run test:cross
 ```
 
 ### Test Pattern

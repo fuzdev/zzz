@@ -14,8 +14,9 @@
 //! (`fuz_actions::perform_action` plus the route states built in `main.rs`).
 //! `App.realtime` is the sole connection-tracking surface; it drives the
 //! `broadcast` / `close_sockets_for_*` shims called from `filer.rs` and
-//! `workspace.rs`, and `pty_manager.rs` sends terminal notifications through
-//! it to the owning account only (`send_to_account`). `WorkspaceInfo` is the value type
+//! `workspace.rs`, and `pty_manager.rs`, `job_manager.rs`, and
+//! `transcription/` send a terminal's and a job's notifications through it to
+//! the owning account only (`send_to_account`). `WorkspaceInfo` is the value type
 //! consumed by `workspace`.
 
 pub mod core;
@@ -98,7 +99,8 @@ pub struct App {
     /// constructed — the spec builders close over `Arc<App>`, so the
     /// registry can't be built until the App `Arc` exists.
     pub action_registry: std::sync::OnceLock<Arc<ActionRegistry>>,
-    /// The local tools found at boot (`ffmpeg`). [`Self::new`] starts with
+    /// The local tools found at boot (`ffmpeg`, whisper.cpp and its model).
+    /// [`Self::new`] starts with
     /// none; `run_app` sets them from the config.
     pub tools: Tools,
 }
@@ -149,8 +151,9 @@ impl App {
     /// Shim over `App.realtime`. The spine WS handler registers
     /// connections in `App.realtime` (`Arc<fuz_realtime::ConnectionRegistry>`);
     /// call sites (`filer::broadcast_filer_change`, `workspace::workspace_*`)
-    /// broadcast through this shim. Terminal output is per-account, so
-    /// `pty_manager` uses `realtime.send_to_account` instead.
+    /// broadcast through this shim. Terminal output and job state are
+    /// per-account, so `pty_manager` and `job_manager` use
+    /// `realtime.send_to_account` instead.
     pub fn broadcast(&self, message: &str) {
         let _ = self.realtime.broadcast(message);
     }
@@ -171,12 +174,6 @@ pub fn caller_account_id(ctx: &ActionContext<'_>) -> Result<Uuid, JsonrpcError> 
         .ok_or_else(unauthenticated)
 }
 
-/// A `not_found` (-32003) error with a caller-supplied `message` and
-/// `data.reason`.
-///
-/// `fuz_http::not_found` fixes the message to `"{resource} not found"`; the
-/// filesystem and workspace handlers keep their `failed to …: …` messages
-/// (which name the path) across every code, so they build the error here.
 /// Deserialize an optional field that, when present, must not be `null` —
 /// zod's `.optional()`. Pair with `#[serde(default)]` for the absent case.
 /// (`parse_strict_params` refuses a top-level `null`; this covers the
@@ -189,6 +186,12 @@ where
     T::deserialize(deserializer).map(Some)
 }
 
+/// A `not_found` (-32003) error with a caller-supplied `message` and
+/// `data.reason`.
+///
+/// `fuz_http::not_found` fixes the message to `"{resource} not found"`; the
+/// filesystem and workspace handlers keep their `failed to …: …` messages
+/// (which name the path) across every code, so they build the error here.
 #[cold]
 pub fn not_found_error(message: &str, reason: &str) -> JsonrpcError {
     JsonrpcError {

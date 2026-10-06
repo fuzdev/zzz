@@ -1,9 +1,8 @@
 //! Jobs: long-running work the daemon does on a caller's behalf, which
 //! outlives the request that started it.
 //!
-//! A job is a run of local tools over a file — a transcription is the first
-//! kind — that can take minutes, so it can't be tied to one request, tab, or
-//! socket. [`JobManager`] holds every job in memory, like terminals: they
+//! A job is a run of local tools over a file — a transcription — that can
+//! take minutes, so it can't be tied to one request, tab, or socket. [`JobManager`] holds every job in memory, like terminals: they
 //! vanish on restart.
 //!
 //! - **One at a time.** Jobs run in the order they were submitted; the rest
@@ -19,7 +18,8 @@
 //!   [`MAX_FINISHED_JOBS`], oldest dropped first.
 //!
 //! The work itself is a future the submitter builds from a [`JobHandle`],
-//! which reports progress, the command lines run, and the tool's stderr.
+//! which reports progress and the command lines run; a failure carries the
+//! tool's stderr ([`JobFailure`]).
 
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;

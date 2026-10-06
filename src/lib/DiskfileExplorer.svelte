@@ -80,8 +80,8 @@
 							: `record audio to a new file in ${new_files_dir}`}
 					disabled={!new_files_dir || recorder.active}
 					onclick={() => {
-						// in the click itself: the microphone opens only on a user gesture.
-						// A failure shows in the recorder indicator
+						// in the click itself: the microphone opens only on a user gesture —
+						// a failure shows in the recorder indicator
 						if (new_files_dir) recorder.start(new_files_dir).catch(() => undefined);
 					}}
 				>

@@ -103,7 +103,8 @@ impl Tools {
     ///
     /// # Errors
     ///
-    /// [`ToolError::Unavailable`] when either wasn't found at boot.
+    /// [`ToolError::Unavailable`] when the binary wasn't found at boot, or
+    /// [`ToolError::Unconfigured`] when no model is set.
     pub fn whisper_cpp(&self) -> Result<(&Path, &Path), ToolError> {
         let bin = self.whisper_cpp.as_deref().ok_or(ToolError::Unavailable {
             tool: WHISPER_CPP_BIN_NAME,
@@ -111,8 +112,9 @@ impl Tools {
         let model = self
             .whisper_cpp_model
             .as_deref()
-            .ok_or(ToolError::Unavailable {
-                tool: "a Whisper model (ZZZ_WHISPER_CPP_MODEL)",
+            .ok_or(ToolError::Unconfigured {
+                what: "Whisper model",
+                env: WHISPER_CPP_MODEL_ENV,
             })?;
         Ok((bin, model))
     }
@@ -241,6 +243,12 @@ pub struct ToolRun<'a> {
 pub enum ToolError {
     #[error("{tool} is not installed or not on the daemon's PATH")]
     Unavailable { tool: &'static str },
+    /// Something a tool needs is only ever set explicitly, and isn't.
+    #[error("no {what} is configured (set {env})")]
+    Unconfigured {
+        what: &'static str,
+        env: &'static str,
+    },
     #[error("failed to run {program}: {source}")]
     Spawn {
         program: String,
