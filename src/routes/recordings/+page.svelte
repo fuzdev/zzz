@@ -147,7 +147,7 @@
 							{to_name(diskfile.path)}
 						</button>
 						{#if is_recording}
-							<small class="chip font_size_sm">recording</small>
+							<small class="chip">recording</small>
 						{:else if job && !job.finished}
 							<!-- shown below -->
 						{:else if transcripts.length > 0}
