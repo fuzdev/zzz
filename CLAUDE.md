@@ -283,7 +283,7 @@ not a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 - `Prompts` (`prompts.svelte.ts`) — Collection of prompts
 - `Provider` (`provider.svelte.ts`) — AI provider config
 - `Providers` (`providers.svelte.ts`) — Collection of providers
-- `Recorder` (`recorder.svelte.ts`) — App-level microphone recording: status, the file it grows, its level, pause / resume / stop, transcribe-on-stop
+- `Recorder` (`recorder.svelte.ts`) — App-level microphone recording to a file: the upload sink, finalize, transcribe-on-stop, over an `AudioCapture` (`audio_capture.svelte.ts`, app-free: microphone, pause / resume, duration, level, chunks to any sink)
 - `Turn` (`turn.svelte.ts`) — Single conversation message
 - `Thread` (`thread.svelte.ts`) — Linear conversation with one model
 - `Threads` (`threads.svelte.ts`) — Collection of threads

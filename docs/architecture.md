@@ -583,6 +583,8 @@ clients find them `lost` when they resync.
 
 `Recorder` (`recorder.svelte.ts`) is an app-level cell that records the microphone to a file on disk. Being app-level, a recording carries on across route changes; `RecorderIndicator` in the root layout shows it — status, duration, pause and stop — on every page while the microphone may be open.
 
+It's two layers. `AudioCapture` (`audio_capture.svelte.ts`) owns the microphone — the user-gesture check, the format, `MediaRecorder`, pause and resume, duration and level — and hands each chunk to an `AudioCaptureSink` it is given, knowing nothing about the app or where chunks go. `Recorder` supplies the sink (a `ChunkUpload` to a file) and owns what happens after: the path, finalizing, and transcribing. Capture has no backend or AI dependency, so another app can record into its own sink.
+
 ```
 click → Recorder.start(dir)
           ├─ a user gesture is in effect, or it refuses
@@ -604,9 +606,9 @@ Recorder.stop()                                                        status: s
 
 **Stopping finalizes.** A browser's `MediaRecorder` streams its output, so the file's header has no duration or seek index. Once every chunk has landed, `media_finalize` has the daemon rewrite the file in place with both (an `ffmpeg` stream copy — nothing is re-encoded). If finalizing fails the recording is kept as it is, and `Recorder.error` says so.
 
-**The microphone.** Capture starts in exactly one place, `Recorder.start`, which refuses unless a user gesture is in effect (`navigator.userActivation`; a browser without that API can't be asked, and is let through) — so it follows a click or a key press, and nothing the backend sends can open the microphone. `Recorder.active` is true from the permission prompt until the recording is saved; while it is, the indicator shows on every page and leaving the page asks first (`confirm_unload_while_recording`). Disposing the app — a logout, a session found revoked — closes the microphone and doesn't finalize; the chunks the uploader already holds, and the last one the browser hands over as it stops, are still sent. A track that ends on its own (the device unplugged, the permission revoked) stops the recording normally.
+**The microphone.** Capture starts in exactly one place, `AudioCapture.start` (which `Recorder.start` calls), and it refuses unless a user gesture is in effect (`navigator.userActivation`; a browser without that API can't be asked, and is let through) — so it follows a click or a key press, and nothing the backend sends can open the microphone. `Recorder.active` is true from the permission prompt until the recording is saved; while it is, the indicator shows on every page and leaving the page asks first (`confirm_unload_while_recording`). Disposing the app — a logout, a session found revoked — closes the microphone and doesn't finalize; the chunks the uploader already holds, and the last one the browser hands over as it stops, are still sent. A track that ends on its own (the device unplugged, the permission revoked) stops the recording normally.
 
-The browser's side of all this — `getUserMedia`, `MediaRecorder`, `fetch`, the clock — is behind `RecorderDeps`, so tests stand in for the microphone and the network.
+The browser's side of all this — `getUserMedia`, `MediaRecorder`, the clock — is behind `AudioCaptureDeps`, which `RecorderDeps` extends with `fetch`, so tests stand in for the microphone and the network.
 
 ### Playing audio
 

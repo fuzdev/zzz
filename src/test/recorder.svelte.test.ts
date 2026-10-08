@@ -4,63 +4,18 @@ import { test, describe, assert, beforeEach, afterEach, vi } from 'vitest';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 import { Frontend } from '$lib/frontend.svelte.ts';
-import { RECORDER_TICK_INTERVAL, type Recorder, type RecorderDeps } from '$lib/recorder.svelte.ts';
+import { AUDIO_CAPTURE_TICK_INTERVAL } from '$lib/audio_capture.svelte.ts';
+import type { Recorder, RecorderDeps } from '$lib/recorder.svelte.ts';
 import { DiskfileDirectoryPath } from '$lib/diskfile_types.ts';
 
-import { FakeByteRoutes, blob_of } from './byte_route_test_helpers.ts';
+import { FakeMediaRecorder, FakeStream } from './audio_capture_test_helpers.ts';
+import { FakeByteRoutes } from './byte_route_test_helpers.ts';
 import { flush, result_error, result_ok } from './terminal_test_helpers.ts';
 
 const DIR = DiskfileDirectoryPath.parse('/w/');
 /** 2026-01-31 09:05:07 local time. */
 const STARTED = new Date(2026, 0, 31, 9, 5, 7).getTime();
 const PATH = '/w/2026-01-31_09-05-07.webm';
-
-class FakeTrack extends EventTarget {
-	stopped = false;
-	stop(): void {
-		this.stopped = true;
-	}
-}
-
-class FakeStream {
-	readonly track = new FakeTrack();
-	getTracks(): Array<FakeTrack> {
-		return [this.track];
-	}
-}
-
-class FakeMediaRecorder extends EventTarget {
-	state: 'inactive' | 'recording' | 'paused' = 'inactive';
-	timeslice: number | undefined;
-	readonly stream: FakeStream;
-	readonly options: MediaRecorderOptions;
-	constructor(stream: FakeStream, options: MediaRecorderOptions) {
-		super();
-		this.stream = stream;
-		this.options = options;
-	}
-	start(timeslice?: number): void {
-		this.state = 'recording';
-		this.timeslice = timeslice;
-	}
-	pause(): void {
-		this.state = 'paused';
-	}
-	resume(): void {
-		this.state = 'recording';
-	}
-	/** Hands over a chunk, as the browser does every timeslice. */
-	emit(size: number): void {
-		this.dispatchEvent(Object.assign(new Event('dataavailable'), { data: blob_of(size) }));
-	}
-	/** The last chunk is dispatched before `stop`, like the real one. */
-	final_chunk_size = 0;
-	stop(): void {
-		this.state = 'inactive';
-		if (this.final_chunk_size) this.emit(this.final_chunk_size);
-		this.dispatchEvent(new Event('stop'));
-	}
-}
 
 interface Harness {
 	app: Frontend;
@@ -348,6 +303,34 @@ describe('Recorder.stop', () => {
 		assert.strictEqual(h.recorder.status, 'idle');
 	});
 
+	test('stays stopping, and active, until the file is finalized', async () => {
+		let finish!: (result: unknown) => void;
+		h.finalize_result = new Promise((resolve) => {
+			finish = resolve;
+		});
+		await h.recorder.start(DIR);
+		const stopped = h.recorder.stop();
+		await flush();
+		assert.deepEqual(h.finalized, [{ path: PATH }], 'finalizing');
+		assert.strictEqual(h.recorder.capture.status, 'idle', 'the microphone is closed');
+		assert.strictEqual(h.recorder.status, 'stopping');
+		assert.ok(h.recorder.active);
+		assert.strictEqual(h.recorder.path, PATH);
+
+		finish(result_ok({ size: 1 }));
+		assert.strictEqual(await stopped, PATH);
+		assert.strictEqual(h.recorder.status, 'idle');
+		assert.ok(!h.recorder.active);
+	});
+
+	test('a stop while saving does nothing', async () => {
+		await h.recorder.start(DIR);
+		const stopped = h.recorder.stop();
+		assert.strictEqual(await h.recorder.stop(), null);
+		assert.strictEqual(await stopped, PATH);
+		assert.deepEqual(h.finalized, [{ path: PATH }]);
+	});
+
 	test('does nothing when idle', async () => {
 		assert.strictEqual(await h.recorder.stop(), null);
 		assert.deepEqual(h.finalized, []);
@@ -371,22 +354,22 @@ describe('Recorder.level', () => {
 			assert.strictEqual(recorder.level, 0);
 			await recorder.start(DIR);
 			assert.strictEqual(meters.length, 1);
-			vi.advanceTimersByTime(RECORDER_TICK_INTERVAL);
+			vi.advanceTimersByTime(AUDIO_CAPTURE_TICK_INTERVAL);
 			assert.strictEqual(recorder.level, 0.5);
 
 			recorder.pause();
 			meters[0]!.level = 0.9;
-			vi.advanceTimersByTime(RECORDER_TICK_INTERVAL);
+			vi.advanceTimersByTime(AUDIO_CAPTURE_TICK_INTERVAL);
 			assert.strictEqual(recorder.level, 0.9);
 
 			const stopped = recorder.stop();
-			await vi.advanceTimersByTimeAsync(RECORDER_TICK_INTERVAL);
+			await vi.advanceTimersByTimeAsync(AUDIO_CAPTURE_TICK_INTERVAL);
 			await stopped;
 			assert.strictEqual(recorder.level, 0);
 			assert.ok(meters[0]!.closed);
 			// nothing ticks once the microphone is closed
 			meters[0]!.level = 0.7;
-			vi.advanceTimersByTime(RECORDER_TICK_INTERVAL * 3);
+			vi.advanceTimersByTime(AUDIO_CAPTURE_TICK_INTERVAL * 3);
 			assert.strictEqual(recorder.level, 0);
 		} finally {
 			vi.useRealTimers();
@@ -399,11 +382,11 @@ describe('Recorder.level', () => {
 			const { recorder, clock } = h;
 			await recorder.start(DIR);
 			clock.now += 300;
-			vi.advanceTimersByTime(RECORDER_TICK_INTERVAL);
+			vi.advanceTimersByTime(AUDIO_CAPTURE_TICK_INTERVAL);
 			assert.strictEqual(recorder.duration, 300);
 			recorder.pause();
 			clock.now += 5000;
-			vi.advanceTimersByTime(RECORDER_TICK_INTERVAL);
+			vi.advanceTimersByTime(AUDIO_CAPTURE_TICK_INTERVAL);
 			assert.strictEqual(recorder.duration, 300);
 			await recorder.stop();
 		} finally {
@@ -507,6 +490,23 @@ describe('Recorder failures and teardown', () => {
 		assert.strictEqual(h.media_recorders[0]!.state, 'inactive');
 		assert.strictEqual(h.recorder.status, 'idle');
 		assert.deepEqual(h.finalized, []);
+	});
+
+	test('disposing while finalizing keeps nothing and transcribes nothing', async () => {
+		let finish!: (result: unknown) => void;
+		h.finalize_result = new Promise((resolve) => {
+			finish = resolve;
+		});
+		await h.recorder.start(DIR);
+		const stopped = h.recorder.stop();
+		await flush();
+		h.app.dispose();
+		finish(result_ok({ size: 1 }));
+		assert.strictEqual(await stopped, null);
+		await flush();
+		assert.deepEqual(h.transcribed, []);
+		assert.strictEqual(h.recorder.last_path, null);
+		assert.strictEqual(h.recorder.status, 'idle');
 	});
 
 	test('the next start clears the last error', async () => {
