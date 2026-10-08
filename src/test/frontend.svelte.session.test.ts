@@ -42,6 +42,7 @@ const create_session = (files: Array<SerializableDisknode> = []): SessionLoadDat
 	provider_status: [],
 	workspaces: [],
 	terminal_ids: [],
+	jobs: [],
 	server_instance_id: SERVER_INSTANCE_ID
 });
 

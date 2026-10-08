@@ -21,7 +21,6 @@ import {
 	writeFile
 } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
-import { request as http_request } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { describe, test, inject, assert } from 'vitest';
 import {
@@ -35,6 +34,7 @@ import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 import { RPC_MESSAGE_MAX_BYTES } from '$lib/rpc_message_limit.ts';
 
 import './cross_test_types.ts';
+import { request_status } from './request_status.ts';
 
 const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 const setup_test = default_cross_process_setup(handle);
@@ -50,65 +50,6 @@ const file_exists = async (path: string): Promise<boolean> => {
 		return false;
 	}
 };
-
-/**
- * POST `body` and resolve the response status, for a request the server may
- * refuse by its headers alone (413 for an oversized `Content-Length`). Sends
- * `Expect: 100-continue` and writes the body only once the server asks for it
- * (`'continue'`), so a server that answers from the headers and closes never
- * races the upload into `EPIPE` / `ECONNRESET` — `fetch` has no such mode. If
- * no interim answer comes within `continue_timeout_ms`, the body is sent
- * anyway (RFC 9110 § 10.1.1). A write error after the response arrived is
- * tolerated.
- */
-const post_status = (
-	url: string,
-	headers: Record<string, string>,
-	body: string,
-	continue_timeout_ms = 3_000
-): Promise<number> =>
-	new Promise((resolve, reject) => {
-		let status: number | undefined;
-		let body_sent = false;
-		const send_body = (): void => {
-			if (body_sent || status !== undefined) return;
-			body_sent = true;
-			clearTimeout(continue_timer);
-			req.end(body);
-		};
-		const req = http_request(
-			url,
-			{
-				method: 'POST',
-				headers: {
-					...headers,
-					'Content-Length': String(Buffer.byteLength(body)),
-					Expect: '100-continue'
-				}
-			},
-			(res) => {
-				status = res.statusCode;
-				clearTimeout(continue_timer);
-				res.on('error', () => undefined);
-				res.resume();
-				res.on('end', () => {
-					resolve(status!);
-					// an unsent body leaves the request open — drop the connection
-					if (!body_sent) req.destroy();
-				});
-			}
-		);
-		const continue_timer = setTimeout(send_body, continue_timeout_ms);
-		req.on('continue', send_body);
-		// a write racing the server's close fails on the socket too
-		req.on('socket', (socket) => socket.on('error', () => undefined));
-		req.on('error', (error) => {
-			clearTimeout(continue_timer);
-			if (status === undefined) reject(error);
-			else resolve(status);
-		});
-		req.flushHeaders();
-	});
 
 describe('filesystem cross-backend', () => {
 	test('diskfile_update_and_read', async () => {
@@ -530,7 +471,7 @@ describe('filesystem cross-backend', () => {
 			assert.ok(http_under.ok, JSON.stringify(http_under).slice(0, 500));
 			assert.equal((await stat(path)).size, under.length);
 
-			const http_over = await post_status(
+			const http_over = await request_status(
 				`${handle.config.base_url}${handle.config.rpc_path}`,
 				{
 					'Content-Type': 'application/json',

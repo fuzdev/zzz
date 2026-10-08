@@ -38,6 +38,9 @@ pub const ERROR_ALREADY_EXISTS: &str = "already_exists";
 /// A save's in-place fallback found the file replaced or removed externally
 /// since it was opened, and wrote nothing (`conflict`).
 pub const ERROR_REPLACED_DURING_SAVE: &str = "replaced_during_save";
+/// An append found the file at a different size than the expected offset,
+/// and wrote nothing (`conflict`).
+pub const ERROR_OFFSET_MISMATCH: &str = "offset_mismatch";
 /// The path doesn't exist (`not_found`).
 pub const ERROR_PATH_NOT_FOUND: &str = "path_not_found";
 /// The path is a directory where a file was expected (`invalid_params`).
@@ -57,7 +60,8 @@ pub const ERROR_NOT_A_REGULAR_FILE: &str = "not_a_regular_file";
 ///   non-writable directory for a new file or directory → `forbidden` (-32002)
 /// - a missing path → `not_found` (-32003)
 /// - `diskfile_create` / `directory_create` over an existing path, or a save
-///   whose file was replaced mid-save → `conflict` (-32004)
+///   whose file was replaced mid-save, or an append at the wrong offset →
+///   `conflict` (-32004)
 /// - any other I/O failure → `internal_error` (-32603)
 ///
 /// Each carries its `ERROR_*` constant as `data.reason`, except
@@ -81,6 +85,7 @@ pub fn scoped_fs_error(action: &str, error: &ScopedFsError) -> JsonrpcError {
         ScopedFsError::ReplacedDuringSave(_) => {
             conflict(&message, Some(ERROR_REPLACED_DURING_SAVE))
         }
+        ScopedFsError::OffsetMismatch { .. } => conflict(&message, Some(ERROR_OFFSET_MISMATCH)),
         ScopedFsError::Io { source, .. } => match source.kind() {
             ErrorKind::NotFound => not_found_error(&message, ERROR_PATH_NOT_FOUND),
             ErrorKind::PermissionDenied | ErrorKind::ReadOnlyFilesystem => {

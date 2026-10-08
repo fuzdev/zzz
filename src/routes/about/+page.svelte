@@ -52,8 +52,8 @@
 		<ul>
 			<li>
 				<ExternalLink href="https://github.com/tokio-rs/axum">Axum</ExternalLink> is the Rust
-				backend web server that provides local system access — filesystem, terminals, and AI
-				provider requests.
+				backend web server that provides local system access — filesystem, terminals, AI provider
+				requests, and running local tools over your files.
 			</li>
 			<li>
 				<ExternalLink href="https://svelte.dev/">SvelteKit</ExternalLink> is the frontend framework,
@@ -247,7 +247,22 @@
 						run interactive terminals -- full shell access as your user, the most powerful
 						capability here, gated behind the auth
 					</li>
+					<li>
+						read any file in those directories as raw bytes, to play or download it -- served so the
+						browser never runs it as a page
+					</li>
+					<li>
+						run <code>ffmpeg</code> and whisper.cpp, if you've installed them, over audio files you
+						choose -- to finish a recording and to transcribe it on your machine; a media file is
+						untrusted input to a large parser, so these tools are handed open files, never paths or
+						network access
+					</li>
 				</ul>
+			</li>
+			<li>
+				The page can record your microphone, only after you click record and the browser asks -- a
+				notice with a stop button stays on every page while it's open, and the audio goes to a file
+				on your machine and nowhere else.
 			</li>
 			<li>
 				Zzz is a single-operator app for your own machine. Every session and every full-scope API

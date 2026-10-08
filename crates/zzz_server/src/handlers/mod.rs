@@ -14,12 +14,15 @@
 //! (`fuz_actions::perform_action` plus the route states built in `main.rs`).
 //! `App.realtime` is the sole connection-tracking surface; it drives the
 //! `broadcast` / `close_sockets_for_*` shims called from `filer.rs` and
-//! `workspace.rs`, and `pty_manager.rs` sends terminal notifications through
-//! it to the owning account only (`send_to_account`). `WorkspaceInfo` is the value type
+//! `workspace.rs`, and `pty_manager.rs`, `job_manager.rs`, and
+//! `transcription/` send a terminal's and a job's notifications through it to
+//! the owning account only (`send_to_account`). `WorkspaceInfo` is the value type
 //! consumed by `workspace`.
 
 pub mod core;
 pub mod filesystem;
+pub mod job;
+pub mod media;
 pub mod provider;
 pub mod terminal;
 pub mod workspace;
@@ -32,9 +35,11 @@ use parking_lot::RwLock;
 use serde::Serialize;
 
 use crate::filer::FilerManager;
+use crate::job_manager::JobManager;
 use crate::provider::{CompletionOptions, ProviderManager};
 use crate::pty_manager::PtyManager;
 use crate::scoped_fs::ScopedFs;
+use crate::tool::Tools;
 
 use fuz_actions::{ActionContext, ActionRegistry};
 use fuz_http::{JsonrpcError, unauthenticated};
@@ -69,6 +74,8 @@ pub struct App {
     pub filer_manager: FilerManager,
     /// PTY terminal manager.
     pub pty_manager: PtyManager,
+    /// Long-running tool work (transcriptions), in memory like terminals.
+    pub job_manager: JobManager,
     /// AI provider manager (Anthropic, `OpenAI`, Gemini).
     pub provider_manager: ProviderManager,
     /// Completion options for every request — always
@@ -92,6 +99,10 @@ pub struct App {
     /// constructed — the spec builders close over `Arc<App>`, so the
     /// registry can't be built until the App `Arc` exists.
     pub action_registry: std::sync::OnceLock<Arc<ActionRegistry>>,
+    /// The local tools found at boot (`ffmpeg`, whisper.cpp and its model).
+    /// [`Self::new`] starts with
+    /// none; `run_app` sets them from the config.
+    pub tools: Tools,
 }
 
 impl std::fmt::Debug for App {
@@ -125,11 +136,13 @@ impl App {
             scoped_dirs,
             filer_manager: FilerManager::new(),
             pty_manager: PtyManager::new(),
+            job_manager: JobManager::new(),
             provider_manager,
             completion_options: CompletionOptions::default(),
             enable_test_actions,
             realtime,
             action_registry: std::sync::OnceLock::new(),
+            tools: Tools::default(),
         }
     }
 
@@ -138,8 +151,9 @@ impl App {
     /// Shim over `App.realtime`. The spine WS handler registers
     /// connections in `App.realtime` (`Arc<fuz_realtime::ConnectionRegistry>`);
     /// call sites (`filer::broadcast_filer_change`, `workspace::workspace_*`)
-    /// broadcast through this shim. Terminal output is per-account, so
-    /// `pty_manager` uses `realtime.send_to_account` instead.
+    /// broadcast through this shim. Terminal output and job state are
+    /// per-account, so `pty_manager` and `job_manager` use
+    /// `realtime.send_to_account` instead.
     pub fn broadcast(&self, message: &str) {
         let _ = self.realtime.broadcast(message);
     }
@@ -158,6 +172,18 @@ pub fn caller_account_id(ctx: &ActionContext<'_>) -> Result<Uuid, JsonrpcError> 
         .account()
         .map(|account| account.id)
         .ok_or_else(unauthenticated)
+}
+
+/// Deserialize an optional field that, when present, must not be `null` —
+/// zod's `.optional()`. Pair with `#[serde(default)]` for the absent case.
+/// (`parse_strict_params` refuses a top-level `null`; this covers the
+/// nested fields its walk doesn't reach.)
+pub(crate) fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
 }
 
 /// A `not_found` (-32003) error with a caller-supplied `message` and

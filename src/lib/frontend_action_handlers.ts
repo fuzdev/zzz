@@ -122,6 +122,36 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		}
 	},
 
+	media_finalize: {
+		receive_error: ({ data: { input, error } }) => {
+			console.error('[frontend_action_handlers] finalize media failed:', input.path, error);
+		}
+	},
+
+	transcription_create: {
+		receive_error: ({ data: { input, error } }) => {
+			console.error('[frontend_action_handlers] transcribe failed:', input.path, error);
+		}
+	},
+
+	transcription_progress: {
+		receive: ({ data: { input } }) => {
+			frontend.jobs.receive_transcription_progress(input.job_id, input.segments);
+		}
+	},
+
+	job_cancel: {
+		receive_error: ({ data: { input, error } }) => {
+			console.error('[frontend_action_handlers] cancel job failed:', input.job_id, error);
+		}
+	},
+
+	job_changed: {
+		receive: ({ data: { input } }) => {
+			frontend.jobs.receive_changed(input.job);
+		}
+	},
+
 	filer_change: {
 		receive: ({ data: { input } }) => {
 			frontend.diskfiles.handle_change(input);

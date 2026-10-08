@@ -26,6 +26,8 @@ import { Spaces } from './spaces.svelte.ts';
 import { Workspaces } from './workspaces.svelte.ts';
 import type { Workspace } from './workspace.svelte.ts';
 import { Terminals } from './terminals.svelte.ts';
+import { Recorder } from './recorder.svelte.ts';
+import { Jobs } from './jobs.svelte.ts';
 import { ERROR_WORKSPACE_NOT_OPEN } from './workspace_helpers.ts';
 import { TerminalPresets } from './terminal_presets.svelte.ts';
 import {
@@ -116,6 +118,11 @@ export interface FrontendOptions extends OmitStrict<CellOptions<typeof FrontendJ
 
 	http_rpc_url?: string | null;
 	http_headers?: Record<string, string>;
+	/**
+	 * The backend API's URL or path, with no trailing slash — what the byte
+	 * routes hang off (see `file_bytes.ts`). Without it nothing can be recorded.
+	 */
+	api_url?: string | null;
 
 	socket_url?: string | null;
 
@@ -164,6 +171,11 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly workspaces: Workspaces;
 	readonly terminals: Terminals;
 	readonly terminal_presets: TerminalPresets;
+	readonly recorder: Recorder;
+	readonly jobs: Jobs;
+
+	/** The backend API's URL or path, with no trailing slash — `null` without one. */
+	readonly api_url: string | null;
 
 	readonly bots: ZzzOptions['bots'];
 
@@ -294,6 +306,9 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.workspaces = new Workspaces({ app: this });
 		this.terminals = new Terminals({ app: this });
 		this.terminal_presets = new TerminalPresets({ app: this });
+		this.api_url = options.api_url ?? null;
+		this.recorder = new Recorder({ app: this });
+		this.jobs = new Jobs({ app: this });
 
 		this.bots = options.bots ?? BOTS_DEFAULT;
 		this.#on_unauthenticated = options.on_unauthenticated ?? null;
@@ -615,6 +630,9 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 			restarted ? TERMINAL_LOST_TO_RESTART_MESSAGE : TERMINAL_LOST_WHILE_DISCONNECTED_MESSAGE
 		);
 
+		// jobs live on the backend, so its list is the truth — a restart empties it
+		this.jobs.reconcile(data.jobs);
+
 		for (const path of reopen) void this.#reopen_workspace(path, data.file_roots);
 	}
 
@@ -716,13 +734,16 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 	/**
 	 * Tear the app down: closes the socket (no reconnect loop is left behind),
-	 * stops `session_load` retries and the cells that own timers, then unregisters.
+	 * ends a recording, stops `session_load` retries and the cells that own
+	 * timers, then unregisters.
 	 */
 	override dispose(): void {
 		this.#disposed = true;
 		this.#clear_session_retry();
 		this.#clear_session_boot();
 		this.socket.disconnect();
+		// closes the microphone: a recording doesn't outlive its session
+		this.recorder.dispose();
 		this.terminals.dispose();
 		this.time.dispose();
 		super.dispose();

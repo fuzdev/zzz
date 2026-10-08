@@ -8,7 +8,7 @@
 
 	import { frontend_context } from './frontend.svelte.ts';
 	import DiskfileExplorer from './DiskfileExplorer.svelte';
-	import DiskfileEditorView from './DiskfileEditorView.svelte';
+	import DiskfileView from './DiskfileView.svelte';
 	import DiskfileTabListitem from './DiskfileTabListitem.svelte';
 	import { Reorderable } from './reorderable.svelte.ts';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
@@ -128,12 +128,12 @@
 			<!-- editor content area -->
 			{#if selected_tab}
 				{#if selected_diskfile}
-					<DiskfileEditorView
+					<DiskfileView
 						diskfile={selected_diskfile}
 						onmodified={(diskfile_id) => editor.handle_file_modified(diskfile_id)}
 					/>
 				{:else}
-					<!-- TODO think this through - maybe the tabs should be more flexible than 1:1 with a diskfile? maybe `DiskfileEditorView` should have UI to create a file if there is none? -->
+					<!-- TODO think this through - maybe the tabs should be more flexible than 1:1 with a diskfile? maybe `DiskfileView` should have UI to create a file if there is none? -->
 					<div class="box height:100%">
 						<p>Something went wrong, this tab has no diskfile</p>
 					</div>

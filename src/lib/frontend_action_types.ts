@@ -153,6 +153,58 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'directory_create', 'receive_error', 'handling'>
 		) => void | Promise<void>;
 	};
+	media_finalize?: {
+		send_request?: (
+			action_event: TypedActionEvent<'media_finalize', 'send_request', 'handling'>
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: TypedActionEvent<'media_finalize', 'receive_response', 'handling'>
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: TypedActionEvent<'media_finalize', 'send_error', 'handling'>
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: TypedActionEvent<'media_finalize', 'receive_error', 'handling'>
+		) => void | Promise<void>;
+	};
+	transcription_create?: {
+		send_request?: (
+			action_event: TypedActionEvent<'transcription_create', 'send_request', 'handling'>
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: TypedActionEvent<'transcription_create', 'receive_response', 'handling'>
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: TypedActionEvent<'transcription_create', 'send_error', 'handling'>
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: TypedActionEvent<'transcription_create', 'receive_error', 'handling'>
+		) => void | Promise<void>;
+	};
+	transcription_progress?: {
+		receive?: (
+			action_event: TypedActionEvent<'transcription_progress', 'receive', 'handling'>
+		) => void | Promise<void>;
+	};
+	job_cancel?: {
+		send_request?: (
+			action_event: TypedActionEvent<'job_cancel', 'send_request', 'handling'>
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: TypedActionEvent<'job_cancel', 'receive_response', 'handling'>
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: TypedActionEvent<'job_cancel', 'send_error', 'handling'>
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: TypedActionEvent<'job_cancel', 'receive_error', 'handling'>
+		) => void | Promise<void>;
+	};
+	job_changed?: {
+		receive?: (
+			action_event: TypedActionEvent<'job_changed', 'receive', 'handling'>
+		) => void | Promise<void>;
+	};
 	completion_create?: {
 		send_request?: (
 			action_event: TypedActionEvent<'completion_create', 'send_request', 'handling'>

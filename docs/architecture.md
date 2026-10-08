@@ -31,16 +31,21 @@ export const completion_create_action_spec = {
 - `remote_notification` — Backend → frontend push (progress, broadcast). Phases: `send` → `receive`. Transport: WebSocket only
 - `local_call` — Frontend-only UI actions. Phases: `execute`. Transport: None
 
-`remote_notification` actions have two routing paths on the backend:
+`remote_notification` actions have three routing paths on the backend:
 
 - **Request-scoped** — delivered only to the originating socket, via the
   connection registry's `send_to(connection_id, …)` (or a handler's
   `ctx.notify`). Used for progress streams tied to an in-flight request
   (`completion_progress`). Specs that use this pattern set
   `streams: '<notification_method>'` to name the companion notification.
+- **Account-scoped** — delivered to every socket of one account, via the
+  connection registry's `send_to_account(account_id, …)`. Used for what
+  belongs to the account that created it: a terminal's output and exit
+  (`terminal_data`, `terminal_exited`) and a job's state and preview
+  (`job_changed`, `transcription_progress`).
 - **Broadcast** (`App::broadcast` in the Rust backend) — fanned out to all
   connected sockets. Used for server-wide events that every client needs
-  (`filer_change`, `workspace_changed`, `terminal_data`, `terminal_exited`).
+  (`filer_change`, `workspace_changed`).
 
 ### Action Spec Fields
 
@@ -451,8 +456,7 @@ Streaming progress (`completion_progress`) is
 **socket-scoped** — it routes only to the client that initiated the request,
 never broadcast. Over HTTP there's no socket, so the provider runs without
 streaming and the caller gets only the final response. `App::broadcast` is
-reserved for genuine broadcasts (`filer_change`, `terminal_data`,
-`terminal_exited`, `workspace_changed`).
+reserved for genuine broadcasts (`filer_change`, `workspace_changed`).
 
 A chunk updates only its own turn: `Turn.length` / `token_count` and
 `Thread.length` / `token_count` are summed from the parts' and turns' lengths
@@ -469,8 +473,9 @@ PTY terminals rendered by xterm.js, spawned and managed by the Rust backend's
 Actions: `terminal_create` (→ `{terminal_id}`), `terminal_data_send` (stdin),
 `terminal_resize`, and `terminal_close` (→ `{exit_code}`) are
 `request_response`; `terminal_data` (output chunks) and `terminal_exited` are
-**broadcast** `remote_notification`s — like `filer_change`, fanned out to all
-connected sockets, not socket-scoped like `completion_progress`.
+**account-scoped** `remote_notification`s — sent to every socket of the
+account that created the terminal, not to all sockets like `filer_change`
+nor to one socket like `completion_progress`.
 
 ```
 User types in xterm.js (TerminalView.svelte)
@@ -573,6 +578,82 @@ server's environment minus its secrets and config (`SECRET_*`, `FUZ_*`,
 `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, `PORT`). Terminals are pure
 in-memory process state — no persistence; a server restart ends them, and
 clients find them `lost` when they resync.
+
+## Recording
+
+`Recorder` (`recorder.svelte.ts`) is an app-level cell that records the microphone to a file on disk. Being app-level, a recording carries on across route changes; `RecorderIndicator` in the root layout shows it — status, duration, pause and stop — on every page while the microphone may be open.
+
+```
+click → Recorder.start(dir)
+          ├─ a user gesture is in effect, or it refuses
+          ├─ pick_recording_format    Opus in WebM, else Ogg, else MP4
+          ├─ getUserMedia({audio})    status: starting
+          ├─ ChunkUpload.create       POST   /api/files/bytes?path=…   (exclusive, empty)
+          └─ MediaRecorder.start(chunk_duration)                       status: recording
+dataavailable → ChunkUpload.enqueue   PATCH  /api/files/bytes?path=…&offset=N
+Recorder.stop()                                                        status: stopping
+          ├─ MediaRecorder.stop       the last chunk arrives before `stop`
+          ├─ close the microphone
+          ├─ ChunkUpload.flush        every chunk has landed
+          └─ media_finalize           remux, so the file has a duration and seeks
+```
+
+**The file is the recording.** It is created under its final name — the local time it started, like `2026-01-31_09-05-07.webm` — in the directory `start` is given (the files page passes `Diskfiles.new_files_dir`), and grows in place as chunks arrive. Nothing is buffered for the length of the recording: a crashed tab loses at most the last chunk (`chunk_duration`, a few seconds), and the file left behind still plays.
+
+**Chunks land exactly once, in order.** `ChunkUpload` (`chunk_upload.ts`) sends one chunk at a time, each as an append at the offset it expects (see [File Bytes](#file-bytes)). A request that gets no answer, or a server error, is retried with backoff; when the retry is refused because the file already grew by exactly this chunk, the first attempt landed and only its reply was lost. Any other refusal — the file changed on disk, the session ended — fails the upload, which ends the recording with the reason in `Recorder.error`.
+
+**Stopping finalizes.** A browser's `MediaRecorder` streams its output, so the file's header has no duration or seek index. Once every chunk has landed, `media_finalize` has the daemon rewrite the file in place with both (an `ffmpeg` stream copy — nothing is re-encoded). If finalizing fails the recording is kept as it is, and `Recorder.error` says so.
+
+**The microphone.** Capture starts in exactly one place, `Recorder.start`, which refuses unless a user gesture is in effect (`navigator.userActivation`; a browser without that API can't be asked, and is let through) — so it follows a click or a key press, and nothing the backend sends can open the microphone. `Recorder.active` is true from the permission prompt until the recording is saved; while it is, the indicator shows on every page and leaving the page asks first (`confirm_unload_while_recording`). Disposing the app — a logout, a session found revoked — closes the microphone and doesn't finalize; the chunks the uploader already holds, and the last one the browser hands over as it stops, are still sent. A track that ends on its own (the device unplugged, the permission revoked) stops the recording normally.
+
+The browser's side of all this — `getUserMedia`, `MediaRecorder`, `fetch`, the clock — is behind `RecorderDeps`, so tests stand in for the microphone and the network.
+
+### Playing audio
+
+The files page picks a file's view in one place, `DiskfileView`, by its content kind (`to_diskfile_content_kind` — the extension, since the file index carries no type): audio gets `DiskfileAudioView`, everything else the text editor.
+
+The audio view (with its transcript beside it — see [Transcription](#transcription)) is an `<audio>` element whose `src` is the file's byte-route URL (see [File Bytes](#file-bytes)); the browser streams and seeks with `Range` requests, so the file is never loaded into the app. A file's content being unloaded means its `content` can't show that it changed, so `Diskfile.mtime` — the disk node's modification time, kept current by every `filer_change` — keys the player: when the bytes change (a finalize, an external write) it remounts and loads them. While the recorder is writing a file, its view says so and shows no player. The view's finalize button runs `media_finalize` on the file — for a recording cut off before it was saved, which plays but has no duration.
+
+### Jobs
+
+Some work takes minutes — a transcription — and can't be tied to one request: closing the tab or dropping the socket would end it. A **job** is that work on the daemon (`crates/zzz_server/src/job_manager.rs`), reported to the frontend as it changes.
+
+- A job has an id, a kind, a status (`queued`, `running`, `succeeded`, `failed`, `cancelled`), a progress, the file it works on, the file it wrote, the command lines it ran, and — when it failed — why, with the tail of the tool's stderr (`job_types.ts`).
+- Jobs run **one at a time**, in the order they were asked for. The rest wait as `queued`.
+- A job belongs to the account that created it. Each kind has its own create action (`transcription_create`); what works on any job is generic: `job_cancel`, and the `job_changed` notification, which carries the job's whole state on every change.
+- Jobs live in the daemon's memory, like terminals: a restart forgets them. Finished ones are kept as a bounded history.
+
+On the frontend, `Jobs` (`jobs.svelte.ts`) mirrors the backend's list and holds nothing of its own: `job_changed` adds or updates a `Job` in place, and every session snapshot (`session_load`'s `jobs`) replaces the collection — so a reload shows the running job again, and after a daemon restart the list is empty. The `/jobs` page lists them plainly; the place a transcription is actually watched is the audio file's view.
+
+### Transcription
+
+`transcription_create` transcribes an audio file with a speech model that runs **on this machine** (whisper.cpp). Nothing is sent anywhere: there is no hosted transcription.
+
+```
+transcribe → transcription_create {path}         → {job_id}, a queued job
+job runs:    hash the audio (blake3)
+             ffmpeg: decode to 16 kHz mono PCM     (handles only)
+             whisper-cli: PCM on stdin
+               ├─ each segment as it's decoded   → transcription_progress
+               └─ progress                       → job_changed
+             write <name>.<model>.transcript.json  (exclusive)
+```
+
+**The transcript is a sidecar file** beside the audio (`transcript_types.ts`): timed segments, each with its words and their probabilities, plus provenance — the audio's hash and size, the backend and its version, the model and its hash, the parameters. It's tool output, so it is **written once and never edited**: the model's name is in the file name, so a better model's transcript sits beside it rather than replacing it, and transcribing again with the same model is refused until the sidecar is deleted. A sidecar is found for an audio file by its name and by what it says it was made from (`find_transcripts`) — a model's name has dots in it, so the name alone can't say.
+
+**Batch, with a preview.** The transcript is made from the finished file. The recognizer decodes in windows and reports segments as it goes, so `transcription_progress` fills in `Job.live_segments` while the job runs; when it succeeds the sidecar arrives through the file index and replaces the preview.
+
+**Reading it.** An audio file's view shows its transcript under the player — the one on disk (a picker when there are several models'), or the running job's preview — and clicking a segment plays from there; with none, a transcribe button. A sidecar opened on its own (`DiskfileTranscriptView`) shows the same segments read-only, with the audio's player when the audio is beside it.
+
+**Editing a copy.** "Edit a copy" (`transcript_to_text`) creates `<name>.md` beside the audio — a link to it, then the speech as paragraphs split at pauses — and opens it in the editor. That file is yours; the sidecar stays as the tool wrote it.
+
+**Transcribe on stop.** The recorder queues a transcription for a recording once it's saved, when its `transcribe_on_stop` toggle is on (the default). That's the person's choice, made by leaving the toggle on — nothing else starts one, and a file that merely appears in a workspace is never decoded or transcribed.
+
+A transcript's text is whatever was said near the microphone. It's rendered as text, and nothing places it in a chat, a prompt, or a terminal on its own.
+
+### The recordings page
+
+`/recordings` is the purpose-built view over the same pieces: a record button with a level meter (`Recorder.level`, read from a Web Audio analyser on the live stream), and the recordings with their transcripts' first lines. It records to `recordings/` in the app directory, so it works with no workspace open. Recordings, transcripts, and jobs are all ordinary files and cells — the files page and the jobs page show the same things raw.
 
 ## IndexedCollection
 
@@ -696,7 +777,7 @@ items.derived_index('ordered_by_name'); // derived → Array<Model>
 
 Two separate concerns:
 
-- App directory (`PUBLIC_ZZZ_DIR`) — Zzz's own files (`state/`, `cache/`, and `run/` are reserved subdirectories)
+- App directory (`PUBLIC_ZZZ_DIR`) — Zzz's own files: `cache/` holds scratch for tool runs, `recordings/` what the recordings page records, and `state/` and `run/` are reserved
 - Scoped dirs (`PUBLIC_ZZZ_SCOPED_DIRS`) — User file access (comma-separated paths)
 
 ### ScopedFs
@@ -704,6 +785,20 @@ Two separate concerns:
 All filesystem operations go through `ScopedFs` (Rust: `crates/zzz_server/src/scoped_fs.rs`). Security: paths validated against allowed roots, symlinks rejected, absolute paths required, parent directories checked recursively.
 
 The allowed roots are the permanent boot-time set (the app directory + scoped dirs) plus one runtime root per open workspace. A path is allowed when any root covers it, and removing a workspace's root never touches a permanent root — so closing a workspace opened on, nested in, or containing the app directory or a scoped dir leaves the access those roots grant intact.
+
+### File Bytes
+
+The file actions (`diskfile_update`, `diskfile_create`) carry contents as UTF-8 strings inside one JSON-RPC message, and the file index holds contents only for UTF-8 files under its size limit. Bytes have their own path: plain HTTP routes at `/api/files/bytes?path=<absolute path>` (Rust: `crates/zzz_server/src/file_bytes.rs`; `src/lib/file_bytes.ts` builds the URLs).
+
+- **Read** — `GET` returns the file's bytes and honors one `Range: bytes=` range (206, or 416 past the end), which is what a media element needs to seek. The URL works directly as an `<audio>` or `<img>` `src`: the request carries the session cookie.
+- **Create** — `POST` creates the file exclusively from the request body, like `diskfile_create`.
+- **Append** — `PATCH` with `&offset=` appends the body only if the file is exactly `offset` bytes long, and otherwise answers 409 `offset_mismatch` with the file's current `size`, having written nothing. A writer that streams a file as chunks sends each at the offset it expects: a retried chunk can't land twice, and the reply's size tells it whether the first attempt landed.
+
+Paths go through `ScopedFs`, and errors carry the same reasons as the file actions' (`path_not_allowed`, `already_exists`, …) in a flat `{error}` body. The routes need a session or a full-scope API token.
+
+A file in a workspace is untrusted content, so a read never hands the browser something to run: only allowlisted raster image, audio, and video extensions are served with their media type, and everything else — HTML, SVG, XML, scripts, text — is an `application/octet-stream` download. Every response that serves or describes a file — a read, a write's reply, a file error — carries `X-Content-Type-Options: nosniff`, a sandboxing `Content-Security-Policy`, and `Cross-Origin-Resource-Policy: same-origin`, and is never cached (`no-store`); a refusal at a gate (a bad query, no credential, an oversized body, a foreign origin) is a plain JSON error without them.
+
+These routes are outside the action system — they don't appear in the actions log or in ./reference.md.
 
 ### Filer
 
@@ -897,6 +992,10 @@ backoff. `receive_session` reconciles rather than adds:
   alone — the snapshot says nothing about them.
 - **Terminals** running when the request went out that the snapshot's
   `terminal_ids` lacks become `lost` (`Terminals.reconcile`).
+- **Jobs** are replaced with the snapshot's `jobs` (`Jobs.reconcile`): they
+  live on the backend, so its list is the truth, and after a restart it's
+  empty. A running transcription's preview segments aren't in the snapshot —
+  a reload shows the job without them until more arrive.
 
 Changes made while the request is in flight win: `filer_change` paths are
 skipped as above, workspaces opened or closed meanwhile

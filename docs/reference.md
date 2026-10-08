@@ -5,7 +5,7 @@
 Generated from `action_specs.ts` and `cell_classes.ts` by `reference.gen.ts`.
 Run `gro gen` to refresh it; `gro check` fails if it drifts. Don't edit by hand.
 
-## Action specs (21)
+## Action specs (26)
 
 The fuz_app protocol actions `heartbeat` (WS-only) and `peer/ping` are
 registered too but omitted here — they belong to the shared runtime, not zzz
@@ -18,9 +18,12 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `diskfile_delete` — Delete a file from disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `diskfile_update` — Write new content to a file on disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `filer_change` — Notifies the frontend of a file system change detected by the watcher. Kind: remote_notification. Initiator: backend. Auth: public
+- `job_cancel` — Cancel a job: a queued one never starts, the running one is stopped. A job that is already over is left as it is. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `job_changed` — A job was queued, started, progressed, or finished — its full current state. Kind: remote_notification. Initiator: backend. Auth: public
+- `media_finalize` — Rewrite a recorded media file in place so its header has a duration and a seek index (an `ffmpeg` stream copy, nothing re-encoded). The container comes from the extension: WebM, Matroska, Ogg, MP4, MP3, WAV, FLAC, or AAC. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `ping` — Health check — echoes the request ID back to the caller. Kind: request_response. Initiator: both. Auth: account=none, actor=none
 - `provider_load_status` — Check the availability and status of an AI provider. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
-- `session_load` — Load the session snapshot (files, workspaces, terminals, provider status) — at boot and after each reconnect, to resync. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `session_load` — Load the session snapshot (files, workspaces, terminals, jobs, provider status) — at boot and after each reconnect, to resync. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `terminal_close` — Kill a terminal process and return the exit code. Fails with `not_found` when the caller has no live terminal with the id. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `terminal_create` — Spawn a PTY process and return the terminal ID. A `cwd` must be absolute (`invalid_params` otherwise). Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `terminal_data` — Stream stdout/stderr bytes from a terminal to the frontend. Kind: remote_notification. Initiator: backend. Auth: public
@@ -28,11 +31,13 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `terminal_exited` — Notify the frontend that a terminal process exited naturally. Kind: remote_notification. Initiator: backend. Auth: public
 - `terminal_resize` — Update PTY dimensions for a terminal. Fails with `not_found` when the caller has no live terminal with the id. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `toggle_main_menu` — Toggle or set the visibility of the main navigation menu. Kind: local_call. Initiator: frontend. Auth: public
+- `transcription_create` — Queue a transcription of an audio file by the local speech model, and return its job. The transcript is written beside the file as `<name>.<model>.transcript.json`; fails with `conflict` (`already_exists`) if that model's transcript is already there. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `transcription_progress` — Segments a running transcription just decoded — a preview; the transcript file is written when the job succeeds. Kind: remote_notification. Initiator: backend. Auth: public
 - `workspace_changed` — Notifies frontends when a workspace is opened or closed. Kind: remote_notification. Initiator: backend. Auth: public
 - `workspace_close` — Close a workspace directory — stops file watching and removes from ScopedFs. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `workspace_list` — List all open workspaces. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `workspace_open` — Open a workspace directory — registers with ScopedFs and starts file watching. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 
-## Cell classes (33)
+## Cell classes (36)
 
-`Action`, `Actions`, `Capabilities`, `Chat`, `Chats`, `Diskfile`, `DiskfileHistory`, `DiskfilePart`, `Diskfiles`, `DiskfilesEditor`, `DiskfileTab`, `DiskfileTabs`, `Model`, `Models`, `Parts`, `Prompt`, `Prompts`, `Provider`, `Providers`, `Space`, `Spaces`, `Terminal`, `TerminalPreset`, `TerminalPresets`, `Terminals`, `TextPart`, `Thread`, `Threads`, `Time`, `Turn`, `Ui`, `Workspace`, `Workspaces`
+`Action`, `Actions`, `Capabilities`, `Chat`, `Chats`, `Diskfile`, `DiskfileHistory`, `DiskfilePart`, `Diskfiles`, `DiskfilesEditor`, `DiskfileTab`, `DiskfileTabs`, `Job`, `Jobs`, `Model`, `Models`, `Parts`, `Prompt`, `Prompts`, `Provider`, `Providers`, `Recorder`, `Space`, `Spaces`, `Terminal`, `TerminalPreset`, `TerminalPresets`, `Terminals`, `TextPart`, `Thread`, `Threads`, `Time`, `Turn`, `Ui`, `Workspace`, `Workspaces`

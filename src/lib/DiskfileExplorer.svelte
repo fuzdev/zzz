@@ -17,6 +17,7 @@
 	import SortableList from './SortableList.svelte';
 	import { sort_by_text, sort_by_numeric } from './sortable.svelte.ts';
 	import { prompt_create_diskfile } from './diskfile_helpers.ts';
+	import { icon_microphone } from './media_icons.ts';
 
 	const {
 		empty
@@ -25,7 +26,7 @@
 	} = $props();
 
 	const app = frontend_context.get();
-	const { diskfiles } = app;
+	const { diskfiles, recorder } = app;
 	const { editor } = diskfiles;
 
 	const { zzz_dir } = $derived(app);
@@ -68,6 +69,23 @@
 					onclick={() => prompt_create_diskfile(diskfiles, 'file')}
 				>
 					<Icon data={icon_create_file} />
+				</PendingButton>
+				<PendingButton
+					pending={recorder.status === 'starting'}
+					class="plain sm"
+					title={!new_files_dir
+						? 'open a workspace to record'
+						: recorder.active
+							? 'a recording is under way'
+							: `record audio to a new file in ${new_files_dir}`}
+					disabled={!new_files_dir || recorder.active}
+					onclick={() => {
+						// in the click itself: the microphone opens only on a user gesture —
+						// a failure shows in the recorder indicator
+						if (new_files_dir) recorder.start(new_files_dir).catch(() => undefined);
+					}}
+				>
+					<Icon data={icon_microphone} />
 				</PendingButton>
 				<PendingButton
 					pending={TODO_create_folder_pending}

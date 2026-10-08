@@ -227,8 +227,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * path in place — keeping its id, so tabs, selection, and parts stay attached.
 	 * A diskfile kept after a delete (see `remove_by_path`) is reattached this
 	 * way when its path reappears on disk. An existing diskfile whose content
-	 * and dependency data already match is left untouched, so a resync that
-	 * re-sends every file doesn't churn the unchanged ones. A content change is
+	 * and dependency data already match is left untouched but for its `mtime`,
+	 * so a resync that re-sends every file doesn't churn the unchanged ones. A content change is
 	 * recorded in the file's editing state, if it has one
 	 * (`DiskfileEditorState.check_disk_changes`).
 	 */
@@ -238,6 +238,9 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			return this.add(disknode_to_diskfile_json(disknode));
 		}
 		if (!existing.deleted_on_disk && diskfile_matches(existing, disknode)) {
+			// the one thing a rewrite to the same content changes — and the only
+			// sign of a change to a file whose content isn't loaded
+			if (existing.mtime !== disknode.mtime) existing.mtime = disknode.mtime;
 			return existing;
 		}
 		existing.deleted_on_disk = false;
@@ -430,10 +433,22 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		}
 		const parsed = parse_new_diskfile_name(filename, 'file');
 		if (!parsed.ok) throw new Error(parsed.message);
-		this.#select_on_arrival = null;
 
 		// `dir` has a trailing slash (`DiskfileDirectoryPath`), and the parsed name has no leading one
-		const path = DiskfilePath.parse(`${dir}${parsed.value}`);
+		await this.create_file_at(DiskfilePath.parse(`${dir}${parsed.value}`), content);
+	}
+
+	/**
+	 * Creates a new file at an absolute path — never overwriting one, like
+	 * `create_file` — and selects it, opened in a permanent tab, now or when
+	 * its `filer_change` arrives.
+	 *
+	 * @param path - the new file's absolute path
+	 * @param content - the new file's content
+	 * @throws Error when the file already exists or the write fails
+	 */
+	async create_file_at(path: DiskfilePath, content: string = ''): Promise<void> {
+		this.#select_on_arrival = null;
 
 		const result = await this.app.api.diskfile_create({ path, content });
 		if (!result.ok) {

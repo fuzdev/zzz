@@ -57,6 +57,7 @@ const create_session = (data: Partial<SessionLoadData> = {}): SessionLoadData =>
 	provider_status: [],
 	workspaces: [],
 	terminal_ids: [],
+	jobs: [],
 	server_instance_id,
 	...data
 });
