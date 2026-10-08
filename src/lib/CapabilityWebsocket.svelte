@@ -80,6 +80,7 @@
 		<div class="display:flex flex-direction:column gap_sm mb_sm">
 			<div
 				class="chip plain flex:1 font_size_xl px_xl flex-direction:column"
+				style:display="inline-flex"
 				style:align-items="start"
 				style:font-weight="400"
 				class:palette_b={capabilities.websocket.status === 'success' && socket.connected}

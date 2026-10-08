@@ -107,7 +107,7 @@
 				{/if}
 			</p>
 			{#if failure_message !== null}
-				<p class="color_c_50" role="alert">{failure_message}</p>
+				<p class="color_c_60" role="alert">{failure_message}</p>
 			{/if}
 			<div class="display:flex gap_sm flex-wrap:wrap">
 				<button

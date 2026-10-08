@@ -132,7 +132,7 @@
 			</button>
 		</form>
 		{#if error_message}
-			<p class="color_c_50 mt_sm">{error_message}</p>
+			<p class="color_c_60 mt_sm">{error_message}</p>
 		{/if}
 	</section>
 

@@ -23,8 +23,8 @@
 	<div class="display:flex">
 		<div
 			class="chip px_xl plain font-weight:400 width_atmost_sm"
-			style:padding="0 var(--space_xl) !important"
-			style:font-weight="400 !important"
+			style:padding="0 var(--space_xl)"
+			style:font-weight="400"
 			class:palette_b={capabilities.backend.status === 'success'}
 			class:palette_c={capabilities.backend.status === 'failure'}
 			class:palette_d={capabilities.backend.status === 'pending'}

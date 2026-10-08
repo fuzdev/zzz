@@ -62,9 +62,9 @@
 			<form class="flex:1">
 				<div
 					class="width:100% chip plain flex:1 flex-direction:column mb_lg"
-					style:display="display:flex !important"
-					style:align-items="flex-start !important"
-					style:font-weight="400 !important"
+					style:display="inline-flex"
+					style:align-items="flex-start"
+					style:font-weight="400"
 					class:palette_b={capability.status === 'success'}
 					class:palette_c={capability.status === 'failure'}
 					class:palette_d={capability.status === 'pending' || checking}

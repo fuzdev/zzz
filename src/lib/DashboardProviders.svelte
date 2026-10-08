@@ -25,9 +25,9 @@
 					<Icon data={icon_provider} />
 					{provider.name}
 					{#if provider.available}
-						<span class="color_b_50 ml_sm"><Icon data={icon_checkmark} /> available</span>
+						<span class="color_b_60 ml_sm"><Icon data={icon_checkmark} /> available</span>
 					{:else}
-						<span class="color_c_50 ml_sm">
+						<span class="color_c_60 ml_sm">
 							<Icon data={icon_error} />
 							{provider.status && !provider.status.available
 								? provider.status.error

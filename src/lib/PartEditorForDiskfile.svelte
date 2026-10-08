@@ -66,11 +66,11 @@
 {#if diskfile && editor_state}
 	<div>
 		{#if !editor_state.content_loaded}
-			<p class="mb_xs color_c_50">
+			<p class="mb_xs color_c_60">
 				<small>{DISKFILE_CONTENT_NOT_LOADED_MESSAGE} — read-only</small>
 			</p>
 		{:else if diskfile.deleted_on_disk}
-			<p class="mb_xs color_c_50">
+			<p class="mb_xs color_c_60">
 				<small>
 					deleted on disk — save to recreate it with your edits, or
 					<button

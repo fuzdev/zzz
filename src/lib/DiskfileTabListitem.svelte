@@ -82,7 +82,7 @@
 			<div class="ellipsis font-weight:400 flex:1">
 				<small class="ml_xs">{path}</small>
 				{#if deleted_on_disk}
-					<small class="ml_xs color_c_50" aria-hidden="true">(deleted)</small>
+					<small class="ml_xs color_c_60" aria-hidden="true">(deleted)</small>
 				{/if}
 				{#if dirty}
 					<small class="ml_xs" class:color_c_50={conflict} aria-hidden="true">●</small>

@@ -79,7 +79,7 @@
 			<span>saving the recording…</span>
 			<span class="font_family_mono">{duration_text}</span>
 		{:else if error !== null}
-			<span class="color_c_50">recording: {error}</span>
+			<span class="color_c_60">recording: {error}</span>
 			<button
 				type="button"
 				class="plain sized_sm"

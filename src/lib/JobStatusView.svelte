@@ -35,7 +35,7 @@
 
 <div class="job-status">
 	<div class="row gap_sm flex-wrap:wrap">
-		<span class="chip" class:color_c_50={job.status === 'failed'}>{job.status}</span>
+		<span class="chip" class:color_c_60={job.status === 'failed'}>{job.status}</span>
 		<span>{job.kind}</span>
 		{#if show_input}
 			<small class="word-break:break-all" title={job.input_path}>
@@ -57,10 +57,10 @@
 		{/if}
 	</div>
 	{#if cancel_error !== null}
-		<p class="color_c_50 mb_0">couldn't cancel: {cancel_error}</p>
+		<p class="color_c_60 mb_0">couldn't cancel: {cancel_error}</p>
 	{/if}
 	{#if job.error !== null}
-		<p class="color_c_50 mb_0">{job.error}</p>
+		<p class="color_c_60 mb_0">{job.error}</p>
 	{/if}
 	{#if job.stderr}
 		<pre class="stderr font_size_sm">{job.stderr}</pre>

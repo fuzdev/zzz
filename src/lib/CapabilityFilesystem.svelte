@@ -17,9 +17,9 @@
 
 <div
 	class="chip plain flex:1 font_size_xl px_xl flex-direction:column mb_xl width_atmost_sm"
-	style:display="display:flex !important"
-	style:align-items="flex-start !important"
-	style:font-weight="400 !important"
+	style:display="inline-flex"
+	style:align-items="flex-start"
+	style:font-weight="400"
 	class:palette_b={capabilities.filesystem.status === 'success'}
 	class:palette_c={capabilities.filesystem.status === 'failure'}
 	class:palette_d={capabilities.filesystem.status === 'pending'}

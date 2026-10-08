@@ -98,7 +98,7 @@
 							icon_props={{ size: 'var(--font_size_sm)' }}
 							label="name"
 						/>{#if provider_error}
-							<span class="color_c_50 ml_sm"><Icon data={icon_error} /> {provider_error}</span>
+							<span class="color_c_60 ml_sm"><Icon data={icon_error} /> {provider_error}</span>
 						{/if}
 					</small>
 				</header>

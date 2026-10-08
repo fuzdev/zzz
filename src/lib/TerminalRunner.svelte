@@ -102,6 +102,6 @@
 		flex-direction: column;
 		gap: var(--space_sm);
 		padding: var(--space_md);
-		border-top: 1px solid var(--border_color, #333);
+		border-top: 1px solid var(--border_color);
 	}
 </style>

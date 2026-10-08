@@ -42,11 +42,13 @@
 						{/each}
 					</div>
 					<div class="display:flex gap_md">
-						<small class="chip">
+						<small class="chip font_size_sm">
 							{project.pages.length}
 							{project.pages.length === 1 ? 'page' : 'pages'}
 						</small>
-						<small class="chip">updated {new Date(project.updated).toLocaleDateString()}</small>
+						<small class="chip font_size_sm">
+							updated {new Date(project.updated).toLocaleDateString()}
+						</small>
 					</div>
 				</a>
 			{/each}

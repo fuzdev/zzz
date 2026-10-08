@@ -110,8 +110,8 @@
 
 <style>
 	.terminal-run-item {
-		border: 1px solid var(--border_color, #333);
-		border-radius: var(--border_radius, 4px);
+		border: 1px solid var(--border_color);
+		border-radius: var(--border_radius_xs2);
 		overflow: hidden;
 	}
 	.run-header {
@@ -131,20 +131,20 @@
 		font-size: var(--font_size_sm);
 	}
 	.running {
-		color: var(--palette_a_50, #8f8);
+		color: var(--palette_a_60);
 	}
 	.exit-code {
 		opacity: 0.6;
 	}
 	.exit-code.error {
-		color: var(--palette_c_50, #f88);
+		color: var(--palette_c_60);
 	}
 	.restart-button,
 	.remove-button {
 		font-size: var(--font_size_sm);
 	}
 	.error-message {
-		color: var(--palette_c_50, #f88);
+		color: var(--palette_c_60);
 		padding: var(--space_xs) var(--space_sm);
 		margin: 0;
 		font-size: var(--font_size_sm);
@@ -156,7 +156,7 @@
 		display: flex;
 		gap: var(--space_xs);
 		padding: var(--space_xs) var(--space_sm);
-		border-top: 1px solid var(--border_color, #333);
+		border-top: 1px solid var(--border_color);
 		background: var(--fg_10);
 	}
 	.stdin-input input {

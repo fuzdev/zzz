@@ -59,7 +59,7 @@
 	{href}
 	target={new_tab ? (rest.target ?? '_blank') : rest.target}
 	{rel}
-	class:color_i_50={true}
+	class:color_i_60={true}
 >
 	{#if children}{@render children()}{:else}{href}{/if}<ExternalLinkIcon>
 		{#snippet children(external_icon)}

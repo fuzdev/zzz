@@ -210,7 +210,7 @@
 		</p>
 		<aside>
 			⚠️ I am not a security professional and Zzz has not been audited; it may be
-			<strong class="color_c_50">dangerous</strong> to run
+			<strong class="color_c_60">dangerous</strong> to run
 		</aside>
 		<p>
 			Much of the reusable security framework now exists — Zzz runs on
@@ -240,7 +240,7 @@
 					</li>
 					<li>
 						authentication is cookie sessions and bearer tokens with a one-shot bootstrap flow, plus
-						an origin allowlist -- it's young and <strong class="color_c_50">unaudited</strong>, so
+						an origin allowlist -- it's young and <strong class="color_c_60">unaudited</strong>, so
 						do not use this in production
 					</li>
 					<li>

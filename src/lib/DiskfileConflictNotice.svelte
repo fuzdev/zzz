@@ -31,7 +31,7 @@
 <!-- TODO a "compare" diff view, once zzz has one — for now both versions are in the history -->
 {#if editor_state.has_conflict}
 	<div {...attrs} role="alert" tabindex="-1" bind:this={notice_el}>
-		<small class="color_c_50">
+		<small class="color_c_60">
 			changed on disk since you edited it — saving is paused so that change isn't overwritten; both
 			versions are in the history
 		</small>

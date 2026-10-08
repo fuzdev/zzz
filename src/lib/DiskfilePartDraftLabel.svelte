@@ -16,7 +16,7 @@
 </script>
 
 {#if label}
-	<small class="color_c_50" title="the prompt sends this unsaved draft, not the file on disk">
+	<small class="color_c_60" title="the prompt sends this unsaved draft, not the file on disk">
 		({label})
 	</small>
 {/if}

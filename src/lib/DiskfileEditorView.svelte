@@ -51,11 +51,11 @@
 	<div class="display:flex height:100%">
 		<div class="flex:1 width_atleast_sm height:100% column">
 			{#if !editor_state.content_loaded}
-				<p class="px_md py_xs mb_0 color_c_50">
+				<p class="px_md py_xs mb_0 color_c_60">
 					{DISKFILE_CONTENT_NOT_LOADED_MESSAGE} — read-only, it can't be edited or saved
 				</p>
 			{:else if diskfile.deleted_on_disk}
-				<p class="px_md py_xs mb_0 color_c_50">
+				<p class="px_md py_xs mb_0 color_c_60">
 					{#if editor_state.has_unsaved_edits}
 						deleted on disk — save to recreate it with your edits, or
 						<button

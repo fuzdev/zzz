@@ -1,9 +1,20 @@
 <script lang="ts">
 	import 'virtual:fuz.css';
+	// the fuz_css plugin doesn't scan `.css` files, so declare every theme variable the imported
+	// stylesheets read - first fuz_code's `theme.css`
+	// @fuz-variables palette_a_50 palette_b_50 palette_d_50 palette_e_50 palette_f_50
+	// @fuz-variables palette_g_50 palette_h_50 palette_i_50 palette_j_50 text_50
 	import '@fuzdev/fuz_code/theme.css';
-	// the fuz_css plugin doesn't scan `.css` files, so declare the variables only `style.css` reads
-	// @fuz-variables shadow_sm palette_a_40 palette_b_40 palette_c_40 palette_d_40
-	// @fuz-variables palette_e_40 palette_f_40 palette_g_40 palette_h_40 palette_i_40
+	// then zzz's own `style.css`
+	// @fuz-variables border_color_30 border_radius_xs2 border_width_1 border_width_2
+	// @fuz-variables outline_color outline_width
+	// @fuz-variables distance_sm font_family_sans font_size_sm input_height
+	// @fuz-variables space_xs space_sm space_md space_xl7
+	// @fuz-variables shade_10 shade_20 shade_30 shade_60 text_70 text_80 text_90 text_color
+	// @fuz-variables palette_a_50
+	// @fuz-variables shadow_sm shadow_bottom_xs shadow_bottom_xl
+	// @fuz-variables shadow_inset_top_xs shadow_inset_top_sm shadow_inset_bottom_xs
+	// @fuz-variables shadow_color_umbra shadow_alpha_30 shadow_alpha_40
 	import './style.css';
 
 	import { untrack } from 'svelte';

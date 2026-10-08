@@ -110,7 +110,7 @@
 	<div class="display:flex height:100%">
 		<div class="flex:1 width_atleast_sm height:100% column p_md gap_md overflow:auto">
 			{#if diskfile.deleted_on_disk}
-				<p class="color_c_50">deleted on disk</p>
+				<p class="color_c_60">deleted on disk</p>
 			{:else if recording}
 				<p class="row gap_sm">
 					<span>recording to this file</span>
@@ -120,7 +120,7 @@
 					</button>
 				</p>
 			{:else if url === null}
-				<p class="color_c_50">no backend to play this file from</p>
+				<p class="color_c_60">no backend to play this file from</p>
 			{:else}
 				<!-- remounted when the file's bytes change, so it loads them -->
 				{#key diskfile.mtime}
@@ -138,14 +138,14 @@
 					></audio>
 				{/key}
 				{#if playback_failed}
-					<p class="color_c_50">
+					<p class="color_c_60">
 						the browser couldn't play this file — it may not be audio, or use a codec the browser
 						lacks
 					</p>
 				{/if}
 			{/if}
 			{#if finalize_error !== null}
-				<p class="color_c_50">couldn't finalize: {finalize_error}</p>
+				<p class="color_c_60">couldn't finalize: {finalize_error}</p>
 			{/if}
 
 			{#if !recording && !diskfile.deleted_on_disk}
@@ -196,7 +196,7 @@
 							</button>
 						</div>
 						{#if copy_error !== null}
-							<p class="color_c_50">couldn't create the copy: {copy_error}</p>
+							<p class="color_c_60">couldn't create the copy: {copy_error}</p>
 						{/if}
 						{#if selected.transcript.segments.length > 0}
 							<TranscriptSegments
@@ -219,7 +219,7 @@
 							<small class="text_50">runs on this machine — the audio is sent nowhere</small>
 						</div>
 						{#if transcribe_error !== null}
-							<p class="color_c_50">couldn't start: {transcribe_error}</p>
+							<p class="color_c_60">couldn't start: {transcribe_error}</p>
 						{:else if job}
 							<!-- the last attempt, failed or cancelled -->
 							<JobStatusView {job} />

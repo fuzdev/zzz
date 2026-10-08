@@ -137,7 +137,7 @@
 					</ConfirmButton>
 				</div>
 				{#if copy_error !== null}
-					<p class="px_md color_c_50">couldn't create the copy: {copy_error}</p>
+					<p class="px_md color_c_60">couldn't create the copy: {copy_error}</p>
 				{/if}
 
 				<div class="px_md mb_lg display:flex flex-direction:column gap_xs width:100%">

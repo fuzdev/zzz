@@ -195,7 +195,7 @@
 						<div
 							class="font_family_mono flex:1 display:flex flex-wrap:wrap align-items:center gap_xs"
 						>
-							<small class="chip">{message_type}</small>
+							<small class="chip font_size_sm">{message_type}</small>
 
 							<CopyToClipboard
 								text={message.id}
@@ -214,7 +214,7 @@
 									{/if}
 								{/snippet}
 							</CopyToClipboard>
-							<small class="chip">{message.data.method}</small>
+							<small class="chip font_size_sm">{message.data.method}</small>
 							<CopyToClipboard
 								text={message.data.id}
 								class="plain font_size_xs text_50"

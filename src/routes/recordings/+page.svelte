@@ -125,12 +125,12 @@
 			<span>transcribe when a recording stops</span>
 		</label>
 		{#if recorder.error !== null}
-			<p class="color_c_50 mb_0 mt_sm">{recorder.error}</p>
+			<p class="color_c_60 mb_0 mt_sm">{recorder.error}</p>
 		{/if}
 	</section>
 
 	{#if error_message !== null}
-		<p class="color_c_50">{error_message}</p>
+		<p class="color_c_60">{error_message}</p>
 	{/if}
 
 	{#if recordings.length === 0}
@@ -147,7 +147,7 @@
 							{to_name(diskfile.path)}
 						</button>
 						{#if is_recording}
-							<small class="chip">recording</small>
+							<small class="chip font_size_sm">recording</small>
 						{:else if job && !job.finished}
 							<!-- shown below -->
 						{:else if transcripts.length > 0}

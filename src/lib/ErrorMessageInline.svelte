@@ -13,7 +13,7 @@
 	} = $props();
 </script>
 
-<span class="color_c_50">
+<span class="color_c_60">
 	{#if icon}
 		<Icon data={icon} />
 	{/if}
