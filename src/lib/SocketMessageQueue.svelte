@@ -179,14 +179,14 @@
 					class="message-item p_sm {selected ? 'selected shade_20' : ''} {queued_messages.indexOf(
 						message
 					) > 0
-						? 'border_top border-style:solid border_color_30'
+						? 'border-top-width:var(--border_width_1) border-style:solid border_color_30'
 						: ''}"
 				>
 					<!-- Message header with metadata and actions -->
 					<div class="display:flex gap_xs align-items:center flex-wrap:wrap">
 						<input
 							type="checkbox"
-							class="m_0 plain sm font_size_md"
+							class="m_0 plain sized_sm font_size_md"
 							checked={selected}
 							onclick={(e) => toggle_queued_message_selection(message.id, e.currentTarget.checked)}
 						/>
@@ -265,7 +265,7 @@
 											</button>
 										</div>
 										<pre
-											class="shade_10 border_radius_xs border_width border_style border_color_20 font_family_mono font_size_xs white-space:pre-wrap word-break:break-word p_md"
+											class="shade_10 border_radius_xs border_width_1 border-style:solid border_color_20 font_family_mono font_size_xs white-space:pre-wrap word-break:break-word p_md"
 										>{message_data_serialized}</pre>
 										<CopyToClipboard text={message_data_serialized} />
 									</div>
@@ -306,7 +306,7 @@
 							</div>
 							<div class="display:flex justify-content:space-between">
 								<span>Reason:</span>
-								<span class="font_family_mono palette_c">{failed_message.reason}</span>
+								<span class="font_family_mono color_c_60">{failed_message.reason}</span>
 							</div>
 						</div>
 					{/if}
@@ -338,6 +338,6 @@
 	}
 
 	.message-item.selected {
-		border-left: 2px solid var(--palette_a);
+		border-left: 2px solid var(--accent_50);
 	}
 </style>

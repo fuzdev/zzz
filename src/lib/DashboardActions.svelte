@@ -36,7 +36,7 @@
 	<p class="row gap_sm">
 		<button
 			type="button"
-			class="sm"
+			class="sized_sm"
 			onclick={() => {
 				actions.items.clear();
 			}}
@@ -44,7 +44,7 @@
 		>
 			clear action history
 		</button>
-		<button type="button" class="sm" onclick={() => app.api.ping()}>ping</button>
+		<button type="button" class="sized_sm" onclick={() => app.api.ping()}>ping</button>
 	</p>
 
 	<div

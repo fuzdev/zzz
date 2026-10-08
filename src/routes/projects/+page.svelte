@@ -54,7 +54,7 @@
 			Here's a very rough sketch of
 			<button
 				type="button"
-				class="inline sm palette_g"
+				class="inline sized_sm palette_g"
 				onclick={() => {
 					projects.previewing = !projects.previewing;
 				}}

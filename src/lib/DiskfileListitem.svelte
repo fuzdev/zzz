@@ -37,7 +37,7 @@
 	<div
 		role="button"
 		tabindex="0"
-		class="menuitem sm ellipsis cursor_pointer"
+		class="menuitem sized_sm ellipsis"
 		class:selected
 		{...attrs}
 		onclick={onselect

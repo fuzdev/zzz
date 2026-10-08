@@ -48,7 +48,7 @@
 				<div class="row gap_xs">
 					<button
 						type="button"
-						class="sm"
+						class="sized_sm"
 						aria-disabled={app.session_status === 'pending'}
 						onclick={() => app.load_session()}
 					>

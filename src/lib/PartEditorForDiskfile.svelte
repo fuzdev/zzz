@@ -53,7 +53,7 @@
 	{/if}
 	<button
 		type="button"
-		class="plain sm"
+		class="plain sized_sm"
 		onclick={() => {
 			show_file_picker = true;
 		}}
@@ -75,7 +75,7 @@
 					deleted on disk — save to recreate it with your edits, or
 					<button
 						type="button"
-						class="inline sm"
+						class="inline sized_sm"
 						onclick={() => editor_state?.discard_draft()}
 						title="discard the unsaved edits and forget the file"
 					>

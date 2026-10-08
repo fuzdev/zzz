@@ -86,7 +86,7 @@
 				<header>
 					<button
 						type="button"
-						class="plain sm font_size_lg text-align:left font-weight:400"
+						class="plain sized_sm font_size_lg text-align:left font-weight:400"
 						onclick={() => (show_model_picker = true)}
 					>
 						{thread.model?.name ?? thread.model_name}

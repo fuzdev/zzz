@@ -90,7 +90,7 @@
 			</div>
 			<button
 				type="button"
-				class="tab-close-button plain icon-button sm border_radius_md ml_sm"
+				class="tab-close-button plain icon-button sized_sm border_radius_md ml_sm"
 				onclick={(e) => {
 					swallow(e);
 					onclose(tab);

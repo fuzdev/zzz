@@ -63,7 +63,7 @@
 </form>
 
 {#snippet ping_item(ping: PingData)}
-	<Icon data={icon_action_request_response} class={ping.completed ? '' : 'opacity_40'} />
+	<Icon data={icon_action_request_response} class={ping.completed ? '' : 'opacity:40%'} />
 	{#if !ping.completed}
 		<span class="font_family_mono">
 			<PendingAnimation inline />

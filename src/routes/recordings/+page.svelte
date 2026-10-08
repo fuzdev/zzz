@@ -155,7 +155,7 @@
 								transcribed by {transcripts.map((t) => t.transcript.tool.model).join(', ')}
 							</small>
 						{:else}
-							<button type="button" class="plain sm" onclick={() => transcribe(diskfile)}>
+							<button type="button" class="plain sized_sm" onclick={() => transcribe(diskfile)}>
 								transcribe
 							</button>
 						{/if}

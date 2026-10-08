@@ -115,7 +115,7 @@
 				<p class="row gap_sm">
 					<span>recording to this file</span>
 					<span class="font_family_mono">{format_recording_duration(recorder.duration)}</span>
-					<button type="button" class="sm" onclick={() => recorder.stop()}>
+					<button type="button" class="sized_sm" onclick={() => recorder.stop()}>
 						<Icon data={icon_stop} /> <span class="ml_xs">stop</span>
 					</button>
 				</p>
@@ -161,7 +161,7 @@
 								transcript by
 								{#if transcripts.length > 1}
 									<select
-										class="inline sm"
+										class="inline sized_sm"
 										value={selected.file.path}
 										onchange={(e) => {
 											selected_path = e.currentTarget.value;
@@ -180,7 +180,7 @@
 							</small>
 							<button
 								type="button"
-								class="plain sm"
+								class="plain sized_sm"
 								title="create a text file from this transcript and open it — the transcript itself is never edited"
 								onclick={edit_a_copy}
 							>
@@ -188,7 +188,7 @@
 							</button>
 							<button
 								type="button"
-								class="plain sm"
+								class="plain sized_sm"
 								title="open the transcript file"
 								onclick={() => diskfiles.select(selected.file.id, true)}
 							>
@@ -259,7 +259,7 @@
 			</div>
 
 			<div class="px_md mb_lg display:flex flex-direction:column gap_xs width:100%">
-				<small class="overflow_wrap_break_all width:100%">
+				<small class="word-break:break-all width:100%">
 					<Icon data={icon_file} />
 					{app.diskfiles.to_relative_path(diskfile.path)}
 				</small>

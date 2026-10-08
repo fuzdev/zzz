@@ -53,7 +53,7 @@
 		</div>
 	{/if}
 
-	<div class="display:flex justify_content_between mt_lg">
+	<div class="display:flex justify-content:space-between mt_lg">
 		<button type="button" class="palette_a" onclick={() => projects.create_new_project()}>
 			<Icon data={icon_add} />&nbsp; new project
 		</button>

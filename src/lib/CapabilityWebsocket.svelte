@@ -189,7 +189,7 @@
 				<label class="display:flex gap_xs align-items:center my_sm">
 					<input
 						type="checkbox"
-						class="sm font_size_sm"
+						class="sized_sm font_size_sm"
 						bind:checked={
 							() => socket.auto_reconnect,
 							(v) => {
@@ -220,7 +220,7 @@
 							<Icon data={icon_cancel} />
 						</button>
 						<div
-							class="bg_d_5 width:100% border_radius_xs position:relative overflow:hidden font-weight:600"
+							class="bg_d_50 width:100% border_radius_xs position:relative overflow:hidden font-weight:600"
 							style:height="24px"
 						>
 							<div
@@ -231,7 +231,7 @@
 							</div>
 							{#key socket.reconnect_attempt}
 								<div
-									class="progress-fill bg_d_6"
+									class="progress-fill bg_d_60"
 									style:animation-duration="{socket.current_reconnect_delay}ms"
 								></div>
 							{/key}
@@ -307,7 +307,10 @@
 			</div>
 
 			<div class="display:flex justify-content:end">
-				<ConfirmButton onconfirm={reset_to_defaults} class="plain font_size_sm sm font-weight:600">
+				<ConfirmButton
+					onconfirm={reset_to_defaults}
+					class="plain font_size_sm sized_sm font-weight:600"
+				>
 					reset to defaults
 
 					{#snippet popover_content(popover)}
@@ -331,7 +334,9 @@
 
 <div class="display:flex gap_xl5">
 	<!-- Connection Stats with retries included -->
-	<div class="width_atmost_xs mt_md border_top pt_md">
+	<div
+		class="width_atmost_xs mt_md border-top:var(--border_width_1)~var(--border_style)~var(--border_color) pt_md"
+	>
 		<div class="display:flex flex-direction:column gap_sm mb_sm">
 			{#if socket.reconnect_count > 0}
 				<div class="display:flex justify-content:space-between" transition:slide>
@@ -376,7 +381,10 @@
 
 <!-- Message Queue Stats -->
 {#if socket.queued_message_count > 0 || socket.failed_message_count > 0}
-	<div class="mt_md border_top pt_md" transition:slide>
+	<div
+		class="mt_md border-top:var(--border_width_1)~var(--border_style)~var(--border_color) pt_md"
+		transition:slide
+	>
 		<h4 class="mt_0 mb_sm">message queue</h4>
 
 		<div class="display:flex flex-direction:column gap_md mb_sm">

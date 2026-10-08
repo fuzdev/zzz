@@ -68,7 +68,7 @@
 			{#if action.action_event_data?.error}
 				<tr>
 					<td>error</td>
-					<td class="font_family_mono palette_c">
+					<td class="font_family_mono color_c_60">
 						{JSON.stringify(action.action_event_data.error)}
 					</td>
 				</tr>

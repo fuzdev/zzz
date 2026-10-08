@@ -38,7 +38,7 @@
 		<div class="display:flex gap_xs mt_xs">
 			<button
 				type="button"
-				class="sm"
+				class="sized_sm"
 				disabled={editor_state.saving}
 				title={editor_state.has_unsaved_edits
 					? 'show your draft and save it over the file on disk'
@@ -55,7 +55,7 @@
 			</button>
 			<button
 				type="button"
-				class="sm"
+				class="sized_sm"
 				title="show the file on disk, keeping your edit in the history"
 				onclick={() => {
 					editor_state.discard_draft();

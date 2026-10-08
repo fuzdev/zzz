@@ -47,7 +47,7 @@
 		{#if children_prop}
 			{@render children_prop()}
 		{/if}
-		<button type="button" class="listitem sm width:100%" onclick={() => pick(model)}>
+		<button type="button" class="listitem sized_sm width:100%" onclick={() => pick(model)}>
 			<ModelListitem {model} />
 		</button>
 	{/snippet}

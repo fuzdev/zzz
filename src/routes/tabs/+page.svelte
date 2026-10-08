@@ -47,7 +47,7 @@
 				onclick={() => (browser.browserified = !browser.browserified)}
 				class:palette_i={!browser.browserified}
 				class:palette_h={browser.browserified}
-				class="inline sm"
+				class="inline sized_sm"
 			>
 				{browser.browserified ? 'un' : ''}browserify!
 			</button>
@@ -58,7 +58,7 @@
 			<code>[backtick `]</code> to
 			<button
 				type="button"
-				class="inline sm"
+				class="inline sized_sm"
 				class:palette_d={app.ui.show_sidebar}
 				class:palette_f={!app.ui.show_sidebar}
 				onclick={() => {

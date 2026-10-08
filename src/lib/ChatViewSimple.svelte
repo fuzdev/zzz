@@ -28,8 +28,7 @@
 	>
 		<!-- the two `p_sm` are expected to stay in sync so the size is the same regardless of presentation style -->
 		<div
-			class="column width_atmost_md width_atleast_sm"
-			class:height_100={!empty}
+			class="column width_atmost_md width_atleast_sm {empty ? '' : 'height:100%'}"
 			class:p_sm={!empty}
 		>
 			<!-- keyed so component-local state (like the editor's clear/restore value)

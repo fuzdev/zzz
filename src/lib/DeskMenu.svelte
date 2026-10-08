@@ -62,7 +62,7 @@
 					</h2>
 					<button
 						type="button"
-						class="icon-button compact"
+						class="icon-button sized_sm"
 						class:selected={app.ui.desk_pinned}
 						title={app.ui.desk_pinned ? 'unpin desk' : 'pin desk'}
 						onclick={() => app.ui.toggle_desk_pinned()}
@@ -90,7 +90,7 @@
 							{#if space !== app.spaces.scratchpad}
 								<ConfirmButton
 									onconfirm={() => app.spaces.remove(space.id)}
-									class="icon-button compact plain deselectable"
+									class="icon-button sized_sm plain deselectable"
 									title="delete space"
 								>
 									<Icon data={icon_delete} />

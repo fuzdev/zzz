@@ -60,7 +60,7 @@
 						deleted on disk — save to recreate it with your edits, or
 						<button
 							type="button"
-							class="inline sm"
+							class="inline sized_sm"
 							title="discard the unsaved edits and forget the file once its tab closes"
 							onclick={() => editor_state.discard_draft()}
 						>

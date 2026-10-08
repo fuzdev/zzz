@@ -61,7 +61,7 @@
 			<div class="display:flex gap_xs2">
 				<PendingButton
 					pending={TODO_create_file_pending}
-					class="plain sm"
+					class="plain sized_sm"
 					title={new_files_dir
 						? `create file in ${new_files_dir}`
 						: 'open a workspace to create files'}
@@ -72,7 +72,7 @@
 				</PendingButton>
 				<PendingButton
 					pending={recorder.status === 'starting'}
-					class="plain sm"
+					class="plain sized_sm"
 					title={!new_files_dir
 						? 'open a workspace to record'
 						: recorder.active
@@ -89,7 +89,7 @@
 				</PendingButton>
 				<PendingButton
 					pending={TODO_create_folder_pending}
-					class="plain sm"
+					class="plain sized_sm"
 					title={new_files_dir
 						? `create folder in ${new_files_dir}`
 						: 'open a workspace to create folders'}
@@ -101,7 +101,7 @@
 				{#if diskfiles.listed.length > 1}
 					<button
 						type="button"
-						class="plain sm selectable deselectable"
+						class="plain sized_sm selectable deselectable"
 						class:selected={editor.show_sort_controls}
 						title="toggle sort controls"
 						onclick={() => editor.toggle_sort_controls()}

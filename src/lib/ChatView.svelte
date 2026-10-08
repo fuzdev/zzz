@@ -60,7 +60,7 @@
 								}
 								active_content="simple"
 								inactive_content="multi"
-								class="plain sm"
+								class="plain sized_sm"
 								title="toggle chat to {chat.view_mode === 'multi' ? 'simple' : 'multi'} view"
 							>
 								<Icon data={icon_view} class="mr_xs" />

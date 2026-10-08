@@ -47,7 +47,7 @@
 		min={bounds.min}
 		max={range_max}
 		{step}
-		class="flex:1 sm plain"
+		class="flex:1 sized_sm plain"
 		{value}
 		oninput={(e) => commit(e.currentTarget)}
 	/>
@@ -57,7 +57,7 @@
 		min={bounds.min}
 		max={bounds.max}
 		{step}
-		class="input-xs sm plain"
+		class="input-xs sized_sm plain"
 		{value}
 		onchange={(e) => commit(e.currentTarget)}
 	/>

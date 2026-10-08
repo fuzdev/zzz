@@ -38,7 +38,7 @@
 		<span class="chip" class:color_c_50={job.status === 'failed'}>{job.status}</span>
 		<span>{job.kind}</span>
 		{#if show_input}
-			<small class="overflow_wrap_break_all" title={job.input_path}>
+			<small class="word-break:break-all" title={job.input_path}>
 				{app.diskfiles.to_relative_path(job.input_path) || job.input_path}
 			</small>
 		{/if}
@@ -53,7 +53,7 @@
 			<small class="text_50">ran {format_recording_duration(job.run_duration)}</small>
 		{/if}
 		{#if job.cancellable}
-			<button type="button" class="plain sm" onclick={cancel}>cancel</button>
+			<button type="button" class="plain sized_sm" onclick={cancel}>cancel</button>
 		{/if}
 	</div>
 	{#if cancel_error !== null}

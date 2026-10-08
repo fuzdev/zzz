@@ -22,7 +22,7 @@
 				</p>
 				<button
 					type="button"
-					class="sm"
+					class="sized_sm"
 					onclick={() => {
 						app.ui.tutorial_for_prompts = false;
 					}}

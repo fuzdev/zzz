@@ -32,7 +32,7 @@
 	onconfirm={() => {
 		owner.remove_part(part.id);
 	}}
-	class="plain sm"
+	class="plain sized_sm"
 	title={label ? `remove part ${label}` : 'remove part'}
 >
 	<Icon data={icon_remove} />

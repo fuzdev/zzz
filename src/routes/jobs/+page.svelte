@@ -37,7 +37,7 @@
 					<div class="row gap_sm mt_xs">
 						<button
 							type="button"
-							class="plain sm"
+							class="plain sized_sm"
 							disabled={!app.diskfiles.get_by_path(job.input_path)}
 							onclick={() => open_file(job.input_path)}
 						>
@@ -47,7 +47,7 @@
 							{@const output_path = job.output_path}
 							<button
 								type="button"
-								class="plain sm"
+								class="plain sized_sm"
 								disabled={!app.diskfiles.get_by_path(output_path)}
 								onclick={() => open_file(output_path)}
 							>

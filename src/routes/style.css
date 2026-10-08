@@ -44,11 +44,11 @@ input[type='text'] {
 }
 
 /* TODO upstream these? */
-input[type='checkbox'].sm {
+input[type='checkbox'].sized_sm {
 	height: var(--input_height);
 	min-height: var(--input_height);
 }
-input[type='checkbox'].sm:not(:hover)::before {
+input[type='checkbox'].sized_sm:not(:hover)::before {
 	color: var(--text_70);
 }
 

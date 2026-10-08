@@ -30,7 +30,7 @@
 		{#if status === 'starting'}
 			<span class="dot"></span>
 			<span>opening the microphone…</span>
-			<button type="button" class="plain sm" title="cancel" onclick={() => recorder.stop()}>
+			<button type="button" class="plain sized_sm" title="cancel" onclick={() => recorder.stop()}>
 				<Icon data={icon_close} />
 			</button>
 		{:else if status === 'recording' || status === 'paused'}
@@ -44,13 +44,13 @@
 				class="row gap_xs3 mb_0"
 				title="transcribe the recording, on this machine, once it's saved"
 			>
-				<input type="checkbox" class="sm" bind:checked={recorder.transcribe_on_stop} />
+				<input type="checkbox" class="sized_sm" bind:checked={recorder.transcribe_on_stop} />
 				<small>transcribe</small>
 			</label>
 			{#if status === 'recording'}
 				<button
 					type="button"
-					class="plain sm"
+					class="plain sized_sm"
 					title="pause recording"
 					onclick={() => recorder.pause()}
 				>
@@ -59,14 +59,19 @@
 			{:else}
 				<button
 					type="button"
-					class="plain sm"
+					class="plain sized_sm"
 					title="resume recording"
 					onclick={() => recorder.resume()}
 				>
 					<Icon data={icon_record} />
 				</button>
 			{/if}
-			<button type="button" class="plain sm" title="stop recording" onclick={() => recorder.stop()}>
+			<button
+				type="button"
+				class="plain sized_sm"
+				title="stop recording"
+				onclick={() => recorder.stop()}
+			>
 				<Icon data={icon_stop} />
 			</button>
 		{:else if status === 'stopping'}
@@ -77,7 +82,7 @@
 			<span class="color_c_50">recording: {error}</span>
 			<button
 				type="button"
-				class="plain sm"
+				class="plain sized_sm"
 				title="dismiss"
 				onclick={() => {
 					recorder.error = null;
@@ -109,7 +114,7 @@
 		background-color: var(--text_50);
 	}
 	.dot.live {
-		background-color: var(--color_c_50);
+		background-color: var(--palette_c_50);
 		animation: recorder-pulse 1.2s ease-in-out infinite;
 	}
 	@keyframes recorder-pulse {
