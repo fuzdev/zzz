@@ -17,7 +17,7 @@
 	.terminals-page {
 		display: flex;
 		flex-direction: column;
-		height: calc(100vh - var(--layout_header_height, 48px) - var(--layout_footer_height, 48px));
+		height: calc(100dvh - var(--layout_header_height, 48px) - var(--layout_footer_height, 48px));
 		padding: var(--space_md);
 		gap: var(--space_md);
 	}

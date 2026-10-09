@@ -121,7 +121,7 @@
 		/* a fixed width, since the rendered rows (and so the content width) change as it scrolls */
 		width: var(--distance_md);
 		max-width: 100%;
-		max-height: 60vh;
+		max-height: 60svh;
 		overflow: auto;
 		scrollbar-width: thin;
 	}
