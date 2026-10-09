@@ -446,7 +446,7 @@ wiped on backend startup (`FUZ_TESTING_RESET_DB_ON_STARTUP`) and
 
 ```
 crates/zzz_server/src/
-├── lib.rs            # `run_app(RunAppOptions)` — full lifecycle: env/config, DB pool + migrations, spine state construction (keyring, audit emitter, connection + SSE registries, rate limiters), `ActionRegistry::compile`, file watchers, route composition, the auth cleanup task (`fuz_auth::spawn_auth_cleanup`, started after the bind, joined after the drain), graceful shutdown
+├── lib.rs            # `run_app(RunAppOptions)` — full lifecycle: env/config, DB pool + migrations, spine state construction (keyring, audit emitter, connection + SSE registries, rate limiters), `ActionRegistry::compile`, file watchers, route composition, the auth cleanup task (`fuz_auth::spawn_auth_cleanup`, started after the bind, joined after the drain), graceful shutdown (through the socket revoker, every live WebSocket gets a 1001 close and every audit stream ends before the drain)
 ├── main.rs           # Thin production entry — constructs `Argon2idHasher`, calls `run_app`
 ├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`; `session_load` and `workspace_open` return a `fuz_actions::ActionOutput` — see Large responses below)
 │   ├── mod.rs        # `App` long-lived state (workspaces, `workspace_lifecycle`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `JobManager`, `ProviderManager`, `tools`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`

@@ -182,8 +182,10 @@ impl std::fmt::Debug for RunAppOptions {
 ///
 /// Parses CLI args + env, opens the DB pool, runs migrations, builds
 /// every spine subsystem, mounts the routes, binds the listener, and
-/// blocks on graceful shutdown (Ctrl-C / SIGTERM). Returns once all
-/// connections have drained and PTYs are torn down.
+/// blocks on graceful shutdown (Ctrl-C / SIGTERM): every live WebSocket is
+/// closed with 1001 (going away) and every audit stream ended, then in-flight
+/// requests drain. Returns once all connections have closed (or at the drain
+/// timeout) and jobs and PTYs are torn down.
 ///
 /// The spine's auth cleanup ([`fuz_auth::spawn_auth_cleanup`]) runs beside
 /// the server — expired sessions deleted and the connections they opened
@@ -823,10 +825,12 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
 
     tracing::info!("zzz_server listening on {addr}");
 
-    // Signal handling + graceful drain come from the spine
+    // Signal handling, the shutdown close of every live WebSocket (a 1001
+    // close) and audit stream, and the graceful drain come from the spine
     // (`fuz_http::lifecycle`) — the SIGINT/SIGTERM → `CancellationToken`
-    // → drain dance is shared with the other spine consumers. zzz's own
-    // teardown (the cleanup task, PTY cleanup) runs after the drain returns.
+    // → close → drain dance is shared with the other spine consumers. zzz's
+    // own teardown (the cleanup task, jobs, PTY cleanup) runs after the drain
+    // returns.
     let shutdown = fuz_http::shutdown_token();
 
     // Migrations have run, so the cleanup's startup pass can start now. It
@@ -837,18 +841,25 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         fuz_auth::AuthCleanupOptions {
             pool: app_state_for_shutdown.db_pool.clone(),
             audit: spine_audit_emitter,
-            socket_revoker,
+            socket_revoker: Arc::clone(&socket_revoker),
         },
         fuz_auth::DEFAULT_AUTH_CLEANUP_INTERVAL,
         shutdown.clone(),
     );
 
-    let served =
-        fuz_http::serve_with_shutdown(listener, app, shutdown.clone(), drain_timeout).await;
+    // The same revoker reaches both live transports (the `/api/ws` registry
+    // and the audit-stream SSE registry), so shutdown closes them through it.
+    let served = fuz_http::serve_with_shutdown(
+        listener,
+        app,
+        shutdown.clone(),
+        socket_revoker.as_ref(),
+        drain_timeout,
+    )
+    .await;
 
-    // A serve error returns without the signal, so cancel for the cleanup
-    // task's sake; it stops at once either way.
-    shutdown.cancel();
+    // `serve_with_shutdown` returns with the token cancelled — on a serve
+    // error too — so the cleanup task is already stopping.
     if let Err(e) = auth_cleanup.await {
         tracing::warn!(error = %e, "the auth cleanup task failed");
     }
