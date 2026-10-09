@@ -17,7 +17,8 @@
 	.terminals-page {
 		display: flex;
 		flex-direction: column;
-		height: calc(100dvh - var(--layout_header_height, 48px) - var(--layout_footer_height, 48px));
+		/* fills the dashboard's scroller; `PageFooter` follows below the fold */
+		height: 100%;
 		padding: var(--space_md);
 		gap: var(--space_md);
 	}
