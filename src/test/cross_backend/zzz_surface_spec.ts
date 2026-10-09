@@ -130,6 +130,10 @@ export const create_zzz_app_surface_spec = (cookie_name: string): AppSurfaceSpec
 		// `POST /api/account/bootstrap` to match. `surface_only` mounts the
 		// route shape (permanent 403) for shape-symmetry tests.
 		bootstrap: { mode: 'surface_only' },
+		// `testing_zzz_server` wires a daemon-token state (the production `zzzd`
+		// passes none), so the surface lists the layer. `GET /api/surface`
+		// stays at its default, off — `zzz_server` serves none.
+		daemon_token: true,
 		transform_middleware: (specs: Array<MiddlewareSpec>): Array<MiddlewareSpec> => [
 			{ name: 'host_validation', path: '*', handler: stub_mw },
 			...specs
