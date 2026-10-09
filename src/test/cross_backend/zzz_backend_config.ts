@@ -153,6 +153,9 @@ const make_zzz_rust_backend_config = ({
 	extra_env
 }: MakeZzzRustBackendOptions): BackendConfig => {
 	const paths = build_zzz_paths(name);
+	// the daemon starts its scoped-dir watcher once at boot and never retries,
+	// so a missing dir leaves the scoped root unregistered for the whole run
+	mkdirSync(paths.scoped_dir, { recursive: true });
 	return make_default_rust_backend_config({
 		name,
 		port,
