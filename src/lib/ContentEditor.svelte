@@ -3,9 +3,9 @@
 	import type { Snippet } from 'svelte';
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 	import PasteFromClipboard from '@fuzdev/fuz_ui/PasteFromClipboard.svelte';
-	import { swallow } from '@fuzdev/fuz_util/dom.ts';
 
 	import { estimate_token_count, format_placeholder } from './helpers.ts';
+	import { handle_save_shortcut_keydown, type SaveShortcutScope } from './save_shortcut.ts';
 	import ContentStats from './ContentStats.svelte';
 	import ClearRestoreButton from './ClearRestoreButton.svelte';
 	import { icon_paste } from '@fuzdev/fuz_ui/icons.ts';
@@ -43,13 +43,8 @@
 		children?: Snippet | undefined;
 		/** Called with the content on Ctrl+S / Cmd+S — see `save_shortcut`. */
 		onsave?: ((value: string) => void) | undefined;
-		/**
-		 * Where Ctrl+S / Cmd+S triggers `onsave`: `'focused'` only while this
-		 * editor's textarea has focus, `'page'` from anywhere on the page unless a
-		 * focused editor handles it first. Use `'page'` only for the one main
-		 * editor of a page.
-		 */
-		save_shortcut?: 'focused' | 'page' | undefined;
+		/** Where Ctrl+S / Cmd+S triggers `onsave` — see `SaveShortcutScope`. */
+		save_shortcut?: SaveShortcutScope | undefined;
 	} = $props();
 
 	let textarea_el: HTMLTextAreaElement | undefined = $state.raw();
@@ -69,14 +64,7 @@
 	 * than the focused one.
 	 */
 	const handle_save_shortcut = (event: KeyboardEvent): void => {
-		if (!onsave || event.defaultPrevented) return;
-		// case-insensitive so Caps Lock doesn't fall through to the browser's save dialog
-		if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
-			swallow(event);
-			// a held key repeats — save once per press
-			if (event.repeat) return;
-			onsave(content);
-		}
+		handle_save_shortcut_keydown(event, onsave && (() => onsave(content)));
 	};
 </script>
 

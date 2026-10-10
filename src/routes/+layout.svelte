@@ -1,10 +1,12 @@
 <script lang="ts">
 	import 'virtual:fuz.css';
-	// the fuz_css plugin doesn't scan `.css` files, so declare every theme variable the imported
-	// stylesheets read - first fuz_code's `theme.css`
+	// declare every theme variable the imported stylesheets read (fuz_css also scans `.css`
+	// imports; these keep the set explicit) - first fuz_code's `theme.css` and
+	// `theme_highlight.css` (the same set)
 	// @fuz-variables palette_a_50 palette_b_50 palette_d_50 palette_e_50 palette_f_50
 	// @fuz-variables palette_g_50 palette_h_50 palette_i_50 palette_j_50 text_50
 	import '@fuzdev/fuz_code/theme.css';
+	import '@fuzdev/fuz_code/theme_highlight.css';
 	// then zzz's own `style.css`
 	// @fuz-variables border_color_30 border_radius_xs2 border_width_1 border_width_2
 	// @fuz-variables outline_color outline_width
