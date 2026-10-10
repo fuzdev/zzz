@@ -62,6 +62,17 @@ impl GeminiProvider {
         status
     }
 
+    /// Run one completion, streaming text chunks through `progress_sender`
+    /// when one is passed.
+    ///
+    /// # Errors
+    ///
+    /// `invalid_params` for a model name that isn't a plain identifier;
+    /// a provider-tagged error when the provider has no usable client, the
+    /// request fails, the API answers non-2xx (status in `data`), the body
+    /// can't be read or decoded, the stream carries an error event or ends
+    /// incomplete, or the finished reply is a failure (see `check_stop`);
+    /// `request_cancelled` when `signal` fires.
     pub async fn complete(
         &self,
         options: &CompletionHandlerOptions,

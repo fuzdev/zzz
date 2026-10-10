@@ -51,6 +51,15 @@ trivial_numeric_casts = "warn"
 unused_lifetimes = "warn"
 unused_qualifications = "warn"
 
+[workspace.lints.rustdoc]
+# A doc link is the only machine-checkable claim a doc comment makes.
+# `private_intra_doc_links` stays at its default warn — module headers
+# deliberately point at private members.
+broken_intra_doc_links = "deny"
+invalid_html_tags = "deny"
+bare_urls = "deny"
+redundant_explicit_links = "deny"
+
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }

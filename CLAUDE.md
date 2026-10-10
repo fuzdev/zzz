@@ -387,12 +387,28 @@ origin, and trusted-proxy pure functions are unit-tested in the spine crates
 ```bash
 cargo build -p zzz_server                                                 # Build
 cargo clippy -p zzz_server                                                # Lint
+cargo clippy --workspace --all-targets -- -D warnings                     # Lint gate: the whole workspace, tests included, warning-free
+cargo doc --workspace --no-deps --document-private-items                  # Doc-link gate (pass = exit code; see below)
 ./target/debug/zzzd --port 4460                                           # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS, FUZ_ALLOWED_ORIGINS)
 cargo xtask dev                                                             # Dev server: Rust backend + Vite frontend
 npm run test:cross                                                        # Rust cross-process suites (rust + rust_proxy; needs rust binary + zzz_test_rust/zzz_test_rust_proxy DBs) — flag baked in
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Single project (Rust binary; needs `postgres://localhost/zzz_test_rust`)
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust_proxy # Single project (proxy variant; ZZZ_TRUSTED_PROXIES=127.0.0.1 at boot)
 ```
+
+The doc-link gate is the only command that checks doc links: rustdoc lints
+fire under `cargo doc` alone, never `build`, `test`, or `clippy`. The workspace
+`[workspace.lints.rustdoc]` table denies `broken_intra_doc_links` (plus
+`invalid_html_tags`, `bare_urls`, `redundant_explicit_links`), so a broken link
+is an `error` and the pass condition is the exit code. The
+`private_intra_doc_links` warnings it also prints are by design — module and
+item docs deliberately point at private members — so `RUSTDOCFLAGS="-D
+warnings"` would fail; rustdoc warns on those links even with
+`--document-private-items`, since they'd break in the public-only docs.
+`--document-private-items` is still part of the gate: without it rustdoc
+never reads the doc comments on private and `pub(crate)` items, so their links
+go unchecked. The GitHub check workflow is Node-only (no sibling Rust spine
+checkout), so the Rust gates run locally.
 
 The `cross_backend_*` vitest projects are gated behind
 `FUZ_TEST_CROSS_BACKEND=1` (set in `vite.config.ts`) — they spawn the real

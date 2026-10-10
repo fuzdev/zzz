@@ -217,6 +217,11 @@ impl Provider {
         }
     }
 
+    /// Run one completion on this provider.
+    ///
+    /// # Errors
+    ///
+    /// The provider's error (see each provider's `complete`).
     pub async fn complete(
         &self,
         options: &CompletionHandlerOptions,
@@ -248,6 +253,12 @@ impl fmt::Debug for ProviderManager {
     }
 }
 
+impl Default for ProviderManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProviderManager {
     pub fn new() -> Self {
         Self {
@@ -263,7 +274,11 @@ impl ProviderManager {
         self.providers.get(&name)
     }
 
-    /// Get a provider or return a `method_not_found`-style error.
+    /// Get a provider by name.
+    ///
+    /// # Errors
+    ///
+    /// An internal error when no provider is registered under `name`.
     pub fn require(&self, name: ProviderName) -> Result<&Provider, JsonrpcError> {
         self.get(name)
             .ok_or_else(|| internal_error(&format!("provider not found: {name}")))

@@ -207,12 +207,11 @@ impl ScopedFs {
     pub fn remove_path(&self, path: &Path) -> bool {
         let normalized = to_normalized_string(path);
         let mut paths = self.dynamic_paths.write();
-        if let Some(index) = paths.iter().position(|p| p == &normalized) {
-            paths.remove(index);
-            true
-        } else {
-            false
-        }
+        paths
+            .iter()
+            .position(|p| p == &normalized)
+            .map(|index| paths.remove(index))
+            .is_some()
     }
 
     /// Check if a path falls under one of the allowed directories.
@@ -301,7 +300,7 @@ impl ScopedFs {
 
     /// Write `content` to a file, creating parent directories if needed.
     ///
-    /// The write is atomic: see [`write_file_atomic`]. Concurrent writes to
+    /// The write is atomic: see `write_file_atomic_with`. Concurrent writes to
     /// the same path never interleave — each stages its own temp file, and
     /// the last rename wins — so no per-path lock is needed.
     ///

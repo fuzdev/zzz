@@ -1909,6 +1909,12 @@ fn app_broadcast(app: &Arc<App>) -> FilerBroadcast {
     })
 }
 
+impl Default for FilerManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FilerManager {
     pub fn new() -> Self {
         Self {
@@ -2931,8 +2937,7 @@ mod tests {
             FilerConfig::workspace(&home, &app_dir),
         )
         .await
-        .err()
-        .expect("the daemon home is refused");
+        .expect_err("the daemon home is refused");
         assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
         // the app dir itself still starts
         start_filer(
@@ -3383,8 +3388,7 @@ mod tests {
         std::fs::remove_dir(&missing.0).unwrap();
         let error = start_filer(&root, Arc::new(|_: &str| {}), FilerConfig::zzz_dir())
             .await
-            .err()
-            .expect("a missing root fails");
+            .expect_err("a missing root fails");
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
 
         let tmp = TempDir::new();
@@ -3394,8 +3398,7 @@ mod tests {
         };
         let error = start_filer(&tmp.root(), Arc::new(|_: &str| {}), FilerConfig::zzz_dir())
             .await
-            .err()
-            .expect("an unreadable root fails");
+            .expect_err("an unreadable root fails");
         assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
     }
 

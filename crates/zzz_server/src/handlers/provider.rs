@@ -75,6 +75,13 @@ struct ProviderStatusResult {
     status: provider::ProviderStatus,
 }
 
+/// `provider_load_status` — a provider's availability status, re-checked
+/// unless `reload` is `false`.
+///
+/// # Errors
+///
+/// `invalid_params` for a malformed input or an unknown provider; an internal
+/// error when the provider isn't registered or the result fails to serialize.
 pub async fn provider_load_status(
     params: Value,
     _ctx: ActionContext<'_>,

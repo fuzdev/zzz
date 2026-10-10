@@ -44,10 +44,11 @@ use tokio::net::TcpListener;
 
 pub use error::ServerError;
 
-/// Default loopback bind address (port 4460). `--port` or `ZZZ_PORT`
-/// override the port; the host stays loopback. The port matches the `zzz`
-/// CLI's daemon default so a directly-run `zzzd` and a CLI-spawned daemon
-/// bind the same port.
+/// Default loopback bind address (port 4460).
+///
+/// `--port` or `ZZZ_PORT` override the port; the host stays loopback. The
+/// port matches the `zzz` CLI's daemon default so a directly-run `zzzd` and a
+/// CLI-spawned daemon bind the same port.
 pub const DEFAULT_ADDR: SocketAddr =
     SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), 4460);
 

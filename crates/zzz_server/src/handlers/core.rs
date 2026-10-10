@@ -71,6 +71,11 @@ struct SessionLoadResult {
 /// any declared key is refused.
 ///
 /// `ActionContext.request_id` carries the parsed envelope's id.
+///
+/// # Errors
+///
+/// `invalid_params` when `params` is anything but absent or `{}`; an internal
+/// error if the result fails to serialize.
 #[allow(
     clippy::unused_async,
     reason = "ActionHandler signature requires async"
@@ -99,6 +104,11 @@ pub async fn ping(
 /// The response carries every indexed file's contents, so it's handed to the
 /// transport to serialize once: the snapshot shares the index's contents, and
 /// no intermediate `Value` copy is made.
+///
+/// # Errors
+///
+/// `invalid_params` when `params` is anything but absent or `{}`;
+/// `unauthenticated` when the request carries no account.
 pub async fn session_load(
     params: Value,
     ctx: ActionContext<'_>,
@@ -152,9 +162,16 @@ pub async fn session_load(
 
 /// `_testing_emit_notifications` — test-only action used by the integration
 /// suite to verify `ctx.notify` socket-scoped routing without a real AI
-/// provider. Emits `count` `_testing_notification` frames through
-/// `ctx.notify`, then returns `{count}`. Gated at registry-compile time
-/// by `App.enable_test_actions` (`ZZZ_ENABLE_TEST_ACTIONS=1`).
+/// provider.
+///
+/// Emits `count` `_testing_notification` frames through `ctx.notify`, then
+/// returns `{count}`. Gated at registry-compile time by
+/// `App.enable_test_actions` (`ZZZ_ENABLE_TEST_ACTIONS=1`).
+///
+/// # Errors
+///
+/// `invalid_params` for a malformed input or a `count` above 100; an internal
+/// error if the result fails to serialize.
 #[allow(
     clippy::unused_async,
     reason = "ActionHandler signature requires async"

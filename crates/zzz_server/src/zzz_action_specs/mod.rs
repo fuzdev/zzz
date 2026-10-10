@@ -26,7 +26,8 @@ pub use provider::build_provider_specs;
 pub use terminal::build_terminal_specs;
 pub use workspace::build_workspace_specs;
 
-/// Every production zzz-owned [`ActionSpec`], in registry-composition order.
+/// Every production zzz-owned [`ActionSpec`](fuz_actions::ActionSpec), in
+/// registry-composition order.
 ///
 /// The aggregation point `run_app` folds into `ActionRegistry::compile` after
 /// the protocol + `fuz_auth` adapter sets. Excludes [`build_testing_specs`],

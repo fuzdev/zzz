@@ -169,7 +169,7 @@ fn map_short_help(mut argv: Vec<String>) -> Vec<String> {
     argv
 }
 
-/// If argv[1] looks like a path rather than a known subcommand, inject
+/// If `argv[1]` looks like a path rather than a known subcommand, inject
 /// `open` at position 1 so argh dispatches via the `Open` handler.
 ///
 /// Leaves `-`-prefixed tokens alone (argh handles `--help` natively —

@@ -165,6 +165,14 @@ pub fn register_account_removal_listener(emitter: &AuditEmitter, app: &Arc<App>)
     }));
 }
 
+/// `terminal_create` — spawn a PTY running `command` for the caller and
+/// return its `terminal_id`.
+///
+/// # Errors
+///
+/// `unauthenticated` when the request carries no account; `invalid_params`
+/// for a malformed input or a relative `cwd`; an internal error when the
+/// spawn fails.
 pub async fn terminal_create(
     params: Value,
     ctx: ActionContext<'_>,
@@ -186,6 +194,13 @@ pub async fn terminal_create(
         .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
+/// `terminal_data_send` — write input to one of the caller's terminals.
+///
+/// # Errors
+///
+/// `unauthenticated` when the request carries no account; `invalid_params`
+/// for a malformed input; `not_found` for a terminal the caller doesn't own;
+/// `queue_overflow` when the terminal's input queue is full.
 pub async fn terminal_data_send(
     params: Value,
     ctx: ActionContext<'_>,
@@ -205,6 +220,13 @@ pub async fn terminal_data_send(
     Ok(Value::Null)
 }
 
+/// `terminal_resize` — resize one of the caller's terminals.
+///
+/// # Errors
+///
+/// `unauthenticated` when the request carries no account; `invalid_params`
+/// for a malformed input or a `cols` / `rows` outside `1..=65535`;
+/// `not_found` for a terminal the caller doesn't own.
 pub async fn terminal_resize(
     params: Value,
     ctx: ActionContext<'_>,
@@ -223,6 +245,14 @@ pub async fn terminal_resize(
     Ok(Value::Null)
 }
 
+/// `terminal_close` — signal one of the caller's terminals and return its
+/// exit code.
+///
+/// # Errors
+///
+/// `unauthenticated` when the request carries no account; `invalid_params`
+/// for a malformed input or a signal other than `SIGTERM` / `SIGKILL`;
+/// `not_found` for a terminal the caller doesn't own.
 pub async fn terminal_close(
     params: Value,
     ctx: ActionContext<'_>,

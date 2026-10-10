@@ -41,10 +41,11 @@ fn session_load_spec(app: Arc<App>) -> ActionSpec {
     )
 }
 
-/// Build the test-only action specs (`_testing_emit_notifications`). Caller
-/// extends the registry input with these only when `enable_test_actions`
-/// is set — the gating happens at registry-compile time so production
-/// boots never carry the test surface at all.
+/// Build the test-only action specs (`_testing_emit_notifications`).
+///
+/// The caller extends the registry input with these only when
+/// `enable_test_actions` is set — the gating happens at registry-compile time
+/// so production boots never carry the test surface at all.
 #[must_use]
 pub fn build_testing_specs(app: Arc<App>) -> Vec<ActionSpec> {
     vec![testing_emit_notifications_spec(app)]

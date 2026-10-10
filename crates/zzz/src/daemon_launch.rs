@@ -26,8 +26,8 @@
 //! was set): the test-only actions have no place in a daemon the CLI starts.
 //!
 //! **Port.** `--port` > `ZZZ_PORT` > `zzz_config_port` in
-//! `~/.zzz/config.json` > [`DEFAULT_PORT`](crate::daemon_lifecycle::DEFAULT_PORT),
-//! always passed to `zzzd` as `--port`. Every source must be a port in
+//! `~/.zzz/config.json` > [`DEFAULT_PORT`], always passed to `zzzd` as
+//! `--port`. Every source must be a port in
 //! `1..=65535` ([`dl::parse_port`]), and a `config.json` that exists must
 //! parse — an invalid value is an error naming its source, never a fallback.
 //!

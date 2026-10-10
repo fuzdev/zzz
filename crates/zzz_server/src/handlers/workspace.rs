@@ -156,6 +156,11 @@ fn display_dir(path: &str) -> String {
 /// Takes no input (`z.void()`): an absent `params` or a `{}` is the call, and
 /// any declared key is refused. `async` is required by the `ActionHandler`
 /// future-returning shape even though the body has no `.await` points.
+///
+/// # Errors
+///
+/// `invalid_params` when `params` is anything but absent or `{}`; an internal
+/// error if the result fails to serialize.
 #[allow(
     clippy::unused_async,
     reason = "ActionHandler signature requires async"
@@ -186,6 +191,15 @@ pub async fn workspace_list(
 /// fails with `forbidden` (`permission_denied`), leaving nothing open. The
 /// file index — contents included — is handed to the transport to serialize
 /// once, sharing the index's contents.
+///
+/// # Errors
+///
+/// `invalid_params` for a malformed input, a relative path, a non-directory,
+/// or an invalid path (a NUL byte, a symlink loop, an over-long name, a
+/// non-UTF-8 name); `not_found` for a missing directory; `forbidden` for a
+/// directory the OS refuses to list, or a `.zzz` directory (or a path inside
+/// one) other than the app dir (`zzz_home_not_allowed`); an internal error for
+/// any other I/O failure or a notification that fails to serialize.
 pub async fn workspace_open(
     params: Value,
     _ctx: ActionContext<'_>,
@@ -335,6 +349,12 @@ async fn ensure_workspace_filer(app: &Arc<App>, path: &str) -> std::io::Result<b
 /// `/`), then canonicalized — so a non-canonical spelling of an open
 /// workspace (`/a/./b`, a symlinked path) closes it too, while a workspace
 /// whose directory was deleted can still be closed by its stored path.
+///
+/// # Errors
+///
+/// `invalid_params` for a malformed input, a relative path, or a path that
+/// names no open workspace (`workspace_not_open`); an internal error if the
+/// close notification fails to serialize.
 pub async fn workspace_close(
     params: Value,
     _ctx: ActionContext<'_>,
