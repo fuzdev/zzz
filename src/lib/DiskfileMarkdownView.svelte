@@ -289,9 +289,7 @@
 					<MarkdownOutline {headings} onselect={reveal_heading} />
 				</div>
 
-				<div class="px_md mb_lg">
-					<MarkdownBrokenLinks {links} onselect={reveal_link} />
-				</div>
+				<MarkdownBrokenLinks {links} onselect={reveal_link} attrs={{ class: 'px_md mb_lg' }} />
 
 				<div class="px_md mb_lg">
 					<DiskfileEditorNav {editor_state} />

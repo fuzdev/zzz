@@ -1,21 +1,25 @@
 <script lang="ts">
+	import type { SvelteHTMLElements } from 'svelte/elements';
+
 	import type { MarkdownLink } from './markdown_links.ts';
 
 	/**
 	 * A markdown document's broken links — relative paths the file index says
-	 * are missing — each a button.
+	 * are missing — each a button. Renders nothing when there are none.
 	 *
 	 * @module
 	 */
 
 	const {
 		links,
-		onselect
+		onselect,
+		attrs
 	}: {
 		/** The document's links, from `to_markdown_links`; only the broken ones are listed. */
 		links: ReadonlyArray<MarkdownLink>;
 		/** Called with the link's position in `links` when it's clicked. */
 		onselect: (index: number, link: MarkdownLink) => void;
+		attrs?: SvelteHTMLElements['section'] | undefined;
 	} = $props();
 
 	const broken = $derived(
@@ -23,13 +27,11 @@
 	);
 </script>
 
-<section>
-	<h4 class="mb_xs">
-		broken links{#if broken.length}&nbsp;<small class="negative_50">{broken.length}</small>{/if}
-	</h4>
-	{#if broken.length === 0}
-		<p class="text_50 mb_0"><small>none found</small></p>
-	{:else}
+{#if broken.length}
+	<section {...attrs}>
+		<h4 class="mb_xs">
+			broken links&nbsp;<small class="negative_50">{broken.length}</small>
+		</h4>
 		<menu class="unstyled">
 			{#each broken as { link, index } (index)}
 				<button
@@ -45,8 +47,8 @@
 				</button>
 			{/each}
 		</menu>
-	{/if}
-</section>
+	</section>
+{/if}
 
 <style>
 	.broken-link {

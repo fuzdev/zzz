@@ -102,7 +102,7 @@
 			<DiskfileExplorer />
 		</div>
 
-		<div class="flex:1 column overflow:auto height:100%">
+		<div class="flex:1 column overflow:hidden height:100%">
 			<!-- tabs -->
 			<menu
 				class="unstyled display:flex overflow-x:auto scrollbar-width:thin"
@@ -125,62 +125,65 @@
 				{/each}
 			</menu>
 
-			<!-- editor content area -->
-			{#if selected_tab}
-				{#if selected_diskfile}
-					<DiskfileView
-						diskfile={selected_diskfile}
-						onmodified={(diskfile_id) => editor.handle_file_modified(diskfile_id)}
-					/>
-				{:else}
-					<!-- TODO think this through - maybe the tabs should be more flexible than 1:1 with a diskfile? maybe `DiskfileView` should have UI to create a file if there is none? -->
+			<!-- editor content area: the space under the tabs, so a view's `height:100%` fits it and
+			     the column never overflows - else `scrollIntoView` and focus scroll the tabs away -->
+			<div class="flex:1 min-height:0">
+				{#if selected_tab}
+					{#if selected_diskfile}
+						<DiskfileView
+							diskfile={selected_diskfile}
+							onmodified={(diskfile_id) => editor.handle_file_modified(diskfile_id)}
+						/>
+					{:else}
+						<!-- TODO think this through - maybe the tabs should be more flexible than 1:1 with a diskfile? maybe `DiskfileView` should have UI to create a file if there is none? -->
+						<div class="box height:100%">
+							<p>Something went wrong, this tab has no diskfile</p>
+						</div>
+					{/if}
+				{:else if diskfiles.on_disk.length > 0}
 					<div class="box height:100%">
-						<p>Something went wrong, this tab has no diskfile</p>
-					</div>
-				{/if}
-			{:else if diskfiles.on_disk.length > 0}
-				<div class="box height:100%">
-					<p>
-						<button
-							type="button"
-							class="inline"
-							onclick={() => {
-								show_diskfile_picker = true;
-							}}
-						>
-							select
-						</button>
-						a file from the list or
-						<button
-							type="button"
-							class="inline palette_f"
-							onclick={() => {
-								const diskfile = random_item(app.diskfiles.on_disk);
-								diskfiles.select(diskfile.id);
-							}}
-						>
-							go fish
-						</button> to view and edit its content
-					</p>
-				</div>
-			{:else}
-				<div class="box height:100%">
-					<p>
-						no files yet,
-						{#if diskfiles.new_files_dir}
+						<p>
 							<button
 								type="button"
-								class="inline palette_d"
-								onclick={() => prompt_create_diskfile(diskfiles, 'file')}
+								class="inline"
+								onclick={() => {
+									show_diskfile_picker = true;
+								}}
 							>
-								create a new file
-							</button>?
-						{:else}
-							<a href={resolve('/workspaces')}>open a workspace</a> to create one
-						{/if}
-					</p>
-				</div>
-			{/if}
+								select
+							</button>
+							a file from the list or
+							<button
+								type="button"
+								class="inline palette_f"
+								onclick={() => {
+									const diskfile = random_item(app.diskfiles.on_disk);
+									diskfiles.select(diskfile.id);
+								}}
+							>
+								go fish
+							</button> to view and edit its content
+						</p>
+					</div>
+				{:else}
+					<div class="box height:100%">
+						<p>
+							no files yet,
+							{#if diskfiles.new_files_dir}
+								<button
+									type="button"
+									class="inline palette_d"
+									onclick={() => prompt_create_diskfile(diskfiles, 'file')}
+								>
+									create a new file
+								</button>?
+							{:else}
+								<a href={resolve('/workspaces')}>open a workspace</a> to create one
+							{/if}
+						</p>
+					</div>
+				{/if}
+			</div>
 		</div>
 	{/if}
 </div>

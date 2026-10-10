@@ -474,12 +474,12 @@ describe('DiskfileMarkdownView outline and links', () => {
 		const a = write_externally(PATH_A, '# a');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		click_button(view.target, 'details');
-		assert.include(view.target.textContent, 'none found');
+		assert.notInclude(view.target.textContent, 'broken links', 'no section without any');
 		type_into(view.textarea()!, '[x](./x.md)');
-		assert.notInclude(view.target.textContent, 'none found');
+		assert.include(view.target.textContent, 'broken links');
 		write_externally(DiskfilePath.parse('/w/x.md'), '');
 		flushSync();
-		assert.include(view.target.textContent, 'none found');
+		assert.notInclude(view.target.textContent, 'broken links');
 	});
 
 	test('a link from another file reveals its heading once this file shows', () => {

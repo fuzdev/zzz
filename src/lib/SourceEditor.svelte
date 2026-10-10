@@ -59,15 +59,18 @@
 
 	/**
 	 * Focus the textarea with the caret at `offset` (clamped to the source),
-	 * scrolled into view - exposed for parent components, like an outline.
+	 * scrolled to its top row (as near as the scroll range allows) - exposed for
+	 * parent components, like an outline.
 	 */
 	export const place_caret = (offset: number): void => {
 		const el = textarea_el;
 		if (!el) return;
 		const clamped = Math.max(0, Math.min(offset, el.value.length));
-		// browsers scroll a textarea to its caret when it takes focus, not on `setSelectionRange`
+		// browsers scroll a textarea to its caret when it takes focus, not on `setSelectionRange`,
+		// and only as far as it takes - so start from the bottom, and the caret lands on the top row
 		if (document.activeElement === el) el.blur();
 		el.setSelectionRange(clamped, clamped);
+		el.scrollTop = el.scrollHeight;
 		el.focus();
 	};
 
