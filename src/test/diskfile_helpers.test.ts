@@ -5,6 +5,7 @@ import {
 	normalize_path,
 	parse_new_diskfile_name,
 	prompt_create_diskfile,
+	to_file_directories,
 	to_relative_path
 } from '$lib/diskfile_helpers.ts';
 import type { Diskfiles } from '$lib/diskfiles.svelte.ts';
@@ -240,5 +241,21 @@ describe('delete_diskfile', () => {
 			"couldn't delete ws/a.txt: failed to delete file: Permission denied: /ws/a.txt"
 		]);
 		assert.strictEqual(console_error.mock.calls.length, 0);
+	});
+});
+
+describe('to_file_directories', () => {
+	test('every folder from a file up to its root, inclusive, innermost first, and none above', () => {
+		assert.deepEqual(to_file_directories('/w/a/b/c.md', '/w/'), ['/w/a/b/', '/w/a/', '/w/']);
+		assert.deepEqual(to_file_directories('/w/top.md', '/w/'), ['/w/']);
+		assert.deepEqual(to_file_directories('/x/y/z.md', '/x/y/'), ['/x/y/']);
+	});
+
+	test('a file outside its root contributes nothing', () => {
+		assert.deepEqual(to_file_directories('/elsewhere/a.md', '/w/'), []);
+	});
+
+	test('the filesystem root as a root ends the walk', () => {
+		assert.deepEqual(to_file_directories('/a/b.md', '/'), ['/a/', '/']);
 	});
 });

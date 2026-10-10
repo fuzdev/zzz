@@ -25,7 +25,8 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 	/**
 	 * The file is gone from disk, but this diskfile is kept because a tab holds
 	 * unsaved edits for it. Transient client state, not serialized — cleared
-	 * when the path reappears on disk.
+	 * when the path reappears on disk. Set it through
+	 * `Diskfiles.set_deleted_on_disk`, which keeps the index's directories in step.
 	 */
 	deleted_on_disk: boolean = $state.raw(false);
 

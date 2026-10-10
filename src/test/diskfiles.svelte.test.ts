@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { test, beforeEach, describe, assert } from 'vitest';
+import { test, beforeEach, describe, assert, vi } from 'vitest';
+import { flushSync } from 'svelte';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
 
 import {
@@ -9,7 +10,7 @@ import {
 	type DiskfileChangeType
 } from '$lib/diskfile_types.ts';
 import { Frontend } from '$lib/frontend.svelte.ts';
-import { confirm_unload_with_unsaved_changes } from '$lib/diskfile_helpers.ts';
+import { confirm_unload_with_unsaved_changes, to_file_directories } from '$lib/diskfile_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
@@ -1040,5 +1041,132 @@ describe('create_directory', () => {
 		);
 		assert.instanceOf(error, Error);
 		assert.strictEqual(error.message, 'already exists');
+	});
+});
+
+describe('directory_paths', () => {
+	const node_at = (path: string, source_dir: string = SOURCE_DIR): SerializableDisknode => ({
+		...create_disknode(DiskfilePath.parse(path)),
+		source_dir: SerializableDisknode.shape.source_dir.parse(source_dir)
+	});
+
+	const dirs = (): Array<string> => [...app.diskfiles.directory_paths].sort();
+
+	/** The directories a from-scratch walk of the files on disk finds. */
+	const rebuilt = (): Array<string> => {
+		const found: Set<string> = new Set();
+		for (const diskfile of app.diskfiles.on_disk) {
+			for (const dir of to_file_directories(diskfile.path, diskfile.source_dir)) found.add(dir);
+		}
+		return [...found].sort();
+	};
+
+	test('a file adds its folders up to its root, and the last file out takes them away', () => {
+		app.diskfiles.upsert(node_at('/ws/a/b/c.md'));
+		assert.deepEqual(dirs(), ['/ws/', '/ws/a/', '/ws/a/b/']);
+		assert.isTrue(app.diskfiles.link_index.has_directory('/ws/a/'));
+
+		app.diskfiles.upsert(node_at('/ws/a/d.md'));
+		filer_change('delete', DiskfilePath.parse('/ws/a/b/c.md'));
+		assert.deepEqual(dirs(), ['/ws/', '/ws/a/'], 'only the emptied folder goes');
+
+		filer_change('delete', DiskfilePath.parse('/ws/a/d.md'));
+		assert.deepEqual(dirs(), [], 'its ancestors up to the root go once they empty');
+		assert.isFalse(app.diskfiles.link_index.has_directory('/ws/'));
+	});
+
+	test('a rename, as a delete plus an add, moves the folders', () => {
+		app.diskfiles.upsert(node_at('/ws/old/x.md'));
+		filer_change('delete', DiskfilePath.parse('/ws/old/x.md'));
+		app.diskfiles.upsert(node_at('/ws/new/x.md'));
+		assert.deepEqual(dirs(), ['/ws/', '/ws/new/']);
+	});
+
+	test('an add of an id already present keeps the file it holds counted', () => {
+		const existing = app.diskfiles.upsert(node_at('/ws/a/x.md'));
+		const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		app.diskfiles.add(existing.to_json());
+		error.mockRestore();
+		assert.strictEqual(app.diskfiles.items.by_id.get(existing.id), existing);
+		assert.deepEqual(dirs(), ['/ws/', '/ws/a/']);
+		assert.deepEqual(dirs(), rebuilt());
+	});
+
+	test('a re-sent file counts once', () => {
+		app.diskfiles.upsert(node_at('/ws/a/x.md'));
+		app.diskfiles.add_initial([node_at('/ws/a/x.md'), node_at('/ws/a/x.md')]);
+		filer_change('delete', DiskfilePath.parse('/ws/a/x.md'));
+		assert.deepEqual(dirs(), []);
+	});
+
+	test('a file kept deleted on disk for its draft holds no folder until it returns', () => {
+		const diskfile = app.diskfiles.upsert(node_at('/ws/a/x.md'));
+		app.diskfiles.select(diskfile.id, true);
+		app.diskfiles.get_editor_state(diskfile).current_content = 'edited';
+		filer_change('delete', DiskfilePath.parse('/ws/a/x.md'));
+		assert.isTrue(diskfile.deleted_on_disk);
+		assert.deepEqual(dirs(), []);
+
+		app.diskfiles.set_deleted_on_disk(diskfile, false);
+		assert.deepEqual(dirs(), ['/ws/', '/ws/a/']);
+		app.diskfiles.set_deleted_on_disk(diskfile, true);
+		assert.deepEqual(dirs(), []);
+
+		app.diskfiles.upsert(node_at('/ws/a/x.md', '/ws/'));
+		assert.deepEqual(dirs(), ['/ws/', '/ws/a/'], 'reappearing on disk restores them');
+	});
+
+	test('a file re-rooted by another snapshot moves to the new root', () => {
+		app.diskfiles.upsert({ ...node_at('/ws/a/x.md'), contents: 'one' });
+		app.diskfiles.upsert({ ...node_at('/ws/a/x.md', '/ws/a/'), contents: 'two' });
+		assert.deepEqual(dirs(), ['/ws/a/']);
+	});
+
+	test('a resync reconciles them, and clearing the collection empties them', () => {
+		app.diskfiles.add_initial([
+			node_at('/ws/a/x.md'),
+			node_at('/ws/b/y.md'),
+			node_at('/z/q.md', '/z/')
+		]);
+		app.diskfiles.reconcile([node_at('/ws/b/y.md'), node_at('/ws/c/w.md')], ['/ws/']);
+		assert.deepEqual(dirs(), ['/ws/', '/ws/b/', '/ws/c/', '/z/']);
+		assert.deepEqual(dirs(), rebuilt());
+
+		app.diskfiles.set_json({ diskfiles: [] });
+		assert.deepEqual(dirs(), []);
+		app.diskfiles.upsert(node_at('/ws/a/x.md'));
+		assert.deepEqual(dirs(), ['/ws/', '/ws/a/'], 'counting restarts from nothing');
+	});
+
+	test('a long mixed sequence agrees with a from-scratch walk', () => {
+		const paths = ['/ws/a.md', '/ws/a/b.md', '/ws/a/b/c.md', '/ws/a/b/d.md', '/ws/e/f.md'];
+		for (let step = 0; step < 60; step++) {
+			const path = DiskfilePath.parse(paths[(step * 7) % paths.length]!);
+			if (step % 3 === 2) {
+				filer_change('delete', path);
+			} else {
+				app.diskfiles.upsert({ ...node_at(path), contents: `v${step}` });
+			}
+			assert.deepEqual(dirs(), rebuilt(), `step ${step}`);
+		}
+	});
+
+	test('a reader follows a folder appearing and emptying', () => {
+		const seen: Array<boolean> = [];
+		const cleanup = $effect.root(() => {
+			$effect(() => {
+				seen.push(app.diskfiles.link_index.has_directory('/ws/a/'));
+			});
+		});
+		flushSync();
+		app.diskfiles.upsert(node_at('/ws/a/x.md'));
+		flushSync();
+		app.diskfiles.upsert(node_at('/ws/a/y.md'));
+		flushSync();
+		filer_change('delete', DiskfilePath.parse('/ws/a/x.md'));
+		filer_change('delete', DiskfilePath.parse('/ws/a/y.md'));
+		flushSync();
+		cleanup();
+		assert.deepEqual(seen, [false, true, false], 'only presence changes rerun it');
 	});
 });

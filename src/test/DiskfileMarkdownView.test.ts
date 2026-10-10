@@ -269,4 +269,247 @@ describe('DiskfileMarkdownView', () => {
 			'deleted on disk — save to recreate it, or close the tab'
 		);
 	});
+
+	test('the mode buttons show their shortcuts', () => {
+		const a = write_externally(PATH_A, '# a');
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		const titles = Array.from(view.target.querySelectorAll('button[aria-pressed]')).map((b) =>
+			b.getAttribute('title')
+		);
+		assert.deepEqual(titles, [
+			'split view [Ctrl+Shift+1]',
+			'preview [Ctrl+Shift+2]',
+			'source [Ctrl+Shift+3]'
+		]);
+	});
+});
+
+const press_mode = (
+	target: EventTarget,
+	digit: 1 | 2 | 3,
+	init: KeyboardEventInit = {}
+): KeyboardEvent => {
+	const event = new KeyboardEvent('keydown', {
+		key: '!@#'[digit - 1],
+		code: `Digit${digit}`,
+		ctrlKey: true,
+		shiftKey: true,
+		bubbles: true,
+		cancelable: true,
+		...init
+	});
+	target.dispatchEvent(event);
+	flushSync();
+	return event;
+};
+
+describe('DiskfileMarkdownView mode shortcuts', () => {
+	test('Ctrl+Shift+1/2/3 switch modes from the editor, and the focus follows', () => {
+		const a = write_externally(PATH_A, '# a');
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		const textarea = view.textarea()!;
+		textarea.focus();
+
+		const event = press_mode(textarea, 2);
+		assert.isTrue(event.defaultPrevented);
+		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'preview');
+		assert.isNull(view.textarea());
+		const preview = view.target.querySelector('h1')?.closest('[tabindex="-1"]');
+		assert.strictEqual(document.activeElement, preview, 'the preview took the focus');
+
+		press_mode(document.activeElement!, 3);
+		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'source');
+		assert.strictEqual(document.activeElement, view.textarea());
+		assert.isNull(view.heading());
+
+		press_mode(document.activeElement!, 1);
+		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'split');
+		assert.ok(view.heading());
+	});
+
+	test('work from the page, but leave an input elsewhere its keys', () => {
+		const a = write_externally(PATH_A, '# a');
+		render(DiskfileMarkdownView, { diskfile: a });
+		press_mode(document.body, 3);
+		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'source');
+
+		const input = document.createElement('input');
+		document.body.append(input);
+		cleanups.push(() => input.remove());
+		const event = press_mode(input, 2);
+		assert.isFalse(event.defaultPrevented);
+		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'source');
+	});
+});
+
+describe('DiskfileMarkdownView mode shortcut guards', () => {
+	/** An element outside the view, removed after the test. */
+	const add_outside = <T extends HTMLElement>(el: T): T => {
+		document.body.append(el);
+		cleanups.push(() => el.remove());
+		return el;
+	};
+
+	test('a held key repeating switches nothing, though its repeats stay swallowed', () => {
+		const a = write_externally(PATH_A, '# a');
+		render(DiskfileMarkdownView, { diskfile: a });
+		const event = press_mode(document.body, 3, { repeat: true });
+		assert.isTrue(event.defaultPrevented);
+		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'split');
+	});
+
+	test('focus on a non-editable element outside the view stays put, and the mode switches', () => {
+		const a = write_externally(PATH_A, '# a');
+		render(DiskfileMarkdownView, { diskfile: a });
+		const button = add_outside(document.createElement('button'));
+		button.focus();
+		const event = press_mode(button, 2);
+		assert.isTrue(event.defaultPrevented);
+		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'preview');
+		assert.strictEqual(document.activeElement, button);
+	});
+
+	test('a focused element inside a contenteditable elsewhere keeps its keys', () => {
+		const a = write_externally(PATH_A, '# a');
+		render(DiskfileMarkdownView, { diskfile: a });
+		const editable = add_outside(document.createElement('div'));
+		editable.setAttribute('contenteditable', 'true');
+		const inner = document.createElement('span');
+		inner.tabIndex = 0;
+		editable.append(inner);
+		inner.focus();
+		const event = press_mode(inner, 3);
+		assert.isFalse(event.defaultPrevented);
+		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'split');
+	});
+
+	test('a modal dialog open over the page keeps the view as it is', () => {
+		const a = write_externally(PATH_A, '# a');
+		render(DiskfileMarkdownView, { diskfile: a });
+		// jsdom has no `showModal`, so the dialog claims `:modal` itself
+		const dialog = add_outside(document.createElement('dialog'));
+		dialog.setAttribute('open', '');
+		const matches = dialog.matches.bind(dialog);
+		dialog.matches = (selector: string) => selector === ':modal' || matches(selector);
+		const event = press_mode(document.body, 3);
+		assert.isFalse(event.defaultPrevented);
+		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'split');
+
+		dialog.removeAttribute('open');
+		press_mode(document.body, 3);
+		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'source');
+	});
+});
+
+describe('DiskfileMarkdownView outline and links', () => {
+	beforeEach(() => {
+		// the index covers `/w/`, so a missing file there is broken
+		app.zzz_dir = '/w/';
+	});
+
+	const DOC = '# Top\n\nintro [gone](./gone.md) and [ok](./a.md)\n\n## Part Two\n\nmore\n';
+
+	test('the drawer outlines the headings; a click puts the caret there and scrolls the preview', () => {
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		const h2 = view.target.querySelector('h2');
+		assert.ok(h2);
+		const scroll = vi.fn();
+		h2.scrollIntoView = scroll;
+
+		click_button(view.target, 'Part Two');
+		assert.strictEqual(scroll.mock.calls.length, 1);
+		const textarea = view.textarea()!;
+		assert.strictEqual(document.activeElement, textarea);
+		assert.strictEqual(textarea.selectionStart, DOC.indexOf('## Part Two'));
+		assert.strictEqual(textarea.selectionEnd, DOC.indexOf('## Part Two'));
+	});
+
+	test('in source mode the outline only moves the caret; in preview only scrolls', () => {
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		click_button(view.target, 'source');
+		click_button(view.target, 'Top');
+		assert.strictEqual(view.textarea()!.selectionStart, 0);
+
+		click_button(view.target, 'preview');
+		const h1 = view.target.querySelector('h1');
+		assert.ok(h1);
+		const scroll = vi.fn();
+		h1.scrollIntoView = scroll;
+		click_button(view.target, 'Top');
+		assert.strictEqual(scroll.mock.calls.length, 1);
+	});
+
+	test('the drawer lists broken links; a click reveals the link', () => {
+		const a = write_externally(PATH_A, DOC);
+		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		const section = Array.from(view.target.querySelectorAll('section')).find((el) =>
+			el.textContent.includes('broken links')
+		);
+		assert.ok(section);
+		assert.include(section.querySelector('h4')?.textContent, '1');
+		const anchor = Array.from(view.target.querySelectorAll('a')).find(
+			(el) => el.textContent === 'gone'
+		);
+		assert.ok(anchor);
+		assert.strictEqual(anchor.dataset.linkStatus, 'broken');
+		const scroll = vi.fn();
+		anchor.scrollIntoView = scroll;
+
+		const button = section.querySelector('button');
+		assert.ok(button);
+		assert.include(button.textContent, './gone.md');
+		button.click();
+		flushSync();
+		assert.strictEqual(scroll.mock.calls.length, 1);
+		assert.strictEqual(document.activeElement, anchor, 'alone, the preview gives the link focus');
+	});
+
+	test('the list updates as the source changes', () => {
+		const a = write_externally(PATH_A, '# a');
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		assert.include(view.target.textContent, 'none found');
+		type_into(view.textarea()!, '[x](./x.md)');
+		assert.notInclude(view.target.textContent, 'none found');
+		write_externally(DiskfilePath.parse('/w/x.md'), '');
+		flushSync();
+		assert.include(view.target.textContent, 'none found');
+	});
+
+	test('a link from another file reveals its heading once this file shows', () => {
+		const a = write_externally(PATH_A, DOC);
+		const b = write_externally(DiskfilePath.parse('/w/b.md'), '[to a](./a.md#part-two)');
+		app.diskfiles.get_editor_state(b).markdown_view_mode_choice = 'preview';
+		const view = render(DiskfileView, {
+			get diskfile() {
+				return app.diskfiles.selected_file ?? b;
+			}
+		});
+		const link = Array.from(view.target.querySelectorAll('a')).find(
+			(el) => el.textContent === 'to a'
+		);
+		assert.ok(link);
+		const scrolls: Array<string> = [];
+		const original = Element.prototype.scrollIntoView as Element['scrollIntoView'] | undefined;
+		Element.prototype.scrollIntoView = function (this: Element) {
+			scrolls.push(this.tagName);
+		};
+		cleanups.push(() => {
+			if (original) Element.prototype.scrollIntoView = original;
+			else delete (Element.prototype as Partial<Element>).scrollIntoView;
+		});
+		link.click();
+		flushSync();
+		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		assert.isNull(app.diskfiles.get_editor_state(a).markdown_pending_fragment, 'consumed');
+		assert.deepEqual(scrolls, ['H2']);
+		const textarea = view.textarea()!;
+		assert.strictEqual(textarea.selectionStart, DOC.indexOf('## Part Two'));
+	});
 });

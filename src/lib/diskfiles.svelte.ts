@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { untrack } from 'svelte';
-import { SvelteMap } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { Uuid } from '@fuzdev/fuz_util/id.ts';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
@@ -21,8 +21,11 @@ import {
 	disknode_to_diskfile_json,
 	normalize_path,
 	parse_new_diskfile_name,
+	to_file_directories,
 	to_relative_path
 } from './diskfile_helpers.ts';
+import { to_diskfile_content_kind } from './diskfile_content_kind.ts';
+import type { MarkdownLinkIndex } from './markdown_links.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
@@ -59,6 +62,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 	readonly items: IndexedCollection<Diskfile> = new IndexedCollection({
 		dispose_item: (diskfile) => {
+			// every way out of the collection passes here - `remove`, `remove_many`, and `clear`
+			this.#sync_directories(diskfile);
 			this.#remove_editor_state(diskfile.id);
 			diskfile.dispose();
 		},
@@ -169,6 +174,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	add(json: DiskfileJsonInput): Diskfile {
 		const diskfile = new Diskfile({ app: this.app, json });
 		this.items.add(diskfile);
+		this.#sync_directories(diskfile);
 		if (diskfile.path === this.#select_on_arrival) {
 			this.#select_on_arrival = null;
 			this.select(diskfile.id, true);
@@ -250,6 +256,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			created: existing.created, // Preserve original creation date
 			updated: get_datetime_now() // TODO @many probably rely on the db to bump `updated`
 		});
+		// back on disk, and its root may have changed with a snapshot from another filer
+		this.#sync_directories(existing);
 		untrack(() => this.#editor_states.get(existing.id))?.check_disk_changes();
 		return existing;
 	}
@@ -315,7 +323,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		if (!diskfile) return;
 
 		if (this.#editor_states.get(diskfile.id)?.has_unsaved_edits) {
-			diskfile.deleted_on_disk = true;
+			this.set_deleted_on_disk(diskfile, true);
 			return;
 		}
 
@@ -410,6 +418,128 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	readonly new_files_dir: DiskfileDirectoryPath | null = $derived(
 		this.app.workspaces.active?.path ?? null
 	);
+
+	/**
+	 * The directories the file index covers, each with a trailing `/`: the app
+	 * directory, the scoped dirs, and the open workspaces.
+	 */
+	readonly indexed_roots: ReadonlyArray<DiskfileDirectoryPath> = $derived.by(() => {
+		const { zzz_dir, scoped_dirs, workspaces } = this.app;
+		const roots: Array<DiskfileDirectoryPath> = zzz_dir ? [zzz_dir] : [];
+		roots.push(...scoped_dirs);
+		for (const workspace of workspaces.items.values) roots.push(workspace.path);
+		return roots;
+	});
+
+	/**
+	 * How many files on disk each directory holds, at any depth, by its path
+	 * with a trailing `/` — every ancestor of each file up to its root (see
+	 * `to_file_directories`). Kept in step as files come and go
+	 * (`#sync_directories`), never rebuilt. Not reactive: `directory_paths` is.
+	 */
+	readonly #directory_counts: Map<string, number> = new Map();
+
+	/** What each counted diskfile contributed to `#directory_counts`, by id. Not reactive. */
+	readonly #counted_files: Map<Uuid, { path: string; source_dir: string }> = new Map();
+
+	readonly #directory_paths: SvelteSet<string> = new SvelteSet();
+
+	/**
+	 * The directories holding a file on disk, each with a trailing `/` —
+	 * changing only as a directory gains its first file or loses its last.
+	 */
+	readonly directory_paths: ReadonlySet<string> = this.#directory_paths;
+
+	/**
+	 * Marks `diskfile` gone from disk, or back — the one writer of
+	 * `Diskfile.deleted_on_disk` besides `upsert`, so `directory_paths` stays
+	 * in step.
+	 */
+	set_deleted_on_disk(diskfile: Diskfile, deleted_on_disk: boolean): void {
+		if (diskfile.deleted_on_disk === deleted_on_disk) return;
+		diskfile.deleted_on_disk = deleted_on_disk;
+		this.#sync_directories(diskfile);
+	}
+
+	/**
+	 * Brings `#directory_counts` in step with the file `diskfile`'s id names:
+	 * it counts while it's in the collection and on disk, under its current
+	 * path and root. Called after every change to any of those. Reads the
+	 * collection's own object for the id when there is one, so a stale or
+	 * rejected object (an `add` of an id already present) can't uncount the
+	 * file that's there.
+	 */
+	#sync_directories(diskfile: Diskfile): void {
+		untrack(() => {
+			const counted = this.#counted_files.get(diskfile.id);
+			const live = this.items.by_id.get(diskfile.id);
+			const counts = !!live && !live.deleted_on_disk;
+			const { path, source_dir } = live ?? diskfile;
+			if (counted && counts && counted.path === path && counted.source_dir === source_dir) return;
+			if (counted) {
+				this.#counted_files.delete(diskfile.id);
+				for (const dir of to_file_directories(counted.path, counted.source_dir)) {
+					const count = this.#directory_counts.get(dir)! - 1;
+					if (count > 0) {
+						this.#directory_counts.set(dir, count);
+					} else {
+						this.#directory_counts.delete(dir);
+						this.#directory_paths.delete(dir);
+					}
+				}
+			}
+			if (counts) {
+				this.#counted_files.set(diskfile.id, { path, source_dir });
+				for (const dir of to_file_directories(path, source_dir)) {
+					const count = this.#directory_counts.get(dir) ?? 0;
+					this.#directory_counts.set(dir, count + 1);
+					if (count === 0) this.#directory_paths.add(dir);
+				}
+			}
+		});
+	}
+
+	/**
+	 * The file index as markdown links see it, for telling a link's target
+	 * exists — reactive, so a check in a `$derived` follows the index.
+	 */
+	readonly link_index: MarkdownLinkIndex = this.#create_link_index();
+
+	#create_link_index(): MarkdownLinkIndex {
+		const get_roots = () => this.indexed_roots;
+		return {
+			has_file: (path) => {
+				const diskfile = this.get_by_path(path as DiskfilePath);
+				return !!diskfile && !diskfile.deleted_on_disk;
+			},
+			has_directory: (path) => this.#directory_paths.has(path),
+			get roots() {
+				return get_roots();
+			}
+		};
+	}
+
+	/**
+	 * Opens the file at `path` in a tab, as a preview unless `open_not_preview`
+	 * (see `select`) — only a file on disk in the index. A markdown file's
+	 * markdown view then reveals the heading `fragment` names (see
+	 * `DiskfileEditorState.markdown_pending_fragment`).
+	 *
+	 * @returns whether a file was opened
+	 */
+	open_path(
+		path: string,
+		options?: { fragment?: string | null; open_not_preview?: boolean }
+	): boolean {
+		const diskfile = this.get_by_path(path as DiskfilePath);
+		if (!diskfile || diskfile.deleted_on_disk) return false;
+		const fragment = options?.fragment;
+		if (fragment && to_diskfile_content_kind(diskfile.path) === 'markdown') {
+			this.get_editor_state(diskfile).markdown_pending_fragment = fragment;
+		}
+		this.select(diskfile.id, options?.open_not_preview);
+		return true;
+	}
 
 	/**
 	 * Creates a new file in `new_files_dir` — never overwriting one: the

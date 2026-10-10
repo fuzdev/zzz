@@ -57,6 +57,20 @@
 		textarea_el?.focus();
 	};
 
+	/**
+	 * Focus the textarea with the caret at `offset` (clamped to the source),
+	 * scrolled into view - exposed for parent components, like an outline.
+	 */
+	export const place_caret = (offset: number): void => {
+		const el = textarea_el;
+		if (!el) return;
+		const clamped = Math.max(0, Math.min(offset, el.value.length));
+		// browsers scroll a textarea to its caret when it takes focus, not on `setSelectionRange`
+		if (document.activeElement === el) el.blur();
+		el.setSelectionRange(clamped, clamped);
+		el.focus();
+	};
+
 	// the textarea's own handler runs first and swallows the event, so a page-level listener never
 	// saves a different editor than the focused one
 	const handle_save_shortcut = (event: KeyboardEvent): void => {

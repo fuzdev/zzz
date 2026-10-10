@@ -131,6 +131,13 @@ export class DiskfileEditorState {
 	 */
 	markdown_view_mode_choice: MarkdownViewMode | null = $state.raw(null);
 
+	/**
+	 * The id of a heading the markdown view reveals once it shows this file,
+	 * then clears — set by following a link with a `#fragment` here from
+	 * another file (`Diskfiles.open_path`).
+	 */
+	markdown_pending_fragment: string | null = $state.raw(null);
+
 	#in_flight_save: InFlightSave | null = null;
 
 	/** The follow-up save queued behind the in-flight write. */
@@ -495,7 +502,7 @@ export class DiskfileEditorState {
 		this.save_error = null;
 		// the write recreated a file deleted on disk — it's no longer held only
 		// for a draft, even before the `add` broadcast arrives
-		diskfile.deleted_on_disk = false;
+		this.app.diskfiles.set_deleted_on_disk(diskfile, false);
 
 		// a disk change other than this save landed while in flight — the disk no
 		// longer holds the saved content, and `check_disk_changes` already recorded it

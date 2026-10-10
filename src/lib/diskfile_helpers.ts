@@ -67,6 +67,27 @@ export const to_relative_path = (path: string, parent: string): string => {
 	return path.length > dir.length && path.startsWith(dir) ? path.slice(dir.length) : path;
 };
 
+/**
+ * The directories holding the file at `path`, each with a trailing `/`:
+ * every ancestor from its parent up to its root `source_dir`, inclusive,
+ * innermost first — none when `path` isn't under `source_dir`. The file
+ * index lists only files, so a folder exists for it exactly when it holds one.
+ *
+ * @param path - an indexed file's path
+ * @param source_dir - the root it's indexed under, with a trailing `/`
+ */
+export const to_file_directories = (path: string, source_dir: string): Array<string> => {
+	const dirs: Array<string> = [];
+	if (!path.startsWith(source_dir)) return dirs;
+	let end = path.lastIndexOf('/');
+	while (end >= source_dir.length - 1) {
+		dirs.push(path.slice(0, end + 1));
+		// `lastIndexOf` clamps a negative start to 0, which would find the root's `/` forever
+		end = end === 0 ? -1 : path.lastIndexOf('/', end - 1);
+	}
+	return dirs;
+};
+
 // TODO @many refactor source/disk files with Gro Disknode too
 /**
  * Converts a `SerializableDisknode` to the `DiskfileJson` format.

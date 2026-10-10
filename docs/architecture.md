@@ -826,7 +826,42 @@ twin over the same editing state: its source in `SourceEditor` (fuz_code's
 highlighted `CodeTextarea`) beside a live `MarkdownPreview`, or either alone —
 split, preview, or source, a mode chosen per file and kept on its
 `DiskfileEditorState`, defaulting to the split, or to the preview while the
-content isn't loaded. The editor's sidebar is a drawer there.
+content isn't loaded. Ctrl+Shift+1, 2, and 3 switch to split, preview, and
+source from anywhere on the page — the textarea included, since Ctrl+Shift
+types nothing — except an input or contenteditable outside the view, or while
+a modal dialog is open. The editor's sidebar is a
+drawer there, adding the document's outline and its broken links: clicking
+either scrolls the preview to it and puts the editor's caret at its source,
+in whichever panes are shown. The view parses the source once with
+`mdz_parse` and hands the nodes to the preview, the outline, and the link
+list.
+
+`MarkdownPreview`'s links never navigate the app (`markdown_links.ts` resolves
+them; the preview only acts). An external link opens in a new tab; a
+`#fragment` scrolls the preview; and with the file's `path`, a relative link
+resolves against the file's directory, a root-relative `/docs/x.md` against
+the open root holding the file (a workspace, usually the repository — the way
+a repository host reads it), with any query dropped and the fragment kept. A
+link to an indexed file opens it in the preview tab — a middle- or
+Ctrl/Cmd-click in a kept tab instead — and a fragment on a markdown file
+reveals that heading once its view shows (`markdown_pending_fragment` on the
+target's `DiskfileEditorState`). A link to a folder opens the folder's README
+if the index has one. A link the file index says is missing — inside a root
+it covers and outside the folders it skips (`FILE_INDEX_IGNORED_DIR_NAMES`,
+mirroring the filer) — is marked broken, and one outside every root, in a
+skipped folder, or root-relative and not found is marked unknown, never
+broken, since the index can't see there; each mark has a title saying why,
+and follows the index and the content as they change. Everything else —
+protocol-relative, other schemes, same-origin absolute URLs, a root-relative
+`..` past its root, or any `..` past `/`, and any relative link in a preview
+without a `path` — is inert (a relative `..` climbing out of the workspace
+reads as outside it, so unknown). The index lists only files, so what it never
+indexes reads as missing — an empty folder, a symlink, a file in an
+unreadable subdirectory, or a path that isn't UTF-8 is marked broken. A test
+holds `FILE_INDEX_IGNORED_DIR_NAMES` and the staging-file prefix to the
+filer's Rust source. The preview pairs each link with its rendered anchor by
+document order, since mdz can rewrite a root-relative `href` (SvelteKit's
+`resolve`), and follows a click from the link's reference.
 
 The frontend file pipeline is six Cells plus a per-file editing-state class:
 
