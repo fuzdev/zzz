@@ -81,6 +81,12 @@ export default defineConfig(({ mode }) => ({
 	resolve: mode === 'test' ? { conditions: ['browser'] } : undefined,
 	optimizeDeps: { exclude: ['@fuzdev/blake3-wasm'] },
 	server: {
+		// Vite watches the whole root with one inotify watch per file, so build output and
+		// caches (the Rust `target/` alone is tens of thousands of files) exhaust the
+		// user's `max_user_watches` budget. Merged with SvelteKit's own ignores.
+		watch: {
+			ignored: ['**/target/**', '**/.fuz/**', '**/.gro/**', '**/build/**', '**/.zzz/**']
+		},
 		proxy: {
 			'/api': `http://localhost:${process.env.PUBLIC_ZZZ_SERVER_PROXIED_PORT || '4461'}`,
 			// `/health` lives outside `/api`; proxy it to the daemon so the gate's
