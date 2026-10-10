@@ -612,7 +612,7 @@ The browser's side of all this — `getUserMedia`, `MediaRecorder`, the clock �
 
 ### Playing audio
 
-The files page picks a file's view in one place, `DiskfileView`, by its content kind (`to_diskfile_content_kind` — the extension, since the file index carries no type): audio gets `DiskfileAudioView`, everything else the text editor.
+The files page routes a file to its view by content kind (see [File Editing](#file-editing)); audio gets `DiskfileAudioView`.
 
 The audio view (with its transcript beside it — see [Transcription](#transcription)) is an `<audio>` element whose `src` is the file's byte-route URL (see [File Bytes](#file-bytes)); the browser streams and seeks with `Range` requests, so the file is never loaded into the app. A file's content being unloaded means its `content` can't show that it changed, so `Diskfile.mtime` — the disk node's modification time, kept current by every `filer_change` — keys the player: when the bytes change (a finalize, an external write) it remounts and loads them. While the recorder is writing a file, its view says so and shows no player. The view's finalize button runs `media_finalize` on the file — for a recording cut off before it was saved, which plays but has no duration.
 
@@ -816,6 +816,18 @@ When the OS runs out of watches (inotify's `max_user_watches`), or no watcher ca
 
 ## File Editing
 
+The files page picks a file's view in one place, `DiskfileView`, by its
+content kind (`to_diskfile_content_kind` — the extension, since the file index
+carries no type): audio gets the player (`DiskfileAudioView`, see
+[Playing audio](#playing-audio)), a transcript sidecar `DiskfileTranscriptView`,
+markdown (`.md`, `.markdown`) `DiskfileMarkdownView`, and everything else the
+text editor (`DiskfileEditorView`). The markdown view is the text editor's
+twin over the same editing state: its source in `SourceEditor` (fuz_code's
+highlighted `CodeTextarea`) beside a live `MarkdownPreview`, or either alone —
+split, preview, or source, a mode chosen per file and kept on its
+`DiskfileEditorState`, defaulting to the split, or to the preview while the
+content isn't loaded. The editor's sidebar is a drawer there.
+
 The frontend file pipeline is six Cells plus a per-file editing-state class:
 
 - `Diskfiles` — `IndexedCollection<Diskfile>` (`by_path` single index,
@@ -874,7 +886,9 @@ the write is in flight — more typing, another history entry picked, or an
 external edit landing after the save's own broadcast — the saved content is
 recorded in history but the editor keeps its content and selection, and an
 external edit stays the last-seen disk state. Ctrl+S saves the focused
-editor; the main `/files` editor also takes it from anywhere on the page.
+editor; the main `/files` view also takes it from anywhere on the page, the
+markdown view included when its preview is shown alone and no editor is
+mounted.
 
 **Disk changes and drafts.** `Diskfiles.upsert` records every content change
 in the file's editing state, if it has one — whether or not an editor is

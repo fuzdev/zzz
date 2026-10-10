@@ -6,10 +6,22 @@
 	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 
 	import type { Diskfile } from './diskfile.svelte.ts';
-	import { icon_delete, icon_file, icon_remove } from '@fuzdev/fuz_ui/icons.ts';
+	import {
+		icon_checkmark,
+		icon_delete,
+		icon_file,
+		icon_remove,
+		icon_view
+	} from '@fuzdev/fuz_ui/icons.ts';
 	import { frontend_context } from './frontend.svelte.ts';
 	import { delete_diskfile } from './diskfile_helpers.ts';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
+	import { to_diskfile_content_kind } from './diskfile_content_kind.ts';
+	import {
+		MARKDOWN_VIEW_MODES,
+		MARKDOWN_VIEW_MODE_LABELS,
+		to_default_markdown_view_mode
+	} from './markdown_view_mode.ts';
 
 	const {
 		diskfile,
@@ -100,5 +112,26 @@
 				</ContextmenuEntry>
 			{/snippet}
 		</ContextmenuSubmenu>
+		{#if to_diskfile_content_kind(diskfile.path) === 'markdown'}
+			{@const current_mode =
+				diskfiles.find_editor_state(diskfile.id)?.markdown_view_mode ??
+				to_default_markdown_view_mode(diskfile.content_loaded)}
+			<!-- rendering only looks the editing state up: it's created on a choice, never by opening the menu -->
+			<ContextmenuSubmenu icon={icon_view}>
+				view
+				{#snippet menu()}
+					{#each MARKDOWN_VIEW_MODES as mode (mode)}
+						<ContextmenuEntry
+							icon={mode === current_mode ? icon_checkmark : icon_view}
+							run={() => {
+								diskfiles.get_editor_state(diskfile).markdown_view_mode_choice = mode;
+							}}
+						>
+							<span>{MARKDOWN_VIEW_MODE_LABELS[mode]}</span>
+						</ContextmenuEntry>
+					{/each}
+				{/snippet}
+			</ContextmenuSubmenu>
+		{/if}
 	{/if}
 {/snippet}

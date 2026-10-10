@@ -6,12 +6,14 @@
  */
 
 import { TRANSCRIPT_SIDECAR_SUFFIX } from './transcript_types.ts';
+import { to_path_extension } from './path_lang.ts';
 
 /**
  * `audio` gets the player, `transcript` (a transcription's sidecar) the
- * segment view, and `other` the text editor.
+ * segment view, `markdown` the source beside its preview, and `other` the
+ * text editor.
  */
-export type DiskfileContentKind = 'audio' | 'transcript' | 'other';
+export type DiskfileContentKind = 'audio' | 'transcript' | 'markdown' | 'other';
 
 /**
  * Extensions viewed as audio. Each is one the backend serves with a media
@@ -33,6 +35,9 @@ export const AUDIO_EXTENSIONS: ReadonlySet<string> = new Set([
 	'aac'
 ]);
 
+/** Extensions viewed as markdown. */
+export const MARKDOWN_EXTENSIONS: ReadonlySet<string> = new Set(['md', 'markdown']);
+
 /**
  * The content kind of the file at `path`, by its extension (case-insensitive).
  *
@@ -41,7 +46,9 @@ export const AUDIO_EXTENSIONS: ReadonlySet<string> = new Set([
 export const to_diskfile_content_kind = (path: string): DiskfileContentKind => {
 	const name = path.slice(path.lastIndexOf('/') + 1);
 	if (name.endsWith(TRANSCRIPT_SIDECAR_SUFFIX)) return 'transcript';
-	const dot = name.lastIndexOf('.');
-	if (dot === -1) return 'other';
-	return AUDIO_EXTENSIONS.has(name.slice(dot + 1).toLowerCase()) ? 'audio' : 'other';
+	const extension = to_path_extension(name);
+	if (extension === null) return 'other';
+	if (AUDIO_EXTENSIONS.has(extension)) return 'audio';
+	if (MARKDOWN_EXTENSIONS.has(extension)) return 'markdown';
+	return 'other';
 };

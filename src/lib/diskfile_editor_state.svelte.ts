@@ -9,6 +9,7 @@ import type { DiskfilePath } from './diskfile_types.ts';
 import { DISKFILE_CONTENT_NOT_LOADED_MESSAGE } from './diskfile_helpers.ts';
 import type { Frontend } from './frontend.svelte.ts';
 import { DiskfileHistory, type HistoryEntry } from './diskfile_history.svelte.ts';
+import { to_default_markdown_view_mode, type MarkdownViewMode } from './markdown_view_mode.ts';
 
 /** Label of the history entry holding a file's draft. */
 export const HISTORY_LABEL_UNSAVED_EDIT = 'Unsaved edit';
@@ -122,6 +123,14 @@ export class DiskfileEditorState {
 	/** The error message from the last failed save, cleared when a save starts. */
 	save_error: string | null = $state.raw(null);
 
+	/**
+	 * The markdown view's mode the user chose for this file, `null` until they
+	 * choose one. Kept with the rest of the file's editing state, so it lasts
+	 * across tab switches and reopening for as long as the app keeps the file
+	 * (in memory, like its drafts). See `markdown_view_mode`.
+	 */
+	markdown_view_mode_choice: MarkdownViewMode | null = $state.raw(null);
+
 	#in_flight_save: InFlightSave | null = null;
 
 	/** The follow-up save queued behind the in-flight write. */
@@ -136,6 +145,13 @@ export class DiskfileEditorState {
 	 * can be saved, since a save would overwrite a file nobody has seen.
 	 */
 	readonly content_loaded: boolean = $derived(this.original_content !== null);
+	/**
+	 * The mode the markdown view shows this file in: the user's choice, else
+	 * `split`, or `preview` while the content isn't loaded (read-only).
+	 */
+	readonly markdown_view_mode: MarkdownViewMode = $derived(
+		this.markdown_view_mode_choice ?? to_default_markdown_view_mode(this.content_loaded)
+	);
 	readonly has_changes = $derived.by(() => {
 		// an unloaded file has no baseline to differ from, and can't be edited
 		if (this.original_content === null) return false;
