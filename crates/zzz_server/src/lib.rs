@@ -201,8 +201,8 @@ impl std::fmt::Debug for RunAppOptions {
 /// # Errors
 ///
 /// Returns [`ServerError`] for env/config validation failures, DB
-/// connectivity / migration failures, listener bind failures, and
-/// `axum::serve` errors.
+/// connectivity / migration failures, listener bind failures, and serve
+/// errors (`fuz_http::serve_with_shutdown` returns none in practice).
 pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     let RunAppOptions {
         password_hasher,
@@ -858,14 +858,14 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     )
     .await;
 
-    // `serve_with_shutdown` returns with the token cancelled — on a serve
-    // error too — so the cleanup task is already stopping.
+    // `serve_with_shutdown` returns only once the token has fired, so the
+    // cleanup task is already stopping.
     if let Err(e) = auth_cleanup.await {
         tracing::warn!(error = %e, "the auth cleanup task failed");
     }
 
     // Stop jobs (killing their tool processes) and clean up spawned terminal
-    // processes before exiting, on a serve error too
+    // processes before exiting, ahead of the `?` on `served`
     app_state_for_shutdown.job_manager.cancel_all().await;
     app_state_for_shutdown.pty_manager.kill_all().await;
     served.map_err(ServerError::Serve)?;
@@ -1647,9 +1647,8 @@ mod client_ip_posture {
             builder = builder.header("x-forwarded-for", value);
         }
         let mut req = builder.body(Body::empty()).expect("request builds");
-        // `fuz_http::serve_with_shutdown` supplies `ConnectInfo` per connection
-        // via `into_make_service_with_connect_info`; a `oneshot` has no
-        // connection, so plumb the peer by hand.
+        // `fuz_http::serve_with_shutdown` inserts `ConnectInfo` into every
+        // request; a `oneshot` has no connection, so plumb the peer by hand.
         req.extensions_mut().insert(ConnectInfo(
             peer.parse::<SocketAddr>().expect("peer parses"),
         ));
