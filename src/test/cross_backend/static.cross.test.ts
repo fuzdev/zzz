@@ -80,7 +80,12 @@ describe('static frontend serving', () => {
 	});
 
 	test('non-GET methods are refused', async () => {
-		const res = await fetch_path('/chats', { method: 'POST' });
+		// a JSON body, so the method check answers, not the simple-request gate
+		const res = await fetch_path('/chats', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: '{}'
+		});
 		assert.strictEqual(res.status, 405);
 		assert.strictEqual(res.headers.get('allow'), 'GET, HEAD');
 	});

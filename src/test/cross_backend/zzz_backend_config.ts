@@ -84,6 +84,9 @@ import {
  */
 export const zzz_session_cookie_name = (port: number): string => `zzz_session_${port}`;
 
+/** The dev UI's origin (Vite), allowed by the test backends beside their own. */
+export const TEST_UI_ORIGIN = 'http://localhost:5173';
+
 /**
  * Per-project Rust backend database URL prefix — real Postgres (PGlite
  * isn't reachable from `tokio-postgres`). The full URL is built by
@@ -169,6 +172,15 @@ const make_zzz_rust_backend_config = ({
 		extra_env: {
 			PUBLIC_ZZZ_DIR: paths.zzz_dir,
 			PUBLIC_ZZZ_SCOPED_DIRS: paths.scoped_dir,
+			// exact origins, the shape the `.env` templates and the CLI ship —
+			// never the upstream harness's `http://localhost:*` — so the
+			// browser-gate suite can show a page on another local port refused.
+			// `TEST_UI_ORIGIN` is the Vite origin the upstream suites send.
+			FUZ_ALLOWED_ORIGINS: [
+				`http://localhost:${port}`,
+				`http://127.0.0.1:${port}`,
+				TEST_UI_ORIGIN
+			].join(','),
 			...extra_env
 		}
 	});

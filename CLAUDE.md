@@ -770,7 +770,7 @@ Decisions.
 - `ZZZ_WHISPER_CPP_MODEL` — the Whisper model file (`ggml-*.bin`) transcription loads; an absolute path to a file, or `zzzd` refuses to boot. There is no default and no search — unset, nothing is transcribed. zzz downloads no models
 - `DATABASE_URL` — PostgreSQL connection (`postgres://`; required — unset or blank refuses to boot, naming it)
 - `SECRET_FUZ_COOKIE_KEYS` — HMAC signing keys (min 32 chars; required, like `DATABASE_URL`)
-- `FUZ_ALLOWED_ORIGINS` — Origin patterns for API verification (required — `zzzd` refuses to boot on an absent or empty list, since an empty allowlist would allow every origin; the CLI defaults it to `http://localhost:<port>,http://127.0.0.1:<port>`)
+- `FUZ_ALLOWED_ORIGINS` — the origins the UI is served from, checked against every browser request's `Origin` (required — `zzzd` refuses to boot on an absent or empty list, since an empty allowlist would allow every origin; the CLI defaults it to `http://localhost:<port>,http://127.0.0.1:<port>`). List exact ports: the session cookie reaches every port on `localhost`, so a wildcard (`http://localhost:*`) admits any page served on any local port to the WebSocket. The hosts it names are also the non-loopback `Host`s `zzzd` answers to (see Security posture)
 - `FUZ_BOOTSTRAP_TOKEN_PATH` — One-shot admin bootstrap token path
 - `PUBLIC_ZZZ_DIR` — Zzz app directory (default `.zzz`, a subdirectory of the daemon's working directory); must not be the working directory itself (under the CLI that's the daemon home, with `.env` and `bootstrap_token`) — `zzzd` refuses to boot on that. The check catches the daemon home only as the working directory: an explicit `PUBLIC_ZZZ_DIR` naming the absolute path of `~/.zzz` for a daemon run elsewhere (say `cargo xtask dev`) makes the home the app dir, whose filer indexes and broadcasts its `.env` — don't
 - `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (`zzzd` doesn't expand `~`; the CLI does); an entry that is, or is inside, a `.zzz` directory other than the app dir refuses to boot
@@ -855,6 +855,29 @@ accounts from each other.
   isn't a security boundary: any account can open its own shell.
 - Revisit — role-gating the `terminal_*`, `workspace_*`, and file actions —
   if multi-account use ever matters.
+
+Only zzz's own UI can drive the daemon from a browser. The session cookie is
+`HttpOnly; Secure; SameSite=Strict`, which keeps other sites' pages out but not
+pages on other `localhost` ports, so every request, the static frontend
+included, also passes three gates:
+
+- **Origin** — a request with an `Origin` must match `FUZ_ALLOWED_ORIGINS`
+  (403 `forbidden_origin`), on the WebSocket upgrade too. A request without
+  one passes (a non-browser client, or a same-origin `GET` such as a media
+  element's `src`).
+- **Host** — `Host` must be loopback (`localhost`, `127.0.0.0/8`, `[::1]`, at
+  any port) or named by an allowed origin (403 `forbidden_host`). This stops
+  DNS rebinding: a page that re-points its own domain at `127.0.0.1` talks to
+  `zzzd` same-origin, sending no `Origin`, but its `Host` is its domain.
+- **CORS simple requests** — a `POST` with no `Content-Type`, or a form or
+  text one, is refused (415 `unsupported_content_type`). A browser sends those
+  cross-origin without a preflight, and same-site ignores the port, so a page
+  on another `localhost` port would carry the session cookie. Any other type
+  makes the browser preflight first, and `zzzd` answers no preflight, so the
+  request is never sent. JSON calls send `application/json` and byte uploads
+  `application/octet-stream`.
+
+`src/test/cross_backend/browser_gates.cross.test.ts` pins them.
 
 ## Known Limitations
 

@@ -87,7 +87,7 @@ cargo xtask check-release         # audit: no production binary depends on fuz_t
 # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS, and FUZ_ALLOWED_ORIGINS)
 DATABASE_URL=postgres://localhost/zzz \
 SECRET_FUZ_COOKIE_KEYS=dev-only-not-for-production-use-000 \
-FUZ_ALLOWED_ORIGINS='http://localhost:*' \
+FUZ_ALLOWED_ORIGINS='http://localhost:4460' \
 ./target/debug/zzzd --port 4460
 
 # Test binary (cross-process integration tests — fast argon2)
@@ -122,7 +122,7 @@ setup (app dir, daemon token).
 
 - `DATABASE_URL` — PostgreSQL connection (e.g. `postgres://localhost/zzz`)
 - `SECRET_FUZ_COOKIE_KEYS` — HMAC signing keys (min 32 chars, `__` separator for rotation)
-- `FUZ_ALLOWED_ORIGINS` — Comma-separated origin allowlist patterns — required, non-empty. The server hard-fails at boot on an empty list, because `fuz_http::check_origin` treats an empty allowlist as allow-all (every origin passes). Dev/prod `.env` set `http://localhost:*`.
+- `FUZ_ALLOWED_ORIGINS` — Comma-separated origin allowlist patterns — required, non-empty. The server hard-fails at boot on an empty list, because `fuz_http::check_origin` treats an empty allowlist as allow-all (every origin passes). The `.env` templates list exact ports (dev: the Vite origin by either name, `http://localhost:5173,http://127.0.0.1:5173`; prod: `zzzd`'s own `http://localhost:4460,http://127.0.0.1:4460`) — the session cookie reaches every `localhost` port, so a wildcard would admit any local page to the WebSocket. The cross-backend harness runs the same shape: the backend's own two origins plus the Vite one the upstream suites send (`zzz_backend_config.ts`).
 
 An unset or blank (empty or whitespace) `DATABASE_URL` or
 `SECRET_FUZ_COOKIE_KEYS` refuses to boot with `<NAME> is unset or blank`.
@@ -230,6 +230,17 @@ orientation; the spine crates are authoritative:
 9. **Origin verification** — `FUZ_ALLOWED_ORIGINS` patterns checked on requests
    with an `Origin` header. Supports exact match, wildcard port
    (`http://localhost:*`), subdomain wildcard (`https://*.example.com`).
+   Three layers wrap the whole router in `run_app`, the static fallback
+   included, outermost first: `fuz_http::host_layer` refuses a `Host` that
+   isn't loopback or named by an allowed origin (403 `forbidden_host` — DNS
+   rebinding); `fuz_http::origin_layer` refuses a disallowed `Origin` (403
+   `forbidden_origin`, ahead of the next gate — the spine handlers check it
+   too); and `fuz_http::simple_request_layer` refuses a `POST` with no
+   `Content-Type` or a form / text one (415 `unsupported_content_type` — a
+   request a browser sends cross-origin with no preflight, carrying the
+   cookie from any other `localhost` port). The spine's JSON handlers (RPC
+   POST, login, logout, password, bootstrap, signup) also require
+   `application/json` themselves, as fuz_app's routes do. See the root CLAUDE.md § Security posture.
 
 10. **Socket revocation** — `close_sockets_for_session(token_hash)`,
     `close_sockets_for_token(api_token_id)`, and
@@ -348,6 +359,19 @@ conform to the shared fuz_app contract. The tests live in
   request with no `Origin` served (a media element's `src`), a full-scope
   bearer admitted, a method-scoped one refused (`token_scope_required` /
   `surface:file_bytes`).
+- **`browser_gates.cross.test.ts`** — the gates in front of every route:
+  loopback `Host`s served; a foreign `Host` (a DNS-rebinding page's) refused
+  with 403 `forbidden_host` on health, the static fallback, account status,
+  RPC GET and POST, the byte routes, and a WebSocket upgrade; a page on
+  another `localhost` port (same-site, so it carries the cookie) refused with
+  403 `forbidden_origin` on RPC — a forged `text/plain` POST included — and
+  the upgrade, while zzzd's own origins are allowed a JSON POST; a `POST` a
+  browser sends cross-origin without a preflight (no `Content-Type`, or
+  `text/plain`, form-encoded, or multipart) refused with 415
+  `unsupported_content_type` on RPC — with a session and an allowed origin,
+  the forged request's exact shape — and on a byte-route create, which
+  writes nothing. Requests go through `node:http`, since `fetch` won't send a
+  chosen `Host`.
 - **`media.cross.test.ts`** — the media actions and jobs against the
   daemon's real tools; each test that needs one skips, visibly, without it
   (`ffmpeg` on `PATH`; for transcription also whisper.cpp and
@@ -786,8 +810,11 @@ joined after the drain, before PTY teardown.
     method-scoped API token holds no non-RPC surface → 403
     `token_scope_required` / `surface:file_bytes`). The router is layered
     with the Origin allowlist, the client-IP middleware, and a body limit
-    (`FILE_BYTES_MAX_BODY_BYTES`, equal to `RPC_MESSAGE_MAX_BYTES`). A
-    request with no `Origin` passes the allowlist, which is what lets a media
+    (`FILE_BYTES_MAX_BODY_BYTES`, equal to `RPC_MESSAGE_MAX_BYTES`), and sits
+    inside `run_app`'s `Host` and simple-request gates, so a `POST` must carry
+    a type that isn't form or text (the frontend sends
+    `application/octet-stream`) — `PATCH` is always preflighted. A request
+    with no `Origin` passes the allowlist, which is what lets a media
     element's same-origin `src` load; the session cookie is `SameSite=Strict`,
     so a cross-site page's request carries no credential. A write's body is
     read only after the gates pass.

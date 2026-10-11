@@ -38,6 +38,12 @@ const bytes_url = (path: string): string => to_file_bytes_url(api_path, path);
 const append_url = (path: string, offset: number): string =>
 	to_file_bytes_append_url(api_path, path, offset);
 
+/**
+ * The content type the frontend uploads with — a write without one, or with a
+ * form or text type, is refused (415) before anything else.
+ */
+const OCTET_STREAM = { 'content-type': 'application/octet-stream' };
+
 /** Bytes that are not valid UTF-8, like the head of a media file. */
 const BINARY = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0xff, 0x00, 0x80, 0xfe, 0x0a, 0x0d]);
 
@@ -211,7 +217,7 @@ describe('file bytes cross-backend', () => {
 			try {
 				const created = await fixture.transport(bytes_url(path), {
 					method: 'POST',
-					headers: fixture.create_session_headers(),
+					headers: fixture.create_session_headers(OCTET_STREAM),
 					body: BINARY
 				});
 				assert.equal(created.status, 201);
@@ -221,7 +227,7 @@ describe('file bytes cross-backend', () => {
 
 				const again = await fixture.transport(bytes_url(path), {
 					method: 'POST',
-					headers: fixture.create_session_headers(),
+					headers: fixture.create_session_headers(OCTET_STREAM),
 					body: new Uint8Array([1, 2, 3])
 				});
 				assert.equal(again.status, 409);
@@ -238,14 +244,14 @@ describe('file bytes cross-backend', () => {
 			const append = (offset: number, body: Uint8Array<ArrayBuffer>): Promise<Response> =>
 				fixture.transport(append_url(path, offset), {
 					method: 'PATCH',
-					headers: fixture.create_session_headers(),
+					headers: fixture.create_session_headers(OCTET_STREAM),
 					body
 				});
 			try {
 				// an empty create, then chunks
 				const created = await fixture.transport(bytes_url(path), {
 					method: 'POST',
-					headers: fixture.create_session_headers()
+					headers: fixture.create_session_headers(OCTET_STREAM)
 				});
 				assert.equal(created.status, 201);
 				assert.deepEqual(await created.json(), { size: 0 });
@@ -278,7 +284,7 @@ describe('file bytes cross-backend', () => {
 			const patch = (url: string): Promise<Response> =>
 				fixture.transport(url, {
 					method: 'PATCH',
-					headers: fixture.create_session_headers(),
+					headers: fixture.create_session_headers(OCTET_STREAM),
 					body: BINARY
 				});
 			const missing = await patch(append_url(path, 0));
@@ -309,7 +315,7 @@ describe('file bytes cross-backend', () => {
 			try {
 				const at_cap = await fixture.transport(bytes_url(path), {
 					method: 'POST',
-					headers: fixture.create_session_headers(),
+					headers: fixture.create_session_headers(OCTET_STREAM),
 					body: new Uint8Array(FILE_BYTES_MAX_BODY_BYTES)
 				});
 				assert.equal(at_cap.status, 201);
@@ -317,7 +323,7 @@ describe('file bytes cross-backend', () => {
 
 				const over = await request_status(
 					`${handle.config.base_url}${append_url(path, FILE_BYTES_MAX_BODY_BYTES)}`,
-					{ origin: handle.config.base_url, ...fixture.create_session_headers() },
+					{ origin: handle.config.base_url, ...fixture.create_session_headers(OCTET_STREAM) },
 					new Uint8Array(FILE_BYTES_MAX_BODY_BYTES + 1),
 					'PATCH'
 				);
@@ -361,9 +367,11 @@ describe('file bytes cross-backend', () => {
 					['POST', bytes_url(await new_path('never.webm'))],
 					['PATCH', append_url(path, BINARY.length)]
 				] as const) {
+					const writes = method === 'POST' || method === 'PATCH';
 					const res = await anonymous(url, {
 						method,
-						body: method === 'POST' || method === 'PATCH' ? BINARY : undefined
+						headers: writes ? OCTET_STREAM : undefined,
+						body: writes ? BINARY : undefined
 					});
 					assert.equal(res.status, 401, method);
 					if (method !== 'HEAD') {
@@ -403,7 +411,10 @@ describe('file bytes cross-backend', () => {
 						method === 'PATCH' ? append_url(path, BINARY.length) : bytes_url(path),
 						{
 							method,
-							headers: { ...fixture.create_session_headers(), origin: 'https://evil.example' },
+							headers: {
+								...fixture.create_session_headers(OCTET_STREAM),
+								origin: 'https://evil.example'
+							},
 							body: method === 'GET' ? undefined : BINARY
 						}
 					);
@@ -448,7 +459,7 @@ describe('file bytes cross-backend', () => {
 				] as const) {
 					const res = await bearer_only(url, {
 						method,
-						headers: narrowed,
+						headers: method === 'GET' ? narrowed : { ...narrowed, ...OCTET_STREAM },
 						body: method === 'GET' ? undefined : BINARY
 					});
 					assert.equal(res.status, 403, method);

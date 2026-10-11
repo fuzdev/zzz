@@ -128,6 +128,9 @@ export default defineConfig(({ mode }) => ({
 	resolve: mode === 'test' ? { conditions: ['browser'] } : undefined,
 	optimizeDeps: { exclude: ['@fuzdev/blake3-wasm'] },
 	server: {
+		// pinned, never the next free port: `FUZ_ALLOWED_ORIGINS` names this exact origin
+		port: 5173,
+		strictPort: true,
 		// Vite watches the whole root with one inotify watch per file, so build output and
 		// caches (the Rust `target/` alone is tens of thousands of files) exhaust the
 		// user's `max_user_watches` budget. Merged with SvelteKit's own ignores.

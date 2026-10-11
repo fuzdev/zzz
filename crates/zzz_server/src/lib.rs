@@ -819,6 +819,31 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         app = app.fallback_service(static_files::static_router(dir));
     }
 
+    // Three gates over everything, the static fallback included, so a browser
+    // page that isn't zzz's own can't drive the daemon — in `fuz_http`'s
+    // mount order, outermost first:
+    // - `host_layer` refuses a `Host` that isn't loopback or named by an
+    //   allowed origin — a DNS-rebinding page talks to zzzd same-origin,
+    //   sending no `Origin`, but its `Host` is its own domain.
+    // - `origin_layer` refuses a disallowed `Origin`. The spine handlers check
+    //   it too; this puts it ahead of the next gate, so a foreign page's
+    //   request is refused for its origin whatever its content type.
+    // - `simple_request_layer` refuses a `POST` a browser could send
+    //   cross-origin without a CORS preflight (no `Content-Type`, or a form
+    //   or text one). The session cookie is `SameSite=Strict`, but same-site
+    //   ignores the port, so a page on another `localhost` port would send it.
+    //   zzz takes no form or multipart bodies, so nothing legitimate is lost.
+    let app = app
+        .layer(axum::middleware::from_fn(fuz_http::simple_request_layer))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&spine_allowed_origins),
+            fuz_http::origin_layer,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&spine_allowed_origins),
+            fuz_http::host_layer,
+        ));
+
     let addr = config.bind_addr;
     let listener = TcpListener::bind(addr)
         .await
