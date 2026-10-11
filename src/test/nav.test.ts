@@ -1,7 +1,7 @@
 import { describe, test, assert } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_util/id.ts';
 
-import { parse_url_param_uuid, to_chats_url, to_prompts_url } from '$lib/nav.ts';
+import { parse_url_param_uuid, to_chats_url, to_prompts_url } from '#lib/nav.ts';
 
 describe('parse_url_param_uuid', () => {
 	test('returns a valid uuid', () => {

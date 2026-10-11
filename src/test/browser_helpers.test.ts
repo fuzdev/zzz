@@ -1,6 +1,6 @@
 import { test, describe, assert } from 'vitest';
 
-import { to_browser_tab_iframe_src, to_browser_tab_url } from '$routes/tabs/browser_helpers.ts';
+import { to_browser_tab_iframe_src, to_browser_tab_url } from '#routes/tabs/browser_helpers.ts';
 
 const APP_ORIGIN = 'http://localhost:4460';
 

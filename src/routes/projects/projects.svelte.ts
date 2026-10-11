@@ -6,7 +6,7 @@ import { page } from '$app/state';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import { Cell, type CellOptions } from '$lib/cell.svelte.ts';
+import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
 import { ProjectsJson } from './projects_schema.ts';
 import { Project } from './project.svelte.ts';
 import { Page } from './page.svelte.ts';
@@ -16,9 +16,9 @@ import { ProjectViewmodel } from './project_viewmodel.svelte.ts';
 import { PageViewmodel } from './page_viewmodel.svelte.ts';
 import { DomainViewmodel } from './domain_viewmodel.svelte.ts';
 import { RepoViewmodel } from './repo_viewmodel.svelte.ts';
-import { HANDLED } from '$lib/cell_helpers.ts';
-import { parse_url_param_uuid } from '$lib/nav.ts';
-import { get_unique_name } from '$lib/helpers.ts';
+import { HANDLED } from '#lib/cell_helpers.ts';
+import { parse_url_param_uuid } from '#lib/nav.ts';
+import { get_unique_name } from '#lib/helpers.ts';
 import { create_sample_projects as create_example_projects } from './example_projects.ts';
 
 export const projects_context = create_context<Projects>();

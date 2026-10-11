@@ -180,7 +180,7 @@ export class PageViewmodel {
 			this.current_page.updated = now;
 		}
 
-		void goto(resolve(`/projects/${this.project_id}/pages`));
+		void goto(resolve('/projects/[project_id]/pages', { project_id: this.project_id }));
 	}
 }
 

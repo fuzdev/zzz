@@ -3,7 +3,7 @@
 import { describe, test, assert, afterEach } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 
-import SourceEditor from '$lib/SourceEditor.svelte';
+import SourceEditor from '#lib/SourceEditor.svelte';
 
 import { create_reactive_props } from './reactive_test_helpers.svelte.ts';
 

@@ -4,7 +4,7 @@ import { test, describe, beforeEach, assert } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_util/id.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 import {

@@ -2,10 +2,10 @@
 
 import { test, describe, beforeEach, assert } from 'vitest';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { Part } from '$lib/part.svelte.ts';
-import type { Prompt } from '$lib/prompt.svelte.ts';
-import { DiskfilePath } from '$lib/diskfile_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { Part } from '#lib/part.svelte.ts';
+import type { Prompt } from '#lib/prompt.svelte.ts';
+import { DiskfilePath } from '#lib/diskfile_types.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

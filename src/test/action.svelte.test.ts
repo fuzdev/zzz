@@ -2,30 +2,24 @@
 
 import { test, describe, beforeEach, assert } from 'vitest';
 import { create_action_event } from '@fuzdev/fuz_app/actions/action_event.ts';
-import type {
-	ActionEventEnvironment,
-	ActionExecutor
-} from '@fuzdev/fuz_app/actions/action_event_types.ts';
-import type { ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';
+import type { ActionEventEnvironment } from '@fuzdev/fuz_app/actions/action_event_types.ts';
 import type {
 	ActionEventData,
 	ActionEventDataUnion
 } from '@fuzdev/fuz_app/actions/action_event_data.ts';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { Action } from '$lib/action.svelte.ts';
-import { toggle_main_menu_action_spec } from '$lib/action_specs.ts';
-import { ACTION_PAYLOAD_BUDGET, is_action_payload_omitted } from '$lib/action_helpers.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { Action } from '#lib/action.svelte.ts';
+import { toggle_main_menu_action_spec } from '#lib/action_specs.ts';
+import { ACTION_PAYLOAD_BUDGET, is_action_payload_omitted } from '#lib/action_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 const environment: ActionEventEnvironment = {
-	executor: 'frontend' as ActionExecutor,
+	executor: 'frontend',
 	lookup_action_handler: () => undefined,
 	lookup_action_spec: (method) =>
-		method === toggle_main_menu_action_spec.method
-			? (toggle_main_menu_action_spec as ActionSpecUnion)
-			: undefined
+		method === toggle_main_menu_action_spec.method ? toggle_main_menu_action_spec : undefined
 };
 
 let app: Frontend;

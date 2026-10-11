@@ -9,16 +9,16 @@ import {
 	DiskfilePath,
 	SerializableDisknode,
 	type DiskfileChangeType
-} from '$lib/diskfile_types.ts';
-import { Frontend, SESSION_BOOT_FALLBACK_DELAY } from '$lib/frontend.svelte.ts';
-import type { SessionLoadData } from '$lib/action_specs.ts';
-import type { WorkspaceInfoJson } from '$lib/workspace.svelte.ts';
-import { ERROR_WORKSPACE_NOT_OPEN } from '$lib/workspace_helpers.ts';
-import type { Terminal } from '$lib/terminal.svelte.ts';
+} from '#lib/diskfile_types.ts';
+import { Frontend, SESSION_BOOT_FALLBACK_DELAY } from '#lib/frontend.svelte.ts';
+import type { SessionLoadData } from '#lib/action_specs.ts';
+import type { WorkspaceInfoJson } from '#lib/workspace.svelte.ts';
+import { ERROR_WORKSPACE_NOT_OPEN } from '#lib/workspace_helpers.ts';
+import type { Terminal } from '#lib/terminal.svelte.ts';
 import {
 	TERMINAL_LOST_TO_RESTART_MESSAGE,
 	TERMINAL_LOST_WHILE_DISCONNECTED_MESSAGE
-} from '$lib/terminal_helpers.ts';
+} from '#lib/terminal_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

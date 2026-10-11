@@ -3,9 +3,9 @@
 import { test, beforeEach, describe, assert } from 'vitest';
 import { create_uuid, UuidWithDefault, type Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import { DISKFILE_TABS_CLOSED_MAX, DiskfileTabs } from '$lib/diskfile_tabs.svelte.ts';
-import { DiskfileTab } from '$lib/diskfile_tab.svelte.ts';
-import { Frontend } from '$lib/frontend.svelte.ts';
+import { DISKFILE_TABS_CLOSED_MAX, DiskfileTabs } from '#lib/diskfile_tabs.svelte.ts';
+import { DiskfileTab } from '#lib/diskfile_tab.svelte.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

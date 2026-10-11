@@ -3,13 +3,13 @@
 
 	import { resolve } from '$app/paths';
 
-	import { projects_context } from '$routes/projects/projects.svelte.ts';
-	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
-	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
-	import DomainsSidebar from '$routes/projects/DomainsSidebar.svelte';
+	import { projects_context } from '#routes/projects/projects.svelte.ts';
+	import ProjectSidebar from '#routes/projects/ProjectSidebar.svelte';
+	import SectionSidebar from '#routes/projects/SectionSidebar.svelte';
+	import DomainsSidebar from '#routes/projects/DomainsSidebar.svelte';
 	import { icon_add, icon_checkmark } from '@fuzdev/fuz_ui/icons.ts';
-	import Icon from '$lib/Icon.svelte';
-	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
+	import Icon from '#lib/Icon.svelte';
+	import ProjectNotFound from '#routes/projects/ProjectNotFound.svelte';
 
 	const projects = projects_context.get();
 
@@ -58,9 +58,10 @@
 								<tr>
 									<td>
 										<a
-											href={resolve(
-												`/projects/${project_viewmodel.project_id}/domains/${domain.id}`
-											)}
+											href={resolve('/projects/[project_id]/domains/[domain_id]', {
+												project_id: project_viewmodel.project_id,
+												domain_id: domain.id
+											})}
 										>
 											{domain.name || '[new domain]'}
 										</a>

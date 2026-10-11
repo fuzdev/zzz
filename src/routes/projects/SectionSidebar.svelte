@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 
-	import NavLink from '$lib/NavLink.svelte';
+	import NavLink from '#lib/NavLink.svelte';
 	import type { Project, ProjectSection } from './project.svelte.ts';
 
 	const {
@@ -22,7 +22,7 @@
 		<ul class="unstyled">
 			<li>
 				<NavLink
-					href={resolve(`/projects/${project.id}`)}
+					href={resolve('/projects/[project_id]', { project_id: project.id })}
 					selected={section === 'project'}
 					show_selected_descendent={false}
 				>
@@ -30,23 +30,32 @@
 				</NavLink>
 			</li>
 			<li>
-				<NavLink href={resolve(`/projects/${project.id}/pages`)} selected={section === 'pages'}>
+				<NavLink
+					href={resolve('/projects/[project_id]/pages', { project_id: project.id })}
+					selected={section === 'pages'}
+				>
 					pages
 				</NavLink>
 			</li>
 			<li>
-				<NavLink href={resolve(`/projects/${project.id}/domains`)} selected={section === 'domains'}>
+				<NavLink
+					href={resolve('/projects/[project_id]/domains', { project_id: project.id })}
+					selected={section === 'domains'}
+				>
 					domains
 				</NavLink>
 			</li>
 			<li>
-				<NavLink href={resolve(`/projects/${project.id}/repos`)} selected={section === 'repos'}>
+				<NavLink
+					href={resolve('/projects/[project_id]/repos', { project_id: project.id })}
+					selected={section === 'repos'}
+				>
 					repos
 				</NavLink>
 			</li>
 			<li>
 				<NavLink
-					href={resolve(`/projects/${project.id}/settings`)}
+					href={resolve('/projects/[project_id]/settings', { project_id: project.id })}
 					selected={section === 'settings'}
 				>
 					settings

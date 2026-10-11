@@ -1,7 +1,7 @@
 import { describe, test, assert } from 'vitest';
 import { z } from 'zod';
 
-import { create_collection_decoder, get_schema_class_info, HANDLED } from '$lib/cell_helpers.ts';
+import { create_collection_decoder, get_schema_class_info, HANDLED } from '#lib/cell_helpers.ts';
 
 describe('get_schema_class_info', () => {
 	test('handles null or undefined schemas', () => {

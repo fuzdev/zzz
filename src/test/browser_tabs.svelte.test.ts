@@ -2,8 +2,8 @@
 
 import { test, describe, assert, beforeEach } from 'vitest';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { BROWSER_TABS_CLOSED_MAX, BrowserTabs } from '$routes/tabs/browser_tabs.svelte.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { BROWSER_TABS_CLOSED_MAX, BrowserTabs } from '#routes/tabs/browser_tabs.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

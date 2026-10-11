@@ -8,9 +8,9 @@ import {
 	DiskfilePath,
 	SerializableDisknode,
 	type DiskfileChangeType
-} from '$lib/diskfile_types.ts';
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { confirm_unload_with_unsaved_changes, to_file_directories } from '$lib/diskfile_helpers.ts';
+} from '#lib/diskfile_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { confirm_unload_with_unsaved_changes, to_file_directories } from '#lib/diskfile_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
@@ -249,7 +249,7 @@ describe('delete cleans up editor state', () => {
 
 describe('has_unsaved_changes and the unload guard', () => {
 	const create_unload_event = () => {
-		const event = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent;
+		const event = new Event('beforeunload', { cancelable: true });
 		return event;
 	};
 

@@ -6,8 +6,8 @@ import {
 	to_completion_truncation,
 	to_completion_response_text,
 	to_completion_stop_reason
-} from '$lib/response_helpers.ts';
-import type { CompletionResponse } from '$lib/completion_types.ts';
+} from '#lib/response_helpers.ts';
+import type { CompletionResponse } from '#lib/completion_types.ts';
 
 const create_response = (data: CompletionResponse['data']): CompletionResponse => ({
 	created: get_datetime_now(),

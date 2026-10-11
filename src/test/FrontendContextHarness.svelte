@@ -2,7 +2,7 @@
 	// Test harness: mounts `component` inside `frontend_context`.
 	import { untrack, type Component } from 'svelte';
 
-	import { frontend_context, type Frontend } from '$lib/frontend.svelte.ts';
+	import { frontend_context, type Frontend } from '#lib/frontend.svelte.ts';
 
 	const {
 		app,

@@ -4,8 +4,8 @@ import { test, describe, beforeEach, assert } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_util/id.ts';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import { estimate_token_count } from '$lib/helpers.ts';
-import { Frontend } from '$lib/frontend.svelte.ts';
+import { estimate_token_count } from '#lib/helpers.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

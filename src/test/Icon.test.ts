@@ -4,7 +4,7 @@ import { describe, test, assert, afterEach } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
 
-import Icon from '$lib/Icon.svelte';
+import Icon from '#lib/Icon.svelte';
 
 let cleanup: (() => void) | null = null;
 afterEach(() => {

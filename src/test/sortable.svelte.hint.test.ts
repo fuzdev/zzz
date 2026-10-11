@@ -1,6 +1,6 @@
 import { test, describe, assert } from 'vitest';
 
-import { sort_with_hint } from '$lib/sortable.svelte.ts';
+import { sort_with_hint } from '#lib/sortable.svelte.ts';
 
 interface Item {
 	key: number;

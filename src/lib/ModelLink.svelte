@@ -33,12 +33,17 @@
 		});
 	}
 
-	const selected = $derived(page.url.pathname === resolve(`/models/${model.name}`));
+	const selected = $derived(page.url.pathname === resolve('/models/[slug]', { slug: model.name }));
 </script>
 
 <!-- TODO this contextmenu appears as a duplicate, I think a de-duped key is the best fix, not manually disabling it -->
 <ModelContextmenu {model}>
-	<a {...rest} href={resolve(`/models/${model.name}`)} class="selected-plain" class:selected>
+	<a
+		{...rest}
+		href={resolve('/models/[slug]', { slug: model.name })}
+		class="selected-plain"
+		class:selected
+	>
 		{#if children}
 			{@render children()}
 		{:else}

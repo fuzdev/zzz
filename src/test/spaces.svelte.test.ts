@@ -2,8 +2,8 @@
 
 import { test, describe, beforeEach, assert } from 'vitest';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { SCRATCHPAD_NAME, Spaces } from '$lib/spaces.svelte.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { SCRATCHPAD_NAME, Spaces } from '#lib/spaces.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

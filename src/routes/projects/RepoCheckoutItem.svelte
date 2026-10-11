@@ -2,7 +2,7 @@
 	// @slop Claude Opus 4
 
 	import { icon_delete } from '@fuzdev/fuz_ui/icons.ts';
-	import Icon from '$lib/Icon.svelte';
+	import Icon from '#lib/Icon.svelte';
 	import type { RepoCheckout } from './projects_schema.ts';
 
 	const {

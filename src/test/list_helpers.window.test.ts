@@ -1,6 +1,6 @@
 import { test, describe, assert } from 'vitest';
 
-import { compute_list_window } from '$lib/list_helpers.ts';
+import { compute_list_window } from '#lib/list_helpers.ts';
 
 describe('compute_list_window', () => {
 	test('renders the visible rows plus overscan', () => {

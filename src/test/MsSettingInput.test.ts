@@ -3,9 +3,9 @@
 import { describe, test, assert, afterEach } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 
-import MsSettingInput from '$lib/MsSettingInput.svelte';
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { HEARTBEAT_INTERVAL_BOUNDS } from '$lib/socket_helpers.ts';
+import MsSettingInput from '#lib/MsSettingInput.svelte';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { HEARTBEAT_INTERVAL_BOUNDS } from '#lib/socket_helpers.ts';
 
 let cleanup: (() => void) | null = null;
 afterEach(() => {

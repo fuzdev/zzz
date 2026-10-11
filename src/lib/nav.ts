@@ -91,10 +91,10 @@ export const main_nav_items_default: Array<NavItem> = [
 ];
 
 export const to_chats_url = (chat_id: Uuid | null): string =>
-	chat_id ? resolve(`/chats/${chat_id}`) : resolve('/chats');
+	chat_id ? resolve('/chats/[chat_id]', { chat_id }) : resolve('/chats');
 
 export const to_prompts_url = (prompt_id: Uuid | null): string =>
-	prompt_id ? resolve(`/prompts/${prompt_id}`) : resolve('/prompts');
+	prompt_id ? resolve('/prompts/[prompt_id]', { prompt_id }) : resolve('/prompts');
 
 /**
  * Navigate to a path only if we're not already on that path.

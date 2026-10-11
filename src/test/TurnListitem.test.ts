@@ -4,11 +4,11 @@ import { describe, test, assert, afterEach } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import TurnListitem from '$lib/TurnListitem.svelte';
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { Thread } from '$lib/thread.svelte.ts';
-import type { Turn } from '$lib/turn.svelte.ts';
-import type { CompletionResponse } from '$lib/completion_types.ts';
+import TurnListitem from '#lib/TurnListitem.svelte';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { Thread } from '#lib/thread.svelte.ts';
+import type { Turn } from '#lib/turn.svelte.ts';
+import type { CompletionResponse } from '#lib/completion_types.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';

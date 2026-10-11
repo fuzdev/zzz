@@ -5,9 +5,9 @@ import { z } from 'zod';
 import { create_uuid, UuidWithDefault } from '@fuzdev/fuz_util/id.ts';
 import { DatetimeNow, get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import { Cell, type CellOptions } from '$lib/cell.svelte.ts';
-import { CellJson, type SchemaKeys } from '$lib/cell_types.ts';
-import { Frontend } from '$lib/frontend.svelte.ts';
+import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
+import { CellJson, type SchemaKeys } from '#lib/cell_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

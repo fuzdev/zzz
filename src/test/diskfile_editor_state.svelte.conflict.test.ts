@@ -3,10 +3,10 @@
 import { test, beforeEach, describe, assert } from 'vitest';
 import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 
-import type { DiskfileEditorState } from '$lib/diskfile_editor_state.svelte.ts';
-import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
-import { Frontend } from '$lib/frontend.svelte.ts';
-import type { Diskfile } from '$lib/diskfile.svelte.ts';
+import type { DiskfileEditorState } from '#lib/diskfile_editor_state.svelte.ts';
+import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import type { Diskfile } from '#lib/diskfile.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

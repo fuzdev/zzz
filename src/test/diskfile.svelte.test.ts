@@ -2,9 +2,9 @@
 
 import { test, describe, assert, beforeEach, afterEach, vi } from 'vitest';
 
-import { Diskfile } from '$lib/diskfile.svelte.ts';
-import { DiskfileJson, DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
-import { Frontend } from '$lib/frontend.svelte.ts';
+import { Diskfile } from '#lib/diskfile.svelte.ts';
+import { DiskfileJson, DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
 
 const PATH = DiskfilePath.parse('/w/a.txt');
 const SOURCE_DIR = SerializableDisknode.shape.source_dir.parse('/w/');

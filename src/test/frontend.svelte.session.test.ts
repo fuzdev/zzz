@@ -7,13 +7,13 @@ import {
 	DiskfilePath,
 	SerializableDisknode,
 	type DiskfileChangeType
-} from '$lib/diskfile_types.ts';
+} from '#lib/diskfile_types.ts';
 import {
 	Frontend,
 	SESSION_LOAD_RETRY_DELAY,
 	SESSION_LOAD_RETRY_DELAY_MAX
-} from '$lib/frontend.svelte.ts';
-import type { SessionLoadData } from '$lib/action_specs.ts';
+} from '#lib/frontend.svelte.ts';
+import type { SessionLoadData } from '#lib/action_specs.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

@@ -4,10 +4,10 @@ import { test, assert, describe, beforeEach } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_util/id.ts';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import { Part, TextPart, DiskfilePart } from '$lib/part.svelte.ts';
-import { DiskfileDirectoryPath, DiskfilePath } from '$lib/diskfile_types.ts';
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { estimate_token_count } from '$lib/helpers.ts';
+import { Part, TextPart, DiskfilePart } from '#lib/part.svelte.ts';
+import { DiskfileDirectoryPath, DiskfilePath } from '#lib/diskfile_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { estimate_token_count } from '#lib/helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
@@ -132,7 +132,7 @@ describe('Part factory method', () => {
 		};
 
 		assert.throws(
-			() => Part.create(app, invalid_json as any),
+			() => Part.create(app, invalid_json),
 			/Missing required "type" field in part JSON/
 		);
 	});

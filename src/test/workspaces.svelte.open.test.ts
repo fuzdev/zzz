@@ -3,14 +3,14 @@
 import { test, beforeEach, afterEach, describe, assert } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_util/id.ts';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
 import {
 	DiskfileDirectoryPath,
 	DiskfilePath,
 	SerializableDisknode,
 	type DiskfileChangeType
-} from '$lib/diskfile_types.ts';
-import type { SessionLoadData, WorkspaceOpenOutput } from '$lib/action_specs.ts';
+} from '#lib/diskfile_types.ts';
+import type { SessionLoadData, WorkspaceOpenOutput } from '#lib/action_specs.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

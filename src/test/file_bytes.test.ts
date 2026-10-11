@@ -5,7 +5,7 @@ import {
 	create_file_bytes,
 	to_file_bytes_append_url,
 	to_file_bytes_url
-} from '$lib/file_bytes.ts';
+} from '#lib/file_bytes.ts';
 
 import { FakeByteRoutes, blob_of } from './byte_route_test_helpers.ts';
 

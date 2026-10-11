@@ -4,15 +4,15 @@ import {
 	PUBLIC_ZZZ_SERVER_PROTOCOL,
 	PUBLIC_ZZZ_SERVER_API_PATH,
 	PUBLIC_ZZZ_WEBSOCKET_URL
-} from '$env/static/public';
+} from '$app/env/public';
 
 import { PathWithLeadingSlash, PathWithoutTrailingSlash } from './zod_helpers.ts';
 
 // This module re-exports public environment variables with parsed values.
 // It should generally be preferred to using the variables directly.
 //
-// WARNING: This module imports $env/static/public (SvelteKit build-time) and
-// MUST NOT be imported by any non-SvelteKit context — $env doesn't exist
+// WARNING: This module imports `$app/env/public` (SvelteKit, declared in `src/env.ts`)
+// and MUST NOT be imported by any non-SvelteKit context — `$app/env` doesn't exist
 // outside the SvelteKit build and will crash.
 
 // TODO a lot of these need to be moved to env or config etc
@@ -76,8 +76,8 @@ export const API_PATH_FOR_HTTP_RPC: string = API_PATH + '/rpc';
 export const API_URL_FOR_HTTP_RPC: string = SERVER_URL + API_PATH_FOR_HTTP_RPC;
 
 /**
- * `PUBLIC_ZZZ_WEBSOCKET_URL` when set (dev: `zzzd` directly, the Vite proxy
- * doesn't carry WebSockets), else `API_PATH + '/ws'` on the page's origin.
+ * `PUBLIC_ZZZ_WEBSOCKET_URL` when set (dev: `zzzd` directly), else
+ * `API_PATH + '/ws'` on the page's origin (the Vite dev proxy carries WebSockets too).
  * Empty during SSR/prerender when unset.
  *
  * @with_protocol

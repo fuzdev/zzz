@@ -18,7 +18,7 @@
 
 <ChatContextmenu {chat}>
 	<NavLink
-		href={resolve(`/chats/${chat.id}`)}
+		href={resolve('/chats/[chat_id]', { chat_id: chat.id })}
 		{selected}
 		class="justify-content:space-between"
 		style="min-height: 0;"

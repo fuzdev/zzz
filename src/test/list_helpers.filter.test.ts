@@ -1,6 +1,6 @@
 import { test, describe, assert } from 'vitest';
 
-import { create_text_filter } from '$lib/list_helpers.ts';
+import { create_text_filter } from '#lib/list_helpers.ts';
 
 interface Item {
 	path: string;

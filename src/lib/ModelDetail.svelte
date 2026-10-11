@@ -24,7 +24,9 @@
 
 	const app = frontend_context.get();
 
-	const at_detail_page = $derived(page.url.pathname === resolve(`/models/${model.name}`));
+	const at_detail_page = $derived(
+		page.url.pathname === resolve('/models/[slug]', { slug: model.name })
+	);
 
 	// TODO get model metadata, probably both at build time and runtime for the best UX
 

@@ -2,11 +2,11 @@
 
 import { z } from 'zod';
 
-import { Cell, type CellOptions } from '$lib/cell.svelte.ts';
-import { CellJson } from '$lib/cell_types.ts';
+import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
+import { CellJson } from '#lib/cell_types.ts';
 import { BrowserTabs } from './browser_tabs.svelte.ts';
 import { BrowserTabJson } from './browser_tab.svelte.ts';
-import { HANDLED } from '$lib/cell_helpers.ts';
+import { HANDLED } from '#lib/cell_helpers.ts';
 import { to_browser_tab_url } from './browser_helpers.ts';
 
 export const BrowserJson = CellJson.extend({

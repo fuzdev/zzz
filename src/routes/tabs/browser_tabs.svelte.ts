@@ -4,16 +4,16 @@ import { z } from 'zod';
 import { create_uuid } from '@fuzdev/fuz_util/id.ts';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import { Cell, type CellOptions } from '$lib/cell.svelte.ts';
-import { IndexedCollection } from '$lib/indexed_collection.svelte.ts';
+import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
+import { IndexedCollection } from '#lib/indexed_collection.svelte.ts';
 import {
 	create_single_index,
 	create_derived_index
-} from '$lib/indexed_collection_helpers.svelte.ts';
-import { CellJson } from '$lib/cell_types.ts';
+} from '#lib/indexed_collection_helpers.svelte.ts';
+import { CellJson } from '#lib/cell_types.ts';
 import { BrowserTab, BrowserTabJson } from './browser_tab.svelte.ts';
-import { create_collection_decoder, HANDLED } from '$lib/cell_helpers.ts';
-import { to_reordered_list } from '$lib/list_helpers.ts';
+import { create_collection_decoder, HANDLED } from '#lib/cell_helpers.ts';
+import { to_reordered_list } from '#lib/list_helpers.ts';
 import { fake_sites } from './sample_tabs.ts';
 
 export const BrowserTabsJson = CellJson.extend({

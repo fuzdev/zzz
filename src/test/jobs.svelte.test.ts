@@ -3,9 +3,9 @@
 import { test, describe, assert, beforeEach, afterEach } from 'vitest';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { DiskfilePath } from '$lib/diskfile_types.ts';
-import type { JobSnapshot } from '$lib/job_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { DiskfilePath } from '#lib/diskfile_types.ts';
+import type { JobSnapshot } from '#lib/job_types.ts';
 
 import { result_ok } from './terminal_test_helpers.ts';
 

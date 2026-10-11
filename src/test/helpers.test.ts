@@ -1,6 +1,6 @@
 import { test, describe, assert } from 'vitest';
 
-import { get_unique_name } from '$lib/helpers.ts';
+import { get_unique_name } from '#lib/helpers.ts';
 
 describe('get_unique_name', () => {
 	test('returns a name not yet taken as is', () => {

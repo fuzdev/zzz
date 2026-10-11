@@ -104,7 +104,7 @@ export class DomainViewmodel {
 			this.projects.add_domain(this.project_id, domain);
 		}
 
-		void goto(resolve(`/projects/${this.project_id}/domains`));
+		void goto(resolve('/projects/[project_id]/domains', { project_id: this.project_id }));
 	}
 
 	/**
@@ -116,7 +116,7 @@ export class DomainViewmodel {
 		// eslint-disable-next-line no-alert
 		if (confirm('Are you sure you want to remove this domain? This action cannot be undone.')) {
 			this.projects.delete_domain(this.project_id, this.domain_id);
-			void goto(resolve(`/projects/${this.project_id}/domains`));
+			void goto(resolve('/projects/[project_id]/domains', { project_id: this.project_id }));
 		}
 	}
 }

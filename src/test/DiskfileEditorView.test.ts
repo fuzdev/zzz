@@ -3,14 +3,14 @@
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
 import { flushSync, mount, unmount, type Component } from 'svelte';
 
-import DiskfileEditorView from '$lib/DiskfileEditorView.svelte';
-import DiskfileCloseDialog from '$lib/DiskfileCloseDialog.svelte';
-import DiskfileListitem from '$lib/DiskfileListitem.svelte';
-import PartEditorForDiskfile from '$lib/PartEditorForDiskfile.svelte';
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { DiskfilePart } from '$lib/part.svelte.ts';
-import type { Diskfile } from '$lib/diskfile.svelte.ts';
-import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
+import DiskfileEditorView from '#lib/DiskfileEditorView.svelte';
+import DiskfileCloseDialog from '#lib/DiskfileCloseDialog.svelte';
+import DiskfileListitem from '#lib/DiskfileListitem.svelte';
+import PartEditorForDiskfile from '#lib/PartEditorForDiskfile.svelte';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { DiskfilePart } from '#lib/part.svelte.ts';
+import type { Diskfile } from '#lib/diskfile.svelte.ts';
+import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { create_reactive_props } from './reactive_test_helpers.svelte.ts';

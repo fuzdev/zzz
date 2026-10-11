@@ -239,7 +239,11 @@ src/
 │   ├── views/
 │   └── workspaces/
 │
+├── env.ts                        # SvelteKit env var declarations (`$app/env/public`)
+├── hooks.server.ts
+│
 └── test/                         # Tests (not co-located)
+    ├── sveltekit_env_setup.ts    # vitest setup: stubs the page global `$app/env/public` reads
     ├── cell.svelte.*.test.ts
     ├── action_event.test.ts
     ├── indexed_collection.svelte.*.test.ts
@@ -807,8 +811,9 @@ open command to run instead of the browser — see CLI).
 
 ### SvelteKit frontend vars (PUBLIC_ZZZ_\*)
 
-Baked in at build time (`$env/static/public`), so each must be present in
-the env file the build reads, even if empty.
+Declared in `src/env.ts` (public and static, imported from `$app/env/public`),
+so the build bakes them in. Each is optional — unset reads as empty, and
+`src/lib/constants.ts` supplies the default.
 
 - `PUBLIC_ZZZ_SERVER_PROTOCOL` — `http` or `https`
 - `PUBLIC_ZZZ_SERVER_HOST` — Server hostname (frontend)

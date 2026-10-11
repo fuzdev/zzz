@@ -47,13 +47,18 @@
 	}
 
 	const selected = $derived(
-		!!provider && page.url.pathname === resolve(`/providers/${provider.name}`)
+		!!provider && page.url.pathname === resolve('/providers/[slug]', { slug: provider.name })
 	);
 </script>
 
 <!-- whitespace is tricky here, the icon branches control it with an explicit nbsp -->
 {#if provider}
-	<a {...rest} href={resolve(`/providers/${provider.name}`)} class="selected-plain" class:selected>
+	<a
+		{...rest}
+		href={resolve('/providers/[slug]', { slug: provider.name })}
+		class="selected-plain"
+		class:selected
+	>
 		{#if children}
 			{@render children()}
 		{:else}

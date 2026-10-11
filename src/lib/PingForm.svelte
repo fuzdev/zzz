@@ -50,7 +50,7 @@
 			<li transition:slide>
 				<div style:visibility="hidden">
 					{@render ping_item({
-						ping_id: (i + ' placeholder') as any,
+						ping_id: i + ' placeholder',
 						completed: true,
 						sent_time: 0,
 						received_time: 0,

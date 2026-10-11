@@ -1,6 +1,6 @@
 import { test, describe, assert } from 'vitest';
 
-import { ChunkUpload, CHUNK_UPLOAD_RETRY_DELAYS } from '$lib/chunk_upload.ts';
+import { ChunkUpload, CHUNK_UPLOAD_RETRY_DELAYS } from '#lib/chunk_upload.ts';
 
 import { FakeByteRoutes, blob_of } from './byte_route_test_helpers.ts';
 

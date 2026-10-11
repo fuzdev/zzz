@@ -3,11 +3,11 @@
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { Diskfile } from '$lib/diskfile.svelte.ts';
-import type { Action } from '$lib/action.svelte.ts';
-import { create_detached } from '$lib/reactive_helpers.svelte.ts';
-import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { Diskfile } from '#lib/diskfile.svelte.ts';
+import type { Action } from '#lib/action.svelte.ts';
+import { create_detached } from '#lib/reactive_helpers.svelte.ts';
+import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 
 import CallbackHarness from './CallbackHarness.svelte';
 

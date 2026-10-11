@@ -7,7 +7,7 @@ import {
 	to_auth_gate_state,
 	to_auth_redirect,
 	type AuthGateInput
-} from '$lib/auth_gate.ts';
+} from '#lib/auth_gate.ts';
 
 describe('is_public_route', () => {
 	test('about and docs, and pages below them, are public', () => {

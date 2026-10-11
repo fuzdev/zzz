@@ -15,7 +15,9 @@
 		attrs?: SvelteHTMLElements['div'] | undefined;
 	} = $props();
 
-	const at_detail_page = $derived(page.url.pathname === resolve(`/providers/${provider.name}`));
+	const at_detail_page = $derived(
+		page.url.pathname === resolve('/providers/[slug]', { slug: provider.name })
+	);
 </script>
 
 <div {...attrs} class="panel p_lg {attrs?.class}">

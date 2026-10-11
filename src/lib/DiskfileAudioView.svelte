@@ -243,7 +243,7 @@
 				{#if url !== null && !recording && !diskfile.deleted_on_disk}
 					<a
 						class="chip"
-						href={/* eslint-disable-line svelte/no-navigation-without-resolve */ url}
+						href={url}
 						download={diskfile.path.slice(diskfile.path.lastIndexOf('/') + 1)}
 					>
 						download

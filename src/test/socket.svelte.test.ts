@@ -11,9 +11,9 @@ import {
 	WS_CLOSE_SESSION_REVOKED
 } from '@fuzdev/fuz_app/actions/transports.ts';
 
-import { Socket } from '$lib/socket.svelte.ts';
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { HEARTBEAT_INTERVAL_BOUNDS, RECONNECT_DELAY_BOUNDS } from '$lib/socket_helpers.ts';
+import { Socket } from '#lib/socket.svelte.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { HEARTBEAT_INTERVAL_BOUNDS, RECONNECT_DELAY_BOUNDS } from '#lib/socket_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
@@ -129,7 +129,7 @@ describe('Socket', () => {
 		MockWebSocket.OPEN = Mocket.OPEN;
 		MockWebSocket.CLOSING = Mocket.CLOSING;
 		MockWebSocket.CLOSED = Mocket.CLOSED;
-		globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket;
+		globalThis.WebSocket = MockWebSocket;
 
 		vi.useFakeTimers();
 	});

@@ -1,6 +1,6 @@
 import { test, describe, assert } from 'vitest';
 
-import { format_ms_to_readable } from '$lib/time_helpers.ts';
+import { format_ms_to_readable } from '#lib/time_helpers.ts';
 
 describe('format_ms_to_readable', () => {
 	test('reads naturally', () => {

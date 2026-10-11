@@ -3,14 +3,14 @@
 
 	import { swallow } from '@fuzdev/fuz_util/dom.ts';
 
-	import { projects_context } from '$routes/projects/projects.svelte.ts';
-	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
-	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
-	import ReposSidebar from '$routes/projects/ReposSidebar.svelte';
+	import { projects_context } from '#routes/projects/projects.svelte.ts';
+	import ProjectSidebar from '#routes/projects/ProjectSidebar.svelte';
+	import SectionSidebar from '#routes/projects/SectionSidebar.svelte';
+	import ReposSidebar from '#routes/projects/ReposSidebar.svelte';
 	import { icon_add, icon_delete } from '@fuzdev/fuz_ui/icons.ts';
-	import Icon from '$lib/Icon.svelte';
-	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
-	import RepoCheckoutItem from '$routes/projects/RepoCheckoutItem.svelte';
+	import Icon from '#lib/Icon.svelte';
+	import ProjectNotFound from '#routes/projects/ProjectNotFound.svelte';
+	import RepoCheckoutItem from '#routes/projects/RepoCheckoutItem.svelte';
 
 	const projects = projects_context.get();
 

@@ -37,9 +37,9 @@ import {
 	session_load_action_spec,
 	transcription_create_action_spec,
 	transcription_progress_action_spec
-} from '$lib/action_specs.ts';
-import { is_job_finished, type JobSnapshot } from '$lib/job_types.ts';
-import { Transcript, TRANSCRIPT_SIDECAR_SUFFIX } from '$lib/transcript_types.ts';
+} from '#lib/action_specs.ts';
+import { is_job_finished, type JobSnapshot } from '#lib/job_types.ts';
+import { Transcript, TRANSCRIPT_SIDECAR_SUFFIX } from '#lib/transcript_types.ts';
 
 import './cross_test_types.ts';
 

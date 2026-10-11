@@ -33,7 +33,7 @@ import type { RequestResponseActionSpec } from '@fuzdev/fuz_app/actions/action_s
 import { is_protocol_action_method } from '@fuzdev/fuz_app/actions/action_codegen.ts';
 import type { MiddlewareSpec } from '@fuzdev/fuz_app/http/middleware_spec.ts';
 
-import { all_action_specs } from '$lib/action_specs.ts';
+import { all_action_specs } from '#lib/action_specs.ts';
 
 /** Surface generation never invokes handlers — see module doc. */
 const noop_handler = (async () => undefined) as unknown as ActionHandler;

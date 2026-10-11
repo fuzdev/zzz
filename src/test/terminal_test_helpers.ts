@@ -1,4 +1,4 @@
-import type { Frontend } from '$lib/frontend.svelte.ts';
+import type { Frontend } from '#lib/frontend.svelte.ts';
 
 /** A stubbed terminal RPC call, settled manually by the test. */
 export interface StubbedTerminalCall {

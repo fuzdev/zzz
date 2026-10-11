@@ -11,12 +11,12 @@
 		icon_drag,
 		icon_refresh
 	} from '@fuzdev/fuz_ui/icons.ts';
-	import Icon from '$lib/Icon.svelte';
-	import { format_placeholder } from '$lib/helpers.ts';
+	import Icon from '#lib/Icon.svelte';
+	import { format_placeholder } from '#lib/helpers.ts';
 	import type { Browser } from './browser.svelte.ts';
 	import BrowserTabContent from './BrowserTabContent.svelte';
 	import BrowserTabListitem from './BrowserTabListitem.svelte';
-	import { Reorderable } from '$lib/reorderable.svelte.ts';
+	import { Reorderable } from '#lib/reorderable.svelte.ts';
 
 	const {
 		browser,

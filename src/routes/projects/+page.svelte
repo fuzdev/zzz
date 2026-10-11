@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 
 	import { icon_project } from '@fuzdev/fuz_ui/icons.ts';
-	import Icon from '$lib/Icon.svelte';
+	import Icon from '#lib/Icon.svelte';
 	import ProjectList from './ProjectList.svelte';
 	import ProjectSidebar from './ProjectSidebar.svelte';
 	import { projects_context } from './projects.svelte.ts';

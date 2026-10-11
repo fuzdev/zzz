@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { icon_tab } from '@fuzdev/fuz_ui/icons.ts';
-	import Icon from '$lib/Icon.svelte';
+	import Icon from '#lib/Icon.svelte';
 	import { Browser } from './browser.svelte.ts';
 	import { sample_tabs } from './sample_tabs.ts';
 	import BrowserView from './BrowserView.svelte';
-	import { frontend_context } from '$lib/frontend.svelte.ts';
-	import ExternalLink from '$lib/ExternalLink.svelte';
-	import { create_detached } from '$lib/reactive_helpers.svelte.ts';
+	import { frontend_context } from '#lib/frontend.svelte.ts';
+	import ExternalLink from '#lib/ExternalLink.svelte';
+	import { create_detached } from '#lib/reactive_helpers.svelte.ts';
 
 	const app = frontend_context.get();
 

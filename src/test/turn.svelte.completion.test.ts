@@ -4,13 +4,13 @@ import { test, describe, beforeEach, assert, vi } from 'vitest';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { Thread } from '$lib/thread.svelte.ts';
-import { Turn } from '$lib/turn.svelte.ts';
-import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
-import type { CompletionResponse } from '$lib/completion_types.ts';
-import { create_frontend_action_handlers } from '$lib/frontend_action_handlers.ts';
-import type { FrontendActionHandlers } from '$lib/frontend_action_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { Thread } from '#lib/thread.svelte.ts';
+import { Turn } from '#lib/turn.svelte.ts';
+import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
+import type { CompletionResponse } from '#lib/completion_types.ts';
+import { create_frontend_action_handlers } from '#lib/frontend_action_handlers.ts';
+import type { FrontendActionHandlers } from '#lib/frontend_action_types.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

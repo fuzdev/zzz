@@ -5,15 +5,15 @@
 	import { resolve } from '$app/paths';
 	import Mdz from '@fuzdev/mdz/Mdz.svelte';
 
-	import { projects_context } from '$routes/projects/projects.svelte.ts';
-	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
-	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
-	import PagesSidebar from '$routes/projects/PagesSidebar.svelte';
-	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
+	import { projects_context } from '#routes/projects/projects.svelte.ts';
+	import ProjectSidebar from '#routes/projects/ProjectSidebar.svelte';
+	import SectionSidebar from '#routes/projects/SectionSidebar.svelte';
+	import PagesSidebar from '#routes/projects/PagesSidebar.svelte';
+	import ProjectNotFound from '#routes/projects/ProjectNotFound.svelte';
 	import { icon_delete, icon_preview } from '@fuzdev/fuz_ui/icons.ts';
-	import Icon from '$lib/Icon.svelte';
-	import { format_placeholder } from '$lib/helpers.ts';
-	import { frontend_context } from '$lib/frontend.svelte.ts';
+	import Icon from '#lib/Icon.svelte';
+	import { format_placeholder } from '#lib/helpers.ts';
+	import { frontend_context } from '#lib/frontend.svelte.ts';
 
 	const projects = projects_context.get();
 	const app = frontend_context.get();
@@ -41,7 +41,7 @@
 			controller.delete_project_page(page_viewmodel.page_id);
 
 			// Navigate back to pages list
-			void goto(resolve(`/projects/${page_viewmodel.project_id}/pages`));
+			void goto(resolve('/projects/[project_id]/pages', { project_id: page_viewmodel.project_id }));
 		}
 	};
 

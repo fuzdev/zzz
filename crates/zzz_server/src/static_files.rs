@@ -48,8 +48,8 @@ use tower::{Service, ServiceExt};
 use tower_http::services::fs::ServeFileSystemResponseBody;
 use tower_http::services::{ServeDir, ServeFile};
 
-/// The SPA fallback shell's filename — must match `fallback` in
-/// `svelte.config.js`.
+/// The SPA fallback shell's filename — must match the adapter's `fallback` in
+/// `vite.config.ts`.
 pub const SPA_FALLBACK_FILE: &str = "200.html";
 
 /// Backend path prefixes that never get the fallback shell. Each matches the

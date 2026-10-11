@@ -60,8 +60,8 @@ import {
 	workspace_list_action_spec,
 	workspace_open_action_spec,
 	all_action_specs
-} from '$lib/action_specs.ts';
-import type { FrontendActionsApi } from '$lib/action_metatypes.ts';
+} from '#lib/action_specs.ts';
+import type { FrontendActionsApi } from '#lib/action_metatypes.ts';
 
 import './cross_test_types.ts';
 

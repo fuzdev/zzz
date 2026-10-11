@@ -2,8 +2,8 @@
 	// Test harness: `DiskfileContextmenu` under a `ContextmenuRoot`, around a target to right-click.
 	import ContextmenuRoot from '@fuzdev/fuz_ui/ContextmenuRoot.svelte';
 
-	import DiskfileContextmenu from '$lib/DiskfileContextmenu.svelte';
-	import type { Diskfile } from '$lib/diskfile.svelte.ts';
+	import DiskfileContextmenu from '#lib/DiskfileContextmenu.svelte';
+	import type { Diskfile } from '#lib/diskfile.svelte.ts';
 
 	const { diskfile }: { diskfile: Diskfile } = $props();
 </script>

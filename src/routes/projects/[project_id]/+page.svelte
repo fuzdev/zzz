@@ -3,10 +3,10 @@
 
 	import { resolve } from '$app/paths';
 
-	import { projects_context } from '$routes/projects/projects.svelte.ts';
-	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
-	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
-	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
+	import { projects_context } from '#routes/projects/projects.svelte.ts';
+	import ProjectSidebar from '#routes/projects/ProjectSidebar.svelte';
+	import SectionSidebar from '#routes/projects/SectionSidebar.svelte';
+	import ProjectNotFound from '#routes/projects/ProjectNotFound.svelte';
 
 	const projects = projects_context.get();
 
@@ -101,7 +101,9 @@
 				<div class="projects-grid">
 					<div class="panel p_md">
 						<h2 class="mt_0 mb_lg">
-							<a href={resolve(`/projects/${project.id}/pages`)}>pages</a>
+							<a href={resolve('/projects/[project_id]/pages', { project_id: project.id })}>
+								pages
+							</a>
 						</h2>
 						{#if project.pages.length === 0}
 							<p class="text_50">no pages created yet</p>
@@ -109,7 +111,14 @@
 							<ul class="pages-list">
 								{#each project.pages as page (page.id)}
 									<li>
-										<a href={resolve(`/projects/${project.id}/pages/${page.id}`)}>{page.title}</a>
+										<a
+											href={resolve('/projects/[project_id]/pages/[page_id]', {
+												project_id: project.id,
+												page_id: page.id
+											})}
+										>
+											{page.title}
+										</a>
 										<span class="text_50">{page.path}</span>
 									</li>
 								{/each}
@@ -128,7 +137,9 @@
 
 					<div class="panel p_md">
 						<h2 class="mt_0 mb_lg">
-							<a href={resolve(`/projects/${project.id}/domains`)}>domains</a>
+							<a href={resolve('/projects/[project_id]/domains', { project_id: project.id })}>
+								domains
+							</a>
 						</h2>
 						{#if project.domains.length === 0}
 							<p class="text_50">no domains configured yet</p>
@@ -136,7 +147,12 @@
 							<ul class="domains-list">
 								{#each project.domains as domain (domain.id)}
 									<li>
-										<a href={resolve(`/projects/${project.id}/domains/${domain.id}`)}>
+										<a
+											href={resolve('/projects/[project_id]/domains/[domain_id]', {
+												project_id: project.id,
+												domain_id: domain.id
+											})}
+										>
 											<span class="domain-name">{domain.name}</span>
 										</a>
 										<div class="domain-details">
@@ -170,7 +186,9 @@
 
 					<div class="panel p_md">
 						<h2 class="mt_0 mb_lg">
-							<a href={resolve(`/projects/${project.id}/repos`)}>repos</a>
+							<a href={resolve('/projects/[project_id]/repos', { project_id: project.id })}>
+								repos
+							</a>
 						</h2>
 						{#if project.repos.length === 0}
 							<p class="text_50">no repos configured yet</p>
@@ -178,7 +196,12 @@
 							<ul class="repos-list">
 								{#each project.repos as repo (repo.id)}
 									<li>
-										<a href={resolve(`/projects/${project.id}/repos/${repo.id}`)}>
+										<a
+											href={resolve('/projects/[project_id]/repos/[repo_id]', {
+												project_id: project.id,
+												repo_id: repo.id
+											})}
+										>
 											<span class="repo-url">{repo.git_url || '[new repo]'}</span>
 										</a>
 										<div class="repo-details">

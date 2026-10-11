@@ -8,8 +8,8 @@ import {
 	create_session_recheck,
 	probe_session,
 	type SessionProbe
-} from '$lib/session_recheck.ts';
-import { Frontend } from '$lib/frontend.svelte.ts';
+} from '#lib/session_recheck.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
 
 afterEach(() => {
 	vi.unstubAllGlobals();

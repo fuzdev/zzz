@@ -144,10 +144,11 @@ paths and missing `_app/` assets 404 instead. In
 production the SPA and API share one origin, so `.env.production` leaves the
 `PUBLIC_ZZZ_SERVER_*` host/port and `PUBLIC_ZZZ_WEBSOCKET_URL` empty: the UI
 derives its API and WebSocket URLs from the page's origin, so one build works
-on whatever port `zzzd` serves it from. `gro build` needs `.env.production` to
-exist — the `PUBLIC_ZZZ_*` names are read at build time. Keep
+on whatever port `zzzd` serves it from. `gro build` reads `.env.production`
+— the `PUBLIC_ZZZ_*` vars (declared in `src/env.ts`) are baked in at build
+time, and each is optional: unset reads as empty. Leave
 `PUBLIC_ZZZ_SERVER_PROTOCOL`, `PUBLIC_ZZZ_SERVER_HOST`,
-`PUBLIC_ZZZ_SERVER_PORT`, and `PUBLIC_ZZZ_WEBSOCKET_URL` present but empty:
+`PUBLIC_ZZZ_SERVER_PORT`, and `PUBLIC_ZZZ_WEBSOCKET_URL` empty or unset:
 a non-empty `PUBLIC_ZZZ_SERVER_PORT` or `PUBLIC_ZZZ_WEBSOCKET_URL` pins the
 build to that fixed server instead of the page's origin.
 
@@ -338,7 +339,7 @@ Create `src/routes/my_route/+page.svelte`:
 
 ```svelte
 <script lang="ts">
-	import { frontend_context } from '$lib/frontend.svelte.ts';
+	import { frontend_context } from '#lib/frontend.svelte.ts';
 
 	const app = frontend_context.get();
 </script>
@@ -352,7 +353,7 @@ Create `src/routes/my_route/+page.svelte`:
 
 ```svelte
 <script lang="ts">
-	import { frontend_context } from '$lib/frontend.svelte.ts';
+	import { frontend_context } from '#lib/frontend.svelte.ts';
 
 	const app = frontend_context.get();
 	const { chats, models, prompts } = app;
@@ -462,7 +463,7 @@ Uses Vitest with `test` and `expect`:
 ```typescript
 import { test, expect } from 'vitest';
 
-import { providers_default, models_default } from '$lib/config_defaults.ts';
+import { providers_default, models_default } from '#lib/config_defaults.ts';
 
 test('all model provider_names exist in providers_default', () => {
 	const model_provider_names = new Set(models_default.map((model) => model.provider_name));
@@ -503,22 +504,22 @@ test('all model provider_names exist in providers_default', () => {
 ### Import Order
 
 1. External packages (`svelte`, `zod`, etc.)
-2. Internal aliases (`$lib/...`, `$env/...`)
+2. Subpath imports and SvelteKit modules (`#lib/...`, `$app/...`)
 3. Relative imports (`./...`)
 
 ```typescript
 import { z } from 'zod';
 import { SvelteMap } from 'svelte/reactivity';
 
-import { Cell } from '$lib/cell.svelte.ts';
-import type { Frontend } from '$lib/frontend.svelte.ts';
+import { Cell } from '#lib/cell.svelte.ts';
+import type { Frontend } from '#lib/frontend.svelte.ts';
 
 import { helper_function } from './helpers.ts';
 ```
 
 Imports use the real source extension (`.ts` / `.svelte.ts` / `.svelte`) —
 library code (`src/lib`) imports relative, while `src/routes` and `src/test`
-use the `$lib` alias.
+use the `#lib/*` / `#routes/*` subpath imports from `package.json`.
 
 ### Svelte 5 Runes in State Classes
 

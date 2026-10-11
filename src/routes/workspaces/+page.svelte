@@ -3,12 +3,12 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { frontend_context } from '$lib/frontend.svelte.ts';
-	import { DiskfileDirectoryPath } from '$lib/diskfile_types.ts';
-	import { parse_workspace_path, WORKSPACE_DEGRADED_NOTICE } from '$lib/workspace_helpers.ts';
+	import { frontend_context } from '#lib/frontend.svelte.ts';
+	import { DiskfileDirectoryPath } from '#lib/diskfile_types.ts';
+	import { parse_workspace_path, WORKSPACE_DEGRADED_NOTICE } from '#lib/workspace_helpers.ts';
 	import { icon_add, icon_delete, icon_directory, icon_workspace } from '@fuzdev/fuz_ui/icons.ts';
-	import Icon from '$lib/Icon.svelte';
-	import PageFooter from '$routes/PageFooter.svelte';
+	import Icon from '#lib/Icon.svelte';
+	import PageFooter from '#routes/PageFooter.svelte';
 
 	const app = frontend_context.get();
 
@@ -53,7 +53,7 @@
 
 	const handle_workspace_param = async (param: string): Promise<void> => {
 		// strip first so a reload never re-opens a workspace the user has since closed
-		void goto(resolve('/workspaces'), { replaceState: true, keepFocus: true, noScroll: true });
+		void goto(resolve('/workspaces'), { replace: true, reset: false });
 
 		const parsed = parse_workspace_path(param);
 		if (!parsed.ok) {

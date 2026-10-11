@@ -12,7 +12,7 @@ import {
 	to_root_dir,
 	type MarkdownLinkIndex,
 	type MarkdownLinkTarget
-} from '$lib/markdown_links.ts';
+} from '#lib/markdown_links.ts';
 
 const FILE = '/w/docs/guide.md';
 const OPTIONS = { file_path: FILE, root_dir: '/w/' };

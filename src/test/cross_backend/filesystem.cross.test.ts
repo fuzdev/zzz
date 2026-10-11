@@ -31,7 +31,7 @@ import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
-import { RPC_MESSAGE_MAX_BYTES } from '$lib/rpc_message_limit.ts';
+import { RPC_MESSAGE_MAX_BYTES } from '#lib/rpc_message_limit.ts';
 
 import './cross_test_types.ts';
 import { request_status } from './request_status.ts';

@@ -2,10 +2,10 @@
 	import { slide } from 'svelte/transition';
 	import { resolve } from '$app/paths';
 
-	import NavLink from '$lib/NavLink.svelte';
+	import NavLink from '#lib/NavLink.svelte';
 	import { projects_context } from './projects.svelte.ts';
 	import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
-	import Icon from '$lib/Icon.svelte';
+	import Icon from '#lib/Icon.svelte';
 
 	const projects = projects_context.get();
 
@@ -30,7 +30,10 @@
 					{#each project_viewmodel.project.domains as domain (domain.id)}
 						<li transition:slide>
 							<NavLink
-								href={resolve(`/projects/${project_viewmodel.project_id}/domains/${domain.id}`)}
+								href={resolve('/projects/[project_id]/domains/[domain_id]', {
+									project_id: project_viewmodel.project_id,
+									domain_id: domain.id
+								})}
 								selected={domain.id === projects.current_domain_id}
 								title={domain.name}
 							>

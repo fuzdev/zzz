@@ -5,12 +5,12 @@ import type { ArrayElement } from '@fuzdev/fuz_util/types.ts';
 import { Uuid } from '@fuzdev/fuz_util/id.ts';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import { Cell, type CellOptions } from '$lib/cell.svelte.ts';
+import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
 import { ProjectJson } from './projects_schema.ts';
 import { Domain } from './domain.svelte.ts';
 import { Page } from './page.svelte.ts';
 import { Repo } from './repo.svelte.ts';
-import { HANDLED } from '$lib/cell_helpers.ts';
+import { HANDLED } from '#lib/cell_helpers.ts';
 
 export const project_sections = ['project', 'pages', 'domains', 'repos', 'settings'] as const;
 export type ProjectSection = ArrayElement<typeof project_sections>;

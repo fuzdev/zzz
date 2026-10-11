@@ -1,4 +1,4 @@
-import type { FileBytesFetch } from '$lib/file_bytes.ts';
+import type { FileBytesFetch } from '#lib/file_bytes.ts';
 
 /** One request a `FakeByteRoutes` received. */
 export interface FakeByteRequest {

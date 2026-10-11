@@ -7,10 +7,10 @@ import {
 	prompt_create_diskfile,
 	to_file_directories,
 	to_relative_path
-} from '$lib/diskfile_helpers.ts';
-import type { Diskfiles } from '$lib/diskfiles.svelte.ts';
-import { DiskfilePath } from '$lib/diskfile_types.ts';
-import type { Diskfile } from '$lib/diskfile.svelte.ts';
+} from '#lib/diskfile_helpers.ts';
+import type { Diskfiles } from '#lib/diskfiles.svelte.ts';
+import { DiskfilePath } from '#lib/diskfile_types.ts';
+import type { Diskfile } from '#lib/diskfile.svelte.ts';
 
 describe('to_relative_path', () => {
 	test('a path inside the parent is relative to it', () => {

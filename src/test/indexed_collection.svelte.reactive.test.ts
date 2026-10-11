@@ -3,12 +3,12 @@
 import { test, assert, describe } from 'vitest';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import { IndexedCollection } from '$lib/indexed_collection.svelte.ts';
+import { IndexedCollection } from '#lib/indexed_collection.svelte.ts';
 import {
 	create_single_index,
 	create_multi_index,
 	create_derived_index
-} from '$lib/indexed_collection_helpers.svelte.ts';
+} from '#lib/indexed_collection_helpers.svelte.ts';
 
 /** An item with reactive fields, like a cell. */
 class Item {

@@ -6,12 +6,12 @@
 	import Details from '@fuzdev/fuz_ui/Details.svelte';
 	import { DEV } from 'esm-env';
 
-	import { logo_zzz } from '$lib/logos.ts';
-	import { library_context } from '$lib/library.ts';
-	import ExternalLink from '$lib/ExternalLink.svelte';
-	import PageFooter from '$routes/PageFooter.svelte';
-	import { frontend_context } from '$lib/frontend.svelte.ts';
-	import { backend_reachable_context } from '$lib/auth_gate.ts';
+	import { logo_zzz } from '#lib/logos.ts';
+	import { library_context } from '#lib/library.ts';
+	import ExternalLink from '#lib/ExternalLink.svelte';
+	import PageFooter from '#routes/PageFooter.svelte';
+	import { frontend_context } from '#lib/frontend.svelte.ts';
+	import { backend_reachable_context } from '#lib/auth_gate.ts';
 
 	const library = library_context.get();
 	// absent on a static build without the daemon (about is a public route)
@@ -279,8 +279,8 @@
 				</ExternalLink>
 				is designed to be fairly locked down, including blocking all unknown network connections --
 				it's currently disabled while being reworked (see
-				<ExternalLink href="https://github.com/fuzdev/zzz/blob/main/svelte.config.js">
-					svelte.config.js
+				<ExternalLink href="https://github.com/fuzdev/zzz/blob/main/vite.config.ts">
+					vite.config.ts
 				</ExternalLink>
 				and the <ExternalLink href="https://ui.fuz.dev/docs/csp">Fuz CSP docs</ExternalLink>).
 				Configuration will be needed for many usecases, unlocking shenanigans good and bad, so we'll

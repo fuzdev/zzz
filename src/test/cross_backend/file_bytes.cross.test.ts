@@ -23,7 +23,7 @@ import {
 	FILE_BYTES_MAX_BODY_BYTES,
 	to_file_bytes_append_url,
 	to_file_bytes_url
-} from '$lib/file_bytes.ts';
+} from '#lib/file_bytes.ts';
 
 import './cross_test_types.ts';
 import { request_status } from './request_status.ts';

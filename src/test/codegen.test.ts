@@ -14,7 +14,7 @@ import {
 	filer_change_action_spec,
 	toggle_main_menu_action_spec,
 	completion_create_action_spec
-} from '$lib/action_specs.ts';
+} from '#lib/action_specs.ts';
 
 describe('ImportBuilder', () => {
 	describe('type-only imports', () => {

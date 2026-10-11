@@ -34,20 +34,20 @@
 	import CopyToClipboard from '@fuzdev/fuz_ui/CopyToClipboard.svelte';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 
-	import { parse_url_param_uuid } from '$lib/nav.ts';
-	import { App } from '$lib/app.svelte.ts';
-	import FrontendRoot from '$lib/FrontendRoot.svelte';
-	import { library_context } from '$lib/library.ts';
+	import { parse_url_param_uuid } from '#lib/nav.ts';
+	import { App } from '#lib/app.svelte.ts';
+	import FrontendRoot from '#lib/FrontendRoot.svelte';
+	import { library_context } from '#lib/library.ts';
 	import { SiteState, site_context } from '@fuzdev/fuz_ui/site.svelte.ts';
-	import { logo_zzz } from '$lib/logos.ts';
+	import { logo_zzz } from '#lib/logos.ts';
 	import { library_json_from_modules } from '@fuzdev/fuz_util/library_json.ts';
 	import { modules } from 'virtual:svelte-docinfo';
 	import pkg_json from 'virtual:pkg.json';
-	import { ProviderJson } from '$lib/provider.svelte.ts';
-	import create_zzz_config from '$lib/config.ts';
-	import { ModelJson } from '$lib/model.svelte.ts';
+	import { ProviderJson } from '#lib/provider.svelte.ts';
+	import create_zzz_config from '#lib/config.ts';
+	import { ModelJson } from '#lib/model.svelte.ts';
 	import { DOCS_PATH } from '@fuzdev/fuz_ui/docs_helpers.svelte.ts';
-	import { create_session_recheck } from '$lib/session_recheck.ts';
+	import { create_session_recheck } from '#lib/session_recheck.ts';
 	import {
 		backend_reachable_context,
 		is_public_route,
@@ -55,11 +55,11 @@
 		probe_backend,
 		to_auth_gate_state,
 		to_auth_redirect
-	} from '$lib/auth_gate.ts';
-	import { create_detached } from '$lib/reactive_helpers.svelte.ts';
-	import { confirm_unload_with_unsaved_changes } from '$lib/diskfile_helpers.ts';
-	import { confirm_unload_while_recording } from '$lib/recording_helpers.ts';
-	import RecorderIndicator from '$lib/RecorderIndicator.svelte';
+	} from '#lib/auth_gate.ts';
+	import { create_detached } from '#lib/reactive_helpers.svelte.ts';
+	import { confirm_unload_with_unsaved_changes } from '#lib/diskfile_helpers.ts';
+	import { confirm_unload_while_recording } from '#lib/recording_helpers.ts';
+	import RecorderIndicator from '#lib/RecorderIndicator.svelte';
 
 	const { children, params } = $props();
 

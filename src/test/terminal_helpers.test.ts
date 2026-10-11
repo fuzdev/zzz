@@ -4,7 +4,7 @@ import {
 	format_terminal_command,
 	parse_terminal_command,
 	TerminalOutputBuffer
-} from '$lib/terminal_helpers.ts';
+} from '#lib/terminal_helpers.ts';
 
 describe('TerminalOutputBuffer', () => {
 	test('concatenates chunks under the cap', () => {

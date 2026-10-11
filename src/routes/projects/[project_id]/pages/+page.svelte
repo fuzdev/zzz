@@ -3,13 +3,13 @@
 
 	import { resolve } from '$app/paths';
 
-	import { projects_context } from '$routes/projects/projects.svelte.ts';
-	import ProjectSidebar from '$routes/projects/ProjectSidebar.svelte';
-	import SectionSidebar from '$routes/projects/SectionSidebar.svelte';
-	import PagesSidebar from '$routes/projects/PagesSidebar.svelte';
+	import { projects_context } from '#routes/projects/projects.svelte.ts';
+	import ProjectSidebar from '#routes/projects/ProjectSidebar.svelte';
+	import SectionSidebar from '#routes/projects/SectionSidebar.svelte';
+	import PagesSidebar from '#routes/projects/PagesSidebar.svelte';
 	import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
-	import Icon from '$lib/Icon.svelte';
-	import ProjectNotFound from '$routes/projects/ProjectNotFound.svelte';
+	import Icon from '#lib/Icon.svelte';
+	import ProjectNotFound from '#routes/projects/ProjectNotFound.svelte';
 
 	const projects = projects_context.get();
 
@@ -56,7 +56,12 @@
 							{#each project_viewmodel.project.pages as page (page.id)}
 								<tr>
 									<td>
-										<a href={resolve(`/projects/${project_viewmodel.project_id}/pages/${page.id}`)}>
+										<a
+											href={resolve('/projects/[project_id]/pages/[page_id]', {
+												project_id: project_viewmodel.project_id,
+												page_id: page.id
+											})}
+										>
 											{page.title}
 										</a>
 									</td>

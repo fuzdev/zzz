@@ -2,10 +2,10 @@
 
 import { test, beforeEach, describe, assert, vi } from 'vitest';
 
-import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
-import { Frontend } from '$lib/frontend.svelte.ts';
-import type { Diskfile } from '$lib/diskfile.svelte.ts';
-import { DISKFILE_CONTENT_NOT_LOADED_MESSAGE } from '$lib/diskfile_helpers.ts';
+import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import type { Diskfile } from '#lib/diskfile.svelte.ts';
+import { DISKFILE_CONTENT_NOT_LOADED_MESSAGE } from '#lib/diskfile_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

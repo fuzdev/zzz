@@ -2,7 +2,7 @@
 	import { swallow } from '@fuzdev/fuz_util/dom.ts';
 
 	import { icon_remove, icon_tab } from '@fuzdev/fuz_ui/icons.ts';
-	import Icon from '$lib/Icon.svelte';
+	import Icon from '#lib/Icon.svelte';
 	import type { BrowserTab } from './browser_tab.svelte.ts';
 
 	const {

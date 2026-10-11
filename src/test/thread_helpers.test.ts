@@ -1,8 +1,8 @@
 import { test, describe, assert } from 'vitest';
 import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 
-import { render_completion_messages } from '$lib/thread_helpers.ts';
-import type { CompletionResponse, CompletionRole } from '$lib/completion_types.ts';
+import { render_completion_messages } from '#lib/thread_helpers.ts';
+import type { CompletionResponse, CompletionRole } from '#lib/completion_types.ts';
 
 interface TestTurn {
 	role: CompletionRole;

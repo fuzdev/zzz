@@ -6,16 +6,16 @@
 	import { icon_delete, icon_pause, icon_stop } from '@fuzdev/fuz_ui/icons.ts';
 	import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 
-	import { frontend_context } from '$lib/frontend.svelte.ts';
-	import type { Diskfile } from '$lib/diskfile.svelte.ts';
-	import { DiskfileDirectoryPath } from '$lib/diskfile_types.ts';
-	import { to_diskfile_content_kind } from '$lib/diskfile_content_kind.ts';
-	import Icon from '$lib/Icon.svelte';
-	import JobStatusView from '$lib/JobStatusView.svelte';
-	import { icon_microphone, icon_record } from '$lib/media_icons.ts';
-	import { format_recording_duration, to_recordings_dir } from '$lib/recording_helpers.ts';
-	import { find_transcripts } from '$lib/transcript_helpers.ts';
-	import PageFooter from '$routes/PageFooter.svelte';
+	import { frontend_context } from '#lib/frontend.svelte.ts';
+	import type { Diskfile } from '#lib/diskfile.svelte.ts';
+	import { DiskfileDirectoryPath } from '#lib/diskfile_types.ts';
+	import { to_diskfile_content_kind } from '#lib/diskfile_content_kind.ts';
+	import Icon from '#lib/Icon.svelte';
+	import JobStatusView from '#lib/JobStatusView.svelte';
+	import { icon_microphone, icon_record } from '#lib/media_icons.ts';
+	import { format_recording_duration, to_recordings_dir } from '#lib/recording_helpers.ts';
+	import { find_transcripts } from '#lib/transcript_helpers.ts';
+	import PageFooter from '#routes/PageFooter.svelte';
 
 	const app = frontend_context.get();
 	const { recorder, diskfiles, jobs } = app;

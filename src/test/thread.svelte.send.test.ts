@@ -2,12 +2,12 @@
 
 import { test, describe, beforeEach, assert, vi } from 'vitest';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { Thread } from '$lib/thread.svelte.ts';
-import type { CompletionRequest } from '$lib/completion_types.ts';
-import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
-import { create_frontend_action_handlers } from '$lib/frontend_action_handlers.ts';
-import type { FrontendActionHandlers } from '$lib/frontend_action_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { Thread } from '#lib/thread.svelte.ts';
+import type { CompletionRequest } from '#lib/completion_types.ts';
+import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
+import { create_frontend_action_handlers } from '#lib/frontend_action_handlers.ts';
+import type { FrontendActionHandlers } from '#lib/frontend_action_types.ts';
 
 import {
 	FrontendWebsocketTransport,
@@ -195,7 +195,7 @@ describe('a completion in flight when the socket drops', () => {
 			send: () => true,
 			add_message_handler: () => () => {},
 			add_error_handler: () => () => {}
-		} as unknown as WebsocketRpcConnection;
+		};
 		live.peer.transports.register_transport(
 			new FrontendWebsocketTransport(connection, (data) => live.peer.receive(data))
 		);

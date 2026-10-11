@@ -5,11 +5,11 @@ import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
 import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { CHAT_AUTONAME_ATTEMPTS_MAX, type Chat } from '$lib/chat.svelte.ts';
-import { Turn } from '$lib/turn.svelte.ts';
-import type { CompletionResponse } from '$lib/completion_types.ts';
-import { BOTS_DEFAULT } from '$lib/config_defaults.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { CHAT_AUTONAME_ATTEMPTS_MAX, type Chat } from '#lib/chat.svelte.ts';
+import { Turn } from '#lib/turn.svelte.ts';
+import type { CompletionResponse } from '#lib/completion_types.ts';
+import { BOTS_DEFAULT } from '#lib/config_defaults.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

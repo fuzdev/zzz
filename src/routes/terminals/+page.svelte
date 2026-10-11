@@ -1,6 +1,6 @@
 <script lang="ts">
-	import TerminalRunner from '$lib/TerminalRunner.svelte';
-	import PageFooter from '$routes/PageFooter.svelte';
+	import TerminalRunner from '#lib/TerminalRunner.svelte';
+	import PageFooter from '#routes/PageFooter.svelte';
 </script>
 
 <div class="terminals-page">

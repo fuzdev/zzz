@@ -4,9 +4,9 @@ import {
 	AUDIO_EXTENSIONS,
 	MARKDOWN_EXTENSIONS,
 	to_diskfile_content_kind
-} from '$lib/diskfile_content_kind.ts';
-import { lang_for_path } from '$lib/path_lang.ts';
-import { RECORDING_FORMATS } from '$lib/recording_helpers.ts';
+} from '#lib/diskfile_content_kind.ts';
+import { lang_for_path } from '#lib/path_lang.ts';
+import { RECORDING_FORMATS } from '#lib/recording_helpers.ts';
 
 describe('to_diskfile_content_kind', () => {
 	test('reads audio from the extension, whatever its case', () => {

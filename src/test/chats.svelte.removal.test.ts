@@ -3,9 +3,9 @@
 import { test, describe, beforeEach, assert } from 'vitest';
 import type { Uuid } from '@fuzdev/fuz_util/id.ts';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
-import type { Chat } from '$lib/chat.svelte.ts';
-import type { Thread } from '$lib/thread.svelte.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import type { Chat } from '#lib/chat.svelte.ts';
+import type { Thread } from '#lib/thread.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

@@ -4,7 +4,7 @@ import {
 	MARKDOWN_VIEW_MODES,
 	MARKDOWN_VIEW_MODE_SHORTCUTS,
 	to_markdown_view_mode_for_shortcut
-} from '$lib/markdown_view_mode.ts';
+} from '#lib/markdown_view_mode.ts';
 
 const key = (code: string, init: Partial<KeyboardEventInit> = {}) => ({
 	ctrlKey: true,

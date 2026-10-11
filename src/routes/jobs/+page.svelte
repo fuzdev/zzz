@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { frontend_context } from '$lib/frontend.svelte.ts';
-	import JobStatusView from '$lib/JobStatusView.svelte';
-	import PageFooter from '$routes/PageFooter.svelte';
+	import { frontend_context } from '#lib/frontend.svelte.ts';
+	import JobStatusView from '#lib/JobStatusView.svelte';
+	import PageFooter from '#routes/PageFooter.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import type { DiskfilePath } from '$lib/diskfile_types.ts';
+	import type { DiskfilePath } from '#lib/diskfile_types.ts';
 
 	const app = frontend_context.get();
 	const { jobs } = app;

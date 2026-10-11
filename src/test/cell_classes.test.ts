@@ -3,12 +3,12 @@
 import { test, describe, assert, beforeEach, afterEach, vi } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_util/id.ts';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { cell_classes, is_cell_type, type CellClassNames } from '$lib/cell_classes.ts';
-import type { Cell } from '$lib/cell.svelte.ts';
-import { Chat } from '$lib/chat.svelte.ts';
-import { Thread } from '$lib/thread.svelte.ts';
-import { providers_default } from '$lib/config_defaults.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { cell_classes, is_cell_type, type CellClassNames } from '#lib/cell_classes.ts';
+import type { Cell } from '#lib/cell.svelte.ts';
+import { Chat } from '#lib/chat.svelte.ts';
+import { Thread } from '#lib/thread.svelte.ts';
+import { providers_default } from '#lib/config_defaults.ts';
 
 /** The least JSON each registered class accepts — its fields without defaults. */
 const MINIMAL_JSON: Partial<Record<CellClassNames, object>> = {

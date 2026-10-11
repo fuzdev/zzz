@@ -3,11 +3,11 @@
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
 import { flushSync, mount, unmount, type Component } from 'svelte';
 
-import DiskfileMarkdownView from '$lib/DiskfileMarkdownView.svelte';
-import DiskfileView from '$lib/DiskfileView.svelte';
-import { Frontend } from '$lib/frontend.svelte.ts';
-import type { Diskfile } from '$lib/diskfile.svelte.ts';
-import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
+import DiskfileMarkdownView from '#lib/DiskfileMarkdownView.svelte';
+import DiskfileView from '#lib/DiskfileView.svelte';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import type { Diskfile } from '#lib/diskfile.svelte.ts';
+import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
@@ -390,7 +390,10 @@ describe('DiskfileMarkdownView mode shortcut guards', () => {
 		const dialog = add_outside(document.createElement('dialog'));
 		dialog.setAttribute('open', '');
 		const matches = dialog.matches.bind(dialog);
-		dialog.matches = (selector: string) => selector === ':modal' || matches(selector);
+		// `defineProperty`, not assignment: lib.dom types `matches` with type-predicate overloads
+		Object.defineProperty(dialog, 'matches', {
+			value: (selector: string) => selector === ':modal' || matches(selector)
+		});
 		const event = press_mode(document.body, 3);
 		assert.isFalse(event.defaultPrevented);
 		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'split');

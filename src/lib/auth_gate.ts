@@ -110,7 +110,10 @@ export const backend_reachable_context = create_context<() => boolean | null>();
  * @param url - the current page URL
  * @param root - where an unsafe path falls back to (the resolved `/`)
  */
-export const to_auth_redirect = (url: URL, root = '/'): string => {
+export const to_auth_redirect = (
+	url: Pick<URL, 'pathname' | 'search' | 'hash'>,
+	root = '/'
+): string => {
 	const { pathname } = url;
 	if (pathname.startsWith('//') || pathname.startsWith('/\\')) return root;
 	return pathname + url.search + url.hash;

@@ -18,7 +18,7 @@
 
 <PromptContextmenu {prompt}>
 	<NavLink
-		href={resolve(`/prompts/${prompt.id}`)}
+		href={resolve('/prompts/[prompt_id]', { prompt_id: prompt.id })}
 		{selected}
 		class="justify-content:space-between"
 		style="min-height: 0;"

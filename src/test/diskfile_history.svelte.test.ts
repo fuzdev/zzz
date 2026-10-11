@@ -3,9 +3,9 @@
 import { test, beforeEach, describe, assert } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_util/id.ts';
 
-import { DiskfileHistory } from '$lib/diskfile_history.svelte.ts';
-import { DiskfilePath } from '$lib/diskfile_types.ts';
-import { Frontend } from '$lib/frontend.svelte.ts';
+import { DiskfileHistory } from '#lib/diskfile_history.svelte.ts';
+import { DiskfilePath } from '#lib/diskfile_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 

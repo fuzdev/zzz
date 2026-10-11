@@ -6,8 +6,8 @@ import {
 	render_message_with_role_length,
 	render_messages_length,
 	render_messages_to_string
-} from '$lib/thread_helpers.ts';
-import type { CompletionRole } from '$lib/completion_types.ts';
+} from '#lib/thread_helpers.ts';
+import type { CompletionRole } from '#lib/completion_types.ts';
 
 interface TestTurn {
 	role: CompletionRole;

@@ -1,7 +1,7 @@
 import { test, describe, assert } from 'vitest';
 import { syntax_styler_global } from '@fuzdev/fuz_code/syntax_styler_global.ts';
 
-import { LANG_BY_EXTENSION, lang_for_path, to_path_extension } from '$lib/path_lang.ts';
+import { LANG_BY_EXTENSION, lang_for_path, to_path_extension } from '#lib/path_lang.ts';
 
 describe('to_path_extension', () => {
 	test('reads the last extension of the last segment, lowercased', () => {

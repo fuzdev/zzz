@@ -35,7 +35,10 @@
 					<div class="prompt-refs font_size_xs mt_xs2">
 						<span class="text_50">In prompt{referenced_by_prompts.length !== 1 ? 's' : ''}:</span>
 						{#each referenced_by_prompts as prompt (prompt.id)}
-							<a href={resolve(`/prompts/${prompt.id}`)} class="prompt-ref">
+							<a
+								href={resolve('/prompts/[prompt_id]', { prompt_id: prompt.id })}
+								class="prompt-ref"
+							>
 								{prompt.name}
 							</a>
 						{/each}

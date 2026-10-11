@@ -13,7 +13,7 @@
 
 <tr>
 	<td>
-		<a href={resolve(`/projects/${project_id}/repos/${repo.id}`)}>
+		<a href={resolve('/projects/[project_id]/repos/[repo_id]', { project_id, repo_id: repo.id })}>
 			{repo.git_url || '[new repo]'}
 		</a>
 	</td>

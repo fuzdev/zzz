@@ -22,7 +22,7 @@ import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
 import { is_notification } from '@fuzdev/fuz_app/testing/transports/ws_client.ts';
 
-import { ERROR_WORKSPACE_NOT_OPEN } from '$lib/workspace_helpers.ts';
+import { ERROR_WORKSPACE_NOT_OPEN } from '#lib/workspace_helpers.ts';
 
 import './cross_test_types.ts';
 

@@ -3,9 +3,9 @@
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
-import type { Diskfile } from '$lib/diskfile.svelte.ts';
-import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import type { Diskfile } from '#lib/diskfile.svelte.ts';
+import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import DiskfileContextmenuHarness from './DiskfileContextmenuHarness.svelte';

@@ -37,7 +37,6 @@
 	transition:slide -->
 <a
 	{...rest}
-	// eslint-disable-next-line svelte/no-navigation-without-resolve
 	{href}
 	class="nav-link {rest.class}"
 	class:selected

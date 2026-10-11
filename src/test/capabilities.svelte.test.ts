@@ -2,7 +2,7 @@
 
 import { test, describe, beforeEach, assert, vi } from 'vitest';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
 
 let app: Frontend;
 

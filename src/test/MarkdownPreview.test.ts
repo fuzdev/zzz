@@ -3,12 +3,12 @@
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 
-import MarkdownPreview from '$lib/MarkdownPreview.svelte';
-import { Frontend } from '$lib/frontend.svelte.ts';
-import type { Diskfile } from '$lib/diskfile.svelte.ts';
-import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
+import MarkdownPreview from '#lib/MarkdownPreview.svelte';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import type { Diskfile } from '#lib/diskfile.svelte.ts';
+import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import { mdz_parse } from '@fuzdev/mdz/mdz.ts';
-import { query_markdown_link_anchors, to_markdown_links } from '$lib/markdown_links.ts';
+import { query_markdown_link_anchors, to_markdown_links } from '#lib/markdown_links.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';

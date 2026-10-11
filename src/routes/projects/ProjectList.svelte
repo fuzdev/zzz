@@ -3,7 +3,7 @@
 
 	import { projects_context } from './projects.svelte.ts';
 	import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
-	import Icon from '$lib/Icon.svelte';
+	import Icon from '#lib/Icon.svelte';
 
 	const projects = projects_context.get();
 </script>
@@ -19,7 +19,7 @@
 		<div class="projects-grid">
 			{#each projects.projects as project (project.id)}
 				<a
-					href={resolve(`/projects/${project.id}`)}
+					href={resolve('/projects/[project_id]', { project_id: project.id })}
 					class="project-card panel p_md font-weight:400"
 				>
 					<h3 class="mt_0 mb_sm">{project.name}</h3>

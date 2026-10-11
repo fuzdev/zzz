@@ -10,7 +10,7 @@ import {
 	is_action_payload_omitted,
 	is_action_payload_over_budget,
 	truncate_action_error_message
-} from '$lib/action_helpers.ts';
+} from '#lib/action_helpers.ts';
 
 const BUDGET = 100;
 

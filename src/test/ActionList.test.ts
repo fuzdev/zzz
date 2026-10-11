@@ -3,9 +3,9 @@
 import { describe, test, assert, afterEach } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 
-import ActionList from '$lib/ActionList.svelte';
-import type { Action } from '$lib/action.svelte.ts';
-import { Frontend } from '$lib/frontend.svelte.ts';
+import ActionList from '#lib/ActionList.svelte';
+import type { Action } from '#lib/action.svelte.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 

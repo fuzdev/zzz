@@ -1,6 +1,6 @@
 import { test, describe, assert } from 'vitest';
 
-import { handle_save_shortcut_keydown } from '$lib/save_shortcut.ts';
+import { handle_save_shortcut_keydown } from '#lib/save_shortcut.ts';
 
 /** A keydown event stand-in recording what was done to it. */
 const create_event = (

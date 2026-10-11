@@ -16,7 +16,7 @@
 			class="inline palette_d"
 			onclick={() => {
 				const project = projects.create_new_project();
-				void goto(resolve(`/projects/${project.id}`));
+				void goto(resolve('/projects/[project_id]', { project_id: project.id }));
 			}}
 		>
 			create one

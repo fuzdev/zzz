@@ -4,8 +4,8 @@
 
 	import PageFooter from './PageFooter.svelte';
 
-	import { logo_zzz } from '$lib/logos.ts';
-	import DashboardHome from '$lib/DashboardHome.svelte';
+	import { logo_zzz } from '#lib/logos.ts';
+	import DashboardHome from '#lib/DashboardHome.svelte';
 </script>
 
 <section class="row gap_xl5 mb_xl5">

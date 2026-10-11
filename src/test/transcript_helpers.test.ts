@@ -9,8 +9,8 @@ import {
 	to_transcript_source_path,
 	transcript_to_paragraphs,
 	transcript_to_text
-} from '$lib/transcript_helpers.ts';
-import type { Transcript, TranscriptSegment } from '$lib/transcript_types.ts';
+} from '#lib/transcript_helpers.ts';
+import type { Transcript, TranscriptSegment } from '#lib/transcript_types.ts';
 
 const create_transcript = (
 	source_name: string,

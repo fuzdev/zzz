@@ -1,6 +1,6 @@
 import { test, assert } from 'vitest';
 
-import { format_prompt_content } from '$lib/prompt_helpers.ts';
+import { format_prompt_content } from '#lib/prompt_helpers.ts';
 
 // Instead of mocking modules, we'll create a simplified part structure
 // that mirrors the interface we need for the tests
@@ -38,7 +38,7 @@ const create_part = (partial: Partial<SimplePart> = {}): SimplePart => {
 
 // Basic tests
 test('format_prompt_content - returns empty string for empty parts array', () => {
-	const result = format_prompt_content([] as any);
+	const result = format_prompt_content([]);
 	assert.strictEqual(result, '');
 });
 

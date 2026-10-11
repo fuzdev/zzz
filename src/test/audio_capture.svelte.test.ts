@@ -7,7 +7,7 @@ import {
 	type AudioCaptureDeps,
 	type AudioCaptureSink,
 	type AudioCaptureStartOptions
-} from '$lib/audio_capture.svelte.ts';
+} from '#lib/audio_capture.svelte.ts';
 
 import { FakeMediaRecorder, FakeStream } from './audio_capture_test_helpers.ts';
 import { flush } from './terminal_test_helpers.ts';

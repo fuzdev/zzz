@@ -7,7 +7,7 @@ import {
 	pick_recording_format,
 	to_microphone_error_message,
 	to_recording_name
-} from '$lib/recording_helpers.ts';
+} from '#lib/recording_helpers.ts';
 
 describe('pick_recording_format', () => {
 	test('prefers Opus in WebM', () => {

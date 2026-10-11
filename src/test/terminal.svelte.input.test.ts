@@ -4,12 +4,12 @@ import { test, describe, beforeEach, afterEach, assert, vi } from 'vitest';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
-import type { Terminal } from '$lib/terminal.svelte.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import type { Terminal } from '#lib/terminal.svelte.ts';
 import {
 	TERMINAL_INPUT_PENDING_MAX_LENGTH,
 	TERMINAL_NOT_FOUND_MESSAGE
-} from '$lib/terminal_helpers.ts';
+} from '#lib/terminal_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 import {

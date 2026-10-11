@@ -2,10 +2,10 @@
 
 import { test, beforeEach, describe, assert, vi } from 'vitest';
 
-import type { DiskfileEditorState } from '$lib/diskfile_editor_state.svelte.ts';
-import { DiskfilePath, SerializableDisknode } from '$lib/diskfile_types.ts';
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { Diskfile } from '$lib/diskfile.svelte.ts';
+import type { DiskfileEditorState } from '#lib/diskfile_editor_state.svelte.ts';
+import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { Diskfile } from '#lib/diskfile.svelte.ts';
 
 import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 

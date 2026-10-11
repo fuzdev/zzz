@@ -121,7 +121,7 @@ export class RepoViewmodel {
 			this.projects.add_repo(this.project_id, repo);
 		}
 
-		void goto(resolve(`/projects/${this.project_id}/repos`));
+		void goto(resolve('/projects/[project_id]/repos', { project_id: this.project_id }));
 	}
 
 	/**
@@ -133,7 +133,7 @@ export class RepoViewmodel {
 		// eslint-disable-next-line no-alert
 		if (confirm('Are you sure you want to remove this repo? This action cannot be undone.')) {
 			this.projects.delete_repo(this.project_id, this.repo_id);
-			void goto(resolve(`/projects/${this.project_id}/repos`));
+			void goto(resolve('/projects/[project_id]/repos', { project_id: this.project_id }));
 		}
 	}
 }

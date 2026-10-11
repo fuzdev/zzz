@@ -3,12 +3,12 @@
 import { describe, test, assert, afterEach, beforeEach } from 'vitest';
 import { flushSync, mount, unmount, type Component } from 'svelte';
 
-import PartView from '$lib/PartView.svelte';
-import TurnView from '$lib/TurnView.svelte';
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { Part } from '$lib/part.svelte.ts';
-import { Thread } from '$lib/thread.svelte.ts';
-import { DiskfilePath } from '$lib/diskfile_types.ts';
+import PartView from '#lib/PartView.svelte';
+import TurnView from '#lib/TurnView.svelte';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { Part } from '#lib/part.svelte.ts';
+import { Thread } from '#lib/thread.svelte.ts';
+import { DiskfilePath } from '#lib/diskfile_types.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';

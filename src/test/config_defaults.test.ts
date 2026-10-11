@@ -5,7 +5,7 @@ import {
 	models_default,
 	chat_template_defaults,
 	BOTS_DEFAULT
-} from '$lib/config_defaults.ts';
+} from '#lib/config_defaults.ts';
 
 /** Claude model ids Anthropic has retired — the API rejects them with a 404. */
 const RETIRED_CLAUDE_MODELS = [

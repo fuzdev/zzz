@@ -1,7 +1,7 @@
 import { describe, test, assert } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-import { FILE_INDEX_IGNORED_DIR_NAMES, FILE_INDEX_TEMP_FILE_PREFIX } from '$lib/markdown_links.ts';
+import { FILE_INDEX_IGNORED_DIR_NAMES, FILE_INDEX_TEMP_FILE_PREFIX } from '#lib/markdown_links.ts';
 
 /**
  * The TS copy of what the backend filer never indexes, held to the Rust

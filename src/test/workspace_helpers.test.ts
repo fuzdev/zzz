@@ -1,6 +1,6 @@
 import { test, describe, assert } from 'vitest';
 
-import { parse_workspace_path } from '$lib/workspace_helpers.ts';
+import { parse_workspace_path } from '#lib/workspace_helpers.ts';
 
 describe('parse_workspace_path', () => {
 	test('adds a trailing slash to an absolute path', () => {

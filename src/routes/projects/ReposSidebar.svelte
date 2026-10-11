@@ -2,10 +2,10 @@
 	import { slide } from 'svelte/transition';
 	import { resolve } from '$app/paths';
 
-	import NavLink from '$lib/NavLink.svelte';
+	import NavLink from '#lib/NavLink.svelte';
 	import { projects_context } from './projects.svelte.ts';
 	import { icon_add } from '@fuzdev/fuz_ui/icons.ts';
-	import Icon from '$lib/Icon.svelte';
+	import Icon from '#lib/Icon.svelte';
 
 	const projects = projects_context.get();
 
@@ -30,7 +30,10 @@
 					{#each project_viewmodel.project.repos as repo (repo.id)}
 						<li transition:slide>
 							<NavLink
-								href={resolve(`/projects/${project_viewmodel.project_id}/repos/${repo.id}`)}
+								href={resolve('/projects/[project_id]/repos/[repo_id]', {
+									project_id: project_viewmodel.project_id,
+									repo_id: repo.id
+								})}
 								selected={repo.id === projects.current_repo_id}
 								title={repo.git_url}
 							>

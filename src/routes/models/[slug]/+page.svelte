@@ -2,8 +2,8 @@
 	import Alert from '@fuzdev/fuz_ui/Alert.svelte';
 	import { resolve } from '$app/paths';
 
-	import ModelDetail from '$lib/ModelDetail.svelte';
-	import { frontend_context } from '$lib/frontend.svelte.ts';
+	import ModelDetail from '#lib/ModelDetail.svelte';
+	import { frontend_context } from '#lib/frontend.svelte.ts';
 
 	const { params } = $props();
 

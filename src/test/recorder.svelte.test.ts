@@ -3,10 +3,10 @@
 import { test, describe, assert, beforeEach, afterEach, vi } from 'vitest';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
-import { Frontend } from '$lib/frontend.svelte.ts';
-import { AUDIO_CAPTURE_TICK_INTERVAL } from '$lib/audio_capture.svelte.ts';
-import type { Recorder, RecorderDeps } from '$lib/recorder.svelte.ts';
-import { DiskfileDirectoryPath } from '$lib/diskfile_types.ts';
+import { Frontend } from '#lib/frontend.svelte.ts';
+import { AUDIO_CAPTURE_TICK_INTERVAL } from '#lib/audio_capture.svelte.ts';
+import type { Recorder, RecorderDeps } from '#lib/recorder.svelte.ts';
+import { DiskfileDirectoryPath } from '#lib/diskfile_types.ts';
 
 import { FakeMediaRecorder, FakeStream } from './audio_capture_test_helpers.ts';
 import { FakeByteRoutes } from './byte_route_test_helpers.ts';
