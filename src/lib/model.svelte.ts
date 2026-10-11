@@ -5,7 +5,7 @@ import { Cell, type CellOptions } from './cell.svelte.ts';
 import { CellJson } from './cell_types.ts';
 import type { Provider } from './provider.svelte.ts';
 
-export const ModelName = z.string().trim();
+export const ModelName = z.string().trim().min(1);
 export type ModelName = z.infer<typeof ModelName>;
 
 export const ModelJson = CellJson.extend({
