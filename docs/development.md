@@ -16,13 +16,66 @@ cargo xtask dev         # build the Rust backend + run it with the Vite frontend
 ```
 
 `cargo xtask dev` rebuilds `zzz_server` (`cargo build -p zzz_server`) on every run,
-binds the backend on `4461`, and serves the Vite frontend on `5173` (proxying
+binds the backend on `4461`, and serves the Vite frontend on `5460` (proxying
 `/api` → `4461`; the WebSocket connects to `4461` directly). Browse to
-`localhost:5173`.
+`http://localhost:5460` — by that name; see Browser access below.
 
 Optionally add API keys to `.env.development` for remote providers (Anthropic,
 OpenAI, Google). Keys are read from the environment only — restart the dev
 server after changing one; `/capabilities` shows each provider's status.
+
+### Browser access
+
+`zzzd` answers a browser page only when the page's origin is in
+`FUZ_ALLOWED_ORIGINS`, and it trusts whatever page is served there: it can't
+tell which process holds a port, and the browser attaches the session cookie
+to a request from any `localhost` port.
+
+- **The dev origin is `http://localhost:5460`**, the one entry in
+  `.env.development.example`. `vite.config.ts` pins the port with
+  `strictPort`, so a second `vite dev` fails on the taken port instead of
+  moving to one `zzzd` refuses. The port is zzz's own, not Vite's default
+  (`5173`), which is the port another project's dev server holds whenever
+  zzz's doesn't. That makes the origin zzz's in practice, not by
+  construction: any local process can bind `5460` while zzz's dev server is
+  down.
+- **Open it as `localhost`.** Vite binds the address `localhost` resolves to,
+  often `[::1]` alone, so `http://127.0.0.1:5460` may be another process's
+  page and isn't listed.
+- **`vite preview`** (`npm run preview`) is pinned to `5461` and isn't
+  allowed by default; add `http://localhost:5461` to use it.
+- **Another origin** — a different port, a LAN address, a hostname — goes in
+  `FUZ_ALLOWED_ORIGINS`, comma-separated, each an exact `scheme://host[:port]`.
+  A port wildcard (`http://localhost:*`) lets every page served on any local
+  port act with your session. A plain `http` origin that isn't loopback
+  passes the gates but can't log in: the session cookie is `Secure`, which a
+  browser accepts only over `https` or on loopback.
+
+`.env.development` is created once and never rewritten, so a file written
+for another dev port keeps two lines that name it. Set both to the template's
+values:
+
+```bash
+PUBLIC_ZZZ_SERVER_PORT=5460
+FUZ_ALLOWED_ORIGINS=http://localhost:5460
+```
+
+- **`PUBLIC_ZZZ_SERVER_PORT`** is the port the UI sends its RPC calls and
+  file bytes to — the Vite server it was loaded from. `cargo xtask dev` sets
+  it for the Vite it starts, along with `PUBLIC_ZZZ_SERVER_PROXIED_PORT` and
+  `PUBLIC_ZZZ_WEBSOCKET_URL`, whatever the file says. A Vite started without
+  xtask (`vite dev`, `gro dev`) reads the file, and refuses to start when the
+  value isn't the port it serves on, naming the line.
+- **`FUZ_ALLOWED_ORIGINS`** must admit `http://localhost:5460`, or `zzzd`
+  refuses the UI's login, RPC calls, and WebSocket (403 `forbidden_origin`).
+  Replace the line rather than adding to it: a loopback origin on a default
+  Vite port left in the list is a port another project's dev server takes,
+  and `zzzd` would trust its page.
+
+`cargo xtask dev` prints a warning for each, with the line to set.
+
+In production `zzzd` serves the UI itself, so the allowed origins are its
+own — see Production build.
 
 ### PTY terminals
 
@@ -136,7 +189,9 @@ value, with a line per overridden key — and the `zzz` CLI, which supplies
 `~/.zzz/.env` with the exported values winning — see below). Supply the env via your process manager, a systemd
 `EnvironmentFile`, or, in a shell, `set -a && . ./.env.production && set +a` before
 running. It requires `DATABASE_URL`, `SECRET_FUZ_COOKIE_KEYS`, and a non-empty
-`FUZ_ALLOWED_ORIGINS` (it hard-fails at boot otherwise). `--static-dir` (or
+`FUZ_ALLOWED_ORIGINS` (it hard-fails at boot otherwise) — the template lists
+`zzzd`'s own two origins, `http://localhost:4460` and `http://127.0.0.1:4460`,
+which are the page it serves; change both with the port. `--static-dir` (or
 `ZZZ_STATIC_DIR`) points it at the built frontend; CLI flags win over env. It
 serves the exact file, then the prerendered `{path}.html`, then the `200.html`
 shell, so reloads, deep links, and dynamic routes load; `/api` and `/health`

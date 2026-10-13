@@ -67,7 +67,7 @@ Recording and transcribing audio use `ffmpeg` and
 neither bundled — [docs/development.md](docs/development.md) § Local tools has
 the setup.
 
-Browse to the location it says, probably `localhost:5173`.
+Browse to `http://localhost:5460`.
 
 On first run Zzz has no account yet, so it shows a bootstrap form. Copy the
 one-time token it points to (`cat .zzz/bootstrap_token`), paste it in, and pick a

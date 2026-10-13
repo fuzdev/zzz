@@ -817,7 +817,7 @@ so the build bakes them in. Each is optional — unset reads as empty, and
 
 - `PUBLIC_ZZZ_SERVER_PROTOCOL` — `http` or `https`
 - `PUBLIC_ZZZ_SERVER_HOST` — Server hostname (frontend)
-- `PUBLIC_ZZZ_SERVER_PORT` — the server the UI calls (dev: the Vite port, which proxies `/api`); empty → the page's own origin, which is how the production build (served by `zzzd` on any port) is configured
+- `PUBLIC_ZZZ_SERVER_PORT` — the server the UI calls (dev: the Vite port, 5460, which proxies `/api` — `cargo xtask dev` forces it, and `vite dev` refuses to start when it names any other port than the one it serves on: `src/lib/dev_server_port.ts`); empty → the page's own origin, which is how the production build (served by `zzzd` on any port) is configured
 - `PUBLIC_ZZZ_SERVER_API_PATH` — API endpoint path
 - `PUBLIC_ZZZ_WEBSOCKET_URL` — WebSocket URL (dev: `zzzd` directly); empty → `<API path>/ws` on the page's origin
 
@@ -878,6 +878,37 @@ included, also passes three gates:
   `application/octet-stream`.
 
 `src/test/cross_backend/browser_gates.cross.test.ts` pins them.
+
+`zzzd` can't tell which process serves an allowed origin — it trusts whatever
+page is there. So the allowlist names only origins that are zzz's own:
+
+- **Production** — `zzzd` serves the UI itself (`--static-dir`), so the
+  allowed origins are its own, `http://localhost:<port>` and
+  `http://127.0.0.1:<port>` (the CLI's default, and `.env.production.example`):
+  the page comes from the process that checks the list. `zzzd` binds
+  `127.0.0.1` only; a browser reaches it as `localhost` by falling back from
+  `[::1]`. So the `localhost` name is `zzzd`'s only while nothing else listens
+  on `[::1]` at that port: a process bound there is what the browser reaches
+  first as `http://localhost:<port>`, an allowed origin, and it is sent the
+  session cookie.
+- **Development** — Vite serves the UI at `http://localhost:5460`, the one
+  origin `.env.development.example` allows. `vite.config.ts` pins the port
+  with `strictPort`, so Vite fails to start rather than move to a port `zzzd`
+  refuses, and the port is zzz's own, not Vite's default — a default port is
+  the one another project's dev server holds whenever zzz's doesn't, and a
+  `zzzd` that allowed it would take that project's page for its UI. This makes
+  the origin zzz's in practice, not by construction: any local process can
+  bind `5460` while zzz's dev server is down. Only `localhost` is listed —
+  Vite binds what that name resolves to, often `[::1]` alone, so
+  `http://127.0.0.1:5460` may be another process's page. `vite preview` is
+  pinned to `5461`, which is allowed only when listed.
+  `src/test/cross_backend/dev_origins.cross.test.ts` runs a backend on the
+  template's list.
+- **Another origin** goes in `FUZ_ALLOWED_ORIGINS` (it replaces the list). A
+  port wildcard (`http://localhost:*`) lets every page served on any local
+  port act with the session. A plain `http` origin that isn't loopback passes
+  the gates but can't hold a session: the cookie is `Secure`, which a browser
+  accepts only over `https` or on loopback.
 
 ## Known Limitations
 

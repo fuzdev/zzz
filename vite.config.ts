@@ -1,6 +1,6 @@
 import { availableParallelism } from 'node:os';
 import { execSync } from 'node:child_process';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
@@ -9,6 +9,8 @@ import { svelte_preprocess_fuz_code } from '@fuzdev/fuz_code/svelte_preprocess_f
 import { vite_plugin_fuz_css } from '@fuzdev/fuz_css/vite_plugin_fuz_css.ts';
 import svelte_docinfo from 'svelte-docinfo/vite.js';
 import { vite_plugin_pkg_json } from '@fuzdev/fuz_ui/vite_plugin_pkg_json.ts';
+
+import { check_dev_server_port, DEV_SERVER_PORT_VAR } from './src/lib/dev_server_port.ts';
 // TODO debugging
 // import {create_csp_directives} from '@fuzdev/fuz_ui/csp.ts';
 // import {csp_directives_of_fuzdev} from '@fuzdev/fuz_ui/csp_of_fuzdev.ts';
@@ -58,8 +60,35 @@ const cross_backend_projects = cross_backend_enabled
 		]
 	: [];
 
+/**
+ * Fails `vite dev` when the loaded `PUBLIC_ZZZ_SERVER_PORT` names a port other
+ * than the one this server is about to serve on. `.env.development` is created
+ * once and never rewritten, so its value can be a port this server no longer
+ * uses, and the UI would send its RPC calls and file bytes there. Read as
+ * SvelteKit reads it (the process env over the env files in the root), so the
+ * value `cargo xtask dev` forces passes whatever the file says. Not `vite
+ * preview` or a build, which serve what `gro build` baked in, and not vitest,
+ * which serves no page.
+ */
+const zzz_dev_server_port = (): Plugin => ({
+	name: 'zzz_dev_server_port',
+	// only a dev server that listens: tools that just resolve this config, such as
+	// `svelte-check`, never get here
+	configureServer({ config }) {
+		if (config.server.middlewareMode || process.env.VITEST) return;
+		const error = check_dev_server_port({
+			loaded: loadEnv(config.mode, config.root, DEV_SERVER_PORT_VAR)[DEV_SERVER_PORT_VAR],
+			port: config.server.port,
+			from_process_env: process.env[DEV_SERVER_PORT_VAR] !== undefined,
+			mode: config.mode
+		});
+		if (error) throw new Error(error);
+	}
+});
+
 export default defineConfig(({ mode }) => ({
 	plugins: [
+		zzz_dev_server_port(),
 		sveltekit({
 			preprocess: [svelte_preprocess_mdz(), svelte_preprocess_fuz_code(), vitePreprocess()],
 			compilerOptions: { runes: true },
@@ -128,8 +157,14 @@ export default defineConfig(({ mode }) => ({
 	resolve: mode === 'test' ? { conditions: ['browser'] } : undefined,
 	optimizeDeps: { exclude: ['@fuzdev/blake3-wasm'] },
 	server: {
-		// pinned, never the next free port: `FUZ_ALLOWED_ORIGINS` names this exact origin
-		port: 5173,
+		// zzz's own port, pinned: the dev `FUZ_ALLOWED_ORIGINS` is exactly
+		// `http://localhost:5460`, and `zzzd` trusts whatever page is served there. So not
+		// Vite's default port, which any other project's dev server would take over once
+		// this one stops, and `strictPort` so this one fails instead of moving to a port
+		// `zzzd` refuses. No `host`: Vite binds the address `localhost` resolves to, the one
+		// a browser tries first, and pinning the other family would leave that one free
+		// for another process to serve as `localhost:5460`.
+		port: 5460,
 		strictPort: true,
 		// Vite watches the whole root with one inotify watch per file, so build output and
 		// caches (the Rust `target/` alone is tens of thousands of files) exhaust the
@@ -148,5 +183,12 @@ export default defineConfig(({ mode }) => ({
 			// liveness probe hits zzzd in dev, not the SvelteKit SPA fallback.
 			'/health': `http://localhost:${process.env.PUBLIC_ZZZ_SERVER_PROXIED_PORT || '4461'}`
 		}
+	},
+	// `vite preview` serves the built frontend and proxies as `server` does. Its origin
+	// is pinned off Vite's default preview port for the same reason, and is opt-in:
+	// `zzzd` allows it only when `FUZ_ALLOWED_ORIGINS` names `http://localhost:5461`.
+	preview: {
+		port: 5461,
+		strictPort: true
 	}
 }));

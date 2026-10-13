@@ -833,4 +833,18 @@ mod tests {
             "http://localhost:4460,http://127.0.0.1:4460"
         );
     }
+
+    #[test]
+    fn the_production_template_lists_the_default_origins() {
+        // the template is for a `zzzd` run without the CLI, which fills
+        // nothing in: the same two origins, written out
+        let template = include_str!("../../../.env.production.example");
+        let allowed: Vec<_> = env_file::parse_env(template)
+            .vars
+            .into_iter()
+            .filter(|(key, _)| key == "FUZ_ALLOWED_ORIGINS")
+            .map(|(_, value)| value)
+            .collect();
+        assert_eq!(allowed, [default_origins(DEFAULT_PORT)]);
+    }
 }

@@ -2,7 +2,7 @@
 //!
 //! Subcommands:
 //! - `dev`        — build `zzz_server`, then run it alongside the Vite frontend
-//!   (the dev backend binds `4461`; Vite serves `5173` and proxies `/api` to it).
+//!   (the dev backend binds `4461`; Vite serves `5460` and proxies `/api` to it).
 //! - `dev-setup`  — generate `.env.development` from `.env.development.example`.
 //! - `prod-setup` — generate `.env.production` from `.env.production.example`.
 //!   Both fill `SECRET_FUZ_COOKIE_KEYS` with a freshly generated key.
@@ -42,8 +42,21 @@ use std::time::{Duration, Instant};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
-/// Dev backend port. Vite (`5173`) proxies `/api` here; see `vite.config.ts`.
+/// Dev backend port. Vite proxies `/api` here; see `vite.config.ts`.
 const DEV_BACKEND_PORT: u16 = 4461;
+/// The port `vite.config.ts` pins the dev server to (`strictPort`), so the dev
+/// UI's origin is `http://localhost:5460` — the one origin
+/// `.env.development.example` allows. It is zzz's own rather than Vite's
+/// default: `zzzd` trusts whatever page is served at an allowed origin, and a
+/// default port is the one another project's dev server takes when this one
+/// isn't running. The copies can't import one another, so the
+/// `dev_origin_copies` tests hold them together.
+const DEV_FRONTEND_PORT: u16 = 5460;
+/// The env var holding `zzzd`'s origin allowlist.
+const ALLOWED_ORIGINS_VAR: &str = "FUZ_ALLOWED_ORIGINS";
+/// The env var the dev UI builds its server URL from (`src/lib/constants.ts`):
+/// the port of the Vite server it was loaded from.
+const SERVER_PORT_VAR: &str = "PUBLIC_ZZZ_SERVER_PORT";
 const DEV_ENV_FILE: &str = ".env.development";
 /// The Vite CLI, run directly so signals reach it (see [`run_dev`]).
 const VITE_BIN: &str = "node_modules/.bin/vite";
@@ -307,14 +320,32 @@ fn run_dev() -> Result<()> {
         ensure_bootstrap_token(token_path)?;
     }
 
-    // Point the frontend at the backend's port regardless of the env's
-    // values (so a stale `.env.development` still works in dev).
-    let port = DEV_BACKEND_PORT.to_string();
-    env.insert("PUBLIC_ZZZ_SERVER_PROXIED_PORT".to_owned(), port.clone());
-    env.insert(
-        "PUBLIC_ZZZ_WEBSOCKET_URL".to_owned(),
-        format!("ws://localhost:{DEV_BACKEND_PORT}/api/ws"),
+    // The file is the developer's, so its stale lines are reported, never
+    // rewritten: the frontend port a Vite started without xtask would read,
+    // and an allowlist that doesn't fit the dev server. For the allowlist the
+    // file's value wins; a blank one leaves the inherited value in place.
+    let inherited_origins = std::env::var(ALLOWED_ORIGINS_VAR).ok();
+    let (allowed_origins, origins_source) = effective_value(
+        env.get(ALLOWED_ORIGINS_VAR).map(String::as_str),
+        inherited_origins.as_deref(),
     );
+    let warnings: Vec<String> = [
+        dev_server_port_warning(env.get(SERVER_PORT_VAR).map(String::as_str)),
+        dev_origin_warning(allowed_origins, origins_source),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    for warning in &warnings {
+        eprintln!("{warning}");
+    }
+
+    // Point the frontend at the dev ports regardless of the env's values (so
+    // a stale `.env.development` still works in dev).
+    for (key, value) in dev_port_env() {
+        env.insert(key.to_owned(), value);
+    }
+    let port = DEV_BACKEND_PORT.to_string();
 
     // Child env = inherited process env, overlaid with the values above.
     let mut child_env: BTreeMap<OsString, OsString> = std::env::vars_os().collect();
@@ -358,6 +389,10 @@ fn run_dev() -> Result<()> {
     wait_for_server(&mut server, DEV_BACKEND_PORT, Duration::from_secs(30))?;
     println!("[xtask] zzz_server listening");
 
+    // again, beside the address Vite is about to print
+    for warning in &warnings {
+        eprintln!("{warning}");
+    }
     println!("[xtask] starting vite dev server...");
     let mut vite = ChildGuard::new(
         "vite",
@@ -380,6 +415,247 @@ fn run_dev() -> Result<()> {
         std::thread::sleep(Duration::from_millis(200));
     }
     Ok(())
+}
+
+/// The frontend's port variables as `dev` forces them, whatever
+/// `.env.development` says: the UI calls the Vite server it was loaded from —
+/// never whatever else holds a port the file names, which would be sent the
+/// session cookie — Vite proxies to the backend, and the WebSocket connects
+/// to the backend directly.
+fn dev_port_env() -> [(&'static str, String); 3] {
+    [
+        (SERVER_PORT_VAR, DEV_FRONTEND_PORT.to_string()),
+        (
+            "PUBLIC_ZZZ_SERVER_PROXIED_PORT",
+            DEV_BACKEND_PORT.to_string(),
+        ),
+        (
+            "PUBLIC_ZZZ_WEBSOCKET_URL",
+            format!("ws://localhost:{DEV_BACKEND_PORT}/api/ws"),
+        ),
+    ]
+}
+
+/// The dev UI's origin: the Vite dev server, as the browser names it.
+fn dev_frontend_origin() -> String {
+    format!("http://localhost:{DEV_FRONTEND_PORT}")
+}
+
+/// Where a variable's value came from, for a message that says so.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum EnvSource {
+    /// A line of `.env.development`.
+    File,
+    /// The environment `cargo xtask dev` was started in.
+    Inherited,
+}
+
+impl EnvSource {
+    /// The parenthetical after the variable's name.
+    const fn describe(self) -> &'static str {
+        match self {
+            Self::File => "in .env.development",
+            Self::Inherited => {
+                "inherited from the environment, as .env.development leaves it unset"
+            }
+        }
+    }
+}
+
+/// The value the children get for a variable, and where it came from: the
+/// file's (blank ones are already dropped — see [`file_values`]), else the
+/// inherited one.
+fn effective_value<'a>(
+    file: Option<&'a str>,
+    inherited: Option<&'a str>,
+) -> (Option<&'a str>, EnvSource) {
+    file.map_or((inherited, EnvSource::Inherited), |value| {
+        (Some(value), EnvSource::File)
+    })
+}
+
+/// The warning for a `.env.development` whose frontend port line names
+/// another port than the dev server's, or `None` when it is unset or right.
+///
+/// `dev` forces the variable for the Vite it starts, so this run is
+/// unaffected — but the file is created once and never rewritten, and a Vite
+/// started without xtask reads the line: `vite.config.ts` then refuses to
+/// start rather than serve a UI that calls another port.
+fn dev_server_port_warning(file_value: Option<&str>) -> Option<String> {
+    let value = file_value.filter(|value| !value.trim().is_empty())?;
+    let expected = DEV_FRONTEND_PORT.to_string();
+    if value == expected {
+        return None;
+    }
+    Some(format!(
+        "[xtask] warning: {SERVER_PORT_VAR} in {DEV_ENV_FILE} is `{value}`, but the dev server \
+         serves on port {expected}.\n\
+         [xtask]   `cargo xtask dev` sets it for this run; a Vite started without xtask \
+         (`vite dev`, `gro dev`) reads the file and refuses to start.\n\
+         [xtask]   Set this line in {DEV_ENV_FILE}:\n\
+         [xtask]     {SERVER_PORT_VAR}={expected}"
+    ))
+}
+
+/// The warnings for an origin allowlist that doesn't fit the dev server, or
+/// `None` when it does. Two independent ones:
+///
+/// - **No entry admits the dev UI's origin.** `zzzd` refuses a browser request
+///   from an origin its allowlist doesn't admit (403 `forbidden_origin`), which
+///   from the UI looks like a backend that never answers. Decided by `zzzd`'s
+///   matching rule ([`origin_matches_pattern`]), so a wildcard entry counts
+///   only when it covers the origin.
+/// - **An entry is a loopback origin on a default Vite port.** `zzzd` trusts
+///   whatever page is served at a listed origin, and that port is the one
+///   another project's dev server holds — the entry a list written for a
+///   default-port dev server leaves behind.
+///
+/// `.env.development` is created once and never rewritten, so its list can be
+/// either. An unset or blank list is left to `zzzd`, which refuses to boot on
+/// one.
+fn dev_origin_warning(allowed_origins: Option<&str>, source: EnvSource) -> Option<String> {
+    let allowed_origins = allowed_origins.filter(|value| !value.trim().is_empty())?;
+    let origin = dev_frontend_origin();
+    let entries: Vec<&str> = allowed_origins
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .collect();
+    let where_from = source.describe();
+    let mut warnings = Vec::new();
+
+    if !entries
+        .iter()
+        .any(|entry| origin_matches_pattern(&origin, entry))
+    {
+        warnings.push(format!(
+            "[xtask] warning: {ALLOWED_ORIGINS_VAR} ({where_from}) is `{allowed_origins}`, which \
+             doesn't admit the dev UI's origin, {origin}.\n\
+             [xtask]   zzzd will refuse the UI's login, RPC calls, and WebSocket (403 \
+             forbidden_origin).\n\
+             [xtask]   Set this line in {DEV_ENV_FILE}, then restart:\n\
+             [xtask]     {ALLOWED_ORIGINS_VAR}={origin}"
+        ));
+    }
+
+    let leftovers: Vec<String> = entries
+        .iter()
+        .filter(|entry| is_default_vite_loopback_origin(entry))
+        .map(|entry| format!("`{entry}`"))
+        .collect();
+    if !leftovers.is_empty() {
+        let fix = match source {
+            EnvSource::File => format!("Remove it from that line in {DEV_ENV_FILE}, then restart."),
+            EnvSource::Inherited => format!(
+                "Remove it from the exported value, or set the line in {DEV_ENV_FILE} (the \
+                 file wins), then restart."
+            ),
+        };
+        warnings.push(format!(
+            "[xtask] warning: {ALLOWED_ORIGINS_VAR} ({where_from}) lists {}, a default Vite \
+             port on loopback.\n\
+             [xtask]   zzzd trusts whatever page is served there, and another project's dev \
+             server takes that port — its page could act with your zzz session.\n\
+             [xtask]   {fix}",
+            leftovers.join(", ")
+        ));
+    }
+
+    if warnings.is_empty() {
+        None
+    } else {
+        Some(warnings.join("\n"))
+    }
+}
+
+/// Whether `port` is one a Vite left on its defaults takes: from 5173 up for
+/// `vite dev` and from 4173 up for `vite preview`, the first free port from
+/// there, so the near ones too.
+fn is_default_vite_port(port: u16) -> bool {
+    (5173..5273).contains(&port) || (4173..4273).contains(&port)
+}
+
+/// Whether an allowlist entry is exactly a plain-http loopback origin
+/// (`localhost`, `127.0.0.1`, `[::1]`) on a default Vite port.
+fn is_default_vite_loopback_origin(entry: &str) -> bool {
+    let Some((scheme, authority)) = entry.split_once("://") else {
+        return false;
+    };
+    let (host, port) = split_host_port(authority);
+    scheme.eq_ignore_ascii_case("http")
+        && ["localhost", "127.0.0.1", "[::1]"]
+            .iter()
+            .any(|loopback| host.eq_ignore_ascii_case(loopback))
+        && port
+            .and_then(|port| port.parse().ok())
+            .is_some_and(is_default_vite_port)
+}
+
+/// Whether the allowlist entry `pattern` admits `origin`, by the rule `zzzd`
+/// applies to a request's `Origin` (`fuz_http::check_origin`, which xtask
+/// doesn't link — the tests hold this copy to the same answers).
+///
+/// Entries are `scheme://host[:port]`, http or https, compared
+/// case-insensitively. A `*` host label matches exactly one label, and a `:*`
+/// port matches any port or none. A malformed entry admits nothing.
+fn origin_matches_pattern(origin: &str, pattern: &str) -> bool {
+    if pattern.eq_ignore_ascii_case(origin) {
+        return true;
+    }
+    let (Some((p_scheme, p_authority)), Some((o_scheme, o_authority))) =
+        (pattern.split_once("://"), origin.split_once("://"))
+    else {
+        return false;
+    };
+    if !(p_scheme.eq_ignore_ascii_case("http") || p_scheme.eq_ignore_ascii_case("https")) {
+        return false;
+    }
+    if !p_scheme.eq_ignore_ascii_case(o_scheme) {
+        return false;
+    }
+    let (p_host, p_port) = split_host_port(p_authority);
+    let (o_host, o_port) = split_host_port(o_authority);
+    let port_ok = match p_port {
+        Some("*") => o_port.is_none_or(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())),
+        Some(explicit) => o_port == Some(explicit),
+        None => o_port.is_none(),
+    };
+    port_ok && host_matches(p_host, o_host)
+}
+
+/// An authority as `(host, port)`; a bracketed IPv6 literal keeps its
+/// brackets.
+fn split_host_port(authority: &str) -> (&str, Option<&str>) {
+    if authority.starts_with('[') {
+        return authority.find(']').map_or((authority, None), |end| {
+            (&authority[..=end], authority[end + 1..].strip_prefix(':'))
+        });
+    }
+    match authority.rsplit_once(':') {
+        Some((host, port)) => (host, Some(port)),
+        None => (authority, None),
+    }
+}
+
+/// A host against a host pattern, label by label: `*` is exactly one
+/// non-empty label, and a bracketed IPv6 literal compares whole.
+fn host_matches(pattern_host: &str, origin_host: &str) -> bool {
+    if pattern_host.starts_with('[') || origin_host.starts_with('[') {
+        return pattern_host.eq_ignore_ascii_case(origin_host);
+    }
+    if pattern_host.split('.').count() != origin_host.split('.').count() {
+        return false;
+    }
+    pattern_host
+        .split('.')
+        .zip(origin_host.split('.'))
+        .all(|(pattern_label, origin_label)| {
+            if pattern_label == "*" {
+                !origin_label.is_empty()
+            } else {
+                !pattern_label.contains('*') && pattern_label.eq_ignore_ascii_case(origin_label)
+            }
+        })
 }
 
 /// The file's assignments to merge: blank (empty or whitespace) values read
@@ -642,6 +918,529 @@ mod tests {
             .port();
         let err = wait_for_server(&mut server, port, Duration::from_secs(10)).unwrap_err();
         assert!(err.to_string().contains("exited before listening"), "{err}");
+    }
+
+    #[test]
+    fn a_list_that_does_not_admit_the_dev_origin_is_reported_with_the_line_to_set() {
+        for stale in [
+            // Vite's default ports, by either name
+            "http://localhost:5173,http://127.0.0.1:5173",
+            "http://localhost:5173",
+            // the dev port under a name the dev server may not be bound to
+            "http://127.0.0.1:5460",
+            "http://[::1]:5460",
+            "https://localhost:5460",
+            "http://localhost:54600",
+            // the backend's own port serves no page in dev
+            "http://localhost:4461",
+            // wildcards that don't cover the dev origin
+            "https://*.example.com",
+            "https://localhost:*",
+            "http://*.localhost:*",
+            "http://*",
+            "http://127.0.0.1:*",
+            "http://*.*:5460",
+            // malformed entries admit nothing
+            "http://localhost:5460/",
+            "localhost:5460",
+            "http://local*:5460",
+            "*",
+        ] {
+            for source in [EnvSource::File, EnvSource::Inherited] {
+                let warning = dev_origin_warning(Some(stale), source).expect(stale);
+                assert!(warning.contains(&format!("is `{stale}`")), "{warning}");
+                assert!(
+                    warning.contains("doesn't admit the dev UI's origin, http://localhost:5460"),
+                    "{warning}"
+                );
+                assert!(
+                    warning.contains(
+                        "Set this line in .env.development, then restart:\n\
+                         [xtask]     FUZ_ALLOWED_ORIGINS=http://localhost:5460"
+                    ),
+                    "{warning}"
+                );
+                assert!(warning.contains("403 forbidden_origin"), "{warning}");
+                // what is refused: not the same-origin GETs, which carry no `Origin`
+                assert!(
+                    warning.contains("the UI's login, RPC calls, and WebSocket"),
+                    "{warning}"
+                );
+                assert!(!warning.contains("every request"), "{warning}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_list_that_admits_the_dev_origin_is_quiet() {
+        for fine in [
+            "http://localhost:5460",
+            "HTTP://LocalHost:5460",
+            " http://localhost:5460 ",
+            "https://zzz.example.com, http://localhost:5460",
+            "http://localhost:5460,,",
+            // wildcards that cover the dev origin
+            "http://localhost:*",
+            "http://*:5460",
+            "http://*:*",
+            "https://*.example.com,http://*:*",
+            // other ports that are not a default Vite's
+            "http://localhost:5460,http://localhost:5461,http://127.0.0.1:4460",
+        ] {
+            for source in [EnvSource::File, EnvSource::Inherited] {
+                assert_eq!(dev_origin_warning(Some(fine), source), None, "{fine}");
+            }
+        }
+        // unset or blank: zzzd refuses to boot, with its own message
+        for unset in [None, Some(""), Some("  ")] {
+            assert_eq!(
+                dev_origin_warning(unset, EnvSource::File),
+                None,
+                "{unset:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_leftover_default_vite_origin_is_reported_beside_the_dev_origin() {
+        for (list, leftovers) in [
+            (
+                "http://localhost:5460,http://localhost:5173",
+                "`http://localhost:5173`",
+            ),
+            (
+                "http://localhost:5173, http://127.0.0.1:5173 ,http://localhost:5460",
+                "`http://localhost:5173`, `http://127.0.0.1:5173`",
+            ),
+            (
+                "http://localhost:5460,HTTP://LocalHost:5174",
+                "`HTTP://LocalHost:5174`",
+            ),
+            (
+                "http://localhost:5460,http://127.0.0.1:5180",
+                "`http://127.0.0.1:5180`",
+            ),
+            (
+                "http://localhost:5460,http://[::1]:5173",
+                "`http://[::1]:5173`",
+            ),
+            (
+                "http://localhost:5460,http://localhost:4173",
+                "`http://localhost:4173`",
+            ),
+            // the wildcard admits the dev UI; the exact entry is still a leftover
+            (
+                "http://*:5460,http://127.0.0.1:4173",
+                "`http://127.0.0.1:4173`",
+            ),
+        ] {
+            let warning = dev_origin_warning(Some(list), EnvSource::File).expect(list);
+            assert!(
+                warning.starts_with(&format!(
+                    "[xtask] warning: FUZ_ALLOWED_ORIGINS (in .env.development) lists \
+                     {leftovers}, a default Vite port on loopback.\n"
+                )),
+                "{warning}"
+            );
+            assert!(
+                warning.ends_with("Remove it from that line in .env.development, then restart."),
+                "{warning}"
+            );
+            // the dev origin is admitted, so only the one warning
+            assert!(!warning.contains("doesn't admit"), "{warning}");
+            assert_eq!(warning.matches("[xtask] warning:").count(), 1, "{warning}");
+        }
+    }
+
+    #[test]
+    fn a_stale_list_gets_both_warnings() {
+        let warning = dev_origin_warning(
+            Some("http://localhost:5173,http://127.0.0.1:5173"),
+            EnvSource::File,
+        )
+        .unwrap();
+        assert_eq!(warning.matches("[xtask] warning:").count(), 2, "{warning}");
+        assert!(warning.contains("doesn't admit"), "{warning}");
+        assert!(
+            warning.contains("lists `http://localhost:5173`, `http://127.0.0.1:5173`, a default"),
+            "{warning}"
+        );
+    }
+
+    #[test]
+    fn only_exact_plain_http_loopback_entries_on_a_default_vite_port_are_leftovers() {
+        for entry in [
+            "http://localhost:5173",
+            "http://localhost:5174",
+            "http://localhost:5180",
+            "http://localhost:5272",
+            "http://localhost:4173",
+            "http://localhost:4272",
+            "http://127.0.0.1:5173",
+            "http://[::1]:4173",
+            "HTTP://LOCALHOST:5173",
+        ] {
+            assert!(is_default_vite_loopback_origin(entry), "{entry}");
+        }
+        for entry in [
+            "http://localhost:5460",
+            "http://localhost:5461",
+            "http://localhost:4460",
+            "http://localhost:4461",
+            "http://localhost:5172",
+            "http://localhost:5273",
+            "http://localhost:4172",
+            "http://localhost:4273",
+            "http://localhost",
+            "http://localhost:*",
+            "https://localhost:5173",
+            "http://example.com:5173",
+            "http://evil.localhost:5173",
+            "http://192.168.1.10:5173",
+            "http://[::2]:5173",
+            "http://*:5173",
+            "localhost:5173",
+        ] {
+            assert!(!is_default_vite_loopback_origin(entry), "{entry}");
+            assert_eq!(
+                dev_origin_warning(
+                    Some(&format!("http://localhost:5460,{entry}")),
+                    EnvSource::File
+                ),
+                None,
+                "{entry}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_origin_warning_says_where_the_value_came_from() {
+        for list in [
+            "http://localhost:5173",
+            "http://localhost:5460,http://localhost:5173",
+        ] {
+            let from_file = dev_origin_warning(Some(list), EnvSource::File).unwrap();
+            assert!(
+                from_file.contains("FUZ_ALLOWED_ORIGINS (in .env.development) "),
+                "{from_file}"
+            );
+            assert!(!from_file.contains("inherited"), "{from_file}");
+            assert!(!from_file.contains("exported value"), "{from_file}");
+
+            let inherited = dev_origin_warning(Some(list), EnvSource::Inherited).unwrap();
+            assert!(
+                inherited.contains(
+                    "FUZ_ALLOWED_ORIGINS (inherited from the environment, as .env.development \
+                     leaves it unset) "
+                ),
+                "{inherited}"
+            );
+            assert!(!inherited.contains("(in .env.development)"), "{inherited}");
+            assert!(
+                inherited.contains("Remove it from the exported value, or set the line in"),
+                "{inherited}"
+            );
+            assert!(!inherited.contains("from that line"), "{inherited}");
+        }
+    }
+
+    /// `zzzd`'s own answers (`fuz_http::check_origin` on a one-entry list),
+    /// as `(entry, origin, admitted)`.
+    #[test]
+    fn origin_matching_agrees_with_zzzd() {
+        for (pattern, origin, admitted) in [
+            ("http://localhost:5460", "http://localhost:5460", true),
+            ("http://localhost:5460", "http://localhost:5173", false),
+            ("http://localhost:5460", "http://127.0.0.1:5460", false),
+            ("HTTP://LocalHost:5460", "http://localhost:5460", true),
+            ("https://zzz.example.com", "https://zzz.example.com", true),
+            (
+                "https://zzz.example.com",
+                "https://zzz.example.com:443",
+                false,
+            ),
+            ("https://zzz.example.com", "http://zzz.example.com", false),
+            (
+                "https://zzz.example.com:443",
+                "https://zzz.example.com",
+                false,
+            ),
+            ("http://localhost:80", "http://localhost", false),
+            ("http://[::1]:5460", "http://[::1]:5460", true),
+            (
+                "http://[2001:DB8::1]:5460",
+                "http://[2001:db8::1]:5460",
+                true,
+            ),
+            ("http://[0:0:0:0:0:0:0:1]:5460", "http://[::1]:5460", false),
+            ("http://localhost.", "http://localhost", false),
+            ("ws://localhost:5460", "ws://localhost:5460", true),
+            ("file://", "null", false),
+            ("*", "*", true),
+            ("*", "http://localhost:5460", false),
+            ("http://localhost:*", "http://localhost", true),
+            ("http://localhost:*", "http://localhost:1", true),
+            ("http://localhost:*", "http://localhost:5173", true),
+            ("http://localhost:*", "http://localhost.:1", false),
+            ("http://localhost:*", "http://evil.localhost:1", false),
+            ("http://localhost:*", "https://localhost:1", false),
+            ("http://[::1]:*", "http://[::1]:9", true),
+            ("http://[::1]:*", "http://[::2]:9", false),
+            ("https://*.example.com", "https://a.example.com", true),
+            ("https://*.example.com", "https://a.b.example.com", false),
+            ("https://*.example.com", "https://example.com", false),
+            ("https://*.example.com", "https://a.example.com:8443", false),
+            ("https://*.example.com", "http://a.example.com", false),
+            (
+                "https://*.example.com:*",
+                "https://a.example.com:8443",
+                true,
+            ),
+            ("https://*.example.com:*", "https://a.example.com", true),
+            ("https://example.*", "https://example.evil", true),
+            ("http://192.168.1.*", "http://192.168.1.77", true),
+            ("http://*", "http://localhost", true),
+            ("http://*", "http://[::1]", false),
+            ("http://*", "http://a.b", false),
+            ("http://*", "http://localhost:5173", false),
+            ("http://*:*", "http://localhost:5173", true),
+            ("http://*:*", "http://[::1]:5173", false),
+            ("http://*.", "http://localhost.", true),
+            ("http://*.", "http://localhost", false),
+            ("https://*.*", "https://evil.example", true),
+            ("http://*.*.*.*:*", "http://10.0.0.7:9", true),
+            (
+                "https://*foo.example.com",
+                "https://afoo.example.com",
+                false,
+            ),
+            (
+                "https://*.*.corp.example.com",
+                "https://a.b.corp.example.com",
+                true,
+            ),
+            ("http://localhost:5460/", "http://localhost:5460", false),
+            ("localhost:5460", "http://localhost:5460", false),
+            ("localhost:5460", "localhost:5460", true),
+            ("http://user@localhost:5460", "http://localhost:5460", false),
+            ("http://localhost:05460", "http://localhost:5460", false),
+            ("http://localhost:", "http://localhost", false),
+            ("http://localhost:", "http://localhost:", true),
+        ] {
+            assert_eq!(
+                origin_matches_pattern(origin, pattern),
+                admitted,
+                "{pattern} <- {origin}"
+            );
+        }
+        // a `:*` port is a number when present
+        assert!(!origin_matches_pattern(
+            "http://localhost:abc",
+            "http://localhost:*"
+        ));
+        assert!(!origin_matches_pattern(
+            "http://localhost:",
+            "http://localhost:*"
+        ));
+        // a `*` label is non-empty, and a non-http(s) entry matches only itself
+        assert!(!origin_matches_pattern(
+            "https://.example.com",
+            "https://*.example.com"
+        ));
+        assert!(!origin_matches_pattern(
+            "ws://a.example.com",
+            "ws://*.example.com"
+        ));
+    }
+
+    #[test]
+    fn the_file_value_wins_and_the_source_is_recorded() {
+        assert_eq!(
+            effective_value(Some("file"), Some("inherited")),
+            (Some("file"), EnvSource::File)
+        );
+        assert_eq!(
+            effective_value(Some("file"), None),
+            (Some("file"), EnvSource::File)
+        );
+        assert_eq!(
+            effective_value(None, Some("inherited")),
+            (Some("inherited"), EnvSource::Inherited)
+        );
+        assert_eq!(effective_value(None, None), (None, EnvSource::Inherited));
+    }
+
+    #[test]
+    fn a_stale_frontend_port_line_is_reported_with_the_line_to_set() {
+        for stale in ["5173", "4461", "54600", "05460", " 5460"] {
+            let warning = dev_server_port_warning(Some(stale)).expect(stale);
+            assert!(
+                warning.starts_with(&format!(
+                    "[xtask] warning: PUBLIC_ZZZ_SERVER_PORT in .env.development is `{stale}`, \
+                     but the dev server serves on port 5460.\n"
+                )),
+                "{warning}"
+            );
+            assert!(
+                warning.ends_with(
+                    "Set this line in .env.development:\n\
+                     [xtask]     PUBLIC_ZZZ_SERVER_PORT=5460"
+                ),
+                "{warning}"
+            );
+        }
+        for fine in [Some("5460"), None, Some(""), Some("  ")] {
+            assert_eq!(dev_server_port_warning(fine), None, "{fine:?}");
+        }
+    }
+
+    #[test]
+    fn dev_forces_the_frontend_onto_the_dev_ports() {
+        assert_eq!(
+            dev_port_env(),
+            [
+                ("PUBLIC_ZZZ_SERVER_PORT", "5460".to_owned()),
+                ("PUBLIC_ZZZ_SERVER_PROXIED_PORT", "4461".to_owned()),
+                (
+                    "PUBLIC_ZZZ_WEBSOCKET_URL",
+                    "ws://localhost:4461/api/ws".to_owned()
+                ),
+            ]
+        );
+        assert_eq!(dev_port_env()[0].0, SERVER_PORT_VAR);
+        assert_eq!(dev_server_port_warning(Some(&dev_port_env()[0].1)), None);
+    }
+
+    /// The dev UI's origin is written down in places that can't import one
+    /// another: [`DEV_FRONTEND_PORT`], the port Vite is pinned to, the env
+    /// template `dev-setup` copies, and the setup docs.
+    mod dev_origin_copies {
+        use super::*;
+
+        fn read(path: &str) -> String {
+            fs::read_to_string(workspace_root().join(path)).unwrap()
+        }
+
+        /// The `port` of the `block: { ... }` object in the Vite config, and
+        /// that object's own fields from its first `port:` on.
+        fn vite_block_port(config: &str, block: &str) -> (u16, String) {
+            let opening = format!("\n\t{block}: {{");
+            let (_, body) = config
+                .split_once(&opening)
+                .unwrap_or_else(|| panic!("vite.config.ts has a `{block}` block"));
+            // the block's own fields come before the next top-level key
+            let body = body.split("\n\t}").next().unwrap();
+            assert!(
+                !body.contains("\n\t\thost:"),
+                "`{block}` sets no host: binding one address family leaves \
+                 `localhost` on the other free for another process"
+            );
+            let (_, rest) = body
+                .split_once("\n\t\tport: ")
+                .unwrap_or_else(|| panic!("`{block}` pins a port"));
+            let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+            let port = digits
+                .parse()
+                .unwrap_or_else(|_| panic!("`{block}.port` is a number"));
+            (port, rest.to_owned())
+        }
+
+        /// The value a template assigns `key`.
+        fn template_value(template: &str, key: &str) -> String {
+            let vars = env_file::parse_env(&read(template)).vars;
+            let mut values = vars.into_iter().filter(|(k, _)| k == key);
+            let (_, value) = values
+                .next()
+                .unwrap_or_else(|| panic!("{template} sets {key}"));
+            assert!(values.next().is_none(), "{template} sets {key} once");
+            value
+        }
+
+        #[test]
+        fn vite_serves_the_dev_origin_and_cannot_move() {
+            let (port, rest) = vite_block_port(&read("vite.config.ts"), "server");
+            assert_eq!(port, DEV_FRONTEND_PORT);
+            assert!(rest.contains("strictPort: true"), "`server` is strictPort");
+        }
+
+        /// `vite.config.ts` refuses to start a dev server whose port differs
+        /// from the loaded `PUBLIC_ZZZ_SERVER_PORT`, so the value `dev` forces
+        /// must be the port it serves on — and the variable's name is written
+        /// on both sides.
+        #[test]
+        fn the_forced_frontend_port_passes_the_vite_port_check() {
+            let config = read("vite.config.ts");
+            let (port, _) = vite_block_port(&config, "server");
+            let forced = dev_port_env();
+            let (key, value) = &forced[0];
+            assert_eq!(*value, port.to_string());
+            assert!(
+                read("src/lib/dev_server_port.ts")
+                    .contains(&format!("export const DEV_SERVER_PORT_VAR = '{key}';")),
+                "the check reads {key}"
+            );
+            assert!(
+                config.contains("\n\t\tzzz_dev_server_port(),\n")
+                    && config.contains("check_dev_server_port({")
+                    && config.contains("if (error) throw new Error(error);"),
+                "vite.config.ts runs the port check"
+            );
+        }
+
+        #[test]
+        fn vite_preview_is_pinned_to_a_port_the_template_does_not_allow() {
+            let (port, rest) = vite_block_port(&read("vite.config.ts"), "preview");
+            assert!(rest.contains("strictPort: true"), "`preview` is strictPort");
+            assert_ne!(port, DEV_FRONTEND_PORT);
+            let allowed = template_value(".env.development.example", ALLOWED_ORIGINS_VAR);
+            assert!(
+                !allowed.contains(&format!(":{port}")),
+                "the preview origin is opt-in: {allowed}"
+            );
+        }
+
+        #[test]
+        fn neither_vite_port_is_one_a_default_vite_takes() {
+            let config = read("vite.config.ts");
+            for block in ["server", "preview"] {
+                let (port, _) = vite_block_port(&config, block);
+                assert!(
+                    !is_default_vite_port(port),
+                    "`{block}.port` {port} is in a default Vite's range"
+                );
+            }
+        }
+
+        #[test]
+        fn the_dev_template_allows_exactly_the_dev_origin() {
+            let allowed = template_value(".env.development.example", ALLOWED_ORIGINS_VAR);
+            assert_eq!(allowed, dev_frontend_origin());
+            assert_eq!(dev_origin_warning(Some(&allowed), EnvSource::File), None);
+            let server_port = template_value(".env.development.example", SERVER_PORT_VAR);
+            assert_eq!(
+                server_port,
+                DEV_FRONTEND_PORT.to_string(),
+                "the UI calls the Vite server"
+            );
+            assert_eq!(dev_server_port_warning(Some(&server_port)), None);
+        }
+
+        #[test]
+        fn no_template_allows_a_wildcard_origin() {
+            for template in [".env.development.example", ".env.production.example"] {
+                let allowed = template_value(template, ALLOWED_ORIGINS_VAR);
+                assert!(!allowed.is_empty(), "{template}");
+                assert!(!allowed.contains('*'), "{template}: {allowed}");
+            }
+        }
+
+        #[test]
+        fn the_setup_docs_name_the_dev_origin() {
+            let address = format!("localhost:{DEV_FRONTEND_PORT}");
+            for doc in ["README.md", "docs/development.md"] {
+                assert!(read(doc).contains(&address), "{doc} says {address}");
+            }
+        }
     }
 
     #[test]

@@ -37,7 +37,7 @@ import { RPC_MESSAGE_MAX_BYTES } from '#lib/rpc_message_limit.ts';
 
 import './cross_test_types.ts';
 import { request_status } from './request_status.ts';
-import { TEST_UI_ORIGIN } from './zzz_backend_config.ts';
+import { RPC_CALL_DEFAULT_ORIGIN } from './zzz_backend_config.ts';
 
 const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 const setup_test = default_cross_process_setup(handle);
@@ -478,7 +478,7 @@ describe('filesystem cross-backend', () => {
 				`${handle.config.base_url}${handle.config.rpc_path}`,
 				{
 					'Content-Type': 'application/json',
-					origin: TEST_UI_ORIGIN,
+					origin: RPC_CALL_DEFAULT_ORIGIN,
 					...fixture.create_session_headers()
 				},
 				JSON.stringify({

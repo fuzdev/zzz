@@ -6,8 +6,8 @@
  * - **Host** — a `Host` that isn't loopback or named by an allowed origin is
  *   refused (403 `forbidden_host`). A DNS-rebinding page talks to zzzd
  *   same-origin, so it sends no `Origin`, but its `Host` is its own domain.
- * - **Origin** — the backends run with exact origins, as the `.env`
- *   templates ship them, so a page on another `localhost` port — same-site,
+ * - **Origin** — the backends run with exact origins, as the production
+ *   template ships them, so a page on another `localhost` port — same-site,
  *   so its requests carry the session cookie — is refused (403
  *   `forbidden_origin`), on the WebSocket upgrade too.
  * - **CORS simple requests** — a `POST` with no `Content-Type`, or a form or
@@ -16,11 +16,11 @@
  *   the session cookie from any `localhost` port.
  *
  * Requests go through `node:http`, since `fetch` won't send a chosen `Host`.
+ * `dev_origins.cross.test.ts` covers the origins a dev checkout allows.
  *
  * @module
  */
 
-import { request as http_request } from 'node:http';
 import { join } from 'node:path';
 import { mkdir, stat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -33,6 +33,11 @@ import {
 import { to_file_bytes_url } from '#lib/file_bytes.ts';
 
 import './cross_test_types.ts';
+import {
+	raw_request as send_raw_request,
+	WS_UPGRADE_HEADERS,
+	type RawResponse
+} from './raw_request.ts';
 
 const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 const setup_test = default_cross_process_setup(handle);
@@ -48,44 +53,11 @@ const OTHER_PORT_ORIGIN = 'http://localhost:8000';
 /** The `Host` a rebinding page sends: its own domain, at the daemon's port. */
 const REBOUND_HOST = `rebind.example.com:${port}`;
 
-interface RawResponse {
-	status: number;
-	body: string;
-}
-
-/** Send one request exactly as given — `Host` included — and read the reply. */
+/** Send one request to the backend exactly as given — `Host` included. */
 const raw_request = (
 	path: string,
-	options: { method?: string; headers?: Record<string, string>; body?: string } = {}
-): Promise<RawResponse> =>
-	new Promise((resolve, reject) => {
-		const req = http_request(`${base_url}${path}`, {
-			method: options.method ?? 'GET',
-			headers: options.headers
-		});
-		const on_response = (res: import('node:http').IncomingMessage): void => {
-			let body = '';
-			res.setEncoding('utf8');
-			res.on('data', (chunk: string) => (body += chunk));
-			res.on('end', () => resolve({ status: res.statusCode!, body }));
-		};
-		req.on('response', on_response);
-		// a 101 would mean the gate let an upgrade through
-		req.on('upgrade', (res, socket) => {
-			socket.destroy();
-			resolve({ status: res.statusCode!, body: '' });
-		});
-		req.on('error', reject);
-		req.end(options.body);
-	});
-
-/** A WebSocket upgrade's own headers (the key is RFC 6455's sample). */
-const WS_UPGRADE_HEADERS = {
-	connection: 'Upgrade',
-	upgrade: 'websocket',
-	'sec-websocket-version': '13',
-	'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ=='
-};
+	options?: Parameters<typeof send_raw_request>[1]
+): Promise<RawResponse> => send_raw_request(`${base_url}${path}`, options);
 
 const ping_envelope = JSON.stringify({ jsonrpc: '2.0', id: 'gate', method: 'ping' });
 

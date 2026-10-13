@@ -30,6 +30,9 @@
  * - Rust test binary → `4462` (matches `testing_zzz_server`'s
  *   `TESTING_DEFAULT_PORT`)
  * - Rust+proxy test binary → `4463`
+ * - Rust dev-origins test binary → `4464`
+ *   ({@link rust_dev_origins_backend_config}, spawned by its one suite
+ *   inside the `cross_backend_rust` project)
  *
  * Vitest projects spawn one backend each, so ports only need to not
  * collide cross-project, not cross-test.
@@ -64,7 +67,7 @@
  * @module
  */
 
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { BackendConfig } from '@fuzdev/fuz_app/testing/cross_backend/backend_config.ts';
 import type { BackendCapabilities } from '@fuzdev/fuz_app/testing/cross_backend/capabilities.ts';
@@ -84,8 +87,29 @@ import {
  */
 export const zzz_session_cookie_name = (port: number): string => `zzz_session_${port}`;
 
-/** The dev UI's origin (Vite), allowed by the test backends beside their own. */
-export const TEST_UI_ORIGIN = 'http://localhost:5173';
+/**
+ * The `Origin` fuz_app's `rpc_call` test helper sends unless told otherwise —
+ * fixed upstream, so the test backends allow it beside their own origins. It
+ * isn't zzz's dev origin, which no test backend but
+ * {@link rust_dev_origins_backend_config}'s allows.
+ */
+export const RPC_CALL_DEFAULT_ORIGIN = 'http://localhost:5173';
+
+/** The dev env template `cargo xtask dev-setup` copies to `.env.development`. */
+const DEV_ENV_TEMPLATE_PATH = '.env.development.example';
+
+/**
+ * The origin allowlist a dev checkout runs on: the `FUZ_ALLOWED_ORIGINS`
+ * value of the dev env template, as written.
+ */
+export const read_dev_allowed_origins = (): string => {
+	const lines = readFileSync(DEV_ENV_TEMPLATE_PATH, 'utf8').split('\n');
+	const values = lines.flatMap((line) => /^FUZ_ALLOWED_ORIGINS=(.*)$/.exec(line)?.[1] ?? []);
+	if (values.length !== 1 || !values[0]) {
+		throw new Error(`${DEV_ENV_TEMPLATE_PATH} sets FUZ_ALLOWED_ORIGINS once`);
+	}
+	return values[0];
+};
 
 /**
  * Per-project Rust backend database URL prefix — real Postgres (PGlite
@@ -134,6 +158,8 @@ const build_zzz_paths = (backend_name: string): ZzzBackendPaths => {
 interface MakeZzzRustBackendOptions {
 	name: string;
 	port: number;
+	/** The database, when it isn't the backend's own `zzz_test_<name>`. */
+	database_name?: string;
 	extra_env?: Record<string, string>;
 }
 
@@ -153,6 +179,7 @@ interface MakeZzzRustBackendOptions {
 const make_zzz_rust_backend_config = ({
 	name,
 	port,
+	database_name = name,
 	extra_env
 }: MakeZzzRustBackendOptions): BackendConfig => {
 	const paths = build_zzz_paths(name);
@@ -163,7 +190,7 @@ const make_zzz_rust_backend_config = ({
 		name,
 		port,
 		start_command: ['cargo', 'run', '--bin', 'testing_zzzd'],
-		database_url: `${RUST_DATABASE_URL_PREFIX}${name}`,
+		database_url: `${RUST_DATABASE_URL_PREFIX}${database_name}`,
 		port_env_var: 'ZZZ_PORT',
 		cookie_name: zzz_session_cookie_name(port),
 		rust_log: 'info,zzz_server=info,testing_zzzd=info',
@@ -172,14 +199,15 @@ const make_zzz_rust_backend_config = ({
 		extra_env: {
 			PUBLIC_ZZZ_DIR: paths.zzz_dir,
 			PUBLIC_ZZZ_SCOPED_DIRS: paths.scoped_dir,
-			// exact origins, the shape the `.env` templates and the CLI ship —
-			// never the upstream harness's `http://localhost:*` — so the
-			// browser-gate suite can show a page on another local port refused.
-			// `TEST_UI_ORIGIN` is the Vite origin the upstream suites send.
+			// exact origins, the shape the production template and the CLI
+			// ship — the backend's own two, the page it serves — never the
+			// upstream harness's `http://localhost:*`, so the browser-gate
+			// suite can show a page on another local port refused. Plus the
+			// one the upstream suites send.
 			FUZ_ALLOWED_ORIGINS: [
 				`http://localhost:${port}`,
 				`http://127.0.0.1:${port}`,
-				TEST_UI_ORIGIN
+				RPC_CALL_DEFAULT_ORIGIN
 			].join(','),
 			...extra_env
 		}
@@ -251,4 +279,24 @@ export const rust_proxy_backend_config = (): BackendConfig =>
 		name: 'rust_proxy',
 		port: 4463,
 		extra_env: { ZZZ_TRUSTED_PROXIES: '127.0.0.1' }
+	});
+
+/**
+ * A second Rust backend for `dev_origins.cross.test.ts`, started with the dev
+ * env template's origin allowlist and no frontend of its own — what
+ * `cargo xtask dev` runs. The suite spawns it itself, beside the
+ * `cross_backend_rust` project's backend, and makes only requests that need
+ * no account, so it shares that project's database instead of taking one of
+ * its own: it never wipes the schema on startup, and its migrations find
+ * them already run.
+ */
+export const rust_dev_origins_backend_config = (): BackendConfig =>
+	make_zzz_rust_backend_config({
+		name: 'rust_dev_origins',
+		port: 4464,
+		database_name: 'rust',
+		extra_env: {
+			FUZ_ALLOWED_ORIGINS: read_dev_allowed_origins(),
+			FUZ_TESTING_RESET_DB_ON_STARTUP: 'false'
+		}
 	});
