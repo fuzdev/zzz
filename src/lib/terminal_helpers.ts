@@ -11,6 +11,18 @@ export const TERMINAL_OUTPUT_MAX_LENGTH = 1_000_000;
  */
 export const TERMINAL_INPUT_PENDING_MAX_LENGTH = 64 * 1024;
 
+/**
+ * Consumed output a terminal acks at once rather than after
+ * `TERMINAL_ACK_DELAY` — see `TerminalOutputAcker`.
+ */
+export const TERMINAL_ACK_THRESHOLD_BYTES = 64 * 1024;
+
+/** How long (ms) consumed output under the threshold waits to be acked. */
+export const TERMINAL_ACK_DELAY = 100;
+
+/** How long (ms) before a failed ack is sent again. */
+export const TERMINAL_ACK_RETRY_DELAY = 1000;
+
 /** Why a terminal is `lost` when the backend answers `not_found` for it. */
 export const TERMINAL_NOT_FOUND_MESSAGE =
 	'lost: the backend no longer has this terminal — zzzd may have restarted';
@@ -138,6 +150,122 @@ export class TerminalOutputBuffer {
 				this.#chunks[0] = first.slice(cut);
 				this.#length -= cut;
 			}
+		}
+	}
+}
+
+/**
+ * How a `terminal_ack` ended: `ok`, `retry` (it failed and is worth sending
+ * again), or `stop` (the backend no longer has the terminal).
+ */
+export type TerminalAckOutcome = 'ok' | 'retry' | 'stop';
+
+export interface TerminalOutputAckerOptions {
+	/** Sends a `terminal_ack` for output consumed through `bytes`. Must not throw. */
+	send: (bytes: number) => Promise<TerminalAckOutcome>;
+	threshold_bytes?: number;
+	delay?: number;
+	retry_delay?: number;
+}
+
+/**
+ * Batches one terminal's output acks. The backend stops reading a terminal
+ * whose output runs too far ahead of what this client has acked, so acks
+ * must keep up with consumption without doubling the message rate.
+ *
+ * Counts are the backend's: each `terminal_data` carries `sent_bytes`, the
+ * terminal's running output total, and an ack echoes the `sent_bytes` of the
+ * last chunk consumed. Acks are cumulative, so a lost one is covered by the
+ * next.
+ *
+ * At most one ack is in flight. Output consumed meanwhile is acked as soon
+ * as that one returns, so under a flood acks go out at the pace of their
+ * round trips, each covering everything consumed so far. Otherwise an ack
+ * is sent at once when `threshold_bytes` are waiting, and after `delay`
+ * when fewer are — so the last of a burst is always acked. Not reactive.
+ */
+export class TerminalOutputAcker {
+	readonly #send: (bytes: number) => Promise<TerminalAckOutcome>;
+	readonly #threshold_bytes: number;
+	readonly #delay: number;
+	readonly #retry_delay: number;
+
+	#consumed = 0;
+	#acked = 0;
+	#sending = false;
+	#stopped = false;
+	#timer: ReturnType<typeof setTimeout> | null = null;
+
+	constructor(options: TerminalOutputAckerOptions) {
+		this.#send = options.send;
+		this.#threshold_bytes = options.threshold_bytes ?? TERMINAL_ACK_THRESHOLD_BYTES;
+		this.#delay = options.delay ?? TERMINAL_ACK_DELAY;
+		this.#retry_delay = options.retry_delay ?? TERMINAL_ACK_RETRY_DELAY;
+	}
+
+	/** The highest `sent_bytes` an ack has succeeded for. */
+	get acked(): number {
+		return this.#acked;
+	}
+
+	/**
+	 * Records that output through `sent_bytes` has been consumed. Counts only
+	 * move forward — a lower value is ignored.
+	 */
+	consumed(sent_bytes: number): void {
+		if (this.#stopped || sent_bytes <= this.#consumed) return;
+		this.#consumed = sent_bytes;
+		if (this.#consumed - this.#acked >= this.#threshold_bytes) {
+			this.flush();
+		} else {
+			this.#schedule(this.#delay);
+		}
+	}
+
+	/**
+	 * Acks what's been consumed now, unless an ack is in flight (what it
+	 * leaves is acked when it returns) or nothing is waiting.
+	 */
+	flush(): void {
+		this.#clear_timer();
+		if (this.#stopped || this.#sending || this.#consumed <= this.#acked) return;
+		void this.#run(this.#consumed);
+	}
+
+	/** Stops acking for good — pending and later output is never acked. */
+	stop(): void {
+		this.#stopped = true;
+		this.#clear_timer();
+	}
+
+	async #run(bytes: number): Promise<void> {
+		this.#sending = true;
+		const outcome = await this.#send(bytes);
+		this.#sending = false;
+		if (this.#stopped) return;
+		if (outcome === 'stop') {
+			this.stop();
+		} else if (outcome === 'retry') {
+			this.#schedule(this.#retry_delay);
+		} else {
+			this.#acked = bytes;
+			this.flush();
+		}
+	}
+
+	/** Flushes after `delay` ms, unless a flush is already scheduled. */
+	#schedule(delay: number): void {
+		if (this.#timer !== null) return;
+		this.#timer = setTimeout(() => {
+			this.#timer = null;
+			this.flush();
+		}, delay);
+	}
+
+	#clear_timer(): void {
+		if (this.#timer !== null) {
+			clearTimeout(this.#timer);
+			this.#timer = null;
 		}
 	}
 }

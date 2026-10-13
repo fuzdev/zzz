@@ -471,7 +471,8 @@ PTY terminals rendered by xterm.js, spawned and managed by the Rust backend's
 `fuz_pty` crate — [development.md](./development.md) covers the build story).
 
 Actions: `terminal_create` (→ `{terminal_id}`), `terminal_data_send` (stdin),
-`terminal_resize`, and `terminal_close` (→ `{exit_code}`) are
+`terminal_resize`, `terminal_ack` (output consumed), and `terminal_close`
+(→ `{exit_code}`) are
 `request_response`; `terminal_data` (output chunks) and `terminal_exited` are
 **account-scoped** `remote_notification`s — sent to every socket of the
 account that created the terminal, not to all sockets like `filer_change`
@@ -487,9 +488,11 @@ User types in xterm.js (TerminalView.svelte)
     incremental UTF-8 decode)
     → terminal_data broadcast to all sockets
       → frontend_action_handlers.terminal_data.receive
-        → frontend.terminals.receive_output(terminal_id, data)
+        → frontend.terminals.receive_output(terminal_id, data, sent_bytes)
           → the Terminal cell buffers the chunk and forwards it to any
             attached TerminalView, which writes it into its xterm buffer
+            → once xterm has parsed it: app.api.terminal_ack({terminal_id, bytes})
+              (batched) → PtyManager::ack, which paces the terminal's reads
 ```
 
 Terminal state lives in app-level Cells, not components: `app.terminals`
@@ -509,6 +512,18 @@ and their output buffering, and coming back reattaches to them.
   `terminal_id` is held (capped at 64K characters) only while a
   `terminal_create` is in flight, since a new shell's first output can arrive
   before the create response.
+- **Output pacing** — each `terminal_data` carries `sent_bytes`, the
+  backend's running total of the terminal's output, and the `Terminal` acks
+  the `sent_bytes` it has consumed through with `terminal_ack`. Consumed
+  means every attached view's xterm has parsed the chunk (`term.write`'s
+  callback), or, with no view attached, that the chunk is in the buffer —
+  which drops its oldest output, so it never backs up. A view that detaches
+  stops being waited on. `TerminalOutputAcker` batches the acks: one at once
+  when 64 KiB are waiting, otherwise after a short delay so the last of a
+  burst is acked too, and never more than one in flight — what's consumed
+  meanwhile goes in the next. The backend stops reading a terminal that gets
+  1 MiB ahead of its acks, which blocks the process until the view catches
+  up. Output for a terminal this tab doesn't hold is never acked.
 - **Input** — `Terminal.send_input` keeps at most one `terminal_data_send` in
   flight per terminal and coalesces data typed meanwhile into the next send,
   so keystrokes stay ordered even though the backend dispatches one socket's

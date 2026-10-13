@@ -36,6 +36,7 @@ export const ActionSpecs = {
 	terminal_create: specs.terminal_create_action_spec,
 	terminal_data_send: specs.terminal_data_send_action_spec,
 	terminal_data: specs.terminal_data_action_spec,
+	terminal_ack: specs.terminal_ack_action_spec,
 	terminal_resize: specs.terminal_resize_action_spec,
 	terminal_close: specs.terminal_close_action_spec,
 	terminal_exited: specs.terminal_exited_action_spec,
@@ -67,6 +68,7 @@ export interface ActionSpecs {
 	terminal_create: typeof specs.terminal_create_action_spec;
 	terminal_data_send: typeof specs.terminal_data_send_action_spec;
 	terminal_data: typeof specs.terminal_data_action_spec;
+	terminal_ack: typeof specs.terminal_ack_action_spec;
 	terminal_resize: typeof specs.terminal_resize_action_spec;
 	terminal_close: typeof specs.terminal_close_action_spec;
 	terminal_exited: typeof specs.terminal_exited_action_spec;
@@ -106,6 +108,7 @@ export const ActionInputs = {
 	terminal_create: specs.terminal_create_action_spec.input,
 	terminal_data_send: specs.terminal_data_send_action_spec.input,
 	terminal_data: specs.terminal_data_action_spec.input,
+	terminal_ack: specs.terminal_ack_action_spec.input,
 	terminal_resize: specs.terminal_resize_action_spec.input,
 	terminal_close: specs.terminal_close_action_spec.input,
 	terminal_exited: specs.terminal_exited_action_spec.input,
@@ -137,6 +140,7 @@ export interface ActionInputs {
 	terminal_create: z.infer<typeof specs.terminal_create_action_spec.input>;
 	terminal_data_send: z.infer<typeof specs.terminal_data_send_action_spec.input>;
 	terminal_data: z.infer<typeof specs.terminal_data_action_spec.input>;
+	terminal_ack: z.infer<typeof specs.terminal_ack_action_spec.input>;
 	terminal_resize: z.infer<typeof specs.terminal_resize_action_spec.input>;
 	terminal_close: z.infer<typeof specs.terminal_close_action_spec.input>;
 	terminal_exited: z.infer<typeof specs.terminal_exited_action_spec.input>;
@@ -174,6 +178,7 @@ export const ActionOutputs = {
 	terminal_create: specs.terminal_create_action_spec.output,
 	terminal_data_send: specs.terminal_data_send_action_spec.output,
 	terminal_data: specs.terminal_data_action_spec.output,
+	terminal_ack: specs.terminal_ack_action_spec.output,
 	terminal_resize: specs.terminal_resize_action_spec.output,
 	terminal_close: specs.terminal_close_action_spec.output,
 	terminal_exited: specs.terminal_exited_action_spec.output,
@@ -205,6 +210,7 @@ export interface ActionOutputs {
 	terminal_create: z.infer<typeof specs.terminal_create_action_spec.output>;
 	terminal_data_send: z.infer<typeof specs.terminal_data_send_action_spec.output>;
 	terminal_data: z.infer<typeof specs.terminal_data_action_spec.output>;
+	terminal_ack: z.infer<typeof specs.terminal_ack_action_spec.output>;
 	terminal_resize: z.infer<typeof specs.terminal_resize_action_spec.output>;
 	terminal_close: z.infer<typeof specs.terminal_close_action_spec.output>;
 	terminal_exited: z.infer<typeof specs.terminal_exited_action_spec.output>;
@@ -308,6 +314,11 @@ export interface ActionEventDatas {
 		ActionOutputs['terminal_data_send']
 	>;
 	terminal_data: ActionEventRemoteNotificationData<'terminal_data', ActionInputs['terminal_data']>;
+	terminal_ack: ActionEventRequestResponseData<
+		'terminal_ack',
+		ActionInputs['terminal_ack'],
+		ActionOutputs['terminal_ack']
+	>;
 	terminal_resize: ActionEventRequestResponseData<
 		'terminal_resize',
 		ActionInputs['terminal_resize'],

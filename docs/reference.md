@@ -5,7 +5,7 @@
 Generated from `action_specs.ts` and `cell_classes.ts` by `reference.gen.ts`.
 Run `gro gen` to refresh it; `gro check` fails if it drifts. Don't edit by hand.
 
-## Action specs (26)
+## Action specs (27)
 
 The fuz_app protocol actions `heartbeat` (WS-only) and `peer/ping` are
 registered too but omitted here — they belong to the shared runtime, not zzz
@@ -24,6 +24,7 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `ping` — Health check — echoes the request ID back to the caller. Kind: request_response. Initiator: both. Auth: account=none, actor=none
 - `provider_load_status` — Check the availability and status of an AI provider. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `session_load` — Load the session snapshot (files, workspaces, terminals, jobs, provider status) — at boot and after each reconnect, to resync. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `terminal_ack` — Acknowledge a terminal's output up to a `terminal_data`'s `sent_bytes`. The backend stops reading a terminal whose output runs too far ahead of what an acknowledging WebSocket connection has taken, and resumes as acks arrive; connections that never acknowledge aren't waited for, and over HTTP the call does nothing. Fails with `not_found` when the caller has no live terminal with the id. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `terminal_close` — Kill a terminal process and return the exit code. Fails with `not_found` when the caller has no live terminal with the id. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `terminal_create` — Spawn a PTY process and return the terminal ID. A `cwd` must be absolute (`invalid_params` otherwise). Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `terminal_data` — Stream stdout/stderr bytes from a terminal to the frontend. Kind: remote_notification. Initiator: backend. Auth: public

@@ -262,9 +262,25 @@ export type TerminalDataSendInput = z.infer<typeof TerminalDataSendInput>;
 /** Input for `terminal_data` (backend → frontend stdout/stderr stream). */
 export const TerminalDataInput = z.strictObject({
 	terminal_id: Uuid,
-	data: z.string()
+	data: z.string(),
+	/**
+	 * Bytes of output (`data` as UTF-8) the terminal has sent in total, this
+	 * chunk included — the backend's count, echoed back by `terminal_ack`.
+	 */
+	sent_bytes: z.number().int().nonnegative()
 });
 export type TerminalDataInput = z.infer<typeof TerminalDataInput>;
+
+/** Input for `terminal_ack`. */
+export const TerminalAckInput = z.strictObject({
+	terminal_id: Uuid,
+	/**
+	 * The `sent_bytes` of the last `terminal_data` the client finished with.
+	 * Cumulative: the backend keeps the highest it has seen from a connection.
+	 */
+	bytes: z.number().int().nonnegative()
+});
+export type TerminalAckInput = z.infer<typeof TerminalAckInput>;
 
 /**
  * A terminal dimension (`cols` / `rows`) — the `u16` range of a PTY
@@ -580,6 +596,19 @@ export const terminal_data_action_spec = {
 	description: 'Stream stdout/stderr bytes from a terminal to the frontend.'
 } satisfies RemoteNotificationActionSpec;
 
+export const terminal_ack_action_spec = {
+	method: 'terminal_ack',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: { account: 'required', actor: 'none' },
+	side_effects: true,
+	input: TerminalAckInput,
+	output: z.null(),
+	async: true,
+	description:
+		"Acknowledge a terminal's output up to a `terminal_data`'s `sent_bytes`. The backend stops reading a terminal whose output runs too far ahead of what an acknowledging WebSocket connection has taken, and resumes as acks arrive; connections that never acknowledge aren't waited for, and over HTTP the call does nothing. Fails with `not_found` when the caller has no live terminal with the id."
+} satisfies RequestResponseActionSpec;
+
 export const terminal_resize_action_spec = {
 	method: 'terminal_resize',
 	kind: 'request_response',
@@ -700,6 +729,7 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	terminal_create_action_spec,
 	terminal_data_send_action_spec,
 	terminal_data_action_spec,
+	terminal_ack_action_spec,
 	terminal_resize_action_spec,
 	terminal_close_action_spec,
 	terminal_exited_action_spec,

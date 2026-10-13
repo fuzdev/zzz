@@ -11,6 +11,7 @@ export const TERMINAL_API_METHODS = [
 	'terminal_create',
 	'terminal_data_send',
 	'terminal_resize',
+	'terminal_ack',
 	'terminal_close'
 ] as const;
 

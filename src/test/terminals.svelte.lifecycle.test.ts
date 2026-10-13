@@ -56,7 +56,7 @@ describe('Terminals.create', () => {
 	test('adopts output and exit that arrived before the create response', async () => {
 		const created = app.terminals.create({ command: 'true' });
 		const terminal_id = create_uuid();
-		app.terminals.receive_output(terminal_id, '$ ');
+		app.terminals.receive_output(terminal_id, '$ ', 2);
 		app.terminals.receive_exited(terminal_id, 3);
 		last_call('terminal_create').resolve(result_ok({ terminal_id }));
 		const terminal = await created;
@@ -93,7 +93,7 @@ describe('Terminals.create', () => {
 		const created = app.terminals.create({ command: 'ls' });
 		const terminal_id = create_uuid();
 		for (let i = 0; i < 100; i++) {
-			app.terminals.receive_output(terminal_id, 'x'.repeat(1023) + '\n');
+			app.terminals.receive_output(terminal_id, 'x'.repeat(1023) + '\n', (i + 1) * 1024);
 		}
 		last_call('terminal_create').resolve(result_ok({ terminal_id }));
 		const terminal = await created;
@@ -108,7 +108,7 @@ describe('Terminals.create', () => {
 		last_call('terminal_create').resolve(result_ok({ terminal_id: create_uuid() }));
 		await created;
 		const other_id = create_uuid();
-		app.terminals.receive_output(other_id, 'not ours');
+		app.terminals.receive_output(other_id, 'not ours', 8);
 		// a later spawn that happens to get this id doesn't see the stale output
 		const second = app.terminals.create({ command: 'ls' });
 		last_call('terminal_create').resolve(result_ok({ terminal_id: other_id }));
@@ -139,8 +139,8 @@ describe('Terminals output and exit without a mounted view', () => {
 
 	test('buffers output and replays it to a view attached later', async () => {
 		const { terminal, terminal_id } = await create_running();
-		app.terminals.receive_output(terminal_id, 'one ');
-		app.terminals.receive_output(terminal_id, 'two ');
+		app.terminals.receive_output(terminal_id, 'one ', 4);
+		app.terminals.receive_output(terminal_id, 'two ', 8);
 
 		// the buffered history is returned for replay, apart from the live stream
 		const received: Array<string> = [];
@@ -149,11 +149,11 @@ describe('Terminals output and exit without a mounted view', () => {
 		assert.ok(!first.truncated);
 		assert.deepEqual(received, []);
 
-		app.terminals.receive_output(terminal_id, 'three');
+		app.terminals.receive_output(terminal_id, 'three', 13);
 		assert.deepEqual(received, ['three']);
 
 		first.detach();
-		app.terminals.receive_output(terminal_id, ' four');
+		app.terminals.receive_output(terminal_id, ' four', 18);
 		assert.deepEqual(received, ['three']);
 
 		// a remounted view replays everything, including what arrived while detached
@@ -245,7 +245,7 @@ describe('Terminals.restart', () => {
 		const old_id = create_uuid();
 		last_call('terminal_create').resolve(result_ok({ terminal_id: old_id }));
 		const terminal = await created;
-		app.terminals.receive_output(old_id, 'old output');
+		app.terminals.receive_output(old_id, 'old output', 10);
 
 		const restarting = app.terminals.restart(terminal);
 		last_call('terminal_close').resolve(result_ok({ exit_code: 0 }));
@@ -266,7 +266,7 @@ describe('Terminals.restart', () => {
 		assert.strictEqual(terminal.run, 1);
 
 		// the old process' trailing output doesn't leak into the new run
-		app.terminals.receive_output(old_id, 'stale');
+		app.terminals.receive_output(old_id, 'stale', 15);
 		assert.strictEqual(terminal.output.text, '');
 	});
 

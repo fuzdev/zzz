@@ -8,6 +8,8 @@ import {
 	format_terminal_command,
 	TERMINAL_INPUT_PENDING_MAX_LENGTH,
 	TERMINAL_NOT_FOUND_MESSAGE,
+	type TerminalAckOutcome,
+	TerminalOutputAcker,
 	TerminalOutputBuffer
 } from './terminal_helpers.ts';
 
@@ -45,8 +47,13 @@ export type TerminalJsonInput = z.input<typeof TerminalJson>;
 
 export interface TerminalOptions extends CellOptions<typeof TerminalJson> {}
 
-/** Receives terminal output — see `Terminal.attach_output`. */
-export type TerminalOutputListener = (data: string) => void;
+/**
+ * Receives terminal output — see `Terminal.attach_output`. It must call
+ * `consumed` once it has finished with `data` (rendered it, or dropped it):
+ * the terminal acks output to the backend only as its listeners consume it,
+ * and the backend stops reading a terminal that gets too far ahead.
+ */
+export type TerminalOutputListener = (data: string, consumed: () => void) => void;
 
 /** Returned by `Terminal.attach_output`. */
 export interface TerminalOutputAttachment {
@@ -63,6 +70,11 @@ const INPUT_RETRY_DELAY_MAX = 2000;
 /**
  * A PTY terminal run: the command it runs, its backend process status,
  * a bounded output buffer that outlives any mounted view, and ordered input.
+ *
+ * Output is acked to the backend (`terminal_ack`) as it's consumed, which is
+ * what paces a process that prints faster than this client takes it: with
+ * views attached, once every view has consumed a chunk; with none, as soon as
+ * it's buffered (the buffer drops its oldest output, so it never backs up).
  *
  * Input goes through a per-terminal queue with at most one `terminal_data_send`
  * in flight — the backend dispatches one socket's requests concurrently, so
@@ -103,7 +115,14 @@ export class Terminal extends Cell<typeof TerminalJson> {
 	/** Output kept for replay into views mounted after it arrived. */
 	readonly output: TerminalOutputBuffer = new TerminalOutputBuffer();
 
-	#output_listeners: Set<TerminalOutputListener> = new Set();
+	/** Attached listeners, each with the `sent_bytes` it has consumed through. */
+	#output_listeners: Map<TerminalOutputListener, number> = new Map();
+
+	/** The `sent_bytes` of the newest output received for the current process. */
+	#received_bytes = 0;
+
+	/** Acks the current process's output — `null` unless it's running. */
+	#output_acker: TerminalOutputAcker | null = null;
 
 	#input_pending = '';
 	#input_sending = false;
@@ -126,25 +145,42 @@ export class Terminal extends Cell<typeof TerminalJson> {
 	 * xterm would answer again, and those answers must not reach the process.
 	 */
 	attach_output(listener: TerminalOutputListener): TerminalOutputAttachment {
-		this.#output_listeners.add(listener);
+		// the buffered output is the caller's to replay, so it starts caught up
+		this.#output_listeners.set(listener, this.#received_bytes);
 		return {
 			buffered: this.output.text,
 			truncated: this.output.dropped,
 			detach: () => {
-				this.#output_listeners.delete(listener);
+				// what it hadn't consumed no longer waits on it
+				if (this.#output_listeners.delete(listener)) this.#ack_consumed();
 			}
 		};
 	}
 
 	/**
 	 * Buffers output from the backend and forwards it to attached views.
+	 *
+	 * @param data - the output
+	 * @param sent_bytes - the chunk's `terminal_data` `sent_bytes`, acked once
+	 *   the output is consumed
 	 */
-	receive_output(data: string): void {
+	receive_output(data: string, sent_bytes: number): void {
 		if (!data) return;
 		this.output.push(data);
-		for (const listener of this.#output_listeners) {
-			listener(data);
+		if (sent_bytes > this.#received_bytes) this.#received_bytes = sent_bytes;
+		const { run } = this;
+		for (const listener of this.#output_listeners.keys()) {
+			listener(data, () => {
+				// ignore a callback from a view of an earlier process, or a detached one
+				if (run !== this.run) return;
+				const consumed = this.#output_listeners.get(listener);
+				if (consumed === undefined || sent_bytes <= consumed) return;
+				this.#output_listeners.set(listener, sent_bytes);
+				this.#ack_consumed();
+			});
 		}
+		// with no listeners, buffering it was consuming it
+		if (this.#output_listeners.size === 0) this.#ack_consumed();
 	}
 
 	/**
@@ -162,6 +198,11 @@ export class Terminal extends Cell<typeof TerminalJson> {
 			return;
 		}
 		this.status = 'running';
+		this.#output_acker = new TerminalOutputAcker({
+			send: (bytes) => this.#send_ack(terminal_id, bytes)
+		});
+		// output that arrived before the `terminal_create` reply
+		this.#ack_consumed();
 		void this.#pump_input();
 		void this.#pump_resize();
 	}
@@ -228,6 +269,10 @@ export class Terminal extends Cell<typeof TerminalJson> {
 		this.output_gap = false;
 		this.output.clear();
 		this.#stop_io();
+		this.#received_bytes = 0;
+		for (const listener of this.#output_listeners.keys()) {
+			this.#output_listeners.set(listener, 0);
+		}
 		this.run++;
 	}
 
@@ -294,7 +339,32 @@ export class Terminal extends Cell<typeof TerminalJson> {
 		super.dispose();
 	}
 
+	/**
+	 * Tells the acker how far the output has been consumed: through the least
+	 * any attached listener has, or everything received when none is attached.
+	 */
+	#ack_consumed(): void {
+		let consumed = this.#received_bytes;
+		for (const listener_consumed of this.#output_listeners.values()) {
+			if (listener_consumed < consumed) consumed = listener_consumed;
+		}
+		this.#output_acker?.consumed(consumed);
+	}
+
+	/**
+	 * Sends one `terminal_ack`. A `not_found` means the process is gone, which
+	 * input and resize report (`lost`) and `terminal_exited` settles — here it
+	 * only ends the acks.
+	 */
+	async #send_ack(terminal_id: Uuid, bytes: number): Promise<TerminalAckOutcome> {
+		const result = await this.app.api.terminal_ack({ terminal_id, bytes });
+		if (result.ok) return 'ok';
+		return result.error.code === JSONRPC_ERROR_CODES.not_found ? 'stop' : 'retry';
+	}
+
 	#stop_io(): void {
+		this.#output_acker?.stop();
+		this.#output_acker = null;
 		this.#input_pending = '';
 		this.#input_retry_delay = 0;
 		if (this.#input_retry_timer !== null) {

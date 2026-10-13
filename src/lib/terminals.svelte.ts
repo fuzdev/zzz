@@ -28,6 +28,8 @@ const UNCLAIMED_OUTPUT_MAX_LENGTH = 64 * 1024;
 /** Output and exit that arrived for a terminal id before its `terminal_create` resolved. */
 interface UnclaimedTerminal {
 	output: TerminalOutputBuffer;
+	/** The `sent_bytes` of the newest output held. */
+	sent_bytes: number;
 	exited: boolean;
 	exit_code: number | null;
 }
@@ -149,15 +151,21 @@ export class Terminals extends Cell<typeof TerminalsJson> {
 	 * Routes a `terminal_data` notification to its terminal, buffering it
 	 * whether or not a view is mounted.
 	 */
-	receive_output(terminal_id: Uuid, data: string): void {
+	receive_output(terminal_id: Uuid, data: string, sent_bytes: number): void {
 		const terminal = this.#by_terminal_id.get(terminal_id);
 		if (terminal) {
-			terminal.receive_output(data);
+			terminal.receive_output(data, sent_bytes);
 			return;
 		}
 		// otherwise another client's terminal, one closed or restarted here, or
 		// (only while spawning) the output of a spawn whose response hasn't arrived
-		this.#get_unclaimed(terminal_id)?.output.push(data);
+		// — never acked from here: an ack makes this connection one the backend
+		// paces the terminal against, and dropping output isn't keeping up with it
+		const unclaimed = this.#get_unclaimed(terminal_id);
+		if (unclaimed) {
+			unclaimed.output.push(data);
+			if (sent_bytes > unclaimed.sent_bytes) unclaimed.sent_bytes = sent_bytes;
+		}
 	}
 
 	/**
@@ -255,7 +263,7 @@ export class Terminals extends Cell<typeof TerminalsJson> {
 
 			this.#by_terminal_id.set(terminal_id, terminal);
 			if (unclaimed) {
-				terminal.receive_output(unclaimed.output.text);
+				terminal.receive_output(unclaimed.output.text, unclaimed.sent_bytes);
 				if (unclaimed.output.dropped) terminal.output.mark_dropped();
 			}
 			// an exit that beat the reply means the queued input has nowhere to go
@@ -285,6 +293,7 @@ export class Terminals extends Cell<typeof TerminalsJson> {
 			}
 			unclaimed = {
 				output: new TerminalOutputBuffer(UNCLAIMED_OUTPUT_MAX_LENGTH),
+				sent_bytes: 0,
 				exited: false,
 				exit_code: null
 			};

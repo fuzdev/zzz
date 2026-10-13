@@ -276,6 +276,20 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'terminal_data', 'receive', 'handling'>
 		) => void | Promise<void>;
 	};
+	terminal_ack?: {
+		send_request?: (
+			action_event: TypedActionEvent<'terminal_ack', 'send_request', 'handling'>
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: TypedActionEvent<'terminal_ack', 'receive_response', 'handling'>
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: TypedActionEvent<'terminal_ack', 'send_error', 'handling'>
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: TypedActionEvent<'terminal_ack', 'receive_error', 'handling'>
+		) => void | Promise<void>;
+	};
 	terminal_resize?: {
 		send_request?: (
 			action_event: TypedActionEvent<'terminal_resize', 'send_request', 'handling'>

@@ -7,6 +7,10 @@
 //!   `Utf8StreamDecoder` so a multibyte character split across reads survives,
 //!   and sent as `terminal_data`. The task spends cooperative budget per
 //!   chunk, so a flood (`yes`, `cat /dev/urandom`) can't pin a runtime worker.
+//!   Reads are paced against what the terminal's clients acknowledge
+//!   (`terminal_ack`, see `OutputWindow`): while too much sent output is
+//!   unacknowledged the task stops reading the master, the kernel's PTY
+//!   buffer fills, and the child blocks in its write.
 //! - **Input** — `terminal_data_send` enqueues onto a per-terminal queue
 //!   bounded in chunks and bytes (`INPUT_QUEUE_CAPACITY`,
 //!   `INPUT_QUEUE_MAX_BYTES`); the task writes each chunk fully (looping on partial writes and
@@ -33,6 +37,7 @@
 
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
+use std::hash::Hash;
 use std::io;
 use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
@@ -41,10 +46,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use fuz_pty::{Pty, PtyError, ReadResult, WaitResult};
+use fuz_realtime::{ConnectionId, ConnectionRegistry};
 use serde::Serialize;
 use tokio::io::unix::AsyncFd;
 use tokio::sync::mpsc::error::TrySendError;
-use tokio::sync::{RwLock, mpsc, oneshot, watch};
+use tokio::sync::{Notify, RwLock, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use uuid::Uuid;
@@ -69,6 +75,20 @@ const INPUT_QUEUE_CAPACITY: usize = 256;
 /// accepted when nothing is held, so any send the message cap admits is still
 /// written in full; a terminal holds at most one such chunk.
 const INPUT_QUEUE_MAX_BYTES: usize = 4 * 1024 * 1024;
+
+/// Unacknowledged output above which a paced terminal stops reading its PTY
+/// (see `OutputWindow`). Bounds what one terminal keeps queued for a client
+/// that acknowledges: this much, plus one read.
+const OUTPUT_WINDOW_HIGH_BYTES: u64 = 1024 * 1024;
+
+/// Unacknowledged output at or below which a paused terminal reads again.
+/// Below the high mark so a terminal doesn't flip between the two on every
+/// ack.
+const OUTPUT_WINDOW_LOW_BYTES: u64 = 256 * 1024;
+
+/// How often a paused terminal re-checks that the connections it is pacing
+/// against are still open — a closed one stops counting within this long.
+const PAUSED_RECHECK_INTERVAL: Duration = Duration::from_millis(250);
 
 /// How long `terminal_close` waits for the requested signal to end the child
 /// before closing the master.
@@ -131,6 +151,9 @@ pub fn terminal_env(
 struct TerminalDataParams<'a> {
     terminal_id: &'a str,
     data: &'a str,
+    /// Bytes of `data` (UTF-8) the terminal has sent in total, this chunk
+    /// included — the count a `terminal_ack` echoes back.
+    sent_bytes: u64,
 }
 
 #[derive(Serialize)]
@@ -139,14 +162,174 @@ struct TerminalExitedParams<'a> {
     exit_code: Option<i32>,
 }
 
-/// Send `terminal_data` to the owning account's sockets.
-fn send_data(app: &App, owner: Uuid, terminal_id: &str, data: &str) {
+/// Send `terminal_data` to the owning account's sockets, counting it in the
+/// terminal's output window. Returns whether the window now says to stop
+/// reading the PTY.
+fn send_data(app: &App, owner: Uuid, terminal_id: &str, output: &OutputFlow, data: &str) -> bool {
     if data.is_empty() {
-        return;
+        return false;
     }
-    let notification =
-        fuz_http::notification("terminal_data", &TerminalDataParams { terminal_id, data });
+    let sent_bytes = output.window.lock().record_sent(data.len());
+    let notification = fuz_http::notification(
+        "terminal_data",
+        &TerminalDataParams {
+            terminal_id,
+            data,
+            sent_bytes,
+        },
+    );
     app.realtime.send_to_account(owner, &notification);
+    output.refresh_paused(&app.realtime)
+}
+
+// -- Output pacing ------------------------------------------------------------
+
+/// A terminal's output flow-control window: how much it has sent, and how
+/// much of that each acknowledging consumer has taken.
+///
+/// **Unit.** Bytes of the `terminal_data` payloads (`data`, as UTF-8), summed
+/// over the terminal's life. Every `terminal_data` carries the running total
+/// as `sent_bytes`, and a `terminal_ack` echoes back the `sent_bytes` of the
+/// last chunk the client finished with — so both sides use the server's
+/// count, and neither depends on how the other measures a string.
+///
+/// **Rule.** The terminal is paused — its task stops reading the PTY, so the
+/// kernel blocks the child — once the unacknowledged bytes pass `high`, and
+/// reads again once they are back to `low` or under.
+///
+/// - *Unacknowledged* is `sent` minus the **highest** ack among the
+///   consumers: the terminal keeps pace with its fastest consumer, so one
+///   that falls behind (a hidden tab) can't stall the others. That slower one
+///   is still bounded by its socket's outbound queue.
+/// - A *consumer* is a connection that has acknowledged this terminal at
+///   least once and is still open. A connection that never acknowledges (a
+///   client that predates acks, a raw API client) isn't one, so with no
+///   consumers — nobody connected, or only such clients — the terminal is
+///   never paused.
+/// - Acks are cumulative: a consumer's value only moves up, a repeated or
+///   reordered ack changes nothing, and an ack past `sent` counts as `sent`.
+///
+/// A terminal's id names one process, so a restarted terminal is a new
+/// window: an ack for the old id finds no terminal.
+///
+/// `C` is the consumer's identity — the connection id.
+#[derive(Debug)]
+struct OutputWindow<C> {
+    sent: u64,
+    /// Highest ack seen per consumer.
+    consumers: HashMap<C, u64>,
+    paused: bool,
+    high: u64,
+    low: u64,
+}
+
+impl<C: Copy + Eq + Hash> OutputWindow<C> {
+    fn new(high: u64, low: u64) -> Self {
+        debug_assert!(low <= high);
+        Self {
+            sent: 0,
+            consumers: HashMap::new(),
+            paused: false,
+            high,
+            low,
+        }
+    }
+
+    /// Count `len` more bytes as sent, returning the new total.
+    fn record_sent(&mut self, len: usize) -> u64 {
+        self.sent = self.sent.saturating_add(len as u64);
+        self.update();
+        self.sent
+    }
+
+    /// Record that `consumer` has taken the output up to `bytes`, making it
+    /// a consumer if it wasn't one.
+    fn ack(&mut self, consumer: C, bytes: u64) {
+        let bytes = bytes.min(self.sent);
+        let acked = self.consumers.entry(consumer).or_insert(0);
+        *acked = (*acked).max(bytes);
+        self.update();
+    }
+
+    fn has_consumer(&self, consumer: C) -> bool {
+        self.consumers.contains_key(&consumer)
+    }
+
+    /// Drop the consumers `is_open` says are gone.
+    fn retain_consumers(&mut self, mut is_open: impl FnMut(C) -> bool) {
+        self.consumers.retain(|consumer, _| is_open(*consumer));
+        self.update();
+    }
+
+    /// Sent bytes no consumer has acknowledged, or `None` with no consumers.
+    fn unacked(&self) -> Option<u64> {
+        let acked = self.consumers.values().copied().max()?;
+        Some(self.sent - acked)
+    }
+
+    const fn is_paused(&self) -> bool {
+        self.paused
+    }
+
+    fn update(&mut self) {
+        self.paused = match self.unacked() {
+            None => false,
+            Some(unacked) if self.paused => unacked > self.low,
+            Some(unacked) => unacked > self.high,
+        };
+    }
+}
+
+/// A terminal's [`OutputWindow`], shared by the manager (which records acks)
+/// and the terminal's task (which counts what it sends and pauses on it).
+#[derive(Debug)]
+struct OutputFlow {
+    window: parking_lot::Mutex<OutputWindow<ConnectionId>>,
+    /// Wakes the terminal's task after an ack.
+    acked: Notify,
+}
+
+impl OutputFlow {
+    fn new() -> Self {
+        Self {
+            window: parking_lot::Mutex::new(OutputWindow::new(
+                OUTPUT_WINDOW_HIGH_BYTES,
+                OUTPUT_WINDOW_LOW_BYTES,
+            )),
+            acked: Notify::new(),
+        }
+    }
+
+    /// Record an ack from `connection` and wake the terminal's task. A
+    /// connection's first ack also drops the consumers whose connections
+    /// have closed, so the set never outgrows the open connections by more
+    /// than those closed since; one from a connection that's already closed
+    /// is ignored.
+    fn ack(&self, registry: &ConnectionRegistry, connection: ConnectionId, bytes: u64) {
+        {
+            let mut window = self.window.lock();
+            if !window.has_consumer(connection) {
+                if !registry.is_registered(connection) {
+                    return;
+                }
+                window.retain_consumers(|consumer| registry.is_registered(consumer));
+            }
+            window.ack(connection, bytes);
+        }
+        self.acked.notify_one();
+    }
+
+    /// Whether the terminal should stop reading its PTY, after dropping the
+    /// consumers whose connections have closed. Only a paused window looks
+    /// the connections up, so sending a chunk doesn't touch the registry
+    /// unless it's about to wait on one.
+    fn refresh_paused(&self, registry: &ConnectionRegistry) -> bool {
+        let mut window = self.window.lock();
+        if window.is_paused() {
+            window.retain_consumers(|consumer| registry.is_registered(consumer));
+        }
+        window.is_paused()
+    }
 }
 
 // -- Per-terminal state -------------------------------------------------------
@@ -242,6 +425,7 @@ struct TerminalEntry {
     input: mpsc::Sender<QueuedInput>,
     input_budget: Arc<InputBudget>,
     size: watch::Sender<(u16, u16)>,
+    output: Arc<OutputFlow>,
     close: oneshot::Sender<CloseRequest>,
     task: JoinHandle<()>,
 }
@@ -393,6 +577,34 @@ impl PtyManager {
         let terminals = self.terminals.read().await;
         let entry = owned_entry(&terminals, owner, terminal_id)?;
         let _ = entry.size.send((cols, rows));
+        Ok(())
+    }
+
+    /// Record that the connection `connection` has taken a terminal's output
+    /// up to `bytes` — the `sent_bytes` of the last `terminal_data` it
+    /// finished with. From then on the terminal is paced against that
+    /// connection, until it closes (see `OutputWindow`).
+    ///
+    /// Without a `connection` (a request over HTTP, which receives no
+    /// output), or with one `registry` no longer holds, the ack is checked
+    /// and otherwise ignored.
+    ///
+    /// # Errors
+    ///
+    /// `TerminalNotFound` when `owner` has no terminal `terminal_id`.
+    pub async fn ack(
+        &self,
+        registry: &ConnectionRegistry,
+        owner: Uuid,
+        terminal_id: &str,
+        connection: Option<ConnectionId>,
+        bytes: u64,
+    ) -> Result<(), TerminalNotFound> {
+        let terminals = self.terminals.read().await;
+        let entry = owned_entry(&terminals, owner, terminal_id)?;
+        if let Some(connection) = connection {
+            entry.output.ack(registry, connection, bytes);
+        }
         Ok(())
     }
 
@@ -580,6 +792,7 @@ async fn spawn_terminal(
     let input_budget = Arc::new(InputBudget::new(INPUT_QUEUE_MAX_BYTES));
     let (size_tx, size_rx) = watch::channel((DEFAULT_COLS, DEFAULT_ROWS));
     let (close_tx, close_rx) = oneshot::channel();
+    let output = Arc::new(OutputFlow::new());
 
     // Hold the write lock across the task spawn so the task can't finish
     // (and try to remove its entry) before the entry exists.
@@ -590,6 +803,7 @@ async fn spawn_terminal(
         master,
         input_rx,
         size_rx,
+        output: Arc::clone(&output),
         close_rx,
         app: Arc::clone(&app),
     }));
@@ -600,6 +814,7 @@ async fn spawn_terminal(
             input: input_tx,
             input_budget,
             size: size_tx,
+            output,
             close: close_tx,
             task,
         },
@@ -618,6 +833,7 @@ struct TerminalIo {
     master: AsyncFd<PtyHandle>,
     input_rx: mpsc::Receiver<QueuedInput>,
     size_rx: watch::Receiver<(u16, u16)>,
+    output: Arc<OutputFlow>,
     close_rx: oneshot::Receiver<CloseRequest>,
     app: Arc<App>,
 }
@@ -645,6 +861,7 @@ async fn run_terminal(mut io: TerminalIo) {
         owner,
         terminal_id,
         master,
+        output,
         mut close_rx,
         app,
         ..
@@ -654,7 +871,13 @@ async fn run_terminal(mut io: TerminalIo) {
     match outcome {
         IoOutcome::Eof => {
             // an incomplete UTF-8 tail can't be completed now — flush it
-            send_data(&app, owner, &terminal_id, &decoder.finish_to_string());
+            send_data(
+                &app,
+                owner,
+                &terminal_id,
+                &output,
+                &decoder.finish_to_string(),
+            );
             handle.close_master();
             let exit_code = reap(&handle.pty, REAP_KILL_AFTER).await;
             tracing::info!(terminal_id, ?exit_code, "terminal exited");
@@ -687,11 +910,22 @@ async fn run_terminal(mut io: TerminalIo) {
 }
 
 /// Move bytes between the PTY and zzz until EOF or a close request.
+///
+/// While the output window is paused (`OutputWindow`) the master isn't
+/// polled for reads — the child blocks once the kernel's PTY buffer is full —
+/// and so EOF isn't seen either: a child that exits while paused is noticed,
+/// and its `terminal_exited` sent, once the window reopens and the rest of
+/// its output has been read. Close requests, input, and resizes are served
+/// throughout.
 async fn pump_io(io: &mut TerminalIo, decoder: &mut Utf8StreamDecoder) -> IoOutcome {
     let mut buf = vec![0u8; READ_BUFFER_SIZE];
     let mut pending: Option<PendingWrite> = None;
     let mut input_open = true;
     let mut size_open = true;
+    let mut paused = false;
+    // when a paused terminal next re-checks its consumers' connections —
+    // a deadline, so serving input or resizes doesn't push it back
+    let mut recheck_at = Instant::now();
 
     loop {
         tokio::select! {
@@ -704,7 +938,7 @@ async fn pump_io(io: &mut TerminalIo, decoder: &mut Utf8StreamDecoder) -> IoOutc
                     kill_after: REAP_KILL_AFTER,
                 }));
             }
-            ready = io.master.readable() => {
+            ready = io.master.readable(), if !paused => {
                 let Ok(mut guard) = ready else {
                     return IoOutcome::Eof;
                 };
@@ -715,7 +949,9 @@ async fn pump_io(io: &mut TerminalIo, decoder: &mut Utf8StreamDecoder) -> IoOutc
                     Ok(Ok(0) | Err(_)) => return IoOutcome::Eof,
                     Ok(Ok(n)) => {
                         let text = decoder.feed_to_string(&buf[..n]);
-                        send_data(&io.app, io.owner, &io.terminal_id, &text);
+                        paused =
+                            send_data(&io.app, io.owner, &io.terminal_id, &io.output, &text);
+                        recheck_at = Instant::now() + PAUSED_RECHECK_INTERVAL;
                         // Readiness futures don't consume coop budget, so a
                         // child that never stops writing would otherwise pin
                         // this worker thread — yield once the budget is spent.
@@ -724,6 +960,15 @@ async fn pump_io(io: &mut TerminalIo, decoder: &mut Utf8StreamDecoder) -> IoOutc
                     // not actually readable — readiness cleared, wait again
                     Err(_would_block) => {}
                 }
+            }
+            // An ack moved the window, or it's time to check that the
+            // connections being paced against are still open.
+            () = io.output.acked.notified(), if paused => {
+                paused = io.output.refresh_paused(&io.app.realtime);
+            }
+            () = tokio::time::sleep_until(recheck_at), if paused => {
+                paused = io.output.refresh_paused(&io.app.realtime);
+                recheck_at = Instant::now() + PAUSED_RECHECK_INTERVAL;
             }
             ready = io.master.writable(), if pending.is_some() => {
                 let Ok(mut guard) = ready else {
@@ -1086,6 +1331,7 @@ mod tests {
                 input: input_tx,
                 input_budget: Arc::new(InputBudget::new(INPUT_QUEUE_MAX_BYTES)),
                 size: size_tx,
+                output: Arc::new(OutputFlow::new()),
                 close: close_tx,
                 task: tokio::spawn(async {}),
             },
@@ -1103,6 +1349,8 @@ mod tests {
         let owner = Uuid::new_v4();
         let other = Uuid::new_v4();
         let mut fake = insert_fake(&manager, "t1", owner).await;
+        let registry = ConnectionRegistry::new();
+        let (connection, _frames) = connect(&registry, other);
 
         for (account, terminal_id) in [(other, "t1"), (owner, "missing"), (other, "missing")] {
             assert_eq!(
@@ -1120,10 +1368,25 @@ mod tests {
                 Err(TerminalNotFound)
             );
             assert_eq!(
+                manager
+                    .ack(&registry, account, terminal_id, Some(connection.id), 1)
+                    .await,
+                Err(TerminalNotFound)
+            );
+            // checked without a connection too
+            assert_eq!(
+                manager.ack(&registry, account, terminal_id, None, 1).await,
+                Err(TerminalNotFound)
+            );
+            assert_eq!(
                 manager.close(account, terminal_id, libc::SIGTERM).await,
                 Err(TerminalNotFound)
             );
         }
+        assert!(
+            !consumes(&manager, "t1", connection.id).await,
+            "no foreign ack reached it"
+        );
         assert!(
             fake.input.try_recv().is_err(),
             "no foreign input reached it"
@@ -1140,6 +1403,398 @@ mod tests {
         assert!(fake.input.try_recv().is_err(), "empty writes aren't queued");
         assert_eq!(manager.resize(owner, "t1", 100, 30).await, Ok(()));
         assert_eq!(*fake.size.borrow_and_update(), (100, 30));
+    }
+
+    /// Open a connection for `account` on `registry`, returning it with the
+    /// receiving end of its outbound queue.
+    fn connect(
+        registry: &ConnectionRegistry,
+        account: Uuid,
+    ) -> (fuz_realtime::Connection, fuz_realtime::ConnectionReceiver) {
+        let (sender, frames) = fuz_realtime::connection_channel(TEST_OUTBOUND_QUEUE_BYTES);
+        let connection = registry.add_connection(
+            sender,
+            None,
+            Some(account),
+            None,
+            tokio_util::sync::CancellationToken::new(),
+        );
+        (connection, frames)
+    }
+
+    /// Roomy enough that no test's output overflows a connection nobody
+    /// reads from.
+    const TEST_OUTBOUND_QUEUE_BYTES: usize = 64 * 1024 * 1024;
+
+    /// Whether `connection` is one of the terminal's consumers.
+    async fn consumes(manager: &PtyManager, terminal_id: &str, connection: ConnectionId) -> bool {
+        manager.terminals.read().await[terminal_id]
+            .output
+            .window
+            .lock()
+            .has_consumer(connection)
+    }
+
+    #[tokio::test]
+    async fn an_ack_makes_its_connection_a_consumer() {
+        let manager = PtyManager::new();
+        let owner = Uuid::new_v4();
+        let _fake = insert_fake(&manager, "t1", owner).await;
+        let registry = ConnectionRegistry::new();
+        let (connection, _frames) = connect(&registry, owner);
+        let (closed, closed_frames) = connect(&registry, owner);
+        registry.remove_connection(closed.id);
+        drop(closed_frames);
+
+        // over HTTP there's no connection to pace against
+        assert_eq!(manager.ack(&registry, owner, "t1", None, 5).await, Ok(()));
+        // nor is a closed one worth waiting for
+        assert_eq!(
+            manager
+                .ack(&registry, owner, "t1", Some(closed.id), 5)
+                .await,
+            Ok(())
+        );
+        assert!(!consumes(&manager, "t1", closed.id).await);
+        assert!(!consumes(&manager, "t1", connection.id).await);
+
+        assert_eq!(
+            manager
+                .ack(&registry, owner, "t1", Some(connection.id), 5)
+                .await,
+            Ok(())
+        );
+        assert!(consumes(&manager, "t1", connection.id).await);
+    }
+
+    #[tokio::test]
+    async fn a_new_consumer_drops_the_closed_ones() {
+        let manager = PtyManager::new();
+        let owner = Uuid::new_v4();
+        let _fake = insert_fake(&manager, "t1", owner).await;
+        let registry = ConnectionRegistry::new();
+        let (first, _first_frames) = connect(&registry, owner);
+        manager
+            .ack(&registry, owner, "t1", Some(first.id), 1)
+            .await
+            .unwrap();
+        registry.remove_connection(first.id);
+
+        let (second, _second_frames) = connect(&registry, owner);
+        manager
+            .ack(&registry, owner, "t1", Some(second.id), 1)
+            .await
+            .unwrap();
+        assert!(consumes(&manager, "t1", second.id).await);
+        assert!(!consumes(&manager, "t1", first.id).await);
+    }
+
+    // -- OutputWindow --
+
+    /// A window pausing above 100 unacknowledged bytes, resuming at 40.
+    fn window() -> OutputWindow<u32> {
+        OutputWindow::new(100, 40)
+    }
+
+    #[test]
+    fn a_window_counts_what_it_sends() {
+        let mut window = window();
+        assert_eq!(window.record_sent(7), 7);
+        assert_eq!(window.record_sent(0), 7);
+        assert_eq!(window.record_sent(5), 12);
+    }
+
+    #[test]
+    fn a_window_without_consumers_never_pauses() {
+        let mut window = window();
+        window.record_sent(1_000_000);
+        assert_eq!(window.unacked(), None);
+        assert!(!window.is_paused());
+    }
+
+    #[test]
+    fn a_window_pauses_above_the_high_mark() {
+        let mut window = window();
+        window.ack(1, 0);
+        window.record_sent(100);
+        assert_eq!(window.unacked(), Some(100));
+        assert!(!window.is_paused(), "at the mark isn't past it");
+        window.record_sent(1);
+        assert!(window.is_paused());
+    }
+
+    #[test]
+    fn a_paused_window_resumes_at_the_low_mark() {
+        let mut window = window();
+        window.ack(1, 0);
+        window.record_sent(101);
+        assert!(window.is_paused());
+        window.ack(1, 60);
+        assert_eq!(window.unacked(), Some(41));
+        assert!(window.is_paused(), "below the high mark isn't enough");
+        window.ack(1, 61);
+        assert!(!window.is_paused());
+        // and stays open until it passes the high mark again
+        window.record_sent(60);
+        assert_eq!(window.unacked(), Some(100));
+        assert!(!window.is_paused());
+        window.record_sent(1);
+        assert!(window.is_paused());
+    }
+
+    #[test]
+    fn a_window_keeps_pace_with_its_fastest_consumer() {
+        let mut window = window();
+        window.ack(1, 0);
+        window.ack(2, 0);
+        window.record_sent(500);
+        assert!(window.is_paused());
+        // one consumer catching up is enough, however far behind the other
+        window.ack(2, 480);
+        assert_eq!(window.unacked(), Some(20));
+        assert!(!window.is_paused());
+    }
+
+    #[test]
+    fn a_closed_consumer_stops_counting() {
+        let mut window = window();
+        window.ack(1, 0);
+        window.ack(2, 0);
+        window.record_sent(500);
+        window.ack(2, 500);
+        assert!(!window.is_paused());
+        // the fast one closes: the window is the slow one's
+        window.retain_consumers(|consumer| consumer != 2);
+        assert_eq!(window.unacked(), Some(500));
+        assert!(window.is_paused());
+        // the last one closes: nothing left to wait for
+        window.retain_consumers(|_| false);
+        assert_eq!(window.unacked(), None);
+        assert!(!window.is_paused());
+    }
+
+    #[test]
+    fn acks_are_cumulative() {
+        let mut window = window();
+        window.record_sent(300);
+        window.ack(1, 250);
+        // a late or repeated ack never takes the count back
+        window.ack(1, 100);
+        assert_eq!(window.unacked(), Some(50));
+        window.ack(1, 250);
+        assert_eq!(window.unacked(), Some(50));
+    }
+
+    #[test]
+    fn an_ack_past_what_was_sent_counts_as_all_of_it() {
+        let mut window = window();
+        window.record_sent(300);
+        window.ack(1, u64::MAX);
+        assert_eq!(window.unacked(), Some(0));
+        // it didn't acknowledge output that hadn't been sent yet
+        window.record_sent(101);
+        assert_eq!(window.unacked(), Some(101));
+        assert!(window.is_paused());
+    }
+
+    // -- pump_io pacing --
+
+    /// An `App` with nothing behind it but a connection registry.
+    fn test_app() -> Arc<App> {
+        let pool = fuz_db::create_pool("postgres://localhost:1/pty_unused")
+            .expect("a lazy pool builds without connecting");
+        Arc::new(App::new(
+            pool,
+            crate::scoped_fs::ScopedFs::new(vec![]),
+            String::new(),
+            vec![],
+            crate::provider::ProviderManager::new(),
+            false,
+            Arc::new(ConnectionRegistry::new()),
+        ))
+    }
+
+    /// A real PTY whose I/O loop runs in a task, with the handles the manager
+    /// would hold.
+    struct Pumped {
+        app: Arc<App>,
+        output: Arc<OutputFlow>,
+        input: mpsc::Sender<QueuedInput>,
+        input_budget: Arc<InputBudget>,
+        close: oneshot::Sender<CloseRequest>,
+        _size: watch::Sender<(u16, u16)>,
+        /// The owner's one connection, and its queue (never read).
+        connection: fuz_realtime::Connection,
+        _frames: fuz_realtime::ConnectionReceiver,
+        task: JoinHandle<(TerminalIo, IoOutcome)>,
+    }
+
+    impl Pumped {
+        fn spawn(script: &str) -> Self {
+            let app = test_app();
+            let owner = Uuid::new_v4();
+            let (connection, frames) = connect(&app.realtime, owner);
+            let master = AsyncFd::try_new(PtyHandle::new(spawn_pty(script))).expect("async fd");
+            let (input, input_rx) = mpsc::channel(INPUT_QUEUE_CAPACITY);
+            let (size, size_rx) = watch::channel((DEFAULT_COLS, DEFAULT_ROWS));
+            let (close, close_rx) = oneshot::channel();
+            let output = Arc::new(OutputFlow::new());
+            let mut io = TerminalIo {
+                owner,
+                terminal_id: "t1".to_owned(),
+                master,
+                input_rx,
+                size_rx,
+                output: Arc::clone(&output),
+                close_rx,
+                app: Arc::clone(&app),
+            };
+            let task = tokio::spawn(async move {
+                let mut decoder = Utf8StreamDecoder::default();
+                let outcome = pump_io(&mut io, &mut decoder).await;
+                (io, outcome)
+            });
+            Self {
+                app,
+                output,
+                input,
+                input_budget: Arc::new(InputBudget::new(INPUT_QUEUE_MAX_BYTES)),
+                close,
+                _size: size,
+                connection,
+                _frames: frames,
+                task,
+            }
+        }
+
+        fn ack(&self, bytes: u64) {
+            self.output
+                .ack(&self.app.realtime, self.connection.id, bytes);
+        }
+
+        fn sent(&self) -> u64 {
+            self.output.window.lock().sent
+        }
+
+        /// Wait until the window is paused, returning what had been sent.
+        async fn paused(&self) -> u64 {
+            wait_until("the terminal to pause", || {
+                self.output.window.lock().is_paused()
+            })
+            .await;
+            self.sent()
+        }
+
+        /// Wait for the I/O loop to end, then reap the child.
+        async fn finish(self) -> IoOutcome {
+            let (io, outcome) = tokio::time::timeout(PUMP_TIMEOUT, self.task)
+                .await
+                .expect("the I/O loop to end")
+                .expect("the I/O loop not to panic");
+            let mut handle = io.master.into_inner();
+            handle.close_master();
+            let _ = handle.pty.kill(libc::SIGKILL);
+            reap(&handle.pty, REAP_KILL_AFTER).await;
+            outcome
+        }
+    }
+
+    const PUMP_TIMEOUT: Duration = Duration::from_secs(30);
+
+    async fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
+        let deadline = Instant::now() + PUMP_TIMEOUT;
+        while !done() {
+            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    }
+
+    /// Longer than `PAUSED_RECHECK_INTERVAL`, so a paused terminal has
+    /// re-checked its consumers at least once.
+    const PAST_A_RECHECK: Duration = Duration::from_millis(600);
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn unacknowledged_output_stops_the_reads_and_not_the_input() {
+        let pumped = Pumped::spawn("exec yes");
+        // the first ack is what makes the connection one to pace against
+        pumped.ack(0);
+        let sent = pumped.paused().await;
+        assert!(sent > OUTPUT_WINDOW_HIGH_BYTES, "{sent}");
+        assert!(
+            sent <= OUTPUT_WINDOW_HIGH_BYTES + READ_BUFFER_SIZE as u64,
+            "at most one read past the mark: {sent}"
+        );
+
+        // nothing more is read while the consumer, still connected, is behind
+        tokio::time::sleep(PAST_A_RECHECK).await;
+        assert_eq!(pumped.sent(), sent);
+
+        // input is written while paused: an interrupt for the child
+        let reservation = pumped.input_budget.try_reserve(1).unwrap();
+        pumped
+            .input
+            .send(QueuedInput {
+                data: vec![0x03],
+                _reservation: reservation,
+            })
+            .await
+            .unwrap();
+        wait_until("the input to be written", || {
+            pumped.input_budget.held.load(Ordering::Acquire) == 0
+        })
+        .await;
+        assert_eq!(pumped.sent(), sent, "still paused");
+
+        // catching up reopens the window: the rest is read, up to the EOF of
+        // the child the interrupt ended
+        pumped.ack(sent);
+        assert!(matches!(pumped.finish().await, IoOutcome::Eof));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_paused_terminal_still_closes() {
+        let mut pumped = Pumped::spawn("exec yes");
+        pumped.ack(0);
+        pumped.paused().await;
+        let (close, _) = oneshot::channel();
+        let close = std::mem::replace(&mut pumped.close, close);
+        let sent = close.send(CloseRequest {
+            signal: libc::SIGTERM,
+            reply: None,
+            kill_after: REAP_KILL_AFTER,
+        });
+        assert!(sent.is_ok());
+        assert!(matches!(pumped.finish().await, IoOutcome::Close(_)));
+    }
+
+    /// Prints a few times the high mark, then exits.
+    const SEVERAL_WINDOWS: &str = "yes | head -c 4000000";
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn output_nobody_acknowledges_is_never_paused() {
+        // a connection that receives the output but never acks it
+        let pumped = Pumped::spawn(SEVERAL_WINDOWS);
+        let output = Arc::clone(&pumped.output);
+        assert!(matches!(pumped.finish().await, IoOutcome::Eof));
+        let window = output.window.lock();
+        assert!(
+            window.sent > 3 * OUTPUT_WINDOW_HIGH_BYTES,
+            "{}",
+            window.sent
+        );
+        assert!(!window.is_paused());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_consumer_that_closes_stops_pacing_the_terminal() {
+        let pumped = Pumped::spawn(SEVERAL_WINDOWS);
+        pumped.ack(0);
+        pumped.paused().await;
+        // its connection goes away without another ack
+        pumped.app.realtime.remove_connection(pumped.connection.id);
+        let output = Arc::clone(&pumped.output);
+        assert!(matches!(pumped.finish().await, IoOutcome::Eof));
+        assert!(output.window.lock().sent > 3 * OUTPUT_WINDOW_HIGH_BYTES);
     }
 
     #[tokio::test]

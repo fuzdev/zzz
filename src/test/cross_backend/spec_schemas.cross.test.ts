@@ -49,6 +49,7 @@ import {
 	ping_action_spec,
 	provider_load_status_action_spec,
 	session_load_action_spec,
+	terminal_ack_action_spec,
 	terminal_close_action_spec,
 	terminal_create_action_spec,
 	terminal_data_action_spec,
@@ -114,12 +115,13 @@ const wait_for_checked_notification = async (
 	ws: WsClient,
 	spec: RemoteNotificationActionSpec,
 	where: (params: Record<string, unknown>) => boolean = () => true
-): Promise<void> => {
+): Promise<unknown> => {
 	const msg = await ws.wait_for<Record<string, unknown>>((m) => {
 		const message = m as Record<string, unknown> | null;
 		return message?.method === spec.method && where(message.params as Record<string, unknown>);
 	}, 10_000);
 	assert_parses(spec.input, msg.params, `${spec.method} params`);
+	return msg.params;
 };
 
 /**
@@ -273,6 +275,16 @@ describe('zzz spec schemas cross-backend', () => {
 				terminal_id: cat.terminal_id,
 				cols: 100,
 				rows: 30
+			});
+			// the terminal echoes the input — ack that output
+			const echoed = (await wait_for_checked_notification(
+				ws,
+				terminal_data_action_spec,
+				(p) => p.terminal_id === cat.terminal_id
+			)) as z.infer<typeof terminal_data_action_spec.input>;
+			await ws_call_and_check(ws, terminal_ack_action_spec, {
+				terminal_id: cat.terminal_id,
+				bytes: echoed.sent_bytes
 			});
 			// the session snapshot lists the live terminal
 			const session = (await call_and_check(fixture, session_load_action_spec)) as z.infer<

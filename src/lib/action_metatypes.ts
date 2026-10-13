@@ -32,6 +32,7 @@ export const ActionMethod = z.enum([
 	'terminal_create',
 	'terminal_data_send',
 	'terminal_data',
+	'terminal_ack',
 	'terminal_resize',
 	'terminal_close',
 	'terminal_exited',
@@ -61,6 +62,7 @@ export const RequestResponseActionMethod = z.enum([
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
+	'terminal_ack',
 	'terminal_resize',
 	'terminal_close',
 	'workspace_open',
@@ -116,6 +118,7 @@ export const FrontendActionMethod = z.enum([
 	'terminal_create',
 	'terminal_data_send',
 	'terminal_data',
+	'terminal_ack',
 	'terminal_resize',
 	'terminal_close',
 	'terminal_exited',
@@ -151,6 +154,7 @@ export const BackendActionMethod = z.enum([
 	'terminal_create',
 	'terminal_data_send',
 	'terminal_data',
+	'terminal_ack',
 	'terminal_resize',
 	'terminal_close',
 	'terminal_exited',
@@ -184,6 +188,7 @@ export const BackendRequestResponseMethod = z.enum([
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
+	'terminal_ack',
 	'terminal_resize',
 	'terminal_close',
 	'workspace_open',
@@ -311,6 +316,10 @@ export interface FrontendActionsApi {
 		input: ActionInputs['terminal_data'],
 		options?: RpcClientCallOptions
 	) => Promise<Result<{ value: ActionOutputs['terminal_data'] }, { error: JsonrpcErrorObject }>>;
+	terminal_ack: (
+		input: ActionInputs['terminal_ack'],
+		options?: RpcClientCallOptions
+	) => Promise<Result<{ value: ActionOutputs['terminal_ack'] }, { error: JsonrpcErrorObject }>>;
 	terminal_resize: (
 		input: ActionInputs['terminal_resize'],
 		options?: RpcClientCallOptions

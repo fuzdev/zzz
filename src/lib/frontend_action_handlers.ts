@@ -218,9 +218,11 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 
 	terminal_data: {
 		receive: ({ data: { input } }) => {
-			frontend.terminals.receive_output(input.terminal_id, input.data);
+			frontend.terminals.receive_output(input.terminal_id, input.data, input.sent_bytes);
 		}
 	},
+
+	terminal_ack: {},
 
 	terminal_resize: {},
 

@@ -406,7 +406,11 @@ conform to the shared fuz_app contract. The tests live in
   `not_found` for a missing terminal ID (close included), ownership scoping (a second
   account gets no output, can't drive or close the terminal, and gets
   replies identical to an unknown id's; the owner's second socket does get
-  output), `session_load`'s `terminal_ids` (running listed; exited, closed,
+  output), output pacing (after a first `terminal_ack` and no more, output
+  stops within one read of the 1 MiB window with the process blocked, a
+  resize still answers, and acking lets the rest through; several windows of
+  output reach a client that never acks, or acks only over HTTP),
+  `session_load`'s `terminal_ids` (running listed; exited, closed,
   and other accounts' not), and a self-deleted account's terminal processes
   being reaped.
 - **`provider.cross.test.ts`** — `provider_load_status` (no-key status) plus `session_load`
@@ -479,7 +483,7 @@ crates/zzz_server/src/
 │   ├── job.rs        # job_cancel
 │   ├── media.rs      # media_finalize, transcription_create (+ `tool_error`, the `ToolError` → JSON-RPC mapping)
 │   ├── provider.rs   # provider_load_status, completion_create
-│   ├── terminal.rs   # terminal_create, terminal_data_send, terminal_resize, terminal_close
+│   ├── terminal.rs   # terminal_create, terminal_data_send, terminal_resize, terminal_ack, terminal_close
 │   └── workspace.rs  # workspace_list, workspace_open, workspace_close (+ workspace_changed broadcast)
 ├── zzz_action_specs/ # Per-domain `ActionSpec` builders consumed by `run_app`'s `ActionRegistry::compile`; each captures `Arc<App>` and calls the matching `handlers::*` fn
 │   ├── mod.rs
@@ -501,7 +505,7 @@ crates/zzz_server/src/
 │   └── gemini.rs     # GeminiProvider — Generative Language API with SSE streaming
 ├── file_bytes.rs     # Byte routes for files (`/api/files/bytes`): ranged read with a response-header lockdown, exclusive create, offset-checked append — hand-written axum handlers with their own auth + scope gates
 ├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered file index (events are hints, `lstat` decides), per-directory watches from the filer's own walk (degraded polling past the watch limit), stat-reusing rescans, debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped
-├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
+├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, output paced by client acks, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
 ├── scoped_fs.rs      # Scoped filesystem — permanent (`zzz_dir` + `scoped_dirs`) + per-workspace roots, path validation, symlink rejection, atomic writes (temp file + fsync + rename), exclusive create, offset-checked append, open-for-read
 ├── static_files.rs   # Built-frontend fallback router: exact file → prerendered `{path}.html` → `200.html` SPA shell; backend paths + missing `_app/` assets 404; cache headers
 ├── tool.rs           # Local tools run as subprocesses: `resolve_tool` (override env var, else absolute `$PATH` entries — never the working directory), `resolve_model_file`, `Tools` (found at boot), `run_tool` (argument array, handles for stdin/stdout, scrubbed env, cwd `/`, timeout, bounded stderr tail), `run_tool_lines` (the same, handing over output lines as they're written)
@@ -701,7 +705,7 @@ joined after the drain, before PTY teardown.
 - Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`, wired to the spine `AuditEmitter` via `fuz_realtime::register_audit_sse_listener` alongside the socket-revocation listeners (which close through the `RealtimeRevoker` fan-out, so they reach these streams too). Wire shape matches fuz_app's `audit_log_sse`; the `sse.cross.test.ts` suite verifies it. Close-on-revoke dispatches on the `RevocationScope` each event declares in `fuz_auth`'s `AUDIT_EVENT_SPECS` — the same column the socket-revocation listener reads, so the two can't drift: `session_revoke` (session-hash-scoped) / `token_revoke` (token-scoped) / `session_revoke_all` / `token_revoke_all` / `password_change` / `logout` / `account_delete` / `account_purge` (account-wide) / `role_grant_revoke` (role-matched). `role_grant_revoke` is the one deliberate difference from the socket-revocation listener, which omits it because `perform_action` re-authorizes every message. The route itself is session-only (`AuditStreamRouteState::credential_gate`), so a bearer never opens a stream here in the first place. A session holds at most `AUDIT_LOG_SSE_MAX_PER_SCOPE` (10) streams — one more ends its oldest — and a stream registers pending before the role read, with the credential re-read before it is admitted (a credential revoked meanwhile gets a 401, or a stream that ends right after its connect comment, never a live one)
 - Login/password rate limiting is **always on** (matching `fuz_forge_server` + `mageguild_server` and the fuz defaults): per-IP (5 attempts / 15 min) + per-account (10 / 30 min) sliding windows fire on `/login` and `/password`; 429 carries `{error: 'rate_limit_exceeded', retry_after}` plus a `Retry-After` header. Per-IP key is the resolved client IP from `fuz_http::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when running behind a reverse proxy so the bucket keys on the originating client rather than the proxy. The `testing_zzz_server` binary disables it via `RunAppOptions::rate_limiters: RateLimiterMode::DisabledForTesting` so the cross-backend auth suite's repeated logins don't trip the bucket; a process that nulls any limiter prints a startup banner saying so
 - One JSON-RPC message is capped at `zzz_server::RPC_MESSAGE_MAX_BYTES` (16 MiB) on both transports: the `/api/rpc` request body (`fuz_http::body_limit_layer`, plus axum's `DefaultBodyLimit` raised to match — the handler's `Bytes` extractor would otherwise stop at axum's 2 MiB default) and each `/api/ws` inbound message and frame (`max_message_bytes` of the `fuz_actions::ActionWsOptions` passed to `register_action_ws_with_options`; the spine default is 1 MiB, tungstenite's own 64 MiB / 16 MiB). It's above the spine's 1 MiB so saving a file the filer loads (≤ 4 MiB) fits — except in the worst case, where JSON's 6-byte escape of each control character pushes a file dense with them past the cap and the client guard refuses the save cleanly — and so long completion histories fit. **The larger buffer isn't confined to authenticated callers on HTTP**: `fuz_actions::rpc_post_handler` buffers and parses the body before auth, and `ping` is public, so any local process can make zzzd hold up to 16 MiB per concurrent request. On the WebSocket (authenticated at upgrade) up to 128 dispatches can be in flight per socket, a ceiling of about 2 GiB of buffered messages per authenticated socket. Both are acceptable only because the bind is loopback-only and zzz is single-operator (root CLAUDE.md § Security posture). The account/bootstrap/signup routers keep `fuz_http::DEFAULT_BODY_LIMIT_BYTES` (1 MiB). An oversized WebSocket message gets no error reply — the read fails and the socket closes (code 1006), taking its in-flight requests with it — so the frontend `Socket` refuses any request over the cap before sending (`RPC_MESSAGE_MAX_BYTES` in `src/lib/rpc_message_limit.ts`, pinned to the Rust constant by the cross-backend filesystem suite). Larger and binary content goes over the file byte routes instead (File byte routes below), a chunk of at most the same size per request. The static fallback takes no body
-- Each WebSocket connection's outbound queue — the frames queued for a socket that its writer hasn't taken yet — has a byte budget of `zzz_server::WS_OUTBOUND_QUEUE_BYTES` (32 MiB, `outbound_queue_bytes` of the same `ActionWsOptions`; the spine default is 4 MiB, and it doesn't follow the message cap). Each waiting frame is charged its UTF-8 length plus `fuz_realtime::OUTBOUND_FRAME_OVERHEAD_BYTES`, a frame is always queued into an empty queue, and one that doesn't fit closes that socket with `fuz_realtime::WS_CLOSE_OUTBOUND_OVERFLOW` (4005), its backlog discarded — the frontend reconnects and reloads `session_load`. The budget is sized by the largest frame zzz pushes: a `filer_change` carries a file's whole text (≤ 4 MiB, `filer::MAX_INDEXED_FILE_SIZE`), and JSON's 6-byte escape of a control character takes one frame to 24 MiB (a `const` assertion in `lib.rs` keeps the budget above that), so the default would deliver any file near the cap only into an empty queue. Requests' responses are written by the connection's loop and never queue. **The budget bounds a burst, it doesn't absorb one of any size**: a sender never waits for a socket, so anything that produces faster than a client takes for longer than the budget holds closes that client's socket. The filer's flush (`filer::flush_ready`) yields to the runtime after each broadcast, so each connection's writer gets a turn to take a frame before the next is queued and a batch isn't queued whole — it is a turn, not backpressure: a client that takes the batch slower than the filer serializes it still falls behind, and is closed once more than the budget is waiting; terminal output has no such pacing — the PTY loop only yields when its coop budget is spent, and nothing slows a child that out-writes the client, so more than 32 MiB of output the browser hasn't taken yet closes the owner's socket (the terminal keeps running; the reconnect flags the output gap). **Memory**: a client that stops reading holds at most the budget plus the one frame its writer has taken (≤ 24 MiB) per socket, until that write passes `fuz_realtime::WS_WRITE_STALL_TIMEOUT` or the next frame overflows; a broadcast's text is one buffer shared by every recipient. Acceptable for the same reason as the message cap: authenticated sockets only, on a loopback bind
+- Each WebSocket connection's outbound queue — the frames queued for a socket that its writer hasn't taken yet — has a byte budget of `zzz_server::WS_OUTBOUND_QUEUE_BYTES` (32 MiB, `outbound_queue_bytes` of the same `ActionWsOptions`; the spine default is 4 MiB, and it doesn't follow the message cap). Each waiting frame is charged its UTF-8 length plus `fuz_realtime::OUTBOUND_FRAME_OVERHEAD_BYTES`, a frame is always queued into an empty queue, and one that doesn't fit closes that socket with `fuz_realtime::WS_CLOSE_OUTBOUND_OVERFLOW` (4005), its backlog discarded — the frontend reconnects and reloads `session_load`. The budget is sized by the largest frame zzz pushes: a `filer_change` carries a file's whole text (≤ 4 MiB, `filer::MAX_INDEXED_FILE_SIZE`), and JSON's 6-byte escape of a control character takes one frame to 24 MiB (a `const` assertion in `lib.rs` keeps the budget above that), so the default would deliver any file near the cap only into an empty queue. Requests' responses are written by the connection's loop and never queue. **The budget bounds a burst, it doesn't absorb one of any size**: a sender never waits for a socket, so anything that produces faster than a client takes for longer than the budget holds closes that client's socket. The filer's flush (`filer::flush_ready`) yields to the runtime after each broadcast, so each connection's writer gets a turn to take a frame before the next is queued and a batch isn't queued whole — it is a turn, not backpressure: a client that takes the batch slower than the filer serializes it still falls behind, and is closed once more than the budget is waiting; terminal output is paced by acks instead (see PTY terminals → Output pacing under Design Decisions): a terminal stops reading its PTY once 1 MiB of its output is unacknowledged by its fastest acking connection, so it holds about that much in such a socket's queue; a connection that never acks isn't paced, and more than the budget of output it hasn't taken closes it (the terminal keeps running; the reconnect flags the output gap). **Memory**: a client that stops reading holds at most the budget plus the one frame its writer has taken (≤ 24 MiB) per socket, until that write passes `fuz_realtime::WS_WRITE_STALL_TIMEOUT` or the next frame overflows; a broadcast's text is one buffer shared by every recipient. Acceptable for the same reason as the message cap: authenticated sockets only, on a loopback bind
 
 ## Design Decisions
 
@@ -1008,6 +1012,32 @@ joined after the drain, before PTY teardown.
     reads isn't mangled. `AsyncFd` readiness doesn't spend tokio's coop
     budget, so the loop calls `tokio::task::coop::consume_budget()` per chunk
     — a child that never stops writing (`yes`) can't pin a worker thread.
+  - **Output pacing**: every `terminal_data` carries `sent_bytes`, the
+    terminal's running total of output bytes (its `data` payloads as UTF-8),
+    and `terminal_ack {terminal_id, bytes}` echoes back the `sent_bytes` of
+    the last chunk a client finished with. `pty_manager::OutputWindow` holds
+    the terminal's total and each consumer's highest ack; once the
+    unacknowledged bytes pass `OUTPUT_WINDOW_HIGH_BYTES` (1 MiB) the task
+    stops polling the master for reads — the kernel's PTY buffer fills and the
+    child blocks in its write — and it reads again at
+    `OUTPUT_WINDOW_LOW_BYTES` (256 KiB) or under. Close, input, and resize are
+    served while it's paused; EOF isn't seen until the window reopens and the
+    rest is read, so a child that exits while paused gets its
+    `terminal_exited` then.
+    - A **consumer** is a WebSocket connection that has acked the terminal at
+      least once and is still registered. Unacknowledged is measured against
+      the **highest** ack among them, so a consumer that falls behind doesn't
+      stall the others (it stays bounded by its own outbound queue). With no
+      consumer — nobody connected, or only clients that never ack — the
+      terminal is never paused, and a paused terminal re-checks its
+      consumers' connections every `PAUSED_RECHECK_INTERVAL`, so one that
+      closes stops counting.
+    - Acks are cumulative: a consumer's count only moves up, and one past
+      `sent_bytes` counts as all of it. A terminal id names one process, so
+      a restarted terminal starts a new count under a new id.
+    - `terminal_ack` over HTTP is checked and otherwise ignored — there is no
+      connection to pace against. A consumer that stays connected and stops
+      acking holds the terminal paused until its socket closes.
   - **Input**: `terminal_data_send` enqueues onto a bounded per-terminal queue
     (at most 256 chunks and 4 MiB held — queued or being written; past
     either → `queue_overflow`, nothing enqueued) and returns. A single chunk
@@ -1035,7 +1065,8 @@ joined after the drain, before PTY teardown.
   - **Ownership**: `terminal_create` records the calling account as the
     terminal's owner. `terminal_data` / `terminal_exited` go to that
     account's sockets only (`ConnectionRegistry::send_to_account`), and
-    `terminal_data_send` / `terminal_resize` / `terminal_close` from any other
+    `terminal_data_send` / `terminal_resize` / `terminal_ack` /
+    `terminal_close` from any other
     account behave exactly as for an unknown id (no effect, same reply — see
     below), so a terminal's existence isn't observable across accounts.
     `session_load` lists only the caller's terminal ids. A successful
@@ -1067,7 +1098,7 @@ joined after the drain, before PTY teardown.
     `fuz` CLI) from terminals.
   - **Missing terminal IDs** (unknown, ended, lost to a restart, or another
     account's — one `pty_manager::TerminalNotFound`): `terminal_data_send`,
-    `terminal_resize`, and `terminal_close` fail with `not_found`
+    `terminal_resize`, `terminal_ack`, and `terminal_close` fail with `not_found`
     (`"terminal not found"`, no `data`), so a client notices a terminal it
     thinks is running is gone; the frontend takes a `not_found` close as
     closed, since the process is already gone.

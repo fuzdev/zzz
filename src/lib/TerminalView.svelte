@@ -94,8 +94,11 @@
 
 			// the terminal cell buffers output whether or not a view is mounted —
 			// replay what's buffered, then stream new output
-			const attachment = terminal.attach_output((data) => {
-				term.write(data);
+			// xterm parses writes asynchronously and calls back once a chunk is
+			// in its buffer — that's when the chunk counts as consumed, which is
+			// what the terminal acks to the backend
+			const attachment = terminal.attach_output((data, consumed) => {
+				term.write(data, consumed);
 			});
 			detach_output = attachment.detach;
 			if (attachment.truncated) {

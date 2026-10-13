@@ -85,6 +85,39 @@ const wait_for_output = async (
 	return terminal_output(ws, terminal_id);
 };
 
+/** The `sent_bytes` of the newest `terminal_data` received for `terminal_id` (0 before any). */
+const terminal_sent_bytes = (ws: WsClient, terminal_id: string): number => {
+	for (let i = ws.messages.length - 1; i >= 0; i--) {
+		const msg = ws.messages[i];
+		if (is_notification(msg, 'terminal_data', terminal_id)) {
+			return Number(
+				((msg as Record<string, unknown>).params as Record<string, unknown>).sent_bytes
+			);
+		}
+	}
+	return 0;
+};
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * The backend's `OUTPUT_WINDOW_HIGH_BYTES` (`pty_manager.rs`): the
+ * unacknowledged output past which a paced terminal stops reading its PTY.
+ */
+const OUTPUT_WINDOW_HIGH_BYTES = 1024 * 1024;
+
+/** The most one PTY read can add to `sent_bytes` — the backend's `READ_BUFFER_SIZE`. */
+const OUTPUT_READ_MAX_BYTES = 8192;
+
+/** Prints several times the output window, then a marker. */
+const SEVERAL_WINDOWS_COMMAND = {
+	command: 'sh',
+	args: ['-c', 'head -c 4500000 /dev/zero | base64; echo ZZZ_OUTPUT_DONE']
+};
+
+/** A lower bound on what `SEVERAL_WINDOWS_COMMAND` prints. */
+const SEVERAL_WINDOWS_MIN_BYTES = 6_000_000;
+
 const wait_for_exited = async (
 	ws: WsClient,
 	terminal_id: string,
@@ -539,6 +572,128 @@ describe('terminal cross-backend', () => {
 		}
 	}, 20_000);
 
+	test('terminal_ack_paces_output_to_what_the_client_acknowledges', async () => {
+		const ws = await open_ws();
+		try {
+			const terminal_id = await create_terminal(ws, 'tak-1', SEVERAL_WINDOWS_COMMAND);
+
+			// the first ack makes this connection one the terminal is paced
+			// against; acknowledging nothing leaves the whole window to fill
+			await ws.request('tak-2', 'terminal_ack', { terminal_id, bytes: 0 });
+
+			// with no further acks the output stops just past the window —
+			// wait until it has been still for a while
+			let stalled = terminal_sent_bytes(ws, terminal_id);
+			for (let still_ms = 0; still_ms < 1000;) {
+				await sleep(50);
+				const sent = terminal_sent_bytes(ws, terminal_id);
+				still_ms = sent === stalled ? still_ms + 50 : 0;
+				stalled = sent;
+			}
+			assert.isAbove(stalled, OUTPUT_WINDOW_HIGH_BYTES, 'the window filled');
+			assert.isAtMost(
+				stalled,
+				OUTPUT_WINDOW_HIGH_BYTES + OUTPUT_READ_MAX_BYTES,
+				'at most one read past the window'
+			);
+			assert.notInclude(
+				terminal_output(ws, terminal_id),
+				'ZZZ_OUTPUT_DONE',
+				'the process is blocked, not finished'
+			);
+
+			// input still reaches a paused terminal
+			assert.isNull(
+				await ws.request('tak-3', 'terminal_resize', { terminal_id, cols: 100, rows: 30 })
+			);
+
+			// acknowledging what arrives lets the rest through, and an ack past
+			// what was sent counts as all of it
+			let acks = 0;
+			while (!terminal_output(ws, terminal_id).includes('ZZZ_OUTPUT_DONE')) {
+				assert.isBelow(acks, 2000, 'the output never finished');
+				// the last ack can find the terminal already gone — the loop
+				// condition tells that apart from one refused mid-stream
+				await ws
+					.request(`tak-ack-${acks++}`, 'terminal_ack', {
+						terminal_id,
+						bytes: Number.MAX_SAFE_INTEGER
+					})
+					.catch(() => undefined);
+				await sleep(10);
+			}
+			assert.isAbove(terminal_sent_bytes(ws, terminal_id), SEVERAL_WINDOWS_MIN_BYTES);
+			assert.equal((await wait_for_exited(ws, terminal_id)).exit_code, 0);
+		} finally {
+			await ws.close();
+		}
+	});
+
+	test('terminal_output_nobody_acknowledges_is_not_paced', async () => {
+		const ws = await open_ws();
+		try {
+			// several windows of output, and never an ack: a client that doesn't
+			// know about acks gets all of it
+			const terminal_id = await create_terminal(ws, 'tna-1', SEVERAL_WINDOWS_COMMAND);
+			assert.equal((await wait_for_exited(ws, terminal_id, 30_000)).exit_code, 0);
+			assert.include(terminal_output(ws, terminal_id), 'ZZZ_OUTPUT_DONE');
+			assert.isAbove(terminal_sent_bytes(ws, terminal_id), SEVERAL_WINDOWS_MIN_BYTES);
+		} finally {
+			await ws.close();
+		}
+	});
+
+	test('terminal_ack_over_http_is_accepted_and_paces_nothing', async () => {
+		const fixture = await setup_test();
+		const ws = await create_ws_transport({
+			base_url: handle.config.base_url,
+			ws_path: handle.config.ws_path,
+			cookies: fixture.transport.cookies()
+		});
+		try {
+			await ws.request('_warmup', 'ping', undefined);
+			const terminal_id = await create_terminal(ws, 'tah-1', SEVERAL_WINDOWS_COMMAND);
+			// an HTTP request has no connection receiving output to pace against
+			const res = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'terminal_ack',
+				params: { terminal_id, bytes: 0 },
+				headers: fixture.create_session_headers()
+			});
+			assert.ok(res.ok);
+			assert.isNull(res.result);
+			assert.equal((await wait_for_exited(ws, terminal_id, 30_000)).exit_code, 0);
+		} finally {
+			await ws.close();
+		}
+	});
+
+	test('terminal_ack_missing', async () => {
+		const fixture = await setup_test();
+		const ack = (params: Record<string, unknown>) =>
+			rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'terminal_ack',
+				params,
+				headers: fixture.create_session_headers()
+			});
+		const res = await ack({ terminal_id: NIL_UUID, bytes: 0 });
+		assert.ok(!res.ok, 'a missing terminal is an error, not a silent success');
+		assert.deepEqual(to_json(res.error), TERMINAL_NOT_FOUND);
+		for (const params of [
+			{ terminal_id: NIL_UUID },
+			{ terminal_id: NIL_UUID, bytes: -1 },
+			{ terminal_id: NIL_UUID, bytes: 1.5 },
+			{ terminal_id: NIL_UUID, bytes: 0, extra: true }
+		]) {
+			const invalid = await ack(params);
+			assert.ok(!invalid.ok, JSON.stringify(params));
+			assert.equal(invalid.error.code, -32602, JSON.stringify(params));
+		}
+	});
+
 	test('terminal_output_and_control_are_scoped_to_the_owner', async () => {
 		const fixture = await setup_test();
 		const owner_ws = await create_ws_transport({
@@ -581,6 +736,7 @@ describe('terminal cross-backend', () => {
 			for (const [method, params] of [
 				['terminal_data_send', { data: 'theirs\n' }],
 				['terminal_resize', { cols: 100, rows: 30 }],
+				['terminal_ack', { bytes: 1 }],
 				['terminal_close', {}]
 			] as const) {
 				const foreign = await as_other(method, { terminal_id, ...params });

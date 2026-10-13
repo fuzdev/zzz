@@ -15,6 +15,7 @@ pub fn build_terminal_specs(app: Arc<App>) -> Vec<ActionSpec> {
         terminal_create_spec(Arc::clone(&app)),
         terminal_data_send_spec(Arc::clone(&app)),
         terminal_resize_spec(Arc::clone(&app)),
+        terminal_ack_spec(Arc::clone(&app)),
         terminal_close_spec(app),
     ]
 }
@@ -50,6 +51,18 @@ fn terminal_resize_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::with_side_effects(
         "terminal_resize",
+        AuthSpec::authenticated(CredentialGate::Any),
+        handler,
+    )
+}
+
+fn terminal_ack_spec(app: Arc<App>) -> ActionSpec {
+    let handler: ActionHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
+        let app = Arc::clone(&app);
+        Box::pin(async move { terminal::terminal_ack(params, ctx, app).await })
+    });
+    ActionSpec::with_side_effects(
+        "terminal_ack",
         AuthSpec::authenticated(CredentialGate::Any),
         handler,
     )

@@ -75,6 +75,15 @@ struct TerminalCloseInput {
     signal: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TerminalAckInput {
+    #[serde(deserialize_with = "deserialize_wire_uuid")]
+    terminal_id: Uuid,
+    /// The `sent_bytes` of the last `terminal_data` the client finished with.
+    bytes: u64,
+}
+
 /// Check a terminal dimension (`cols` / `rows`): an integer in `1..=65535`
 /// (the `u16` range of a PTY `winsize`). Out-of-range values are rejected
 /// rather than truncated — `65536 as u16` would be `0`.
@@ -239,6 +248,39 @@ pub async fn terminal_resize(
 
     app.pty_manager
         .resize(owner, &input.terminal_id.to_string(), cols, rows)
+        .await
+        .map_err(terminal_not_found)?;
+
+    Ok(Value::Null)
+}
+
+/// `terminal_ack` — record how much of a terminal's output the caller has
+/// taken.
+///
+/// That paces the terminal against the calling connection (see
+/// `pty_manager`). Accepted and ignored over HTTP, where there is no
+/// connection receiving output.
+///
+/// # Errors
+///
+/// `unauthenticated` when the request carries no account; `invalid_params`
+/// for a malformed input; `not_found` for a terminal the caller doesn't own.
+pub async fn terminal_ack(
+    params: Value,
+    ctx: ActionContext<'_>,
+    app: Arc<App>,
+) -> Result<Value, JsonrpcError> {
+    let owner = caller_account_id(&ctx)?;
+    let input: TerminalAckInput = parse_strict_params(params)?;
+
+    app.pty_manager
+        .ack(
+            &app.realtime,
+            owner,
+            &input.terminal_id.to_string(),
+            ctx.connection_id,
+            input.bytes,
+        )
         .await
         .map_err(terminal_not_found)?;
 
@@ -433,6 +475,26 @@ mod tests {
         ] {
             assert!(
                 parse_strict_params::<TerminalDataSendInput>(params.clone()).is_err(),
+                "{params}"
+            );
+        }
+        let ack: TerminalAckInput =
+            parse_strict_params(json!({"terminal_id": NIL_UUID, "bytes": 0})).unwrap();
+        assert_eq!(ack.bytes, 0);
+        let ack: TerminalAckInput =
+            parse_strict_params(json!({"terminal_id": NIL_UUID, "bytes": u64::MAX})).unwrap();
+        assert_eq!(ack.bytes, u64::MAX);
+        for params in [
+            json!({"terminal_id": NIL_UUID}),
+            json!({"terminal_id": NIL_UUID, "bytes": -1}),
+            json!({"terminal_id": NIL_UUID, "bytes": 1.5}),
+            json!({"terminal_id": NIL_UUID, "bytes": "1"}),
+            json!({"terminal_id": NIL_UUID, "bytes": null}),
+            json!({"terminal_id": NIL_UUID, "bytes": 1, "extra": true}),
+            json!({"terminal_id": "abc", "bytes": 1}),
+        ] {
+            assert!(
+                parse_strict_params::<TerminalAckInput>(params.clone()).is_err(),
                 "{params}"
             );
         }
