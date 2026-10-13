@@ -89,7 +89,7 @@ use crate::handlers::App;
 /// watcher otherwise would happily pull into memory.
 ///
 /// TODO @parity: align with `fuz_app`'s equivalent cap when it lands.
-const MAX_INDEXED_FILE_SIZE: u64 = 4 * 1024 * 1024;
+pub(crate) const MAX_INDEXED_FILE_SIZE: u64 = 4 * 1024 * 1024;
 
 /// Cap on concurrent file reads during a directory scan.
 /// File reads block on disk + utf-8 validation; without a cap a large
@@ -1844,17 +1844,33 @@ async fn filer_event_loop(
                 if next_deadline.is_some() => {}
         }
 
-        for ready in state.take_ready(Instant::now()) {
-            let params = FilerChangeParams {
-                change: DiskfileChange {
-                    change_type: ready.change_type,
-                    path: ready.disknode.id.clone(),
-                },
-                disknode: ready.disknode,
-            };
-            let notification = fuz_http::notification("filer_change", &params);
-            broadcast(&notification);
-        }
+        flush_ready(&mut state, Instant::now(), &broadcast).await;
+    }
+}
+
+/// Broadcast the pending changes whose deadline has passed by `now`.
+///
+/// Yields to the runtime after each broadcast. A broadcast only queues its
+/// frame on every connection, and a connection's writer is another task: a
+/// batch sent with no await in it would pile up whole in each queue, and one
+/// larger than the queue's byte budget would close every socket before a
+/// writer could take a frame. The yield gives the writers a turn to take the
+/// frame first.
+async fn flush_ready(state: &mut FilerState, now: Instant, broadcast: &FilerBroadcast) {
+    for ready in state.take_ready(now) {
+        let params = FilerChangeParams {
+            change: DiskfileChange {
+                change_type: ready.change_type,
+                path: ready.disknode.id.clone(),
+            },
+            disknode: ready.disknode,
+        };
+        let notification = fuz_http::notification("filer_change", &params);
+        broadcast(&notification);
+        // each queue holds the registry's copy — free this one before the
+        // yield instead of holding it across the writers' turn
+        drop(notification);
+        tokio::task::yield_now().await;
     }
 }
 
@@ -3034,6 +3050,101 @@ mod tests {
         assert_eq!(ready.len(), 1);
         assert!(state.pending.is_empty());
         assert!(state.next_deadline().is_none());
+    }
+
+    /// A registry holding one connection whose outbound queue has a budget
+    /// of `outbound_queue_bytes`, with a filer broadcast sink into it.
+    fn one_connection(
+        outbound_queue_bytes: usize,
+    ) -> (
+        Arc<fuz_realtime::ConnectionRegistry>,
+        fuz_realtime::Connection,
+        fuz_realtime::ConnectionReceiver,
+        FilerBroadcast,
+    ) {
+        let registry = Arc::new(fuz_realtime::ConnectionRegistry::new());
+        let (sender, receiver) = fuz_realtime::connection_channel(outbound_queue_bytes);
+        let connection = registry.add_connection(
+            sender,
+            None,
+            None,
+            None,
+            tokio_util::sync::CancellationToken::new(),
+        );
+        let sink = Arc::clone(&registry);
+        let broadcast: FilerBroadcast = Arc::new(move |message: &str| {
+            let _ = sink.broadcast(message);
+        });
+        (registry, connection, receiver, broadcast)
+    }
+
+    #[tokio::test]
+    async fn flush_yields_so_a_read_connection_outlasts_its_budget() {
+        const CHANGES: usize = 32;
+        const TEXT_BYTES: usize = 1024;
+        // room for a few frames, a fraction of the batch
+        const BUDGET: usize = 4 * TEXT_BYTES;
+
+        let tmp = TempDir::new();
+        let mut state = state_for(&tmp).await;
+        let now = Instant::now();
+        let text = "x".repeat(TEXT_BYTES);
+        for i in 0..CHANGES {
+            let key = tmp.key(&format!("{i}.txt"));
+            state.queue_at(now, key.clone(), ChangeType::Add, node(&key, &text, 1.0));
+        }
+        let (registry, connection, mut rx, broadcast) = one_connection(BUDGET);
+        // the connection's writer — takes a frame whenever it gets a turn,
+        // and stops early if the registry closes the connection
+        let writer = tokio::spawn(async move {
+            let mut frames = 0;
+            while frames < CHANGES && rx.recv().await.is_some() {
+                frames += 1;
+            }
+            frames
+        });
+
+        flush_ready(&mut state, now + DEBOUNCE_DURATION, &broadcast).await;
+
+        assert!(state.pending.is_empty());
+        assert_eq!(connection.close_reason.get(), None);
+        assert!(registry.is_registered(connection.id));
+        let frames = tokio::time::timeout(Duration::from_secs(5), writer)
+            .await
+            .expect("the writer must finish")
+            .unwrap();
+        assert_eq!(frames, CHANGES);
+    }
+
+    #[tokio::test]
+    async fn outbound_budget_holds_the_largest_change_behind_another() {
+        let tmp = TempDir::new();
+        let mut state = state_for(&tmp).await;
+        let now = Instant::now();
+        // a file at the cap, every byte a control character JSON escapes to 6
+        let dense = "\u{1}".repeat(usize::try_from(MAX_INDEXED_FILE_SIZE).unwrap());
+        for (name, text) in [("dense.txt", dense.as_str()), ("small.txt", "x")] {
+            let key = tmp.key(name);
+            state.queue_at(now, key.clone(), ChangeType::Add, node(&key, text, 1.0));
+        }
+        // nothing takes a frame during the flush, as when the writer is busy
+        // with an earlier one
+        let (registry, connection, mut rx, broadcast) =
+            one_connection(crate::WS_OUTBOUND_QUEUE_BYTES);
+
+        flush_ready(&mut state, now + DEBOUNCE_DURATION, &broadcast).await;
+
+        assert_eq!(connection.close_reason.get(), None);
+        assert!(registry.is_registered(connection.id));
+        let mut frame_bytes = [
+            rx.try_recv().unwrap().as_str().len(),
+            rx.try_recv().unwrap().as_str().len(),
+        ];
+        frame_bytes.sort_unstable();
+        assert!(rx.try_recv().is_err());
+        assert!(frame_bytes[1] > 6 * dense.len());
+        // the pair is more than the spine's default budget would queue
+        assert!(frame_bytes[0] + frame_bytes[1] > fuz_actions::DEFAULT_WS_OUTBOUND_QUEUE_BYTES);
     }
 
     #[tokio::test]

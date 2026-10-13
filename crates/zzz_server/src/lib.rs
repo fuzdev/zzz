@@ -95,6 +95,46 @@ pub fn session_cookie_name_for_port(port: u16) -> String {
 /// keep the 1 MiB default.
 pub const RPC_MESSAGE_MAX_BYTES: usize = 16 * 1024 * 1024;
 
+/// Byte budget of one WebSocket connection's outbound queue — the frames
+/// queued for a socket that its writer has not yet taken.
+///
+/// A frame that does not fit closes the socket with
+/// `fuz_realtime::WS_CLOSE_OUTBOUND_OVERFLOW` (4005) and the client
+/// reconnects and reloads; a frame is always queued into an empty queue
+/// (`fuz_realtime::connection_channel`).
+///
+/// 32 MiB, above the spine's 4 MiB default
+/// (`fuz_actions::DEFAULT_WS_OUTBOUND_QUEUE_BYTES`), sized by the largest
+/// frame zzz pushes: a `filer_change` carries a file's whole text, up to
+/// `filer::MAX_INDEXED_FILE_SIZE` (4 MiB), and JSON escapes a control
+/// character to 6 bytes, so one frame can reach 24 MiB. The budget holds
+/// that frame behind others still waiting — under the default any file near
+/// the cap is delivered only into an empty queue, so two of them in a row,
+/// or one behind a line of terminal output, would close the socket. Every
+/// other notification is
+/// small next to it (`terminal_data` is at most one 8 KiB read, escaped), and
+/// responses are written by the connection's own loop, not queued.
+///
+/// It bounds a burst, it does not absorb one of any size: a batch of changes
+/// larger than this still closes a socket whose client takes nothing while
+/// the batch is queued. The filer yields after each broadcast so a
+/// connection's writer can take each frame before the next is queued; a
+/// client that falls more than the budget behind is still closed.
+///
+/// **Memory.** This is what a client that stops reading can make zzzd hold
+/// for its socket: up to 32 MiB waiting, plus the one frame its writer has
+/// taken (at most 24 MiB), until the write stalls out
+/// (`fuz_realtime::WS_WRITE_STALL_TIMEOUT`) or the next frame overflows the
+/// queue. A broadcast's text is one buffer shared by every recipient, so
+/// sockets holding the same `filer_change` frames hold them once.
+pub const WS_OUTBOUND_QUEUE_BYTES: usize = 2 * RPC_MESSAGE_MAX_BYTES;
+
+// The budget holds the largest `filer_change` frame — every byte of a file
+// at the cap escaped to 6 — with 1 MiB to spare for its envelope and for the
+// frames it queues behind.
+const _: () =
+    assert!(WS_OUTBOUND_QUEUE_BYTES as u64 >= 6 * filer::MAX_INDEXED_FILE_SIZE + 1024 * 1024);
+
 /// zzz's concrete instantiation of [`fuz_actions::ExtraActionSpecsFactory`]
 /// over [`handlers::App`] — extra specs folded in after the standard zzz set.
 ///
@@ -684,14 +724,20 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         // shipped behavior exactly.
         required_roles: Vec::new(),
     };
-    // Same cap as the `/api/rpc` body (`RPC_MESSAGE_MAX_BYTES`); an
-    // oversized message closes the socket.
-    let spine_ws_router =
-        fuz_actions::register_action_ws_with_message_limit(spine_ws_state, RPC_MESSAGE_MAX_BYTES)
-            .layer(axum::middleware::from_fn_with_state(
-                Arc::clone(&spine_trusted_proxies),
-                fuz_http::client_ip_middleware,
-            ));
+    // Same inbound cap as the `/api/rpc` body (`RPC_MESSAGE_MAX_BYTES`) — an
+    // oversized message closes the socket — and an outbound queue budget
+    // sized for `filer_change` frames (`WS_OUTBOUND_QUEUE_BYTES`).
+    let spine_ws_router = fuz_actions::register_action_ws_with_options(
+        spine_ws_state,
+        fuz_actions::ActionWsOptions {
+            max_message_bytes: RPC_MESSAGE_MAX_BYTES,
+            outbound_queue_bytes: WS_OUTBOUND_QUEUE_BYTES,
+        },
+    )
+    .layer(axum::middleware::from_fn_with_state(
+        Arc::clone(&spine_trusted_proxies),
+        fuz_http::client_ip_middleware,
+    ));
 
     // Spine account REST router: mounts `/status`, `/login`, `/logout`,
     // `/password` under `/api/account`.
