@@ -135,6 +135,27 @@ pub const WS_OUTBOUND_QUEUE_BYTES: usize = 2 * RPC_MESSAGE_MAX_BYTES;
 const _: () =
     assert!(WS_OUTBOUND_QUEUE_BYTES as u64 >= 6 * filer::MAX_INDEXED_FILE_SIZE + 1024 * 1024);
 
+/// The size limits `/api/ws` is mounted with: the inbound message cap shared
+/// with the `/api/rpc` body ([`RPC_MESSAGE_MAX_BYTES`] — an oversized
+/// message closes the socket) and the outbound queue budget
+/// ([`WS_OUTBOUND_QUEUE_BYTES`]).
+///
+/// Private, and read by exactly one non-test site — the
+/// `register_action_ws_with_options` call in `run_app` — so that mounting
+/// the socket without it (the spine's `register_action_ws`, or its
+/// message-limit helper, either of which leaves the outbound budget at the
+/// spine's 4 MiB default) leaves this unused and fails the `dead_code` lint
+/// under `-D warnings`. The assertion above names `WS_OUTBOUND_QUEUE_BYTES`
+/// rather than this for the same reason: a use inside a `const _` would keep
+/// it alive. `filer`'s budget test reads it too, which doesn't count in the
+/// library target. The tripwire only sees the const going unread: a call
+/// site that reads one field and drops the other (say `max_message_bytes`
+/// alone, through the message-limit helper) still compiles clean.
+const WS_OPTIONS: fuz_actions::ActionWsOptions = fuz_actions::ActionWsOptions {
+    max_message_bytes: RPC_MESSAGE_MAX_BYTES,
+    outbound_queue_bytes: WS_OUTBOUND_QUEUE_BYTES,
+};
+
 /// zzz's concrete instantiation of [`fuz_actions::ExtraActionSpecsFactory`]
 /// over [`handlers::App`] — extra specs folded in after the standard zzz set.
 ///
@@ -724,20 +745,13 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         // shipped behavior exactly.
         required_roles: Vec::new(),
     };
-    // Same inbound cap as the `/api/rpc` body (`RPC_MESSAGE_MAX_BYTES`) — an
-    // oversized message closes the socket — and an outbound queue budget
-    // sized for `filer_change` frames (`WS_OUTBOUND_QUEUE_BYTES`).
-    let spine_ws_router = fuz_actions::register_action_ws_with_options(
-        spine_ws_state,
-        fuz_actions::ActionWsOptions {
-            max_message_bytes: RPC_MESSAGE_MAX_BYTES,
-            outbound_queue_bytes: WS_OUTBOUND_QUEUE_BYTES,
-        },
-    )
-    .layer(axum::middleware::from_fn_with_state(
-        Arc::clone(&spine_trusted_proxies),
-        fuz_http::client_ip_middleware,
-    ));
+    // `WS_OPTIONS`: the `/api/rpc` body's inbound cap, and an outbound queue
+    // budget sized for `filer_change` frames.
+    let spine_ws_router = fuz_actions::register_action_ws_with_options(spine_ws_state, WS_OPTIONS)
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&spine_trusted_proxies),
+            fuz_http::client_ip_middleware,
+        ));
 
     // Spine account REST router: mounts `/status`, `/login`, `/logout`,
     // `/password` under `/api/account`.

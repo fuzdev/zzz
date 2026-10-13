@@ -3485,7 +3485,7 @@ mod tests {
         // nothing takes a frame during the flush, as when the writer is busy
         // with an earlier one
         let (registry, connection, mut rx, broadcast) =
-            one_connection(crate::WS_OUTBOUND_QUEUE_BYTES);
+            one_connection(crate::WS_OPTIONS.outbound_queue_bytes);
 
         flush_ready(&mut state, now + DEBOUNCE_DURATION, &broadcast).await;
 
