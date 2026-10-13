@@ -83,8 +83,7 @@ describe('TerminalOutputAcker', () => {
 		await vi.advanceTimersByTimeAsync(TERMINAL_ACK_DELAY * 10);
 		assert.deepEqual(sent_bytes(), [TERMINAL_ACK_THRESHOLD_BYTES], 'the rest waits on the first');
 
-		// the final ack follows the first without waiting for more output, even
-		// when what's left is under the threshold
+		// with a threshold or more waiting, the next follows the first at once
 		acker.consumed(5 * TERMINAL_ACK_THRESHOLD_BYTES + 1);
 		await sent[0]!.settle('ok');
 		assert.deepEqual(sent_bytes(), [
@@ -94,6 +93,81 @@ describe('TerminalOutputAcker', () => {
 		await sent[1]!.settle('ok');
 		assert.strictEqual(sent.length, 2);
 		assert.strictEqual(acker.acked, 5 * TERMINAL_ACK_THRESHOLD_BYTES + 1);
+	});
+
+	test('what an ack in flight left under the threshold waits out the delay', async () => {
+		acker.consumed(TERMINAL_ACK_THRESHOLD_BYTES);
+		acker.consumed(2 * TERMINAL_ACK_THRESHOLD_BYTES - 1);
+		await sent[0]!.settle('ok');
+		assert.strictEqual(sent.length, 1, 'round trips do not set the pace of the acks');
+		await vi.advanceTimersByTimeAsync(TERMINAL_ACK_DELAY - 1);
+		assert.strictEqual(sent.length, 1);
+		await vi.advanceTimersByTimeAsync(1);
+		assert.deepEqual(sent_bytes(), [
+			TERMINAL_ACK_THRESHOLD_BYTES,
+			2 * TERMINAL_ACK_THRESHOLD_BYTES - 1
+		]);
+	});
+
+	test('an ack that left nothing waiting schedules nothing', async () => {
+		acker.consumed(TERMINAL_ACK_THRESHOLD_BYTES);
+		await sent[0]!.settle('ok');
+		assert.strictEqual(vi.getTimerCount(), 0);
+	});
+
+	describe('against a backend that has paused the terminal', () => {
+		// The backend's window (`OUTPUT_WINDOW_HIGH_BYTES` and
+		// `OUTPUT_WINDOW_LOW_BYTES` in `pty_manager.rs`): it stops reading past
+		// `HIGH` unacked bytes and, once stopped, reads again at `LOW` or under.
+		const HIGH = 1024 * 1024;
+		const LOW = 256 * 1024;
+
+		/** Whether a backend that had `sent` bytes out stays paused at `acked`. */
+		const stays_paused = (sent: number, acked: number): boolean => sent - acked > LOW;
+
+		test('the threshold is within the low-water mark', () => {
+			assert.isAtMost(TERMINAL_ACK_THRESHOLD_BYTES, LOW);
+		});
+
+		test('a client that has consumed everything acks at once', () => {
+			// paused the moment it passed the high mark, with nothing acked
+			const sent_total = HIGH + 1;
+			assert.ok(stays_paused(sent_total, acker.acked));
+			// the client works through it in pieces under the threshold
+			const step = TERMINAL_ACK_THRESHOLD_BYTES - 1;
+			for (let consumed = step; consumed < sent_total; consumed += step) {
+				acker.consumed(consumed);
+			}
+			acker.consumed(sent_total);
+			assert.isAbove(sent.length, 0, 'no timer has run');
+			assert.strictEqual(vi.getTimerCount(), 0, 'and none is what the ack waits on');
+		});
+
+		test('however little over the low mark is unacked, it is acked at once', async () => {
+			// the least a paused backend can be waiting for: one byte over the mark
+			const acked = 5 * HIGH;
+			acker.consumed(acked);
+			await sent[0]!.settle('ok');
+			const sent_total = acked + LOW + 1;
+			assert.ok(stays_paused(sent_total, acker.acked));
+
+			acker.consumed(sent_total);
+			assert.deepEqual(sent_bytes(), [acked, sent_total], 'sent without the delay');
+			assert.ok(!stays_paused(sent_total, sent.at(-1)!.bytes), 'and it reopens the window');
+		});
+
+		test('with an ack in flight, the rest follows when it returns', async () => {
+			const first = TERMINAL_ACK_THRESHOLD_BYTES;
+			acker.consumed(first);
+			// everything else the paused backend sent is consumed meanwhile
+			const sent_total = first + LOW + 1;
+			acker.consumed(sent_total);
+			assert.deepEqual(sent_bytes(), [first]);
+			assert.ok(stays_paused(sent_total, first), 'the one in flight does not reopen it');
+
+			await sent[0]!.settle('ok');
+			assert.deepEqual(sent_bytes(), [first, sent_total], 'sent without the delay');
+		});
 	});
 
 	test('ignores counts that go backwards', async () => {

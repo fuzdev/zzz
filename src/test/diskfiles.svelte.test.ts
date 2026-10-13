@@ -9,6 +9,7 @@ import {
 	SerializableDisknode,
 	type DiskfileChangeType
 } from '#lib/diskfile_types.ts';
+import type { DiskfileChangeTracker } from '#lib/diskfiles.svelte.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { confirm_unload_with_unsaved_changes, to_file_directories } from '#lib/diskfile_helpers.ts';
 
@@ -186,13 +187,25 @@ describe('upsert by path', () => {
 		assert.ok(!editor_state.has_conflict, 'the file on disk still has what the draft started from');
 	});
 
-	test('a touch counts as a tracked change only when it updated a diskfile', () => {
+	test('a tracker records touches apart from full changes, the latest per path', () => {
 		filer_change('add', PATH_A, 'one');
 		const tracker = app.diskfiles.track_changes();
 		filer_touch(PATH_A, 7);
+		filer_touch(PATH_A, 5);
+		// not held here, and recorded all the same
 		filer_touch(PATH_B, 7);
+		filer_change('change', PATH_C, 'c');
 		tracker.stop();
-		assert.deepEqual([...tracker.paths], [PATH_A]);
+		filer_touch(PATH_C, 7);
+
+		assert.deepEqual([...tracker.paths], [PATH_C]);
+		assert.deepEqual(
+			[...tracker.touches].map(([path, metadata]) => [path, metadata.mtime]),
+			[
+				[PATH_A, 5],
+				[PATH_B, 7]
+			]
+		);
 	});
 
 	test('change for an unknown path adds it', () => {
@@ -222,6 +235,139 @@ describe('upsert by path', () => {
 		assert.strictEqual(a.content, 'a2');
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_B)?.content, 'b1');
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_C)?.content, 'c1');
+	});
+});
+
+describe('a touch while a snapshot is in flight', () => {
+	const snapshot_node = (
+		path: DiskfilePath,
+		contents: string,
+		mtime: number
+	): SerializableDisknode => ({ ...create_disknode(path, contents), mtime });
+
+	/** Applies `files` as the snapshot `tracker` was started for. */
+	const reconcile = (files: Array<SerializableDisknode>, tracker: DiskfileChangeTracker): void => {
+		tracker.stop();
+		app.diskfiles.reconcile(files, [SOURCE_DIR], { changes: tracker });
+	};
+
+	test('never keeps contents the snapshot replaces', () => {
+		// held from before a connection gap in which the file changed on disk
+		filer_change('add', PATH_A, 'old');
+		const tracker = app.diskfiles.track_changes();
+		filer_touch(PATH_A, 9);
+		reconcile([snapshot_node(PATH_A, 'new', 5)], tracker);
+
+		const diskfile = app.diskfiles.get_by_path(PATH_A);
+		assert.strictEqual(diskfile?.content, 'new', 'a touch says nothing about the contents');
+		assert.strictEqual(diskfile?.mtime, 9, 'and its metadata is applied over the snapshot');
+	});
+
+	test('is applied over a seed that only adds, too', () => {
+		filer_change('add', PATH_A, 'old');
+		const tracker = app.diskfiles.track_changes();
+		filer_touch(PATH_A, 9);
+		tracker.stop();
+		app.diskfiles.add_initial([snapshot_node(PATH_A, 'new', 5)], tracker);
+
+		const diskfile = app.diskfiles.get_by_path(PATH_A);
+		assert.strictEqual(diskfile?.content, 'new');
+		assert.strictEqual(diskfile?.mtime, 9);
+	});
+
+	test('wins over the snapshot with a lower mtime as well', () => {
+		// an mtime can move backwards, and the two can't be ordered from here:
+		// if the snapshot was the newer, another notification is still to come
+		filer_change('add', PATH_A, 'old');
+		const tracker = app.diskfiles.track_changes();
+		filer_touch(PATH_A, 3);
+		reconcile([snapshot_node(PATH_A, 'new', 5)], tracker);
+
+		const diskfile = app.diskfiles.get_by_path(PATH_A);
+		assert.strictEqual(diskfile?.content, 'new');
+		assert.strictEqual(diskfile?.mtime, 3);
+	});
+
+	test('the latest of several is the one applied', () => {
+		filer_change('add', PATH_A, 'old');
+		const tracker = app.diskfiles.track_changes();
+		filer_touch(PATH_A, 9);
+		filer_touch(PATH_A, 4);
+		reconcile([snapshot_node(PATH_A, 'new', 5)], tracker);
+
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_A)?.mtime, 4);
+	});
+
+	test('a change after it stands, with its own mtime', () => {
+		filer_change('add', PATH_A, 'old');
+		const tracker = app.diskfiles.track_changes();
+		filer_touch(PATH_A, 9);
+		filer_change('change', PATH_A, 'changed');
+		reconcile([snapshot_node(PATH_A, 'snapshot', 5)], tracker);
+
+		const diskfile = app.diskfiles.get_by_path(PATH_A);
+		assert.strictEqual(diskfile?.content, 'changed', 'the snapshot yields to a change');
+		assert.strictEqual(diskfile?.mtime, 1, 'the earlier touch is not applied over the change');
+	});
+
+	test('a change before it stands, with the mtime of the touch', () => {
+		filer_change('add', PATH_A, 'old');
+		const tracker = app.diskfiles.track_changes();
+		filer_change('change', PATH_A, 'changed');
+		filer_touch(PATH_A, 9);
+		reconcile([snapshot_node(PATH_A, 'snapshot', 5)], tracker);
+
+		const diskfile = app.diskfiles.get_by_path(PATH_A);
+		assert.strictEqual(diskfile?.content, 'changed');
+		assert.strictEqual(diskfile?.mtime, 9);
+	});
+
+	test('a delete after it is not undone', () => {
+		filer_change('add', PATH_A, 'old');
+		const tracker = app.diskfiles.track_changes();
+		filer_touch(PATH_A, 9);
+		filer_change('delete', PATH_A);
+		reconcile([snapshot_node(PATH_A, 'snapshot', 5)], tracker);
+
+		assert.strictEqual(count_by_path(PATH_A), 0);
+	});
+
+	test('a delete before it is not undone', () => {
+		filer_change('add', PATH_A, 'old');
+		const tracker = app.diskfiles.track_changes();
+		filer_change('delete', PATH_A);
+		filer_touch(PATH_A, 9);
+		reconcile([snapshot_node(PATH_A, 'snapshot', 5)], tracker);
+
+		assert.strictEqual(count_by_path(PATH_A), 0);
+	});
+
+	test('does not keep a file the snapshot lacks', () => {
+		filer_change('add', PATH_A, 'old');
+		filer_change('add', PATH_B, 'draft base');
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(b);
+		app.diskfiles.get_editor_state(b).current_content = 'draft';
+		const tracker = app.diskfiles.track_changes();
+		filer_touch(PATH_A, 9);
+		filer_touch(PATH_B, 9);
+		reconcile([], tracker);
+
+		assert.strictEqual(count_by_path(PATH_A), 0, 'pruned like any file the snapshot lacks');
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b, 'kept for its draft');
+		assert.ok(b.deleted_on_disk, 'and not brought back by the touch');
+	});
+
+	test('for a file not held here leaves the snapshot to bring it', () => {
+		const tracker = app.diskfiles.track_changes();
+		filer_touch(PATH_A, 9);
+		filer_touch(PATH_B, 9);
+		reconcile([snapshot_node(PATH_A, 'new', 5)], tracker);
+
+		const diskfile = app.diskfiles.get_by_path(PATH_A);
+		assert.strictEqual(diskfile?.content, 'new', 'the touch did not hide the entry');
+		assert.strictEqual(diskfile?.mtime, 9);
+		assert.strictEqual(count_by_path(PATH_B), 0, 'nothing to add a file with');
 	});
 });
 

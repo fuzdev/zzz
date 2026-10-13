@@ -345,7 +345,7 @@ describe('file reconcile', () => {
 		assert.isFalse(a.deleted_on_disk);
 	});
 
-	test('a `touch` during the request keeps its mtime, and one for an unknown file yields to the snapshot', async () => {
+	test('a `touch` during the request keeps its mtime, and one for an unknown file leaves the snapshot to bring it', async () => {
 		await load({ files: [create_disknode(ZZZ_A, 'a')] });
 
 		const loaded = app.load_session();
@@ -365,11 +365,28 @@ describe('file reconcile', () => {
 		const a = app.diskfiles.get_by_path(ZZZ_A);
 		assert.strictEqual(a?.content, 'a');
 		assert.strictEqual(a?.mtime, 99, 'the snapshot did not take the mtime back');
-		assert.strictEqual(
-			app.diskfiles.get_by_path(ZZZ_B)?.content,
-			'b',
-			'the snapshot brought the file the touch could not add'
-		);
+		const b = app.diskfiles.get_by_path(ZZZ_B);
+		assert.strictEqual(b?.content, 'b', 'the snapshot brought the file the touch could not add');
+		assert.strictEqual(b?.mtime, 99);
+	});
+
+	test('a `touch` during the request does not keep contents the snapshot replaces', async () => {
+		// held from before a connection gap, during which the file changed on disk
+		await load({ files: [create_disknode(ZZZ_A, 'old')] });
+
+		const loaded = app.load_session();
+		const { contents: _, ...metadata } = create_disknode(ZZZ_A, '');
+		app.diskfiles.handle_change({
+			change: { type: 'touch', path: ZZZ_A },
+			disknode: { ...metadata, mtime: 99 }
+		});
+		// the snapshot was read before the touch: newer contents, older mtime
+		await succeed(1, { files: [create_disknode(ZZZ_A, 'new')] });
+		assert.ok(await loaded);
+
+		const a = app.diskfiles.get_by_path(ZZZ_A);
+		assert.strictEqual(a?.content, 'new', 'the touch said nothing about the contents');
+		assert.strictEqual(a?.mtime, 99, 'the snapshot did not take the mtime back');
 	});
 
 	test('a file `filer_change` touched during the request is neither pruned nor reverted', async () => {

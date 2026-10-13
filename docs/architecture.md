@@ -167,7 +167,10 @@ Defined in `src/lib/action_specs.ts`. A representative subset below — the `ter
 ### Actions Log
 
 Every `app.api` call is recorded as an `Action` cell in `app.actions` (shown on
-the actions page), which keeps the newest 512 (`HISTORY_LIMIT_DEFAULT`). The
+the actions page), which keeps the newest 512 (`HISTORY_LIMIT_DEFAULT`) —
+except calls of the flow-control methods in `QUIET_ACTION_METHODS`
+(`terminal_ack`), which arrive many a second under a flood of terminal output
+and would turn the whole history over. The
 log keeps each call's method, lifecycle (kind, phase, step), timing, and error,
 but only a bounded copy of its payloads: an `input`, `output`, `progress`,
 request `params`, response `result`, notification `params`, or error `data`
@@ -486,7 +489,7 @@ User types in xterm.js (TerminalView.svelte)
         → the terminal's task writes each chunk in full as the PTY accepts it
   → child process output → the terminal's task (readiness-driven read,
     incremental UTF-8 decode)
-    → terminal_data broadcast to all sockets
+    → terminal_data sent to the owning account's sockets
       → frontend_action_handlers.terminal_data.receive
         → frontend.terminals.receive_output(terminal_id, data, sent_bytes)
           → the Terminal cell buffers the chunk and forwards it to any
@@ -519,11 +522,17 @@ and their output buffering, and coming back reattaches to them.
   callback), or, with no view attached, that the chunk is in the buffer —
   which drops its oldest output, so it never backs up. A view that detaches
   stops being waited on. `TerminalOutputAcker` batches the acks: one at once
-  when 64 KiB are waiting, otherwise after a short delay so the last of a
+  when 256 KiB are waiting, otherwise after a short delay so the last of a
   burst is acked too, and never more than one in flight — what's consumed
-  meanwhile goes in the next. The backend stops reading a terminal that gets
-  1 MiB ahead of its acks, which blocks the process until the view catches
-  up. Output for a terminal this tab doesn't hold is never acked.
+  meanwhile waits for it and goes in the next, by the same rule. The backend
+  stops reading a terminal that gets 1 MiB ahead of its acks, which blocks
+  the process until the view catches up, and reads again once 256 KiB or
+  less is unacked — the ack threshold is no higher than that, so a view that
+  has caught up acks at once rather than after the delay. Output for a
+  terminal this tab doesn't hold is never acked, so the backend never slows
+  one down for this tab. Acks are flow control, not user actions: they stay
+  out of the actions log, and one answered `not_found` — its terminal closed
+  or exited first — just ends the acks (`QUIET_ACTION_METHODS`).
 - **Input** — `Terminal.send_input` keeps at most one `terminal_data_send` in
   flight per terminal and coalesces data typed meanwhile into the next send,
   so keystrokes stay ordered even though the backend dispatches one socket's
@@ -819,7 +828,7 @@ These routes are outside the action system — they don't appear in the actions 
 
 ### Filer
 
-`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open workspace dir. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. A change that moved an indexed file's timestamps and left its contents as they were (a `touch`, a rewrite of the same bytes) is a `touch`: its `disknode` is the file's metadata with no `contents` key (`DisknodeMetadata`), so the contents aren't sent again — a client holding the file keeps the content it has (`Diskfiles.touch`), and one that doesn't ignores it. Every other change carries the whole disknode, where `contents: null` keeps its one meaning: not loaded. A touch folded into an unbroadcast `add` or `change` is sent as that change, contents included. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored directories (`.git`, `node_modules`, `target`, …) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rebuilds its watches on a fresh watcher, rescans its root, and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed, never watched — matching `ScopedFs`.
+`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open workspace dir. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. A change that moved an indexed file's timestamps and left the contents the index holds for it as they were (a `touch`, a rewrite of the same bytes) is a `touch`: its `disknode` is the file's metadata with no `contents` key (`DisknodeMetadata`), so the contents aren't sent again — a client holding the file keeps the content it has (`Diskfiles.touch`), and one that doesn't ignores it. The index holds no contents for a file it didn't load, so every change to such a file is a `touch`, and what shows it changed is its `mtime`. Every other change carries the whole disknode, where `contents: null` keeps its one meaning: not loaded. A touch folded into an unbroadcast `add` or `change` is sent as that change, contents included. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored directories (`.git`, `node_modules`, `target`, …) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rebuilds its watches on a fresh watcher, rescans its root, and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed, never watched — matching `ScopedFs`.
 
 Watches are per directory: the filer's own walk (on a blocking thread) adds one non-recursive watch to each directory it indexes — never inside ignored, symlinked, or non-UTF-8 directories — watching each before listing it, so nothing created in between is missed. A directory that appears gets watches for its subtree when it's synced; one that's removed or renamed away has them dropped (two paths sharing one inode, like a renamed directory's old and new path or a bind mount, share one kernel watch, removed only with its last path). An unreadable subdirectory is skipped and logged once, and picked up once it's readable again; one made unreadable later drops out of the index. A listing that fails transiently (`EMFILE`, `EIO`) keeps what's indexed under it and retries. Rescans (`session_load`, overflow recovery) re-read only files whose `lstat` identity or change stamps moved, and trust a stamp only once the file has been still for two seconds (git's "racily clean" rule), since same-size writes within one timestamp tick look identical.
 
@@ -1018,11 +1027,15 @@ flattens every active filer's index, and lists the filers' roots as
 the new tree appears immediately. `Frontend.load_session` runs `session_load`
 and retries a failure with backoff (1s doubling to 30s) until it succeeds,
 tracking progress in `session_status` / `session_error`; `Workspaces.open`
-does the same snapshot handling for `workspace_open`. Both record the paths
-`filer_change` touches while their request is in flight
-(`Diskfiles.track_changes`) and skip those snapshot entries, since the
-notification is at least as new — a file deleted mid-request isn't
-resurrected, and newer content isn't reverted.
+does the same snapshot handling for `workspace_open`. Both record what
+`filer_change` reports while their request is in flight
+(`Diskfiles.track_changes`) and apply the snapshot around it: a path with an
+`add`, `change`, or `delete` keeps what the notification left — its snapshot
+entry is skipped, so a file deleted mid-request isn't resurrected and newer
+content isn't reverted. A `touch` carries no contents, so it never makes the
+snapshot yield: the snapshot's entry is applied (or the file pruned), and
+the touch's metadata is then applied again, unless a full change was also
+reported for the path.
 
 **Reconnect resync.** Notifications sent while the socket is down —
 `filer_change`, `workspace_changed`, `terminal_data`, `terminal_exited`,
@@ -1063,9 +1076,10 @@ backoff. `receive_session` reconciles rather than adds:
   empty. A running transcription's preview segments aren't in the snapshot —
   a reload shows the job without them until more arrive.
 
-Changes made while the request is in flight win: `filer_change` paths are
-skipped as above (a `touch` counts only if it updated a diskfile here — one
-for a file this client doesn't hold leaves the snapshot to bring it), workspaces opened or closed meanwhile
+Changes made while the request is in flight win: paths a `filer_change`
+added, changed, or deleted are skipped as above (a `touch` keeps only its
+metadata, so a client that missed a `change` while disconnected still gets
+the snapshot's contents), workspaces opened or closed meanwhile
 (`Workspaces.track_changes`) keep their state and their files aren't
 pruned, and terminals started meanwhile aren't judged. A completion whose
 `completion_create` was in flight when the socket closed is rejected by the

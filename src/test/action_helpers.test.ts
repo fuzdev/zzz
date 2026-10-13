@@ -1,8 +1,10 @@
-import { test, describe, assert } from 'vitest';
+import { test, describe, assert, vi } from 'vitest';
 import { ActionEventData } from '@fuzdev/fuz_app/actions/action_event_data.ts';
 
 import {
 	ACTION_ERROR_MESSAGE_TRUNCATED_KEY,
+	QUIET_ACTION_METHODS,
+	create_quiet_action_log,
 	action_event_data_has_omitted_payload,
 	bound_action_event_data,
 	estimate_json_length,
@@ -218,5 +220,37 @@ describe('bound_action_event_data', () => {
 		});
 		const parsed = ActionEventData.safeParse(bound_action_event_data(data, BUDGET));
 		assert.ok(parsed.success, parsed.error?.message);
+	});
+});
+
+describe('create_quiet_action_log', () => {
+	const create_log = () => ({ error: vi.fn(), warn: vi.fn(), debug: vi.fn() });
+
+	test("drops the dispatcher's report of a quiet method's failed request", () => {
+		const log = create_log();
+		const quiet = create_quiet_action_log(log);
+		for (const method of QUIET_ACTION_METHODS) {
+			quiet.error('[peer] send request failed:', method, 'terminal not found');
+		}
+		assert.strictEqual(log.error.mock.calls.length, 0);
+	});
+
+	test('passes everything else through', () => {
+		const log = create_log();
+		const quiet = create_quiet_action_log(log);
+		quiet.error('[peer] send request failed:', 'terminal_close', 'terminal not found');
+		quiet.error('[peer] send unexpected error:', 'terminal_ack');
+		quiet.error('[peer] send failed: no transport available');
+		quiet.warn('[peer] receive request: method not found:', 'terminal_ack');
+		quiet.debug('[peer] send request:', 'terminal_ack');
+		assert.deepEqual(log.error.mock.calls, [
+			['[peer] send request failed:', 'terminal_close', 'terminal not found'],
+			['[peer] send unexpected error:', 'terminal_ack'],
+			['[peer] send failed: no transport available']
+		]);
+		assert.deepEqual(log.warn.mock.calls, [
+			['[peer] receive request: method not found:', 'terminal_ack']
+		]);
+		assert.deepEqual(log.debug.mock.calls, [['[peer] send request:', 'terminal_ack']]);
 	});
 });

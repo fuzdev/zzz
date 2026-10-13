@@ -46,10 +46,25 @@ export type DiskfilesJsonInput = z.input<typeof DiskfilesJson>;
 
 export interface DiskfilesOptions extends CellOptions<typeof DiskfilesJson> {}
 
-/** Records the paths `filer_change` touches while a file-tree snapshot is in flight. */
-export interface DiskfileChangeTracker {
-	/** Paths `Diskfiles.handle_change` touched since tracking started. */
+/**
+ * What `filer_change` reported while a file-tree snapshot was in flight —
+ * see `Diskfiles.track_changes` for how a snapshot is applied around it.
+ */
+export interface DiskfileSnapshotChanges {
+	/**
+	 * Paths an `add`, `change`, or `delete` reported. The snapshot's entries
+	 * for them are skipped.
+	 */
 	readonly paths: ReadonlySet<string>;
+	/**
+	 * The latest `touch` reported per path. A touch never makes the snapshot
+	 * yield; its metadata is applied again after the snapshot.
+	 */
+	readonly touches: ReadonlyMap<string, DisknodeMetadata>;
+}
+
+/** Records what `filer_change` reports while a file-tree snapshot is in flight. */
+export interface DiskfileChangeTracker extends DiskfileSnapshotChanges {
 	/** Stops recording. */
 	stop: () => void;
 }
@@ -132,19 +147,46 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	// not reactive — bookkeeping for snapshot requests in flight
-	readonly #change_trackers: Set<Set<string>> = new Set();
+	readonly #change_trackers: Set<{
+		paths: Set<string>;
+		touches: Map<string, DisknodeMetadata>;
+	}> = new Set();
 
 	/**
-	 * Starts recording the paths `handle_change` touches. Start it before
-	 * requesting a file-tree snapshot and pass its `paths` to `add_initial`, so
-	 * the snapshot doesn't overwrite what `filer_change` reported while the
-	 * request was in flight — a notification is at least as new as the snapshot,
-	 * so a file it deleted isn't resurrected and newer content isn't reverted.
+	 * Starts recording what `handle_change` is given. Start it before
+	 * requesting a file-tree snapshot and pass it to `add_initial` or
+	 * `reconcile` with the snapshot, which is then applied around what
+	 * `filer_change` reported while the request was in flight:
+	 *
+	 * - A path an `add`, `change`, or `delete` reported keeps what the
+	 *   notification left: the snapshot's entry for it is skipped, and it isn't
+	 *   pruned. So a file deleted meanwhile isn't resurrected and newer content
+	 *   isn't reverted.
+	 * - A `touch` never makes the snapshot yield, because it carries no
+	 *   contents: a client that missed a `change` while disconnected holds old
+	 *   text, and only the snapshot can replace it. The snapshot's entry is
+	 *   applied (or the file pruned, if the snapshot lacks it), and then the
+	 *   path's latest touch is applied again — unless an `add`, `change`, or
+	 *   `delete` was also reported for the path, whose result already stands.
+	 *
+	 * The touch's metadata wins over the snapshot's whichever `mtime` is
+	 * higher. The two can't be ordered from here — a notification that arrives
+	 * during the request may have been sent before or after the backend read
+	 * its index for the snapshot, and a file's `mtime` can move backwards — but
+	 * the backend queues a notification for every change to its index, so its
+	 * notifications converge on the index: if the snapshot was the newer of the
+	 * two, whatever moved the file past the touch has its own notification
+	 * still to come, and that one settles it. Preferring the snapshot would
+	 * have no such correction when the touch was the newer.
 	 */
 	track_changes(): DiskfileChangeTracker {
-		const paths: Set<string> = new Set();
-		this.#change_trackers.add(paths);
-		return { paths, stop: () => this.#change_trackers.delete(paths) };
+		const tracker = { paths: new Set<string>(), touches: new Map<string, DisknodeMetadata>() };
+		this.#change_trackers.add(tracker);
+		return {
+			paths: tracker.paths,
+			touches: tracker.touches,
+			stop: () => this.#change_trackers.delete(tracker)
+		};
 	}
 
 	/**
@@ -155,13 +197,14 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 */
 	handle_change(params: ActionInputs['filer_change']): void {
 		const { disknode } = params;
-		// a touch that found nothing to update reported nothing a snapshot in
-		// flight should yield to — the snapshot is what brings the file
 		if (!('contents' in disknode)) {
-			if (this.touch(disknode)) this.#track_change(disknode.id);
+			// recorded apart from the changes a snapshot in flight yields to
+			// (see `track_changes`), whether or not there's a diskfile to update
+			for (const tracker of this.#change_trackers) tracker.touches.set(disknode.id, disknode);
+			this.touch(disknode);
 			return;
 		}
-		this.#track_change(disknode.id);
+		for (const tracker of this.#change_trackers) tracker.paths.add(disknode.id);
 		if (params.change.type === 'delete') {
 			this.remove_by_path(disknode.id);
 		} else {
@@ -169,15 +212,13 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		}
 	}
 
-	#track_change(path: DiskfilePath): void {
-		for (const paths of this.#change_trackers) paths.add(path);
-	}
-
 	/**
-	 * Applies a `touch`: the file's timestamps moved on disk and its contents
-	 * didn't, so the diskfile keeps the content it has — loaded or not — and
-	 * takes the new `mtime`. Nothing else changes: no editor state is
-	 * notified, since there's no new content to weigh against a draft.
+	 * Applies a `touch`: the file's metadata changed on disk and the contents
+	 * the backend holds for it did not, so the diskfile keeps the content it
+	 * has — loaded or not — and takes the new `mtime`. For a file whose
+	 * content isn't loaded the backend holds none, so every change to it
+	 * arrives this way. Nothing else changes: no editor state is notified,
+	 * since there's no new content to weigh against a draft.
 	 *
 	 * A path this client doesn't hold is left alone (there are no contents to
 	 * add it with — the next snapshot brings it), as is a diskfile kept after
@@ -293,13 +334,30 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * Upserts by path, so overlapping seeds don't duplicate.
 	 *
 	 * @param files - the snapshot's file tree
-	 * @param skip_paths - paths `filer_change` touched while the snapshot was in
-	 * flight (see `track_changes`), whose snapshot entries are stale
+	 * @param changes - what `filer_change` reported while the snapshot was in
+	 * flight (see `track_changes`)
 	 */
-	add_initial(files: Array<SerializableDisknode>, skip_paths?: ReadonlySet<string>): void {
+	add_initial(files: Array<SerializableDisknode>, changes?: DiskfileSnapshotChanges): void {
+		this.#upsert_snapshot(files, changes?.paths);
+		this.#apply_touches(changes);
+	}
+
+	#upsert_snapshot(files: Array<SerializableDisknode>, skip_paths?: ReadonlySet<string>): void {
 		for (const disknode of files) {
 			if (skip_paths?.has(disknode.id)) continue;
 			this.upsert(disknode);
+		}
+	}
+
+	/**
+	 * Applies the touches reported while a snapshot was in flight again, now
+	 * that the snapshot is in — except for a path a full change was reported
+	 * for (see `track_changes`).
+	 */
+	#apply_touches(changes: DiskfileSnapshotChanges | undefined): void {
+		if (!changes) return;
+		for (const [path, metadata] of changes.touches) {
+			if (!changes.paths.has(path)) this.touch(metadata);
 		}
 	}
 
@@ -312,19 +370,31 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 *
 	 * @param files - the snapshot's file tree
 	 * @param roots - the directories (trailing `/`) whose complete trees `files` holds
-	 * @param options.skip_paths - paths `filer_change` touched while the snapshot
-	 *   was in flight (see `track_changes`), neither upserted nor removed
+	 * @param options.changes - what `filer_change` reported while the snapshot
+	 *   was in flight (see `track_changes`): a path with a full change is
+	 *   neither upserted nor removed
 	 * @param options.skip_dirs - directories (trailing `/`) whose files aren't
 	 *   removed, e.g. workspaces opened while the snapshot was in flight
 	 */
 	reconcile(
 		files: Array<SerializableDisknode>,
 		roots: ReadonlyArray<string>,
-		options?: { skip_paths?: ReadonlySet<string>; skip_dirs?: ReadonlyArray<string> }
+		options?: { changes?: DiskfileSnapshotChanges; skip_dirs?: ReadonlyArray<string> }
 	): void {
-		const skip_paths = options?.skip_paths;
+		const changes = options?.changes;
+		const skip_paths = changes?.paths;
 		const skip_dirs = options?.skip_dirs ?? [];
-		this.add_initial(files, skip_paths);
+		this.#upsert_snapshot(files, skip_paths);
+		this.#prune_unlisted(files, roots, skip_paths, skip_dirs);
+		this.#apply_touches(changes);
+	}
+
+	#prune_unlisted(
+		files: Array<SerializableDisknode>,
+		roots: ReadonlyArray<string>,
+		skip_paths: ReadonlySet<string> | undefined,
+		skip_dirs: ReadonlyArray<string>
+	): void {
 		if (!roots.length) return;
 		const snapshot_paths: Set<string> = new Set(files.map((disknode) => disknode.id));
 		for (const diskfile of this.items.values) {

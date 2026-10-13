@@ -1,4 +1,41 @@
 import type { ActionEventData } from '@fuzdev/fuz_app/actions/action_event_data.ts';
+import { console_action_log, type ActionLog } from '@fuzdev/fuz_app/actions/action_event_types.ts';
+
+/**
+ * Methods the app calls as flow control rather than on anyone's behalf, many
+ * times a second: `terminal_ack` under a flood of terminal output. Their
+ * calls are kept out of the actions log, whose bounded history they would
+ * turn over in seconds, and a failed send isn't reported by the
+ * dispatcher's log (`create_quiet_action_log`) — the caller handles its own
+ * failures, some of which are expected (an ack racing its terminal's close).
+ */
+export const QUIET_ACTION_METHODS: ReadonlySet<string> = new Set(['terminal_ack']);
+
+/** The dispatcher's message for a request whose response was an error. */
+const SEND_REQUEST_FAILED_MESSAGE = '[peer] send request failed:';
+
+/**
+ * Wraps a dispatch log so a failed request of a quiet method
+ * (`QUIET_ACTION_METHODS`) isn't reported; everything else passes through.
+ *
+ * @param log - where the rest goes, by default the console
+ */
+export const create_quiet_action_log = (log: ActionLog = console_action_log): ActionLog => ({
+	error: (...args) => {
+		// the dispatcher logs `(message, method, error message)`
+		const [message, method] = args;
+		if (
+			message === SEND_REQUEST_FAILED_MESSAGE &&
+			typeof method === 'string' &&
+			QUIET_ACTION_METHODS.has(method)
+		) {
+			return;
+		}
+		log.error(...args);
+	},
+	warn: (...args) => log.warn(...args),
+	debug: (...args) => log.debug(...args)
+});
 
 /**
  * The most JSON, in characters, the actions log keeps of one payload — an

@@ -21,6 +21,8 @@ import {
 import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
 
+import { TERMINAL_ACK_THRESHOLD_BYTES } from '#lib/terminal_helpers.ts';
+
 import './cross_test_types.ts';
 
 const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
@@ -602,10 +604,23 @@ describe('terminal cross-backend', () => {
 				'the process is blocked, not finished'
 			);
 
-			// input still reaches a paused terminal
+			// a paused terminal still answers a resize
 			assert.isNull(
 				await ws.request('tak-3', 'terminal_resize', { terminal_id, cols: 100, rows: 30 })
 			);
+
+			// the frontend acks at once only when its threshold is waiting, so a
+			// paused terminal has to read again as soon as less than that is
+			// unacked — else a client that had consumed everything could leave
+			// the process blocked until its ack delay ran out
+			await ws.request('tak-4', 'terminal_ack', {
+				terminal_id,
+				bytes: stalled - TERMINAL_ACK_THRESHOLD_BYTES + 1
+			});
+			for (let waited_ms = 0; terminal_sent_bytes(ws, terminal_id) === stalled; waited_ms += 50) {
+				assert.isBelow(waited_ms, 5000, 'an ack inside the threshold did not resume the output');
+				await sleep(50);
+			}
 
 			// acknowledging what arrives lets the rest through, and an ack past
 			// what was sent counts as all of it

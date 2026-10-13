@@ -46,9 +46,11 @@
 //!   `delete` (a no-op for clients that never saw the add). A path that
 //!   keeps changing still broadcasts at least every [`DEBOUNCE_MAX_WAIT`].
 //! - **Contents travel only when they changed.** A change that moved an
-//!   indexed file's timestamps and left its contents as they were (`touch`,
-//!   a rewrite of the same bytes) is broadcast as a `touch`: the node's
-//!   metadata, with no `contents` key ([`ChangeType::Touch`]).
+//!   indexed file's timestamps and left the contents the index holds for it
+//!   as they were (`touch`, a rewrite of the same bytes) is broadcast as a
+//!   `touch`: the node's metadata, with no `contents` key
+//!   ([`ChangeType::Touch`]). The index holds no contents for a file it
+//!   didn't load, so every change to one is a `touch`.
 //! - **Overflow recovery.** Paths under ignored directories are filtered in
 //!   the notify callback, before the bounded channel. If the channel is
 //!   still full, or notify reports a rescan (inotify queue overflow), the
@@ -185,11 +187,16 @@ enum ChangeType {
     Add,
     /// Indexed, and its contents differ — broadcast with its contents.
     Change,
-    /// Indexed, with the contents it had and different timestamps —
-    /// broadcast as [`DisknodeMetadata`], without resending the contents.
-    /// Every client holding the path holds those contents: it has the index
-    /// as of some snapshot plus every broadcast since, and this is only
-    /// queued when nothing unbroadcast changed them ([`coalesce_change`]).
+    /// Indexed, with the contents the index held for it and different
+    /// timestamps — broadcast as [`DisknodeMetadata`], without resending the
+    /// contents. Every client holding the path holds those contents: it has
+    /// the index as of some snapshot plus every broadcast since, and this is
+    /// only queued when nothing unbroadcast changed them
+    /// ([`coalesce_change`]).
+    ///
+    /// It says the indexed contents are the same, not the file's bytes: a
+    /// file the index doesn't load (`contents: None` — too large, not UTF-8,
+    /// unreadable) has none to compare, so every change to it is one.
     Touch,
     Delete,
 }
@@ -540,8 +547,11 @@ async fn read_disknode(
 
 /// How an indexed file's node `old` differs from the one just read for the
 /// same path, in what clients care about: [`ChangeType::Change`] when the
-/// contents differ (loaded text, or loaded vs. not), [`ChangeType::Touch`]
-/// when only the timestamps do, `None` when neither does.
+/// indexed contents differ (loaded text, or loaded vs. not),
+/// [`ChangeType::Touch`] when only the timestamps do, `None` when neither
+/// does. A file not loaded on either side has no contents to differ, so a
+/// change to its bytes is a [`ChangeType::Touch`] like any other move of its
+/// timestamps.
 fn disknode_change(old: &SerializableDisknode, new: &SerializableDisknode) -> Option<ChangeType> {
     if old.contents != new.contents {
         Some(ChangeType::Change)
@@ -2327,6 +2337,20 @@ mod tests {
             disknode_change(&base, &node("/w/f", "other", 2.0)),
             Some(ChangeType::Change)
         );
+        // any other text is a change, however close: an append, a
+        // truncation, a file emptied or filled, the same length
+        for other in ["text and more", "te", "", "tex!"] {
+            assert_eq!(
+                disknode_change(&base, &node("/w/f", other, 2.0)),
+                Some(ChangeType::Change),
+                "{other:?}"
+            );
+            assert_eq!(
+                disknode_change(&node("/w/f", other, 2.0), &base),
+                Some(ChangeType::Change),
+                "{other:?}"
+            );
+        }
         // equal text in another allocation is still the same contents
         assert_eq!(
             disknode_change(&base, &node("/w/f", &String::from("text"), 2.0)),

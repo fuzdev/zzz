@@ -410,8 +410,9 @@ conform to the shared fuz_app contract. The tests live in
   replies identical to an unknown id's; the owner's second socket does get
   output), output pacing (after a first `terminal_ack` and no more, output
   stops within one read of the 1 MiB window with the process blocked, a
-  resize still answers, and acking lets the rest through; several windows of
-  output reach a client that never acks, or acks only over HTTP),
+  resize still answers, an ack that leaves less than the frontend's ack
+  threshold outstanding resumes it, and acking lets the rest through; several
+  windows of output reach a client that never acks, or acks only over HTTP),
   `session_load`'s `terminal_ids` (running listed; exited, closed,
   and other accounts' not), and a self-deleted account's terminal processes
   being reaped.
@@ -699,7 +700,7 @@ joined after the drain, before PTY teardown.
 ## Known Limitations
 
 - RPC methods: `ping`, `session_load`, `workspace_*`, `diskfile_update`, `diskfile_create`, `diskfile_delete`, `directory_create`, `media_finalize`, `transcription_create`, `job_cancel`, `terminal_*`, `provider_load_status`, `completion_create`, `account_verify`, `account_session_list`, `account_session_revoke`, `account_session_revoke_all`, `account_token_create`, `account_token_list`, `account_token_revoke`, `admin_session_revoke_all` (admin-only), `admin_token_revoke_all` (admin-only) — plus the rest of the spine-registered `fuz_auth` standard bundle and protocol specs (see the workspace-layout section above)
-- zzz-domain `remote_notification` actions: `job_changed` (a job's full state on every change) and `transcription_progress` (segments a running transcription just decoded), both sent only to the owning account's sockets, `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — per-directory watches (see Filer watches below), per-path debounced broadcasts (80ms quiet, capped at 500ms) with immediate index updates (delete+create inside the window becomes `change`, create+delete becomes a bare `delete`), every event resolved by `lstat` so late or reordered removes can't drop an existing file, rename-aware (old path `delete`, new path `add`), contents sent only when they changed (a change that moved an indexed file's timestamps and not its contents is a `touch`, whose `disknode` has no `contents` key — `filer::DisknodeMetadata` — unless an unbroadcast `add` / `change` / `delete` for the path is pending, which then carries them), ignored paths filtered before the bounded event channel with a coalesced root rescan on overflow, per-watcher ignore config, in-memory file index returned by `session_load` and `workspace_open`, symlinks skipped; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz` by name globally (`.zzz` keeps the CLI daemon home's `.env` / `bootstrap_token` out of a `~` workspace), `ScopedFs`'s `.zzz-tmp-*` staging files (the walk also deletes orphaned ones — exact `.zzz-tmp-<uuid>` names, regular files over an hour old), and every non-UTF-8 path, plus `zzz_dir` by its full path for a workspace/scoped_dir watcher whose root contains it; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY output) and `terminal_exited` (process exit), both sent only to the owning account's sockets, `completion_progress` (streaming completion chunks to requesting WS connection); the spine's role-grant-offer bundle carries its own notification set (`role_grant_offer_received` / `_retracted` / `_accepted` / `_declined` / `_supersede`)
+- zzz-domain `remote_notification` actions: `job_changed` (a job's full state on every change) and `transcription_progress` (segments a running transcription just decoded), both sent only to the owning account's sockets, `workspace_changed` (broadcast on open/close), `filer_change` (`FilerManager` with `notify` crate — per-directory watches (see Filer watches below), per-path debounced broadcasts (80ms quiet, capped at 500ms) with immediate index updates (delete+create inside the window becomes `change`, create+delete becomes a bare `delete`), every event resolved by `lstat` so late or reordered removes can't drop an existing file, rename-aware (old path `delete`, new path `add`), contents sent only when they changed (a change that moved an indexed file's timestamps and not the contents the index holds for it is a `touch`, whose `disknode` has no `contents` key — `filer::DisknodeMetadata` — unless an unbroadcast `add` / `change` / `delete` for the path is pending, which then carries them; the index holds no contents for a file it didn't load, so every change to one is a `touch`), ignored paths filtered before the bounded event channel with a coalesced root rescan on overflow, per-watcher ignore config, in-memory file index returned by `session_load` and `workspace_open`, symlinks skipped; ignores `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz` by name globally (`.zzz` keeps the CLI daemon home's `.env` / `bootstrap_token` out of a `~` workspace), `ScopedFs`'s `.zzz-tmp-*` staging files (the walk also deletes orphaned ones — exact `.zzz-tmp-<uuid>` names, regular files over an hour old), and every non-UTF-8 path, plus `zzz_dir` by its full path for a workspace/scoped_dir watcher whose root contains it; startup filers on `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime tracking), `terminal_data` (PTY output) and `terminal_exited` (process exit), both sent only to the owning account's sockets, `completion_progress` (streaming completion chunks to requesting WS connection); the spine's role-grant-offer bundle carries its own notification set (`role_grant_offer_received` / `_retracted` / `_accepted` / `_declined` / `_supersede`)
 - AI providers: Anthropic, OpenAI, and Gemini all fully implemented (non-streaming + SSE streaming)
 - No batch request support (JSON arrays)
 - `/api/account/signup` is mounted via `fuz_auth::signup_routes`. Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting via `app_settings_update` to enable open signup. The cross-process test binary opts into `open_signup: true` at startup via `app_settings_patch` so per-test `mint_account` can sign up without invites. `app_settings` is loaded from the DB per signup request (no cache).
@@ -1032,14 +1033,18 @@ joined after the drain, before PTY teardown.
       stall the others (it stays bounded by its own outbound queue). With no
       consumer — nobody connected, or only clients that never ack — the
       terminal is never paused, and a paused terminal re-checks its
-      consumers' connections every `PAUSED_RECHECK_INTERVAL`, so one that
-      closes stops counting.
+      consumers' connections every `PAUSED_RECHECK_INTERVAL` (kept to a
+      second at most by a `const` assertion), so one that closes stops counting
+      within that long.
     - Acks are cumulative: a consumer's count only moves up, and one past
       `sent_bytes` counts as all of it. A terminal id names one process, so
       a restarted terminal starts a new count under a new id.
     - `terminal_ack` over HTTP is checked and otherwise ignored — there is no
-      connection to pace against. A consumer that stays connected and stops
-      acking holds the terminal paused until its socket closes.
+      connection to pace against.
+    - There is no stall timeout. A terminal's only consumer — or its fastest
+      one — that stays connected and stops acking (a tab whose JavaScript is
+      frozen) holds the terminal paused until its socket closes; a slower
+      consumer that stops doesn't, since the terminal follows the highest ack.
   - **Input**: `terminal_data_send` enqueues onto a bounded per-terminal queue
     (at most 256 chunks and 4 MiB held — queued or being written; past
     either → `queue_overflow`, nothing enqueued) and returns. A single chunk

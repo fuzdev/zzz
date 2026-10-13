@@ -5,6 +5,7 @@ import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 import type { Assignable, ClassConstructor, OmitStrict } from '@fuzdev/fuz_util/types.ts';
 import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import type { Logger } from '@fuzdev/fuz_util/log.ts';
 import { ActionRegistry } from '@fuzdev/fuz_app/actions/action_registry.ts';
 import { ActionEventPhase, type ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';
 
@@ -14,7 +15,7 @@ import { Models } from './models.svelte.ts';
 import { Chats } from './chats.svelte.ts';
 import { Threads } from './threads.svelte.ts';
 import { Providers } from './providers.svelte.ts';
-import { Diskfiles } from './diskfiles.svelte.ts';
+import { Diskfiles, type DiskfileSnapshotChanges } from './diskfiles.svelte.ts';
 import { Actions } from './actions.svelte.ts';
 import { Action } from './action.svelte.ts';
 import type { ModelJsonInput } from './model.svelte.ts';
@@ -62,7 +63,11 @@ import { ActionOutputs } from './action_collections.ts';
 import { all_action_specs } from './action_specs.ts';
 import { create_frontend_action_handlers } from './frontend_action_handlers.ts';
 import { create_detached } from './reactive_helpers.svelte.ts';
-import { bound_action_event_data } from './action_helpers.ts';
+import {
+	QUIET_ACTION_METHODS,
+	bound_action_event_data,
+	create_quiet_action_log
+} from './action_helpers.ts';
 
 // TODO this is over-used, see also `app_context` for the user pattern
 export const frontend_context = create_context<Frontend>();
@@ -79,8 +84,8 @@ const WORKSPACE_REOPEN_REFUSAL_CODES: ReadonlySet<number> = new Set([
 
 /** What changed while a session snapshot was in flight — see `Frontend.receive_session`. */
 export interface SessionSnapshotChanges {
-	/** Diskfile paths a `filer_change` touched (`Diskfiles.track_changes`). */
-	file_paths: ReadonlySet<string>;
+	/** What `filer_change` reported (`Diskfiles.track_changes`). */
+	file_changes: DiskfileSnapshotChanges;
 	/** Workspace paths opened or closed (`Workspaces.track_changes`). */
 	workspace_paths: ReadonlySet<string>;
 	/** Backend ids of the terminals running when the snapshot was requested. */
@@ -140,9 +145,14 @@ export interface FrontendOptions extends OmitStrict<CellOptions<typeof FrontendJ
  */
 export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEnvironment {
 	readonly executor: ActionExecutor = 'frontend';
-	// TODO give this a `log` (fuz_util `Logger`) once `log.ts` loads in the browser —
-	// today it imports `node:util` and reads `process` at module load. Until then
-	// fuz_app's dispatcher falls back to console for warnings and errors.
+	// TODO make this a fuz_util `Logger` once `log.ts` loads in the browser —
+	// today it imports `node:util` and reads `process` at module load.
+	/**
+	 * Where fuz_app's dispatcher reports warnings and errors: the console,
+	 * minus the failed sends of the quiet methods (`QUIET_ACTION_METHODS`).
+	 * The dispatch path reads only the `ActionLog` surface of it.
+	 */
+	readonly log: Logger = create_quiet_action_log() as unknown as Logger;
 
 	/**
 	 * App-wide cell registry, maps class names to constructor and tracks registered instances.
@@ -319,21 +329,24 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 			peer: this.peer,
 			environment: this,
 			on_action_event: (event) => {
-				// `app.api` calls can come from component init, `onMount`, or an `$effect`,
-				// and the action outlives them (see `create_detached`)
-				const action = create_detached(
-					() =>
-						new Action({
-							app: this,
-							json: {
-								method: event.spec.method,
-								action_event_data: bound_action_event_data(event.data)
-							}
-						})
-				);
-				// listen before adding, so an action trimmed right away stops listening when disposed
-				action.listen_to_action_event(event);
-				this.actions.add(action);
+				// flow-control calls would turn the whole history over in seconds
+				if (!QUIET_ACTION_METHODS.has(event.spec.method)) {
+					// `app.api` calls can come from component init, `onMount`, or an `$effect`,
+					// and the action outlives them (see `create_detached`)
+					const action = create_detached(
+						() =>
+							new Action({
+								app: this,
+								json: {
+									method: event.spec.method,
+									action_event_data: bound_action_event_data(event.data)
+								}
+							})
+					);
+					// listen before adding, so an action trimmed right away stops listening when disposed
+					action.listen_to_action_event(event);
+					this.actions.add(action);
+				}
 				if (this.#on_unauthenticated) {
 					event.observe((data, old_data) => {
 						if (
@@ -397,10 +410,11 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	 * is disposed. Calling it while a retry waits retries now. Runs at boot and
 	 * after every reconnect (see `handle_socket_connect`).
 	 *
-	 * Changes that arrive while the request is in flight win over the snapshot,
-	 * since they're at least as new: file paths a `filer_change` touched and
-	 * workspaces opened or closed are left as they are, and only terminals
-	 * running when the request was sent can be found lost.
+	 * Changes that arrive while the request is in flight win over the snapshot:
+	 * files a `filer_change` added, changed, or deleted (a `touch` only keeps
+	 * its metadata — see `Diskfiles.track_changes`) and workspaces opened or
+	 * closed are left as they are, and only terminals running when the request
+	 * was sent can be found lost.
 	 *
 	 * A success also re-pings a backend whose last ping failed (see
 	 * `Capabilities.check_backend`).
@@ -428,7 +442,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 			if (this.#disposed) return false;
 			if (result.ok) {
 				this.receive_session(result.value.data, {
-					file_paths: file_changes.paths,
+					file_changes,
 					workspace_paths: workspace_changes.paths,
 					running_terminal_ids
 				});
@@ -620,7 +634,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		// a removed workspace's files are gone from the backend's view unless
 		// another root covers them — then they're in the snapshot or pruned there
 		this.diskfiles.reconcile(data.files, [...data.file_roots, ...removed], {
-			skip_paths: changes?.file_paths,
+			changes: changes?.file_changes,
 			skip_dirs: [...skip_workspaces, ...reopen]
 		});
 

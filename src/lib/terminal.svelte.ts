@@ -354,12 +354,17 @@ export class Terminal extends Cell<typeof TerminalJson> {
 	/**
 	 * Sends one `terminal_ack`. A `not_found` means the process is gone, which
 	 * input and resize report (`lost`) and `terminal_exited` settles — here it
-	 * only ends the acks.
+	 * only ends the acks, silently: an ack in flight when its terminal closes
+	 * or exits is routinely answered that way. Any other failure is logged
+	 * here, since the dispatcher doesn't report this method's
+	 * (`QUIET_ACTION_METHODS`), and retried.
 	 */
 	async #send_ack(terminal_id: Uuid, bytes: number): Promise<TerminalAckOutcome> {
 		const result = await this.app.api.terminal_ack({ terminal_id, bytes });
 		if (result.ok) return 'ok';
-		return result.error.code === JSONRPC_ERROR_CODES.not_found ? 'stop' : 'retry';
+		if (result.error.code === JSONRPC_ERROR_CODES.not_found) return 'stop';
+		console.error('[terminal] terminal_ack failed:', result.error.message);
+		return 'retry';
 	}
 
 	#stop_io(): void {

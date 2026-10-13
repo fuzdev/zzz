@@ -88,7 +88,15 @@ const OUTPUT_WINDOW_LOW_BYTES: u64 = 256 * 1024;
 
 /// How often a paused terminal re-checks that the connections it is pacing
 /// against are still open — a closed one stops counting within this long.
+///
+/// Nothing tells a paused terminal that a connection closed, so this is how
+/// long closing the tab a terminal was keeping pace with leaves it blocked
+/// for everyone else watching it — hence the bound below.
 const PAUSED_RECHECK_INTERVAL: Duration = Duration::from_millis(250);
+
+// A closed consumer must release its terminals sooner than anyone watching
+// one would take it for hung.
+const _: () = assert!(PAUSED_RECHECK_INTERVAL.as_millis() <= 1000);
 
 /// How long `terminal_close` waits for the requested signal to end the child
 /// before closing the master.
@@ -203,9 +211,11 @@ fn send_data(app: &App, owner: Uuid, terminal_id: &str, output: &OutputFlow, dat
 ///   is still bounded by its socket's outbound queue.
 /// - A *consumer* is a connection that has acknowledged this terminal at
 ///   least once and is still open. A connection that never acknowledges (a
-///   client that predates acks, a raw API client) isn't one, so with no
-///   consumers — nobody connected, or only such clients — the terminal is
-///   never paused.
+///   raw API client) isn't one, so with no consumers — nobody connected, or
+///   only such clients — the terminal is never paused.
+/// - Nothing times a consumer out. The only one, or the fastest, that stays
+///   open and stops acknowledging keeps the terminal paused until its
+///   connection closes; a slower one that stops changes nothing.
 /// - Acks are cumulative: a consumer's value only moves up, a repeated or
 ///   reordered ack changes nothing, and an ack past `sent` counts as `sent`.
 ///
@@ -804,6 +814,7 @@ async fn spawn_terminal(
         input_rx,
         size_rx,
         output: Arc::clone(&output),
+        recheck_interval: PAUSED_RECHECK_INTERVAL,
         close_rx,
         app: Arc::clone(&app),
     }));
@@ -834,6 +845,9 @@ struct TerminalIo {
     input_rx: mpsc::Receiver<QueuedInput>,
     size_rx: watch::Receiver<(u16, u16)>,
     output: Arc<OutputFlow>,
+    /// How often the terminal, while paused, re-checks its consumers'
+    /// connections — [`PAUSED_RECHECK_INTERVAL`].
+    recheck_interval: Duration,
     close_rx: oneshot::Receiver<CloseRequest>,
     app: Arc<App>,
 }
@@ -951,7 +965,7 @@ async fn pump_io(io: &mut TerminalIo, decoder: &mut Utf8StreamDecoder) -> IoOutc
                         let text = decoder.feed_to_string(&buf[..n]);
                         paused =
                             send_data(&io.app, io.owner, &io.terminal_id, &io.output, &text);
-                        recheck_at = Instant::now() + PAUSED_RECHECK_INTERVAL;
+                        recheck_at = Instant::now() + io.recheck_interval;
                         // Readiness futures don't consume coop budget, so a
                         // child that never stops writing would otherwise pin
                         // this worker thread — yield once the budget is spent.
@@ -968,7 +982,7 @@ async fn pump_io(io: &mut TerminalIo, decoder: &mut Utf8StreamDecoder) -> IoOutc
             }
             () = tokio::time::sleep_until(recheck_at), if paused => {
                 paused = io.output.refresh_paused(&io.app.realtime);
-                recheck_at = Instant::now() + PAUSED_RECHECK_INTERVAL;
+                recheck_at = Instant::now() + io.recheck_interval;
             }
             ready = io.master.writable(), if pending.is_some() => {
                 let Ok(mut guard) = ready else {
@@ -1631,6 +1645,12 @@ mod tests {
 
     impl Pumped {
         fn spawn(script: &str) -> Self {
+            Self::spawn_rechecking(script, PAUSED_RECHECK_INTERVAL)
+        }
+
+        /// [`Self::spawn`] with its own interval between a paused terminal's
+        /// re-checks of its consumers.
+        fn spawn_rechecking(script: &str, recheck_interval: Duration) -> Self {
             let app = test_app();
             let owner = Uuid::new_v4();
             let (connection, frames) = connect(&app.realtime, owner);
@@ -1646,6 +1666,7 @@ mod tests {
                 input_rx,
                 size_rx,
                 output: Arc::clone(&output),
+                recheck_interval,
                 close_rx,
                 app: Arc::clone(&app),
             };
@@ -1749,6 +1770,45 @@ mod tests {
         // the child the interrupt ended
         pumped.ack(sent);
         assert!(matches!(pumped.finish().await, IoOutcome::Eof));
+    }
+
+    #[tokio::test]
+    async fn an_ack_wakes_the_terminal_task() {
+        let registry = ConnectionRegistry::new();
+        let (connection, _frames) = connect(&registry, Uuid::new_v4());
+        let flow = OutputFlow::new();
+        let woken = flow.acked.notified();
+        tokio::pin!(woken);
+        assert!(
+            futures_util::poll!(woken.as_mut()).is_pending(),
+            "nothing has acked yet"
+        );
+        flow.ack(&registry, connection.id, 0);
+        assert!(futures_util::poll!(woken).is_ready());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_ack_resumes_the_reads_without_a_recheck() {
+        // no re-check comes while the test runs, so only the ack itself can
+        // resume the reads
+        let pumped = Pumped::spawn_rechecking("exec yes", 10 * PUMP_TIMEOUT);
+        pumped.ack(0);
+        let sent = pumped.paused().await;
+        pumped.ack(sent);
+        wait_until("the ack to resume the reads", || pumped.sent() > sent).await;
+        let (close, _) = oneshot::channel();
+        let mut pumped = pumped;
+        let close = std::mem::replace(&mut pumped.close, close);
+        assert!(
+            close
+                .send(CloseRequest {
+                    signal: libc::SIGTERM,
+                    reply: None,
+                    kill_after: REAP_KILL_AFTER,
+                })
+                .is_ok()
+        );
+        assert!(matches!(pumped.finish().await, IoOutcome::Close(_)));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

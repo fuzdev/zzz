@@ -138,9 +138,8 @@ export class Workspaces extends Cell<typeof WorkspacesJson> {
 
 	/**
 	 * Opens the workspace at `path` on the backend (`workspace_open`), then adds it
-	 * with its file tree. Tree entries for paths a `filer_change` touched while the
-	 * request was in flight are skipped, since the notification is at least as new
-	 * (see `Diskfiles.track_changes`).
+	 * with its file tree, applied around what `filer_change` reported while the
+	 * request was in flight (see `Diskfiles.track_changes`).
 	 *
 	 * @param path - the directory to open; the daemon canonicalizes it, so the
 	 * returned workspace's path may differ
@@ -171,9 +170,9 @@ export class Workspaces extends Cell<typeof WorkspacesJson> {
 			opened_path = workspace.path;
 			workspace.watch_status = watch_status;
 			if (options?.reconcile_files) {
-				this.app.diskfiles.reconcile(files, [workspace.path], { skip_paths: changes.paths });
+				this.app.diskfiles.reconcile(files, [workspace.path], { changes });
 			} else {
-				this.app.diskfiles.add_initial(files, changes.paths);
+				this.app.diskfiles.add_initial(files, changes);
 			}
 			return { ok: true, value: workspace };
 		} finally {

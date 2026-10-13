@@ -404,7 +404,7 @@ export const filer_change_action_spec = {
 	output: z.void(),
 	async: true,
 	description:
-		"Notifies the frontend of a file system change detected by the watcher. Carries the file's contents unless only its timestamps moved (a `touch`)."
+		"Notifies the frontend of a file system change detected by the watcher. Carries the file's contents unless the ones the backend holds for it are unchanged (a `touch`)."
 } satisfies RemoteNotificationActionSpec;
 
 export const diskfile_update_action_spec = {

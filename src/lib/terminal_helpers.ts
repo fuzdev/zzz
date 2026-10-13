@@ -14,8 +14,15 @@ export const TERMINAL_INPUT_PENDING_MAX_LENGTH = 64 * 1024;
 /**
  * Consumed output a terminal acks at once rather than after
  * `TERMINAL_ACK_DELAY` — see `TerminalOutputAcker`.
+ *
+ * It must not exceed the backend's low-water mark (256 KiB, the unacked
+ * output at or under which a paused terminal reads again). While the backend
+ * holds a terminal paused, more than that mark is unacked; so a client that
+ * has consumed everything it was sent has at least this much waiting, and
+ * acks at once instead of leaving the process blocked for the delay. The
+ * cross-backend terminal suite pins the relation against the backend.
  */
-export const TERMINAL_ACK_THRESHOLD_BYTES = 64 * 1024;
+export const TERMINAL_ACK_THRESHOLD_BYTES = 256 * 1024;
 
 /** How long (ms) consumed output under the threshold waits to be acked. */
 export const TERMINAL_ACK_DELAY = 100;
@@ -178,11 +185,18 @@ export interface TerminalOutputAckerOptions {
  * last chunk consumed. Acks are cumulative, so a lost one is covered by the
  * next.
  *
- * At most one ack is in flight. Output consumed meanwhile is acked as soon
- * as that one returns, so under a flood acks go out at the pace of their
- * round trips, each covering everything consumed so far. Otherwise an ack
- * is sent at once when `threshold_bytes` are waiting, and after `delay`
- * when fewer are — so the last of a burst is always acked. Not reactive.
+ * An ack is sent at once when `threshold_bytes` of consumed output are
+ * waiting, and after `delay` when fewer are — so the last of a burst is
+ * always acked. At most one ack is in flight: output consumed meanwhile
+ * waits for it to return and is then acked by the same rule, so under a
+ * flood acks go out per `threshold_bytes` consumed, not per round trip
+ * (each ack is a request the backend runs in a transaction).
+ *
+ * Acks can't stall a terminal the backend has paused, as long as
+ * `threshold_bytes` is at most the backend's low-water mark (see
+ * `TERMINAL_ACK_THRESHOLD_BYTES`): once everything sent is consumed, at
+ * least the threshold is waiting, and the ack goes out at once or as soon as
+ * the one in flight returns. `delay` bounds every other case. Not reactive.
  */
 export class TerminalOutputAcker {
 	readonly #send: (bytes: number) => Promise<TerminalAckOutcome>;
@@ -215,9 +229,18 @@ export class TerminalOutputAcker {
 	consumed(sent_bytes: number): void {
 		if (this.#stopped || sent_bytes <= this.#consumed) return;
 		this.#consumed = sent_bytes;
-		if (this.#consumed - this.#acked >= this.#threshold_bytes) {
+		this.#ack_waiting();
+	}
+
+	/**
+	 * Acks what's waiting by the batching rule: at once when it's the
+	 * threshold or more, after the delay when it's less.
+	 */
+	#ack_waiting(): void {
+		const waiting = this.#consumed - this.#acked;
+		if (waiting >= this.#threshold_bytes) {
 			this.flush();
-		} else {
+		} else if (waiting > 0) {
 			this.#schedule(this.#delay);
 		}
 	}
@@ -249,7 +272,7 @@ export class TerminalOutputAcker {
 			this.#schedule(this.#retry_delay);
 		} else {
 			this.#acked = bytes;
-			this.flush();
+			this.#ack_waiting();
 		}
 	}
 

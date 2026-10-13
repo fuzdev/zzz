@@ -9,8 +9,10 @@ import { PathWithTrailingSlash } from './zod_helpers.ts';
  *
  * - `add` — it's newly indexed
  * - `change` — its contents differ
- * - `touch` — its timestamps moved and its contents didn't (a `touch`, a
- *   rewrite of the same bytes), so they aren't sent again
+ * - `touch` — its metadata changed and the contents the backend holds for
+ *   it didn't (a `touch`, a rewrite of the same bytes), so they aren't sent
+ *   again. The backend holds no contents for a file it didn't load
+ *   (`contents: null`), so every change to such a file is a `touch`
  * - `delete` — it's gone
  */
 export const DiskfileChangeType = z.enum(['add', 'change', 'touch', 'delete']);

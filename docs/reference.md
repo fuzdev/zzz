@@ -17,7 +17,7 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `diskfile_create` — Create a new file on disk, failing with `conflict` (`already_exists`) if the path is taken — never overwrites. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `diskfile_delete` — Delete a file from disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `diskfile_update` — Write new content to a file on disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
-- `filer_change` — Notifies the frontend of a file system change detected by the watcher. Carries the file's contents unless only its timestamps moved (a `touch`). Kind: remote_notification. Initiator: backend. Auth: public
+- `filer_change` — Notifies the frontend of a file system change detected by the watcher. Carries the file's contents unless the ones the backend holds for it are unchanged (a `touch`). Kind: remote_notification. Initiator: backend. Auth: public
 - `job_cancel` — Cancel a job: a queued one never starts, the running one is stopped. A job that is already over is left as it is. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `job_changed` — A job was queued, started, progressed, or finished — its full current state. Kind: remote_notification. Initiator: backend. Auth: public
 - `media_finalize` — Rewrite a recorded media file in place so its header has a duration and a seek index (an `ffmpeg` stream copy, nothing re-encoded). The container comes from the extension: WebM, Matroska, Ogg, MP4, MP3, WAV, FLAC, or AAC. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none

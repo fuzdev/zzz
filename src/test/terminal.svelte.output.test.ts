@@ -215,15 +215,40 @@ describe('Terminal output acks', () => {
 		assert.strictEqual(acks().length, 0);
 	});
 
-	test('a not_found ack ends the acks without marking the terminal lost', async () => {
-		const terminal = create_running();
-		terminal.receive_output('x', TERMINAL_ACK_THRESHOLD_BYTES);
-		acks()[0]!.resolve(result_error(JSONRPC_ERROR_CODES.not_found, 'terminal not found'));
-		await vi.advanceTimersByTimeAsync(0);
-		assert.strictEqual(terminal.status, 'running');
-		terminal.receive_output('y', 3 * TERMINAL_ACK_THRESHOLD_BYTES);
-		await vi.advanceTimersByTimeAsync(TERMINAL_ACK_RETRY_DELAY * 2);
-		assert.strictEqual(acks().length, 1, 'neither retried nor followed by another');
+	test('a not_found ack ends the acks, silently, without marking the terminal lost', async () => {
+		const console_error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			const terminal = create_running();
+			terminal.receive_output('x', TERMINAL_ACK_THRESHOLD_BYTES);
+			acks()[0]!.resolve(result_error(JSONRPC_ERROR_CODES.not_found, 'terminal not found'));
+			await vi.advanceTimersByTimeAsync(0);
+			assert.strictEqual(terminal.status, 'running');
+			terminal.receive_output('y', 3 * TERMINAL_ACK_THRESHOLD_BYTES);
+			await vi.advanceTimersByTimeAsync(TERMINAL_ACK_RETRY_DELAY * 2);
+			assert.strictEqual(acks().length, 1, 'neither retried nor followed by another');
+			assert.strictEqual(
+				console_error.mock.calls.length,
+				0,
+				'an ack racing its terminal is expected'
+			);
+		} finally {
+			console_error.mockRestore();
+		}
+	});
+
+	test('any other failed ack is reported and retried', async () => {
+		const console_error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			const terminal = create_running();
+			terminal.receive_output('x', TERMINAL_ACK_THRESHOLD_BYTES);
+			acks()[0]!.resolve(result_error(JSONRPC_ERROR_CODES.internal_error, 'boom'));
+			await vi.advanceTimersByTimeAsync(0);
+			assert.deepEqual(console_error.mock.calls, [['[terminal] terminal_ack failed:', 'boom']]);
+			await vi.advanceTimersByTimeAsync(TERMINAL_ACK_RETRY_DELAY);
+			assert.strictEqual(acks().length, 2);
+		} finally {
+			console_error.mockRestore();
+		}
 	});
 
 	test("a restarted terminal acks the new process' counts under its new id", async () => {
