@@ -89,7 +89,11 @@ const flush = async (): Promise<void> => {
 	for (let i = 0; i < 10; i++) await Promise.resolve();
 };
 
-const filer_change = (type: DiskfileChangeType, path: DiskfilePath, contents?: string): void => {
+const filer_change = (
+	type: Exclude<DiskfileChangeType, 'touch'>,
+	path: DiskfilePath,
+	contents?: string
+): void => {
 	app.diskfiles.handle_change({
 		change: { type, path },
 		disknode: create_disknode(path, type === 'delete' ? null : (contents ?? null))

@@ -4,7 +4,16 @@ import { CellJson } from './cell_types.ts';
 import { is_path_absolute } from './diskfile_helpers.ts';
 import { PathWithTrailingSlash } from './zod_helpers.ts';
 
-export const DiskfileChangeType = z.enum(['add', 'change', 'delete']);
+/**
+ * What happened to a file the backend indexes:
+ *
+ * - `add` — it's newly indexed
+ * - `change` — its contents differ
+ * - `touch` — its timestamps moved and its contents didn't (a `touch`, a
+ *   rewrite of the same bytes), so they aren't sent again
+ * - `delete` — it's gone
+ */
+export const DiskfileChangeType = z.enum(['add', 'change', 'touch', 'delete']);
 export type DiskfileChangeType = z.infer<typeof DiskfileChangeType>;
 
 /** An absolute Unix-style file path. */
@@ -36,6 +45,15 @@ export const SerializableDisknode = z.strictObject({
 	dependencies: z.array(z.tuple([DiskfilePath, z.any()])) // TODO @many zod4 - these can't be circular refs, how to rewrite?
 });
 export type SerializableDisknode = z.infer<typeof SerializableDisknode>;
+
+/**
+ * A disknode without its contents — what a `touch` change carries. It has no
+ * `contents` key, which is not `contents: null`: `null` says the file's
+ * contents aren't loaded, and this says nothing about them — whoever holds
+ * the file keeps the contents it has.
+ */
+export const DisknodeMetadata = SerializableDisknode.omit({ contents: true });
+export type DisknodeMetadata = z.infer<typeof DisknodeMetadata>;
 
 /**
  * A file on disk. `path` and `source_dir` are required — a diskfile is

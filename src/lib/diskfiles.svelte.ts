@@ -13,6 +13,7 @@ import {
 	DiskfilePath,
 	type DiskfileDirectoryPath,
 	type DiskfileJsonInput,
+	type DisknodeMetadata,
 	type SerializableDisknode
 } from './diskfile_types.ts';
 import {
@@ -149,21 +150,46 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Applies a `filer_change` notification. `add` and `change` both upsert by
 	 * path — the backend's add/change split is advisory, and a re-seed or a
-	 * missed delete must never leave two diskfiles for one path.
+	 * missed delete must never leave two diskfiles for one path. A `touch`
+	 * carries no contents (see `touch`).
 	 */
 	handle_change(params: ActionInputs['filer_change']): void {
-		for (const paths of this.#change_trackers) paths.add(params.disknode.id);
-		switch (params.change.type) {
-			case 'add':
-			case 'change': {
-				this.upsert(params.disknode);
-				break;
-			}
-			case 'delete': {
-				this.remove_by_path(params.disknode.id);
-				break;
-			}
+		const { disknode } = params;
+		// a touch that found nothing to update reported nothing a snapshot in
+		// flight should yield to — the snapshot is what brings the file
+		if (!('contents' in disknode)) {
+			if (this.touch(disknode)) this.#track_change(disknode.id);
+			return;
 		}
+		this.#track_change(disknode.id);
+		if (params.change.type === 'delete') {
+			this.remove_by_path(disknode.id);
+		} else {
+			this.upsert(disknode);
+		}
+	}
+
+	#track_change(path: DiskfilePath): void {
+		for (const paths of this.#change_trackers) paths.add(path);
+	}
+
+	/**
+	 * Applies a `touch`: the file's timestamps moved on disk and its contents
+	 * didn't, so the diskfile keeps the content it has — loaded or not — and
+	 * takes the new `mtime`. Nothing else changes: no editor state is
+	 * notified, since there's no new content to weigh against a draft.
+	 *
+	 * A path this client doesn't hold is left alone (there are no contents to
+	 * add it with — the next snapshot brings it), as is a diskfile kept after
+	 * its file was deleted, whose content is no longer the file's.
+	 *
+	 * @returns whether a diskfile was updated
+	 */
+	touch(metadata: DisknodeMetadata): boolean {
+		const existing = this.items.by_optional('by_path', metadata.id);
+		if (!existing || existing.deleted_on_disk) return false;
+		if (existing.mtime !== metadata.mtime) existing.mtime = metadata.mtime;
+		return true;
 	}
 
 	/**

@@ -18,6 +18,7 @@ import {
 	rename,
 	rm,
 	stat,
+	utimes,
 	writeFile
 } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
@@ -31,6 +32,7 @@ import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
+import { FilerChangeInput } from '#lib/action_specs.ts';
 import { RPC_MESSAGE_MAX_BYTES } from '#lib/rpc_message_limit.ts';
 
 import './cross_test_types.ts';
@@ -603,6 +605,92 @@ describe('filesystem cross-backend', () => {
 					unknown
 				>;
 				assert.equal(disknode.contents, 'renamed');
+			} finally {
+				await ws.close();
+			}
+
+			await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'workspace_close',
+				params: { path: tmp_dir },
+				headers: fixture.create_session_headers()
+			}).catch(() => undefined);
+		} finally {
+			await rm(tmp_dir, { recursive: true, force: true });
+		}
+	});
+	test('filer_change_sends_contents_only_when_they_changed', async () => {
+		const fixture = await setup_test();
+		const tmp_dir = join(tmpdir(), `zzz_cross_filer_${randomUUID()}`);
+		await mkdir(tmp_dir, { recursive: true });
+		const path = join(tmp_dir, 'touched.txt');
+		await writeFile(path, 'unchanged', 'utf-8');
+		try {
+			const open = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'workspace_open',
+				params: { path: tmp_dir },
+				headers: fixture.create_session_headers()
+			});
+			assert.ok(open.ok);
+
+			const ws = await create_ws_transport({
+				base_url: handle.config.base_url,
+				ws_path: handle.config.ws_path,
+				cookies: fixture.transport.cookies()
+			});
+			try {
+				await ws.request('_warmup', 'ping', undefined);
+
+				/** The next `filer_change` for `path` after message `from`, parsed against the spec. */
+				const next_change = async (from: number): Promise<FilerChangeInput> => {
+					const msg = await ws.wait_for<Record<string, unknown>>((m) => {
+						if (ws.messages.indexOf(m) < from) return false;
+						const rec = m as Record<string, unknown> | null;
+						if (rec?.method !== 'filer_change') return false;
+						const change = (rec.params as Record<string, unknown> | undefined)?.change as
+							Record<string, unknown> | undefined;
+						return change?.path === path;
+					}, 10_000);
+					return FilerChangeInput.parse(msg.params);
+				};
+
+				// an mtime-only change: the timestamps, and no contents key at all
+				let from = ws.messages.length;
+				await utimes(path, new Date(1_000_000), new Date(1_000_000));
+				const touched = await next_change(from);
+				assert.equal(touched.change.type, 'touch');
+				assert.notProperty(touched.disknode, 'contents');
+				assert.equal(touched.disknode.mtime, 1_000_000);
+
+				// a rewrite of the same bytes is the same
+				from = ws.messages.length;
+				await writeFile(path, 'unchanged', 'utf-8');
+				await utimes(path, new Date(2_000_000), new Date(2_000_000));
+				const rewritten = await next_change(from);
+				assert.equal(rewritten.change.type, 'touch');
+				assert.notProperty(rewritten.disknode, 'contents');
+
+				// new contents are sent
+				from = ws.messages.length;
+				await writeFile(path, 'changed', 'utf-8');
+				const changed = await next_change(from);
+				assert.equal(changed.change.type, 'change');
+				assert.propertyVal(changed.disknode, 'contents', 'changed');
+
+				// a snapshot still has the file whole, with the latest timestamps
+				const session = await rpc_call({
+					app: fixture.transport,
+					path: handle.config.rpc_path,
+					method: 'session_load',
+					headers: fixture.create_session_headers()
+				});
+				assert.ok(session.ok);
+				const files = ((session.result as Record<string, unknown>).data as Record<string, unknown>)
+					.files as Array<Record<string, unknown>>;
+				assert.equal(files.find((f) => f.id === path)?.contents, 'changed');
 			} finally {
 				await ws.close();
 			}

@@ -73,7 +73,11 @@ const succeed = (index: number, files?: Array<SerializableDisknode>): void =>
 const fail = (index: number, message = 'backend down'): void =>
 	calls[index]!({ ok: false, error: { code: -32603, message } });
 
-const filer_change = (type: DiskfileChangeType, path: DiskfilePath, contents?: string): void => {
+const filer_change = (
+	type: Exclude<DiskfileChangeType, 'touch'>,
+	path: DiskfilePath,
+	contents?: string
+): void => {
 	app.diskfiles.handle_change({
 		change: { type, path },
 		disknode: create_disknode(path, type === 'delete' ? null : (contents ?? null))

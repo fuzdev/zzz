@@ -34,10 +34,23 @@ const create_disknode = (
 
 let app: Frontend;
 
-const filer_change = (type: DiskfileChangeType, path: DiskfilePath, contents?: string): void => {
+const filer_change = (
+	type: Exclude<DiskfileChangeType, 'touch'>,
+	path: DiskfilePath,
+	contents?: string
+): void => {
 	app.diskfiles.handle_change({
 		change: { type, path },
 		disknode: create_disknode(path, type === 'delete' ? null : contents)
+	});
+};
+
+/** A `touch`: the file's timestamps moved, and the notification carries no contents. */
+const filer_touch = (path: DiskfilePath, mtime: number): void => {
+	const { contents: _, ...metadata } = create_disknode(path, null);
+	app.diskfiles.handle_change({
+		change: { type: 'touch', path },
+		disknode: { ...metadata, mtime }
 	});
 };
 
@@ -115,6 +128,71 @@ describe('upsert by path', () => {
 		assert.strictEqual(count_by_path(PATH_A), 1);
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), diskfile);
 		assert.strictEqual(diskfile.content, 'two');
+	});
+
+	test('a touch moves the mtime and keeps the content', () => {
+		filer_change('add', PATH_A, 'one');
+		const diskfile = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(diskfile);
+		const { updated } = diskfile;
+
+		filer_touch(PATH_A, 7);
+
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), diskfile);
+		assert.strictEqual(diskfile.content, 'one', 'no contents key is not `contents: null`');
+		assert.ok(diskfile.content_loaded);
+		assert.strictEqual(diskfile.mtime, 7);
+		assert.strictEqual(diskfile.updated, updated, 'nothing but the mtime changed');
+	});
+
+	test('a touch moves the mtime of a file whose content is not loaded', () => {
+		app.diskfiles.handle_change({
+			change: { type: 'add', path: PATH_A },
+			disknode: create_disknode(PATH_A, null)
+		});
+		const diskfile = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(diskfile);
+		filer_touch(PATH_A, 7);
+		assert.isNull(diskfile.content);
+		assert.strictEqual(diskfile.mtime, 7);
+	});
+
+	test('a touch for an unknown path adds nothing', () => {
+		filer_touch(PATH_A, 7);
+		assert.strictEqual(count_by_path(PATH_A), 0, 'there are no contents to add it with');
+	});
+
+	test("a touch leaves a diskfile kept after its file's delete alone", () => {
+		filer_change('add', PATH_A, 'one');
+		const diskfile = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(diskfile);
+		diskfile.deleted_on_disk = true;
+		filer_touch(PATH_A, 7);
+		assert.ok(diskfile.deleted_on_disk);
+		assert.strictEqual(diskfile.mtime, 1);
+	});
+
+	test('a touch does not disturb a draft', () => {
+		filer_change('add', PATH_A, 'one');
+		const diskfile = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(diskfile);
+		const editor_state = app.diskfiles.get_editor_state(diskfile);
+		editor_state.current_content = 'one, edited';
+
+		filer_touch(PATH_A, 7);
+
+		assert.strictEqual(editor_state.current_content, 'one, edited');
+		assert.strictEqual(editor_state.last_seen_disk_content, 'one');
+		assert.ok(!editor_state.has_conflict, 'the file on disk still has what the draft started from');
+	});
+
+	test('a touch counts as a tracked change only when it updated a diskfile', () => {
+		filer_change('add', PATH_A, 'one');
+		const tracker = app.diskfiles.track_changes();
+		filer_touch(PATH_A, 7);
+		filer_touch(PATH_B, 7);
+		tracker.stop();
+		assert.deepEqual([...tracker.paths], [PATH_A]);
 	});
 
 	test('change for an unknown path adds it', () => {

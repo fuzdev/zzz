@@ -24,8 +24,10 @@ export { heartbeat_action_spec, cancel_action_spec, peer_ping_action_spec };
 
 import {
 	DiskfileChange,
+	DiskfileChangeType,
 	DiskfileDirectoryPath,
 	DiskfilePath,
+	DisknodeMetadata,
 	SerializableDisknode
 } from './diskfile_types.ts';
 import { is_path_absolute } from './diskfile_helpers.ts';
@@ -100,11 +102,20 @@ export const SessionLoadOutput = z.strictObject({
 });
 export type SessionLoadOutput = z.infer<typeof SessionLoadOutput>;
 
-/** Input for `filer_change`. */
-export const FilerChangeInput = z.strictObject({
-	change: DiskfileChange,
-	disknode: SerializableDisknode
-});
+/**
+ * Input for `filer_change`: the file's whole disknode — or, for a `touch`,
+ * its metadata without the contents (`DisknodeMetadata`).
+ */
+export const FilerChangeInput = z.union([
+	z.strictObject({
+		change: DiskfileChange.extend({ type: DiskfileChangeType.exclude(['touch']) }),
+		disknode: SerializableDisknode
+	}),
+	z.strictObject({
+		change: DiskfileChange.extend({ type: z.literal('touch') }),
+		disknode: DisknodeMetadata
+	})
+]);
 export type FilerChangeInput = z.infer<typeof FilerChangeInput>;
 
 /** Input for `diskfile_update`. */
@@ -392,7 +403,8 @@ export const filer_change_action_spec = {
 	input: FilerChangeInput,
 	output: z.void(),
 	async: true,
-	description: 'Notifies the frontend of a file system change detected by the watcher.'
+	description:
+		"Notifies the frontend of a file system change detected by the watcher. Carries the file's contents unless only its timestamps moved (a `touch`)."
 } satisfies RemoteNotificationActionSpec;
 
 export const diskfile_update_action_spec = {

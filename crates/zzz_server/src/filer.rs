@@ -45,6 +45,10 @@
 //!   becomes `change`, and an `add` followed by a `delete` becomes a bare
 //!   `delete` (a no-op for clients that never saw the add). A path that
 //!   keeps changing still broadcasts at least every [`DEBOUNCE_MAX_WAIT`].
+//! - **Contents travel only when they changed.** A change that moved an
+//!   indexed file's timestamps and left its contents as they were (`touch`,
+//!   a rewrite of the same bytes) is broadcast as a `touch`: the node's
+//!   metadata, with no `contents` key ([`ChangeType::Touch`]).
 //! - **Overflow recovery.** Paths under ignored directories are filtered in
 //!   the notify callback, before the bounded channel. If the channel is
 //!   still full, or notify reports a rescan (inotify queue overflow), the
@@ -128,11 +132,41 @@ const RACY_STAT_MARGIN: Duration = Duration::from_secs(2);
 /// Params for `filer_change` `remote_notification`.
 ///
 /// Matches the TypeScript `filer_change_action_spec` input schema:
-/// `{ change: DiskfileChange, disknode: SerializableDisknode }`.
+/// `{ change: DiskfileChange, disknode }`, where `disknode` is a
+/// `SerializableDisknode` — or, for a `touch`, a [`DisknodeMetadata`].
 #[derive(Serialize)]
-struct FilerChangeParams {
+struct FilerChangeParams<N> {
     change: DiskfileChange,
-    disknode: SerializableDisknode,
+    disknode: N,
+}
+
+/// A disknode without its contents — the `disknode` of a `touch`. Matches
+/// `DisknodeMetadata` from `diskfile_types.ts`.
+///
+/// It has no `contents` key at all, rather than a `null` one: `null` means
+/// the file's contents aren't loaded (too large, not UTF-8, unreadable),
+/// which is a statement about the file. This says nothing about them.
+#[derive(Serialize)]
+struct DisknodeMetadata<'a> {
+    id: &'a str,
+    source_dir: &'a str,
+    ctime: Option<f64>,
+    mtime: Option<f64>,
+    dependents: &'a [Value],
+    dependencies: &'a [Value],
+}
+
+impl<'a> From<&'a SerializableDisknode> for DisknodeMetadata<'a> {
+    fn from(node: &'a SerializableDisknode) -> Self {
+        Self {
+            id: &node.id,
+            source_dir: &node.source_dir,
+            ctime: node.ctime,
+            mtime: node.mtime,
+            dependents: &node.dependents,
+            dependencies: &node.dependencies,
+        }
+    }
 }
 
 /// Matches `DiskfileChange` from `diskfile_types.ts`.
@@ -147,8 +181,16 @@ struct DiskfileChange {
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 enum ChangeType {
+    /// Newly indexed — broadcast with its contents.
     Add,
+    /// Indexed, and its contents differ — broadcast with its contents.
     Change,
+    /// Indexed, with the contents it had and different timestamps —
+    /// broadcast as [`DisknodeMetadata`], without resending the contents.
+    /// Every client holding the path holds those contents: it has the index
+    /// as of some snapshot plus every broadcast since, and this is only
+    /// queued when nothing unbroadcast changed them ([`coalesce_change`]).
+    Touch,
     Delete,
 }
 
@@ -496,12 +538,20 @@ async fn read_disknode(
     make_disknode(path_str, source_dir, contents, ctime, mtime, stat)
 }
 
-/// Whether two disknodes for the same path differ in a way clients care
-/// about (contents or timestamps).
-fn disknode_changed(a: &SerializableDisknode, b: &SerializableDisknode) -> bool {
-    a.contents != b.contents
-        || a.mtime.map(f64::to_bits) != b.mtime.map(f64::to_bits)
-        || a.ctime.map(f64::to_bits) != b.ctime.map(f64::to_bits)
+/// How an indexed file's node `old` differs from the one just read for the
+/// same path, in what clients care about: [`ChangeType::Change`] when the
+/// contents differ (loaded text, or loaded vs. not), [`ChangeType::Touch`]
+/// when only the timestamps do, `None` when neither does.
+fn disknode_change(old: &SerializableDisknode, new: &SerializableDisknode) -> Option<ChangeType> {
+    if old.contents != new.contents {
+        Some(ChangeType::Change)
+    } else if old.mtime.map(f64::to_bits) != new.mtime.map(f64::to_bits)
+        || old.ctime.map(f64::to_bits) != new.ctime.map(f64::to_bits)
+    {
+        Some(ChangeType::Touch)
+    } else {
+        None
+    }
 }
 
 // -- Event classification -----------------------------------------------------
@@ -601,16 +651,23 @@ fn debounce_deadline(now: Instant, first_queued: Instant) -> Instant {
 /// an atomic save — clients still hold the path). `add`+`delete` → `delete`,
 /// not nothing: `session_load` / `workspace_open` read the index directly, so
 /// a client may already hold a path whose `add` broadcast is still pending,
-/// and a `delete` for a path a client never saw is a no-op for it. Otherwise
-/// the latest wins.
+/// and a `delete` for a path a client never saw is a no-op for it.
+///
+/// A `touch` stays one only while nothing pending changed the contents:
+/// after an unbroadcast `add`, `change`, or `delete` the clients don't hold
+/// the contents the touch left alone, so the pending change keeps carrying
+/// them (`add`+`touch` → `add`, `change`+`touch` → `change`, and so for the
+/// reverse order). Contents changed and changed back inside one window are
+/// sent again — the fold doesn't compare against what was last broadcast.
 const fn coalesce_change(prev: Option<ChangeType>, next: ChangeType) -> ChangeType {
     match (prev, next) {
         (None, next) => next,
-        (Some(ChangeType::Add), ChangeType::Add | ChangeType::Change) => ChangeType::Add,
-        (Some(ChangeType::Change | ChangeType::Delete), ChangeType::Add | ChangeType::Change) => {
+        (Some(_), ChangeType::Delete) => ChangeType::Delete,
+        (Some(ChangeType::Add), _) => ChangeType::Add,
+        (Some(ChangeType::Touch), ChangeType::Touch) => ChangeType::Touch,
+        (Some(ChangeType::Change | ChangeType::Touch | ChangeType::Delete), _) => {
             ChangeType::Change
         }
-        (Some(_), ChangeType::Delete) => ChangeType::Delete,
     }
 }
 
@@ -628,7 +685,8 @@ type ScanIndex = BTreeMap<String, ScannedFile>;
 /// Replace the index entries under `prefix` with `fresh` (a scan of that
 /// subtree), returning the resulting changes. Unchanged entries produce
 /// nothing; a re-read file whose contents and timestamps match only has its
-/// stored [`FileStat`] refreshed, so the next rescan can reuse it.
+/// stored [`FileStat`] refreshed, so the next rescan can reuse it, and one
+/// whose timestamps alone moved is a `touch` ([`disknode_change`]).
 ///
 /// @mutates index - entries under `prefix` are inserted, replaced, or removed to match `fresh`
 fn apply_subtree(
@@ -649,9 +707,9 @@ fn apply_subtree(
                 let Some(old) = index.get_mut(&key) else {
                     continue;
                 };
-                if disknode_changed(old, &node) {
+                if let Some(change) = disknode_change(old, &node) {
                     old.clone_from(&node);
-                    changes.push((key, ChangeType::Change, *node));
+                    changes.push((key, change, *node));
                 } else {
                     old.stat = node.stat;
                 }
@@ -1613,9 +1671,10 @@ impl FilerState {
         }
     }
 
-    /// Insert or update one file, queueing `add` (newly indexed) or
-    /// `change` (indexed, and differs). An unchanged file only has its stored
-    /// [`FileStat`] refreshed.
+    /// Insert or update one file, queueing `add` (newly indexed), `change`
+    /// (indexed, and its contents differ), or `touch` (indexed, and only its
+    /// timestamps differ — see [`disknode_change`]). An unchanged file only
+    /// has its stored [`FileStat`] refreshed.
     async fn upsert(&mut self, path: String, node: SerializableDisknode) {
         let change = {
             let mut index = self.files.write().await;
@@ -1624,13 +1683,14 @@ impl FilerState {
                     index.insert(path.clone(), node.clone());
                     Some(ChangeType::Add)
                 }
-                Some(old) if disknode_changed(old, &node) => {
-                    *old = node.clone();
-                    Some(ChangeType::Change)
-                }
                 Some(old) => {
-                    old.stat = node.stat;
-                    None
+                    let change = disknode_change(old, &node);
+                    if change.is_some() {
+                        *old = node.clone();
+                    } else {
+                        old.stat = node.stat;
+                    }
+                    change
                 }
             }
         };
@@ -1858,19 +1918,38 @@ async fn filer_event_loop(
 /// frame first.
 async fn flush_ready(state: &mut FilerState, now: Instant, broadcast: &FilerBroadcast) {
     for ready in state.take_ready(now) {
-        let params = FilerChangeParams {
-            change: DiskfileChange {
-                change_type: ready.change_type,
-                path: ready.disknode.id.clone(),
-            },
-            disknode: ready.disknode,
-        };
-        let notification = fuz_http::notification("filer_change", &params);
+        let notification = filer_change_notification(&ready);
         broadcast(&notification);
         // each queue holds the registry's copy — free this one before the
         // yield instead of holding it across the writers' turn
         drop(notification);
         tokio::task::yield_now().await;
+    }
+}
+
+/// The `filer_change` notification for a pending change: the whole node,
+/// or for a [`ChangeType::Touch`] its metadata without the contents.
+fn filer_change_notification(pending: &PendingNotification) -> String {
+    let change = DiskfileChange {
+        change_type: pending.change_type,
+        path: pending.disknode.id.clone(),
+    };
+    if pending.change_type == ChangeType::Touch {
+        fuz_http::notification(
+            "filer_change",
+            &FilerChangeParams {
+                change,
+                disknode: DisknodeMetadata::from(&pending.disknode),
+            },
+        )
+    } else {
+        fuz_http::notification(
+            "filer_change",
+            &FilerChangeParams {
+                change,
+                disknode: &pending.disknode,
+            },
+        )
     }
 }
 
@@ -2194,10 +2273,11 @@ mod tests {
 
     #[test]
     fn coalesce_table() {
-        use ChangeType::{Add, Change, Delete};
+        use ChangeType::{Add, Change, Delete, Touch};
         let cases = [
             (None, Add, Add),
             (None, Change, Change),
+            (None, Touch, Touch),
             (None, Delete, Delete),
             // short-lived file — a client may have read the pending add
             // straight from the index, so it still hears the delete
@@ -2211,10 +2291,147 @@ mod tests {
             (Some(Change), Change, Change),
             (Some(Change), Add, Change),
             (Some(Change), Delete, Delete),
+            // a touch stays one only while no pending change holds contents
+            // the clients haven't been sent
+            (Some(Touch), Touch, Touch),
+            (Some(Touch), Change, Change),
+            (Some(Touch), Add, Change),
+            (Some(Touch), Delete, Delete),
+            (Some(Add), Touch, Add),
+            (Some(Change), Touch, Change),
+            (Some(Delete), Touch, Change),
         ];
         for (prev, next, expected) in cases {
             assert_eq!(coalesce_change(prev, next), expected, "{prev:?} + {next:?}");
         }
+    }
+
+    #[test]
+    fn disknode_change_tells_a_touch_from_a_change() {
+        let base = node("/w/f", "text", 1.0);
+        assert_eq!(disknode_change(&base, &node("/w/f", "text", 1.0)), None);
+        // timestamps alone
+        assert_eq!(
+            disknode_change(&base, &node("/w/f", "text", 2.0)),
+            Some(ChangeType::Touch)
+        );
+        let mut created = node("/w/f", "text", 1.0);
+        created.ctime = Some(5.0);
+        assert_eq!(disknode_change(&base, &created), Some(ChangeType::Touch));
+        // contents, whatever the timestamps did
+        assert_eq!(
+            disknode_change(&base, &node("/w/f", "other", 1.0)),
+            Some(ChangeType::Change)
+        );
+        assert_eq!(
+            disknode_change(&base, &node("/w/f", "other", 2.0)),
+            Some(ChangeType::Change)
+        );
+        // equal text in another allocation is still the same contents
+        assert_eq!(
+            disknode_change(&base, &node("/w/f", &String::from("text"), 2.0)),
+            Some(ChangeType::Touch)
+        );
+        // loaded vs. not loaded is a contents change, both ways
+        let mut unloaded = node("/w/f", "", 2.0);
+        unloaded.contents = None;
+        assert_eq!(disknode_change(&base, &unloaded), Some(ChangeType::Change));
+        assert_eq!(disknode_change(&unloaded, &base), Some(ChangeType::Change));
+        // a file that was never loaded can still be touched
+        let mut unloaded_later = unloaded.clone();
+        unloaded_later.mtime = Some(3.0);
+        assert_eq!(
+            disknode_change(&unloaded, &unloaded_later),
+            Some(ChangeType::Touch)
+        );
+    }
+
+    /// The `params` of the `filer_change` notification for a pending change.
+    fn notification_params(change_type: ChangeType, disknode: SerializableDisknode) -> Value {
+        let now = Instant::now();
+        let notification = filer_change_notification(&PendingNotification {
+            change_type,
+            first_queued: now,
+            deadline: now,
+            disknode,
+        });
+        let mut message: Value = serde_json::from_str(&notification).unwrap();
+        assert_eq!(message["method"], "filer_change");
+        message["params"].take()
+    }
+
+    #[test]
+    fn a_touch_notification_carries_no_contents() {
+        let touched = notification_params(ChangeType::Touch, node("/w/f", "text", 2.0));
+        assert_eq!(
+            touched,
+            serde_json::json!({
+                "change": { "type": "touch", "path": "/w/f" },
+                "disknode": {
+                    "id": "/w/f",
+                    "source_dir": "/w/",
+                    "ctime": null,
+                    "mtime": 2.0,
+                    "dependents": [],
+                    "dependencies": [],
+                },
+            })
+        );
+        // every other change sends the node whole, `contents` always present:
+        // the text, or `null` for a file that isn't loaded or is gone
+        for change_type in [ChangeType::Add, ChangeType::Change] {
+            let params = notification_params(change_type, node("/w/f", "text", 2.0));
+            assert_eq!(params["disknode"]["contents"], "text", "{change_type:?}");
+            let mut unloaded = node("/w/f", "", 2.0);
+            unloaded.contents = None;
+            let params = notification_params(change_type, unloaded);
+            let disknode = params["disknode"].as_object().unwrap();
+            assert_eq!(
+                disknode.get("contents"),
+                Some(&Value::Null),
+                "{change_type:?}"
+            );
+        }
+        let deleted = notification_params(
+            ChangeType::Delete,
+            deleted_disknode(node("/w/f", "text", 2.0)),
+        );
+        assert_eq!(deleted["change"]["type"], "delete");
+        assert_eq!(
+            deleted["disknode"].as_object().unwrap().get("contents"),
+            Some(&Value::Null)
+        );
+    }
+
+    #[test]
+    fn apply_subtree_reports_a_timestamp_only_change_as_a_touch() {
+        let mut index = FileIndex::new();
+        for n in [
+            node("/w/d/touched", "t", 1.0),
+            node("/w/d/edited", "old", 1.0),
+        ] {
+            index.insert(n.id.clone(), n);
+        }
+        let mut fresh = ScanIndex::new();
+        for n in [
+            node("/w/d/touched", "t", 2.0),
+            node("/w/d/edited", "new", 2.0),
+        ] {
+            fresh.insert(n.id.clone(), ScannedFile::Read(Box::new(n)));
+        }
+        let mut changes: Vec<(String, ChangeType)> = apply_subtree(&mut index, "/w/d/", fresh)
+            .into_iter()
+            .map(|(path, change, _)| (path, change))
+            .collect();
+        changes.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            changes,
+            vec![
+                ("/w/d/edited".to_owned(), ChangeType::Change),
+                ("/w/d/touched".to_owned(), ChangeType::Touch),
+            ]
+        );
+        assert_eq!(index["/w/d/touched"].mtime, Some(2.0), "the index moved");
     }
 
     fn node(path: &str, contents: &str, mtime: f64) -> SerializableDisknode {
@@ -2554,6 +2771,144 @@ mod tests {
         for kept in [&fresh, &not_ours, &uppercase, &dir] {
             assert!(kept.exists(), "{} must be kept", kept.display());
         }
+    }
+
+    /// Set `path`'s modification time to `secs` seconds after the epoch.
+    fn set_mtime(path: &Path, secs: u64) {
+        std::fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(secs))
+            .unwrap();
+    }
+
+    /// Report `path` as modified, flush everything pending, and return the
+    /// `filer_change` params broadcast.
+    async fn modified(state: &mut FilerState, path: &Path) -> Vec<Value> {
+        state
+            .handle_event(event(
+                EventKind::Modify(ModifyKind::Any),
+                &[path.to_path_buf()],
+            ))
+            .await;
+        flushed(state).await
+    }
+
+    /// Flush everything pending and return the `filer_change` params broadcast.
+    async fn flushed(state: &mut FilerState) -> Vec<Value> {
+        let frames = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&frames);
+        let broadcast: FilerBroadcast = Arc::new(move |message: &str| {
+            let mut message: Value = serde_json::from_str(message).unwrap();
+            sink.lock().push(message["params"].take());
+        });
+        flush_ready(state, Instant::now() + DEBOUNCE_MAX_WAIT, &broadcast).await;
+        assert!(state.pending.is_empty());
+        std::mem::take(&mut *frames.lock())
+    }
+
+    #[tokio::test]
+    async fn contents_are_broadcast_only_when_they_changed() {
+        let tmp = TempDir::new();
+        let path = tmp.path("f.txt");
+        let key = tmp.key("f.txt");
+        std::fs::write(&path, "one").unwrap();
+        set_mtime(&path, 1000);
+        let mut state = state_for(&tmp).await;
+
+        // touched: the timestamps, and no contents key
+        set_mtime(&path, 2000);
+        let frames = modified(&mut state, &path).await;
+        assert_eq!(frames.len(), 1);
+        assert_eq!(
+            frames[0]["change"],
+            serde_json::json!({ "type": "touch", "path": key })
+        );
+        let disknode = frames[0]["disknode"].as_object().unwrap();
+        assert!(!disknode.contains_key("contents"), "{disknode:?}");
+        assert_eq!(disknode["mtime"], 2_000_000.0);
+        assert_eq!(state.files.read().await[&key].mtime, Some(2_000_000.0));
+
+        // rewritten with the same bytes: also a touch
+        std::fs::write(&path, "one").unwrap();
+        set_mtime(&path, 3000);
+        let frames = modified(&mut state, &path).await;
+        assert_eq!(frames[0]["change"]["type"], "touch");
+        assert!(
+            !frames[0]["disknode"]
+                .as_object()
+                .unwrap()
+                .contains_key("contents")
+        );
+
+        // changed: the whole node
+        std::fs::write(&path, "two").unwrap();
+        set_mtime(&path, 4000);
+        let frames = modified(&mut state, &path).await;
+        assert_eq!(frames[0]["change"]["type"], "change");
+        assert_eq!(frames[0]["disknode"]["contents"], "two");
+
+        // changed back: contents again — clients hold "two" now
+        std::fs::write(&path, "one").unwrap();
+        set_mtime(&path, 5000);
+        let frames = modified(&mut state, &path).await;
+        assert_eq!(frames[0]["change"]["type"], "change");
+        assert_eq!(frames[0]["disknode"]["contents"], "one");
+
+        // nothing a client cares about moved: no broadcast
+        assert!(modified(&mut state, &path).await.is_empty());
+
+        // first sighting: the whole node
+        let new_path = tmp.path("new.txt");
+        std::fs::write(&new_path, "new").unwrap();
+        let frames = modified(&mut state, &new_path).await;
+        assert_eq!(frames[0]["change"]["type"], "add");
+        assert_eq!(frames[0]["disknode"]["contents"], "new");
+    }
+
+    #[tokio::test]
+    async fn a_touch_after_an_unbroadcast_change_still_sends_the_contents() {
+        let tmp = TempDir::new();
+        let path = tmp.path("f.txt");
+        std::fs::write(&path, "one").unwrap();
+        set_mtime(&path, 1000);
+        let mut state = state_for(&tmp).await;
+        let modify = |path: &Path| event(EventKind::Modify(ModifyKind::Any), &[path.to_path_buf()]);
+
+        // changed, then touched, inside one debounce window: clients have
+        // neither, so the one broadcast carries the new contents
+        std::fs::write(&path, "two").unwrap();
+        set_mtime(&path, 2000);
+        state.handle_event(modify(&path)).await;
+        set_mtime(&path, 3000);
+        state.handle_event(modify(&path)).await;
+        let frames = flushed(&mut state).await;
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0]["change"]["type"], "change");
+        assert_eq!(frames[0]["disknode"]["contents"], "two");
+        assert_eq!(frames[0]["disknode"]["mtime"], 3_000_000.0);
+
+        // touched twice: still just a touch, with the latest timestamp
+        set_mtime(&path, 4000);
+        state.handle_event(modify(&path)).await;
+        set_mtime(&path, 5000);
+        state.handle_event(modify(&path)).await;
+        let frames = flushed(&mut state).await;
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0]["change"]["type"], "touch");
+        assert_eq!(frames[0]["disknode"]["mtime"], 5_000_000.0);
+
+        // a file added and touched before its add went out is still an add
+        let new_path = tmp.path("new.txt");
+        std::fs::write(&new_path, "new").unwrap();
+        set_mtime(&new_path, 1000);
+        state.handle_event(modify(&new_path)).await;
+        set_mtime(&new_path, 2000);
+        state.handle_event(modify(&new_path)).await;
+        let frames = flushed(&mut state).await;
+        assert_eq!(frames[0]["change"]["type"], "add");
+        assert_eq!(frames[0]["disknode"]["contents"], "new");
     }
 
     #[tokio::test]
