@@ -880,8 +880,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     }
 
     // Three gates over everything, the static fallback included, so a browser
-    // page that isn't zzz's own can't drive the daemon — in `fuz_http`'s
-    // mount order, outermost first:
+    // page that isn't zzz's own can't drive the daemon — outermost first:
     // - `host_layer` refuses a `Host` that isn't loopback or named by an
     //   allowed origin — a DNS-rebinding page talks to zzzd same-origin,
     //   sending no `Origin`, but its `Host` is its own domain.
@@ -893,6 +892,16 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     //   or text one). The session cookie is `SameSite=Strict`, but same-site
     //   ignores the port, so a page on another `localhost` port would send it.
     //   zzz takes no form or multipart bodies, so nothing legitimate is lost.
+    //
+    // The three keep `fuz_http`'s relative order (its "Mount ordering"), but
+    // the body cap isn't where that order puts it. `fuz_http` recommends one
+    // `body_limit_layer` outside the origin check, so an over-cap request is
+    // a 413 whatever its origin. zzz's caps differ per router — 16 MiB on
+    // `/api/rpc` and the byte routes, the 1 MiB default on the account
+    // routers — so each is layered on its own router above, inside these
+    // gates: a request refused for its `Host` or `Origin` is a 403 even when
+    // its declared length is over the cap, and only one that passes the gates
+    // is answered 413. Either way the body is never read.
     let app = app
         .layer(axum::middleware::from_fn(fuz_http::simple_request_layer))
         .layer(axum::middleware::from_fn_with_state(
