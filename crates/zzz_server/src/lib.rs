@@ -23,6 +23,7 @@ pub mod filer;
 pub mod handlers;
 pub mod job_manager;
 pub mod media;
+mod origin_allowlist;
 pub mod provider;
 pub mod pty_manager;
 pub mod scoped_fs;
@@ -433,14 +434,12 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             "trusted proxies configured — XFF resolution enabled"
         );
     }
-    // Refuse to boot (fail loud) on an absent / all-empty allowlist — an empty
-    // list silently fails *open* (allow-all), disabling the Origin gate on
-    // every REST + RPC + WS handler; see `fuz_http::require_non_empty_origins`.
-    // Mirrors the TS `validate_server_env` contract.
-    let spine_allowed_origins = Arc::new(
-        fuz_http::require_non_empty_origins(config.allowed_origins.as_deref())
-            .map_err(|e| ServerError::Config(e.to_string()))?,
-    );
+    // Never empty, and every entry well-formed: `parse_config` refused to
+    // boot otherwise (see `origin_allowlist`). An empty list would silently
+    // fail *open* (allow-all), disabling the Origin gate on every REST + RPC
+    // + WS handler — so the list is moved out of `config`, not taken: no
+    // emptied field is left behind to read.
+    let spine_allowed_origins = Arc::new(config.allowed_origins);
     let bootstrap_available_atomic =
         Arc::new(std::sync::atomic::AtomicBool::new(bootstrap_available));
     // Both transports: a revocation handler's direct close must reach the
@@ -987,7 +986,10 @@ pub struct Config {
     pub database_url: String,
     pub secret_cookie_keys: String,
     pub bootstrap_token_path: Option<String>,
-    pub allowed_origins: Option<String>,
+    /// `FUZ_ALLOWED_ORIGINS`, parsed and validated entry by entry — never
+    /// empty (see [`origin_allowlist`]). Read by both the origin check and
+    /// the `Host` check.
+    pub allowed_origins: Vec<String>,
     /// `PUBLIC_ZZZ_SCOPED_DIRS`, resolved (canonical, trailing `/`) and
     /// checked by [`check_scoped_dirs`].
     pub scoped_dirs: Vec<String>,
@@ -1372,7 +1374,12 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
     let secret_cookie_keys = env_required("SECRET_FUZ_COOKIE_KEYS")?;
 
     let bootstrap_token_path = env_non_empty("FUZ_BOOTSTRAP_TOKEN_PATH")?;
-    let allowed_origins = env_var_utf8("FUZ_ALLOWED_ORIGINS")?;
+    // checked here, before anything touches the DB: an unset or empty list,
+    // or a malformed entry, refuses to boot, and a wildcard entry is logged
+    // with what it admits
+    let allowed_origins = origin_allowlist::allowed_origins_from_env(
+        env_var_utf8(origin_allowlist::ALLOWED_ORIGINS_VAR)?.as_deref(),
+    )?;
 
     let zzz_dir = ensure_zzz_dir_from_env()?;
 

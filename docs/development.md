@@ -46,10 +46,14 @@ to a request from any `localhost` port.
   allowed by default; add `http://localhost:5461` to use it.
 - **Another origin** — a different port, a LAN address, a hostname — goes in
   `FUZ_ALLOWED_ORIGINS`, comma-separated, each an exact `scheme://host[:port]`.
-  A port wildcard (`http://localhost:*`) lets every page served on any local
-  port act with your session. A plain `http` origin that isn't loopback
-  passes the gates but can't log in: the session cookie is `Secure`, which a
-  browser accepts only over `https` or on loopback.
+  `zzzd` refuses to boot on a malformed entry — a trailing slash, a missing
+  scheme, a stray comma — naming it. A port wildcard (`http://localhost:*`)
+  lets every page served on any local port act with your session, and a host
+  wildcard (`https://*.example.com`) every page on a matching host; `zzzd`
+  logs a warning at boot for each, saying what it admits. A plain `http`
+  origin that isn't loopback passes the gates but can't log in: the session
+  cookie is `Secure`, which a browser accepts only over `https` or on
+  loopback.
 
 `.env.development` is created once and never rewritten, so a file written
 for another dev port keeps two lines that name it. Set both to the template's

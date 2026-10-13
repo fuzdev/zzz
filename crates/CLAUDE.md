@@ -122,7 +122,7 @@ setup (app dir, daemon token).
 
 - `DATABASE_URL` — PostgreSQL connection (e.g. `postgres://localhost/zzz`)
 - `SECRET_FUZ_COOKIE_KEYS` — HMAC signing keys (min 32 chars, `__` separator for rotation)
-- `FUZ_ALLOWED_ORIGINS` — Comma-separated origin allowlist patterns — required, non-empty. The server hard-fails at boot on an empty list, because `fuz_http::check_origin` treats an empty allowlist as allow-all (every origin passes). The `.env` templates list exact origins (dev: the Vite dev server's, `http://localhost:5460` — the port `vite.config.ts` pins with `strictPort`, zzz's own rather than Vite's default, and `localhost` only, since Vite binds what that name resolves to; prod: `zzzd`'s own `http://localhost:4460,http://127.0.0.1:4460`) — `zzzd` trusts whatever page is served at a listed origin, and the session cookie reaches every `localhost` port, so a wildcard would admit any local page to the WebSocket. xtask's `dev_origin_copies` tests hold the dev copies together (the Vite port, the template, the setup docs), and a `daemon_launch` test holds the prod template to the CLI's default. The cross-backend harness runs the prod shape — the backend's own two origins, the page it serves — plus `http://localhost:5173`, the origin fuz_app's `rpc_call` test helper sends (`zzz_backend_config.ts`); `dev_origins.cross.test.ts` runs a second backend on the dev template's list.
+- `FUZ_ALLOWED_ORIGINS` — Comma-separated origin allowlist patterns — required, non-empty. The server hard-fails at boot on an empty list, because `fuz_http::check_origin` treats an empty allowlist as allow-all (every origin passes). Each entry is checked at boot too (`origin_allowlist.rs`, before the DB is touched): a malformed one — which the matcher would read as matching nothing, leaving every browser request a 403 — refuses to boot, naming the entry and the expected `scheme://host[:port]` shape, and a wildcard one boots with a `warn!` saying what it admits (see Auth item 9). The `.env` templates list exact origins (dev: the Vite dev server's, `http://localhost:5460` — the port `vite.config.ts` pins with `strictPort`, zzz's own rather than Vite's default, and `localhost` only, since Vite binds what that name resolves to; prod: `zzzd`'s own `http://localhost:4460,http://127.0.0.1:4460`) — `zzzd` trusts whatever page is served at a listed origin, and the session cookie reaches every `localhost` port, so a wildcard would admit any local page to the WebSocket. xtask's `dev_origin_copies` tests hold the dev copies together (the Vite port, the template, the setup docs), and a `daemon_launch` test holds the prod template to the CLI's default. The cross-backend harness runs the prod shape — the backend's own two origins, the page it serves — plus `http://localhost:5173`, the origin fuz_app's `rpc_call` test helper sends (`zzz_backend_config.ts`); `dev_origins.cross.test.ts` runs a second backend on the dev template's list.
 
 An unset or blank (empty or whitespace) `DATABASE_URL` or
 `SECRET_FUZ_COOKIE_KEYS` refuses to boot with `<NAME> is unset or blank`.
@@ -229,7 +229,31 @@ orientation; the spine crates are authoritative:
 
 9. **Origin verification** — `FUZ_ALLOWED_ORIGINS` patterns checked on requests
    with an `Origin` header. Supports exact match, wildcard port
-   (`http://localhost:*`), subdomain wildcard (`https://*.example.com`).
+   (`http://localhost:*`), and wildcard host labels — each `*` is any one
+   label, in any position (`https://*.example.com`, `https://example.*`), and
+   a host of only `*` labels (`http://*`, `https://*.*`) is every host with
+   that many labels.
+   `origin_allowlist::allowed_origins_from_env` reads the list in
+   `parse_config`:
+   - **Malformed entries refuse the boot** (`validate_origin_pattern`): an
+     empty entry (a stray comma), anything but printable ASCII without
+     spaces, no `scheme://`, a scheme other than http or https, a path /
+     query / fragment / trailing slash, userinfo, an empty host, a character
+     no hostname holds (a percent-encoding included), a `*` that isn't a
+     whole label, an IPv4 address not written as four decimal numbers, an
+     IPv6 address unbracketed or not in the form a browser sends, a port
+     outside `1..=65535` or with leading zeros, and a scheme's default port
+     written out. The check is of the shape, not a proof that the entry
+     matches something: a hostname a browser would rewrite (an invalid
+     punycode label) passes and matches nothing.
+   - **Wildcard entries boot with a warning** (`origin_wildcard_warning`)
+     that says which it is — port, host, or both — and what it admits: any
+     port on the host, any host matching the pattern, or, when no label is
+     fixed, every host of that shape (four `*` labels cover every IPv4
+     address). The `Host` gate below admits the hosts the same entries name,
+     on either scheme, so a host wildcard also lets a DNS-rebinding page on
+     a matching domain through it; the warning says so.
+   `tests/boot_allowed_origins.rs` runs the real `zzzd` over each case.
    Three layers wrap the whole router in `run_app`, the static fallback
    included, outermost first: `fuz_http::host_layer` refuses a `Host` that
    isn't loopback or named by an allowed origin (403 `forbidden_host` — DNS
@@ -498,6 +522,7 @@ crates/zzz_server/src/
 │   ├── terminal.rs
 │   └── workspace.rs
 ├── job_manager.rs    # Jobs: long-running tool work that outlives its request — in memory, one at a time with a queue, owned by an account, cancellable (dropping the work kills its tool), bounded history; `job_changed` notifications
+├── origin_allowlist.rs # `FUZ_ALLOWED_ORIGINS` at boot: per-entry validation (a malformed entry refuses the boot), the warning for each wildcard entry
 ├── media.rs          # Media containers (by extension) and the `ffmpeg` runs over them — confined to file handles zzz opened (`fd:` protocol only, named input format); `remux`, `decode_speech` (16 kHz mono PCM), unnamed scratch files
 ├── provider/         # AI provider system
 │   ├── mod.rs        # ProviderName, ProviderStatus, Provider enum, ProviderManager, CompletionOptions
