@@ -2,7 +2,7 @@
 
 import type { Attachment } from 'svelte/attachments';
 import { on } from 'svelte/events';
-import type { Flavored } from '@fuzdev/fuz_util/types.ts';
+import type { Flavored } from '@fuzdev/fuz_schema/schema.ts';
 import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
 
 import {
