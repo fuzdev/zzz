@@ -1,7 +1,7 @@
 import { SvelteMap } from 'svelte/reactivity';
 import { DEV } from 'esm-env';
 import { EMPTY_ARRAY } from '@fuzdev/fuz_util/array.ts';
-import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import type { IndexedItem } from './indexed_collection_helpers.svelte.ts';
 

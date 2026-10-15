@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
 import { UnreachableError } from '@fuzdev/fuz_util/error.ts';
 import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
-import { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { estimate_token_count } from './helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';

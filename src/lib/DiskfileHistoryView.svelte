@@ -2,7 +2,7 @@
 	import { slide } from 'svelte/transition';
 	import type { SvelteHTMLElements } from 'svelte/elements';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
-	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 	import { format_time } from './time_helpers.ts';

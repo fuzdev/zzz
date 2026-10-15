@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, assert, describe, beforeEach } from 'vitest';
-import { create_uuid } from '@fuzdev/fuz_util/id.ts';
-import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
+import { create_uuid, get_datetime_now } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Part, TextPart, DiskfilePart } from '#lib/part.svelte.ts';
 import { DiskfileDirectoryPath, DiskfilePath } from '#lib/diskfile_types.ts';

@@ -2,8 +2,12 @@
 
 import { test, describe, beforeEach, assert } from 'vitest';
 import { z } from 'zod';
-import { create_uuid, UuidWithDefault, type Uuid } from '@fuzdev/fuz_util/id.ts';
-import { DatetimeNow } from '@fuzdev/fuz_util/datetime.ts';
+import {
+	create_uuid,
+	DatetimeNow,
+	type Uuid,
+	UuidWithDefault
+} from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Sortable, type Sorter, sort_by_text, sort_by_numeric } from '#lib/sortable.svelte.ts';
 import { Cell } from '#lib/cell.svelte.ts';

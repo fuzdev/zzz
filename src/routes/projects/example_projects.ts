@@ -1,4 +1,4 @@
-import { create_uuid } from '@fuzdev/fuz_util/id.ts';
+import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import type { Frontend } from '#lib/frontend.svelte.ts';
 import { Project } from './project.svelte.ts';

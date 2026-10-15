@@ -8,7 +8,7 @@
 	import { app_context } from './app.svelte.ts';
 	import TimeWidget from './TimeWidget.svelte';
 	import { random_item } from '@fuzdev/fuz_util/random.ts';
-	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 	const app = app_context.get();
 

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ComponentProps } from 'svelte';
 	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
-	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
 
 	import PickerDialog from './PickerDialog.svelte';

@@ -2,7 +2,7 @@
 
 import { SvelteMap } from 'svelte/reactivity';
 import { z } from 'zod';
-import { UuidWithDefault } from '@fuzdev/fuz_util/id.ts';
+import { UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import type { IndexDefinition, IndexedCollection } from './indexed_collection.svelte.ts';
 

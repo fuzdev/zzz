@@ -27,7 +27,7 @@ import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 import { blake3_ready, hash_blake3 } from '@fuzdev/fuz_util/hash_blake3.ts';
-import { create_uuid } from '@fuzdev/fuz_util/id.ts';
+import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import {
 	job_cancel_action_spec,

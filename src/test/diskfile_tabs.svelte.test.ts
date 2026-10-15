@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, beforeEach, describe, assert } from 'vitest';
-import { create_uuid, UuidWithDefault, type Uuid } from '@fuzdev/fuz_util/id.ts';
+import { create_uuid, type Uuid, UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { DISKFILE_TABS_CLOSED_MAX, DiskfileTabs } from '#lib/diskfile_tabs.svelte.ts';
 import { DiskfileTab } from '#lib/diskfile_tab.svelte.ts';

@@ -2,7 +2,7 @@
 
 import { test, describe, assert, vi } from 'vitest';
 
-import { create_uuid } from '@fuzdev/fuz_util/id.ts';
+import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
 

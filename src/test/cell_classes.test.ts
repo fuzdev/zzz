@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, describe, assert, beforeEach, afterEach, vi } from 'vitest';
-import { create_uuid } from '@fuzdev/fuz_util/id.ts';
+import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { cell_classes, is_cell_type, type CellClassNames } from '#lib/cell_classes.ts';

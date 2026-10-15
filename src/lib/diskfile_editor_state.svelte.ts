@@ -1,6 +1,6 @@
 // @slop Claude Sonnet 3.7
 
-import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 
 import { estimate_token_count } from './helpers.ts';

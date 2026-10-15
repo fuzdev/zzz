@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { page } from '$app/state';
-import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Prompt, PromptJson, type PromptJsonInput } from './prompt.svelte.ts';

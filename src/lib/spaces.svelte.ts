@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Space, SpaceJson, type SpaceJsonInput } from './space.svelte.ts';

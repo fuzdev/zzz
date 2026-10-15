@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 	import type { Diskfile } from './diskfile.svelte.ts';
 	import DiskfileAudioView from './DiskfileAudioView.svelte';

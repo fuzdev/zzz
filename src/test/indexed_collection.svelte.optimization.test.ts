@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, assert, describe, vi } from 'vitest';
-import { create_uuid, Uuid } from '@fuzdev/fuz_util/id.ts';
+import { create_uuid, Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { IndexedCollection } from '#lib/indexed_collection.svelte.ts';
 import {

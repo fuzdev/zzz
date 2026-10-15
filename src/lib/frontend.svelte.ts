@@ -4,7 +4,7 @@ import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
 import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 import type { Assignable, ClassConstructor, OmitStrict } from '@fuzdev/fuz_util/types.ts';
-import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import type { Logger } from '@fuzdev/fuz_util/log.ts';
 import { ActionRegistry } from '@fuzdev/fuz_app/actions/action_registry.ts';
 import { ActionEventPhase, type ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';

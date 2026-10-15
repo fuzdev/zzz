@@ -2,7 +2,7 @@
 	import { slide } from 'svelte/transition';
 	import { inside_editable, is_editable, swallow } from '@fuzdev/fuz_util/dom.ts';
 	import { mdz_parse } from '@fuzdev/mdz/mdz.ts';
-	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 	import {
 		icon_double_chevron_left,
 		icon_double_chevron_right,

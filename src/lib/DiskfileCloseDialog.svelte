@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
 	import DialogContent from '@fuzdev/fuz_ui/DialogContent.svelte';
-	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 	import { untrack } from 'svelte';
 
 	import { frontend_context } from './frontend.svelte.ts';

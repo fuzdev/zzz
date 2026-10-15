@@ -1,5 +1,5 @@
 import { test, describe, assert } from 'vitest';
-import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
+import { get_datetime_now } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import {
 	is_completion_truncated,

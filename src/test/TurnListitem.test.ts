@@ -2,7 +2,7 @@
 
 import { describe, test, assert, afterEach } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
-import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
+import { get_datetime_now } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import TurnListitem from '#lib/TurnListitem.svelte';
 import { Frontend } from '#lib/frontend.svelte.ts';

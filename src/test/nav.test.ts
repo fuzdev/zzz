@@ -1,5 +1,5 @@
 import { describe, test, assert } from 'vitest';
-import { create_uuid } from '@fuzdev/fuz_util/id.ts';
+import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { parse_url_param_uuid, to_chats_url, to_prompts_url } from '#lib/nav.ts';
 

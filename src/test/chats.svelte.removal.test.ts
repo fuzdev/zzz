@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, describe, beforeEach, assert } from 'vitest';
-import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
 import type { Chat } from '#lib/chat.svelte.ts';

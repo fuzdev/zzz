@@ -1,4 +1,4 @@
-import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import type { Model } from './model.svelte.ts';
 import { Turn, create_turn_from_text } from './turn.svelte.ts';

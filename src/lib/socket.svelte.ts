@@ -13,7 +13,7 @@ import {
 import type { WebsocketRpcConnection } from '@fuzdev/fuz_app/actions/transports_ws.ts';
 import type { JsonrpcRequestId } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import { UNKNOWN_ERROR_MESSAGE } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
-import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
+import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import {
 	DEFAULT_AUTO_RECONNECT,

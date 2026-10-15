@@ -10,7 +10,7 @@ import { heartbeat_action_spec } from '@fuzdev/fuz_app/actions/heartbeat.ts';
 import { cancel_action_spec } from '@fuzdev/fuz_app/actions/cancel.ts';
 import { peer_ping_action_spec } from '@fuzdev/fuz_app/actions/peer_ping.ts';
 import { protocol_action_specs } from '@fuzdev/fuz_app/actions/protocol.ts';
-import { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 // Re-export so codegen (which builds `import * as specs from './action_specs'`)
 // resolves `specs.heartbeat_action_spec` / `specs.cancel_action_spec` /

@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, describe, beforeEach, assert, vi } from 'vitest';
-import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
-import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { get_datetime_now, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 import { Frontend } from '#lib/frontend.svelte.ts';

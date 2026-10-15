@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, beforeEach, describe, assert } from 'vitest';
-import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Workspace } from '#lib/workspace.svelte.ts';
 import { Workspaces } from '#lib/workspaces.svelte.ts';

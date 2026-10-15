@@ -1,7 +1,7 @@
 // @slop Claude Sonnet 3.7
 
 import { z } from 'zod';
-import { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { DiskfileTabs } from './diskfile_tabs.svelte.ts';

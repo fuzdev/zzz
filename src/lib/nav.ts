@@ -2,7 +2,7 @@ import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { page } from '$app/state';
-import { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import {
 	icon_capability,

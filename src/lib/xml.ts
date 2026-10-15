@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UuidWithDefault } from '@fuzdev/fuz_util/id.ts';
+import { UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 export const XmlAttributeKey = z
 	.string()

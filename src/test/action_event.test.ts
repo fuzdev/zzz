@@ -2,7 +2,7 @@
 
 import { test, describe, assert } from 'vitest';
 import { assert_rejects } from '@fuzdev/fuz_util/testing.ts';
-import { create_uuid } from '@fuzdev/fuz_util/id.ts';
+import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import {
 	create_action_event,

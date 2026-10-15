@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 	import { icon_arrow_left, icon_arrow_right, icon_refresh } from '@fuzdev/fuz_ui/icons.ts';
 	import Icon from './Icon.svelte';

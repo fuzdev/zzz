@@ -1,5 +1,5 @@
 import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
-import { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { estimate_token_count_from_length } from './helpers.ts';
 import { joined_content_length } from './thread_helpers.ts';

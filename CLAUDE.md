@@ -946,8 +946,10 @@ ActionDispatcher, transports, and `create_rpc_client` from
 `@fuzdev/fuz_app/actions/*.ts`. Cell patterns (Cell base class, cell classes,
 IndexedCollection) remain in zzz. The generated `TypedActionEvent` alias
 intersects fuz_app's generic `ActionEvent` with zzz's `ActionEventDatas` map
-for typed input/output in handlers. `Uuid` and `create_uuid` come from
-`@fuzdev/fuz_util/id.ts`, imported directly.
+for typed input/output in handlers. `Uuid`, `create_uuid`, `Datetime`, and
+`get_datetime_now` come from `@fuzdev/fuz_app/primitive_schemas.ts`, and the
+Zod walkers (`cell.svelte.ts`, `cell_helpers.ts`) from
+`@fuzdev/fuz_app/zod.ts`, imported directly.
 
 Daemon lifecycle is owned by the Rust CLI (`crates/zzz/src/daemon_lifecycle.rs`)
 — it atomically writes `~/.zzz/run/daemon.json` (`{version, pid, boot_id,

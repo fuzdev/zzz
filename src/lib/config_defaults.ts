@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import { create_uuid } from '@fuzdev/fuz_util/id.ts';
+import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import type { ProviderJsonInput } from './provider.svelte.ts';
 import type { ModelJson } from './model.svelte.ts';

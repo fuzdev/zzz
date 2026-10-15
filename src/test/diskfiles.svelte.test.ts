@@ -2,7 +2,7 @@
 
 import { test, beforeEach, describe, assert, vi } from 'vitest';
 import { flushSync } from 'svelte';
-import { create_uuid, type Uuid } from '@fuzdev/fuz_util/id.ts';
+import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import {
 	DiskfilePath,

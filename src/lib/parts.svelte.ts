@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Part, PartJson, type PartJsonInput, type PartUnion } from './part.svelte.ts';

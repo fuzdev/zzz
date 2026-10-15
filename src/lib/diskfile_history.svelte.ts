@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
-import { create_uuid, Uuid, UuidWithDefault } from '@fuzdev/fuz_util/id.ts';
+import { create_uuid, Uuid, UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { DiskfilePath } from './diskfile_types.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';

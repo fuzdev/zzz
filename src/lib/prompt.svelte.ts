@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Uuid } from '@fuzdev/fuz_util/id.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { to_preview, estimate_token_count } from './helpers.ts';
 import { Part, PartJson, type PartUnion } from './part.svelte.ts';

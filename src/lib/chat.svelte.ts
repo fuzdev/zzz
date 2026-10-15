@@ -1,8 +1,7 @@
 import { z } from 'zod';
 import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
-import { Uuid } from '@fuzdev/fuz_util/id.ts';
-import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
+import { get_datetime_now, Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import type { Model } from './model.svelte.ts';
 import { to_completion_response_text } from './response_helpers.ts';

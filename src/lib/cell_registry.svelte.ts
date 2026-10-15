@@ -1,7 +1,7 @@
 import type { ClassConstructor } from '@fuzdev/fuz_util/types.ts';
 import type { z } from 'zod';
 import { DEV } from 'esm-env';
-import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import type { Cell } from './cell.svelte.ts';
 import type { Frontend } from './frontend.svelte.ts';

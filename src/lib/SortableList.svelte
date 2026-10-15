@@ -1,7 +1,7 @@
 <script lang="ts" generics="T extends {id: Uuid}">
 	import { untrack, type Snippet } from 'svelte';
 	import { EMPTY_ARRAY } from '@fuzdev/fuz_util/array.ts';
-	import type { Uuid } from '@fuzdev/fuz_util/id.ts';
+	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 	import { slide } from 'svelte/transition';
 	import type { SvelteHTMLElements } from 'svelte/elements';
 

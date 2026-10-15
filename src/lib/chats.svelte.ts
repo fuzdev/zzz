@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { page } from '$app/state';
-import type { Uuid } from '@fuzdev/fuz_util/id.ts';
-import { get_datetime_now } from '@fuzdev/fuz_util/datetime.ts';
+import { get_datetime_now, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Chat, ChatJson, type ChatJsonInput } from './chat.svelte.ts';
