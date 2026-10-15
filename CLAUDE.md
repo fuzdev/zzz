@@ -22,6 +22,9 @@ it replaced (path, query, and hash).
 
 For coding conventions, see Skill(fuz-stack).
 
+IMPORTANT for AI agents: never deploy or publish zzz. Its releases and deploys
+are the user's.
+
 ## What zzz Does
 
 1. **Chat** with AI models — multi-thread, multi-model comparison, streaming responses
