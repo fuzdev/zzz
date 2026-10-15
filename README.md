@@ -97,4 +97,4 @@ Zzz builds on a great deal of software.
 
 ## License 🐦
 
-[MIT](LICENSE)
+[0BSD](LICENSE)
