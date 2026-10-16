@@ -1,10 +1,7 @@
 import { z } from 'zod';
 import { UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
-export const XmlAttributeKey = z
-	.string()
-	.transform((s) => s.trim())
-	.pipe(z.string().min(1));
+export const XmlAttributeKey = z.string().trim().min(1);
 export type XmlAttributeKey = z.infer<typeof XmlAttributeKey>;
 
 export const XmlAttributeKeyWithDefault = XmlAttributeKey.default('attr');
