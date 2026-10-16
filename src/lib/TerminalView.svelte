@@ -188,7 +188,7 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: var(--space_xs);
-		background: var(--fg_10);
+		background: var(--ink_10);
 	}
 	.terminal-id {
 		font-size: var(--font_size_sm);
@@ -206,7 +206,7 @@
 		gap: var(--space_sm);
 		margin: 0;
 		padding: var(--space_xs3) var(--space_xs);
-		background: var(--fg_10);
+		background: var(--ink_10);
 	}
 	.terminal-container {
 		flex: 1;

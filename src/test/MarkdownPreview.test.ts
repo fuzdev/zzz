@@ -314,8 +314,7 @@ describe('MarkdownPreview in-zzz links', () => {
 		assert.isUndefined(status_of(target, 'a'));
 	});
 
-	test('a mark never outlives its link, even where the rendered href differs from the reference', () => {
-		add_file(GUIDE);
+	test('a mark never outlives its link, even where the rendered href stays the same', () => {
 		const guide = add_file('/w/docs/readme.md', '[a](/nope/x.md)');
 		const target = render_in_app({
 			path: guide.path,
@@ -326,20 +325,30 @@ describe('MarkdownPreview in-zzz links', () => {
 		assert.strictEqual(status_of(target, 'a'), 'unknown');
 		assert.include(find_link(target, 'a').title, '/w/nope/x.md');
 
-		// mdz renders a root-relative reference through SvelteKit's `resolve`, dropping the empty
-		// segment, and reuses the anchor in place
-		guide.content = '[a](/docs//guide.md)';
+		// mdz collapses a leading slash run, so the reused anchor keeps its `href`, but the
+		// reference is now protocol-relative, which nothing follows; the link after it is still
+		// paired with its own anchor
+		guide.content = '[a](//nope/x.md) [b](./missing.md)';
 		flushSync();
-		assert.strictEqual(find_link(target, 'a').getAttribute('href'), '/docs/guide.md');
-		assert.isUndefined(status_of(target, 'a'), 'the file exists');
+		assert.strictEqual(find_link(target, 'a').getAttribute('href'), '/nope/x.md');
+		assert.isUndefined(status_of(target, 'a'));
 		assert.isNull(find_link(target, 'a').getAttribute('title'));
+		assert.strictEqual(status_of(target, 'b'), 'broken');
 	});
 
 	test('a click follows the reference, not the rendered href', () => {
 		const readme = add_file('/w/readme.md');
 		add_file(GUIDE);
-		const target = render_in_app({ path: readme.path, content: '[g](/docs//guide.md)' });
+		// rendered `/docs/guide.md`, an indexed file, but written protocol-relative, so inert
+		const target = render_in_app({
+			path: readme.path,
+			content: '[g](//docs/guide.md) [h](docs/guide.md)'
+		});
+		assert.strictEqual(find_link(target, 'g').getAttribute('href'), '/docs/guide.md');
 		assert.isTrue(click_link(target, 'g'));
+		assert.isNull(app.diskfiles.selected_file_id);
+		// the link after it still follows its own reference
+		assert.isTrue(click_link(target, 'h'));
 		assert.strictEqual(app.diskfiles.selected_file?.path, GUIDE);
 	});
 

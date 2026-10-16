@@ -119,7 +119,7 @@
 		align-items: center;
 		gap: var(--space_sm);
 		padding: var(--space_xs) var(--space_sm);
-		background: var(--fg_10);
+		background: var(--ink_10);
 		font-size: var(--font_size_sm);
 	}
 	.run-command {
@@ -157,7 +157,7 @@
 		gap: var(--space_xs);
 		padding: var(--space_xs) var(--space_sm);
 		border-top: 1px solid var(--border_color);
-		background: var(--fg_10);
+		background: var(--ink_10);
 	}
 	.stdin-input input {
 		flex: 1;

@@ -356,8 +356,8 @@ export const to_markdown_headings = (nodes: ReadonlyArray<MdzNode>): Array<Markd
 /** A link in a markdown document, resolved. */
 export interface MarkdownLink {
 	/**
-	 * The reference as written — the rendered `<a>`'s `href`, unless mdz
-	 * rewrote a root-relative one (see `query_markdown_link_anchors`).
+	 * The reference as written — the rendered `<a>`'s `href`, except where mdz
+	 * collapses a leading slash run (see `query_markdown_link_anchors`).
 	 */
 	reference: string;
 	text: string;
@@ -412,10 +412,13 @@ export const to_markdown_links = (
  * The rendered `<a>` of each of `links` inside `container`, matched by
  * document order — the `i`th anchor with an `href` is the `i`th link — or
  * `null` when the counts disagree, so no link is paired with another's
- * anchor. Order, not `href`, because mdz renders a root-relative reference
- * through SvelteKit's `resolve`, which can rewrite it (`/a//b.md` renders
- * `/a/b.md`). Assumes mdz renders every anchor in `container`, which holds
- * while no mdz context injects components that render their own.
+ * anchor. Order, not `href`, because the `href` isn't always the reference:
+ * mdz renders a root-relative one through SvelteKit's `resolve`, collapsing
+ * its leading run of `/` and `\` to one `/` (`//a/b.md` renders `/a/b.md`),
+ * so an anchor that reads as a path can stand for a reference this module
+ * reads as protocol-relative or backslashed, and inert. Assumes
+ * mdz renders every anchor in `container`, which holds while no mdz context
+ * injects components that render their own.
  *
  * @param container - the element mdz rendered the document into
  * @param links - the document's links, from `to_markdown_links`
