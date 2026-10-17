@@ -1,6 +1,7 @@
 {
   "name": "@fuzdev/zzz",
   "version": "0.0.1",
+  "private": true,
   "description": "software garage for power users and devs",
   "tagline": "nice web things for the tired",
   "glyph": "💤",
