@@ -301,15 +301,11 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         .await
         .map_err(|e| ServerError::Database(format!("migration failed: {e}")))?;
 
-    // Validate the cookie keys env early; the spine `fuz_auth::Keyring`
-    // (constructed below as `spine_keyring`) is the sole keyring on `App`.
-    let errors = fuz_auth::Keyring::validate(&config.secret_cookie_keys);
-    if !errors.is_empty() {
-        return Err(ServerError::Config(format!(
-            "SECRET_FUZ_COOKIE_KEYS validation failed: {}",
-            errors.join(", ")
-        )));
-    }
+    // Build (and so validate) the cookie keyring early; the spine
+    // `fuz_auth::Keyring` is the sole keyring on `App`.
+    let spine_keyring = Arc::new(fuz_auth::Keyring::new(&config.secret_cookie_keys).map_err(
+        |e| ServerError::Config(format!("SECRET_FUZ_COOKIE_KEYS validation failed: {e}")),
+    )?);
 
     // Bootstrap availability check — drives the `bootstrap_available_atomic`
     // shared by the spine account router (returned on `/status` 401) and
@@ -408,14 +404,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // alongside the socket-revocation listeners below fans every audit row to
     // these streams and closes account-keyed streams on revocation.
     let audit_sse = Arc::new(fuz_realtime::SseRegistry::new());
-    let spine_keyring = Arc::new(
-        fuz_auth::Keyring::new(&config.secret_cookie_keys).ok_or_else(|| {
-            ServerError::Config(
-                "SECRET_FUZ_COOKIE_KEYS is required for spine keyring (no valid keys found)"
-                    .to_owned(),
-            )
-        })?,
-    );
     let spine_password_hasher: Arc<dyn fuz_auth::PasswordHasher> = password_hasher;
     // Parse `ZZZ_TRUSTED_PROXIES` into the spine `fuz_http::ParsedProxy`
     // type. Empty/unset → empty vec → middleware treats every connection
