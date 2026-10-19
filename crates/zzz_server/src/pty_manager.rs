@@ -1428,9 +1428,10 @@ mod tests {
         let (sender, frames) = fuz_realtime::connection_channel(TEST_OUTBOUND_QUEUE_BYTES);
         let connection = registry.add_connection(
             sender,
-            None,
-            Some(account),
-            None,
+            fuz_realtime::ConnectionIdentity {
+                account_id: Some(account),
+                ..fuz_realtime::ConnectionIdentity::default()
+            },
             tokio_util::sync::CancellationToken::new(),
         );
         (connection, frames)

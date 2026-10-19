@@ -3445,9 +3445,7 @@ mod tests {
         let (sender, receiver) = fuz_realtime::connection_channel(outbound_queue_bytes);
         let connection = registry.add_connection(
             sender,
-            None,
-            None,
-            None,
+            fuz_realtime::ConnectionIdentity::default(),
             tokio_util::sync::CancellationToken::new(),
         );
         let sink = Arc::clone(&registry);
