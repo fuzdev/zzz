@@ -255,15 +255,25 @@ orientation; the spine crates are authoritative:
      on either scheme, so a host wildcard also lets a DNS-rebinding page on
      a matching domain through it; the warning says so.
    `tests/boot_allowed_origins.rs` runs the real `zzzd` over each case.
-   Three layers wrap the whole router in `run_app`, the static fallback
-   included, outermost first: `fuz_http::host_layer` refuses a `Host` that
-   isn't loopback or named by an allowed origin (403 `forbidden_host` — DNS
-   rebinding); `fuz_http::origin_layer` refuses a disallowed `Origin` (403
-   `forbidden_origin`, ahead of the next gate — the spine handlers check it
-   too); and `fuz_http::simple_request_layer` refuses a `POST` with no
-   `Content-Type` or a form / text one (415 `unsupported_content_type` — a
-   request a browser sends cross-origin with no preflight, carrying the
-   cookie from any other `localhost` port). The spine's JSON handlers (RPC
+   The router is `fuz_http::compose_stack`'s (`router.rs`): route groups,
+   each with its own body cap — `rpc` (`/api/rpc` + `/api/ws`,
+   `RPC_MESSAGE_MAX_BYTES`), `file_bytes` (`FILE_BYTES_MAX_BODY_BYTES`),
+   `account` (account, bootstrap, signup), `health_and_audit` (`/health` +
+   the audit stream), and the fallback (the static frontend, or axum's empty
+   404), the last three at `fuz_http::DEFAULT_BODY_LIMIT_BYTES` — and every
+   group, the fallback included, behind the same gates, outermost first: the
+   group's body cap (a declared `Content-Length` over it is a 413 ahead of
+   every other refusal), `fuz_http::host_layer` (a `Host` that isn't loopback
+   or named by an allowed origin → 403 `forbidden_host` — DNS rebinding),
+   `fuz_http::origin_layer` (a disallowed `Origin` → 403 `forbidden_origin` on
+   every path; no group is carved out — the spine handlers and the byte
+   routes check it again through the `fuz_auth::AuthGate`),
+   `fuz_http::simple_request_layer` (a `POST` with no `Content-Type` or a form
+   / text one → 415 `unsupported_content_type` — a request a browser sends
+   cross-origin with no preflight, carrying the cookie from any other
+   `localhost` port), then `fuz_http::client_ip_middleware`. Request tracing
+   is off. The `router.rs` tests pin each gate on every group through the
+   composed router. The spine's JSON handlers (RPC
    POST, login, logout, password, bootstrap, signup) also require
    `application/json` themselves, as fuz_app's routes do. See the root CLAUDE.md § Security posture.
 
@@ -397,7 +407,10 @@ conform to the shared fuz_app contract. The tests live in
   `text/plain`, form-encoded, or multipart) refused with 415
   `unsupported_content_type` on RPC — with a session and an allowed origin,
   the forged request's exact shape — and on a byte-route create, which
-  writes nothing. Requests go through `node:http`, since `fetch` won't send a
+  writes nothing; a foreign `Origin` refused on health, the static fallback,
+  and unrouted paths; and a body declared over its route group's cap answered
+  413 from a foreign origin on every group (health, the fallback, an account
+  route, RPC, the byte routes). Requests go through `node:http`, since `fetch` won't send a
   chosen `Host`.
 - **`media.cross.test.ts`** — the media actions and jobs against the
   daemon's real tools; each test that needs one skips, visibly, without it
@@ -536,6 +549,7 @@ crates/zzz_server/src/
 ├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered file index (events are hints, `lstat` decides), per-directory watches from the filer's own walk (degraded polling past the watch limit), stat-reusing rescans, debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, output paced by client acks, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
 ├── scoped_fs.rs      # Scoped filesystem — permanent (`zzz_dir` + `scoped_dirs`) + per-workspace roots, path validation, symlink rejection, atomic writes (temp file + fsync + rename), exclusive create, offset-checked append, open-for-read
+├── router.rs         # The served router: the surface routers composed by `fuz_http::compose_stack` into capped route groups (rpc, file_bytes, account, health_and_audit, the static fallback), every group behind the host, origin, and simple-request gates; its tests pin each gate on every group
 ├── static_files.rs   # Built-frontend fallback router: exact file → prerendered `{path}.html` → `200.html` SPA shell; backend paths + missing `_app/` assets 404; cache headers
 ├── tool.rs           # Local tools run as subprocesses: `resolve_tool` (override env var, else absolute `$PATH` entries — never the working directory), `resolve_model_file`, `Tools` (found at boot), `run_tool` (argument array, handles for stdin/stdout, scrubbed env, cwd `/`, timeout, bounded stderr tail), `run_tool_lines` (the same, handing over output lines as they're written)
 ├── transcription/    # Speech to timed text by a local model
@@ -733,7 +747,7 @@ joined after the drain, before PTY teardown.
 - Token management is JSON-RPC only (`account_token_create` / `account_token_list` / `account_token_revoke`) — no REST token routes
 - Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`, wired to the spine `AuditEmitter` via `fuz_realtime::register_audit_sse_listener` alongside the socket-revocation listeners (which close through the `RealtimeRevoker` fan-out, so they reach these streams too). Wire shape matches fuz_app's `audit_log_sse`; the `sse.cross.test.ts` suite verifies it. Close-on-revoke dispatches on the `RevocationScope` each event declares in `fuz_auth`'s `AUDIT_EVENT_SPECS` — the same column the socket-revocation listener reads, so the two can't drift: `session_revoke` (session-hash-scoped) / `token_revoke` (token-scoped) / `session_revoke_all` / `token_revoke_all` / `password_change` / `logout` / `account_delete` / `account_purge` (account-wide) / `role_grant_revoke` (role-matched). `role_grant_revoke` is the one deliberate difference from the socket-revocation listener, which omits it because `perform_action` re-authorizes every message. The route itself is session-only (`AuditStreamRouteState::credential_gate`), so a bearer never opens a stream here in the first place. A session holds at most `AUDIT_LOG_SSE_MAX_PER_SCOPE` (10) streams — one more ends its oldest — and a stream registers pending before the role read, with the credential re-read before it is admitted (a credential revoked meanwhile gets a 401, or a stream that ends right after its connect comment, never a live one)
 - Login/password rate limiting is **always on** (matching `fuz_forge_server` + `mageguild_server` and the fuz defaults): per-IP (5 attempts / 15 min) + per-account (10 / 30 min) sliding windows fire on `/login` and `/password`; 429 carries `{error: 'rate_limit_exceeded', retry_after}` plus a `Retry-After` header. Per-IP key is the resolved client IP from `fuz_http::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when running behind a reverse proxy so the bucket keys on the originating client rather than the proxy. The `testing_zzz_server` binary disables it via `RunAppOptions::rate_limiters: RateLimiterMode::DisabledForTesting` so the cross-backend auth suite's repeated logins don't trip the bucket; a process that nulls any limiter prints a startup banner saying so
-- One JSON-RPC message is capped at `zzz_server::RPC_MESSAGE_MAX_BYTES` (16 MiB) on both transports: the `/api/rpc` request body (`fuz_http::body_limit_layer`, plus axum's `DefaultBodyLimit` raised to match — the handler's `Bytes` extractor would otherwise stop at axum's 2 MiB default) and each `/api/ws` inbound message and frame (`max_message_bytes` of the `fuz_actions::ActionWsOptions` passed to `register_action_ws_with_options`; the spine default is 1 MiB, tungstenite's own 64 MiB / 16 MiB). It's above the spine's 1 MiB so saving a file the filer loads (≤ 4 MiB) fits — except in the worst case, where JSON's 6-byte escape of each control character pushes a file dense with them past the cap and the client guard refuses the save cleanly — and so long completion histories fit. **The larger buffer isn't confined to authenticated callers on HTTP**: `fuz_actions::rpc_post_handler` buffers and parses the body before auth, and `ping` is public, so any local process can make zzzd hold up to 16 MiB per concurrent request. On the WebSocket (authenticated at upgrade) up to 128 dispatches can be in flight per socket, a ceiling of about 2 GiB of buffered messages per authenticated socket. Both are acceptable only because the bind is loopback-only and zzz is single-operator (root CLAUDE.md § Security posture). The account/bootstrap/signup routers keep `fuz_http::DEFAULT_BODY_LIMIT_BYTES` (1 MiB). An oversized WebSocket message gets no error reply — the read fails and the socket closes (code 1006), taking its in-flight requests with it — so the frontend `Socket` refuses any request over the cap before sending (`RPC_MESSAGE_MAX_BYTES` in `src/lib/rpc_message_limit.ts`, pinned to the Rust constant by the cross-backend filesystem suite). Larger and binary content goes over the file byte routes instead (File byte routes below), a chunk of at most the same size per request. The static fallback takes no body
+- One JSON-RPC message is capped at `zzz_server::RPC_MESSAGE_MAX_BYTES` (16 MiB) on both transports: the `/api/rpc` request body (the `rpc` stack group's `BodyCap::Bytes`, which mounts `fuz_http::body_limit_layer` plus axum's `DefaultBodyLimit` at the same size — the handler's `Bytes` extractor would otherwise stop at axum's 2 MiB default) and each `/api/ws` inbound message and frame (`max_message_bytes` of the `fuz_actions::ActionWsOptions` passed to `register_action_ws_with_options`; the spine default is 1 MiB, tungstenite's own 64 MiB / 16 MiB). It's above the spine's 1 MiB so saving a file the filer loads (≤ 4 MiB) fits — except in the worst case, where JSON's 6-byte escape of each control character pushes a file dense with them past the cap and the client guard refuses the save cleanly — and so long completion histories fit. **The larger buffer isn't confined to authenticated callers on HTTP**: `fuz_actions::rpc_post_handler` buffers and parses the body before auth, and `ping` is public, so any local process can make zzzd hold up to 16 MiB per concurrent request. On the WebSocket (authenticated at upgrade) up to 128 dispatches can be in flight per socket, a ceiling of about 2 GiB of buffered messages per authenticated socket. Both are acceptable only because the bind is loopback-only and zzz is single-operator (root CLAUDE.md § Security posture). The account/bootstrap/signup routers, `/health`, the audit stream, and the fallback keep `fuz_http::DEFAULT_BODY_LIMIT_BYTES` (1 MiB). An oversized WebSocket message gets no error reply — the read fails and the socket closes (code 1006), taking its in-flight requests with it — so the frontend `Socket` refuses any request over the cap before sending (`RPC_MESSAGE_MAX_BYTES` in `src/lib/rpc_message_limit.ts`, pinned to the Rust constant by the cross-backend filesystem suite). Larger and binary content goes over the file byte routes instead (File byte routes below), a chunk of at most the same size per request. The static fallback takes no body
 - Each WebSocket connection's outbound queue — the frames queued for a socket that its writer hasn't taken yet — has a byte budget of `zzz_server::WS_OUTBOUND_QUEUE_BYTES` (32 MiB, `outbound_queue_bytes` of the same `ActionWsOptions`; the spine default is 4 MiB, and it doesn't follow the message cap). Each waiting frame is charged its UTF-8 length plus `fuz_realtime::OUTBOUND_FRAME_OVERHEAD_BYTES`, a frame is always queued into an empty queue, and one that doesn't fit closes that socket with `fuz_realtime::WS_CLOSE_OUTBOUND_OVERFLOW` (4005), its backlog discarded — the frontend reconnects and reloads `session_load`. The budget is sized by the largest frame zzz pushes: a `filer_change` carries a file's whole text (≤ 4 MiB, `filer::MAX_INDEXED_FILE_SIZE`), and JSON's 6-byte escape of a control character takes one frame to 24 MiB (a `const` assertion in `lib.rs` keeps the budget above that), so the default would deliver any file near the cap only into an empty queue. Requests' responses are written by the connection's loop and never queue. **The budget bounds a burst, it doesn't absorb one of any size**: a sender never waits for a socket, so anything that produces faster than a client takes for longer than the budget holds closes that client's socket. The filer's flush (`filer::flush_ready`) yields to the runtime after each broadcast, so each connection's writer gets a turn to take a frame before the next is queued and a batch isn't queued whole — it is a turn, not backpressure: a client that takes the batch slower than the filer serializes it still falls behind, and is closed once more than the budget is waiting (a batch of `touch`es carries no contents, so `touch`ing a whole tree sends each file's metadata and none of its text; a batch of real changes still carries every changed file whole); terminal output is paced by acks instead (see PTY terminals → Output pacing under Design Decisions): a terminal stops reading its PTY once 1 MiB of its output is unacknowledged by its fastest acking connection, so it holds about that much in such a socket's queue; a connection that never acks isn't paced, and more than the budget of output it hasn't taken closes it (the terminal keeps running; the reconnect flags the output gap). **Memory**: a client that stops reading holds at most the budget plus the one frame its writer has taken (≤ 24 MiB) per socket, until that write passes `fuz_realtime::WS_WRITE_STALL_TIMEOUT` or the next frame overflows; a broadcast's text is one buffer shared by every recipient. Acceptable for the same reason as the message cap: authenticated sockets only, on a loopback bind
 
 ## Design Decisions
@@ -837,17 +851,19 @@ joined after the drain, before PTY teardown.
   entry, no generated client, and no entry in the `any_credential_surface`
   census — so they run the gates themselves and
   `file_bytes.cross.test.ts` pins them.
-  - **Gates**, in order: query shape (unknown key, missing `path`, a
-    non-decimal `offset` → 400 `invalid_query_params`, the same with or
-    without credentials); `fuz_auth::resolve_auth_from_headers` (any
+  - **Gates**, in order, through the server's `fuz_auth::AuthGate`: the
+    origin check (`check_origin`, 403 `forbidden_origin`); query shape
+    (unknown key, missing `path`, a non-decimal `offset` → 400
+    `invalid_query_params`, the same with or without credentials); the
+    credential walk (`resolve_credential` on the origin check's witness — any
     credential, like every zzz-owned action; none → 401); the token scope (a
     method-scoped API token holds no non-RPC surface → 403
-    `token_scope_required` / `surface:file_bytes`). The router is layered
-    with the Origin allowlist, the client-IP middleware, and a body limit
-    (`FILE_BYTES_MAX_BODY_BYTES`, equal to `RPC_MESSAGE_MAX_BYTES`), and sits
-    inside `run_app`'s `Host` and simple-request gates, so a `POST` must carry
-    a type that isn't form or text (the frontend sends
-    `application/octet-stream`) — `PATCH` is always preflighted. A request
+    `token_scope_required` / `surface:file_bytes`). The routes are their own
+    stack group, capped at `FILE_BYTES_MAX_BODY_BYTES` (equal to
+    `RPC_MESSAGE_MAX_BYTES`) outside the `Host`, origin, and simple-request
+    gates, so a `POST` must carry a type that isn't form or text (the
+    frontend sends `application/octet-stream`) — `PATCH` is always
+    preflighted. A request
     with no `Origin` passes the allowlist, which is what lets a media
     element's same-origin `src` load; the session cookie is `SameSite=Strict`,
     so a cross-site page's request carries no credential. A write's body is

@@ -14,6 +14,9 @@
  *   text one, is refused (415 `unsupported_content_type`) before anything
  *   reads it: a browser sends those cross-origin with no preflight, carrying
  *   the session cookie from any `localhost` port.
+ * - **Body cap** — each route group's cap sits outside the gates above, so a
+ *   request declaring a `Content-Length` over its route's cap is a 413 even
+ *   from a foreign origin.
  *
  * Requests go through `node:http`, since `fetch` won't send a chosen `Host`.
  * `dev_origins.cross.test.ts` covers the origins a dev checkout allows.
@@ -30,7 +33,8 @@ import {
 	reconstruct_bootstrapped_handle
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 
-import { to_file_bytes_url } from '#lib/file_bytes.ts';
+import { FILE_BYTES_MAX_BODY_BYTES, to_file_bytes_url } from '#lib/file_bytes.ts';
+import { RPC_MESSAGE_MAX_BYTES } from '#lib/rpc_message_limit.ts';
 
 import './cross_test_types.ts';
 import {
@@ -38,6 +42,7 @@ import {
 	WS_UPGRADE_HEADERS,
 	type RawResponse
 } from './raw_request.ts';
+import { request_status } from './request_status.ts';
 
 const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
 const setup_test = default_cross_process_setup(handle);
@@ -49,6 +54,12 @@ const scoped_dir = handle.config.env.PUBLIC_ZZZ_SCOPED_DIRS!;
 
 /** A page on another local port: same-site with zzzd, not an allowed origin. */
 const OTHER_PORT_ORIGIN = 'http://localhost:8000';
+
+/**
+ * The cap on every route group but RPC and the byte routes — the spine's
+ * default, `fuz_http::DEFAULT_BODY_LIMIT_BYTES`.
+ */
+const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;
 
 /** The `Host` a rebinding page sends: its own domain, at the daemon's port. */
 const REBOUND_HOST = `rebind.example.com:${port}`;
@@ -150,6 +161,16 @@ describe('browser gates', () => {
 			assert_error(ws, 403, 'forbidden_origin', 'ws upgrade');
 		});
 
+		test('a foreign origin is refused on the probe, the static fallback, and unrouted paths', async () => {
+			for (const path of ['/health', '/', '/chats/x', '/no/such/route', `${api_path}/nope`]) {
+				const res = await raw_request(path, { headers: { origin: OTHER_PORT_ORIGIN } });
+				assert_error(res, 403, 'forbidden_origin', path);
+			}
+			// with no `Origin` they answer as usual
+			assert.strictEqual((await raw_request('/health')).status, 200, '/health');
+			assert.strictEqual((await raw_request(`${api_path}/nope`)).status, 404, 'unrouted api path');
+		});
+
 		test("zzzd's own origins are allowed a JSON POST", async () => {
 			for (const origin of [base_url, `http://127.0.0.1:${port}`]) {
 				const res = await raw_request(rpc_path, {
@@ -212,6 +233,32 @@ describe('browser gates', () => {
 				() => false
 			);
 			assert.isFalse(exists, 'no file created');
+		});
+	});
+
+	describe('Body cap', () => {
+		test('an over-cap body from a foreign origin is a 413 on every route group', async () => {
+			const fixture = await setup_test();
+			const file_bytes = to_file_bytes_url(api_path, join(scoped_dir, `${randomUUID()}.bin`));
+			for (const [label, path, cap] of [
+				['health', '/health', DEFAULT_BODY_LIMIT_BYTES],
+				['static fallback', '/', DEFAULT_BODY_LIMIT_BYTES],
+				['unrouted path', '/no/such/route', DEFAULT_BODY_LIMIT_BYTES],
+				['account login', '/api/account/login', DEFAULT_BODY_LIMIT_BYTES],
+				['rpc POST', rpc_path, RPC_MESSAGE_MAX_BYTES],
+				['file bytes', file_bytes, FILE_BYTES_MAX_BODY_BYTES]
+			] as const) {
+				const status = await request_status(
+					`${base_url}${path}`,
+					{
+						...fixture.create_session_headers(),
+						origin: OTHER_PORT_ORIGIN,
+						'content-type': 'application/json'
+					},
+					new Uint8Array(cap + 1)
+				);
+				assert.strictEqual(status, 413, label);
+			}
 		});
 	});
 });

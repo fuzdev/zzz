@@ -861,8 +861,10 @@ accounts from each other.
 
 Only zzz's own UI can drive the daemon from a browser. The session cookie is
 `HttpOnly; Secure; SameSite=Strict`, which keeps other sites' pages out but not
-pages on other `localhost` ports, so every request, the static frontend
-included, also passes three gates:
+pages on other `localhost` ports, so every request, the static frontend and
+an unrouted path included, also passes three gates — each behind a body cap,
+so a request declaring a `Content-Length` over its route's cap is a 413
+whatever else is wrong with it (`crates/zzz_server/src/router.rs`):
 
 - **Origin** — a request with an `Origin` must match `FUZ_ALLOWED_ORIGINS`
   (403 `forbidden_origin`), on the WebSocket upgrade too. A request without

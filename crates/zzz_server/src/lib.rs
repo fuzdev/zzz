@@ -26,6 +26,7 @@ pub mod media;
 mod origin_allowlist;
 pub mod provider;
 pub mod pty_manager;
+mod router;
 pub mod scoped_fs;
 pub mod static_files;
 pub mod tool;
@@ -38,9 +39,6 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use axum::routing::get;
-use axum::{Json, Router};
-use serde::Serialize;
 use tokio::net::TcpListener;
 
 pub use error::ServerError;
@@ -422,9 +420,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             "trusted proxies configured — XFF resolution enabled"
         );
     }
-    // Never empty, and every entry well-formed: `parse_config` refused to
-    // boot otherwise (see `origin_allowlist`).
-    let spine_allowed_origins = config.allowed_origins;
     let bootstrap_available_atomic =
         Arc::new(std::sync::atomic::AtomicBool::new(bootstrap_available));
     // Both transports: a revocation handler's direct close must reach the
@@ -433,23 +428,33 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     let socket_revoker = fuz_realtime::RealtimeRevoker::socket_revoker(&realtime, &audit_sse);
     // Spine daemon-token state — **injected, never constructed here** (see
     // `RunAppOptions::daemon_token_state`). Production is `None`, so the
-    // daemon-token leg of `resolve_auth_from_headers` is unreachable and no
-    // credential file is written.
+    // gate's daemon-token leg is unreachable and no credential file is
+    // written.
     if let Some(ref state) = spine_daemon_token {
         fuz_auth::resolve_keeper_into(state, &pool).await;
     }
-    let account_route_state = fuz_auth::AccountRouteState {
+    // One front door for the whole server: the origin allowlist beside the
+    // credential walk (daemon token → cookie → bearer) over zzz's per-port
+    // cookie. Every route state that reads a credential takes a clone, and the
+    // stack's options read its allowlist (`router::zzz_stack_options`), so
+    // the stack's origin check and each handler's in-handler one read one list.
+    // The allowlist is never empty and every entry is well-formed:
+    // `parse_config` refused to boot otherwise (see `origin_allowlist`).
+    let gate = fuz_auth::AuthGate {
         pool: pool.clone(),
         keyring: Arc::clone(&spine_keyring),
+        daemon_token_state: spine_daemon_token.clone(),
+        session_cookie_name,
+        allowed_origins: config.allowed_origins,
+    };
+    let account_route_state = fuz_auth::AccountRouteState {
+        gate: gate.clone(),
         password_hasher: Arc::clone(&spine_password_hasher),
         audit: Arc::clone(&spine_audit_emitter),
         socket_revoker: Arc::clone(&socket_revoker),
-        allowed_origins: spine_allowed_origins.clone(),
         bootstrap_available: Arc::clone(&bootstrap_available_atomic),
         login_ip_rate_limiter,
         login_account_rate_limiter,
-        daemon_token_state: spine_daemon_token.clone(),
-        session_cookie_name,
     };
     let bootstrap_route_state = fuz_auth::BootstrapRouteState {
         options: Arc::new(fuz_auth::BootstrapOptions {
@@ -468,9 +473,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
                 cb
             }),
         }),
-        keyring: Arc::clone(&spine_keyring),
-        allowed_origins: spine_allowed_origins.clone(),
-        session_cookie_name,
+        gate: gate.clone(),
     };
 
     // Signup route: mounted on the production server so the
@@ -496,9 +499,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             signup_fail_floor_ms: fuz_auth::DEFAULT_SIGNUP_FAIL_FLOOR_MS,
             signup_fail_jitter_ms: fuz_auth::DEFAULT_SIGNUP_FAIL_JITTER_MS,
         }),
-        keyring: Arc::clone(&spine_keyring),
-        allowed_origins: spine_allowed_origins.clone(),
-        session_cookie_name,
+        gate: gate.clone(),
     };
 
     let mut app = handlers::App::new(
@@ -648,29 +649,15 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // `app.broadcast` is shimmed onto `App.realtime`
     // (see `handlers/mod.rs`).
     //
-    // Middleware: every spine router below carries its own
-    // `fuz_http::client_ip_middleware` layer over `spine_trusted_proxies` —
-    // RPC, WS, the three `/api/account/*` REST routers, and the admin audit
-    // stream. The layer is mounted unconditionally, including when
-    // `ZZZ_TRUSTED_PROXIES` is unset and the set is empty: the middleware
-    // always populates `ClientIp`, and an empty set is the *more* conservative
-    // configuration, not a disabled one — every connection then fails
-    // `is_trusted_ip`, so the spoofable `X-Forwarded-For` is ignored and the
-    // real TCP peer is recorded. Omitting the layer is what would degrade
-    // behavior: `ClientIp` would be absent, so the IP-keyed limiters
-    // (`login_ip_rate_limiter`, `signup_ip_rate_limiter`,
-    // `action_ip_rate_limiter`) would bucket every caller under one shared
-    // `fuz_http::UNRESOLVED_CLIENT_IP` key, and each bearer touch of
-    // `api_token` would record that same sentinel as `last_used_ip` instead of
-    // the real address.
+    // The routers below carry no layers of their own: `router::compose_router`
+    // puts each in a `fuz_http::compose_stack` group, and the stack mounts the
+    // body cap, the browser gates, and `fuz_http::client_ip_middleware` (over
+    // `spine_trusted_proxies`) in every group — see `router`.
     let registry_for_rpc = Arc::clone(app_state.action_registry.get().ok_or_else(|| {
         ServerError::Config("action_registry must be set before mounting /api/rpc".to_owned())
     })?);
     let spine_rpc_state = fuz_actions::RpcRouteState {
-        pool: app_state.db_pool.clone(),
-        keyring: Arc::clone(&spine_keyring),
-        daemon_token_state: spine_daemon_token.clone(),
-        allowed_origins: spine_allowed_origins.clone(),
+        gate: gate.clone(),
         registry: registry_for_rpc,
         audit: Arc::clone(&spine_audit_emitter),
         socket_revoker: Arc::clone(&socket_revoker),
@@ -678,38 +665,20 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         // notification emitted on the HTTP dispatch path reaches the
         // live sockets rather than an empty registry.
         notification_sender: Arc::clone(&realtime).into_notification_sender(),
-        session_cookie_name,
         account_rate_limiter: action_account_rate_limiter.clone(),
         ip_rate_limiter: action_ip_rate_limiter.clone(),
     };
-    let spine_rpc_router = fuz_actions::create_rpc_router(spine_rpc_state)
-        .layer(axum::middleware::from_fn_with_state(
-            Arc::clone(&spine_trusted_proxies),
-            fuz_http::client_ip_middleware,
-        ))
-        // `RPC_MESSAGE_MAX_BYTES` (16 MiB) request-body cap, shared with the
-        // `/api/ws` message cap below; larger and binary content goes over
-        // the file byte routes (`file_bytes`). The POST handler reads
-        // the body through axum's `Bytes` extractor, which applies axum's own
-        // 2 MiB `DefaultBodyLimit` — raised to the same cap, so the tower
-        // limit is the one that decides.
-        .layer(axum::extract::DefaultBodyLimit::max(RPC_MESSAGE_MAX_BYTES))
-        .layer(fuz_http::body_limit_layer(RPC_MESSAGE_MAX_BYTES));
 
     let registry_for_ws = Arc::clone(app_state.action_registry.get().ok_or_else(|| {
         ServerError::Config("action_registry must be set before mounting /api/ws".to_owned())
     })?);
     let spine_ws_state = fuz_actions::WsRouteState {
-        pool: app_state.db_pool.clone(),
-        keyring: Arc::clone(&spine_keyring),
-        daemon_token_state: spine_daemon_token.clone(),
-        allowed_origins: spine_allowed_origins.clone(),
+        gate: gate.clone(),
         registry: registry_for_ws,
         audit: Arc::clone(&spine_audit_emitter),
         socket_revoker: Arc::clone(&socket_revoker),
         notification_sender: Arc::clone(&realtime).into_notification_sender(),
         connection_registry: Arc::clone(&realtime),
-        session_cookie_name,
         account_rate_limiter: action_account_rate_limiter,
         ip_rate_limiter: action_ip_rate_limiter,
         // No role gate: zzz is single-operator by configuration
@@ -729,173 +698,49 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         // shipped behavior exactly.
         required_roles: Vec::new(),
     };
-    // `WS_OPTIONS`: the `/api/rpc` body's inbound cap, and an outbound queue
-    // budget sized for `filer_change` frames.
-    let spine_ws_router = fuz_actions::register_action_ws_with_options(spine_ws_state, WS_OPTIONS)
-        .layer(axum::middleware::from_fn_with_state(
-            Arc::clone(&spine_trusted_proxies),
-            fuz_http::client_ip_middleware,
-        ));
-
-    // Spine account REST router: mounts `/status`, `/login`, `/logout`,
-    // `/password` under `/api/account`.
-    // `fuz_http::client_ip_middleware` is wrapped on the router so
-    // `Extension<fuz_http::ClientIp>` is populated for every account
-    // route (rate-limit keys + audit_log.ip).
-    let spine_account_router = fuz_auth::account_router(account_route_state)
-        .layer(axum::middleware::from_fn_with_state(
-            Arc::clone(&spine_trusted_proxies),
-            fuz_http::client_ip_middleware,
-        ))
-        .layer(fuz_http::body_limit_layer(
-            fuz_http::DEFAULT_BODY_LIMIT_BYTES,
-        ));
-
-    // Spine bootstrap router: mounts `/bootstrap` at the router root, so
-    // nesting under `/api/account` produces `/api/account/bootstrap`.
-    let spine_bootstrap_router =
-        fuz_auth::bootstrap_routes::bootstrap_router(bootstrap_route_state)
-            .layer(axum::middleware::from_fn_with_state(
-                Arc::clone(&spine_trusted_proxies),
-                fuz_http::client_ip_middleware,
-            ))
-            .layer(fuz_http::body_limit_layer(
-                fuz_http::DEFAULT_BODY_LIMIT_BYTES,
-            ));
-
-    // Spine signup router: mounts `/signup` at the router root, so
-    // nesting under `/api/account` produces `/api/account/signup`.
-    // Same client_ip_middleware layer so audit_log.ip on success +
-    // failure rows reflects the resolved client IP rather than the
-    // proxy peer.
-    let spine_signup_router = fuz_auth::signup_routes::signup_router(signup_route_state)
-        .layer(axum::middleware::from_fn_with_state(
-            Arc::clone(&spine_trusted_proxies),
-            fuz_http::client_ip_middleware,
-        ))
-        .layer(fuz_http::body_limit_layer(
-            fuz_http::DEFAULT_BODY_LIMIT_BYTES,
-        ));
 
     // Spine audit-log SSE stream: `GET /api/admin/audit/stream` — the shared
     // `fuz_realtime::audit_stream_router`, mounted with the spine defaults
     // (admin role, session-only credential gate, and a close-on-revoke keyed
     // by each audit event's declared `RevocationScope`), wired to the
-    // `audit_sse` registry the listener above fans rows into. Carries its own
-    // `origin_layer` so the origin allowlist gates it like every other zzz
-    // handler, and the same `client_ip_middleware` as every other spine
-    // router: it writes no `audit_log.ip`, but credential resolution runs the
-    // bearer leg *before* the channel gate refuses it, and that leg's
-    // `api_token` touch writes `last_used_ip = $2` unconditionally — the
-    // statement has no "leave the column alone" form — so without the layer
-    // every bearer attempt on the stream would stamp the
-    // `fuz_http::UNRESOLVED_CLIENT_IP` sentinel over the real address.
-    let mut audit_stream_state = fuz_realtime::AuditStreamRouteState::new(
-        app_state.db_pool.clone(),
-        Arc::clone(&spine_keyring),
-        spine_daemon_token.clone(),
-        Arc::clone(&audit_sse),
-    );
-    audit_stream_state.session_cookie_name = session_cookie_name;
-    let spine_audit_stream_router = fuz_realtime::audit_stream_router(audit_stream_state)
-        .layer(axum::middleware::from_fn_with_state(
-            Arc::clone(&spine_trusted_proxies),
-            fuz_http::client_ip_middleware,
-        ))
-        .layer(axum::middleware::from_fn_with_state(
-            spine_allowed_origins.clone(),
-            fuz_http::origin_layer,
-        ));
+    // `audit_sse` registry the listener above fans rows into. The stream
+    // checks the request at the gate (origin, then credential); the stack's
+    // client-IP middleware matters here although it writes no `audit_log.ip`:
+    // credential resolution runs the bearer leg *before* the channel gate
+    // refuses it, and that leg's `api_token` touch writes `last_used_ip = $2`
+    // unconditionally, so without the layer every bearer attempt on the
+    // stream would stamp the `fuz_http::UNRESOLVED_CLIENT_IP` sentinel over
+    // the real address.
+    let audit_stream_state =
+        fuz_realtime::AuditStreamRouteState::new(gate.clone(), Arc::clone(&audit_sse));
 
     // File byte routes (`file_bytes::FILE_BYTES_PATH`): hand-written, outside
-    // the action system, so they carry the gates the RPC router gets from the
-    // spine — the Origin allowlist, the client-IP middleware (the bearer
-    // leg's `api_token` touch records it), and a body cap. The handlers
-    // authenticate before they read a body.
-    let file_bytes_router = file_bytes::file_bytes_router(file_bytes::FileBytesRouteState {
+    // the action system, so the handlers run the gate themselves (origin,
+    // then the query, then the credential) before they read a body.
+    let file_bytes_state = file_bytes::FileBytesRouteState {
         app: Arc::clone(&app_state),
-        keyring: Arc::clone(&spine_keyring),
-        daemon_token_state: spine_daemon_token.clone(),
-        session_cookie_name,
-    })
-    .layer(axum::middleware::from_fn_with_state(
-        Arc::clone(&spine_trusted_proxies),
-        fuz_http::client_ip_middleware,
-    ))
-    .layer(axum::middleware::from_fn_with_state(
-        spine_allowed_origins.clone(),
-        fuz_http::origin_layer,
-    ))
-    .layer(fuz_http::body_limit_layer(
-        file_bytes::FILE_BYTES_MAX_BODY_BYTES,
-    ));
+        gate: gate.clone(),
+    };
 
-    // A new top-level backend route (beside `/api` and `/health`) must also be
-    // added to `static_files::BACKEND_PATH_PREFIXES`, or its unknown subpaths
-    // get the SPA shell.
-    let mut app = Router::new()
-        .route("/health", get(health_handler))
-        // Spine REST routers — account REST + bootstrap. The order of
-        // `.nest("/api/account", ...)` calls doesn't matter because the
-        // bootstrap router only exposes `/bootstrap` and account exposes
-        // the four other paths. axum merges nests at the same prefix.
-        .nest("/api/account", spine_account_router)
-        .nest("/api/account", spine_bootstrap_router)
-        .nest("/api/account", spine_signup_router)
-        // Spine RPC + WS — single canonical mount. `create_rpc_router`
-        // exposes `/rpc` and `register_action_ws` exposes `/ws`, so
-        // nesting at `/api` produces `/api/rpc` and `/api/ws`. Both
-        // nested routers carry their own state (`RpcRouteState` /
-        // `WsRouteState`) + middleware stack.
-        .nest("/api", spine_rpc_router)
-        .nest("/api", spine_ws_router)
-        // Admin-gated audit-log SSE stream — absolute path, so merge (not nest).
-        .merge(spine_audit_stream_router)
-        // File byte routes — absolute path too.
-        .merge(file_bytes_router);
-
-    // The built frontend, as the fallback behind every backend route: exact
-    // files, then prerendered pages, then the SPA shell — see `static_files`.
-    // Without a static dir (dev, where Vite serves the frontend) unmatched
-    // paths get axum's empty 404.
+    let surfaces = router::SurfaceRouters {
+        rpc: fuz_actions::create_rpc_router(spine_rpc_state),
+        // `WS_OPTIONS`: the `/api/rpc` body's inbound cap, and an outbound
+        // queue budget sized for `filer_change` frames.
+        ws: fuz_actions::register_action_ws_with_options(spine_ws_state, WS_OPTIONS),
+        account: fuz_auth::account_router(account_route_state),
+        bootstrap: fuz_auth::bootstrap_routes::bootstrap_router(bootstrap_route_state),
+        signup: fuz_auth::signup_routes::signup_router(signup_route_state),
+        audit_stream: fuz_realtime::audit_stream_router(audit_stream_state),
+        file_bytes: file_bytes::file_bytes_router(file_bytes_state),
+    };
     if let Some(ref dir) = config.static_dir {
         tracing::info!(dir = %dir.display(), "serving static files");
-        app = app.fallback_service(static_files::static_router(dir));
     }
-
-    // Three gates over everything, the static fallback included, so a browser
-    // page that isn't zzz's own can't drive the daemon — outermost first:
-    // - `host_layer` refuses a `Host` that isn't loopback or named by an
-    //   allowed origin — a DNS-rebinding page talks to zzzd same-origin,
-    //   sending no `Origin`, but its `Host` is its own domain.
-    // - `origin_layer` refuses a disallowed `Origin`. The spine handlers check
-    //   it too; this puts it ahead of the next gate, so a foreign page's
-    //   request is refused for its origin whatever its content type.
-    // - `simple_request_layer` refuses a `POST` a browser could send
-    //   cross-origin without a CORS preflight (no `Content-Type`, or a form
-    //   or text one). The session cookie is `SameSite=Strict`, but same-site
-    //   ignores the port, so a page on another `localhost` port would send it.
-    //   zzz takes no form or multipart bodies, so nothing legitimate is lost.
-    //
-    // The three keep `fuz_http`'s relative order (its "Mount ordering"), but
-    // the body cap isn't where that order puts it. `fuz_http` recommends one
-    // `body_limit_layer` outside the origin check, so an over-cap request is
-    // a 413 whatever its origin. zzz's caps differ per router — 16 MiB on
-    // `/api/rpc` and the byte routes, the 1 MiB default on the account
-    // routers — so each is layered on its own router above, inside these
-    // gates: a request refused for its `Host` or `Origin` is a 403 even when
-    // its declared length is over the cap, and only one that passes the gates
-    // is answered 413. Either way the body is never read.
-    let app = app
-        .layer(axum::middleware::from_fn(fuz_http::simple_request_layer))
-        .layer(axum::middleware::from_fn_with_state(
-            spine_allowed_origins.clone(),
-            fuz_http::origin_layer,
-        ))
-        .layer(axum::middleware::from_fn_with_state(
-            spine_allowed_origins.clone(),
-            fuz_http::host_layer,
-        ));
+    let app = router::compose_router(
+        surfaces,
+        config.static_dir.as_deref(),
+        &router::zzz_stack_options(&gate, spine_trusted_proxies),
+    );
 
     let addr = config.bind_addr;
     let listener = TcpListener::bind(addr)
@@ -951,15 +796,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
 
     tracing::info!("server shutdown complete");
     Ok(())
-}
-
-#[derive(Serialize)]
-struct HealthResponse {
-    status: &'static str,
-}
-
-async fn health_handler() -> Json<HealthResponse> {
-    Json(HealthResponse { status: "ok" })
 }
 
 // -- Config -------------------------------------------------------------------
@@ -1689,11 +1525,12 @@ mod config_paths {
 
 #[cfg(test)]
 mod client_ip_posture {
-    //! The empty-trusted-proxy posture the spine routers in [`run_app`] rely on.
+    //! The empty-trusted-proxy posture the routes [`run_app`] serves rely on.
     //!
-    //! `ZZZ_TRUSTED_PROXIES` is unset by default, so every spine router layers
-    //! `client_ip_middleware` over an *empty* proxy set. These tests pin what
-    //! that combination does — record the real TCP peer, never believe a forged
+    //! `ZZZ_TRUSTED_PROXIES` is unset by default, so the stack mounts
+    //! `client_ip_middleware` in every route group over an *empty* proxy
+    //! set. These tests pin what that combination does — record the real
+    //! TCP peer, never believe a forged
     //! `X-Forwarded-For` — because it is the whole reason the layer is mounted
     //! unconditionally rather than only when proxies are configured.
 

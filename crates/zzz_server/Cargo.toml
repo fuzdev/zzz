@@ -45,5 +45,13 @@ fuz_pty.workspace = true
 reqwest.workspace = true
 libc = "0.2"
 
+[dev-dependencies]
+# Re-declare fuz_http (already a normal dep) with the test-only
+# `GatedRouter::into_router_for_testing`, so the router tests can drive the
+# composed router in-process. Enabled from a dev-dependency it stays out of
+# every build that compiles no tests; `cargo xtask check-release` refuses it on
+# a normal edge.
+fuz_http = { workspace = true, features = ["test_router_access"] }
+
 [lints]
 workspace = true

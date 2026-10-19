@@ -18,13 +18,17 @@
 //!
 //! ## Gates
 //!
-//! In order: the query's shape, authentication
-//! ([`fuz_auth::resolve_auth_from_headers`] — any credential, like every
-//! zzz-owned action), and the token scope (a method-scoped API token holds no
-//! non-RPC surface). The router is mounted behind the Origin allowlist. Paths
-//! go through [`ScopedFs`](crate::scoped_fs::ScopedFs): absolute, in scope, no
-//! symlinks, regular files only. A write's body is read only after the gates
-//! pass.
+//! In order, through the server's [`AuthGate`]: the origin check
+//! ([`AuthGate::check_origin`]), the query's shape, authentication
+//! ([`AuthGate::resolve_credential`], on the origin check's witness — any
+//! credential, like every zzz-owned action), and the token scope (a
+//! method-scoped API token holds no non-RPC surface). The origin check is the
+//! in-handler half of a belt the stack's origin layer also wears, so the
+//! routes refuse a foreign page even outside that stack. The query check runs
+//! before the credential walk, so a malformed query answers the same whatever
+//! the caller's credentials. Paths go through
+//! [`ScopedFs`](crate::scoped_fs::ScopedFs): absolute, in scope, no symlinks,
+//! regular files only. A write's body is read only after the gates pass.
 //!
 //! These routes are outside the action system, so nothing derived from action
 //! specs covers them: no audit row, no actions-log entry, no generated client,
@@ -60,7 +64,7 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use fuz_auth::route_helpers::extract_client_ip_or_unresolved;
-use fuz_auth::{Keyring, SharedDaemonTokenState, resolve_auth_from_headers};
+use fuz_auth::{AuthGate, OriginChecked};
 use fuz_http::{ClientIp, assert_known_query_keys, query_first};
 use tokio::io::{AsyncReadExt as _, AsyncSeekExt as _};
 
@@ -90,26 +94,25 @@ const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; sandbox";
 #[derive(Clone)]
 pub struct FileBytesRouteState {
     pub app: Arc<App>,
-    /// Cookie-signing keyring.
-    pub keyring: Arc<Keyring>,
-    /// `Some(_)` only in the test binary.
-    pub daemon_token_state: Option<SharedDaemonTokenState>,
-    pub session_cookie_name: &'static str,
+    /// The server's front door — the origin check, then the credential walk
+    /// (daemon token, `Some` only in the test binary; cookie; bearer).
+    pub gate: AuthGate,
 }
 
 impl std::fmt::Debug for FileBytesRouteState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FileBytesRouteState")
-            .field("session_cookie_name", &self.session_cookie_name)
+            .field("gate", &self.gate)
             .finish_non_exhaustive()
     }
 }
 
 /// Router exposing the byte routes at their absolute path.
 ///
-/// Merge it, don't nest it. The caller layers the Origin allowlist, the
-/// client-IP middleware, and a [`FILE_BYTES_MAX_BODY_BYTES`] body limit over
-/// it.
+/// Merge it, don't nest it. It carries no layers: the server composes it into
+/// its own `fuz_http::compose_stack` group, capped at
+/// [`FILE_BYTES_MAX_BODY_BYTES`], behind the browser gates and the client-IP
+/// middleware.
 pub fn file_bytes_router(state: FileBytesRouteState) -> Router {
     Router::new()
         .route(
@@ -130,11 +133,15 @@ async fn read_file_bytes(
     client_ip: Option<Extension<ClientIp>>,
     headers: HeaderMap,
 ) -> Response {
+    let origin = match state.gate.check_origin(&headers) {
+        Ok(origin) => origin,
+        Err(response) => return response,
+    };
     let path = match parse_query(&query_pairs, &["path"]) {
         Ok(query) => query.path,
         Err(response) => return response,
     };
-    if let Err(response) = authorize(&state, &headers, client_ip).await {
+    if let Err(response) = authorize(&state, origin, client_ip).await {
         return response;
     }
     let (file, meta) = match state.app.scoped_fs.open_file(path).await {
@@ -181,11 +188,15 @@ async fn create_file_bytes(
     client_ip: Option<Extension<ClientIp>>,
     request: Request,
 ) -> Response {
+    let origin = match state.gate.check_origin(request.headers()) {
+        Ok(origin) => origin,
+        Err(response) => return response,
+    };
     let path = match parse_query(&query_pairs, &["path"]) {
         Ok(query) => query.path,
         Err(response) => return response,
     };
-    if let Err(response) = authorize(&state, request.headers(), client_ip).await {
+    if let Err(response) = authorize(&state, origin, client_ip).await {
         return response;
     }
     let content = match read_body(request).await {
@@ -206,6 +217,10 @@ async fn append_file_bytes(
     client_ip: Option<Extension<ClientIp>>,
     request: Request,
 ) -> Response {
+    let origin = match state.gate.check_origin(request.headers()) {
+        Ok(origin) => origin,
+        Err(response) => return response,
+    };
     let query = match parse_query(&query_pairs, &["path", "offset"]) {
         Ok(query) => query,
         Err(response) => return response,
@@ -213,7 +228,7 @@ async fn append_file_bytes(
     let Some(offset) = query.offset else {
         return fuz_http::invalid_query_params_response();
     };
-    if let Err(response) = authorize(&state, request.headers(), client_ip).await {
+    if let Err(response) = authorize(&state, origin, client_ip).await {
         return response;
     }
     let content = match read_body(request).await {
@@ -240,8 +255,9 @@ struct FileBytesQuery<'a> {
 }
 
 /// Check the query's shape: only `allowed` keys, a `path`, and — when given —
-/// an `offset` that's a plain decimal `u64`. Runs before auth, so a malformed
-/// query answers the same whatever the caller's credentials.
+/// an `offset` that's a plain decimal `u64`. Runs after the origin check and
+/// before the credential walk, so a malformed query answers the same whatever
+/// the caller's credentials.
 #[allow(
     clippy::result_large_err,
     reason = "Err is the ready-to-return axum Response — the spine REST handler idiom"
@@ -266,24 +282,15 @@ fn parse_query<'a>(
     Ok(FileBytesQuery { path, offset })
 }
 
-/// Authenticate the request and check its token scope: `401` with no valid
-/// credential, `403` for a method-scoped API token.
+/// Authenticate a request the origin check admitted and check its token
+/// scope: `401` with no valid credential, `403` for a method-scoped API token.
 async fn authorize(
     state: &FileBytesRouteState,
-    headers: &HeaderMap,
+    origin: OriginChecked<'_>,
     client_ip: Option<Extension<ClientIp>>,
 ) -> Result<(), Response> {
     let client_ip = extract_client_ip_or_unresolved(client_ip);
-    let Some(auth) = resolve_auth_from_headers(
-        headers,
-        &state.keyring,
-        &state.app.db_pool,
-        state.daemon_token_state.as_ref(),
-        state.session_cookie_name,
-        &client_ip,
-    )
-    .await
-    else {
+    let Some(auth) = state.gate.resolve_credential(origin, &client_ip).await else {
         return Err(fuz_http::authentication_required_response());
     };
     if !auth.scope.admits_non_rpc_surface() {
@@ -294,7 +301,7 @@ async fn authorize(
     Ok(())
 }
 
-/// Buffer a write's body, after the gates. The router's body-limit layer
+/// Buffer a write's body, after the gates. The stack's body-limit layer
 /// already refused a declared `Content-Length` over the cap; this catches a
 /// body that runs past it without declaring one.
 async fn read_body(request: Request) -> Result<Bytes, Response> {
