@@ -100,7 +100,7 @@ fn a_trailing_slash_entry_refuses_the_boot() {
         "slash",
         Some("http://localhost:5460/"),
         &[
-            "entry 'http://localhost:5460/'",
+            "entry 1 \"http://localhost:5460/\"",
             "trailing slash",
             "`scheme://host[:port]`",
         ],
@@ -112,7 +112,7 @@ fn a_stray_comma_refuses_the_boot() {
     assert_refused(
         "comma",
         Some("http://localhost:5460,"),
-        &["entry ''", "stray comma", "`scheme://host[:port]`"],
+        &["entry 2 \"\"", "stray comma", "`scheme://host[:port]`"],
     );
 }
 
@@ -121,14 +121,14 @@ fn a_malformed_entry_behind_a_good_one_refuses_the_boot() {
     assert_refused(
         "second",
         Some("http://localhost:4460, localhost:5460"),
-        &["entry 'localhost:5460'", "no `scheme://`"],
+        &["entry 2 \"localhost:5460\"", "no `scheme://`"],
     );
 }
 
 #[test]
 fn an_unset_or_blank_list_refuses_the_boot() {
     for (label, value) in [("unset", None), ("empty", Some("")), ("blank", Some("  "))] {
-        assert_refused(label, value, &["is required"]);
+        assert_refused(label, value, &["no origins supplied"]);
     }
 }
 

@@ -423,11 +423,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         );
     }
     // Never empty, and every entry well-formed: `parse_config` refused to
-    // boot otherwise (see `origin_allowlist`). An empty list would silently
-    // fail *open* (allow-all), disabling the Origin gate on every REST + RPC
-    // + WS handler — so the list is moved out of `config`, not taken: no
-    // emptied field is left behind to read.
-    let spine_allowed_origins = Arc::new(config.allowed_origins);
+    // boot otherwise (see `origin_allowlist`).
+    let spine_allowed_origins = config.allowed_origins;
     let bootstrap_available_atomic =
         Arc::new(std::sync::atomic::AtomicBool::new(bootstrap_available));
     // Both transports: a revocation handler's direct close must reach the
@@ -447,7 +444,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         password_hasher: Arc::clone(&spine_password_hasher),
         audit: Arc::clone(&spine_audit_emitter),
         socket_revoker: Arc::clone(&socket_revoker),
-        allowed_origins: Arc::clone(&spine_allowed_origins),
+        allowed_origins: spine_allowed_origins.clone(),
         bootstrap_available: Arc::clone(&bootstrap_available_atomic),
         login_ip_rate_limiter,
         login_account_rate_limiter,
@@ -472,7 +469,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             }),
         }),
         keyring: Arc::clone(&spine_keyring),
-        allowed_origins: Arc::clone(&spine_allowed_origins),
+        allowed_origins: spine_allowed_origins.clone(),
         session_cookie_name,
     };
 
@@ -500,7 +497,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             signup_fail_jitter_ms: fuz_auth::DEFAULT_SIGNUP_FAIL_JITTER_MS,
         }),
         keyring: Arc::clone(&spine_keyring),
-        allowed_origins: Arc::clone(&spine_allowed_origins),
+        allowed_origins: spine_allowed_origins.clone(),
         session_cookie_name,
     };
 
@@ -673,7 +670,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         pool: app_state.db_pool.clone(),
         keyring: Arc::clone(&spine_keyring),
         daemon_token_state: spine_daemon_token.clone(),
-        allowed_origins: Arc::clone(&spine_allowed_origins),
+        allowed_origins: spine_allowed_origins.clone(),
         registry: registry_for_rpc,
         audit: Arc::clone(&spine_audit_emitter),
         socket_revoker: Arc::clone(&socket_revoker),
@@ -706,7 +703,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         pool: app_state.db_pool.clone(),
         keyring: Arc::clone(&spine_keyring),
         daemon_token_state: spine_daemon_token.clone(),
-        allowed_origins: Arc::clone(&spine_allowed_origins),
+        allowed_origins: spine_allowed_origins.clone(),
         registry: registry_for_ws,
         audit: Arc::clone(&spine_audit_emitter),
         socket_revoker: Arc::clone(&socket_revoker),
@@ -806,7 +803,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
             fuz_http::client_ip_middleware,
         ))
         .layer(axum::middleware::from_fn_with_state(
-            Arc::clone(&spine_allowed_origins),
+            spine_allowed_origins.clone(),
             fuz_http::origin_layer,
         ));
 
@@ -826,7 +823,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         fuz_http::client_ip_middleware,
     ))
     .layer(axum::middleware::from_fn_with_state(
-        Arc::clone(&spine_allowed_origins),
+        spine_allowed_origins.clone(),
         fuz_http::origin_layer,
     ))
     .layer(fuz_http::body_limit_layer(
@@ -892,11 +889,11 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     let app = app
         .layer(axum::middleware::from_fn(fuz_http::simple_request_layer))
         .layer(axum::middleware::from_fn_with_state(
-            Arc::clone(&spine_allowed_origins),
+            spine_allowed_origins.clone(),
             fuz_http::origin_layer,
         ))
         .layer(axum::middleware::from_fn_with_state(
-            Arc::clone(&spine_allowed_origins),
+            spine_allowed_origins.clone(),
             fuz_http::host_layer,
         ));
 
@@ -977,7 +974,7 @@ pub struct Config {
     /// `FUZ_ALLOWED_ORIGINS`, parsed and validated entry by entry — never
     /// empty (see [`origin_allowlist`]). Read by both the origin check and
     /// the `Host` check.
-    pub allowed_origins: Vec<String>,
+    pub allowed_origins: fuz_http::AllowedOrigins,
     /// `PUBLIC_ZZZ_SCOPED_DIRS`, resolved (canonical, trailing `/`) and
     /// checked by [`check_scoped_dirs`].
     pub scoped_dirs: Vec<String>,

@@ -592,16 +592,15 @@ fn is_default_vite_loopback_origin(entry: &str) -> bool {
 }
 
 /// Whether the allowlist entry `pattern` admits `origin`, by the rule `zzzd`
-/// applies to a request's `Origin` (`fuz_http::check_origin`, which xtask
-/// doesn't link — the tests hold this copy to the same answers).
+/// applies to a request's `Origin` (`fuz_http::AllowedOrigins::allows`, which
+/// xtask doesn't link — the tests hold this copy to the same answers).
 ///
 /// Entries are `scheme://host[:port]`, http or https, compared
-/// case-insensitively. A `*` host label matches exactly one label, and a `:*`
-/// port matches any port or none. A malformed entry admits nothing.
+/// case-insensitively, with no identical-string shortcut. A `*` host label
+/// matches exactly one label, and a `:*` port matches any port or none. A
+/// malformed entry refuses `zzzd`'s boot; the shapes it can take here admit
+/// nothing.
 fn origin_matches_pattern(origin: &str, pattern: &str) -> bool {
-    if pattern.eq_ignore_ascii_case(origin) {
-        return true;
-    }
     let (Some((p_scheme, p_authority)), Some((o_scheme, o_authority))) =
         (pattern.split_once("://"), origin.split_once("://"))
     else {
@@ -617,7 +616,7 @@ fn origin_matches_pattern(origin: &str, pattern: &str) -> bool {
     let (o_host, o_port) = split_host_port(o_authority);
     let port_ok = match p_port {
         Some("*") => o_port.is_none_or(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())),
-        Some(explicit) => o_port == Some(explicit),
+        Some(explicit) => !explicit.is_empty() && o_port == Some(explicit),
         None => o_port.is_none(),
     };
     port_ok && host_matches(p_host, o_host)
@@ -1144,8 +1143,9 @@ mod tests {
         }
     }
 
-    /// `zzzd`'s own answers (`fuz_http::check_origin` on a one-entry list),
-    /// as `(entry, origin, admitted)`.
+    /// `zzzd`'s own answers (`fuz_http::AllowedOrigins::allows` on a
+    /// one-entry list; an entry it refuses admits nothing), as
+    /// `(entry, origin, admitted)`.
     #[test]
     fn origin_matching_agrees_with_zzzd() {
         for (pattern, origin, admitted) in [
@@ -1174,9 +1174,9 @@ mod tests {
             ),
             ("http://[0:0:0:0:0:0:0:1]:5460", "http://[::1]:5460", false),
             ("http://localhost.", "http://localhost", false),
-            ("ws://localhost:5460", "ws://localhost:5460", true),
+            ("ws://localhost:5460", "ws://localhost:5460", false),
             ("file://", "null", false),
-            ("*", "*", true),
+            ("*", "*", false),
             ("*", "http://localhost:5460", false),
             ("http://localhost:*", "http://localhost", true),
             ("http://localhost:*", "http://localhost:1", true),
@@ -1221,11 +1221,11 @@ mod tests {
             ),
             ("http://localhost:5460/", "http://localhost:5460", false),
             ("localhost:5460", "http://localhost:5460", false),
-            ("localhost:5460", "localhost:5460", true),
+            ("localhost:5460", "localhost:5460", false),
             ("http://user@localhost:5460", "http://localhost:5460", false),
             ("http://localhost:05460", "http://localhost:5460", false),
             ("http://localhost:", "http://localhost", false),
-            ("http://localhost:", "http://localhost:", true),
+            ("http://localhost:", "http://localhost:", false),
         ] {
             assert_eq!(
                 origin_matches_pattern(origin, pattern),
@@ -1242,7 +1242,7 @@ mod tests {
             "http://localhost:",
             "http://localhost:*"
         ));
-        // a `*` label is non-empty, and a non-http(s) entry matches only itself
+        // a `*` label is non-empty, and a non-http(s) entry matches nothing
         assert!(!origin_matches_pattern(
             "https://.example.com",
             "https://*.example.com"
