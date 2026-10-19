@@ -645,8 +645,9 @@ on the same emitter — a pass once the listener is bound, then one per
 `DEFAULT_AUTH_CLEANUP_INTERVAL`. Expired sessions are deleted and the
 connections they opened closed through the bound `RealtimeRevoker` (WS sockets
 get the revocation close, audit streams end) — no audit row, so this direct
-close is the only one, and a connection outlives its session's expiry by at
-most one interval. Each expired
+close is the sweep's only one. It repeats a close already made: every socket
+and audit stream closes at its own credential's deadline
+(`fuz_auth::ResolvedAuth::credential_deadline`), sweep or no sweep. Each expired
 role-grant offer is audited once (`role_grant_offer_expire`, fanned out to the
 audit streams like any other row). The task stops on the shutdown token and is
 joined after the drain, before PTY teardown.

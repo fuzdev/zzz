@@ -134,10 +134,19 @@ pub const WS_OUTBOUND_QUEUE_BYTES: usize = 2 * RPC_MESSAGE_MAX_BYTES;
 const _: () =
     assert!(WS_OUTBOUND_QUEUE_BYTES as u64 >= 6 * filer::MAX_INDEXED_FILE_SIZE + 1024 * 1024);
 
-/// The size limits `/api/ws` is mounted with: the inbound message cap shared
+/// Receive silence past which `/api/ws` closes a socket (4003, "server
+/// heartbeat timeout") — 1200 s, twice the longest heartbeat interval zzz's
+/// frontend lets a user set (`HEARTBEAT_INTERVAL_BOUNDS.max`, 600 s, in
+/// `src/lib/socket_helpers.ts`). The spine's 60 s default would drop a live
+/// client whose interval was raised past 30 s; at twice the longest interval
+/// a client idle for one interval and slow on the next stays inside it.
+const WS_RECEIVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1200);
+
+/// The limits `/api/ws` is mounted with: the inbound message cap shared
 /// with the `/api/rpc` body ([`RPC_MESSAGE_MAX_BYTES`] — an oversized
-/// message closes the socket) and the outbound queue budget
-/// ([`WS_OUTBOUND_QUEUE_BYTES`]).
+/// message closes the socket), the outbound queue budget
+/// ([`WS_OUTBOUND_QUEUE_BYTES`]), and the receive timeout
+/// ([`WS_RECEIVE_TIMEOUT`]).
 ///
 /// Private, and read by exactly one non-test site — the
 /// `register_action_ws_with_options` call in `run_app` — so that mounting
@@ -149,10 +158,13 @@ const _: () =
 /// it alive. `filer`'s budget test reads it too, which doesn't count in the
 /// library target. The tripwire only sees the const going unread: a call
 /// site that reads one field and drops the other (say `max_message_bytes`
-/// alone, through the message-limit helper) still compiles clean.
+/// alone, through the message-limit helper) still compiles clean — and so does
+/// one that drops `receive_timeout` for the spine default, which the
+/// `ws_receive_timeout_covers_the_longest_client_interval` test pins.
 const WS_OPTIONS: fuz_actions::ActionWsOptions = fuz_actions::ActionWsOptions {
     max_message_bytes: RPC_MESSAGE_MAX_BYTES,
     outbound_queue_bytes: WS_OUTBOUND_QUEUE_BYTES,
+    receive_timeout: Some(WS_RECEIVE_TIMEOUT),
 };
 
 /// zzz's concrete instantiation of [`fuz_actions::ExtraActionSpecsFactory`]
@@ -251,9 +263,10 @@ impl std::fmt::Debug for RunAppOptions {
 /// The spine's auth cleanup ([`fuz_auth::spawn_auth_cleanup`]) runs beside
 /// the server — expired sessions deleted and the connections they opened
 /// closed, expired role-grant offers audited once — a pass once the listener
-/// is bound, then one every [`fuz_auth::DEFAULT_AUTH_CLEANUP_INTERVAL`], so a
-/// socket or audit stream outlives its session's expiry by at most one
-/// interval. It stops when shutdown begins and is joined before this returns.
+/// is bound, then one every [`fuz_auth::DEFAULT_AUTH_CLEANUP_INTERVAL`]. Its
+/// close repeats one already made: a socket or audit stream closes at its own
+/// credential's deadline ([`fuz_auth::ResolvedAuth::credential_deadline`]).
+/// It stops when shutdown begins and is joined before this returns.
 ///
 /// Every configuration knob lives on [`RunAppOptions`]; everything
 /// not explicitly named there flows from CLI args or the process
@@ -1237,6 +1250,25 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
         trusted_proxies,
         tools,
     })
+}
+
+#[cfg(test)]
+mod ws_receive_timeout {
+    /// The longest heartbeat interval zzz's frontend lets a user set —
+    /// `HEARTBEAT_INTERVAL_BOUNDS.max` in `src/lib/socket_helpers.ts`, kept in
+    /// step by hand: a change there moves this.
+    const MAX_CLIENT_HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(600);
+
+    /// `/api/ws` keeps a client at its longest heartbeat interval: the socket's
+    /// receive timeout is set, and at least twice that interval.
+    #[test]
+    fn ws_receive_timeout_covers_the_longest_client_interval() {
+        assert_eq!(
+            super::WS_OPTIONS.receive_timeout,
+            Some(super::WS_RECEIVE_TIMEOUT)
+        );
+        assert!(super::WS_RECEIVE_TIMEOUT >= 2 * MAX_CLIENT_HEARTBEAT_INTERVAL);
+    }
 }
 
 #[cfg(test)]
