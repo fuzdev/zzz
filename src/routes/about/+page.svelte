@@ -102,10 +102,7 @@
 				when I regain an appetite for social,
 				<ExternalLink href="https://atproto.com/">AT Protocol</ExternalLink> and
 				<ExternalLink href="https://activitypub.rocks/">ActivityPub</ExternalLink> -- probably both
-				but they're not immediate prioritie (I have an initial
-				<ExternalLink href="https://github.com/fuzdev/fuz_mastodon">
-					Mastodon integration
-				</ExternalLink> with readonly embedded posts)
+				but they're not immediate priorities
 			</li>
 			<li>
 				more, input welcome
