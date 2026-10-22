@@ -82,5 +82,7 @@ unwrap_used = "warn"
 [profile.release]
 lto = true
 codegen-units = 1
-panic = "abort"
+# unwind, not abort: fuz_http::compose_stack catches a request panic and
+# answers 500; under abort that panic would kill the server
+panic = "unwind"
 strip = true
