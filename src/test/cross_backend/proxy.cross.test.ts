@@ -236,23 +236,24 @@ describe('proxy.cross', () => {
 		);
 	});
 
-	// Malformed entry between client and trusted proxy. `attacker-controlled`
-	// fails strict validation and gets skipped during the right-to-left walk
-	// so an attacker can't rotate garbage as a fresh rate-limit-key.
-	test('proxy_malformed_xff_entry_skipped', async () => {
+	// Malformed entry left of the client IP. The right-to-left walk returns
+	// the first untrusted entry, `203.0.113.1`, before it reaches
+	// `attacker-controlled`, so an entry past the stopping point never
+	// affects the result, malformed or not.
+	test('proxy_malformed_entry_left_of_untrusted_never_reached', async () => {
 		await assert_resolved_ip(
 			handle,
-			'malformed',
+			'malformed-unreached',
 			'attacker-controlled, 203.0.113.1',
 			'203.0.113.1',
-			'audit.ip skips malformed entry'
+			'audit.ip = first untrusted from right; malformed entry left of it unread'
 		);
 	});
 
 	// Every XFF entry is trusted (loopback). `resolve_client_ip` falls through
-	// to the leftmost strictly-valid entry, which is itself the trusted proxy
-	// IP — likely a misconfiguration in production, but defined behavior so
-	// the bucket has a stable key.
+	// to the leftmost entry (every entry passed strict validation to get
+	// there), which is itself the trusted proxy IP — likely a misconfiguration
+	// in production, but defined behavior so the bucket has a stable key.
 	test('proxy_all_trusted_xff_falls_back_to_leftmost', async () => {
 		await assert_resolved_ip(
 			handle,
@@ -304,29 +305,29 @@ describe('proxy.cross', () => {
 		);
 	});
 
-	// Tighter multi-hop: malformed entry between client and trusted proxy
-	// must not short-circuit the walk to the trusted entry, and the malformed
-	// entry must not surface as the client IP (rate-limit-key poisoning
-	// defense). 127.0.0.1 (trusted, skip) → attacker-controlled (malformed,
-	// skip) → 198.51.100.7 (valid, untrusted) → stop.
-	test('proxy_multi_hop_with_malformed_then_untrusted', async () => {
+	// Malformed entry between a client-written entry and the trusted proxy:
+	// the walk stops at the malformed entry, and the middleware keys the
+	// request on the connection IP. 127.0.0.1 (trusted, skip) →
+	// attacker-controlled (malformed, stop → none) → connection IP. The
+	// malformed entry must not surface as the client IP (rate-limit-key
+	// poisoning), and the walk must not continue into `198.51.100.7`, which
+	// no trusted hop vouched for — a client could otherwise pick its own
+	// bucket behind a proxy that appends a non-bare-IP token.
+	test('proxy_multi_hop_stops_at_malformed_uses_connection_ip', async () => {
 		await assert_resolved_ip(
 			handle,
-			'mixed',
+			'stops-at-malformed',
 			'198.51.100.7, attacker-controlled, 127.0.0.1',
-			'198.51.100.7',
-			'audit.ip skips malformed and stops at first valid untrusted'
+			'127.0.0.1',
+			'audit.ip = connection IP; walk stops at malformed, never reaches the client-written entry'
 		);
 	});
 
 	// End-to-end rate-limit-key poisoning defense: with every entry
-	// malformed, `resolve_client_ip` returns `None` (right-to-left walk skips
-	// all; leftmost-strictly-valid fallback finds nothing), and the
-	// middleware silently falls back to the connection IP. The surface this
-	// locks is the all-malformed shape — `_malformed_xff_entry_skipped` only
-	// covers malformed-between-valid (which still has a valid entry to
-	// return); this test exercises the case where the resolver returns
-	// `None` and the middleware path matters.
+	// malformed, the right-to-left walk stops at the rightmost entry,
+	// `resolve_client_ip` returns `None`, and the middleware falls back to
+	// the connection IP. Unlike `_stops_at_malformed_uses_connection_ip`, no
+	// trusted hop is skipped first — the stop is the walk's first step.
 	test('proxy_all_malformed_xff_falls_back_to_connection_ip', async () => {
 		await assert_resolved_ip(
 			handle,
