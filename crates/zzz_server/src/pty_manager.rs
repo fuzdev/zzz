@@ -384,7 +384,7 @@ impl InputBudget {
     /// held, so it can't stall forever behind the cap.
     fn try_reserve(self: &Arc<Self>, len: usize) -> Option<InputReservation> {
         self.held
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |held| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |held| {
                 let total = held.checked_add(len)?;
                 (held == 0 || total <= self.max).then_some(total)
             })

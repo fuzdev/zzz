@@ -284,6 +284,10 @@ fn parse_query<'a>(
 
 /// Authenticate a request the origin check admitted and check its token
 /// scope: `401` with no valid credential, `403` for a method-scoped API token.
+#[allow(
+    clippy::result_large_err,
+    reason = "Err is the ready-to-return axum Response — the spine's REST handler idiom"
+)]
 async fn authorize(
     state: &FileBytesRouteState,
     origin: OriginChecked<'_>,
@@ -304,6 +308,10 @@ async fn authorize(
 /// Buffer a write's body, after the gates. The stack's body-limit layer
 /// already refused a declared `Content-Length` over the cap; this catches a
 /// body that runs past it without declaring one.
+#[allow(
+    clippy::result_large_err,
+    reason = "Err is the ready-to-return axum Response — the spine's REST handler idiom"
+)]
 async fn read_body(request: Request) -> Result<Bytes, Response> {
     axum::body::to_bytes(request.into_body(), FILE_BYTES_MAX_BODY_BYTES)
         .await

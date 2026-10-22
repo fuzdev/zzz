@@ -140,7 +140,7 @@ const _: () =
 /// `src/lib/socket_helpers.ts`). The spine's 60 s default would drop a live
 /// client whose interval was raised past 30 s; at twice the longest interval
 /// a client idle for one interval and slow on the next stays inside it.
-const WS_RECEIVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1200);
+const WS_RECEIVE_TIMEOUT: std::time::Duration = std::time::Duration::from_mins(20);
 
 /// The limits `/api/ws` is mounted with: the inbound message cap shared
 /// with the `/api/rpc` body ([`RPC_MESSAGE_MAX_BYTES`] — an oversized

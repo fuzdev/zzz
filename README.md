@@ -26,7 +26,8 @@ see the issues and [discussions](https://github.com/fuzdev/zzz/discussions).
 This project is in its early stages, and installing it
 currently requires some basic technical skills.
 Eventually there will be a desktop app but
-for now you'll need Node (>=24.14), a Rust toolchain (for the backend),
+for now you'll need Node (>=24.14), the Rust toolchain pinned in
+`rust-toolchain.toml` (for the backend; rustup installs it automatically),
 PostgreSQL, and Git to clone the repo.
 
 Running Zzz locally — in development with `cargo xtask dev`, or self-hosted through

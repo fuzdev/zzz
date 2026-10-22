@@ -21,7 +21,7 @@ pub fn is_temp_file_name(name: &str) -> bool {
 /// How old a staging file must be before the filer's walk deletes it as
 /// orphaned (left behind by a crash mid-write). A live write finishes in
 /// well under this.
-pub const ORPHANED_TEMP_FILE_MIN_AGE: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+pub const ORPHANED_TEMP_FILE_MIN_AGE: std::time::Duration = std::time::Duration::from_hours(1);
 
 /// Whether `name` is exactly a staging-file name [`ScopedFs::write_file`] generates.
 ///

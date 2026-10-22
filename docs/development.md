@@ -4,8 +4,9 @@ Development workflow, extension points, and common patterns.
 
 ## Setup
 
-Requires Node (>=24.14), a Rust toolchain, PostgreSQL, and the sibling fuz
-Rust workspace checked out alongside this repo (path deps — including `fuz_pty`).
+Requires Node (>=24.14), the Rust toolchain pinned in `rust-toolchain.toml`
+(rustup installs it automatically), PostgreSQL, and the sibling fuz Rust
+workspace checked out alongside this repo (path deps — including `fuz_pty`).
 
 ```bash
 git clone https://github.com/fuzdev/zzz.git && cd zzz

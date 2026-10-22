@@ -49,7 +49,7 @@ pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// ready, so the first phase must outlast Anthropic's 10-minute cap on those
 /// with room to spare, and reasoning models can go quiet mid-stream while
 /// they think.
-pub const READ_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+pub const READ_TIMEOUT: Duration = Duration::from_mins(15);
 
 /// The message on the `request_cancelled` error a cancelled completion
 /// returns.

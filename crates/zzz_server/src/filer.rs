@@ -2756,7 +2756,7 @@ mod tests {
 
         let tmp = TempDir::new();
         let hex = "0123456789abcdef0123456789abcdef";
-        let old = SystemTime::now() - Duration::from_secs(2 * 60 * 60);
+        let old = SystemTime::now() - Duration::from_hours(2);
         let make = |name: &str, age: Option<SystemTime>| {
             let path = tmp.path(name);
             std::fs::write(&path, "x").unwrap();

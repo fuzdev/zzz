@@ -28,11 +28,11 @@ use crate::tool::{ToolError, ToolRun, run_tool};
 
 /// How long a remux may run. It copies streams without re-encoding, so even
 /// a long recording takes seconds.
-pub const REMUX_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+pub const REMUX_TIMEOUT: Duration = Duration::from_mins(5);
 
 /// How long a decode to PCM may run — far faster than real time, so this
 /// allows for many hours of audio on a slow disk.
-pub const DECODE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+pub const DECODE_TIMEOUT: Duration = Duration::from_mins(30);
 
 /// Sample rate of the PCM a speech recognizer is fed.
 pub const SPEECH_SAMPLE_RATE: u32 = 16_000;
