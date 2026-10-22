@@ -6,8 +6,9 @@
  * on the Rust backend. Its cases (the `: connected` comment, an audit `data:`
  * frame on `admin_session_revoke_all`, close-on-revoke on
  * `account_session_revoke_all` and `account_session_revoke`, close on account
- * delete, and the per-session stream cap) assert the audit-log SSE wire
- * contract against the fuz_app standard.
+ * delete, a second admin's stream closed on `admin_token_revoke_all`, logout,
+ * password change, and `account_purge`, and the per-session stream cap) assert
+ * the audit-log SSE wire contract against the fuz_app standard.
  *
  * Gated on `capabilities.sse` (set on the zzz backend config — the backend
  * serves the route). The keeper holds `ROLE_ADMIN` (via `extra_keeper_roles`) so
