@@ -3348,10 +3348,8 @@ dependencies = [
 name = "zzz_server"
 version = "0.1.0"
 dependencies = [
- "argon2",
  "axum",
  "axum-extra",
- "base64",
  "blake3",
  "deadpool-postgres",
  "futures-util",
@@ -3362,14 +3360,12 @@ dependencies = [
  "fuz_pty",
  "fuz_realtime",
  "fuz_sys",
- "hmac 0.12.1",
  "libc",
  "notify",
  "parking_lot",
  "reqwest",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "thiserror 2.0.18",
  "tokio",
  "tokio-postgres",

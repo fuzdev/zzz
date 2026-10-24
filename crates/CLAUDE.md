@@ -756,12 +756,10 @@ joined after the drain, before PTY teardown.
 - **DB**: `tokio-postgres` + `deadpool-postgres` pool in `App`. Required at
   startup — server fails fast if `DATABASE_URL` is missing or unreachable.
   Migrations run on every startup (CREATE TABLE IF NOT EXISTS).
-- **Cookie signing**: Pure Rust HMAC-SHA256 via `hmac`/`sha2` crates.
-  Compatible with fuz_app's keyring format (same `value.base64(signature)`).
-- **Session hashing**: `blake3` crate for token → storage key hashing.
-  Compatible with fuz_app's `hash_blake3` (same hex output).
-- **Password hashing**: Argon2id via `argon2` crate (bootstrap, login, password change),
-  offloaded to `tokio::task::spawn_blocking` to avoid blocking the async runtime.
+- **Credentials**: cookie signing, session and API-token hashing, and
+  password hashing are `fuz_auth`'s, byte-compatible with fuz_app's formats;
+  `zzz_server` holds no credential crypto of its own (its one direct hash is
+  the transcription `blake3`).
 - **Strict inputs**: every zzz handler decodes `params` through
   `fuz_http::parse_strict_params` into a `#[serde(deny_unknown_fields)]`
   struct mirroring its `z.strictObject` TS input (unknown keys and explicit

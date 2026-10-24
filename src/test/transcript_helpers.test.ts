@@ -1,4 +1,5 @@
 import { test, describe, assert } from 'vitest';
+import { FactHashSchema } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import {
 	find_transcripts,
@@ -18,12 +19,17 @@ const create_transcript = (
 	segments: Array<TranscriptSegment> = []
 ): Transcript => ({
 	version: 1,
-	source: { name: source_name, blake3: 'blake3:ab', size: 10, duration_ms: 1000 },
+	source: {
+		name: source_name,
+		blake3: FactHashSchema.parse(`blake3:${'ab'.repeat(32)}`),
+		size: 10,
+		duration_ms: 1000
+	},
 	tool: {
 		backend: 'whisper_cpp',
 		version: '1.9.4',
 		model,
-		model_blake3: 'blake3:cd',
+		model_blake3: FactHashSchema.parse(`blake3:${'cd'.repeat(32)}`),
 		params: { language: 'auto' }
 	},
 	language: 'en',
@@ -83,6 +89,22 @@ describe('parse_transcript', () => {
 		// dots and spaces in a plain name are fine
 		for (const name of ['a.webm', '..a.webm', 'my recording (2).ogg', '.hidden.wav']) {
 			assert.ok(parse_transcript(JSON.stringify(create_transcript(name, 'm'))), name);
+		}
+	});
+
+	test('refuses a hash that is not a fact hash', () => {
+		const transcript = create_transcript('a.webm', 'base.en');
+		for (const hash of [
+			'blake3:ab',
+			`blake3:${'AB'.repeat(32)}`,
+			`sha256:${'ab'.repeat(32)}`,
+			'ab'.repeat(32),
+			''
+		]) {
+			const bad_source = { ...transcript, source: { ...transcript.source, blake3: hash } };
+			assert.strictEqual(parse_transcript(JSON.stringify(bad_source)), null, hash);
+			const bad_model = { ...transcript, tool: { ...transcript.tool, model_blake3: hash } };
+			assert.strictEqual(parse_transcript(JSON.stringify(bad_model)), null, hash);
 		}
 	});
 });

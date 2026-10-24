@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FactHashSchema } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 /** One word of a transcript segment, with the recognizer's confidence in it. */
 export const TranscriptWord = z.strictObject({
@@ -51,7 +52,7 @@ export const Transcript = z.looseObject({
 		 */
 		name: z.string().refine(is_plain_file_name, { message: 'must be a file name, not a path' }),
 		/** `blake3:<hex>` of the source's bytes when it was transcribed. */
-		blake3: z.string(),
+		blake3: FactHashSchema,
 		size: z.number(),
 		duration_ms: z.number()
 	}),
@@ -59,7 +60,8 @@ export const Transcript = z.looseObject({
 		backend: z.string(),
 		version: z.string().nullable(),
 		model: z.string(),
-		model_blake3: z.string(),
+		/** `blake3:<hex>` of the model file. */
+		model_blake3: FactHashSchema,
 		params: z.looseObject({ language: z.string() })
 	}),
 	language: z.string().nullable(),

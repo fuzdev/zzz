@@ -461,6 +461,12 @@ type ModelStamp = (PathBuf, u64, Option<std::time::SystemTime>);
 
 /// Hashes of model files already hashed. A model is gigabytes, and the same
 /// one is used for every transcription.
+///
+/// The cache trusts the stamp, not the bytes, for the life of the process: a
+/// model changed at the same path and size with an unchanged mtime (written
+/// within one tick of the filesystem's mtime granularity, or copied over with
+/// its mtime preserved) keeps its old hash until zzzd restarts, and the
+/// transcript's `model_blake3` then names the previous bytes.
 static MODEL_HASHES: Mutex<Option<HashMap<ModelStamp, String>>> = Mutex::new(None);
 
 /// `blake3:<hex>` of the model at `path`, hashed once per file version.
@@ -549,11 +555,13 @@ mod tests {
 
     #[test]
     fn a_transcript_serializes_in_its_documented_shape() {
+        let source_blake3 = format!("blake3:{}", "ab".repeat(32));
+        let model_blake3 = format!("blake3:{}", "cd".repeat(32));
         let transcript = Transcript {
             version: TRANSCRIPT_VERSION,
             source: TranscriptSource {
                 name: "standup.webm".to_owned(),
-                blake3: "blake3:ab".to_owned(),
+                blake3: source_blake3.clone(),
                 size: 10,
                 duration_ms: 4200,
             },
@@ -561,7 +569,7 @@ mod tests {
                 backend: "whisper_cpp",
                 version: Some("1.9.4".to_owned()),
                 model: "base.en".to_owned(),
-                model_blake3: "blake3:cd".to_owned(),
+                model_blake3: model_blake3.clone(),
                 params: TranscriptParams {
                     language: "auto".to_owned(),
                 },
@@ -591,12 +599,12 @@ mod tests {
             serde_json::to_value(&transcript).unwrap(),
             serde_json::json!({
                 "version": 1,
-                "source": {"name": "standup.webm", "blake3": "blake3:ab", "size": 10, "duration_ms": 4200},
+                "source": {"name": "standup.webm", "blake3": source_blake3, "size": 10, "duration_ms": 4200},
                 "tool": {
                     "backend": "whisper_cpp",
                     "version": "1.9.4",
                     "model": "base.en",
-                    "model_blake3": "blake3:cd",
+                    "model_blake3": model_blake3,
                     "params": {"language": "auto"}
                 },
                 "language": "en",
