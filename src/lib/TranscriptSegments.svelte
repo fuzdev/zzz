@@ -82,6 +82,6 @@
 		min-width: 3.5em;
 	}
 	.current .segment {
-		background-color: var(--shade_20, var(--shade_10));
+		background-color: var(--shade_20);
 	}
 </style>
