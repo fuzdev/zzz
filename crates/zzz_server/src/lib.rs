@@ -210,7 +210,8 @@ pub struct RunAppOptions {
     pub force_test_actions: bool,
     /// Whether the spine's rate limiters are built.
     /// Production: [`fuz_auth::RateLimiterMode::Enforced`] — always on,
-    /// matching `fuz_forge_server` + `mageguild_server` and the fuz defaults.
+    /// matching `fuz_forge_server` and the other spine servers, and the fuz
+    /// defaults.
     /// Test binary: `DisabledForTesting` so the cross-backend auth suite's
     /// repeated logins don't trip the bucket.
     pub rate_limiters: fuz_auth::RateLimiterMode,
@@ -356,8 +357,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     }
 
     // Per-IP + per-account rate limiters on `/login` and `/password`, always
-    // on in production — matching `fuz_forge_server` + `mageguild_server` and
-    // the fuz defaults (`DEFAULT_LOGIN_IP_RATE_LIMIT` 5/15min,
+    // on in production — matching `fuz_forge_server` and the other spine
+    // servers, and the fuz defaults (`DEFAULT_LOGIN_IP_RATE_LIMIT` 5/15min,
     // `DEFAULT_LOGIN_ACCOUNT_RATE_LIMIT` 10/30min). The test binary passes
     // `RateLimiterMode::DisabledForTesting` so the cross-backend auth suite's
     // repeated logins don't trip the bucket. Spine `fuz_auth::RateLimiter`

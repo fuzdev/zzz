@@ -51,8 +51,8 @@ pub fn build_zzz_owned_specs(
 
 /// The permissive-credential census — zzz's half of the S1 `Any` surface,
 /// readable in one place (the counterpart of
-/// `fuz_auth::action_auth::any_credential_surface` and the `fuz_cell_actions`,
-/// visiones, and mageguild censuses).
+/// `fuz_auth::action_auth::any_credential_surface`, the `fuz_cell_actions`
+/// census, and the other spine servers' censuses).
 ///
 /// The whole set is `CredentialGate::Any` today, deliberately. Eleven of these
 /// specs are machine-capability *mutations* — `diskfile_update`,
