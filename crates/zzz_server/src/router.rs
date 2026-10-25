@@ -275,6 +275,8 @@ mod tests {
                 bootstrap_available: Arc::clone(&bootstrap_available),
                 login_ip_rate_limiter: None,
                 login_account_rate_limiter: None,
+                login_fail_floor_ms: fuz_auth::DEFAULT_LOGIN_FAIL_FLOOR_MS,
+                login_fail_jitter_ms: fuz_auth::DEFAULT_LOGIN_FAIL_JITTER_MS,
             }),
             bootstrap: fuz_auth::bootstrap_routes::bootstrap_router(
                 fuz_auth::BootstrapRouteState {

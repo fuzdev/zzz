@@ -469,6 +469,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         bootstrap_available: Arc::clone(&bootstrap_available_atomic),
         login_ip_rate_limiter,
         login_account_rate_limiter,
+        login_fail_floor_ms: fuz_auth::DEFAULT_LOGIN_FAIL_FLOOR_MS,
+        login_fail_jitter_ms: fuz_auth::DEFAULT_LOGIN_FAIL_JITTER_MS,
     };
     let bootstrap_route_state = fuz_auth::BootstrapRouteState {
         options: Arc::new(fuz_auth::BootstrapOptions {
