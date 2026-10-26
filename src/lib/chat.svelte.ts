@@ -24,7 +24,8 @@ export const CHAT_AUTONAME_ATTEMPTS_MAX = 3;
 /**
  * JSON-RPC error codes that won't change on retry, so auto-naming stops after
  * one — a bad request, missing method or resource, or an auth failure.
- * Provider failures are all `internal_error`; see `AUTONAME_PERMANENT_HTTP_STATUSES`.
+ * Provider failures are all `ai_provider_error` (-32020);
+ * see `AUTONAME_PERMANENT_HTTP_STATUSES`.
  */
 const AUTONAME_PERMANENT_ERROR_CODES: ReadonlySet<number> = new Set([
 	JSONRPC_ERROR_CODES.parse_error,

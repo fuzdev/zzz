@@ -13,20 +13,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chmod, mkdir, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { describe, test, inject, assert } from 'vitest';
-import {
-	default_cross_process_setup,
-	reconstruct_bootstrapped_handle
-} from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
+import { describe, test, assert } from 'vitest';
+import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
+import { default_cross_process_setup } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
 import { is_notification } from '@fuzdev/fuz_app/testing/transports/ws_client.ts';
 
 import { ERROR_WORKSPACE_NOT_OPEN } from '#lib/workspace_helpers.ts';
 
-import './cross_test_types.ts';
-
-const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
+const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
 
 /** Create a fresh tmp directory for a workspace; caller cleans up. */

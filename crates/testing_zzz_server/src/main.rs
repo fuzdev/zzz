@@ -6,7 +6,15 @@
 //! ~1-5 ms argon2 feedback instead of production's ~30-50 ms, and
 //! registers the `_testing_reset` RPC action from
 //! [`fuz_testing::create_testing_reset_action_spec`] so per-test fixtures
-//! can opt into a fresh auth-table + domain-state reset between cases.
+//! can opt into a fresh auth-table + domain-state reset between cases, and
+//! `_testing_drain_effects` from
+//! [`fuz_testing::create_testing_drain_effects_action_spec`], the barrier
+//! that awaits in-flight fire-and-forget audit writes (a signup's, a
+//! failure audit, a WebSocket mutation's) before a test reads the audit log.
+//! The drain is a real barrier because this binary builds the app's audit
+//! emitter with in-flight tracking
+//! (`RunAppOptions::audit_inflight_tracking`); over an untracked emitter it
+//! would return at once.
 //! Three layered guardrails keep this from leaking into production:
 //!
 //! 1. The `testing_` prefix is enforced by `fuz_release`'s manifest
@@ -32,7 +40,8 @@ use std::sync::Arc;
 
 use fuz_auth::PasswordHasher;
 use fuz_testing::{
-    ResetStateFn, TestingArgon2idHasher, TestingResetOptions, create_testing_reset_action_spec,
+    ResetStateFn, TestingArgon2idHasher, TestingResetOptions,
+    create_testing_drain_effects_action_spec, create_testing_reset_action_spec,
 };
 
 /// Default loopback bind address for the testing binary (port 4462).
@@ -64,9 +73,10 @@ async fn main() -> ExitCode {
     // active` line is emitted by `TestingArgon2idHasher::new` itself.
     eprintln!("testing_zzzd starting (test-mode argon2 active)");
 
-    // The `_testing_reset` factory closes over `Arc<App>` so the
+    // The factory closes over `Arc<App>` so the `_testing_reset`
     // domain-state reset closure can close zzz workspaces + kill terminals +
-    // wipe the optional scratch dir.
+    // wipe the optional scratch dir, and `_testing_drain_effects` can await
+    // the app's audit emitter.
     let extra_specs_factory: zzz_server::ExtraActionSpecsFactory = Box::new(|app, runtime| {
         let app_for_reset = Arc::clone(&app);
         // zzz's domain state is in-memory (workspaces + terminals +
@@ -119,13 +129,20 @@ async fn main() -> ExitCode {
             "testing_zzz_server requires the daemon-token credential to be wired \
              (it provides keeper credentials for _testing_reset)",
         );
-        vec![create_testing_reset_action_spec(TestingResetOptions {
-            password_hasher: runtime.password_hasher,
-            keyring: runtime.keyring,
-            daemon_token_state,
-            session_cookie_name: runtime.session_cookie_name,
-            reset_state: Some(reset_state),
-        })]
+        // awaits the emitter's detached writes; tracked because
+        // `audit_inflight_tracking` is on below
+        let drain_effects =
+            create_testing_drain_effects_action_spec(Arc::clone(&app.audit_emitter));
+        vec![
+            create_testing_reset_action_spec(TestingResetOptions {
+                password_hasher: runtime.password_hasher,
+                keyring: runtime.keyring,
+                daemon_token_state,
+                session_cookie_name: runtime.session_cookie_name,
+                reset_state: Some(reset_state),
+            }),
+            drain_effects,
+        ]
     });
 
     // Pre-migration hook — wipes the auth-namespace schema when
@@ -191,6 +208,8 @@ async fn main() -> ExitCode {
         extra_action_specs_factory: Some(extra_specs_factory),
         pre_migration_hook: Some(pre_migration_hook),
         daemon_token_state,
+        // makes `_testing_drain_effects` a real barrier
+        audit_inflight_tracking: true,
     })
     .await;
     zzz_server::report_run_result(result, "testing_zzzd")

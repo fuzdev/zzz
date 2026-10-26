@@ -15,6 +15,13 @@ import type { Diskfiles } from './diskfiles.svelte.ts';
 export const DISKFILE_CONTENT_NOT_LOADED_MESSAGE =
 	'content not loaded — the file is over 4 MiB, not UTF-8 text, or unreadable';
 
+/**
+ * `data.reason` of the `invalid_params` refusing a path that isn't absolute
+ * (or holds a NUL byte) — twin of `ERROR_INVALID_PATH` in the backend's
+ * filesystem handlers.
+ */
+export const ERROR_INVALID_PATH = 'invalid_path';
+
 /** `data.reason` of the error refusing to write over a file whose content wasn't loaded. */
 export const ERROR_CONTENT_NOT_LOADED = 'content_not_loaded';
 

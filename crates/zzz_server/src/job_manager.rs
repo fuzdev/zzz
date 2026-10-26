@@ -501,13 +501,14 @@ mod tests {
         let pool = fuz_db::create_pool("postgres://localhost:1/jobs_unused")
             .expect("a lazy pool builds without connecting");
         Arc::new(App::new(
-            pool,
+            pool.clone(),
             crate::scoped_fs::ScopedFs::new(vec![]),
             String::new(),
             vec![],
             crate::provider::ProviderManager::new(),
             false,
             Arc::new(fuz_realtime::ConnectionRegistry::new()),
+            Arc::new(fuz_auth::AuditEmitter::new(pool)),
         ))
     }
 

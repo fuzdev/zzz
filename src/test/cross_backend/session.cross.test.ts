@@ -4,7 +4,8 @@
  *
  * - The cookie is per port (`zzz_session_<port>`), so zzz daemons on one host
  *   (the installed daemon, `cargo xtask dev`, test binaries) don't share a
- *   session — plus fuz_app's hardened-attribute suite under that name.
+ *   session (fuz_app's hardened-attribute suite runs under that name in
+ *   `spine_suites.cross.test.ts`).
  * - Logging out closes every socket of the account (the fuz_app contract), so
  *   another tab's socket closes while its session stays valid — the client
  *   rechecks and rebuilds its socket, which needs the status probe to say
@@ -17,22 +18,20 @@
  * @module
  */
 
-import { describe, test, inject, assert } from 'vitest';
+import { describe, test, assert } from 'vitest';
+import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
 import {
 	default_cross_process_setup,
-	reconstruct_bootstrapped_handle,
 	type TestFixture
 } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
-import { describe_cookie_attributes_cross_tests } from '@fuzdev/fuz_app/testing/cross_backend/cookie_attributes.ts';
 import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
 import type { FetchTransport } from '@fuzdev/fuz_app/testing/transports/fetch_transport.ts';
 import { DEFAULT_TEST_PASSWORD } from '@fuzdev/fuz_app/testing/test_credentials.ts';
 import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 
-import './cross_test_types.ts';
 import { zzz_session_cookie_name } from './zzz_backend_config.ts';
 
-const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
+const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
 const { cookie_name } = handle.config;
 
@@ -64,8 +63,6 @@ const open_ws = async (tab: FetchTransport) => {
 
 const status_of = async (tab: FetchTransport): Promise<number> =>
 	(await tab(STATUS_PATH, { method: 'GET' })).status;
-
-describe_cookie_attributes_cross_tests({ setup_test, cookie_name });
 
 describe('session cookie name', () => {
 	test('is per port', () => {

@@ -603,7 +603,14 @@ mod tests {
         let status = serde_json::to_value(client.status(ProviderName::Claude)).unwrap();
         assert_eq!(status["available"], false);
         assert_eq!(status["error"], PROVIDER_ERROR_NEEDS_API_KEY);
-        assert!(client.require(ProviderName::Claude).is_err());
+        // a configuration condition, answered as `ai_provider_error` (-32020,
+        // 502), never `internal_error`
+        let error = client.require(ProviderName::Claude).unwrap_err();
+        assert_eq!(
+            error.code,
+            fuz_http::JsonrpcErrorCode::Consumer(crate::provider::AI_PROVIDER_ERROR)
+        );
+        assert_eq!(error.message, "claude: needs API key");
     }
 
     #[test]

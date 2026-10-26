@@ -345,7 +345,7 @@ env-setup orchestration is `cargo xtask` (see `crates/xtask/`), so there's no
 - `gro typecheck` — Type checking only (faster iteration)
 - `gro test` — Run Vitest unit + db tests (cross-backend gated out — see below)
 - `npm test` — `gro test` (unit + db; cross-backend projects excluded unless `FUZ_TEST_CROSS_BACKEND=1`)
-- `npm run test:cross` — Rust cross-process suites (rust + rust_proxy; needs rust binary + `zzz_test_rust`/`zzz_test_rust_proxy` Postgres DBs) — flag baked in
+- `npm run test:cross` — Rust cross-process suites (rust + rust_proxy; needs local Postgres — builds `testing_zzzd` and creates `zzz_test_rust`/`zzz_test_rust_proxy` when missing) — flag baked in
 - `gro gen` — Run `*.gen.ts` generators (regenerate their outputs)
 - `gro format` — Format with tsv
 - `gro build` — Production build
@@ -381,11 +381,14 @@ type enforcement, bootstrap endpoint. AI provider system with enum-dispatched
 providers — Anthropic, OpenAI, and Gemini all fully implemented (non-streaming +
 SSE streaming with connection-targeted `completion_progress` notifications).
 Cross-process integration tests in `src/test/cross_backend/*.cross.test.ts`
-run fuz_app's standard suites against `zzz_server` over real HTTP, verifying
-its JSON-RPC responses conform to the shared fuz_app contract. They cover
-the full surface — including the admin role-gated `admin_session_revoke_all` /
-`admin_token_revoke_all` handlers and trusted-proxy `client_ip` resolution
-(the `cross_backend_rust_proxy` project). `zzz_server`'s own `#[cfg(test)]`
+run fuz_app's shared suites (one `describe_spine_cross_suites` call) and
+zzz's own against `zzz_server` over real HTTP + WebSocket, verifying its
+JSON-RPC responses conform to the shared fuz_app contract — including the
+admin role-gated `admin_session_revoke_all` / `admin_token_revoke_all`
+handlers and trusted-proxy `client_ip` resolution (the
+`cross_backend_rust_proxy` project). The suites needing `_testing_*`
+backdoors `testing_zzzd` doesn't register are excluded (./crates/CLAUDE.md
+§ Integration Tests lists them). `zzz_server`'s own `#[cfg(test)]`
 unit tests sit beside the code they cover (e.g. the provider modules,
 `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`); auth,
 origin, and trusted-proxy pure functions are unit-tested in the spine crates
@@ -398,7 +401,7 @@ cargo clippy --workspace --all-targets -- -D warnings                     # Lint
 cargo doc --workspace --no-deps --document-private-items                  # Doc-link gate (pass = exit code; see below)
 ./target/debug/zzzd --port 4460                                           # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS, FUZ_ALLOWED_ORIGINS)
 cargo xtask dev                                                             # Dev server: Rust backend + Vite frontend
-npm run test:cross                                                        # Rust cross-process suites (rust + rust_proxy; needs rust binary + zzz_test_rust/zzz_test_rust_proxy DBs) — flag baked in
+npm run test:cross                                                        # Rust cross-process suites (rust + rust_proxy; builds testing_zzzd, creates its DBs) — flag baked in
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Single project (Rust binary; needs `postgres://localhost/zzz_test_rust`)
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust_proxy # Single project (proxy variant; ZZZ_TRUSTED_PROXIES=127.0.0.1 at boot)
 ```
@@ -425,9 +428,9 @@ script (`npm run test:cross`) bakes in the flag; set it manually only for
 single-project `--project` runs.
 
 Requires the sibling Rust workspace checked out alongside this repo (path
-deps). Each cross-backend project expects its own PostgreSQL DB —
-`zzz_test_rust` and `zzz_test_rust_proxy` (`createdb zzz_test_rust`;
-`createdb zzz_test_rust_proxy`).
+deps). Each cross-backend project runs on its own PostgreSQL DB —
+`zzz_test_rust` and `zzz_test_rust_proxy` — which its global setup creates
+when missing, and builds `testing_zzzd` before spawning it.
 See ./crates/CLAUDE.md for architecture, endpoints,
 prerequisites, and what the integration tests check.
 

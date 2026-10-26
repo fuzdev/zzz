@@ -2,7 +2,7 @@
 
 import { test, describe, beforeEach, assert, vi } from 'vitest';
 import { get_datetime_now } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+import { JSONRPC_ERROR_CODES } from '#lib/zzz_jsonrpc_errors.ts';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { Thread } from '#lib/thread.svelte.ts';
@@ -203,7 +203,7 @@ describe('completion_create stop reasons', () => {
 		receive_progress(turn, 'Sure, here');
 		receive_error(
 			turn,
-			JSONRPC_ERROR_CODES.internal_error,
+			JSONRPC_ERROR_CODES.ai_provider_error,
 			'claude: the model declined to respond (stop_reason: refusal)'
 		);
 

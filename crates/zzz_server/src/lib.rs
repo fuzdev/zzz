@@ -171,7 +171,7 @@ const WS_OPTIONS: fuz_actions::ActionWsOptions = fuz_actions::ActionWsOptions {
 /// over [`handlers::App`] — extra specs folded in after the standard zzz set.
 ///
 /// Production passes `None`; the `testing_zzz_server` binary passes `Some(_)`
-/// to inject `_testing_reset`, closing over `fuz_testing` types in its own
+/// to inject `_testing_reset` and `_testing_drain_effects`, closing over `fuz_testing` types in its own
 /// process so the production graph stays clean.
 pub type ExtraActionSpecsFactory = fuz_actions::ExtraActionSpecsFactory<handlers::App>;
 
@@ -239,6 +239,11 @@ pub struct RunAppOptions {
     /// (`fuz_testing::init_daemon_token`) is confined to `fuz_testing` by dep
     /// graph, so this crate cannot construct one even by mistake.
     pub daemon_token_state: Option<fuz_auth::SharedDaemonTokenState>,
+    /// Whether the audit emitter counts its detached writes, so the test binary's
+    /// `_testing_drain_effects` can await them (twin of the TS testing
+    /// server's `track_inflight: true`). Production: `false`. Test binary:
+    /// `true`.
+    pub audit_inflight_tracking: bool,
 }
 
 impl std::fmt::Debug for RunAppOptions {
@@ -248,7 +253,26 @@ impl std::fmt::Debug for RunAppOptions {
             .field("drain_timeout", &self.drain_timeout)
             .field("force_test_actions", &self.force_test_actions)
             .field("rate_limiters", &self.rate_limiters)
+            .field("audit_inflight_tracking", &self.audit_inflight_tracking)
             .finish_non_exhaustive()
+    }
+}
+
+/// Build the spine audit emitter every audit row goes through.
+///
+/// `inflight_tracking` selects [`fuz_auth::AuditEmitter::new_with_inflight_tracking`]
+/// over [`fuz_auth::AuditEmitter::new`]: `emit` spawns a detached write, and
+/// the in-flight counter is what lets the test binary's
+/// `_testing_drain_effects` await it — over an untracked emitter the drain
+/// returns before the row lands. The counter is pure overhead in production,
+/// which never drains, so only the test binary turns it on
+/// ([`RunAppOptions::audit_inflight_tracking`]).
+#[must_use]
+fn build_audit_emitter(pool: &fuz_db::Pool, inflight_tracking: bool) -> fuz_auth::AuditEmitter {
+    if inflight_tracking {
+        fuz_auth::AuditEmitter::new_with_inflight_tracking(pool.clone())
+    } else {
+        fuz_auth::AuditEmitter::new(pool.clone())
     }
 }
 
@@ -288,6 +312,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         extra_action_specs_factory,
         pre_migration_hook,
         daemon_token_state: spine_daemon_token,
+        audit_inflight_tracking,
     } = options;
     let mut config = parse_config(default_addr)?;
     if force_test_actions {
@@ -410,7 +435,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
     // `Arc<App>` is constructed so the socket-revoker capability is
     // available.
     let realtime = Arc::new(fuz_realtime::ConnectionRegistry::new());
-    let spine_audit_emitter = Arc::new(fuz_auth::AuditEmitter::new(pool.clone()));
+    let spine_audit_emitter = Arc::new(build_audit_emitter(&pool, audit_inflight_tracking));
     // SSE half of the realtime surface — the registry of open
     // `GET /api/admin/audit/stream` subscriptions. The audit listener wired
     // alongside the socket-revocation listeners below fans every audit row to
@@ -526,6 +551,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         provider_manager,
         config.enable_test_actions,
         Arc::clone(&realtime),
+        Arc::clone(&spine_audit_emitter),
     );
     app.tools = config.tools;
     let app_state = Arc::new(app);
@@ -1271,6 +1297,54 @@ mod ws_receive_timeout {
             Some(super::WS_RECEIVE_TIMEOUT)
         );
         assert!(super::WS_RECEIVE_TIMEOUT >= 2 * MAX_CLIENT_HEARTBEAT_INTERVAL);
+    }
+}
+
+#[cfg(test)]
+mod audit_inflight_tracking {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use fuz_auth::{AuditEventType, AuditLogInput};
+
+    /// The test binary's `_testing_drain_effects` is a barrier only over the
+    /// tracked emitter: a fire-and-forget write still in flight (here, stuck
+    /// dialing a server that accepts the connection and never answers) holds
+    /// the drain, and the untracked production emitter's drain returns at
+    /// once.
+    #[tokio::test]
+    async fn audit_inflight_tracking_makes_the_drain_wait_for_a_write() {
+        let silent = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("binds");
+        let url = format!(
+            "postgres://zzz:zzz@{}/zzz_unused",
+            silent.local_addr().expect("has an address")
+        );
+        let pool = fuz_db::create_pool(&url).expect("a lazy pool builds without connecting");
+        let emit = |emitter: &Arc<fuz_auth::AuditEmitter>| {
+            emitter.emit(AuditLogInput::for_event(AuditEventType::Logout))
+        };
+
+        let tracked = Arc::new(super::build_audit_emitter(&pool, true));
+        let write = emit(&tracked);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(200), tracked.drain_inflight())
+                .await
+                .is_err(),
+            "the drain waits while the write is in flight"
+        );
+        write.abort();
+        tokio::time::timeout(Duration::from_secs(5), tracked.drain_inflight())
+            .await
+            .expect("the drain resolves once the write ends");
+
+        let untracked = Arc::new(super::build_audit_emitter(&pool, false));
+        let write = emit(&untracked);
+        tokio::time::timeout(Duration::from_millis(200), untracked.drain_inflight())
+            .await
+            .expect("untracked, the drain returns at once");
+        write.abort();
     }
 }
 

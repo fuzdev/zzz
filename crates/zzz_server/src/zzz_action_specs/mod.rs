@@ -80,13 +80,14 @@ mod any_credential_surface {
         let pool = fuz_db::create_pool("postgres://localhost:1/census_unused")
             .expect("a lazy pool builds without connecting");
         let app = Arc::new(crate::handlers::App::new(
-            pool,
+            pool.clone(),
             crate::scoped_fs::ScopedFs::new(vec![]),
             String::new(),
             vec![],
             crate::provider::ProviderManager::new(),
             false,
             Arc::new(fuz_realtime::ConnectionRegistry::new()),
+            Arc::new(fuz_auth::AuditEmitter::new(pool)),
         ));
 
         let specs = super::build_zzz_owned_specs(&app);

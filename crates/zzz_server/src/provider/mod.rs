@@ -8,7 +8,8 @@ use std::collections::HashMap;
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use fuz_http::{JsonrpcError, internal_error};
+use axum::http::StatusCode;
+use fuz_http::{ConsumerErrorCode, JsonrpcError, consumer_error, internal_error};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
@@ -294,8 +295,27 @@ impl ProviderManager {
 
 pub const PROVIDER_ERROR_NEEDS_API_KEY: &str = "needs API key";
 
+/// zzz's `ai_provider_error` code: `-32020`, answering HTTP 502.
+///
+/// The twin of `JSONRPC_ERROR_CODES.ai_provider_error` and its
+/// `JSONRPC_ERROR_CODE_TO_HTTP_STATUS` entry in `src/lib/zzz_jsonrpc_errors.ts`.
+pub const AI_PROVIDER_ERROR: ConsumerErrorCode =
+    ConsumerErrorCode::new(-32020, StatusCode::BAD_GATEWAY);
+
+/// A provider failure: [`AI_PROVIDER_ERROR`] with the message
+/// `"{provider_name}: {message}"`, as the TS twin's
+/// `jsonrpc_errors.ai_provider_error(provider, message)` builds it.
+///
+/// Every provider failure answers this — a missing or invalid API key, a
+/// transport failure, a non-2xx from the provider's API, an unreadable
+/// response, a refused or filtered reply — not `internal_error`: each is a
+/// condition of the provider or its configuration, not a zzz crash.
 pub fn ai_provider_error(provider_name: &str, message: &str) -> JsonrpcError {
-    internal_error(&format!("{provider_name}: {message}"))
+    consumer_error(
+        AI_PROVIDER_ERROR,
+        &format!("{provider_name}: {message}"),
+        None,
+    )
 }
 
 /// `data.reason` on an error for a non-2xx response from the provider's API,
@@ -305,7 +325,7 @@ pub const ERROR_REASON_PROVIDER_HTTP_ERROR: &str = "provider_http_error";
 /// An `ai_provider_error` for a non-2xx response from the provider's API,
 /// with `data: {reason: "provider_http_error", status}`.
 ///
-/// The JSON-RPC code stays `internal_error`; `status` lets a client tell a
+/// The JSON-RPC code is [`AI_PROVIDER_ERROR`]; `status` lets a client tell a
 /// request that can't succeed (400, 401, 403, 404) from one worth retrying
 /// (408, 429, 5xx).
 pub fn ai_provider_http_error(provider_name: &str, message: &str, status: u16) -> JsonrpcError {
@@ -387,6 +407,36 @@ mod tests {
         assert_eq!(
             value,
             serde_json::json!({"name": "claude", "available": true, "checked_at": 42}),
+        );
+    }
+
+    /// Every provider failure is `-32020` / 502, the TS twin's
+    /// `ai_provider_error`, never `internal_error` — the cross round-trip
+    /// reads a 500 or -32603 as a crash.
+    #[test]
+    fn provider_errors_are_ai_provider_error_with_bad_gateway() {
+        let needs_key = ai_provider_error("claude", PROVIDER_ERROR_NEEDS_API_KEY);
+        assert_eq!(needs_key.code.as_i32(), -32020);
+        assert_eq!(needs_key.message, "claude: needs API key");
+        assert!(needs_key.data.is_none());
+        assert_eq!(
+            fuz_http::error_code_to_http_status(needs_key.code),
+            StatusCode::BAD_GATEWAY
+        );
+        assert_eq!(
+            serde_json::to_value(&needs_key).unwrap(),
+            serde_json::json!({"code": -32020, "message": "claude: needs API key"}),
+        );
+
+        let http = ai_provider_http_error("gemini", "model not found", 404);
+        assert_eq!(http.code.as_i32(), -32020);
+        assert_eq!(
+            fuz_http::error_code_to_http_status(http.code),
+            StatusCode::BAD_GATEWAY
+        );
+        assert_eq!(
+            http.data,
+            Some(serde_json::json!({"reason": ERROR_REASON_PROVIDER_HTTP_ERROR, "status": 404})),
         );
     }
 

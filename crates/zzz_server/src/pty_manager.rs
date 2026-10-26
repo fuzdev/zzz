@@ -362,6 +362,29 @@ pub enum TerminalWriteError {
     InputFull,
 }
 
+/// Why `PtyManager::spawn` couldn't start a terminal.
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum TerminalSpawnError {
+    /// The command can't be found: its `exec` failed with `ENOENT` (no such
+    /// file, no match on `PATH`, or a missing `#!` interpreter) — the
+    /// caller's input, refused as such. Nothing was registered.
+    #[error("command not found")]
+    CommandNotFound,
+    /// Any other spawn failure (a bad `cwd`, a command that isn't executable,
+    /// the PTY itself), described.
+    #[error("{0}")]
+    Failed(String),
+}
+
+impl From<PtyError> for TerminalSpawnError {
+    fn from(error: PtyError) -> Self {
+        match error {
+            PtyError::ExecFailed(libc::ENOENT) => Self::CommandNotFound,
+            other => Self::Failed(other.to_string()),
+        }
+    }
+}
+
 /// A terminal's input byte budget ([`INPUT_QUEUE_MAX_BYTES`]), shared by the
 /// manager (which reserves on send) and the terminal's task (whose chunks
 /// release on drop — written, failed, or discarded with the task).
@@ -513,8 +536,9 @@ impl PtyManager {
     ///
     /// # Errors
     ///
-    /// A message describing the failure when the PTY can't be spawned —
-    /// including a bad `cwd` or an unexecutable `command`, which fail the
+    /// [`TerminalSpawnError::CommandNotFound`] when `command` doesn't exist;
+    /// [`TerminalSpawnError::Failed`] for any other failure to spawn the PTY
+    /// — including a bad `cwd` or an unexecutable `command`. Either fails the
     /// spawn rather than running somewhere else or exiting later.
     pub async fn spawn(
         app: Arc<App>,
@@ -523,14 +547,14 @@ impl PtyManager {
         command: &str,
         args: &[String],
         cwd: Option<&str>,
-    ) -> Result<(), String> {
+    ) -> Result<(), TerminalSpawnError> {
         let terminal_id = terminal_id.to_owned();
         let command = command.to_owned();
         let args = args.to_vec();
         let cwd = cwd.map(str::to_owned);
         tokio::spawn(spawn_terminal(app, owner, terminal_id, command, args, cwd))
             .await
-            .map_err(|e| format!("spawn task failed: {e}"))?
+            .map_err(|e| TerminalSpawnError::Failed(format!("spawn task failed: {e}")))?
     }
 
     /// Queue `data` for a terminal's stdin. A terminal that's exiting accepts
@@ -758,7 +782,7 @@ async fn spawn_terminal(
     command: String,
     args: Vec<String>,
     cwd: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), TerminalSpawnError> {
     let env = terminal_env(std::env::vars_os());
 
     // fork + waiting on the child's exec report are blocking syscalls
@@ -774,8 +798,7 @@ async fn spawn_terminal(
         )
     })
     .await
-    .map_err(|e| format!("spawn task failed: {e}"))?
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| TerminalSpawnError::Failed(format!("spawn task failed: {e}")))??;
 
     let master = match AsyncFd::try_new(PtyHandle::new(pty)) {
         Ok(master) => master,
@@ -794,7 +817,9 @@ async fn spawn_terminal(
                     );
                 }
             });
-            return Err(format!("failed to register PTY with the reactor: {error}"));
+            return Err(TerminalSpawnError::Failed(format!(
+                "failed to register PTY with the reactor: {error}"
+            )));
         }
     };
 
@@ -1619,13 +1644,14 @@ mod tests {
         let pool = fuz_db::create_pool("postgres://localhost:1/pty_unused")
             .expect("a lazy pool builds without connecting");
         Arc::new(App::new(
-            pool,
+            pool.clone(),
             crate::scoped_fs::ScopedFs::new(vec![]),
             String::new(),
             vec![],
             crate::provider::ProviderManager::new(),
             false,
             Arc::new(ConnectionRegistry::new()),
+            Arc::new(fuz_auth::AuditEmitter::new(pool)),
         ))
     }
 
@@ -1978,6 +2004,52 @@ mod tests {
         assert!(
             manager
                 .terminal_ids_for_account(Uuid::new_v4())
+                .await
+                .is_empty()
+        );
+    }
+    /// Only a command that doesn't exist (`exec` → `ENOENT`) is the caller's
+    /// input; every other spawn failure stays a described internal one.
+    #[test]
+    fn only_an_exec_enoent_is_command_not_found() {
+        assert_eq!(
+            TerminalSpawnError::from(PtyError::ExecFailed(libc::ENOENT)),
+            TerminalSpawnError::CommandNotFound
+        );
+        for other in [
+            PtyError::ExecFailed(libc::EACCES),
+            PtyError::ExecFailed(libc::ENOEXEC),
+            PtyError::ChdirFailed(libc::ENOENT),
+            PtyError::SpawnFailed,
+            PtyError::NulByte,
+        ] {
+            let described = other.to_string();
+            assert_eq!(
+                TerminalSpawnError::from(other),
+                TerminalSpawnError::Failed(described)
+            );
+        }
+    }
+
+    /// A spawn of a command that doesn't exist fails as `CommandNotFound`
+    /// and registers no terminal.
+    #[tokio::test]
+    async fn a_missing_command_fails_the_spawn_and_registers_nothing() {
+        let app = test_app();
+        let owner = Uuid::new_v4();
+        let result = PtyManager::spawn(
+            Arc::clone(&app),
+            owner,
+            &Uuid::new_v4().to_string(),
+            "zzz-no-such-command-for-this-test",
+            &[],
+            None,
+        )
+        .await;
+        assert_eq!(result, Err(TerminalSpawnError::CommandNotFound));
+        assert!(
+            app.pty_manager
+                .terminal_ids_for_account(owner)
                 .await
                 .is_empty()
         );

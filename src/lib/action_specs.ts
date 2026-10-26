@@ -30,7 +30,8 @@ import {
 	DisknodeMetadata,
 	SerializableDisknode
 } from './diskfile_types.ts';
-import { is_path_absolute } from './diskfile_helpers.ts';
+import { ERROR_INVALID_PATH, is_path_absolute } from './diskfile_helpers.ts';
+import { ERROR_TERMINAL_COMMAND_NOT_FOUND } from './terminal_helpers.ts';
 import { ProviderStatus, ProviderName } from './provider_types.ts';
 import { JobSnapshot } from './job_types.ts';
 import { TranscriptSegment } from './transcript_types.ts';
@@ -579,8 +580,9 @@ export const terminal_create_action_spec = {
 	input: TerminalCreateInput,
 	output: TerminalCreateOutput,
 	async: true,
+	error_reasons: [ERROR_INVALID_PATH, ERROR_TERMINAL_COMMAND_NOT_FOUND],
 	description:
-		'Spawn a PTY process and return the terminal ID. A `cwd` must be absolute (`invalid_params` otherwise).'
+		'Spawn a PTY process and return the terminal ID. A `cwd` must be absolute (`invalid_params` otherwise); a `command` that does not exist is `invalid_params` with `terminal_command_not_found`.'
 } satisfies RequestResponseActionSpec;
 
 export const terminal_data_send_action_spec = {

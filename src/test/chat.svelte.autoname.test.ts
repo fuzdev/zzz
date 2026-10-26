@@ -2,7 +2,7 @@
 
 import { test, describe, beforeEach, assert, vi } from 'vitest';
 import { get_datetime_now, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+import { JSONRPC_ERROR_CODES } from '#lib/zzz_jsonrpc_errors.ts';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { CHAT_AUTONAME_ATTEMPTS_MAX, type Chat } from '#lib/chat.svelte.ts';
@@ -85,14 +85,14 @@ const send = async (chat: Chat): Promise<void> => {
 
 const transient = (message = 'claude: Overloaded'): NamerReply => ({
 	ok: false,
-	code: JSONRPC_ERROR_CODES.internal_error,
+	code: JSONRPC_ERROR_CODES.ai_provider_error,
 	message
 });
 
 /** A provider failure for a non-2xx upstream response, as the backend sends it. */
 const http_error = (status: number): NamerReply => ({
 	ok: false,
-	code: JSONRPC_ERROR_CODES.internal_error,
+	code: JSONRPC_ERROR_CODES.ai_provider_error,
 	message: `claude: upstream ${status}`,
 	data: { reason: 'provider_http_error', status }
 });

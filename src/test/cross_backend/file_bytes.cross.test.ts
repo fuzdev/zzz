@@ -12,11 +12,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { describe, test, inject, assert } from 'vitest';
-import {
-	default_cross_process_setup,
-	reconstruct_bootstrapped_handle
-} from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
+import { describe, test, assert } from 'vitest';
+import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
+import { default_cross_process_setup } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 
 import {
@@ -25,10 +23,9 @@ import {
 	to_file_bytes_url
 } from '#lib/file_bytes.ts';
 
-import './cross_test_types.ts';
 import { request_status } from './request_status.ts';
 
-const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
+const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
 
 const scoped_dir = handle.config.env.PUBLIC_ZZZ_SCOPED_DIRS!;

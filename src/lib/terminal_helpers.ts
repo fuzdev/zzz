@@ -1,4 +1,11 @@
 /**
+ * Error reason: `terminal_create`'s `command` doesn't exist. Answered as
+ * `invalid_params` before any terminal is registered; declared in the action
+ * spec's `error_reasons`.
+ */
+export const ERROR_TERMINAL_COMMAND_NOT_FOUND = 'terminal_command_not_found';
+
+/**
  * Max characters of output kept per terminal for replay into a (re)mounted
  * view. Counted in UTF-16 code units — about 1-2 MB of memory. The oldest
  * output is dropped first.

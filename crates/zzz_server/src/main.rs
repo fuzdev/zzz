@@ -39,6 +39,8 @@ async fn main() -> ExitCode {
         // ever wrote a keeper-grade secret to `<zzz_dir>/run/daemon_token` on a
         // 30-second timer for no caller.
         daemon_token_state: None,
+        // production never drains its audit writes
+        audit_inflight_tracking: false,
     })
     .await;
     zzz_server::report_run_result(result, "zzzd")

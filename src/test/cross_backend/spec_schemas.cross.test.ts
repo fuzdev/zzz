@@ -23,12 +23,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { describe, test, inject, assert, afterEach, afterAll, beforeAll, vi } from 'vitest';
+import { describe, test, assert, afterEach, afterAll, beforeAll, vi } from 'vitest';
+import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
 import type { z } from 'zod';
-import {
-	default_cross_process_setup,
-	reconstruct_bootstrapped_handle
-} from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
+import { default_cross_process_setup } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
 import type {
@@ -64,9 +62,7 @@ import {
 } from '#lib/action_specs.ts';
 import type { FrontendActionsApi } from '#lib/action_metatypes.ts';
 
-import './cross_test_types.ts';
-
-const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
+const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
 
 type CrossFixture = Awaited<ReturnType<typeof setup_test>>;

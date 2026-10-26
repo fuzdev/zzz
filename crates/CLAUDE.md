@@ -6,8 +6,8 @@ OpenAI, and Gemini (all full).
 
 **Workspace layout**:
 
-- `zzz_server/` — library (`zzz_server`) + production daemon binary (the `[[bin]]` target is named `zzzd`). `pub async fn run_app(options: RunAppOptions)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, the auth cleanup task, drain). `RunAppOptions` carries: `password_hasher` (production-vs-test swap), `default_addr: SocketAddr` (bind address when `--port`/`ZZZ_PORT` don't supply one; host stays loopback, only the port is overridable), `drain_timeout` (graceful-shutdown drain bound), `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag), `rate_limiters` (the `fuz_auth::RateLimiterMode` every spine limiter is built through — `Enforced` in production, `DisabledForTesting` in the test binary only), `extra_action_specs_factory` (lets the test binary inject `_testing_reset` without putting `fuz_testing` in the production dep graph), and `pre_migration_hook` (fires after pool creation, before migrations — the test binary wires `fuz_testing::reset_db_on_startup_if_env_set`). `src/main.rs` is the thin production entry — constructs `Argon2idHasher`, calls `run_app` with `force_test_actions: false, extra_action_specs_factory: None`.
-- `testing_zzz_server/` — separate test-binary package (its `[[bin]]` target is named `testing_zzzd`) wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) AND `fuz_testing::create_testing_reset_action_spec` (auth-table wipe + fresh-keeper re-seed + consumer-supplied `reset_state(ActionDb)` callback; `credential_types: [DaemonToken]` auth gate). zzz's reset closure ignores the in-tx `ActionDb` handle (its domain state is in-memory, not in PG) — it closes every zzz workspace through the production close path (`handlers::workspace::workspace_close_all` — filers stopped, `ScopedFs` roots removed, `workspace_changed` broadcast, restoring the boot-time scope), calls `pty_manager.kill_all()` (non-destructive — manager stays usable across tests), stops and forgets every job (`job_manager.cancel_all()`), and wipes the optional `ZZZ_TESTING_SCRATCH_DIR`. Default port 4462 (production is 4460). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. It is zzz's test binary, spawned by the cross-process integration tests.
+- `zzz_server/` — library (`zzz_server`) + production daemon binary (the `[[bin]]` target is named `zzzd`). `pub async fn run_app(options: RunAppOptions)` in `src/lib.rs` owns the full lifecycle (env, signal handler, router build, listener bind, the auth cleanup task, drain). `RunAppOptions` carries: `password_hasher` (production-vs-test swap), `default_addr: SocketAddr` (bind address when `--port`/`ZZZ_PORT` don't supply one; host stays loopback, only the port is overridable), `drain_timeout` (graceful-shutdown drain bound), `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag), `rate_limiters` (the `fuz_auth::RateLimiterMode` every spine limiter is built through — `Enforced` in production, `DisabledForTesting` in the test binary only), `extra_action_specs_factory` (lets the test binary inject `_testing_reset` and `_testing_drain_effects` without putting `fuz_testing` in the production dep graph), `pre_migration_hook` (fires after pool creation, before migrations — the test binary wires `fuz_testing::reset_db_on_startup_if_env_set`), `daemon_token_state` (the test binary's keeper credential; production `None`), and `audit_inflight_tracking` (builds the spine `AuditEmitter` with `new_with_inflight_tracking`, so the test binary's `_testing_drain_effects` awaits detached audit writes; production `false`). The emitter is also held on `App` (`audit_emitter`), where the test binary's specs factory reaches it. `src/main.rs` is the thin production entry — constructs `Argon2idHasher`, calls `run_app` with `force_test_actions: false, extra_action_specs_factory: None, audit_inflight_tracking: false`.
+- `testing_zzz_server/` — separate test-binary package (its `[[bin]]` target is named `testing_zzzd`) wiring `fuz_testing::TestingArgon2idHasher` (~1-5 ms argon2 vs production's ~30-50 ms) AND `fuz_testing::create_testing_reset_action_spec` (auth-table wipe + fresh-keeper re-seed + consumer-supplied `reset_state(ActionDb)` callback; `credential_types: [DaemonToken]` auth gate) and `fuz_testing::create_testing_drain_effects_action_spec` (`_testing_drain_effects`, the barrier awaiting in-flight fire-and-forget audit writes — a real one because this binary passes `audit_inflight_tracking: true`). zzz's reset closure ignores the in-tx `ActionDb` handle (its domain state is in-memory, not in PG) — it closes every zzz workspace through the production close path (`handlers::workspace::workspace_close_all` — filers stopped, `ScopedFs` roots removed, `workspace_changed` broadcast, restoring the boot-time scope), calls `pty_manager.kill_all()` (non-destructive — manager stays usable across tests), stops and forgets every job (`job_manager.cancel_all()`), and wipes the optional `ZZZ_TESTING_SCRATCH_DIR`. Default port 4462 (production is 4460). **Never ships in a release** — enforced by `fuz_release`'s `testing_` manifest filter and the `cargo xtask check-release` dep-graph audit. It is zzz's test binary, spawned by the cross-process integration tests.
 - `xtask/` — dev automation (`cargo xtask <cmd>`, pure `std` + `fuz_audit`, no extra deps). `dev` loads `.env.development`, builds `zzz_server`, checks port 4461 is free, then runs `zzzd` (port 4461) + the Vite frontend (`node_modules/.bin/vite dev` run directly — `npx` doesn't forward signals; 5460, proxying `/api`), with the inherited env overlaid by `.env.development` — the file's non-blank values win (the opposite of the CLI's rule; a blank `KEY=` line is unset, never clearing an exported value), printing each inherited key it overrides (never the value), forcing the frontend's own ports (`PUBLIC_ZZZ_SERVER_PORT` 5460, `PUBLIC_ZZZ_SERVER_PROXIED_PORT` 4461, `PUBLIC_ZZZ_WEBSOCKET_URL`) whatever the file says, warning — with the line to set; the file is never rewritten — when the file's `PUBLIC_ZZZ_SERVER_PORT` isn't the dev port (`dev_server_port_warning`: a Vite started without xtask reads the file, and `vite.config.ts` refuses to start on a mismatch), when no `FUZ_ALLOWED_ORIGINS` entry admits the dev UI's origin `http://localhost:5460`, and when an entry is a loopback origin on a default Vite port (`dev_origin_warning`, which matches entries by `fuz_http::AllowedOrigins::allows`'s rule — a copy, as xtask doesn't link the spine — and says whether the value came from the file or the inherited environment), holding both children in guards that `SIGTERM` (then `SIGKILL`) and reap the survivor on every exit path; `dev-setup` / `prod-setup` create `.env.development` / `.env.production` from the `.example` templates (mode `0600`, `create_new`) with a freshly generated `SECRET_FUZ_COOKIE_KEYS` — the templates ship the key empty; `check-release` (the dep-graph audit — sanity check #2 of the test-binary pattern) delegates its work to `fuz_audit::run_check_release_cli()`. Dispatch and usage live in xtask itself: bare `cargo xtask` / `help` / `-h` / `--help` print the full subcommand list (exit 0); an unknown subcommand (a non-UTF-8 one included — args are read with `args_os`), or any argument after a subcommand (none takes one), prints an error + usage (exit 1). Every subcommand runs from the workspace root (the grandparent of `CARGO_MANIFEST_DIR` — the one `cargo run` sets at run time, else the one baked in at build time, which goes stale in a copied checkout), so it works from any directory in the checkout — the env files, `node_modules/.bin/vite`, `target/debug/zzzd`, and `.env.development`'s relative paths (resolved by the children against their working directory) are always the workspace's. Marked `[package.metadata.fuz_audit] dev_only = true` so xtask itself is excluded from the production scan.
 - `zzz/` — Rust CLI (argh). `daemon start/stop/status`, `status`, `init`, `open` (the default command — opener resolution, path resolution, daemon discovery, detached auto-start, then the configured opener or the browser), and `version` (+ the `--version`/`-v` switch). Modules: `daemon_launch.rs` (the `zzzd` command: `--port`, `--static-dir`, cwd `~/.zzz`, and the env overlay from `~/.zzz/.env` + defaults, with required-var / static-dir / port / `config.json` validation, the note naming `.env` keys the environment overrides, and `ZZZ_ENABLE_TEST_ACTIONS` stripped; `CliConfig`, the one reader of `config.json`), `opener.rs` (the open command run instead of the browser: `opener` in `config.json` — a string, or an array of the program and its arguments — then `ZZZ_OPENER`; blank reads as unset; the program whitespace-trimmed, `~`-expanded, resolved against `~/.zzz` or the CLI's directory by source, and required to be an executable file — a bare name (no `/`, `~name` included) is refused from both sources, never searched for on `$PATH` or run from the current directory; the URL appended as its own final argument, no shell, so a `--flag=<url>` form needs a wrapper script; output in `run/opener.log`, emptied at each launch; `ZZZ_ENABLE_TEST_ACTIONS` removed), `daemon_lifecycle.rs` (`resolve_server_bin` — `ZZZ_SERVER_BIN` (must be an executable file) > beside the resolved CLI executable > `~/.zzz/bin` > absolute `$PATH` entries, skipping non-executable candidates, never the current directory; `parse_port`, the one `1..=65535` rule for `--port` (argh `from_str_fn`), `ZZZ_PORT`, and `zzz_config_port`; `daemon.json` v2 I/O with ownership-checked removal and foreign-record reporting — an older/newer/corrupt record is never signalled, removed, or overwritten, so a start refuses to run; the proxy-free `/health` probe on `127.0.0.1`, the serving wait, `create_private_log` + `spawn_detached` (the detached spawn the auto-started daemon and the opener share: own process group, output appended to a `0600` log under `~/.zzz/run` that each launch empties), shutdown-signal handling, `stop_child` SIGTERM → SIGKILL → reap, terminate), `procfs.rs` (Linux `/proc` identity: boot id, pid start time, listening-socket ownership), `env_file.rs` (the dotenv parser — std-only, also compiled into xtask via `#[path]`; its module doc lists where it diverges from `dotenv`). `zzz status` / `zzz daemon status` exit 0 when running, 1 when alive but not responding, 3 when not running, 4 when unknown (a `daemon.json` this zzz can't read). With `--json` they print one object whose keys are always all present: `state` (`running`, `not_responding`, `not_running`, `stale` — the record named a process that's gone and was removed — or `unknown`), `running` (the recorded process is alive), `healthy` (it answers `/health`), `daemon` (the `daemon.json` record — `version`, `pid`, `boot_id`, `pid_start_ticks`, `port`, `started`, `app_version` — for `running` / `not_responding` / `stale`, else `null`), and `foreign_record` (`{pid, kind, description}` for `unknown`, `kind` one of `older` / `newer` / `unreadable`, `pid` `null` when it names none; else `null`). The CLI reads its args with `args_os`, so a non-UTF-8 argument is an error, never a panic (the program name is decoded lossily — argh only shows it in help). Usage and config errors — argh parse errors included — exit 2; `--help` exits 0. See the root CLAUDE.md § CLI for the launch rules. Tests: unit tests per module, `tests/cli_daemon.rs` (infra-free: status + stale/reused-pid/older-zzz records (a start refuses to overwrite one), launch validation (ports at every source, `config.json`, env-override notes, `ZZZ_ENABLE_TEST_ACTIONS` stripped, never a `zzzd` from the current directory), early child exit, `init` file modes, the opener (a stand-in script recording its arguments: the URL as the single final argument for a workspace path a shell would mangle, array arguments passed through, config over env, blank values unset, the browser stub as the fallback, no `ZZZ_ENABLE_TEST_ACTIONS`; a missing or non-executable program, a bare name from either source, and a malformed `opener` exit 2 with nothing launched), full foreground + detached lifecycles and signals during startup against a `sh` + `python3` stand-in daemon — a visible SKIPPED line without `python3` — with a drop guard that kills stand-ins on failure), and `tests/cli_e2e.rs` (full `daemon start` ↔ live `testing_zzzd` lifecycle, gated behind `ZZZ_TEST_E2E=1` + Postgres, self-skips otherwise). Build it with `cargo build -p zzz`.
 
@@ -68,13 +68,13 @@ The sibling Rust workspace must be checked out alongside this repo:
 If a path dep is missing, `cargo build` will fail with
 `failed to read .../crates/{crate}/Cargo.toml`.
 
-**PostgreSQL** is required. Create the development and test databases:
+**PostgreSQL** is required. Create the development and manual-test databases
+(the cross-backend projects' `zzz_test_rust` / `zzz_test_rust_proxy` are
+created by their global setup when missing):
 
 ```bash
 createdb zzz                 # development
 createdb zzz_test            # manual testing_zzzd runs
-createdb zzz_test_rust        # cross-backend vitest project: cross_backend_rust
-createdb zzz_test_rust_proxy  # cross-backend vitest project: cross_backend_rust_proxy
 ```
 
 ## Build and Run
@@ -323,31 +323,28 @@ binary over real HTTP + WebSocket, verifying its JSON-RPC / SSE responses
 conform to the shared fuz_app contract. The tests live in
 `src/test/cross_backend/` (TypeScript, not in the Rust crate):
 
-- **`auth.cross.test.ts`** — invokes fuz_app's
-  `describe_standard_cross_process_tests` (the cross-process subset of the
-  standard bundle: ping; JSON-RPC parse / method / request errors over HTTP +
-  WS; auth enforcement; bearer-token auth on HTTP + WS incl. browser-context
-  discard and per-token revocation; session + account management; audit
-  emission; admin role-gated paths). The surface is built in TS from
-  `action_specs.ts` + fuz_app's standard route bundle via
-  `create_zzz_app_surface_spec` (`zzz_surface_spec.ts`) — no backend
-  dependency. The keeper is granted `ROLE_ADMIN` (`extra_keeper_roles`) so
-  admin-gated cases can drive admin RPC. The bundle omits `rate_limiting`,
-  `audit_completeness`, and `bootstrap_success` (in-process / FK-structural /
-  already consumed by globalSetup — see the bundle's module doc).
+- **`spine_suites.cross.test.ts`** — every shipped fuz_app cross suite the
+  backend's capabilities admit, in one `describe_spine_cross_suites` call:
+  the standard bundle (HTTP + RPC round-trip, admin, auth enforcement,
+  bearer tokens on HTTP + WS), the WS, SSE (`GET /api/admin/audit/stream`)
+  and server-initiated `peer/ping` suites, the front-door, origin, body-size,
+  cookie, token and role-grant suites. The declared surface is
+  `create_rust_spine_consumer_surface_spec` over `all_action_specs` with
+  `host_gate: true` — no backend dependency. Excluded, each with its reason
+  shown in the run: `actor_lookup` (no resolver mounted), and the suites
+  needing `_testing_*` backdoors `testing_zzzd` doesn't register
+  (`credential_deadline`, `origin_conformance`, `ws_outbound_overflow`,
+  `testing_backdoor` — it mounts `_testing_reset` and `_testing_drain_effects`
+  alone). The capabilities
+  are stated in `zzz_backend_config.ts`.
 - **`session.cross.test.ts`** — the per-port session cookie
   (`zzz_session_<port>`: set on login, the shared `fuz_session` name not
-  read, plus fuz_app's hardened-attribute suite under it); another session's
+  read; fuz_app's hardened-attribute suite runs under it in
+  `spine_suites.cross.test.ts`); another session's
   logout closing this session's socket while the session stays valid and a
   fresh socket works (what the frontend's recheck-and-reconnect relies on);
   an RPC `account_session_revoke_all` already committed when the socket
   closes.
-- **`sse.cross.test.ts`** — `describe_cross_process_sse_tests` against
-  `GET /api/admin/audit/stream` (the shared `fuz_realtime::audit_stream_router`):
-  the `: connected` comment, an audit `data:` frame on
-  `admin_session_revoke_all`, close-on-revoke, close on account delete (the
-  deleted account's stream), and the per-session stream cap (one stream past
-  it ends the session's oldest and no other). Gated on `capabilities.sse`.
 - **`workspace.cross.test.ts`** — workspace open / list / close, idempotency,
   scope on close (closing a workspace on `zzz_dir`, on a scoped dir via a
   non-canonical spelling, or nested in a scoped dir keeps write access; closing
@@ -438,8 +435,9 @@ conform to the shared fuz_app contract. The tests live in
 - **`terminal.cross.test.ts`** — PTY create / read / write / close lifecycle,
   `terminal_data` / `terminal_exited` notifications over WS, live resize and
   out-of-range resize rejection, explicit cwd and bad-cwd spawn failure,
-  nonexistent-command handling, a relative `cwd` and unsupported close
-  signals refused (`invalid_params`), a ~22KB paste round-trip through `cat`
+  a nonexistent command refused before any terminal is registered
+  (`invalid_params`, `terminal_command_not_found`), a relative `cwd` and
+  unsupported close signals refused (`invalid_params`), a ~22KB paste round-trip through `cat`
   (partial writes continued), multibyte output split across reads, env
   scrubbing (no `SECRET_*` / `DATABASE_URL` / … in the child), reaping of a
   child that ignores `SIGTERM` + `SIGHUP` (no zombie after close),
@@ -458,12 +456,7 @@ conform to the shared fuz_app contract. The tests live in
   (zzz_dir file listing with contents + recursive subdirectory walk; `file_roots`
   covering `zzz_dir`, the scoped dirs, and every file; a stable
   `server_instance_id`).
-- **`completion.cross.test.ts`** — `completion_create` invalid-provider and blank-prompt rejection.
-- **`peer_ping_ws.cross.test.ts`** — server-initiated `peer/ping` round-trip
-  (client invokes, server pings back over the same socket, client responder
-  echoes, server validates) plus security negatives. Invokes fuz_app's shared
-  `describe_peer_ping_ws_tests`; gated on `capabilities.peer_request` (runs in
-  the `cross_backend_rust` project).
+- **`completion.cross.test.ts`** — `completion_create` on a provider with no API key (`ai_provider_error`, -32020 / 502) and blank-prompt rejection.
 - **`static.cross.test.ts`** — built-frontend serving through the full
   router: the `cross_backend_rust` backend serves a miniature adapter-static
   build (`STATIC_FIXTURE_FILES` in `zzz_backend_config.ts`, via
@@ -482,10 +475,10 @@ conform to the shared fuz_app contract. The tests live in
   (spine crate), where the pure functions carry their own `#[cfg(test)]` unit
   tests.
 
-Supporting files: `global_setup.ts` (vitest globalSetup),
-`zzz_backend_config.ts` (per-project `BackendConfig` factories),
-`zzz_surface_spec.ts` (the TS `AppSurfaceSpec` + RPC endpoints),
-`cross_test_types.ts` (`inject('backend_handle')` typing), and
+Supporting files: `global_setup.ts` (vitest globalSetup:
+`create_cross_backend_global_setup`, which builds `testing_zzzd` first and
+creates each project's database when missing), `zzz_backend_config.ts`
+(per-project `BackendConfig` factories and the stated capabilities), and
 `request_status.ts` (a request whose body the server may refuse from the
 headers alone — the over-cap cases).
 
@@ -501,11 +494,12 @@ in `vite.config.ts` so a bare `gro test` never spawns backends. The
 `test:cross` package.json script (`npm run test:cross`) bakes the flag in;
 set it manually only for the single-project `--project` runs.
 
-The harness writes a bootstrap token to a tmpdir, spawns the test binary
-via the project's `BackendConfig.start_command`, waits for health,
+The harness builds the test binary (`prepare_cargo_binary`;
+`FUZ_TESTING_NO_REBUILD=1` skips it), writes a bootstrap token to a tmpdir,
+spawns the built binary (`BackendConfig.start_command`), waits for health,
 bootstraps an admin account via `POST /api/account/bootstrap`, then
-provides the bootstrapped handle to test files via vitest's
-`inject('backend_handle')`. SIGTERM on globalSetup teardown leaves no
+provides the bootstrapped handle to test files, which read it with
+`inject_backend_handle`. SIGTERM on globalSetup teardown leaves no
 stranded ports. Each project targets its own real PostgreSQL DB
 (`zzz_test_rust` / `zzz_test_rust_proxy`), with its auth-namespace schema
 wiped on backend startup (`FUZ_TESTING_RESET_DB_ON_STARTUP`) and

@@ -242,6 +242,7 @@ mod tests {
             crate::provider::ProviderManager::new(),
             false,
             Arc::clone(&realtime),
+            Arc::clone(&audit),
         ));
         SurfaceRouters {
             rpc: fuz_actions::create_rpc_router(fuz_actions::RpcRouteState {

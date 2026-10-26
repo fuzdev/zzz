@@ -12,8 +12,8 @@ use fuz_auth::{
     deserialize_wire_uuid,
 };
 use fuz_http::{
-    JsonrpcError, internal_error, internal_error_with_source, invalid_params, not_found,
-    parse_strict_params, queue_overflow,
+    JsonrpcError, SAFE_INTEGER_MAX, internal_error, internal_error_with_source,
+    invalid_input_params, invalid_params, not_found, parse_strict_params, queue_overflow,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -21,7 +21,12 @@ use uuid::Uuid;
 
 use crate::handlers::filesystem::ERROR_INVALID_PATH;
 use crate::handlers::{App, caller_account_id};
-use crate::pty_manager::{PtyManager, TerminalNotFound, TerminalWriteError};
+use crate::pty_manager::{PtyManager, TerminalNotFound, TerminalSpawnError, TerminalWriteError};
+
+/// Error reason: `terminal_create`'s `command` doesn't exist — twin of
+/// `ERROR_TERMINAL_COMMAND_NOT_FOUND` in `src/lib/terminal_helpers.ts`,
+/// declared in the action spec's `error_reasons`.
+pub const ERROR_TERMINAL_COMMAND_NOT_FOUND: &str = "terminal_command_not_found";
 
 #[derive(Serialize)]
 struct TerminalCreateResult {
@@ -81,7 +86,23 @@ struct TerminalAckInput {
     #[serde(deserialize_with = "deserialize_wire_uuid")]
     terminal_id: Uuid,
     /// The `sent_bytes` of the last `terminal_data` the client finished with.
+    /// At most [`SAFE_INTEGER_MAX`] ([`parse_terminal_ack_params`]).
     bytes: u64,
+}
+
+/// Parse `terminal_ack`'s params, refusing what the TS schema refuses.
+///
+/// The twin declares `bytes` `z.number().int().nonnegative()`, and Zod's
+/// `int()` refuses past `Number.MAX_SAFE_INTEGER`, so a `bytes` above
+/// [`SAFE_INTEGER_MAX`] gets the schema's generic `invalid params` (no
+/// reason) here too — at params validation, ahead of the terminal lookup —
+/// rather than decoding as a `u64` the twin can't represent.
+fn parse_terminal_ack_params(params: Value) -> Result<TerminalAckInput, JsonrpcError> {
+    let input: TerminalAckInput = parse_strict_params(params)?;
+    if input.bytes > SAFE_INTEGER_MAX.unsigned_abs() {
+        return Err(invalid_input_params("'bytes' must be a safe integer", None));
+    }
+    Ok(input)
 }
 
 /// Check a terminal dimension (`cols` / `rows`): an integer in `1..=65535`
@@ -122,6 +143,21 @@ fn terminal_cwd(cwd: Option<&str>) -> Result<Option<&str>, JsonrpcError> {
             Some(ERROR_INVALID_PATH),
         )),
         cwd => Ok(cwd),
+    }
+}
+
+/// The reply for a failed spawn: a `command` that doesn't exist is the
+/// caller's input, refused as `invalid_params` with
+/// [`ERROR_TERMINAL_COMMAND_NOT_FOUND`]; any other failure is internal.
+fn terminal_spawn_error(error: &TerminalSpawnError, command: &str) -> JsonrpcError {
+    match error {
+        TerminalSpawnError::CommandNotFound => invalid_params(
+            &format!("command not found: {command:?}"),
+            Some(ERROR_TERMINAL_COMMAND_NOT_FOUND),
+        ),
+        TerminalSpawnError::Failed(message) => {
+            internal_error(&format!("failed to create terminal: {message}"))
+        }
     }
 }
 
@@ -180,8 +216,9 @@ pub fn register_account_removal_listener(emitter: &AuditEmitter, app: &Arc<App>)
 /// # Errors
 ///
 /// `unauthenticated` when the request carries no account; `invalid_params`
-/// for a malformed input or a relative `cwd`; an internal error when the
-/// spawn fails.
+/// for a malformed input, a relative `cwd`, or a `command` that doesn't
+/// exist ([`ERROR_TERMINAL_COMMAND_NOT_FOUND`]); an internal error when the
+/// spawn fails otherwise.
 pub async fn terminal_create(
     params: Value,
     ctx: ActionContext<'_>,
@@ -197,7 +234,7 @@ pub async fn terminal_create(
 
     PtyManager::spawn(Arc::clone(&app), owner, &terminal_id, &command, &args, cwd)
         .await
-        .map_err(|e| internal_error(&format!("failed to create terminal: {e}")))?;
+        .map_err(|e| terminal_spawn_error(&e, &command))?;
 
     serde_json::to_value(TerminalCreateResult { terminal_id })
         .map_err(|e| internal_error_with_source("serialization failed", &e))
@@ -264,14 +301,15 @@ pub async fn terminal_resize(
 /// # Errors
 ///
 /// `unauthenticated` when the request carries no account; `invalid_params`
-/// for a malformed input; `not_found` for a terminal the caller doesn't own.
+/// for a malformed input or a `bytes` past `Number.MAX_SAFE_INTEGER`;
+/// `not_found` for a terminal the caller doesn't own.
 pub async fn terminal_ack(
     params: Value,
     ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
     let owner = caller_account_id(&ctx)?;
-    let input: TerminalAckInput = parse_strict_params(params)?;
+    let input = parse_terminal_ack_params(params)?;
 
     app.pty_manager
         .ack(
@@ -345,6 +383,31 @@ mod tests {
         assert!(error.data.is_none(), "nothing to tell unknown from foreign");
     }
 
+    /// A command that doesn't exist is refused as the caller's input —
+    /// `invalid_params` with the declared reason — and any other spawn
+    /// failure stays internal.
+    #[test]
+    fn spawn_errors_map_command_not_found_to_its_reason() {
+        let error = terminal_spawn_error(&TerminalSpawnError::CommandNotFound, "nope");
+        assert_eq!(error.code, JsonrpcErrorCode::InvalidParams);
+        assert_eq!(error.message, "command not found: \"nope\"");
+        assert_eq!(
+            error.data,
+            Some(json!({ "reason": ERROR_TERMINAL_COMMAND_NOT_FOUND }))
+        );
+        assert_eq!(
+            fuz_http::error_code_to_http_status(error.code),
+            axum::http::StatusCode::BAD_REQUEST
+        );
+
+        let error = terminal_spawn_error(
+            &TerminalSpawnError::Failed("PTY spawn failed".to_owned()),
+            "sh",
+        );
+        assert_eq!(error.code, JsonrpcErrorCode::InternalError);
+        assert_eq!(error.message, "failed to create terminal: PTY spawn failed");
+    }
+
     #[test]
     fn close_signals_are_sigterm_or_sigkill() {
         assert_eq!(close_signal(None).ok(), Some(libc::SIGTERM));
@@ -368,6 +431,27 @@ mod tests {
                 Some(&json!(ERROR_INVALID_PATH)),
                 "{cwd:?}"
             );
+        }
+    }
+
+    /// `bytes` past `Number.MAX_SAFE_INTEGER` gets the refusal the TS
+    /// schema's `int()` answers on the spine — `invalid params`, generic
+    /// message, no reason — at params validation, before any terminal lookup
+    /// could answer `not_found`.
+    #[test]
+    fn ack_bytes_past_the_safe_integer_range_are_refused_at_params_validation() {
+        use fuz_http::INVALID_PARAMS_MESSAGE;
+        let max = SAFE_INTEGER_MAX.unsigned_abs();
+        let ack = parse_terminal_ack_params(json!({"terminal_id": NIL_UUID, "bytes": max}))
+            .expect("the largest safe integer reaches the handler");
+        assert_eq!(ack.bytes, max);
+        for bytes in [max + 1, u64::MAX] {
+            let error = parse_terminal_ack_params(json!({"terminal_id": NIL_UUID, "bytes": bytes}))
+                .err()
+                .unwrap_or_else(|| panic!("{bytes} must be refused"));
+            assert_eq!(error.code, JsonrpcErrorCode::InvalidParams, "{bytes}");
+            assert_eq!(error.message, INVALID_PARAMS_MESSAGE, "{bytes}");
+            assert!(error.data.is_none(), "{bytes}: no reason");
         }
     }
 
@@ -478,12 +562,8 @@ mod tests {
                 "{params}"
             );
         }
-        let ack: TerminalAckInput =
-            parse_strict_params(json!({"terminal_id": NIL_UUID, "bytes": 0})).unwrap();
+        let ack = parse_terminal_ack_params(json!({"terminal_id": NIL_UUID, "bytes": 0})).unwrap();
         assert_eq!(ack.bytes, 0);
-        let ack: TerminalAckInput =
-            parse_strict_params(json!({"terminal_id": NIL_UUID, "bytes": u64::MAX})).unwrap();
-        assert_eq!(ack.bytes, u64::MAX);
         for params in [
             json!({"terminal_id": NIL_UUID}),
             json!({"terminal_id": NIL_UUID, "bytes": -1}),
@@ -494,7 +574,7 @@ mod tests {
             json!({"terminal_id": "abc", "bytes": 1}),
         ] {
             assert!(
-                parse_strict_params::<TerminalAckInput>(params.clone()).is_err(),
+                parse_terminal_ack_params(params.clone()).is_err(),
                 "{params}"
             );
         }

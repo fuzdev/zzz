@@ -55,6 +55,9 @@ import { FrontendHttpTransport } from '@fuzdev/fuz_app/actions/transports_http.t
 import { FrontendWebsocketTransport } from '@fuzdev/fuz_app/actions/transports_ws.ts';
 import { create_rpc_client } from '@fuzdev/fuz_app/actions/rpc_client.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+// registers zzz's `ai_provider_error` (-32020 → 502) in fuz_app's status table
+// before any transport reads it
+import './zzz_jsonrpc_errors.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 import type { FrontendActionsApi } from './action_metatypes.ts';

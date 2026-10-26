@@ -13,19 +13,18 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { describe, test, inject, assert } from 'vitest';
-import {
-	default_cross_process_setup,
-	reconstruct_bootstrapped_handle
-} from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
+import { describe, test, assert } from 'vitest';
+import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
+import { default_cross_process_setup } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
 
-import { TERMINAL_ACK_THRESHOLD_BYTES } from '#lib/terminal_helpers.ts';
+import {
+	ERROR_TERMINAL_COMMAND_NOT_FOUND,
+	TERMINAL_ACK_THRESHOLD_BYTES
+} from '#lib/terminal_helpers.ts';
 
-import './cross_test_types.ts';
-
-const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
+const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
@@ -324,55 +323,26 @@ describe('terminal cross-backend', () => {
 
 	test('terminal_create_nonexistent_command', async () => {
 		const fixture = await setup_test();
-		const ws = await create_ws_transport({
-			base_url: handle.config.base_url,
-			ws_path: handle.config.ws_path,
-			cookies: fixture.transport.cookies()
+		const res = await rpc_call({
+			app: fixture.transport,
+			path: handle.config.rpc_path,
+			method: 'terminal_create',
+			params: { command: '/nonexistent/binary_zzz_test' },
+			headers: fixture.create_session_headers()
 		});
-		try {
-			await ws.request('_warmup', 'ping', undefined);
-
-			// Two valid behaviors across backends — either an error response
-			// from the create call, or a successful create followed by an
-			// exited notification with exit_code 127. Catch the error path
-			// from `ws.request` (it throws on error frames) and fall through
-			// to the success-path branch.
-			let terminal_id: string | undefined;
-			let create_error: Error | undefined;
-			try {
-				const create_result = await ws.request<Record<string, unknown>>(
-					'tcne-1',
-					'terminal_create',
-					{
-						command: '/nonexistent/binary_zzz_test',
-						args: []
-					}
-				);
-				terminal_id = create_result.terminal_id as string;
-				assert.equal(typeof terminal_id, 'string');
-			} catch (e) {
-				create_error = e as Error;
-			}
-
-			if (create_error) {
-				// Spawn failed at the create call — message includes the code.
-				assert.match(create_error.message, /-32603/);
-			} else {
-				// Forkpty path: child exits 127. Wait for the terminal_exited
-				// notification matching the just-created terminal_id.
-				const exited = await ws.wait_for<Record<string, unknown>>((msg) => {
-					if (!msg || typeof msg !== 'object') return false;
-					const m = msg as Record<string, unknown>;
-					if (m.method !== 'terminal_exited') return false;
-					const params = m.params as Record<string, unknown> | undefined;
-					return params?.terminal_id === terminal_id;
-				}, 5_000);
-				const exit_params = exited.params as Record<string, unknown>;
-				assert.equal(exit_params.exit_code, 127, 'exit_code is 127');
-			}
-		} finally {
-			await ws.close();
-		}
+		assert.ok(!res.ok, 'a missing command should be refused');
+		assert.equal(res.status, 400);
+		assert.equal(res.error.code, -32602);
+		assert.deepEqual(res.error.data, { reason: ERROR_TERMINAL_COMMAND_NOT_FOUND });
+		// refused before any terminal is registered
+		const session = await rpc_call({
+			app: fixture.transport,
+			path: handle.config.rpc_path,
+			method: 'session_load',
+			headers: fixture.create_session_headers()
+		});
+		assert.ok(session.ok, JSON.stringify(session));
+		assert.deepEqual(session_terminal_ids(session.result), []);
 	});
 
 	test('terminal_data_send_missing', async () => {

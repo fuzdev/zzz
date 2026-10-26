@@ -9,25 +9,19 @@
  * @module
  */
 
-import { describe, test, inject, assert } from 'vitest';
-import {
-	default_cross_process_setup,
-	reconstruct_bootstrapped_handle
-} from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
+import { describe, test, assert } from 'vitest';
+import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
+import { default_cross_process_setup } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 
-import './cross_test_types.ts';
-
-const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
+const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
 
 describe('completion cross-backend', () => {
 	test('completion_create_invalid_provider_rejected', async () => {
-		// Sending a completion against an unconfigured provider should
-		// surface as an RPC error rather than a successful completion.
-		// Neither backend has live provider credentials in the cross-process
-		// suite, so both should error — the exact code differs by backend
-		// but every code in the JSON-RPC spec range is rejection.
+		// Sending a completion against an unconfigured provider surfaces as
+		// a provider error rather than a successful completion: the
+		// cross-process suite has no live provider credentials.
 		const fixture = await setup_test();
 		const res = await rpc_call({
 			app: fixture.transport,
@@ -44,17 +38,14 @@ describe('completion cross-backend', () => {
 			headers: fixture.create_session_headers()
 		});
 		assert.ok(!res.ok, `expected error, got ${JSON.stringify(res)}`);
-		// `gemini` is a registered provider, so an unconfigured instance
-		// (no API key in the cross-process suite) surfaces as
-		// `ai_provider_error` (-32020); an unregistered provider would surface
-		// as internal-error (-32603) or invalid-params (-32602). Any of the
-		// three is a valid rejection — every code in the JSON-RPC spec range
-		// means "not a successful completion", and the exact code is
-		// environment-dependent and identical across all three TS runtimes.
-		assert.ok(
-			res.error.code === -32603 || res.error.code === -32602 || res.error.code === -32020,
-			`unexpected error code: ${res.error.code} (${res.error.message})`
-		);
+		// `gemini` is a registered provider, so an unconfigured instance (no
+		// API key in the cross-process suite) is refused by
+		// `ProviderClient::require` as `ai_provider_error` — zzz's declared
+		// -32020, answering 502 (`src/lib/zzz_jsonrpc_errors.ts`), never an
+		// `internal_error`
+		assert.strictEqual(res.status, 502);
+		assert.strictEqual(res.error.code, -32020);
+		assert.strictEqual(res.error.message, 'gemini: needs API key');
 	});
 
 	test('completion_create_blank_prompt_rejected', async () => {

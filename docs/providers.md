@@ -108,8 +108,10 @@ error separately. Transport error messages have the request URL stripped.
 The shared HTTP client bounds connection setup at 30 seconds; there is no
 overall request timeout, since streaming completions run long.
 
-Every provider failure is an `internal_error` (-32603) whose message is
-prefixed with the provider name. When the provider's API answered with a
+Every provider failure — a missing or invalid API key included — is an
+`ai_provider_error` (-32020, HTTP 502, declared in
+`src/lib/zzz_jsonrpc_errors.ts`) whose message is prefixed with the provider
+name (`claude: needs API key`). When the provider's API answered with a
 non-2xx status, the error's `data` is
 `{reason: 'provider_http_error', status}` with the upstream HTTP status
 (`ai_provider_http_error`), so a client can tell a request that can't succeed

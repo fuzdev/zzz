@@ -42,15 +42,11 @@
  * @module
  */
 
-import { describe, test, inject, assert, afterAll } from 'vitest';
+import { describe, test, assert, afterAll } from 'vitest';
 import { Client } from 'pg';
 
-import {
-	type ReconstructedBootstrappedBackendHandle,
-	reconstruct_bootstrapped_handle
-} from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
-
-import './cross_test_types.ts';
+import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
+import type { ReconstructedBootstrappedBackendHandle } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 
 /**
  * Resolve the connection string for the spawned backend's database.
@@ -201,7 +197,7 @@ const assert_resolved_ip = async (
 	assert.strictEqual(resolved_ip, expected_ip, message);
 };
 
-const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
+const handle = inject_backend_handle();
 
 describe('proxy.cross', () => {
 	// No XFF header — middleware uses the TCP peer (loopback). The harness

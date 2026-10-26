@@ -12,13 +12,12 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { describe, test, inject, assert } from 'vitest';
-import { reconstruct_bootstrapped_handle } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
+import { describe, test, assert } from 'vitest';
+import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
 
-import './cross_test_types.ts';
 import { STATIC_FIXTURE_FILES } from './zzz_backend_config.ts';
 
-const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
+const handle = inject_backend_handle();
 const { base_url } = handle.config;
 
 const FALLBACK = STATIC_FIXTURE_FILES['200.html'];

@@ -52,25 +52,23 @@
  * `_testing_reset` RPC action (per-test reset) is orthogonal and stays
  * wired the same way it was; this is the per-process-startup wipe.
  *
- * **Operator setup** — the per-project DBs must exist before the test
- * harness runs. One-time bootstrap (idempotent):
- *
- * ```bash
- * createdb zzz_test_rust 2>/dev/null || true
- * createdb zzz_test_rust_proxy 2>/dev/null || true
- * ```
- *
- * Equivalent provisioning via your PG cluster is fine — the harness
- * does not call `CREATE DATABASE` (deliberately, to avoid forcing a
- * `CREATEDB` privilege on the test role).
+ * **Databases** — the global setup creates each project's database when
+ * it's missing (`ensure_databases`, an idempotent `createdb`; a role without
+ * `CREATEDB` gets a warning, and a database provisioned another way works
+ * the same).
  *
  * @module
  */
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { BackendConfig } from '@fuzdev/fuz_app/testing/cross_backend/backend_config.ts';
 import type { BackendCapabilities } from '@fuzdev/fuz_app/testing/cross_backend/capabilities.ts';
+import {
+	resolve_cargo_binary_path,
+	type CargoBinaryOptions
+} from '@fuzdev/fuz_app/testing/cross_backend/cargo_binary.ts';
 import {
 	build_test_backend_paths,
 	type TestBackendPaths
@@ -121,36 +119,60 @@ export const read_dev_allowed_origins = (): string => {
 const RUST_DATABASE_URL_PREFIX = 'postgres://localhost/zzz_test_';
 
 /**
- * The Rust backend serves `GET /api/admin/audit/stream` via
- * `fuz_realtime::audit_stream_router`. Advertise `sse` so
- * `describe_cross_process_sse_tests` runs (rather than skips). The
- * Rust+proxy project never includes `sse.cross.test.ts`, so its flag is
- * inert there but stays honest.
+ * Every mount flag `zzz_server` has, stated: `/api/ws` (`ws`), the
+ * admin-gated audit stream `GET /api/admin/audit/stream`
+ * (`fuz_realtime::audit_stream_router`, `sse`), and one action registry
+ * serving `/api/rpc` and `/api/ws` with `PROTOCOL_ACTION_SPECS` (`peer/ping`
+ * on both, so an HTTP call refuses `peer_no_transport` — `peer_request`) and
+ * `build_auth_spec_set` (the self-service account actions on the socket —
+ * `ws_account_actions`). No cell, fact-serving or `/ready` mounts, no test
+ * create policy, and the upgrade has no role gate. The proxy project runs
+ * only `proxy.cross.test.ts`, so its flags are inert there but stay honest.
  */
-const rust_capabilities: BackendCapabilities = { ...rust_default_capabilities, sse: true };
+const rust_capabilities: BackendCapabilities = {
+	...rust_default_capabilities,
+	ws: true,
+	sse: true,
+	peer_request: true,
+	ws_account_actions: true,
+	cell_crud: false,
+	cell_relations: false,
+	cell_gated_create: false,
+	fact_serving: false,
+	fact_serving_admin_hash: false,
+	ready: false,
+	ws_role_gated: false
+};
+
+/**
+ * The Rust test binary — `testing_zzzd` in the `testing_zzz_server` crate,
+ * `dev` profile (wire-shape conformance with the fast argon2 hasher, so a
+ * release build buys nothing). The global setup builds it before the spawn
+ * (`prepare_cargo_binary`); the configs spawn the path it builds to.
+ */
+export const ZZZ_CARGO_BINARY: CargoBinaryOptions = {
+	workspace_dir: fileURLToPath(new URL('../../..', import.meta.url)),
+	package: 'testing_zzz_server',
+	bin: 'testing_zzzd'
+};
 
 interface ZzzBackendPaths extends TestBackendPaths {
-	zzz_dir: string;
 	scoped_dir: string;
 }
 
 /**
  * Per-backend filesystem layout — generic paths via
- * {@link build_test_backend_paths}, plus zzz-specific `zzz_dir` /
- * `scoped_dir` for `PUBLIC_ZZZ_DIR` / `PUBLIC_ZZZ_SCOPED_DIRS`. The
- * Rust daemon-token writer expects `{zzz_dir}/run/daemon_token`, so
- * `zzz_dir` is anchored to `paths.root` (the generic builder's tmpdir
- * subtree) — keeping the daemon-token convention consistent.
+ * {@link build_test_backend_paths}, plus the zzz-specific `scoped_dir` for
+ * `PUBLIC_ZZZ_SCOPED_DIRS`. The Rust daemon-token writer expects
+ * `{zzz_dir}/run/daemon_token`, so the daemon-token path is anchored to a
+ * `zzz` dir under `paths.root` (the generic builder's tmpdir subtree), and
+ * `daemon_token_dir_env` derives `PUBLIC_ZZZ_DIR` from it.
  */
 const build_zzz_paths = (backend_name: string): ZzzBackendPaths => {
 	const paths = build_test_backend_paths(`zzz_cross_${backend_name}`);
-	const zzz_dir = join(paths.root, 'zzz');
 	return {
 		...paths,
-		// Override the daemon-token path to live under `{zzz_dir}/run/`,
-		// matching `init_daemon_token` (Rust).
-		daemon_token_path: join(zzz_dir, 'run', 'daemon_token'),
-		zzz_dir,
+		daemon_token_path: join(paths.root, 'zzz', 'run', 'daemon_token'),
 		scoped_dir: join(paths.root, 'scoped')
 	};
 };
@@ -165,16 +187,12 @@ interface MakeZzzRustBackendOptions {
 
 /**
  * Rust-family wrapper that threads the zzz-specific env vars + port
- * variable name through the upstream builder. `cargo run` (debug, not
- * release) keeps the source-of-truth invocation in cargo's hands so a
- * stale `target/debug/testing_zzzd` from a prior checkout never serves
- * silently. Debug because the cross-backend suite is wire-shape /
- * behavioral conformance (the fast argon2 hasher is already wired), so a
- * release LTO build buys it nothing while a cold release build would
- * exceed the backend-spawn health timeout — matching `fuz_forge_server`'s
- * harness. Consumers iterating locally can swap to
- * `['target/debug/testing_zzzd']` for faster spawns once they've built
- * the binary at least once.
+ * variable name through the upstream builder. It spawns the built
+ * `ZZZ_CARGO_BINARY`, which the global setup has just built, so a stale
+ * binary never serves silently and a cold build runs outside the spawn's
+ * health window. `PUBLIC_ZZZ_DIR` is the binary's daemon-token directory
+ * (`init_daemon_token` writes `{zzz_dir}/run/daemon_token`), so it is set
+ * through `daemon_token_dir_env` from `paths.daemon_token_path`.
  */
 const make_zzz_rust_backend_config = ({
 	name,
@@ -189,15 +207,15 @@ const make_zzz_rust_backend_config = ({
 	return make_default_rust_backend_config({
 		name,
 		port,
-		start_command: ['cargo', 'run', '--bin', 'testing_zzzd'],
+		start_command: [resolve_cargo_binary_path(ZZZ_CARGO_BINARY)],
 		database_url: `${RUST_DATABASE_URL_PREFIX}${database_name}`,
 		port_env_var: 'ZZZ_PORT',
 		cookie_name: zzz_session_cookie_name(port),
 		rust_log: 'info,zzz_server=info,testing_zzzd=info',
 		capabilities: rust_capabilities,
 		paths,
+		daemon_token_dir_env: 'PUBLIC_ZZZ_DIR',
 		extra_env: {
-			PUBLIC_ZZZ_DIR: paths.zzz_dir,
 			PUBLIC_ZZZ_SCOPED_DIRS: paths.scoped_dir,
 			// exact origins, the shape the production template and the CLI
 			// ship — the backend's own two, the page it serves — never the

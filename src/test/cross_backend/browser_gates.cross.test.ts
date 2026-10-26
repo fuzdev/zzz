@@ -27,16 +27,13 @@
 import { join } from 'node:path';
 import { mkdir, stat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { describe, test, inject, assert } from 'vitest';
-import {
-	default_cross_process_setup,
-	reconstruct_bootstrapped_handle
-} from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
+import { describe, test, assert } from 'vitest';
+import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
+import { default_cross_process_setup } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 
 import { FILE_BYTES_MAX_BODY_BYTES, to_file_bytes_url } from '#lib/file_bytes.ts';
 import { RPC_MESSAGE_MAX_BYTES } from '#lib/rpc_message_limit.ts';
 
-import './cross_test_types.ts';
 import {
 	raw_request as send_raw_request,
 	WS_UPGRADE_HEADERS,
@@ -44,7 +41,7 @@ import {
 } from './raw_request.ts';
 import { request_status } from './request_status.ts';
 
-const handle = reconstruct_bootstrapped_handle(inject('backend_handle'));
+const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
 
 const { base_url, rpc_path } = handle.config;

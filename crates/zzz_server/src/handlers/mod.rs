@@ -42,6 +42,7 @@ use crate::scoped_fs::ScopedFs;
 use crate::tool::Tools;
 
 use fuz_actions::{ActionContext, ActionRegistry};
+use fuz_auth::AuditEmitter;
 use fuz_http::{JsonrpcError, unauthenticated};
 use fuz_realtime::ConnectionRegistry;
 use uuid::Uuid;
@@ -103,6 +104,11 @@ pub struct App {
     /// [`Self::new`] starts with
     /// none; `run_app` sets them from the config.
     pub tools: Tools,
+    /// The spine audit emitter every audit row goes through — the one
+    /// `run_app` hands the route states and the action registry. Held here so
+    /// the test binary's specs factory can build `_testing_drain_effects`
+    /// over it.
+    pub audit_emitter: Arc<AuditEmitter>,
 }
 
 impl std::fmt::Debug for App {
@@ -117,6 +123,10 @@ impl std::fmt::Debug for App {
 }
 
 impl App {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "one handle per subsystem `run_app` composes; the tests build inert ones"
+    )]
     pub fn new(
         db_pool: Pool,
         scoped_fs: ScopedFs,
@@ -125,6 +135,7 @@ impl App {
         provider_manager: ProviderManager,
         enable_test_actions: bool,
         realtime: Arc<ConnectionRegistry>,
+        audit_emitter: Arc<AuditEmitter>,
     ) -> Self {
         Self {
             instance_id: Uuid::new_v4(),
@@ -143,6 +154,7 @@ impl App {
             realtime,
             action_registry: std::sync::OnceLock::new(),
             tools: Tools::default(),
+            audit_emitter,
         }
     }
 
