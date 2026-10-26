@@ -330,13 +330,13 @@ conform to the shared fuz_app contract. The tests live in
   and server-initiated `peer/ping` suites, the front-door, origin, body-size,
   cookie, token and role-grant suites. The declared surface is
   `create_rust_spine_consumer_surface_spec` over `all_action_specs` with
-  `host_gate: true` — no backend dependency. Excluded, each with its reason
-  shown in the run: `actor_lookup` (no resolver mounted), and the suites
-  needing `_testing_*` backdoors `testing_zzzd` doesn't register
-  (`credential_deadline`, `origin_conformance`, `ws_outbound_overflow`,
-  `testing_backdoor` — it mounts `_testing_reset` and `_testing_drain_effects`
-  alone). The capabilities
-  are stated in `zzz_backend_config.ts`.
+  `host_gate: true` — no backend dependency. Excluded with its reason shown in
+  the run: `actor_lookup` (no resolver mounted). The capabilities, including
+  `testing_backdoors` (`_testing_reset` and `_testing_drain_effects`, the two
+  `testing_zzzd` mounts), are stated in `zzz_backend_config.ts`; the
+  testing-backdoor suite checks that list against the binary, and the suites
+  needing another backdoor (`credential_deadline`, `origin_conformance`,
+  `ws_outbound_overflow`) skip themselves, naming it.
 - **`session.cross.test.ts`** — the per-port session cookie
   (`zzz_session_<port>`: set on login, the shared `fuz_session` name not
   read; fuz_app's hardened-attribute suite runs under it in

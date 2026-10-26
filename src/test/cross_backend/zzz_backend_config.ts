@@ -141,7 +141,10 @@ const rust_capabilities: BackendCapabilities = {
 	fact_serving: false,
 	fact_serving_admin_hash: false,
 	ready: false,
-	ws_role_gated: false
+	ws_role_gated: false,
+	// `testing_zzzd` mounts these two of the spine's backdoors; the suites needing
+	// another skip themselves, naming it
+	testing_backdoors: ['_testing_reset', '_testing_drain_effects']
 };
 
 /**

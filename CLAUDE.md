@@ -387,7 +387,7 @@ JSON-RPC responses conform to the shared fuz_app contract — including the
 admin role-gated `admin_session_revoke_all` / `admin_token_revoke_all`
 handlers and trusted-proxy `client_ip` resolution (the
 `cross_backend_rust_proxy` project). The suites needing `_testing_*`
-backdoors `testing_zzzd` doesn't register are excluded (./crates/CLAUDE.md
+backdoors `testing_zzzd` doesn't register skip themselves (./crates/CLAUDE.md
 § Integration Tests lists them). `zzz_server`'s own `#[cfg(test)]`
 unit tests sit beside the code they cover (e.g. the provider modules,
 `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`); auth,

@@ -10,9 +10,9 @@
 import type { JsonrpcErrorCode, JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import {
 	JSONRPC_ERROR_CODES as BASE_JSONRPC_ERROR_CODES,
-	JSONRPC_ERROR_CODE_TO_HTTP_STATUS,
 	jsonrpc_error_messages as base_jsonrpc_error_messages,
 	jsonrpc_errors as base_jsonrpc_errors,
+	register_jsonrpc_error_code,
 	ThrownJsonrpcError,
 	type JsonrpcErrorName as BaseJsonrpcErrorName
 } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
@@ -56,10 +56,10 @@ export const jsonrpc_errors = {
 	ai_provider_error: create_error_thrower(jsonrpc_error_messages.ai_provider_error)
 } as const;
 
-// Extend fuz_app's code → status table with zzz's code. It's a plain object
-// designed for consumer extension via mutation — fuz_app's
-// `jsonrpc_error_code_to_http_status` reads it at call time. The frontend
-// imports this module for that side effect (`frontend.svelte.ts`). The
-// reverse status → code table is deliberately left alone: an envelope-less
-// 502 (a proxy in front of a stopped zzzd) isn't a provider error.
-JSONRPC_ERROR_CODE_TO_HTTP_STATUS[-32020] = 502; // ai_provider_error → bad gateway
+// Register zzz's `ai_provider_error` code with fuz_app, so
+// `jsonrpc_error_code_to_http_status` answers 502 (bad gateway) rather than 500.
+// The frontend imports this module for that side effect (`frontend.svelte.ts`),
+// and `sideEffects` keeps it in the build. A registered code joins no reverse
+// status → code map: an envelope-less 502 (a proxy in front of a stopped zzzd)
+// isn't a provider error.
+register_jsonrpc_error_code(JSONRPC_ERROR_CODES.ai_provider_error, 502);

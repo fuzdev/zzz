@@ -46,16 +46,6 @@ const roles = create_role_schema([]);
 
 /** The Rust spine's tracked divergences, as on fuz_app's `testing_spine_stub`. */
 const overrides: SuiteOverrides = {
-	rpc_adversarial: {
-		xfail_params: [
-			{
-				method: 'account_token_create',
-				labels: ['missing: scope', 'null: scope', 'missing: lifetime', 'null: lifetime'],
-				tracking_id: 'rust-token-create-schema-reason',
-				reason: 'Rust adds invalid_token_scope / invalid_token_lifetime to schema refusals'
-			}
-		]
-	},
 	// the `cross_backend_rust` backend serves its static frontend with a `200.html`
 	// fallback (`ZZZ_STATIC_DIR`, pinned by `static.cross.test.ts`)
 	origin_scope: { unrouted_status: 200 },
@@ -85,15 +75,7 @@ describe_spine_cross_suites(handle, {
 	rpc_max_body_bytes: RPC_MESSAGE_MAX_BYTES,
 	ws_max_message_bytes: RPC_MESSAGE_MAX_BYTES,
 	exclude: {
-		actor_lookup: 'zzz mounts no actor_lookup resolver',
-		// backdoors `testing_zzzd` doesn't register — it mounts `_testing_reset` and
-		// `_testing_drain_effects` alone
-		credential_deadline:
-			'needs _testing_shorten_credential_expiry, which testing_zzzd does not mount',
-		origin_conformance: 'needs _testing_origin_check, which testing_zzzd does not mount',
-		ws_outbound_overflow: 'needs _testing_flood_notifications, which testing_zzzd does not mount',
-		testing_backdoor:
-			'pins the full _testing_* set; testing_zzzd mounts _testing_reset and _testing_drain_effects alone'
+		actor_lookup: 'zzz mounts no actor_lookup resolver'
 	},
 	overrides
 });

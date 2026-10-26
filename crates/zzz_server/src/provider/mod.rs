@@ -298,7 +298,7 @@ pub const PROVIDER_ERROR_NEEDS_API_KEY: &str = "needs API key";
 /// zzz's `ai_provider_error` code: `-32020`, answering HTTP 502.
 ///
 /// The twin of `JSONRPC_ERROR_CODES.ai_provider_error` and its
-/// `JSONRPC_ERROR_CODE_TO_HTTP_STATUS` entry in `src/lib/zzz_jsonrpc_errors.ts`.
+/// `register_jsonrpc_error_code` call in `src/lib/zzz_jsonrpc_errors.ts`.
 pub const AI_PROVIDER_ERROR: ConsumerErrorCode =
     ConsumerErrorCode::new(-32020, StatusCode::BAD_GATEWAY);
 
