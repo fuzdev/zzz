@@ -207,7 +207,7 @@ crates/                               # Rust workspace
 │   └── zzz_server/                   # Axum JSON-RPC server — full spine consumer (single `/api/rpc` + `/api/ws` on `fuz_actions::ActionRegistry`)
 │       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast` shim + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `file_bytes.rs` (byte routes), `filer.rs`, `job_manager.rs`, `media.rs` + `tool.rs` (`ffmpeg` runs, local tools), `transcription/`, `pty_manager.rs`, `scoped_fs.rs`, `utf8_stream.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB (and the JSON-RPC `notification` builder + error constructors + socket revocation) all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
 src/
-├── lib/                          # Published as @fuzdev/zzz
+├── lib/                          # Library exports of @fuzdev/zzz (not yet on npm)
 │   ├── *.svelte.ts               # Cell state classes
 │   ├── action_specs.ts           # Action spec definitions
 │   ├── cell.svelte.ts            # Base Cell class

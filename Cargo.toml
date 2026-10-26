@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/zzz", "crates/zzz_server", "crates/testing_zzz_server", "crates/xtask"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
 license = "0BSD"
 publish = false

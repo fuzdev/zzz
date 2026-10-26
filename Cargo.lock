@@ -2235,7 +2235,7 @@ dependencies = [
 
 [[package]]
 name = "testing_zzz_server"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "fuz_actions",
  "fuz_auth",
@@ -3217,7 +3217,7 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "fuz_audit",
 ]
@@ -3333,7 +3333,7 @@ checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
 name = "zzz"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "argh",
  "fuz_sys",
@@ -3346,7 +3346,7 @@ dependencies = [
 
 [[package]]
 name = "zzz_server"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "axum",
  "axum-extra",
