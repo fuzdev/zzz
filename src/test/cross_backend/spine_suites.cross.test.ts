@@ -44,23 +44,11 @@ const surface_options = {
 // Built-in roles only — zzz registers no app-defined roles.
 const roles = create_role_schema([]);
 
-/** The Rust spine's tracked divergences, as on fuz_app's `testing_spine_stub`. */
+/** zzz's differences from the spine defaults. */
 const overrides: SuiteOverrides = {
 	// the `cross_backend_rust` backend serves its static frontend with a `200.html`
 	// fallback (`ZZZ_STATIC_DIR`, pinned by `static.cross.test.ts`)
-	origin_scope: { unrouted_status: 200 },
-	// on the derived multi-actor setup, so its seeding stays the one call's
-	transport_composition: (derived) => ({
-		multi_actor: derived.multi_actor && {
-			...derived.multi_actor,
-			xfail: {
-				tracking_id: 'rust-ws-upgrade-acting-fail-open',
-				reason:
-					'the Rust upgrade resolves an account, not an actor, so it admits a multi-actor ' +
-					'upgrade that names no actor; per-frame dispatch still resolves each frame'
-			}
-		}
-	})
+	origin_scope: { unrouted_status: 200 }
 };
 
 describe_spine_cross_suites(handle, {
