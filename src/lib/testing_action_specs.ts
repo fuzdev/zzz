@@ -20,7 +20,7 @@ import type {
 	RemoteNotificationActionSpec,
 	RequestResponseActionSpec
 } from '@fuzdev/fuz_app/actions/action_spec.ts';
-import type { ActionContext, ActionHandler } from '@fuzdev/fuz_app/actions/action_rpc.ts';
+import type { ActionContext, ActionHandler } from '@fuzdev/fuz_app/actions/action_types.ts';
 
 // -- Schemas ----------------------------------------------------------------
 
