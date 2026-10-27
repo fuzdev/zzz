@@ -38,10 +38,11 @@ use std::net::SocketAddr;
 use std::process::ExitCode;
 use std::sync::Arc;
 
+use fuz_actions::server::{SpineBackendOptions, SpineRunOptions};
 use fuz_auth::PasswordHasher;
 use fuz_testing::{
     ResetStateFn, TestingArgon2idHasher, TestingResetOptions,
-    create_testing_drain_effects_action_spec, create_testing_reset_action_spec,
+    create_testing_drain_effects_action_spec, create_testing_reset_action_spec, startup_reset_hook,
 };
 
 /// Default loopback bind address for the testing binary (port 4462).
@@ -54,10 +55,11 @@ const TESTING_DEFAULT_ADDR: SocketAddr =
 #[tokio::main]
 async fn main() -> ExitCode {
     // `--help` or a bad argument exits before the side effects below (app
-    // dir, daemon token); `run_app` parses the args again.
-    if let Err(e) = zzz_server::check_cli_args() {
-        return zzz_server::report_run_result(Err(e), "testing_zzzd");
-    }
+    // dir, daemon token).
+    let args = match zzz_server::parse_process_args("testing_zzzd") {
+        Ok(args) => args,
+        Err(exit) => return exit,
+    };
 
     // Non-blocking stdout logging so a stalled stdout consumer can't starve
     // the async runtime. `_log_guard` must stay live for the whole process —
@@ -145,28 +147,6 @@ async fn main() -> ExitCode {
         ]
     });
 
-    // Pre-migration hook — wipes the auth-namespace schema when
-    // `FUZ_TESTING_RESET_DB_ON_STARTUP=true`, then migrations replay
-    // from nothing. Lifts the manual `psql DROP TABLE...` step out of
-    // the cross-backend test harness so projects can re-run against a
-    // shared PG without operator intervention between sessions.
-    // No-op when the env var is unset/false.
-    let pre_migration_hook: zzz_server::PreMigrationHook = Box::new(|pool: &fuz_db::Pool| {
-        Box::pin(async move {
-            let client = pool.get().await.map_err(|e| {
-                zzz_server::ServerError::Database(format!(
-                    "failed to get client for startup reset: {e}"
-                ))
-            })?;
-            fuz_testing::reset_db_on_startup_if_env_set(&client)
-                .await
-                .map_err(|e| {
-                    zzz_server::ServerError::Database(format!("startup DB reset failed: {e}"))
-                })?;
-            Ok(())
-        })
-    });
-
     // Daemon-token credential for `_testing_reset`. `fuz_testing` owns the only
     // producer of this credential — `zzz_server` cannot mint one — so the test
     // binary constructs it here and injects the handle. The token is static for
@@ -185,32 +165,46 @@ async fn main() -> ExitCode {
     // the `expect` in the specs factory above reports.
     let zzz_dir = match zzz_server::ensure_zzz_dir_from_env() {
         Ok(dir) => dir,
+        Err(e) => return fuz_sys::cli::report_failure(&e, e.hint(), e.exit_code()),
+    };
+    let daemon_token_state = match fuz_testing::init_daemon_token(std::path::Path::new(&zzz_dir))
+        .await
+    {
+        Ok(state) => state,
         Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::from(2);
+            let e =
+                fuz_actions::server::StartupError::Config(format!("daemon token init failed: {e}"));
+            return fuz_sys::cli::report_failure(&e, e.hint(), e.exit_code());
         }
     };
-    let daemon_token_state =
-        match fuz_testing::init_daemon_token(std::path::Path::new(&zzz_dir)).await {
-            Ok(state) => Some(state),
-            Err(e) => {
-                eprintln!("error: daemon token init failed: {e}");
-                return ExitCode::from(2);
-            }
-        };
 
-    let result = zzz_server::run_app(zzz_server::RunAppOptions {
-        password_hasher,
-        default_addr: TESTING_DEFAULT_ADDR,
-        drain_timeout: fuz_http::DEFAULT_DRAIN_TIMEOUT,
+    match zzz_server::run_app(zzz_server::RunAppOptions {
+        spine: SpineRunOptions {
+            backend: SpineBackendOptions {
+                password_hasher,
+                login_ip_rate_limit: fuz_auth::DEFAULT_LOGIN_IP_RATE_LIMIT,
+                // the cross-backend auth suite's repeated logins would trip the
+                // buckets; the once-per-process banner announces the nulls
+                rate_limiters: fuz_auth::RateLimiterMode::DisabledForTesting,
+                daemon_token_state: Some(daemon_token_state),
+                // Wipes the auth-namespace schema when
+                // `FUZ_TESTING_RESET_DB_ON_STARTUP=true`, then migrations
+                // replay from nothing, so projects can re-run against a shared
+                // PG without operator intervention. No-op when unset.
+                pre_migration_hook: Some(startup_reset_hook()),
+                // makes `_testing_drain_effects` a real barrier
+                audit_inflight_tracking: true,
+            },
+            default_addr: TESTING_DEFAULT_ADDR,
+            drain_timeout: fuz_http::DEFAULT_DRAIN_TIMEOUT,
+        },
+        args,
         force_test_actions: true,
-        rate_limiters: fuz_auth::RateLimiterMode::DisabledForTesting,
         extra_action_specs_factory: Some(extra_specs_factory),
-        pre_migration_hook: Some(pre_migration_hook),
-        daemon_token_state,
-        // makes `_testing_drain_effects` a real barrier
-        audit_inflight_tracking: true,
     })
-    .await;
-    zzz_server::report_run_result(result, "testing_zzzd")
+    .await
+    {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => fuz_sys::cli::report_failure(&e, e.hint(), e.exit_code()),
+    }
 }

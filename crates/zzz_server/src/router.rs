@@ -64,15 +64,13 @@
 //! subpaths get the SPA shell.
 
 use std::path::Path;
-use std::sync::Arc;
 
 use axum::routing::get;
 use axum::{Json, Router};
-use fuz_auth::AuthGate;
 use fuz_http::{
-    BodyCap, DEFAULT_BODY_LIMIT_BYTES, GatedRouter, ParsedProxy, RouteGroup, StackOptions,
-    compose_stack,
+    BodyCap, DEFAULT_BODY_LIMIT_BYTES, GatedRouter, RouteGroup, StackOptions, compose_stack,
 };
+
 use serde::Serialize;
 
 use crate::file_bytes::FILE_BYTES_MAX_BODY_BYTES;
@@ -97,10 +95,10 @@ pub struct SurfaceRouters {
     pub file_bytes: Router,
 }
 
-/// The stack options every group shares: the gate's allowlist and the trusted
-/// proxies, the host gate on, request tracing off (module doc).
-pub fn zzz_stack_options(gate: &AuthGate, trusted_proxies: Arc<Vec<ParsedProxy>>) -> StackOptions {
-    let mut options = gate.stack_options(trusted_proxies);
+/// The stack options every group shares: the spine core's (the gate's
+/// allowlist and the trusted proxies), the host gate on, request tracing off
+/// (module doc).
+pub const fn zzz_stack_options(mut options: StackOptions) -> StackOptions {
     options.host_gate = true;
     options.request_tracing = false;
     options
@@ -174,6 +172,8 @@ pub fn compose_router(
     )
 }
 
+/// `GET /health`'s body, the spine's one shape. zzz mounts the probe alone,
+/// not the spine's `probe_router`: its `/` is the built frontend.
 #[derive(Serialize)]
 struct HealthResponse {
     status: &'static str,
@@ -191,7 +191,7 @@ mod tests {
 
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
 
     use axum::body::Body;
     use axum::extract::ConnectInfo;
@@ -208,109 +208,81 @@ mod tests {
     const COOKIE_KEY: &str = "a-cookie-signing-key-that-is-long-enough-to-pass";
     const SPA_SHELL: &str = "<!doctype html>shell";
 
-    fn test_gate() -> AuthGate {
-        AuthGate {
-            pool: fuz_db::create_pool("postgres://localhost:1/zzz_router_unused")
-                .expect("a lazy pool builds without connecting"),
-            keyring: Arc::new(fuz_auth::Keyring::new(COOKIE_KEY).expect("keyring builds")),
-            daemon_token_state: None,
-            session_cookie_name: "zzz_session_4460",
+    /// The spine core over a pool that never connects, its limiters off.
+    fn test_backend() -> fuz_actions::server::AppBackend {
+        let env = fuz_http::BaseServerEnv {
+            database_url: Some("postgres://localhost:1/zzz_router_unused".to_owned()),
+            cookie_keys: Some(COOKIE_KEY.to_owned()),
+            host: None,
+            port: None,
             allowed_origins: AllowedOrigins::parse(ALLOWED_ORIGIN).expect("origins parse"),
-        }
+            trusted_proxies: Vec::new(),
+            bootstrap_token_path: None,
+        };
+        fuz_actions::server::build_app_backend(
+            &env,
+            &fuz_actions::server::AppBackendSpec {
+                session_cookie_name: "zzz_session_4460",
+                migration_namespaces: crate::ZZZ_MIGRATION_NAMESPACES,
+                expected_schema_json: None,
+                audit_sse: true,
+            },
+            &fuz_actions::server::SpineBackendOptions {
+                rate_limiters: fuz_auth::RateLimiterMode::DisabledForTesting,
+                ..fuz_actions::server::SpineBackendOptions::production(Arc::new(
+                    fuz_auth::Argon2idHasher::new(),
+                ))
+            },
+        )
+        .expect("a lazy core builds without connecting")
     }
 
-    /// The real surface routers over inert state, the way `run_app` builds
-    /// them (no limiters, no bootstrap token).
-    fn surfaces(gate: &AuthGate) -> SurfaceRouters {
-        let pool = gate.pool.clone();
-        let realtime = Arc::new(fuz_realtime::ConnectionRegistry::new());
-        let audit_sse = Arc::new(fuz_realtime::SseRegistry::new());
-        let audit = Arc::new(fuz_auth::AuditEmitter::new(pool.clone()));
-        let socket_revoker = fuz_realtime::RealtimeRevoker::socket_revoker(&realtime, &audit_sse);
-        let password_hasher: Arc<dyn fuz_auth::PasswordHasher> =
-            Arc::new(fuz_auth::Argon2idHasher::new());
-        let bootstrap_available = Arc::new(AtomicBool::new(false));
+    /// The real surface routers over the inert core, the way `run_app` builds
+    /// them (no bootstrap token).
+    fn surfaces(backend: &fuz_actions::server::AppBackend) -> SurfaceRouters {
+        let gate = backend.auth_gate();
+        let limits = fuz_actions::server::ActionRateLimits::defaults(backend.rate_limiters);
         let registry = Arc::new(
             fuz_actions::ActionRegistry::compile(fuz_actions::PROTOCOL_ACTION_SPECS())
                 .expect("the protocol specs compile"),
         );
         let app = Arc::new(App::new(
-            pool.clone(),
+            backend.pool.clone(),
             crate::scoped_fs::ScopedFs::new(vec![]),
             String::new(),
             vec![],
             crate::provider::ProviderManager::new(),
             false,
-            Arc::clone(&realtime),
-            Arc::clone(&audit),
+            Arc::clone(&backend.realtime),
+            Arc::clone(&backend.audit_emitter),
         ));
         SurfaceRouters {
-            rpc: fuz_actions::create_rpc_router(fuz_actions::RpcRouteState {
-                gate: gate.clone(),
-                registry: Arc::clone(&registry),
-                audit: Arc::clone(&audit),
-                socket_revoker: Arc::clone(&socket_revoker),
-                notification_sender: Arc::clone(&realtime).into_notification_sender(),
-                account_rate_limiter: None,
-                ip_rate_limiter: None,
-            }),
+            rpc: fuz_actions::create_rpc_router(backend.rpc_route_state(
+                gate.clone(),
+                Arc::clone(&registry),
+                &limits,
+            )),
             ws: fuz_actions::register_action_ws_with_options(
-                fuz_actions::WsRouteState {
-                    gate: gate.clone(),
-                    registry,
-                    audit: Arc::clone(&audit),
-                    socket_revoker: Arc::clone(&socket_revoker),
-                    notification_sender: Arc::clone(&realtime).into_notification_sender(),
-                    connection_registry: Arc::clone(&realtime),
-                    account_rate_limiter: None,
-                    ip_rate_limiter: None,
-                    required_roles: Vec::new(),
-                },
+                backend.ws_route_state(gate.clone(), registry, &limits, Vec::new()),
                 crate::WS_OPTIONS,
             ),
-            account: fuz_auth::account_router(fuz_auth::AccountRouteState {
-                gate: gate.clone(),
-                password_hasher: Arc::clone(&password_hasher),
-                audit: Arc::clone(&audit),
-                socket_revoker,
-                bootstrap_available: Arc::clone(&bootstrap_available),
-                login_ip_rate_limiter: None,
-                login_account_rate_limiter: None,
-                login_fail_floor_ms: fuz_auth::DEFAULT_LOGIN_FAIL_FLOOR_MS,
-                login_fail_jitter_ms: fuz_auth::DEFAULT_LOGIN_FAIL_JITTER_MS,
-            }),
+            account: fuz_auth::account_router(backend.account_route_state(gate.clone())),
             bootstrap: fuz_auth::bootstrap_routes::bootstrap_router(
-                fuz_auth::BootstrapRouteState {
-                    options: Arc::new(fuz_auth::BootstrapOptions {
-                        pool: pool.clone(),
-                        password_hasher: Arc::clone(&password_hasher),
-                        audit: Arc::clone(&audit),
-                        bootstrap_available,
-                        token_store: None,
-                        on_keeper_resolved: None,
-                    }),
-                    gate: gate.clone(),
-                },
+                backend.bootstrap_route_state(gate.clone()),
             ),
-            signup: fuz_auth::signup_routes::signup_router(fuz_auth::SignupRouteState {
-                options: Arc::new(fuz_auth::SignupOptions {
-                    pool,
-                    password_hasher,
-                    audit,
-                    signup_ip_rate_limiter: None,
-                    signup_account_rate_limiter: None,
-                    signup_fail_floor_ms: fuz_auth::DEFAULT_SIGNUP_FAIL_FLOOR_MS,
-                    signup_fail_jitter_ms: fuz_auth::DEFAULT_SIGNUP_FAIL_JITTER_MS,
-                }),
-                gate: gate.clone(),
-            }),
+            signup: fuz_auth::signup_routes::signup_router(
+                backend.signup_route_state(gate.clone()),
+            ),
             audit_stream: fuz_realtime::audit_stream_router(
-                fuz_realtime::AuditStreamRouteState::new(gate.clone(), audit_sse),
+                fuz_realtime::AuditStreamRouteState::new(
+                    gate.clone(),
+                    backend
+                        .audit_sse
+                        .clone()
+                        .expect("the audit stream registry"),
+                ),
             ),
-            file_bytes: crate::file_bytes::file_bytes_router(FileBytesRouteState {
-                app,
-                gate: gate.clone(),
-            }),
+            file_bytes: crate::file_bytes::file_bytes_router(FileBytesRouteState { app, gate }),
         }
     }
 
@@ -338,9 +310,9 @@ mod tests {
     }
 
     fn router(static_dir: Option<&Path>) -> GatedRouter {
-        let gate = test_gate();
-        let options = zzz_stack_options(&gate, Arc::new(Vec::new()));
-        compose_router(surfaces(&gate), static_dir, &options)
+        let backend = test_backend();
+        let options = zzz_stack_options(backend.stack_options());
+        compose_router(surfaces(&backend), static_dir, &options)
     }
 
     /// Both fallbacks — no static dir (dev) and a built frontend —

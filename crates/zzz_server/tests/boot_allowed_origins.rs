@@ -71,18 +71,19 @@ fn stdout(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-/// A refused list: exit 1, the message on stderr, and nothing done first.
+/// A refused list: exit 2 (configuration), the message on stderr, and nothing
+/// done first.
 fn assert_refused(label: &str, allowed_origins: Option<&str>, expected: &[&str]) {
     let dir = TempDir::new(label);
     let output = boot(&dir, allowed_origins);
     let message = stderr(&output);
     assert_eq!(
         output.status.code(),
-        Some(1),
+        Some(2),
         "{allowed_origins:?}: {message}"
     );
     assert!(
-        message.starts_with("zzzd: configuration error: FUZ_ALLOWED_ORIGINS"),
+        message.starts_with("error: invalid configuration: FUZ_ALLOWED_ORIGINS"),
         "{allowed_origins:?}: {message}"
     );
     for part in expected {
@@ -132,14 +133,16 @@ fn an_unset_or_blank_list_refuses_the_boot() {
     }
 }
 
-/// Past the list: `zzzd` gets as far as the database, which isn't there.
+/// Past the list: `zzzd` gets as far as the database, which isn't there —
+/// exit 1, with the connectivity hint.
 fn assert_reaches_the_database(output: &Output, label: &str) {
     let message = stderr(output);
     assert_eq!(output.status.code(), Some(1), "{label}: {message}");
     assert!(
-        message.starts_with("zzzd: database error"),
+        message.starts_with("error: database error"),
         "{label}: {message}"
     );
+    assert!(message.contains("\nhint: "), "{label}: {message}");
 }
 
 #[test]

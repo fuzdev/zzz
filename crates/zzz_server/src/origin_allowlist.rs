@@ -13,7 +13,7 @@
 
 use fuz_http::AllowedOrigins;
 
-use crate::ServerError;
+use fuz_actions::server::StartupError;
 
 /// The env var holding the list.
 pub const ALLOWED_ORIGINS_VAR: &str = "FUZ_ALLOWED_ORIGINS";
@@ -23,12 +23,12 @@ pub const ALLOWED_ORIGINS_VAR: &str = "FUZ_ALLOWED_ORIGINS";
 ///
 /// # Errors
 ///
-/// [`ServerError::Config`] when the value is unset or blank, or when any entry
+/// [`StartupError::Config`] when the value is unset or blank, or when any entry
 /// is malformed — naming the variable, each refused entry, and the shape
 /// expected.
-pub fn allowed_origins_from_env(raw: Option<&str>) -> Result<AllowedOrigins, ServerError> {
+pub fn allowed_origins_from_env(raw: Option<&str>) -> Result<AllowedOrigins, StartupError> {
     let origins = AllowedOrigins::parse(raw.unwrap_or_default())
-        .map_err(|e| ServerError::Config(format!("{ALLOWED_ORIGINS_VAR}: {e}")))?;
+        .map_err(|e| StartupError::Config(format!("{ALLOWED_ORIGINS_VAR}: {e}")))?;
     for origin in origins.wildcards() {
         if let Some(warning) = origin_wildcard_warning(origin.as_str()) {
             tracing::warn!(origin = %origin.as_str(), "{ALLOWED_ORIGINS_VAR}: {warning}");
@@ -129,7 +129,7 @@ mod tests {
 
     fn config_error(raw: Option<&str>) -> String {
         match allowed_origins_from_env(raw) {
-            Err(ServerError::Config(message)) => message,
+            Err(StartupError::Config(message)) => message,
             other => panic!("{raw:?}: expected a config error, got {other:?}"),
         }
     }

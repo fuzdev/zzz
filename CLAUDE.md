@@ -205,7 +205,7 @@ crates/                               # Rust workspace
 │   ├── xtask/                        # Dev automation: `cargo xtask dev` (build + run zzzd + Vite), `dev-setup`/`prod-setup` (env files), `check-release` (dep-graph audit — sanity check #2 of the test-binary pattern)
 │   ├── testing_zzz_server/           # Test-mode binary — wires `fuz_testing::TestingArgon2idHasher` for fast cross-process integration tests. **Never ships in a release.**
 │   └── zzz_server/                   # Axum JSON-RPC server — full spine consumer (single `/api/rpc` + `/api/ws` on `fuz_actions::ActionRegistry`)
-│       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast` shim + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `file_bytes.rs` (byte routes), `filer.rs`, `job_manager.rs`, `media.rs` + `tool.rs` (`ffmpeg` runs, local tools), `transcription/`, `pty_manager.rs`, `scoped_fs.rs`, `utf8_stream.rs`, `error.rs`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB (and the JSON-RPC `notification` builder + error constructors + socket revocation) all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
+│       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast` shim + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `file_bytes.rs` (byte routes), `filer.rs`, `job_manager.rs`, `media.rs` + `tool.rs` (`ffmpeg` runs, local tools), `transcription/`, `pty_manager.rs`, `scoped_fs.rs`, `utf8_stream.rs`. Startup errors, the spine core, route states, and serving come from `fuz_actions::server`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB (and the JSON-RPC `notification` builder + error constructors + socket revocation) all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
 src/
 ├── lib/                          # Library exports of @fuzdev/zzz (not yet on npm)
 │   ├── *.svelte.ts               # Cell state classes
@@ -794,9 +794,10 @@ fails boot too, rather than reading as unset.
 
 Its command line is `zzzd [--port <port>] [--static-dir <dir>]` (each value
 also as `--flag=value`); `-h` / `--help` prints that usage (exit 0), and an
-unknown or malformed argument refuses to boot rather than being ignored. A
-`--static-dir` may be any path, UTF-8 or not. A boot failure prints
-`zzzd: <error>` to stderr and exits 1.
+unknown or malformed argument exits 2 with the usage on stderr rather than
+being ignored. A `--static-dir` may be any path, UTF-8 or not. A boot failure
+prints `error: <error chain>` and a hint to stderr and exits 2 for a
+configuration error (env, the database's isolation setting), 1 otherwise.
 
 PTY terminals spawned by the server don't get the `SECRET_*`, `FUZ_*`,
 `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, or `PORT` variables — they're

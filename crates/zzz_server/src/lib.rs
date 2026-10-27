@@ -1,22 +1,24 @@
 //! `zzz_server` — Rust backend for zzz.
 //!
-//! The library entry point [`run_app`] owns the full server lifecycle:
-//! env loading, DB pool + migrations, spine state construction,
-//! `ActionRegistry` compile, file watchers, route composition, signal
-//! handling, the auth cleanup task, and graceful shutdown.
+//! The library entry point [`run_app`] owns the full server lifecycle over
+//! the spine's server toolkit (`fuz_actions::server`): config from the command
+//! line and env, the spine core booted by `create_app_backend` (pool, the
+//! READ COMMITTED guard, migrations, keyring, audit emitter, limiters,
+//! realtime registries, revocation listeners), the `ActionRegistry` compile,
+//! file watchers, route composition, signal handling, the auth cleanup task,
+//! graceful shutdown, then zzz's own teardown (jobs, PTYs).
 //!
-//! The `password_hasher` parameter is the swap point for the
-//! test-binary pattern (fast argon2 via a pluggable hasher):
+//! The spine's swap points (`fuz_actions::server::SpineRunOptions`) are what
+//! the binaries differ on:
 //!
 //! - Production wires [`fuz_auth::Argon2idHasher`] from `src/main.rs`.
 //! - `testing_zzz_server`'s `main.rs` wires
 //!   `fuz_testing::TestingArgon2idHasher` for ~1-5 ms argon2 in
-//!   cross-process integration tests.
+//!   cross-process integration tests, plus its daemon token and seams.
 //!
 //! Keeping the lifecycle in the library shrinks each binary's
-//! `main.rs` to the hasher selection plus `run_app(...)`.
+//! `main.rs` to the command line, the swap points, and `run_app(...)`.
 
-pub mod error;
 pub mod file_bytes;
 pub mod filer;
 pub mod handlers;
@@ -38,9 +40,10 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use tokio::net::TcpListener;
-
-pub use error::ServerError;
+use fuz_actions::server::{
+    ActionRateLimits, AppBackendSpec, BootedAppBackend, ServeOptions, SpineRunOptions,
+    StartupError, UpkeepOptions, compile_action_registry, create_app_backend, serve_until_shutdown,
+};
 
 /// Default loopback bind address (port 4460).
 ///
@@ -174,60 +177,20 @@ const WS_OPTIONS: fuz_actions::ActionWsOptions = fuz_actions::ActionWsOptions {
 /// process so the production graph stays clean.
 pub type ExtraActionSpecsFactory = fuz_actions::ExtraActionSpecsFactory<handlers::App>;
 
-/// zzz's concrete instantiation of [`fuz_actions::PreMigrationHook`].
-///
-/// Production passes `None`; the `testing_zzz_server` binary passes `Some(_)`
-/// to fire `fuz_testing::reset_db_on_startup_if_env_set` (env-gated schema
-/// wipe). Errors surface as [`ServerError::Database`].
-pub type PreMigrationHook = fuz_actions::PreMigrationHook<ServerError>;
+/// The name zzz's sentinels carry (`zzz_server listening on …`).
+pub const SERVER_NAME: &str = "zzz_server";
+
+/// The migration chain zzz applies: the spine's auth namespace alone (zzz's
+/// own state is in-memory and on disk).
+pub const ZZZ_MIGRATION_NAMESPACES: &[fuz_db::MigrationNamespace] = &[fuz_auth::AUTH_MIGRATIONS];
 
 /// Options for [`run_app`].
-///
-/// Named fields rather than positional params so future swap points
-/// can land additively without churning every call site. The
-/// `extra_action_specs_factory` slot already follows that pattern —
-/// adding a second factory or a config override (e.g., a test-only
-/// notify decorator) would be one new named field plus a `Default`
-/// fallback.
 pub struct RunAppOptions {
-    /// Production-vs-test password hasher swap point.
-    /// Production: [`fuz_auth::Argon2idHasher`]. Test binary:
-    /// `fuz_testing::TestingArgon2idHasher`.
-    pub password_hasher: Arc<dyn fuz_auth::PasswordHasher>,
-    /// Default bind address when neither `--port` nor `ZZZ_PORT` supplies a
-    /// port. The host stays this address's host (loopback); only the port is
-    /// overridable. Production: [`DEFAULT_ADDR`] (`127.0.0.1:4460`). Test
-    /// binary: `127.0.0.1:4462` so the two can run side-by-side.
-    pub default_addr: SocketAddr,
-    /// Bounds the graceful-shutdown connection drain. Pass
-    /// [`fuz_http::DEFAULT_DRAIN_TIMEOUT`] unless a consumer needs a different
-    /// bound — the other spine consumers all pass that shared default.
-    pub drain_timeout: std::time::Duration,
-    /// Override the `ZZZ_ENABLE_TEST_ACTIONS` env-parsed flag.
-    /// Production: `false`. Test binary: `true` so the `_testing_*`
-    /// registry branch fires regardless of operator env.
-    pub force_test_actions: bool,
-    /// Whether the spine's rate limiters are built.
-    /// Production: [`fuz_auth::RateLimiterMode::Enforced`] — always on,
-    /// matching `fuz_forge_server` and the other spine servers, and the fuz
-    /// defaults.
-    /// Test binary: `DisabledForTesting` so the cross-backend auth suite's
-    /// repeated logins don't trip the bucket.
-    pub rate_limiters: fuz_auth::RateLimiterMode,
-    /// Factory injecting extra action specs after the standard zzz set.
-    /// Production: `None`. Test binary: `Some(_)` so
-    /// `fuz_testing::create_testing_reset_action_spec` can register
-    /// without dragging `fuz_testing` into the production dep graph
-    /// (the `cargo xtask check-release` audit blocks that).
-    pub extra_action_specs_factory: Option<ExtraActionSpecsFactory>,
-    /// Hook fired after pool creation, **before** migrations run.
-    /// Production: `None`. Test binary: `Some(_)` to wire
-    /// `fuz_testing::reset_db_on_startup_if_env_set` so per-process
-    /// startup can wipe the auth-namespace schema and let migrations
-    /// replay from nothing.
-    pub pre_migration_hook: Option<PreMigrationHook>,
-    /// Daemon-token state for `X-Daemon-Token` auth. Production: `None`.
-    /// Test binary: `Some(_)` so `_testing_reset` resolves the keeper.
+    /// The spine's swap points. Production: [`fuz_auth::Argon2idHasher`],
+    /// [`DEFAULT_ADDR`] (`127.0.0.1:4460`; only the port is overridable),
+    /// [`fuz_http::DEFAULT_DRAIN_TIMEOUT`], every limiter enforced — always
+    /// on, matching the other spine servers — no daemon token, no hook, no
+    /// in-flight audit tracking.
     ///
     /// zzz mounts **no** daemon-token credential in production. Nothing sends
     /// the header — the browser UI authenticates with session cookies, and a
@@ -237,117 +200,122 @@ pub struct RunAppOptions {
     /// `<zzz_dir>/run/daemon_token` on a 30-second timer. Its producer
     /// (`fuz_testing::init_daemon_token`) is confined to `fuz_testing` by dep
     /// graph, so this crate cannot construct one even by mistake.
-    pub daemon_token_state: Option<fuz_auth::SharedDaemonTokenState>,
-    /// Whether the audit emitter counts its detached writes, so the test binary's
-    /// `_testing_drain_effects` can await them (twin of the TS testing
-    /// server's `track_inflight: true`). Production: `false`. Test binary:
-    /// `true`.
-    pub audit_inflight_tracking: bool,
+    ///
+    /// The test binary: `fuz_testing::TestingArgon2idHasher`,
+    /// `127.0.0.1:4462` so the two can run side-by-side, the limiters
+    /// `DisabledForTesting` so the cross-backend auth suite's repeated logins
+    /// don't trip the bucket, the daemon token `_testing_reset` resolves the
+    /// keeper through, the env-gated schema wipe, and in-flight tracking so
+    /// `_testing_drain_effects` is a real barrier.
+    pub spine: SpineRunOptions,
+    /// The parsed command line ([`parse_args`]): `--port` and `--static-dir`,
+    /// each over its env var.
+    pub args: CliArgs,
+    /// Override the `ZZZ_ENABLE_TEST_ACTIONS` env-parsed flag.
+    /// Production: `false`. Test binary: `true` so the `_testing_*`
+    /// registry branch fires regardless of operator env.
+    pub force_test_actions: bool,
+    /// Factory injecting extra action specs after the standard zzz set.
+    /// Production: `None`. Test binary: `Some(_)` so
+    /// `fuz_testing::create_testing_reset_action_spec` can register
+    /// without dragging `fuz_testing` into the production dep graph
+    /// (the `cargo xtask check-release` audit blocks that).
+    pub extra_action_specs_factory: Option<ExtraActionSpecsFactory>,
 }
 
 impl std::fmt::Debug for RunAppOptions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RunAppOptions")
-            .field("default_addr", &self.default_addr)
-            .field("drain_timeout", &self.drain_timeout)
+            .field("default_addr", &self.spine.default_addr)
+            .field("drain_timeout", &self.spine.drain_timeout)
+            .field("args", &self.args)
             .field("force_test_actions", &self.force_test_actions)
-            .field("rate_limiters", &self.rate_limiters)
-            .field("audit_inflight_tracking", &self.audit_inflight_tracking)
             .finish_non_exhaustive()
-    }
-}
-
-/// Build the spine audit emitter every audit row goes through.
-///
-/// `inflight_tracking` selects [`fuz_auth::AuditEmitter::new_with_inflight_tracking`]
-/// over [`fuz_auth::AuditEmitter::new`]: `emit` spawns a detached write, and
-/// the in-flight counter is what lets the test binary's
-/// `_testing_drain_effects` await it — over an untracked emitter the drain
-/// returns before the row lands. The counter is pure overhead in production,
-/// which never drains, so only the test binary turns it on
-/// ([`RunAppOptions::audit_inflight_tracking`]).
-#[must_use]
-fn build_audit_emitter(pool: &fuz_db::Pool, inflight_tracking: bool) -> fuz_auth::AuditEmitter {
-    if inflight_tracking {
-        fuz_auth::AuditEmitter::new_with_inflight_tracking(pool.clone())
-    } else {
-        fuz_auth::AuditEmitter::new(pool.clone())
     }
 }
 
 /// Run the `zzz_server` lifecycle to completion.
 ///
-/// Parses CLI args + env, opens the DB pool, runs migrations, builds
-/// every spine subsystem, mounts the routes, binds the listener, and
-/// blocks on graceful shutdown (Ctrl-C / SIGTERM): every live WebSocket is
+/// Reads the config (command line + env), boots the spine core
+/// (`fuz_actions::server::create_app_backend`: the keyring, the READ
+/// COMMITTED guard, the pre-migration hook, the auth migrations, the keeper,
+/// bootstrap availability, the revocation listeners and the audit-row fan-out
+/// to the admin audit streams), builds zzz's app over it, compiles the action
+/// registry, starts the permanent file watchers, mounts the routes, and
+/// serves until Ctrl-C / SIGTERM
+/// ([`fuz_actions::server::serve_until_shutdown`]): every live WebSocket is
 /// closed with 1001 (going away) and every audit stream ended, then in-flight
-/// requests drain. Returns once all connections have closed (or at the drain
-/// timeout) and jobs and PTYs are torn down.
+/// requests drain. Jobs and PTYs are torn down after the drain.
 ///
 /// The spine's auth cleanup ([`fuz_auth::spawn_auth_cleanup`]) runs beside
 /// the server — expired sessions deleted and the connections they opened
-/// closed, expired role-grant offers audited once — a pass once the listener
-/// is bound, then one every [`fuz_auth::DEFAULT_AUTH_CLEANUP_INTERVAL`]. Its
-/// close repeats one already made: a socket or audit stream closes at its own
-/// credential's deadline ([`fuz_auth::ResolvedAuth::credential_deadline`]).
-/// It stops when shutdown begins and is joined before this returns.
-///
-/// Every configuration knob lives on [`RunAppOptions`]; everything
-/// not explicitly named there flows from CLI args or the process
-/// environment.
+/// closed, expired role-grant offers audited once — from the bind until
+/// shutdown begins, and is joined before the teardown. Its close repeats one
+/// already made: a socket or audit stream closes at its own credential's
+/// deadline ([`fuz_auth::ResolvedAuth::credential_deadline`]).
 ///
 /// # Errors
 ///
-/// Returns [`ServerError`] for env/config validation failures, DB
-/// connectivity / migration failures, listener bind failures, and serve
-/// errors (`fuz_http::serve_with_shutdown` returns none in practice).
-pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
+/// [`StartupError`] for config validation failures (exit `2`), DB
+/// connectivity / migration failures, a database not at READ COMMITTED,
+/// listener bind failures, and serve errors.
+pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
     let RunAppOptions {
-        password_hasher,
-        default_addr,
-        drain_timeout,
+        spine:
+            SpineRunOptions {
+                backend: backend_options,
+                default_addr,
+                drain_timeout,
+            },
+        args,
         force_test_actions,
-        rate_limiters,
         extra_action_specs_factory,
-        pre_migration_hook,
-        daemon_token_state: spine_daemon_token,
-        audit_inflight_tracking,
     } = options;
-    let mut config = parse_config(default_addr)?;
+    let mut config = parse_config(default_addr, args)?;
     if force_test_actions {
         config.enable_test_actions = true;
     }
-    // The spine's route states take the cookie name as `&'static str`; the
-    // name is fixed for the life of the process, so leak its one allocation.
-    let session_cookie_name: &'static str =
-        session_cookie_name_for_port(config.bind_addr.port()).leak();
+    let shutdown = fuz_http::shutdown_token();
 
-    // Database — required. Spine `fuz_db::create_pool` builds the
-    // deadpool-postgres pool; `fuz_db::run_migrations` runs the auth DDL
-    // tracked under the reserved `fuz_auth` namespace.
-    let pool = fuz_db::create_pool(&config.database_url)
-        .map_err(|e| ServerError::Database(format!("failed to create pool: {e}")))?;
-    // Pre-migration hook — test binary uses this slot for the env-gated
-    // `fuz_testing::reset_db_on_startup_if_env_set` schema wipe so the
-    // migration chain below sees a clean DB. Production passes `None`.
-    if let Some(hook) = pre_migration_hook {
-        hook(&pool).await?;
+    // Parse `ZZZ_TRUSTED_PROXIES`. Empty/unset → no XFF trust (`client_ip` is
+    // the TCP peer): zzz binds loopback only and has no proxy in front of it
+    // by default. Misconfiguration fails fast so the operator sees the error
+    // instead of silently leaving a hole.
+    let trusted_proxies = match config.trusted_proxies.as_deref() {
+        None => Vec::new(),
+        Some(raw) => fuz_http::parse_proxy_list(raw)
+            .map_err(|e| StartupError::Config(format!("ZZZ_TRUSTED_PROXIES: {e}")))?,
+    };
+    if !trusted_proxies.is_empty() {
+        tracing::info!(
+            count = trusted_proxies.len(),
+            "trusted proxies configured — XFF resolution enabled"
+        );
     }
-    fuz_db::run_migrations(&pool, &[fuz_auth::AUTH_MIGRATIONS])
-        .await
-        .map_err(|e| ServerError::Database(format!("migration failed: {e}")))?;
 
-    // Build (and so validate) the cookie keyring early; the spine
-    // `fuz_auth::Keyring` is the sole keyring on `App`.
-    let spine_keyring = Arc::new(fuz_auth::Keyring::new(&config.secret_cookie_keys).map_err(
-        |e| ServerError::Config(format!("SECRET_FUZ_COOKIE_KEYS validation failed: {e}")),
-    )?);
-
-    // Bootstrap availability check — drives the `bootstrap_available_atomic`
-    // shared by the spine account router (returned on `/status` 401) and
-    // the bootstrap router (gate on `/bootstrap`).
-    let bootstrap_available =
-        fuz_auth::is_bootstrap_available(&pool, config.bootstrap_token_path.as_deref()).await;
+    // What zzz's server is: its per-port cookie (the spine's route states take
+    // the name as `&'static str`; it is fixed for the life of the process, so
+    // leak its one allocation), the auth chain, and the admin audit stream. No
+    // `/ready` fixture: zzz is a local daemon with no deploy gate.
+    let spec = AppBackendSpec {
+        session_cookie_name: session_cookie_name_for_port(config.bind_addr.port()).leak(),
+        migration_namespaces: ZZZ_MIGRATION_NAMESPACES,
+        expected_schema_json: None,
+        audit_sse: true,
+    };
+    // zzz reads its own env (`ZZZ_PORT`, `--port`, a required
+    // `DATABASE_URL`, `ZZZ_TRUSTED_PROXIES`); the spine core takes it in the
+    // base reader's shape. The bind is `config.bind_addr`, not this.
+    let env = fuz_http::BaseServerEnv {
+        database_url: Some(config.database_url.clone()),
+        cookie_keys: Some(config.secret_cookie_keys.clone()),
+        host: None,
+        port: None,
+        allowed_origins: config.allowed_origins.clone(),
+        trusted_proxies,
+        bootstrap_token_path: config.bootstrap_token_path.as_deref().map(PathBuf::from),
+    };
+    let BootedAppBackend { backend, .. } = create_app_backend(&env, &spec, backend_options).await?;
 
     let scoped_dir_strings = std::mem::take(&mut config.scoped_dirs);
 
@@ -380,228 +348,51 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         );
     }
 
-    // Per-IP + per-account rate limiters on `/login` and `/password`, always
-    // on in production — matching `fuz_forge_server` and the other spine
-    // servers, and the fuz defaults (`DEFAULT_LOGIN_IP_RATE_LIMIT` 5/15min,
-    // `DEFAULT_LOGIN_ACCOUNT_RATE_LIMIT` 10/30min). The test binary passes
-    // `RateLimiterMode::DisabledForTesting` so the cross-backend auth suite's
-    // repeated logins don't trip the bucket. Spine `fuz_auth::RateLimiter`
-    // (parking_lot, sync).
-    let login_ip_rate_limiter = rate_limiters.limiter(fuz_auth::DEFAULT_LOGIN_IP_RATE_LIMIT);
-    let login_account_rate_limiter =
-        rate_limiters.limiter(fuz_auth::DEFAULT_LOGIN_ACCOUNT_RATE_LIMIT);
-
-    // Per-account rate limiter shared across admin RPC methods and the
-    // role-grant-offer surface. Mirrors fuz_app's
-    // `default_action_account_rate_limit` (1200 / 15min per actor) —
-    // bounds paginated admin-side scraping pressure per the TS posture in
-    // `admin_action_specs.ts` (every admin spec but the read-only
-    // `app_settings_get` carries `rate_limit: 'account'`) and offer-spam /
-    // account-existence-oracle pressure on `role_grant_offer_create`, whose spec in
-    // `role_grant_offer_action_specs.ts` declares the same. Always-on (no env
-    // gate); the production cap sits far above the cross-backend test
-    // suite's request volume.
-    //
-    // One pair serves every surface that consults it: the spine's auth spec
-    // set charges these buckets inside its handler closures, and the
-    // dispatcher charges the same ones for protocol + zzz-owned specs via
-    // `ActionSpec::with_rate_limit`, across both the HTTP RPC and WS
-    // transports. Sharing is the contract rather than a convenience — fuz_app
-    // threads one `action_account_rate_limiter` through `create_app_server`
-    // into both transports, so a second instance hands a caller two
-    // independent budgets where the TS spine gives one.
-    //
-    // The IP axis is live: `peer/ping` comes in with `PROTOCOL_ACTION_SPECS`
-    // declaring `RateLimitClass::Ip`, so every anonymous call to it spends the
-    // IP bucket at the shared spine default (600 / 15 min). zzz is local-first
-    // on a loopback-fixed bind, so that budget is per-machine and the axis
-    // carries little signal until a zzz grows a reverse proxy or a second
-    // account. No spine auth entry declares an IP class, so the auth surface
-    // never charges it; passing it there is what makes a future entry that
-    // opts in share this bucket instead of getting its own.
-    //
-    // No zzz-owned spec declares a class, so beyond the auth surface's account
-    // charges these sit ready rather than active — the point is that a future
-    // `.with_rate_limit(...)` gets a real limiter instead of silently
-    // no-op'ing against a `None` axis.
-    let action_account_rate_limiter =
-        rate_limiters.limiter(fuz_auth::DEFAULT_ACTION_ACCOUNT_RATE_LIMIT);
-    let action_ip_rate_limiter = rate_limiters.limiter(fuz_auth::DEFAULT_ACTION_IP_RATE_LIMIT);
-
-    // Spine connection registry + audit emitter — wired into `App` and
-    // mounted into the spine RPC + WS dispatchers below. Listener
-    // registration (audit-event → socket revocation) happens after
-    // `Arc<App>` is constructed so the socket-revoker capability is
-    // available.
-    let realtime = Arc::new(fuz_realtime::ConnectionRegistry::new());
-    let spine_audit_emitter = Arc::new(build_audit_emitter(&pool, audit_inflight_tracking));
-    // SSE half of the realtime surface — the registry of open
-    // `GET /api/admin/audit/stream` subscriptions. The audit listener wired
-    // alongside the socket-revocation listeners below fans every audit row to
-    // these streams and closes account-keyed streams on revocation.
-    let audit_sse = Arc::new(fuz_realtime::SseRegistry::new());
-    let spine_password_hasher: Arc<dyn fuz_auth::PasswordHasher> = password_hasher;
-    // Parse `ZZZ_TRUSTED_PROXIES` into the spine `fuz_http::ParsedProxy`
-    // type. Empty/unset → empty vec → middleware treats every connection
-    // as untrusted (XFF ignored, `client_ip` = TCP peer). Misconfiguration
-    // fails fast so the operator sees the error instead of silently
-    // leaving a hole. Sole trusted-proxy state on `App`.
-    let spine_trusted_proxies: Arc<Vec<fuz_http::ParsedProxy>> =
-        Arc::new(match config.trusted_proxies.as_deref() {
-            None => Vec::new(),
-            Some(raw) => fuz_http::parse_proxy_list(raw)
-                .map_err(|e| ServerError::Config(format!("ZZZ_TRUSTED_PROXIES: {e}")))?,
-        });
-    if !spine_trusted_proxies.is_empty() {
-        tracing::info!(
-            count = spine_trusted_proxies.len(),
-            "trusted proxies configured — XFF resolution enabled"
-        );
-    }
-    let bootstrap_available_atomic =
-        Arc::new(std::sync::atomic::AtomicBool::new(bootstrap_available));
-    // Both transports: a revocation handler's direct close must reach the
-    // audit streams too, since the SSE listener only fires on a written audit
-    // row and the REST `/logout` / `/password` audit write is fail-open.
-    let socket_revoker = fuz_realtime::RealtimeRevoker::socket_revoker(&realtime, &audit_sse);
-    // Spine daemon-token state — **injected, never constructed here** (see
-    // `RunAppOptions::daemon_token_state`). Production is `None`, so the
-    // gate's daemon-token leg is unreachable and no credential file is
-    // written.
-    if let Some(ref state) = spine_daemon_token {
-        fuz_auth::resolve_keeper_into(state, &pool).await;
-    }
-    // One front door for the whole server: the origin allowlist beside the
-    // credential walk (daemon token → cookie → bearer) over zzz's per-port
-    // cookie. Every route state that reads a credential takes a clone, and the
-    // stack's options read its allowlist (`router::zzz_stack_options`), so
-    // the stack's origin check and each handler's in-handler one read one list.
-    // The allowlist is never empty and every entry is well-formed:
-    // `parse_config` refused to boot otherwise (see `origin_allowlist`).
-    let gate = fuz_auth::AuthGate {
-        pool: pool.clone(),
-        keyring: Arc::clone(&spine_keyring),
-        daemon_token_state: spine_daemon_token.clone(),
-        session_cookie_name,
-        allowed_origins: config.allowed_origins,
-    };
-    let account_route_state = fuz_auth::AccountRouteState {
-        gate: gate.clone(),
-        password_hasher: Arc::clone(&spine_password_hasher),
-        audit: Arc::clone(&spine_audit_emitter),
-        socket_revoker: Arc::clone(&socket_revoker),
-        bootstrap_available: Arc::clone(&bootstrap_available_atomic),
-        login_ip_rate_limiter,
-        login_account_rate_limiter,
-        login_fail_floor_ms: fuz_auth::DEFAULT_LOGIN_FAIL_FLOOR_MS,
-        login_fail_jitter_ms: fuz_auth::DEFAULT_LOGIN_FAIL_JITTER_MS,
-    };
-    let bootstrap_route_state = fuz_auth::BootstrapRouteState {
-        options: Arc::new(fuz_auth::BootstrapOptions {
-            pool: pool.clone(),
-            password_hasher: Arc::clone(&spine_password_hasher),
-            audit: Arc::clone(&spine_audit_emitter),
-            bootstrap_available: Arc::clone(&bootstrap_available_atomic),
-            token_store: config.bootstrap_token_path.as_ref().map(|p| {
-                let store: Arc<dyn fuz_auth::BootstrapTokenStore> =
-                    Arc::new(fuz_auth::FileBootstrapTokenStore::new(PathBuf::from(p)));
-                store
-            }),
-            on_keeper_resolved: spine_daemon_token.as_ref().map(|state| {
-                let cb: Arc<dyn fuz_auth::BootstrapKeeperResolved> =
-                    Arc::new(fuz_auth::DaemonTokenKeeperResolved::new(Arc::clone(state)));
-                cb
-            }),
-        }),
-        gate: gate.clone(),
-    };
-
-    // Signup route: mounted on the production server so the
-    // cross-process integration harness (testing_zzz_server reuses
-    // run_app) can mint per-test accounts through production RPC.
-    // Open_signup defaults to false in app_settings, so the route is
-    // invite-gated at runtime unless an admin flips the flag. The
-    // signup handler loads app_settings per request; switch to a
-    // cached Arc<RwLock<AppSettings>> shared with the future admin
-    // update handler when that lands on Rust.
-    let signup_route_state = fuz_auth::SignupRouteState {
-        options: Arc::new(fuz_auth::SignupOptions {
-            pool: pool.clone(),
-            password_hasher: Arc::clone(&spine_password_hasher),
-            audit: Arc::clone(&spine_audit_emitter),
-            // Own instances, not the login buckets: a signup flood must not
-            // spend the budget bounding credential guessing, and vice versa.
-            // The spine has no signup-specific defaults — the login ones are
-            // the right shape and the TS twin reuses them the same way.
-            signup_ip_rate_limiter: rate_limiters.limiter(fuz_auth::DEFAULT_LOGIN_IP_RATE_LIMIT),
-            signup_account_rate_limiter: rate_limiters
-                .limiter(fuz_auth::DEFAULT_LOGIN_ACCOUNT_RATE_LIMIT),
-            signup_fail_floor_ms: fuz_auth::DEFAULT_SIGNUP_FAIL_FLOOR_MS,
-            signup_fail_jitter_ms: fuz_auth::DEFAULT_SIGNUP_FAIL_JITTER_MS,
-        }),
-        gate: gate.clone(),
-    };
-
+    // The app over the core's pool, connection registry, and audit emitter —
+    // the instances the spine routes and the revocation listeners use.
     let mut app = handlers::App::new(
-        pool,
+        backend.pool.clone(),
         scoped_fs,
         config.zzz_dir,
         scoped_dir_strings,
         provider_manager,
         config.enable_test_actions,
-        Arc::clone(&realtime),
-        Arc::clone(&spine_audit_emitter),
+        Arc::clone(&backend.realtime),
+        Arc::clone(&backend.audit_emitter),
     );
     app.tools = config.tools;
     let app_state = Arc::new(app);
 
-    // Register audit-event → WebSocket socket-revocation listeners on
-    // the spine `AuditEmitter`. Mirrors `fuz_app`'s
-    // `create_ws_auth_guard` + `create_ws_logout_closer` composition.
-    //
-    // One listener per event type — keeps matching logic explicit and
-    // avoids a per-event match cascade in a single closure. Failure
-    // outcomes never trigger socket close: a failed `session_revoke` row
-    // carries the caller-submitted `session_id` (attacker-controlled
-    // metadata), so reacting to it would let an authenticated user
-    // disconnect another user by guessing a session hash.
-    //
-    // ## Layering with handler-side close
-    //
-    // Revocation-emitting handlers close sockets themselves too: the RPC
-    // ones (`account_session_revoke`, `account_session_revoke_all`,
-    // `account_token_revoke`, the admin revoke-alls, account delete/purge)
-    // once their transaction commits — never before, or a client told
-    // "revoked" could recheck its session before the deletion is visible —
-    // and the REST ones (`/api/account/logout`, `/api/account/password`)
-    // inline, on their autocommit client. The listeners run on the
-    // materialized row and call the same idempotent `close_sockets_for_*`
-    // a second time; the duplication is intentional defense-in-depth.
-    fuz_auth::register_socket_revocation_listeners(&spine_audit_emitter, &socket_revoker);
     // A deleted or purged account's terminals end with its sockets.
-    handlers::terminal::register_account_removal_listener(&spine_audit_emitter, &app_state);
+    handlers::terminal::register_account_removal_listener(&backend.audit_emitter, &app_state);
 
-    // SSE half of the audit fan-out — every audit row becomes one `data:`
-    // frame on each open `/api/admin/audit/stream` subscription, and a
-    // successful account-wide revocation drops that account's streams. Mirrors
-    // `fuz_app`'s `create_audit_log_sse`; the socket-revocation listeners above
-    // close through the same fan-out revoker, so they reach these streams too.
-    fuz_realtime::register_audit_sse_listener(&spine_audit_emitter, &audit_sse);
+    // The per-action limiters, built once and shared by every surface that
+    // consults them: the spine's auth spec set charges these buckets inside
+    // its handler closures, and the dispatcher charges the same ones for
+    // protocol + zzz-owned specs via `ActionSpec::with_rate_limit`, across
+    // both the HTTP RPC and WS transports — one budget per caller, as fuz_app
+    // threads one pair through `create_app_server`.
+    //
+    // The IP axis is live: `peer/ping` comes in with `PROTOCOL_ACTION_SPECS`
+    // declaring `RateLimitClass::Ip`. zzz is local-first on a loopback-fixed
+    // bind, so that budget is per-machine and the axis carries little signal
+    // until a zzz grows a reverse proxy or a second account. No zzz-owned spec
+    // declares a class, so beyond the auth surface's account charges these sit
+    // ready rather than active — the point is that a future
+    // `.with_rate_limit(...)` gets a real limiter instead of silently
+    // no-op'ing against a `None` axis.
+    let limits = ActionRateLimits::defaults(backend.rate_limiters);
 
     // Compile the spine action registry — must run after `Arc<App>` is
     // constructed because the zzz-specific spec builders capture
     // `Arc::clone(&app_state)` into per-spec handler closures.
     //
-    // Composition order: protocol (heartbeat + peer/ping), then
-    // `fuz_auth` placeholder adapters (account + admin self-service),
-    // then zzz-specific specs (`core`, `workspace`, `filesystem`,
-    // `terminal`, `provider`).
+    // Composition order: protocol (heartbeat + peer/ping), then the spine's
+    // auth families (account + admin self-service), then zzz-specific specs
+    // (`core`, `workspace`, `filesystem`, `terminal`, `provider`).
     let mut all_specs: Vec<fuz_actions::ActionSpec> = fuz_actions::PROTOCOL_ACTION_SPECS();
-    all_specs.extend(fuz_actions::auth_adapter::build_auth_spec_set(
-        Arc::clone(&spine_audit_emitter),
-        Arc::clone(&socket_revoker),
-        action_account_rate_limiter.clone(),
-        action_ip_rate_limiter.clone(),
+    all_specs.extend(backend.auth_spec_set(
+        &limits,
         Arc::new(fuz_auth::AdminOfferAuthorize),
         Arc::new(fuz_auth::RoleRegistry::default()),
     ));
@@ -612,30 +403,28 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         )));
     }
     if let Some(factory) = extra_action_specs_factory {
-        let runtime = fuz_actions::ExtraActionSpecsRuntime {
-            password_hasher: Arc::clone(&spine_password_hasher),
-            keyring: Arc::clone(&spine_keyring),
-            daemon_token_state: spine_daemon_token.clone(),
-            session_cookie_name,
-        };
-        all_specs.extend(factory(Arc::clone(&app_state), runtime));
+        all_specs.extend(factory(
+            Arc::clone(&app_state),
+            backend.extra_action_specs_runtime(),
+        ));
     }
-    let action_registry = Arc::new(
-        fuz_actions::ActionRegistry::compile(all_specs)
-            .map_err(|e| ServerError::Config(format!("ActionRegistry::compile failed: {e}")))?,
+    let action_registry = compile_action_registry(all_specs)?;
+    tracing::info!(
+        spec_count = action_registry.len(),
+        "spine action registry compiled"
     );
     // Set the action_registry on App via OnceLock. The set call returns
     // Err only if the cell is already populated, which is impossible
     // here because we just constructed the Arc<App>.
-    if app_state.action_registry.set(action_registry).is_err() {
-        return Err(ServerError::Config(
+    if app_state
+        .action_registry
+        .set(Arc::clone(&action_registry))
+        .is_err()
+    {
+        return Err(StartupError::Internal(
             "action_registry was already set — unexpected double init".to_owned(),
         ));
     }
-    tracing::info!(
-        spec_count = app_state.action_registry.get().map_or(0, |r| r.len()),
-        "spine action registry compiled"
-    );
 
     // Start the permanent file watchers at startup: zzz_dir, then each of
     // scoped_dirs. zzz_dir uses FilerConfig::zzz_dir() (no ignored dirs);
@@ -675,168 +464,118 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), ServerError> {
         }
     }
 
-    let app_state_for_shutdown = Arc::clone(&app_state);
-
-    // -- Spine RPC + WS routes -------------------------------------
+    // -- Routes -----------------------------------------------------------
     //
-    // The spine `ActionRegistry` dispatcher is mounted at `/api/rpc`
-    // and the spine WS handler at `/api/ws` — the single namespace
-    // per the ecosystem's pre-stable posture (no `/v2` suffix, no
-    // compat shim, no deprecation period). The boot-compiled
-    // `ActionRegistry` (protocol + auth_adapter + zzz-specific
-    // specs) is the sole dispatcher for `/api/rpc` and `/api/ws`
-    // traffic.
+    // One front door for the whole server: the origin allowlist beside the
+    // credential walk (daemon token → cookie → bearer) over zzz's per-port
+    // cookie. Every route state that reads a credential takes a clone, and the
+    // stack's options read its allowlist (`router::zzz_stack_options`), so
+    // the stack's origin check and each handler's in-handler one read one list.
+    // The allowlist is never empty and every entry is well-formed:
+    // `parse_config` refused to boot otherwise (see `origin_allowlist`).
     //
-    // `app.broadcast` is shimmed onto `App.realtime`
-    // (see `handlers/mod.rs`).
-    //
-    // The routers below carry no layers of their own: `router::compose_router`
-    // puts each in a `fuz_http::compose_stack` group, and the stack mounts the
-    // body cap, the browser gates, and `fuz_http::client_ip_middleware` (over
-    // `spine_trusted_proxies`) in every group — see `router`.
-    let registry_for_rpc = Arc::clone(app_state.action_registry.get().ok_or_else(|| {
-        ServerError::Config("action_registry must be set before mounting /api/rpc".to_owned())
-    })?);
-    let spine_rpc_state = fuz_actions::RpcRouteState {
-        gate: gate.clone(),
-        registry: registry_for_rpc,
-        audit: Arc::clone(&spine_audit_emitter),
-        socket_revoker: Arc::clone(&socket_revoker),
-        // Same `ConnectionRegistry` the WS endpoint populates, so a
-        // notification emitted on the HTTP dispatch path reaches the
-        // live sockets rather than an empty registry.
-        notification_sender: Arc::clone(&realtime).into_notification_sender(),
-        account_rate_limiter: action_account_rate_limiter.clone(),
-        ip_rate_limiter: action_ip_rate_limiter.clone(),
-    };
-
-    let registry_for_ws = Arc::clone(app_state.action_registry.get().ok_or_else(|| {
-        ServerError::Config("action_registry must be set before mounting /api/ws".to_owned())
-    })?);
-    let spine_ws_state = fuz_actions::WsRouteState {
-        gate: gate.clone(),
-        registry: registry_for_ws,
-        audit: Arc::clone(&spine_audit_emitter),
-        socket_revoker: Arc::clone(&socket_revoker),
-        notification_sender: Arc::clone(&realtime).into_notification_sender(),
-        connection_registry: Arc::clone(&realtime),
-        account_rate_limiter: action_account_rate_limiter,
-        ip_rate_limiter: action_ip_rate_limiter,
-        // No role gate: zzz is single-operator by configuration
-        // (`open_signup` defaults false, so every account is operator-minted)
-        // and so every authenticated account is that operator. That default is
-        // the weaker half of the argument, though — flip it and the gate still
-        // wouldn't help, because the socket adds no privilege the account
-        // doesn't already hold. The RPC surface is itself wide open by
-        // recorded decision: the `any_credential_surface` census in
-        // `crate::zzz_action_specs` documents that every zzz-owned spec is
-        // `CredentialGate::Any`, mutations included, so any credential that
-        // could open a socket can already `terminal_create` and read the same
-        // stream over RPC. A role gate here would narrow nothing while that
-        // posture stands; it becomes the right move in the same breath as
-        // narrowing that census (a second account, a reverse proxy). Zzz has
-        // no TS server to twin against (Rust-only), so this preserves the
-        // shipped behavior exactly.
-        required_roles: Vec::new(),
-    };
-
-    // Spine audit-log SSE stream: `GET /api/admin/audit/stream` — the shared
-    // `fuz_realtime::audit_stream_router`, mounted with the spine defaults
-    // (admin role, session-only credential gate, and a close-on-revoke keyed
-    // by each audit event's declared `RevocationScope`), wired to the
-    // `audit_sse` registry the listener above fans rows into. The stream
-    // checks the request at the gate (origin, then credential); the stack's
-    // client-IP middleware matters here although it writes no `audit_log.ip`:
-    // credential resolution runs the bearer leg *before* the channel gate
-    // refuses it, and that leg's `api_token` touch writes `last_used_ip = $2`
-    // unconditionally, so without the layer every bearer attempt on the
-    // stream would stamp the `fuz_http::UNRESOLVED_CLIENT_IP` sentinel over
-    // the real address.
-    let audit_stream_state =
-        fuz_realtime::AuditStreamRouteState::new(gate.clone(), Arc::clone(&audit_sse));
-
-    // File byte routes (`file_bytes::FILE_BYTES_PATH`): hand-written, outside
-    // the action system, so the handlers run the gate themselves (origin,
-    // then the query, then the credential) before they read a body.
-    let file_bytes_state = file_bytes::FileBytesRouteState {
-        app: Arc::clone(&app_state),
-        gate: gate.clone(),
-    };
-
+    // The spine `ActionRegistry` dispatcher is mounted at `/api/rpc` and the
+    // spine WS handler at `/api/ws`; `app.broadcast` is shimmed onto
+    // `App.realtime` (see `handlers/mod.rs`). The routers carry no layers of
+    // their own: `router::compose_router` puts each in a
+    // `fuz_http::compose_stack` group — see `router`.
+    let gate = backend.auth_gate();
+    let audit_sse = backend
+        .audit_sse
+        .clone()
+        .ok_or_else(|| StartupError::Internal("the audit stream registry is unbuilt".into()))?;
     let surfaces = router::SurfaceRouters {
-        rpc: fuz_actions::create_rpc_router(spine_rpc_state),
+        rpc: fuz_actions::create_rpc_router(backend.rpc_route_state(
+            gate.clone(),
+            Arc::clone(&action_registry),
+            &limits,
+        )),
         // `WS_OPTIONS`: the `/api/rpc` body's inbound cap, and an outbound
         // queue budget sized for `filer_change` frames.
-        ws: fuz_actions::register_action_ws_with_options(spine_ws_state, WS_OPTIONS),
-        account: fuz_auth::account_router(account_route_state),
-        bootstrap: fuz_auth::bootstrap_routes::bootstrap_router(bootstrap_route_state),
-        signup: fuz_auth::signup_routes::signup_router(signup_route_state),
-        audit_stream: fuz_realtime::audit_stream_router(audit_stream_state),
-        file_bytes: file_bytes::file_bytes_router(file_bytes_state),
+        ws: fuz_actions::register_action_ws_with_options(
+            backend.ws_route_state(
+                gate.clone(),
+                action_registry,
+                &limits,
+                // No role gate: zzz is single-operator by configuration
+                // (`open_signup` defaults false, so every account is operator-minted)
+                // and so every authenticated account is that operator. That default is
+                // the weaker half of the argument, though — flip it and the gate still
+                // wouldn't help, because the socket adds no privilege the account
+                // doesn't already hold. The RPC surface is itself wide open by
+                // recorded decision: the `any_credential_surface` census in
+                // `crate::zzz_action_specs` documents that every zzz-owned spec is
+                // `CredentialGate::Any`, mutations included, so any credential that
+                // could open a socket can already `terminal_create` and read the same
+                // stream over RPC. A role gate here would narrow nothing while that
+                // posture stands; it becomes the right move in the same breath as
+                // narrowing that census (a second account, a reverse proxy). Zzz has
+                // no TS server to twin against (Rust-only), so this preserves the
+                // shipped behavior exactly.
+                Vec::new(),
+            ),
+            WS_OPTIONS,
+        ),
+        account: fuz_auth::account_router(backend.account_route_state(gate.clone())),
+        bootstrap: fuz_auth::bootstrap_routes::bootstrap_router(
+            backend.bootstrap_route_state(gate.clone()),
+        ),
+        // Signup: mounted on the production server so the cross-process
+        // integration harness (testing_zzz_server reuses run_app) can mint
+        // per-test accounts through production RPC. `open_signup` defaults to
+        // false in app_settings, so the route is invite-gated at runtime
+        // unless an admin flips the flag.
+        signup: fuz_auth::signup_routes::signup_router(backend.signup_route_state(gate.clone())),
+        // `GET /api/admin/audit/stream`, with the spine defaults (admin role,
+        // session-only credential gate, close-on-revoke keyed by each audit
+        // event's declared `RevocationScope`), over the registry the core's
+        // audit listener fans rows into.
+        audit_stream: fuz_realtime::audit_stream_router(fuz_realtime::AuditStreamRouteState::new(
+            gate.clone(),
+            audit_sse,
+        )),
+        // File byte routes (`file_bytes::FILE_BYTES_PATH`): hand-written,
+        // outside the action system, so the handlers run the gate themselves
+        // (origin, then the query, then the credential) before they read a body.
+        file_bytes: file_bytes::file_bytes_router(file_bytes::FileBytesRouteState {
+            app: Arc::clone(&app_state),
+            gate,
+        }),
     };
     if let Some(ref dir) = config.static_dir {
         tracing::info!(dir = %dir.display(), "serving static files");
     }
-    let app = router::compose_router(
+    let router = router::compose_router(
         surfaces,
         config.static_dir.as_deref(),
-        &router::zzz_stack_options(&gate, spine_trusted_proxies),
+        &router::zzz_stack_options(backend.stack_options()),
     );
-
-    let addr = config.bind_addr;
-    let listener = TcpListener::bind(addr)
-        .await
-        .map_err(|source| ServerError::Bind { addr, source })?;
-
-    tracing::info!("zzz_server listening on {addr}");
 
     // Signal handling, the shutdown close of every live WebSocket (a 1001
-    // close) and audit stream, and the graceful drain come from the spine
-    // (`fuz_http::lifecycle`) — the SIGINT/SIGTERM → `CancellationToken`
-    // → close → drain dance is shared with the other spine consumers. zzz's
-    // own teardown (the cleanup task, jobs, PTY cleanup) runs after the drain
-    // returns.
-    let shutdown = fuz_http::shutdown_token();
-
-    // Migrations have run, so the cleanup's startup pass can start now. It
-    // audits through the spine emitter, so expiry events reach the admin
-    // audit streams, and closes each swept session's connections through the
-    // revoker the revocation handlers hold (WS sockets and audit streams).
-    let auth_cleanup = fuz_auth::spawn_auth_cleanup(
-        fuz_auth::AuthCleanupOptions {
-            pool: app_state_for_shutdown.db_pool.clone(),
-            audit: spine_audit_emitter,
-            socket_revoker: Arc::clone(&socket_revoker),
+    // close) and audit stream, the auth cleanup beside the server, and the
+    // graceful drain come from the spine; zzz's own teardown (jobs, PTYs) runs
+    // after the drain returns, ahead of the result.
+    let served = serve_until_shutdown(
+        router,
+        ServeOptions {
+            server_name: SERVER_NAME,
+            addr: config.bind_addr,
+            drain_timeout,
+            shutdown,
+            socket_revoker: Some(backend.socket_revoker()),
+            upkeep: Some(UpkeepOptions {
+                auth_cleanup: backend.auth_cleanup_options(),
+                extra: Vec::new(),
+            }),
         },
-        fuz_auth::DEFAULT_AUTH_CLEANUP_INTERVAL,
-        shutdown.clone(),
-    );
-
-    // The same revoker reaches both live transports (the `/api/ws` registry
-    // and the audit-stream SSE registry), so shutdown closes them through it.
-    let served = fuz_http::serve_with_shutdown(
-        listener,
-        app,
-        shutdown.clone(),
-        socket_revoker.as_ref(),
-        drain_timeout,
     )
     .await;
 
-    // `serve_with_shutdown` returns only once the token has fired, so the
-    // cleanup task is already stopping.
-    if let Err(e) = auth_cleanup.await {
-        tracing::warn!(error = %e, "the auth cleanup task failed");
-    }
-
     // Stop jobs (killing their tool processes) and clean up spawned terminal
-    // processes before exiting, ahead of the `?` on `served`
-    app_state_for_shutdown.job_manager.cancel_all().await;
-    app_state_for_shutdown.pty_manager.kill_all().await;
-    served.map_err(ServerError::Serve)?;
-
-    tracing::info!("server shutdown complete");
-    Ok(())
+    // processes before exiting
+    app_state.job_manager.cancel_all().await;
+    app_state.pty_manager.kill_all().await;
+    served
 }
 
 // -- Config -------------------------------------------------------------------
@@ -898,15 +637,15 @@ pub const DEFAULT_ZZZ_DIR: &str = ".zzz/";
 ///
 /// # Errors
 ///
-/// [`ServerError::Config`] naming the variable when its value isn't valid
+/// [`StartupError::Config`] naming the variable when its value isn't valid
 /// UTF-8 — never read as unset, which would silently drop a configured path
 /// (e.g. every `PUBLIC_ZZZ_SCOPED_DIRS` entry).
-fn env_var_utf8(name: &str) -> Result<Option<String>, ServerError> {
+fn env_var_utf8(name: &str) -> Result<Option<String>, StartupError> {
     match std::env::var(name) {
         Ok(value) => Ok(Some(value)),
         Err(std::env::VarError::NotPresent) => Ok(None),
         Err(std::env::VarError::NotUnicode(_)) => {
-            Err(ServerError::Config(format!("{name} is not valid UTF-8")))
+            Err(StartupError::Config(format!("{name} is not valid UTF-8")))
         }
     }
 }
@@ -918,7 +657,7 @@ fn env_var_utf8(name: &str) -> Result<Option<String>, ServerError> {
 /// # Errors
 ///
 /// As [`env_var_utf8`].
-fn env_non_empty(name: &str) -> Result<Option<String>, ServerError> {
+fn env_non_empty(name: &str) -> Result<Option<String>, StartupError> {
     Ok(non_empty(env_var_utf8(name)?))
 }
 
@@ -926,19 +665,15 @@ fn env_non_empty(name: &str) -> Result<Option<String>, ServerError> {
 ///
 /// # Errors
 ///
-/// [`ServerError::Config`] for anything but an integer in `1..=65535` — an
-/// invalid port refuses to boot rather than falling back to the default.
-fn parse_port(source: &str, value: &str) -> Result<u16, ServerError> {
+/// The reason, naming `source`, for anything but an integer in `1..=65535` —
+/// an invalid port refuses to boot rather than falling back to the default.
+fn parse_port(source: &str, value: &str) -> Result<u16, String> {
     value
         .trim()
         .parse::<u16>()
         .ok()
         .filter(|&port| port != 0)
-        .ok_or_else(|| {
-            ServerError::Config(format!(
-                "invalid {source} {value:?}: expected a port in 1..=65535"
-            ))
-        })
+        .ok_or_else(|| format!("invalid {source} {value:?}: expected a port in 1..=65535"))
 }
 
 fn non_empty(value: Option<String>) -> Option<String> {
@@ -952,20 +687,20 @@ fn non_empty(value: Option<String>) -> Option<String> {
 ///
 /// # Errors
 ///
-/// Returns [`ServerError::Config`] for an empty path or one that can't be
+/// Returns [`StartupError::Config`] for an empty path or one that can't be
 /// made absolute — never a silent fallback, which would collapse to `/` (a
 /// permanent scoped root, and a filer, over the whole filesystem).
-fn resolve_dir(path: &Path) -> Result<String, ServerError> {
+fn resolve_dir(path: &Path) -> Result<String, StartupError> {
     if path.as_os_str().is_empty() {
-        return Err(ServerError::Config("empty directory path".to_owned()));
+        return Err(StartupError::Config("empty directory path".to_owned()));
     }
     let resolved = std::fs::canonicalize(path)
         .or_else(|_| std::path::absolute(path))
-        .map_err(|e| ServerError::Config(format!("can't resolve {}: {e}", path.display())))?;
+        .map_err(|e| StartupError::Config(format!("can't resolve {}: {e}", path.display())))?;
     let mut s = resolved
         .to_str()
         .ok_or_else(|| {
-            ServerError::Config(format!(
+            StartupError::Config(format!(
                 "{} resolves to a path that isn't valid UTF-8: {}",
                 path.display(),
                 resolved.display()
@@ -988,9 +723,9 @@ fn resolve_dir(path: &Path) -> Result<String, ServerError> {
 ///
 /// # Errors
 ///
-/// Returns [`ServerError::Config`] when the directory can't be created or
+/// Returns [`StartupError::Config`] when the directory can't be created or
 /// resolved, or is the working directory (see [`check_app_dir_is_not_cwd`]).
-pub fn ensure_zzz_dir_from_env() -> Result<String, ServerError> {
+pub fn ensure_zzz_dir_from_env() -> Result<String, StartupError> {
     let raw = env_non_empty("PUBLIC_ZZZ_DIR")?.unwrap_or_else(|| DEFAULT_ZZZ_DIR.to_owned());
     let zzz_dir = ensure_app_dir(Path::new(&raw))?;
     // an unreadable working directory can't equal the app dir, which resolved
@@ -1011,11 +746,11 @@ pub fn ensure_zzz_dir_from_env() -> Result<String, ServerError> {
 ///
 /// # Errors
 ///
-/// [`ServerError::Config`] naming both when `zzz_dir` (resolved) is `cwd`.
-fn check_app_dir_is_not_cwd(zzz_dir: &str, cwd: &Path) -> Result<(), ServerError> {
+/// [`StartupError::Config`] naming both when `zzz_dir` (resolved) is `cwd`.
+fn check_app_dir_is_not_cwd(zzz_dir: &str, cwd: &Path) -> Result<(), StartupError> {
     let cwd = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
     if Path::new(zzz_dir) == cwd {
-        return Err(ServerError::Config(format!(
+        return Err(StartupError::Config(format!(
             "PUBLIC_ZZZ_DIR resolves to the daemon's working directory {zzz_dir}: the app dir must not be the working directory itself (the default `{DEFAULT_ZZZ_DIR}` is a subdirectory of it), since the working directory holds the daemon's own files (the CLI's `.env` and `bootstrap_token`)"
         )));
     }
@@ -1030,15 +765,15 @@ fn check_app_dir_is_not_cwd(zzz_dir: &str, cwd: &Path) -> Result<(), ServerError
 ///
 /// # Errors
 ///
-/// [`ServerError::Config`] naming `PUBLIC_ZZZ_SCOPED_DIRS` and the first
+/// [`StartupError::Config`] naming `PUBLIC_ZZZ_SCOPED_DIRS` and the first
 /// such dir.
-fn check_scoped_dirs(scoped_dirs: &[String], zzz_dir: &str) -> Result<(), ServerError> {
+fn check_scoped_dirs(scoped_dirs: &[String], zzz_dir: &str) -> Result<(), StartupError> {
     let app_dir = Path::new(zzz_dir);
     scoped_dirs
         .iter()
         .find(|dir| filer::is_in_zzz_home(Path::new(dir), app_dir))
         .map_or(Ok(()), |dir| {
-            Err(ServerError::Config(format!(
+            Err(StartupError::Config(format!(
                 "PUBLIC_ZZZ_SCOPED_DIRS entry {dir} is in a .zzz directory other than the app dir {zzz_dir}: .zzz directories hold zzz's own files (secrets, tokens) and can't be scoped"
             )))
         })
@@ -1053,14 +788,14 @@ fn check_scoped_dirs(scoped_dirs: &[String], zzz_dir: &str) -> Result<(), Server
 ///
 /// # Errors
 ///
-/// Returns [`ServerError::Config`] naming the path when it can't be created
+/// Returns [`StartupError::Config`] naming the path when it can't be created
 /// (or exists but isn't a directory) or can't be resolved.
-fn ensure_app_dir(path: &Path) -> Result<String, ServerError> {
+fn ensure_app_dir(path: &Path) -> Result<String, StartupError> {
     if path.as_os_str().is_empty() {
-        return Err(ServerError::Config("empty directory path".to_owned()));
+        return Err(StartupError::Config("empty directory path".to_owned()));
     }
     fuz_sys::fs::create_dir_all_mode(path, 0o700).map_err(|e| {
-        ServerError::Config(format!(
+        StartupError::Config(format!(
             "can't create app directory {}: {e}",
             path.display()
         ))
@@ -1069,49 +804,57 @@ fn ensure_app_dir(path: &Path) -> Result<String, ServerError> {
 }
 
 /// The daemon's options, printed after the binary's name for `-h` /
-/// `--help` ([`report_run_result`]) and quoted by every argument error —
+/// `--help` ([`usage`]) and quoted by every argument error —
 /// shared by `zzzd` and `testing_zzzd`, so it names neither.
 pub const OPTIONS: &str = "[--port <port>] [--static-dir <dir>]";
 
-/// Validate the process's command line without acting on it — for a binary
-/// that has side effects to do before [`run_app`] (which parses it again), so
-/// `--help` or a bad argument exits before any of them.
+/// The usage text for the binary named `program` (`zzzd`, `testing_zzzd`).
+#[must_use]
+pub fn usage(program: &str) -> String {
+    format!("Usage: {program} {OPTIONS}\n")
+}
+
+/// Why [`parse_args`] stopped short of a command line to run.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ArgsError {
+    /// `-h` / `--help`: not a failure — the binary prints its usage and exits
+    /// `0`.
+    HelpRequested,
+    /// The line to print above the usage; the binary exits `2`.
+    Invalid(String),
+}
+
+/// Parse the process's command line for the binary named `program`, or the
+/// exit it ends on.
+///
+/// `--help` prints the usage to stdout and exits `0`; a bad
+/// argument prints the error and the usage to stderr and exits `2`
+/// (`fuz_sys::cli::EXIT_USAGE`) — before the binary does anything else.
 ///
 /// # Errors
 ///
-/// As [`parse_args`], including [`ServerError::HelpRequested`].
-pub fn check_cli_args() -> Result<(), ServerError> {
-    parse_args(std::env::args_os().skip(1)).map(|_| ())
-}
-
-/// The process exit for a [`run_app`] (or [`check_cli_args`]) result of the
-/// binary named `program`.
-///
-/// [`ServerError::HelpRequested`] prints `usage: <program> <OPTIONS>` to
-/// stdout and exits 0; any other error prints `<program>: <error>` to stderr
-/// (e.g. `zzzd: configuration error: …` — the variant names the kind) and
-/// exits 1 — synchronously, not through the non-blocking logger, whose
-/// buffered lines a `std::process::exit` would drop.
-#[must_use]
-pub fn report_run_result(result: Result<(), ServerError>, program: &str) -> std::process::ExitCode {
-    match result {
-        Ok(()) => std::process::ExitCode::SUCCESS,
-        Err(ServerError::HelpRequested) => {
-            println!("usage: {program} {OPTIONS}");
-            std::process::ExitCode::SUCCESS
+/// The [`std::process::ExitCode`] to return from `main`.
+pub fn parse_process_args(program: &str) -> Result<CliArgs, std::process::ExitCode> {
+    match parse_args(std::env::args_os().skip(1)) {
+        Ok(args) => Ok(args),
+        Err(ArgsError::HelpRequested) => {
+            print!("{}", usage(program));
+            Err(std::process::ExitCode::SUCCESS)
         }
-        Err(e) => {
-            eprintln!("{program}: {e}");
-            std::process::ExitCode::FAILURE
+        Err(ArgsError::Invalid(message)) => {
+            eprint!("error: {message}\n\n{}", usage(program));
+            Err(std::process::ExitCode::from(fuz_sys::cli::EXIT_USAGE))
         }
     }
 }
 
 /// Flags parsed from the command line; unset ones fall back to env vars.
 #[derive(Debug, Default, PartialEq, Eq)]
-struct CliArgs {
-    port: Option<u16>,
-    static_dir: Option<PathBuf>,
+pub struct CliArgs {
+    /// `--port`, over `ZZZ_PORT`.
+    pub port: Option<u16>,
+    /// `--static-dir`, over `ZZZ_STATIC_DIR`.
+    pub static_dir: Option<PathBuf>,
 }
 
 /// Parse `zzzd`'s arguments (without the program name). Each flag takes its
@@ -1124,11 +867,11 @@ struct CliArgs {
 ///
 /// # Errors
 ///
-/// [`ServerError::HelpRequested`] for `-h` / `--help`; [`ServerError::Config`]
+/// [`ArgsError::HelpRequested`] for `-h` / `--help`; [`ArgsError::Invalid`]
 /// for an unknown flag or stray positional argument, a flag missing its
 /// value, an empty `--static-dir`, or an invalid port — never ignored, so a
 /// typo can't silently boot with defaults.
-fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<CliArgs, ServerError> {
+pub fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<CliArgs, ArgsError> {
     use std::os::unix::ffi::{OsStrExt as _, OsStringExt as _};
 
     let mut parsed = CliArgs::default();
@@ -1144,32 +887,32 @@ fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<CliArgs, Serve
             _ => (bytes, None),
         };
         let flag = match std::str::from_utf8(flag_bytes) {
-            Ok("-h" | "--help") if inline.is_none() => return Err(ServerError::HelpRequested),
+            Ok("-h" | "--help") if inline.is_none() => return Err(ArgsError::HelpRequested),
             Ok(flag @ ("--port" | "--static-dir")) => flag,
             Ok(_) => {
-                return Err(ServerError::Config(format!(
+                return Err(ArgsError::Invalid(format!(
                     "unknown argument {:?} (options: {OPTIONS})",
                     arg.to_string_lossy()
                 )));
             }
             Err(_) => {
-                return Err(ServerError::Config(format!(
+                return Err(ArgsError::Invalid(format!(
                     "argument {:?} is not valid UTF-8 (options: {OPTIONS})",
                     arg.to_string_lossy()
                 )));
             }
         };
         let value = inline.or_else(|| args.next()).ok_or_else(|| {
-            ServerError::Config(format!("{flag} requires a value (options: {OPTIONS})"))
+            ArgsError::Invalid(format!("{flag} requires a value (options: {OPTIONS})"))
         })?;
         if flag == "--port" {
             let value = value
                 .to_str()
-                .ok_or_else(|| ServerError::Config("--port is not valid UTF-8".to_owned()))?;
-            parsed.port = Some(parse_port("--port", value)?);
+                .ok_or_else(|| ArgsError::Invalid("--port is not valid UTF-8".to_owned()))?;
+            parsed.port = Some(parse_port("--port", value).map_err(ArgsError::Invalid)?);
         } else {
             if value.is_empty() {
-                return Err(ServerError::Config(
+                return Err(ArgsError::Invalid(
                     "--static-dir requires a non-empty value".to_owned(),
                 ));
             }
@@ -1183,12 +926,12 @@ fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<CliArgs, Serve
 ///
 /// # Errors
 ///
-/// [`ServerError::Config`] naming the variable when it's unset or blank
+/// [`StartupError::Config`] naming the variable when it's unset or blank
 /// (empty or whitespace — the same "unset" every other var uses), or not
 /// valid UTF-8.
-fn env_required(name: &str) -> Result<String, ServerError> {
+fn env_required(name: &str) -> Result<String, StartupError> {
     env_non_empty(name)?
-        .ok_or_else(|| ServerError::Config(format!("{name} is unset or blank (it is required)")))
+        .ok_or_else(|| StartupError::Config(format!("{name} is unset or blank (it is required)")))
 }
 
 /// Parse the `ZZZ_ENABLE_TEST_ACTIONS` flag from its env value: unset or
@@ -1196,26 +939,26 @@ fn env_required(name: &str) -> Result<String, ServerError> {
 ///
 /// # Errors
 ///
-/// [`ServerError::Config`] naming the variable for an unrecognized value.
-fn parse_test_actions_flag(value: Option<&str>) -> Result<bool, ServerError> {
+/// [`StartupError::Config`] naming the variable for an unrecognized value.
+fn parse_test_actions_flag(value: Option<&str>) -> Result<bool, StartupError> {
     let Some(value) = value.filter(|v| !v.trim().is_empty()) else {
         return Ok(false);
     };
     fuz_sys::env::parse_stringbool(value)
-        .map_err(|e| ServerError::Config(format!("ZZZ_ENABLE_TEST_ACTIONS: {e}")))
+        .map_err(|e| StartupError::Config(format!("ZZZ_ENABLE_TEST_ACTIONS: {e}")))
 }
 
-fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
+fn parse_config(default_addr: SocketAddr, args: CliArgs) -> Result<Config, StartupError> {
     let CliArgs {
         mut port,
         mut static_dir,
-    } = parse_args(std::env::args_os().skip(1))?;
+    } = args;
 
     // Fall back to env vars for port/static_dir
     if port.is_none()
         && let Some(val) = env_non_empty("ZZZ_PORT")?
     {
-        port = Some(parse_port("ZZZ_PORT", &val)?);
+        port = Some(parse_port("ZZZ_PORT", &val).map_err(StartupError::Config)?);
     }
     if static_dir.is_none() {
         static_dir = env_non_empty("ZZZ_STATIC_DIR")?.map(PathBuf::from);
@@ -1225,7 +968,7 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
     if let Some(dir) = &static_dir
         && !dir.is_dir()
     {
-        return Err(ServerError::Config(format!(
+        return Err(StartupError::Config(format!(
             "static dir is not a directory: {}",
             dir.display()
         )));
@@ -1260,7 +1003,7 @@ fn parse_config(default_addr: SocketAddr) -> Result<Config, ServerError> {
         parse_test_actions_flag(env_var_utf8("ZZZ_ENABLE_TEST_ACTIONS")?.as_deref())?;
     let trusted_proxies = env_var_utf8("ZZZ_TRUSTED_PROXIES")?;
     // a bad override refuses to boot; a tool that's simply absent doesn't
-    let tools = tool::Tools::from_env().map_err(ServerError::Config)?;
+    let tools = tool::Tools::from_env().map_err(StartupError::Config)?;
 
     Ok(Config {
         bind_addr: SocketAddr::new(
@@ -1300,54 +1043,6 @@ mod ws_receive_timeout {
 }
 
 #[cfg(test)]
-mod audit_inflight_tracking {
-    use std::sync::Arc;
-    use std::time::Duration;
-
-    use fuz_auth::{AuditEventType, AuditLogInput};
-
-    /// The test binary's `_testing_drain_effects` is a barrier only over the
-    /// tracked emitter: a fire-and-forget write still in flight (here, stuck
-    /// dialing a server that accepts the connection and never answers) holds
-    /// the drain, and the untracked production emitter's drain returns at
-    /// once.
-    #[tokio::test]
-    async fn audit_inflight_tracking_makes_the_drain_wait_for_a_write() {
-        let silent = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("binds");
-        let url = format!(
-            "postgres://zzz:zzz@{}/zzz_unused",
-            silent.local_addr().expect("has an address")
-        );
-        let pool = fuz_db::create_pool(&url).expect("a lazy pool builds without connecting");
-        let emit = |emitter: &Arc<fuz_auth::AuditEmitter>| {
-            emitter.emit(AuditLogInput::for_event(AuditEventType::Logout))
-        };
-
-        let tracked = Arc::new(super::build_audit_emitter(&pool, true));
-        let write = emit(&tracked);
-        assert!(
-            tokio::time::timeout(Duration::from_millis(200), tracked.drain_inflight())
-                .await
-                .is_err(),
-            "the drain waits while the write is in flight"
-        );
-        write.abort();
-        tokio::time::timeout(Duration::from_secs(5), tracked.drain_inflight())
-            .await
-            .expect("the drain resolves once the write ends");
-
-        let untracked = Arc::new(super::build_audit_emitter(&pool, false));
-        let write = emit(&untracked);
-        tokio::time::timeout(Duration::from_millis(200), untracked.drain_inflight())
-            .await
-            .expect("untracked, the drain returns at once");
-        write.abort();
-    }
-}
-
-#[cfg(test)]
 #[allow(
     clippy::unwrap_used,
     clippy::panic,
@@ -1382,7 +1077,7 @@ mod config_paths {
         assert_eq!(parse_port("ZZZ_PORT", " 65535 ").unwrap(), 65535);
         for bad in ["", "0", "65536", "-1", "44x60", "4460.0"] {
             match parse_port("ZZZ_PORT", bad) {
-                Err(ServerError::Config(message)) => {
+                Err(message) => {
                     assert!(message.contains("ZZZ_PORT"), "{message}");
                 }
                 other => panic!("{bad:?} should be refused, got {:?}", other.ok()),
@@ -1394,9 +1089,9 @@ mod config_paths {
         list.iter().map(OsString::from).collect()
     }
 
-    fn config_error(result: Result<CliArgs, ServerError>) -> String {
+    fn config_error(result: Result<CliArgs, ArgsError>) -> String {
         match result {
-            Err(ServerError::Config(message)) => message,
+            Err(ArgsError::Invalid(message)) => message,
             other => panic!("expected a config error, got {other:?}"),
         }
     }
@@ -1461,11 +1156,10 @@ mod config_paths {
     fn help_is_requested_not_an_error() {
         for list in [&["--help"][..], &["-h"], &["--port", "5000", "-h"]] {
             assert!(
-                matches!(parse_args(args(list)), Err(ServerError::HelpRequested)),
+                matches!(parse_args(args(list)), Err(ArgsError::HelpRequested)),
                 "{list:?}"
             );
         }
-        assert_eq!(ServerError::HelpRequested.to_string(), "help requested");
         // a flag's value is never taken for help
         assert_eq!(
             parse_args(args(&["--static-dir", "--help"]))
@@ -1507,7 +1201,7 @@ mod config_paths {
         assert!(parse_test_actions_flag(Some("1")).unwrap());
         assert!(parse_test_actions_flag(Some("TRUE")).unwrap());
         assert!(!parse_test_actions_flag(Some("off")).unwrap());
-        let Err(ServerError::Config(message)) = parse_test_actions_flag(Some("maybe")) else {
+        let Err(StartupError::Config(message)) = parse_test_actions_flag(Some("maybe")) else {
             panic!("an unknown value errors");
         };
         assert!(message.contains("ZZZ_ENABLE_TEST_ACTIONS"), "{message}");
@@ -1517,7 +1211,7 @@ mod config_paths {
     fn resolve_dir_rejects_an_empty_path() {
         assert!(matches!(
             resolve_dir(Path::new("")),
-            Err(ServerError::Config(_))
+            Err(StartupError::Config(_))
         ));
     }
 
@@ -1583,7 +1277,7 @@ mod config_paths {
         let app = ensure_app_dir(&home.join(".zzz")).unwrap();
         let home_dir = ensure_app_dir(&home).unwrap();
 
-        let Err(ServerError::Config(message)) = check_app_dir_is_not_cwd(&home_dir, &home) else {
+        let Err(StartupError::Config(message)) = check_app_dir_is_not_cwd(&home_dir, &home) else {
             panic!("expected the daemon home to be refused as the app dir");
         };
         assert!(message.contains("PUBLIC_ZZZ_DIR"), "{message}");
@@ -1598,7 +1292,7 @@ mod config_paths {
     fn scoped_dirs_in_a_zzz_home_refuse_to_boot() {
         let app = "/home/u/.zzz/.zzz/";
         for dir in ["/home/u/.zzz/", "/home/u/.zzz/run/", "/w/.zzz/"] {
-            let Err(ServerError::Config(message)) =
+            let Err(StartupError::Config(message)) =
                 check_scoped_dirs(&["/w/ok/".to_owned(), dir.to_owned()], app)
             else {
                 panic!("expected {dir} to be refused");
@@ -1619,99 +1313,14 @@ mod config_paths {
         let tmp = TempDir::new();
         let file = tmp.0.join("file");
         std::fs::write(&file, "x").unwrap();
-        let Err(ServerError::Config(message)) = ensure_app_dir(&file) else {
+        let Err(StartupError::Config(message)) = ensure_app_dir(&file) else {
             panic!("expected a config error");
         };
         assert!(message.contains("can't create app directory"), "{message}");
         assert!(message.contains(&file.display().to_string()), "{message}");
         assert!(matches!(
             ensure_app_dir(Path::new("")),
-            Err(ServerError::Config(_))
+            Err(StartupError::Config(_))
         ));
-    }
-}
-
-#[cfg(test)]
-mod client_ip_posture {
-    //! The empty-trusted-proxy posture the routes [`run_app`] serves rely on.
-    //!
-    //! `ZZZ_TRUSTED_PROXIES` is unset by default, so the stack mounts
-    //! `client_ip_middleware` in every route group over an *empty* proxy
-    //! set. These tests pin what that combination does — record the real
-    //! TCP peer, never believe a forged
-    //! `X-Forwarded-For` — because it is the whole reason the layer is mounted
-    //! unconditionally rather than only when proxies are configured.
-
-    use std::net::SocketAddr;
-    use std::sync::{Arc, Mutex};
-
-    use axum::Router;
-    use axum::body::Body;
-    use axum::extract::{ConnectInfo, Extension};
-    use axum::http::{Request, StatusCode};
-    use axum::middleware::from_fn_with_state;
-    use axum::routing::get;
-    use fuz_http::{ClientIp, ParsedProxy, client_ip_middleware};
-    use tower::ServiceExt;
-
-    /// Drive one request through the composer's empty-set layer shape and
-    /// return the `ClientIp` the middleware resolved.
-    async fn resolved_client_ip(peer: &str, forwarded_for: Option<&str>) -> String {
-        let seen: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
-        let sink = Arc::clone(&seen);
-        // The same empty vec `run_app` builds when `ZZZ_TRUSTED_PROXIES` is unset.
-        let proxies: Arc<Vec<ParsedProxy>> = Arc::new(Vec::new());
-        let app = Router::new()
-            .route(
-                "/ip",
-                get(move |Extension(ClientIp(ip)): Extension<ClientIp>| {
-                    let sink = Arc::clone(&sink);
-                    async move {
-                        *sink.lock().expect("sink is uncontended") = Some(ip);
-                        StatusCode::OK
-                    }
-                }),
-            )
-            .layer(from_fn_with_state(proxies, client_ip_middleware));
-
-        let mut builder = Request::builder().uri("/ip").method("GET");
-        if let Some(value) = forwarded_for {
-            builder = builder.header("x-forwarded-for", value);
-        }
-        let mut req = builder.body(Body::empty()).expect("request builds");
-        // `fuz_http::serve_with_shutdown` inserts `ConnectInfo` into every
-        // request; a `oneshot` has no connection, so plumb the peer by hand.
-        req.extensions_mut().insert(ConnectInfo(
-            peer.parse::<SocketAddr>().expect("peer parses"),
-        ));
-
-        let response = app.oneshot(req).await.expect("router responds");
-        // A 500 here would mean the `ClientIp` extension was missing — i.e. the
-        // middleware was not mounted.
-        assert_eq!(response.status(), StatusCode::OK, "ClientIp was populated");
-
-        seen.lock()
-            .expect("sink is uncontended")
-            .clone()
-            .expect("the middleware always populates ClientIp")
-    }
-
-    #[tokio::test]
-    async fn no_forwarded_for_resolves_to_the_peer() {
-        assert_eq!(
-            resolved_client_ip("203.0.113.7:51234", None).await,
-            "203.0.113.7"
-        );
-    }
-
-    #[tokio::test]
-    async fn forged_forwarded_for_from_an_untrusted_peer_is_ignored() {
-        // With no trusted proxies every peer fails the trust check, so the
-        // spoofable header is never believed — a caller cannot mint a fresh
-        // per-IP rate-limit bucket by inventing an `X-Forwarded-For`.
-        assert_eq!(
-            resolved_client_ip("203.0.113.7:51234", Some("198.51.100.9")).await,
-            "203.0.113.7"
-        );
     }
 }
