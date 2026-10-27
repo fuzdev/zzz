@@ -2,9 +2,8 @@
 //!
 //! The library entry point [`run_app`] owns the full server lifecycle:
 //! env loading, DB pool + migrations, spine state construction,
-//! `ActionRegistry` compile, file watchers, daemon-token rotation,
-//! route composition, signal handling, the auth cleanup task, and
-//! graceful shutdown.
+//! `ActionRegistry` compile, file watchers, route composition, signal
+//! handling, the auth cleanup task, and graceful shutdown.
 //!
 //! The `password_hasher` parameter is the swap point for the
 //! test-binary pattern (fast argon2 via a pluggable hasher):
