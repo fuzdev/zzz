@@ -366,12 +366,11 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
     // A deleted or purged account's terminals end with its sockets.
     handlers::terminal::register_account_removal_listener(&backend.audit_emitter, &app_state);
 
-    // The per-action limiters, built once and shared by every surface that
-    // consults them: the spine's auth spec set charges these buckets inside
-    // its handler closures, and the dispatcher charges the same ones for
-    // protocol + zzz-owned specs via `ActionSpec::with_rate_limit`, across
-    // both the HTTP RPC and WS transports — one budget per caller, as fuz_app
-    // threads one pair through `create_app_server`.
+    // The per-action limiters, built once and shared by both dispatcher
+    // states: the dispatcher charges every spec declaring a class — the
+    // spine's auth spec set, protocol, and zzz-owned specs — across both the
+    // HTTP RPC and WS transports, one budget per caller, as fuz_app threads
+    // one pair through `create_app_server`.
     //
     // The IP axis is live: `peer/ping` comes in with `PROTOCOL_ACTION_SPECS`
     // declaring `RateLimitClass::Ip`. zzz is local-first on a loopback-fixed
@@ -392,7 +391,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
     // (`core`, `workspace`, `filesystem`, `terminal`, `provider`).
     let mut all_specs: Vec<fuz_actions::ActionSpec> = fuz_actions::PROTOCOL_ACTION_SPECS();
     all_specs.extend(backend.auth_spec_set(
-        &limits,
         Arc::new(fuz_auth::AdminOfferAuthorize),
         Arc::new(fuz_auth::RoleRegistry::default()),
     ));
