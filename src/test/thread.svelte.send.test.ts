@@ -188,6 +188,7 @@ describe('a completion in flight when the socket drops', () => {
 		let reject_request: ((error: unknown) => void) | undefined;
 		const connection: WebsocketRpcConnection = {
 			connected: true,
+			will_reconnect: false,
 			request: () =>
 				new Promise((_resolve, reject) => {
 					reject_request = reject;

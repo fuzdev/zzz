@@ -180,6 +180,8 @@ export class Socket implements WebsocketRpcConnection {
 	);
 
 	readonly connected: boolean = $derived(this.#client?.connected ?? false);
+	/** Whether the underlying client is opening on its own (`FrontendWebsocketClient.will_reconnect`). */
+	readonly will_reconnect: boolean = $derived(this.#client?.will_reconnect ?? false);
 	readonly open: boolean = $derived(this.connected);
 	readonly can_send: boolean = $derived(this.connected);
 	readonly has_queued_messages: boolean = $derived(this.message_queue.length > 0);

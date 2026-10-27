@@ -375,11 +375,11 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		}
 		if (options.http_rpc_url) {
 			this.peer.transports.register_transport(
-				new FrontendHttpTransport(
-					options.http_rpc_url,
-					options.http_headers,
-					(method) => this.action_registry.spec_by_method.get(method)?.side_effects ?? true
-				)
+				new FrontendHttpTransport({
+					url: options.http_rpc_url,
+					headers: options.http_headers,
+					lookup_action_spec: (method) => this.lookup_action_spec(method)
+				})
 			);
 		}
 
