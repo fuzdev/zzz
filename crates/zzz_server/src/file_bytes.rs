@@ -83,7 +83,8 @@ pub const FILE_BYTES_PATH: &str = "/api/files/bytes";
 pub const FILE_BYTES_MAX_BODY_BYTES: usize = crate::RPC_MESSAGE_MAX_BYTES;
 
 /// Capability named in the `403` a method-scoped API token gets here.
-pub const FILE_BYTES_SURFACE: &str = "surface:file_bytes";
+pub const FILE_BYTES_SURFACE: fuz_auth::SurfaceCapability =
+    fuz_auth::SurfaceCapability::new("surface:file_bytes");
 
 /// How much of a file one read pulls into memory while streaming a response.
 const READ_CHUNK_BYTES: usize = 64 * 1024;

@@ -225,7 +225,7 @@ mod tests {
                 session_cookie_name: "zzz_session_4460",
                 migration_namespaces: crate::ZZZ_MIGRATION_NAMESPACES,
                 expected_schema_json: None,
-                audit_sse: true,
+                audit_sse: Some(fuz_actions::server::AuditSseSpec::DEFAULT),
             },
             &fuz_actions::server::SpineBackendOptions {
                 rate_limiters: fuz_auth::RateLimiterMode::DisabledForTesting,

@@ -302,7 +302,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
         session_cookie_name: session_cookie_name_for_port(config.bind_addr.port()).leak(),
         migration_namespaces: ZZZ_MIGRATION_NAMESPACES,
         expected_schema_json: None,
-        audit_sse: true,
+        audit_sse: Some(fuz_actions::server::AuditSseSpec::DEFAULT),
     };
     // zzz reads its own env (`ZZZ_PORT`, `--port`, a required
     // `DATABASE_URL`, `ZZZ_TRUSTED_PROXIES`); the spine core takes it in the
