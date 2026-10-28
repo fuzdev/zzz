@@ -287,12 +287,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
         Some(raw) => fuz_http::parse_proxy_list(raw)
             .map_err(|e| StartupError::Config(format!("ZZZ_TRUSTED_PROXIES: {e}")))?,
     };
-    if !trusted_proxies.is_empty() {
-        tracing::info!(
-            count = trusted_proxies.len(),
-            "trusted proxies configured — XFF resolution enabled"
-        );
-    }
 
     // What zzz's server is: its per-port cookie (the spine's route states take
     // the name as `&'static str`; it is fixed for the life of the process, so
@@ -481,10 +475,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
     // their own: `router::compose_router` puts each in a
     // `fuz_http::compose_stack` group — see `router`.
     let gate = backend.auth_gate();
-    let audit_sse = backend
-        .audit_sse
-        .clone()
-        .ok_or_else(|| StartupError::Internal("the audit stream registry is unbuilt".into()))?;
     let dispatch = backend.action_dispatch(gate.clone(), action_registry, &limits);
     let surfaces = router::SurfaceRouters {
         rpc: fuz_actions::create_rpc_router(dispatch.clone()),
@@ -512,24 +502,17 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
             ),
             WS_OPTIONS,
         ),
-        account: fuz_auth::account_router(backend.account_route_state(gate.clone())),
-        bootstrap: fuz_auth::bootstrap_routes::bootstrap_router(
-            backend.bootstrap_route_state(gate.clone()),
-        ),
-        // Signup: mounted on the production server so the cross-process
-        // integration harness (testing_zzz_server reuses run_app) can mint
-        // per-test accounts through production RPC. `open_signup` defaults to
-        // false in app_settings, so the route is invite-gated at runtime
-        // unless an admin flips the flag.
-        signup: fuz_auth::signup_routes::signup_router(backend.signup_route_state(gate.clone())),
+        // Account, bootstrap, and signup. Signup is mounted on the production
+        // server so the cross-process integration harness (testing_zzz_server
+        // reuses run_app) can mint per-test accounts through production RPC.
+        // `open_signup` defaults to false in app_settings, so the route is
+        // invite-gated at runtime unless an admin flips the flag.
+        account: backend.auth_rest_routes(gate.clone()).into_router(),
         // `GET /api/admin/audit/stream`, with the spine defaults (admin role,
         // session-only credential gate, close-on-revoke keyed by each audit
         // event's declared `RevocationScope`), over the registry the core's
         // audit listener fans rows into.
-        audit_stream: fuz_realtime::audit_stream_router(fuz_realtime::AuditStreamRouteState::new(
-            gate.clone(),
-            audit_sse,
-        )),
+        audit_stream: backend.audit_stream_router(gate.clone())?,
         // File byte routes (`file_bytes::FILE_BYTES_PATH`): hand-written,
         // outside the action system, so the handlers run the gate themselves
         // (origin, then the query, then the credential) before they read a body.

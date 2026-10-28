@@ -83,13 +83,10 @@ pub struct SurfaceRouters {
     pub rpc: Router,
     /// `fuz_actions::register_action_ws_with_options` — `/ws`, nested at `/api`.
     pub ws: Router,
-    /// `fuz_auth::account_router` — nested at `/api/account`.
+    /// The account REST surface (account, bootstrap, signup:
+    /// `fuz_actions::server::AuthRestRoutes`) — nested at `/api/account`.
     pub account: Router,
-    /// `fuz_auth::bootstrap_routes::bootstrap_router` — nested at `/api/account`.
-    pub bootstrap: Router,
-    /// `fuz_auth::signup_routes::signup_router` — nested at `/api/account`.
-    pub signup: Router,
-    /// `fuz_realtime::audit_stream_router` — at its absolute path.
+    /// `AppBackend::audit_stream_router` — at its absolute path.
     pub audit_stream: Router,
     /// [`crate::file_bytes::file_bytes_router`] — at its absolute path.
     pub file_bytes: Router,
@@ -116,8 +113,6 @@ pub fn compose_router(
         rpc,
         ws,
         account,
-        bootstrap,
-        signup,
         audit_stream,
         file_bytes,
     } = surfaces;
@@ -136,10 +131,9 @@ pub fn compose_router(
         BodyCap::Bytes(FILE_BYTES_MAX_BODY_BYTES),
     )
     .refuse_simple_requests();
-    // The three account routers expose disjoint paths under one prefix.
     let account_group = RouteGroup::new(
         "account",
-        Router::new().nest("/api/account", account.merge(bootstrap).merge(signup)),
+        Router::new().nest("/api/account", account),
         BodyCap::Bytes(DEFAULT_BODY_LIMIT_BYTES),
     )
     .refuse_simple_requests();
@@ -265,22 +259,10 @@ mod tests {
                 backend.ws_route_state(dispatch, Vec::new()),
                 crate::WS_OPTIONS,
             ),
-            account: fuz_auth::account_router(backend.account_route_state(gate.clone())),
-            bootstrap: fuz_auth::bootstrap_routes::bootstrap_router(
-                backend.bootstrap_route_state(gate.clone()),
-            ),
-            signup: fuz_auth::signup_routes::signup_router(
-                backend.signup_route_state(gate.clone()),
-            ),
-            audit_stream: fuz_realtime::audit_stream_router(
-                fuz_realtime::AuditStreamRouteState::new(
-                    gate.clone(),
-                    backend
-                        .audit_sse
-                        .clone()
-                        .expect("the audit stream registry"),
-                ),
-            ),
+            account: backend.auth_rest_routes(gate.clone()).into_router(),
+            audit_stream: backend
+                .audit_stream_router(gate.clone())
+                .expect("the spec mounts the audit stream"),
             file_bytes: crate::file_bytes::file_bytes_router(FileBytesRouteState { app, gate }),
         }
     }
