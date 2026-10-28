@@ -40,9 +40,10 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use fuz_actions::ActionRateLimits;
 use fuz_actions::server::{
-    ActionRateLimits, AppBackendSpec, BootedAppBackend, ServeOptions, SpineRunOptions,
-    StartupError, UpkeepOptions, compile_action_registry, create_app_backend, serve_until_shutdown,
+    AppBackendSpec, BootedAppBackend, ServeOptions, SpineRunOptions, StartupError, UpkeepOptions,
+    compile_action_registry, create_app_backend, serve_until_shutdown,
 };
 
 /// Default loopback bind address (port 4460).

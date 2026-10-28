@@ -241,7 +241,7 @@ mod tests {
     /// them (no bootstrap token).
     fn surfaces(backend: &fuz_actions::server::AppBackend) -> SurfaceRouters {
         let gate = backend.auth_gate();
-        let limits = fuz_actions::server::ActionRateLimits::defaults(backend.rate_limiters);
+        let limits = fuz_actions::ActionRateLimits::defaults(backend.rate_limiters);
         let registry = Arc::new(
             fuz_actions::ActionRegistry::compile(fuz_actions::PROTOCOL_ACTION_SPECS())
                 .expect("the protocol specs compile"),
