@@ -483,19 +483,14 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
         .audit_sse
         .clone()
         .ok_or_else(|| StartupError::Internal("the audit stream registry is unbuilt".into()))?;
+    let dispatch = backend.action_dispatch(gate.clone(), action_registry, &limits);
     let surfaces = router::SurfaceRouters {
-        rpc: fuz_actions::create_rpc_router(backend.rpc_route_state(
-            gate.clone(),
-            Arc::clone(&action_registry),
-            &limits,
-        )),
+        rpc: fuz_actions::create_rpc_router(dispatch.clone()),
         // `WS_OPTIONS`: the `/api/rpc` body's inbound cap, and an outbound
         // queue budget sized for `filer_change` frames.
         ws: fuz_actions::register_action_ws_with_options(
             backend.ws_route_state(
-                gate.clone(),
-                action_registry,
-                &limits,
+                dispatch,
                 // No role gate: zzz is single-operator by configuration
                 // (`open_signup` defaults false, so every account is operator-minted)
                 // and so every authenticated account is that operator. That default is

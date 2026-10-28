@@ -256,14 +256,11 @@ mod tests {
             Arc::clone(&backend.realtime),
             Arc::clone(&backend.audit_emitter),
         ));
+        let dispatch = backend.action_dispatch(gate.clone(), registry, &limits);
         SurfaceRouters {
-            rpc: fuz_actions::create_rpc_router(backend.rpc_route_state(
-                gate.clone(),
-                Arc::clone(&registry),
-                &limits,
-            )),
+            rpc: fuz_actions::create_rpc_router(dispatch.clone()),
             ws: fuz_actions::register_action_ws_with_options(
-                backend.ws_route_state(gate.clone(), registry, &limits, Vec::new()),
+                backend.ws_route_state(dispatch, Vec::new()),
                 crate::WS_OPTIONS,
             ),
             account: fuz_auth::account_router(backend.account_route_state(gate.clone())),
