@@ -1,5 +1,5 @@
 //! Long-lived `App` server state, the per-domain RPC handlers, and the
-//! `App.broadcast` / `close_sockets_for_*` connection shims.
+//! `App.broadcast` connection shim.
 //!
 //! The per-domain handler modules (`core`, `filesystem`, `provider`,
 //! `terminal`, `workspace`) hold the zzz-specific RPC handlers in the spine
@@ -13,10 +13,10 @@
 //! Auth, dispatch, and the JSON-RPC / WS routes come from the spine
 //! (`fuz_actions::perform_action` plus the route states built in `main.rs`).
 //! `App.realtime` is the sole connection-tracking surface; it drives the
-//! `broadcast` / `close_sockets_for_*` shims called from `filer.rs` and
-//! `workspace.rs`, and `pty_manager.rs`, `job_manager.rs`, and
-//! `transcription/` send a terminal's and a job's notifications through it to
-//! the owning account only (`send_to_account`). `WorkspaceInfo` is the value type
+//! `broadcast` shim called from `filer.rs` and `workspace.rs`, and
+//! `pty_manager.rs`, `job_manager.rs`, and `transcription/` send a terminal's
+//! and a job's notifications through it to the owning account only
+//! (`send_to_account`). `WorkspaceInfo` is the value type
 //! consumed by `workspace`.
 
 pub mod core;
