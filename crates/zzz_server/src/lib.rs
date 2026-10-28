@@ -401,7 +401,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
         all_specs.extend(factory(
             Arc::clone(&app_state),
             backend.extra_action_specs_runtime(),
-        ));
+        )?);
     }
     let action_registry = compile_action_registry(all_specs)?;
     tracing::info!(

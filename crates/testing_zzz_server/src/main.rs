@@ -12,9 +12,8 @@
 //! that awaits in-flight fire-and-forget audit writes (a signup's, a
 //! failure audit, a WebSocket mutation's) before a test reads the audit log.
 //! The drain is a real barrier because this binary builds the app's audit
-//! emitter with in-flight tracking
-//! (`RunAppOptions::audit_inflight_tracking`); over an untracked emitter it
-//! would return at once.
+//! emitter with in-flight tracking ([`fuz_testing::testing_backend_options`]);
+//! over an untracked emitter it would return at once.
 //! Three layered guardrails keep this from leaking into production:
 //!
 //! 1. The `testing_` prefix is enforced by `fuz_release`'s manifest
@@ -38,12 +37,8 @@ use std::net::SocketAddr;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use fuz_actions::server::{SpineBackendOptions, SpineRunOptions};
-use fuz_auth::PasswordHasher;
-use fuz_testing::{
-    ResetStateFn, TestingArgon2idHasher, TestingResetOptions,
-    create_testing_drain_effects_action_spec, create_testing_reset_action_spec, startup_reset_hook,
-};
+use fuz_actions::server::SpineRunOptions;
+use fuz_testing::{ResetStateFn, testing_backend_options, testing_reset_specs};
 
 /// Default loopback bind address for the testing binary (port 4462).
 /// Distinct from the production default (4460) so both binaries can run
@@ -68,18 +63,46 @@ async fn main() -> ExitCode {
     let _log_guard =
         fuz_sys::logging::init_non_blocking_stdout("info,zzz_server=info,testing_zzzd=info");
 
-    let password_hasher: Arc<dyn PasswordHasher> = Arc::new(TestingArgon2idHasher::new());
-
     // Always-visible startup sentinel — survives any RUST_LOG filter that
     // would suppress `info!`. The sister `WARN: test-mode argon2 hasher
     // active` line is emitted by `TestingArgon2idHasher::new` itself.
     eprintln!("testing_zzzd starting (test-mode argon2 active)");
 
+    // Daemon-token credential for `_testing_reset`. `fuz_testing` owns the only
+    // producer of this credential — `zzz_server` cannot mint one — so the test
+    // binary constructs it here and injects the handle. The token is static for
+    // the process lifetime (the harness reads it once at spawn).
+    //
+    // Deliberately `init_daemon_token` against `ensure_zzz_dir_from_env` rather than the
+    // sibling `init_daemon_token_from_env` the other testing binaries use.
+    // That is `run_app`'s own resolution of `PUBLIC_ZZZ_DIR`, so the
+    // file lands exactly where the cross-process harness looks —
+    // `<zzz_dir>/run/daemon_token` — and there is a single source of truth for
+    // the directory. A dedicated `*_DAEMON_TOKEN_DIR` var would be a second one
+    // that has to agree with `PUBLIC_ZZZ_DIR` or the harness silently reads a
+    // token from the wrong tree. The `_from_env` "unset → behave like
+    // production" affordance buys nothing here either: `_testing_reset` always
+    // needs the credential, so a failed init is a hard misconfiguration that
+    // exits here.
+    let zzz_dir = match zzz_server::ensure_zzz_dir_from_env() {
+        Ok(dir) => dir,
+        Err(e) => return fuz_sys::cli::report_failure(&e, e.hint(), e.exit_code()),
+    };
+    let daemon_token_state = match fuz_testing::init_daemon_token(std::path::Path::new(&zzz_dir))
+        .await
+    {
+        Ok(state) => state,
+        Err(e) => {
+            let e =
+                fuz_actions::server::StartupError::Config(format!("daemon token init failed: {e}"));
+            return fuz_sys::cli::report_failure(&e, e.hint(), e.exit_code());
+        }
+    };
+
     // The factory closes over `Arc<App>` so the `_testing_reset`
     // domain-state reset closure can close zzz workspaces + kill terminals +
-    // wipe the optional scratch dir, and `_testing_drain_effects` can await
-    // the app's audit emitter.
-    let extra_specs_factory: zzz_server::ExtraActionSpecsFactory = Box::new(|app, runtime| {
+    // wipe the optional scratch dir.
+    let extra_specs_factory: zzz_server::ExtraActionSpecsFactory = Box::new(move |app, runtime| {
         let app_for_reset = Arc::clone(&app);
         // zzz's domain state is in-memory (workspaces + terminals +
         // scratch dir), so the in-tx `ActionDb` handed in by the spine
@@ -123,78 +146,12 @@ async fn main() -> ExitCode {
                 Ok(())
             })
         });
-        #[allow(
-            clippy::expect_used,
-            reason = "fail loud at startup if the test binary is misconfigured"
-        )]
-        let daemon_token_state = runtime.daemon_token_state.expect(
-            "testing_zzz_server requires the daemon-token credential to be wired \
-             (it provides keeper credentials for _testing_reset)",
-        );
-        // awaits the emitter's detached writes; tracked because
-        // `audit_inflight_tracking` is on below
-        let drain_effects =
-            create_testing_drain_effects_action_spec(Arc::clone(&app.audit_emitter));
-        vec![
-            create_testing_reset_action_spec(TestingResetOptions {
-                password_hasher: runtime.password_hasher,
-                keyring: runtime.keyring,
-                daemon_token_state,
-                session_cookie_name: runtime.session_cookie_name,
-                reset_state: Some(reset_state),
-            }),
-            drain_effects,
-        ]
+        testing_reset_specs(&runtime, Some(reset_state))
     });
-
-    // Daemon-token credential for `_testing_reset`. `fuz_testing` owns the only
-    // producer of this credential — `zzz_server` cannot mint one — so the test
-    // binary constructs it here and injects the handle. The token is static for
-    // the process lifetime (the harness reads it once at spawn).
-    //
-    // Deliberately `init_daemon_token` against `ensure_zzz_dir_from_env` rather than the
-    // sibling `init_daemon_token_from_env` the other testing binaries use.
-    // That is `run_app`'s own resolution of `PUBLIC_ZZZ_DIR`, so the
-    // file lands exactly where the cross-process harness looks —
-    // `<zzz_dir>/run/daemon_token` — and there is a single source of truth for
-    // the directory. A dedicated `*_DAEMON_TOKEN_DIR` var would be a second one
-    // that has to agree with `PUBLIC_ZZZ_DIR` or the harness silently reads a
-    // token from the wrong tree. The `_from_env` "unset → behave like
-    // production" affordance buys nothing here either: `_testing_reset` always
-    // needs the credential, so a missing one is a hard misconfiguration, which
-    // the `expect` in the specs factory above reports.
-    let zzz_dir = match zzz_server::ensure_zzz_dir_from_env() {
-        Ok(dir) => dir,
-        Err(e) => return fuz_sys::cli::report_failure(&e, e.hint(), e.exit_code()),
-    };
-    let daemon_token_state = match fuz_testing::init_daemon_token(std::path::Path::new(&zzz_dir))
-        .await
-    {
-        Ok(state) => state,
-        Err(e) => {
-            let e =
-                fuz_actions::server::StartupError::Config(format!("daemon token init failed: {e}"));
-            return fuz_sys::cli::report_failure(&e, e.hint(), e.exit_code());
-        }
-    };
 
     match zzz_server::run_app(zzz_server::RunAppOptions {
         spine: SpineRunOptions {
-            backend: SpineBackendOptions {
-                password_hasher,
-                login_ip_rate_limit: fuz_auth::DEFAULT_LOGIN_IP_RATE_LIMIT,
-                // the cross-backend auth suite's repeated logins would trip the
-                // buckets; the once-per-process banner announces the nulls
-                rate_limiters: fuz_auth::RateLimiterMode::DisabledForTesting,
-                daemon_token_state: Some(daemon_token_state),
-                // Wipes the auth-namespace schema when
-                // `FUZ_TESTING_RESET_DB_ON_STARTUP=true`, then migrations
-                // replay from nothing, so projects can re-run against a shared
-                // PG without operator intervention. No-op when unset.
-                pre_migration_hook: Some(startup_reset_hook()),
-                // makes `_testing_drain_effects` a real barrier
-                audit_inflight_tracking: true,
-            },
+            backend: testing_backend_options(daemon_token_state),
             default_addr: TESTING_DEFAULT_ADDR,
             drain_timeout: fuz_http::DEFAULT_DRAIN_TIMEOUT,
         },

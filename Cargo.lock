@@ -718,6 +718,7 @@ dependencies = [
  "fuz_db",
  "fuz_http",
  "fuz_realtime",
+ "fuz_sys",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
