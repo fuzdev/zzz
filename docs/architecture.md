@@ -53,7 +53,7 @@ export const completion_create_action_spec = {
 - `kind` (`ActionKind`) — `'request_response'` | `'remote_notification'` | `'local_call'`
 - `initiator` (`ActionInitiator`) — `'frontend'` | `'backend'` | `'both'`
 - `auth` (`RouteAuth | null`) — `{account, actor, roles?, credential_types?, required_scope?}`; required on `request_response` specs, `null` on `remote_notification` / `local_call`
-- `side_effects` (`boolean`) — Whether action mutates state (also keeps it off the cacheable `GET /api/rpc` path)
+- `side_effects` (`boolean`) — Whether action mutates state (also keeps it off the side-effect-free `GET /api/rpc` path)
 - `input` (`z.ZodType`) — Zod schema for request params
 - `output` (`z.ZodType`) — Zod schema for response
 - `async` (`boolean`) — Whether handler is async

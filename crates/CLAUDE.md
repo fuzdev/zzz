@@ -146,7 +146,7 @@ A blank (empty or whitespace) path var reads as unset — `PUBLIC_ZZZ_DIR` falls
 
 ## Endpoints
 
-- `/api/rpc` (GET) — JSON-RPC 2.0 (cacheable reads, query params)
+- `/api/rpc` (GET) — JSON-RPC 2.0 (side-effect-free reads, query params)
 - `/api/rpc` (POST) — JSON-RPC 2.0 (HTTP transport, auth-gated)
 - `/api/account/bootstrap` (POST) — One-shot admin account creation
 - `/api/account/signup` (POST) — Public account creation (invite-gated by default; `open_signup=true` opens)
