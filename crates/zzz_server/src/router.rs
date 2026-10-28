@@ -96,10 +96,10 @@ pub struct SurfaceRouters {
 }
 
 /// The stack options every group shares: the spine core's (the gate's
-/// allowlist and the trusted proxies), the host gate on, request tracing off
-/// (module doc).
+/// allowlist, the trusted proxies, and the host gate
+/// [`crate::origin_allowlist::ZZZ_BROWSER_GATES`] turns on), with request
+/// tracing off (module doc).
 pub const fn zzz_stack_options(mut options: StackOptions) -> StackOptions {
-    options.host_gate = true;
     options.request_tracing = false;
     options
 }
@@ -216,6 +216,7 @@ mod tests {
             host: None,
             port: None,
             allowed_origins: AllowedOrigins::parse(ALLOWED_ORIGIN).expect("origins parse"),
+            allow_origin_wildcards: false,
             trusted_proxies: Vec::new(),
             bootstrap_token_path: None,
         };
@@ -226,6 +227,7 @@ mod tests {
                 migration_namespaces: crate::ZZZ_MIGRATION_NAMESPACES,
                 expected_schema_json: None,
                 audit_sse: Some(fuz_actions::server::AuditSseSpec::DEFAULT),
+                browser_gates: crate::origin_allowlist::ZZZ_BROWSER_GATES,
             },
             &fuz_actions::server::SpineBackendOptions {
                 rate_limiters: fuz_auth::RateLimiterMode::DisabledForTesting,

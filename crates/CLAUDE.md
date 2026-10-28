@@ -94,6 +94,7 @@ FUZ_ALLOWED_ORIGINS='http://localhost:4460' \
 DATABASE_URL=postgres://localhost/zzz_test \
 SECRET_FUZ_COOKIE_KEYS=dev-only-not-for-production-use-000 \
 FUZ_ALLOWED_ORIGINS='http://localhost:*' \
+FUZ_ALLOW_ORIGIN_WILDCARDS=true \
 ./target/debug/testing_zzzd
 
 # Quick smoke test
@@ -248,13 +249,19 @@ orientation; the spine crates are authoritative:
      written out. The check is of the shape, not a proof that the entry
      matches something: a hostname a browser would rewrite (an invalid
      punycode label) passes and matches nothing.
-   - **Wildcard entries boot with a warning** (`origin_wildcard_warning`)
-     that says which it is — port, host, or both — and what it admits: any
-     port on the host, any host matching the pattern, or, when no label is
-     fixed, every host of that shape (four `*` labels cover every IPv4
-     address). The `Host` gate below admits the hosts the same entries name,
-     on either scheme, so a host wildcard also lets a DNS-rebinding page on
-     a matching domain through it; the warning says so.
+   - **Wildcard entries need the opt-in** — the spine's boot
+     (`fuz_actions::server::create_app_backend`, through
+     `fuz_http::admit_origin_wildcards`) refuses one unless
+     `FUZ_ALLOW_ORIGIN_WILDCARDS=true` (read strictly in `parse_config`:
+     exactly `true` or `false`), with text that says which it is — port, host,
+     or both — and what it admits: any port on the host, any host matching the
+     pattern, or, when no label is fixed, every host of that shape (four `*`
+     labels cover every IPv4 address). With the flag it boots and logs that
+     text as a warning on every boot. The `Host` gate below admits the hosts
+     the same entries name, on either scheme, so a host wildcard also lets a
+     DNS-rebinding page on a matching domain through it; the text says so
+     (`origin_allowlist::ZZZ_BROWSER_GATES` turns the gate on and adds zzz's
+     note).
    `tests/boot_allowed_origins.rs` runs the real `zzzd` over each case.
    The router is `fuz_http::compose_stack`'s (`router.rs`): route groups,
    each with its own body cap — `rpc` (`/api/rpc` + `/api/ws`,

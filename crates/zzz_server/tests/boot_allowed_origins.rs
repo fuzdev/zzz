@@ -1,9 +1,12 @@
 //! `zzzd`'s boot, for each kind of `FUZ_ALLOWED_ORIGINS` value: the real
-//! binary, so what's pinned is that the checks run where the daemon starts —
-//! before it creates its app directory or reaches for the database.
+//! binary, so what's pinned is that the checks run where the daemon starts.
+//! A malformed list or opt-in is refused before the daemon creates its app
+//! directory; a wildcard without the opt-in is the spine's boot check, which
+//! runs after the app directory exists but before anything reaches for the
+//! database.
 //!
-//! No database is needed: a refused list exits first, and the one case that
-//! gets past the list is pointed at a port nothing listens on.
+//! No database is needed: a refused list exits first, and the cases that get
+//! past the list are pointed at a port nothing listens on.
 
 #![allow(
     clippy::unwrap_used,
@@ -43,6 +46,11 @@ impl Drop for TempDir {
 /// (unset for `None`), every other required value present, and a database URL
 /// nothing answers at.
 fn boot(dir: &TempDir, allowed_origins: Option<&str>) -> Output {
+    boot_with_flag(dir, allowed_origins, None)
+}
+
+/// [`boot`] with `FUZ_ALLOW_ORIGIN_WILDCARDS` set to `flag` (unset for `None`).
+fn boot_with_flag(dir: &TempDir, allowed_origins: Option<&str>, flag: Option<&str>) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_zzzd"));
     command
         .current_dir(&dir.0)
@@ -59,6 +67,9 @@ fn boot(dir: &TempDir, allowed_origins: Option<&str>) -> Output {
         .args(["--port", "4479"]);
     if let Some(value) = allowed_origins {
         command.env("FUZ_ALLOWED_ORIGINS", value);
+    }
+    if let Some(value) = flag {
+        command.env("FUZ_ALLOW_ORIGIN_WILDCARDS", value);
     }
     command.output().expect("zzzd runs")
 }
@@ -154,13 +165,43 @@ fn an_exact_list_boots_without_a_warning() {
     assert!(!log.contains("FUZ_ALLOWED_ORIGINS"), "{log}");
 }
 
+const WILDCARD_LIST: &str = "http://localhost:5460, http://localhost:*, https://*.example.com";
+
 #[test]
-fn a_wildcard_entry_boots_with_a_warning_saying_what_it_admits() {
+fn a_wildcard_entry_refuses_the_boot_without_the_opt_in() {
+    for (label, flag) in [("wildcard_unset", None), ("wildcard_false", Some("false"))] {
+        let dir = TempDir::new(label);
+        let output = boot_with_flag(&dir, Some(WILDCARD_LIST), flag);
+        let message = stderr(&output);
+        assert_eq!(output.status.code(), Some(2), "{label}: {message}");
+        assert!(
+            message.starts_with(
+                "error: invalid configuration: FUZ_ALLOWED_ORIGINS holds a wildcard entry, \
+                 refused unless FUZ_ALLOW_ORIGIN_WILDCARDS=true."
+            ),
+            "{label}: {message}"
+        );
+        // each wildcard entry, with what it admits on zzzd
+        assert!(
+            message.contains(
+                "`http://localhost:*`: port wildcard: a page served from ANY port on `localhost`"
+            ) && message.contains(
+                "`https://*.example.com`: host wildcard: a page served from ANY host matching"
+            ) && message.contains("On zzzd that includes terminals and file writes.")
+                && message.contains("DNS rebinding"),
+            "{label}: {message}"
+        );
+        assert!(
+            !message.contains("`http://localhost:5460`"),
+            "{label}: {message}"
+        );
+    }
+}
+
+#[test]
+fn a_wildcard_entry_boots_with_the_opt_in_and_a_warning_saying_what_it_admits() {
     let dir = TempDir::new("wildcard");
-    let output = boot(
-        &dir,
-        Some("http://localhost:5460, http://localhost:*, https://*.example.com"),
-    );
+    let output = boot_with_flag(&dir, Some(WILDCARD_LIST), Some("true"));
     assert_reaches_the_database(&output, "wildcard");
     let log = stdout(&output);
     let warnings: Vec<&str> = log
@@ -178,4 +219,21 @@ fn a_wildcard_entry_boots_with_a_warning_saying_what_it_admits() {
             && warnings[1].contains("origin=https://*.example.com"),
         "{log}"
     );
+}
+
+#[test]
+fn a_malformed_opt_in_refuses_the_boot() {
+    for value in ["", "1", "TRUE", "yes"] {
+        let dir = TempDir::new("flag");
+        let output = boot_with_flag(&dir, Some("http://localhost:5460"), Some(value));
+        let message = stderr(&output);
+        assert_eq!(output.status.code(), Some(2), "{value:?}: {message}");
+        assert!(
+            message.starts_with(
+                "error: invalid configuration: FUZ_ALLOW_ORIGIN_WILDCARDS: expected `true` or \
+                 `false`"
+            ),
+            "{value:?}: {message}"
+        );
+    }
 }

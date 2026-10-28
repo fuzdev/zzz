@@ -303,6 +303,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
         migration_namespaces: ZZZ_MIGRATION_NAMESPACES,
         expected_schema_json: None,
         audit_sse: Some(fuz_actions::server::AuditSseSpec::DEFAULT),
+        browser_gates: origin_allowlist::ZZZ_BROWSER_GATES,
     };
     // zzz reads its own env (`ZZZ_PORT`, `--port`, a required
     // `DATABASE_URL`, `ZZZ_TRUSTED_PROXIES`); the spine core takes it in the
@@ -313,6 +314,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
         host: None,
         port: None,
         allowed_origins: config.allowed_origins.clone(),
+        allow_origin_wildcards: config.allow_origin_wildcards,
         trusted_proxies,
         bootstrap_token_path: config.bootstrap_token_path.as_deref().map(PathBuf::from),
     };
@@ -585,6 +587,9 @@ pub struct Config {
     /// empty (see [`origin_allowlist`]). Read by both the origin check and
     /// the `Host` check.
     pub allowed_origins: fuz_http::AllowedOrigins,
+    /// `FUZ_ALLOW_ORIGIN_WILDCARDS` — `true` admits a wildcard entry in
+    /// `allowed_origins`, which the boot refuses otherwise.
+    pub allow_origin_wildcards: bool,
     /// `PUBLIC_ZZZ_SCOPED_DIRS`, resolved (canonical, trailing `/`) and
     /// checked by [`check_scoped_dirs`].
     pub scoped_dirs: Vec<String>,
@@ -614,6 +619,7 @@ impl std::fmt::Debug for Config {
             .field("secret_cookie_keys", &"[redacted]")
             .field("bootstrap_token_path", &self.bootstrap_token_path)
             .field("allowed_origins", &self.allowed_origins)
+            .field("allow_origin_wildcards", &self.allow_origin_wildcards)
             .field("scoped_dirs", &self.scoped_dirs)
             .field("zzz_dir", &self.zzz_dir)
             .field("enable_test_actions", &self.enable_test_actions)
@@ -974,10 +980,13 @@ fn parse_config(default_addr: SocketAddr, args: CliArgs) -> Result<Config, Start
 
     let bootstrap_token_path = env_non_empty("FUZ_BOOTSTRAP_TOKEN_PATH")?;
     // checked here, before anything touches the DB: an unset or empty list,
-    // or a malformed entry, refuses to boot, and a wildcard entry is logged
-    // with what it admits
+    // or a malformed entry, refuses to boot; a wildcard entry needs the opt-in,
+    // which the spine's boot checks
     let allowed_origins = origin_allowlist::allowed_origins_from_env(
-        env_var_utf8(origin_allowlist::ALLOWED_ORIGINS_VAR)?.as_deref(),
+        env_var_utf8(fuz_http::ALLOWED_ORIGINS_VAR)?.as_deref(),
+    )?;
+    let allow_origin_wildcards = fuz_http::parse_allow_origin_wildcards(
+        env_var_utf8(fuz_http::ALLOW_ORIGIN_WILDCARDS_VAR)?.as_deref(),
     )?;
 
     let zzz_dir = ensure_zzz_dir_from_env()?;
@@ -1009,6 +1018,7 @@ fn parse_config(default_addr: SocketAddr, args: CliArgs) -> Result<Config, Start
         secret_cookie_keys,
         bootstrap_token_path,
         allowed_origins,
+        allow_origin_wildcards,
         scoped_dirs,
         zzz_dir,
         enable_test_actions,

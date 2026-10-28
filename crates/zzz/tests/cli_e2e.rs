@@ -98,6 +98,8 @@ fn daemon_start_status_stop_against_live_server() {
             "dev-only-not-for-production-use-000",
         )
         .env("FUZ_ALLOWED_ORIGINS", "http://localhost:*")
+        // a wildcard boots only with the opt-in
+        .env("FUZ_ALLOW_ORIGIN_WILDCARDS", "true")
         .env_remove("ZZZ_PORT") // ensure --port wins over any inherited ZZZ_PORT
         .env_remove("ZZZ_STATIC_DIR")
         .stdout(Stdio::inherit())

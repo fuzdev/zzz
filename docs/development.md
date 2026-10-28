@@ -50,8 +50,10 @@ to a request from any `localhost` port.
   `zzzd` refuses to boot on a malformed entry — a trailing slash, a missing
   scheme, a stray comma — naming it. A port wildcard (`http://localhost:*`)
   lets every page served on any local port act with your session, and a host
-  wildcard (`https://*.example.com`) every page on a matching host; `zzzd`
-  logs a warning at boot for each, saying what it admits. A plain `http`
+  wildcard (`https://*.example.com`) every page on a matching host, so `zzzd`
+  refuses to boot on one unless `FUZ_ALLOW_ORIGIN_WILDCARDS=true` is set — the
+  refusal says what each admits, and with the flag it logs that as a warning
+  on every boot. A plain `http`
   origin that isn't loopback passes the gates but can't log in: the session
   cookie is `Secure`, which a browser accepts only over `https` or on
   loopback.

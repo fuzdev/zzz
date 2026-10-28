@@ -776,7 +776,7 @@ Decisions.
 - `ZZZ_WHISPER_CPP_MODEL` — the Whisper model file (`ggml-*.bin`) transcription loads; an absolute path to a file, or `zzzd` refuses to boot. There is no default and no search — unset, nothing is transcribed. zzz downloads no models
 - `DATABASE_URL` — PostgreSQL connection (`postgres://`; required — unset or blank refuses to boot, naming it)
 - `SECRET_FUZ_COOKIE_KEYS` — HMAC signing keys (min 32 chars; required, like `DATABASE_URL`)
-- `FUZ_ALLOWED_ORIGINS` — the origins the UI is served from, checked against every browser request's `Origin` (required — `zzzd` refuses to boot on an absent or empty list, since an empty allowlist would allow every origin; the CLI defaults it to `http://localhost:<port>,http://127.0.0.1:<port>`). List exact ports: the session cookie reaches every port on `localhost`, so a wildcard (`http://localhost:*`) admits any page served on any local port to the WebSocket. Each entry is `scheme://host[:port]`, http or https; a malformed one (a trailing slash, a missing scheme, a stray comma, a scheme's default port written out, …) refuses to boot, naming the entry, and a wildcard port or host label boots with a warning saying what it admits. The hosts it names are also the non-loopback `Host`s `zzzd` answers to (see Security posture)
+- `FUZ_ALLOWED_ORIGINS` — the origins the UI is served from, checked against every browser request's `Origin` (required — `zzzd` refuses to boot on an absent or empty list, since an empty allowlist would allow every origin; the CLI defaults it to `http://localhost:<port>,http://127.0.0.1:<port>`). List exact ports: the session cookie reaches every port on `localhost`, so a wildcard (`http://localhost:*`) admits any page served on any local port to the WebSocket. Each entry is `scheme://host[:port]`, http or https; a malformed one (a trailing slash, a missing scheme, a stray comma, a scheme's default port written out, …) refuses to boot, naming the entry, and a wildcard port or host label refuses to boot, saying what it admits, unless `FUZ_ALLOW_ORIGIN_WILDCARDS=true` (exactly `true` or `false`), which boots it with that warning on every boot. The hosts it names are also the non-loopback `Host`s `zzzd` answers to (see Security posture)
 - `FUZ_BOOTSTRAP_TOKEN_PATH` — One-shot admin bootstrap token path
 - `PUBLIC_ZZZ_DIR` — Zzz app directory (default `.zzz`, a subdirectory of the daemon's working directory); must not be the working directory itself (under the CLI that's the daemon home, with `.env` and `bootstrap_token`) — `zzzd` refuses to boot on that. The check catches the daemon home only as the working directory: an explicit `PUBLIC_ZZZ_DIR` naming the absolute path of `~/.zzz` for a daemon run elsewhere (say `cargo xtask dev`) makes the home the app dir, whose filer indexes and broadcasts its `.env` — don't
 - `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (`zzzd` doesn't expand `~`; the CLI does); an entry that is, or is inside, a `.zzz` directory other than the app dir refuses to boot
@@ -917,7 +917,8 @@ page is there. So the allowlist names only origins that are zzz's own:
   port wildcard (`http://localhost:*`) lets every page served on any local
   port act with the session, and a host wildcard (`https://*.example.com`)
   every page on a matching host, which the `Host` gate then answers to as
-  well; `zzzd` logs a warning for each at boot, and refuses to boot on a
+  well; `zzzd` refuses to boot on either unless `FUZ_ALLOW_ORIGIN_WILDCARDS=true`
+  is set, which boots it with a warning for each, and refuses to boot on a
   malformed entry. A plain `http` origin that isn't loopback passes
   the gates but can't hold a session: the cookie is `Secure`, which a browser
   accepts only over `https` or on loopback.
