@@ -123,7 +123,7 @@ describe('a revocation that leaves this session valid', () => {
 
 	// smoke check: over the wire the commit-vs-close order is a race this would
 	// usually win even with the bug — the deterministic regression test is the
-	// spine's `revocations_close_sockets_after_the_transaction_commits`
+	// spine's `revocations_close_connections_after_the_transaction_commits`
 	test('smoke: an RPC revocation has committed by the time the socket closes', async () => {
 		const fixture = await setup_test();
 		await fixture.create_account({

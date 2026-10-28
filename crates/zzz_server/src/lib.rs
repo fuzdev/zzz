@@ -556,7 +556,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
             addr: config.bind_addr,
             drain_timeout,
             shutdown,
-            socket_revoker: Some(backend.socket_revoker()),
+            connection_closer: Some(backend.connection_closer()),
             upkeep: Some(UpkeepOptions {
                 auth_cleanup: backend.auth_cleanup_options(),
                 extra: Vec::new(),

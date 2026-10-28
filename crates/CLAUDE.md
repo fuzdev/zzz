@@ -23,7 +23,7 @@ workspace / filesystem / media / job / terminal / provider specs from
 `zzz_action_specs/` (handlers in `handlers/`), the admin audit-log
 SSE stream from `fuz_realtime::audit_stream_router`, and zzz's own
 hand-written file byte routes (`file_bytes.rs`, outside the registry). Besides the handlers,
-`handlers/` holds `App` state and a `broadcast` shim over `App.realtime` (socket revocation
+`handlers/` holds `App` state and a `broadcast` shim over `App.realtime` (connection revocation
 lives on the spine's `ConnectionRegistry` — see Auth below). RPC methods:
 `ping`, `session_load`, `workspace_*`, `diskfile_*`, `directory_create`,
 `media_finalize`, `transcription_create`, `job_cancel`, `terminal_*`,
@@ -51,7 +51,7 @@ notifications, local tools (`ffmpeg`, whisper.cpp) run as subprocesses with an
 in-memory job queue, file watching via `notify`
 crate with debounced broadcasts and immediate index updates, WebSocket
 connection tracking with targeted `completion_progress` streaming
-notifications, event-driven socket revocation. Database (PostgreSQL via
+notifications, event-driven connection revocation. Database (PostgreSQL via
 `tokio-postgres`/`deadpool-postgres`), HMAC-SHA256 cookie signing, blake3
 session hashing. Anthropic provider uses `reqwest` HTTP client with manual
 SSE parsing for streaming completions.
@@ -278,9 +278,9 @@ orientation; the spine crates are authoritative:
    POST, login, logout, password, bootstrap, signup) also require
    `application/json` themselves, as fuz_app's routes do. See the root CLAUDE.md § Security posture.
 
-10. **Socket revocation** — `close_sockets(&SocketCloseTarget)` (`Session` /
-    `Token` / `Account` / `Role`) is the spine's `SocketRevoker` method;
-    `run_app` binds `fuz_realtime::RealtimeRevoker`, which fans each
+10. **Connection revocation** — `close_connections(&ConnectionCloseTarget)` (`Session` /
+    `Token` / `Account` / `Role`) is the spine's `ConnectionCloser` method;
+    `run_app` binds `fuz_realtime::RealtimeCloser`, which fans each
     close to the WS `ConnectionRegistry` and the audit-stream `SseRegistry`
     (`App` itself carries only a `broadcast` shim). They close matching
     WebSocket connections by dropping the channel sender — the ws loop breaks
@@ -293,7 +293,7 @@ orientation; the spine crates are authoritative:
     / `token_revoke_all` / `password_change` (account-wide). The auth
     cleanup invokes the per-session close too, for each expired session it
     deletes (see "Auth cleanup" under Architecture). The RPC handlers close
-    only after their transaction commits (`fuz_auth::queue_socket_close`), so
+    only after their transaction commits (`fuz_auth::queue_connection_close`), so
     a client's recheck on a 4001 never finds the revoked session still in the
     table; the REST ones close inline on their autocommit client. See "Audit
     emission" under Architecture for the listener chain.
@@ -557,7 +557,7 @@ and `perform_action`), and DB pool / migrations all live in the spine crates
 (`fuz_auth` / `fuz_http` / `fuz_realtime` / `fuz_actions` / `fuz_db`) —
 `zzz_server` composes them in `run_app`. `handlers/` holds `App` state, a
 `broadcast` shim over `App.realtime`, and the per-domain handlers; socket
-revocation is the spine `RealtimeRevoker` over the WS and SSE registries
+revocation is the spine `RealtimeCloser` over the WS and SSE registries
 (see Auth item 10).
 
 **Large responses**: `session_load` and `workspace_open` carry every
@@ -613,8 +613,8 @@ shared by the account / bootstrap / signup routers and the RPC dispatch
 path. Two listener sets hang off its event chain, the spine's registered by
 `create_app_backend` and zzz's by `run_app` once `Arc<App>` exists:
 
-- `fuz_auth::register_socket_revocation_listeners` — closes
-  matching connections through the bound `RealtimeRevoker` (WS sockets and audit
+- `fuz_auth::register_revocation_guard` — closes
+  matching connections through the bound `RealtimeCloser` (WS sockets and audit
   streams) on `session_revoke` / `token_revoke` (granular) and
   `session_revoke_all` / `token_revoke_all` / `password_change` / `logout`
   (account-wide). Revocation-emitting handlers also close directly — the RPC
@@ -637,7 +637,7 @@ metadata contract, the bootstrap success/failure audit rows, and the
 **Auth cleanup**: `run_app` schedules the spine's `fuz_auth::spawn_auth_cleanup`
 on the same emitter — a pass once the listener is bound, then one per
 `DEFAULT_AUTH_CLEANUP_INTERVAL`. Expired sessions are deleted and the
-connections they opened closed through the bound `RealtimeRevoker` (WS sockets
+connections they opened closed through the bound `RealtimeCloser` (WS sockets
 get the revocation close, audit streams end) — no audit row, so this direct
 close is the sweep's only one. It repeats a close already made: every socket
 and audit stream closes at its own credential's deadline
@@ -653,7 +653,7 @@ joined after the drain, before PTY teardown.
   (`fuz_actions::admit_upgrade`: registered pending → re-read → admitted; a
   credential revoked mid-upgrade closes with 4001, a failed re-read with 1011).
   After that, closes are event-driven: every revocation closes the matching
-  connections (`close_sockets` on a `SocketCloseTarget`), and the
+  connections (`close_connections` on a `ConnectionCloseTarget`), and the
   auth cleanup closes an expired session's within one interval. A message on
   an open socket never re-checks its session.
 - **error.data omits Zod validation details** — for -32602 (invalid params)
@@ -740,7 +740,7 @@ joined after the drain, before PTY teardown.
 - No batch request support (JSON arrays)
 - `/api/account/signup` is mounted via `fuz_auth::signup_routes`. Invite-gated by default (`app_settings.open_signup=false`); admins flip the setting via `app_settings_update` to enable open signup. The cross-process test binary opts into `open_signup: true` at startup via `app_settings_patch` so per-test `mint_account` can sign up without invites. `app_settings` is loaded from the DB per signup request (no cache).
 - Token management is JSON-RPC only (`account_token_create` / `account_token_list` / `account_token_revoke`) — no REST token routes
-- Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`, wired to the spine `AuditEmitter` via `fuz_realtime::register_audit_sse_listener`, which only broadcasts. Wire shape matches fuz_app's `audit_log_sse`; the `sse.cross.test.ts` suite verifies it. Close-on-revoke is the one socket-revocation listener's, closing through the `RealtimeRevoker` fan-out, so it reaches these streams too: it dispatches on the `RevocationScope` each event declares in `fuz_auth`'s `AUDIT_EVENT_SPECS` — `session_revoke` (session-hash-scoped) / `token_revoke` (token-scoped) / `session_revoke_all` / `token_revoke_all` / `password_change` / `logout` / `account_delete` / `account_purge` (account-wide) / `role_grant_revoke` (role-matched, global grants only). The route itself is session-only (`AuditStreamRouteState::credential_gate`), so a bearer never opens a stream here in the first place. A session holds at most `AUDIT_LOG_SSE_MAX_PER_SCOPE` (10) streams — one more ends its oldest — and a stream registers pending once its gates pass, with the credential, acting actor, and role re-read before it is admitted (`fuz_auth::recheck_admission` — a credential or actor revoked meanwhile gets a 401, a role a 403, or a stream that ends right after its connect comment, never a live one)
+- Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the shared `fuz_realtime::audit_stream_router`, wired to the spine `AuditEmitter` via `fuz_realtime::register_audit_sse_listener`, which only broadcasts. Wire shape matches fuz_app's `audit_log_sse`; the `sse.cross.test.ts` suite verifies it. Close-on-revoke is the one revocation guard's, closing through the `RealtimeCloser` fan-out, so it reaches these streams too: it dispatches on the `RevocationScope` each event declares in `fuz_auth`'s `AUDIT_EVENT_SPECS` — `session_revoke` (session-hash-scoped) / `token_revoke` (token-scoped) / `session_revoke_all` / `token_revoke_all` / `password_change` / `logout` / `account_delete` / `account_purge` (account-wide) / `role_grant_revoke` (role-matched, global grants only). The route itself is session-only (`AuditStreamRouteState::credential_gate`), so a bearer never opens a stream here in the first place. A session holds at most `AUDIT_LOG_SSE_MAX_PER_SCOPE` (10) streams — one more ends its oldest — and a stream registers pending once its gates pass, with the credential, acting actor, and role re-read before it is admitted (`fuz_auth::recheck_admission` — a credential or actor revoked meanwhile gets a 401, a role a 403, or a stream that ends right after its connect comment, never a live one)
 - Login/password rate limiting is **always on** (matching `fuz_forge_server` and the other spine servers, and the fuz defaults): per-IP (5 attempts / 15 min) + per-account (10 / 30 min) sliding windows fire on `/login` and `/password`; 429 carries `{error: 'rate_limit_exceeded', retry_after}` plus a `Retry-After` header. Per-IP key is the resolved client IP from `fuz_http::client_ip_middleware` — set `ZZZ_TRUSTED_PROXIES` when running behind a reverse proxy so the bucket keys on the originating client rather than the proxy. The `testing_zzz_server` binary disables it via `SpineBackendOptions::rate_limiters: RateLimiterMode::DisabledForTesting` so the cross-backend auth suite's repeated logins don't trip the bucket; a process that nulls any limiter prints a startup banner saying so
 - One JSON-RPC message is capped at `zzz_server::RPC_MESSAGE_MAX_BYTES` (16 MiB) on both transports: the `/api/rpc` request body (the `rpc` stack group's `BodyCap::Bytes`, which mounts `fuz_http::body_limit_layer` plus axum's `DefaultBodyLimit` at the same size — the handler's `Bytes` extractor would otherwise stop at axum's 2 MiB default) and each `/api/ws` inbound message and frame (`max_message_bytes` of the `fuz_actions::ActionWsOptions` passed to `register_action_ws_with_options`; the spine default is 1 MiB, tungstenite's own 64 MiB / 16 MiB). It's above the spine's 1 MiB so saving a file the filer loads (≤ 4 MiB) fits — except in the worst case, where JSON's 6-byte escape of each control character pushes a file dense with them past the cap and the client guard refuses the save cleanly — and so long completion histories fit. **The larger buffer isn't confined to authenticated callers on HTTP**: `fuz_actions::rpc_post_handler` buffers and parses the body before auth, and `ping` is public, so any local process can make zzzd hold up to 16 MiB per concurrent request. On the WebSocket (authenticated at upgrade) up to 128 dispatches can be in flight per socket, a ceiling of about 2 GiB of buffered messages per authenticated socket. Both are acceptable only because the bind is loopback-only and zzz is single-operator (root CLAUDE.md § Security posture). The account/bootstrap/signup routers, `/health`, the audit stream, and the fallback keep `fuz_http::DEFAULT_BODY_LIMIT_BYTES` (1 MiB). An oversized WebSocket message gets no error reply — the read fails and the socket closes (code 1006), taking its in-flight requests with it — so the frontend `Socket` refuses any request over the cap before sending (`RPC_MESSAGE_MAX_BYTES` in `src/lib/rpc_message_limit.ts`, pinned to the Rust constant by the cross-backend filesystem suite). Larger and binary content goes over the file byte routes instead (File byte routes below), a chunk of at most the same size per request. The static fallback takes no body
 - Each WebSocket connection's outbound queue — the frames queued for a socket that its writer hasn't taken yet — has a byte budget of `zzz_server::WS_OUTBOUND_QUEUE_BYTES` (32 MiB, `outbound_queue_bytes` of the same `ActionWsOptions`; the spine default is 4 MiB, and it doesn't follow the message cap). Each waiting frame is charged its UTF-8 length plus `fuz_realtime::OUTBOUND_FRAME_OVERHEAD_BYTES`, a frame is always queued into an empty queue, and one that doesn't fit closes that socket with `fuz_realtime::WS_CLOSE_OUTBOUND_OVERFLOW` (4005), its backlog discarded — the frontend reconnects and reloads `session_load`. The budget is sized by the largest frame zzz pushes: a `filer_change` carries a file's whole text (≤ 4 MiB, `filer::MAX_INDEXED_FILE_SIZE`), and JSON's 6-byte escape of a control character takes one frame to 24 MiB (a `const` assertion in `lib.rs` keeps the budget above that), so the default would deliver any file near the cap only into an empty queue. Requests' responses are written by the connection's loop and never queue. **The budget bounds a burst, it doesn't absorb one of any size**: a sender never waits for a socket, so anything that produces faster than a client takes for longer than the budget holds closes that client's socket. The filer's flush (`filer::flush_ready`) yields to the runtime after each broadcast, so each connection's writer gets a turn to take a frame before the next is queued and a batch isn't queued whole — it is a turn, not backpressure: a client that takes the batch slower than the filer serializes it still falls behind, and is closed once more than the budget is waiting (a batch of `touch`es carries no contents, so `touch`ing a whole tree sends each file's metadata and none of its text; a batch of real changes still carries every changed file whole); terminal output is paced by acks instead (see PTY terminals → Output pacing under Design Decisions): a terminal stops reading its PTY once 1 MiB of its output is unacknowledged by its fastest acking connection, so it holds about that much in such a socket's queue; a connection that never acks isn't paced, and more than the budget of output it hasn't taken closes it (the terminal keeps running; the reconnect flags the output gap). **Memory**: a client that stops reading holds at most the budget plus the one frame its writer has taken (≤ 24 MiB) per socket, until that write passes `fuz_realtime::WS_WRITE_STALL_TIMEOUT` or the next frame overflows; a broadcast's text is one buffer shared by every recipient. Acceptable for the same reason as the message cap: authenticated sockets only, on a loopback bind
@@ -1114,7 +1114,7 @@ joined after the drain, before PTY teardown.
     `session_load` lists only the caller's terminal ids. A successful
     `account_delete` / `account_purge` audit event closes the target account's
     terminals (`handlers::terminal::register_account_removal_listener`,
-    beside the spine's socket-revocation listeners). Creation itself is open
+    beside the spine's revocation guard). Creation itself is open
     to any authenticated account (`CredentialGate::Any`) — and a terminal is a
     shell as the daemon's OS user; see the root CLAUDE.md § Security posture.
     Notifications go to every socket of the account, regardless of which API
