@@ -18,7 +18,7 @@ complete — the spine crates (`fuz_db`, `fuz_auth`, `fuz_http`,
 boot-compiled `ActionRegistry` dispatch path. A single canonical
 `/api/rpc` + `/api/ws` (mounted via `fuz_actions::create_rpc_router` /
 `register_action_ws`) serves all dispatch; admin + account specs come
-from fuz_auth's `auth_adapter::build_auth_spec_set`, the zzz-specific
+from fuz_actions' `auth_adapter::build_auth_spec_set`, the zzz-specific
 workspace / filesystem / media / job / terminal / provider specs from
 `zzz_action_specs/` (handlers in `handlers/`), the admin audit-log
 SSE stream from `fuz_realtime::audit_stream_router`, and zzz's own
