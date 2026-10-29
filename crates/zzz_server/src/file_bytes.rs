@@ -298,7 +298,7 @@ async fn authorize(
     let Some(auth) = state.gate.resolve_credential(origin, &client_ip).await else {
         return Err(fuz_http::authentication_required_response());
     };
-    if !auth.scope.admits_non_rpc_surface() {
+    if !auth.scope().admits_non_rpc_surface() {
         return Err(fuz_auth::token_scope_surface_denied_response(
             FILE_BYTES_SURFACE,
         ));

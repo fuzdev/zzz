@@ -212,9 +212,9 @@ orientation; the spine crates are authoritative:
 6. **Auth pipeline** — Both transports try: daemon token → cookie → bearer.
    Daemon token has highest priority (matches fuz_app middleware order), but
    its leg is unreachable in production, where the state is `None`.
-   `ResolvedAuth` carries `credential_type` (`Session`, `ApiToken`,
-   `DaemonToken`) and optional `token_hash` (session connections only —
-   bearer and daemon token connections have `None`).
+   `ResolvedAuth` carries a `ResolvedCredential` (`Session { session_hash }`,
+   `ApiToken { api_token_id, scope }`, `DaemonToken`), read through
+   `credential_type()` / `scope()` / `session_hash()` / `api_token_id()`.
 
 7. **Per-action auth** — these levels are the enforcement shorthand for the
    `auth` record on each TS spec (fuz_app's `RouteAuth`: `{account, actor,
