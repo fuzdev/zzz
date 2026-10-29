@@ -1,9 +1,7 @@
 import { describe, test, assert } from 'vitest';
 
 import {
-	HEALTH_PATH,
 	is_public_route,
-	probe_backend,
 	to_auth_gate_state,
 	to_auth_redirect,
 	type AuthGateInput
@@ -82,47 +80,6 @@ describe('to_auth_gate_state', () => {
 		// `AuthState.verifying` isn't an input: only the first check shows `checking`
 		assert.strictEqual(to_auth_gate_state(settled), 'login');
 		assert.strictEqual(to_auth_gate_state({ ...settled, needs_bootstrap: true }), 'bootstrap');
-	});
-});
-
-describe('probe_backend', () => {
-	const json =
-		(body: unknown, status = 200) =>
-		async () =>
-			new Response(JSON.stringify(body), {
-				status,
-				headers: { 'content-type': 'application/json' }
-			});
-
-	test("the backend's health reply is reachable", async () => {
-		assert.ok(await probe_backend(json({ status: 'ok' })));
-	});
-
-	test('a static server is not a backend', async () => {
-		// no health route
-		assert.ok(!(await probe_backend(async () => new Response('not found', { status: 404 }))));
-		// an SPA fallback answering every path with the app shell
-		assert.ok(
-			!(await probe_backend(
-				async () =>
-					new Response('<!doctype html><html></html>', {
-						status: 200,
-						headers: { 'content-type': 'text/html' }
-					})
-			))
-		);
-		// JSON that isn't the health reply
-		assert.ok(!(await probe_backend(json({ status: 'nope' }))));
-		assert.ok(!(await probe_backend(json(null))));
-	});
-
-	test('errors are unreachable', async () => {
-		assert.ok(!(await probe_backend(json({ status: 'ok' }, 502))));
-		assert.ok(!(await probe_backend(() => Promise.reject(new TypeError('Failed to fetch')))));
-	});
-
-	test('probes the health route by default', () => {
-		assert.strictEqual(HEALTH_PATH, '/health');
 	});
 });
 

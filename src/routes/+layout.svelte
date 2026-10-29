@@ -52,10 +52,10 @@
 		backend_reachable_context,
 		is_public_route,
 		PUBLIC_ROUTE_PATHS,
-		probe_backend,
 		to_auth_gate_state,
 		to_auth_redirect
 	} from '#lib/auth_gate.ts';
+	import { BackendProbe } from '@fuzdev/fuz_app/ui/backend_probe.svelte.ts';
 	import { create_detached } from '#lib/reactive_helpers.svelte.ts';
 	import { confirm_unload_with_unsaved_changes } from '#lib/diskfile_helpers.ts';
 	import { confirm_unload_while_recording } from '#lib/recording_helpers.ts';
@@ -80,14 +80,8 @@
 	// (a static build served on its own, or a stopped daemon) from a
 	// logged-out 401, so probe the backend to say the daemon is needed instead
 	// of showing a dead login form. Browser-only.
-	let backend_checked = $state.raw(false);
-	let backend_reachable = $state.raw(false);
-	if (BROWSER) {
-		void probe_backend().then((reachable) => {
-			backend_reachable = reachable;
-			backend_checked = true;
-		});
-	}
+	const backend = new BackendProbe();
+	if (BROWSER) void backend.probe();
 
 	const public_route = $derived(
 		is_public_route(
@@ -98,8 +92,8 @@
 	const gate_state = $derived(
 		to_auth_gate_state({
 			session_checked,
-			backend_checked,
-			backend_reachable,
+			backend_checked: backend.reachable !== null,
+			backend_reachable: backend.reachable === true,
 			verified: auth_state.verified,
 			needs_bootstrap: auth_state.needs_bootstrap
 		})
@@ -107,7 +101,7 @@
 	// a login or bootstrap returns to the page it replaced, deep link intact
 	const auth_redirect = $derived(to_auth_redirect(page.url, resolve('/')));
 	// public routes read this to say what they're missing (the daemon, or a login)
-	backend_reachable_context.set(() => (backend_checked ? backend_reachable : null));
+	backend_reachable_context.set(() => backend.reachable);
 
 	// TODO should load granularly when needed (/docs, /about), but currently the capabilities page uses the package json data, how better to get that? generate a more minimal metadata file?
 	library_context.set(new Library(library_json));

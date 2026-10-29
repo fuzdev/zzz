@@ -68,32 +68,6 @@ export const to_auth_gate_state = (input: AuthGateInput): AuthGateState => {
 	return 'login';
 };
 
-/** The zzz backend's liveness route. */
-export const HEALTH_PATH = '/health';
-
-/**
- * Probe whether a zzz backend is serving. Only its health reply counts — a
- * static server (or an SPA fallback answering every path with HTML) is not
- * a backend, and neither is a network error.
- *
- * @param fetch_health - fetches the health route (injectable for tests)
- * @returns whether the zzz backend answered
- */
-export const probe_backend = async (
-	fetch_health: () => Promise<Response> = () => fetch(HEALTH_PATH)
-): Promise<boolean> => {
-	try {
-		const response = await fetch_health();
-		if (!response.ok) return false;
-		const body: unknown = await response.json();
-		return (
-			typeof body === 'object' && body !== null && (body as { status?: unknown }).status === 'ok'
-		);
-	} catch {
-		return false;
-	}
-};
-
 /**
  * Whether a zzz backend answered the root layout's probe — `null` until the
  * probe settles (and during SSR). Set by the root layout as a getter, so
