@@ -283,7 +283,8 @@ fn parse_query<'a>(
 }
 
 /// Authenticate a request the origin check admitted and check its token
-/// scope: `401` with no valid credential, `403` for a method-scoped API token.
+/// scope: `401` with no valid credential, `403` for a method-scoped API token,
+/// and the credential-read fault's `500` when the credential read fails.
 #[allow(
     clippy::result_large_err,
     reason = "Err is the ready-to-return axum Response — the spine's REST handler idiom"
@@ -294,8 +295,10 @@ async fn authorize(
     client_ip: Option<Extension<ClientIp>>,
 ) -> Result<(), Response> {
     let client_ip = ClientIp::as_str_or_unresolved(client_ip.as_ref());
-    let Some(auth) = state.gate.resolve_credential(origin, client_ip).await else {
-        return Err(fuz_http::authentication_required_response());
+    let auth = match state.gate.resolve_credential(origin, client_ip).await {
+        Ok(Some(auth)) => auth,
+        Ok(None) => return Err(fuz_http::authentication_required_response()),
+        Err(fault) => return Err(fault.into_response()),
     };
     if !auth.scope().admits_non_rpc_surface() {
         return Err(fuz_auth::token_scope_surface_denied_response(
