@@ -225,6 +225,10 @@ const make_zzz_rust_backend_config = ({
 				`http://127.0.0.1:${port}`,
 				TEST_ORIGIN
 			].join(','),
+			// the upstream builder opts into wildcards for its own
+			// `http://localhost:*`; these lists have none, so boot as the CLI
+			// and `cargo xtask dev` do, refusing one
+			FUZ_ALLOW_ORIGIN_WILDCARDS: 'false',
 			...extra_env
 		}
 	});
