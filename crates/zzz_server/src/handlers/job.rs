@@ -7,8 +7,7 @@
 use std::sync::Arc;
 
 use fuz_actions::ActionContext;
-use fuz_auth::deserialize_wire_uuid;
-use fuz_http::{JsonrpcError, parse_strict_params};
+use fuz_http::{JsonrpcError, deserialize_wire_uuid, parse_strict_params};
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;

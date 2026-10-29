@@ -10,9 +10,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionOutput};
-use fuz_auth::require_void_params;
 use fuz_http::{
     JsonrpcError, forbidden, internal_error_with_source, invalid_params, parse_strict_params,
+    require_void_params,
 };
 use fuz_realtime::notify_to_string;
 use serde::{Deserialize, Serialize};

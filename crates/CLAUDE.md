@@ -766,9 +766,9 @@ joined after the drain, before PTY teardown.
   struct mirroring its `z.strictObject` TS input (unknown keys and explicit
   `null`s are `invalid_params`; nested `.optional()` fields refuse `null`
   through a `present` deserializer; UUID fields use
-  `fuz_auth::deserialize_wire_uuid`), and the `z.void()` methods (`ping`,
+  `fuz_http::deserialize_wire_uuid`), and the `z.void()` methods (`ping`,
   `session_load`, `workspace_list`) refuse any declared key via
-  `fuz_auth::require_void_params` — an absent `params` and a `{}` are both
+  `fuz_http::require_void_params` — an absent `params` and a `{}` are both
   the no-arg call, since fuz_app's WebSocket client sends `{}` for a
   parameterless request.
 - **Filesystem errors**: `handlers::filesystem::scoped_fs_error` maps each

@@ -157,7 +157,7 @@ pub async fn completion_create(
 
     let progress_token = meta.and_then(|m| m.progress_token);
     if let Some(token) = &progress_token
-        && !fuz_auth::is_valid_uuid(token)
+        && !fuz_http::is_valid_uuid(token)
     {
         return Err(invalid_params(
             "invalid params: _meta.progressToken must be a uuid",

@@ -12,8 +12,10 @@
 use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionOutput};
-use fuz_auth::require_void_params;
-use fuz_http::{JsonrpcError, internal_error_with_source, invalid_params, parse_strict_params};
+use fuz_http::{
+    JsonrpcError, internal_error_with_source, invalid_params, parse_strict_params,
+    require_void_params,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
