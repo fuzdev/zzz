@@ -73,13 +73,12 @@ pub fn build_zzz_owned_specs(
 mod any_credential_surface {
     use std::sync::Arc;
 
-    #[test]
-    fn every_zzz_owned_spec_admits_any_credential() {
-        // Inert handles: a lazy pool that never connects, an empty scoped-FS
-        // allowlist, no providers configured, and a registry with no sockets.
+    /// Inert handles: a lazy pool that never connects, an empty scoped-FS
+    /// allowlist, no providers configured, and a registry with no sockets.
+    fn inert_app() -> Arc<crate::handlers::App> {
         let pool = fuz_db::create_pool("postgres://localhost:1/census_unused")
             .expect("a lazy pool builds without connecting");
-        let app = Arc::new(crate::handlers::App::new(
+        Arc::new(crate::handlers::App::new(
             pool.clone(),
             crate::scoped_fs::ScopedFs::new(vec![]),
             String::new(),
@@ -88,7 +87,27 @@ mod any_credential_surface {
             false,
             Arc::new(fuz_realtime::ConnectionRegistry::new()),
             Arc::new(fuz_auth::AuditEmitter::new(pool)),
-        ));
+        ))
+    }
+
+    /// The registry's boot-time invariants hold over the protocol specs plus
+    /// every zzz-owned spec (the testing specs included), so a spec the
+    /// registry refuses fails here rather than at server boot.
+    #[test]
+    fn the_owned_and_protocol_specs_compile_into_a_registry() {
+        let app = inert_app();
+        let mut specs = fuz_actions::PROTOCOL_ACTION_SPECS();
+        specs.extend(super::build_zzz_owned_specs(&app));
+        specs.extend(super::build_testing_specs(Arc::clone(&app)));
+        let count = specs.len();
+        let registry = fuz_actions::ActionRegistry::compile(specs)
+            .unwrap_or_else(|e| panic!("the zzz spec set must compile: {e}"));
+        assert_eq!(registry.len(), count);
+    }
+
+    #[test]
+    fn every_zzz_owned_spec_admits_any_credential() {
+        let app = inert_app();
 
         let specs = super::build_zzz_owned_specs(&app);
         assert!(!specs.is_empty(), "the census must see the owned surface");

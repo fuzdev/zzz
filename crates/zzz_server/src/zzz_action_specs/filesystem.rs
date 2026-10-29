@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionHandler, ActionSpec};
 use fuz_auth::{AuthSpec, CredentialGate};
+use fuz_http::InputShape;
 use serde_json::Value;
 
 use crate::handlers::App;
@@ -33,6 +34,7 @@ fn diskfile_update_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::with_side_effects(
         "diskfile_update",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }
@@ -45,6 +47,7 @@ fn diskfile_create_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::with_side_effects(
         "diskfile_create",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }
@@ -57,6 +60,7 @@ fn diskfile_delete_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::with_side_effects(
         "diskfile_delete",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }
@@ -69,6 +73,7 @@ fn directory_create_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::with_side_effects(
         "directory_create",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }

@@ -12,10 +12,7 @@
 use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionOutput};
-use fuz_http::{
-    JsonrpcError, internal_error_with_source, invalid_params, parse_strict_params,
-    require_void_params,
-};
+use fuz_http::{JsonrpcError, internal_error_with_source, invalid_params, parse_strict_params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -69,25 +66,23 @@ struct SessionLoadResult {
 }
 
 /// `ping` — public health check. Echoes the request id back as `ping_id`.
-/// Takes no input (`z.void()`): an absent `params` or a `{}` is the call, and
-/// any declared key is refused.
+/// Takes no input (`z.void()`): the spec declares `InputShape::Void`, so the
+/// dispatcher refuses any declared key before this runs.
 ///
 /// `ActionContext.request_id` carries the parsed envelope's id.
 ///
 /// # Errors
 ///
-/// `invalid_params` when `params` is anything but absent or `{}`; an internal
-/// error if the result fails to serialize.
+/// An internal error if the result fails to serialize.
 #[allow(
     clippy::unused_async,
     reason = "ActionHandler signature requires async"
 )]
 pub async fn ping(
-    params: Value,
+    _params: Value,
     ctx: ActionContext<'_>,
     _app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
-    require_void_params(&params)?;
     let result = PingResult {
         ping_id: ctx.request_id.clone(),
     };
@@ -95,8 +90,8 @@ pub async fn ping(
 }
 
 /// `session_load` — authenticated initial-state load. Takes no input
-/// (`z.void()`): an absent `params` or a `{}` is the call, and any declared key
-/// is refused.
+/// (`z.void()`): the spec declares `InputShape::Void`, so the dispatcher
+/// refuses any declared key before this runs.
 ///
 /// Returns the cross-domain snapshot the frontend loads at boot and reloads
 /// after a reconnect: open workspaces, every filer's file tree (rescanned for
@@ -109,14 +104,12 @@ pub async fn ping(
 ///
 /// # Errors
 ///
-/// `invalid_params` when `params` is anything but absent or `{}`;
 /// `unauthenticated` when the request carries no account.
 pub async fn session_load(
-    params: Value,
+    _params: Value,
     ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<ActionOutput, JsonrpcError> {
-    require_void_params(&params)?;
     let owner = caller_account_id(&ctx)?;
     let workspaces: Vec<WorkspaceInfo> = {
         let ws = app.workspaces.read();

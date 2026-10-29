@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionHandler, ActionSpec};
 use fuz_auth::{AuthSpec, CredentialGate};
+use fuz_http::InputShape;
 use serde_json::Value;
 
 use crate::handlers::App;
@@ -27,6 +28,7 @@ fn job_cancel_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::with_side_effects(
         "job_cancel",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }

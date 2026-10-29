@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionHandler, ActionOutputHandler, ActionSpec};
 use fuz_auth::{AuthSpec, CredentialGate};
+use fuz_http::InputShape;
 use serde_json::Value;
 
 use crate::handlers::App;
@@ -44,7 +45,8 @@ fn workspace_list_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::read_only(
         "workspace_list",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
+        InputShape::Void,
         handler,
     )
 }
@@ -57,6 +59,7 @@ fn workspace_open_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::new_output(
         "workspace_open",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         true,
         handler,
     )
@@ -70,6 +73,7 @@ fn workspace_close_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::with_side_effects(
         "workspace_close",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }

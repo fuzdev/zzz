@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionHandler, ActionSpec};
 use fuz_auth::{AuthSpec, CredentialGate};
+use fuz_http::InputShape;
 use serde_json::Value;
 
 use crate::handlers::App;
@@ -29,6 +30,7 @@ fn transcription_create_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::with_side_effects(
         "transcription_create",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }
@@ -41,6 +43,7 @@ fn media_finalize_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::with_side_effects(
         "media_finalize",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }

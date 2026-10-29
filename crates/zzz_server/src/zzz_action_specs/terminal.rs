@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionHandler, ActionSpec};
 use fuz_auth::{AuthSpec, CredentialGate};
+use fuz_http::InputShape;
 use serde_json::Value;
 
 use crate::handlers::App;
@@ -28,6 +29,7 @@ fn terminal_create_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::with_side_effects(
         "terminal_create",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }
@@ -40,6 +42,7 @@ fn terminal_data_send_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::with_side_effects(
         "terminal_data_send",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }
@@ -52,6 +55,7 @@ fn terminal_resize_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::with_side_effects(
         "terminal_resize",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }
@@ -64,6 +68,7 @@ fn terminal_ack_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::with_side_effects(
         "terminal_ack",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }
@@ -76,6 +81,7 @@ fn terminal_close_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::with_side_effects(
         "terminal_close",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }

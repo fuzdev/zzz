@@ -12,7 +12,6 @@ use std::sync::Arc;
 use fuz_actions::{ActionContext, ActionOutput};
 use fuz_http::{
     JsonrpcError, forbidden, internal_error_with_source, invalid_params, parse_strict_params,
-    require_void_params,
 };
 use fuz_realtime::notify_to_string;
 use serde::{Deserialize, Serialize};
@@ -153,24 +152,23 @@ fn display_dir(path: &str) -> String {
 
 /// `workspace_list` — read-only snapshot of open workspaces.
 ///
-/// Takes no input (`z.void()`): an absent `params` or a `{}` is the call, and
-/// any declared key is refused. `async` is required by the `ActionHandler`
-/// future-returning shape even though the body has no `.await` points.
+/// Takes no input (`z.void()`): the spec declares `InputShape::Void`, so the
+/// dispatcher refuses any declared key before this runs. `async` is required
+/// by the `ActionHandler` future-returning shape even though the body has no
+/// `.await` points.
 ///
 /// # Errors
 ///
-/// `invalid_params` when `params` is anything but absent or `{}`; an internal
-/// error if the result fails to serialize.
+/// An internal error if the result fails to serialize.
 #[allow(
     clippy::unused_async,
     reason = "ActionHandler signature requires async"
 )]
 pub async fn workspace_list(
-    params: Value,
+    _params: Value,
     _ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
-    require_void_params(&params)?;
     let list: Vec<WorkspaceInfo> = {
         let workspaces = app.workspaces.read();
         workspaces.values().cloned().collect()

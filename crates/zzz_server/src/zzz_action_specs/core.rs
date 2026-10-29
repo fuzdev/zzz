@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionHandler, ActionOutputHandler, ActionSpec};
 use fuz_auth::{AuthSpec, CredentialGate};
+use fuz_http::InputShape;
 use serde_json::Value;
 
 use crate::handlers::App;
@@ -25,7 +26,7 @@ fn ping_spec(app: Arc<App>) -> ActionSpec {
         let app = Arc::clone(&app);
         Box::pin(async move { core::ping(params, ctx, app).await })
     });
-    ActionSpec::read_only("ping", AuthSpec::public(), handler)
+    ActionSpec::read_only("ping", AuthSpec::public(), InputShape::Void, handler)
 }
 
 fn session_load_spec(app: Arc<App>) -> ActionSpec {
@@ -35,7 +36,8 @@ fn session_load_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::new_output(
         "session_load",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
+        InputShape::Void,
         false,
         handler,
     )
@@ -59,6 +61,7 @@ fn testing_emit_notifications_spec(app: Arc<App>) -> ActionSpec {
     ActionSpec::read_only(
         "_testing_emit_notifications",
         AuthSpec::authenticated(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }
