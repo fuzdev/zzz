@@ -77,6 +77,7 @@ import {
 	make_default_rust_backend_config,
 	rust_default_capabilities
 } from '@fuzdev/fuz_app/testing/cross_backend/default_backend_configs.ts';
+import { TEST_ORIGIN } from '@fuzdev/fuz_app/testing/test_origin.ts';
 
 /**
  * The session cookie name `zzz_server` issues on `port` — twin of the Rust
@@ -84,14 +85,6 @@ import {
  * one host don't share a session cookie).
  */
 export const zzz_session_cookie_name = (port: number): string => `zzz_session_${port}`;
-
-/**
- * The `Origin` fuz_app's `rpc_call` test helper sends unless told otherwise —
- * fixed upstream, so the test backends allow it beside their own origins. It
- * isn't zzz's dev origin, which no test backend but
- * {@link rust_dev_origins_backend_config}'s allows.
- */
-export const RPC_CALL_DEFAULT_ORIGIN = 'http://localhost:5173';
 
 /** The dev env template `cargo xtask dev-setup` copies to `.env.development`. */
 const DEV_ENV_TEMPLATE_PATH = '.env.development.example';
@@ -224,11 +217,13 @@ const make_zzz_rust_backend_config = ({
 			// ship — the backend's own two, the page it serves — never the
 			// upstream harness's `http://localhost:*`, so the browser-gate
 			// suite can show a page on another local port refused. Plus the
-			// one the upstream suites send.
+			// one the upstream suites send (`TEST_ORIGIN`, `rpc_call`'s default
+			// `Origin`) — not zzz's dev origin, which no test backend but
+			// `rust_dev_origins_backend_config`'s allows.
 			FUZ_ALLOWED_ORIGINS: [
 				`http://localhost:${port}`,
 				`http://127.0.0.1:${port}`,
-				RPC_CALL_DEFAULT_ORIGIN
+				TEST_ORIGIN
 			].join(','),
 			...extra_env
 		}
