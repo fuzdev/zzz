@@ -1,0 +1,1 @@
+import{H as e,Pt as t,W as n,mt as r}from"./DUbCpK4d.js";import{t as i}from"./CL0Tib7L.js";var a=n(`<div class="box py_xl9"><!></div>`);function o(n){var o=a(),s=r(o);i(s,{}),t(o),e(n,o)}export{o as t};

@@ -1,0 +1,1 @@
+export{t as component}from"../chunks/BBDM_frE.js";

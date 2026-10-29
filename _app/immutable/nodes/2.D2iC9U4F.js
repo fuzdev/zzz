@@ -1,0 +1,1 @@
+import{Dt as e,H as t,I as n,Ot as r,U as i,ht as a,ut as o}from"../chunks/DUbCpK4d.js";import{n as s}from"../chunks/Bvm9cKoR.js";function c(c,l){r(l,!0);let u=s.get();o(()=>{u.chats.selected&&(u.ui.pending_element_to_focus_key=u.chats.selected.id)});var d=i(),f=a(d);n(f,()=>l.children),t(c,d),e()}export{c as component};

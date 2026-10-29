@@ -1,0 +1,1 @@
+import{a as e,n as t}from"./BwdCec41.js";import{a as n}from"./BAXDEeSv.js";import{n as r}from"./Dn2IfYo1.js";var i=e(),a=e(),o=(e,i=r,a)=>{let o=typeof e==`string`?e:e.slug,s=i+`/`+o;return n(a?s+t(a,`#`):s)},s=e=>e.title??e.slug,c=e=>{let t=i.get()().get(e);if(!t)throw Error(`unable to find tome "${e}"`);return t};export{i as a,s as i,c as n,o as r,a as t};
