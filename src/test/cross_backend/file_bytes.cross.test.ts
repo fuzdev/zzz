@@ -16,14 +16,13 @@ import { describe, test, assert } from 'vitest';
 import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
 import { default_cross_process_setup } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
+import { raw_http_send_head } from '@fuzdev/fuz_app/testing/transports/raw_http.ts';
 
 import {
 	FILE_BYTES_MAX_BODY_BYTES,
 	to_file_bytes_append_url,
 	to_file_bytes_url
 } from '#lib/file_bytes.ts';
-
-import { request_status } from './request_status.ts';
 
 const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
@@ -318,13 +317,16 @@ describe('file bytes cross-backend', () => {
 				assert.equal(at_cap.status, 201);
 				assert.equal((await stat(path)).size, FILE_BYTES_MAX_BODY_BYTES);
 
-				const over = await request_status(
-					`${handle.config.base_url}${append_url(path, FILE_BYTES_MAX_BODY_BYTES)}`,
-					{ origin: handle.config.base_url, ...fixture.create_session_headers(OCTET_STREAM) },
-					new Uint8Array(FILE_BYTES_MAX_BODY_BYTES + 1),
-					'PATCH'
-				);
-				assert.equal(over, 413);
+				const over = await raw_http_send_head(handle.config.base_url, {
+					method: 'PATCH',
+					path: append_url(path, FILE_BYTES_MAX_BODY_BYTES),
+					headers: {
+						origin: handle.config.base_url,
+						...fixture.create_session_headers(OCTET_STREAM)
+					},
+					content_length: FILE_BYTES_MAX_BODY_BYTES + 1
+				});
+				assert.equal(over.status, 413);
 				assert.equal((await stat(path)).size, FILE_BYTES_MAX_BODY_BYTES, 'nothing appended');
 			} finally {
 				await rm(path, { force: true });

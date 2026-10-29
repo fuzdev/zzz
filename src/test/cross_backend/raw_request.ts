@@ -43,11 +43,3 @@ export const raw_request = (
 		req.on('error', reject);
 		req.end(options.body);
 	});
-
-/** A WebSocket upgrade's own headers (the key is RFC 6455's sample). */
-export const WS_UPGRADE_HEADERS = {
-	connection: 'Upgrade',
-	upgrade: 'websocket',
-	'sec-websocket-version': '13',
-	'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ=='
-};

@@ -29,11 +29,11 @@ import { default_cross_process_setup } from '@fuzdev/fuz_app/testing/cross_backe
 import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+import { raw_http_send_head } from '@fuzdev/fuz_app/testing/transports/raw_http.ts';
 
 import { FilerChangeInput } from '#lib/action_specs.ts';
 import { RPC_MESSAGE_MAX_BYTES } from '#lib/rpc_message_limit.ts';
 
-import { request_status } from './request_status.ts';
 import { RPC_CALL_DEFAULT_ORIGIN } from './zzz_backend_config.ts';
 
 const handle = inject_backend_handle();
@@ -471,21 +471,24 @@ describe('filesystem cross-backend', () => {
 			assert.ok(http_under.ok, JSON.stringify(http_under).slice(0, 500));
 			assert.equal((await stat(path)).size, under.length);
 
-			const http_over = await request_status(
-				`${handle.config.base_url}${handle.config.rpc_path}`,
-				{
+			// the head alone, declaring the envelope's length: the cap refuses on it
+			const http_over = await raw_http_send_head(handle.config.base_url, {
+				path: handle.config.rpc_path,
+				headers: {
 					'Content-Type': 'application/json',
 					origin: RPC_CALL_DEFAULT_ORIGIN,
 					...fixture.create_session_headers()
 				},
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: 'over',
-					method: 'diskfile_update',
-					params: { path, content: over }
-				})
-			);
-			assert.equal(http_over, 413);
+				content_length: Buffer.byteLength(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: 'over',
+						method: 'diskfile_update',
+						params: { path, content: over }
+					})
+				)
+			});
+			assert.equal(http_over.status, 413);
 
 			// WebSocket: under the cap is written, over it closes the socket
 			await rm(path);

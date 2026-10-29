@@ -30,16 +30,13 @@ import { randomUUID } from 'node:crypto';
 import { describe, test, assert } from 'vitest';
 import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
 import { default_cross_process_setup } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
+import { raw_http_send_head } from '@fuzdev/fuz_app/testing/transports/raw_http.ts';
+import { RAW_WS_UPGRADE_HEADERS } from '@fuzdev/fuz_app/testing/transports/ws_raw_client.ts';
 
 import { FILE_BYTES_MAX_BODY_BYTES, to_file_bytes_url } from '#lib/file_bytes.ts';
 import { RPC_MESSAGE_MAX_BYTES } from '#lib/rpc_message_limit.ts';
 
-import {
-	raw_request as send_raw_request,
-	WS_UPGRADE_HEADERS,
-	type RawResponse
-} from './raw_request.ts';
-import { request_status } from './request_status.ts';
+import { raw_request as send_raw_request, type RawResponse } from './raw_request.ts';
 
 const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
@@ -116,7 +113,7 @@ describe('browser gates', () => {
 				headers: {
 					...fixture.create_session_headers(),
 					host: REBOUND_HOST,
-					...WS_UPGRADE_HEADERS
+					...RAW_WS_UPGRADE_HEADERS
 				}
 			});
 			assert_error(res, 403, 'forbidden_host', 'ws upgrade');
@@ -152,7 +149,7 @@ describe('browser gates', () => {
 				headers: {
 					...session,
 					origin: OTHER_PORT_ORIGIN,
-					...WS_UPGRADE_HEADERS
+					...RAW_WS_UPGRADE_HEADERS
 				}
 			});
 			assert_error(ws, 403, 'forbidden_origin', 'ws upgrade');
@@ -245,16 +242,16 @@ describe('browser gates', () => {
 				['rpc POST', rpc_path, RPC_MESSAGE_MAX_BYTES],
 				['file bytes', file_bytes, FILE_BYTES_MAX_BODY_BYTES]
 			] as const) {
-				const status = await request_status(
-					`${base_url}${path}`,
-					{
+				const res = await raw_http_send_head(base_url, {
+					path,
+					headers: {
 						...fixture.create_session_headers(),
 						origin: OTHER_PORT_ORIGIN,
 						'content-type': 'application/json'
 					},
-					new Uint8Array(cap + 1)
-				);
-				assert.strictEqual(status, 413, label);
+					content_length: cap + 1
+				});
+				assert.strictEqual(res.status, 413, label);
 			}
 		});
 	});

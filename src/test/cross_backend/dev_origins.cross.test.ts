@@ -23,8 +23,9 @@ import {
 	spawn_backend,
 	type BackendHandle
 } from '@fuzdev/fuz_app/testing/cross_backend/spawn_backend.ts';
+import { RAW_WS_UPGRADE_HEADERS } from '@fuzdev/fuz_app/testing/transports/ws_raw_client.ts';
 
-import { raw_request, WS_UPGRADE_HEADERS, type RawResponse } from './raw_request.ts';
+import { raw_request, type RawResponse } from './raw_request.ts';
 import { read_dev_allowed_origins, rust_dev_origins_backend_config } from './zzz_backend_config.ts';
 
 /** The dev UI's origin: the Vite dev server, at the port `vite.config.ts` pins. */
@@ -48,7 +49,7 @@ const request_from = async (
 	}),
 	rest: await raw_request(`${base_url}${api_path}/account/status`, { headers: { origin } }),
 	ws: await raw_request(`${base_url}${api_path}/ws`, {
-		headers: { origin, ...WS_UPGRADE_HEADERS }
+		headers: { origin, ...RAW_WS_UPGRADE_HEADERS }
 	})
 });
 

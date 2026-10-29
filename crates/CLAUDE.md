@@ -486,8 +486,9 @@ Supporting files: `global_setup.ts` (vitest globalSetup:
 `create_cross_backend_global_setup`, which builds `testing_zzzd` first and
 creates each project's database when missing), `zzz_backend_config.ts`
 (per-project `BackendConfig` factories and the stated capabilities), and
-`request_status.ts` (a request whose body the server may refuse from the
-headers alone — the over-cap cases).
+`raw_request.ts` (a request sent with exactly the headers given — a chosen
+`Host`, an upgrade). The over-cap cases send the request head alone through
+fuz_app's `raw_http_send_head`, so the cap must refuse on the declared length.
 
 ```bash
 npm run test:cross                                                        # Both rust projects (rust + rust_proxy) — flag baked in
