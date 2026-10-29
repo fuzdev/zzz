@@ -63,7 +63,6 @@ use axum::extract::{Extension, Query, Request, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use fuz_auth::route_helpers::extract_client_ip_or_unresolved;
 use fuz_auth::{AuthGate, OriginChecked};
 use fuz_http::{ClientIp, assert_known_query_keys, query_first};
 use tokio::io::{AsyncReadExt as _, AsyncSeekExt as _};
@@ -294,8 +293,8 @@ async fn authorize(
     origin: OriginChecked<'_>,
     client_ip: Option<Extension<ClientIp>>,
 ) -> Result<(), Response> {
-    let client_ip = extract_client_ip_or_unresolved(client_ip);
-    let Some(auth) = state.gate.resolve_credential(origin, &client_ip).await else {
+    let client_ip = ClientIp::as_str_or_unresolved(client_ip.as_ref());
+    let Some(auth) = state.gate.resolve_credential(origin, client_ip).await else {
         return Err(fuz_http::authentication_required_response());
     };
     if !auth.scope().admits_non_rpc_surface() {
