@@ -213,6 +213,8 @@ mod tests {
             allow_origin_wildcards: false,
             trusted_proxies: Vec::new(),
             bootstrap_token_path: None,
+            db_checkout_timeout: fuz_db::DEFAULT_CHECKOUT_TIMEOUT,
+            db_audit_checkout_timeout: fuz_db::DEFAULT_AUDIT_CHECKOUT_TIMEOUT,
         };
         fuz_actions::server::build_app_backend(
             &env,

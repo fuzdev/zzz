@@ -498,8 +498,11 @@ mod tests {
     /// An `App` with inert handles: a pool that never connects and a
     /// registry with no sockets, so notifications go nowhere.
     fn test_app() -> Arc<App> {
-        let pool = fuz_db::create_pool("postgres://localhost:1/jobs_unused")
-            .expect("a lazy pool builds without connecting");
+        let pool = fuz_db::create_pool(
+            "postgres://localhost:1/jobs_unused",
+            &fuz_db::PoolOptions::default(),
+        )
+        .expect("a lazy pool builds without connecting");
         Arc::new(App::new(
             pool.clone(),
             crate::scoped_fs::ScopedFs::new(vec![]),

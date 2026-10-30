@@ -300,7 +300,9 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
         browser_gates: origin_allowlist::ZZZ_BROWSER_GATES,
     };
     // zzz reads its own env (`ZZZ_PORT`, `--port`, a required
-    // `DATABASE_URL`, `ZZZ_TRUSTED_PROXIES`); the spine core takes it in the
+    // `DATABASE_URL`, `ZZZ_TRUSTED_PROXIES`, the spine's
+    // `FUZ_DB_CHECKOUT_TIMEOUT_MS` / `FUZ_DB_AUDIT_CHECKOUT_TIMEOUT_MS`); the
+    // spine core takes it in the
     // base reader's shape. The bind is `config.bind_addr`, not this.
     let env = fuz_http::BaseServerEnv {
         database_url: Some(config.database_url.clone()),
@@ -311,6 +313,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
         allow_origin_wildcards: config.allow_origin_wildcards,
         trusted_proxies,
         bootstrap_token_path: config.bootstrap_token_path.as_deref().map(PathBuf::from),
+        db_checkout_timeout: config.db_checkout_timeout,
+        db_audit_checkout_timeout: config.db_audit_checkout_timeout,
     };
     let BootedAppBackend { backend, .. } = create_app_backend(&env, &spec, backend_options).await?;
 
@@ -589,6 +593,13 @@ pub struct Config {
     pub trusted_proxies: Option<String>,
     /// The local tools found at boot (`ffmpeg`, whisper.cpp and its model).
     pub tools: tool::Tools,
+    /// `FUZ_DB_CHECKOUT_TIMEOUT_MS` — the bound on every pool checkout a
+    /// request makes (default 5 s), read by the spine's own rules
+    /// ([`fuz_http::parse_checkout_timeout`]).
+    pub db_checkout_timeout: std::time::Duration,
+    /// `FUZ_DB_AUDIT_CHECKOUT_TIMEOUT_MS` — the bound on the checkout behind
+    /// each audit pool write (default 30 s).
+    pub db_audit_checkout_timeout: std::time::Duration,
 }
 
 /// Hand-written so the secrets never reach a log line: `database_url` (which
@@ -608,6 +619,8 @@ impl std::fmt::Debug for Config {
             .field("enable_test_actions", &self.enable_test_actions)
             .field("trusted_proxies", &self.trusted_proxies)
             .field("tools", &self.tools)
+            .field("db_checkout_timeout", &self.db_checkout_timeout)
+            .field("db_audit_checkout_timeout", &self.db_audit_checkout_timeout)
             .finish()
     }
 }
@@ -990,6 +1003,36 @@ fn parse_config(default_addr: SocketAddr, args: CliArgs) -> Result<Config, Start
     let trusted_proxies = env_var_utf8("ZZZ_TRUSTED_PROXIES")?;
     // a bad override refuses to boot; a tool that's simply absent doesn't
     let tools = tool::Tools::from_env().map_err(StartupError::Config)?;
+    // the spine's pool checkout bounds, read by its own rules: a malformed or
+    // out-of-range value refuses to boot naming the var
+    let checkout_vars = [
+        (
+            fuz_http::DB_CHECKOUT_TIMEOUT_VAR,
+            env_var_utf8(fuz_http::DB_CHECKOUT_TIMEOUT_VAR)?,
+        ),
+        (
+            fuz_http::DB_AUDIT_CHECKOUT_TIMEOUT_VAR,
+            env_var_utf8(fuz_http::DB_AUDIT_CHECKOUT_TIMEOUT_VAR)?,
+        ),
+    ];
+    let get_checkout_var = |name: &str| {
+        checkout_vars
+            .iter()
+            .find(|(var, _)| *var == name)
+            .and_then(|(_, value)| value.clone())
+    };
+    let db_checkout_timeout = fuz_http::parse_checkout_timeout(
+        &get_checkout_var,
+        fuz_http::DB_CHECKOUT_TIMEOUT_VAR,
+        fuz_db::DEFAULT_CHECKOUT_TIMEOUT,
+    )
+    .map_err(|e| StartupError::Config(e.to_string()))?;
+    let db_audit_checkout_timeout = fuz_http::parse_checkout_timeout(
+        &get_checkout_var,
+        fuz_http::DB_AUDIT_CHECKOUT_TIMEOUT_VAR,
+        fuz_db::DEFAULT_AUDIT_CHECKOUT_TIMEOUT,
+    )
+    .map_err(|e| StartupError::Config(e.to_string()))?;
 
     Ok(Config {
         bind_addr: SocketAddr::new(
@@ -1007,6 +1050,8 @@ fn parse_config(default_addr: SocketAddr, args: CliArgs) -> Result<Config, Start
         enable_test_actions,
         trusted_proxies,
         tools,
+        db_checkout_timeout,
+        db_audit_checkout_timeout,
     })
 }
 

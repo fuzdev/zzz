@@ -76,8 +76,11 @@ mod any_credential_surface {
     /// Inert handles: a lazy pool that never connects, an empty scoped-FS
     /// allowlist, no providers configured, and a registry with no sockets.
     fn inert_app() -> Arc<crate::handlers::App> {
-        let pool = fuz_db::create_pool("postgres://localhost:1/census_unused")
-            .expect("a lazy pool builds without connecting");
+        let pool = fuz_db::create_pool(
+            "postgres://localhost:1/census_unused",
+            &fuz_db::PoolOptions::default(),
+        )
+        .expect("a lazy pool builds without connecting");
         Arc::new(crate::handlers::App::new(
             pool.clone(),
             crate::scoped_fs::ScopedFs::new(vec![]),
