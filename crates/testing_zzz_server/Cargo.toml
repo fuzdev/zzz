@@ -27,7 +27,6 @@ fuz_actions.workspace = true
 fuz_auth.workspace = true
 # `logging` feature → non-blocking stdout subscriber init.
 fuz_sys = { workspace = true, features = ["logging"] }
-fuz_db.workspace = true
 fuz_http.workspace = true
 fuz_testing.workspace = true
 
