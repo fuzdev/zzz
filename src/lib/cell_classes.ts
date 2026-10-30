@@ -94,9 +94,3 @@ export const is_cell_type = <K extends CellClassNames>(
 	cell: Cell<any> | null | undefined,
 	class_name: K
 ): cell is CellRegistryMap[K] => cell instanceof cell_classes[class_name];
-
-/**
- * Get a list of all registered cell class names.
- */
-export const get_cell_class_names = (): Array<CellClassNames> =>
-	Object.keys(cell_classes) as Array<CellClassNames>;

@@ -32,7 +32,6 @@ export interface CellOptions<TSchema extends z.ZodType> {
  * This may cause issues based on how data gets queried, but at least it's stable once loaded.
  * However we may need to revisit this if it causes problems.
  */
-export const get_global_cell_count = (): number => global_cell_count;
 let global_cell_count = 0;
 
 /**

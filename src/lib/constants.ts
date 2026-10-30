@@ -88,11 +88,3 @@ export const WEBSOCKET_URL: string = PUBLIC_ZZZ_WEBSOCKET_URL
 	: PAGE_ORIGIN
 		? PAGE_ORIGIN.replace(/^http/, 'ws') + API_PATH + '/ws'
 		: '';
-
-export const WEBSOCKET_URL_OBJECT: URL | null = WEBSOCKET_URL ? new URL(WEBSOCKET_URL) : null;
-
-/**
- * @leading_slash
- * @no_trailing_slash
- */
-export const WEBSOCKET_PATH: string | undefined = WEBSOCKET_URL_OBJECT?.pathname;

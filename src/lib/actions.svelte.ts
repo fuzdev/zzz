@@ -7,7 +7,6 @@ import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { CellJson } from './cell_types.ts';
 
 export const HISTORY_LIMIT_DEFAULT = 512;
-export const PONG_DISPLAY_LIMIT = 6;
 
 export const ActionsJson = CellJson.extend({
 	items: z.array(ActionJson).default(() => [])
