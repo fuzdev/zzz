@@ -392,5 +392,3 @@ export class Chat extends Cell<typeof ChatJson> {
 		reorder_list(this.thread_ids, from_index, to_index);
 	}
 }
-
-export const ChatSchema = z.instanceof(Chat);

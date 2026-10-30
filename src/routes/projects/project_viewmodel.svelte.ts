@@ -1,6 +1,5 @@
 // @slop Claude Opus 4
 
-import { z } from 'zod';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { create_uuid, get_datetime_now, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
@@ -204,5 +203,3 @@ export class ProjectViewmodel {
 		);
 	}
 }
-
-export const ProjectViewmodelSchema = z.instanceof(ProjectViewmodel);

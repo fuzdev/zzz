@@ -235,8 +235,6 @@ export class Chats extends Cell<typeof ChatsJson> {
 	}
 }
 
-export const ChatsSchema = z.instanceof(Chats);
-
 /**
  * Gets the base name to number a duplicate from, so duplicating `my chat 2`
  * yields `my chat 3` rather than `my chat 2 2`. The numeric suffix is only

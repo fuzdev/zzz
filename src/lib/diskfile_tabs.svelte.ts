@@ -516,5 +516,3 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		}
 	}
 }
-
-export const DiskfileTabsSchema = z.instanceof(DiskfileTabs);

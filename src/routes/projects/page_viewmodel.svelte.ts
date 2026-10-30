@@ -1,6 +1,5 @@
 // @slop Claude Opus 4
 
-import { z } from 'zod';
 import { goto } from '$app/navigation';
 import { get_datetime_now, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
@@ -182,5 +181,3 @@ export class PageViewmodel {
 		void goto(resolve('/projects/[project_id]/pages', { project_id: this.project_id }));
 	}
 }
-
-export const PageViewmodelSchema = z.instanceof(PageViewmodel);

@@ -195,5 +195,3 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 		this.items.indexes.manual_order = to_reordered_list(this.ordered_tabs, from_index, to_index);
 	}
 }
-
-export const BrowserTabsSchema = z.instanceof(BrowserTabs);

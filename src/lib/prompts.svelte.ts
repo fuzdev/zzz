@@ -197,5 +197,3 @@ export class Prompts extends Cell<typeof PromptsJson> {
 		this.show_sort_controls = value;
 	}
 }
-
-export const PromptsSchema = z.instanceof(Prompts);

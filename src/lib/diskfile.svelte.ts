@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import {
 	DiskfileDirectoryPath,
@@ -62,5 +60,3 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 		this.init();
 	}
 }
-
-export const DiskfileSchema = z.instanceof(Diskfile);

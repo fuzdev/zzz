@@ -113,5 +113,3 @@ export class Action extends Cell<typeof ActionJson> {
 		this.unlisten_to_action_event?.();
 	}
 }
-
-export const ActionSchema = z.instanceof(Action);

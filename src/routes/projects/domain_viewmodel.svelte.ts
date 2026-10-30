@@ -1,6 +1,5 @@
 // @slop Claude Opus 4
 
-import { z } from 'zod';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { get_datetime_now, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
@@ -119,5 +118,3 @@ export class DomainViewmodel {
 		}
 	}
 }
-
-export const DomainViewmodelSchema = z.instanceof(DomainViewmodel);

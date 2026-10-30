@@ -193,5 +193,3 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 		this.show_sort_controls = value;
 	}
 }
-
-export const DiskfilesEditorSchema = z.instanceof(DiskfilesEditor);

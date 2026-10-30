@@ -1,6 +1,5 @@
 // @slop Claude Opus 4
 
-import { z } from 'zod';
 import { create_context } from '@fuzdev/fuz_ui/context_helpers.ts';
 import { page } from '$app/state';
 import { create_uuid, get_datetime_now, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
@@ -332,5 +331,3 @@ export class Projects extends Cell<typeof ProjectsJson> {
 		}
 	}
 }
-
-export const ProjectsSchema = z.instanceof(Projects);

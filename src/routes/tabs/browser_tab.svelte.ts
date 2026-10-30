@@ -42,5 +42,3 @@ export class BrowserTab extends Cell<typeof BrowserTabJson> {
 		this.refresh_counter++;
 	}
 }
-
-export const BrowserTabSchema = z.instanceof(BrowserTab);

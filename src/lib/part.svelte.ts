@@ -163,8 +163,6 @@ export abstract class Part<T extends z.ZodType = typeof PartJsonBase> extends Ce
 	}
 }
 
-export const PartSchema = z.instanceof(Part);
-
 /**
  * Text part - stores content directly.
  */
@@ -178,8 +176,6 @@ export class TextPart extends Part<typeof TextPartJson> {
 		this.init();
 	}
 }
-
-export const TextPartSchema = z.instanceof(TextPart);
 
 /**
  * Diskfile part - references content from a Diskfile.
@@ -283,5 +279,3 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 		this.init();
 	}
 }
-
-export const DiskfilePartSchema = z.instanceof(DiskfilePart);

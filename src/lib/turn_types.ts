@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
-import { Cell } from './cell.svelte.ts';
 import { CellJson } from './cell_types.ts';
 import { CompletionRequest, CompletionResponse, CompletionRole } from './completion_types.ts';
 
@@ -28,5 +27,3 @@ export const TurnJson = CellJson.extend({
 }).meta({ cell_class_name: 'Turn' });
 export type TurnJson = z.infer<typeof TurnJson>;
 export type TurnJsonInput = z.input<typeof TurnJson>;
-
-export const TurnSchema = z.instanceof(Cell);

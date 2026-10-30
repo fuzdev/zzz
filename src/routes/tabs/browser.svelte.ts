@@ -108,5 +108,3 @@ export class Browser extends Cell<typeof BrowserJson> {
 		this.tabs.reorder_tabs(from_index, to_index);
 	}
 }
-
-export const BrowserSchema = z.instanceof(Browser);
