@@ -1,11 +1,12 @@
 /**
- * Test-only action specs and handler.
+ * Test-only action specs.
  *
  * `_testing_emit_notifications` + `_testing_notification` are kept out of the
  * production codegen surface (`all_action_specs` in `action_specs.ts`).
- * They register on the live HTTP-RPC + WebSocket dispatchers only when
- * `ZZZ_ENABLE_TEST_ACTIONS=1`, which the cross-process test binary
- * (`testing_zzz_server`) sets unconditionally and production never does.
+ * These are the TS twins of the methods zzzd's Rust registry registers on the
+ * live HTTP-RPC + WebSocket dispatchers, only when `ZZZ_ENABLE_TEST_ACTIONS=1`,
+ * which the cross-process test binary (`testing_zzz_server`) sets
+ * unconditionally and production never does.
  *
  * Naming follows the test-binary safety convention — `_testing_*` /
  * `Testing*` for anything wire-visible or artifact-shipping, matching
@@ -16,11 +17,9 @@
 
 import { z } from 'zod';
 import type {
-	ActionSpecUnion,
 	RemoteNotificationActionSpec,
 	RequestResponseActionSpec
 } from '@fuzdev/fuz_app/actions/action_spec.ts';
-import type { ActionContext, ActionHandler } from '@fuzdev/fuz_app/actions/action_types.ts';
 
 // -- Schemas ----------------------------------------------------------------
 
@@ -72,22 +71,3 @@ export const _testing_notification_action_spec = {
 	description:
 		'Test-only. Progress notification emitted by _testing_emit_notifications; carries the sequence index.'
 } satisfies RemoteNotificationActionSpec;
-
-/** Both test specs as a single array — splice into `all_action_specs` when test mode is on. */
-export const testing_action_specs: Array<ActionSpecUnion> = [
-	_testing_emit_notifications_action_spec,
-	_testing_notification_action_spec
-];
-
-// -- Handler ----------------------------------------------------------------
-
-/** Handler for `_testing_emit_notifications`. Emits `count` notifications via `ctx.notify`. */
-export const handle_testing_emit_notifications: ActionHandler<
-	TestingEmitNotificationsInput,
-	TestingEmitNotificationsOutput
-> = (input, ctx: ActionContext) => {
-	for (let i = 0; i < input.count; i++) {
-		ctx.notify('_testing_notification', { index: i });
-	}
-	return { count: input.count };
-};
