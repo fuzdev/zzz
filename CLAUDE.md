@@ -311,8 +311,8 @@ Defined in `src/lib/action_specs.ts`. The full list — method, kind, initiator,
 auth, and description — is generated into ./docs/reference.md
 from the specs themselves (`src/lib/reference.gen.ts`, refreshed by `gro gen`),
 so it can't drift. The test-only `_testing_emit_notifications` +
-`_testing_notification` specs live in `src/lib/testing_action_specs.ts` and only
-register on the live dispatchers when `ZZZ_ENABLE_TEST_ACTIONS=1`.
+`_testing_notification` specs live in `src/lib/testing_action_specs.ts` as TS
+twins of the methods zzzd registers only when `ZZZ_ENABLE_TEST_ACTIONS=1`.
 
 The generated tables cover zzz's own TS specs only — the fuz_app methods the
 backend registers from the spine (`account_*`, `admin_*`, invites, role
@@ -436,7 +436,7 @@ prerequisites, and what the integration tests check.
 
 ### Naming Conventions
 
-- TypeScript files — `snake_case.ts`. Example: `action_dispatcher.ts`
+- TypeScript files — `snake_case.ts`. Example: `action_helpers.ts`
 - Svelte 5 state — `snake_case.svelte.ts`. Example: `chat.svelte.ts`
 - Components — `PascalCase.svelte`. Example: `ChatView.svelte`
 - Tests — `*.test.ts` in `src/test/`. Example: `cell.svelte.base.test.ts`
