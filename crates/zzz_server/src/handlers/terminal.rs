@@ -9,9 +9,9 @@ use std::sync::Arc;
 use fuz_actions::ActionContext;
 use fuz_auth::{AuditEmitter, AuditEventType, AuditLogEvent};
 use fuz_http::{
-    JsonrpcError, SAFE_INTEGER_MAX, deserialize_optional_wire_uuid, deserialize_wire_uuid,
-    internal_error, internal_error_with_source, invalid_input_params, invalid_params, not_found,
-    parse_strict_params, queue_overflow,
+    JsonrpcError, deserialize_optional_wire_uuid, deserialize_wire_int, deserialize_wire_uuid,
+    internal_error, internal_error_with_source, invalid_params, not_found, parse_strict_params,
+    queue_overflow,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -65,7 +65,11 @@ struct TerminalDataSendInput {
 struct TerminalResizeInput {
     #[serde(deserialize_with = "deserialize_wire_uuid")]
     terminal_id: Uuid,
+    /// `z.number().int()` on the twin, so any integral spelling; the range is
+    /// [`terminal_dimension`]'s.
+    #[serde(deserialize_with = "deserialize_wire_int")]
     cols: u64,
+    #[serde(deserialize_with = "deserialize_wire_int")]
     rows: u64,
 }
 
@@ -84,23 +88,19 @@ struct TerminalAckInput {
     #[serde(deserialize_with = "deserialize_wire_uuid")]
     terminal_id: Uuid,
     /// The `sent_bytes` of the last `terminal_data` the client finished with.
-    /// At most [`SAFE_INTEGER_MAX`] ([`parse_terminal_ack_params`]).
+    /// `z.number().int().nonnegative()` on the twin: the adapter reads any
+    /// integral spelling and refuses past `Number.MAX_SAFE_INTEGER`, `u64`
+    /// refuses a negative.
+    #[serde(deserialize_with = "deserialize_wire_int")]
     bytes: u64,
 }
 
-/// Parse `terminal_ack`'s params, refusing what the TS schema refuses.
-///
-/// The twin declares `bytes` `z.number().int().nonnegative()`, and Zod's
-/// `int()` refuses past `Number.MAX_SAFE_INTEGER`, so a `bytes` above
-/// [`SAFE_INTEGER_MAX`] gets the schema's generic `invalid params` (no
-/// reason) here too — at params validation, ahead of the terminal lookup —
-/// rather than decoding as a `u64` the twin can't represent.
+/// Parse `terminal_ack`'s params, refusing what the TS schema refuses — a
+/// `bytes` past the safe range included, as the schema's generic
+/// `invalid params` (no reason), at params validation ahead of the terminal
+/// lookup.
 fn parse_terminal_ack_params(params: Value) -> Result<TerminalAckInput, JsonrpcError> {
-    let input: TerminalAckInput = parse_strict_params(params)?;
-    if input.bytes > SAFE_INTEGER_MAX.unsigned_abs() {
-        return Err(invalid_input_params("'bytes' must be a safe integer", None));
-    }
-    Ok(input)
+    parse_strict_params(params)
 }
 
 /// Check a terminal dimension (`cols` / `rows`): an integer in `1..=65535`
@@ -352,7 +352,7 @@ pub async fn terminal_close(
 
 #[cfg(test)]
 mod tests {
-    use fuz_http::JsonrpcErrorCode;
+    use fuz_http::{JsonrpcErrorCode, SAFE_INTEGER_MAX};
     use serde_json::json;
 
     use super::*;
@@ -451,6 +451,25 @@ mod tests {
             assert_eq!(error.message, INVALID_PARAMS_MESSAGE, "{bytes}");
             assert!(error.data.is_none(), "{bytes}: no reason");
         }
+    }
+
+    /// The twin's `int()` reads any integral spelling, so `80.0` is a width.
+    #[test]
+    fn integral_float_spellings_decode() {
+        let input: TerminalResizeInput = serde_json::from_str(&format!(
+            r#"{{"terminal_id":"{NIL_UUID}","cols":80.0,"rows":2.4e1}}"#
+        ))
+        .unwrap();
+        assert_eq!((input.cols, input.rows), (80, 24));
+        assert!(
+            serde_json::from_str::<TerminalResizeInput>(&format!(
+                r#"{{"terminal_id":"{NIL_UUID}","cols":80.5,"rows":24}}"#
+            ))
+            .is_err()
+        );
+        let ack: TerminalAckInput =
+            serde_json::from_str(&format!(r#"{{"terminal_id":"{NIL_UUID}","bytes":-0}}"#)).unwrap();
+        assert_eq!(ack.bytes, 0);
     }
 
     #[test]

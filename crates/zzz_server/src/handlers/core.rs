@@ -30,6 +30,7 @@ struct PingResult {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct TestingEmitNotificationsInput {
+    #[serde(deserialize_with = "fuz_http::deserialize_wire_int")]
     count: u64,
 }
 
