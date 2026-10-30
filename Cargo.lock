@@ -797,6 +797,7 @@ dependencies = [
  "fuz_auth",
  "fuz_db",
  "fuz_http",
+ "fuz_sys",
  "parking_lot",
  "serde",
  "serde_json",
