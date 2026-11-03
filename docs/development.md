@@ -170,7 +170,7 @@ commands.
 There are two production targets:
 
 - **Static-only** — `gro build` prerenders the SPA into `build/`, and `gro deploy`
-  publishes it to a static host (zzz.software). adapter-static prerenders the
+  publishes it to a static host. adapter-static prerenders the
   fixed routes (`chats.html`, `docs/api.html`, …) and writes `200.html`, an SPA
   shell for everything else (dynamic routes like `/chats/<id>` are never
   prerendered). No Rust backend, so the

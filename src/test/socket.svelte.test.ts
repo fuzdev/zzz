@@ -85,8 +85,8 @@ class Mocket {
 }
 
 const TEST_URLS = {
-	BASE: 'ws://test.zzz.software',
-	ALTERNATE: 'ws://alternate.zzz.software'
+	BASE: 'ws://test.fuz.dev',
+	ALTERNATE: 'ws://alternate.fuz.dev'
 };
 
 const TEST_MESSAGE = {

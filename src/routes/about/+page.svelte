@@ -136,7 +136,10 @@
 		<h2 class="mb_lg">More details</h2>
 		<ul>
 			<li>Zzz is free and open source and permissively licensed</li>
-			<li>it's a noncommercial project and its only official domain is zzz.software</li>
+			<li>
+				it's a noncommercial project and its official home is
+				<ExternalLink href="https://github.com/fuzdev/zzz">github.com/fuzdev/zzz</ExternalLink>
+			</li>
 			<li>
 				I'm looking for <ExternalLink href="https://www.ryanatkn.com/funding">funding</ExternalLink>
 				to sustain my continued work on it

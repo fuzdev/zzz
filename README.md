@@ -1,12 +1,10 @@
 # Zzz
 
-[<img src="/static/logo.svg" alt="three sleepy z's" align="right" width="192" height="192">](https://www.zzz.software/)
+[<img src="/static/logo.svg" alt="three sleepy z's" align="right" width="192" height="192">](https://github.com/fuzdev/zzz)
 
 > nice web things for the tired 💤
 
 ⚠️ early pre-release, does not persist your chats, prompts, or workspaces yet
-
-**[zzz.software](https://www.zzz.software/)**
 
 Zzz, pronounced "zees" like bees,
 is a software garage for power users and devs.
@@ -15,8 +13,6 @@ your needs and intent while remaining fully open, aligned, and designed for your
 It's both a customizable web UI and local-first backend for power users,
 and a flexible tool for crafting UX-maximizing websites
 with a streamlined developer experience, eventually accessible to non-coders (hence all the AI).
-
-More at [zzz.software/about](https://www.zzz.software/about).
 
 This is an early stage project and the ideas are still developing -
 see the issues and [discussions](https://github.com/fuzdev/zzz/discussions).
@@ -32,8 +28,7 @@ PostgreSQL, and Git to clone the repo.
 
 Running Zzz locally — in development with `cargo xtask dev`, or self-hosted through
 the `zzz` CLI (see [docs/development.md](docs/development.md)) — is the supported way to use it right now.
-It deploys via SvelteKit's static adapter with diminished capabilities
-([zzz.software](https://www.zzz.software/)),
+It also builds as a static site via SvelteKit's static adapter with diminished capabilities,
 and the full app is served by the Rust `zzz_server` backend.
 
 > The Rust backend depends on sibling crates from the fuz workspace via path

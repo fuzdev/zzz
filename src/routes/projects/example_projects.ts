@@ -16,7 +16,7 @@ export const create_sample_projects = (app: Frontend): Array<Project> => {
 				domains: [
 					{
 						id: create_uuid(),
-						name: 'zzz.software',
+						name: 'fuz.dev',
 						status: 'active',
 						ssl: true,
 						created: '2023-01-15T12:00:00Z',
@@ -24,7 +24,7 @@ export const create_sample_projects = (app: Frontend): Array<Project> => {
 					},
 					{
 						id: create_uuid(),
-						name: 'zzz.zzz.software',
+						name: 'zzz.fuz.dev',
 						status: 'active',
 						ssl: true,
 						created: '2023-01-15T12:00:00Z',

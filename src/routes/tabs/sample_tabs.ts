@@ -11,7 +11,7 @@ export const fake_sites = {
 			<div style="padding: 20px; font-family: system-ui;">
 				<h1>new tab</h1>
 				<ul>
-					<li><a href="https://www.zzz.software/about" target="_blank" rel="noopener">about Zzz</a></li>
+					<li><a href="/about" target="_blank" rel="noopener">about Zzz</a></li>
 					<li><a href="https://github.com/fuzdev/zzz" target="_blank" rel="noopener">source code</a></li>
 				</ul>
 			</div>
@@ -25,7 +25,7 @@ export const sample_tabs: Array<BrowserTabJson> = [
 	{
 		id: create_uuid(),
 		title: 'Zzz is a browser',
-		url: 'https://www.zzz.software/tabs',
+		url: 'https://github.com/fuzdev/zzz',
 		type: 'raw',
 		selected: true,
 		refresh_counter: 0,

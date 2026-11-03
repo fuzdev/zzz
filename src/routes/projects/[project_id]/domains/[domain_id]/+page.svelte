@@ -52,7 +52,7 @@
 								<h3 class="mt_0 mb_sm">domain name</h3>
 								<input type="text" bind:value={domains_viewmodel.domain_name} class="width:100%" />
 							</label>
-							<p>enter the full domain name, like zzz.software or blog.zzz.software</p>
+							<p>enter the full domain name, like fuz.dev or blog.fuz.dev</p>
 						</div>
 
 						{#if domains_viewmodel.domain}
