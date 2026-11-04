@@ -1,1 +1,0 @@
-import"../chunks/DUbCpK4d.js";import{t as e}from"../chunks/DueQTLfd.js";function t(t){e(t,{})}export{t as component};
