@@ -1,0 +1,1 @@
+import{i as e,r as t}from"./BwdCec41.js";var n=n=>t(e(e(n,`https://`),`www.`),`/`);export{n as t};

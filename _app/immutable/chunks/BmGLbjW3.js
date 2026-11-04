@@ -1,0 +1,1 @@
+import{n as e,r as t}from"./DUbCpK4d.js";import{t as n}from"./Bb7ujkGB.js";var r=new Set([`$$slots`,`$$events`,`$$legacy`]);function i(i,a){let o=e(a,r);n(i,t({status:`error`},()=>o))}export{i as t};

@@ -1,0 +1,1 @@
+var e=(e,t,n=Math.random)=>Math.floor(n()*(t-e+1))+e,t=(t,n=Math.random)=>t[e(0,t.length-1,n)];export{t};

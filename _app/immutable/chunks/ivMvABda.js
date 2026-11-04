@@ -1,0 +1,1 @@
+var e=(e=0)=>new Promise(t=>setTimeout(t,e)),t=e=>e!=null&&typeof e.then==`function`,n=Object.freeze({});export{t as n,e as r,n as t};
