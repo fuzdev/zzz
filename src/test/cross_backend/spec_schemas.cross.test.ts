@@ -36,6 +36,7 @@ import type {
 import { all_account_action_specs } from '@fuzdev/fuz_app/auth/account_action_specs.ts';
 import { is_void_schema } from '@fuzdev/fuz_app/http/schema_helpers.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+import { parse_any, type ValidationSchema } from '@fuzdev/fuz_app/schema_issues.ts';
 
 import {
 	directory_create_action_spec,
@@ -69,11 +70,11 @@ type CrossFixture = Awaited<ReturnType<typeof setup_test>>;
 type WsClient = Awaited<ReturnType<typeof create_ws_transport>>;
 
 /** Assert `value` parses against `schema`, reporting the issues on failure. */
-const assert_parses = (schema: z.ZodType, value: unknown, label: string): void => {
-	const parsed = schema.safeParse(value);
+const assert_parses = (schema: ValidationSchema, value: unknown, label: string): void => {
+	const parsed = parse_any(schema, value);
 	assert.ok(
-		parsed.success,
-		`${label} does not match its TS schema: ${JSON.stringify(parsed.error?.issues)} — got ${JSON.stringify(value)}`
+		parsed.ok,
+		`${label} does not match its TS schema: ${parsed.ok ? '' : JSON.stringify(parsed.issues)} — got ${JSON.stringify(value)}`
 	);
 };
 
