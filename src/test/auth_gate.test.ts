@@ -15,7 +15,7 @@ describe('is_public_route', () => {
 	});
 
 	test('prerendered files served without clean URLs are public too', () => {
-		for (const pathname of ['/about.html', '/docs.html', '/docs/library.html']) {
+		for (const pathname of ['/about.html', '/docs.html', '/docs/api.html']) {
 			assert.ok(is_public_route(pathname), pathname);
 		}
 	});

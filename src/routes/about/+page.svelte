@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
-	import LibraryDetail from '@fuzdev/fuz_ui/LibraryDetail.svelte';
+	import LibrarySummary from '@fuzdev/fuz_ui/LibrarySummary.svelte';
 	import EcosystemLinksPanel from '@fuzdev/fuz_ui/EcosystemLinksPanel.svelte';
 	import { resolve } from '$app/paths';
 	import Details from '@fuzdev/fuz_ui/Details.svelte';
@@ -347,7 +347,7 @@
 		<Details>
 			{#snippet summary()}package details{/snippet}
 			<div class="panel p_md width_atmost_md">
-				<LibraryDetail {library} />
+				<LibrarySummary {library} />
 			</div>
 		</Details>
 	</section>
