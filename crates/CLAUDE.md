@@ -58,11 +58,11 @@ SSE parsing for streaming completions.
 
 ## Prerequisites
 
-The sibling Rust workspace must be checked out alongside this repo:
+The sibling [fuz](https://github.com/fuzdev/fuz) workspace must be checked out alongside this repo:
 
 ```
 ~/dev/zzz/                  (this repo)
-<sibling Rust workspace>/   (path deps: fuz_sys, fuz_pty, the 5 spine crates — fuz_db, fuz_auth, fuz_http, fuz_realtime, fuz_actions — plus fuz_testing for the test binary and fuz_audit for xtask)
+~/dev/fuz/                  (path deps: fuz_sys, fuz_pty, the spine crates — fuz_db, fuz_auth, fuz_http, fuz_realtime, fuz_actions — plus fuz_testing for the test binary and fuz_audit for xtask)
 ```
 
 If a path dep is missing, `cargo build` will fail with

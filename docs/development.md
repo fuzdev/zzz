@@ -5,10 +5,11 @@ Development workflow, extension points, and common patterns.
 ## Setup
 
 Requires Node (>=24.14), the Rust toolchain pinned in `rust-toolchain.toml`
-(rustup installs it automatically), PostgreSQL, and the sibling fuz Rust
-workspace checked out alongside this repo (path deps — including `fuz_pty`).
+(rustup installs it automatically), PostgreSQL, and the sibling [fuz](https://github.com/fuzdev/fuz) Rust
+workspace checked out alongside this repo as `fuz/` (path deps — including `fuz_pty`).
 
 ```bash
+git clone https://github.com/fuzdev/fuz.git
 git clone https://github.com/fuzdev/zzz.git && cd zzz
 createdb zzz          # PostgreSQL database the backend connects to
 cargo xtask dev-setup   # generate .env.development (idempotent)
