@@ -16,7 +16,7 @@
  */
 
 import { fuz_session_config } from '@fuzdev/fuz_app/auth/session_cookie.ts';
-import { create_role_schema, ROLE_ADMIN, ROLE_KEEPER } from '@fuzdev/fuz_app/auth/role_schema.ts';
+import { create_role_registry, ROLE_ADMIN, ROLE_KEEPER } from '@fuzdev/fuz_app/auth/role_schema.ts';
 import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
 import {
 	create_rust_spine_consumer_rpc_endpoints,
@@ -42,7 +42,7 @@ const surface_options = {
 };
 
 // Built-in roles only — zzz registers no app-defined roles.
-const roles = create_role_schema([]);
+const roles = create_role_registry([]);
 
 /** zzz's differences from the spine defaults. */
 const overrides: SuiteOverrides = {
