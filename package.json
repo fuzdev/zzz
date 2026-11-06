@@ -55,7 +55,7 @@
     }
   },
   "devDependencies": {
-    "@fuzdev/fuz_app": "^0.163.0",
+    "@fuzdev/fuz_app": "^0.165.0",
     "@fuzdev/fuz_code": "^0.56.0",
     "@fuzdev/fuz_css": "^0.72.0",
     "@fuzdev/fuz_schema": "^0.5.4",
