@@ -6,6 +6,7 @@ import {
 	type Infer,
 	type InferInput
 } from '@fuzdev/fuz_schema/schema.ts';
+import { Timestamp } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { type Datetime } from './datetime.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
@@ -25,8 +26,8 @@ export const WorkspaceInfoJson = object({
 	path: DiskfileDirectoryPath,
 	/** Display name, auto-derived from directory basename. */
 	name: string,
-	/** ISO timestamp of when this workspace was opened. */
-	opened_at: string
+	/** UTC ISO timestamp of when this workspace was opened. */
+	opened_at: Timestamp
 });
 export type WorkspaceInfoJson = Infer<typeof WorkspaceInfoJson>;
 

@@ -33,9 +33,7 @@ const broadcast = (contents: string): void => {
 			source_dir: SOURCE_DIR,
 			contents,
 			ctime: 1,
-			mtime: 1,
-			dependents: [],
-			dependencies: []
+			mtime: 1
 		}
 	});
 };

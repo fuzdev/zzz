@@ -22,15 +22,6 @@ afterEach(() => {
 });
 
 describe('Diskfile schema and fields agree', () => {
-	test('dependency lists default to empty, never null', () => {
-		const diskfile = new Diskfile({ app, json: { path: PATH, source_dir: SOURCE_DIR } });
-
-		assert.deepEqual(diskfile.dependents, []);
-		assert.deepEqual(diskfile.dependencies, []);
-		assert.strictEqual(diskfile.dependents_count, 0);
-		assert.strictEqual(diskfile.dependencies_count, 0);
-	});
-
 	test('content defaults to null — not loaded', () => {
 		const diskfile = new Diskfile({ app, json: { path: PATH, source_dir: SOURCE_DIR } });
 
@@ -44,22 +35,5 @@ describe('Diskfile schema and fields agree', () => {
 		assert.isFalse(is(DiskfileJson, { path: PATH }));
 		assert.isFalse(is(DiskfileJson, { path: null, source_dir: SOURCE_DIR }));
 		assert.throws(() => new Diskfile({ app, json: { source_dir: SOURCE_DIR } as any }));
-	});
-
-	test('dependency lists accept what the backend sends', () => {
-		const disknode: SerializableDisknode = {
-			id: PATH,
-			source_dir: SOURCE_DIR,
-			contents: 'a',
-			ctime: 1,
-			mtime: 1,
-			dependents: [[parse_or_throw(DiskfilePath, '/w/b.ts'), { any: 'shape' }]],
-			dependencies: []
-		};
-		app.diskfiles.upsert(disknode);
-
-		const diskfile = app.diskfiles.get_by_path(PATH);
-		assert.ok(diskfile);
-		assert.strictEqual(diskfile.dependents_count, 1);
 	});
 });

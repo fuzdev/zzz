@@ -25,9 +25,7 @@ const create_disknode = (path: DiskfilePath, contents: string | null): Serializa
 	source_dir: WS_DIR,
 	contents,
 	ctime: 1,
-	mtime: 1,
-	dependents: [],
-	dependencies: []
+	mtime: 1
 });
 
 type WorkspaceOpenResult =

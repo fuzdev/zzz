@@ -41,9 +41,7 @@ const add_diskfile = (path: string, contents: string | null): Diskfile =>
 		source_dir: SOURCE_DIR,
 		contents,
 		ctime: 1,
-		mtime: 1,
-		dependents: [],
-		dependencies: []
+		mtime: 1
 	});
 
 const render = (diskfile: Diskfile): HTMLElement => {

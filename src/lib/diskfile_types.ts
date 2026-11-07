@@ -1,5 +1,4 @@
 import {
-	array,
 	brand,
 	check,
 	message,
@@ -9,10 +8,7 @@ import {
 	one_of,
 	pipe,
 	string,
-	transform,
-	unknown,
 	with_default,
-	with_default_fn,
 	type Infer,
 	type InferInput
 } from '@fuzdev/fuz_schema/schema.ts';
@@ -62,32 +58,13 @@ export const DiskfileChange = object({
 });
 export type DiskfileChange = Infer<typeof DiskfileChange>;
 
-/**
- * A disknode's edge to another: the other's path and data the frontend never
- * reads. fuz_schema has no `tuple`, so it's an array checked to hold two items,
- * the first an absolute path.
- */
-// TODO the backend always sends these empty and the frontend reads only their
-// `length`; drop `dependents`/`dependencies` on both sides
-const DisknodeEdge = pipe(
-	array(unknown),
-	check(
-		(v: Array<unknown>) => v.length === 2 && typeof v[0] === 'string' && is_path_absolute(v[0]),
-		'[DiskfilePath, unknown]'
-	),
-	// types the checked array as the tuple, returning it as given
-	transform((v: Array<unknown>) => v as [DiskfilePath, unknown])
-);
-
 // TODO hacky, uses the serializable form of the Gro `Disknode` (which uses maps)
 export const SerializableDisknode = object({
 	id: DiskfilePath,
 	source_dir: DiskfileDirectoryPath,
 	contents: nullable(string),
 	ctime: nullable(number),
-	mtime: nullable(number),
-	dependents: array(DisknodeEdge),
-	dependencies: array(DisknodeEdge)
+	mtime: nullable(number)
 });
 export type SerializableDisknode = Infer<typeof SerializableDisknode>;
 
@@ -116,9 +93,7 @@ export const DiskfileJson = cell_json_schema(
 		 * epoch — `null` when the backend couldn't say. It moves whenever the
 		 * file's bytes do, including for a file whose content isn't loaded.
 		 */
-		mtime: with_default(nullable(number), null),
-		dependents: with_default_fn(SerializableDisknode.def.dependents, () => []),
-		dependencies: with_default_fn(SerializableDisknode.def.dependencies, () => [])
+		mtime: with_default(nullable(number), null)
 	},
 	'Diskfile'
 );

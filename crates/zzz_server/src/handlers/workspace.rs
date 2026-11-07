@@ -490,8 +490,6 @@ mod tests {
                         "contents": null,
                         "ctime": null,
                         "mtime": null,
-                        "dependents": [],
-                        "dependencies": [],
                     }],
                     "watch_status": wire,
                 })

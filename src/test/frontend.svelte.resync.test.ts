@@ -37,9 +37,7 @@ const create_disknode = (path: DiskfilePath, contents = 'contents'): Serializabl
 	source_dir: path.startsWith(WS_DIR) ? WS_DIR : ZZZ_DIR,
 	contents,
 	ctime: 1,
-	mtime: 1,
-	dependents: [],
-	dependencies: []
+	mtime: 1
 });
 
 const create_workspace_info = (path: DiskfileDirectoryPath): WorkspaceInfoJson => ({

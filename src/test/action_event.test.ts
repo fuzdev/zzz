@@ -821,9 +821,7 @@ describe('ActionEvent', () => {
 					source_dir: '/',
 					contents: 'test content',
 					ctime: Date.now(),
-					mtime: Date.now(),
-					dependents: [],
-					dependencies: []
+					mtime: Date.now()
 				}
 			};
 

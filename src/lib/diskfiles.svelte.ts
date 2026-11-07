@@ -795,12 +795,4 @@ const is_under_any = (path: string, dirs: ReadonlyArray<string>): boolean =>
 
 /** Whether `diskfile` already holds everything `upsert` would take from `disknode`. */
 const diskfile_matches = (diskfile: Diskfile, disknode: SerializableDisknode): boolean =>
-	diskfile.content === disknode.contents &&
-	diskfile.source_dir === disknode.source_dir &&
-	dependency_lists_match(diskfile.dependents, disknode.dependents) &&
-	dependency_lists_match(diskfile.dependencies, disknode.dependencies);
-
-const dependency_lists_match = (
-	a: ReadonlyArray<readonly [string, unknown]>,
-	b: ReadonlyArray<readonly [string, unknown]>
-): boolean => a.length === b.length && (a.length === 0 || JSON.stringify(a) === JSON.stringify(b));
+	diskfile.content === disknode.contents && diskfile.source_dir === disknode.source_dir;

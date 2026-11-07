@@ -1,10 +1,5 @@
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import {
-	DiskfileDirectoryPath,
-	DiskfileJson,
-	type DiskfilePath,
-	type SerializableDisknode
-} from './diskfile_types.ts';
+import { DiskfileDirectoryPath, DiskfileJson, type DiskfilePath } from './diskfile_types.ts';
 import { to_preview } from './helpers.ts';
 import type { PartUnion } from './part.svelte.ts';
 
@@ -31,13 +26,6 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 	readonly part: PartUnion | undefined = $derived(
 		this.app.parts.find_part_by_diskfile_path(this.path)
 	);
-
-	// TODO @many add UI support for deps for module diskfiles (TS, Svelte, etc)
-	dependents: SerializableDisknode['dependents'] = $state.raw()!; // TODO @many these need to be null for unknown file types (support JS modules, etc)
-	dependencies: SerializableDisknode['dependencies'] = $state.raw()!; // TODO @many these need to be null for unknown file types (support JS modules, etc)
-
-	readonly dependencies_count: number = $derived(this.dependencies.length);
-	readonly dependents_count: number = $derived(this.dependents.length);
 
 	/** e.g. `bar/foo.json` inside the zzz dir, or an absolute path outside it. */
 	readonly path_relative: string | null | undefined = $derived(

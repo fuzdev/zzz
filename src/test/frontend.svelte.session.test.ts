@@ -28,9 +28,7 @@ const create_disknode = (path: DiskfilePath, contents: string | null): Serializa
 	source_dir: ZZZ_DIR,
 	contents,
 	ctime: 1,
-	mtime: 1,
-	dependents: [],
-	dependencies: []
+	mtime: 1
 });
 
 const SERVER_INSTANCE_ID = create_uuid();

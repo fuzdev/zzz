@@ -33,9 +33,7 @@ const create_disknode = (path: DiskfilePath, contents: string): SerializableDisk
 	source_dir: SOURCE_DIR,
 	contents,
 	ctime: 1,
-	mtime: 1,
-	dependents: [],
-	dependencies: []
+	mtime: 1
 });
 
 let app: Frontend;

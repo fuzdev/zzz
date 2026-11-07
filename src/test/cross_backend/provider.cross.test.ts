@@ -137,8 +137,9 @@ describe('provider + session cross-backend', () => {
 			assert.ok((test_file.source_dir as string).startsWith('/'), 'source_dir absolute');
 			assert.ok((test_file.source_dir as string).endsWith('/'), 'source_dir trailing slash');
 			assert.ok((test_file.id as string).startsWith('/'), 'file id absolute');
-			assert.deepEqual(test_file.dependents, []);
-			assert.deepEqual(test_file.dependencies, []);
+			// the vestigial edge lists are gone from the wire
+			assert.notProperty(test_file, 'dependents');
+			assert.notProperty(test_file, 'dependencies');
 			assert.equal(typeof test_file.mtime, 'number');
 		} finally {
 			await rm(file_path, { force: true });

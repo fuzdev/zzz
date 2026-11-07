@@ -120,18 +120,9 @@ export const disknode_to_diskfile_json = (
 		updated:
 			disknode.mtime == null
 				? created
-				: parse_or_throw(Datetime, new Date(disknode.mtime).toISOString()),
-		dependents: disknode.dependents,
-		dependencies: disknode.dependencies
+				: parse_or_throw(Datetime, new Date(disknode.mtime).toISOString())
 	};
 };
-
-// TODO hacky
-export const SUPPORTED_CODE_FILETYPE_MATCHER = /\.[mc]?[jt]sx?$/i;
-export const has_dependencies = (diskfile: Diskfile): boolean =>
-	diskfile.dependencies_count > 0 ||
-	diskfile.dependents_count > 0 ||
-	SUPPORTED_CODE_FILETYPE_MATCHER.test(diskfile.path);
 
 /**
  * Parses a name entered for a new file or folder, a path relative to

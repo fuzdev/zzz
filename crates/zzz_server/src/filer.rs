@@ -81,7 +81,6 @@ use notify::event::{ModifyKind, RenameMode};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::Mutex;
 use serde::Serialize;
-use serde_json::Value;
 use tokio::sync::{Notify, RwLock, mpsc, oneshot};
 use tokio::time::Instant;
 
@@ -154,8 +153,6 @@ struct DisknodeMetadata<'a> {
     source_dir: &'a str,
     ctime: Option<f64>,
     mtime: Option<f64>,
-    dependents: &'a [Value],
-    dependencies: &'a [Value],
 }
 
 impl<'a> From<&'a SerializableDisknode> for DisknodeMetadata<'a> {
@@ -165,8 +162,6 @@ impl<'a> From<&'a SerializableDisknode> for DisknodeMetadata<'a> {
             source_dir: &node.source_dir,
             ctime: node.ctime,
             mtime: node.mtime,
-            dependents: &node.dependents,
-            dependencies: &node.dependencies,
         }
     }
 }
@@ -203,9 +198,6 @@ enum ChangeType {
 
 /// Matches `SerializableDisknode` from `diskfile_types.ts`.
 ///
-/// Simplified — `dependents` and `dependencies` are always empty (no
-/// dependency tracking in the Rust backend).
-///
 /// `contents` is shared, so cloning a node out of the index (a snapshot for
 /// `session_load`, a queued broadcast) doesn't copy the file's text.
 #[derive(Serialize, Clone, Debug)]
@@ -216,8 +208,6 @@ pub struct SerializableDisknode {
     pub contents: Option<Arc<String>>,
     pub ctime: Option<f64>,
     pub mtime: Option<f64>,
-    pub dependents: Vec<Value>,
-    pub dependencies: Vec<Value>,
     /// The `lstat` this node was read after — lets a rescan reuse the node
     /// while the file is unchanged. Not part of the wire shape.
     #[serde(skip)]
@@ -469,8 +459,6 @@ fn make_disknode(
         contents,
         ctime,
         mtime,
-        dependents: vec![],
-        dependencies: vec![],
         stat,
     }
 }
@@ -2224,6 +2212,7 @@ pub struct FilerSnapshot {
 mod tests {
     use super::*;
     use notify::event::{CreateKind, DataChange, RemoveKind, RenameMode};
+    use serde_json::Value;
 
     // -- pure: classification + coalescing + subtree diff ---------------------
 
@@ -2396,8 +2385,6 @@ mod tests {
                     "source_dir": "/w/",
                     "ctime": null,
                     "mtime": 2.0,
-                    "dependents": [],
-                    "dependencies": [],
                 },
             })
         );
@@ -4416,8 +4403,6 @@ mod tests {
                 "contents": "say \"hi\"\n",
                 "ctime": 2.5,
                 "mtime": 2.5,
-                "dependents": [],
-                "dependencies": [],
             })
         );
         let unloaded = SerializableDisknode::for_test("/w/big.bin", None, None);
@@ -4429,8 +4414,6 @@ mod tests {
                 "contents": null,
                 "ctime": null,
                 "mtime": null,
-                "dependents": [],
-                "dependencies": [],
             })
         );
     }

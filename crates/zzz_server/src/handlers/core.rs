@@ -228,8 +228,6 @@ mod tests {
                     "contents": "a",
                     "ctime": 1.5,
                     "mtime": 1.5,
-                    "dependents": [],
-                    "dependencies": [],
                 }],
                 "file_roots": ["/s/"],
                 "zzz_dir": "/z",

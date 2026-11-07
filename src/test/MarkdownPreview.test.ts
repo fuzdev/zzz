@@ -192,9 +192,7 @@ describe('MarkdownPreview in-zzz links', () => {
 			source_dir: SOURCE_DIR,
 			contents,
 			ctime: 1,
-			mtime: 1,
-			dependents: [],
-			dependencies: []
+			mtime: 1
 		});
 
 	const render_in_app = (props: Record<string, unknown>): HTMLElement => {

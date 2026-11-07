@@ -7,7 +7,6 @@
 	import { frontend_context } from './frontend.svelte.ts';
 	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 	import DiskfileMetrics from './DiskfileMetrics.svelte';
-	import { has_dependencies } from './diskfile_helpers.ts';
 
 	const {
 		diskfile,
@@ -34,13 +33,6 @@
 	</small>
 
 	<DiskfileMetrics {editor_state} />
-
-	{#if has_dependencies(diskfile)}
-		<small class="font_family_mono" transition:slide>
-			<div>{diskfile.dependencies_count} dependencies</div>
-			<div>{diskfile.dependents_count} dependents</div>
-		</small>
-	{/if}
 
 	<small class="font_family_mono">{diskfile.id}</small>
 </div>
