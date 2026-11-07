@@ -175,7 +175,7 @@
 <svelte:document onkeydown={handle_keydown} />
 
 <DiskfileContextmenu {diskfile}>
-	<div class="display:flex height:100%" bind:this={root_el}>
+	<div class="flex height:100%" bind:this={root_el}>
 		<div class="flex:1 width_atleast_sm height:100% column">
 			<div class="row gap_xs px_md py_xs">
 				{#each MARKDOWN_VIEW_MODES as m (m)}
@@ -240,7 +240,7 @@
 					</ErrorMessage>
 				</div>
 			{/if}
-			<div class="display:flex flex:1 min-height:0">
+			<div class="flex flex:1 min-height:0">
 				{#if mode !== 'preview'}
 					<!-- a wrapper keeps the editor its last child, so `CodeTextarea` adds no flow margin below -->
 					<div class="flex:1 min-width:0 column">

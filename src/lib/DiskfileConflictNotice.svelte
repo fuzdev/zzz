@@ -35,7 +35,7 @@
 			changed on disk since you edited it — saving is paused so that change isn't overwritten; both
 			versions are in the history
 		</small>
-		<div class="display:flex gap_xs mt_xs">
+		<div class="flex gap_xs mt_xs">
 			<button
 				type="button"
 				class="sized_sm"

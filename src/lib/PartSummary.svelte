@@ -25,7 +25,7 @@
 
 <PartContextmenu {part} {owner}>
 	<div
-		class="part-summary display:flex justify-content:space-between gap_xs2 font_size_sm position:relative panel"
+		class="part-summary flex justify-content:space-between gap_xs2 font_size_sm relative panel"
 		class:dormant={!part.enabled}
 	>
 		<div class="progress-bar" style:width="{percent}%"></div>
@@ -35,7 +35,7 @@
 			{#if part.type === 'diskfile'}<DiskfilePartDraftLabel {part} />{/if}
 			{part.content_preview}
 		</div>
-		<div class="controls display:flex gap_xs2">
+		<div class="controls flex gap_xs2">
 			<PartToggleButton {part} />
 			{#if owner}
 				<PartRemoveButton {part} {owner} />

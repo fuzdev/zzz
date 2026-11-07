@@ -26,8 +26,8 @@
 </script>
 
 <div {...attrs} class="panel p_lg {attrs?.class}">
-	<section class="display:flex mb_lg">
-		<div class="display:flex">
+	<section class="flex mb_lg">
+		<div class="flex">
 			<ProviderLogo name={provider.name} size="var(--icon_size_xl)" fill={null} />
 			<div class="pl_xl">
 				{#if at_detail_page}
@@ -63,7 +63,7 @@
 
 	<section>
 		<aside>⚠️ This information is incomplete and may be incorrect or outdated.</aside>
-		<ul class="display:flex flex-wrap:wrap unstyled gap_md">
+		<ul class="flex flex-wrap:wrap unstyled gap_md">
 			{#each provider.models as model (model)}
 				<ModelSummary {model} omit_provider />
 			{/each}

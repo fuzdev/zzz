@@ -48,7 +48,7 @@
 	</p>
 
 	<div
-		class="flex:1 display:grid overflow:hidden"
+		class="flex:1 grid overflow:hidden"
 		style:grid-template-columns="320px 1fr"
 		style:gap="var(--space_md)"
 	>

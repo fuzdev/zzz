@@ -24,7 +24,7 @@
 
 <!-- `Contextmenu`'s element is `display: contents`, so the layout lives on an inner element -->
 <ChatsContextmenu tag="div">
-	<div class="display:flex width:100% height:100%">
+	<div class="flex width:100% height:100%">
 		<div class="column-fixed">
 			<div class="py_sm pr_sm">
 				<div class="row gap_xs2 mb_xs pl_xs2">

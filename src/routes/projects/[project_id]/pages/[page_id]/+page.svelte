@@ -57,7 +57,7 @@
 		<!-- preview toggle button in top-right corner -->
 		<button
 			type="button"
-			class="position:fixed top:0 right:0 icon-button plain border-radius:0"
+			class="fixed top:0 right:0 icon-button plain border-radius:0"
 			aria-label="close preview"
 			title="close preview"
 			onclick={toggle_preview}
@@ -78,14 +78,14 @@
 			{#if page_viewmodel && project}
 				<div class="height:100% column p_lg">
 					<div>
-						<div class="display:flex gap_sm align-items:center">
+						<div class="flex gap_sm align-items:center">
 							<h1 class="mb_lg">
 								{page_viewmodel.current_page?.title || 'Page'}
 							</h1>
 						</div>
 
-						<div class="display:flex width:100% justify-content:space-between gap_sm mb_lg">
-							<div class="display:flex gap_sm">
+						<div class="flex width:100% justify-content:space-between gap_sm mb_lg">
+							<div class="flex gap_sm">
 								<button
 									type="button"
 									onclick={() => page_viewmodel.save_page()}
@@ -107,7 +107,7 @@
 					</div>
 
 					<div class="panel p_md mb_md">
-						<div class="display:flex gap_sm">
+						<div class="flex gap_sm">
 							<div class="flex:1">
 								<label>
 									page title

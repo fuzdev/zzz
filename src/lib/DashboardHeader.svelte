@@ -10,7 +10,7 @@
 	} = $props();
 </script>
 
-<div class="display:flex">
+<div class="flex">
 	<header class="flex:1">
 		{@render header()}
 	</header>

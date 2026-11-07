@@ -31,7 +31,7 @@
 	<section>
 		<CapabilitiesView />
 	</section>
-	<section class="mb_xl7 display:flex justify-content:center">
+	<section class="mb_xl7 flex justify-content:center">
 		<Footer />
 	</section>
 </div>

@@ -47,7 +47,7 @@
 
 <div class="mb_xs">
 	{#if diskfile}
-		<small class="mb_xs display:block overflow:hidden white-space:break-spaces">
+		<small class="mb_xs block overflow:hidden white-space:break-spaces">
 			{diskfile.path_relative}
 		</small>
 	{/if}

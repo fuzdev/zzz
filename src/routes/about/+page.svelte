@@ -170,7 +170,7 @@
 					style="transition: transform 200ms ease"
 				/>
 				<span>
-					<span class="display:inline-block text-align:right" style:width="6ch">
+					<span class="inline-block text-align:right" style:width="6ch">
 						{app.futuremode ? 'disable' : 'enable'}
 					</span>
 					futuremode

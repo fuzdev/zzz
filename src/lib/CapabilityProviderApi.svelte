@@ -56,9 +56,9 @@
 	};
 </script>
 
-<div class="display:flex flex-direction:column">
+<div class="flex flex-direction:column">
 	{#if provider}
-		<div class="py_sm display:flex gap_sm align-items:start">
+		<div class="py_sm flex gap_sm align-items:start">
 			<form class="flex:1">
 				<div
 					class="width:100% chip plain flex:1 flex-direction:column mb_lg"
@@ -104,7 +104,7 @@
 					<p class="font_size_sm">
 						set <code>{env_var_name}</code> in the server's environment and restart
 					</p>
-					<div class="display:flex justify-content:space-between gap_xs">
+					<div class="flex justify-content:space-between gap_xs">
 						<button type="button" class="flex:1" disabled={checking} onclick={reload_status}>
 							reload
 						</button>

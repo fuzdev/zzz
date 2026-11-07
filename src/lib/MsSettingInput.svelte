@@ -40,7 +40,7 @@
 	};
 </script>
 
-<div class="display:flex gap_xs">
+<div class="flex gap_xs">
 	<input
 		type="range"
 		aria-label={label}

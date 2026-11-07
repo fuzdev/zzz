@@ -54,7 +54,7 @@
 	<h2 class="mt_0 mb_lg">{heading}</h2>
 {/if}
 
-<div class="display:flex">
+<div class="flex">
 	<section class="width_atmost_sm width_atleast_sm">
 		<h3 class="mt_0 mb_lg">with model</h3>
 		<ModelPicker
@@ -79,7 +79,7 @@
 				>
 					<div>
 						<div class="font_size_lg mb_sm">{chat_template.name}</div>
-						<div class="display:flex flex-wrap:wrap gap_xs2">
+						<div class="flex flex-wrap:wrap gap_xs2">
 							{#each chat_template.model_names as model_name (model_name)}
 								{@const provider_name = app.models.find_by_name(model_name)?.provider_name}
 								<small class="chip">

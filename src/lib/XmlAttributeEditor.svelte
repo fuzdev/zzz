@@ -21,7 +21,7 @@
 	const dormant = $derived(dormant_prop || !attribute.key);
 </script>
 
-<div class="display:flex gap_xs2 align-items:center" class:dormant_wrapper={!attribute.key}>
+<div class="flex gap_xs2 align-items:center" class:dormant_wrapper={!attribute.key}>
 	<input
 		class="plain sized_sm"
 		class:dormant

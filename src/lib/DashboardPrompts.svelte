@@ -65,7 +65,7 @@
 	};
 </script>
 
-<div class="display:flex width:100% height:100%">
+<div class="flex width:100% height:100%">
 	<div class="column-fixed">
 		<div class="p_sm pl_0">
 			<div class="row gap_xs2 mb_xs pl_xs2">
@@ -98,7 +98,7 @@
 		<PromptContextmenu prompt={app.prompts.selected}>
 			<div class="column-fixed pr_sm">
 				<section class="column-section">
-					<div class="font_size_lg display:flex align-items:center">
+					<div class="font_size_lg flex align-items:center">
 						<Icon data={icon_prompt} />
 						<EditableText bind:value={app.prompts.selected.name} />
 					</div>
@@ -139,8 +139,8 @@
 
 			<div class="column-fluid">
 				<div class="column-bg-1 column gap_md p_sm">
-					<div class="display:flex justify-content:space-between">
-						<div class="display:flex flex-wrap:wrap gap_xs">
+					<div class="flex justify-content:space-between">
+						<div class="flex flex-wrap:wrap gap_xs">
 							<button type="button" class="plain font_size_sm" onclick={add_text_part}>
 								<div class="row white-space:nowrap">
 									<Icon data={icon_part} />&nbsp; add text
@@ -168,7 +168,7 @@
 						</div>
 					</div>
 					<ul
-						class="unstyled display:grid gap_md"
+						class="unstyled grid gap_md"
 						style:grid-template-columns="repeat(auto-fill, minmax(300px, 1fr))"
 					>
 						{#each app.prompts.selected.parts as part (part.id)}

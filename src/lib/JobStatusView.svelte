@@ -34,7 +34,7 @@
 </script>
 
 <div class="job-status">
-	<div class="row gap_sm flex-wrap:wrap">
+	<div class="row_wrap gap_sm">
 		<span class="chip" class:color_c_60={job.status === 'failed'}>{job.status}</span>
 		<span>{job.kind}</span>
 		{#if show_input}

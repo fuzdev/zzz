@@ -16,7 +16,7 @@
 
 <div>
 	<!-- TODO add user-customizable sets of models -->
-	<div class="display:flex">
+	<div class="flex">
 		<div class="flex:1 p_xs">
 			<header class="font_size_lg text-align:center mb_xs">add by tag</header>
 			<menu class="unstyled column">

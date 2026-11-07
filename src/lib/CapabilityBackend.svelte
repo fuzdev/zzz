@@ -19,8 +19,8 @@
 	});
 </script>
 
-<div class="display:flex flex-direction:column">
-	<div class="display:flex">
+<div class="flex flex-direction:column">
+	<div class="flex">
 		<div
 			class="chip px_xl plain font-weight:400 width_atmost_sm"
 			style:padding="0 var(--space_xl)"

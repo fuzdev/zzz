@@ -109,7 +109,7 @@
 			{#if failure_message !== null}
 				<p class="color_c_60" role="alert">{failure_message}</p>
 			{/if}
-			<div class="display:flex gap_sm flex-wrap:wrap">
+			<div class="flex gap_sm flex-wrap:wrap">
 				<button
 					type="button"
 					class="palette_f"

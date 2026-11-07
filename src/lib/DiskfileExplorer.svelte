@@ -58,7 +58,7 @@
 					<a href={resolve('/workspaces')}>open a workspace</a> to create files
 				</small>
 			{/if}
-			<div class="display:flex gap_xs2">
+			<div class="flex gap_xs2">
 				<PendingButton
 					pending={TODO_create_file_pending}
 					class="plain sized_sm"

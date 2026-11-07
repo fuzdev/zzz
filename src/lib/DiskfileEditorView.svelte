@@ -48,7 +48,7 @@
 </script>
 
 <DiskfileContextmenu {diskfile}>
-	<div class="display:flex height:100%">
+	<div class="flex height:100%">
 		<div class="flex:1 width_atleast_sm height:100% column">
 			{#if !editor_state.content_loaded}
 				<p class="px_md py_xs mb_0 color_c_60">

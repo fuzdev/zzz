@@ -77,7 +77,7 @@
 	</table>
 </div>
 
-<div class="display:flex gap_md mb_sm">
+<div class="flex gap_md mb_sm">
 	<CopyToClipboard text={JSON.stringify(action.json, null, 2)} class="plain" />
 </div>
 <pre

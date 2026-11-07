@@ -32,7 +32,7 @@
 		}}
 		transition:slide
 	>
-		<div class="font-weight:400 display:flex align-items:center gap_xs width:100%">
+		<div class="font-weight:400 flex align-items:center gap_xs width:100%">
 			<Icon data={get_icon_for_action_method(action.method)} />
 			<Icon data={get_icon_for_action_kind(action.kind)} />
 			<span class="font_family_mono flex:1 ellipsis">{action.method}</span>

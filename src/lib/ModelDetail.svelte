@@ -62,7 +62,7 @@
 					{/if}
 				</div>
 				{#if model.tags.length}
-					<ul class="unstyled display:flex gap_xs">
+					<ul class="unstyled flex gap_xs">
 						{#each model.tags as tag (tag)}
 							<small class="chip font-weight:400">{tag}</small>
 						{/each}
@@ -77,7 +77,7 @@
 			like we'll have to maintain hardcoded metadata for models, probably extending what we can
 			retrieve from each API.
 		</aside>
-		<section class="display:flex gap_xs">
+		<section class="flex gap_xs">
 			<button
 				type="button"
 				class="palette_d"

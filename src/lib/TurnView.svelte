@@ -22,12 +22,12 @@
 	{#if turn.parts.length > 0}
 		{#each turn.parts as part (part.id)}
 			<div class="column gap_sm mb_md" class:dormant={!part.enabled}>
-				<div class="display:flex mb_0 justify-content:space-between">
+				<div class="flex mb_0 justify-content:space-between">
 					<div class="font_size_lg m_0">
 						<Icon data={get_part_type_icon(part)} />&nbsp;
 						{part.name}
 					</div>
-					<div class="display:flex gap_xs">
+					<div class="flex gap_xs">
 						<PartToggleButton {part} />
 						<PartRemoveButton {part} owner={turn} />
 					</div>

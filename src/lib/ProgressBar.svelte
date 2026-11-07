@@ -15,7 +15,7 @@
 	// TODO a11y
 </script>
 
-<div class="display:flex align-items:center gap_sm">
+<div class="flex align-items:center gap_sm">
 	{#if text}
 		{@render text()}
 	{:else}

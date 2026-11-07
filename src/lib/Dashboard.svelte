@@ -102,14 +102,14 @@
 	style:--desk_width="{desk_width}px"
 >
 	<div
-		class="height:100% width:100% position:fixed top:0 left:0"
+		class="height:100% width:100% fixed top:0 left:0"
 		style:padding-left="var(--sidebar_width)"
 		style:padding-right="var(--desk_width)"
 	>
 		{@render children()}
 	</div>
 	<div
-		class="height:100% position:fixed top:0 left:0 overflow:auto scrollbar-width:thin"
+		class="height:100% fixed top:0 left:0 overflow:auto scrollbar-width:thin"
 		style:width="var(--sidebar_width)"
 	>
 		<!-- TODO refactor -->
@@ -118,7 +118,7 @@
 			<nav class="font_size_lg">
 				{#each dashboard_nav_items as section (section.group)}
 					{#if section.group === 'main'}
-						<div class="display:flex p_sm mb_sm">
+						<div class="flex p_sm mb_sm">
 							<NavLink
 								href={resolve('/')}
 								title={app.futuremode ? 'futuremode' : 'home'}
@@ -177,7 +177,7 @@
 	<!-- sidebar toggle button -->
 	<button
 		type="button"
-		class="position:fixed bottom:0 left:0 icon-button plain border-radius:0 border_top_right_radius_md"
+		class="fixed bottom:0 left:0 icon-button plain border-radius:0 border_top_right_radius_md"
 		aria-label={sidebar_button_title}
 		title={sidebar_button_title}
 		onclick={() => app.ui.toggle_sidebar()}
@@ -189,7 +189,7 @@
 	{#if !app.ui.show_desk_menu}
 		<button
 			type="button"
-			class="position:fixed top:0 right:0 icon-button plain border-radius:0 border_bottom_left_radius_md"
+			class="fixed top:0 right:0 icon-button plain border-radius:0 border_bottom_left_radius_md"
 			aria-label="desk menu"
 			title="desk menu — switch spaces [~]"
 			onclick={() => app.ui.toggle_desk_menu()}

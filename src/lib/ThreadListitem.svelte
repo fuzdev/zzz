@@ -70,7 +70,7 @@
 					{/if}
 					{thread.model_name}
 				</div>
-				<div class="display:flex gap_xs">
+				<div class="flex gap_xs">
 					{#if turn_count > 0}
 						<small>
 							{turn_count} message{turn_count !== 1 ? 's' : ''}, {thread.token_count}
@@ -81,7 +81,7 @@
 					{/if}
 				</div>
 			</div>
-			<div class="display:flex gap_xs">
+			<div class="flex gap_xs">
 				<ThreadToggleButton {thread} />
 				<ConfirmButton
 					onconfirm={() => chat.remove_thread(thread.id)}

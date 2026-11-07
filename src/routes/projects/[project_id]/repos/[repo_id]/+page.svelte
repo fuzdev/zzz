@@ -102,7 +102,7 @@
 							</div>
 						</div>
 
-						<div class="width:100% display:flex justify-content:space-between gap_sm">
+						<div class="width:100% flex justify-content:space-between gap_sm">
 							<div>
 								<button
 									type="submit"

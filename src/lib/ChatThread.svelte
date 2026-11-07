@@ -82,7 +82,7 @@
 			class:empty
 			class:dormant={!thread.enabled}
 		>
-			<div class="display:flex justify-content:space-between align-items:start">
+			<div class="flex justify-content:space-between align-items:start">
 				<header>
 					<button
 						type="button"

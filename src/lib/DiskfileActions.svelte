@@ -29,7 +29,7 @@
 </script>
 
 <!-- Content modification actions (copy, paste, clear) -->
-<div class="display:flex gap_xs">
+<div class="flex gap_xs">
 	{#if editor_state.content_loaded}
 		<CopyToClipboard text={editor_state.current_content} class="plain" />
 	{/if}
@@ -58,7 +58,7 @@
 </div>
 
 {#if !readonly && !auto_save}
-	<div class="mt_xs display:flex" transition:slide>
+	<div class="mt_xs flex" transition:slide>
 		<button
 			class="flex:1 palette_f"
 			type="button"

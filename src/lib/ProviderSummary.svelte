@@ -36,7 +36,7 @@
 			<ExternalLink href={provider.url}>docs</ExternalLink>
 		</div>
 	</section>
-	<ul class="display:flex flex-wrap:wrap unstyled gap_md">
+	<ul class="flex flex-wrap:wrap unstyled gap_md">
 		{#each provider.models as model (model)}
 			<ModelSummary {model} />
 		{/each}

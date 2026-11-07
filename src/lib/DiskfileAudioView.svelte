@@ -108,7 +108,7 @@
 </script>
 
 <DiskfileContextmenu {diskfile}>
-	<div class="display:flex height:100%">
+	<div class="flex height:100%">
 		<div class="flex:1 width_atleast_sm height:100% column p_md gap_md overflow:auto">
 			{#if diskfile.deleted_on_disk}
 				<p class="color_c_60">deleted on disk</p>
@@ -157,7 +157,7 @@
 							<TranscriptSegments segments={job.live_segments} onseek={seek} {current_ms} />
 						{/if}
 					{:else if selected}
-						<div class="row gap_sm flex-wrap:wrap mb_sm">
+						<div class="row_wrap gap_sm mb_sm">
 							<small class="text_50">
 								transcript by
 								{#if transcripts.length > 1}
@@ -209,7 +209,7 @@
 							<p class="text_50">no speech was recognized</p>
 						{/if}
 					{:else}
-						<div class="row gap_sm flex-wrap:wrap">
+						<div class="row_wrap gap_sm">
 							<PendingButton
 								pending={transcribe_pending}
 								title="transcribe this file with the local speech model"
@@ -231,7 +231,7 @@
 		</div>
 
 		<div class="width_atmost_sm width_atleast_sm py_md">
-			<div class="px_md mb_lg display:flex gap_xs">
+			<div class="px_md mb_lg flex gap_xs">
 				<PendingButton
 					pending={finalizing}
 					disabled={recording || diskfile.deleted_on_disk}
@@ -259,7 +259,7 @@
 				</ConfirmButton>
 			</div>
 
-			<div class="px_md mb_lg display:flex flex-direction:column gap_xs width:100%">
+			<div class="px_md mb_lg flex flex-direction:column gap_xs width:100%">
 				<small class="word-break:break-all width:100%">
 					<Icon data={icon_file} />
 					{app.diskfiles.to_relative_path(diskfile.path)}

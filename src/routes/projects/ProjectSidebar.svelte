@@ -12,7 +12,7 @@
 </script>
 
 <aside class="height:100% overflow-y:auto unstyled width_atmost_xs p_xs">
-	<div class="display:flex">
+	<div class="flex">
 		<button
 			type="button"
 			class="plain justify-content:start flex:1"

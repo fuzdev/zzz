@@ -158,7 +158,7 @@
 								<strong>{workspace.name}</strong>
 								<span class="text_50 font_size_sm font_family_mono ml_sm">{workspace.path}</span>
 								{#if workspace.watch_status === 'degraded'}
-									<small class="text_50 display:block">{WORKSPACE_DEGRADED_NOTICE}</small>
+									<small class="text_50 block">{WORKSPACE_DEGRADED_NOTICE}</small>
 								{/if}
 							</span>
 						</button>

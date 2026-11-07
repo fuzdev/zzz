@@ -14,9 +14,9 @@
 </script>
 
 <div class="p_lg">
-	<section class="display:flex flex-wrap:wrap align-items:start gap_lg">
+	<section class="flex flex-wrap:wrap align-items:start gap_lg">
 		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
-			<h3 class="mt_0 mb_lg display:flex align-items:center justify-content:space-between">
+			<h3 class="mt_0 mb_lg flex align-items:center justify-content:space-between">
 				<a class="font-weight:500 text_80" href={to_nav_link_href(app, 'chats', resolve('/chats'))}>
 					chats
 				</a>
@@ -50,7 +50,7 @@
 			{/if}
 		</div>
 		<div class="panel p_md flex:1 width_atleast_sm" style:max-width="480px">
-			<h3 class="mt_0 mb_lg display:flex align-items:center justify-content:space-between">
+			<h3 class="mt_0 mb_lg flex align-items:center justify-content:space-between">
 				<a
 					class="font-weight:500 text_80"
 					href={to_nav_link_href(app, 'prompts', resolve('/prompts'))}

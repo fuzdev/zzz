@@ -40,7 +40,7 @@
 		{/if}
 
 		{#if model.tags.length}
-			<ul class="unstyled display:flex flex-wrap:wrap gap_xs mb_md mt_sm">
+			<ul class="unstyled flex flex-wrap:wrap gap_xs mb_md mt_sm">
 				{#each model.tags as tag (tag)}
 					<small class="chip font-weight:400">{tag}</small>
 				{/each}
@@ -49,19 +49,19 @@
 
 		<div class="column gap_xs">
 			{#if model.context_window}
-				<div class="display:flex flex-wrap:wrap gap_xs font_size_sm">
+				<div class="flex flex-wrap:wrap gap_xs font_size_sm">
 					<span class="text_50 font-weight:600">context:</span>
 					<span>{model.context_window.toLocaleString()} tokens</span>
 				</div>
 			{/if}
 			{#if model.parameter_count}
-				<div class="display:flex flex-wrap:wrap gap_xs font_size_sm">
+				<div class="flex flex-wrap:wrap gap_xs font_size_sm">
 					<span class="text_50 font-weight:600">parameters:</span>
 					<span>{model.parameter_count.toLocaleString()}B</span>
 				</div>
 			{/if}
 			{#if model.filesize}
-				<div class="display:flex flex-wrap:wrap gap_xs font_size_sm">
+				<div class="flex flex-wrap:wrap gap_xs font_size_sm">
 					<span class="text_50 font-weight:600">size:</span>
 					<span>{format_gigabytes(model.filesize)}</span>
 				</div>

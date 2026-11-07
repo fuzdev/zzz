@@ -94,7 +94,7 @@
 				<Icon data={icon_microphone} /> <span class="ml_xs">record</span>
 			</PendingButton>
 		{:else}
-			<div class="row gap_sm flex-wrap:wrap">
+			<div class="row_wrap gap_sm">
 				<strong>{recorder.status}</strong>
 				<span class="font_family_mono">{format_recording_duration(recorder.duration)}</span>
 				{#if recorder.status === 'recording'}
@@ -143,7 +143,7 @@
 				{@const job = jobs.latest_for_input(diskfile.path)}
 				{@const is_recording = recorder.path === diskfile.path}
 				<li class="panel p_md">
-					<div class="row gap_sm flex-wrap:wrap">
+					<div class="row_wrap gap_sm">
 						<button type="button" class="plain" onclick={() => open(diskfile)}>
 							{to_name(diskfile.path)}
 						</button>

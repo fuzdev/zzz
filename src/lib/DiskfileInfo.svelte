@@ -19,7 +19,7 @@
 	const app = frontend_context.get();
 </script>
 
-<div class="display:flex flex-direction:column gap_xs width:100%">
+<div class="flex flex-direction:column gap_xs width:100%">
 	<small class="word-break:break-all width:100%">
 		<Icon data={icon_file} />
 		{app.diskfiles.to_relative_path(diskfile.path)}

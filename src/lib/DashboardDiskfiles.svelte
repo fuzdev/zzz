@@ -68,7 +68,7 @@
 	}}
 />
 
-<div class="height:100% display:flex">
+<div class="height:100% flex">
 	{#if capabilities.filesystem_available === false}
 		<div class="box height:100% width:100%">
 			<div class="width_atmost_sm">
@@ -92,7 +92,7 @@
 	{:else if capabilities.filesystem_available === null ||
 		capabilities.filesystem_available === undefined
 	}
-		<div class="box height:100% width:100% display:flex align-items:center justify-content:center">
+		<div class="box height:100% width:100% flex align-items:center justify-content:center">
 			<div class="text-align:center">
 				<p class="mt_md">loading filesystem <PendingAnimation inline /></p>
 			</div>
@@ -105,14 +105,14 @@
 		<div class="flex:1 column overflow:hidden height:100%">
 			<!-- tabs -->
 			<menu
-				class="unstyled display:flex overflow-x:auto scrollbar-width:thin"
+				class="unstyled flex overflow-x:auto scrollbar-width:thin"
 				{@attach tabs_reorderable.list({
 					onreorder: (from_index, to_index) => editor.reorder_tabs(from_index, to_index)
 				})}
 			>
 				{#each editor.tabs.ordered_tabs as tab, index (tab.id)}
-					<li class="display:flex py_xs3 px_xs4">
-						<div class="display:flex" {@attach tabs_reorderable.item({ index })}>
+					<li class="flex py_xs3 px_xs4">
+						<div class="flex" {@attach tabs_reorderable.item({ index })}>
 							<!-- TODO notice the different APIs here, needs fixing, diskfiles is higher in the tree -->
 							<DiskfileTabListitem
 								{tab}

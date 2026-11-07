@@ -33,7 +33,7 @@
 		</div>
 
 		{#if show_tags && model.tags.length}
-			<ul class="unstyled display:flex flex-wrap:wrap gap_xs2">
+			<ul class="unstyled flex flex-wrap:wrap gap_xs2">
 				{#each model.tags as tag (tag)}
 					<small class="chip font-weight:400">{tag}</small>
 				{/each}

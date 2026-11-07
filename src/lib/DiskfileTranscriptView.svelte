@@ -84,7 +84,7 @@
 
 {#if transcript}
 	<DiskfileContextmenu {diskfile}>
-		<div class="display:flex height:100%">
+		<div class="flex height:100%">
 			<div class="flex:1 width_atleast_sm height:100% column p_md gap_md overflow:auto">
 				{#if source && source_url}
 					{#key source.mtime}
@@ -115,7 +115,7 @@
 			</div>
 
 			<div class="width_atmost_sm width_atleast_sm py_md">
-				<div class="px_md mb_lg display:flex gap_xs">
+				<div class="px_md mb_lg flex gap_xs">
 					<button
 						type="button"
 						class="plain"
@@ -146,7 +146,7 @@
 					<p class="px_md color_c_60">couldn't create the copy: {copy_error}</p>
 				{/if}
 
-				<div class="px_md mb_lg display:flex flex-direction:column gap_xs width:100%">
+				<div class="px_md mb_lg flex flex-direction:column gap_xs width:100%">
 					<small class="word-break:break-all width:100%">
 						<Icon data={icon_file} />
 						{app.diskfiles.to_relative_path(diskfile.path)}

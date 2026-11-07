@@ -33,13 +33,13 @@
 	// TODO custom buttons section - including quick local, smartest all, all, etc - custom buttons to do common things, compose them with buttons like "fill all" or "fill with tag" or at least drag
 </script>
 
-<div class="flex:1 height:100% display:flex align-items:start">
+<div class="flex:1 height:100% flex align-items:start">
 	<div class="column-fixed">
 		{#if chat}
 			<section class="column-section" transition:slide>
 				<!-- TODO needs work -->
 				<div
-					class="font_size_lg display:flex align-items:center"
+					class="font_size_lg flex align-items:center"
 					title={chat.autoname && chat.init_name_error
 						? `auto-naming failed: ${chat.init_name_error}`
 						: undefined}
@@ -82,7 +82,7 @@
 		{#if thread_count && (chat.view_mode !== 'simple' || thread_count > 1)}
 			<section class="column-section">
 				<header
-					class="mt_0 mb_lg font_size_lg display:flex justify-content:space-between"
+					class="mt_0 mb_lg font_size_lg flex justify-content:space-between"
 					title="threads are the individual threads of conversation in a chat -- each chat can have many threads, comprising its history"
 				>
 					<span><Icon data={icon_thread} /> threads</span><span>{thread_count}</span>

@@ -114,7 +114,7 @@
 	};
 </script>
 
-<div class="display:flex gap_xs align-items:center">
+<div class="flex gap_xs align-items:center">
 	<button
 		type="button"
 		class="icon-button plain p_xs border_radius_lg"

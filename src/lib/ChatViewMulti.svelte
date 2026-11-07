@@ -69,7 +69,7 @@
 			</PendingButton>
 		</ContentEditor>
 
-		<div class="display:flex mt_lg">
+		<div class="flex mt_lg">
 			<button type="button" class="plain" onclick={() => (show_model_picker = true)}>
 				<Icon data={icon_add} />&nbsp; add thread
 			</button>

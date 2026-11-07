@@ -41,7 +41,7 @@
 							</div>
 						{/each}
 					</div>
-					<div class="display:flex gap_md">
+					<div class="flex gap_md">
 						<small class="chip">
 							{project.pages.length}
 							{project.pages.length === 1 ? 'page' : 'pages'}
@@ -55,7 +55,7 @@
 		</div>
 	{/if}
 
-	<div class="display:flex justify-content:space-between mt_lg">
+	<div class="flex justify-content:space-between mt_lg">
 		<button type="button" class="palette_a" onclick={() => projects.create_new_project()}>
 			<Icon data={icon_add} />&nbsp; new project
 		</button>
