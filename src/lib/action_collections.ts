@@ -13,7 +13,7 @@ import type {
  * Action specifications indexed by method name.
  * These represent the complete action spec definitions.
  */
-export const ActionSpecs = {
+export const ActionSpecs: ActionSpecs = {
 	heartbeat: specs.heartbeat_action_spec,
 	cancel: specs.cancel_action_spec,
 	'peer/ping': specs.peer_ping_action_spec,
@@ -44,39 +44,39 @@ export const ActionSpecs = {
 	workspace_close: specs.workspace_close_action_spec,
 	workspace_list: specs.workspace_list_action_spec,
 	workspace_changed: specs.workspace_changed_action_spec
-} as const;
-export interface ActionSpecs {
-	heartbeat: typeof specs.heartbeat_action_spec;
-	cancel: typeof specs.cancel_action_spec;
-	'peer/ping': typeof specs.peer_ping_action_spec;
-	ping: typeof specs.ping_action_spec;
-	session_load: typeof specs.session_load_action_spec;
-	filer_change: typeof specs.filer_change_action_spec;
-	diskfile_update: typeof specs.diskfile_update_action_spec;
-	diskfile_create: typeof specs.diskfile_create_action_spec;
-	diskfile_delete: typeof specs.diskfile_delete_action_spec;
-	directory_create: typeof specs.directory_create_action_spec;
-	media_finalize: typeof specs.media_finalize_action_spec;
-	transcription_create: typeof specs.transcription_create_action_spec;
-	transcription_progress: typeof specs.transcription_progress_action_spec;
-	job_cancel: typeof specs.job_cancel_action_spec;
-	job_changed: typeof specs.job_changed_action_spec;
-	completion_create: typeof specs.completion_create_action_spec;
-	completion_progress: typeof specs.completion_progress_action_spec;
-	toggle_main_menu: typeof specs.toggle_main_menu_action_spec;
-	provider_load_status: typeof specs.provider_load_status_action_spec;
-	terminal_create: typeof specs.terminal_create_action_spec;
-	terminal_data_send: typeof specs.terminal_data_send_action_spec;
-	terminal_data: typeof specs.terminal_data_action_spec;
-	terminal_ack: typeof specs.terminal_ack_action_spec;
-	terminal_resize: typeof specs.terminal_resize_action_spec;
-	terminal_close: typeof specs.terminal_close_action_spec;
-	terminal_exited: typeof specs.terminal_exited_action_spec;
-	workspace_open: typeof specs.workspace_open_action_spec;
-	workspace_close: typeof specs.workspace_close_action_spec;
-	workspace_list: typeof specs.workspace_list_action_spec;
-	workspace_changed: typeof specs.workspace_changed_action_spec;
-}
+};
+export type ActionSpecs = {
+	readonly heartbeat: typeof specs.heartbeat_action_spec;
+	readonly cancel: typeof specs.cancel_action_spec;
+	readonly 'peer/ping': typeof specs.peer_ping_action_spec;
+	readonly ping: typeof specs.ping_action_spec;
+	readonly session_load: typeof specs.session_load_action_spec;
+	readonly filer_change: typeof specs.filer_change_action_spec;
+	readonly diskfile_update: typeof specs.diskfile_update_action_spec;
+	readonly diskfile_create: typeof specs.diskfile_create_action_spec;
+	readonly diskfile_delete: typeof specs.diskfile_delete_action_spec;
+	readonly directory_create: typeof specs.directory_create_action_spec;
+	readonly media_finalize: typeof specs.media_finalize_action_spec;
+	readonly transcription_create: typeof specs.transcription_create_action_spec;
+	readonly transcription_progress: typeof specs.transcription_progress_action_spec;
+	readonly job_cancel: typeof specs.job_cancel_action_spec;
+	readonly job_changed: typeof specs.job_changed_action_spec;
+	readonly completion_create: typeof specs.completion_create_action_spec;
+	readonly completion_progress: typeof specs.completion_progress_action_spec;
+	readonly toggle_main_menu: typeof specs.toggle_main_menu_action_spec;
+	readonly provider_load_status: typeof specs.provider_load_status_action_spec;
+	readonly terminal_create: typeof specs.terminal_create_action_spec;
+	readonly terminal_data_send: typeof specs.terminal_data_send_action_spec;
+	readonly terminal_data: typeof specs.terminal_data_action_spec;
+	readonly terminal_ack: typeof specs.terminal_ack_action_spec;
+	readonly terminal_resize: typeof specs.terminal_resize_action_spec;
+	readonly terminal_close: typeof specs.terminal_close_action_spec;
+	readonly terminal_exited: typeof specs.terminal_exited_action_spec;
+	readonly workspace_open: typeof specs.workspace_open_action_spec;
+	readonly workspace_close: typeof specs.workspace_close_action_spec;
+	readonly workspace_list: typeof specs.workspace_list_action_spec;
+	readonly workspace_changed: typeof specs.workspace_changed_action_spec;
+};
 
 export const action_specs: Array<ActionSpecUnion> = Object.values(ActionSpecs);
 
