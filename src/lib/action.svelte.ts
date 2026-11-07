@@ -1,6 +1,7 @@
 // @slop Claude Opus 4
 
 import { z } from 'zod';
+import { is } from '@fuzdev/fuz_schema/schema.ts';
 import { ActionKind, type ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
@@ -16,7 +17,8 @@ import { bound_action_event_data } from './action_helpers.ts';
 // TODO this isnt in action_types.ts because of circular dependencies, idk what pattern is best yet
 export const ActionJson = CellJson.extend({
 	method: ActionMethod,
-	action_event_data: ActionEventData.optional()
+	// `ActionEventData` is a fuz_schema schema, which zod can't embed, so it's bridged
+	action_event_data: z.custom<ActionEventData>((v) => is(ActionEventData, v)).optional()
 }).meta({ cell_class_name: 'Action' });
 export type ActionJson = z.infer<typeof ActionJson>;
 export type ActionJsonInput = z.input<typeof ActionJson>;

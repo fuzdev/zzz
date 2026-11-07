@@ -3,6 +3,7 @@
 import type { ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';
 import * as specs from './action_specs.ts';
 import { z } from 'zod';
+import type { Infer } from '@fuzdev/fuz_schema/schema.ts';
 import type {
 	ActionEventLocalCallData,
 	ActionEventRemoteNotificationData,
@@ -118,9 +119,9 @@ export const ActionInputs = {
 	workspace_changed: specs.workspace_changed_action_spec.input
 } as const;
 export interface ActionInputs {
-	heartbeat: z.infer<typeof specs.heartbeat_action_spec.input>;
-	cancel: z.infer<typeof specs.cancel_action_spec.input>;
-	'peer/ping': z.infer<typeof specs.peer_ping_action_spec.input>;
+	heartbeat: Infer<typeof specs.heartbeat_action_spec.input>;
+	cancel: Infer<typeof specs.cancel_action_spec.input>;
+	'peer/ping': Infer<typeof specs.peer_ping_action_spec.input>;
 	ping: z.infer<typeof specs.ping_action_spec.input>;
 	session_load: z.infer<typeof specs.session_load_action_spec.input>;
 	filer_change: z.infer<typeof specs.filer_change_action_spec.input>;
@@ -188,10 +189,10 @@ export const ActionOutputs = {
 	workspace_changed: specs.workspace_changed_action_spec.output
 } as const;
 export interface ActionOutputs {
-	heartbeat: z.infer<typeof specs.heartbeat_action_spec.output>;
-	cancel: z.infer<typeof specs.cancel_action_spec.output>;
-	'peer/ping': z.infer<typeof specs.peer_ping_action_spec.output>;
-	ping: z.infer<typeof specs.ping_action_spec.output>;
+	heartbeat: Infer<typeof specs.heartbeat_action_spec.output>;
+	cancel: Infer<typeof specs.cancel_action_spec.output>;
+	'peer/ping': Infer<typeof specs.peer_ping_action_spec.output>;
+	ping: Infer<typeof specs.ping_action_spec.output>;
 	session_load: z.infer<typeof specs.session_load_action_spec.output>;
 	filer_change: z.infer<typeof specs.filer_change_action_spec.output>;
 	diskfile_update: z.infer<typeof specs.diskfile_update_action_spec.output>;

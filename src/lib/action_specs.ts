@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { object, type Infer } from '@fuzdev/fuz_schema/schema.ts';
 import { JsonrpcRequestId } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import type {
 	LocalCallActionSpec,
@@ -51,11 +52,15 @@ export type ProgressMeta = z.infer<typeof ProgressMeta>;
 
 // -- Input/output schemas ---------------------------------------------------
 
-/** Output for `ping`. Echoes the JSON-RPC request id back as `ping_id`. */
-export const PingOutput = z.strictObject({
+/**
+ * Output for `ping`. Echoes the JSON-RPC request id back as `ping_id`.
+ * A fuz_schema `object` (refuses unknown keys), since it embeds fuz_app's
+ * fuz_schema `JsonrpcRequestId`.
+ */
+export const PingOutput = object({
 	ping_id: JsonrpcRequestId
 });
-export type PingOutput = z.infer<typeof PingOutput>;
+export type PingOutput = Infer<typeof PingOutput>;
 
 /**
  * Inner payload of `session_load`. The fields here are the actual session

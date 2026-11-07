@@ -1,5 +1,6 @@
 import { test, describe, assert, vi } from 'vitest';
 import { ActionEventData } from '@fuzdev/fuz_app/actions/action_event_data.ts';
+import { format_issue, is, parse } from '@fuzdev/fuz_schema/schema.ts';
 
 import {
 	ACTION_ERROR_MESSAGE_TRUNCATED_KEY,
@@ -178,7 +179,7 @@ describe('bound_action_event_data', () => {
 		const response = bounded.response as { error: { message: string } };
 		assert.strictEqual(response.error.message, bounded.error.message);
 		assert.ok(is_action_error_message_truncated(response.error));
-		assert.ok(ActionEventData.safeParse(bounded).success);
+		assert.ok(is(ActionEventData, bounded));
 		assert.ok(action_event_data_has_omitted_payload(bounded));
 		assert.ok(!action_event_data_has_omitted_payload(data));
 	});
@@ -218,8 +219,8 @@ describe('bound_action_event_data', () => {
 			},
 			response: { jsonrpc: '2.0', id: 'r1', result: { content: big_string } }
 		});
-		const parsed = ActionEventData.safeParse(bound_action_event_data(data, BUDGET));
-		assert.ok(parsed.success, parsed.error?.message);
+		const parsed = parse(ActionEventData, bound_action_event_data(data, BUDGET));
+		assert.ok(parsed.ok, parsed.ok ? undefined : parsed.issues.map(format_issue).join('; '));
 	});
 });
 
