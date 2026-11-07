@@ -146,7 +146,7 @@ describe('Frontend on_unauthenticated', () => {
 			http_rpc_url: 'http://x/api/rpc',
 			on_unauthenticated: () => calls++
 		});
-		const result = await app.api.diskfile_update({ path: '/a/b.txt' as any, content: 'x' });
+		const result = await app.api.diskfile_update({ path: '/a/b.txt', content: 'x' });
 		assert.ok(!result.ok);
 		assert.strictEqual(result.error.code, JSONRPC_ERROR_CODES.unauthenticated);
 		assert.strictEqual(calls, 1);
@@ -160,7 +160,7 @@ describe('Frontend on_unauthenticated', () => {
 			http_rpc_url: 'http://x/api/rpc',
 			on_unauthenticated: () => calls++
 		});
-		const result = await app.api.diskfile_update({ path: '/a/b.txt' as any, content: 'x' });
+		const result = await app.api.diskfile_update({ path: '/a/b.txt', content: 'x' });
 		assert.ok(!result.ok);
 		assert.strictEqual(calls, 0);
 	});

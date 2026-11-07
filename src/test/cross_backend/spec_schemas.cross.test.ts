@@ -19,7 +19,7 @@
  * @module
  */
 
-import type { Infer } from '@fuzdev/fuz_schema/schema.ts';
+import { parse, type AnySchema, type Infer } from '@fuzdev/fuz_schema/schema.ts';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -36,7 +36,6 @@ import type {
 import { all_account_action_specs } from '@fuzdev/fuz_app/auth/account_action_specs.ts';
 import { is_void_schema } from '@fuzdev/fuz_app/http/schema_helpers.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
-import { parse, type AnySchema } from '@fuzdev/fuz_schema/schema.ts';
 
 import {
 	directory_create_action_spec,
@@ -396,7 +395,7 @@ describe('zzz spec schemas cross-backend', () => {
 
 				const file_path = join(dir, 'via_ws.txt');
 				const update = await api_result.diskfile_update({
-					path: file_path as never,
+					path: file_path,
 					content: 'over ws'
 				});
 				assert.ok(update.ok, `diskfile_update over ws: ${JSON.stringify(update)}`);
